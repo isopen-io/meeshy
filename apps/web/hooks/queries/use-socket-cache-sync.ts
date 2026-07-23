@@ -134,6 +134,42 @@ interface UseSocketCacheSyncOptions {
   enabled?: boolean;
 }
 
+type InfiniteMessagesData = {
+  pages: { messages: Message[]; hasMore: boolean; total: number }[];
+  pageParams: number[];
+};
+
+/**
+ * Every cached message list that belongs to `conversationId`.
+ *
+ * A conversation can be opened by its ObjectId (`/conversations/:id`) OR by its
+ * identifier — the home page mounts the global conversation as `"meeshy"` — and
+ * the cache key mirrors whichever the screen used. Socket payloads always carry
+ * the resolved ObjectId, so keying the write on that alone silently skipped the
+ * slug-keyed entry and left the global conversation frozen until a reload.
+ * Alias entries are recognised by the `conversationId` their cached messages
+ * carry, which is the resolved ObjectId in every case.
+ */
+function messageCacheKeysFor(
+  queryClient: ReturnType<typeof useQueryClient>,
+  conversationId: string
+): unknown[][] {
+  const keys: unknown[][] = [];
+  for (const query of queryClient.getQueryCache().findAll({ queryKey: queryKeys.messages.lists() })) {
+    const key = query.queryKey as unknown[];
+    if (key[2] === conversationId) {
+      keys.push(key);
+      continue;
+    }
+    const data = query.state.data as InfiniteMessagesData | undefined;
+    const belongsToConversation = data?.pages?.some((page) =>
+      page.messages?.some((m) => m.conversationId === conversationId)
+    );
+    if (belongsToConversation) keys.push(key);
+  }
+  return keys;
+}
+
 export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
   const { conversationId, enabled = true } = options;
   const queryClient = useQueryClient();
@@ -145,11 +181,21 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
     const handleNewMessage = (message: Message) => {
       const targetConversationId = message.conversationId;
 
-      // Update infinite messages query
-      queryClient.setQueryData(
-        queryKeys.messages.infinite(targetConversationId),
-        (old: { pages: { messages: Message[]; hasMore: boolean; total: number }[]; pageParams: number[] } | undefined) => {
+      // Tracks whether the message actually landed in a cache entry. When the
+      // conversation has no cached page yet (initial fetch still in flight, or
+      // conversation never opened this session) the updater below bails out and
+      // the message would be lost for good: the socket layer already marked its
+      // id as "seen" for 5 minutes, so no re-delivery repairs the gap, and with
+      // `staleTime: Infinity` nothing re-reads the server either.
+      let landedInCache = false;
+
+      // Update every cached message list of this conversation (ObjectId-keyed
+      // and identifier-keyed alike).
+      const updateMessagesCache = (
+        old: InfiniteMessagesData | undefined
+      ): InfiniteMessagesData | undefined => {
           if (!old) return old;
+          landedInCache = true;
 
           // Single-pass: ID dedup + own-message optimistic replacement
           const currentUser = useAuthStore.getState().user;
@@ -211,8 +257,20 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
                 : page
             ),
           };
-        }
-      );
+      };
+
+      for (const key of messageCacheKeysFor(queryClient, targetConversationId)) {
+        queryClient.setQueryData(key, updateMessagesCache);
+      }
+
+      // No cache entry to write into: mark the query stale so the in-flight
+      // fetch is re-issued (and any later mount re-reads) from the server —
+      // the only source able to close the gap this message would leave.
+      if (!landedInCache) {
+        queryClient.invalidateQueries({
+          queryKey: queryKeys.messages.infinite(targetConversationId),
+        });
+      }
 
       // Update ALL conversation list variants with latest message AND move to top
       queryClient.setQueriesData<Conversation[]>(
@@ -309,21 +367,22 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
     const handleMessageEdited = (message: Message) => {
       const targetConversationId = message.conversationId;
 
-      queryClient.setQueryData(
-        queryKeys.messages.infinite(targetConversationId),
-        (old: { pages: { messages: Message[]; hasMore: boolean; total: number }[]; pageParams: number[] } | undefined) => {
-          if (!old) return old;
-          return {
-            ...old,
-            pages: old.pages.map((page) => ({
-              ...page,
-              messages: page.messages.map((m) =>
-                m.id === message.id && !isStaleEdit(m, message) ? { ...m, ...message } : m
-              ),
-            })),
-          };
-        }
-      );
+      const applyEdit = (old: InfiniteMessagesData | undefined): InfiniteMessagesData | undefined => {
+        if (!old) return old;
+        return {
+          ...old,
+          pages: old.pages.map((page) => ({
+            ...page,
+            messages: page.messages.map((m) =>
+              m.id === message.id && !isStaleEdit(m, message) ? { ...m, ...message } : m
+            ),
+          })),
+        };
+      };
+
+      for (const key of messageCacheKeysFor(queryClient, targetConversationId)) {
+        queryClient.setQueryData(key, applyEdit);
+      }
 
       // Update lastMessage in ALL conversation list variants if this edited message is the last one
       queryClient.setQueriesData<Conversation[]>(

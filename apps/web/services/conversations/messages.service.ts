@@ -44,19 +44,28 @@ export class MessagesService {
     after?: string
   ): Promise<GetMessagesResponse> {
     try {
-      const requestKey = `messages-${conversationId}`;
-      const controller = this.createRequestController(requestKey);
-
       const offset = (page - 1) * limit;
 
       const queryParams: Record<string, unknown> = { limit };
+      let mode: 'after' | 'before' | 'offset';
       if (after) {
         queryParams.after = after;
+        mode = 'after';
       } else if (cursor) {
         queryParams.before = cursor;
+        mode = 'before';
       } else {
         queryParams.offset = offset;
+        mode = 'offset';
       }
+
+      // La clé d'annulation inclut le MODE de lecture. Scopée à la seule
+      // conversation, elle faisait s'annuler mutuellement les deux lectures
+      // légitimement concurrentes d'une conversation ouverte — la pagination
+      // (offset/before) et le rattrapage avant (after) — celle qui perdait la
+      // course remontait `REQUEST_CANCELLED` et ses messages disparaissaient.
+      const requestKey = `messages-${conversationId}-${mode}`;
+      const controller = this.createRequestController(requestKey);
 
       if (signal) {
         signal.addEventListener('abort', () => controller.abort(), { once: true });

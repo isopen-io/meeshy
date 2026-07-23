@@ -368,6 +368,96 @@ describe('useSocketCacheSync', () => {
       expect(cachedData.pages[0].messages).toHaveLength(3);
     });
 
+    // A `message:new` that lands while the conversation's message list has no
+    // cache entry yet (initial fetch in flight, or conversation never opened in
+    // this session) used to be dropped on the floor: `setQueryData` bails out on
+    // `!old`, and the socket layer had already marked the id as "seen" for 5
+    // minutes, so no re-delivery ever repaired the gap. Combined with
+    // `staleTime: Infinity`, the message stayed invisible across reloads.
+    // Invalidating the key makes the in-flight (or next) fetch re-read from the
+    // server, which is the only source that can close the gap.
+    it('invalidates the messages query when no cache entry exists yet', () => {
+      const { wrapper, queryClient } = createWrapperWithClient();
+      const invalidateSpy = jest.spyOn(queryClient, 'invalidateQueries');
+
+      renderHook(() => useSocketCacheSync({ conversationId: 'conv-1', enabled: true }), { wrapper });
+
+      act(() => {
+        newMessageCallback?.(createMockMessage('msg-missed', 'Arrived during initial fetch'));
+      });
+
+      expect(invalidateSpy).toHaveBeenCalledWith({
+        queryKey: ['messages', 'list', 'conv-1', 'infinite'],
+      });
+    });
+
+    it('does not invalidate the messages query when the message was written to cache', () => {
+      const { wrapper, queryClient } = createWrapperWithClient();
+
+      queryClient.setQueryData(['messages', 'list', 'conv-1', 'infinite'], {
+        pages: [{ messages: mockMessages, hasMore: false, total: 2 }],
+        pageParams: [1],
+      });
+
+      const invalidateSpy = jest.spyOn(queryClient, 'invalidateQueries');
+
+      renderHook(() => useSocketCacheSync({ conversationId: 'conv-1', enabled: true }), { wrapper });
+
+      act(() => {
+        newMessageCallback?.(createMockMessage('msg-new', 'New message'));
+      });
+
+      expect(invalidateSpy).not.toHaveBeenCalledWith({
+        queryKey: ['messages', 'list', 'conv-1', 'infinite'],
+      });
+    });
+
+    // The home page opens the global conversation by its slug
+    // (`conversationId="meeshy"`), so its cache entry is keyed by the slug while
+    // the socket payload carries the resolved ObjectId. Writing only to the
+    // ObjectId key left that screen frozen until a reload.
+    it('writes into a cache entry keyed by the conversation slug', () => {
+      const { wrapper, queryClient } = createWrapperWithClient();
+
+      queryClient.setQueryData(['messages', 'list', 'meeshy', 'infinite'], {
+        pages: [{ messages: mockMessages, hasMore: false, total: 2 }],
+        pageParams: [1],
+      });
+
+      renderHook(() => useSocketCacheSync({ conversationId: 'meeshy', enabled: true }), { wrapper });
+
+      act(() => {
+        newMessageCallback?.(createMockMessage('msg-new', 'Realtime into slug cache'));
+      });
+
+      const cached = queryClient.getQueryData(['messages', 'list', 'meeshy', 'infinite']) as {
+        pages: { messages: Message[] }[];
+      };
+      expect(cached.pages[0].messages[0].id).toBe('msg-new');
+      expect(cached.pages[0].messages).toHaveLength(3);
+    });
+
+    it('leaves other conversations’ caches untouched', () => {
+      const { wrapper, queryClient } = createWrapperWithClient();
+
+      const otherMessage = { ...mockMessages[0], id: 'other-1', conversationId: 'conv-2' } as Message;
+      queryClient.setQueryData(['messages', 'list', 'conv-2', 'infinite'], {
+        pages: [{ messages: [otherMessage], hasMore: false, total: 1 }],
+        pageParams: [1],
+      });
+
+      renderHook(() => useSocketCacheSync({ conversationId: null, enabled: true }), { wrapper });
+
+      act(() => {
+        newMessageCallback?.(createMockMessage('msg-new', 'For conv-1 only'));
+      });
+
+      const cached = queryClient.getQueryData(['messages', 'list', 'conv-2', 'infinite']) as {
+        pages: { messages: Message[] }[];
+      };
+      expect(cached.pages[0].messages.map((m) => m.id)).toEqual(['other-1']);
+    });
+
     it('should not add duplicate message', () => {
       const { wrapper, queryClient } = createWrapperWithClient();
 
@@ -534,6 +624,26 @@ describe('useSocketCacheSync', () => {
       const updatedMessage = cachedData.pages[0].messages.find((m) => m.id === 'msg-1');
       expect(updatedMessage?.content).toBe('Edited content');
       expect(updatedMessage?.isEdited).toBe(true);
+    });
+
+    it('updates a cache entry keyed by the conversation slug', () => {
+      const { wrapper, queryClient } = createWrapperWithClient();
+
+      queryClient.setQueryData(['messages', 'list', 'meeshy', 'infinite'], {
+        pages: [{ messages: mockMessages, hasMore: false, total: 2 }],
+        pageParams: [1],
+      });
+
+      renderHook(() => useSocketCacheSync({ conversationId: 'meeshy', enabled: true }), { wrapper });
+
+      act(() => {
+        messageEditedCallback?.({ ...mockMessages[0], content: 'Edited from socket' } as Message);
+      });
+
+      const cached = queryClient.getQueryData(['messages', 'list', 'meeshy', 'infinite']) as {
+        pages: { messages: Message[] }[];
+      };
+      expect(cached.pages[0].messages[0].content).toBe('Edited from socket');
     });
 
     it('should ignore a stale out-of-order edit older than the currently cached edit', () => {

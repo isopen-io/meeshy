@@ -599,17 +599,36 @@ describe('useConversationMessagesRQ', () => {
       jest.useRealTimers();
     });
 
-    it('fetches only messages newer than the cached watermark on mount and merges them without replacing pages', async () => {
+    // The catch-up now runs on window focus / socket reconnect only — opening a
+    // conversation goes through the always-on refetch instead (see
+    // "Open conversation → always revalidate").
+    async function triggerFocusCatchUp() {
+      jest.useFakeTimers();
+      act(() => {
+        focusManager.setFocused(false);
+        focusManager.setFocused(true);
+      });
+      await act(async () => {
+        jest.advanceTimersByTime(1100);
+      });
+      jest.useRealTimers();
+    }
+
+    it('fetches only messages newer than the cached watermark on focus and merges them without replacing pages', async () => {
       const cachedOld = [
         createMockMessage('old-1', 'newest cached', new Date('2024-01-03T00:00:00.000Z')),
         createMockMessage('old-2', 'older cached', new Date('2024-01-02T00:00:00.000Z')),
       ];
       const newer = createMockMessage('new-1', 'missed while away', new Date('2024-01-05T00:00:00.000Z'));
       const duplicate = createMockMessage('old-1', 'newest cached', new Date('2024-01-03T00:00:00.000Z'));
-      mockGetMessages.mockResolvedValue({ messages: [duplicate, newer], hasMore: false, total: 2 });
 
       const { wrapper, queryClient } = createPersistedWrapper();
       seedCache(queryClient, cachedOld);
+
+      // Mount refetch answers with the cached page (server has not seen the
+      // newer message yet), then the focus catch-up brings it in.
+      mockGetMessages.mockResolvedValueOnce({ messages: cachedOld, hasMore: false, total: 2 });
+      mockGetMessages.mockResolvedValue({ messages: [duplicate, newer], hasMore: false, total: 2 });
 
       const { result } = renderHook(
         () => useConversationMessagesRQ('conv-1', mockUser),
@@ -617,21 +636,23 @@ describe('useConversationMessagesRQ', () => {
       );
 
       await waitFor(() => {
-        expect(mockGetMessages).toHaveBeenCalledWith(
-          'conv-1',
-          1,
-          50,
-          null,
-          undefined,
-          new Date('2024-01-03T00:00:00.000Z').toISOString()
-        );
+        expect(mockGetMessages).toHaveBeenCalledTimes(1);
       });
+
+      await triggerFocusCatchUp();
+
+      expect(mockGetMessages).toHaveBeenLastCalledWith(
+        'conv-1',
+        1,
+        50,
+        null,
+        undefined,
+        new Date('2024-01-03T00:00:00.000Z').toISOString()
+      );
 
       await waitFor(() => {
         expect(result.current.messages.map((m) => m.id)).toEqual(['new-1', 'old-1', 'old-2']);
       });
-
-      expect(mockGetMessages).toHaveBeenCalledTimes(1);
     });
 
     it('does not run catch-up when there is no cache entry (initial fetch handles cold opens)', async () => {
@@ -653,7 +674,10 @@ describe('useConversationMessagesRQ', () => {
       expect(mockGetMessages.mock.calls.every((call) => call[5] === undefined)).toBe(true);
     });
 
-    it('waits for the persisted cache restore before running the mount catch-up', async () => {
+    // The always-on mount refetch must not race the async IndexedDB restore:
+    // nothing may hit the network while `useIsRestoring()` is true, otherwise a
+    // reload fires a read before the persisted pages are back in the cache.
+    it('waits for the persisted cache restore before reading from the server', async () => {
       const cached = [createMockMessage('old-1', 'cached', new Date('2024-01-01T00:00:00.000Z'))];
       mockGetMessages.mockResolvedValue({ messages: [], hasMore: false, total: 0 });
 
@@ -694,7 +718,7 @@ describe('useConversationMessagesRQ', () => {
       await waitFor(() => {
         expect(mockGetMessages).toHaveBeenCalledTimes(1);
       });
-      expect(mockGetMessages.mock.calls[0][5]).toBe(new Date('2024-01-01T00:00:00.000Z').toISOString());
+      expect(mockGetMessages.mock.calls[0][5]).toBeUndefined();
     });
 
     it('keeps fetching with an advancing watermark while the server reports more missed messages', async () => {
@@ -703,6 +727,7 @@ describe('useConversationMessagesRQ', () => {
       const batch2 = [createMockMessage('new-2', 'batch 2', new Date('2024-01-03T00:00:00.000Z'))];
       const batch3 = [createMockMessage('new-3', 'batch 3', new Date('2024-01-04T00:00:00.000Z'))];
       mockGetMessages
+        .mockResolvedValueOnce({ messages: cached, hasMore: false, total: 1 })
         .mockResolvedValueOnce({ messages: batch1, hasMore: true, total: 3 })
         .mockResolvedValueOnce({ messages: batch2, hasMore: true, total: 3 })
         .mockResolvedValueOnce({ messages: batch3, hasMore: false, total: 3 });
@@ -716,17 +741,23 @@ describe('useConversationMessagesRQ', () => {
       );
 
       await waitFor(() => {
-        expect(mockGetMessages).toHaveBeenCalledTimes(3);
+        expect(mockGetMessages).toHaveBeenCalledTimes(1);
+      });
+
+      await triggerFocusCatchUp();
+
+      await waitFor(() => {
+        expect(mockGetMessages).toHaveBeenCalledTimes(4);
       });
 
       expect(mockGetMessages).toHaveBeenNthCalledWith(
-        1, 'conv-1', 1, 50, null, undefined, new Date('2024-01-01T00:00:00.000Z').toISOString()
+        2, 'conv-1', 1, 50, null, undefined, new Date('2024-01-01T00:00:00.000Z').toISOString()
       );
       expect(mockGetMessages).toHaveBeenNthCalledWith(
-        2, 'conv-1', 1, 50, null, undefined, new Date('2024-01-02T00:00:00.000Z').toISOString()
+        3, 'conv-1', 1, 50, null, undefined, new Date('2024-01-02T00:00:00.000Z').toISOString()
       );
       expect(mockGetMessages).toHaveBeenNthCalledWith(
-        3, 'conv-1', 1, 50, null, undefined, new Date('2024-01-03T00:00:00.000Z').toISOString()
+        4, 'conv-1', 1, 50, null, undefined, new Date('2024-01-03T00:00:00.000Z').toISOString()
       );
 
       await waitFor(() => {
@@ -742,6 +773,7 @@ describe('useConversationMessagesRQ', () => {
         total: 100,
       });
       mockGetMessages
+        .mockResolvedValueOnce({ messages: cached, hasMore: false, total: 1 })
         .mockResolvedValueOnce(batchFor(1))
         .mockResolvedValueOnce(batchFor(2))
         .mockResolvedValueOnce(batchFor(3))
@@ -758,10 +790,18 @@ describe('useConversationMessagesRQ', () => {
       );
 
       await waitFor(() => {
-        expect(mockGetMessages.mock.calls.length).toBeGreaterThanOrEqual(6);
+        expect(mockGetMessages).toHaveBeenCalledTimes(1);
       });
 
-      const capFallbackCall = mockGetMessages.mock.calls[5];
+      await triggerFocusCatchUp();
+
+      await waitFor(() => {
+        expect(mockGetMessages.mock.calls.length).toBeGreaterThanOrEqual(7);
+      });
+
+      // Calls 2..6 are the five watermark iterations; call 7 is the full
+      // refetch fallback (no `after` argument).
+      const capFallbackCall = mockGetMessages.mock.calls[6];
       expect(capFallbackCall[5]).toBeUndefined();
     });
 
@@ -797,16 +837,19 @@ describe('useConversationMessagesRQ', () => {
       });
       jest.useRealTimers();
 
+      // Four focus transitions coalesce into a single catch-up read.
       expect(mockGetMessages).toHaveBeenCalledTimes(1);
       expect(mockGetMessages.mock.calls[0][5]).toBe(new Date('2024-01-01T00:00:00.000Z').toISOString());
     });
 
     it('does not start a second catch-up while one is already in flight', async () => {
       const cached = [createMockMessage('old-1', 'cached', new Date('2024-01-01T00:00:00.000Z'))];
-      let resolveFirst: ((value: { messages: Message[]; hasMore: boolean; total: number }) => void) | null = null;
-      mockGetMessages.mockImplementationOnce(
-        () => new Promise((resolve) => { resolveFirst = resolve; })
-      );
+      let resolveCatchUp: ((value: { messages: Message[]; hasMore: boolean; total: number }) => void) | null = null;
+      mockGetMessages
+        .mockResolvedValueOnce({ messages: cached, hasMore: false, total: 1 })
+        .mockImplementationOnce(
+          () => new Promise((resolve) => { resolveCatchUp = resolve; })
+        );
 
       const { wrapper, queryClient } = createPersistedWrapper();
       seedCache(queryClient, cached);
@@ -820,23 +863,139 @@ describe('useConversationMessagesRQ', () => {
         expect(mockGetMessages).toHaveBeenCalledTimes(1);
       });
 
-      jest.useFakeTimers();
-      act(() => {
-        focusManager.setFocused(false);
-        focusManager.setFocused(true);
-      });
-      await act(async () => {
-        jest.advanceTimersByTime(1100);
-      });
-      jest.useRealTimers();
+      // First focus starts a catch-up that never settles.
+      await triggerFocusCatchUp();
+      expect(mockGetMessages).toHaveBeenCalledTimes(2);
 
-      expect(mockGetMessages).toHaveBeenCalledTimes(1);
+      // Second focus while the first is still in flight must be a no-op.
+      await triggerFocusCatchUp();
+      expect(mockGetMessages).toHaveBeenCalledTimes(2);
 
       await act(async () => {
-        resolveFirst?.({ messages: [], hasMore: false, total: 0 });
+        resolveCatchUp?.({ messages: [], hasMore: false, total: 0 });
       });
 
-      expect(mockGetMessages).toHaveBeenCalledTimes(1);
+      expect(mockGetMessages).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  // Opening a conversation MUST re-read the latest page from the server, even
+  // when a cache entry already exists. The production QueryClient runs with
+  // `staleTime: Infinity` + `refetchOnMount: false`, so without an explicit
+  // per-query opt-in a restored (IndexedDB-persisted) page was displayed
+  // forever and any message missing from it never appeared — no matter how many
+  // times the user reloaded.
+  describe('Open conversation → always revalidate', () => {
+    function createStaleForeverWrapper() {
+      const queryClient = new QueryClient({
+        defaultOptions: {
+          queries: {
+            retry: false,
+            gcTime: 30 * 60 * 1000,
+            staleTime: Infinity,
+            refetchOnMount: false,
+          },
+        },
+      });
+
+      const wrapper = function Wrapper({ children }: { children: React.ReactNode }) {
+        return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>;
+      };
+
+      return { wrapper, queryClient };
+    }
+
+    it('keeps socket-delivered and optimistic messages the server read cannot see yet', async () => {
+      const { wrapper, queryClient } = createStaleForeverWrapper();
+
+      const socketDelivered = createMockMessage('msg-socket', 'just arrived', new Date('2024-01-09'));
+      const optimistic = {
+        ...createMockMessage('cid_pending', 'sending…', new Date('2024-01-08')),
+        _tempId: 'cid_pending',
+        _localStatus: 'sending',
+      } as unknown as Message;
+
+      queryClient.setQueryData(['messages', 'list', 'conv-1', 'infinite'], {
+        pages: [{
+          messages: [socketDelivered, optimistic, mockMessages[0], mockMessages[1]],
+          hasMore: false,
+          total: 4,
+        }],
+        pageParams: [1],
+      });
+
+      // Replica lag: the server page still lacks the two newest local rows.
+      mockGetMessages.mockResolvedValue(mockMessagesResponse);
+
+      const { result } = renderHook(
+        () => useConversationMessagesRQ('conv-1', mockUser),
+        { wrapper }
+      );
+
+      await waitFor(() => {
+        expect(mockGetMessages).toHaveBeenCalled();
+      });
+
+      await waitFor(() => {
+        const ids = result.current.messages.map((m) => m.id);
+        expect(ids).toContain('msg-socket');
+        expect(ids).toContain('cid_pending');
+        expect(ids).toContain('msg-1');
+      });
+    });
+
+    it('drops a local row once the server page carries its confirmed twin', async () => {
+      const { wrapper, queryClient } = createStaleForeverWrapper();
+
+      const optimistic = {
+        ...createMockMessage('cid_confirmed', 'sent', new Date('2024-01-09')),
+        _tempId: 'cid_confirmed',
+        _localStatus: 'sending',
+      } as unknown as Message;
+
+      queryClient.setQueryData(['messages', 'list', 'conv-1', 'infinite'], {
+        pages: [{ messages: [optimistic], hasMore: false, total: 1 }],
+        pageParams: [1],
+      });
+
+      const confirmed = {
+        ...createMockMessage('msg-server', 'sent', new Date('2024-01-09')),
+        clientMessageId: 'cid_confirmed',
+      } as unknown as Message;
+      mockGetMessages.mockResolvedValue({ messages: [confirmed], hasMore: false, total: 1 });
+
+      const { result } = renderHook(
+        () => useConversationMessagesRQ('conv-1', mockUser),
+        { wrapper }
+      );
+
+      await waitFor(() => {
+        expect(result.current.messages.map((m) => m.id)).toEqual(['msg-server']);
+      });
+    });
+
+    it('refetches the first page on mount even when the cache is already populated', async () => {
+      const { wrapper, queryClient } = createStaleForeverWrapper();
+
+      queryClient.setQueryData(['messages', 'list', 'conv-1', 'infinite'], {
+        pages: [{ messages: [mockMessages[1], mockMessages[2]], hasMore: false, total: 2 }],
+        pageParams: [1],
+      });
+
+      mockGetMessages.mockResolvedValue(mockMessagesResponse);
+
+      const { result } = renderHook(
+        () => useConversationMessagesRQ('conv-1', mockUser),
+        { wrapper }
+      );
+
+      await waitFor(() => {
+        expect(mockGetMessages).toHaveBeenCalledWith('conv-1', 1, 20, null, expect.anything());
+      });
+
+      await waitFor(() => {
+        expect(result.current.messages.map((m) => m.id)).toContain('msg-1');
+      });
     });
   });
 
