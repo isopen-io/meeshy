@@ -400,7 +400,6 @@ struct StoryViewerView: View {
     private var viewerContent: some View {
         StoryViewerContentView(
             prefetcher: prefetcher,
-            isPreviewMode: isPreviewMode,
             cardScale: cardScale,
             cardCornerRadius: cardCornerRadius,
             cardOpacity: cardOpacity,

@@ -284,6 +284,15 @@ struct SettingsView: View {
                                     .font(MeeshyFont.relative(14))
                                 Text(pref.label)
                                     .font(MeeshyFont.relative(9, weight: .medium))
+                                    // Un seul segment = une seule ligne : sous
+                                    // grande taille Dynamic Type le libellé
+                                    // débordait et repassait à la ligne
+                                    // (« Aut o », « So mbr e »). On le garde sur
+                                    // une ligne, on l'amincit légèrement, puis on
+                                    // tronque avec « … » si vraiment trop long.
+                                    .lineLimit(1)
+                                    .minimumScaleFactor(0.8)
+                                    .truncationMode(.tail)
                             }
                             .foregroundColor(theme.preference == pref ? Color(hex: pref.tintColor) : theme.textMuted)
                             .padding(.horizontal, MeeshySpacing.sm + 2)

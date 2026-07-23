@@ -157,32 +157,11 @@ final class ContactsListViewModel: ObservableObject {
 
             let (received, sent) = try await (receivedResponse, sentResponse)
 
-            var friendMap: [String: FriendRequestUser] = [:]
-
-            for request in received.data where request.status == "accepted" {
-                if let sender = request.sender, sender.id != currentUserId {
-                    friendMap[sender.id] = sender
-                } else if let receiver = request.receiver, receiver.id != currentUserId {
-                    friendMap[receiver.id] = receiver
-                }
-            }
-
-            for request in sent.data where request.status == "accepted" {
-                if let receiver = request.receiver, receiver.id != currentUserId {
-                    friendMap[receiver.id] = receiver
-                } else if let sender = request.sender, sender.id != currentUserId {
-                    friendMap[sender.id] = sender
-                }
-            }
-
-            friends = friendMap.values.sorted { a, b in
-                let aOnline = a.isOnline ?? false
-                let bOnline = b.isOnline ?? false
-                if aOnline != bOnline { return aOnline }
-                let aDate = a.lastActiveAt ?? .distantPast
-                let bDate = b.lastActiveAt ?? .distantPast
-                return aDate > bDate
-            }
+            friends = FriendListAggregator.aggregate(
+                received: received.data,
+                sent: sent.data,
+                currentUserId: currentUserId
+            )
 
             loadState = .loaded
             lastObservedFriendIds = Set(friends.map(\.id))
