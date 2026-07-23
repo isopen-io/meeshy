@@ -329,7 +329,13 @@ struct ChangePasswordView: View {
                 SecureField(placeholder, text: text)
                     .font(.subheadline.weight(.medium))
                     .foregroundColor(theme.textPrimary)
-                    .textContentType(.password)
+                    // Le champ « actuel » est `.password` (AutoFill le
+                    // pré-remplit depuis le trousseau) ; les deux champs de
+                    // saisie du nouveau mot de passe sont `.newPassword`, ce qui
+                    // déclenche la proposition de mot de passe fort ET la mise à
+                    // jour de l'entrée existante au trousseau. Les trois étaient
+                    // `.password`, donc iOS ne mettait jamais l'entrée à jour.
+                    .textContentType(field == .current ? .password : .newPassword)
                     .focused($focusedField, equals: field)
                     // VoiceOver annonce le rôle du champ ("Nouveau mot de
                     // passe, champ de texte sécurisé") au lieu du seul
