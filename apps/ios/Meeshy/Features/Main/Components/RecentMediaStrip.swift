@@ -537,6 +537,25 @@ struct RecentMediaStrip: View {
         addSingle(asset)
     }
 
+    /// `resolve` renvoie `nil` quand PhotoKit ne peut pas matérialiser l'asset :
+    /// vidéo iCloud non redescendue, ralenti/timelapse rendu en `AVComposition`
+    /// plutôt qu'en fichier, ou copie temporaire en échec. Ces trois cas
+    /// sortaient en silence : le spinner tournait puis le tap ne faisait RIEN,
+    /// sans le moindre moyen pour l'utilisateur de comprendre pourquoi son média
+    /// n'arrivait pas dans les pièces jointes. Le passage par la photothèque
+    /// complète (`PHPicker`, hors-process) reste la porte de sortie.
+    private func announceResolutionFailure(count: Int = 1) {
+        FeedbackToastManager.shared.showError(
+            count > 1
+                ? String(localized: "recentMedia.resolveFailed.multiple",
+                         defaultValue: "\(count) médias n'ont pas pu être préparés — passez par la photothèque complète",
+                         bundle: .main)
+                : String(localized: "recentMedia.resolveFailed",
+                         defaultValue: "Ce média n'a pas pu être préparé — passez par la photothèque complète",
+                         bundle: .main)
+        )
+    }
+
     /// Resolves the asset and hands it to the host — the "Ajouter" path.
     private func addSingle(_ asset: PHAsset) {
         guard resolvingId == nil, !isBatchResolving else { return }
@@ -545,7 +564,7 @@ struct RecentMediaStrip: View {
         Task {
             let pick = await model.resolve(asset)
             resolvingId = nil
-            if let pick { onSelect(pick) }
+            if let pick { onSelect(pick) } else { announceResolutionFailure() }
         }
     }
 
@@ -577,14 +596,18 @@ struct RecentMediaStrip: View {
         isBatchResolving = true
         let ids = selection.ids
         Task {
+            var failures = 0
             for id in ids {
                 guard let asset = model.assets.first(where: { $0.localIdentifier == id }) else { continue }
                 resolvingId = id
-                if let pick = await model.resolve(asset) { onSelect(pick) }
+                if let pick = await model.resolve(asset) { onSelect(pick) } else { failures += 1 }
             }
             resolvingId = nil
             isBatchResolving = false
             exitSelection()
+            // Un seul message pour le lot : un toast par échec noierait les
+            // médias qui, eux, sont bien arrivés dans la barre de pièces jointes.
+            if failures > 0 { announceResolutionFailure(count: failures) }
         }
     }
 
@@ -597,7 +620,7 @@ struct RecentMediaStrip: View {
         Task {
             let pick = await model.resolve(asset)
             resolvingId = nil
-            if let pick { onEdit(pick) }
+            if let pick { onEdit(pick) } else { announceResolutionFailure() }
         }
     }
 
