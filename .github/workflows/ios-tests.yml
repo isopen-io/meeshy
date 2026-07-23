@@ -44,13 +44,17 @@ concurrency:
 jobs:
   ios-tests:
     runs-on: macos-15
-    # Measured warm-cache breakdown (macos-15, 2-worker parallel run phase):
-    # ~1 min setup + ~9-14 min iOS 18.2 runtime download (fixed, variable with
-    # network) + ~3-5 min SPM resolve + ~9 min incremental compile + ~7-8 min
-    # parallel tests ≈ 31-33 min. 35 gives margin for the runtime-download
-    # variance without going to the 40+ min a serial run would have needed.
-    # Still a hard cap so a genuine deadlock fails fast, not GitHub's 6h default.
-    timeout-minutes: 35
+    # Warm-run cost is dominated by HIGH-VARIANCE fixed steps that no cache
+    # removes — measured across runs: iOS 18.2 runtime download 8-14 min
+    # (network), SPM resolve 3-6.6 min (network), compile 4.5-9 min (DerivedData
+    # incremental reuse is unreliable across ephemeral runners), + ~14 min
+    # serial tests. Best case ≈ 30 min, worst case ≈ 44 min. 35 covered the
+    # median but not the tail (a run hit 37 min on a 9-min compile + slow
+    # download). 40 covers the realistic tail; a genuinely reliable sub-35 run
+    # needs a bigger runner (macos-15-xlarge: faster compile/tests + enough
+    # RAM for real parallel testing, which the 3 vCPU / 7 GB standard runner
+    # can't do). Still a hard cap so a real deadlock fails fast.
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@v7
 
