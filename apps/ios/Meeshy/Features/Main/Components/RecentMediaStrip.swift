@@ -158,6 +158,35 @@ final class RecentMediaStripModel: NSObject, ObservableObject, PHPhotoLibraryCha
         }
     }
 
+    // MARK: - PhotoKit request seam
+    //
+    // Every completion below is declared as an explicitly `@Sendable`-typed
+    // local instead of being written inline as a trailing closure. This is NOT
+    // stylistic.
+    //
+    // The target compiles under MainActor default isolation, so a closure
+    // literal written inside this `@MainActor` class inherits `@MainActor`.
+    // Swift 6 then emits a dynamic isolation assertion in the closure's
+    // PROLOGUE — `swift_task_isCurrentExecutor` — which traps the instant
+    // PhotoKit invokes it from its own queue, before the body runs. Wrapping
+    // the body in `Task { @MainActor in }` does not help: the trap happens at
+    // entry, so the Task is never reached.
+    //
+    // `PHImageManager.h` documents the video handlers verbatim as "The result
+    // handler is called on an arbitrary queue" — so `requestAVAsset` and
+    // `requestPlayerItem` trapped every single time. That is the crash in
+    // Meeshy-2026-07-11-131634.ips (thread `com.apple.photos.requestAVAsset`,
+    // EXC_BREAKPOINT in `closure #1 in closure #1 in resolveVideo(_:)`), seen
+    // 7× across builds 1201→1235: tapping any video in the strip killed the app.
+    //
+    // The image handlers are documented as main-thread, so they never trapped —
+    // but they carry the same latent prologue, and one `.opportunistic`
+    // delivery mode (which the header says may call back "synchronously on the
+    // calling thread") would arm them. They go through the same seam so the
+    // whole file is queue-agnostic by construction.
+    //
+    // Same fix, same reason as `CallTranscriptionService.requestPermission()`.
+
     /// Square thumbnail for a cell. `.fastFormat` guarantees a single callback,
     /// which keeps the continuation safe (multi-callback modes would resume it
     /// more than once).
@@ -168,11 +197,13 @@ final class RecentMediaStripModel: NSObject, ObservableObject, PHPhotoLibraryCha
         options.isNetworkAccessAllowed = true
         options.isSynchronous = false
         return await withCheckedContinuation { (continuation: CheckedContinuation<ImageBox, Never>) in
-            imageManager.requestImage(
-                for: asset, targetSize: size, contentMode: .aspectFill, options: options
-            ) { image, _ in
+            let completion: @Sendable (UIImage?, [AnyHashable: Any]?) -> Void = { image, _ in
                 continuation.resume(returning: ImageBox(image: image))
             }
+            imageManager.requestImage(
+                for: asset, targetSize: size, contentMode: .aspectFill, options: options,
+                resultHandler: completion
+            )
         }.image
     }
 
@@ -186,14 +217,16 @@ final class RecentMediaStripModel: NSObject, ObservableObject, PHPhotoLibraryCha
         options.isNetworkAccessAllowed = true
         options.isSynchronous = false
         return await withCheckedContinuation { (continuation: CheckedContinuation<ImageBox, Never>) in
+            let completion: @Sendable (UIImage?, [AnyHashable: Any]?) -> Void = { image, _ in
+                continuation.resume(returning: ImageBox(image: image))
+            }
             imageManager.requestImage(
                 for: asset,
                 targetSize: CGSize(width: 1024, height: 1024),
                 contentMode: .aspectFit,
-                options: options
-            ) { image, _ in
-                continuation.resume(returning: ImageBox(image: image))
-            }
+                options: options,
+                resultHandler: completion
+            )
         }.image
     }
 
@@ -206,9 +239,10 @@ final class RecentMediaStripModel: NSObject, ObservableObject, PHPhotoLibraryCha
         options.deliveryMode = .automatic
         options.isNetworkAccessAllowed = true
         return await withCheckedContinuation { (continuation: CheckedContinuation<PlayerItemBox, Never>) in
-            imageManager.requestPlayerItem(forVideo: asset, options: options) { item, _ in
+            let completion: @Sendable (AVPlayerItem?, [AnyHashable: Any]?) -> Void = { item, _ in
                 continuation.resume(returning: PlayerItemBox(item: item))
             }
+            imageManager.requestPlayerItem(forVideo: asset, options: options, resultHandler: completion)
         }.item
     }
 
@@ -228,14 +262,16 @@ final class RecentMediaStripModel: NSObject, ObservableObject, PHPhotoLibraryCha
         options.isNetworkAccessAllowed = true
         options.isSynchronous = false
         let box = await withCheckedContinuation { (continuation: CheckedContinuation<ImageBox, Never>) in
+            let completion: @Sendable (UIImage?, [AnyHashable: Any]?) -> Void = { image, _ in
+                continuation.resume(returning: ImageBox(image: image))
+            }
             imageManager.requestImage(
                 for: asset,
                 targetSize: CGSize(width: 2048, height: 2048),
                 contentMode: .aspectFit,
-                options: options
-            ) { image, _ in
-                continuation.resume(returning: ImageBox(image: image))
-            }
+                options: options,
+                resultHandler: completion
+            )
         }
         return box.image.map { .image($0) }
     }
@@ -245,7 +281,7 @@ final class RecentMediaStripModel: NSObject, ObservableObject, PHPhotoLibraryCha
         options.deliveryMode = .highQualityFormat
         options.isNetworkAccessAllowed = true
         let url: URL? = await withCheckedContinuation { (continuation: CheckedContinuation<URL?, Never>) in
-            imageManager.requestAVAsset(forVideo: asset, options: options) { avAsset, _, _ in
+            let completion: @Sendable (AVAsset?, AVAudioMix?, [AnyHashable: Any]?) -> Void = { avAsset, _, _ in
                 guard let urlAsset = avAsset as? AVURLAsset else {
                     continuation.resume(returning: nil)
                     return
@@ -259,6 +295,7 @@ final class RecentMediaStripModel: NSObject, ObservableObject, PHPhotoLibraryCha
                     continuation.resume(returning: nil)
                 }
             }
+            imageManager.requestAVAsset(forVideo: asset, options: options, resultHandler: completion)
         }
         return url.map { .video($0) }
     }
