@@ -87,8 +87,6 @@ final class SettingsActionQueueTests: XCTestCase {
         }
         let countAfterFour = await queue.count
         XCTAssertEqual(countAfterFour, 2, "FIFO still blocks fresh while stale hasn't hit maxAttempts")
-        let countBefore = await queue.count
-        XCTAssertEqual(countBefore, 2, "FIFO still blocks fresh while stale hasn't hit maxAttempts")
 
         // The 5th attempt exhausts `stale` — it must be dropped AND `fresh`
         // must be processed in this SAME pass, not wait for a 6th flush call.
@@ -96,8 +94,6 @@ final class SettingsActionQueueTests: XCTestCase {
 
         let countAfterFifth = await queue.count
         XCTAssertEqual(countAfterFifth, 0,
-        let countAfter = await queue.count
-        XCTAssertEqual(countAfter, 0,
             "Dropping the exhausted head must let the rest of the queue drain immediately")
     }
 
@@ -112,16 +108,12 @@ final class SettingsActionQueueTests: XCTestCase {
         }
         let countBeforeReplace = await queue.count
         XCTAssertEqual(countBeforeReplace, 1, "Still queued — one attempt short of exhaustion")
-        let countBefore = await queue.count
-        XCTAssertEqual(countBefore, 1, "Still queued — one attempt short of exhaustion")
 
         // A fresh edit for the SAME endpoint replaces the pending row with a
         // brand-new id (existing last-write-wins behavior).
         await queue.enqueue(makeAction(endpoint: "/users/me"))
         let countAfterReplace = await queue.count
         XCTAssertEqual(countAfterReplace, 1)
-        let countAfterEnqueue = await queue.count
-        XCTAssertEqual(countAfterEnqueue, 1)
 
         // One more failure must NOT exhaust the replacement — it has its own
         // fresh budget, not the 4 failures already accrued by the old row.
@@ -129,8 +121,6 @@ final class SettingsActionQueueTests: XCTestCase {
 
         let countAfterFailure = await queue.count
         XCTAssertEqual(countAfterFailure, 1,
-        let countAfterFlush = await queue.count
-        XCTAssertEqual(countAfterFlush, 1,
             "The replacement item must not inherit the old item's failure count")
     }
 
@@ -153,8 +143,6 @@ final class SettingsActionQueueTests: XCTestCase {
 
         let mergedCount = await queue.count
         XCTAssertEqual(mergedCount, 1, "The two saves for the same endpoint still collapse into one pending action")
-        let count = await queue.count
-        XCTAssertEqual(count, 1, "The two saves for the same endpoint still collapse into one pending action")
 
         let pendingItems = await queue.pendingItems
         guard let merged = pendingItems.first,
