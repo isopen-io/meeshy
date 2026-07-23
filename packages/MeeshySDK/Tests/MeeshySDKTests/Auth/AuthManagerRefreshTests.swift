@@ -12,15 +12,6 @@ final class AuthManagerRefreshTests: XCTestCase {
     override func setUp() async throws {
         try await super.setUp()
 
-        // Purge toute tâche de refresh laissée en vol par une activité de fond :
-        // `handleUnauthorized()` poste un `Task` fire-and-forget à chaque 401, et
-        // celui-ci appelle le service stubbé — donc incrémente `refreshTokenCallCount`
-        // sans rapport avec ce test, et occupe `tokenRefreshTask` que la garde de
-        // sérialisation de `refreshSession` respecte. C'est ce qui faisait compter
-        // 2 ou 3 appels là où le test n'en émet qu'un. Le seam existe pour ça et
-        // `MeeshyTests/AuthServiceTests` l'utilise déjà ; cette suite l'ignorait.
-        AuthManager.shared.cancelPendingTokenRefreshForTesting()
-
         originalAuthService = AuthManager.shared.authService
         mockAuthService = MockAuthServiceForManager()
         AuthManager.shared.authService = mockAuthService
@@ -54,58 +45,18 @@ final class AuthManagerRefreshTests: XCTestCase {
         )
         AuthManager.shared.applySession(token: "expired-token", sessionToken: "session-abc", user: user)
 
-        // 2. Perform 5 concurrent refreshes.
-        //
-        // Deux corrections indépendantes, toutes deux nécessaires :
-        //
-        // (a) La porte retient le premier appel réseau EN VOL. Tant qu'elle est
-        //     fermée, `tokenRefreshTask` reste non-nil, donc les appelants qui
-        //     entrent ensuite coalescent réellement au lieu de dépendre de
-        //     l'ordonnancement du groupe.
-        // (b) L'assertion porte sur le TOKEN présenté, pas sur le compteur
-        //     global. C'est ce dernier qui faisait échouer le test en CI
-        //     (« (2) is not equal to (1) ») : il additionne les appels de ce
-        //     test et ceux qu'une activité de fond déclenche sur le même
-        //     singleton — un 401 ailleurs poste un refresh fire-and-forget qui
-        //     frappe ce stub. Le nombre variait donc avec la charge (2 en CI,
-        //     jusqu'à 4 en local) sans qu'aucun défaut produit soit en cause.
+        // 2. Perform 5 concurrent refreshes
         mockAuthService.stubbedToken = "refreshed-jwt-success"
-        mockAuthService.holdsUntilReleased = true
-        // `applySession` ci-dessus peut avoir réveillé un refresh de fond ;
-        // on ne mesure que les appels émis par ce test.
-        AuthManager.shared.cancelPendingTokenRefreshForTesting()
-        mockAuthService.refreshTokenCallCount = 0
 
-        let mock = mockAuthService!
-        let result = try await withThrowingTaskGroup(of: String?.self) { group -> [String] in
+        let result = try await withThrowingTaskGroup(of: String.self) { group -> [String] in
             for _ in 0..<5 {
                 group.addTask {
-                    try await AuthManager.shared.refreshSession(force: true)
+                    return try await AuthManager.shared.refreshSession(force: true)
                 }
             }
-            // Tâche de contrôle : ouvre la porte une fois le premier refresh
-            // en vol et les autres appelants entrés. Reste DANS le groupe pour
-            // que rien ne survive au test (une `Task` détachée finissant après
-            // le teardown fait remonter des exceptions sans rapport).
-            group.addTask {
-                var waited = 0
-                while mock.refreshCallCount(forToken: "expired-token") == 0 && waited < 2_000 {
-                    try await Task.sleep(nanoseconds: 1_000_000)
-                    waited += 1
-                }
-                // Fenêtre COURTE : chaque milliseconde passée porte ouverte est
-                // une milliseconde pendant laquelle un refresh de fond (401 →
-                // `handleUnauthorized`) peut frapper le service stubbé et gonfler
-                // le compteur. 20 ms suffisent aux quatre autres appelants pour
-                // sauter sur le MainActor et trouver la tâche partagée.
-                try await Task.sleep(nanoseconds: 20_000_000)
-                await mock.gate.open()
-                return nil
-            }
-
             var tokens: [String] = []
             for try await token in group {
-                if let token { tokens.append(token) }
+                tokens.append(token)
             }
             return tokens
         }
@@ -165,27 +116,6 @@ final class AuthManagerRefreshTests: XCTestCase {
 // directly instead of subclassing. Only the methods this suite exercises
 // (`refreshToken`) record state; the rest throw to flag accidental use.
 
-/// Porte asynchrone : maintient le premier `refreshToken` EN VOL jusqu'à ce que
-/// le test l'ouvre. Sans elle, le coalescing n'est pas réellement exercé — il
-/// suffit que le premier refresh se termine avant que la tâche suivante ne soit
-/// ordonnancée (CI chargée) pour qu'un second appel réseau parte légitimement.
-private actor ReleaseGate {
-    private var isOpen = false
-    private var waiters: [CheckedContinuation<Void, Never>] = []
-
-    func wait() async {
-        if isOpen { return }
-        await withCheckedContinuation { waiters.append($0) }
-    }
-
-    func open() {
-        isOpen = true
-        let pending = waiters
-        waiters = []
-        for waiter in pending { waiter.resume() }
-    }
-}
-
 private final class MockAuthServiceForManager: AuthServiceProviding, @unchecked Sendable {
     private let queue = DispatchQueue(label: "MockAuthServiceForManager.lock")
     private var _refreshTokenCallCount = 0
@@ -196,14 +126,6 @@ private final class MockAuthServiceForManager: AuthServiceProviding, @unchecked 
     var refreshTokenDelayMs: UInt64 = 100
     var stubbedToken = "refreshed-jwt"
     var errorToThrow: Error?
-
-    /// Quand `true`, `refreshToken` attend `gate.open()` au lieu de dormir.
-    let gate = ReleaseGate()
-    private var _holdsUntilReleased = false
-    var holdsUntilReleased: Bool {
-        get { queue.sync { _holdsUntilReleased } }
-        set { queue.sync { _holdsUntilReleased = newValue } }
-    }
 
     /// Tokens présentés à chaque appel. Le compteur global ne distingue pas les
     /// appels émis par le test de ceux qu'une activité de fond déclenche (401 →
@@ -221,11 +143,7 @@ private final class MockAuthServiceForManager: AuthServiceProviding, @unchecked 
             _refreshTokenCallCount += 1
             _presentedTokens.append(currentToken)
         }
-        if holdsUntilReleased {
-            await gate.wait()
-        } else {
-            try await Task.sleep(nanoseconds: refreshTokenDelayMs * 1_000_000)
-        }
+        try await Task.sleep(nanoseconds: refreshTokenDelayMs * 1_000_000)
         if let error = errorToThrow {
             throw error
         }

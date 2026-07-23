@@ -122,11 +122,21 @@ struct EmbeddableVideoResolverTests {
         let thumb = v.thumbnailURL()
         #expect(thumb.host == "img.youtube.com")
         #expect(thumb.absoluteString == "https://img.youtube.com/vi/abc%2F..%2F..%2Fevil/hqdefault.jpg")
-        #expect(thumb.pathComponents == ["/", "vi", "abc/../../evil", "hqdefault.jpg"])
+        // La garde d'injection porte sur l'URL ÉMISE : les `/` du videoId sont
+        // percent-encodés, donc aucun segment n'est injecté et `standardized`
+        // (qui résout les `..` réels) ne peut pas remonter l'arborescence.
+        //
+        // Ne PAS asserter sur `pathComponents` : cette propriété décode les
+        // percent-escapes avant de découper, si bien qu'elle rend
+        // ["abc", "..", "..", "evil"] pour une URL pourtant sûre. Elle décrit le
+        // comportement de Foundation — qui a changé avec Xcode 26 — et non le
+        // nôtre ; l'y adosser faisait échouer ce test sans qu'aucune injection
+        // ne soit possible.
+        #expect(thumb.standardized.absoluteString == thumb.absoluteString)
         let embed = v.embedURL
         #expect(embed.host == "www.youtube.com")
         #expect(embed.absoluteString == "https://www.youtube.com/embed/abc%2F..%2F..%2Fevil")
-        #expect(embed.pathComponents == ["/", "embed", "abc/../../evil"])
+        #expect(embed.standardized.absoluteString == embed.absoluteString)
     }
 
     @Test("make() rejette un id ASCII valide suivi de garbage plutôt que de le tronquer")
