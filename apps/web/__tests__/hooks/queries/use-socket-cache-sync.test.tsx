@@ -900,7 +900,33 @@ describe('useSocketCacheSync', () => {
 
       const cached = queryClient.getQueryData(['conversations', 'infinite']) as { pages: { conversations: Conversation[] }[] };
       const conv = cached.pages[0].conversations[0];
-      expect((conv as any).lastMessageAt).toBe(newTime);
+      // `Conversation.lastMessageAt` is a `Date` — that is what the REST
+      // transformer puts in this cache. The socket payload's ISO string is
+      // materialised so a single conversation never carries both shapes.
+      expect(conv.lastMessageAt).toEqual(new Date(newTime));
+    });
+
+    it('keeps the cached date when the event carries an unparseable one', () => {
+      const { wrapper, queryClient } = createWrapperWithClient();
+
+      queryClient.setQueryData(['conversations', 'infinite'], {
+        pages: [{ conversations: [mockConversation], pagination: { total: 1, offset: 0, limit: 20, hasMore: false } }],
+        pageParams: [0],
+      });
+
+      renderHook(() => useSocketCacheSync(), { wrapper });
+
+      act(() => {
+        conversationUpdatedCallback?.({
+          conversationId: 'conv-1',
+          updatedBy: { id: 'user-1' },
+          updatedAt: 'not-a-date',
+          lastMessageAt: 'not-a-date',
+        });
+      });
+
+      const cached = queryClient.getQueryData(['conversations', 'infinite']) as { pages: { conversations: Conversation[] }[] };
+      expect(cached.pages[0].conversations[0].lastMessageAt).toEqual(mockConversation.lastMessageAt);
     });
   });
 

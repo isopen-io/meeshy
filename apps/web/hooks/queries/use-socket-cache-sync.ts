@@ -38,6 +38,47 @@ type CachedMessage = Message & {
   translatedAudios?: Record<string, SocketIOTranslation>;
 };
 
+// Socket payloads carry timestamps as ISO strings, while everything the REST
+// layer puts in the conversation cache went through
+// `transformersService.transformConversationData`, which materialises them as
+// `Date` — the shape `Conversation` declares. Writing the raw string back into
+// a cached conversation left the cache holding both shapes for the same field.
+function toDate(value: unknown): Date | null {
+  if (value instanceof Date) return Number.isNaN(value.getTime()) ? null : value;
+  if (typeof value !== 'string' && typeof value !== 'number') return null;
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+const CONVERSATION_DATE_FIELDS = new Set([
+  'lastMessageAt',
+  'createdAt',
+  'updatedAt',
+  'encryptionEnabledAt',
+]);
+
+/**
+ * Turns an untyped `conversation:updated` payload into a patch that matches
+ * `Conversation`: date fields are materialised, and an unparseable date is
+ * dropped rather than overwriting a valid cached value with garbage.
+ *
+ * The final assertion is the trust boundary: the event declares an
+ * `[key: string]: unknown` index signature (the gateway spreads whichever
+ * fields changed), so no narrower type can be inferred from it.
+ */
+export function normalizeConversationPatch(raw: Record<string, unknown>): Partial<Conversation> {
+  const patch: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(raw)) {
+    if (!CONVERSATION_DATE_FIELDS.has(key)) {
+      patch[key] = value;
+      continue;
+    }
+    const asDate = toDate(value);
+    if (asDate) patch[key] = asDate;
+  }
+  return patch as Partial<Conversation>;
+}
+
 type InfiniteConversationData = {
   pages: { conversations: Conversation[]; pagination: any }[];
   pageParams: number[];
@@ -804,13 +845,16 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
         }
       );
 
+      const linkLastMessage = linkMsg as unknown as Message;
+      const linkLastMessageAt = toDate(linkMsg.createdAt) ?? new Date();
+
       queryClient.setQueriesData<Conversation[]>(
         { queryKey: queryKeys.conversations.lists() },
         (old) => {
           if (!old) return old;
           const idx = old.findIndex((c) => c.id === linkConvId);
           if (idx === -1) return old;
-          const updated = { ...old[idx], lastMessage: linkMsg as unknown as Message, lastMessageAt: linkMsg.createdAt as string ?? new Date().toISOString() };
+          const updated: Conversation = { ...old[idx], lastMessage: linkLastMessage, lastMessageAt: linkLastMessageAt };
           return [updated, ...old.filter((_, i) => i !== idx)];
         }
       );
@@ -818,7 +862,7 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
       updateInfiniteConversationCache(queryClient, (convs) => {
         const idx = convs.findIndex((c) => c.id === linkConvId);
         if (idx === -1) return convs;
-        const updated = { ...convs[idx], lastMessage: linkMsg as unknown as Message, lastMessageAt: linkMsg.createdAt as string ?? new Date().toISOString() };
+        const updated: Conversation = { ...convs[idx], lastMessage: linkLastMessage, lastMessageAt: linkLastMessageAt };
         return [updated, ...convs.filter((_, i) => i !== idx)];
       });
     };
@@ -885,8 +929,9 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
     const handleConversationUpdated = (data: { conversationId: string; updatedBy: { id: string }; updatedAt: string; [key: string]: unknown }) => {
       const { conversationId: updatedId, updatedBy: _updatedBy, ...rest } = data;
       if (!updatedId) return;
+      const patch = normalizeConversationPatch(rest);
       updateInfiniteConversationCache(queryClient, (convs) =>
-        convs.map((c) => c.id === updatedId ? { ...c, ...rest } : c)
+        convs.map((c) => c.id === updatedId ? { ...c, ...patch } : c)
       );
     };
 
