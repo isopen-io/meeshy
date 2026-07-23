@@ -645,6 +645,40 @@ describe('Social Notification Methods', () => {
       expect(createArg.data.priority).toBe('low');
     });
 
+    // Le discriminant d'entité décide de la surface ouverte au tap. Sans lui,
+    // un like sur un commentaire de réel retombait sur une heuristique de cache
+    // et pouvait ouvrir la mauvaise surface.
+    it('should persist the carrying entity postType in metadata', async () => {
+      setupSuccessMocks(mockPrisma, { type: 'comment_like', priority: 'low' });
+
+      await service.createCommentLikeNotification({
+        actorId: ACTOR_ID,
+        postId: POST_ID,
+        commentId: COMMENT_ID,
+        commentAuthorId: AUTHOR_ID,
+        emoji: '👍',
+        postType: 'REEL',
+      });
+
+      const createArg = mockPrisma.notification.create.mock.calls[0][0];
+      expect(createArg.data.metadata.postType).toBe('REEL');
+    });
+
+    it('should default metadata postType to POST when the caller omits it', async () => {
+      setupSuccessMocks(mockPrisma, { type: 'comment_like', priority: 'low' });
+
+      await service.createCommentLikeNotification({
+        actorId: ACTOR_ID,
+        postId: POST_ID,
+        commentId: COMMENT_ID,
+        commentAuthorId: AUTHOR_ID,
+        emoji: '👍',
+      });
+
+      const createArg = mockPrisma.notification.create.mock.calls[0][0];
+      expect(createArg.data.metadata.postType).toBe('POST');
+    });
+
     it('should create comment_like notification by default (enabled by default)', async () => {
       // Spec produit 2026-06-14 : tout activé par défaut sauf DnD. Une
       // préférence absente résout vers `commentLikeEnabled ?? true`.

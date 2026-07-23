@@ -114,3 +114,102 @@ Top risks Vague 1 (résolus) : P0 magic link connecté = fuite inter-comptes · 
 **Qualité du processus** : chaque merge vérifié pour fraîcheur/disjonction avant fusion ; chaque lot suivi d'un `meeshy.sh test` complet réel (jamais l'exit code seul) ; tout échec post-merge diagnostiqué à la source (lecture du code réel, jamais de correctif à l'aveugle) avant correction. Plusieurs bugs réels (pas seulement des piètres de compilation) ont été trouvés et corrigés grâce à cette discipline de vérification systématique — le chantier aurait pu se déclarer "terminé" prématurément à plusieurs reprises si seul l'exit code du merge avait été considéré.
 
 **Dette assumée / hors scope** (documentée par les lanes elles-mêmes, à reprendre si besoin) : traduction des aperçus long-press dans la liste de conversations (nécessite des fichiers d'une autre lane) ; kind outbox `.createConversation` mort non retiré ; quelques gaps de durabilité OfflineQueue pour réactions/commentaires story ; refactor SDK purity plus large pour MediaDownloadPolicy/CachedAsyncImage (dette pré-existante, non régressée).
+
+---
+
+# Cohérence du routage des notifications (in-app + push iOS) — 2026-07-23
+
+## Symptôme rapporté
+Notification de **commentaire sur un réel** → l'ouverture mène à **une story sans rapport**.
+
+## Cause racine (prouvée par lecture du code)
+
+1. `POST /posts/:postId/comments` (`services/gateway/src/routes/posts/comments.ts:246`) appelle
+   `createStoryCommentNotificationsBatch` pour **tout** post commenté (pas seulement les stories).
+   Ce batch émet des notifications de type `story_thread_reply` / `friend_story_comment`
+   **même pour un RÉEL**, en portant le vrai discriminant dans `metadata.postType = "REEL"`.
+2. Côté iOS, `RootView.navigateFromNotification` traitait
+   `.storyNewComment / .friendStoryComment / .storyThreadReply` par une branche **hard-codée story**
+   qui n'appelait JAMAIS `NotificationContentRouter` et ignorait `ctx.postType` :
+   → `router.push(.storyNotificationTarget(storyId: <id du réel>))`
+   → le viewer de story s'ouvrait sur un id qui n'est pas une story.
+
+Le web (`apps/web/utils/notification-helpers.ts:152`) faisait déjà la bonne chose
+(`metadata.contentType ?? metadata.postType` d'abord, type de notif seulement en repli) :
+c'est iOS qui divergeait de la source de vérité.
+
+## Défauts connexes de la même famille (métadonnées incohérentes / non lues)
+
+| # | Emplacement | Défaut |
+|---|---|---|
+| A | `NotificationService.createFriendContentNotificationsBatch` | n'écrivait que `metadata.contentType`, jamais `postType` → `data.postType` du push vide → un **réel d'ami** ouvrait `postDetail` au lieu du viewer immersif |
+| B | `NotificationService.createCommentLikeNotification` | aucun `postType` → `comment_like` sur réel/story mal routé |
+| C | `NotificationService.createNotification` (push data) | `data.postType` ne retombait pas sur `metadata.contentType` |
+| D | `iPadRootView+Navigation` | mêmes branches story hard-codées + logique dupliquée `isStoryPost` au lieu du routeur partagé |
+| E | SDK `SocketNotificationMetadata` | pas de `contentType` → le toast socket `friend_new_*` sans discriminant |
+| F | `NotificationNavContext` (3 inits) | lisait `postType` seul, jamais `contentType` |
+| G | `user_mentioned` hors conversation | `createPost/CommentMentionNotificationsBatch` n'émettent qu'un `postId` ; iOS ne routait ce type que par `conversationId` → **tap sans effet** pour toute mention faite dans un post ou un commentaire (le web, lui, routait correctement) |
+| H | les 2 batchs de mention | n'émettaient aucun `postType` → mention dans le commentaire d'un réel mal routée |
+
+## Plan
+
+### Gateway (source des métadonnées)
+- [x] `createFriendContentNotificationsBatch` : écrire `metadata.postType` à côté de `contentType`
+- [x] `createCommentLikeNotification` : accepter + persister `postType` ; appelant le fournit
+- [x] `createNotification` : `data.postType` retombe sur `metadata.contentType`
+- [x] Tests jest correspondants
+
+### iOS (décision de surface — source de vérité unique)
+- [x] `NotificationContentRouter` : accepter `contentType` en second discriminant, couvrir TOUS les types sociaux
+- [x] `RootView.navigateFromNotification` : toutes les branches sociales passent par le routeur
+- [x] `iPadRootView+Navigation` : `isStoryPost` supprimé, routeur partagé
+- [x] `NotificationNavContext` : `postType ?? contentType` pour les 3 sources
+- [x] Tests XCTest correspondants
+
+### SDK
+- [x] `SocketNotificationMetadata.contentType` + `SocketNotificationEvent.postType = postType ?? contentType`
+- [x] `NotificationPayload` : lire `contentType` en repli de `postType`
+
+## Review
+
+**Gateway** — `createFriendContentNotificationsBatch` écrit `metadata.postType = contentType` en
+plus de `contentType` (rétro-compat web conservée) ; `createCommentLikeNotification` accepte et
+persiste `postType`, renseigné par `CommentReactionService` depuis `post.type` ;
+`createNotification` fait retomber `data.postType` du push sur `metadata.contentType`.
+
+**SDK** — `SocketNotificationMetadata.contentType` ajouté, `SocketNotificationEvent.postType`
+résout `postType ?? contentType`, `NotificationPayload.postType` lit les deux clés du push.
+
+**iOS** — `NotificationContentRouter.surface(postType:contentType:notificationType:storyLifecycleHint:)`
+devient la source de vérité unique ; `RootView.navigateFromNotification` route les 5 familles
+sociales via `socialSurface(_:postId:)` avec l'intent story dérivé du type
+(`.comments` / `.reactions` / `.view`) ; `iPadRootView+Navigation` délègue au même routeur
+(les réels y ouvrent `postDetail`, faute de viewer immersif, mais ne partent plus jamais vers
+le viewer de story) ; `NotificationNavContext` lit `postType ?? contentType` sur les 3 sources.
+
+**Mentions (défauts G/H)** — les 2 batchs de mention acceptent et persistent désormais `postType`
+(renseigné par `routes/posts/comments.ts` et les 2 sites de `routes/posts/core.ts`), et
+`RootView` fait retomber la branche message/mention sur la surface sociale quand la notification
+ne porte pas de `conversationId` — une mention dans un post/commentaire n'est plus un cul-de-sac.
+
+**Vérification**
+- Gateway : `bun run test` — **81 suites / 1826 tests verts** (notifications, mentions, posts,
+  routes commentaires), dont 9 nouveaux ; `tsc --noEmit` propre.
+- Web : **15 suites / 338 tests verts** (contrat `contentType ?? postType` non régressé).
+- iOS : `xcodebuild build-for-testing` **SUCCEEDED** puis `test-without-building` sur simu 18.2 —
+  **21/21 `NotificationContentRouterTests` verts**, dont la non-régression exacte du bug rapporté
+  (`story_thread_reply` + `postType REEL` → `.reel`).
+- Vérification iOS faite dans un **worktree jetable sur HEAD** : le worktree principal était muté
+  en parallèle par une autre session (refactor `DevicePermissions` à moitié appliqué), et HEAD
+  lui-même ne compile pas (`AVAudioSession.requestMicrophonePermission` référencé par `0a66a536d`,
+  helper `MicrophonePermission.swift` jamais committé) — neutralisé par un stub local jetable.
+
+**Constat hors périmètre (non traité)** — sur Android, le tap d'une notification ne fait que
+`markAsRead` : aucune navigation n'est implémentée (`NotificationsScreen.kt`). Ce n'est pas une
+incohérence de routage mais une fonctionnalité absente ; la demande portait sur iOS.
+
+**Note d'architecture (à conserver)** : le **nom du type de notification n'est pas un discriminant
+d'entité**. `story_thread_reply` / `friend_story_comment` sont des types de *fan-out de commentaire*
+émis pour n'importe quel contenu (post, réel, mood, story). Le seul discriminant fiable est
+`metadata.postType` (ou `metadata.contentType` pour `friend_new_*`). Toute nouvelle surface cliente
+DOIT passer par `NotificationContentRouter` (iOS) / `resolveContentRoute` (web).

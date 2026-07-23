@@ -189,6 +189,8 @@ export function registerCommentRoutes(
               commenterId: authContext.registeredUser.id,
               mentionedUserIds,
               commentExcerpt: parsed.data.content?.slice(0, 100),
+              // Discriminant d'entité → surface ouverte au tap côté client.
+              postType: post?.type as 'POST' | 'STORY' | 'MOOD' | 'STATUS' | 'REEL' | undefined,
             }).catch(err => fastify.log.error(`comment mention notification failed: ${err}`));
           }
         }
@@ -345,10 +347,20 @@ export function registerCommentRoutes(
       // subtitle pour identifier QUEL commentaire reçoit la réaction.
       const notifService = fastify.notificationService;
       if (notifService && result.authorId) {
-        const likedComment = await fastify.prisma?.postComment?.findUnique({
-          where: { id: commentId },
-          select: { content: true },
-        });
+        // Le type de l'entité portant le commentaire est le discriminant qui
+        // décide de la surface ouverte au tap (lecteur de réel / viewer
+        // éphémère / détail de post) — sans lui le client retombe sur une
+        // heuristique de cache et peut ouvrir la mauvaise surface.
+        const [likedComment, likedPost] = await Promise.all([
+          fastify.prisma?.postComment?.findUnique({
+            where: { id: commentId },
+            select: { content: true },
+          }),
+          fastify.prisma?.post?.findUnique({
+            where: { id: request.params.postId },
+            select: { type: true },
+          }),
+        ]);
         notifService.createCommentLikeNotification({
           actorId: authContext.registeredUser.id,
           postId: request.params.postId,
@@ -356,6 +368,7 @@ export function registerCommentRoutes(
           commentAuthorId: result.authorId,
           emoji,
           commentPreview: likedComment?.content?.slice(0, 80),
+          postType: likedPost?.type as 'POST' | 'STORY' | 'MOOD' | 'STATUS' | 'REEL' | undefined,
         }).catch((err) => fastify.log.warn({ err }, '[POST /posts/:postId/comments/:commentId/like]: notify comment like failed'));
       }
 

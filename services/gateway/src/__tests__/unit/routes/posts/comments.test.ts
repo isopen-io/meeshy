@@ -761,6 +761,110 @@ describe('POST /posts/:postId/comments — createCommentMentionNotificationsBatc
   });
 });
 
+// ─── Entity discriminant propagation ─────────────────────────────────────────
+//
+// The type of the entity carrying the comment is what decides WHICH surface the
+// tap opens client-side (reel player / ephemeral viewer / post detail). When the
+// route drops it, the client falls back to a cache heuristic and can open the
+// wrong surface — the "comment on a réel opens an unrelated story" bug.
+
+describe('POST /posts/:postId/comments — entity discriminant reaches the notifications', () => {
+  function makeReelPrisma() {
+    const prisma = makeDefaultPrisma();
+    prisma.post.findUnique = jest.fn<any>().mockResolvedValue({
+      authorId: 'author-1',
+      commentCount: 5,
+      type: 'REEL',
+      content: 'Reel caption',
+      createdAt: new Date(),
+      expiresAt: null,
+      visibility: 'PUBLIC',
+      visibilityUserIds: [],
+    });
+    return prisma;
+  }
+
+  it('forwards postType REEL to createPostCommentNotification', async () => {
+    const app = await buildApp({ prisma: makeReelPrisma(), withNotificationService: true });
+    const res = await app.inject({
+      method: 'POST', url: `/posts/${POST_ID}/comments`,
+      payload: { content: 'Nice reel' },
+    });
+    expect(res.statusCode).toBe(201);
+    await new Promise((resolve) => setImmediate(resolve));
+
+    const notif = (app as any).notificationService;
+    expect(notif.createPostCommentNotification).toHaveBeenCalledWith(
+      expect.objectContaining({ postType: 'REEL' })
+    );
+    await app.close();
+  });
+
+  it('forwards postType REEL to the comment fan-out batch', async () => {
+    const app = await buildApp({ prisma: makeReelPrisma(), withNotificationService: true });
+    await app.inject({
+      method: 'POST', url: `/posts/${POST_ID}/comments`,
+      payload: { content: 'Nice reel' },
+    });
+    await new Promise((resolve) => setImmediate(resolve));
+
+    const notif = (app as any).notificationService;
+    expect(notif.createStoryCommentNotificationsBatch).toHaveBeenCalledWith(
+      expect.objectContaining({ postType: 'REEL' })
+    );
+    await app.close();
+  });
+
+  it('forwards postType REEL to createCommentReplyNotification', async () => {
+    const app = await buildApp({ prisma: makeReelPrisma(), withNotificationService: true });
+    await app.inject({
+      method: 'POST', url: `/posts/${POST_ID}/comments`,
+      payload: { content: 'Replying', parentId: COMMENT_ID },
+    });
+    await new Promise((resolve) => setImmediate(resolve));
+
+    const notif = (app as any).notificationService;
+    expect(notif.createCommentReplyNotification).toHaveBeenCalledWith(
+      expect.objectContaining({ postType: 'REEL' })
+    );
+    await app.close();
+  });
+
+  it('forwards postType REEL to createCommentLikeNotification', async () => {
+    const app = await buildApp({ prisma: makeReelPrisma(), withNotificationService: true });
+    const res = await app.inject({
+      method: 'POST', url: `/posts/${POST_ID}/comments/${COMMENT_ID}/like`,
+      payload: { emoji: '🔥' },
+    });
+    expect(res.statusCode).toBe(200);
+    await new Promise((resolve) => setImmediate(resolve));
+
+    const notif = (app as any).notificationService;
+    expect(notif.createCommentLikeNotification).toHaveBeenCalledWith(
+      expect.objectContaining({ postType: 'REEL' })
+    );
+    await app.close();
+  });
+
+  it('forwards postType REEL to the comment mention batch', async () => {
+    mockExtractMentions.mockReturnValueOnce(['alice']);
+    mockResolveUsernames.mockResolvedValueOnce(new Map([['alice', { id: 'mentioned-1' }]]));
+
+    const app = await buildApp({ prisma: makeReelPrisma(), withNotificationService: true });
+    await app.inject({
+      method: 'POST', url: `/posts/${POST_ID}/comments`,
+      payload: { content: 'Hey @alice look' },
+    });
+    await new Promise((resolve) => setImmediate(resolve));
+
+    const notif = (app as any).notificationService;
+    expect(notif.createCommentMentionNotificationsBatch).toHaveBeenCalledWith(
+      expect.objectContaining({ postType: 'REEL' })
+    );
+    await app.close();
+  });
+});
+
 describe('POST /posts/:postId/comments — createCommentReplyNotification rejects (line 222)', () => {
   it('returns 201 and swallows reply notification rejection', async () => {
     const replyApp = Fastify({ logger: false });

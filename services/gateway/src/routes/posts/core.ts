@@ -148,6 +148,8 @@ export function registerCoreRoutes(
                 posterId,
                 mentionedUserIds,
                 postExcerpt: postContent.slice(0, 100),
+                // Discriminant d'entité → surface ouverte au tap côté client.
+                postType: postType as 'POST' | 'STORY' | 'MOOD' | 'STATUS' | 'REEL',
               }).catch((err: unknown) => {
                 fastify.log.error(`[POST /posts] post mention notify failed: ${err}`);
               });
@@ -273,6 +275,8 @@ export function registerCoreRoutes(
                 posterId: editPosterId,
                 mentionedUserIds: editMentionedUserIds,
                 postExcerpt: editedContent.slice(0, 100),
+                // Discriminant d'entité → surface ouverte au tap côté client.
+                postType: (post as any).type as 'POST' | 'STORY' | 'MOOD' | 'STATUS' | 'REEL' | undefined,
               }).catch((err: unknown) => {
                 fastify.log.error(`[PUT /posts/:postId] post mention notify failed: ${err}`);
               });

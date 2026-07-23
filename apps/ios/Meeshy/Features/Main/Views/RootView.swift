@@ -988,6 +988,11 @@ struct RootView: View {
         // mapping in `navigateFromNotification` falls back to the local
         // story cache as a secondary signal.
         let postType: String?
+        /// `metadata.contentType` — the discriminant the `friend_new_*` family
+        /// historically shipped INSTEAD of `postType`. Read as a fallback so a
+        /// friend's new réel doesn't degrade to the flat post detail on
+        /// payloads minted before the gateway mirrored the value.
+        let contentType: String?
         let senderId: String?
         let senderUsername: String?
         // Phase G — snapshot fed to `StoryNotificationTargetScreen` so the
@@ -1014,6 +1019,7 @@ struct RootView: View {
             commentId = notification.context?.commentId ?? notification.metadata?.commentId
             parentCommentId = notification.context?.parentCommentId ?? notification.metadata?.parentCommentId
             postType = notification.metadata?.postType
+            contentType = notification.metadata?.contentType
             senderId = notification.senderId
             senderUsername = notification.senderName
             storyContext = StoryNotificationContext.from(notification)
@@ -1032,6 +1038,7 @@ struct RootView: View {
             commentId = event.commentId
             parentCommentId = event.parentCommentId
             postType = event.postType
+            contentType = event.metadata?.contentType
             senderId = event.senderId
             senderUsername = event.senderUsername
             storyContext = NotificationNavContext.makeStoryContext(from: event)
@@ -1050,6 +1057,7 @@ struct RootView: View {
             commentId = payload.commentId
             parentCommentId = payload.parentCommentId
             postType = payload.postType
+            contentType = payload.contentType
             senderId = payload.senderId
             senderUsername = payload.senderUsername
             storyContext = NotificationNavContext.makeStoryContext(from: payload)
@@ -1059,6 +1067,20 @@ struct RootView: View {
             isVideoCall = payload.isVideoCall
             iceServersJSON = payload.iceServersJSON
         }
+
+        // MARK: - Intent derived from the notification type
+        //
+        // The TYPE says what the user is being told about (a comment, a
+        // reaction, a fresh publication); the metadata discriminant says WHICH
+        // entity carries it. Keeping the two apart is what lets a comment on a
+        // réel open the réel with its comments, instead of the story viewer.
+
+        /// Which affordance the story surface auto-opens once resolved.
+        var storyIntent: StoryIntent { NotificationContentRouter.intent(for: type) }
+
+        /// `true` when the notification is ABOUT a comment — the post detail
+        /// surface then opens with its comments sheet already showing.
+        var opensComments: Bool { NotificationContentRouter.opensComments(type) }
 
         // MARK: - Story context fabrication
         //
@@ -1174,27 +1196,64 @@ struct RootView: View {
 
     // Routing decision for a social-content notification — delegated to the pure
     // `NotificationContentRouter` (single source of truth, mirrors the web's
-    // `resolveContentRoute`). `metadata.postType` is the high-confidence signal;
-    // when the gateway omits it we fall back to the notification type and, last,
-    // to the local story cache where any post carrying a non-nil `expiresAt` is,
-    // by definition, a story.
-    private func isStoryNotification(_ ctx: NotificationNavContext, postId: String) -> Bool {
-        let storyLifecycleHint = StoryService.shared.cachedPost(id: postId)?.expiresAt != nil
-        return NotificationContentRouter.surface(
-            postType: ctx.postType,
-            notificationType: ctx.type,
-            storyLifecycleHint: storyLifecycleHint
-        ) == .story
-    }
-
-    // Reel-flavoured notification (`metadata.postType == "REEL"`). Reels open in
-    // the full-screen immersive viewer, never the story target or the post detail.
-    private func isReelNotification(_ ctx: NotificationNavContext) -> Bool {
+    // `resolveContentRoute`). The metadata discriminant (`postType`, or
+    // `contentType` for the `friend_new_*` family) is the high-confidence
+    // signal; when the gateway omits it we fall back to the notification type
+    // and, last, to the local cache where any post carrying a non-nil
+    // `expiresAt` is ephemeral by definition.
+    //
+    // EVERY social branch below goes through this — including the comment
+    // fan-out types (`story_thread_reply`, `friend_story_comment`,
+    // `story_new_comment`), which the gateway emits for ANY commented content,
+    // reels included. Routing those on their name alone is what opened the
+    // story viewer on an unrelated story when the user tapped a comment
+    // notification for a réel.
+    private func socialSurface(_ ctx: NotificationNavContext, postId: String) -> NotificationContentSurface {
         NotificationContentRouter.surface(
             postType: ctx.postType,
+            contentType: ctx.contentType,
             notificationType: ctx.type,
-            storyLifecycleHint: false
-        ) == .reel
+            storyLifecycleHint: StoryService.shared.cachedPost(id: postId)?.expiresAt != nil
+        )
+    }
+
+    /// Opens the entity a social notification points at, on the surface the
+    /// router resolved. Shared by the social branch and by the mention branch —
+    /// a mention lives either in a conversation OR in a post/comment, and the
+    /// latter used to dead-end because the mention branch only knew about
+    /// conversations.
+    private func openSocialContent(_ ctx: NotificationNavContext, postId: String) {
+        switch socialSurface(ctx, postId: postId) {
+        case .reel:
+            // The user tapped a notification about a réel — it must land on the
+            // réel in the immersive viewer, never on the story target screen
+            // (which would resolve an unrelated story) nor on the flat detail.
+            openReelFromNotification(
+                postId: postId,
+                commentId: ctx.commentId,
+                parentCommentId: ctx.parentCommentId
+            )
+
+        case .story:
+            // Phase G — ephemeral entities route to the notification target
+            // screen, which redirects into the viewer (comments overlay /
+            // reactions sheet) or surfaces the expired empty state when the
+            // content is gone.
+            router.push(.storyNotificationTarget(
+                storyId: postId,
+                intent: ctx.storyIntent,
+                context: ctx.storyContext
+            ))
+
+        case .post:
+            router.push(.postDetail(
+                postId,
+                nil,
+                showComments: ctx.opensComments,
+                commentId: ctx.commentId,
+                parentCommentId: ctx.parentCommentId
+            ))
+        }
     }
 
     private func navigateFromNotification(_ ctx: NotificationNavContext) {
@@ -1204,7 +1263,17 @@ struct RootView: View {
              .userMentioned, .mention, .legacyMention,
              .translationCompleted, .translationReady, .legacyTranslationReady, .transcriptionCompleted,
              .messageEdited, .messageDeleted, .messagePinned, .messageForwarded:
-            guard let conversationId = ctx.conversationId, !conversationId.isEmpty else { return }
+            guard let conversationId = ctx.conversationId, !conversationId.isEmpty else {
+                // A mention lives EITHER in a conversation OR in a post/comment
+                // (`createPostMentionNotificationsBatch` /
+                // `createCommentMentionNotificationsBatch` ship a `postId` and
+                // no `conversationId`). Without this fallback the tap was a
+                // dead end for every mention made outside a chat.
+                if let postId = ctx.postId, !postId.isEmpty {
+                    openSocialContent(ctx, postId: postId)
+                }
+                return
+            }
             navigateToConversationById(conversationId, highlightMessageId: ctx.messageId, ensureUnread: true)
 
         case .friendRequest, .contactRequest, .legacyFriendRequest,
@@ -1256,80 +1325,54 @@ struct RootView: View {
                 conversationId: ctx.conversationId
             )
 
-        case .postLike, .legacyPostLike, .postRepost, .friendNewPost:
-            if let postId = ctx.postId, !postId.isEmpty {
-                if isReelNotification(ctx) {
-                    openReelFromNotification(postId: postId)
-                } else {
-                    router.push(.postDetail(postId))
+        // ===== SOCIAL CONTENT =====
+        // One decision point for every social notification: the surface comes
+        // from `socialSurface` (metadata discriminant first), the story intent
+        // from the notification type. Never from the type alone.
+        case .postLike, .legacyPostLike, .postRepost, .friendNewPost,
+             .postComment, .legacyPostComment, .commentLike, .commentReply, .commentReaction,
+             .storyReaction, .statusReaction,
+             .storyNewComment, .friendStoryComment, .storyThreadReply,
+             .friendNewStory, .friendNewMood:
+            guard let postId = ctx.postId, !postId.isEmpty else {
+                // No entity to open — some legacy social pushes only carry the
+                // conversation. Never a dead end.
+                if let conversationId = ctx.conversationId, !conversationId.isEmpty {
+                    navigateToConversationById(conversationId)
                 }
-            } else if let conversationId = ctx.conversationId, !conversationId.isEmpty {
-                navigateToConversationById(conversationId)
+                return
             }
 
-        case .postComment, .legacyPostComment, .commentLike, .commentReply, .commentReaction:
-            if let postId = ctx.postId, !postId.isEmpty {
-                // Reel comments/reactions open the full-screen reel viewer (the
-                // user tapped a notification about a réel — it must land on the
-                // réel, not the story viewer with the wrong post).
-                //
-                // Phase G — story-flavoured comments route to the notification
-                // target screen (which redirects into the viewer's comments
-                // overlay or shows the expired empty state). Detection: explicit
-                // `metadata.postType == "STORY"` OR a cache hint (cached post
-                // carries a non-nil `expiresAt`). Falls back to the regular
-                // post-detail navigation otherwise.
-                if isReelNotification(ctx) {
-                    openReelFromNotification(postId: postId, commentId: ctx.commentId, parentCommentId: ctx.parentCommentId)
-                } else if isStoryNotification(ctx, postId: postId) {
-                    router.push(.storyNotificationTarget(
-                        storyId: postId,
-                        intent: .comments,
-                        context: ctx.storyContext
-                    ))
-                } else {
-                    router.push(.postDetail(
-                        postId,
-                        nil,
-                        showComments: true,
-                        commentId: ctx.commentId,
-                        parentCommentId: ctx.parentCommentId
-                    ))
-                }
-            } else if let conversationId = ctx.conversationId, !conversationId.isEmpty {
-                navigateToConversationById(conversationId)
-            }
+            switch socialSurface(ctx, postId: postId) {
+            case .reel:
+                // The user tapped a notification about a réel — it must land on
+                // the réel in the immersive viewer, never on the story target
+                // screen (which would resolve an unrelated story) nor on the
+                // flat post detail.
+                openReelFromNotification(
+                    postId: postId,
+                    commentId: ctx.commentId,
+                    parentCommentId: ctx.parentCommentId
+                )
 
-        case .storyReaction, .statusReaction:
-            // Phase G — every story-reaction notification routes through
-            // the notification target screen so the viewer auto-opens its
-            // viewers/reactions sheet (or the expired empty state surfaces
-            // when the story is gone). Replaces the previous best-effort
-            // `groupIndex(forStoryId:)` lookup which silently dropped the
-            // notification when the local tray hadn't loaded the story yet.
-            if let postId = ctx.postId, !postId.isEmpty {
+            case .story:
+                // Phase G — ephemeral entities route to the notification target
+                // screen, which redirects into the viewer (comments overlay /
+                // reactions sheet) or surfaces the expired empty state when the
+                // content is gone.
                 router.push(.storyNotificationTarget(
                     storyId: postId,
-                    intent: .reactions,
+                    intent: ctx.storyIntent,
                     context: ctx.storyContext
                 ))
-            }
 
-        case .storyNewComment, .friendStoryComment, .storyThreadReply:
-            if let postId = ctx.postId, !postId.isEmpty {
-                router.push(.storyNotificationTarget(
-                    storyId: postId,
-                    intent: .comments,
-                    context: ctx.storyContext
-                ))
-            }
-
-        case .friendNewStory, .friendNewMood:
-            if let postId = ctx.postId, !postId.isEmpty {
-                router.push(.storyNotificationTarget(
-                    storyId: postId,
-                    intent: .view,
-                    context: ctx.storyContext
+            case .post:
+                router.push(.postDetail(
+                    postId,
+                    nil,
+                    showComments: ctx.opensComments,
+                    commentId: ctx.commentId,
+                    parentCommentId: ctx.parentCommentId
                 ))
             }
 

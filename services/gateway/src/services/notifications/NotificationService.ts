@@ -43,6 +43,18 @@ function formatDuration(ms: number): string {
   return formatClock(Math.round(ms / 1000));
 }
 
+/**
+ * Lit une clé de metadata comme chaîne non vide pour le payload push (les
+ * `data` APNs/FCM ne transportent que des chaînes). Retourne `''` quand la clé
+ * est absente, nulle ou vide — ce que le client interprète comme « pas de
+ * valeur » (`NotificationPayload` mappe la chaîne vide vers `nil`).
+ */
+function pickMetadataString(metadata: unknown, key: string): string {
+  if (!metadata || typeof metadata !== 'object' || !(key in metadata)) return '';
+  const value = (metadata as Record<string, unknown>)[key];
+  return value == null ? '' : String(value);
+}
+
 function formatFileSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} o`;
   // Bascule le tier sur la valeur ARRONDIE (comme formatCallDataSize) : sinon
@@ -908,7 +920,15 @@ export class NotificationService {
                 // handler iOS lit cette clé défensivement : absente →
                 // résolution via receivedRequests par senderId.
                 friendRequestId: params.context.friendRequestId || '',
-                postType: (params.metadata && 'postType' in params.metadata ? String(params.metadata.postType ?? '') : ''),
+                // Discriminant d'entité du contenu social — pilote la surface
+                // ouverte au tap côté client (lecteur de réel / viewer éphémère
+                // / détail de post). `contentType` sert de repli : c'est sous ce
+                // nom que la famille `friend_new_*` l'a historiquement porté.
+                // Le TYPE de notification n'est JAMAIS un discriminant : le
+                // fan-out de commentaires émet `story_thread_reply` pour
+                // n'importe quel contenu, réel inclus.
+                postType: pickMetadataString(params.metadata, 'postType')
+                  || pickMetadataString(params.metadata, 'contentType'),
                 senderId: params.actor?.id || '',
                 senderUsername: params.actor?.username || '',
                 senderDisplayName: params.actor?.displayName || '',
@@ -1938,6 +1958,12 @@ export class NotificationService {
     commenterId: string;
     mentionedUserIds: string[];
     commentExcerpt?: string;
+    /**
+     * Type de l'entité portant le commentaire — discriminant qui décide de la
+     * surface ouverte au tap côté client. Sans lui, une mention dans le
+     * commentaire d'un réel ouvre le détail de post plat. Défaut POST.
+     */
+    postType?: 'POST' | 'STORY' | 'MOOD' | 'STATUS' | 'REEL';
   }): Promise<void> {
     if (params.mentionedUserIds.length === 0) return;
 
@@ -1991,6 +2017,7 @@ export class NotificationService {
             postId: params.postId,
             commentId: params.commentId,
             commentPreview: content,
+            postType: params.postType ?? 'POST',
           } as any,
         })
       );
@@ -2016,6 +2043,12 @@ export class NotificationService {
     posterId: string;
     mentionedUserIds: string[];
     postExcerpt?: string;
+    /**
+     * Type du contenu mentionnant — discriminant qui décide de la surface
+     * ouverte au tap côté client (lecteur de réel / viewer éphémère / détail de
+     * post). Défaut POST.
+     */
+    postType?: 'POST' | 'STORY' | 'MOOD' | 'STATUS' | 'REEL';
   }): Promise<void> {
     if (params.mentionedUserIds.length === 0) return;
 
@@ -2067,6 +2100,7 @@ export class NotificationService {
             entityType: 'post',
             postId: params.postId,
             postPreview: excerpt,
+            postType: params.postType ?? 'POST',
           } as any,
         })
       );
@@ -2227,6 +2261,12 @@ export class NotificationService {
             action: 'view_post',
             postId: params.postId,
             contentType: params.contentType,
+            // Le discriminant d'entité voyage AUSSI sous `postType` : c'est la
+            // clé que lisent le payload push (`data.postType`) et le routage
+            // client. Sans ce miroir, le nouveau réel d'un ami arrivait sans
+            // discriminant et ouvrait le détail de post plat au lieu du lecteur
+            // immersif. `contentType` est conservé pour la rétro-compat web.
+            postType: params.contentType,
             excerpt,
             ...(mediaType ? { mediaType } : {}),
             ...(media?.thumbnailUrl ? { postThumbnailUrl: media.thumbnailUrl } : {}),
@@ -2985,6 +3025,12 @@ export class NotificationService {
     emoji: string;
     /** Extrait du commentaire liké — identifie QUEL commentaire reçoit la réaction. */
     commentPreview?: string;
+    /**
+     * Type de l'entité PORTANT le commentaire liké. Sans lui, le client ne peut
+     * pas choisir la bonne surface (lecteur de réel / viewer éphémère / détail
+     * de post) et retombe sur une heuristique de cache. Défaut POST.
+     */
+    postType?: 'POST' | 'STORY' | 'MOOD' | 'STATUS' | 'REEL';
   }): Promise<Notification | null> {
     if (params.actorId === params.commentAuthorId) return null;
 
@@ -3029,6 +3075,7 @@ export class NotificationService {
         postId: params.postId,
         commentId: params.commentId,
         emoji: params.emoji,
+        postType: params.postType ?? 'POST',
         ...(trimmedPreview !== ''
           ? { commentPreview: this.truncateMessage(trimmedPreview) }
           : {}),

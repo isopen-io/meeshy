@@ -318,6 +318,11 @@ public struct NotificationPayload {
     public let senderAvatar: String?
     public let postId: String?
     public let postType: String?
+    /// Discriminant d'entité de la famille `friend_new_*`, que la gateway a
+    /// historiquement émis SOUS CE NOM au lieu de `postType`. Lu en repli par le
+    /// routage client pour que le nouveau réel d'un ami ouvre bien le lecteur
+    /// immersif et non le détail de post plat.
+    public let contentType: String?
     /// Commentaire ciblé par la notification (like/réponse/commentaire). Permet
     /// d'ouvrir l'entité puis de défiler/surligner le commentaire exact.
     public let commentId: String?
@@ -351,6 +356,8 @@ public struct NotificationPayload {
         self.postId = rawPostId.isEmpty ? nil : rawPostId
         let rawPostType = userInfo["postType"] as? String ?? ""
         self.postType = rawPostType.isEmpty ? nil : rawPostType
+        let rawContentType = userInfo["contentType"] as? String ?? ""
+        self.contentType = rawContentType.isEmpty ? nil : rawContentType
         let rawCommentId = userInfo["commentId"] as? String ?? ""
         self.commentId = rawCommentId.isEmpty ? nil : rawCommentId
         let rawParentCommentId = userInfo["parentCommentId"] as? String ?? ""
