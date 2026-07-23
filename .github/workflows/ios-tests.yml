@@ -44,11 +44,13 @@ concurrency:
 jobs:
   ios-tests:
     runs-on: macos-15
-    # Cold runs grew past the old 25-min cap (the job was killed mid-compile in
-    # swift-frontend, not hung on a test). 30 min gives head-room; the cache
-    # below makes warm runs finish well under it. Still a hard cap so a genuine
-    # deadlock fails fast instead of sitting for GitHub's 6h default.
-    timeout-minutes: 30
+    # Measured warm-cache breakdown (macos-15, 2-worker parallel run phase):
+    # ~1 min setup + ~9-14 min iOS 18.2 runtime download (fixed, variable with
+    # network) + ~3-5 min SPM resolve + ~9 min incremental compile + ~7-8 min
+    # parallel tests ≈ 31-33 min. 35 gives margin for the runtime-download
+    # variance without going to the 40+ min a serial run would have needed.
+    # Still a hard cap so a genuine deadlock fails fast, not GitHub's 6h default.
+    timeout-minutes: 35
     steps:
       - uses: actions/checkout@v7
 
