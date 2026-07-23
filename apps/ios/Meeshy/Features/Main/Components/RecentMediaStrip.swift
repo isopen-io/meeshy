@@ -94,26 +94,38 @@ final class RecentMediaStripModel: NSObject, ObservableObject, PHPhotoLibraryCha
         }
     }
 
+    /// Charge la tête de photothèque SANS jamais déclencher de prompt.
+    ///
+    /// Le strip est monté dès l'ouverture du composer : demander ici revenait à
+    /// réclamer l'accès aux photos avant la moindre intention de l'utilisateur —
+    /// un prompt sans contexte, souvent refusé définitivement. Tant que l'accès
+    /// n'est pas accordé, la vue affiche une tuile d'invitation dont le tap
+    /// appelle `requestAccess()`.
     func load(limit: Int = 40) {
         guard !didLoad else { return }
         didLoad = true
         fetchLimit = limit
-        switch status {
-        case .authorized, .limited:
-            fetch(limit: limit)
-        case .notDetermined:
-            PHPhotoLibrary.requestAuthorization(for: .readWrite) { [weak self] newStatus in
-                Task { @MainActor in
-                    guard let self else { return }
-                    self.status = newStatus
-                    if newStatus == .authorized || newStatus == .limited {
-                        self.fetch(limit: limit)
-                    }
-                }
-            }
-        default:
-            break
-        }
+        guard status == .authorized || status == .limited else { return }
+        fetch(limit: limit)
+    }
+
+    /// Demande déclenchée par un geste explicite (tap sur la tuile d'accès).
+    /// `announcesRefusal: false` : la tuile explique déjà le refus sur place,
+    /// un toast en plus ferait doublon sur le même geste.
+    func requestAccess() async {
+        let granted = await MediaPermissionCoordinator.ensurePhotoLibraryRead(announcesRefusal: false)
+        status = PHPhotoLibrary.authorizationStatus(for: .readWrite)
+        guard granted else { return }
+        fetch(limit: fetchLimit)
+    }
+
+    /// `true` tant que le strip n'a rien à montrer faute d'autorisation.
+    var needsAuthorization: Bool {
+        status != .authorized && status != .limited
+    }
+
+    var isAuthorizationRefused: Bool {
+        status == .denied || status == .restricted
     }
 
     private func fetch(limit: Int) {
@@ -312,7 +324,9 @@ struct RecentMediaStrip: View {
                     .transition(.move(edge: .top).combined(with: .opacity))
             }
             Group {
-                if usesGridLayout {
+                if model.needsAuthorization {
+                    authorizationTile
+                } else if usesGridLayout {
                     regularGrid
                 } else {
                     compactStrip
@@ -321,6 +335,45 @@ struct RecentMediaStrip: View {
             }
         }
         .task { model.load() }
+    }
+
+    /// Remplace la grille tant que la photothèque n'est pas accessible.
+    ///
+    /// Deux états : jamais demandé (le tap déclenche le prompt, au moment où
+    /// l'utilisateur montre son intérêt) et refus définitif (le tap ouvre les
+    /// Réglages — auparavant le strip restait simplement vide, sans un mot).
+    private var authorizationTile: some View {
+        Button {
+            HapticFeedback.light()
+            if model.isAuthorizationRefused {
+                MediaPermissionCoordinator.openSettings()
+            } else {
+                Task { await model.requestAccess() }
+            }
+        } label: {
+            HStack(spacing: 10) {
+                Image(systemName: "photo.on.rectangle.angled")
+                    .font(MeeshyFont.relative(18, weight: .medium))
+                    .foregroundColor(Color(hex: accentColor))
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(model.isAuthorizationRefused
+                         ? String(localized: "composer.recent.accessDenied", defaultValue: "Accès aux photos refusé", bundle: .main)
+                         : String(localized: "composer.recent.grantAccess", defaultValue: "Autoriser l'accès aux photos", bundle: .main))
+                        .font(MeeshyFont.relative(13, weight: .semibold))
+                        .foregroundColor(.primary)
+                    Text(model.isAuthorizationRefused
+                         ? String(localized: "composer.recent.accessDenied.hint", defaultValue: "Toucher pour ouvrir les Réglages", bundle: .main)
+                         : String(localized: "composer.recent.grantAccess.hint", defaultValue: "Pour retrouver vos médias récents ici", bundle: .main))
+                        .font(MeeshyFont.relative(11))
+                        .foregroundColor(.secondary)
+                }
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, hPadding)
+            .padding(.vertical, 14)
+        }
+        .buttonStyle(.plain)
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     /// Shown while multi-selecting: cancel on the left, a counting "Ajouter"

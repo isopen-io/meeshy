@@ -10,6 +10,11 @@ public final class DefaultSDKAudioRecorder: ObservableObject, AudioRecordingProv
     @Published public var isRecording = false
     @Published public var duration: TimeInterval = 0
     @Published public var audioLevels: [CGFloat] = Array(repeating: 0, count: 15)
+    /// Passe à `true` quand un `startRecording()` a été refusé faute de
+    /// permission micro. Les vues SDK-UI demandent la permission elles-mêmes en
+    /// amont (et rendent leur propre message) ; ce drapeau sert de signal aux
+    /// hôtes qui appellent le recorder sans passer par ces vues.
+    @Published public private(set) var permissionDenied = false
 
     public private(set) var recordedFileURL: URL?
 
@@ -61,6 +66,29 @@ public final class DefaultSDKAudioRecorder: ObservableObject, AudioRecordingProv
     }
 
     public func startRecording() {
+        // Filet micro : activer la session avant que TCC ait tranché déclenche
+        // le prompt système de façon asynchrone pendant que `record()` tourne
+        // déjà — l'enregistrement démarre alors muet. On tranche AVANT.
+        // Chemin nominal (déjà autorisé) : test synchrone, zéro latence ajoutée.
+        let permission = MediaPermissionState.microphone
+        guard permission.isUsable else {
+            guard permission.canPrompt else {
+                permissionDenied = true
+                return
+            }
+            Task { @MainActor [weak self] in
+                let resolved = await DevicePermissions.requestMicrophone()
+                guard let self else { return }
+                guard resolved.isUsable else {
+                    self.permissionDenied = true
+                    return
+                }
+                self.startRecording()
+            }
+            return
+        }
+        permissionDenied = false
+
         // Source unique de session (call-aware) : pendant un appel VoIP la
         // reconfiguration est refusée — on n'enregistre pas par-dessus
         // RTCAudioSession (l'ancien chemin direct AVAudioSession cassait

@@ -73,6 +73,15 @@ final class AudioRecorderManager: ObservableObject, AudioRecordingProviding {
             return
         }
 
+        // Garde micro — point UNIQUE pour les cinq surfaces qui appellent ce
+        // recorder (message vocal, commentaire post, commentaire story, post
+        // audio, canvas story). Sans elle, `setCategory`/`setActive` déclenchent
+        // le prompt TCC de façon asynchrone pendant que `record()` tourne déjà :
+        // le tout premier enregistrement de l'utilisateur partait muet, sans
+        // aucun signal. Chemin nominal (permission déjà accordée) : test
+        // synchrone, aucune latence ajoutée.
+        guard hasMicrophonePermission() else { return }
+
         let session = AVAudioSession.sharedInstance()
         do {
             // Audit P1-10 — `.voiceChat` enables the system EC/AGC/NS chain
@@ -116,6 +125,26 @@ final class AudioRecorderManager: ObservableObject, AudioRecordingProviding {
         timer = Timer.scheduledTimer(withTimeInterval: 0.05, repeats: true) { [weak self] _ in
             Task { @MainActor in self?.updateMetering() }
         }
+    }
+
+    /// Tranche la permission micro AVANT toute activation de session.
+    ///
+    /// - déjà accordée → `true` immédiatement, chemin synchrone inchangé ;
+    /// - jamais demandée → `false` maintenant, mais la demande part et
+    ///   `startRecording()` est relancé si l'utilisateur accepte. Les vues
+    ///   observent `@Published isRecording`, donc ce démarrage différé est
+    ///   transparent pour elles ;
+    /// - refus définitif → `false` + toast actionnable (le système ne
+    ///   ré-afficherait plus jamais son prompt).
+    private func hasMicrophonePermission() -> Bool {
+        let state = MediaPermissionState.microphone
+        if state.isUsable { return true }
+
+        Task { @MainActor [weak self] in
+            guard await MediaPermissionCoordinator.ensureMicrophone() else { return }
+            self?.startRecording()
+        }
+        return false
     }
 
     /// A3 — central deactivation helper. Exposed `internal` for tests; not

@@ -19,6 +19,27 @@ struct IncomingCallView: View {
     @State private var ringOpacity: Double = 1.0
     @State private var avatarBounce: Bool = false
 
+    /// Tranche les permissions AVANT de laisser `CallManager` répondre.
+    ///
+    /// Ce chemin (bannière in-app, app au premier plan) est le seul où l'on
+    /// peut demander avant l'acceptation — sur le chemin CallKit l'UI système
+    /// répond pour nous et `CallManager.answerCall()` porte la garde de repli.
+    /// Micro refusé ⇒ on ne répond pas et on raccroche : un appel accepté sans
+    /// micro se connecte muet, l'appelant parlant dans le vide.
+    /// Caméra refusée ⇒ on répond quand même, en audio (dégradation gérée en aval).
+    private func acceptCall() {
+        Task { @MainActor in
+            guard await MediaPermissionCoordinator.ensureMicrophone() else {
+                callManager.endCall()
+                return
+            }
+            if callManager.isVideoEnabled {
+                await MediaPermissionCoordinator.ensureCamera(announcesRefusal: false)
+            }
+            callManager.answerCall()
+        }
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             Spacer()
@@ -197,7 +218,7 @@ struct IncomingCallView: View {
 
                 // Accept
                 Button {
-                    callManager.answerCall()
+                    acceptCall()
                 } label: {
                     VStack(spacing: 10) {
                         Image(systemName: callManager.isVideoEnabled ? "video.fill" : "phone.fill")

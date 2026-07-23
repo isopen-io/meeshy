@@ -1898,12 +1898,14 @@ class ConversationViewModel: ObservableObject {
         }
         let displayName = resolvedPeerDisplayName
             ?? String(localized: "call.peer.fallback", defaultValue: "Appel", bundle: .main)
-        CallManager.shared.startCall(
-            conversationId: conversationId,
-            userId: peerUserId,
-            displayName: displayName,
-            isVideo: summary.callType == .video
-        )
+        Task { @MainActor in
+            await CallManager.shared.requestPermissionsThenStartCall(
+                conversationId: conversationId,
+                userId: peerUserId,
+                displayName: displayName,
+                isVideo: summary.callType == .video
+            )
+        }
     }
 
     /// Rejoint l'appel EN COURS annoncé par la bulle vivante — 4 branches :

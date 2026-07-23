@@ -111,25 +111,22 @@ public final class PhotoLibraryManager: @unchecked Sendable {
 
     // MARK: - Authorization
 
+    /// Demande l'accès `.addOnly` (écriture seule). Délègue à
+    /// `DevicePermissions` — source unique des demandes TCC, dont le callback
+    /// est confiné `nonisolated` (cf. `DevicePermissions.swift`).
     public func requestAuthorization() async -> Bool {
-        let status = PHPhotoLibrary.authorizationStatus(for: .addOnly)
-        switch status {
-        case .authorized, .limited:
-            return true
-        case .notDetermined:
-            return await withCheckedContinuation { continuation in
-                PHPhotoLibrary.requestAuthorization(for: .addOnly) { newStatus in
-                    continuation.resume(returning: newStatus == .authorized || newStatus == .limited)
-                }
-            }
-        default:
-            return false
-        }
+        await DevicePermissions.requestPhotoLibraryAdd().isUsable
     }
 
     public var isAuthorized: Bool {
-        let status = PHPhotoLibrary.authorizationStatus(for: .addOnly)
-        return status == .authorized || status == .limited
+        MediaPermissionState.photoLibraryAdd.isUsable
+    }
+
+    /// État courant, sans jamais prompter — permet aux appelants de distinguer
+    /// « pas encore demandé » d'un refus définitif (qui, lui, mérite un renvoi
+    /// vers les Réglages plutôt qu'un nouveau prompt qui n'apparaîtra jamais).
+    public var authorizationState: MediaPermissionState {
+        MediaPermissionState.photoLibraryAdd
     }
 
     // MARK: - Album Management

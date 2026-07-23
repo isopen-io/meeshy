@@ -837,10 +837,50 @@ final class CallManager: ObservableObject {
         }
     }
 
+    /// Point d'entrée de composition pour TOUTE surface produit (header de
+    /// conversation, liste, clavier, journal d'appels, rappel).
+    ///
+    /// Le micro est tranché AVANT de composer : auparavant, aucun chemin ne le
+    /// demandait et le prompt système arrivait pendant le setup CallKit — refusé,
+    /// l'appel se « connectait » et restait muet, l'interlocuteur parlant dans le
+    /// vide. Un refus micro annule donc l'appel, avec renvoi vers les Réglages.
+    ///
+    /// La caméra n'est jamais bloquante : un refus fait simplement composer en
+    /// audio (la dégradation aval de `performLocalMediaStart` reste le filet).
+    @discardableResult
+    func requestPermissionsThenStartCall(
+        conversationId: String,
+        userId: String,
+        displayName: String,
+        isVideo: Bool
+    ) async -> Bool {
+        guard await MediaPermissionCoordinator.ensureMicrophone() else {
+            Logger.calls.warning("[CALL] outgoing call aborted: microphone permission refused")
+            return false
+        }
+
+        var video = isVideo
+        if video, await MediaPermissionCoordinator.ensureCamera(announcesRefusal: false) == false {
+            video = false
+            Logger.calls.warning("[CALL] camera refused — dialing audio-only")
+            FeedbackToastManager.shared.showError(
+                String(localized: "call.video.permission.denied",
+                       defaultValue: "Caméra : accès refusé — toucher pour ouvrir les Paramètres",
+                       bundle: .main)
+            ) { MediaPermissionCoordinator.openSettings() }
+        }
+
+        return startCall(conversationId: conversationId, userId: userId, displayName: displayName, isVideo: video)
+    }
+
     /// Starts an outgoing call. Returns `false` (no-op) if a call is already
     /// active — callers that need to tell the user why nothing happened
     /// (e.g. `CallStarter`, which shows a busy toast) should check this;
     /// callers that don't care can ignore it.
+    ///
+    /// N'appelle PAS de permission : les surfaces produit passent par
+    /// `requestPermissionsThenStartCall`. Cette méthode reste le moteur brut,
+    /// utilisé par les chemins déjà autorisés (CallKit) et les tests.
     @discardableResult
     func startCall(conversationId: String, userId: String, displayName: String, isVideo: Bool) -> Bool {
         resetEndedStateForNewCall()
@@ -1687,6 +1727,22 @@ final class CallManager: ObservableObject {
         guard case .ringing(isOutgoing: false) = callState else { return }
         guard let callId = currentCallId, let userId = remoteUserId else { return }
 
+        // Micro absolument requis pour répondre. Sur le chemin in-app,
+        // `IncomingCallView` a déjà demandé la permission avant d'afficher
+        // Accepter/Refuser ; sur le chemin CallKit, l'acceptation vient de
+        // l'UI système et rien ne peut être demandé en amont — on tranche donc
+        // ici. Sans micro, l'appel se connecterait muet : on raccroche tout de
+        // suite avec un renvoi vers les Réglages, plutôt que de laisser
+        // l'appelant parler dans le vide.
+        guard MediaPermissionState.microphone.isUsable else {
+            Logger.calls.warning("[CALL] answer refused: microphone permission missing — ending call")
+            FeedbackToastManager.shared.showError(
+                MediaPermissionCoordinator.deniedMessage(for: .microphone)
+            ) { MediaPermissionCoordinator.openSettings() }
+            endCall()
+            return
+        }
+
         // CALL-FIX 2026-06-06 — stop the incoming ringtone the INSTANT the user
         // accepts, not at .connected (which is seconds later after ICE). Otherwise
         // the ringtone keeps playing through the connecting phase.
@@ -2164,6 +2220,21 @@ final class CallManager: ObservableObject {
             _ = await previousSurvival?.value
             await previousAnswer?.value
             guard let self, !Task.isCancelled else { return }
+            // Caméra jamais demandée : sans ce pré-flight, le prompt système
+            // surgissait au beau milieu de `upgradeToVideo()` — l'utilisateur
+            // voyait la vidéo « s'activer » puis retomber. On tranche avant.
+            // Un refus est déjà annoncé par le `catch cameraPermissionDenied`
+            // en aval, d'où `announcesRefusal: false` (pas deux toasts).
+            if target, await MediaPermissionCoordinator.ensureCamera(announcesRefusal: false) == false {
+                guard !Task.isCancelled else { return }
+                self.isVideoEnabled = false
+                FeedbackToastManager.shared.showError(
+                    String(localized: "call.video.permission.denied",
+                           defaultValue: "Caméra : accès refusé — toucher pour ouvrir les Paramètres",
+                           bundle: .main)
+                ) { MediaPermissionCoordinator.openSettings() }
+                return
+            }
             do {
                 let needsRenegotiation: Bool
                 if target {

@@ -325,12 +325,12 @@ private struct HeaderCallButtonsView: View {
     private var startCallButtons: some View {
         Menu {
             Button {
-                CallManager.shared.startCall(conversationId: conversationId, userId: userId, displayName: calleeName, isVideo: false)
+                Task { await CallManager.shared.requestPermissionsThenStartCall(conversationId: conversationId, userId: userId, displayName: calleeName, isVideo: false) }
             } label: {
                 Label(String(localized: "call.start.audio", defaultValue: "Appel vocal", bundle: .main), systemImage: "phone.fill")
             }
             Button {
-                CallManager.shared.startCall(conversationId: conversationId, userId: userId, displayName: calleeName, isVideo: true)
+                Task { await CallManager.shared.requestPermissionsThenStartCall(conversationId: conversationId, userId: userId, displayName: calleeName, isVideo: true) }
             } label: {
                 Label(String(localized: "call.start.video", defaultValue: "Appel vidéo", bundle: .main), systemImage: "video.fill")
             }

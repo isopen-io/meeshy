@@ -156,6 +156,30 @@ final class CameraModelSwitchDuringRecordingTests: XCTestCase {
         )
     }
 
+    /// Depuis que le micro n'est demandé qu'au passage en mode Vidéo (et qu'un
+    /// refus laisse filmer sans son), les segments peuvent n'avoir AUCUNE piste
+    /// audio. Le stitching doit rester tolérant piste par piste : traiter
+    /// l'absence de piste audio comme une erreur ferait perdre toute la
+    /// capture d'un utilisateur ayant refusé le micro.
+    func test_mergeSegments_toleratesSegmentsWithoutAudioTrack() throws {
+        let fn = try mergeSegmentsBody()
+        XCTAssertTrue(
+            fn.contains("if let assetAudioTrack = try? await asset.loadTracks(withMediaType: .audio).first"),
+            "L'insertion de la piste audio doit être conditionnelle — un segment " +
+            "filmé sans micro autorisé n'a pas de piste audio et ne doit pas " +
+            "faire échouer le merge."
+        )
+        XCTAssertTrue(
+            fn.contains("if let assetVideoTrack = try? await asset.loadTracks(withMediaType: .video).first"),
+            "Même tolérance côté vidéo : une piste manquante saute, elle n'annule pas le merge."
+        )
+        XCTAssertFalse(
+            fn.contains("guard let assetAudioTrack"),
+            "Un `guard` sur la piste audio abandonnerait la capture entière d'un " +
+            "enregistrement muet — exactement le cas d'un refus micro."
+        )
+    }
+
     func test_mergeSegments_exportsToMovViaHighestQualityPreset() throws {
         let fn = try mergeSegmentsBody()
         XCTAssertTrue(

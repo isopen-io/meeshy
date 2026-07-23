@@ -24,6 +24,9 @@ struct LocationPickerView: View {
 
                 VStack(spacing: 0) {
                     searchBar
+                    if viewModel.isLocationRefused {
+                        locationDeniedBanner
+                    }
                     Spacer()
                     bottomCard
                 }
@@ -50,6 +53,37 @@ struct LocationPickerView: View {
                 mapTarget = MapTarget(center: loc, latitudinalMeters: 1000, longitudinalMeters: 1000)
             }
         }
+    }
+
+    // MARK: - Permission
+
+    /// Refus de localisation : le picker restait muet (l'échec CoreLocation ne
+    /// produisait qu'un log) et l'utilisateur attendait un recentrage qui
+    /// n'arriverait jamais. Le bandeau explique et renvoie aux Réglages ; la
+    /// sélection manuelle sur la carte reste parfaitement utilisable, donc on
+    /// n'obstrue rien.
+    private var locationDeniedBanner: some View {
+        Button {
+            MediaPermissionCoordinator.openSettings()
+        } label: {
+            HStack(spacing: 8) {
+                Image(systemName: "location.slash.fill")
+                    .font(MeeshyFont.relative(13, weight: .semibold))
+                Text(MediaPermissionCoordinator.locationDeniedMessage)
+                    .font(MeeshyFont.relative(12, weight: .medium))
+                    .multilineTextAlignment(.leading)
+                Spacer(minLength: 0)
+            }
+            .foregroundColor(MeeshyColors.warning)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 10)
+            .background(
+                RoundedRectangle(cornerRadius: MeeshyRadius.md)
+                    .fill(MeeshyColors.warning.opacity(0.15))
+            )
+        }
+        .padding(.horizontal, 12)
+        .padding(.top, 8)
     }
 
     // MARK: - Map
@@ -301,6 +335,13 @@ final class LocationPickerModel: NSObject, ObservableObject, CLLocationManagerDe
     @Published var isGeocoding = false
     @Published var searchResults: [MKMapItem] = []
     @Published var userLocation: CLLocationCoordinate2D?
+    /// Statut d'autorisation, publié pour que la vue puisse expliquer un refus
+    /// au lieu de laisser l'utilisateur attendre un relevé qui ne viendra pas.
+    @Published private(set) var authorization: CLAuthorizationStatus = .notDetermined
+
+    var isLocationRefused: Bool {
+        authorization == .denied || authorization == .restricted
+    }
 
     private let manager = CLLocationManager()
     private let geocoder = CLGeocoder()
@@ -310,13 +351,26 @@ final class LocationPickerModel: NSObject, ObservableObject, CLLocationManagerDe
         super.init()
         manager.delegate = self
         manager.desiredAccuracy = kCLLocationAccuracyBest
+        authorization = manager.authorizationStatus
     }
 
+    /// Appelé à l'ouverture du picker — c'est-à-dire APRÈS le tap explicite sur
+    /// « Localisation » dans le composer, le bon moment pour demander.
+    ///
+    /// `requestLocation()` n'est plus lancé tant que l'autorisation n'est pas
+    /// acquise : l'appeler sur un statut refusé ne produisait qu'un
+    /// `didFailWithError` silencieux. Sur un octroi,
+    /// `locationManagerDidChangeAuthorization` déclenche le relevé.
     func requestPermission() {
-        if manager.authorizationStatus == .notDetermined {
+        authorization = manager.authorizationStatus
+        switch authorization {
+        case .notDetermined:
             manager.requestWhenInUseAuthorization()
+        case .authorizedWhenInUse, .authorizedAlways:
+            manager.requestLocation()
+        default:
+            break
         }
-        manager.requestLocation()
     }
 
     func updateSelectedLocation(_ coordinate: CLLocationCoordinate2D) {
@@ -400,7 +454,11 @@ final class LocationPickerModel: NSObject, ObservableObject, CLLocationManagerDe
     }
 
     nonisolated func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
-        if manager.authorizationStatus == .authorizedWhenInUse || manager.authorizationStatus == .authorizedAlways {
+        let status = manager.authorizationStatus
+        Task { @MainActor [weak self] in
+            self?.authorization = status
+        }
+        if status == .authorizedWhenInUse || status == .authorizedAlways {
             manager.requestLocation()
         }
     }

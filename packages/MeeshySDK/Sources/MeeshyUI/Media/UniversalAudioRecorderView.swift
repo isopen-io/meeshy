@@ -29,6 +29,9 @@ public struct UniversalAudioRecorderView<Recorder: AudioRecordingProviding>: Vie
     @State private var showEditor = false
     @State private var showPreview = false
     @State private var wavePhase: CGFloat = 0
+    /// Refus micro : le tap sur « Enregistrer » retournait en silence, laissant
+    /// l'écran inerte sans la moindre explication. Rendu sous les contrôles.
+    @State private var permissionMessage: String?
 
     public init(
         recorder: Recorder,
@@ -59,6 +62,16 @@ public struct UniversalAudioRecorderView<Recorder: AudioRecordingProviding>: Vie
                 centerContent
 
                 Spacer()
+
+                if let permissionMessage {
+                    Text(permissionMessage)
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundColor(MeeshyColors.error)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 32)
+                        .padding(.bottom, 12)
+                        .transition(.opacity)
+                }
 
                 bottomControls
                     .padding(.horizontal, 20)
@@ -322,13 +335,19 @@ public struct UniversalAudioRecorderView<Recorder: AudioRecordingProviding>: Vie
     // MARK: - Actions
 
     private func handleStartRecording() {
-        // Le closure de `requestRecordPermission` hériterait de `@MainActor`
-        // (defaultIsolation MeeshyUI) et trapperait à l'entrée sur la queue TCC.
-        // `AVAudioSession.requestMicrophonePermission()` confine la demande à un
-        // helper `nonisolated`. Cf. `MicrophonePermission.swift`.
+        // Un closure de callback TCC hériterait de `@MainActor` (defaultIsolation
+        // MeeshyUI) et trapperait à l'entrée sur la queue TCC ;
+        // `DevicePermissions.requestMicrophone()` confine la demande à un helper
+        // `nonisolated`. Cf. `DevicePermissions.swift`.
         Task { @MainActor in
-            let granted = await AVAudioSession.requestMicrophonePermission()
-            guard granted else { return }
+            let state = await DevicePermissions.requestMicrophone()
+            guard state.isUsable else {
+                permissionMessage = state.needsSettingsRedirect
+                    ? String(localized: "audio.recorder.micDeniedSettings", defaultValue: "Micro refus\u{00E9} \u{2014} autorisez-le dans R\u{00E9}glages", bundle: .module)
+                    : String(localized: "audio.recorder.micDenied", defaultValue: "Permission micro refus\u{00E9}e", bundle: .module)
+                return
+            }
+            permissionMessage = nil
             recorder.configure(with: settings)
             recorder.startRecording()
             HapticFeedback.medium()

@@ -273,9 +273,11 @@ final class ConversationMenuSystemDesignGuardTests: XCTestCase {
             "Le builder natif doit offrir « Appeler » (icône phone.fill, DM)."
         )
         XCTAssertTrue(
-            builderBlock.contains("CallManager.shared.startCall("),
-            "« Appeler » doit passer par CallManager.shared.startCall — même chemin " +
-            "que le bouton onCall de l'aperçu custom (SSOT)."
+            builderBlock.contains("CallManager.shared.requestPermissionsThenStartCall("),
+            "« Appeler » doit passer par CallManager.shared.requestPermissionsThenStartCall — " +
+            "même chemin que le bouton onCall de l'aperçu custom (SSOT). Depuis " +
+            "2026-07-23 ce point d'entrée tranche micro/caméra AVANT de composer ; " +
+            "`startCall` brut ne demande rien et connecterait un appel muet."
         )
     }
 
