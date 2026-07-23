@@ -197,6 +197,20 @@ jobs:
           # reaches the in-simulator test process under `xcodebuild test`),
           # so -skip-testing is the only thing that actually excludes them.
           # meeshy.sh mirrors the same exclusion locally (NON_PHASE_SUITES).
+          # Parallelize the run phase: it became the bottleneck once caching cut
+          # the compile (measured ~13 min serial). xcodebuild CLONES the single
+          # destination simulator into `worker-count` copies — all of the SAME
+          # iOS 18.2 runtime — so the Timeline snapshot baselines still match and
+          # the isolated-deinit crash (18.5/18.6/26.x only) stays avoided. Test
+          # CLASSES are distributed across the clones, each in its own sim + test
+          # host process (isolation is per-process, so cross-suite singleton
+          # bleed can't span workers). Worker count is pinned to 2: the standard
+          # macos-15 runner is 3 vCPU / 7 GB, and each booted clone + host eats
+          # ~1.5-2 GB, so 2 is the memory-safe sweet spot; the clone boots add a
+          # ~1 min fixed cost, still a net win over serial.
+          # NOTE: the photos-add TCC grant is applied to the source device above;
+          # `simctl clone` copies the data container (incl. TCC.db), so
+          # CameraCaptureSaveRuntimeTests keeps its grant on the clones.
           xcodebuild test-without-building \
             -project apps/ios/Meeshy.xcodeproj \
             -scheme Meeshy \
@@ -207,6 +221,8 @@ jobs:
             -skip-testing:MeeshyTests/MessageListPerformanceTests \
             -skip-testing:MeeshyTests/BubbleSimpleMessagePerfTests \
             -skip-testing:MeeshyTests/SearchPerformanceTests \
+            -parallel-testing-enabled YES \
+            -parallel-testing-worker-count 2 \
             -resultBundlePath TestResults.xcresult \
             -test-timeouts-enabled YES \
             -maximum-test-execution-time-allowance 180 \
