@@ -351,6 +351,12 @@ struct MessageOverlayMenu: View {
                             custom: userCustomDestinationLanguage
                         )
                     )
+                    // Gate Equatable (H3) : pendant le drag 60 fps
+                    // (`clusterDragOffset`) le body du GeometryReader se
+                    // ré-évalue ; sans ce gate, `ThemedMessageBubble` se
+                    // re-rendrait à chaque frame. Ses inputs sont stables
+                    // pendant le drag → EquatableView saute son body.
+                    .equatable()
                     .frame(width: bubbleRect.width, height: bubbleRect.height, alignment: .leading)
                     .scaleEffect(nlFitScale, anchor: .center)
                     .frame(width: nlBubbleW, height: nlBubbleH)
@@ -376,6 +382,11 @@ struct MessageOverlayMenu: View {
             }
         }
         .ignoresSafeArea()
+        // A11y (C2) : l'overlay est MODAL — VoiceOver piège le focus dedans
+        // (ignore la conversation derrière) ; le geste d'échappement (scrub
+        // 2 doigts) le ferme, comme un `.contextMenu` natif.
+        .accessibilityAddTraits(.isModal)
+        .accessibilityAction(.escape) { dismiss() }
         .onAppear {
             HapticFeedback.medium()
             // Entree spring — courbe de reponse de qualite iMessage. La

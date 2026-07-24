@@ -15,8 +15,8 @@ Branche : `main` (directe, worktree principal). Simu visuel : iPhone 16 Pro / iO
 - [ ] **⚠️ Vérif VISUELLE de l'overlay = SUR DEVICE iOS 26** (l'appui long synthétique idb ne déclenche pas le LongPressGesture au simu — limitation documentée). À vérifier : plus de carte native, pastille+menu accent, zéro bulle fantôme, Supprimer dans « Plus… ».
 - [ ] **P2 — `MessageOverlayLayout` pur (TDD)** : extraire la géométrie inline (`MessageOverlayMenu` L194-239) → struct pure + tests (clamps haut/bas-réserve-composer, plancher d'échelle ~0.7, ancrage isMe/reçu, clamp latéral)
 - [ ] **D1 — Inverser guards** `ConversationMenuSystemDesignGuardTests` (RED : « aucun `.contextMenu` sur bulles ; overlay partout »)
-- [ ] **P3 — Polish overlay (visuel simu)** : chrome pastille accent, retrait platter (chemin custom = pas de platter, à confirmer), carte menu compacte teintée accent, backdrop mono-source (retirer `.animation(value:)`), isolation drag (bulle Equatable), springs lift/reverse
-- [ ] **C2b — a11y** : `.isModal` + `.accessibilityAction(.escape)` + labels pastille/actions
+- [x] **C2b — a11y** ✅ `.accessibilityAddTraits(.isModal)` + `.accessibilityAction(.escape)` sur l'overlay (parité sémantique menu natif après retrait du natif). Build OK.
+- [~] **P3 — Polish overlay** : [x] isolation drag (bulle `.equatable()`, H3). Reste (VISUEL, à régler SUR DEVICE) : teinte accent menu/pastille (⚠️ le menu a été délibérément dé-teinté pour parité système + `EmojiReactionPicker` = SDK partagé → décision device), plancher d'échelle ~0.7 (risque overflow sans vérif visuelle), backdrop mono-source (subtil, non cassé), springs lift/reverse (réglage à l'œil).
 - [ ] **P4 — Nettoyage code mort** post-natif : `standalone`, `MessageMenuPreviewContainer`, `makeThemedBubble(true)` + guards vestigiaux
 - [ ] **P5 — Build + capture visuelle iPhone 16 Pro**, itérer
 
