@@ -1,5 +1,15 @@
 # @meeshy/web
 
+## 1.16.0
+
+### Minor Changes
+
+- Changements automatiques détectés :
+
+  - build cassé — MeeshyColors.error est déjà un Color
+  - curseur de lecture borné au préfixe contigu réellement lu
+  - borne le gel readAt aux messages réellement affichés
+
 ## 1.15.0
 
 ### Minor Changes
