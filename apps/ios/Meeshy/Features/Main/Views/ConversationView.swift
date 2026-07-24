@@ -707,6 +707,11 @@ struct ConversationView: View {
                             Task { await viewModel.deleteAttachment(messageId: msg.id, attachmentId: attId) }
                         }
                     },
+                    onPin: { Task { await viewModel.togglePin(messageId: msg.id) }; HapticFeedback.medium() },
+                    onToggleStar: {
+                        _ = viewModel.toggleStar(messageId: msg.id, conversationName: conversation?.name, conversationAccentColor: accentColor)
+                    },
+                    onDeleteMessage: { overlayState.deleteConfirmMessageId = msg.id },
                     onSelectTranslation: { translation in
                         viewModel.setActiveTranslation(for: msg.id, translation: translation)
                     },

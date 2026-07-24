@@ -10,6 +10,9 @@ enum PrimaryAction: String, Equatable {
 /// d'ancre de navigation directe (action primaire « Traduire »).
 enum MoreItem: String, Equatable {
     case reply, forward, thread, deleteMedia
+    /// Actions sorties du menu compact (`primaryActions`) et routées vers
+    /// « Plus… » : épingler/favori (toggles) + suppression du message.
+    case pin, unpin, star, unstar, delete
     case language, views, reactions, transcription, sentiment, history
     case report
 }
@@ -43,27 +46,33 @@ struct MessageMenuContext: Equatable {
 /// Logique pure de composition du menu appui-long. Aucune dépendance UI —
 /// entièrement testable. Source unique de vérité pour « quelle action, où ».
 enum MessageActionResolver {
-    /// Liste verticale de l'overlay (ordre fixe, filtré par contexte).
+    /// Liste verticale COMPACTE de l'overlay (façon iMessage) : uniquement les
+    /// actions clés + `.more` toujours en fin. `pin`/`star`/`delete` sont
+    /// routés vers « Plus… » (`moreSections`), jamais affichés ici.
     static func primaryActions(_ ctx: MessageMenuContext) -> [PrimaryAction] {
         var out: [PrimaryAction] = []
         if ctx.isMine && ctx.canEdit && ctx.hasText { out.append(.edit) }
-        out.append(.translate)
+        if ctx.hasText { out.append(.translate) }
         if ctx.hasText { out.append(.copy) }
         if ctx.saveableAttachmentCount == 1 { out.append(.saveMedia) }
-        out.append(ctx.isPinned ? .unpin : .pin)
-        out.append(ctx.isStarred ? .unstar : .star)
+        // Repli : jamais de menu réduit à « Plus… » seul (média-seul non
+        // enregistrable, localisation…) → épingler comme action visible.
+        if out.isEmpty { out.append(ctx.isPinned ? .unpin : .pin) }
         out.append(.more)
-        if ctx.canDelete { out.append(.delete) }
         return out
     }
 
-    /// Sections de la feuille « Plus… » (filtrées par contexte).
-    /// `.language` n'y figure jamais.
+    /// Sections de la feuille « Plus… » (SSOT overflow, filtrées par contexte).
+    /// Accueille les actions sorties du menu compact : pin/star (toggles) et
+    /// la suppression du message. `.language` n'y figure jamais.
     static func moreSections(_ ctx: MessageMenuContext) -> [MoreSection] {
         var sections: [MoreSection] = []
 
         var actions: [MoreItem] = [.reply, .forward, .thread]
+        actions.append(ctx.isPinned ? .unpin : .pin)
+        actions.append(ctx.isStarred ? .unstar : .star)
         if ctx.canDelete && ctx.hasMedia { actions.append(.deleteMedia) }
+        if ctx.canDelete { actions.append(.delete) }
         sections.append(.actions(actions))
 
         var info: [MoreItem] = [.views, .reactions]
