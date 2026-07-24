@@ -9,6 +9,8 @@ struct MessageReactionsDetailView: View {
     let message: Message
     let contactColor: String
     let conversationId: String
+    /// Ajouter une réaction depuis cette vue (voir + ajouter). `nil` = lecture seule.
+    var onReact: ((String) -> Void)? = nil
 
     private var theme: ThemeManager { ThemeManager.shared }
     @Environment(\.colorScheme) private var colorScheme
@@ -18,8 +20,26 @@ struct MessageReactionsDetailView: View {
     @State private var isLoadingReactions = false
     @State private var reactionFilter: String = "all"
 
+    private static let quickReactionDefaults = ["😂", "❤️", "👍", "😮", "😢", "🔥", "🎉", "💯", "🥰", "😎", "🙏", "💀"]
+
     var body: some View {
         VStack(spacing: 12) {
+            // Ajouter une réaction (req 2026-07-24 : « Réactions » = voir + ajouter).
+            // Bande rapide partagée (mêmes emojis que la pastille de l'appui long).
+            if let onReact {
+                EmojiReactionPicker(
+                    quickEmojis: EmojiUsageTracker.topEmojis(count: 12, defaults: Self.quickReactionDefaults),
+                    style: isDark ? .dark : .light,
+                    scrollable: true,
+                    onReact: { emoji in
+                        EmojiUsageTracker.recordUsage(emoji: emoji)
+                        onReact(emoji)
+                        HapticFeedback.light()
+                    }
+                )
+                .frame(maxWidth: .infinity)
+                Divider().opacity(0.4)
+            }
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
                     reactionFilterCapsule(

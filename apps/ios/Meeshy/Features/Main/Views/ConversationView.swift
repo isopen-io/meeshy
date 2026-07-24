@@ -725,6 +725,7 @@ struct ConversationView: View {
                         HapticFeedback.success()
                     },
                     onShare: { overlayState.shareMessage = msg },
+                    onReact: { emoji in viewModel.toggleReaction(messageId: msg.id, emoji: emoji) },
                     onSelectTranslation: { translation in
                         viewModel.setActiveTranslation(for: msg.id, translation: translation)
                     },

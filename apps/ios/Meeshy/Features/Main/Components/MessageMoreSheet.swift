@@ -28,6 +28,8 @@ struct MessageMoreSheet: View {
     var onEdit: (() -> Void)? = nil
     var onCopy: (() -> Void)? = nil
     var onShare: (() -> Void)? = nil
+    /// Ajout d'une réaction depuis la vue « Réactions » de « Plus… » (voir + ajouter).
+    var onReact: ((String) -> Void)? = nil
     var onSelectTranslation: ((MessageTranslation?) -> Void)? = nil
     var onSelectAudioLanguage: ((String?) -> Void)? = nil
     var onReport: ((String, String?) -> Void)? = nil
@@ -48,14 +50,21 @@ struct MessageMoreSheet: View {
         VStack(spacing: 0) {
             ScrollView(showsIndicators: false) {
                 VStack(spacing: 16) {
-                    glassGridCard
-                        .padding(.horizontal, 14)
-                        .padding(.top, 8)
-
                     if let selectedItem, isExploration(selectedItem) {
+                        // Morph (req 2026-07-24) : au tap d'un item explorable, la
+                        // grille complète se replie en une BANDE D'ICÔNES horizontale
+                        // scrollable (Liquid Glass) — le contenu de l'item sélectionné
+                        // s'affiche dessous, laissant la place au détail.
+                        explorableTabStrip(selected: selectedItem)
+                            .padding(.horizontal, 14)
+                            .padding(.top, 8)
                         inlineContent(for: selectedItem)
                             .id(selectedItem)
                             .transition(.opacity.combined(with: .move(edge: .top)))
+                    } else {
+                        glassGridCard
+                            .padding(.horizontal, 14)
+                            .padding(.top, 8)
                     }
                 }
                 .padding(.bottom, 24)
@@ -101,6 +110,52 @@ struct MessageMoreSheet: View {
         .adaptiveGlass(in: RoundedRectangle(cornerRadius: 20, style: .continuous), tint: accent.opacity(0.14))
         .shadow(color: accent.opacity(0.12), radius: 12, x: 0, y: 4)
         .shadow(color: .black.opacity(0.14), radius: 18, x: 0, y: 8)
+    }
+
+    // MARK: - Bande d'icônes horizontale (morph)
+
+    /// Items explorables (à contenu) présents dans les sections — deviennent les
+    /// « onglets » de la bande horizontale une fois un item ouvert.
+    private var explorableItems: [MoreItem] {
+        sections.flatMap { section -> [MoreItem] in
+            switch section { case .actions(let i), .info(let i), .moderation(let i): return i }
+        }.filter { isExploration($0) }
+    }
+
+    /// Bande d'icônes horizontale scrollable (Liquid Glass) : un onglet par item
+    /// explorable, l'actif teinté à sa couleur. Le retour à la grille complète se
+    /// fait via le bouton de fermeture de `inlineContent`.
+    private func explorableTabStrip(selected: MoreItem) -> some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 10) {
+                ForEach(explorableItems, id: \.self) { item in
+                    let color = colorFor(item)
+                    let isActive = item == selected
+                    Button {
+                        HapticFeedback.light()
+                        withAnimation(.easeInOut(duration: 0.22)) { selectedItem = item }
+                    } label: {
+                        Image(systemName: symbol(item))
+                            .font(.callout.weight(.semibold))
+                            .foregroundColor(isActive ? color : theme.textSecondary)
+                            .frame(width: 44, height: 44)
+                            .background(
+                                Circle().fill(isActive
+                                    ? color.opacity(isDark ? 0.35 : 0.18)
+                                    : (isDark ? Color.white.opacity(0.06) : Color.black.opacity(0.05)))
+                            )
+                            .overlay(Circle().stroke(isActive ? color.opacity(0.5) : .clear, lineWidth: 1.5))
+                    }
+                    .buttonStyle(MorePelletButtonStyle())
+                    .accessibilityLabel(labelText(item))
+                    .accessibilityAddTraits(isActive ? [.isSelected] : [])
+                }
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+        }
+        .adaptiveGlass(in: Capsule(), tint: accent.opacity(0.10))
+        .shadow(color: accent.opacity(0.10), radius: 8, x: 0, y: 3)
     }
 
     @ViewBuilder
@@ -304,7 +359,7 @@ struct MessageMoreSheet: View {
         case .views:
             MessageViewsDetailView(message: message, contactColor: contactColor, conversationId: conversationId)
         case .reactions:
-            MessageReactionsDetailView(message: message, contactColor: contactColor, conversationId: conversationId)
+            MessageReactionsDetailView(message: message, contactColor: contactColor, conversationId: conversationId, onReact: onReact)
         case .transcription:
             MessageTranscriptionDetailView(message: message, contactColor: contactColor, conversationId: conversationId,
                 transcription: transcription, translatedAudios: translatedAudios, onSelectAudioLanguage: onSelectAudioLanguage)
