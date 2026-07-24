@@ -1,5 +1,47 @@
 # Progress — state & what to do next
 
+> On 2026-07-24 the **transparent token-refresh Authenticator (reactive 401 wiring)** landed (slice
+> `auth-token-refresh-authenticator`, feature-parity §A → "Transparent token refresh on 401 with one
+> retry" stays `[~]` but the app-side wiring the policy core was waiting on is now **done**). This turns
+> the pure `TokenRefreshPolicy.decideOn401` shipped 2026-07-22 into real OkHttp behaviour. New
+> `:core:network/RefreshAuthenticator` (an `okhttp3.Authenticator`) + a `fun interface TokenRefresher`
+> (synchronous refresh → new JWT or null). On every 401 it asks `decideOn401(endpoint, serverMessage =
+> null, hasRefreshedOn401 = response.priorResponse != null)` and: **RefreshAndRetry** → call the
+> refresher, on a real token rewrite `Authorization: Bearer …` on the replay of the *original* request
+> (URL + method preserved) and persist it to the `TokenStore`; on a null/blank token → teardown;
+> **Teardown** (already-retried, or a handshake/`/auth/refresh` endpoint) → `tokenStore.clear()` + give
+> up; **InvalidCredentials** (`/auth/login` 401) → give up **without** clearing an existing session.
+> `serverMessage` is `null` on purpose: the invalid-vs-expired branch depends only on the endpoint, and
+> the authenticator never surfaces the credentials message (the repository does, off the 401 body), so
+> peeking the body would be wasted work. The `/api/v1/…` path is normalised to the policy's `/auth/…`
+> form via a private `endpointOf` (strips a configurable `apiPathPrefix`). **SOTA over iOS:** a blank
+> refreshed token is treated as a teardown (iOS trusts any non-nil string); the retry-once loop guard
+> is OkHttp-native (`priorResponse`) rather than a hand-rolled counter. **Wired for real** in
+> `MeeshyApi.create`: a lateinit-bound refresher calls `auth.refresh(RefreshTokenRequest(sessionToken))`
+> in `runBlocking` (Authenticator runs on a background dispatcher thread — blocking is legal) and cannot
+> recurse because `/auth/refresh` is policy-ineligible. **+11 behavioural tests** (`RefreshAuthenticatorTest`,
+> constructed `Response`s + a fake refresher, no MockWebServer): refresh+replay / preserve-url+method /
+> refresh-null-teardown / refresh-blank-teardown / second-attempt-loop-guard-teardown / login-invalid-
+> creds-preserves-session / refresh-endpoint-teardown / register-teardown / magic-link-teardown / no-
+> prefix-normalises / custom-prefix-strips. Every arm of `authenticate` + both `endpointOf` branches
+> hit. **Mutation check (RED proof):** forcing `hasRefreshed = false` fails **exactly**
+> `eligibleEndpoint_secondAttempt_priorResponsePresent_tearsDownWithoutRefreshing` (18 run, 1 failed,
+> no collateral) — proving the loop guard is load-bearing. **Gate:** `:core:network:testDebugUnitTest`
+> green (11/11 new) + `gradle assembleDebug testDebugUnitTest` (all modules) → BUILD SUCCESSFUL.
+> Reviewer **PASS** (diff `apps/android` only — 1 new source + 1 new test + `MeeshyApi.create` wiring +
+> tracking docs, zero production logic elsewhere; **SDK purity** — the *decision* stays in the pure
+> `:core:model` policy, the Authenticator is thin framework glue in `:core:network` where OkHttp lives,
+> the refresher is injected; **SSOT** — every branch defers to `TokenRefreshPolicy`, re-implementing no
+> decision; **UX/security** — a live session is never torn down by a wrong-password 401, and a dead
+> session can never spin forever). **Next slice:** the app-side `AnonymousSessionStore` (persist
+> `sessionToken` per `linkId`, mirroring iOS Keychain `AnonymousSessionStore`) + guest join flow calling
+> `AnonymousJoinResponse.toSessionContext`; OR the still-`[ ]` app-side `RegistrationViewModel`/
+> `OnboardingFlowView` wiring of the shipped auth cores (all per-step gates + `LanguageStepSelection` +
+> `RegistrationStepGate.canProceed` are ready to feed a real UDF ViewModel — JVM-testable with
+> Turbine/MockK); OR the tracked Kover 90% coverage-gate infra. **Known standing debt (not this slice):**
+> the `:sdk-core` DataStore-parallel-load timeout flake (`ThemeStoreTest`/`InterfaceLanguageStoreTest`/
+> `PrivacyPreferencesStoreTest`) — green in isolation, intermittent in the full run.
+
 > On 2026-07-22 the **anonymous-session permission-hardening core** landed (slice
 > `anonymous-session-permissions-core`, feature-parity §A → advances "Anonymous (shared-link) sessions
 > with restricted send permissions" `[ ]`→`[~]`). The security-critical piece of guest sessions: a
