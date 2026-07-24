@@ -213,6 +213,29 @@ describe('computeUserStats', () => {
       })
     );
   });
+
+  it('filters translated messages with an object (non-array) NOT filter', async () => {
+    const prisma = buildPrisma();
+    await computeUserStats(prisma, 'u1');
+
+    const messageCountCalls = (prisma as unknown as {
+      message: { count: jest.Mock };
+    }).message.count.mock.calls;
+
+    const translationCountCall = messageCountCalls.find(
+      (call: unknown[]) =>
+        Array.isArray(call) &&
+        call[0] &&
+        typeof call[0] === 'object' &&
+        'where' in call[0] &&
+        'NOT' in (call[0].where as Record<string, unknown>)
+    );
+
+    expect(translationCountCall).toBeDefined();
+    const where = (translationCountCall?.[0] as { where: Record<string, unknown> }).where;
+    expect(where.NOT).toBeDefined();
+    expect(Array.isArray(where.NOT)).toBe(false);
+  });
 });
 
 // NOTE: `GET /users/:id/stats` (any user by id/username) is owned by

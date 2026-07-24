@@ -71,7 +71,10 @@ export async function computeUserStats(
       where: {
         sender: { userId },
         deletedAt: null,
-        NOT: [{ translations: null }],
+        // Forme objet (non-tableau) : le client Prisma Mongo n'accepte pas
+        // Prisma.JsonNull dans `equals` pour ce champ Json? — `null` couvre
+        // ici « pas de traductions » (champ null ou absent).
+        NOT: { translations: null },
       },
     }),
     prisma.friendRequest.count({

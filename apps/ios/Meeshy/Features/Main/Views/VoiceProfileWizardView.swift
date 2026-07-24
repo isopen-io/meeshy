@@ -247,6 +247,13 @@ struct VoiceProfileWizardView: View {
                     Task { await viewModel.uploadSamples(audioDataList) }
                 }
 
+                if let error = viewModel.error {
+                    Text(error)
+                        .font(MeeshyFont.relative(13, weight: .medium))
+                        .foregroundColor(MeeshyColors.error)
+                        .padding(.horizontal, 20)
+                }
+
                 Spacer().frame(height: 32)
             }
         }
