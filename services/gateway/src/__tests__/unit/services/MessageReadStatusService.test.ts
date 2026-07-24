@@ -3829,6 +3829,134 @@ describe('MessageReadStatusService', () => {
     });
   });
 
+  // ───────────────────────────────────────────────────────────────────────────
+  // Bascule EXACT_READ_TRACKING_SINCE
+  //
+  // Armée, un message dépourvu de `readAt` figé cesse d'être déclaré lu au seul
+  // motif que le curseur l'a dépassé. Les tests voisins n'exercent JAMAIS ce
+  // chemin — la bascule étant désarmée par défaut — d'où ce bloc dédié : sans
+  // lui, un câblage incorrect passerait inaperçu.
+  //
+  // `deliveredAt` conserve son repli curseur : un message récupéré est livré.
+  // @see docs/superpowers/specs/2026-07-24-read-exactness-design.md
+  // ───────────────────────────────────────────────────────────────────────────
+  describe('bascule du suivi exact (EXACT_READ_TRACKING_SINCE)', () => {
+    const ENV_KEY = 'EXACT_READ_TRACKING_SINCE';
+    const originalEnv = process.env[ENV_KEY];
+
+    // Tous les messages des montages ci-dessous sont postérieurs à cette date,
+    // donc soumis au suivi exact une fois la bascule armée.
+    const armCutover = () => { process.env[ENV_KEY] = '2024-01-01T00:00:00.000Z'; };
+
+    afterEach(() => {
+      if (originalEnv === undefined) delete process.env[ENV_KEY];
+      else process.env[ENV_KEY] = originalEnv;
+    });
+
+    it('getMessageReadStatus: a cursor-only read no longer counts', async () => {
+      armCutover();
+      mockPrisma.message.findUnique.mockResolvedValue({
+        id: testMessageId,
+        createdAt: new Date('2025-01-01T10:00:00Z'),
+        senderId: testParticipantId,
+        anonymousSenderId: null,
+        conversationId: testConversationId
+      });
+      mockPrisma.participant.findMany.mockResolvedValue([
+        { id: testParticipantId, displayName: 'User1' },
+        { id: testParticipantId2, displayName: 'User2' }
+      ]);
+      mockPrisma.conversationReadCursor.findMany.mockResolvedValue([{
+        participantId: testParticipantId2,
+        lastDeliveredAt: new Date('2025-01-01T10:05:00Z'),
+        lastReadAt: new Date('2025-01-01T10:10:00Z'),
+        participant: { id: testParticipantId2, displayName: 'User2' }
+      }]);
+
+      const result = await service.getMessageReadStatus(testMessageId, testConversationId);
+
+      expect(result.readCount).toBe(0);
+      expect(result.readBy).toHaveLength(0);
+      // La livraison, elle, reste établie par le curseur.
+      expect(result.receivedCount).toBe(1);
+    });
+
+    it('getConversationReadStatuses: a cursor-only read no longer counts', async () => {
+      armCutover();
+      mockPrisma.message.findMany.mockResolvedValue([
+        { id: testMessageId, createdAt: new Date('2025-01-01T10:00:00Z'), senderId: 'sender-1' }
+      ]);
+      mockPrisma.conversationReadCursor.findMany.mockResolvedValue([{
+        participantId: testParticipantId,
+        lastDeliveredAt: new Date('2025-01-01T12:00:00Z'),
+        lastReadAt: new Date('2025-01-01T12:00:00Z')
+      }]);
+
+      const result = await service.getConversationReadStatuses(testConversationId, [testMessageId]);
+
+      expect(result.get(testMessageId)).toEqual(
+        expect.objectContaining({ receivedCount: 1, readCount: 0 })
+      );
+    });
+
+    it('getMessageStatusDetails: readAt falls back to null, deliveredAt survives', async () => {
+      armCutover();
+      mockPrisma.message.findUnique.mockResolvedValue({
+        createdAt: new Date('2024-06-01T10:00:00Z'),
+        conversationId: testConversationId
+      });
+      mockPrisma.conversationReadCursor.findMany.mockResolvedValue([{
+        participantId: 'p1',
+        lastDeliveredAt: new Date('2024-06-01T10:01:00Z'),
+        lastReadAt: new Date('2024-06-01T10:02:00Z')
+      }]);
+      mockPrisma.participant.findMany.mockResolvedValue([
+        { id: 'p1', displayName: 'Alice', avatar: null }
+      ]);
+
+      const result = await service.getMessageStatusDetails(testMessageId);
+
+      expect(result.statuses[0].readAt).toBeNull();
+      expect(result.statuses[0].deliveredAt).not.toBeNull();
+    });
+
+    it('getLatestMessageSummary: a cursor-only read no longer counts', async () => {
+      armCutover();
+      mockPrisma.message.findFirst.mockResolvedValue({
+        createdAt: new Date('2024-06-01T10:00:00Z'),
+        senderId: 'sender-id'
+      });
+      mockPrisma.participant.findMany.mockResolvedValue([{ id: 'p1' }, { id: 'p2' }]);
+      mockPrisma.conversationReadCursor.findMany.mockResolvedValue([
+        { participantId: 'p1', lastDeliveredAt: new Date('2024-06-01T10:01:00Z'), lastReadAt: new Date('2024-06-01T10:02:00Z') },
+        { participantId: 'p2', lastDeliveredAt: new Date('2024-06-01T10:01:00Z'), lastReadAt: null }
+      ]);
+
+      const result = await service.getLatestMessageSummary(testConversationId);
+
+      expect(result.readCount).toBe(0);
+      expect(result.deliveredCount).toBe(2);
+    });
+
+    it('a message PREDATING the cutover keeps the legacy cursor fallback', async () => {
+      armCutover();
+      // Créé avant la bascule : il n'a jamais eu l'occasion d'être gelé, le
+      // priver du repli le ferait basculer à tort en « jamais vu ».
+      mockPrisma.message.findFirst.mockResolvedValue({
+        createdAt: new Date('2023-06-01T10:00:00Z'),
+        senderId: 'sender-id'
+      });
+      mockPrisma.participant.findMany.mockResolvedValue([{ id: 'p1' }]);
+      mockPrisma.conversationReadCursor.findMany.mockResolvedValue([
+        { participantId: 'p1', lastDeliveredAt: new Date('2023-06-01T10:01:00Z'), lastReadAt: new Date('2023-06-01T10:02:00Z') }
+      ]);
+
+      const result = await service.getLatestMessageSummary(testConversationId);
+
+      expect(result.readCount).toBe(1);
+    });
+  });
+
   describe('getMessageReadStatus — totalMembers denominator', () => {
     const activeParticipant = (id: string) => ({
       id, displayName: id, avatar: null, user: { avatar: null },

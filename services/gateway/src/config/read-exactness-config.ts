@@ -27,21 +27,35 @@ const ENV_KEY = 'EXACT_READ_TRACKING_SINCE';
  * curseur, donc le comportement historique à l'identique. Une valeur illisible
  * ne doit jamais armer la bascule par accident : le repli est le seul défaut sûr.
  *
- * Lu à chaque appel plutôt que mémoïsé : la valeur n'est consultée qu'en
- * chemin de lecture, le coût est négligeable, et cela évite qu'un
- * redémarrage soit nécessaire pour changer d'avis.
+ * Mémoïsé sur la valeur BRUTE de la variable, pas au premier appel : les
+ * chemins de lecture l'interrogent une fois par participant et par message, et
+ * re-parser une date à chaque itération serait gratuit mais inutile. Indexer le
+ * cache sur la chaîne d'origine préserve la possibilité de changer d'avis sans
+ * redémarrer le service.
  */
+let cachedRaw: string | undefined;
+let cachedCutover: Date | null = null;
+
 export function getExactReadTrackingCutover(): Date | null {
   const raw = process.env[ENV_KEY];
-  if (!raw) return null;
+
+  if (raw === cachedRaw) return cachedCutover;
+  cachedRaw = raw;
+
+  if (!raw) {
+    cachedCutover = null;
+    return cachedCutover;
+  }
 
   const parsed = new Date(raw);
   if (Number.isNaN(parsed.getTime())) {
     logger.warn(
       `[read-exactness] ${ENV_KEY} illisible ("${raw}") — suivi exact NON armé, repli curseur conservé`
     );
-    return null;
+    cachedCutover = null;
+    return cachedCutover;
   }
 
-  return parsed;
+  cachedCutover = parsed;
+  return cachedCutover;
 }

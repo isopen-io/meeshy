@@ -16,7 +16,8 @@
 import { PrismaClient, Message, Prisma } from "@meeshy/shared/prisma/client";
 import { resolveParticipantAvatar } from '@meeshy/shared/utils/participant-helpers';
 import { enhancedLogger } from '../utils/logger-enhanced';
-import { computeContiguousReadPrefix } from '../utils/read-exactness';
+import { computeContiguousReadPrefix, resolveReadAt } from '../utils/read-exactness';
+import { getExactReadTrackingCutover } from '../config/read-exactness-config';
 
 // Logger dédié pour MessageReadStatusService
 const logger = enhancedLogger.child({ module: 'MessageReadStatusService' });
@@ -1079,14 +1080,14 @@ export class MessageReadStatusService {
           cursor?.lastDeliveredAt && cursor.lastDeliveredAt >= message.createdAt
             ? cursor.lastDeliveredAt
             : null;
-        const cursorRead =
-          cursor?.lastReadAt && cursor.lastReadAt >= message.createdAt
-            ? cursor.lastReadAt
-            : null;
-
         const frozen = frozenByParticipant.get(participantId);
         const receivedAt = frozen?.receivedAt ?? frozen?.deliveredAt ?? cursorDelivered;
-        const readAt = frozen?.readAt ?? cursorRead;
+        const readAt = resolveReadAt({
+          frozenReadAt: frozen?.readAt ?? null,
+          cursorLastReadAt: cursor?.lastReadAt ?? null,
+          messageCreatedAt: message.createdAt,
+          cutover: getExactReadTrackingCutover(),
+        });
 
         if (receivedAt) {
           receivedBy.push({
@@ -1298,14 +1299,14 @@ export class MessageReadStatusService {
             cursor?.lastDeliveredAt && cursor.lastDeliveredAt >= msg.createdAt
               ? cursor.lastDeliveredAt
               : null;
-          const cursorRead =
-            cursor?.lastReadAt && cursor.lastReadAt >= msg.createdAt
-              ? cursor.lastReadAt
-              : null;
-
           const frozen = frozenForMsg?.get(participantId);
           const receivedAt = frozen?.receivedAt ?? frozen?.deliveredAt ?? cursorDelivered;
-          const readAt = frozen?.readAt ?? cursorRead;
+          const readAt = resolveReadAt({
+            frozenReadAt: frozen?.readAt ?? null,
+            cursorLastReadAt: cursor?.lastReadAt ?? null,
+            messageCreatedAt: msg.createdAt,
+            cutover: getExactReadTrackingCutover(),
+          });
 
           if (receivedAt) receivedCount++;
           if (readAt) readCount++;
@@ -1436,15 +1437,15 @@ export class MessageReadStatusService {
           cursor?.lastDeliveredAt && cursor.lastDeliveredAt >= message.createdAt
             ? cursor.lastDeliveredAt
             : null;
-        const cursorRead =
-          cursor?.lastReadAt && cursor.lastReadAt >= message.createdAt
-            ? cursor.lastReadAt
-            : null;
-
         const frozen = frozenByParticipant.get(participantId);
         const deliveredAt = frozen?.deliveredAt ?? cursorDelivered;
         const receivedAt = frozen?.receivedAt ?? frozen?.deliveredAt ?? cursorDelivered;
-        const readAt = frozen?.readAt ?? cursorRead;
+        const readAt = resolveReadAt({
+          frozenReadAt: frozen?.readAt ?? null,
+          cursorLastReadAt: cursor?.lastReadAt ?? null,
+          messageCreatedAt: message.createdAt,
+          cutover: getExactReadTrackingCutover(),
+        });
         const readDevice = frozen?.readDevice ?? null;
 
         if (filter === "delivered" && !deliveredAt) continue;
@@ -1955,14 +1956,14 @@ export class MessageReadStatusService {
           cursor?.lastDeliveredAt && cursor.lastDeliveredAt >= latestMessage.createdAt
             ? cursor.lastDeliveredAt
             : null;
-        const cursorRead =
-          cursor?.lastReadAt && cursor.lastReadAt >= latestMessage.createdAt
-            ? cursor.lastReadAt
-            : null;
-
         const frozen = frozenByParticipant.get(participantId);
         const receivedAt = frozen?.receivedAt ?? frozen?.deliveredAt ?? cursorDelivered;
-        const readAt = frozen?.readAt ?? cursorRead;
+        const readAt = resolveReadAt({
+          frozenReadAt: frozen?.readAt ?? null,
+          cursorLastReadAt: cursor?.lastReadAt ?? null,
+          messageCreatedAt: latestMessage.createdAt,
+          cutover: getExactReadTrackingCutover(),
+        });
 
         if (receivedAt) deliveredCount++;
         if (readAt) readCount++;

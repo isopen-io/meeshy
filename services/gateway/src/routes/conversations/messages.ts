@@ -18,6 +18,8 @@ import { createError, sendErrorResponse } from '@meeshy/shared/utils/errors';
 import { resolveParticipantAvatar, resolveParticipantDisplayName } from '@meeshy/shared/utils/participant-helpers';
 import { resolveUserLanguage } from '@meeshy/shared/utils/conversation-helpers';
 import { resolveConversationId } from '../../utils/conversation-id-cache';
+import { resolveReadAt } from '../../utils/read-exactness';
+import { getExactReadTrackingCutover } from '../../config/read-exactness-config';
 import { UnifiedAuthRequest } from '../../middleware/auth';
 import { validatePagination, buildPaginationMeta, buildCursorPaginationMeta } from '../../utils/pagination';
 import { messageValidationHook } from '../../middleware/rate-limiter';
@@ -1076,10 +1078,14 @@ export function registerMessagesRoutes(
             for (const participantId of evaluatedParticipantIds) {
               const cursor = cursorByParticipant.get(participantId);
               const cursorDelivered = cursor?.lastDeliveredAt && cursor.lastDeliveredAt >= msg.createdAt ? cursor.lastDeliveredAt : null;
-              const cursorRead = cursor?.lastReadAt && cursor.lastReadAt >= msg.createdAt ? cursor.lastReadAt : null;
               const frozen = frozenForMsg?.get(participantId);
               const deliveredAt = frozen?.receivedAt ?? frozen?.deliveredAt ?? cursorDelivered;
-              const readAt = frozen?.readAt ?? cursorRead;
+              const readAt = resolveReadAt({
+                frozenReadAt: frozen?.readAt ?? null,
+                cursorLastReadAt: cursor?.lastReadAt ?? null,
+                messageCreatedAt: msg.createdAt,
+                cutover: getExactReadTrackingCutover(),
+              });
               if (deliveredAt) deliveredCount++;
               if (readAt) readCount++;
             }

@@ -35,9 +35,14 @@ Ce comportement n'est pas une régression : il est décrit comme intentionnel da
 assume le modèle curseur `cursor.lastReadAt >= message.createdAt → lu`. Le présent
 document **change cette décision**.
 
-`tasks/proof-read-state-exactness.md` en dépend : son lemme L1 postule que le
-système « ne peut jamais sur-compter ». C'est faux, et le document doit être
-corrigé dans ce lot.
+`tasks/proof-read-state-exactness.md` mérite une note de portée — non parce que
+ses théorèmes seraient faux, mais parce qu'ils ne couvrent pas cette question.
+Correction d'une affirmation antérieure de ce spec : son lemme L1 (`rc ≤ N(c)`)
+est une borne de cardinalité et **tient**, quelle que soit la sémantique de
+« lu ». La preuve établit que le client reflète fidèlement les compteurs du
+serveur ; elle ne demande jamais si l'ensemble « lu » du serveur correspond à ce
+qui a été affiché. `ReadReceiptGate` (T3) ne comble pas ce vide : il gate **quand**
+un accusé est émis, pas **quels messages** il couvre.
 
 ## Principe directeur
 
@@ -113,7 +118,14 @@ Le repli ne peut pas être supprimé sèchement : les messages historiques n'ont
 d'entrée `readAt`, et le retrait les ferait tous basculer en « jamais vu ».
 
 D'où une **date de bascule**, `EXACT_READ_TRACKING_SINCE` (variable
-d'environnement, valeur par défaut = date de déploiement) :
+d'environnement).
+
+**La bascule est opt-in, et c'est délibéré.** Sur ce dépôt, pousser sur `main`
+déclenche le déploiement ; faire par défaut de la date de déploiement le seuil
+reviendrait à rendre le changement visible au moment même de la livraison, sans
+maîtrise du calendrier. Absente, vide ou illisible, la variable conserve le repli
+curseur — donc le comportement historique à l'identique. Une valeur illisible
+n'arme jamais la bascule par accident : le repli est le seul défaut sûr.
 
 ```
 resolveReadAt({ frozenReadAt, cursorLastReadAt, messageCreatedAt, cutover })
@@ -122,11 +134,25 @@ resolveReadAt({ frozenReadAt, cursorLastReadAt, messageCreatedAt, cutover })
 - `messageCreatedAt < cutover` → repli curseur autorisé (héritage) ;
 - `messageCreatedAt >= cutover` → `frozenReadAt` seul fait foi.
 
-Fonction pure, appliquée aux six lecteurs recensés : `getMessageReadStatus`
-(:912-978), `getLatestMessageSummary` (:1118-1184), liste filtrée read/unread
-(:1248-1333), agrégat readCount (:1805-1841),
-`routes/conversations/messages.ts:1030-1072`,
-`routes/conversations/messages-advanced.ts:1371-1401`.
+Fonction pure, appliquée aux **cinq** sites porteurs du repli, tous de forme
+identique (`const readAt = frozen?.readAt ?? cursorRead`) :
+`getMessageReadStatus`, `getConversationReadStatuses`, `getMessageStatusDetails`
+et `getLatestMessageSummary` dans `MessageReadStatusService.ts`, plus le bloc
+d'enrichissement de `routes/conversations/messages.ts`.
+
+Correction d'un recensement initial erroné : `messages-advanced.ts` **n'a pas** ce
+repli — il lit les compteurs dénormalisés `Message.readCount`/`readByAllAt` et les
+`statusEntries.readAt` bruts, sans jamais consulter le curseur. Rien à y basculer.
+Incohérence connexe repérée au passage, hors périmètre : ces compteurs
+dénormalisés ne sont jamais mis à jour en base, donc ce point d'entrée renvoie des
+valeurs figées.
+
+**Le compteur de non-lus reste hors de cette bascule.** `getUnreadCount` dérive
+uniquement du curseur (`count(createdAt > lastReadAt)`) et ne consulte jamais
+`MessageStatusEntry`. Conséquence assumée : un message lu hors séquence — après un
+trou — porte un `readAt` figé tout en restant compté non lu, puisque le curseur
+s'arrête au trou. Rendre les deux strictement cohérents exigerait une anti-jointure
+par message, coûteuse en MongoDB, que ce lot refuse explicitement.
 
 ## 5. Réciprocité `showReadReceipts`
 
@@ -138,9 +164,33 @@ toucher deux fois serait du gaspillage.
 - Sa propre ligne reste toujours visible.
 - Les écritures continuent : seule l'exposition est filtrée, donc réversible.
 
-Helper unique `filterByReadReceiptPreference({ viewerUserId, entries })`.
-Préférences chargées en **une requête groupée** puis mises en cache
-(`CacheStore`) : une liste de N participants ne doit pas produire N requêtes.
+**Le participant opt-out sort du numérateur ET du dénominateur.** Dans un groupe
+de trois dont un a désactivé ses accusés, l'expéditeur voit « 0/2 » à « 2/2 », et
+« lu par tous » reste atteignable. Les deux alternatives ont été écartées :
+retirer seulement du numérateur rend le total définitivement inatteignable, ce qui
+trahit l'existence d'un opt-out ; garder le compteur intact en masquant les noms
+laisse déduire trivialement qui a lu, et vide la préférence de son sens.
+
+**Moitié déjà en place.** Le versant « je n'émets pas d'accusés » existe :
+`routes/conversations/messages.ts:344` gate le broadcast sur la préférence du
+lecteur. Ce lot ajoute le versant réciproque « je ne vois pas ceux des autres »,
+qui dépend du **demandeur** et ne peut donc s'appliquer qu'aux chemins de requête,
+jamais à un broadcast commun à toute la conversation.
+
+**Fuite préexistante corrigée au passage.** `getLatestMessageSummary` agrège tous
+les curseurs sans distinction : la lecture d'un participant opt-out ressortait
+dans le résumé diffusé aux autres, contournant le gate de broadcast. Le résumé
+exclut désormais ces participants avant diffusion.
+
+Réutilisation : `PrivacyPreferencesService` existe déjà, avec un cache de 5 min
+(`getPreferences`) et surtout `getPreferencesForUsers` pour le **chargement
+groupé** — une liste de N participants ne doit pas produire N requêtes. Rien de
+nouveau à construire de ce côté.
+
+Difficulté à traiter : les chemins de lecture manipulent des `participantId`,
+alors que les préférences sont indexées par `userId`. La relation participant →
+user est déjà chargée pour le nom et l'avatar, donc l'information est disponible
+sans jointure supplémentaire.
 
 Côté web, `showReadReceipts` est aujourd'hui **totalement ignorée** — déclarée dans
 le store et l'écran de réglages, lue par aucun composant de chat. Le gate serveur
@@ -202,13 +252,32 @@ La garde morte `hasMarkedAsReadOnOpenRef` (assignée, jamais lue) est supprimée
   chargement groupé.
 - `deliveredAt` : **non-régression** — la fenêtre reste en place.
 
-**Test verrou à réécrire**
+**Test verrou — à renommer, PAS à inverser**
 `MessageReadStatusService.test.ts:602`
-(`'should freeze a write-once readAt per message newly crossed'`) affirme
-aujourd'hui que **deux** messages reçoivent `readAt` alors que l'appel n'en nommait
-qu'un. Il encode le bug ; il devient l'assertion inverse. Les tests voisins
-(:632, :651, :668, :690) et les assertions négatives (:395, :453, :550) sont à
-revérifier un par un.
+(`'should freeze a write-once readAt per message newly crossed'`) affirme que
+**deux** messages reçoivent `readAt` alors que l'appel n'en nommait qu'un.
+
+Correction de ce spec : ce test n'encode pas le bug, il décrit correctement le
+**chemin hérité**. Puisque le corps de `mark-read` reste optionnel, ce chemin
+subsiste et doit rester couvert. Le test est renommé pour l'expliciter, et le mode
+exact fait l'objet de tests distincts.
+
+**Piège découvert à l'implémentation, absent de ce spec à l'origine.** La garde de
+déduplication est indexée sur le message le plus récent de la conversation. En mode
+exact, deux lots successifs de messages affichés partagent ce message : la clé
+serait identique et le second lot silencieusement avalé dans la fenêtre TTL, donc
+perdu. La garde est neutralisée en mode exact — les écritures y sont write-once,
+donc déjà idempotentes.
+
+**Ordre inversé en mode exact.** On gèle AVANT d'avancer le curseur, alors que le
+chemin hérité fait l'inverse : un message affiché est lu même quand le curseur ne
+peut pas bouger, et geler après l'aurait perdu.
+
+**Couverture du chemin armé.** Les tests existants n'exercent jamais la bascule,
+puisqu'elle est désarmée par défaut : un câblage incorrect y passerait inaperçu.
+Un bloc de tests dédié arme donc la variable et couvre les quatre sites du service.
+Le cinquième — la route — est couvert par mutation : casser son câblage fait
+échouer deux tests existants.
 
 **iOS** — `willDisplay`/`didEndDisplaying` alimentent l'accumulateur, le lot part
 dans l'Outbox, le body n'est plus nul.
@@ -219,18 +288,21 @@ dans l'Outbox, le body n'est plus nul.
 
 Chaque lot commité vert, séparément.
 
-1. Fonctions pures TS + tests (`computeContiguousReadPrefix`, `resolveReadAt`,
-   accumulateur).
-2. Gel borné + `MarkReadBodySchema` + réécriture du test verrou.
-3. Curseur à préfixe contigu.
-4. Bascule `EXACT_READ_TRACKING_SINCE` sur les six lecteurs.
+1. ✅ Fonctions pures TS + tests (`computeContiguousReadPrefix`, `resolveReadAt`).
+2. ✅ Gel borné + `MarkReadBodySchema`.
+3. ✅ Curseur à préfixe contigu.
+4. ✅ Bascule `EXACT_READ_TRACKING_SINCE` (opt-in) sur les cinq lecteurs.
 5. Réciprocité `showReadReceipts` + chargement groupé des préférences.
-6. Miroir Swift des fonctions pures + tests.
+6. Accumulateur de visibilité — TS (web) et Swift (iOS), mêmes cas de test.
 7. iOS : visibilité, accumulateur, body de l'Outbox.
 8. Web : `IntersectionObserver`, accumulateur, payload.
 9. Correction de `tasks/proof-read-state-exactness.md` (lemme L1) et de
    `docs/plans/2026-03-09-message-delivery-read-status-design.md` (note de
    supersession).
+
+Tant que les étapes 7 et 8 ne sont pas livrées, aucun client n'envoie de
+`messageIds` : le gateway emprunte partout le chemin hérité et la production est
+strictement inchangée, même bascule armée.
 
 ## Risques
 
