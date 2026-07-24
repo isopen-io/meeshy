@@ -11,6 +11,7 @@ struct DataStorageView: View {
 
     @State private var showClearConfirm = false
     @State private var isClearing = false
+    @State private var cacheSize: Int = 0
 
     private let accentColor = MeeshyColors.brandPrimaryHex
 
@@ -22,6 +23,9 @@ struct DataStorageView: View {
                 header
                 scrollContent
             }
+        }
+        .task {
+            await loadCacheSize()
         }
         .alert(String(localized: "settings.data.storage.clear.title", defaultValue: "Vider le cache", bundle: .main), isPresented: $showClearConfirm) {
             Button(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .main), role: .cancel) { }
@@ -92,9 +96,17 @@ struct DataStorageView: View {
                     fieldIcon("folder.fill", color: accentColor)
 
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(String(localized: "settings.data.storage.cache.title", defaultValue: "Cache media", bundle: .main))
-                            .font(MeeshyFont.relative(14, weight: .medium))
-                            .foregroundColor(theme.textPrimary)
+                        HStack(spacing: 8) {
+                            Text(String(localized: "settings.data.storage.cache.title", defaultValue: "Cache media", bundle: .main))
+                                .font(MeeshyFont.relative(14, weight: .medium))
+                                .foregroundColor(theme.textPrimary)
+
+                            Spacer()
+
+                            Text(formatCacheSize(cacheSize))
+                                .font(MeeshyFont.relative(14, weight: .semibold))
+                                .foregroundColor(Color(hex: accentColor))
+                        }
 
                         Text(String(localized: "settings.data.storage.cache.subtitle", defaultValue: "Images, audio et videos mis en cache", bundle: .main))
                             .font(MeeshyFont.relative(12, weight: .regular))
@@ -159,10 +171,23 @@ struct DataStorageView: View {
             await CacheCoordinator.shared.audio.clearAll()
             await CacheCoordinator.shared.video.clearAll()
             await CacheCoordinator.shared.thumbnails.clearAll()
+            await loadCacheSize()
             HapticFeedback.success()
             FeedbackToastManager.shared.showSuccess(String(localized: "settings.data.storage.toast.cleared", defaultValue: "Cache vide", bundle: .main))
             isClearing = false
         }
+    }
+
+    private func loadCacheSize() async {
+        let imageSize = await CacheCoordinator.shared.images.estimatedDiskBytes()
+        let audioSize = await CacheCoordinator.shared.audio.estimatedDiskBytes()
+        let videoSize = await CacheCoordinator.shared.video.estimatedDiskBytes()
+        let thumbnailSize = await CacheCoordinator.shared.thumbnails.estimatedDiskBytes()
+        cacheSize = imageSize + audioSize + videoSize + thumbnailSize
+    }
+
+    private func formatCacheSize(_ bytes: Int) -> String {
+        AudioPlayerView.formatBytes(Int64(bytes))
     }
 
     // MARK: - Helpers
