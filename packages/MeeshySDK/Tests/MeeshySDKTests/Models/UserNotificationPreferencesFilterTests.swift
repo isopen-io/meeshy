@@ -51,7 +51,43 @@ final class UserNotificationPreferencesFilterTests: XCTestCase {
         XCTAssertTrue(prefs.isTypeEnabled(.friendNewPost))
     }
 
+    /// « Appels entrants » (`callsEnabled`, catégorie dédiée GW6) et « Appels
+    /// manqués » (`missedCallEnabled`) sont deux toggles INDÉPENDANTS : couper
+    /// la sonnerie ne doit pas couper les notifications d'appel manqué, et
+    /// inversement.
+    func test_isTypeEnabled_incomingCallTypes_followCallsToggle_independentlyOfMissedCalls() {
+        var prefs = UserNotificationPreferences.defaults
+        prefs.callsEnabled = false
+        XCTAssertFalse(prefs.isTypeEnabled(.incomingCall))
+        XCTAssertFalse(prefs.isTypeEnabled(.incomingCallAlert))
+        XCTAssertFalse(prefs.isTypeEnabled(.legacyCallIncoming))
+        XCTAssertTrue(prefs.isTypeEnabled(.missedCall))
+
+        prefs.callsEnabled = true
+        prefs.missedCallEnabled = false
+        XCTAssertTrue(prefs.isTypeEnabled(.incomingCall))
+        XCTAssertFalse(prefs.isTypeEnabled(.missedCall))
+        XCTAssertFalse(prefs.isTypeEnabled(.callEnded))
+        XCTAssertFalse(prefs.isTypeEnabled(.callDeclined))
+    }
+
     // MARK: - Nouveaux champs Codable
+
+    func test_callsEnabled_defaultsTrue_andRoundTrips() throws {
+        XCTAssertTrue(UserNotificationPreferences.defaults.callsEnabled)
+
+        let empty = try JSONDecoder().decode(UserNotificationPreferences.self, from: Data("{}".utf8))
+        XCTAssertTrue(empty.callsEnabled)
+
+        var prefs = UserNotificationPreferences.defaults
+        prefs.callsEnabled = false
+        let decoded = try JSONDecoder().decode(
+            UserNotificationPreferences.self,
+            from: JSONEncoder().encode(prefs)
+        )
+        XCTAssertFalse(decoded.callsEnabled)
+    }
+
 
     func test_friendContentEnabled_defaultsTrue_andRoundTrips() throws {
         XCTAssertTrue(UserNotificationPreferences.defaults.friendContentEnabled)

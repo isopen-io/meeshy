@@ -102,6 +102,9 @@ struct NotificationSettingsView: View {
             notifToggle(icon: "bubble.left.fill", title: String(localized: "settings.notifications.new_messages", defaultValue: "Nouveaux messages", bundle: .main), color: MeeshyColors.brandPrimaryHex,
                         keyPath: \.newMessageEnabled)
 
+            notifToggle(icon: "phone.fill", title: String(localized: "settings.notifications.incoming_calls", defaultValue: "Appels entrants", bundle: .main), color: MeeshyColors.successHex,
+                        keyPath: \.callsEnabled)
+
             notifToggle(icon: "phone.arrow.down.left", title: String(localized: "settings.notifications.missed_calls", defaultValue: "Appels manqués", bundle: .main), color: MeeshyColors.errorHex,
                         keyPath: \.missedCallEnabled)
 

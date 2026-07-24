@@ -56,6 +56,38 @@ final class UserPreferencesManagerTests: XCTestCase {
         )
     }
 
+    // MARK: - Miroir App Group (NSE)
+
+    /// La NSE tourne dans un process séparé sans accès à
+    /// `UserDefaults.standard` : chaque écriture des préférences notification
+    /// doit être miroitée dans la suite App Group pour que le gating à la
+    /// livraison (sons/badge/DND/types) fonctionne app tuée.
+    func test_updateNotification_mirrorsToAppGroupForNSE() throws {
+        let suite = UserDefaults(suiteName: UserPreferencesManager.appGroupSuiteName)
+        suite?.removeObject(forKey: UserPreferencesManager.appGroupNotificationPrefsKey)
+
+        manager.updateNotification { $0.soundEnabled = false }
+
+        let data = try XCTUnwrap(
+            suite?.data(forKey: UserPreferencesManager.appGroupNotificationPrefsKey),
+            "le miroir App Group doit être écrit à chaque persist notification"
+        )
+        let mirrored = try JSONDecoder().decode(UserNotificationPreferences.self, from: data)
+        XCTAssertFalse(mirrored.soundEnabled)
+    }
+
+    func test_resetSession_removesAppGroupMirror() {
+        manager.updateNotification { $0.soundEnabled = false }
+
+        manager.resetSession()
+
+        XCTAssertNil(
+            UserDefaults(suiteName: UserPreferencesManager.appGroupSuiteName)?
+                .data(forKey: UserPreferencesManager.appGroupNotificationPrefsKey),
+            "logout : un user B ne doit pas hériter du gating NSE du user A"
+        )
+    }
+
     // MARK: - resetSession (P1 — logout)
 
     /// Prouve que `resetSession()` purge à la fois les @Published en mémoire

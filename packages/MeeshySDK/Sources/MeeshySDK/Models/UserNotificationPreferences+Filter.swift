@@ -96,8 +96,10 @@ public extension UserNotificationPreferences {
             return replyEnabled
         case .messageEdited, .messageDeleted, .messagePinned, .messageForwarded:
             return newMessageEnabled
-        case .missedCall, .legacyCallMissed, .incomingCall, .incomingCallAlert, .callEnded, .callDeclined, .legacyCallIncoming:
+        case .missedCall, .legacyCallMissed, .callEnded, .callDeclined:
             return missedCallEnabled
+        case .incomingCall, .incomingCallAlert, .legacyCallIncoming:
+            return callsEnabled
         case .userMentioned, .mention, .legacyMention:
             return mentionEnabled
         case .messageReaction, .reaction, .legacyMessageReaction:

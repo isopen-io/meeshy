@@ -50,6 +50,14 @@ nonisolated class NotificationService: UNNotificationServiceExtension {
         applyCategory(to: bestAttemptContent)
         applyBadge(to: bestAttemptContent)
         applyThreading(to: bestAttemptContent)
+        // Préférences de notification (miroir App Group) — APRÈS applyBadge et
+        // applyThreading pour que sons/badge/regroupement coupés gagnent, et
+        // avant tout chemin de sortie (contentHandler / expiration).
+        NSEPreferencesGate.apply(
+            preferences: NSEPreferencesGate.loadPreferences() ?? .defaults,
+            to: bestAttemptContent,
+            rawType: bestAttemptContent.userInfo["type"] as? String
+        )
         updateSharedUnreadCount(from: bestAttemptContent.userInfo)
         prefetchMessageData(from: bestAttemptContent.userInfo)
         prefetchSocialData(from: bestAttemptContent.userInfo)

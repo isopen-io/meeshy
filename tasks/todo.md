@@ -71,6 +71,13 @@
 ### Hors périmètre (documenté, décision produit)
 - `callsEnabled` (sonnerie) sans UI iOS ; miroir prefs → App Group pour la NSE ; redaction `showPreview` des toasts in-app ; nettoyage modèles morts (`NotificationPreferences` Swift, Prisma `NotificationPreference`, `PreferencesService` gateway non routé)
 
+## Lot 2 — Miroir NSE + toggle « Appels entrants » (2026-07-24 soir)
+
+- [x] D1 `callsEnabled` ajouté au modèle Swift (Codable complet) + rangée « Appels entrants » (MESSAGES) ; filtre : `.incomingCall/.incomingCallAlert/.legacyCallIncoming` → `callsEnabled` (séparé des appels manqués)
+- [x] D2 Miroir App Group : `UserPreferencesManager.persist` écrit aussi `meeshy_prefs_notification` dans `group.me.meeshy.apps` (chokepoint unique : updates + applyRemote + resetCategory) ; purge au `resetSession`
+- [x] D3 `NSEPreferencesGate` (NSE, réutilise le modèle SDK) : sons coupés → sans son ; badges coupés → badge 0 ; `groupNotifications` off → threadIdentifier annulé (corrige `applyThreading` qui défaisait le strip serveur) ; push off / DND / type désactivé → livraison passive (pas de bannière/son — la NSE ne peut pas supprimer sans l'entitlement filtering)
+- [x] D4 pbxproj régénéré et COMMITTÉ (+22 refs, CURRENT_PROJECT_VERSION restauré 1255) — corrige aussi le build local du lot 1 (resolver absent du pbxproj committé)
+
 ### Review (fin de run)
 Commit `a866afea4` (19 fichiers, +714/−58, NON poussé — main local ahead 5 avec le travail long-press d'une autre session).
 Vérifications : gateway 696 tests notif verts (30 suites) + `tsc --noEmit` clean ; SDK 38 verts ciblés (coordinator 31 dont resync badge, filtre 6, haptique 1) + 19 UserPreferencesManager dont stamp offset ; app : build complet OK + résolveur 9/9.

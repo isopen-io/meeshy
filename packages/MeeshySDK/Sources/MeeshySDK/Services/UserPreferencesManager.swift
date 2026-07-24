@@ -39,8 +39,14 @@ public final class UserPreferencesManager: ObservableObject {
     /// par les tests `@testable import`.
     var pendingCategories: Set<PreferenceCategory> = []
 
-    private static let keyPrefix = "meeshy_prefs_"
+    private nonisolated static let keyPrefix = "meeshy_prefs_"
     private static let lastSyncKey = "meeshy_prefs_last_sync"
+    /// Suite App Group partagée avec les extensions (NSE, widgets). La clé
+    /// miroir des préférences de notification est
+    /// `appGroupNotificationPrefsKey` — lue par `NSEPreferencesGate` depuis le
+    /// process de la NSE, donc `nonisolated` (constantes immuables Sendable).
+    public nonisolated static let appGroupSuiteName = "group.me.meeshy.apps"
+    public nonisolated static let appGroupNotificationPrefsKey = keyPrefix + PreferenceCategory.notification.rawValue
     private static let minSyncInterval: TimeInterval = 5 * 60
 
     // MARK: - Init
@@ -217,6 +223,10 @@ public final class UserPreferencesManager: ObservableObject {
             UserDefaults.standard.removeObject(forKey: Self.keyPrefix + category.rawValue)
         }
         UserDefaults.standard.removeObject(forKey: Self.lastSyncKey)
+        // Purge du miroir App Group (privacy) : un user B sur le même device
+        // ne doit pas hériter du gating notifications du user A dans la NSE.
+        UserDefaults(suiteName: Self.appGroupSuiteName)?
+            .removeObject(forKey: Self.appGroupNotificationPrefsKey)
     }
 
     public func resetCategory(_ category: PreferenceCategory) async {
@@ -239,6 +249,14 @@ public final class UserPreferencesManager: ObservableObject {
     private func persist<T: Encodable>(_ value: T, category: PreferenceCategory) {
         guard let data = try? encoder.encode(value) else { return }
         UserDefaults.standard.set(data, forKey: Self.keyPrefix + category.rawValue)
+        // Miroir App Group : la NSE (process séparé, app tuée) applique les
+        // préférences de notification au moment de la livraison — sons, badge,
+        // regroupement, DND, toggles par type. Chokepoint unique : couvre les
+        // updates locaux, applyRemote et resetCategory.
+        if category == .notification {
+            UserDefaults(suiteName: Self.appGroupSuiteName)?
+                .set(data, forKey: Self.keyPrefix + category.rawValue)
+        }
     }
 
     private static func load<T: Decodable>(_ category: PreferenceCategory) -> T? {

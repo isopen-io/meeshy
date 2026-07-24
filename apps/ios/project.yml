@@ -207,6 +207,9 @@ targets:
       # resurrected now that the sources are shared).
       - path: MeeshyNotificationExtension/NotificationPayloadHelpers.swift
       - path: MeeshyNotificationExtension/NSEDecryptor.swift
+      # NSEPreferencesGate importe MeeshySDK (modèle UserNotificationPreferences,
+      # déjà lié au bundle de tests) + UserNotifications (data-only en test).
+      - path: MeeshyNotificationExtension/NSEPreferencesGate.swift
     settings:
       PRODUCT_BUNDLE_IDENTIFIER: me.meeshy.app.tests
       CODE_SIGN_STYLE: Automatic

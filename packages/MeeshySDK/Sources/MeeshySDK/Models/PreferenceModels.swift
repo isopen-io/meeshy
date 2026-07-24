@@ -399,6 +399,10 @@ public struct UserNotificationPreferences: Codable, Equatable, Sendable {
     public var vibrationEnabled: Bool
     public var newMessageEnabled: Bool
     public var missedCallEnabled: Bool
+    /// Sonnerie des appels entrants (pushes VoIP/ring). Catégorie dédiée côté
+    /// gateway (GW6) : ni `pushEnabled:false` ni le DND ne coupent les appels —
+    /// seul ce toggle le fait.
+    public var callsEnabled: Bool
     public var voicemailEnabled: Bool
     public var systemEnabled: Bool
     public var conversationEnabled: Bool
@@ -433,7 +437,7 @@ public struct UserNotificationPreferences: Codable, Equatable, Sendable {
 
     public static let defaults = UserNotificationPreferences(
         pushEnabled: true, emailEnabled: true, soundEnabled: true, vibrationEnabled: true,
-        newMessageEnabled: true, missedCallEnabled: true, voicemailEnabled: true, systemEnabled: true,
+        newMessageEnabled: true, missedCallEnabled: true, callsEnabled: true, voicemailEnabled: true, systemEnabled: true,
         conversationEnabled: true, replyEnabled: true, mentionEnabled: true, reactionEnabled: true,
         contactRequestEnabled: true, groupInviteEnabled: true, memberJoinedEnabled: true, memberLeftEnabled: true,
         postLikeEnabled: true, postCommentEnabled: true, postRepostEnabled: true, storyReactionEnabled: true,
@@ -445,7 +449,7 @@ public struct UserNotificationPreferences: Codable, Equatable, Sendable {
 
     public init(
         pushEnabled: Bool = true, emailEnabled: Bool = true, soundEnabled: Bool = true, vibrationEnabled: Bool = true,
-        newMessageEnabled: Bool = true, missedCallEnabled: Bool = true, voicemailEnabled: Bool = true,
+        newMessageEnabled: Bool = true, missedCallEnabled: Bool = true, callsEnabled: Bool = true, voicemailEnabled: Bool = true,
         systemEnabled: Bool = true, conversationEnabled: Bool = true, replyEnabled: Bool = true,
         mentionEnabled: Bool = true, reactionEnabled: Bool = true, contactRequestEnabled: Bool = true,
         groupInviteEnabled: Bool = true, memberJoinedEnabled: Bool = true, memberLeftEnabled: Bool = true,
@@ -460,6 +464,7 @@ public struct UserNotificationPreferences: Codable, Equatable, Sendable {
         self.pushEnabled = pushEnabled; self.emailEnabled = emailEnabled
         self.soundEnabled = soundEnabled; self.vibrationEnabled = vibrationEnabled
         self.newMessageEnabled = newMessageEnabled; self.missedCallEnabled = missedCallEnabled
+        self.callsEnabled = callsEnabled
         self.voicemailEnabled = voicemailEnabled; self.systemEnabled = systemEnabled
         self.conversationEnabled = conversationEnabled; self.replyEnabled = replyEnabled
         self.mentionEnabled = mentionEnabled; self.reactionEnabled = reactionEnabled
@@ -478,7 +483,7 @@ public struct UserNotificationPreferences: Codable, Equatable, Sendable {
 
     enum CodingKeys: String, CodingKey {
         case pushEnabled, emailEnabled, soundEnabled, vibrationEnabled
-        case newMessageEnabled, missedCallEnabled, voicemailEnabled, systemEnabled
+        case newMessageEnabled, missedCallEnabled, callsEnabled, voicemailEnabled, systemEnabled
         case conversationEnabled, replyEnabled, mentionEnabled, reactionEnabled
         case contactRequestEnabled, groupInviteEnabled, memberJoinedEnabled, memberLeftEnabled
         case postLikeEnabled, postCommentEnabled, postRepostEnabled, storyReactionEnabled
@@ -496,6 +501,7 @@ public struct UserNotificationPreferences: Codable, Equatable, Sendable {
         vibrationEnabled = try c.decodeIfPresent(Bool.self, forKey: .vibrationEnabled) ?? Self.defaults.vibrationEnabled
         newMessageEnabled = try c.decodeIfPresent(Bool.self, forKey: .newMessageEnabled) ?? Self.defaults.newMessageEnabled
         missedCallEnabled = try c.decodeIfPresent(Bool.self, forKey: .missedCallEnabled) ?? Self.defaults.missedCallEnabled
+        callsEnabled = try c.decodeIfPresent(Bool.self, forKey: .callsEnabled) ?? Self.defaults.callsEnabled
         voicemailEnabled = try c.decodeIfPresent(Bool.self, forKey: .voicemailEnabled) ?? Self.defaults.voicemailEnabled
         systemEnabled = try c.decodeIfPresent(Bool.self, forKey: .systemEnabled) ?? Self.defaults.systemEnabled
         conversationEnabled = try c.decodeIfPresent(Bool.self, forKey: .conversationEnabled) ?? Self.defaults.conversationEnabled
