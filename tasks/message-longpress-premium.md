@@ -20,6 +20,13 @@ Branche : `main` (directe, worktree principal). Simu visuel : iPhone 16 Pro / iO
 - [ ] **P4 — Nettoyage code mort** post-natif : `standalone`, `MessageMenuPreviewContainer`, `makeThemedBubble(true)` + guards vestigiaux
 - [ ] **P5 — Build + capture visuelle iPhone 16 Pro**, itérer
 
+## Req 2026-07-24 (retour iMessage Liquid Glass)
+- [x] **Req 1 — éléments de menu en Liquid Glass** ✅ VÉRIFIÉ : pastille (`EmojiReactionPicker`→`.adaptiveGlass(Capsule())`), menu (`MessageActionsMenu`), « Plus… » (`MessageMoreSheet`) rendent tous du **vrai `glassEffect`** sur iOS 26. Le retrait natif (C2) fait qu'iOS 26 les affiche en Liquid Glass.
+- [x] **Req 4 — « Plus… » enrichi** ✅ éditer/copier/**partager** (ShareSheet réel)/traduire ajoutés à `moreSections` (RED→GREEN, 24 tests).
+- [x] **Req 3 — morph** ✅ au tap d'un item explorable, la grille se replie en **bande d'icônes horizontale scrollable** (Liquid Glass) + contenu dessous (`explorableTabStrip`).
+- [x] **Req 2 — Réactions voir+ajouter** ✅ bande de réactions rapides en tête de la vue Réactions → `onReact`→`toggleReaction`.
+- [ ] ⚠️ Tout ce lot (morph, share, réactions-add) = **à vérifier VISUELLEMENT sur device iOS 26** (le sheet « Plus… » n'est pas atteignable via l'automatisation du simu — long-press synthétique KO).
+
 ## Décisions verrouillées
 - Overlay custom unifié partout ; pastille épurée teinte accentColor (pas de queue smiley) ; menu compact ≤ actions clés + « Plus… » ; Supprimer dans « Plus… » ; bande 20 emojis scrollable conservée ; message long = mise à l'échelle (plancher relevé ~0.7).
 - Pas de « Répondre » ajouté au resolver (absent, hors périmètre).
