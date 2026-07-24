@@ -1324,9 +1324,14 @@ struct StoryCommentsOverlayView: View {
     /// dirigé sur lui (repli : parent de thread) au lieu du dernier commentaire.
     var targetCommentId: String? = nil
     var targetParentCommentId: String? = nil
+    /// Chasse paginée fournie par le parent quand la cible n'est pas dans les
+    /// pages chargées (les pages qui arrivent re-déclenchent le scroll via
+    /// l'onChange sur le count).
+    var huntTargetComment: (() async -> Void)? = nil
     /// Latch — un seul ciblage par montage de l'overlay, ensuite la liste
     /// reprend le comportement historique (suivre le dernier commentaire).
     @State private var hasScrolledToTargetStoryComment = false
+    @State private var hasRequestedTargetHunt = false
 
     @Binding var showCommentsOverlay: Bool
     /// Réservation visuelle. Quand non-nil, le composer principal (un
@@ -1541,6 +1546,14 @@ struct StoryCommentsOverlayView: View {
                         proxy.scrollTo(anchorId, anchor: .center)
                     }
                     return
+                }
+                // Cible hors des pages chargées : demander la chasse paginée
+                // une seule fois — ses pages re-déclencheront ce onChange.
+                if !hasScrolledToTargetStoryComment, !hasRequestedTargetHunt,
+                   targetCommentId != nil || targetParentCommentId != nil,
+                   let hunt = huntTargetComment {
+                    hasRequestedTargetHunt = true
+                    Task { await hunt() }
                 }
                 if let last = storyComments.last {
                     withAnimation(.easeOut(duration: 0.3)) {
@@ -1948,6 +1961,8 @@ extension StoryViewerView {
                 )
             }
             storyComments = comments
+            storyCommentsNextCursor = response.pagination?.nextCursor
+            storyCommentsHasMore = response.pagination?.hasMore ?? false
             storyCommentLikedIds = Self.computeLikedIds(from: response.data)
             let topAll = comments.filter { $0.parentId == nil }
             storyCommentCount = topAll.count + topAll.reduce(0) { $0 + $1.replies }
@@ -1965,6 +1980,55 @@ extension StoryViewerView {
             // l'avaler (diagnostic des overlays vides signalés).
             Logger.messages.error("[StoryViewer] fetchStoryComments failed: \(error.localizedDescription, privacy: .public)")
         }
+    }
+
+    /// Page suivante (plus ancienne) des commentaires top-level de la story —
+    /// utilisée par la chasse paginée d'un commentaire notifié hors de la
+    /// première page. Append + dédup (jamais de remplacement : le fetch plein
+    /// reste le seul à réinitialiser la liste).
+    func loadNextStoryCommentsPage() async {
+        guard storyCommentsHasMore, let story = currentStory else { return }
+        let langs = AuthManager.shared.currentUser?.preferredContentLanguages ?? []
+        do {
+            let response = try await PostService.shared.getComments(
+                postId: story.id, cursor: storyCommentsNextCursor, limit: 50
+            )
+            if let now = currentStory?.id, now != story.id { return }
+            let fetched = response.data.map { c -> FeedComment in
+                FeedComment(
+                    id: c.id, author: c.author.name, authorId: c.author.id,
+                    authorUsername: c.author.username,
+                    authorAvatarURL: c.author.avatar,
+                    content: c.content, timestamp: c.createdAt,
+                    likes: c.likeCount ?? 0, replies: c.replyCount ?? 0,
+                    parentId: c.parentId,
+                    originalLanguage: c.originalLanguage,
+                    translatedContent: PostDetailViewModel.resolveCommentTranslation(
+                        translations: c.translations, originalLanguage: c.originalLanguage, preferredLanguages: langs
+                    ),
+                    currentUserReactions: c.currentUserReactions,
+                    media: (c.media ?? []).map { $0.toFeedMedia() }
+                )
+            }
+            let existing = Set(storyComments.map(\.id))
+            storyComments.append(contentsOf: fetched.filter { !existing.contains($0.id) })
+            storyCommentsNextCursor = response.pagination?.nextCursor
+            storyCommentsHasMore = response.pagination?.hasMore ?? false
+        } catch {
+            storyCommentsHasMore = false
+        }
+    }
+
+    /// Chasse bornée du commentaire ciblé par la notification (racine ou
+    /// parent de thread) — cf. `CommentTargetHunter`.
+    func huntTargetStoryComment() async {
+        let anchors = [targetCommentId, targetParentCommentId].compactMap { $0 }
+        guard !anchors.isEmpty else { return }
+        _ = await CommentTargetHunter.hunt(
+            isPresent: { storyComments.contains { anchors.contains($0.id) } },
+            hasMore: { storyCommentsHasMore },
+            loadNextPage: { await loadNextStoryCommentsPage() }
+        )
     }
 
     /// Seeds `storyCommentCount` for the slide that just became visible.

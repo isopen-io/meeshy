@@ -58,6 +58,9 @@ struct PostDetailView: View {
     /// Garde-fou : ne défile vers la cible qu'une seule fois (les commentaires
     /// peuvent arriver après le premier rendu via le chargement paginé).
     @State private var didScrollToTargetComment: Bool = false
+    /// Latch de la chasse paginée (cible hors des pages chargées) — une seule
+    /// chasse par présentation.
+    @State private var isHuntingTargetComment: Bool = false
     /// Texte du composer, lié au `UniversalComposerBar`. Permet de préremplir une
     /// @mention quand on répond à une réponse (niveau 2) — l'auteur ciblé est
     /// notifié via `user_mentioned` même si la réponse est reparentée à la racine.
@@ -505,7 +508,20 @@ struct PostDetailView: View {
         // Only top-level sections carry a scroll anchor. For a reply, that's the
         // parent comment; otherwise the comment itself.
         let sectionId = targetParentCommentId.flatMap { $0.isEmpty ? nil : $0 } ?? target
-        guard viewModel.topLevelComments.contains(where: { $0.id == sectionId }) else { return }
+        guard viewModel.topLevelComments.contains(where: { $0.id == sectionId }) else {
+            // Cible au-delà des pages chargées (20/page) : chasse paginée
+            // bornée. Chaque page qui arrive re-déclenche ce scroll via
+            // l'onChange sur topLevelComments.count ; si la chasse échoue
+            // (cap ou fin de liste), on désarme le ciblage.
+            if !isHuntingTargetComment {
+                isHuntingTargetComment = true
+                Task {
+                    let found = await viewModel.loadCommentsUntilPresent(sectionId, postId: postId)
+                    if !found { didScrollToTargetComment = true }
+                }
+            }
+            return
+        }
         didScrollToTargetComment = true
 
         if let parentId = targetParentCommentId, !parentId.isEmpty,

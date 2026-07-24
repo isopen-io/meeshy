@@ -179,6 +179,21 @@ class PostDetailViewModel: ObservableObject {
         Task { [weak self] in await self?.preloadReplyPreviews(postId: postId) }
     }
 
+    /// Notification → commentaire hors de la première page : suit le curseur
+    /// existant jusqu'à ce que le commentaire top-level ciblé soit chargé
+    /// (borné — cf. `CommentTargetHunter`). Retourne `true` si la cible est
+    /// présente à l'issue de la chasse.
+    @discardableResult
+    func loadCommentsUntilPresent(_ commentId: String, postId: String) async -> Bool {
+        await CommentTargetHunter.hunt(
+            isPresent: { [weak self] in
+                self?.topLevelComments.contains(where: { $0.id == commentId }) ?? true
+            },
+            hasMore: { [weak self] in self?.hasMoreComments ?? false },
+            loadNextPage: { [weak self] in await self?.loadMoreComments(postId) }
+        )
+    }
+
     func loadMoreComments(_ postId: String) async {
         // NOTE: no `commentCursor != nil` guard on purpose — see
         // `FeedViewModel.loadMoreIfNeeded`'s identical fix. `loadComments`'s

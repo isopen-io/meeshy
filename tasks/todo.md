@@ -91,6 +91,18 @@ Audit 4 agents (push tap, toast/cloche, payloads gateway, destinations). Verdict
 
 Limites documentées (mémoire `notification-tap-routing-map`) : commentaire > page 1 non atteint (pas d'API comments-around), reply = ancre parent (rangées de réponses sans ancre propre), missed_call sans scroll d'entrée d'appel, `context.parentCommentId` strippé par le schéma REST cloche (metadata dual-read OK), 4 dispatchs à unifier (refactor NotificationNavContext partagé).
 
+## Lot 4 — Chasse paginée du commentaire notifié (2026-07-24 nuit)
+
+Ferme la limite n°1 du lot 3 : un commentaire au-delà de la première page n'était jamais atteint.
+Choix : PAS d'API « around » (trou dans la liste + double sémantique de curseur) — chasse paginée
+BORNÉE sur le curseur existant (`CommentTargetHunter`, cap 15 pages), liste contiguë, cache cohérent.
+
+- [x] H1 `CommentTargetHunter` (pur, `nonisolated`) + 4 tests (présent d'emblée, 3ᵉ page, cap, fin de liste)
+- [x] H2 `PostDetailViewModel.loadCommentsUntilPresent` (réutilise `loadMoreComments`) + 3 tests VM (file multi-pages ajoutée à `MockPostService`)
+- [x] H3 `PostDetailView` : branche d'échec du scroll → chasse (latch), échec → désarme le ciblage
+- [x] H4 `FeedCommentsSheet` (posts ET réels) : suivi du `nextCursor` (ignoré jusqu'ici), `loadNextCommentsPage` (merge, jamais d'écrasement), chasse dans la branche d'échec
+- [x] H5 Overlay STORY : pagination suivie (`storyCommentsNextCursor/HasMore`), `loadNextStoryCommentsPage` (append+dédup), chasse déclenchée par l'overlay via closure — les 3 surfaces couvertes
+
 ### Review (fin de run)
 Commit `a866afea4` (19 fichiers, +714/−58, NON poussé — main local ahead 5 avec le travail long-press d'une autre session).
 Vérifications : gateway 696 tests notif verts (30 suites) + `tsc --noEmit` clean ; SDK 38 verts ciblés (coordinator 31 dont resync badge, filtre 6, haptique 1) + 19 UserPreferencesManager dont stamp offset ; app : build complet OK + résolveur 9/9.

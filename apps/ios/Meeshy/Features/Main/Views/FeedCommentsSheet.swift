@@ -174,6 +174,11 @@ struct CommentsSheetView: View {
     @State private var highlightedCommentId: String? = nil
     /// Garde-fou : ne défile vers la cible qu'une seule fois.
     @State private var didScrollToTargetComment: Bool = false
+    /// Curseur de pagination du GET commentaires — suivi pour la chasse
+    /// paginée d'un commentaire notifié hors de la première page.
+    @State private var commentsNextCursor: String?
+    @State private var commentsHasMore: Bool = false
+    @State private var isHuntingTargetComment: Bool = false
     @State private var composerLanguage: String = DefaultComposerLanguage.resolve()
     @State private var commentBlurEnabled: Bool = false
     @State private var commentEffects: MessageEffects = .none
@@ -620,33 +625,59 @@ struct CommentsSheetView: View {
         }
         do {
             let response = try await PostService.shared.getComments(postId: post.id, cursor: nil, limit: 20)
-            let langs = AuthManager.shared.currentUser?.preferredContentLanguages ?? []
-            let fetched = response.data.map { c -> FeedComment in
-                let translated = PostDetailViewModel.resolveCommentTranslation(
-                    translations: c.translations, originalLanguage: c.originalLanguage, preferredLanguages: langs
-                )
-                return FeedComment(
-                    id: c.id, author: c.author.name, authorId: c.author.id,
-                    authorAvatarURL: c.author.avatar,
-                    content: c.content, timestamp: c.createdAt,
-                    likes: c.likeCount ?? 0, replies: c.replyCount ?? 0,
-                    parentId: c.parentId, effectFlags: c.effectFlags ?? 0,
-                    originalLanguage: c.originalLanguage, translatedContent: translated,
-                    currentUserReactions: c.currentUserReactions
-                )
-            }
+            let fetched = mapFetchedComments(response.data)
             // Merge, never overwrite: `liveComments` may already carry an
             // optimistic send or a socket-reconciled comment that landed
             // while this GET was in flight — the server snapshot the GET
             // resolved from can't know about either yet.
             liveComments = Self.mergeFetchedComments(current: liveComments ?? post.comments, fetched: fetched)
             seedLikedIds(from: fetched)
+            commentsNextCursor = response.pagination?.nextCursor
+            commentsHasMore = response.pagination?.hasMore ?? false
             try? await CacheCoordinator.shared.comments.save(fetched, for: cacheKey)
         } catch {
             // Network failed — keep whatever we already have (embedded top-3
             // or the cached stale page loaded above). Matches this sheet's
             // existing silent-fail pattern for supplementary loads (e.g. the
             // replies prefetch above).
+        }
+    }
+
+    private func mapFetchedComments(_ data: [APIPostComment]) -> [FeedComment] {
+        let langs = AuthManager.shared.currentUser?.preferredContentLanguages ?? []
+        return data.map { c -> FeedComment in
+            let translated = PostDetailViewModel.resolveCommentTranslation(
+                translations: c.translations, originalLanguage: c.originalLanguage, preferredLanguages: langs
+            )
+            return FeedComment(
+                id: c.id, author: c.author.name, authorId: c.author.id,
+                authorAvatarURL: c.author.avatar,
+                content: c.content, timestamp: c.createdAt,
+                likes: c.likeCount ?? 0, replies: c.replyCount ?? 0,
+                parentId: c.parentId, effectFlags: c.effectFlags ?? 0,
+                originalLanguage: c.originalLanguage, translatedContent: translated,
+                currentUserReactions: c.currentUserReactions
+            )
+        }
+    }
+
+    /// Page suivante (plus ancienne) du fil — utilisée par la chasse paginée
+    /// d'un commentaire notifié hors de la première page.
+    private func loadNextCommentsPage() async {
+        guard commentsHasMore else { return }
+        do {
+            let response = try await PostService.shared.getComments(
+                postId: post.id, cursor: commentsNextCursor, limit: 20
+            )
+            let fetched = mapFetchedComments(response.data)
+            liveComments = Self.mergeFetchedComments(current: liveComments ?? post.comments, fetched: fetched)
+            seedLikedIds(from: fetched)
+            commentsNextCursor = response.pagination?.nextCursor
+            commentsHasMore = response.pagination?.hasMore ?? false
+        } catch {
+            // Échec réseau : stopper la chasse proprement (la liste reste
+            // utilisable, le ciblage se désarmera côté appelant).
+            commentsHasMore = false
         }
     }
 
@@ -661,7 +692,23 @@ struct CommentsSheetView: View {
         // Only top-level sections carry a scroll anchor. For a reply, that's the
         // parent comment; otherwise the comment itself.
         let sectionId = targetParentCommentId.flatMap { $0.isEmpty ? nil : $0 } ?? target
-        guard topLevelComments.contains(where: { $0.id == sectionId }) else { return }
+        guard topLevelComments.contains(where: { $0.id == sectionId }) else {
+            // Cible au-delà de la première page : chasse paginée bornée —
+            // chaque page re-déclenche ce scroll via l'onChange sur
+            // topLevelComments.count ; échec (cap/fin) → désarmer le ciblage.
+            if !isHuntingTargetComment {
+                isHuntingTargetComment = true
+                Task {
+                    let found = await CommentTargetHunter.hunt(
+                        isPresent: { topLevelComments.contains { $0.id == sectionId } },
+                        hasMore: { commentsHasMore },
+                        loadNextPage: { await loadNextCommentsPage() }
+                    )
+                    if !found { didScrollToTargetComment = true }
+                }
+            }
+            return
+        }
         didScrollToTargetComment = true
 
         if let parentId = targetParentCommentId, !parentId.isEmpty, !expandedThreads.contains(parentId) {

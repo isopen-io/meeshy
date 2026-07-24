@@ -292,6 +292,10 @@ struct StoryViewerView: View {
     /// not when somebody else has (bug 2026-05-28).
     @State var storyCurrentUserReactions: [String] = []
     @State var storyComments: [FeedComment] = []
+    /// Pagination des commentaires top-level de la story — suivie pour la
+    /// chasse paginée d'un commentaire notifié hors de la première page (50).
+    @State var storyCommentsNextCursor: String?
+    @State var storyCommentsHasMore = false
     @State var isLoadingComments = false
     @State var storyCommentCount: Int = 0
     @State var replyingToStoryComment: FeedComment? = nil
@@ -1138,6 +1142,7 @@ struct StoryViewerView: View {
             isStoryExpired: currentStory?.isExpired() ?? false,
             targetCommentId: targetCommentId,
             targetParentCommentId: targetParentCommentId,
+            huntTargetComment: { await huntTargetStoryComment() },
             showCommentsOverlay: $showCommentsOverlay,
             replyingToStoryComment: $replyingToStoryComment,
             keyboard: keyboard,
