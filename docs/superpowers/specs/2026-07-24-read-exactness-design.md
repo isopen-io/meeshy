@@ -173,24 +173,64 @@ laisse déduire trivialement qui a lu, et vide la préférence de son sens.
 
 **Moitié déjà en place.** Le versant « je n'émets pas d'accusés » existe :
 `routes/conversations/messages.ts:344` gate le broadcast sur la préférence du
-lecteur. Ce lot ajoute le versant réciproque « je ne vois pas ceux des autres »,
-qui dépend du **demandeur** et ne peut donc s'appliquer qu'aux chemins de requête,
-jamais à un broadcast commun à toute la conversation.
+lecteur.
+
+### Où vit la réciprocité — arbitrage
+
+Le versant « je ne vois pas ceux des autres » dépend du **demandeur**. Or
+`getMessageReadStatus(messageId, conversationId)` et
+`getLatestMessageSummary(conversationId)` n'en reçoivent aucun, et cette dernière
+alimente des broadcasts : un payload commun à toute la conversation ne peut pas
+être filtré par spectateur sans passer à un envoi par destinataire.
+
+La résolution tient à une distinction :
+
+- **Masquer l'opt-out aux autres protège une donnée personnelle.** C'est une règle
+  de confidentialité : elle doit être **autoritaire côté serveur**, sans quoi un
+  client modifié la contourne. → implémentée ici.
+- **Masquer les accusés des autres à l'opt-out est une règle d'équité** (« tu ne
+  partages pas, tu ne vois pas »). Ce qu'elle cache est consenti par ceux qui l'ont
+  émis : il n'y a rien à protéger contre l'utilisateur opt-out. → **côté client**.
+
+Conséquences : aucun payload par destinataire, aucune refonte de la diffusion, et
+un comportement **cohérent entre REST et temps réel** — ce qu'un filtrage REST seul
+n'aurait pas donné, l'utilisateur voyant alors ses coches bouger en direct tout en
+trouvant la feuille de détail vide. C'est aussi le modèle de WhatsApp.
+
+La réciprocité rejoint donc les étapes 7 et 8 (clients).
 
 **Fuite préexistante corrigée au passage.** `getLatestMessageSummary` agrège tous
 les curseurs sans distinction : la lecture d'un participant opt-out ressortait
 dans le résumé diffusé aux autres, contournant le gate de broadcast. Le résumé
 exclut désormais ces participants avant diffusion.
 
-Réutilisation : `PrivacyPreferencesService` existe déjà, avec un cache de 5 min
-(`getPreferences`) et surtout `getPreferencesForUsers` pour le **chargement
-groupé** — une liste de N participants ne doit pas produire N requêtes. Rien de
-nouveau à construire de ce côté.
+### Comment la préférence est lue
 
-Difficulté à traiter : les chemins de lecture manipulent des `participantId`,
-alors que les préférences sont indexées par `userId`. La relation participant →
-user est déjà chargée pour le nom et l'avatar, donc l'information est disponible
-sans jointure supplémentaire.
+Correction d'une affirmation antérieure de ce spec : `getPreferencesForUsers`
+n'était **pas** un chargement groupé malgré son nom — un `Promise.all` sur des
+appels unitaires, dont un test verrouillait le comportement. Corrigé séparément :
+la méthode lit désormais tous les manquants en une requête, ce qui profite aussi à
+la présence et aux handlers de messages.
+
+`MessageReadStatusService` ne l'utilise pourtant pas. `PrivacyPreferencesService`
+démarre un `setInterval` de nettoyage qui capture `this` : l'instance n'est donc
+jamais collectée. Or `MessageReadStatusService` est construit **par requête** — en
+créer une par instance fuirait un timer par requête.
+
+Il lit donc l'opt-out en **une requête indexée**, avec la clé importée de
+`PRIVACY_KEY_MAPPING` plutôt que dupliquée, pour ne pas forker la source de
+vérité. Le défaut étant `true`, une ligne absente vaut « visible » ; seules les
+lignes à `"false"` excluent.
+
+Les participants anonymes et bots n'ont pas de `userId`, donc pas de préférence
+stockée : ils restent visibles.
+
+Repli **ouvert** en cas d'erreur — tout le monde reste visible. C'est la convention
+déjà retenue par `PrivacyPreferencesService.fetchFromDatabase`, et échouer fermé
+masquerait les accusés de **tous** sur un incident transitoire.
+
+Le filtrage se fait **en amont**, sur la liste de participants : les opt-out
+disparaissent ainsi du dénominateur comme du numérateur sans traitement séparé.
 
 Côté web, `showReadReceipts` est aujourd'hui **totalement ignorée** — déclarée dans
 le store et l'écran de réglages, lue par aucun composant de chat. Le gate serveur
@@ -292,10 +332,12 @@ Chaque lot commité vert, séparément.
 2. ✅ Gel borné + `MarkReadBodySchema`.
 3. ✅ Curseur à préfixe contigu.
 4. ✅ Bascule `EXACT_READ_TRACKING_SINCE` (opt-in) sur les cinq lecteurs.
-5. Réciprocité `showReadReceipts` + chargement groupé des préférences.
+5. ✅ Exclusion `showReadReceipts` sur les quatre lecteurs du service
+   (numérateur + dénominateur), fuite du résumé diffusé colmatée, et lecture
+   réellement groupée des préférences.
 6. Accumulateur de visibilité — TS (web) et Swift (iOS), mêmes cas de test.
-7. iOS : visibilité, accumulateur, body de l'Outbox.
-8. Web : `IntersectionObserver`, accumulateur, payload.
+7. iOS : visibilité, accumulateur, body de l'Outbox, **réciprocité d'affichage**.
+8. Web : `IntersectionObserver`, accumulateur, payload, **réciprocité d'affichage**.
 9. Correction de `tasks/proof-read-state-exactness.md` (lemme L1) et de
    `docs/plans/2026-03-09-message-delivery-read-status-design.md` (note de
    supersession).

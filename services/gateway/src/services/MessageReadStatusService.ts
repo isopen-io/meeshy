@@ -18,6 +18,8 @@ import { resolveParticipantAvatar } from '@meeshy/shared/utils/participant-helpe
 import { enhancedLogger } from '../utils/logger-enhanced';
 import { computeContiguousReadPrefix, resolveReadAt } from '../utils/read-exactness';
 import { getExactReadTrackingCutover } from '../config/read-exactness-config';
+import { PRIVACY_KEY_MAPPING } from '../config/user-preferences-defaults';
+import { BoundedTtlCache } from '../utils/bounded-cache';
 
 // Logger dédié pour MessageReadStatusService
 const logger = enhancedLogger.child({ module: 'MessageReadStatusService' });
@@ -28,6 +30,28 @@ const logger = enhancedLogger.child({ module: 'MessageReadStatusService' });
  * curseur rattrapera au passage suivant.
  */
 const EXACT_CURSOR_SCAN_LIMIT = 500;
+
+/**
+ * Mémoïsation de la préférence « accusés de lecture » par utilisateur.
+ *
+ * `getLatestMessageSummary` est appelée à CHAQUE accusé de lecture, depuis cinq
+ * sites dont des handlers socket : sans cache, le filtre d'exclusion y ajouterait
+ * une requête payée en permanence. Partagée au niveau module parce que le service
+ * est construit par requête — une instance par appel n'aurait rien mémoïsé.
+ *
+ * `BoundedTtlCache` plutôt qu'une Map : elle borne la mémoire et expire seule,
+ * sans le `setInterval` de `PrivacyPreferencesService` qui, capturant `this`,
+ * empêcherait la collecte de chaque instance.
+ *
+ * TTL de 5 min, aligné sur `PrivacyPreferencesService`. Conséquence assumée :
+ * désactiver ses accusés met jusqu'à 5 min à masquer l'utilisateur des vues déjà
+ * chaudes — la préférence n'a pas à être instantanée, et l'écriture continue
+ * d'être enregistrée pendant ce temps.
+ */
+const READ_RECEIPT_OPT_OUT_CACHE = new BoundedTtlCache<string, boolean>({
+  maxSize: 5000,
+  ttlMs: 5 * 60 * 1000,
+});
 
 
 // Helper pour retry des transactions en cas de deadlock (P2034)
@@ -74,6 +98,13 @@ export class MessageReadStatusService {
    * TTL: 2 secondes (nettoyé automatiquement)
    */
   private static recentActionCache = new Map<string, number>();
+
+  /**
+   * Exposée en statique pour suivre la convention de `recentActionCache` : les
+   * tests la vident dans leur `beforeEach` pour rester isolés d'un cache dont la
+   * portée est le processus.
+   */
+  private static readReceiptOptOutCache = READ_RECEIPT_OPT_OUT_CACHE;
   private static readonly DEDUP_TTL_MS = 2000;
   private static readonly dedupCleanupInterval = (() => {
     const handle = setInterval(() => MessageReadStatusService.cleanupDedupCache(), 30_000);
@@ -808,6 +839,80 @@ export class MessageReadStatusService {
   }
 
   /**
+   * Participants dont le propriétaire a désactivé ses accusés de lecture.
+   *
+   * Ils sortent du **numérateur et du dénominateur** des statuts exposés aux
+   * autres. Les retirer du seul numérateur rendrait le total définitivement
+   * inatteignable, ce qui trahirait leur existence ; garder le compteur en
+   * masquant leur nom laisserait déduire trivialement qu'ils ont lu.
+   *
+   * Une seule requête indexée, sur la clé issue de sa source de vérité plutôt
+   * que dupliquée ici. Les participants anonymes et bots n'ont pas de `userId`,
+   * donc pas de préférence stockée : ils restent visibles (défaut `true`).
+   *
+   * Repli **ouvert** en cas d'erreur — tout le monde reste visible. C'est la
+   * convention déjà retenue par `PrivacyPreferencesService.fetchFromDatabase`,
+   * et échouer fermé masquerait les accusés de TOUS sur un incident transitoire.
+   *
+   * @see docs/superpowers/specs/2026-07-24-read-exactness-design.md
+   */
+  private async _loadReadReceiptOptOuts(
+    participants: ReadonlyArray<{ id: string; userId?: string | null }>
+  ): Promise<Set<string>> {
+    const participantsByUserId = new Map<string, string[]>();
+    for (const participant of participants) {
+      if (!participant.userId) continue;
+      const known = participantsByUserId.get(participant.userId);
+      if (known) known.push(participant.id);
+      else participantsByUserId.set(participant.userId, [participant.id]);
+    }
+
+    if (participantsByUserId.size === 0) return new Set();
+
+    const excluded = new Set<string>();
+    const unresolved: string[] = [];
+
+    const exclude = (userId: string) => {
+      for (const participantId of participantsByUserId.get(userId) ?? []) {
+        excluded.add(participantId);
+      }
+    };
+
+    for (const userId of participantsByUserId.keys()) {
+      const cached = MessageReadStatusService.readReceiptOptOutCache.get(userId);
+      if (cached === undefined) unresolved.push(userId);
+      else if (cached) exclude(userId);
+    }
+
+    if (unresolved.length === 0) return excluded;
+
+    try {
+      const optedOut = await this.prisma.userPreference.findMany({
+        where: {
+          userId: { in: unresolved },
+          key: PRIVACY_KEY_MAPPING.showReadReceipts,
+          value: "false",
+        },
+        select: { userId: true },
+      });
+
+      const optedOutIds = new Set(optedOut.map((row) => row.userId));
+      for (const userId of unresolved) {
+        const isOptOut = optedOutIds.has(userId);
+        MessageReadStatusService.readReceiptOptOutCache.set(userId, isOptOut);
+        if (isOptOut) exclude(userId);
+      }
+      return excluded;
+    } catch (error) {
+      logger.error(
+        "[MessageReadStatus] _loadReadReceiptOptOuts failed — everyone stays visible:",
+        error
+      );
+      return new Set();
+    }
+  }
+
+  /**
    * Détermine jusqu'où le curseur de lecture peut avancer sans franchir un
    * message non lu, en repartant de sa position courante.
    *
@@ -988,15 +1093,21 @@ export class MessageReadStatusService {
 
       if (!message) throw new Error(`Message ${messageId} not found`);
 
-      const participants = await this.prisma.participant.findMany({
+      const allParticipants = await this.prisma.participant.findMany({
         where: { conversationId, isActive: true },
         select: {
           id: true,
+          userId: true,
           displayName: true,
           avatar: true,
           user: { select: { avatar: true } },
         },
       });
+
+      // Filtré EN AMONT : les opt-out disparaissent ainsi du dénominateur
+      // (`totalMembers`) comme du numérateur, sans traitement séparé.
+      const optedOut = await this._loadReadReceiptOptOuts(allParticipants);
+      const participants = allParticipants.filter((p) => !optedOut.has(p.id));
 
       // Denominator = active recipients EXCLUDING the sender, by IDENTITY. A
       // blind `participants.length - 1` drops an active recipient when the
@@ -1220,11 +1331,16 @@ export class MessageReadStatusService {
         select: { id: true, createdAt: true, senderId: true },
       });
 
+      const allActiveParticipants = await this.prisma.participant.findMany({
+        where: { conversationId, isActive: true },
+        select: { id: true, userId: true },
+      });
+
+      // Même règle que les trois autres lecteurs : l'opt-out est retiré avant
+      // tout comptage, donc absent du numérateur comme du dénominateur.
+      const optedOut = await this._loadReadReceiptOptOuts(allActiveParticipants);
       const activeParticipantIds = new Set(
-        (await this.prisma.participant.findMany({
-          where: { conversationId, isActive: true },
-          select: { id: true },
-        })).map(p => p.id)
+        allActiveParticipants.filter(p => !optedOut.has(p.id)).map(p => p.id)
       );
 
       const cursors = await this.prisma.conversationReadCursor.findMany({
@@ -1399,7 +1515,7 @@ export class MessageReadStatusService {
         ...frozenEntries.map(e => e.participantId),
       ]));
 
-      const participants = evaluatedParticipantIds.length
+      const allParticipants = evaluatedParticipantIds.length
         ? await this.prisma.participant.findMany({
             where: {
               id: { in: evaluatedParticipantIds },
@@ -1407,12 +1523,19 @@ export class MessageReadStatusService {
             },
             select: {
               id: true,
+              userId: true,
               displayName: true,
               avatar: true,
               user: { select: { avatar: true } },
             },
           })
         : [];
+
+      // Absents de `participantById`, les opt-out sont ignorés par la boucle
+      // (`continue` sur participant introuvable) et disparaissent donc aussi
+      // bien de la liste que de son total.
+      const optedOut = await this._loadReadReceiptOptOuts(allParticipants);
+      const participants = allParticipants.filter(p => !optedOut.has(p.id));
 
       const participantById = new Map(
         participants.map(p => [p.id, p])
@@ -1906,10 +2029,16 @@ export class MessageReadStatusService {
         return { totalMembers: 0, deliveredCount: 0, readCount: 0 };
       }
 
-      const activeParticipants = await this.prisma.participant.findMany({
+      const allActiveParticipants = await this.prisma.participant.findMany({
         where: { conversationId, isActive: true, id: { not: latestMessage.senderId } },
-        select: { id: true }
+        select: { id: true, userId: true }
       });
+
+      // Ce résumé alimente les events READ_STATUS_UPDATED diffusés à toute la
+      // conversation. Sans ce filtre, la lecture d'un participant opt-out y
+      // ressortait, contournant le gate d'émission posé côté route.
+      const optedOut = await this._loadReadReceiptOptOuts(allActiveParticipants);
+      const activeParticipants = allActiveParticipants.filter(p => !optedOut.has(p.id));
       const totalMembers = activeParticipants.length;
       const activeIds = new Set(activeParticipants.map(p => p.id));
 
