@@ -1651,9 +1651,17 @@ struct ConversationView: View {
 
     // MARK: - Overlay Menu Content (extracted to help type-checker)
 
-    @ViewBuilder
-    private var overlayMenuContent: some View {
-        if overlayState.showOverlayMenu, let msg = overlayState.overlayMessage {
+    // Retourne AnyView pour ÉRADIQUER le type massif de `MessageOverlayMenu` du
+    // type mangled de `ConversationView.body`. Ce type profond (aggravé par les
+    // ajouts .equatable()/a11y de l'overlay) faisait déborder la pile du
+    // décodeur de métadonnées Swift (`swift_getTypeByMangledName`) au 1er rendu
+    // SUR DEVICE → EXC_BAD_ACCESS dans l'en-tête (`expandedHeaderBandBody`).
+    // L'overlay est modal (zIndex 999) → AnyView sans coût de liste.
+    private var overlayMenuContent: AnyView {
+        guard overlayState.showOverlayMenu, let msg = overlayState.overlayMessage else {
+            return AnyView(EmptyView())
+        }
+        return AnyView(
             MessageOverlayMenu(
                 message: msg,
                 contactColor: accentColor,
@@ -1725,7 +1733,7 @@ struct ConversationView: View {
                 }
             )
             .transition(.opacity).zIndex(999)
-        }
+        )
     }
 
     // MARK: - Menu message NATIF (iOS 26 Liquid Glass)
