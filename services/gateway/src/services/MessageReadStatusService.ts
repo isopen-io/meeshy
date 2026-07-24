@@ -16,9 +16,17 @@
 import { PrismaClient, Message, Prisma } from "@meeshy/shared/prisma/client";
 import { resolveParticipantAvatar } from '@meeshy/shared/utils/participant-helpers';
 import { enhancedLogger } from '../utils/logger-enhanced';
+import { computeContiguousReadPrefix } from '../utils/read-exactness';
 
 // Logger dédié pour MessageReadStatusService
 const logger = enhancedLogger.child({ module: 'MessageReadStatusService' });
+
+/**
+ * Borne du balayage cherchant jusqu'où le curseur de lecture peut avancer.
+ * Protège d'un scan non maîtrisé sur une conversation très en retard : le
+ * curseur rattrapera au passage suivant.
+ */
+const EXACT_CURSOR_SCAN_LIMIT = 500;
 
 
 // Helper pour retry des transactions en cas de deadlock (P2034)
@@ -592,6 +600,7 @@ export class MessageReadStatusService {
     // fails — a poisoned key would otherwise swallow every retry within the
     // TTL and silently drop the read receipt.
     let dedupKey: string | undefined;
+    const exactMessageIds = options?.messageIds;
     try {
       // Resolve the effective target message id BEFORE the dedup gate. When the
       // caller omits latestMessageId, the dedup key must reflect the ACTUAL
@@ -610,20 +619,25 @@ export class MessageReadStatusService {
         messageId = latestMessage.id;
       }
 
-      // Keyed by the RESOLVED messageId so a genuinely newer message always
-      // produces a distinct key and is never swallowed by the TTL gate — only
-      // identical repeats (same message within the TTL) are deduped.
-      dedupKey = `${participantId}:${conversationId}:read:${messageId}`;
-      const dedupNow = Date.now();
-      const lastCall = MessageReadStatusService.recentActionCache.get(dedupKey);
+      // La garde de déduplication est indexée sur le message le plus RÉCENT de
+      // la conversation. En mode exact, deux lots successifs de messages
+      // affichés partagent ce même message : la clé serait identique et le
+      // second lot silencieusement avalé, donc perdu. La garde est neutralisée
+      // dans ce mode — les écritures y sont write-once, donc déjà idempotentes,
+      // et elle n'y protégeait que d'un travail redondant marginal.
+      if (!exactMessageIds) {
+        dedupKey = `${participantId}:${conversationId}:read:${messageId}`;
+        const dedupNow = Date.now();
+        const lastCall = MessageReadStatusService.recentActionCache.get(dedupKey);
 
-      if (
-        lastCall &&
-        dedupNow - lastCall < MessageReadStatusService.DEDUP_TTL_MS
-      ) {
-        return;
+        if (
+          lastCall &&
+          dedupNow - lastCall < MessageReadStatusService.DEDUP_TTL_MS
+        ) {
+          return;
+        }
+        MessageReadStatusService.recentActionCache.set(dedupKey, dedupNow);
       }
-      MessageReadStatusService.recentActionCache.set(dedupKey, dedupNow);
 
       const now = new Date();
 
@@ -653,37 +667,72 @@ export class MessageReadStatusService {
       // evaluated atomically inside the write, never on a snapshot read
       // earlier — see _advanceCursor. Never rolls the read cursor back to an
       // older message — that would resurrect already-read messages as unread.
-      const advanced = await this._advanceCursor({
-        participantId,
-        conversationId,
-        messageId,
-        now,
-        cursorExists,
-        idField: "lastReadMessageId",
-        atField: "lastReadAt",
-        resetUnreadCount: true,
-      });
-      if (!advanced) {
-        logger.info(
-          `[MessageReadStatus] Ignoring stale read receipt for participant ${participantId} in conversation ${conversationId}`
-        );
-        return;
-      }
+      if (exactMessageIds) {
+        // MODE EXACT — l'ordre est inversé par rapport au mode hérité : on fige
+        // d'abord, car un message affiché EST lu, que le curseur puisse avancer
+        // ou non. Le curseur ne s'aligne qu'ensuite, sur ce qui est réellement lu.
+        await this.freezeMessageStatus({
+          participantId,
+          conversationId,
+          since: prevReadAt,
+          at: now,
+          field: "readAt",
+          messageIds: exactMessageIds,
+        });
 
-      // Précision absolue : fige un `MessageStatusEntry.readAt` par message
-      // nouvellement franchi (write-once). Sans cela, le statut "lu" de chaque
-      // message suivrait le curseur mobile `lastReadAt`, qui ré-avance à
-      // `now` à chaque ouverture — collapsant tous les anciens messages à la
-      // même date. Le curseur reste l'index rapide ; la date par message est
-      // gelée à la première lecture.
-      await this.freezeMessageStatus({
-        participantId,
-        conversationId,
-        since: prevReadAt,
-        at: now,
-        field: "readAt",
-        messageIds: options?.messageIds,
-      });
+        const cursorTarget = await this._computeExactReadCursorTarget({
+          participantId,
+          conversationId,
+          since: prevReadAt,
+        });
+
+        // `null` = le message suivant immédiatement le curseur n'a pas été vu.
+        // Le curseur ne bouge pas : sauter au bas d'une conversation ne doit
+        // pas vider le badge de non-lus de ce qui a été survolé.
+        if (cursorTarget) {
+          await this._advanceCursor({
+            participantId,
+            conversationId,
+            messageId: cursorTarget,
+            now,
+            cursorExists,
+            idField: "lastReadMessageId",
+            atField: "lastReadAt",
+            resetUnreadCount: false,
+          });
+        }
+      } else {
+        const advanced = await this._advanceCursor({
+          participantId,
+          conversationId,
+          messageId,
+          now,
+          cursorExists,
+          idField: "lastReadMessageId",
+          atField: "lastReadAt",
+          resetUnreadCount: true,
+        });
+        if (!advanced) {
+          logger.info(
+            `[MessageReadStatus] Ignoring stale read receipt for participant ${participantId} in conversation ${conversationId}`
+          );
+          return;
+        }
+
+        // Précision absolue : fige un `MessageStatusEntry.readAt` par message
+        // nouvellement franchi (write-once). Sans cela, le statut "lu" de chaque
+        // message suivrait le curseur mobile `lastReadAt`, qui ré-avance à
+        // `now` à chaque ouverture — collapsant tous les anciens messages à la
+        // même date. Le curseur reste l'index rapide ; la date par message est
+        // gelée à la première lecture.
+        await this.freezeMessageStatus({
+          participantId,
+          conversationId,
+          since: prevReadAt,
+          at: now,
+          field: "readAt",
+        });
+      }
 
       // Read implies delivered: a message can never be read without first having
       // been delivered. When a recipient opens a conversation whose newest
@@ -754,6 +803,61 @@ export class MessageReadStatusService {
         error
       );
       throw error;
+    }
+  }
+
+  /**
+   * Détermine jusqu'où le curseur de lecture peut avancer sans franchir un
+   * message non lu, en repartant de sa position courante.
+   *
+   * Le compteur de non-lus dérive du curseur (`createdAt > lastReadAt`) : le
+   * laisser sauter par-dessus des messages jamais affichés reviendrait à les
+   * déclarer lus par ricochet, ce que tout ce lot corrige. On s'arrête donc au
+   * premier trou.
+   *
+   * Résilient : ne jette jamais — à défaut, le curseur reste en place et
+   * rattrapera au passage suivant.
+   */
+  private async _computeExactReadCursorTarget(params: {
+    participantId: string;
+    conversationId: string;
+    since: Date | null;
+  }): Promise<string | null> {
+    const { participantId, conversationId, since } = params;
+    try {
+      const candidates = await this.prisma.message.findMany({
+        where: {
+          conversationId,
+          deletedAt: null,
+          senderId: { not: participantId },
+          ...(since ? { createdAt: { gt: since } } : {}),
+        },
+        orderBy: { createdAt: "asc" },
+        take: EXACT_CURSOR_SCAN_LIMIT,
+        select: { id: true },
+      });
+      if (candidates.length === 0) return null;
+
+      const orderedIds = candidates.map((m) => m.id);
+      const readEntries = await this.prisma.messageStatusEntry.findMany({
+        where: {
+          messageId: { in: orderedIds },
+          participantId,
+          readAt: { not: null },
+        },
+        select: { messageId: true },
+      });
+
+      return computeContiguousReadPrefix(
+        orderedIds,
+        new Set(readEntries.map((e) => e.messageId))
+      );
+    } catch (error) {
+      logger.error(
+        `[MessageReadStatus] _computeExactReadCursorTarget failed for participant ${participantId} in conversation ${conversationId}:`,
+        error
+      );
+      return null;
     }
   }
 
