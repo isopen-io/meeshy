@@ -695,7 +695,16 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       **reactive 401 decision** (`decideOn401` → `InvalidCredentials`/`RefreshAndRetry`/`Teardown`,
       refresh-once via `hasRefreshedOn401`), and the **replay classification**
       (`classifyRetryStatus` → `Success`/`Teardown`/`ServerError`). +29 behavioural tests, mutation-proven.
-      Still needs the OkHttp `Authenticator`/interceptor that *wires* these decisions into `:core:network`.
+      **Wiring landed** (slice `auth-token-refresh-authenticator`, 2026-07-24): the concrete OkHttp
+      `RefreshAuthenticator` in `:core:network` now feeds `decideOn401` on every real 401 — refresh
+      once (via an injected synchronous `TokenRefresher`) then replay with the renewed bearer,
+      teardown on a dead/already-retried session, and pass invalid-credentials through **without**
+      clearing an existing session. It uses `Response.priorResponse` as the retry-once loop guard,
+      normalises the `/api/v1/…` path to the policy's `/auth/…` form, and treats a null **or blank**
+      refreshed token as a teardown (SOTA graceful guard over a naive non-null check). Wired into
+      `MeeshyApi.create` with a lateinit-bound refresher (`AuthApi.refresh` in `runBlocking`) that
+      cannot recurse because `/auth/refresh` is policy-ineligible. +11 behavioural tests
+      (`RefreshAuthenticatorTest`), all branches of `authenticate` + `endpointOf` covered.
 - [~] Anonymous (shared-link) sessions with restricted send permissions — the
       **permission-hardening decision core** landed (slice `anonymous-session-permissions-core`,
       2026-07-22): `ParticipantPermissions.defaultUser`/`.defaultAnonymous` (port of iOS
