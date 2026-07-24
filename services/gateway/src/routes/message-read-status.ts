@@ -6,6 +6,7 @@ import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
 import type { ReadStatusUpdatedEventData } from '@meeshy/shared/types/socketio-events';
 import { validateParams, validateQuery } from '../validation/helpers.js';
 import { MessageIdParamSchema, ConversationIdParamSchema, ReadStatusesQuerySchema, DeliveryReceiptParamsSchema } from '../validation/message-read-status-schemas.js';
+import { MarkReadBodySchema } from '../validation/messages-schemas.js';
 import { resolveConversationId } from '../utils/conversation-id-cache.js';
 import { sendSuccess, sendNotFound, sendForbidden, sendBadRequest, sendInternalError } from '../utils/response.js';
 import { enhancedLogger } from '../utils/logger-enhanced.js';
@@ -208,12 +209,29 @@ export default async function messageReadStatusRoutes(fastify: FastifyInstance) 
         return sendForbidden(reply, 'Accès non autorisé à cette conversation');
       }
 
+      // Suivi de lecture exact. La webapp appelle CE point d'entrée, pas
+      // /conversations/:id/mark-read : n'en doter qu'un laisserait le web sur le
+      // chemin par fenêtre. Corps absent = client non mis à jour → repli fenêtre.
+      let reportedMessageIds: readonly string[] | undefined;
+      if (request.body !== undefined && request.body !== null) {
+        const bodyResult = MarkReadBodySchema.safeParse(request.body);
+        if (!bodyResult.success) {
+          return sendBadRequest(reply, 'Corps de requête invalide pour le marquage de lecture');
+        }
+        reportedMessageIds = bodyResult.data.messageIds;
+      }
+
       // Compteur AVANT marquage — nombre de messages marqués comme lus,
       // uniforme avec POST /conversations/:id/mark-read.
       const markedCount = await readStatusService.getUnreadCount(membership.id, conversationId);
 
       // Marquer comme lu (participantId, pas userId)
-      await readStatusService.markMessagesAsRead(membership.id, conversationId);
+      await readStatusService.markMessagesAsRead(
+        membership.id,
+        conversationId,
+        undefined,
+        reportedMessageIds ? { messageIds: reportedMessageIds } : undefined
+      );
 
       // PRIVACY: Vérifier si l'utilisateur a activé showReadReceipts avant de broadcaster
       const shouldShowReadReceipts = await privacyPreferencesService.shouldShowReadReceipts(

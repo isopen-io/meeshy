@@ -18,6 +18,7 @@ import { createError, sendErrorResponse } from '@meeshy/shared/utils/errors';
 import { resolveParticipantAvatar, resolveParticipantDisplayName } from '@meeshy/shared/utils/participant-helpers';
 import { resolveUserLanguage } from '@meeshy/shared/utils/conversation-helpers';
 import { resolveConversationId } from '../../utils/conversation-id-cache';
+import { MarkReadBodySchema } from '../../validation/messages-schemas';
 import { resolveReadAt } from '../../utils/read-exactness';
 import { getExactReadTrackingCutover } from '../../config/read-exactness-config';
 import { UnifiedAuthRequest } from '../../middleware/auth';
@@ -86,18 +87,6 @@ export const messageSenderUserSelect = {
 // légende) ou un forward arrive avec un contenu vide. Le `.refine()` final
 // exige qu'au moins une source de contenu soit présente. Restaure le
 // comportement du commit ee9a29db, perdu lors de la migration Zod (Phase 4).
-// Suivi de lecture exact — le client rapporte les messages RÉELLEMENT affichés.
-// Le corps est OPTIONNEL et son absence conserve le repli par fenêtre
-// temporelle : les binaires déjà distribués postent un corps vide, et les en
-// priver perdrait toute lecture jusqu'à leur mise à jour.
-// @see docs/superpowers/specs/2026-07-24-read-exactness-design.md
-export const MarkReadBodySchema = z.object({
-  messageIds: z
-    .array(z.string().regex(/^[0-9a-fA-F]{24}$/, 'Invalid MongoDB ObjectId format'))
-    .max(200)
-    .optional(),
-}).strict();
-
 export const SendMessageBodySchema = z.object({
   content: z
     .string()
