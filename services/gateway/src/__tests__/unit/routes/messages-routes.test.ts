@@ -1103,6 +1103,56 @@ describe('POST /conversations/:id/mark-read', () => {
     await getHandler_()(makeRequest(), reply);
     expect(mockSendInternalError).toHaveBeenCalled();
   });
+
+  // Suivi de lecture exact — @see docs/superpowers/specs/2026-07-24-read-exactness-design.md
+
+  it('forwards the reported messageIds so only displayed messages are frozen', async () => {
+    mockGetUnreadCount.mockResolvedValue(3);
+    const reply = makeReply();
+    await getHandler_()(
+      makeRequest({ body: { messageIds: ['507f1f77bcf86cd799439013'] } }),
+      reply
+    );
+    expect(mockMarkMessagesAsRead).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.anything(),
+      undefined,
+      { messageIds: ['507f1f77bcf86cd799439013'] }
+    );
+  });
+
+  it('still marks read without a body — deployed clients post none', async () => {
+    mockGetUnreadCount.mockResolvedValue(3);
+    const reply = makeReply();
+    await getHandler_()(makeRequest({ body: undefined }), reply);
+    expect(mockMarkMessagesAsRead).toHaveBeenCalled();
+    // Pas d'ids rapportés → repli fenêtre, surtout pas un lot vide qui ne
+    // figerait rien et perdrait la lecture pour ces versions.
+    const options = mockMarkMessagesAsRead.mock.calls[0][3];
+    expect(options?.messageIds).toBeUndefined();
+    expect(mockSendSuccess).toHaveBeenCalledWith(reply, { markedCount: 3 });
+  });
+
+  it('rejects a malformed messageIds payload with 400', async () => {
+    mockGetUnreadCount.mockResolvedValue(3);
+    const reply = makeReply();
+    await getHandler_()(makeRequest({ body: { messageIds: ['pas-un-objectid'] } }), reply);
+    expect(mockSendBadRequest).toHaveBeenCalled();
+    expect(mockMarkMessagesAsRead).not.toHaveBeenCalled();
+  });
+
+  it('freezes reported ids even when the cursor reports zero unread', async () => {
+    // Le curseur bute sur un trou, donc unreadCount vaut 0 alors que le client
+    // vient d'afficher des messages situés APRÈS ce trou. Le raccourci
+    // « 0 non-lu → ne rien faire » perdrait ces lectures.
+    mockGetUnreadCount.mockResolvedValue(0);
+    const reply = makeReply();
+    await getHandler_()(
+      makeRequest({ body: { messageIds: ['507f1f77bcf86cd799439013'] } }),
+      reply
+    );
+    expect(mockMarkMessagesAsRead).toHaveBeenCalled();
+  });
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════
