@@ -65,8 +65,15 @@
 - [x] B4 `NotificationToastManager` : hook `hapticPlayer` injectable gaté sur `vibrationEnabled` — test haptic vert
 
 ### App iOS
-- [~] C1 `AppDelegate.willPresent` : options dérivées des prefs via `NotificationPresentationResolver` (pur, 9 tests) — build+tests app en cours
+- [x] C1 `AppDelegate.willPresent` : options dérivées des prefs via `NotificationPresentationResolver` (pur `nonisolated`, 9 tests verts) — app compile, pbxproj restauré (fichiers glob-inclus par xcodegen en CI)
 - [x] C2 Haptic player câblé dans MeeshyApp (UIImpactFeedbackGenerator light) + rangée « Contenus des amis » (friendContentEnabled) dans FEED SOCIAL
 
 ### Hors périmètre (documenté, décision produit)
 - `callsEnabled` (sonnerie) sans UI iOS ; miroir prefs → App Group pour la NSE ; redaction `showPreview` des toasts in-app ; nettoyage modèles morts (`NotificationPreferences` Swift, Prisma `NotificationPreference`, `PreferencesService` gateway non routé)
+
+### Review (fin de run)
+Commit `a866afea4` (19 fichiers, +714/−58, NON poussé — main local ahead 5 avec le travail long-press d'une autre session).
+Vérifications : gateway 696 tests notif verts (30 suites) + `tsc --noEmit` clean ; SDK 38 verts ciblés (coordinator 31 dont resync badge, filtre 6, haptique 1) + 19 UserPreferencesManager dont stamp offset ; app : build complet OK + résolveur 9/9.
+Chaque toggle de l'écran Notifications a désormais ≥1 consommateur réel documenté dans
+`memory/reference_notification_prefs_enforcement_map.md`. Trous assumés : NSE sans accès prefs
+(miroir App Group à faire), `callsEnabled` sans UI, `showPreview` non appliqué aux toasts in-app.
