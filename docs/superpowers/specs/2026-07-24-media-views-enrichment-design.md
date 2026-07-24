@@ -3,6 +3,11 @@
 Date : 2026-07-24
 Périmètre : messages / conversations uniquement (stories, posts et réels hors lot)
 
+> **Lot 2 de 2.** Dépend de `2026-07-24-read-exactness-design.md`, qui corrige la
+> sur-déclaration de lecture. Livrer ce lot en premier produirait une feuille
+> « vues » précise mais fausse : des participants y apparaîtraient comme ayant vu
+> un message jamais affiché.
+
 ## Problème
 
 La feuille « vues » d'un attachement (`MessageViewsDetailView`) affiche aujourd'hui,
@@ -155,19 +160,23 @@ pour tous les messages affichés au même instant. Seul l'**override manuel** es
 per-message. D'où deux chemins :
 
 **Chemin de masse — `POST /conversations/:id/mark-read`**
-La route n'a aujourd'hui aucun schéma de body. Elle en reçoit un, optionnel :
+Le lot 1 (`2026-07-24-read-exactness-design.md`) dote déjà cette route d'un
+`MarkReadBodySchema` portant `messageIds`. Il suffit d'y ajouter un champ :
 
 ```ts
 export const MarkReadBodySchema = z.object({
-  language: z.string().min(2).max(16).optional(),
+  messageIds: z.array(CommonSchemas.mongoId).max(200).optional(), // lot 1
+  language: z.string().min(2).max(16).optional(),                 // lot 2
 }).strict();
 ```
 
-`markMessagesAsRead` gagne un quatrième paramètre optionnel
-`options?: { language?: string }`. La langue n'est écrite **qu'à la création** des
-entrées (`createMany`) : les entrées préexistantes conservent la langue de leur
-première lecture. Cela évite un read-modify-write sur un lot et respecte la
-sémantique write-once déjà en place.
+Le lot est cohérent par construction : tous les messages d'un même envoi ont été
+affichés au même instant, donc dans la **même** langue résolue. Un seul code
+langue pour tout le lot est donc exact, et non une approximation.
+
+La langue n'est écrite **qu'à la création** des entrées (`createMany`) : les
+entrées préexistantes conservent la langue de leur première lecture. Cela évite un
+read-modify-write sur un lot et respecte la sémantique write-once déjà en place.
 
 **Chemin d'override — `POST /messages/:messageId/status`**
 La route existe (`routes/messages.ts:501`), son body est déjà validé par
