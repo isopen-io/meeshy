@@ -247,6 +247,38 @@ describe('PATCH /users/me — customDestinationLanguage empty string (line 151)'
   });
 });
 
+// ─── regionalLanguage='' → null (clear secondary language) ───────────────────
+
+describe('PATCH /users/me — regionalLanguage empty string (clear)', () => {
+  it('maps empty string to null in updateData', async () => {
+    const prisma = makePrisma();
+    const app = await buildApp({ prisma });
+    const res = await app.inject({
+      method: 'PATCH', url: '/users/me',
+      payload: { regionalLanguage: '' },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(prisma.user.update).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ regionalLanguage: null }) })
+    );
+    await app.close();
+  });
+
+  it('maps non-empty regionalLanguage string normally', async () => {
+    const prisma = makePrisma();
+    const app = await buildApp({ prisma });
+    const res = await app.inject({
+      method: 'PATCH', url: '/users/me',
+      payload: { regionalLanguage: 'es' },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(prisma.user.update).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ regionalLanguage: 'es' }) })
+    );
+    await app.close();
+  });
+});
+
 // ─── Line 194: onDuplicate callback in withMutationLog ───────────────────────
 
 describe('PATCH /users/me — onDuplicate callback (line 194)', () => {

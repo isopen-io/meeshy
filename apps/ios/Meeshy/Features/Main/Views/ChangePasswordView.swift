@@ -371,18 +371,14 @@ struct ChangePasswordView: View {
                 }
                 try? await Task.sleep(nanoseconds: 1_500_000_000)
                 dismiss()
-            } catch let error as APIError {
-                HapticFeedback.error()
-                switch error {
-                case .serverError(400, _):
-                    errorMessage = String(localized: "auth.password.change.error.current", defaultValue: "Incorrect current password", bundle: .main)
-                default:
-                    errorMessage = error.errorDescription
-                }
             } catch let error as MeeshyError {
                 HapticFeedback.error()
-                if case .server(_, let msg) = error {
-                    errorMessage = msg
+                // Le stack réseau ne lève que MeeshyError (pas APIError) : un 400
+                // = « mot de passe actuel incorrect » → message localisé dédié.
+                if case .server(let statusCode, let msg) = error {
+                    errorMessage = statusCode == 400
+                        ? String(localized: "auth.password.change.error.current", defaultValue: "Incorrect current password", bundle: .main)
+                        : msg
                 } else {
                     errorMessage = error.localizedDescription
                 }

@@ -532,13 +532,9 @@ final class ProfileUserPostsViewModel: ObservableObject {
         }
     }
 
-    func sendComment(postId: String, content: String, parentId: String?) async {
-        do {
-            _ = try await postService.addComment(postId: postId, content: content, parentId: parentId, effectFlags: nil)
-        } catch {
-            FeedbackToastManager.shared.showError(String(localized: "profile.posts.commentError", defaultValue: "Erreur lors de l'envoi du commentaire", bundle: .main))
-        }
-    }
+    // `sendComment` retiré (2026-07-24) : aucun call site. Les commentaires de
+    // cette liste passent par le viewer/détail hôte (PostDetailViewModel), pas
+    // par un composer inline ici — la méthode était du code mort trompeur.
 
     func report(_ postId: String) async {
         try? await ReportService.shared.reportPost(postId: postId, reportType: "inappropriate", reason: nil)

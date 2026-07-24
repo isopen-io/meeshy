@@ -64,6 +64,12 @@ public final class NotificationCoordinator: ObservableObject {
     /// OUR own reads. Injectable for tests; defaults to the auth singleton.
     private let currentUserIdProvider: @MainActor () -> String?
 
+    /// Whether the app-icon badge is allowed to display a non-zero count.
+    /// Mirrors the user's `notificationBadgeEnabled` preference so disabling the
+    /// "Badges" toggle actually clears the icon badge. The widget/app-group
+    /// counter is intentionally NOT gated (it's a distinct surface).
+    private let badgeEnabledProvider: @MainActor () -> Bool
+
     /// Ids of conversations the user has muted. Muted conversations still show
     /// their unread badge on their own row, but MUST NOT nag the app-icon badge
     /// or the widget unread counter — the whole point of muting is to silence
@@ -79,11 +85,13 @@ public final class NotificationCoordinator: ObservableObject {
     public init(
         badgeWriter: NotificationBadgeWriting = SystemNotificationBadgeWriter(),
         appGroupSuiteName: String = "group.me.meeshy.apps",
-        currentUserIdProvider: @escaping @MainActor () -> String? = { AuthManager.shared.currentUser?.id }
+        currentUserIdProvider: @escaping @MainActor () -> String? = { AuthManager.shared.currentUser?.id },
+        badgeEnabledProvider: @escaping @MainActor () -> Bool = { UserPreferencesManager.shared.notification.notificationBadgeEnabled }
     ) {
         self.badgeWriter = badgeWriter
         self.appGroupDefaults = UserDefaults(suiteName: appGroupSuiteName)
         self.currentUserIdProvider = currentUserIdProvider
+        self.badgeEnabledProvider = badgeEnabledProvider
     }
 
     // MARK: - Lifecycle
@@ -314,7 +322,10 @@ public final class NotificationCoordinator: ObservableObject {
     /// Immediately push badge + widget updates. Exposed for tests and scene-phase callbacks.
     public func syncNow() async {
         let count = badgeTotal
-        await badgeWriter.setBadgeCount(count)
+        // La pref « Badges » ne gate QUE l'icône d'app ; le widget/app-group
+        // (surface distincte) conserve le vrai total.
+        let badgeCount = badgeEnabledProvider() ? count : 0
+        await badgeWriter.setBadgeCount(badgeCount)
         appGroupDefaults?.set(count, forKey: Self.unreadCountKey)
         widgetSink?.publishUnreadCount(count)
         widgetSink?.reloadTimelines()

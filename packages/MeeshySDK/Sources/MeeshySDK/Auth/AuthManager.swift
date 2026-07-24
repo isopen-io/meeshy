@@ -66,6 +66,13 @@ public protocol AuthManaging: AnyObject {
     /// EditProfileViewModel when `OfflineQueue.outcomeStream` emits
     /// `.exhausted` for the corresponding `updateProfile` row.
     func restoreLocalProfileSnapshot(_ snapshot: ProfileSnapshot)
+
+    /// Reflects a confirmed `voicePublic` change onto `currentUser` (in-memory
+    /// publish + keychain persist) after a successful `PATCH /users/me`. Without
+    /// it, a screen that re-derives its toggle from `currentUser.voicePublic`
+    /// (e.g. VoiceProfileManageViewModel.loadProfile) would restore the stale
+    /// value on reopen.
+    func applyLocalVoicePublicChange(_ isPublic: Bool)
 }
 
 // MARK: - Implementation
@@ -1040,6 +1047,15 @@ public final class AuthManager: ObservableObject, AuthManaging {
         // U3 — the optimistic edit was rolled back; drop the guard + persist.
         pendingOptimisticProfile = nil
         saveUserToKeychain(reverted, userId: reverted.id)
+    }
+
+    public func applyLocalVoicePublicChange(_ isPublic: Bool) {
+        guard let user = currentUser else { return }
+        let updated = user.withProfileChanges(voicePublic: isPublic)
+        currentUser = updated
+        // The change is already server-confirmed (called after PATCH /users/me),
+        // so it doesn't join the optimistic guard — just persist for cold start.
+        saveUserToKeychain(updated, userId: updated.id)
     }
 
     /// U3 — merge any in-flight optimistic profile onto a freshly-fetched server

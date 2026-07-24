@@ -340,7 +340,8 @@ public struct MeeshyUser: Codable, Identifiable, Sendable {
         avatar: String? = nil,
         avatarThumbHash: String? = nil,
         banner: String? = nil,
-        bannerThumbHash: String? = nil
+        bannerThumbHash: String? = nil,
+        voicePublic: Bool? = nil
     ) -> MeeshyUser {
         MeeshyUser(
             id: id, username: username, email: email,
@@ -367,7 +368,7 @@ public struct MeeshyUser: Codable, Identifiable, Sendable {
             registrationCountry: registrationCountry,
             profileCompletionRate: profileCompletionRate,
             signalIdentityKeyPublic: signalIdentityKeyPublic,
-            voicePublic: voicePublic,
+            voicePublic: voicePublic ?? self.voicePublic,
             voiceSampleUrl: voiceSampleUrl,
             voiceSampleDurationMs: voiceSampleDurationMs,
             voiceQuality: voiceQuality

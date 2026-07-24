@@ -167,6 +167,15 @@ final class MockAuthManager: AuthManaging {
         }
     }
 
+    var appliedVoicePublicChanges: [Bool] = []
+
+    func applyLocalVoicePublicChange(_ isPublic: Bool) {
+        appliedVoicePublicChanges.append(isPublic)
+        if let user = currentUser {
+            currentUser = user.withProfileChanges(voicePublic: isPublic)
+        }
+    }
+
     // MARK: - Test Helpers
 
     func simulateLoggedIn(user: MeeshyUser, token: String = "mock-token") {
@@ -214,5 +223,6 @@ final class MockAuthManager: AuthManaging {
         appliedProfileChanges.removeAll()
         restoredSnapshots.removeAll()
         applyLocalProfileChangesReturn = nil
+        appliedVoicePublicChanges.removeAll()
     }
 }

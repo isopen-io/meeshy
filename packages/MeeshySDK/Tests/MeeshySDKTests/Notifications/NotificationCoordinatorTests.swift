@@ -471,6 +471,27 @@ final class NotificationCoordinatorTests: XCTestCase {
         XCTAssertEqual(UserDefaults(suiteName: suite)?.integer(forKey: "unread_count"), 3)
     }
 
+    func test_syncNow_whenBadgeDisabled_writesZeroBadgeButKeepsWidgetCount() async {
+        let suite = "group.test.meeshy.coordinator.\(UUID().uuidString)"
+        createdSuiteNames.append(suite)
+        UserDefaults(suiteName: suite)?.removePersistentDomain(forName: suite)
+        let writer = MockBadgeWriter()
+        let sink = MockWidgetSink()
+        let sut = NotificationCoordinator(
+            badgeWriter: writer, appGroupSuiteName: suite,
+            badgeEnabledProvider: { false }
+        )
+        sut.widgetSink = sink
+        sut.registerConversations([makeConversation(id: "a", unread: 3)])
+
+        await sut.syncNow()
+
+        // Pref « Badges » désactivée → l'icône d'app ne montre aucun badge…
+        XCTAssertEqual(writer.writes.last, 0)
+        // …mais le widget (compteur distinct) garde le vrai total.
+        XCTAssertEqual(sink.publishedUnread.last, 3)
+    }
+
     // MARK: - reset
 
     func test_reset_clearsStateAndBadge() {

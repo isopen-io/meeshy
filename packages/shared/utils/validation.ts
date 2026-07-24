@@ -257,7 +257,9 @@ export const updateUserProfileSchema = z.object({
   phoneNumber: z.union([z.string(), z.null()]).optional(),
   bio: z.string().max(500).optional(),
   systemLanguage: supportedLanguageCode.optional(),
-  regionalLanguage: supportedLanguageCode.optional(),
+  // Chaîne vide autorisée = effacement de la langue secondaire (mirror de
+  // customDestinationLanguage). resolveUserLanguage traite '' comme absent.
+  regionalLanguage: z.union([z.literal(''), supportedLanguageCode]).optional(),
   customDestinationLanguage: z
     .union([z.literal(''), z.null(), z.string().min(2).max(5).transform((code) => code.toLowerCase())])
     .optional(),

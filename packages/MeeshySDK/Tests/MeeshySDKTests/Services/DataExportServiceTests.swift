@@ -128,4 +128,47 @@ final class DataExportServiceTests: XCTestCase {
             XCTFail("Expected MeeshyError")
         }
     }
+
+    // MARK: - Encoding (RGPD : le fichier partagé doit contenir les données réelles, pas que des compteurs)
+
+    func test_dataExportData_encodesFullPayload_notJustCounts() throws {
+        let profile = ExportedProfile(
+            id: "u1", username: "alice", displayName: "Alice",
+            firstName: nil, lastName: nil, email: "alice@meeshy.me",
+            phoneNumber: nil, bio: "hello", avatar: nil, banner: nil,
+            systemLanguage: "fr", regionalLanguage: nil,
+            customDestinationLanguage: nil, timezone: nil,
+            createdAt: nil, lastActiveAt: nil
+        )
+        let message = ExportedMessage(
+            id: "m1", conversationId: "c1", content: "Bonjour le monde",
+            originalLanguage: "fr", messageType: "text", messageSource: nil,
+            createdAt: nil, editedAt: nil
+        )
+        let contact = ExportedContact(
+            conversationId: "c1", conversationName: "Team", conversationType: "group",
+            role: "member", joinedAt: nil,
+            participants: [ExportedContactParticipant(displayName: "Bob", type: "user")]
+        )
+        let data = DataExportData(
+            exportDate: "2026-04-09T00:00:00Z", format: "json",
+            requestedTypes: ["profile", "messages", "contacts"],
+            profile: profile, messages: [message], messagesCount: 1,
+            contacts: [contact], contactsCount: 1, csv: ["messages": "id,content\n"]
+        )
+
+        let encoder = JSONEncoder()
+        let encoded = try encoder.encode(data)
+        let json = String(decoding: encoded, as: UTF8.self)
+
+        XCTAssertTrue(json.contains("alice"), "profile.username absent de l'export")
+        XCTAssertTrue(json.contains("Bonjour le monde"), "message.content absent de l'export")
+        XCTAssertTrue(json.contains("Team"), "contact.conversationName absent de l'export")
+
+        let roundTripped = try JSONDecoder().decode(DataExportData.self, from: encoded)
+        XCTAssertEqual(roundTripped.profile?.username, "alice")
+        XCTAssertEqual(roundTripped.messages?.first?.content, "Bonjour le monde")
+        XCTAssertEqual(roundTripped.contacts?.first?.conversationName, "Team")
+        XCTAssertEqual(roundTripped.messagesCount, 1)
+    }
 }

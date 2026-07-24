@@ -790,11 +790,10 @@ struct ProfileView: View {
     ///
     /// Only valid for fields the gateway's `updateUserProfileSchema` actually
     /// accepts an empty string for: `bio` (plain `z.string().max(500)`, no
-    /// minimum) and `customDestinationLanguage` (explicit `z.literal('')`
-    /// union member). `regionalLanguage` requires 2-5 chars with no
-    /// empty-string variant — routing it through here would 400 the ENTIRE
-    /// PATCH, so it deliberately keeps the old isEmpty-collapses-to-nil
-    /// behavior below until the gateway schema grows a clear path.
+    /// minimum), `customDestinationLanguage` (explicit `z.literal('')` union
+    /// member) and `regionalLanguage` (now a `z.union([z.literal(''),
+    /// supportedLanguageCode])` — the gateway maps `''` to `null` and the
+    /// Prisme treats a cleared secondary language as absent).
     ///
     /// `static` + non-`private` (rather than an instance method) so it can be
     /// exercised directly from `MeeshyTests` via `@testable import Meeshy`
@@ -816,7 +815,7 @@ struct ProfileView: View {
             displayName: displayName.isEmpty ? nil : displayName,
             bio: Self.changedOrNil(bio, original: original.bio),
             systemLanguage: systemLanguage.isEmpty ? nil : systemLanguage,
-            regionalLanguage: regionalLanguage.isEmpty ? nil : regionalLanguage,
+            regionalLanguage: Self.changedOrNil(regionalLanguage, original: original.regionalLanguage),
             customDestinationLanguage: Self.changedOrNil(customDestinationLanguage, original: original.customDestinationLanguage)
         )
         authManager.currentUser = optimistic
@@ -829,7 +828,7 @@ struct ProfileView: View {
             displayName: displayName.isEmpty ? nil : displayName,
             bio: Self.changedOrNil(bio, original: original.bio),
             systemLanguage: systemLanguage.isEmpty ? nil : systemLanguage,
-            regionalLanguage: regionalLanguage.isEmpty ? nil : regionalLanguage,
+            regionalLanguage: Self.changedOrNil(regionalLanguage, original: original.regionalLanguage),
             customDestinationLanguage: Self.changedOrNil(customDestinationLanguage, original: original.customDestinationLanguage)
         )
 

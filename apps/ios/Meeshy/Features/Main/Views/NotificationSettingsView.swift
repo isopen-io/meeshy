@@ -105,9 +105,9 @@ struct NotificationSettingsView: View {
             notifToggle(icon: "phone.arrow.down.left", title: String(localized: "settings.notifications.missed_calls", defaultValue: "Appels manqués", bundle: .main), color: MeeshyColors.errorHex,
                         keyPath: \.missedCallEnabled)
 
-            notifToggle(icon: "mic.fill", title: String(localized: "settings.notifications.voicemail", defaultValue: "Messages vocaux", bundle: .main), color: MeeshyColors.trackingAccentHex,
-                        keyPath: \.voicemailEnabled)
-
+            // Toggle « Messages vocaux » retiré : préférence orpheline (aucun
+            // MeeshyNotificationType.voicemail, aucun case dans isTypeEnabled) —
+            // le champ voicemailEnabled reste au modèle pour un usage futur.
             notifToggle(icon: "gear", title: String(localized: "settings.notifications.system", defaultValue: "Système", bundle: .main), color: MeeshyColors.infoHex,
                         keyPath: \.systemEnabled)
         }
