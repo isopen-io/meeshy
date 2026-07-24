@@ -131,13 +131,41 @@ final class MessageActionResolverTests: XCTestCase {
         XCTAssertEqual(items, [.report])
     }
 
-    func test_moreSections_neverContainsLanguage() {
-        for section in MessageActionResolver.moreSections(ctx(isMine: true, canEdit: true, canDelete: true,
-            hasMedia: true, hasTimebasedMedia: true, isEdited: true, hasEditRevisions: true)) {
-            let items: [MoreItem]
-            switch section { case .actions(let i), .info(let i), .moderation(let i): items = i }
-            XCTAssertFalse(items.contains(.language))
-        }
+    // « Plus… » enrichi (req 2026-07-24) : éditer / copier / partager / traduire /
+    // transcription y sont désormais disponibles (menu complet).
+
+    func test_moreSections_actionsIncludeShare() {
+        let items = actionItems(MessageActionResolver.moreSections(ctx()))
+        XCTAssertTrue(items.contains(.share), "« Partager » disponible dans « Plus… »")
+    }
+
+    func test_moreSections_ownEditableText_actionsIncludeEditAndCopy() {
+        let items = actionItems(MessageActionResolver.moreSections(ctx(isMine: true, canEdit: true)))
+        XCTAssertTrue(items.contains(.edit))
+        XCTAssertTrue(items.contains(.copy))
+    }
+
+    func test_moreSections_receivedText_actionsOmitEdit_keepCopy() {
+        let items = actionItems(MessageActionResolver.moreSections(ctx(isMine: false)))
+        XCTAssertFalse(items.contains(.edit), "pas d'édition d'un message reçu")
+        XCTAssertTrue(items.contains(.copy))
+    }
+
+    func test_moreSections_text_infoIncludesLanguageAndReactions() {
+        let items = infoItems(MessageActionResolver.moreSections(ctx()))
+        XCTAssertTrue(items.contains(.language), "Traduire (langue) explorable dans « Plus… »")
+        XCTAssertTrue(items.contains(.reactions), "Réactions explorables (voir + ajouter) dans « Plus… »")
+    }
+
+    func test_moreSections_mediaNoText_infoOmitsLanguageAndSentiment() {
+        let items = infoItems(MessageActionResolver.moreSections(ctx(hasText: false, hasMedia: true)))
+        XCTAssertFalse(items.contains(.language), "pas de traduction sans texte ni piste temporelle")
+        XCTAssertFalse(items.contains(.sentiment))
+    }
+
+    func test_moreSections_timebasedMedia_infoIncludesLanguage() {
+        let items = infoItems(MessageActionResolver.moreSections(ctx(hasText: false, hasMedia: true, hasTimebasedMedia: true)))
+        XCTAssertTrue(items.contains(.language), "audio/vidéo → traduction (langue) disponible")
     }
 
     // MARK: - Helpers

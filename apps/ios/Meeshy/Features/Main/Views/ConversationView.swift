@@ -53,6 +53,9 @@ struct ConversationOverlayState {
     var quickReactionAnchorFrame: CGRect? = nil
     var emojiOnlyMode = false
     var deleteConfirmMessageId: String? = nil
+    /// Message dont la feuille de partage système (`UIActivityViewController`)
+    /// est présentée — action « Partager » du menu « Plus… ».
+    var shareMessage: Message? = nil
     var showStoryViewer = false
     var storyViewerUserId: String? = nil
     var storyViewerGroupIndex: Int = 0
@@ -627,6 +630,10 @@ struct ConversationView: View {
             } message: { _ in
                 Text(String(localized: "conversation.view.delete_for_everyone.hint", bundle: .main))
             }
+            .sheet(item: $overlayState.shareMessage) { msg in
+                ShareSheet(activityItems: [viewModel.preferredTranslation(for: msg.id)?.translatedContent ?? msg.content])
+                    .presentationDetents([.medium, .large])
+            }
             .sheet(item: $composerState.forwardMessage) { msgToForward in
                 ForwardPickerSheet(message: msgToForward, sourceConversationId: conversation?.id ?? "", accentColor: accentColor) { composerState.forwardMessage = nil }
                     .presentationDetents([.medium, .large])
@@ -712,6 +719,12 @@ struct ConversationView: View {
                         _ = viewModel.toggleStar(messageId: msg.id, conversationName: conversation?.name, conversationAccentColor: accentColor)
                     },
                     onDeleteMessage: { overlayState.deleteConfirmMessageId = msg.id },
+                    onEdit: { composerState.editingMessageId = msg.id },
+                    onCopy: {
+                        UIPasteboard.general.string = viewModel.preferredTranslation(for: msg.id)?.translatedContent ?? msg.content
+                        HapticFeedback.success()
+                    },
+                    onShare: { overlayState.shareMessage = msg },
                     onSelectTranslation: { translation in
                         viewModel.setActiveTranslation(for: msg.id, translation: translation)
                     },

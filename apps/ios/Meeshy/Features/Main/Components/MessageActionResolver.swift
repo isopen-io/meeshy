@@ -13,6 +13,9 @@ enum MoreItem: String, Equatable {
     /// Actions sorties du menu compact (`primaryActions`) et routées vers
     /// « Plus… » : épingler/favori (toggles) + suppression du message.
     case pin, unpin, star, unstar, delete
+    /// Actions « faire » ajoutées au menu « Plus… » (exécutent + ferment) :
+    /// éditer, copier, partager. `language`/`transcription` = explorables.
+    case edit, copy, share
     case language, views, reactions, transcription, sentiment, history
     case report
 }
@@ -68,15 +71,27 @@ enum MessageActionResolver {
     static func moreSections(_ ctx: MessageMenuContext) -> [MoreSection] {
         var sections: [MoreSection] = []
 
+        // « Faire » (exécutent + ferment) : répondre, transférer, discussion,
+        // éditer (si éditable), copier (si texte), partager, épingler/favori,
+        // supprimer.
         var actions: [MoreItem] = [.reply, .forward, .thread]
+        if ctx.isMine && ctx.canEdit && ctx.hasText { actions.append(.edit) }
+        if ctx.hasText { actions.append(.copy) }
+        actions.append(.share)
         actions.append(ctx.isPinned ? .unpin : .pin)
         actions.append(ctx.isStarred ? .unstar : .star)
         if ctx.canDelete && ctx.hasMedia { actions.append(.deleteMedia) }
         if ctx.canDelete { actions.append(.delete) }
         sections.append(.actions(actions))
 
-        var info: [MoreItem] = [.views, .reactions]
+        // « Infos & Prisme » (explorables → morph icônes + contenu) : traduire
+        // (langue), transcription (audio/vidéo), réactions (voir + ajouter),
+        // vues, sentiment (texte), historique (édité).
+        var info: [MoreItem] = []
+        if ctx.hasText || ctx.hasTimebasedMedia { info.append(.language) }
         if ctx.hasTimebasedMedia { info.append(.transcription) }
+        info.append(.reactions)
+        info.append(.views)
         if ctx.hasText { info.append(.sentiment) }
         if ctx.isEdited && ctx.hasEditRevisions { info.append(.history) }
         sections.append(.info(info))

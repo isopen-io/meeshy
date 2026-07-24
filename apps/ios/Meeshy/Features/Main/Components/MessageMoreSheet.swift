@@ -25,6 +25,9 @@ struct MessageMoreSheet: View {
     /// Suppression du message entier — route vers le dialogue riche
     /// (« pour tous » / « pour moi ») de `ConversationView`.
     var onDeleteMessage: (() -> Void)? = nil
+    var onEdit: (() -> Void)? = nil
+    var onCopy: (() -> Void)? = nil
+    var onShare: (() -> Void)? = nil
     var onSelectTranslation: ((MessageTranslation?) -> Void)? = nil
     var onSelectAudioLanguage: ((String?) -> Void)? = nil
     var onReport: ((String, String?) -> Void)? = nil
@@ -164,6 +167,9 @@ struct MessageMoreSheet: View {
                 case .pin, .unpin: onPin?()
                 case .star, .unstar: onToggleStar?()
                 case .delete: onDeleteMessage?()
+                case .edit: onEdit?()
+                case .copy: onCopy?()
+                case .share: onShare?()
                 default: break
                 }
                 dismiss()
@@ -221,7 +227,7 @@ struct MessageMoreSheet: View {
 
     private func isExploration(_ item: MoreItem) -> Bool {
         switch item {
-        case .reply, .forward, .thread, .deleteMedia, .pin, .unpin, .star, .unstar, .delete: return false
+        case .reply, .forward, .thread, .deleteMedia, .pin, .unpin, .star, .unstar, .delete, .edit, .copy, .share: return false
         case .views, .reactions, .language, .transcription, .sentiment, .history, .report: return true
         }
     }
@@ -235,6 +241,9 @@ struct MessageMoreSheet: View {
         case .pin, .unpin: return MeeshyColors.indigo400
         case .star, .unstar: return MeeshyColors.warning
         case .delete: return MeeshyColors.error
+        case .edit: return MeeshyColors.indigo500
+        case .copy: return MeeshyColors.indigo400
+        case .share: return MeeshyColors.info
         case .language: return MeeshyColors.info
         case .views: return MeeshyColors.success
         case .reactions: return MeeshyColors.warning
@@ -305,7 +314,7 @@ struct MessageMoreSheet: View {
             MessageEditsDetailView(message: message, editRevisions: editRevisions)
         case .report:
             MessageReportDetailView(message: message, onReport: { onReport?($0, $1); dismiss() }, onDismiss: { dismiss() })
-        case .reply, .forward, .thread, .deleteMedia, .pin, .unpin, .star, .unstar, .delete:
+        case .reply, .forward, .thread, .deleteMedia, .pin, .unpin, .star, .unstar, .delete, .edit, .copy, .share:
             EmptyView()
         }
     }
@@ -321,6 +330,9 @@ struct MessageMoreSheet: View {
         case .star: return "star"
         case .unstar: return "star.slash"
         case .delete: return "trash"
+        case .edit: return "pencil"
+        case .copy: return "doc.on.doc"
+        case .share: return "square.and.arrow.up"
         case .language: return "globe"
         case .views: return "eye"
         case .reactions: return "face.smiling"
@@ -342,7 +354,10 @@ struct MessageMoreSheet: View {
         case .star: return String(localized: "action.favorite", defaultValue: "Favori", bundle: .main)
         case .unstar: return String(localized: "action.unfavorite", defaultValue: "Retirer le favori", bundle: .main)
         case .delete: return String(localized: "common.delete", defaultValue: "Supprimer", bundle: .main)
-        case .language: return String(localized: "message-detail.tab.language", defaultValue: "Langue", bundle: .main)
+        case .edit: return String(localized: "action.edit", defaultValue: "Éditer", bundle: .main)
+        case .copy: return String(localized: "action.copy", defaultValue: "Copier", bundle: .main)
+        case .share: return String(localized: "action.share", defaultValue: "Partager", bundle: .main)
+        case .language: return String(localized: "message-detail.tab.language", defaultValue: "Traduire", bundle: .main)
         case .views: return String(localized: "message-detail.tab.views", defaultValue: "Qui a vu", bundle: .main)
         case .reactions: return String(localized: "message-detail.tab.reactions", defaultValue: "Réactions", bundle: .main)
         case .transcription: return String(localized: "message-detail.tab.transcription", defaultValue: "Transcription", bundle: .main)
