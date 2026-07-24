@@ -19,6 +19,7 @@ struct MessageReactionsDetailView: View {
     @State private var reactionGroups: [ReactionGroup] = []
     @State private var isLoadingReactions = false
     @State private var reactionFilter: String = "all"
+    @State private var showFullEmojiPicker = false
 
     private static let quickReactionDefaults = ["😂", "❤️", "👍", "😮", "😢", "🔥", "🎉", "💯", "🥰", "😎", "🙏", "💀"]
 
@@ -35,7 +36,8 @@ struct MessageReactionsDetailView: View {
                         EmojiUsageTracker.recordUsage(emoji: emoji)
                         onReact(emoji)
                         HapticFeedback.light()
-                    }
+                    },
+                    onExpandFullPicker: { showFullEmojiPicker = true }
                 )
                 .frame(maxWidth: .infinity)
                 Divider().opacity(0.4)
@@ -81,6 +83,12 @@ struct MessageReactionsDetailView: View {
             }
         }
         .onAppear { Task { await loadReactionDetails() } }
+        .sheet(isPresented: $showFullEmojiPicker) {
+            EmojiFullPickerSheet(
+                style: isDark ? .dark : .light,
+                onReact: { emoji in onReact?(emoji); showFullEmojiPicker = false }
+            )
+        }
     }
 
     private var filteredReactionUsers: [ReactionUserItem] {

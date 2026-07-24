@@ -114,12 +114,13 @@ struct MessageMoreSheet: View {
 
     // MARK: - Bande d'icônes horizontale (morph)
 
-    /// Items explorables (à contenu) présents dans les sections — deviennent les
-    /// « onglets » de la bande horizontale une fois un item ouvert.
-    private var explorableItems: [MoreItem] {
+    /// TOUS les items des sections — la bande horizontale (morph) les affiche
+    /// tous (feedback 2026-07-24 : « il faut toute la liste en horizontal »).
+    /// Les actions s'exécutent au tap, les explorables basculent le contenu.
+    private var allMoreItems: [MoreItem] {
         sections.flatMap { section -> [MoreItem] in
             switch section { case .actions(let i), .info(let i), .moderation(let i): return i }
-        }.filter { isExploration($0) }
+        }
     }
 
     /// Bande d'icônes horizontale scrollable (Liquid Glass) : un onglet par item
@@ -128,12 +129,11 @@ struct MessageMoreSheet: View {
     private func explorableTabStrip(selected: MoreItem) -> some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 10) {
-                ForEach(explorableItems, id: \.self) { item in
+                ForEach(allMoreItems, id: \.self) { item in
                     let color = colorFor(item)
                     let isActive = item == selected
                     Button {
-                        HapticFeedback.light()
-                        withAnimation(.easeInOut(duration: 0.22)) { selectedItem = item }
+                        handleMoreItemTap(item)
                     } label: {
                         Image(systemName: symbol(item))
                             .font(.callout.weight(.semibold))
@@ -192,6 +192,37 @@ struct MessageMoreSheet: View {
 
     // MARK: - Pellet Button
 
+    /// Action commune d'un item (grille OU bande horizontale) : explorable →
+    /// bascule le contenu inline ; deleteMedia → confirmation ; sinon → exécute
+    /// le callback + ferme la feuille.
+    private func handleMoreItemTap(_ item: MoreItem) {
+        if isExploration(item) {
+            HapticFeedback.light()
+            withAnimation(.easeInOut(duration: 0.2)) {
+                selectedItem = (selectedItem == item) ? nil : item
+            }
+        } else if item == .deleteMedia {
+            // Destructif → confirmation obligatoire (jamais de suppression directe).
+            HapticFeedback.medium()
+            showDeleteMediaConfirm = true
+        } else {
+            HapticFeedback.medium()
+            switch item {
+            case .reply: onReply?()
+            case .forward: onForward?()
+            case .thread: onThread?()
+            case .pin, .unpin: onPin?()
+            case .star, .unstar: onToggleStar?()
+            case .delete: onDeleteMessage?()
+            case .edit: onEdit?()
+            case .copy: onCopy?()
+            case .share: onShare?()
+            default: break
+            }
+            dismiss()
+        }
+    }
+
     private func pellet(_ item: MoreItem, index: Int) -> some View {
         let color = colorFor(item)
         let isActive = selectedItem == item && isExploration(item)
@@ -203,32 +234,7 @@ struct MessageMoreSheet: View {
             : (isDark ? 0.12 : 0.06)
 
         return Button {
-            if isExploration(item) {
-                HapticFeedback.light()
-                withAnimation(.easeInOut(duration: 0.2)) {
-                    selectedItem = (selectedItem == item) ? nil : item
-                }
-            } else if item == .deleteMedia {
-                // Destructif → confirmation obligatoire, la feuille reste ouverte
-                // jusqu'à la validation (jamais de suppression directe).
-                HapticFeedback.medium()
-                showDeleteMediaConfirm = true
-            } else {
-                HapticFeedback.medium()
-                switch item {
-                case .reply: onReply?()
-                case .forward: onForward?()
-                case .thread: onThread?()
-                case .pin, .unpin: onPin?()
-                case .star, .unstar: onToggleStar?()
-                case .delete: onDeleteMessage?()
-                case .edit: onEdit?()
-                case .copy: onCopy?()
-                case .share: onShare?()
-                default: break
-                }
-                dismiss()
-            }
+            handleMoreItemTap(item)
         } label: {
             VStack(spacing: 5) {
                 ZStack {
