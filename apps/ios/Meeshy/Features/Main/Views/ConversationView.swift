@@ -1127,7 +1127,7 @@ struct ConversationView: View {
                 // bulles — mêmes actions que l'overlay custom (SSOT). `nil`
                 // renvoyé pour les messages système / résumés d'appel (pas de
                 // menu). Le builder est appelé une fois par config de cellule.
-                nativeMessageMenu: { msg in buildNativeMessageMenu(for: msg) },
+                overlaidMessageId: overlayState.showOverlayMenu ? overlayState.overlayMessage?.id : nil,
                 onCallDetailRequest: { messageId in
                     guard let msg = viewModel.messages.first(where: { $0.id == messageId }) else { return }
                     overlayState.callDetailMessage = msg
