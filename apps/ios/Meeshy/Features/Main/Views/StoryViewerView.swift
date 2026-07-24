@@ -302,6 +302,11 @@ struct StoryViewerView: View {
     @State var storyCommentRepliesMap: [String: [FeedComment]] = [:]
     @State var storyCommentExpandedThreads: Set<String> = []
     @State var storyCommentLoadingReplies: Set<String> = []
+    /// Pagination des réponses par commentaire racine (endpoint replies paginé
+    /// ASC 20/page). NON-private : consommé par l'extension frère
+    /// StoryViewerView+Content (piège protection level cross-file).
+    @State var storyCommentRepliesHasMore: [String: Bool] = [:]
+    @State var storyCommentRepliesNextCursor: [String: String] = [:]
     /// Optimistic local tracking of liked comments (id ∈ set => current user reacted).
     @State var storyCommentLikedIds: Set<String> = []
     /// Local like-count delta keyed by comment id, applied on top of the server `comment.likes`
@@ -1137,12 +1142,17 @@ struct StoryViewerView: View {
             storyCommentRepliesMap: storyCommentRepliesMap,
             storyCommentExpandedThreads: storyCommentExpandedThreads,
             storyCommentLoadingReplies: storyCommentLoadingReplies,
+            storyCommentRepliesHasMore: storyCommentRepliesHasMore,
             isLoadingComments: isLoadingComments,
             userLang: AuthManager.shared.currentUser?.preferredContentLanguages.first ?? "fr",
             isStoryExpired: currentStory?.isExpired() ?? false,
             targetCommentId: targetCommentId,
             targetParentCommentId: targetParentCommentId,
             huntTargetComment: { await huntTargetStoryComment() },
+            loadMoreStoryCommentReplies: { await loadMoreStoryCommentReplies(commentId: $0) },
+            revealTargetReply: { parentId, replyId in
+                await revealTargetStoryReply(parentId: parentId, replyId: replyId)
+            },
             showCommentsOverlay: $showCommentsOverlay,
             replyingToStoryComment: $replyingToStoryComment,
             keyboard: keyboard,

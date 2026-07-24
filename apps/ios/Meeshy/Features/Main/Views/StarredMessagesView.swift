@@ -9,7 +9,7 @@ import MeeshyUI
 struct StarredMessagesView: View {
     @StateObject private var store = StarredMessagesStore.shared
     @Environment(\.dismiss) private var dismiss
-    @EnvironmentObject private var theme: ThemeManager
+    private var theme: ThemeManager { ThemeManager.shared }
     @EnvironmentObject private var router: Router
 
     var body: some View {

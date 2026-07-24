@@ -1252,6 +1252,11 @@ struct StoryCommentThread: View {
     let userLang: String
     let makeRow: (FeedComment, String) -> StoryCommentRowView
     let onToggleThread: () -> Void
+    /// Vrai quand le serveur a d'autres pages de réponses au-delà de celles
+    /// chargées (endpoint replies paginé à 20) — affiche « Voir plus de
+    /// réponses » en bas du fil déplié.
+    var hasMoreReplies: Bool = false
+    var onLoadMoreReplies: (() async -> Void)? = nil
 
     var body: some View {
         makeRow(comment, userLang)
@@ -1303,6 +1308,25 @@ struct StoryCommentThread: View {
                     .padding(.leading, 32)
                     .id(reply.id)
             }
+
+            if hasMoreReplies, let onLoadMoreReplies {
+                Button {
+                    HapticFeedback.light()
+                    Task { await onLoadMoreReplies() }
+                } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: "chevron.down")
+                            .font(MeeshyFont.relative(9, weight: .bold))
+                        Text(String(localized: "story.viewer.comments.loadMoreReplies", defaultValue: "Voir plus de réponses", bundle: .main))
+                            .font(MeeshyFont.relative(11, weight: .semibold))
+                    }
+                    .foregroundColor(StoryCommentRowView.legibleAuthorColor(hex: comment.authorColor))
+                    .padding(.leading, 40)
+                    .padding(.vertical, 4)
+                    .storyOverlayLegible()
+                }
+                .accessibilityLabel(String(localized: "a11y.story.comments.loadMoreReplies", defaultValue: "Charger plus de réponses", bundle: .main))
+            }
         }
     }
 }
@@ -1313,6 +1337,9 @@ struct StoryCommentsOverlayView: View {
     let storyCommentRepliesMap: [String: [FeedComment]]
     let storyCommentExpandedThreads: Set<String>
     let storyCommentLoadingReplies: Set<String>
+    /// Pagination des réponses par fil (endpoint replies paginé à 20) — pilote
+    /// le bouton « Voir plus de réponses » de chaque `StoryCommentThread`.
+    var storyCommentRepliesHasMore: [String: Bool] = [:]
     let isLoadingComments: Bool
     let userLang: String
     /// Vrai quand la story consultée est expirée. Affiche une bannière au-dessus
@@ -1328,6 +1355,13 @@ struct StoryCommentsOverlayView: View {
     /// pages chargées (les pages qui arrivent re-déclenchent le scroll via
     /// l'onChange sur le count).
     var huntTargetComment: (() async -> Void)? = nil
+    /// Page suivante des réponses d'un fil (commentId) — câblé sur
+    /// `loadMoreStoryCommentReplies` côté StoryViewerView.
+    var loadMoreStoryCommentReplies: ((String) async -> Void)? = nil
+    /// Ciblage d'une RÉPONSE : déplie le fil du parent (parentId) puis chasse
+    /// les pages de réponses jusqu'à la cible (replyId). Retourne `true` si la
+    /// réponse est chargée à l'issue de la chasse.
+    var revealTargetReply: ((_ parentId: String, _ replyId: String) async -> Bool)? = nil
     /// Latch — un seul ciblage par montage de l'overlay, ensuite la liste
     /// reprend le comportement historique (suivre le dernier commentaire).
     @State private var hasScrolledToTargetStoryComment = false
@@ -1502,7 +1536,12 @@ struct StoryCommentsOverlayView: View {
                             isLoadingReplies: storyCommentLoadingReplies.contains(comment.id),
                             userLang: userLang,
                             makeRow: makeStoryCommentRow,
-                            onToggleThread: { Task { await toggleStoryCommentThread(comment.id) } }
+                            onToggleThread: { Task { await toggleStoryCommentThread(comment.id) } },
+                            hasMoreReplies: storyCommentExpandedThreads.contains(comment.id)
+                                && (storyCommentRepliesHasMore[comment.id] ?? false),
+                            onLoadMoreReplies: loadMoreStoryCommentReplies.map { load -> (() async -> Void) in
+                                { await load(comment.id) }
+                            }
                         )
                     }
 
@@ -1532,6 +1571,27 @@ struct StoryCommentsOverlayView: View {
                 .padding(.bottom, 12)
             }
             .adaptiveOnChange(of: storyComments.count) { _, _ in
+                // Notification → RÉPONSE précise : le parent est chargé
+                // (top-level) mais la cible n'y est pas — c'est une réponse.
+                // Déplier le fil du parent + chasser ses pages de réponses via
+                // la closure du parent, puis scroller sur la rangée de la
+                // réponse elle-même (les ancres `.id(reply.id)` existent déjà).
+                // Repli : scroll sur le parent si la chasse échoue.
+                if !hasScrolledToTargetStoryComment,
+                   let target = targetCommentId,
+                   let parentId = targetParentCommentId, parentId != target,
+                   topLevelComments.contains(where: { $0.id == parentId }),
+                   !topLevelComments.contains(where: { $0.id == target }),
+                   let reveal = revealTargetReply {
+                    hasScrolledToTargetStoryComment = true
+                    Task {
+                        let found = await reveal(parentId, target)
+                        withAnimation(.easeOut(duration: 0.3)) {
+                            proxy.scrollTo(found ? target : parentId, anchor: .center)
+                        }
+                    }
+                    return
+                }
                 // Notification → commentaire précis : au premier chargement où
                 // la cible (ou son parent de thread) est présente, scroller
                 // dessus au lieu du dernier commentaire. Une seule fois par
@@ -1620,31 +1680,88 @@ extension StoryViewerView {
             let response = try await PostService.shared.getCommentReplies(
                 postId: story.id, commentId: commentId
             )
-            let langs = AuthManager.shared.currentUser?.preferredContentLanguages ?? []
-            let replies = response.data.map { c -> FeedComment in
-                let translated = PostDetailViewModel.resolveCommentTranslation(
-                    translations: c.translations, originalLanguage: c.originalLanguage,
-                    preferredLanguages: langs
-                )
-                return FeedComment(
-                    id: c.id, author: c.author.name, authorId: c.author.id,
-                    authorUsername: c.author.username,
-                    authorAvatarURL: c.author.avatar,
-                    content: c.content, timestamp: c.createdAt,
-                    likes: c.likeCount ?? 0, replies: c.replyCount ?? 0,
-                    parentId: commentId,
-                    originalLanguage: c.originalLanguage, translatedContent: translated,
-                    currentUserReactions: c.currentUserReactions,
-                    media: (c.media ?? []).map { $0.toFeedMedia() }
-                )
-            }
-            storyCommentRepliesMap[commentId] = replies
+            // Refetch-on-expand = première page → REPLACE + réinitialisation
+            // du curseur ; les pages suivantes (loadMoreStoryCommentReplies)
+            // s'append-ent dessus.
+            storyCommentRepliesMap[commentId] = mapStoryReplies(response.data, parentId: commentId)
+            storyCommentRepliesNextCursor[commentId] = response.pagination?.nextCursor
+            storyCommentRepliesHasMore[commentId] = response.pagination?.hasMore ?? false
         } catch {
             // Échec réseau transitoire : on garde le thread OUVERT (le
             // refermer punissait l'utilisateur qui venait de l'ouvrir) —
             // il affiche son état vide/spinner et le prochain toggle ou
             // refetch opportuniste réessaiera.
             Logger.messages.error("[StoryViewer] loadStoryCommentReplies failed for \(commentId, privacy: .public): \(error.localizedDescription, privacy: .public)")
+        }
+    }
+
+    /// Page suivante (curseur `gt`, tri ASC → APPEND) des réponses d'un fil de
+    /// commentaire de story. Jamais de remplacement : les réponses posées
+    /// optimistiquement / par socket restent en place (dédup par id).
+    /// NOTE : `storyCommentRepliesHasMore[id] == nil` (pagination jamais
+    /// enregistrée — premier fetch échoué) n'est PAS bloquant : `cursor: nil`
+    /// signifie « page 1 » et récupère un vrai curseur. Seul `false` stoppe.
+    func loadMoreStoryCommentReplies(commentId: String) async {
+        guard let story = currentStory,
+              storyCommentRepliesHasMore[commentId] != false,
+              !storyCommentLoadingReplies.contains(commentId) else { return }
+        storyCommentLoadingReplies.insert(commentId)
+        defer { storyCommentLoadingReplies.remove(commentId) }
+        do {
+            let response = try await PostService.shared.getCommentReplies(
+                postId: story.id, commentId: commentId,
+                cursor: storyCommentRepliesNextCursor[commentId], limit: 20
+            )
+            let fetched = mapStoryReplies(response.data, parentId: commentId)
+            let existing = storyCommentRepliesMap[commentId] ?? []
+            let existingIds = Set(existing.map(\.id))
+            storyCommentRepliesMap[commentId] = existing + fetched.filter { !existingIds.contains($0.id) }
+            storyCommentRepliesNextCursor[commentId] = response.pagination?.nextCursor
+            storyCommentRepliesHasMore[commentId] = response.pagination?.hasMore ?? false
+        } catch {
+            // Échec réseau : stopper proprement la pagination (et toute chasse
+            // en cours) — le fil garde les pages déjà chargées.
+            storyCommentRepliesHasMore[commentId] = false
+        }
+    }
+
+    /// Ciblage d'une RÉPONSE notifiée : déplie le fil du parent (refetch page 1,
+    /// curseur réinitialisé) puis chasse les pages de réponses jusqu'à la cible
+    /// (borné — cf. `CommentTargetHunter`). Retourne `true` si la réponse est
+    /// chargée à l'issue de la chasse.
+    func revealTargetStoryReply(parentId: String, replyId: String) async -> Bool {
+        if !storyCommentExpandedThreads.contains(parentId) {
+            await toggleStoryCommentThread(parentId)
+        } else if storyCommentRepliesMap[parentId] == nil {
+            await loadStoryCommentReplies(commentId: parentId)
+        }
+        return await CommentTargetHunter.hunt(
+            isPresent: { storyCommentRepliesMap[parentId]?.contains(where: { $0.id == replyId }) ?? false },
+            // `nil` = pagination inconnue (premier fetch échoué) → retenter la
+            // page 1 ; seul `false` (fin de fil connue) arrête la chasse.
+            hasMore: { storyCommentRepliesHasMore[parentId] != false },
+            loadNextPage: { await loadMoreStoryCommentReplies(commentId: parentId) }
+        )
+    }
+
+    private func mapStoryReplies(_ data: [APIPostComment], parentId: String) -> [FeedComment] {
+        let langs = AuthManager.shared.currentUser?.preferredContentLanguages ?? []
+        return data.map { c -> FeedComment in
+            let translated = PostDetailViewModel.resolveCommentTranslation(
+                translations: c.translations, originalLanguage: c.originalLanguage,
+                preferredLanguages: langs
+            )
+            return FeedComment(
+                id: c.id, author: c.author.name, authorId: c.author.id,
+                authorUsername: c.author.username,
+                authorAvatarURL: c.author.avatar,
+                content: c.content, timestamp: c.createdAt,
+                likes: c.likeCount ?? 0, replies: c.replyCount ?? 0,
+                parentId: parentId,
+                originalLanguage: c.originalLanguage, translatedContent: translated,
+                currentUserReactions: c.currentUserReactions,
+                media: (c.media ?? []).map { $0.toFeedMedia() }
+            )
         }
     }
 

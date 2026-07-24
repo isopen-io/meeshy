@@ -4,8 +4,10 @@ import { CommentThread } from '@/components/v2/CommentThread';
 import type { PostComment } from '@meeshy/shared/types/post';
 
 jest.mock('@/components/v2/CommentItem', () => ({
-  CommentItem: ({ comment }: { comment: PostComment }) => (
-    <div data-testid={`reply-${comment.id}`}>{comment.content}</div>
+  CommentItem: ({ comment, isHighlighted }: { comment: PostComment; isHighlighted?: boolean }) => (
+    <div data-testid={`reply-${comment.id}`} data-highlighted={isHighlighted ? 'true' : 'false'}>
+      {comment.content}
+    </div>
   ),
 }));
 
@@ -73,5 +75,53 @@ describe('CommentThread', () => {
     const noReplies = { ...parentComment, replyCount: 0 };
     const { container } = render(<CommentThread postId="post-1" parentComment={noReplies} replies={[]} />);
     expect(container.innerHTML).toBe('');
+  });
+
+  describe('controlled expansion (notification reply targeting)', () => {
+    it('renders nothing while controlled and collapsed — the trigger lives in CommentItem', () => {
+      const { container } = render(
+        <CommentThread postId="post-1" parentComment={parentComment} replies={replies} expanded={false} />,
+      );
+      expect(container.innerHTML).toBe('');
+    });
+
+    it('renders replies without any expand button when controlled and expanded', () => {
+      render(
+        <CommentThread postId="post-1" parentComment={parentComment} replies={replies} expanded />,
+      );
+      expect(screen.queryByTestId('expand-thread')).not.toBeInTheDocument();
+      expect(screen.getByTestId('reply-r-1')).toBeInTheDocument();
+      expect(screen.getByTestId('reply-r-2')).toBeInTheDocument();
+    });
+
+    it('highlights only the targeted reply via highlightedReplyId', () => {
+      render(
+        <CommentThread
+          postId="post-1"
+          parentComment={parentComment}
+          replies={replies}
+          expanded
+          highlightedReplyId="r-2"
+        />,
+      );
+      expect(screen.getByTestId('reply-r-2')).toHaveAttribute('data-highlighted', 'true');
+      expect(screen.getByTestId('reply-r-1')).toHaveAttribute('data-highlighted', 'false');
+    });
+
+    it('shows load-more-replies when controlled, expanded and hasMore', () => {
+      const onLoadMore = jest.fn();
+      render(
+        <CommentThread
+          postId="post-1"
+          parentComment={parentComment}
+          replies={replies}
+          expanded
+          hasMore
+          onLoadMore={onLoadMore}
+        />,
+      );
+      fireEvent.click(screen.getByTestId('load-more-replies'));
+      expect(onLoadMore).toHaveBeenCalled();
+    });
   });
 });

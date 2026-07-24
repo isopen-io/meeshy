@@ -72,6 +72,8 @@ export interface PostDetailProps {
   onShowReplies?: (commentId: string) => void;
   /** Commentaire ciblé par une navigation depuis une notification. */
   targetCommentId?: string | null;
+  /** Parent top-level quand `targetCommentId` est une réponse (`?parent=`). */
+  targetParentCommentId?: string | null;
   className?: string;
 }
 
@@ -109,6 +111,7 @@ function PostDetail({
   onDeleteComment,
   onShowReplies,
   targetCommentId,
+  targetParentCommentId,
   className,
 }: PostDetailProps) {
   const [showReactionPicker, setShowReactionPicker] = useState(false);
@@ -348,6 +351,7 @@ function PostDetail({
           onSubmitComment={onSubmitComment}
           onShowReplies={onShowReplies}
           targetCommentId={targetCommentId}
+          targetParentCommentId={targetParentCommentId}
         />
       </div>
     </div>

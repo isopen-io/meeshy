@@ -455,7 +455,11 @@ struct PostDetailView: View {
                 presenceState: PresenceManager.shared.presenceMap[comment.authorId]?.state,
                 replyMoodResolver: { statusViewModel.statusForUser(userId: $0)?.moodEmoji },
                 replyStoryResolver: { storyViewModel.storyRingState(forUserId: $0) },
-                replyPresenceResolver: { PresenceManager.shared.presenceMap[$0]?.state }
+                replyPresenceResolver: { PresenceManager.shared.presenceMap[$0]?.state },
+                hasMoreReplies: viewModel.expandedThreads.contains(comment.id)
+                    && (viewModel.repliesHasMore[comment.id] ?? false),
+                onLoadMoreReplies: { await viewModel.loadMoreReplies(comment.id, postId: postId) },
+                highlightedCommentId: highlightedCommentId
             )
             .padding(.horizontal, 16)
             .padding(.vertical, highlightedCommentId == comment.id ? 6 : 0)
@@ -524,20 +528,36 @@ struct PostDetailView: View {
         }
         didScrollToTargetComment = true
 
-        if let parentId = targetParentCommentId, !parentId.isEmpty,
-           !viewModel.expandedThreads.contains(parentId) {
-            // Scroll APRÈS l'arrivée des réponses : ancrer avant l'expansion
-            // décale la section et laisse la réponse notifiée hors écran.
+        if let parentId = targetParentCommentId, !parentId.isEmpty, target != sectionId {
+            // Cible = une RÉPONSE. Déplier le parent (awaité — ancrer avant
+            // l'expansion décale la section), CHASSER la page de réponses qui
+            // contient la cible (le fil est paginé à 20), puis scroller sur la
+            // rangée de la réponse elle-même. Repli : section + highlight du
+            // parent si la chasse échoue (cap / fin de fil / réseau).
             Task {
-                await viewModel.toggleThread(parentId, postId: postId)
-                withAnimation { proxy.scrollTo("comment-\(sectionId)", anchor: .top) }
+                if !viewModel.expandedThreads.contains(parentId) {
+                    await viewModel.toggleThread(parentId, postId: postId)
+                }
+                let found = await viewModel.loadRepliesUntilPresent(target, in: parentId, postId: postId)
+                if found {
+                    withAnimation { proxy.scrollTo("comment-\(target)", anchor: .center) }
+                    applyTargetHighlight(target)
+                } else {
+                    withAnimation { proxy.scrollTo("comment-\(sectionId)", anchor: .top) }
+                    applyTargetHighlight(sectionId)
+                }
             }
         } else {
             withAnimation { proxy.scrollTo("comment-\(sectionId)", anchor: .top) }
+            applyTargetHighlight(sectionId)
         }
-        highlightedCommentId = sectionId
+    }
+
+    /// Surligne `id` puis désarme après 2,6 s (si toujours actif).
+    private func applyTargetHighlight(_ id: String) {
+        highlightedCommentId = id
         DispatchQueue.main.asyncAfter(deadline: .now() + 2.6) {
-            if highlightedCommentId == sectionId { highlightedCommentId = nil }
+            if highlightedCommentId == id { highlightedCommentId = nil }
         }
     }
 

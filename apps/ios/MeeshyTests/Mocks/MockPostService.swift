@@ -111,6 +111,19 @@ final class MockPostService: PostServiceProviding, @unchecked Sendable {
     var getPostViewsCallCount = 0
     var getUserPostsCallCount = 0
     var getCommentRepliesCallCount = 0
+    var lastGetCommentRepliesPostId: String?
+    var lastGetCommentRepliesCommentId: String?
+    var lastGetCommentRepliesCursor: String?
+    var getCommentRepliesResult: Result<PaginatedAPIResponse<[APIPostComment]>, Error> = {
+        let empty: PaginatedAPIResponse<[APIPostComment]> = JSONStub.decode("""
+        {"success":true,"data":[],"pagination":null,"error":null}
+        """)
+        return .success(empty)
+    }()
+    /// File de pages pour les tests multi-pages (pagination / chasse paginée
+    /// d'une réponse notifiée) : consommée en priorité, une entrée par appel.
+    /// Même pattern que `getCommentsResultsQueue`.
+    var getCommentRepliesResultsQueue: [Result<PaginatedAPIResponse<[APIPostComment]>, Error>] = []
     var getCommunityPostsCallCount = 0
 
     var getBookmarksResult: Result<PaginatedAPIResponse<[APIPost]>, Error> = .success(emptyPaginatedPosts)
@@ -320,9 +333,13 @@ final class MockPostService: PostServiceProviding, @unchecked Sendable {
 
     func getCommentReplies(postId: String, commentId: String, cursor: String?, limit: Int) async throws -> PaginatedAPIResponse<[APIPostComment]> {
         getCommentRepliesCallCount += 1
-        return JSONStub.decode("""
-        {"success":true,"data":[],"pagination":null,"error":null}
-        """)
+        lastGetCommentRepliesPostId = postId
+        lastGetCommentRepliesCommentId = commentId
+        lastGetCommentRepliesCursor = cursor
+        if !getCommentRepliesResultsQueue.isEmpty {
+            return try getCommentRepliesResultsQueue.removeFirst().get()
+        }
+        return try getCommentRepliesResult.get()
     }
 
     func getCommunityPosts(communityId: String, cursor: String?, limit: Int) async throws -> PaginatedAPIResponse<[APIPost]> {
@@ -463,6 +480,16 @@ final class MockPostService: PostServiceProviding, @unchecked Sendable {
         getPostViewsCallCount = 0
         getUserPostsCallCount = 0
         getCommentRepliesCallCount = 0
+        lastGetCommentRepliesPostId = nil
+        lastGetCommentRepliesCommentId = nil
+        lastGetCommentRepliesCursor = nil
+        getCommentRepliesResult = {
+            let empty: PaginatedAPIResponse<[APIPostComment]> = JSONStub.decode("""
+            {"success":true,"data":[],"pagination":null,"error":null}
+            """)
+            return .success(empty)
+        }()
+        getCommentRepliesResultsQueue = []
         getCommunityPostsCallCount = 0
 
         getBookmarksResult = .success(emptyPaginatedPosts)

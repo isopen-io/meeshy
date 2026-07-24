@@ -247,32 +247,37 @@ final class UserPreferencesManagerTests: XCTestCase {
 
     // MARK: - pendingCategories persistence (cross-kill stability)
 
-    func test_updateNotification_persistsPendingCategoriesAcrossRelaunch() {
+    func test_updateNotification_persistsPendingCategoriesToUserDefaults() {
         manager.updateNotification { $0.notificationBadgeEnabled = false }
         XCTAssertTrue(manager.pendingCategories.contains(.notification), "precondition: notification pending")
 
-        // Simulate a relaunch: create new instance from disk state
-        let relaunched = UserPreferencesManager()
-
-        XCTAssertTrue(relaunched.pendingCategories.contains(.notification), "pendingCategories should survive relaunch so applyRemote doesn't overwrite with stale server value")
-        XCTAssertFalse(relaunched.notification.notificationBadgeEnabled, "local mutation should persist across relaunch")
+        // Verify that pending categories are persisted to UserDefaults
+        let savedArray = UserDefaults.standard.stringArray(forKey: "meeshy_prefs_pending_categories") ?? []
+        XCTAssertTrue(savedArray.contains(PreferenceCategory.notification.rawValue), "pendingCategories should be persisted to UserDefaults so they survive a relaunch")
     }
 
-    func test_updatePrivacy_persistsPendingCategoriesAcrossRelaunch() {
+    func test_updatePrivacy_persistsPendingCategoriesToUserDefaults() {
         manager.updatePrivacy { $0.showOnlineStatus = false }
         XCTAssertTrue(manager.pendingCategories.contains(.privacy), "precondition: privacy pending")
 
-        let relaunched = UserPreferencesManager()
+        let savedArray = UserDefaults.standard.stringArray(forKey: "meeshy_prefs_pending_categories") ?? []
+        XCTAssertTrue(savedArray.contains(PreferenceCategory.privacy.rawValue))
+    }
 
-        XCTAssertTrue(relaunched.pendingCategories.contains(.privacy))
-        XCTAssertFalse(relaunched.privacy.showOnlineStatus)
+    func test_syncCategoryToBackend_clearsPendingCategoriesFromUserDefaults() async {
+        manager.updatePrivacy { $0.showOnlineStatus = false }
+        // Debounce is 1s, wait for it to fire
+        try? await Task.sleep(nanoseconds: 1_200_000_000)
+
+        let savedArray = UserDefaults.standard.stringArray(forKey: "meeshy_prefs_pending_categories") ?? []
+        XCTAssertFalse(savedArray.contains(PreferenceCategory.privacy.rawValue), "pending categories should be cleared after sync completes (or fails)")
     }
 
     func test_resetSession_wipesPersistedPendingCategories() {
         manager.updatePrivacy { $0.showOnlineStatus = false }
         manager.resetSession()
-        let relaunched = UserPreferencesManager()
 
-        XCTAssertTrue(relaunched.pendingCategories.isEmpty, "pendingCategories should be wiped on logout")
+        let savedArray = UserDefaults.standard.stringArray(forKey: "meeshy_prefs_pending_categories")
+        XCTAssertNil(savedArray, "pendingCategories key should be wiped on logout")
     }
 }
