@@ -184,3 +184,34 @@ Le travail sera fait dans un **worktree dédié** créé off `dev` (ex. `../v2_m
 - Menu de la **liste de conversations** (conserve le natif iOS 26).
 - Réactions par **attachment** individuel (le modèle existant `attachment:reaction-*` reste inchangé).
 - Parité **web / Android** de ce menu (ce design est iOS-only).
+
+---
+
+## 11. Révisions post-revue architecte (2026-07-24)
+
+Revue de conception indépendante (ios-architect-expert). Deux points **bloquants** que le design initial sous-estimait, plus des arbitrages :
+
+### Prérequis BLOQUANTS (pas du polish)
+- **C1 — Masquer la cellule live sous l'overlay.** `MessageRowEnvelope` (`isHiddenForOverlay`, cross-fade 16 ms) est **du code mort jamais câblé**. Aujourd'hui le `.contextMenu` natif iOS 26 masque+soulève la vraie cellule gratuitement ; **retirer le natif expose une double-bulle fantôme sur toutes les versions** (la copie liftée se détache et découvre la cellule live floutée dessous). → Câbler le masquage de la cellule ciblée **AVANT** tout réglage d'animation : c'est ce qui fait lire le lift comme premium. Pousser l'id masqué au `MessageListViewController`, reconfigurer **uniquement** cette cellule (envelope Equatable), révéler en sync avec le settle du dismiss.
+- **C2 — Accessibilité.** Le natif fournissait la sémantique VoiceOver (modal, liste, piège de focus, escape). L'overlay custom n'a rien. → Ajouter `.accessibilityAddTraits(.isModal)`, `.accessibilityAction(.escape) { dismiss() }`, labels sur pastille/actions, ordre de focus. Non négociable (règle a11y projet).
+
+### Arbitrages
+- **Menu compact = réconcilier avec `moreSections`, PAS de surface parallèle (D2).** `primaryActions` devient compact (actions clés + `.more` toujours présent ; `.delete`/`.star`/`.pin` **jamais** en primaire). Tout ce qui sort du primaire est routé vers le `MessageMoreSheet` existant (SSOT « Plus… ») : j'étends `MoreItem`/`moreSections` avec `pin/unpin`, `star/unstar`, `delete`, et je câble la confirmation de suppression message (aujourd'hui seul `deleteMedia` confirme).
+- **Message très long (D3).** Le plancher d'échelle 0.4 rend le texte illisible → relever le plancher (~0.7) + fondu de troncature bas ; scroll fidèle iMessage reste différé (§10).
+- **Pastille (D4).** Garder la bande 20 emojis scrollable, mais **ne pas** étendre le drag vertical (Plus…/dismiss) à la pastille (conflit scroll horizontal ↔ dismiss vertical) — le drag reste sur le menu d'actions.
+
+### Fluidité (mise en œuvre)
+- **Pas de `matchedGeometryEffect`** : cellule dans `UIHostingConfiguration` d'UICollectionView, overlay dans l'arbre SwiftUI de `ConversationView` → aucun `Namespace` partagé possible. Garder l'**interpolation manuelle par frame** (`.position` source↔cible) déjà en place.
+- **Une seule source d'animation** : retirer le `.animation(_, value: isVisible)` implicite du backdrop, piloter son opacité par un `withAnimation` explicite (easeOut flou / spring clusters) pour éviter le rebond (résout M2).
+- **Isoler le drag (H3)** : un seul `.offset` lisant `clusterDragOffset`, bulle en sous-vue Equatable pour que le drag 60 fps ne ré-instancie pas `ThemedMessageBubble`. Hoister `currentUserId` en `let`.
+- `.compositingGroup()` sur la bulle liftée (composite ombre+scale une fois) ; **jamais** `.drawingGroup()` (rasterise le texte pendant le scale).
+
+### Ordre TDD (pur d'abord)
+1. **`MessageActionResolver`** — compact `primaryActions` + `moreSections` étendu (RED = réécrire les 8 tests existants).
+2. **Extraire `MessageOverlayLayout` pur** depuis la géométrie inline de `MessageOverlayMenu` (entrées bubbleRect/insets/écran/hauteurs → sorties positions/scale/anchor) + tests des clamps (haut, bas-réserve-composer, plancher d'échelle, ancrage isMe/reçu, clamp latéral). Actuellement 0 test.
+3. **`MessageOverlayDragLaw`** — déjà pur & couvert, réutiliser.
+4. **Inverser les guards** (`ConversationMenuSystemDesignGuardTests`) : nouvel invariant « aucun `.contextMenu` sur les bulles ; overlay partout » (RED), puis retirer `test_messageRow_prefersNativeMenu_*` et `test_buildNativeMessageMenu_*`.
+5. **Nettoyage code mort** post-retrait natif : `standalone`, `MessageMenuPreviewContainer`, `makeThemedBubble(true)` + leurs guards.
+
+### Purement visuel (simulateur iPhone 16 Pro / iOS 18.2)
+Params spring, densité flou/lueur/ombre, stagger, timing lift/reverse, haptique ; **sync masquage cellule (C1)** = zéro ghost/flash ; Dynamic Type AX5, dark/light, RTL, placement bords/composer.
