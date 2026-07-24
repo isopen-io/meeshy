@@ -1320,6 +1320,14 @@ struct StoryCommentsOverlayView: View {
     /// indiquant que la story n'est plus accessible (spec 2026-06-23).
     var isStoryExpired: Bool = false
 
+    /// Commentaire ciblé par une notification : premier scroll de la liste
+    /// dirigé sur lui (repli : parent de thread) au lieu du dernier commentaire.
+    var targetCommentId: String? = nil
+    var targetParentCommentId: String? = nil
+    /// Latch — un seul ciblage par montage de l'overlay, ensuite la liste
+    /// reprend le comportement historique (suivre le dernier commentaire).
+    @State private var hasScrolledToTargetStoryComment = false
+
     @Binding var showCommentsOverlay: Bool
     /// Réservation visuelle. Quand non-nil, le composer principal (un
     /// `StoryComposerBarView` rendu dans la canvas « Bottom area ») affiche
@@ -1519,6 +1527,21 @@ struct StoryCommentsOverlayView: View {
                 .padding(.bottom, 12)
             }
             .adaptiveOnChange(of: storyComments.count) { _, _ in
+                // Notification → commentaire précis : au premier chargement où
+                // la cible (ou son parent de thread) est présente, scroller
+                // dessus au lieu du dernier commentaire. Une seule fois par
+                // présentation ; ensuite comportement historique (suivre le
+                // dernier commentaire).
+                if !hasScrolledToTargetStoryComment,
+                   let anchorId = [targetCommentId, targetParentCommentId]
+                       .compactMap({ $0 })
+                       .first(where: { id in storyComments.contains { $0.id == id } }) {
+                    hasScrolledToTargetStoryComment = true
+                    withAnimation(.easeOut(duration: 0.3)) {
+                        proxy.scrollTo(anchorId, anchor: .center)
+                    }
+                    return
+                }
                 if let last = storyComments.last {
                     withAnimation(.easeOut(duration: 0.3)) {
                         proxy.scrollTo(last.id, anchor: .bottom)

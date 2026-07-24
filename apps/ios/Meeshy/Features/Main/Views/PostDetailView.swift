@@ -510,10 +510,15 @@ struct PostDetailView: View {
 
         if let parentId = targetParentCommentId, !parentId.isEmpty,
            !viewModel.expandedThreads.contains(parentId) {
-            Task { await viewModel.toggleThread(parentId, postId: postId) }
+            // Scroll APRÈS l'arrivée des réponses : ancrer avant l'expansion
+            // décale la section et laisse la réponse notifiée hors écran.
+            Task {
+                await viewModel.toggleThread(parentId, postId: postId)
+                withAnimation { proxy.scrollTo("comment-\(sectionId)", anchor: .top) }
+            }
+        } else {
+            withAnimation { proxy.scrollTo("comment-\(sectionId)", anchor: .top) }
         }
-
-        withAnimation { proxy.scrollTo("comment-\(sectionId)", anchor: .top) }
         highlightedCommentId = sectionId
         DispatchQueue.main.asyncAfter(deadline: .now() + 2.6) {
             if highlightedCommentId == sectionId { highlightedCommentId = nil }

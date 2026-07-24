@@ -75,9 +75,13 @@ struct StarredMessagesView: View {
     private func navigate(to snapshot: StarredMessageSnapshot) {
         // Delegate to Router's existing highlight-in-conversation flow so the
         // starred row behaves exactly like a tapped notification / search hit.
+        // Le highlight est SCOPÉ à la conversation cible, et la notification
+        // est observée par RootView/iPadRootView (elle était sans observateur —
+        // tap étoilé = no-op silencieux + highlight qui fuitait ailleurs).
         router.pendingHighlightMessageId = snapshot.id
+        router.pendingHighlightConversationId = snapshot.conversationId
         NotificationCenter.default.post(
-            name: Notification.Name("navigateToConversationById"),
+            name: .meeshyNavigateToConversation,
             object: snapshot.conversationId
         )
         dismiss()

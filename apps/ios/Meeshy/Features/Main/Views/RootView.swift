@@ -31,6 +31,13 @@ struct StoryViewerRequest: Identifiable, Equatable {
     /// (notification, deep link). Permet au container un fetch unitaire
     /// léger si le tray ignore le groupe. `nil` = comportement historique.
     var postId: String? = nil
+    /// Commentaire ciblé par une notification (story_new_comment,
+    /// story_thread_reply…) : l'overlay commentaires scrolle dessus au lieu
+    /// du dernier commentaire. `nil` = comportement historique.
+    var targetCommentId: String? = nil
+    /// Parent du commentaire ciblé (réponse en thread) — repli de scroll
+    /// quand la réponse elle-même n'est pas (encore) dans la liste.
+    var targetParentCommentId: String? = nil
 }
 
 /// Named magic numbers for the iPhone root-view audio overlay layout.
@@ -361,11 +368,13 @@ struct RootView: View {
                     case .editProfile:
                         EditProfileView()
                             .navigationBarHidden(true)
-                    case .storyNotificationTarget(let storyId, let intent, let context):
+                    case .storyNotificationTarget(let storyId, let intent, let context, let commentId, let parentCommentId):
                         StoryNotificationTargetScreen(
                             storyId: storyId,
                             intent: intent,
-                            context: context
+                            context: context,
+                            commentId: commentId,
+                            parentCommentId: parentCommentId
                         )
                     }
                 }
@@ -613,7 +622,9 @@ struct RootView: View {
                 postId: request.postId,
                 startAtFirstUnviewed: request.startAtFirstUnviewed,
                 presentationSource: "RootView.fromConv",
-                initialAction: request.initialAction
+                initialAction: request.initialAction,
+                targetCommentId: request.targetCommentId,
+                targetParentCommentId: request.targetParentCommentId
             )
             // Re-inject the trio that StoryViewerView declares as
             // @EnvironmentObject (so it can re-inject them onto its inner
@@ -688,6 +699,13 @@ struct RootView: View {
             guard let payload, AuthManager.shared.isAuthenticated else { return }
             handlePushNotificationTap(payload)
             PushNotificationManager.shared.clearPendingNotification()
+        }
+        // Navigation par id demandée par une vue sans accès aux helpers de
+        // résolution (StarredMessagesView) — le highlight scopé est déjà parké
+        // sur le Router par l'émetteur.
+        .onReceive(NotificationCenter.default.publisher(for: .meeshyNavigateToConversation)) { notification in
+            guard let conversationId = notification.object as? String, !conversationId.isEmpty else { return }
+            navigateToConversationById(conversationId, highlightMessageId: router.pendingHighlightMessageId)
         }
         .onReceive(NotificationCenter.default.publisher(for: Notification.Name("sendMessageToUser"))) { notification in
             guard let targetUserId = notification.object as? String else { return }
@@ -1242,7 +1260,9 @@ struct RootView: View {
             router.push(.storyNotificationTarget(
                 storyId: postId,
                 intent: ctx.storyIntent,
-                context: ctx.storyContext
+                context: ctx.storyContext,
+                commentId: ctx.commentId,
+                parentCommentId: ctx.parentCommentId
             ))
 
         case .post:
@@ -1363,7 +1383,9 @@ struct RootView: View {
                 router.push(.storyNotificationTarget(
                     storyId: postId,
                     intent: ctx.storyIntent,
-                    context: ctx.storyContext
+                    context: ctx.storyContext,
+                    commentId: ctx.commentId,
+                    parentCommentId: ctx.parentCommentId
                 ))
 
             case .post:
@@ -1385,7 +1407,10 @@ struct RootView: View {
         case .securityAlert, .loginNewDevice, .legacySystemAlert,
              .passwordChanged, .twoFactorEnabled, .twoFactorDisabled,
              .system, .maintenance, .updateAvailable, .voiceCloneReady:
-            break
+            // Pas d'entité cible : ouvrir la liste des notifications plutôt
+            // qu'un tap muet — l'utilisateur retrouve au moins la notification
+            // (et son détail) qu'il vient de toucher.
+            router.push(.notifications)
         }
     }
 
@@ -1401,23 +1426,32 @@ struct RootView: View {
         Task { @MainActor in
             await NSEPendingPostConsumer.shared.consumeAll()
 
-            if let cached = await cachedReelSeed(for: postId) {
+            if let cached = await cachedReelSeed(for: postId), cached.isReel {
                 reelsPresenter.present(posts: [cached], startId: postId, commentId: commentId, parentCommentId: parentCommentId)
                 return
             }
 
             let preferred = AuthManager.shared.currentUser?.preferredContentLanguages ?? []
-            if let apiPost = try? await PostService.shared.getPost(postId: postId) {
+            if let apiPost = try? await PostService.shared.getPost(postId: postId),
+               case let post = apiPost.toFeedPost(preferredLanguages: preferred),
+               post.isReel {
                 reelsPresenter.present(
-                    posts: [apiPost.toFeedPost(preferredLanguages: preferred)],
+                    posts: [post],
                     startId: postId,
                     commentId: commentId,
                     parentCommentId: parentCommentId
                 )
             } else {
-                // Never a dead end: the universal post-detail surface renders any
-                // post type, including a reel.
-                router.push(.postDetail(postId))
+                // Post introuvable OU classé non-reel (le seed du pager filtre sur
+                // `isReel` : présenter un non-reel ouvrait le feed d'affinité sur
+                // un réel SANS RAPPORT). Jamais de cul-de-sac : la surface post
+                // universelle rend tout type, en CONSERVANT la cible commentaire.
+                router.push(.postDetail(
+                    postId, nil,
+                    showComments: commentId != nil,
+                    commentId: commentId,
+                    parentCommentId: parentCommentId
+                ))
             }
         }
     }

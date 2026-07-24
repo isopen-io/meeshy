@@ -98,6 +98,13 @@ struct StoryViewerView: View {
     /// (tray, deep link, story-reaction redirect) on the existing path.
     var initialAction: StoryViewerInitialAction? = nil
 
+    /// Commentaire ciblé par la notification : l'overlay commentaires scrolle
+    /// dessus (au lieu du dernier) une fois la liste chargée. `parent` sert de
+    /// repli de scroll pour une réponse dont le thread n'est pas déplié.
+    /// Non-private : consommés par StoryViewerView+Content (fichier extension).
+    var targetCommentId: String? = nil
+    var targetParentCommentId: String? = nil
+
     static let heartEmoji = "\u{2764}\u{FE0F}"
 
     @State var currentStoryIndex = 0 // internal for cross-file extension access
@@ -1129,6 +1136,8 @@ struct StoryViewerView: View {
             isLoadingComments: isLoadingComments,
             userLang: AuthManager.shared.currentUser?.preferredContentLanguages.first ?? "fr",
             isStoryExpired: currentStory?.isExpired() ?? false,
+            targetCommentId: targetCommentId,
+            targetParentCommentId: targetParentCommentId,
             showCommentsOverlay: $showCommentsOverlay,
             replyingToStoryComment: $replyingToStoryComment,
             keyboard: keyboard,

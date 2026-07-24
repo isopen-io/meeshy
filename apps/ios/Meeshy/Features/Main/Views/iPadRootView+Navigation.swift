@@ -179,7 +179,12 @@ extension iPadRootView {
              .legacyStoryReply, .reply,
              .messageEdited, .messageDeleted, .messagePinned, .messageForwarded:
             guard let conversationId = data?.conversationId else { return }
-            navigateToConversationById(conversationId)
+            // Parité iPhone/push : scroll + flash sur le message exact.
+            navigateToConversationById(
+                conversationId,
+                highlightMessageId: notification.context?.messageId,
+                ensureUnread: true
+            )
 
         case .friendRequest, .contactRequest, .legacyFriendRequest,
              .friendAccepted, .contactAccepted, .legacyFriendAccepted,
@@ -203,7 +208,7 @@ extension iPadRootView {
              .storyReaction, .statusReaction,
              .storyNewComment, .friendStoryComment, .storyThreadReply,
              .friendNewStory, .friendNewMood:
-            if let postId = notification.context?.postId ?? data?.postId {
+            if let postId = notification.context?.postId ?? data?.postId ?? notification.metadata?.postId {
                 routeSocialNotification(
                     postId: postId,
                     postType: notification.metadata?.postType,
@@ -230,7 +235,9 @@ extension iPadRootView {
         case .securityAlert, .loginNewDevice, .legacySystemAlert,
              .passwordChanged, .twoFactorEnabled, .twoFactorDisabled,
              .system, .maintenance, .updateAvailable, .voiceCloneReady:
-            break
+            // Pas d'entité cible : ouvrir le panneau notifications plutôt
+            // qu'un tap muet.
+            rightPanelRoute = .notifications
         }
     }
 
@@ -242,14 +249,19 @@ extension iPadRootView {
              .mention, .missedCall,
              .newConversation, .newConversationDirect, .newConversationGroup, .addedToConversation, .memberJoined:
             if let conversationId = event.conversationId {
-                navigateToConversationById(conversationId)
+                // Parité iPhone/push : scroll + flash sur le message exact.
+                navigateToConversationById(
+                    conversationId,
+                    highlightMessageId: event.messageId,
+                    ensureUnread: true
+                )
             }
 
         case .friendRequest, .contactRequest, .friendAccepted, .contactAccepted:
-            if let senderId = event.senderId, let username = event.senderUsername {
+            if let senderId = event.senderId {
                 router.deepLinkProfileUser = ProfileSheetUser(
                     userId: senderId,
-                    username: username
+                    username: event.senderUsername ?? senderId
                 )
             }
 
@@ -271,8 +283,35 @@ extension iPadRootView {
                 )
             }
 
+        case .achievementUnlocked, .legacyAchievementUnlocked, .streakMilestone, .badgeEarned:
+            rightPanelRoute = .userStats
+
+        case .legacyAffiliateSignup:
+            rightPanelRoute = .affiliate
+
+        case .securityAlert, .loginNewDevice, .legacySystemAlert,
+             .passwordChanged, .twoFactorEnabled, .twoFactorDisabled,
+             .system, .maintenance, .updateAvailable, .voiceCloneReady:
+            rightPanelRoute = .notifications
+
         default:
-            break
+            // Parité avec le chemin push : ~30 types (familles legacy message,
+            // communauté, appels…) tombaient ici en tap MUET. Toute entité
+            // conversationnelle → conversation (avec highlight), sinon entité
+            // sociale → surface post/story/reel.
+            if let conversationId = event.conversationId, !conversationId.isEmpty {
+                navigateToConversationById(conversationId, highlightMessageId: event.messageId)
+            } else if let postId = event.postId, !postId.isEmpty {
+                routeSocialNotification(
+                    postId: postId,
+                    postType: event.postType,
+                    contentType: event.metadata?.contentType,
+                    type: event.notificationType,
+                    commentId: event.commentId,
+                    parentCommentId: event.parentCommentId,
+                    storyContext: makeStoryContext(from: event)
+                )
+            }
         }
     }
 
@@ -362,7 +401,9 @@ extension iPadRootView {
         case .securityAlert, .loginNewDevice, .legacySystemAlert,
              .passwordChanged, .twoFactorEnabled, .twoFactorDisabled,
              .system, .maintenance, .updateAvailable, .voiceCloneReady:
-            break
+            // Pas d'entité cible : ouvrir le panneau notifications plutôt
+            // qu'un tap muet.
+            rightPanelRoute = .notifications
         }
     }
 
@@ -376,6 +417,7 @@ extension iPadRootView {
             }
             if let messageId = highlightMessageId {
                 router.pendingHighlightMessageId = messageId
+                router.pendingHighlightConversationId = conversationId
             }
             openConversation(conv)
             return
@@ -396,6 +438,7 @@ extension iPadRootView {
                     }
                     if let messageId = highlightMessageId {
                         router.pendingHighlightMessageId = messageId
+                        router.pendingHighlightConversationId = conversationId
                     }
                     openConversation(conv)
                     return
@@ -486,7 +529,9 @@ extension iPadRootView {
             router.push(.storyNotificationTarget(
                 storyId: postId,
                 intent: NotificationContentRouter.intent(for: type),
-                context: storyContext
+                context: storyContext,
+                commentId: commentId,
+                parentCommentId: parentCommentId
             ))
         case .reel, .post:
             rightPanelRoute = .postDetail(

@@ -751,6 +751,34 @@ struct ConversationView: View {
             }
     }
 
+    /// Consomme `router.pendingHighlightMessageId` : scroll + flash sur le
+    /// message cible (fetch de la fenêtre autour si hors page chargée).
+    /// Scopé par conversation : un highlight posé pour une AUTRE conversation
+    /// n'est ni consommé ni « brûlé » ici — il reste disponible pour la bonne.
+    private func consumePendingHighlightMessage() async {
+        guard let messageId = router.pendingHighlightMessageId, !messageId.isEmpty else { return }
+        if let scopedId = router.pendingHighlightConversationId,
+           let currentId = conversation?.id,
+           scopedId != currentId {
+            return
+        }
+        router.pendingHighlightMessageId = nil
+        router.pendingHighlightConversationId = nil
+        try? await Task.sleep(for: .milliseconds(300))
+        guard !Task.isCancelled else { return }
+        if viewModel.messages.contains(where: { $0.id == messageId }) {
+            scrollState.scrollToMessageId = messageId
+            scrollState.scrollToMessageTrigger += 1
+        } else {
+            await viewModel.loadMessagesAround(messageId: messageId)
+            if Task.isCancelled { return }
+            try? await Task.sleep(for: .milliseconds(100))
+            guard !Task.isCancelled else { return }
+            scrollState.scrollToMessageId = messageId
+            scrollState.scrollToMessageTrigger += 1
+        }
+    }
+
     private var bodyWithLifecycle: some View {
         bodyContent
             .background(InteractivePopEnabler())
@@ -765,22 +793,7 @@ struct ConversationView: View {
                 await viewModel.loadMessages()
                 MessageSocketManager.shared.connect()
 
-                if let messageId = router.pendingHighlightMessageId, !messageId.isEmpty {
-                    router.pendingHighlightMessageId = nil
-                    try? await Task.sleep(for: .milliseconds(300))
-                    guard !Task.isCancelled else { return }
-                    if viewModel.messages.contains(where: { $0.id == messageId }) {
-                        scrollState.scrollToMessageId = messageId
-                        scrollState.scrollToMessageTrigger += 1
-                    } else {
-                        await viewModel.loadMessagesAround(messageId: messageId)
-                        if Task.isCancelled { return }
-                        try? await Task.sleep(for: .milliseconds(100))
-                        guard !Task.isCancelled else { return }
-                        scrollState.scrollToMessageId = messageId
-                        scrollState.scrollToMessageTrigger += 1
-                    }
-                }
+                await consumePendingHighlightMessage()
 
                 // Ouverture depuis le bouton Recherche de l'aperçu long-press :
                 // active directement la barre de recherche in-conversation.
@@ -792,6 +805,13 @@ struct ConversationView: View {
                         headerState.showSearch = true
                     }
                 }
+            }
+            // Tap de notification pour la conversation DÉJÀ à l'écran : `path`
+            // reçoit le même id, la vue n'est pas recréée et `.task` ne rejoue
+            // pas — consommer le highlight à chaud.
+            .adaptiveOnChange(of: router.pendingHighlightMessageId) { _, newValue in
+                guard let newValue, !newValue.isEmpty else { return }
+                Task { await consumePendingHighlightMessage() }
             }
             .onAppear {
                 if let context = replyContext { composerState.pendingReplyReference = context.toReplyReference }

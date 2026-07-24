@@ -78,6 +78,19 @@
 - [x] D3 `NSEPreferencesGate` (NSE, réutilise le modèle SDK) : sons coupés → sans son ; badges coupés → badge 0 ; `groupNotifications` off → threadIdentifier annulé (corrige `applyThreading` qui défaisait le strip serveur) ; push off / DND / type désactivé → livraison passive (pas de bannière/son — la NSE ne peut pas supprimer sans l'entitlement filtering)
 - [x] D4 pbxproj régénéré et COMMITTÉ (+22 refs, CURRENT_PROJECT_VERSION restauré 1255) — corrige aussi le build local du lot 1 (resolver absent du pbxproj committé)
 
+## Lot 3 — Certification routage tap-notification → entité exacte (2026-07-24 nuit)
+
+Audit 4 agents (push tap, toast/cloche, payloads gateway, destinations). Verdict avant correctifs : NON certifiable.
+
+- [x] R1 Réel mal classé = réel SANS RAPPORT : `openReelFromNotification` gate `isReel` ; fallback `.postDetail` conserve commentId/parentCommentId
+- [x] R2 Commentaire de STORY jamais ciblé : `commentId/parentCommentId` voyagent Route → Screen → Bridge → `StoryViewerRequest` → `StoryCommentsOverlayView` (scroll ciblé, latch, repli parent)
+- [x] R3 Réponses : les 2 renderers (PostDetailView, FeedCommentsSheet) scrollent APRÈS l'expansion du thread (course corrigée)
+- [x] R4 Highlight scopé conversation (`pendingHighlightConversationId`) + consommation à chaud (`adaptiveOnChange`, conversation déjà ouverte) + StarredMessages réparé (`.meeshyNavigateToConversation` observée par les 2 roots)
+- [x] R5 iPad parité : cloche+toast → `highlightMessageId`+`ensureUnread` ; username facultatif ; `default:` route conversation/social au lieu de ~30 taps muets ; fallback `metadata.postId`
+- [x] R6 Système/sécurité : tap → liste notifications (3 sites × 2 plateformes) au lieu de no-op
+
+Limites documentées (mémoire `notification-tap-routing-map`) : commentaire > page 1 non atteint (pas d'API comments-around), reply = ancre parent (rangées de réponses sans ancre propre), missed_call sans scroll d'entrée d'appel, `context.parentCommentId` strippé par le schéma REST cloche (metadata dual-read OK), 4 dispatchs à unifier (refactor NotificationNavContext partagé).
+
 ### Review (fin de run)
 Commit `a866afea4` (19 fichiers, +714/−58, NON poussé — main local ahead 5 avec le travail long-press d'une autre session).
 Vérifications : gateway 696 tests notif verts (30 suites) + `tsc --noEmit` clean ; SDK 38 verts ciblés (coordinator 31 dont resync badge, filtre 6, haptique 1) + 19 UserPreferencesManager dont stamp offset ; app : build complet OK + résolveur 9/9.

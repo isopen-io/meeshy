@@ -173,6 +173,12 @@ struct iPadRootView: View {
                 handlePushNotificationTap(payload)
                 PushNotificationManager.shared.clearPendingNotification()
             }
+            // Navigation par id demandée par une vue sans accès aux helpers de
+            // résolution (StarredMessagesView) — highlight scopé déjà parké.
+            .onReceive(NotificationCenter.default.publisher(for: .meeshyNavigateToConversation)) { notification in
+                guard let conversationId = notification.object as? String, !conversationId.isEmpty else { return }
+                navigateToConversationById(conversationId, highlightMessageId: router.pendingHighlightMessageId)
+            }
             .onReceive(NotificationCenter.default.publisher(for: Notification.Name("sendMessageToUser"))) { notification in
                 handleSendMessageToUser(notification)
             }

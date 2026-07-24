@@ -38,7 +38,9 @@ enum Route: Hashable {
     case storyNotificationTarget(
         storyId: String,
         intent: StoryIntent,
-        context: StoryNotificationContext
+        context: StoryNotificationContext,
+        commentId: String?,
+        parentCommentId: String?
     )
 }
 
@@ -205,6 +207,12 @@ final class Router: ObservableObject {
 
     @Published var pendingHighlightMessageId: String?
 
+    /// Conversation à laquelle `pendingHighlightMessageId` s'applique. Sans ce
+    /// scoping, un highlight posé pour la conversation A pouvait être consommé
+    /// par la prochaine conversation B ouverte (scroll/fetch vers un message
+    /// étranger). `nil` = non scopé (compat entrées legacy).
+    @Published var pendingHighlightConversationId: String?
+
     /// Quand true, la prochaine `ConversationView` ouverte active directement sa
     /// vue recherche (bouton Recherche de l'aperçu long-press). Consommé + remis
     /// à false par `ConversationView` à l'ouverture.
@@ -212,6 +220,7 @@ final class Router: ObservableObject {
 
     func navigateToConversation(_ conversation: Conversation, highlightMessageId: String? = nil) {
         pendingHighlightMessageId = highlightMessageId
+        pendingHighlightConversationId = highlightMessageId == nil ? nil : conversation.id
 
         // iPad deux colonnes : les routes sont forwardees via `onRouteRequested`
         // (pas de NavigationStack `path`) — comportement inchange.
@@ -370,4 +379,13 @@ final class Router: ObservableObject {
             Self.logger.error("Share deep link received with no content")
         }
     }
+}
+
+extension Notification.Name {
+    /// Demande de navigation vers une conversation par id, émise par des vues
+    /// qui n'ont pas accès aux helpers de résolution des root views (ex :
+    /// StarredMessagesView). `object` = conversationId (String). Observée par
+    /// RootView (iPhone) et iPadRootView — sans observateur, le tap étoilé
+    /// était un no-op silencieux.
+    static let meeshyNavigateToConversation = Notification.Name("navigateToConversationById")
 }

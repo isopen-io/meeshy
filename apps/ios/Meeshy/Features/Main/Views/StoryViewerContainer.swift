@@ -30,6 +30,10 @@ struct StoryViewerContainer: View {
     /// viewer can auto-open the comments overlay or viewers sheet on appear.
     /// `nil` keeps every legacy entry point on the existing path.
     var initialAction: StoryViewerInitialAction? = nil
+    /// Commentaire ciblé par la notification (scroll dans l'overlay) + parent
+    /// (repli de scroll pour une réponse en thread). Forwardés au viewer.
+    var targetCommentId: String? = nil
+    var targetParentCommentId: String? = nil
 
     @State private var timedOut = false
     @State private var reloadAttempts = 0
@@ -54,7 +58,9 @@ struct StoryViewerContainer: View {
                         isPresented: $isPresented,
                         initialStoryIndex: resolvedStoryIndex,
                         startAtFirstUnviewed: startAtFirstUnviewed,
-                        initialAction: initialAction
+                        initialAction: initialAction,
+                        targetCommentId: targetCommentId,
+                        targetParentCommentId: targetParentCommentId
                     )
                     .transition(.identity)
                 } else {
@@ -66,7 +72,9 @@ struct StoryViewerContainer: View {
                         onReplyToStory: onReplyToStory,
                         initialStoryIndex: resolvedStoryIndex,
                         startAtFirstUnviewed: startAtFirstUnviewed,
-                        initialAction: initialAction
+                        initialAction: initialAction,
+                        targetCommentId: targetCommentId,
+                        targetParentCommentId: targetParentCommentId
                     )
                     .transition(.identity)
                 }
