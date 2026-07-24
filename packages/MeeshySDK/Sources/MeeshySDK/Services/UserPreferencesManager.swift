@@ -6,6 +6,12 @@ import Combine
 public final class UserPreferencesManager: ObservableObject {
     public static let shared = UserPreferencesManager()
 
+    /// Injected closure to flush the outbox immediately after a preference mutation
+    /// is enqueued. The SDK cannot import app-side OutboxFlushTrigger, so the app
+    /// injects this at boot: `{ Task { await OutboxFlushTrigger.flushNow() } }`.
+    /// If nil, the outbox drains on the next app boot/foreground transition only.
+    public var onSettingsMutationEnqueued: (@Sendable () -> Void)?
+
     // MARK: - Published Preferences
 
     @Published public private(set) var privacy: PrivacyPreferences
@@ -41,6 +47,7 @@ public final class UserPreferencesManager: ObservableObject {
 
     private nonisolated static let keyPrefix = "meeshy_prefs_"
     private static let lastSyncKey = "meeshy_prefs_last_sync"
+    private static let pendingCategoriesKey = "meeshy_prefs_pending_categories"
     /// Suite App Group partagée avec les extensions (NSE, widgets). La clé
     /// miroir des préférences de notification est
     /// `appGroupNotificationPrefsKey` — lue par `NSEPreferencesGate` depuis le
@@ -62,6 +69,10 @@ public final class UserPreferencesManager: ObservableObject {
 
         if let ts = UserDefaults.standard.object(forKey: Self.lastSyncKey) as? Date {
             lastSyncDate = ts
+        }
+
+        if let pending = Self.loadPendingCategories() {
+            pendingCategories = pending
         }
 
         observeAuth()
@@ -213,6 +224,7 @@ public final class UserPreferencesManager: ObservableObject {
         syncTasks.values.forEach { $0.cancel() }
         syncTasks.removeAll()
         pendingCategories.removeAll()
+        persistPendingCategories()
         // NE PAS vider `cancellables` : il ne porte QUE les abonnements
         // process-lifetime posés une seule fois à l'init (`observeAuth` /
         // `observeForeground`). Les vider au premier logout tuait
@@ -223,6 +235,7 @@ public final class UserPreferencesManager: ObservableObject {
             UserDefaults.standard.removeObject(forKey: Self.keyPrefix + category.rawValue)
         }
         UserDefaults.standard.removeObject(forKey: Self.lastSyncKey)
+        UserDefaults.standard.removeObject(forKey: Self.pendingCategoriesKey)
         // Purge du miroir App Group (privacy) : un user B sur le même device
         // ne doit pas hériter du gating notifications du user A dans la NSE.
         UserDefaults(suiteName: Self.appGroupSuiteName)?
@@ -264,11 +277,22 @@ public final class UserPreferencesManager: ObservableObject {
         return try? JSONDecoder().decode(T.self, from: data)
     }
 
+    private func persistPendingCategories() {
+        let rawValues = pendingCategories.map(\.rawValue)
+        UserDefaults.standard.set(rawValues, forKey: Self.pendingCategoriesKey)
+    }
+
+    private static func loadPendingCategories() -> Set<PreferenceCategory>? {
+        guard let rawValues = UserDefaults.standard.stringArray(forKey: pendingCategoriesKey) else { return nil }
+        return Set(rawValues.compactMap { PreferenceCategory(rawValue: $0) })
+    }
+
     // MARK: - Private: Debounced Backend Sync
 
     private func scheduleSyncToBackend(_ category: PreferenceCategory) {
         syncTasks[category]?.cancel()
         pendingCategories.insert(category)
+        persistPendingCategories()
         syncTasks[category] = Task {
             try? await Task.sleep(nanoseconds: 1_000_000_000)
             guard !Task.isCancelled else { return }
@@ -288,7 +312,10 @@ public final class UserPreferencesManager: ObservableObject {
         // Cleared here (not right after the debounce sleep) so the category
         // stays "pending" — and protected from `applyRemote` server-wins —
         // for the full round trip, including the network/outbox call below.
-        defer { pendingCategories.remove(category) }
+        defer {
+            pendingCategories.remove(category)
+            persistPendingCategories()
+        }
         guard AuthManager.shared.isAuthenticated else { return }
         let cmid = ClientMutationId.generate()
         let body: Data?
@@ -318,6 +345,7 @@ public final class UserPreferencesManager: ObservableObject {
         )
         do {
             try await OfflineQueue.shared.enqueue(.updateSettings, payload: payload)
+            onSettingsMutationEnqueued?()
         } catch {
             // Fall back to the direct PATCH path — outbox enqueue can
             // fail if the pool was never wired (early-boot UI surfaces

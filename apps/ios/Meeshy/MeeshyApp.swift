@@ -226,6 +226,14 @@ struct MeeshyApp: App {
                     let bootPool = dependencies.dbPool
                     await OfflineQueue.shared.configure(pool: bootPool)
 
+                    // Wire preference mutations to flush the outbox immediately after
+                    // enqueue so changes don't get stuck `.pending` until boot/foreground
+                    // transition. The SDK cannot import app-side OutboxFlushTrigger
+                    // (SDK purity), so we inject this Sendable closure at boot.
+                    UserPreferencesManager.shared.onSettingsMutationEnqueued = {
+                        Task { await OutboxFlushTrigger.flushNow() }
+                    }
+
                     // Phase 4 §6.1.1 — boot crash recovery. Any record left
                     // `.inflight` from a previous process (the app was killed
                     // mid-dispatch) is reset to `.pending` so the flusher

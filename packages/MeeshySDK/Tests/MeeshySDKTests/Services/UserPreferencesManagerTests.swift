@@ -244,4 +244,35 @@ final class UserPreferencesManagerTests: XCTestCase {
 
         XCTAssertTrue(manager.pendingCategories.isEmpty)
     }
+
+    // MARK: - pendingCategories persistence (cross-kill stability)
+
+    func test_updateNotification_persistsPendingCategoriesAcrossRelaunch() {
+        manager.updateNotification { $0.notificationBadgeEnabled = false }
+        XCTAssertTrue(manager.pendingCategories.contains(.notification), "precondition: notification pending")
+
+        // Simulate a relaunch: create new instance from disk state
+        let relaunched = UserPreferencesManager()
+
+        XCTAssertTrue(relaunched.pendingCategories.contains(.notification), "pendingCategories should survive relaunch so applyRemote doesn't overwrite with stale server value")
+        XCTAssertFalse(relaunched.notification.notificationBadgeEnabled, "local mutation should persist across relaunch")
+    }
+
+    func test_updatePrivacy_persistsPendingCategoriesAcrossRelaunch() {
+        manager.updatePrivacy { $0.showOnlineStatus = false }
+        XCTAssertTrue(manager.pendingCategories.contains(.privacy), "precondition: privacy pending")
+
+        let relaunched = UserPreferencesManager()
+
+        XCTAssertTrue(relaunched.pendingCategories.contains(.privacy))
+        XCTAssertFalse(relaunched.privacy.showOnlineStatus)
+    }
+
+    func test_resetSession_wipesPersistedPendingCategories() {
+        manager.updatePrivacy { $0.showOnlineStatus = false }
+        manager.resetSession()
+        let relaunched = UserPreferencesManager()
+
+        XCTAssertTrue(relaunched.pendingCategories.isEmpty, "pendingCategories should be wiped on logout")
+    }
 }
