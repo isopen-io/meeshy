@@ -24,8 +24,8 @@ extension ConversationView {
     }
 
     // MARK: - Header Avatar (thin wrapper → extracted struct to avoid PAC crashes)
-    var headerAvatarView: some View {
-        ConversationHeaderAvatarView(
+    var headerAvatarView: AnyView {
+        AnyView(ConversationHeaderAvatarView(
             composerState: $composerState,
             headerState: $headerState,
             conversation: conversation,
@@ -42,7 +42,7 @@ extension ConversationView {
                     router.deepLinkProfileUser = profileUser
                 }
             }
-        )
+        ))
     }
 
     // MARK: - Header Call Buttons (audio + video)

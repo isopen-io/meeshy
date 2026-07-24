@@ -1528,19 +1528,18 @@ struct ConversationView: View {
     /// alongside the rest of the band produced an opaque return type that
     /// Swift's runtime metadata resolver couldn't materialize — `body` would
     /// crash at first render with a deep `swift_getTypeByMangledName` stack.
-    @ViewBuilder
-    private var expandedHeaderMidContent: some View {
+    // AnyView : casse la récursion de type de `expandedHeaderBandBody` (crash
+    // stack-overflow du décodeur de métadonnées Swift au 1er rendu SUR DEVICE).
+    private var expandedHeaderMidContent: AnyView {
         if composerState.showOptions {
-            expandedHeaderTitleAndTags
+            return AnyView(expandedHeaderTitleAndTags)
         } else {
-            // Call button stays next to the search icon in BOTH states
-            // (user-requested 2026-07-11) — collapsing/expanding the header
-            // only toggles the name/category/tags/favorite-emoji area
-            // (expandedHeaderTitleAndTags), never the call button's presence.
-            HStack {
+            // Le bouton d'appel reste à côté de la recherche dans les 2 états
+            // (le collapse/expand ne bascule que la zone nom/tags).
+            return AnyView(HStack {
                 Spacer()
                 headerButtonsCluster
-            }
+            })
         }
     }
 
@@ -1632,9 +1631,9 @@ struct ConversationView: View {
         .accessibilityIdentifier("conversation.header.search")
     }
 
-    @ViewBuilder
-    private var expandedHeaderBackground: some View {
-        if composerState.showOptions {
+    private var expandedHeaderBackground: AnyView {
+        guard composerState.showOptions else { return AnyView(Color.clear) }
+        return AnyView(
             RoundedRectangle(cornerRadius: MeeshyRadius.xxl - 2)
                 .fill(.ultraThinMaterial)
                 .overlay(
@@ -1646,7 +1645,7 @@ struct ConversationView: View {
                 )
                 .shadow(color: Color(hex: accentColor).opacity(0.2), radius: 8, y: 2)
                 .transition(.scale(scale: 0.1, anchor: .trailing).combined(with: .opacity))
-        }
+        )
     }
 
     // MARK: - Overlay Menu Content (extracted to help type-checker)
