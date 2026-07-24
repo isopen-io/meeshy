@@ -1,6 +1,8 @@
 package me.meeshy.sdk.net
 
+import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json
+import me.meeshy.sdk.model.RefreshTokenRequest
 import me.meeshy.sdk.net.api.ActiveCallApi
 import me.meeshy.sdk.net.api.AuthApi
 import me.meeshy.sdk.net.api.BlockApi
@@ -56,8 +58,26 @@ class MeeshyApi private constructor(retrofit: Retrofit) {
         }
 
         fun create(config: MeeshyConfig, tokenStore: TokenStore): MeeshyApi {
+            // The authenticator needs to call `auth.refresh` on the very instance it
+            // guards; the instance does not exist yet. The refresher closure is only
+            // invoked on a 401 — long after `api` is assigned — so a lateinit binding
+            // safely breaks the cycle. `/auth/refresh` is a handshake endpoint the
+            // policy marks ineligible, so the refresh call never re-enters the
+            // authenticator (no recursion).
+            lateinit var api: MeeshyApi
+            val refresher = TokenRefresher {
+                val session = tokenStore.sessionToken ?: return@TokenRefresher null
+                runCatching {
+                    runBlocking { api.auth.refresh(RefreshTokenRequest(session)) }
+                }.getOrNull()
+                    ?.takeIf { it.success }
+                    ?.data
+                    ?.token
+            }
+
             val client = OkHttpClient.Builder()
                 .addInterceptor(AuthInterceptor(tokenStore))
+                .authenticator(RefreshAuthenticator(tokenStore, refresher))
                 .apply {
                     if (config.enableLogging) {
                         addInterceptor(
@@ -77,7 +97,8 @@ class MeeshyApi private constructor(retrofit: Retrofit) {
                 )
                 .build()
 
-            return MeeshyApi(retrofit)
+            api = MeeshyApi(retrofit)
+            return api
         }
     }
 }
