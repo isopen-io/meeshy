@@ -151,3 +151,43 @@ describe('resolveReadAt — repli curseur réservé à l\'héritage', () => {
     ).toBeNull();
   });
 });
+
+describe('resolveReadAt — bascule non armée (opt-in)', () => {
+  // `push main` déclenche le déploiement sur ce dépôt : la bascule doit être
+  // armée explicitement en production, jamais par le simple fait de livrer le
+  // code. Sans date, le comportement historique est conservé à l'identique.
+  it('keeps the legacy cursor fallback when no cutover is configured', () => {
+    const cursor = new Date('2026-08-20T00:00:00.000Z');
+    expect(
+      resolveReadAt({
+        frozenReadAt: null,
+        cursorLastReadAt: cursor,
+        messageCreatedAt: new Date('2026-08-10T00:00:00.000Z'),
+        cutover: null,
+      })
+    ).toEqual(cursor);
+  });
+
+  it('still prefers the frozen readAt when no cutover is configured', () => {
+    const frozen = new Date('2026-08-11T00:00:00.000Z');
+    expect(
+      resolveReadAt({
+        frozenReadAt: frozen,
+        cursorLastReadAt: new Date('2026-08-20T00:00:00.000Z'),
+        messageCreatedAt: new Date('2026-08-10T00:00:00.000Z'),
+        cutover: null,
+      })
+    ).toEqual(frozen);
+  });
+
+  it('still refuses a cursor that predates the message when no cutover is configured', () => {
+    expect(
+      resolveReadAt({
+        frozenReadAt: null,
+        cursorLastReadAt: new Date('2026-08-05T00:00:00.000Z'),
+        messageCreatedAt: new Date('2026-08-10T00:00:00.000Z'),
+        cutover: null,
+      })
+    ).toBeNull();
+  });
+});

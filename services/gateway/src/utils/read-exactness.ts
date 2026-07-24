@@ -42,8 +42,13 @@ export type ResolveReadAtInput = {
   /** `ConversationReadCursor.lastReadAt` du participant. */
   readonly cursorLastReadAt: Date | null;
   readonly messageCreatedAt: Date;
-  /** Date d'entrée en vigueur du suivi exact. */
-  readonly cutover: Date;
+  /**
+   * Date d'entrée en vigueur du suivi exact, ou `null` tant qu'il n'est pas
+   * armé. Sur ce dépôt, `push main` déclenche le déploiement : la bascule doit
+   * donc être activée délibérément en production, jamais par le seul fait de
+   * livrer le code. `null` conserve le comportement historique à l'identique.
+   */
+  readonly cutover: Date | null;
 };
 
 /**
@@ -63,7 +68,7 @@ export function resolveReadAt({
 }: ResolveReadAtInput): Date | null {
   if (frozenReadAt) return frozenReadAt;
 
-  if (messageCreatedAt.getTime() >= cutover.getTime()) return null;
+  if (cutover && messageCreatedAt.getTime() >= cutover.getTime()) return null;
 
   if (!cursorLastReadAt) return null;
 
