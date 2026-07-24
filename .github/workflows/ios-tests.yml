@@ -44,17 +44,17 @@ concurrency:
 jobs:
   ios-tests:
     runs-on: macos-15
-    # Warm-run cost is dominated by HIGH-VARIANCE fixed steps that no cache
-    # removes — measured across runs: iOS 18.2 runtime download 8-14 min
-    # (network), SPM resolve 3-6.6 min (network), compile 4.5-9 min (DerivedData
-    # incremental reuse is unreliable across ephemeral runners), + ~14 min
-    # serial tests. Best case ≈ 30 min, worst case ≈ 44 min. 35 covered the
-    # median but not the tail (a run hit 37 min on a 9-min compile + slow
-    # download). 40 covers the realistic tail; a genuinely reliable sub-35 run
-    # needs a bigger runner (macos-15-xlarge: faster compile/tests + enough
-    # RAM for real parallel testing, which the 3 vCPU / 7 GB standard runner
-    # can't do). Still a hard cap so a real deadlock fails fast.
-    timeout-minutes: 40
+    # STOPGAP cap, sized to the measured worst case — NOT a healthy target.
+    # This suite on the standard 3 vCPU / 7 GB runner is dominated by
+    # high-variance steps no cache removes: iOS 18.2 runtime download 8-14 min
+    # (network), SPM resolve 3-6.6 min (network), compile 8-9 min (DerivedData
+    # incremental reuse is unreliable across ephemeral runners — one 4.5-min
+    # build was a fluke), + 14-16 min serial tests. Observed range ≈ 38-44 min;
+    # 30/35/40 caps all timed out. 50 covers the tail with margin so CI stops
+    # flapping. The RIGHT fix is macos-15-xlarge (faster compile/tests + enough
+    # RAM for real parallel testing, impossible on this runner) — that would
+    # bring it reliably under ~30 min. Hard cap kept so a real deadlock fails.
+    timeout-minutes: 50
     steps:
       - uses: actions/checkout@v7
 
