@@ -574,10 +574,19 @@ export class MessageReadStatusService {
    * Marque les messages comme lus pour un utilisateur
    * Simplifié: Met à jour `lastReadAt` dans `ConversationReadCursor`.
    */
+  /**
+   * @param options.messageIds Identifiants des messages RÉELLEMENT affichés,
+   *   rapportés par le client. Quand ils sont fournis, le gel `readAt` est borné
+   *   à ces messages. En leur absence — binaires clients déjà distribués, qui
+   *   postent un corps vide — on retombe sur la fenêtre temporelle historique,
+   *   qui sur-déclare.
+   * @see docs/superpowers/specs/2026-07-24-read-exactness-design.md
+   */
   async markMessagesAsRead(
     participantId: string,
     conversationId: string,
-    latestMessageId?: string
+    latestMessageId?: string,
+    options?: { readonly messageIds?: readonly string[] }
   ): Promise<void> {
     // Hoisted so the catch below can release the dedup key when the write
     // fails — a poisoned key would otherwise swallow every retry within the
@@ -673,6 +682,7 @@ export class MessageReadStatusService {
         since: prevReadAt,
         at: now,
         field: "readAt",
+        messageIds: options?.messageIds,
       });
 
       // Read implies delivered: a message can never be read without first having
@@ -762,15 +772,28 @@ export class MessageReadStatusService {
     since: Date | null;
     at: Date;
     field: "readAt" | "deliveredAt";
+    /**
+     * Restreint le gel aux messages réellement affichés. Une liste VIDE est
+     * significative — « rien n'a été affiché » — et ne retombe donc pas sur la
+     * fenêtre. Seule l'absence du paramètre déclenche le repli historique.
+     * Réservé à `readAt` : un message récupéré est livré même s'il n'a jamais
+     * été affiché, donc la fenêtre reste correcte pour `deliveredAt`.
+     */
+    messageIds?: readonly string[];
   }): Promise<void> {
-    const { participantId, conversationId, since, at, field } = params;
+    const { participantId, conversationId, since, at, field, messageIds } = params;
     try {
       const messages = await this.prisma.message.findMany({
         where: {
+          // Ces trois gardes tiennent dans les deux modes : une liste d'ids
+          // forgée par un client ne permet pas de marquer lu un message d'une
+          // autre conversation, supprimé, ou émis par le participant lui-même.
           conversationId,
           deletedAt: null,
           senderId: { not: participantId },
-          createdAt: { lte: at, ...(since ? { gt: since } : {}) },
+          ...(messageIds
+            ? { id: { in: [...messageIds] } }
+            : { createdAt: { lte: at, ...(since ? { gt: since } : {}) } }),
         },
         select: { id: true },
       });

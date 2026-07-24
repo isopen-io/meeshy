@@ -84,6 +84,18 @@ export const messageSenderUserSelect = {
 // légende) ou un forward arrive avec un contenu vide. Le `.refine()` final
 // exige qu'au moins une source de contenu soit présente. Restaure le
 // comportement du commit ee9a29db, perdu lors de la migration Zod (Phase 4).
+// Suivi de lecture exact — le client rapporte les messages RÉELLEMENT affichés.
+// Le corps est OPTIONNEL et son absence conserve le repli par fenêtre
+// temporelle : les binaires déjà distribués postent un corps vide, et les en
+// priver perdrait toute lecture jusqu'à leur mise à jour.
+// @see docs/superpowers/specs/2026-07-24-read-exactness-design.md
+export const MarkReadBodySchema = z.object({
+  messageIds: z
+    .array(z.string().regex(/^[0-9a-fA-F]{24}$/, 'Invalid MongoDB ObjectId format'))
+    .max(200)
+    .optional(),
+}).strict();
+
 export const SendMessageBodySchema = z.object({
   content: z
     .string()
@@ -1511,18 +1523,37 @@ export function registerMessagesRoutes(
         return sendForbidden(reply, 'Not a participant');
       }
 
+      // Corps absent = client déjà distribué → repli fenêtre (surtout pas un
+      // lot vide, qui ne figerait rien et perdrait la lecture).
+      let reportedMessageIds: readonly string[] | undefined;
+      if (request.body !== undefined && request.body !== null) {
+        const bodyResult = MarkReadBodySchema.safeParse(request.body);
+        if (!bodyResult.success) {
+          return sendBadRequest(reply, 'Corps de requête invalide pour le marquage de lecture');
+        }
+        reportedMessageIds = bodyResult.data.messageIds;
+      }
+
       const { MessageReadStatusService } = await import('../../services/MessageReadStatusService');
       const readStatusService = new MessageReadStatusService(prisma);
 
       const unreadCount = await readStatusService.getUnreadCount(currentParticipant.id, conversationId);
-      if (unreadCount === 0) {
+      // Le raccourci « 0 non-lu → ne rien faire » ne vaut que SANS ids
+      // rapportés : le curseur peut buter sur un trou et annoncer 0 alors que
+      // le client vient d'afficher des messages situés après ce trou.
+      if (unreadCount === 0 && !reportedMessageIds) {
         return sendSuccess(reply, { markedCount: 0 });
       }
 
-      await readStatusService.markMessagesAsRead(currentParticipant.id, conversationId);
+      await readStatusService.markMessagesAsRead(
+        currentParticipant.id,
+        conversationId,
+        undefined,
+        reportedMessageIds ? { messageIds: reportedMessageIds } : undefined
+      );
       await broadcastReadStatus(userId, currentParticipant.id, conversationId, 'read', authRequest.authContext.type === 'anonymous');
 
-      return sendSuccess(reply, { markedCount: unreadCount });
+      return sendSuccess(reply, { markedCount: reportedMessageIds?.length ?? unreadCount });
 
     } catch (error) {
       logger.error('Error marking conversation as read', error);
