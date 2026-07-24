@@ -187,6 +187,12 @@ struct MeeshyApp: App {
                     NotificationToastManager.shared.conversationPresentationProvider = { conversationId in
                         WidgetDataManager.shared.conversationToastPresentation(forId: conversationId)
                     }
+                    // « Vibrations » : le SDK gate sur `vibrationEnabled` et
+                    // appelle ce player à l'apparition d'un toast — l'haptique
+                    // vit app-side (le SDK core n'importe pas UIKit).
+                    NotificationToastManager.shared.hapticPlayer = {
+                        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                    }
                     await CacheCoordinator.shared.start()
                     // Touch PresenceManager early so it has subscribed to
                     // `presence:snapshot` + `user:status` + `didReconnect`

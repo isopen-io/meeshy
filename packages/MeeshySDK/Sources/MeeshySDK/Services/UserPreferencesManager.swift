@@ -90,6 +90,9 @@ public final class UserPreferencesManager: ObservableObject {
 
     public func updateNotification(_ transform: (inout UserNotificationPreferences) -> Void) {
         var copy = notification; transform(&copy)
+        // Ré-estampille l'offset UTC du device à chaque écriture (voyage, DST) :
+        // le gateway évalue la fenêtre DND dans l'heure locale utilisateur.
+        copy.dndUtcOffsetMinutes = TimeZone.current.secondsFromGMT() / 60
         guard copy != notification else { return }
         notification = copy
         persist(copy, category: .notification)

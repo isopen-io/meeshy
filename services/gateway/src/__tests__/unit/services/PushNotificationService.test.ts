@@ -827,6 +827,124 @@ describe('PushNotificationService', () => {
       });
     });
 
+    // GW8 — les préférences de livraison (Sons / Badges / regroupement) doivent
+    // être appliquées au chokepoint transport pour couvrir TOUS les producteurs :
+    // avant ce correctif, soundEnabled / notificationBadgeEnabled /
+    // groupNotifications étaient persistées mais jamais lues à l'envoi.
+    describe('delivery preferences (soundEnabled / notificationBadgeEnabled / groupNotifications)', () => {
+      afterEach(() => {
+        delete (mockPrisma as any).userPreferences;
+      });
+
+      const apnsEnv = {
+        ENABLE_PUSH_NOTIFICATIONS: 'true',
+        ENABLE_APNS_PUSH: 'true',
+        APNS_KEY_ID: 'test-key-id',
+        APNS_TEAM_ID: 'test-team-id',
+        APNS_KEY_PATH: '/path/to/key.p8',
+        APNS_BUNDLE_ID: 'me.meeshy.app',
+      };
+
+      const setupService = async (notificationPrefs: Record<string, unknown>) => {
+        mockApnsProviderSend.mockResolvedValue({ sent: [{ device: 'apns-token-123' }], failed: [] });
+        const { PushNotificationService } = await getServiceWithEnv(apnsEnv);
+        const service = new PushNotificationService(mockPrisma as any);
+        (mockPrisma as any).userPreferences = {
+          findUnique: jest.fn().mockResolvedValue({ notification: notificationPrefs }),
+        };
+        mockPrisma.pushToken.findMany.mockResolvedValue([
+          { id: 'token-1', token: 'apns-token-123', type: 'apns', platform: 'ios', bundleId: 'me.meeshy.app' },
+        ]);
+        mockPrisma.pushToken.update.mockResolvedValue({});
+        return service;
+      };
+
+      const richPayload = {
+        title: 'Test',
+        body: 'Test message',
+        badge: 5,
+        threadId: 'conv-42',
+        data: { type: 'new_message' },
+      };
+
+      it('soundEnabled:false delivers the banner without any APNs sound', async () => {
+        const service = await setupService({ pushEnabled: true, soundEnabled: false });
+
+        const result = await service.sendToUser({ userId: 'user-123', payload: richPayload });
+
+        expect(result).toHaveLength(1);
+        expect(result[0].success).toBe(true);
+        const sent = mockApnsProviderSend.mock.calls[0][0];
+        expect(sent.sound).toBeUndefined();
+        // Le reste du payload reste intact : seul le son est coupé.
+        expect(sent.badge).toBe(5);
+        expect(sent.threadId).toBe('conv-42');
+      });
+
+      it('notificationBadgeEnabled:false forces aps.badge to 0 (mirror of the iOS icon-badge gate)', async () => {
+        const service = await setupService({ pushEnabled: true, notificationBadgeEnabled: false });
+
+        await service.sendToUser({ userId: 'user-123', payload: richPayload });
+
+        const sent = mockApnsProviderSend.mock.calls[0][0];
+        // 0 (et non undefined) : efface le badge résiduel quand l'app est tuée,
+        // exactement comme NotificationCoordinator.syncNow côté iOS.
+        expect(sent.badge).toBe(0);
+        expect(sent.sound).toBe('default');
+        expect(sent.threadId).toBe('conv-42');
+      });
+
+      it('groupNotifications:false drops the threadId so banners no longer stack per conversation', async () => {
+        const service = await setupService({ pushEnabled: true, groupNotifications: false });
+
+        await service.sendToUser({ userId: 'user-123', payload: richPayload });
+
+        const sent = mockApnsProviderSend.mock.calls[0][0];
+        expect(sent.threadId).toBeUndefined();
+        expect(sent.badge).toBe(5);
+        expect(sent.sound).toBe('default');
+      });
+
+      it('default preferences leave sound, badge and threadId untouched', async () => {
+        const service = await setupService({ pushEnabled: true });
+
+        await service.sendToUser({ userId: 'user-123', payload: richPayload });
+
+        const sent = mockApnsProviderSend.mock.calls[0][0];
+        expect(sent.sound).toBe('default');
+        expect(sent.badge).toBe(5);
+        expect(sent.threadId).toBe('conv-42');
+      });
+
+      it('call pushes are exempt from delivery preferences (ring must stay audible)', async () => {
+        mockApnsProviderSend.mockResolvedValue({ sent: [{ device: 'voip-token-123' }], failed: [] });
+        const { PushNotificationService } = await getServiceWithEnv({
+          ...apnsEnv,
+          ENABLE_VOIP_PUSH: 'true',
+          APNS_VOIP_BUNDLE_ID: 'me.meeshy.app.voip',
+        });
+        const service = new PushNotificationService(mockPrisma as any);
+        (mockPrisma as any).userPreferences = {
+          findUnique: jest.fn().mockResolvedValue({
+            notification: { soundEnabled: false, notificationBadgeEnabled: false, groupNotifications: false },
+          }),
+        };
+        mockPrisma.pushToken.findMany.mockResolvedValue([
+          { id: 'token-1', token: 'voip-token-123', type: 'voip', platform: 'ios', bundleId: null },
+        ]);
+        mockPrisma.pushToken.update.mockResolvedValue({});
+
+        const result = await service.sendToUser({
+          userId: 'user-123',
+          payload: { title: 'Incoming Call', body: 'John is calling...', callId: 'call-123', callerName: 'John' },
+          types: ['voip'],
+        });
+
+        expect(result).toHaveLength(1);
+        expect(result[0].success).toBe(true);
+      });
+    });
+
     it('silent payload builds a pure background APNS push: no alert, no sound, pushType background, priority 5', async () => {
       mockApnsProviderSend.mockResolvedValue({ sent: [{ device: 'apns-token-123' }], failed: [] });
 

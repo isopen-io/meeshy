@@ -41,3 +41,32 @@
 ## Review
 
 (à compléter en fin de run)
+
+---
+
+# Audit notifications point-par-point + câblage manquant — 2026-07-24 (soir)
+
+> Demande : garantir (1) prise en compte activation/désactivation de chaque toggle Notifications,
+> (2) application aux endroits adéquats, (3) persistance locale + backend.
+> Constat audit (4 agents) : persistance OK partout (UserDefaults `meeshy_prefs_notification` + PATCH `/me/preferences/notification` débouncé, refetch login/foreground). Les écarts sont dans l'APPLICATION des prefs.
+
+## Plan correctifs
+
+### Gateway (TDD jest/bun)
+- [x] A1 `shouldCreateNotification` : retirer l'early-return `type === 'system'` → le toggle `systemEnabled` devient effectif (sécurité reste hardcodée true)
+- [x] A2 `isTypeEnabled` : `member_left|member_removed|member_promoted|member_demoted|member_role_changed` → `memberLeftEnabled` ; `added_to_conversation|removed_from_conversation` → `conversationEnabled` ; `community_invite` → `groupInviteEnabled` (alignement mapping iOS)
+- [x] A3 e-mail immédiat haute priorité : gater les types non-sécurité sur `emailEnabled` (digest/broadcast/contact déjà gatés ; sécurité reste toujours envoyée)
+- [x] A4 `PushNotificationService.sendToUser` : gating central `soundEnabled` (omettre `sound` APNs/FCM), `notificationBadgeEnabled` (badge → 0), `groupNotifications` (omettre `threadId`) — hors pushes d'appel — 696 tests notif verts + tsc clean
+
+### SDK (TDD XCTest)
+- [x] B1 `UserNotificationPreferences` : + `dndUtcOffsetMinutes: Int = 0` (Codable) ; stamp `TimeZone.current` dans `updateNotification` → le DND serveur (tz-aware) cesse d'être évalué en UTC pour les utilisateurs iOS — test stamp vert
+- [x] B2 Filter : `.newConversationDirect/.newConversationGroup` → `conversationEnabled` ; `.commentReaction` → `commentLikeEnabled` ; `.storyNewComment/.friendStoryComment/.storyThreadReply` → `postCommentEnabled` ; + champ `friendContentEnabled` + mapping `.friendNewPost/.friendNewStory/.friendNewMood` — 6 tests filtre verts
+- [x] B3 `NotificationCoordinator` : resync badge immédiat quand `notificationBadgeEnabled` change (publisher injectable, souscription au `start()`) — 31 tests coordinator verts
+- [x] B4 `NotificationToastManager` : hook `hapticPlayer` injectable gaté sur `vibrationEnabled` — test haptic vert
+
+### App iOS
+- [~] C1 `AppDelegate.willPresent` : options dérivées des prefs via `NotificationPresentationResolver` (pur, 9 tests) — build+tests app en cours
+- [x] C2 Haptic player câblé dans MeeshyApp (UIImpactFeedbackGenerator light) + rangée « Contenus des amis » (friendContentEnabled) dans FEED SOCIAL
+
+### Hors périmètre (documenté, décision produit)
+- `callsEnabled` (sonnerie) sans UI iOS ; miroir prefs → App Group pour la NSE ; redaction `showPreview` des toasts in-app ; nettoyage modèles morts (`NotificationPreferences` Swift, Prisma `NotificationPreference`, `PreferencesService` gateway non routé)

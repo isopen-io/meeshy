@@ -564,9 +564,6 @@ export class NotificationService {
     type: NotificationType,
     preloadedPrefs?: NotifPrefs | null
   ): Promise<boolean> {
-    // Les notifications système/sécurité passent toujours
-    if (type === 'system') return true;
-
     const prefs = preloadedPrefs !== undefined
       ? preloadedPrefs
       : await this.loadNotificationPrefs(userId);
@@ -626,14 +623,15 @@ export class NotificationService {
       case 'friend_new_mood':   return prefs.friendContentEnabled ?? true;
       case 'new_conversation_direct':
       case 'new_conversation_group':
-      case 'new_conversation':  return prefs.conversationEnabled;
+      case 'new_conversation':
       case 'added_to_conversation':
-      case 'removed_from_conversation':
+      case 'removed_from_conversation': return prefs.conversationEnabled;
+      case 'community_invite':      return prefs.groupInviteEnabled;
       case 'member_removed':
-      case 'member_left':           return prefs.memberJoinedEnabled;
+      case 'member_left':
       case 'member_promoted':
       case 'member_demoted':
-      case 'member_role_changed':   return prefs.memberJoinedEnabled;
+      case 'member_role_changed':   return prefs.memberLeftEnabled;
       case 'password_changed':
       case 'two_factor_enabled':
       case 'two_factor_disabled':
@@ -1064,9 +1062,11 @@ export class NotificationService {
                   }).catch(err => {
                     notificationLogger.error('Immediate email failed', { error: err, userId: params.userId });
                   });
-                } else {
+                } else if (notifPrefs?.emailEnabled !== false) {
                   // Social / general notification (mention, missed call, …):
                   // neutral notification email, never the security template.
+                  // Gated on emailEnabled comme le digest et les broadcasts —
+                  // seules les alertes de sécurité ci-dessus passent toujours.
                   this.emailService.sendNotificationEmail({
                     to: user.email,
                     name: user.username || 'User',

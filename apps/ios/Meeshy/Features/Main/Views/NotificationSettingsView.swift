@@ -170,6 +170,9 @@ struct NotificationSettingsView: View {
 
             notifToggle(icon: "hand.thumbsup.fill", title: String(localized: "settings.notifications.comment_likes", defaultValue: "Likes commentaires", bundle: .main), color: MeeshyColors.errorHex,
                         keyPath: \.commentLikeEnabled)
+
+            notifToggle(icon: "person.2.fill", title: String(localized: "settings.notifications.friend_content", defaultValue: "Contenus des amis", bundle: .main), color: MeeshyColors.successHex,
+                        keyPath: \.friendContentEnabled)
         }
     }
 

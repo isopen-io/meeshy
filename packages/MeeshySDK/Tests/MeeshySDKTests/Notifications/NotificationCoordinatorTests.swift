@@ -545,4 +545,38 @@ final class NotificationCoordinatorTests: XCTestCase {
         XCTAssertTrue(runningAfterFirst)
         XCTAssertTrue(sut.isRunning)
     }
+
+    // MARK: - Badge preference change → resync immédiat
+
+    /// Basculer le toggle « Badges » doit réécrire l'icône TOUT DE SUITE :
+    /// avant ce correctif, le badge restait affiché jusqu'au prochain event
+    /// socket ou passage en background.
+    func test_badgePreferenceChange_resyncsBadgeImmediately() {
+        let suite = "group.test.meeshy.coordinator.\(UUID().uuidString)"
+        createdSuiteNames.append(suite)
+        let writer = MockBadgeWriter()
+        let changes = PassthroughSubject<Bool, Never>()
+        var badgeEnabled = true
+        let sut = NotificationCoordinator(
+            badgeWriter: writer,
+            appGroupSuiteName: suite,
+            badgeEnabledProvider: { badgeEnabled },
+            badgeEnabledChanges: changes.eraseToAnyPublisher()
+        )
+        sut.start()
+        sut.applyConversationUnread(conversationId: "c1", unreadCount: 7)
+        waitFor("initial badge write") { writer.writes.last == 7 }
+
+        badgeEnabled = false
+        changes.send(false)
+
+        waitFor("badge cleared after toggle off") { writer.writes.last == 0 }
+        XCTAssertEqual(writer.writes.last, 0)
+
+        badgeEnabled = true
+        changes.send(true)
+
+        waitFor("badge restored after toggle on") { writer.writes.last == 7 }
+        XCTAssertEqual(writer.writes.last, 7)
+    }
 }

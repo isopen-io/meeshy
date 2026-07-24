@@ -415,10 +415,16 @@ public struct UserNotificationPreferences: Codable, Equatable, Sendable {
     public var storyReactionEnabled: Bool
     public var commentReplyEnabled: Bool
     public var commentLikeEnabled: Bool
+    public var friendContentEnabled: Bool
     public var dndEnabled: Bool
     public var dndStartTime: String
     public var dndEndTime: String
     public var dndDays: [DndDay]
+    /// Offset UTC du device en minutes, estampillé à chaque écriture par
+    /// `UserPreferencesManager.updateNotification` : le gateway évalue la
+    /// fenêtre DND dans l'heure LOCALE de l'utilisateur (`isWithinDnd`,
+    /// packages/shared). 0 = comportement UTC historique.
+    public var dndUtcOffsetMinutes: Int
     public var showPreview: Bool
     public var showSenderName: Bool
     public var groupNotifications: Bool
@@ -431,8 +437,8 @@ public struct UserNotificationPreferences: Codable, Equatable, Sendable {
         conversationEnabled: true, replyEnabled: true, mentionEnabled: true, reactionEnabled: true,
         contactRequestEnabled: true, groupInviteEnabled: true, memberJoinedEnabled: true, memberLeftEnabled: true,
         postLikeEnabled: true, postCommentEnabled: true, postRepostEnabled: true, storyReactionEnabled: true,
-        commentReplyEnabled: true, commentLikeEnabled: true,
-        dndEnabled: false, dndStartTime: "22:00", dndEndTime: "08:00", dndDays: [],
+        commentReplyEnabled: true, commentLikeEnabled: true, friendContentEnabled: true,
+        dndEnabled: false, dndStartTime: "22:00", dndEndTime: "08:00", dndDays: [], dndUtcOffsetMinutes: 0,
         showPreview: true, showSenderName: true, groupNotifications: true, notificationBadgeEnabled: true,
         extras: [:]
     )
@@ -445,7 +451,9 @@ public struct UserNotificationPreferences: Codable, Equatable, Sendable {
         groupInviteEnabled: Bool = true, memberJoinedEnabled: Bool = true, memberLeftEnabled: Bool = true,
         postLikeEnabled: Bool = true, postCommentEnabled: Bool = true, postRepostEnabled: Bool = true,
         storyReactionEnabled: Bool = true, commentReplyEnabled: Bool = true, commentLikeEnabled: Bool = true,
+        friendContentEnabled: Bool = true,
         dndEnabled: Bool = false, dndStartTime: String = "22:00", dndEndTime: String = "08:00", dndDays: [DndDay] = [],
+        dndUtcOffsetMinutes: Int = 0,
         showPreview: Bool = true, showSenderName: Bool = true, groupNotifications: Bool = true,
         notificationBadgeEnabled: Bool = true, extras: [String: CodableValue] = [:]
     ) {
@@ -460,7 +468,9 @@ public struct UserNotificationPreferences: Codable, Equatable, Sendable {
         self.postLikeEnabled = postLikeEnabled; self.postCommentEnabled = postCommentEnabled
         self.postRepostEnabled = postRepostEnabled; self.storyReactionEnabled = storyReactionEnabled
         self.commentReplyEnabled = commentReplyEnabled; self.commentLikeEnabled = commentLikeEnabled
+        self.friendContentEnabled = friendContentEnabled
         self.dndEnabled = dndEnabled; self.dndStartTime = dndStartTime; self.dndEndTime = dndEndTime
+        self.dndUtcOffsetMinutes = dndUtcOffsetMinutes
         self.dndDays = dndDays; self.showPreview = showPreview; self.showSenderName = showSenderName
         self.groupNotifications = groupNotifications; self.notificationBadgeEnabled = notificationBadgeEnabled
         self.extras = extras
@@ -472,8 +482,8 @@ public struct UserNotificationPreferences: Codable, Equatable, Sendable {
         case conversationEnabled, replyEnabled, mentionEnabled, reactionEnabled
         case contactRequestEnabled, groupInviteEnabled, memberJoinedEnabled, memberLeftEnabled
         case postLikeEnabled, postCommentEnabled, postRepostEnabled, storyReactionEnabled
-        case commentReplyEnabled, commentLikeEnabled
-        case dndEnabled, dndStartTime, dndEndTime, dndDays
+        case commentReplyEnabled, commentLikeEnabled, friendContentEnabled
+        case dndEnabled, dndStartTime, dndEndTime, dndDays, dndUtcOffsetMinutes
         case showPreview, showSenderName, groupNotifications, notificationBadgeEnabled
         case extras
     }
@@ -502,10 +512,12 @@ public struct UserNotificationPreferences: Codable, Equatable, Sendable {
         storyReactionEnabled = try c.decodeIfPresent(Bool.self, forKey: .storyReactionEnabled) ?? Self.defaults.storyReactionEnabled
         commentReplyEnabled = try c.decodeIfPresent(Bool.self, forKey: .commentReplyEnabled) ?? Self.defaults.commentReplyEnabled
         commentLikeEnabled = try c.decodeIfPresent(Bool.self, forKey: .commentLikeEnabled) ?? Self.defaults.commentLikeEnabled
+        friendContentEnabled = try c.decodeIfPresent(Bool.self, forKey: .friendContentEnabled) ?? Self.defaults.friendContentEnabled
         dndEnabled = try c.decodeIfPresent(Bool.self, forKey: .dndEnabled) ?? Self.defaults.dndEnabled
         dndStartTime = try c.decodeIfPresent(String.self, forKey: .dndStartTime) ?? Self.defaults.dndStartTime
         dndEndTime = try c.decodeIfPresent(String.self, forKey: .dndEndTime) ?? Self.defaults.dndEndTime
         dndDays = try c.decodeIfPresent([DndDay].self, forKey: .dndDays) ?? Self.defaults.dndDays
+        dndUtcOffsetMinutes = try c.decodeIfPresent(Int.self, forKey: .dndUtcOffsetMinutes) ?? Self.defaults.dndUtcOffsetMinutes
         showPreview = try c.decodeIfPresent(Bool.self, forKey: .showPreview) ?? Self.defaults.showPreview
         showSenderName = try c.decodeIfPresent(Bool.self, forKey: .showSenderName) ?? Self.defaults.showSenderName
         groupNotifications = try c.decodeIfPresent(Bool.self, forKey: .groupNotifications) ?? Self.defaults.groupNotifications

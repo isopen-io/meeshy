@@ -614,9 +614,12 @@ describe('NotificationService — New Methods', () => {
       },
     });
 
-    it('should block member_left when memberJoinedEnabled=false', async () => {
+    // GW9 — alignement iOS : « Membre parti » (memberLeftEnabled) gate les
+    // départs/retraits/changements de rôle ; « Membre rejoint »
+    // (memberJoinedEnabled) ne gate QUE member_joined.
+    it('should block member_left when memberLeftEnabled=false even if memberJoinedEnabled=true', async () => {
       prisma.userPreferences.findUnique.mockResolvedValue(
-        createUserPrefs({ memberJoinedEnabled: false })
+        createUserPrefs({ memberLeftEnabled: false, memberJoinedEnabled: true })
       );
       prisma.user.findUnique.mockResolvedValue(mockActor);
       prisma.conversation.findUnique.mockResolvedValue(mockConversation);
@@ -631,9 +634,11 @@ describe('NotificationService — New Methods', () => {
       expect(prisma.notification.create).not.toHaveBeenCalled();
     });
 
-    it('should block added_to_conversation when memberJoinedEnabled=false', async () => {
+    // GW9 — alignement iOS : être ajouté/retiré d'une conversation relève du
+    // toggle « Conversations » (conversationEnabled), pas de « Membre rejoint ».
+    it('should block added_to_conversation when conversationEnabled=false even if memberJoinedEnabled=true', async () => {
       prisma.userPreferences.findUnique.mockResolvedValue(
-        createUserPrefs({ memberJoinedEnabled: false })
+        createUserPrefs({ conversationEnabled: false, memberJoinedEnabled: true })
       );
       prisma.user.findUnique.mockResolvedValue(mockActor);
       prisma.conversation.findUnique.mockResolvedValue(mockConversation);
@@ -648,9 +653,9 @@ describe('NotificationService — New Methods', () => {
       expect(prisma.notification.create).not.toHaveBeenCalled();
     });
 
-    it('should block role change when memberJoinedEnabled=false', async () => {
+    it('should block role change when memberLeftEnabled=false even if memberJoinedEnabled=true', async () => {
       prisma.userPreferences.findUnique.mockResolvedValue(
-        createUserPrefs({ memberJoinedEnabled: false })
+        createUserPrefs({ memberLeftEnabled: false, memberJoinedEnabled: true })
       );
       prisma.user.findUnique.mockResolvedValue(mockActor);
       prisma.conversation.findUnique.mockResolvedValue(mockConversation);
@@ -683,6 +688,35 @@ describe('NotificationService — New Methods', () => {
 
       expect(result).toBeDefined();
       expect(prisma.notification.create).toHaveBeenCalledTimes(1);
+    });
+
+    // GW9 — le toggle « Système » de l'app doit être effectif : avant ce
+    // correctif, `type === 'system'` court-circuitait shouldCreateNotification
+    // et le case `systemEnabled` était du code mort.
+    it('system notifications respect systemEnabled', async () => {
+      prisma.userPreferences.findUnique.mockResolvedValue(
+        createUserPrefs({ systemEnabled: false })
+      );
+      const blocked = await (service as any).shouldCreateNotification('user-123', 'system');
+      expect(blocked).toBe(false);
+
+      prisma.userPreferences.findUnique.mockResolvedValue(
+        createUserPrefs({ systemEnabled: true })
+      );
+      const allowed = await (service as any).shouldCreateNotification('user-123', 'system');
+      expect(allowed).toBe(true);
+    });
+
+    // GW9 — alignement iOS : « Invitations groupe » (groupInviteEnabled) gate
+    // community_invite ; il ne doit pas retomber sur le default:true.
+    it('community_invite is gated by groupInviteEnabled, not conversationEnabled', () => {
+      const basePrefs = createUserPrefs().notification;
+      expect(
+        (service as any).isTypeEnabled({ ...basePrefs, groupInviteEnabled: false, conversationEnabled: true }, 'community_invite')
+      ).toBe(false);
+      expect(
+        (service as any).isTypeEnabled({ ...basePrefs, groupInviteEnabled: true }, 'community_invite')
+      ).toBe(true);
     });
 
     it('should always allow security types even when all prefs disabled', async () => {
@@ -771,6 +805,33 @@ describe('NotificationService — New Methods', () => {
 
       await service.createPasswordChangedNotification({ recipientUserId: 'u1' });
       // The social email must NOT have consumed the security bucket.
+      expect(mockEmail.sendSecurityAlertEmail).toHaveBeenCalledTimes(1);
+    });
+
+    // GW9 — le toggle « Email » doit gater l'e-mail immédiat haute priorité
+    // (mention, appel manqué…) comme il gate déjà le digest et les broadcasts.
+    // Les alertes de sécurité restent toujours envoyées (transactionnel).
+    it('emailEnabled:false suppresses the immediate social email but keeps the notification', async () => {
+      prisma.userPreferences.findUnique.mockResolvedValue({
+        notification: { emailEnabled: false },
+      });
+
+      const result = await service.createMissedCallNotification({
+        recipientUserId: 'u1', callerId: 'caller-1', conversationId: 'c1', callSessionId: 's1', callType: 'audio',
+      });
+
+      expect(result).toBeDefined();
+      expect(mockEmail.sendNotificationEmail).not.toHaveBeenCalled();
+    });
+
+    it('emailEnabled:false still sends security alert emails', async () => {
+      prisma.userPreferences.findUnique.mockResolvedValue({
+        notification: { emailEnabled: false },
+      });
+      prisma.notification.create.mockResolvedValue(mockNotification('password_changed'));
+
+      await service.createPasswordChangedNotification({ recipientUserId: 'u1' });
+
       expect(mockEmail.sendSecurityAlertEmail).toHaveBeenCalledTimes(1);
     });
 

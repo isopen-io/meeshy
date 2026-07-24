@@ -581,18 +581,16 @@ extension AppDelegate: @preconcurrency UNUserNotificationCenterDelegate {
         let socketConnected = MessageSocketManager.shared.isConnected
         logger.info("Foreground notification: type=\(type) conversation=\(conversationId ?? "-") postId=\(postId ?? "-") socketConnected=\(socketConnected)")
 
-        if socketConnected {
-            // Socket is alive → the in-app toast will fire from the matching
-            // `notification:new` socket event. Suppress the native banner to
-            // avoid double-display. Keep .badge so the app icon counter stays
-            // correct.
-            completionHandler([.badge])
-            return
-        }
-
-        // Socket is down → no in-app toast will fire. Surface the full system
-        // banner so the user is notified by *something*.
-        completionHandler([.banner, .list, .sound, .badge])
+        // Socket vivant → le toast in-app (gaté par les préférences) prend le
+        // relais, pas de bannière native. Socket down → bannière système
+        // UNIQUEMENT si les préférences l'autorisent (master push, DND, toggle
+        // par catégorie), son/badge gatés par « Sons »/« Badges ».
+        completionHandler(NotificationPresentationResolver.options(
+            socketConnected: socketConnected,
+            prefs: UserPreferencesManager.shared.notification,
+            rawType: userInfo["type"] as? String,
+            conversationType: userInfo["conversationType"] as? String
+        ))
     }
 
     /// Called when the user interacts with a notification (tap, action button, etc.).

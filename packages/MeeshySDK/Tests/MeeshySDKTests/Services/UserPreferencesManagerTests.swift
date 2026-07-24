@@ -40,6 +40,22 @@ final class UserPreferencesManagerTests: XCTestCase {
         XCTAssertEqual(manager.application, ApplicationPreferences.defaults)
     }
 
+    // MARK: - dndUtcOffsetMinutes (DND serveur tz-aware)
+
+    /// Chaque écriture de préférences notification embarque l'offset UTC du
+    /// device : le gateway évalue la fenêtre DND dans l'heure LOCALE de
+    /// l'utilisateur (`isWithinDnd`, dndUtcOffsetMinutes). Sans ce stamp, les
+    /// push des utilisateurs iOS hors UTC étaient (dé)bloqués aux mauvaises
+    /// heures dès que l'app était fermée.
+    func test_updateNotification_stampsDeviceUtcOffset() {
+        manager.updateNotification { $0.newMessageEnabled = false }
+
+        XCTAssertEqual(
+            manager.notification.dndUtcOffsetMinutes,
+            TimeZone.current.secondsFromGMT() / 60
+        )
+    }
+
     // MARK: - resetSession (P1 — logout)
 
     /// Prouve que `resetSession()` purge à la fois les @Published en mémoire
