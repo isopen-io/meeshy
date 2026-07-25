@@ -3,6 +3,7 @@ package me.meeshy.sdk.session
 import me.meeshy.sdk.model.AnonymousJoinRequest
 import me.meeshy.sdk.model.AnonymousSessionContext
 import me.meeshy.sdk.model.LeaveAnonymousRequest
+import me.meeshy.sdk.model.ShareLinkInfo
 import me.meeshy.sdk.model.toSessionContext
 import me.meeshy.sdk.net.ApiError
 import me.meeshy.sdk.net.NetworkResult
@@ -29,6 +30,15 @@ public class AnonymousSessionRepository @Inject constructor(
     private val store: AnonymousSessionStore,
     private val tokenStore: TokenStore,
 ) {
+    /**
+     * Fetch the public preview of a share link by its identifier — the no-auth
+     * `anonymous/link/{identifier}` endpoint (port of iOS `getLinkInfo`). Purely
+     * a read: it never touches the token store or persisted session, so a preview
+     * can never strand a half-authenticated guest.
+     */
+    public suspend fun preview(identifier: String): NetworkResult<ShareLinkInfo> =
+        apiCall { shareLinkApi.getLinkInfo(identifier) }
+
     /**
      * Join [linkId] as an anonymous guest. On success the hardened context is
      * persisted and its session token installed. A response that cannot form a

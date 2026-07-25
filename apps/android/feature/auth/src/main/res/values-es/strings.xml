@@ -5,4 +5,21 @@
     <string name="login_password_label">Contraseña</string>
     <string name="login_button">Iniciar sesión</string>
     <string name="login_error_required">El nombre de usuario y la contraseña son obligatorios</string>
+
+    <string name="guest_join_title">Unirse a la conversación</string>
+    <string name="guest_join_subtitle">Crea una identidad temporal para unirte</string>
+    <string name="guest_join_first_name">Nombre</string>
+    <string name="guest_join_last_name">Apellido</string>
+    <string name="guest_join_username">Nombre de usuario</string>
+    <string name="guest_join_username_optional">Nombre de usuario (opcional)</string>
+    <string name="guest_join_email">Correo electrónico</string>
+    <string name="guest_join_birthday">Fecha de nacimiento</string>
+    <string name="guest_join_language">Idioma hablado</string>
+    <string name="guest_join_submit">Unirse</string>
+    <string name="guest_join_joining">Uniéndose…</string>
+    <string name="guest_join_back">Atrás</string>
+    <string name="guest_join_retry">Reintentar</string>
+    <string name="guest_join_preview_error">No se pudo abrir este enlace</string>
+    <string name="guest_join_requires_account">Este enlace requiere una cuenta.</string>
+    <string name="guest_join_sign_in">Iniciar sesión</string>
 </resources>
