@@ -21,6 +21,7 @@ import { MessageSearch } from './MessageSearch';
 import { ErrorBoundary } from '@/components/common/ErrorBoundary';
 import { useSeenMessages } from '@/hooks/use-seen-messages';
 import { resolveConsumedLanguage } from '@/utils/consumed-language';
+import { getUserLanguagePreferences } from '@/utils/user-language-preferences';
 import { getAuthToken } from '@/utils/token-utils';
 import type { Conversation, Message, User } from '@meeshy/shared/types';
 import type { Participant } from '@meeshy/shared/types/participant';
@@ -205,17 +206,20 @@ export const ConversationView = memo(forwardRef<HTMLDivElement, ConversationView
     const messagesRef = useRef(messages);
     messagesRef.current = messages;
 
+    // Liste ordonnée des langues préférées via le SSOT du Prisme Linguistique :
+    // `getUserLanguagePreferences` injecte la `deviceLocale` en 4e priorité et
+    // normalise chaque code (`pt-BR` → `pt`), exactement comme le chemin qui
+    // résout le TEXTE affiché (`resolveUserPreferredLanguage`). Reconstruire la
+    // liste à la main ici la faisait diverger : sans deviceLocale, un lecteur
+    // dont c'est le seul signal de langue voyait le serveur enregistrer la
+    // langue ORIGINALE — une langue jamais affichée.
     const preferredLanguages = useMemo(
-      () =>
-        [
-          currentUser.systemLanguage,
-          currentUser.regionalLanguage,
-          currentUser.customDestinationLanguage,
-        ].filter((code): code is string => Boolean(code)),
+      () => getUserLanguagePreferences(currentUser),
       [
         currentUser.systemLanguage,
         currentUser.regionalLanguage,
         currentUser.customDestinationLanguage,
+        (currentUser as { deviceLocale?: string | null }).deviceLocale,
       ]
     );
     const preferredLanguagesRef = useRef(preferredLanguages);
