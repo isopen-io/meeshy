@@ -156,3 +156,84 @@ final class StoryGestureNavigationTests: XCTestCase {
             .enterFullscreen)
     }
 }
+
+// MARK: - Spec gestuelle révisée (2026-07-25)
+
+/// Reprise de lecture et double tap se disputent la bande centrale : si un
+/// simple toucher au centre relance la story, le PREMIER tap d'un double tap
+/// relance avant que le second n'arrive — « double tap relance » devient alors
+/// impossible. Les bords, eux, doivent rester immédiats.
+@MainActor
+final class StoryPausedTouchDownTests: XCTestCase {
+
+    private let width: CGFloat = 400   // zones : [0,120[ · [120,280[ · [280,400]
+
+    private func pausedContext() -> StoryGestureContext {
+        StoryGestureContext(holdActive: false, isPaused: true,
+                            isResumingTap: false, isComposerEngaged: false)
+    }
+
+    func test_touchDown_whenPaused_onLeftEdge_resumes() {
+        XCTAssertEqual(
+            StoryGestureDecisions.decideTouchDown(
+                context: pausedContext(), touchStartX: 40, width: width),
+            .resumeFromPause)
+    }
+
+    func test_touchDown_whenPaused_onRightEdge_resumes() {
+        XCTAssertEqual(
+            StoryGestureDecisions.decideTouchDown(
+                context: pausedContext(), touchStartX: 360, width: width),
+            .resumeFromPause)
+    }
+
+    /// Le cœur de la règle : au centre, le touch-down ne reprend PAS.
+    func test_touchDown_whenPaused_inCenterBand_doesNotResume() {
+        XCTAssertEqual(
+            StoryGestureDecisions.decideTouchDown(
+                context: pausedContext(), touchStartX: 200, width: width),
+            .none)
+    }
+
+    func test_touchDown_whilePlaying_neverResumes() {
+        let playing = StoryGestureContext(holdActive: false, isPaused: false,
+                                          isResumingTap: false, isComposerEngaged: false)
+        XCTAssertEqual(
+            StoryGestureDecisions.decideTouchDown(
+                context: playing, touchStartX: 40, width: width),
+            .none)
+    }
+
+    func test_touchDown_whenComposerEngaged_neverResumes() {
+        let composing = StoryGestureContext(holdActive: false, isPaused: true,
+                                            isResumingTap: false, isComposerEngaged: true)
+        XCTAssertEqual(
+            StoryGestureDecisions.decideTouchDown(
+                context: composing, touchStartX: 40, width: width),
+            .none)
+    }
+}
+
+/// Le long-press est un TOGGLE : il met en pause et masque les contrôleurs, un
+/// second long-press rend la lecture ET les contrôleurs. Sans cette garde, il
+/// redeviendrait un « hold to pause » à sens unique.
+@MainActor
+final class StoryLongPressToggleGuardTests: XCTestCase {
+
+    func test_longPressArming_togglesInsteadOfAlwaysPausing() throws {
+        let source = try String(
+            contentsOf: URL(fileURLWithPath: #filePath)
+                .deletingLastPathComponent()   // Stories
+                .deletingLastPathComponent()   // Features
+                .deletingLastPathComponent()   // MeeshyTests
+                .deletingLastPathComponent()   // ios
+                .appendingPathComponent("Meeshy/Features/Main/Views/StoryViewerView+Canvas.swift"),
+            encoding: .utf8
+        )
+
+        XCTAssertTrue(source.contains("if isLongPressPaused {"),
+                      "le long-press doit tester l'état de pause pour basculer")
+        XCTAssertTrue(source.contains("holdActive = false\n                                        isLongPressPaused = false"),
+                      "un second long-press doit rendre la lecture")
+    }
+}

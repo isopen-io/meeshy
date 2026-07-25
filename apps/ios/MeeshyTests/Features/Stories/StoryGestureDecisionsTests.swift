@@ -25,7 +25,7 @@ final class StoryGestureDecisionsTests: XCTestCase {
             isResumingTap: false,
             isComposerEngaged: false
         )
-        XCTAssertEqual(StoryGestureDecisions.decideTouchDown(context: ctx), .none)
+        XCTAssertEqual(StoryGestureDecisions.decideTouchDown(context: ctx, touchStartX: 10, width: 400), .none)
     }
 
     func test_touchDown_whenPaused_returnsResumeFromPause() {
@@ -35,7 +35,7 @@ final class StoryGestureDecisionsTests: XCTestCase {
             isResumingTap: false,
             isComposerEngaged: false
         )
-        XCTAssertEqual(StoryGestureDecisions.decideTouchDown(context: ctx), .resumeFromPause)
+        XCTAssertEqual(StoryGestureDecisions.decideTouchDown(context: ctx, touchStartX: 10, width: 400), .resumeFromPause)
     }
 
     func test_touchDown_whenPausedButComposerEngaged_returnsNone() {
@@ -47,7 +47,7 @@ final class StoryGestureDecisionsTests: XCTestCase {
             isResumingTap: false,
             isComposerEngaged: true
         )
-        XCTAssertEqual(StoryGestureDecisions.decideTouchDown(context: ctx), .none)
+        XCTAssertEqual(StoryGestureDecisions.decideTouchDown(context: ctx, touchStartX: 10, width: 400), .none)
     }
 
     // MARK: - decideTouchUp — composer engaged
@@ -203,7 +203,7 @@ final class StoryGestureDecisionsTests: XCTestCase {
             isResumingTap: false,
             isComposerEngaged: false
         )
-        XCTAssertEqual(StoryGestureDecisions.decideTouchDown(context: ctx), .none)
+        XCTAssertEqual(StoryGestureDecisions.decideTouchDown(context: ctx, touchStartX: 10, width: 400), .none)
 
         // 2. Après 200 ms, le hold se confirme dans la View (poserait
         // holdActive = true et isPaused = true).
@@ -229,7 +229,7 @@ final class StoryGestureDecisionsTests: XCTestCase {
             isResumingTap: false,
             isComposerEngaged: false
         )
-        XCTAssertEqual(StoryGestureDecisions.decideTouchDown(context: ctx), .resumeFromPause)
+        XCTAssertEqual(StoryGestureDecisions.decideTouchDown(context: ctx, touchStartX: 10, width: 400), .resumeFromPause)
 
         // 5. La View pose isResumingTap = true et isPaused = false pour le
         // reste du geste. Release : no-op, surtout pas de nav.

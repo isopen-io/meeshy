@@ -128,7 +128,11 @@ struct StoryGestureOverlayView: View {
                                 isResumingTap: false,
                                 isComposerEngaged: isComposerEngaged
                             )
-                            switch StoryGestureDecisions.decideTouchDown(context: ctx) {
+                            switch StoryGestureDecisions.decideTouchDown(
+                                context: ctx,
+                                touchStartX: value.startLocation.x,
+                                width: geometry.size.width
+                            ) {
                             case .resumeFromPause:
                                 // Story en pause via long-press précédent.
                                 // Ce tap REPREND la lecture — pas de hold,
@@ -138,7 +142,10 @@ struct StoryGestureOverlayView: View {
                                 onChromeVisibilityChange(!isFullscreenStorySession)
                                 HapticFeedback.light()
                             case .none:
-                                // Story en lecture : arme le long-press.
+                                // Arme le long-press. Il est un TOGGLE (spec
+                                // 2026-07-25) : il met en pause et masque les
+                                // contrôleurs, et un second long-press rend la
+                                // lecture ET les contrôleurs.
                                 isResumingTap = false
                                 holdArmingTask = Task { @MainActor in
                                     try? await Task.sleep(for: .milliseconds(Int(holdThresholdSeconds * 1000)))
@@ -149,9 +156,15 @@ struct StoryGestureOverlayView: View {
                                     // de foreground pendant l'attente, on
                                     // ne déclenche pas un freeze invisible.
                                     guard UIApplication.shared.applicationState == .active else { return }
-                                    holdActive = true
-                                    isLongPressPaused = true
-                                    onChromeVisibilityChange(isFullscreenStorySession)
+                                    if isLongPressPaused {
+                                        holdActive = false
+                                        isLongPressPaused = false
+                                        onChromeVisibilityChange(!isFullscreenStorySession)
+                                    } else {
+                                        holdActive = true
+                                        isLongPressPaused = true
+                                        onChromeVisibilityChange(isFullscreenStorySession)
+                                    }
                                 }
                             default:
                                 break  // touchDown ne produit pas d'autres actions
@@ -391,12 +404,21 @@ enum StoryVerticalGestureDecisions {
 enum StoryGestureDecisions {
 
     /// Décide quoi faire au TOUCH-DOWN d'un nouveau geste sur l'overlay.
-    /// - `.resumeFromPause` si `isPaused` était `true` (tap qui reprend).
-    /// - `.none` sinon (le caller arme alors la détection du long-press).
-    static func decideTouchDown(context: StoryGestureContext) -> StoryGestureAction {
+    ///
+    /// Un toucher **sur les bords** reprend une lecture en pause : la
+    /// navigation gauche/droite doit rester immédiate en toutes circonstances.
+    /// Dans la **bande centrale**, on ne reprend PAS — cette bande appartient au
+    /// double tap, dont le premier relâchement relancerait sinon la story avant
+    /// que le second n'arrive, rendant impossible le « double tap relance »
+    /// (spec 2026-07-25).
+    static func decideTouchDown(context: StoryGestureContext,
+                                touchStartX: CGFloat,
+                                width: CGFloat) -> StoryGestureAction {
         if context.isComposerEngaged { return .none }
-        if context.isPaused { return .resumeFromPause }
-        return .none
+        guard context.isPaused else { return .none }
+        return StoryTapZone.zone(forX: touchStartX, width: width) == .center
+            ? .none
+            : .resumeFromPause
     }
 
     /// Décide quoi faire au TOUCH-UP (.onEnded) d'un geste.
