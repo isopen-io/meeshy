@@ -1,5 +1,63 @@
 # Progress — state & what to do next
 
+> On 2026-07-25 the **guest-join flow** landed (slice `sharelink-guest-join-form`, feature-parity
+> §J anonymous-sessions → the `[~]` item's "guest-join screen" gap closes, and §O Links → the `[ ]`
+> "Anonymous join-via-share-link (preview → form → success)" advances to `[x]`). This completes the
+> anonymous-session vertical: the hardening core (`anonymous-session-permissions-core`), the
+> join/restore/leave use-case (`anonymous-session-store`), and the composer gates
+> (`composer-attachment-affordances`) already shipped; this slice adds the **preview → form → join**
+> UI on top. **Added (production, all `apps/android`):** the pure, immutable `GuestJoinForm`
+> (`:core:model`) — the SSOT for what a visitor must supply and how it becomes an
+> `AnonymousJoinRequest`. Faithful port of the web `AnonymousForm.isFormValid`
+> (`apps/web/components/join/AnonymousForm.tsx`): first/last name always required; nickname/email/birthday
+> required **only** when the link sets `requireNickname`/`requireEmail`/`requireBirthday`. `from(info,
+> language)` seeds the requirement flags (blank language → `fr`); per-field validity getters +
+> `canSubmit`; `suggestingUsername(suffix)` fills a blank username from both names once present
+> (idempotent — same instance when nothing changes), delegating format to the deterministic
+> `suggestedUsername` companion (port of web `generateUsername`: lowercase, strip non-`a..z`, `_`-join,
+> 3-digit zero-pad, suffix reduced mod 1000 so any injected value stays in range); `toRequest()` trims
+> every field and **null-omits** each empty optional (username/email/birthday travel as `null`, never
+> `""`), falling back to `fr` for a blank language. **SOTA over web+iOS:** a `requireAccount` link
+> **cannot** be joined anonymously — `canSubmit` stays false and `requiresAccount` steers the visitor to
+> sign in, instead of firing a request the gateway will reject. `AnonymousSessionRepository.preview(
+> identifier)` (`:sdk-core`) is the no-auth `anonymous/link/{id}` read — purely a read, it never touches
+> the token store or persisted session, so a preview can't strand a half-authenticated guest. **Wiring
+> (`:feature:auth`):** `GuestJoinViewModel` (UDF, `hiltViewModel`, reads the `identifier` nav arg) loads
+> the preview on creation (spinner only while cold — instant-app), threads each field edit through the
+> form (auto-suggesting a username once both names are present, randomness `usernameSuffix` injected at
+> the edge for deterministic tests), and submits the hardened join keyed by `info.linkId` (→ `id` → the
+> raw identifier); a failed join keeps every edit for retry and surfaces the message, success exposes the
+> `AnonymousSessionContext`. `GuestJoinScreen` is an accent-coherent `MeeshyBackground`+`Scaffold` with a
+> back-arrow top bar, a cold-load spinner, a preview-error card with **Retry**, a `requiresAccount`
+> sign-in steer, and the form (first/last/username, conditional email/birthday, 4-language `FilterChip`
+> row, `MeeshyPrimaryButton` gated on `canSubmit`) — reached via a `meeshy://join/{identifier}` deep link
+> and wired into `MeeshyApp` (`onJoined`→conversations, `onBack`→pop, `onSignIn`→login; no dead end).
+> EN/FR/ES/PT strings (18 keys ×4). **+30 behavioural tests:** `GuestJoinFormTest` (20 — seeding, every
+> require-flag gate, requireAccount block, toRequest trim/null-omit/lang-fallback, suggestingUsername
+> idempotence + inert-until-both-names, suggestedUsername cleaning/padding/mod) + `AnonymousSessionRepositoryTest`
+> (+2 — preview success returns info & touches no session, preview failure propagates) +
+> `GuestJoinViewModelTest` (8 — preview seed, preview failure, auto-suggest, submit success with linkId,
+> submit failure keeps edits, edit clears prior error, inert submit, account-required blocks). All
+> asserted through the public API / observable `state`, never internals. **Mutation (RED proof):**
+> replacing `canSubmit`'s `!requireAccount &&` with `true &&` failed exactly
+> `requireAccount_blocksAnonymousSubmit_evenWhenEveryFieldIsFilled` — the account gate is load-bearing.
+> **Gate:** `:app:assembleDebug` + whole-graph `testDebugUnitTest` → **BUILD SUCCESSFUL**. Reviewer
+> **PASS** (diff `apps/android` only — 1 pure core + test in `:core:model`, 1 repo method + test in
+> `:sdk-core`, VM + screen + nav wiring + 18×4 strings in `:feature:auth`/`:app`, zero production logic
+> elsewhere; **SDK purity** — validation/request-building is a stateless `:core:model` block, the
+> when-to-load/submit orchestration stays app-side; **SSOT** — reuses `ShareLinkInfo`/`AnonymousJoinRequest`/
+> `AnonymousSessionRepository`, re-implements nothing; **failure paths** — preview & join failures degrade
+> to retryable state, never a crash; **coherence** — accent visuals, deep-link entry, every arm leads
+> somewhere).
+> **Next slice:** the **share-link CREATION** side (§O — `CreateShareLinkRequest` already modelled: a pure
+> builder for guest-rules/permissions/max-uses/expiration/slug + a create screen), OR the `MyShareLink`
+> list + stats + detail screen, OR wiring an `https://meeshy.me/join/{id}` App-Links intent-filter (touches
+> `AndroidManifest` only, still `apps/android`), OR the paged `OnboardingFlowView`, OR the tracked Kover
+> 90% coverage-gate infra.
+> **Known standing debt (not this slice):** the `:sdk-core` DataStore-parallel-load timeout flake
+> (`ThemeStoreTest`/`InterfaceLanguageStoreTest`/`PrivacyPreferencesStoreTest`/`NotificationPreferencesStoreTest`)
+> — green in isolation, intermittent in the full run (did not recur this run).
+
 > On 2026-07-25 the **admin conversation-settings editor** landed (slice `conversation-settings-form`,
 > feature-parity §Chat → the `[~]` "Conversation moderation: write-role, announcement mode, slow mode,
 > auto-translate" item advances to `[x]`). This completes the moderation item: the two enforcement halves

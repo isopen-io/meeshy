@@ -781,8 +781,17 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       +21 behavioural tests. `AnonymousSessionContext` is now `@Serializable` for persistence.
       The **composer now consumes those hardened `permissions`** (slice `composer-attachment-affordances`,
       2026-07-25 — see §C): the pure `ComposerAttachmentPolicy` gates the attach/mic/read-only affordances,
-      wired into `ChatViewModel`/`ChatScreen` off the persisted anonymous session. Still needs: the
-      guest-join **screen** (link-preview → form → success).
+      wired into `ChatViewModel`/`ChatScreen` off the persisted anonymous session. The **guest-join
+      screen** (link-preview → form → success) landed next (slice `sharelink-guest-join-form`,
+      2026-07-25): the pure `:core:model` `GuestJoinForm` SSOT (faithful port of the web
+      `AnonymousForm.isFormValid` — first/last name always required, nickname/email/birthday required
+      only when the link demands them — plus a deterministic `suggestedUsername` port of the web
+      `generateUsername`, randomness injected at the edge; SOTA: a `requireAccount` link can't be joined
+      anonymously so `canSubmit` stays false, and `toRequest()` trims + null-omits every empty optional),
+      `AnonymousSessionRepository.preview(identifier)` (the no-auth `anonymous/link/{id}` read, touches
+      no token/session), and the `GuestJoinViewModel` + `GuestJoinScreen` (`:feature:auth`, reached via a
+      `meeshy://join/{identifier}` deep link) orchestrating preview → form → join with retry, an
+      account-required sign-in steer, and a failed join that keeps every edit. +30 tests, mutation-proven.
 - [ ] Login/logout teardown wiping E2EE keys and per-user caches
 - [ ] Splash screen with brand animation + minimum display duration
 
@@ -3629,7 +3638,10 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
 - [ ] Links hub (share / tracking / community / affiliate) with quick-create
 - [ ] Share/invite links: create (guest rules, anonymous permissions, max-uses, expiration,
       custom slug), list + stats, detail (copy/share/activate/delete)
-- [ ] Anonymous join-via-share-link (preview → form → success); share-link preview screen
+- [x] Anonymous join-via-share-link (preview → form → success); share-link preview screen —
+      slice `sharelink-guest-join-form` (2026-07-25): pure `GuestJoinForm` (`:core:model`) +
+      `AnonymousSessionRepository.preview()` (`:sdk-core`) + `GuestJoinViewModel`/`GuestJoinScreen`
+      (`:feature:auth`, `meeshy://join/{identifier}` deep link). See §J anonymous-sessions entry. +30 tests.
 - [ ] UTM tracking links: create, list, toggle, delete; aggregate + per-link click stats
       (geo/device/browser breakdown, click timeline), QR generation
 - [ ] Affiliate / referral links: create, copy, share, delete, dashboard stats

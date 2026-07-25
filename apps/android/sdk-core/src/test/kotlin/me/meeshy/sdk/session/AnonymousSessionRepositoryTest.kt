@@ -31,10 +31,15 @@ class AnonymousSessionRepositoryTest {
     private class FakeShareLinkApi(
         var joinResponse: ApiResponse<AnonymousJoinResponse> = ApiResponse(success = false),
         var leaveResponse: ApiResponse<Unit> = ApiResponse(success = true, data = Unit),
+        var linkInfoResponse: ApiResponse<ShareLinkInfo> = ApiResponse(success = false),
         val joinCalls: MutableList<Pair<String, AnonymousJoinRequest>> = mutableListOf(),
         val leaveCalls: MutableList<LeaveAnonymousRequest> = mutableListOf(),
+        val linkInfoCalls: MutableList<String> = mutableListOf(),
     ) : ShareLinkApi {
-        override suspend fun getLinkInfo(identifier: String) = ApiResponse<ShareLinkInfo>(success = false)
+        override suspend fun getLinkInfo(identifier: String): ApiResponse<ShareLinkInfo> {
+            linkInfoCalls += identifier
+            return linkInfoResponse
+        }
 
         override suspend fun joinAnonymously(
             linkId: String,
@@ -75,6 +80,36 @@ class AnonymousSessionRepositoryTest {
         tokenStore: InMemoryTokenStore = InMemoryTokenStore(),
     ): Triple<AnonymousSessionRepository, AnonymousSessionStore, InMemoryTokenStore> =
         Triple(AnonymousSessionRepository(api, store, tokenStore), store, tokenStore)
+
+    // ---- preview ----
+
+    @Test
+    fun preview_success_returnsLinkInfoAndTouchesNoSession() = runTest {
+        val info = ShareLinkInfo(id = "l1", name = "Design chat", requireNickname = true)
+        val api = FakeShareLinkApi(linkInfoResponse = ApiResponse(success = true, data = info))
+        val (repo, store, tokenStore) = repository(api)
+
+        val result = repo.preview("design-chat")
+
+        assertThat(api.linkInfoCalls).containsExactly("design-chat")
+        assertThat(result).isInstanceOf(NetworkResult.Success::class.java)
+        assertThat(result.getOrNull()).isEqualTo(info)
+        // a preview is a pure read — it must never authenticate or persist anything
+        assertThat(store.load()).isNull()
+        assertThat(tokenStore.sessionToken).isNull()
+    }
+
+    @Test
+    fun preview_networkFailure_propagatesAndTouchesNoSession() = runTest {
+        val api = FakeShareLinkApi(linkInfoResponse = ApiResponse(success = false, error = "not found"))
+        val (repo, store, tokenStore) = repository(api)
+
+        val result = repo.preview("missing")
+
+        assertThat(result).isInstanceOf(NetworkResult.Failure::class.java)
+        assertThat(store.load()).isNull()
+        assertThat(tokenStore.sessionToken).isNull()
+    }
 
     // ---- join ----
 

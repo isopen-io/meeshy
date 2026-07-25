@@ -35,6 +35,8 @@ import me.meeshy.app.R
 import android.net.Uri
 import kotlinx.coroutines.delay
 import me.meeshy.app.auth.AuthViewModel
+import me.meeshy.app.auth.GuestJoinScreen
+import me.meeshy.app.auth.GuestJoinViewModel
 import me.meeshy.app.auth.LoginScreen
 import me.meeshy.app.calls.CallHistoryScreen
 import me.meeshy.app.calls.CallPill
@@ -84,6 +86,9 @@ import me.meeshy.app.stories.StoryViewerViewModel
 
 object Routes {
     const val LOGIN = "login"
+    const val GUEST_JOIN = "join/{${GuestJoinViewModel.IDENTIFIER_ARG}}"
+    const val GUEST_JOIN_DEEP_LINK = "meeshy://$GUEST_JOIN"
+    fun guestJoin(identifier: String): String = "join/$identifier"
     const val CONVERSATIONS = "conversations"
     const val NEW_CONVERSATION = "conversations/new"
     const val CONVERSATIONS_DEEP_LINK = "meeshy://conversations"
@@ -266,6 +271,26 @@ fun MeeshyApp(
                     onAuthenticated = {
                         navController.navigate(Routes.CONVERSATIONS) {
                             popUpTo(Routes.LOGIN) { inclusive = true }
+                        }
+                    },
+                )
+            }
+            composable(
+                route = Routes.GUEST_JOIN,
+                deepLinks = listOf(
+                    navDeepLink { uriPattern = Routes.GUEST_JOIN_DEEP_LINK },
+                ),
+            ) {
+                GuestJoinScreen(
+                    onJoined = {
+                        navController.navigate(Routes.CONVERSATIONS) {
+                            popUpTo(Routes.GUEST_JOIN) { inclusive = true }
+                        }
+                    },
+                    onBack = { navController.popBackStack() },
+                    onSignIn = {
+                        navController.navigate(Routes.LOGIN) {
+                            popUpTo(Routes.GUEST_JOIN) { inclusive = true }
                         }
                     },
                 )
