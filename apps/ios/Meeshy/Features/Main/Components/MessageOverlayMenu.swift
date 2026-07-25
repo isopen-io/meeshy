@@ -159,7 +159,8 @@ struct MessageOverlayMenu: View {
             // séparément (ConversationView) avec la vraie valeur
             // `!editRevisions(for:).isEmpty`.
             hasEditRevisions: true,
-            saveableAttachmentCount: message.attachments.filter { $0.type != .location }.count
+            saveableAttachmentCount: message.attachments.filter { $0.type != .location }.count,
+            showReadReceipts: UserPreferencesManager.shared.privacy.showReadReceipts
         )
     }
 

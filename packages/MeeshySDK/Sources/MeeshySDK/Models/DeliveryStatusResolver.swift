@@ -56,8 +56,24 @@ public enum DeliveryStatusResolver {
         readCount: Int,
         recipientCount: Int,
         deliveredToAllAt: Date? = nil,
-        readByAllAt: Date? = nil
+        readByAllAt: Date? = nil,
+        showReadReceipts: Bool = true
     ) -> MeeshyMessage.DeliveryStatus {
+        // Réciprocité : qui ne partage pas ses accusés ne voit pas ceux des
+        // autres. Booléen OPAQUE — ce résolveur est pur, lire
+        // `UserPreferencesManager` ici violerait la pureté du SDK et le rendrait
+        // intestable ; l'app lit la préférence et la transmet.
+        //
+        // Le défaut `true` est délibéré : les appelants de PERSISTANCE
+        // (`ConversationSyncEngine`, `ConversationSocketHandler`) ne passent pas
+        // ce paramètre, et dégrader leur état corromprait ce qui est stocké. Seul
+        // le site d'AFFICHAGE transmet la préférence.
+        //
+        // Voir `docs/superpowers/specs/2026-07-24-read-exactness-design.md`.
+        let degradeRead: (MeeshyMessage.DeliveryStatus) -> MeeshyMessage.DeliveryStatus = { resolved in
+            guard !showReadReceipts, resolved == .read else { return resolved }
+            return .delivered
+        }
         // The pre-delivery send lifecycle is authoritative and independent of
         // how many peers have received the message — never reinterpret it.
         switch status {
@@ -72,12 +88,12 @@ public enum DeliveryStatusResolver {
         // computation is correct there), so trust it. Also keeps the live
         // state-machine path — which promotes status without writing counts —
         // working for direct chats.
-        guard recipientCount > 1 else { return status }
+        guard recipientCount > 1 else { return degradeRead(status) }
 
         // Group: the indicator must represent EVERY recipient. Trust the
         // unambiguous "all" markers first (count-blind live path), then the
         // per-message counters (authoritative at cold-start).
-        if readByAllAt != nil || readCount >= recipientCount { return .read }
+        if readByAllAt != nil || readCount >= recipientCount { return degradeRead(.read) }
         if deliveredToAllAt != nil || deliveredCount >= recipientCount { return .delivered }
         return .sent
     }

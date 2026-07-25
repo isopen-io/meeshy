@@ -8,13 +8,15 @@ final class MessageActionResolverTests: XCTestCase {
         hasText: Bool = true, hasMedia: Bool = false, hasTimebasedMedia: Bool = false,
         isPinned: Bool = false, isStarred: Bool = false,
         isEdited: Bool = false, hasEditRevisions: Bool = false,
-        saveableAttachmentCount: Int = 0
+        saveableAttachmentCount: Int = 0,
+        showReadReceipts: Bool = true
     ) -> MessageMenuContext {
         MessageMenuContext(isMine: isMine, canEdit: canEdit, canDelete: canDelete,
             hasText: hasText, hasMedia: hasMedia, hasTimebasedMedia: hasTimebasedMedia,
             isPinned: isPinned, isStarred: isStarred, isEdited: isEdited,
             hasEditRevisions: hasEditRevisions,
-            saveableAttachmentCount: saveableAttachmentCount)
+            saveableAttachmentCount: saveableAttachmentCount,
+            showReadReceipts: showReadReceipts)
     }
 
     // MARK: - primaryActions : liste COMPACTE de l'overlay (≤ actions clés + .more)
@@ -178,5 +180,38 @@ final class MessageActionResolverTests: XCTestCase {
     private func infoItems(_ sections: [MoreSection]) -> [MoreItem] {
         for s in sections { if case .info(let items) = s { return items } }
         return []
+    }
+    // MARK: - Réciprocité showReadReceipts
+    //
+    // Qui ne partage pas ses accusés ne voit pas ceux des autres. On masque
+    // l'entrée de menu plutôt que d'ouvrir une feuille vide — le serveur ne
+    // renverrait rien de toute façon.
+    // Voir `docs/superpowers/specs/2026-07-24-read-exactness-design.md`.
+
+    func test_moreSections_sharing_offersViews() {
+        let sections = MessageActionResolver.moreSections(ctx(showReadReceipts: true))
+        XCTAssertTrue(sections.contains { section in
+            if case .info(let items) = section { return items.contains(.views) }
+            return false
+        })
+    }
+
+    func test_moreSections_optedOut_hidesViews() {
+        let sections = MessageActionResolver.moreSections(ctx(showReadReceipts: false))
+        XCTAssertFalse(sections.contains { section in
+            if case .info(let items) = section { return items.contains(.views) }
+            return false
+        })
+    }
+
+    func test_moreSections_optedOut_keepsTheOtherInfoEntries() {
+        let sections = MessageActionResolver.moreSections(ctx(hasText: true, showReadReceipts: false))
+        let info = sections.compactMap { section -> [MoreItem]? in
+            if case .info(let items) = section { return items }
+            return nil
+        }.first
+        XCTAssertNotNil(info)
+        XCTAssertTrue(info?.contains(.reactions) ?? false)
+        XCTAssertTrue(info?.contains(.language) ?? false)
     }
 }

@@ -691,7 +691,8 @@ struct ConversationView: View {
                     isPinned: msg.pinnedAt != nil,
                     isStarred: viewModel.isStarred(messageId: msg.id),
                     isEdited: msg.isEdited,
-                    hasEditRevisions: !viewModel.editRevisions(for: msg.id).isEmpty
+                    hasEditRevisions: !viewModel.editRevisions(for: msg.id).isEmpty,
+                    showReadReceipts: UserPreferencesManager.shared.privacy.showReadReceipts
                 )
                 MessageMoreSheet(
                     message: msg,
@@ -1765,7 +1766,8 @@ struct ConversationView: View {
             isStarred: viewModel.isStarred(messageId: msg.id),
             isEdited: msg.isEdited,
             hasEditRevisions: true,
-            saveableAttachmentCount: msg.attachments.filter { $0.type != .location }.count
+            saveableAttachmentCount: msg.attachments.filter { $0.type != .location }.count,
+            showReadReceipts: UserPreferencesManager.shared.privacy.showReadReceipts
         )
         let actions = MessageActionResolver.primaryActions(ctx)
         // 4 emojis les plus utilisés (fallback sur les défauts) — rangée rapide

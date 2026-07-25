@@ -217,7 +217,14 @@ extension BubbleContent {
                     readCount: message.readCount,
                     recipientCount: recipientCount,
                     deliveredToAllAt: message.deliveredToAllAt,
-                    readByAllAt: message.readByAllAt)
+                    readByAllAt: message.readByAllAt,
+                    // Réciprocité, appliquée UNIQUEMENT ici : c'est le site
+                    // d'AFFICHAGE. Les deux autres appelants du résolveur
+                    // (ConversationSyncEngine, ConversationSocketHandler) sont
+                    // des chemins de persistance — les gater corromprait l'état
+                    // stocké, qui doit rester vrai quelle que soit la préférence.
+                    // @see docs/superpowers/specs/2026-07-24-read-exactness-design.md
+                    showReadReceipts: UserPreferencesManager.shared.privacy.showReadReceipts)
                 : nil
         )
     }

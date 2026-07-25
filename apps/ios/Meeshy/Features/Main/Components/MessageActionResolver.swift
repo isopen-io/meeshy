@@ -44,6 +44,15 @@ struct MessageMenuContext: Equatable {
     /// « Enregistrer » n'apparaît que pour EXACTEMENT UN attachment —
     /// le multi-attachment passe par la galerie (qui a son propre save).
     var saveableAttachmentCount: Int = 0
+    /// Réciprocité : qui ne partage pas ses accusés de lecture ne voit pas ceux
+    /// des autres. L'entrée « vues » disparaît plutôt que d'ouvrir une feuille
+    /// vide — le serveur ne renverrait rien de toute façon.
+    ///
+    /// Booléen porté par le contexte plutôt que lu ici : ce résolveur est une
+    /// logique pure, entièrement testable, sans dépendance à un singleton.
+    ///
+    /// Voir `docs/superpowers/specs/2026-07-24-read-exactness-design.md`.
+    var showReadReceipts: Bool = true
 }
 
 /// Logique pure de composition du menu appui-long. Aucune dépendance UI —
@@ -91,7 +100,7 @@ enum MessageActionResolver {
         if ctx.hasText || ctx.hasTimebasedMedia { info.append(.language) }
         if ctx.hasTimebasedMedia { info.append(.transcription) }
         info.append(.reactions)
-        info.append(.views)
+        if ctx.showReadReceipts { info.append(.views) }
         if ctx.hasText { info.append(.sentiment) }
         if ctx.isEdited && ctx.hasEditRevisions { info.append(.history) }
         sections.append(.info(info))
