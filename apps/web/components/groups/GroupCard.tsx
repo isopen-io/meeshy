@@ -8,6 +8,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Lock, Copy, CheckCircle2, Users, MessageSquare } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useI18n } from '@/hooks/use-i18n';
+import { formatShortDate } from '@/utils/date-format';
 import type { Group } from '@meeshy/shared/types';
 
 interface GroupCardProps {
@@ -25,7 +26,7 @@ export const GroupCard = memo(function GroupCard({
   onCopyIdentifier,
   copiedIdentifier
 }: GroupCardProps) {
-  const { t } = useI18n('groups');
+  const { t, locale } = useI18n('groups');
   const displayIdentifier = group.identifier?.replace(/^mshy_/, '') || '';
 
   return (
@@ -110,7 +111,7 @@ export const GroupCard = memo(function GroupCard({
           </div>
           {group.createdAt && (
             <div className="flex items-center gap-1">
-              <span>{new Date(group.createdAt).toLocaleDateString()}</span>
+              <span>{formatShortDate(group.createdAt, locale)}</span>
             </div>
           )}
         </div>

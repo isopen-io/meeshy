@@ -7,6 +7,7 @@ import { memo } from 'react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { MessageSquare, Lock } from 'lucide-react';
 import { useI18n } from '@/hooks/useI18n';
+import { formatShortDate } from '@/utils/date-format';
 import type { Conversation } from '@meeshy/shared/types';
 
 interface ConversationsListProps {
@@ -99,7 +100,7 @@ const ConversationItem = memo(function ConversationItem({
           <span>{(conversation as unknown)._count?.messages || 0} messages</span>
           {conversation.lastMessageAt && (
             <span>
-              {t('details.lastActivity')}: {new Date(conversation.lastMessageAt).toLocaleDateString(locale)}
+              {t('details.lastActivity')}: {formatShortDate(conversation.lastMessageAt, locale)}
             </span>
           )}
         </div>
