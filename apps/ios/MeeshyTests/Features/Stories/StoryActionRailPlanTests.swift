@@ -6,7 +6,7 @@ import XCTest
 /// figé pendant le slide. Ces tests pinnent la règle pure de résolution.
 final class StoryActionRailPlanTests: XCTestCase {
 
-    func test_resolve_ownStory_showsViewsExportForward_hidesReactReplyRepostTranslations() {
+    func test_resolve_ownStory_showsViewsExportForward_hidesReactReplyRepost() {
         let plan = StoryActionRailPlan.resolve(
             isOwnStory: true,
             canReply: true,
@@ -22,6 +22,32 @@ final class StoryActionRailPlanTests: XCTestCase {
         XCTAssertFalse(plan.showsReact)
         XCTAssertFalse(plan.showsReply)
         XCTAssertFalse(plan.showsRepost)
+    }
+
+    /// Changement 2026-07-25 : l'auteur voit AUSSI le bouton traductions. Il
+    /// choisit déjà la langue de son export MP4 ; lui refuser l'exploration des
+    /// langues dans le viewer était une asymétrie sans justification produit.
+    func test_resolve_translations_visibleToAuthorAndReaderAlike() {
+        let author = StoryActionRailPlan.resolve(
+            isOwnStory: true, canReply: false, isPublicStory: true,
+            hasAudibleSound: false, commentCount: 0, hasTranslatableContent: true
+        )
+        let reader = StoryActionRailPlan.resolve(
+            isOwnStory: false, canReply: false, isPublicStory: true,
+            hasAudibleSound: false, commentCount: 0, hasTranslatableContent: true
+        )
+
+        XCTAssertTrue(author.showsTranslations)
+        XCTAssertTrue(reader.showsTranslations)
+    }
+
+    /// Sans texte ni audio à traduire, le bouton reste absent pour tout le monde.
+    func test_resolve_translations_hiddenWithoutTranslatableContent() {
+        let plan = StoryActionRailPlan.resolve(
+            isOwnStory: false, canReply: false, isPublicStory: true,
+            hasAudibleSound: false, commentCount: 0, hasTranslatableContent: false
+        )
+
         XCTAssertFalse(plan.showsTranslations)
     }
 

@@ -32,9 +32,9 @@ final class ActiveSessionsViewModelTests: XCTestCase {
           "id": "\(id)",
           "deviceName": "\(deviceName)",
           "ipAddress": "10.0.0.1",
-          "lastActive": null,
+          "lastActivityAt": null,
           "createdAt": "2026-01-01T00:00:00.000Z",
-          "isCurrent": \(isCurrent)
+          "isCurrentSession": \(isCurrent)
         }
         """)
     }

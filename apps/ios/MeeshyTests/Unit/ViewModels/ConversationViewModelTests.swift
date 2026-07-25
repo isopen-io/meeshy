@@ -284,22 +284,27 @@ final class ConversationViewModelTests: XCTestCase {
         XCTAssertEqual(mockMessageService.listCallCount, 1)
     }
 
-    func test_loadMessages_marksConversationAsRead() async {
+    func test_loadMessages_doesNotMarkConversationReadOnOpen() async {
         let response: MessagesAPIResponse = JSONStub.decode("""
         {"success":true,"data":[],"pagination":null,"cursorPagination":null,"hasNewer":null}
         """)
         mockMessageService.listResult = .success(response)
         let sut = makeSUT()
-        // markAsRead routes through ConversationSyncEngine + the offline outbox;
-        // the .conversationMarkedRead notification is its observable contract.
+        // Read-exactness (docs/superpowers/specs/2026-07-24-read-exactness-design):
+        // "Badge de non-lus qui ne se vide plus à l'ouverture" — opening a
+        // conversation no longer marks it read. Only messages actually displayed
+        // are reported (visibility accumulator → markAsRead(messageIds:)), and a
+        // partial report never posts the conversation-wide .conversationMarkedRead.
+        // So loadMessages() must NOT post that notification.
         let expectedId = testConversationId
         let marked = expectation(forNotification: .conversationMarkedRead, object: nil) { notification in
             (notification.object as? String) == expectedId
         }
+        marked.isInverted = true
 
         await sut.loadMessages()
 
-        await fulfillment(of: [marked], timeout: 1.0)
+        await fulfillment(of: [marked], timeout: 0.5)
     }
 
     // MARK: - loadOlderMessages Tests (P1 — offline cache fallback)
