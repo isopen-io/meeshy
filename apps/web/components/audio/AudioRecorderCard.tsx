@@ -3,6 +3,7 @@
 import React, { useState, useRef, useEffect, useCallback, forwardRef, useImperativeHandle } from 'react';
 import { Square, Play, Pause, X, Mic, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
+import { formatFileSize } from '@meeshy/shared/types/attachment';
 import { useI18n } from '@/hooks/use-i18n';
 
 // Types pour les métadonnées audio extraites
@@ -496,7 +497,7 @@ export const AudioRecorderCard = forwardRef<AudioRecorderCardRef, AudioRecorderC
               {formatTime(recordingTime)}
             </div>
             <div className="text-[11px] text-green-600 dark:text-green-400 font-medium leading-none mt-0.5">
-              {audioFormat} · {(audioBlob.size / 1024).toFixed(0)} KB
+              {audioFormat} · {formatFileSize(audioBlob.size)}
             </div>
             <div className="text-[11px] text-gray-500 dark:text-gray-400 leading-none mt-0.5">
               {isPlaying ? 'Playing...' : 'Ready'}

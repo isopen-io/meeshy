@@ -448,8 +448,10 @@ describe('AudioRecorderCard', () => {
       });
 
       await waitFor(() => {
-        // Should show format (WEBM/MP4) and KB size
-        expect(screen.getByText(/KB/i)).toBeInTheDocument();
+        // Should show format (WEBM/MP4) and a human-readable size via the shared
+        // formatFileSize SSOT (B/KB/MB — never a raw ".toFixed(0) KB" that shows
+        // "0 KB" for a sub-kilobyte clip).
+        expect(screen.getByText(/\d+(\.\d+)?\s*(B|KB|MB)\b/i)).toBeInTheDocument();
       });
     });
   });
