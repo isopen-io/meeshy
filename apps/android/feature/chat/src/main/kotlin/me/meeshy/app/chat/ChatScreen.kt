@@ -45,6 +45,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.AddLink
 import androidx.compose.material.icons.filled.ArrowDownward
 import androidx.compose.material.icons.filled.AttachFile
 import androidx.compose.material.icons.filled.AutoAwesome
@@ -201,6 +202,7 @@ fun ChatScreen(
     onBack: () -> Unit,
     onStartCall: (peerName: String, isVideo: Boolean) -> Unit = { _, _ -> },
     onRejoinCall: (call: ActiveCallSession, peerName: String) -> Unit = { _, _ -> },
+    onCreateShareLink: () -> Unit = {},
     /** True when THIS device is already engaged in a live call — suppresses the
      * « Rejoindre » pill so a minimised call viewing its own chat isn't offered
      * to rejoin the call it's already in. */
@@ -358,9 +360,18 @@ fun ChatScreen(
                         IconButton(onClick = viewModel::openSearch) {
                             Icon(Icons.Filled.Search, contentDescription = stringResource(R.string.chat_search))
                         }
-                        // Moderator+ viewers get the admin conversation-settings sheet
+                        // Moderator+ viewers of a group get the admin surfaces: the
+                        // share-link creator and the conversation-settings sheet
                         // (write-role / announcement / slow-mode / auto-translate).
                         if (state.slowModeExempt) {
+                            if (state.isGroup) {
+                                IconButton(onClick = onCreateShareLink) {
+                                    Icon(
+                                        Icons.Filled.AddLink,
+                                        contentDescription = stringResource(R.string.chat_create_share_link),
+                                    )
+                                }
+                            }
                             IconButton(onClick = { showConversationSettings = true }) {
                                 Icon(
                                     Icons.Filled.Tune,

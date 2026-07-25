@@ -3636,8 +3636,16 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
 
 ## O. Links
 - [ ] Links hub (share / tracking / community / affiliate) with quick-create
-- [ ] Share/invite links: create (guest rules, anonymous permissions, max-uses, expiration,
+- [~] Share/invite links: create (guest rules, anonymous permissions, max-uses, expiration,
       custom slug), list + stats, detail (copy/share/activate/delete)
+      — **create half shipped**, slice `sharelink-create` (2026-07-25): pure `CreateShareLinkForm`
+      + `ShareLinkExpiration` (`:core:model`, deterministic ISO expiry via injected clock; account
+      gate forces guest sub-requirements off — port of iOS `CreateShareLinkView.create()`) +
+      authenticated `LinkApi.create` (`:core:network`) + `ShareLinkRepository.create` (`:sdk-core`,
+      flattens the nested `{ linkId, conversationId, shareLink }` envelope) +
+      `CreateShareLinkViewModel`/`CreateShareLinkScreen` (`:feature:conversations`), reached from a
+      group chat's top bar (moderator+ → `AddLink`). +23 tests. **Remaining:** `MyShareLink` list +
+      stats + detail (copy/share/activate/delete), and the created-link success/share sheet.
 - [x] Anonymous join-via-share-link (preview → form → success); share-link preview screen —
       slice `sharelink-guest-join-form` (2026-07-25): pure `GuestJoinForm` (`:core:model`) +
       `AnonymousSessionRepository.preview()` (`:sdk-core`) + `GuestJoinViewModel`/`GuestJoinScreen`

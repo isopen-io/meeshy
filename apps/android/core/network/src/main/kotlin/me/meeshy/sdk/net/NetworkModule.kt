@@ -15,6 +15,7 @@ import me.meeshy.sdk.net.api.CommunityApi
 import me.meeshy.sdk.net.api.ConversationApi
 import me.meeshy.sdk.net.api.DataExportApi
 import me.meeshy.sdk.net.api.FriendApi
+import me.meeshy.sdk.net.api.LinkApi
 import me.meeshy.sdk.net.api.MediaApi
 import me.meeshy.sdk.net.api.MessageApi
 import me.meeshy.sdk.net.api.NotificationApi
@@ -107,4 +108,7 @@ internal object NetworkModule {
 
     @Provides
     fun providesShareLinkApi(api: MeeshyApi): ShareLinkApi = api.shareLinks
+
+    @Provides
+    fun providesLinkApi(api: MeeshyApi): LinkApi = api.links
 }

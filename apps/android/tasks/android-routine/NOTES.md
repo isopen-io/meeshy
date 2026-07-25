@@ -2,6 +2,26 @@
 
 Append-only log of gotchas and decisions that save time next run.
 
+## Lesson (2026-07-25, `sharelink-create`) — inject the clock at the VM edge; add resources BEFORE compiling
+Shipped the share-link CREATION side (owner-facing counterpart to guest-join).
+1. **A time-dependent wire field (`expiresAt`) belongs in a pure function that takes `nowMillis: Long`,
+   never `System.currentTimeMillis()` inside the model.** `ShareLinkExpiration.expiresAtIso(nowMillis)`
+   is deterministic; the VM injects `now: () -> Long` (`@VisibleForTesting`), the test freezes it to a
+   fixed `Instant`. Same edge-injection discipline as `usernameSuffix` in guest-join.
+2. **Two REST auth postures = two Retrofit interfaces.** The anonymous guest endpoints live in
+   `ShareLinkApi` (no-JWT); the owner-facing `POST /links` is authenticated → a NEW `LinkApi`. Don't
+   fold JWT endpoints into the anonymous interface. Register in `MeeshyApi` + `NetworkModule`.
+3. **Port the iOS toggle-disabling into the builder, not the UI.** iOS greys out nickname/email/birthday
+   when "account required" is on; the faithful port is `requireX && !requireAccount` inside
+   `toRequest`, so the rule holds even if a caller flips flags directly. The screen still disables the
+   toggles for UX, but correctness lives in `:core:model`.
+4. **Add string resources BEFORE kicking off the gradle run that compiles the screen.** A `stringResource(R.string.x)`
+   for a not-yet-added key fails as `Unresolved reference 'x'`, and — subtly — a `listOf(opt to R.string.x)`
+   whose value became an error type reports a misleading `component2() is ambiguous` on the destructuring
+   `forEach { (a, b) -> }`. Both vanish once R regenerates with the keys present.
+5. **The moderator-gated group affordance is `state.isGroup && state.slowModeExempt`** (ChatScreen top
+   bar) — reuse the existing `slowModeExempt` moderator signal rather than adding a new capability flag.
+
 ## Lesson (2026-07-25, `sharelink-guest-join-form`) — keep injected randomness at the edge so the pure core stays deterministic; a host-less `meeshy://` intent-filter already covers new deep-link paths
 Shipped the guest-join flow (preview → form → join), completing the anonymous-session vertical. Durable lessons:
 1. **When porting a form whose validity/auto-fill uses randomness (`Math.random()` in the web `generateUsername`), split the deterministic transform from the entropy.** `GuestJoinForm.suggestedUsername(first, last, suffix: Int)` is a pure companion (lowercase → strip non-`a..z` → `_`-join → 3-digit zero-pad → `suffix mod 1000`); the *randomness* lives only in the `GuestJoinViewModel.usernameSuffix: () -> Int` seam (`@VisibleForTesting internal var`, default `{ Random.nextInt(1000) }`). Tests set `usernameSuffix = { 7 }` and assert the exact `ada_lovelace007` — no flaky prefix-only assertion, and the pure core has full branch coverage independent of the VM.

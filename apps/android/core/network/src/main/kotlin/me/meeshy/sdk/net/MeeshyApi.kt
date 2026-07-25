@@ -11,6 +11,7 @@ import me.meeshy.sdk.net.api.CommunityApi
 import me.meeshy.sdk.net.api.ConversationApi
 import me.meeshy.sdk.net.api.DataExportApi
 import me.meeshy.sdk.net.api.FriendApi
+import me.meeshy.sdk.net.api.LinkApi
 import me.meeshy.sdk.net.api.MediaApi
 import me.meeshy.sdk.net.api.MessageApi
 import me.meeshy.sdk.net.api.NotificationApi
@@ -50,6 +51,7 @@ class MeeshyApi private constructor(retrofit: Retrofit) {
     val reports: ReportApi = retrofit.create()
     val dataExport: DataExportApi = retrofit.create()
     val shareLinks: ShareLinkApi = retrofit.create()
+    val links: LinkApi = retrofit.create()
 
     companion object {
         val json: Json = Json {

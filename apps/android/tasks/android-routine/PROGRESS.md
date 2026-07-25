@@ -1,5 +1,56 @@
 # Progress — state & what to do next
 
+> On 2026-07-25 the **share-link CREATION side** landed (slice `sharelink-create`, feature-parity
+> §O Links → the `[ ]` "Share/invite links: create (guest rules, anonymous permissions, max-uses,
+> expiration, custom slug)…" item advances to `[~]` — the create half is done; list/stats/detail
+> remain). This is the owner-facing counterpart to the guest-join slice that shipped earlier the same
+> day. **Added (production, all `apps/android`):** the pure, immutable `CreateShareLinkForm`
+> (`:core:model`) — the SSOT for what a valid `CreateShareLinkRequest` looks like, a faithful port of
+> iOS `CreateShareLinkView.create()`: name/description/slug are optional and null-omitted when blank
+> (slug trimmed + lowercased into the URL identifier), `maxUses` only travels when `maxUsesEnabled`,
+> and the expiry resolves through the new `ShareLinkExpiration` enum. **SOTA/faithful:** a
+> `requireAccount` link forces every guest sub-requirement (nickname/email/birthday) OFF in
+> `toRequest`, mirroring the iOS toggle-disabling — an account-gated link never also demands anonymous
+> fields the guest can't reach; `canSubmit` guards on a non-blank `conversationId` so a link can never
+> be built without a target. `ShareLinkExpiration.expiresAtIso(nowMillis)` computes the gateway's ISO
+> `expiresAt` against an **injected clock** (deterministic, testable), `null` for `Never`; three months
+> is a flat 90-day horizon (link expiry is intentionally coarse). Wire types `CreateShareLinkResponse`/
+> `CreateShareLinkDetail`/`CreatedShareLink` (`:core:model`) flatten the gateway's nested
+> `{ linkId, conversationId, shareLink }` envelope (top-level `linkId` preferred, nested fallback).
+> **Wiring:** authenticated `LinkApi.create` (`@POST("links")`, `:core:network`, registered in
+> `MeeshyApi` + `NetworkModule` — distinct from the no-JWT `ShareLinkApi`) + `ShareLinkRepository.create`
+> (`:sdk-core`, `apiCall{…}.map{ CreatedShareLink.from(it) }`, a thin stateless mapper). `CreateShareLinkViewModel`
+> (UDF, `hiltViewModel`, reads the `conversationId` nav arg, seeds the form, threads each edit through it,
+> clock injected at the edge; `submit()` is inert while a create is in flight and when the conversation is
+> blank; a failed create keeps every edit for retry and surfaces the message) + `CreateShareLinkScreen`
+> (accent-coherent `MeeshyBackground`+`Scaffold`, identity/access/permissions/limits sections, account
+> toggle disables the three guest sub-toggles, max-uses field appears only when enabled, 5-option
+> expiration `FilterChip` row, `MeeshyPrimaryButton` gated on `canSubmit`) in `:feature:conversations`,
+> EN/FR/ES/PT strings (27 keys ×4). Reached from a **group chat's top bar** (moderator+ → new `AddLink`
+> IconButton, shown when `state.isGroup && state.slowModeExempt`), wired into `MeeshyApp`
+> (`conversations/{id}/share-link/new`; `onCreated`→pop, `onBack`→pop — no dead end), +1 chat string ×4.
+> **+23 behavioural tests:** `CreateShareLinkFormTest` (13 — expiry per option + future-ness, seeding &
+> iOS defaults, blank-conversation block, immutable edits, slug trim/lowercase + null-omit, max-uses gate,
+> expiration translation, account gate forces sub-requirements off, permission passthrough) +
+> `ShareLinkRepositoryTest` (3 — create success flattening + request forwarding, nested-linkId fallback,
+> failure propagation) + `CreateShareLinkViewModelTest` (7 — seed from arg, edits reach the request,
+> success exposes the created link, failure keeps edits + surfaces error, edit clears prior error, inert
+> on blank conversation, inert double-submit). All asserted through the public API / observable `state`.
+> **Mutation (RED proof):** replacing `requireNickname && !requireAccount` with plain `requireNickname`
+> fails exactly `requireAccount_forcesEveryGuestSubRequirementOff`; dropping the `if (current.isSubmitting) return`
+> guard fails `submit_isInertWhileAnEarlierSubmitIsInFlight`. **Gate:** `:app:assembleDebug` + the three
+> new test suites → BUILD SUCCESSFUL. Reviewer **PASS** (diff `apps/android` only — 1 pure core + wire
+> types in `:core:model`, 1 authenticated api in `:core:network`, 1 repo in `:sdk-core`, VM + screen +
+> strings in `:feature:conversations`, nav + entry affordance in `:app`/`:feature:chat`; **SDK purity** —
+> validation/request-building is a stateless `:core:model` block, the when-to-create orchestration stays
+> app-side, the repo is a thin mapper; **SSOT** — reuses `CreateShareLinkRequest`, re-implements nothing;
+> **failure paths** — create failure degrades to a retryable state; **coherence** — accent visuals,
+> admin-gated entry, every arm leads somewhere).
+> **Next slice:** the **`MyShareLink` list + stats + detail** screen (copy/share/activate/delete — the
+> `GET /links`, `GET /links/stats`, `PATCH`/`DELETE /links/{id}` surfaces + a created-link success/share
+> sheet), OR the paged `OnboardingFlowView`, OR the tracked Kover 90% coverage-gate infra, OR an
+> `https://meeshy.me/join/{id}` App-Links intent-filter (`AndroidManifest` only).
+
 > On 2026-07-25 the **guest-join flow** landed (slice `sharelink-guest-join-form`, feature-parity
 > §J anonymous-sessions → the `[~]` item's "guest-join screen" gap closes, and §O Links → the `[ ]`
 > "Anonymous join-via-share-link (preview → form → success)" advances to `[x]`). This completes the
