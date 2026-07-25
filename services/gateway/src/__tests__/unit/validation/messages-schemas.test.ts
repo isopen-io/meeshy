@@ -374,6 +374,24 @@ describe('MarkReadBodySchema', () => {
     expect(MarkReadBodySchema.safeParse({ language: '@@' }).success).toBe(false);
   });
 
+  it('accepte les exceptions par message', () => {
+    expect(
+      MarkReadBodySchema.safeParse({
+        messageIds: [VALID_OID],
+        language: 'en',
+        messageLanguages: { [VALID_OID]: 'fr' },
+      }).success
+    ).toBe(true);
+  });
+
+  it('rejette une clé qui n\'est pas un identifiant de message', () => {
+    expect(MarkReadBodySchema.safeParse({ messageLanguages: { nope: 'fr' } }).success).toBe(false);
+  });
+
+  it('rejette une langue d\'exception malformée', () => {
+    expect(MarkReadBodySchema.safeParse({ messageLanguages: { [VALID_OID]: '@@' } }).success).toBe(false);
+  });
+
   it('rejette un champ inconnu (strict)', () => {
     expect(MarkReadBodySchema.safeParse({ extra: true }).success).toBe(false);
   });
