@@ -182,7 +182,23 @@ Tous grisés `opacity 0.55` + `allowsHitTesting(false)`, aucun toggle instancié
 - Export de données (schema strip corrigé) · Stats utilisateur (JsonNull corrigé) · Clear langue régionale (#5, `z.literal('')` mergé)
 - → résolus par `push main → CI deploy` ; **re-tester ces 3 écrans après déploiement**.
 
-## Nouveaux défauts découverts par la Reverify (backlog priorisé)
+## Backlog — ✅ FERMÉ ET VÉRIFIÉ EN PROD (cycles 2-3, 2026-07-25)
+
+Workflow `backlog-4bugs-targeted` (7 agents) + passe API post-déploiement :
+
+1. **Outbox prefs** : cause encore plus profonde trouvée — kill dans la fenêtre de debounce = mutation « pending » orpheline à jamais → `resumeOrphanedPendingSyncs` câblé sur la transition d'auth + flush immédiat. Vérifié visuellement 4/4 : PATCH expédié en ~3 s SANS kill (confirmé API), valeur conservée après kill+relaunch (showOnlineStatus ET badges), restauration OK. 29/29 tests SDK.
+2. **Sessions vides** : `ACTIVE_SESSION_FILTER` (null OU `isSet:false`), 4 call-sites. **Vérifié prod : GET /auth/sessions → 10 sessions.**
+3. **Select auth sans bio** : champs ajoutés. **Vérifié prod : /auth/me expose bio/phoneNumber/banner.**
+4. **a11y** : `wrappedValue` dans profileField + retrait du `.combine` d'EmptyStateView qui avalait le bouton d'action. Vérifié via arbre d'accessibilité 2/2.
+
+Et les 3 « pending deploy » sont fermés en prod après 2 corrections supplémentaires (les fixes du 24 étaient insuffisants — jamais exercés contre le vrai runtime) :
+- **Stats 500** : Prisma+Mongo rejette null brut/JsonNull/isSet sur `Json?` — seule la forme `not:{equals:null}` passe (validée en lecture seule dans le conteneur prod : 188 messages traduits pour le compte de test). **Prod : HTTP 200, vraies données.**
+- **Clear langue régionale 400** : `minLength:2` dans le schema FASTIFY (`api-schemas.ts`) rejetait `''` en preValidation — les tests étaient verts car ils mockaient ce schema (permissif). Tests sur le schema RÉEL ajoutés. **Prod : PATCH `''` → 200, persisté, restauré.**
+- **Export** : fonctionnel dès le 1er déploiement (110 Ko de données réelles).
+
+Leçon durable : un fix de requête Prisma ou de schema de route n'est PAS prouvé par des tests unitaires à mocks — valider contre le runtime réel (conteneur prod en lecture seule, ou schema réel via `jest.requireActual`).
+
+## ~~Nouveaux défauts découverts par la Reverify (backlog priorisé)~~ (fermé ci-dessus)
 
 1. **[SDK/offline] PATCH préférences jamais expédié à chaud** : `syncCategoryToBackend` enqueue dans `OfflineQueue` sans dispatch immédiat → toute préférence modifiée est perdue au kill+relaunch (reproduit 2/2 : `showOnlineStatus`, badges ; PATCH jamais reçu par le gateway, confirmé API). Fix : flush immédiat après enqueue + `fetchFromBackend()` au cold boot doit attendre le flush initial de l'outbox.
 2. **[Gateway] Sessions actives toujours vides** : 4 call-sites de `SessionService.ts` filtrent `invalidatedAt: null` — en Prisma+MongoDB, `null` ne matche PAS les champs ABSENTS (`{ isSet: false }` requis) et `createSession` n'écrit jamais ce champ.

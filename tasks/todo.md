@@ -47,6 +47,11 @@ Nouveaux bugs découverts (backlog) : OfflineQueue sans dispatch immédiat des P
 `invalidatedAt: null` vs `isSet` Prisma+MongoDB (sessions vides), `select` auth sans `bio` (profil stale), a11y Binding ProfileView.
 Détail complet : `tasks/audit-settings-profile-ios-2026-07-24.md` § « Vérification visuelle E2E ».
 
+Cycles 2-3 (2026-07-25) : workflow `backlog-4bugs-targeted` (7 agents) + passe API post-déploiement — TOUT FERMÉ EN PROD.
+Outbox prefs temps réel (4/4 visuel, `resumeOrphanedPendingSyncs`), sessions (10 résultats), /auth/me avec bio, a11y 2/2,
+stats 200 (forme `not:{equals:null}` validée dans le conteneur prod), clear langue `''` 200 (minLength retiré du schema Fastify + tests sur schema réel), export 110 Ko.
+CI gateway reverdi (mocks user-stats alignés). Voir § « Backlog — FERMÉ » du fichier d'audit.
+
 ---
 
 # Audit notifications point-par-point + câblage manquant — 2026-07-24 (soir)
