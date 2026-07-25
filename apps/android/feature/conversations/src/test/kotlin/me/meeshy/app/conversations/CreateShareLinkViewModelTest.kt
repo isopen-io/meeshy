@@ -41,6 +41,22 @@ class CreateShareLinkViewModelTest {
             requests += body
             return response
         }
+
+        override suspend fun listMyLinks(
+            offset: Int,
+            limit: Int,
+        ): ApiResponse<List<me.meeshy.sdk.model.MyShareLink>> = ApiResponse(success = true, data = emptyList())
+
+        override suspend fun fetchMyStats(): ApiResponse<me.meeshy.sdk.model.MyShareLinkStats> =
+            ApiResponse(success = true, data = me.meeshy.sdk.model.MyShareLinkStats())
+
+        override suspend fun toggle(
+            linkId: String,
+            body: me.meeshy.sdk.model.ToggleShareLinkRequest,
+        ): ApiResponse<Unit> = ApiResponse(success = true, data = Unit)
+
+        override suspend fun delete(linkId: String): ApiResponse<Unit> =
+            ApiResponse(success = true, data = Unit)
     }
 
     private fun okResponse() = ApiResponse(

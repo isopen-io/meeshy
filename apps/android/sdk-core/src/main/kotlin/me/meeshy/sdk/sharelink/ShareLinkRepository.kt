@@ -2,6 +2,9 @@ package me.meeshy.sdk.sharelink
 
 import me.meeshy.sdk.model.CreatedShareLink
 import me.meeshy.sdk.model.CreateShareLinkRequest
+import me.meeshy.sdk.model.MyShareLink
+import me.meeshy.sdk.model.MyShareLinkStats
+import me.meeshy.sdk.model.ToggleShareLinkRequest
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.net.api.LinkApi
 import me.meeshy.sdk.net.apiCall
@@ -9,11 +12,11 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * Owner-facing share-link use cases (authenticated). Currently the creation path:
- * it flattens the gateway's nested `{ linkId, conversationId, shareLink }` envelope
- * into a [CreatedShareLink], preferring the top-level `linkId` and falling back to
- * the nested one. A failed create propagates as a [NetworkResult.Failure] — nothing
- * to persist, so the repository stays a thin, stateless data mapper.
+ * Owner-facing share-link use cases (authenticated). A thin, stateless data mapper
+ * over [LinkApi]: it flattens the create envelope into a [CreatedShareLink], and
+ * otherwise forwards the list / stats / toggle / delete calls, folding each into a
+ * [NetworkResult] so callers never see exceptions. The "when to load / optimistic
+ * update / rollback" orchestration stays app-side in the ViewModel.
  */
 @Singleton
 public class ShareLinkRepository @Inject constructor(
@@ -21,4 +24,16 @@ public class ShareLinkRepository @Inject constructor(
 ) {
     public suspend fun create(request: CreateShareLinkRequest): NetworkResult<CreatedShareLink> =
         apiCall { linkApi.create(request) }.map { CreatedShareLink.from(it) }
+
+    public suspend fun listMyLinks(offset: Int = 0, limit: Int = 50): NetworkResult<List<MyShareLink>> =
+        apiCall { linkApi.listMyLinks(offset, limit) }
+
+    public suspend fun fetchMyStats(): NetworkResult<MyShareLinkStats> =
+        apiCall { linkApi.fetchMyStats() }
+
+    public suspend fun setActive(linkId: String, isActive: Boolean): NetworkResult<Unit> =
+        apiCall { linkApi.toggle(linkId, ToggleShareLinkRequest(isActive)) }
+
+    public suspend fun delete(linkId: String): NetworkResult<Unit> =
+        apiCall { linkApi.delete(linkId) }
 }

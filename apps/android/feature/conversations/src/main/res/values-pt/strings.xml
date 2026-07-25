@@ -82,4 +82,22 @@
     <string name="share_link_expiration_3m">3 meses</string>
     <string name="share_link_create_submit">Criar link de partilha</string>
     <string name="share_link_creating">A criar…</string>
+    <string name="my_share_links_title">Ligações de partilha</string>
+    <string name="my_share_links_back">Voltar</string>
+    <string name="my_share_links_stats_total">Ligações</string>
+    <string name="my_share_links_stats_active">Ativas</string>
+    <string name="my_share_links_stats_uses">Aderiram</string>
+    <string name="my_share_links_section">As minhas ligações</string>
+    <string name="my_share_links_empty_title">Sem ligações de partilha</string>
+    <string name="my_share_links_empty_subtitle">Crie uma ligação para convidar pessoas para uma conversa.</string>
+    <string name="my_share_links_joined_count">%1$d aderiram</string>
+    <string name="my_share_links_status_active">Ativa</string>
+    <string name="my_share_links_status_inactive">Inativa</string>
+    <string name="my_share_links_copy">Copiar ligação</string>
+    <string name="my_share_links_share">Partilhar ligação</string>
+    <string name="my_share_links_toggle">Ativa</string>
+    <string name="my_share_links_delete">Eliminar ligação</string>
+    <string name="my_share_links_copied">Ligação copiada</string>
+    <string name="my_share_links_share_subject">Junta-te a mim no Meeshy</string>
+    <string name="my_share_links_retry">Tentar novamente</string>
 </resources>

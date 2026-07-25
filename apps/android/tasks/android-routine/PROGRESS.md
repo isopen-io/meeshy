@@ -1,5 +1,58 @@
 # Progress — state & what to do next
 
+> On 2026-07-25 the **share-link MANAGEMENT side** landed (slice `sharelink-my-links`, feature-parity
+> §O Links → the "Share/invite links: … list + stats, manage (copy/share/activate/delete)" item advances
+> to `[x]` — this completes the share-link management vertical begun by `sharelink-create`). This is the
+> owner-facing list/stats/actions counterpart to the create screen. **Added (production, all
+> `apps/android`):** the pure, immutable `MyShareLinksState` reducer (`:core:model`) — the SSOT for the
+> screen's UDF state. Loads settle via `loaded(links, stats)` (a null stats keeps the last aggregate so a
+> stats-only fetch failure never blanks the header); `toggled(linkId)` and `removed(linkId)` mutate the
+> list **optimistically** and keep the aggregate `MyShareLinkStats` locally consistent. **SOTA/faithful:**
+> the `totalUses` decrement on `removed` is *exact, not a guess* — the gateway derives `totalUses` as
+> `_sum(currentUses)` over the user's links (`services/gateway/src/routes/links/user.ts`), so subtracting
+> the removed link's own `currentUses` mirrors the server; `activeLinks` tracks the flip/removal; all
+> counters `coerceAtLeast(0)` so an inconsistent server stat can't drive them negative; an unknown linkId
+> is inert. Pure `MyShareLink.displayName` (`name ?? identifier ?? linkId`, blank-hardened) + `joinUrl(
+> webOrigin)` presentation helpers, and a `ToggleShareLinkRequest` wire body. **Wiring:** `LinkApi`
+> gains `listMyLinks(offset,limit)`/`fetchMyStats()`/`toggle(linkId,body)`/`delete(linkId)`
+> (`:core:network`) — bound to the **real gateway routes** `GET /links`, `GET /links/stats`,
+> `PATCH /links/{linkId}/toggle` (`{isActive}` body), `DELETE /links/{linkId}` (NOT the iOS-assumed plain
+> `PATCH /links/{id}`; verified against `routes/links/{user,admin}.ts`) + `ShareLinkRepository`
+> `listMyLinks`/`fetchMyStats`/`setActive`/`delete` (`:sdk-core`, thin `apiCall` mappers).
+> `MyShareLinksViewModel` (UDF, `hiltViewModel`, loads list+stats on init; activate/delete apply
+> optimistically then **snapshot-rollback** to the prior state on network failure — Instant-App; the
+> public web origin for a shareable join URL is resolved once from the injected `MeeshyConfig.apiBaseUrl`
+> via `ServerEnvironmentResolver.serverOrigin`→`webOrigin`; all `viewModelScope` work rethrows
+> `CancellationException`) + `MyShareLinksScreen` (accent-coherent `MeeshyBackground`+`Scaffold`, a
+> 3-card stats header, a `MeeshyCard`-per-link list with copy/share intents + an activate `Switch` +
+> delete, cold spinner only on empty load, settled empty-state card) in `:feature:conversations`,
+> EN/FR/ES/PT strings (20 keys ×4). Reached from **Settings → Chats → Share links** (new
+> `onOpenShareLinks` row in `:feature:settings` + `share-links` route in `:app` — `onBack` pops, no dead
+> end), +1 settings string ×4. **+26 behavioural tests:** `MyShareLinksStateTest` (15 — phase
+> derivations, loaded-keeps-prior-stats, toggle both directions + inert + null-stats + never-negative,
+> remove active/inactive + inert + null-stats + never-negative), `MyShareLinkPresentationTest` (7 —
+> displayName fallback chain incl. blank, joinUrl identifier/linkId/trailing-slash),
+> `ShareLinkRepositoryTest` (+6 — list forwards paging + defaults, stats, setActive body, delete forward
+> + failure), `MyShareLinksViewModelTest` (10 — load list+stats, load failure, joinUrl via resolved
+> web origin, staging origin, optimistic toggle before network, toggle sends inverted flag + keeps
+> optimistic on success, toggle failure rolls back + surfaces error, delete optimistic + calls API,
+> delete failure restores + surfaces, dismissError). All asserted through the public API / observable
+> `state`. **Mutation (RED proof):** inverting the `activeLinks` delta in `toggled` (`-1`/`+1` → `+1`/`-1`)
+> failed exactly the 3 active-count tests. **Gate:** `:app:assembleDebug` + the four affected module test
+> suites → BUILD SUCCESSFUL. Reviewer **PASS** (diff `apps/android` only — pure reducer + presentation +
+> wire body in `:core:model`, 4 endpoints in `:core:network`, 4 repo methods in `:sdk-core`, VM + screen +
+> strings in `:feature:conversations`, settings row in `:feature:settings`, route in `:app`; **SDK
+> purity** — state/reducer is a stateless `:core:model` block, the when-to-load / optimistic / rollback
+> orchestration stays app-side, repo is a thin mapper; **SSOT** — reuses `MyShareLink`/`MyShareLinkStats`,
+> resolves web origin via the existing `ServerEnvironmentResolver`, re-implements nothing; **failure
+> paths** — every mutation degrades to a retryable rolled-back state, never a crash; **coherence** —
+> accent visuals, Settings entry, every arm leads somewhere).
+> **Next slice:** the **created-link success/share sheet** (surface the freshly created link from
+> `CreateShareLinkScreen` with copy/share instead of a bare pop), OR a **per-link detail** screen
+> (full stats + extend-expiry `PATCH /links/{linkId}/extend`), OR the paged `OnboardingFlowView`, OR the
+> tracked Kover 90% coverage-gate infra, OR an `https://meeshy.me/join/{id}` App-Links intent-filter
+> (`AndroidManifest` only).
+
 > On 2026-07-25 the **share-link CREATION side** landed (slice `sharelink-create`, feature-parity
 > §O Links → the `[ ]` "Share/invite links: create (guest rules, anonymous permissions, max-uses,
 > expiration, custom slug)…" item advances to `[~]` — the create half is done; list/stats/detail

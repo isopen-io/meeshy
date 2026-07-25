@@ -3636,16 +3636,24 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
 
 ## O. Links
 - [ ] Links hub (share / tracking / community / affiliate) with quick-create
-- [~] Share/invite links: create (guest rules, anonymous permissions, max-uses, expiration,
-      custom slug), list + stats, detail (copy/share/activate/delete)
-      — **create half shipped**, slice `sharelink-create` (2026-07-25): pure `CreateShareLinkForm`
+- [x] Share/invite links: create (guest rules, anonymous permissions, max-uses, expiration,
+      custom slug), list + stats, manage (copy/share/activate/delete)
+      — **create half** slice `sharelink-create` (2026-07-25): pure `CreateShareLinkForm`
       + `ShareLinkExpiration` (`:core:model`, deterministic ISO expiry via injected clock; account
       gate forces guest sub-requirements off — port of iOS `CreateShareLinkView.create()`) +
       authenticated `LinkApi.create` (`:core:network`) + `ShareLinkRepository.create` (`:sdk-core`,
       flattens the nested `{ linkId, conversationId, shareLink }` envelope) +
       `CreateShareLinkViewModel`/`CreateShareLinkScreen` (`:feature:conversations`), reached from a
-      group chat's top bar (moderator+ → `AddLink`). +23 tests. **Remaining:** `MyShareLink` list +
-      stats + detail (copy/share/activate/delete), and the created-link success/share sheet.
+      group chat's top bar (moderator+ → `AddLink`). +23 tests.
+      **list/stats/manage half** slice `sharelink-my-links` (2026-07-25): pure `MyShareLinksState`
+      reducer (`:core:model`, optimistic toggle/delete keeping the aggregate stats locally exact —
+      `totalUses` mirrors the gateway `_sum(currentUses)`) + `MyShareLink.displayName`/`joinUrl`
+      helpers + `LinkApi.listMyLinks`/`fetchMyStats`/`toggle`/`delete` (`:core:network`, real routes
+      `GET /links`, `GET /links/stats`, `PATCH /links/{linkId}/toggle`, `DELETE /links/{linkId}`) +
+      repository methods (`:sdk-core`) + `MyShareLinksViewModel`/`MyShareLinksScreen`
+      (`:feature:conversations`, snapshot-rollback on failure, copy/share intents, web-origin-derived
+      join URL) reached from **Settings → Share links**. +26 tests. **Remaining (later slice):** the
+      created-link success/share sheet + a per-link detail screen.
 - [x] Anonymous join-via-share-link (preview → form → success); share-link preview screen —
       slice `sharelink-guest-join-form` (2026-07-25): pure `GuestJoinForm` (`:core:model`) +
       `AnonymousSessionRepository.preview()` (`:sdk-core`) + `GuestJoinViewModel`/`GuestJoinScreen`

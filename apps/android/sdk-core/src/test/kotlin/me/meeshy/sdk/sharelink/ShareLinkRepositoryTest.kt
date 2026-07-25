@@ -6,6 +6,9 @@ import me.meeshy.sdk.model.ApiResponse
 import me.meeshy.sdk.model.CreateShareLinkDetail
 import me.meeshy.sdk.model.CreateShareLinkRequest
 import me.meeshy.sdk.model.CreateShareLinkResponse
+import me.meeshy.sdk.model.MyShareLink
+import me.meeshy.sdk.model.MyShareLinkStats
+import me.meeshy.sdk.model.ToggleShareLinkRequest
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.net.api.LinkApi
 import org.junit.Test
@@ -21,10 +24,40 @@ class ShareLinkRepositoryTest {
     private class FakeLinkApi(
         var response: ApiResponse<CreateShareLinkResponse> = ApiResponse(success = false),
         val requests: MutableList<CreateShareLinkRequest> = mutableListOf(),
+        var listResponse: ApiResponse<List<MyShareLink>> = ApiResponse(success = false),
+        var statsResponse: ApiResponse<MyShareLinkStats> = ApiResponse(success = false),
+        var toggleResponse: ApiResponse<Unit> = ApiResponse(success = false),
+        var deleteResponse: ApiResponse<Unit> = ApiResponse(success = false),
     ) : LinkApi {
+        var lastListOffset: Int? = null
+        var lastListLimit: Int? = null
+        var lastToggle: Pair<String, ToggleShareLinkRequest>? = null
+        var lastDeletedLinkId: String? = null
+
         override suspend fun create(body: CreateShareLinkRequest): ApiResponse<CreateShareLinkResponse> {
             requests += body
             return response
+        }
+
+        override suspend fun listMyLinks(offset: Int, limit: Int): ApiResponse<List<MyShareLink>> {
+            lastListOffset = offset
+            lastListLimit = limit
+            return listResponse
+        }
+
+        override suspend fun fetchMyStats(): ApiResponse<MyShareLinkStats> = statsResponse
+
+        override suspend fun toggle(
+            linkId: String,
+            body: ToggleShareLinkRequest,
+        ): ApiResponse<Unit> {
+            lastToggle = linkId to body
+            return toggleResponse
+        }
+
+        override suspend fun delete(linkId: String): ApiResponse<Unit> {
+            lastDeletedLinkId = linkId
+            return deleteResponse
         }
     }
 
@@ -89,5 +122,75 @@ class ShareLinkRepositoryTest {
 
         assertThat(result).isInstanceOf(NetworkResult.Failure::class.java)
         assertThat((result as NetworkResult.Failure).error.message).isEqualTo("forbidden")
+    }
+
+    @Test
+    fun listMyLinks_success_returnsTheLinksAndForwardsPaging() = runTest {
+        val api = FakeLinkApi(
+            listResponse = ApiResponse(
+                success = true,
+                data = listOf(MyShareLink(id = "sl-1", linkId = "link-1", name = "Launch")),
+            ),
+        )
+
+        val result = ShareLinkRepository(api).listMyLinks(offset = 20, limit = 10)
+
+        assertThat(api.lastListOffset).isEqualTo(20)
+        assertThat(api.lastListLimit).isEqualTo(10)
+        val links = (result as NetworkResult.Success).data
+        assertThat(links.map { it.linkId }).containsExactly("link-1")
+    }
+
+    @Test
+    fun listMyLinks_defaultsToTheFirstPage() = runTest {
+        val api = FakeLinkApi(listResponse = ApiResponse(success = true, data = emptyList()))
+
+        ShareLinkRepository(api).listMyLinks()
+
+        assertThat(api.lastListOffset).isEqualTo(0)
+        assertThat(api.lastListLimit).isEqualTo(50)
+    }
+
+    @Test
+    fun fetchMyStats_success_returnsTheAggregate() = runTest {
+        val api = FakeLinkApi(
+            statsResponse = ApiResponse(
+                success = true,
+                data = MyShareLinkStats(totalLinks = 3, activeLinks = 2, totalUses = 12),
+            ),
+        )
+
+        val result = ShareLinkRepository(api).fetchMyStats()
+
+        assertThat((result as NetworkResult.Success).data.totalUses).isEqualTo(12)
+    }
+
+    @Test
+    fun setActive_forwardsTheLinkIdAndFlagInTheBody() = runTest {
+        val api = FakeLinkApi(toggleResponse = ApiResponse(success = true, data = Unit))
+
+        val result = ShareLinkRepository(api).setActive("link-7", isActive = false)
+
+        assertThat(result).isInstanceOf(NetworkResult.Success::class.java)
+        assertThat(api.lastToggle).isEqualTo("link-7" to ToggleShareLinkRequest(isActive = false))
+    }
+
+    @Test
+    fun delete_forwardsTheLinkId() = runTest {
+        val api = FakeLinkApi(deleteResponse = ApiResponse(success = true, data = Unit))
+
+        val result = ShareLinkRepository(api).delete("link-7")
+
+        assertThat(result).isInstanceOf(NetworkResult.Success::class.java)
+        assertThat(api.lastDeletedLinkId).isEqualTo("link-7")
+    }
+
+    @Test
+    fun delete_failure_propagatesTheError() = runTest {
+        val api = FakeLinkApi(deleteResponse = ApiResponse(success = false, error = "nope"))
+
+        val result = ShareLinkRepository(api).delete("link-7")
+
+        assertThat((result as NetworkResult.Failure).error.message).isEqualTo("nope")
     }
 }
