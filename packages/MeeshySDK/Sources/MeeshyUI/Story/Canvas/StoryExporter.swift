@@ -3,6 +3,7 @@ import CoreMedia
 import CoreVideo
 import Foundation
 import MeeshySDK
+import UIKit
 
 public enum StoryExporterError: Error, Sendable {
     case noBackgroundVideo
@@ -80,6 +81,20 @@ public enum StoryExporter {
                               watermark: StoryExportWatermark? = nil,
                               audioResolver: (@Sendable (StoryAudioPlayerObject) -> URL?)? = nil,
                               progress: (@Sendable (Double) -> Void)? = nil) async throws {
+        // Keep the export alive if the app is backgrounded mid-render — the same
+        // net `TusUploadManager` gives uploads. A story export runs a few seconds
+        // to ~1 min; `beginBackgroundTask` grants roughly 30 s of extra runtime
+        // after the app leaves the foreground, covering the common case. This is
+        // the single choke point every export path (viewer, timeline, save)
+        // flows through. On hosts without a live UIApplication the id is
+        // `.invalid` and the end call is skipped.
+        let backgroundTaskId = await UIApplication.shared.beginBackgroundTask(withName: "story-export")
+        defer {
+            if backgroundTaskId != .invalid {
+                Task { @MainActor in UIApplication.shared.endBackgroundTask(backgroundTaskId) }
+            }
+        }
+
         let composition = AVMutableComposition()
         // Use the deterministic total duration so every element on the slide
         // (text, foreground media, audio, transitions) is fully covered by
