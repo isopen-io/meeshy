@@ -380,26 +380,10 @@ public final class StoryAVCompositor: NSObject, nonisolated AVVideoCompositing, 
         layer.render(in: cg)
 
         if let watermark {
-            drawWatermark(watermark, in: cg,
-                          renderSize: CGSize(width: width, height: height))
+            watermark.draw(in: cg,
+                           renderSize: CGSize(width: width, height: height),
+                           at: time.seconds)
         }
-    }
-
-    /// Dessine le watermark par-dessus la frame composée, ancré bas-droite.
-    /// Dernière passe du pipeline : rien ne doit se dessiner au-dessus.
-    @MainActor
-    private static func drawWatermark(_ watermark: StoryExportWatermark,
-                                      in cg: CGContext,
-                                      renderSize: CGSize) {
-        let rect = watermark.frame(in: renderSize)
-        cg.saveGState()
-        cg.setAlpha(watermark.opacity)
-        // Même compensation top-down que paintAspectFill : le contexte est
-        // flippé pour CALayer.render(in:), CGContext.draw dessine bottom-up.
-        cg.translateBy(x: rect.origin.x, y: rect.origin.y + rect.height)
-        cg.scaleBy(x: 1, y: -1)
-        cg.draw(watermark.image, in: CGRect(origin: .zero, size: rect.size))
-        cg.restoreGState()
     }
 
     /// Applies the static state of an opening transition to `rootLayer` at
