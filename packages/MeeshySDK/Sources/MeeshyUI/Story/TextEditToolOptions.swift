@@ -51,6 +51,7 @@ struct TextEditToolOptions: View {
             case .background: backgroundOptions
             case .frame:      frameOptions
             case .border:     borderOptions
+            case .language:   languageOptions
             }
         }
         .frame(maxWidth: .infinity)
@@ -215,6 +216,70 @@ struct TextEditToolOptions: View {
                 )
         }
         .buttonStyle(.plain)
+    }
+
+
+    // MARK: - Langue du texte
+
+    /// Langue dans laquelle ce texte est ÉCRIT — la base de toute traduction.
+    ///
+    /// Elle était devinée à partir de la langue de LECTURE de l'auteur, ce qui
+    /// étiquetait `en` le texte français d'un francophone ayant réglé l'app en
+    /// anglais. L'erreur est invisible à l'écriture et ne se paie qu'à la
+    /// traduction, d'où ce choix explicite posé parmi les autres attributs.
+    private var languageOptions: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                ForEach(Self.languageChoices(current: textObject.sourceLanguage), id: \.self) { code in
+                    languageChip(code)
+                }
+            }
+            .padding(.horizontal, 2)
+        }
+        .frame(height: 44)
+    }
+
+    /// Langues proposées : celles de l'interface Meeshy, la langue déjà posée
+    /// sur le texte en tête si elle sort du lot — jamais de liste vide, et
+    /// jamais de perte du choix courant.
+    static func languageChoices(current: String?) -> [String] {
+        let base = ["fr", "en", "es", "de", "it", "pt", "ar"]
+        guard let normalised = normalisedCode(current) else { return base }
+        return base.contains(normalised) ? base : [normalised] + base
+    }
+
+    /// Réduit un code au format des pastilles (`pt-BR` → `pt`), ou `nil` s'il
+    /// n'y a rien d'exploitable.
+    static func normalisedCode(_ raw: String?) -> String? {
+        guard let raw else { return nil }
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+        return MeeshyUser.normalizeLanguageCode(trimmed)
+            ?? trimmed.split(whereSeparator: { $0 == "-" || $0 == "_" })
+                .first.map { $0.lowercased() } ?? trimmed.lowercased()
+    }
+
+    private func languageChip(_ code: String) -> some View {
+        let isSel = Self.normalisedCode(textObject.sourceLanguage) == code
+        return Button {
+            textObject.sourceLanguage = code
+            HapticFeedback.light()
+        } label: {
+            Text(code.uppercased())
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(isSel ? Color.white : Color.primary)
+                .frame(minWidth: 44)
+                .frame(height: 38)
+                .padding(.horizontal, 6)
+                .background(
+                    RoundedRectangle(cornerRadius: 10)
+                        .fill(isSel ? AnyShapeStyle(MeeshyColors.brandGradient)
+                                    : AnyShapeStyle(Color.gray.opacity(0.18)))
+                )
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(Locale.current.localizedString(forLanguageCode: code) ?? code)
+        .accessibilityAddTraits(isSel ? .isSelected : [])
     }
 
     // MARK: - Background

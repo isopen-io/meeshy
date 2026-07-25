@@ -22,9 +22,23 @@ extension StoryComposerViewModel {
     /// 1. `systemLanguage` (primary in-app language)
     /// 2. `regionalLanguage` (secondary in-app language)
     /// 3. Hardcoded `"fr"` fallback.
+    /// Langue dans laquelle le texte a été ÉCRIT — à ne pas confondre avec
+    /// celle dans laquelle son auteur préfère LIRE.
+    ///
+    /// Les deux étaient confondues : on renvoyait le `systemLanguage`, une
+    /// préférence de CONSOMMATION. Un francophone ayant réglé l'app en anglais
+    /// voyait son texte français étiqueté `en` ; la traduction partait alors de
+    /// la mauvaise langue et le texte ressortait inchangé.
+    ///
+    /// Le clavier actif au moment de la frappe fait foi ; les préférences ne
+    /// sont qu'un repli quand il est inconnu.
     nonisolated public static func resolveComposerSourceLanguage(
-        user: MeeshyUser?
+        user: MeeshyUser?,
+        keyboardLanguage: String? = nil
     ) -> String {
+        if let typed = normalisedWritingLanguage(keyboardLanguage) {
+            return typed
+        }
         if let sys = user?.systemLanguage, !sys.isEmpty {
             return sys
         }
@@ -34,8 +48,41 @@ extension StoryComposerViewModel {
         return "fr"
     }
 
+    /// Réduit un identifiant de clavier à un code de langue exploitable, ou
+    /// `nil` quand ce n'en est pas un.
+    ///
+    /// `UITextInputMode.primaryLanguage` ne renvoie pas QUE des langues : le
+    /// clavier emoji annonce `emoji`, la dictée `dictation`. Les prendre pour
+    /// argent comptant produirait une story dont la langue source est « emoji »
+    /// — intraduisible, et absente du sélecteur de langues.
+    nonisolated private static func normalisedWritingLanguage(_ raw: String?) -> String? {
+        guard let raw else { return nil }
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+        // Même réduction que `StoryPrismeMatch.base` côté SDK — ce dernier est
+        // interne à MeeshySDK, donc invisible ici : normalisation officielle,
+        // puis repli qui rabote la région et la casse (`pt-BR` → `pt`).
+        let base = MeeshyUser.normalizeLanguageCode(trimmed)
+            ?? trimmed.split(whereSeparator: { $0 == "-" || $0 == "_" })
+                .first.map { $0.lowercased() } ?? trimmed.lowercased()
+        guard !base.isEmpty, base != "emoji", base != "dictation" else { return nil }
+        return base
+    }
+
+    /// Langue d'écriture présumée : le clavier PRINCIPAL de l'utilisateur
+    /// (`activeInputModes.first`), sinon les préférences.
+    ///
+    /// Limite assumée : c'est le premier clavier ACTIVÉ, pas celui affiché à
+    /// l'instant de la frappe — le connaître exigerait d'interroger le
+    /// `textInputMode` du champ en cours d'édition, que le ViewModel n'a pas
+    /// sous la main. Reste nettement plus proche de la vérité que la langue de
+    /// LECTURE qu'on utilisait avant : un francophone lisant en anglais a
+    /// presque toujours le clavier français en tête de liste.
     var detectedKeyboardLanguage: String {
-        Self.resolveComposerSourceLanguage(user: AuthManager.shared.currentUser)
+        Self.resolveComposerSourceLanguage(
+            user: AuthManager.shared.currentUser,
+            keyboardLanguage: UITextInputMode.activeInputModes.first?.primaryLanguage
+        )
     }
 
     var currentEffects: StoryEffects {

@@ -14,6 +14,11 @@ public enum TextEditTool: String, CaseIterable, Sendable, Equatable {
     case background
     case frame
     case border
+    /// Langue dans laquelle le texte est ÉCRIT. Réglable ici, à côté des
+    /// attributs visuels, parce qu'une langue source fausse ne se voit PAS à
+    /// l'écriture — elle ne se paie qu'à la traduction (directive user
+    /// 2026-07-25).
+    case language
 
     var sfSymbol: String {
         switch self {
@@ -25,6 +30,7 @@ public enum TextEditTool: String, CaseIterable, Sendable, Equatable {
         case .background: return "a.square.fill"
         case .frame:      return "rectangle.roundedtop"
         case .border:     return "square"
+        case .language:   return "globe"
         }
     }
 
@@ -38,6 +44,7 @@ public enum TextEditTool: String, CaseIterable, Sendable, Equatable {
         case .background: return String(localized: "story.textEdit.tool.background", defaultValue: "Fond du texte", bundle: .module)
         case .frame:      return String(localized: "story.textEdit.tool.frame", defaultValue: "Cadrage du texte", bundle: .module)
         case .border:     return String(localized: "story.textEdit.tool.border", defaultValue: "Contour du texte", bundle: .module)
+        case .language:   return String(localized: "story.textEdit.tool.language", defaultValue: "Langue du texte", bundle: .module)
         }
     }
 }
