@@ -62,6 +62,20 @@ public class AudioPlaybackManager: NSObject, ObservableObject {
     public private(set) var currentUrl: String?
     private var listenStartTime: Date?
 
+    /// Capture fidèle de l'interaction : une entrée par écoute réellement
+    /// continue, avec son motif de fin. Un échantillonnage périodique perdrait
+    /// un vocal d'une seconde ou une écoute abandonnée en 500 ms ; le lecteur,
+    /// lui, connaît les frontières exactes.
+    private var stretchTracker = PlaybackStretchTracker()
+
+    /// Version linguistique que le lecteur a sous les yeux — piste traduite ou
+    /// transcription affichée. Fournie par la vue, qui seule la connaît : le
+    /// moteur ne lit aucun singleton (pureté SDK). `nil` ⇒ rien n'est déclaré,
+    /// ce qui vaut mieux qu'inventer une langue.
+    public var consumedLanguageProvider: (() -> String?)?
+
+    private var positionMs: Int { Int((player?.currentTime ?? currentTime) * 1000) }
+
     /// Unification Étape C (slice 4) — session routée via `MediaSessionCoordinator`
     /// (source unique, refcomptée, call-aware via l'Étape B) au lieu d'un
     /// `setCategory`/`setActive` direct. Flag idempotent : `play` ne libère pas
@@ -224,6 +238,7 @@ public class AudioPlaybackManager: NSObject, ObservableObject {
             isPlaying = true
             isLoading = false
             listenStartTime = Date()
+            stretchTracker.begin(positionMs)
             startProgressTimer()
         } catch {
             Self.log.error("playData AVAudioPlayer init echec (\(data.count, privacy: .public)o): \(error.localizedDescription, privacy: .public)")
@@ -244,6 +259,13 @@ public class AudioPlaybackManager: NSObject, ObservableObject {
         // different track does not inherit the prior track's start time and
         // post `reportListenProgress` against the wrong attachment. The new
         // track's `listenStartTime` is set in `playData(_:)` on actual start.
+        // L'écoute en cours s'arrête sans être ni terminée ni mise en pause :
+        // clos et envoyé AVANT d'effacer la fenêtre d'analyse, sans quoi elle
+        // serait perdue — ou pire, recollée à la piste suivante.
+        if stretchTracker.hasOpenStretch {
+            stretchTracker.dismissed(positionMs)
+        }
+        reportListenProgress(complete: false)
         listenStartTime = nil
         loadTask?.cancel()
         loadTask = nil
@@ -265,6 +287,7 @@ public class AudioPlaybackManager: NSObject, ObservableObject {
             player.pause()
             isPlaying = false
             timer?.invalidate()
+            stretchTracker.pause(positionMs)
             reportListenProgress(complete: false)
             persistPosition()
         } else {
@@ -276,6 +299,7 @@ public class AudioPlaybackManager: NSObject, ObservableObject {
             player.play()
             isPlaying = true
             listenStartTime = listenStartTime ?? Date()
+            stretchTracker.begin(positionMs)
             startProgressTimer()
         }
     }
@@ -283,6 +307,9 @@ public class AudioPlaybackManager: NSObject, ObservableObject {
     public func seek(to fraction: Double) {
         guard let player = player else { return }
         let target = fraction * player.duration
+        // Relevé AVANT le déplacement : c'est jusque-là que l'écoute a porté.
+        // Le traqueur ignore de lui-même un déplacement à l'arrêt.
+        stretchTracker.seek(from: positionMs, to: Int(target * 1000))
         player.currentTime = target
         currentTime = target
         progress = fraction
@@ -297,6 +324,7 @@ public class AudioPlaybackManager: NSObject, ObservableObject {
     public func skip(seconds: Double) {
         guard let player = player else { return }
         let target = max(0, min(player.duration, player.currentTime + seconds))
+        stretchTracker.seek(from: positionMs, to: Int(target * 1000))
         player.currentTime = target
         currentTime = target
         progress = player.duration > 0 ? target / player.duration : 0
@@ -315,6 +343,9 @@ public class AudioPlaybackManager: NSObject, ObservableObject {
     // MARK: - Playback Finished (called by delegate)
     private func handlePlaybackFinished() {
         let finishedUrl = currentUrl
+        // Le média est allé au bout tout seul : la frontière n'est ni une pause
+        // ni un abandon, et l'écart se lit dans la trace.
+        stretchTracker.completed(Int(duration * 1000))
         reportListenProgress(complete: true)
         // Natural end → forget the saved RESUME position so a later re-listen
         // starts from 0, but remember the media as fully CONSUMED so the bubble
@@ -333,6 +364,7 @@ public class AudioPlaybackManager: NSObject, ObservableObject {
             currentTime = 0
             progress = 0
             listenStartTime = Date()
+            stretchTracker.begin(0)
             player.play()
             isPlaying = true
             startProgressTimer()
@@ -357,16 +389,24 @@ public class AudioPlaybackManager: NSObject, ObservableObject {
         guard let attId = attachmentId else { return }
         guard let start = listenStartTime else { return }
         let listenedSeconds = Date().timeIntervalSince(start)
-        guard complete || listenedSeconds >= 3 else { return }
+        // Vidée AVANT la garde, et jamais après : un retour anticipé laisserait
+        // la trace dans le traqueur, qui l'attribuerait ensuite à la piste
+        // SUIVANTE. Le seuil de 3 s protège le réseau, pas la mesure — une trace
+        // non vide vaut d'être envoyée, même pour une écoute de 500 ms.
+        let stretches = stretchTracker.drain()
+        guard complete || listenedSeconds >= 3 || !stretches.isEmpty else { return }
         let positionMs = Int(currentTime * 1000)
         let totalDurationMs = Int(duration * 1000)
+        let language = consumedLanguageProvider?()
 
         Task {
             let body = AttachmentStatusBody(
                 action: "listened",
                 playPositionMs: positionMs,
                 durationMs: totalDurationMs,
-                complete: complete
+                complete: complete,
+                stretches: stretches,
+                language: language
             )
             let _: APIResponse<[String: String]>? = try? await APIClient.shared.post(
                 endpoint: "/attachments/\(attId)/status",
@@ -455,6 +495,10 @@ public class AudioPlaybackManager: NSObject, ObservableObject {
                 guard let self = self, let player = self.player else { return }
                 guard player.isPlaying else { return }
                 let newTime = player.currentTime
+                // Le traqueur ne crée rien ici : il retient seulement la dernière
+                // position connue, pour pouvoir clore proprement une écoute dont
+                // la position finale serait illisible (fermeture brutale).
+                self.stretchTracker.observe(Int(newTime * 1000))
                 let newProgress = player.duration > 0 ? newTime / player.duration : 0
                 if abs(newTime - self.currentTime) >= Self.currentTimeWriteThresholdSeconds {
                     self.currentTime = newTime

@@ -1510,7 +1510,10 @@ struct StoryViewerView: View {
     @MainActor
     private func probeAudioTrackCount(for media: StoryMediaObject,
                                       in story: StoryItem) async -> Int? {
-        guard let url = resolveVideoURL(for: media, in: story) else { return nil }
+        guard let url = resolveVideoURL(for: media, in: story) else {
+            Logger.media.debug("story sound probe: unresolved URL for \(media.id, privacy: .public)")
+            return nil
+        }
         do {
             return try await AVURLAsset(url: url).loadTracks(withMediaType: .audio).count
         } catch {

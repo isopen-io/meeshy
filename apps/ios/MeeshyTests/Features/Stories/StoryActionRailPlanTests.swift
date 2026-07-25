@@ -116,3 +116,31 @@ final class StoryActionRailPlanTests: XCTestCase {
         XCTAssertTrue(audible.showsSound)
     }
 }
+
+// MARK: - Ré-évaluation du rail à l'arrivée du probe audio
+
+/// Le rail est figé à l'entrée du slide (directive 2026-07-10), mais la présence
+/// d'une piste audio dans une vidéo est établie par un probe ASYNCHRONE qui
+/// conclut souvent après ce gel. Sans ré-évaluation, une story sonore restait
+/// sans bouton son pour toute sa lecture (constaté 2026-07-25).
+extension StoryActionRailPlanTests {
+
+    func test_sidebar_refreezesRailWhenSoundBecomesAvailable() throws {
+        let source = try String(
+            contentsOf: URL(fileURLWithPath: #filePath)
+                .deletingLastPathComponent()   // Stories
+                .deletingLastPathComponent()   // Features
+                .deletingLastPathComponent()   // MeeshyTests
+                .deletingLastPathComponent()   // ios
+                .appendingPathComponent("Meeshy/Features/Main/Views/StoryViewerView+Sidebar.swift"),
+            encoding: .utf8
+        )
+
+        XCTAssertTrue(
+            source.contains("adaptiveOnChange(of: storyHasAudibleSound)"),
+            "le rail doit être ré-évalué quand le probe audio conclut")
+        XCTAssertTrue(
+            source.contains("guard !wasAudible, isAudible else { return }"),
+            "la ré-évaluation doit rester à sens unique : un bouton n'est jamais retiré en cours de lecture")
+    }
+}

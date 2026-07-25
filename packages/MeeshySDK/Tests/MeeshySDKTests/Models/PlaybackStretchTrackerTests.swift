@@ -138,6 +138,25 @@ final class PlaybackStretchTrackerTests: XCTestCase {
         ])
     }
 
+    /// Parcourir la barre de progression d'un média en pause ne fait rien
+    /// entendre : compter cela comme une écoute serait inventer une consommation.
+    func test_seekWhilePaused_opensNothing() {
+        var tracker = PlaybackStretchTracker()
+        tracker.seek(from: 0, to: 5000)
+
+        XCTAssertFalse(tracker.hasOpenStretch)
+        tracker.pause(6000)
+        XCTAssertEqual(tracker.drain(), [])
+    }
+
+    func test_seekWhilePlaying_reopens() {
+        var tracker = PlaybackStretchTracker()
+        tracker.begin(0)
+        tracker.seek(from: 1000, to: 5000)
+
+        XCTAssertTrue(tracker.hasOpenStretch)
+    }
+
     func test_drain_neverYieldsTheSameStretchTwice() {
         var tracker = PlaybackStretchTracker()
         tracker.begin(0)

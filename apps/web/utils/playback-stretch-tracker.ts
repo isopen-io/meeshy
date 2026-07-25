@@ -98,10 +98,17 @@ export class PlaybackStretchTracker {
     this.close(positionMs ?? this.lastObservedMs, 'dismissed');
   }
 
-  /** Déplacement du curseur : clôt l'écoute en cours et en ouvre une autre. */
+  /**
+   * Déplacement du curseur : clôt l'écoute en cours et en ouvre une autre.
+   *
+   * Déplacer le curseur d'un média EN PAUSE n'ouvre rien : rien n'est écouté
+   * tant que la lecture n'a pas repris. Sans cette garde, parcourir la barre de
+   * progression à l'arrêt fabriquerait une écoute qui n'a pas eu lieu.
+   */
   seek(fromPositionMs: number, toPositionMs: number): void {
+    const wasPlaying = this.openedAtMs !== null;
     this.close(fromPositionMs, 'seek');
-    this.openedAtMs = toPositionMs;
+    if (wasPlaying) this.openedAtMs = toPositionMs;
     this.lastObservedMs = toPositionMs;
   }
 

@@ -105,9 +105,14 @@ public struct PlaybackStretchTracker: Sendable {
     }
 
     /// Déplacement du curseur : clôt l'écoute en cours et en ouvre une autre.
+    ///
+    /// Déplacer le curseur d'un média EN PAUSE n'ouvre rien : rien n'est écouté
+    /// tant que la lecture n'a pas repris. Sans cette garde, parcourir la barre
+    /// de progression à l'arrêt fabriquerait une écoute qui n'a pas eu lieu.
     public mutating func seek(from fromPositionMs: Int, to toPositionMs: Int) {
+        let wasPlaying = openedAtMs != nil
         close(at: fromPositionMs, endedBy: .seek)
-        openedAtMs = toPositionMs
+        if wasPlaying { openedAtMs = toPositionMs }
         lastObservedMs = toPositionMs
     }
 

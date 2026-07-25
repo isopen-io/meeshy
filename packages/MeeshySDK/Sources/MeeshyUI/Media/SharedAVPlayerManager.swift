@@ -21,6 +21,8 @@ public final class SharedAVPlayerManager: ObservableObject {
     /// Mute global du player (préservé entre vidéos dans la session).
     /// Toggle via le bouton mute du fullscreen overlay. Propagé à
     /// `AVPlayer.isMuted` automatiquement via `didSet`.
+    /// Couper le son clôt le visionnage en cours : ce qui suit n'est plus la
+    /// même consommation, et la trace doit pouvoir le dire.
     @Published public var isMuted: Bool = false {
         didSet { applyMuteState() }
     }
@@ -40,8 +42,16 @@ public final class SharedAVPlayerManager: ObservableObject {
     /// (`isMuted`) OU intention ponctuelle d'une surface (`isForceMuted`).
     public var effectiveMuted: Bool { isMuted || isForceMuted }
 
+    /// Appelé par les `didSet` de mute : un média coupé n'est plus consommé de
+    /// la même façon, et la frontière est une information à part entière.
+    private func closeStretchOnMuteChange() {
+        guard effectiveMuted, stretchTracker.hasOpenStretch else { return }
+        stretchTracker.muted(positionMs)
+    }
+
     private func applyMuteState() {
         player?.isMuted = effectiveMuted
+        closeStretchOnMuteChange()
     }
 
     /// Si vrai, le notification handler de fin de lecture seek(0) + play()
@@ -71,6 +81,18 @@ public final class SharedAVPlayerManager: ObservableObject {
     private var pipController: AVPictureInPictureController?
     private var pipDelegate: PipDelegate?
     private var watchStartTime: Date?
+
+    /// Capture fidèle de l'interaction : une entrée par visionnage réellement
+    /// continu, avec son motif de fin. Distinct des `WatchSample` d'engagement,
+    /// qui échantillonnent une horloge : ceux-là ne diraient jamais qu'un
+    /// visionnage s'est arrêté sur une coupure du son plutôt qu'une pause.
+    private var stretchTracker = PlaybackStretchTracker()
+
+    /// Version linguistique consommée — sous-titres, piste doublée. Fournie par
+    /// la surface, qui seule la connaît ; le moteur ne lit aucun singleton.
+    public var consumedLanguageProvider: (() -> String?)?
+
+    private var positionMs: Int { currentTime.isNaN ? 0 : max(0, Int(currentTime * 1000)) }
     /// Last `currentTime` (s) at which an engagement heartbeat fired. Instance-scoped
     /// (was a `var` captured inside the time-observer closure) so the observer block
     /// can stay a plain `MainActor.assumeIsolated` call — no `Task` hop per tick.
@@ -154,11 +176,15 @@ public final class SharedAVPlayerManager: ObservableObject {
         isPlaying = true
         if watchStartTime == nil { watchStartTime = Date() }
         if watchClockStart == nil { watchClockStart = Date() }
+        stretchTracker.begin(positionMs)
         emitWatchSample()
     }
 
     public func pause() {
         emitWatchSample()
+        // Clôt AVANT le rapport, qui draine la trace : sinon le dernier passage
+        // resterait ouvert et manquerait à l'envoi.
+        stretchTracker.pause(positionMs)
         reportWatchProgress(complete: false)
         player?.pause()
         isPlaying = false
@@ -198,6 +224,9 @@ public final class SharedAVPlayerManager: ObservableObject {
     }
 
     public func seek(to seconds: Double) {
+        // Relevé AVANT le déplacement : c'est jusque-là que le visionnage a
+        // porté. Le traqueur ignore de lui-même un déplacement à l'arrêt.
+        stretchTracker.seek(from: positionMs, to: max(0, Int(seconds * 1000)))
         let time = CMTime(seconds: seconds, preferredTimescale: 600)
         player?.seek(to: time, toleranceBefore: .zero, toleranceAfter: .zero)
     }
@@ -281,7 +310,12 @@ public final class SharedAVPlayerManager: ObservableObject {
         guard let attId = attachmentId else { return }
         guard let start = watchStartTime else { return }
         let watchedSeconds = Date().timeIntervalSince(start)
-        guard complete || watchedSeconds >= 3 else { return }
+        // Vidé AVANT la garde, et jamais après : un retour anticipé laisserait
+        // la trace dans le traqueur, qui l'attribuerait ensuite à la vidéo
+        // SUIVANTE. Le seuil de 3 s protège le réseau, pas la mesure — une
+        // trace non vide vaut d'être envoyée quelle qu'ait été sa durée.
+        let stretches = stretchTracker.drain()
+        guard complete || watchedSeconds >= 3 || !stretches.isEmpty else { return }
         let positionMs = Int(currentTime * 1000)
         let totalDurationMs = Int(duration * 1000)
 
@@ -293,12 +327,16 @@ public final class SharedAVPlayerManager: ObservableObject {
             MediaConsumptionStore.shared.record(fraction: currentTime / duration, complete: false, for: attId)
         }
 
+        let language = consumedLanguageProvider?()
+
         Task {
             let body = AttachmentStatusBody(
                 action: "watched",
                 playPositionMs: positionMs,
                 durationMs: totalDurationMs,
-                complete: complete
+                complete: complete,
+                stretches: stretches,
+                language: language
             )
             let _: APIResponse<[String: String]>? = try? await APIClient.shared.post(
                 endpoint: "/attachments/\(attId)/status",
@@ -334,6 +372,9 @@ public final class SharedAVPlayerManager: ObservableObject {
                 guard let self else { return }
                 let seconds = time.seconds.isNaN ? 0 : time.seconds
                 self.currentTime = seconds
+                // Ne crée aucune entrée : retient seulement la dernière position
+                // connue, pour clore proprement un visionnage interrompu net.
+                self.stretchTracker.observe(max(0, Int(seconds * 1000)))
                 if self.isPlaying, seconds - self.lastHeartbeat >= 10 {
                     self.lastHeartbeat = seconds
                     self.emitWatchSample()
@@ -364,6 +405,7 @@ public final class SharedAVPlayerManager: ObservableObject {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in
                 guard let self else { return }
+                self.stretchTracker.completed(Int(self.duration * 1000))
                 self.reportWatchProgress(complete: true)
                 self.emitWatchSample(complete: true)
                 self.watchClockStart = self.shouldLoop ? Date() : nil
@@ -389,6 +431,14 @@ public final class SharedAVPlayerManager: ObservableObject {
     // MARK: - Cleanup
 
     private func cleanup() {
+        // L'utilisateur quitte pendant la lecture : le visionnage en cours n'est
+        // ni terminé ni mis en pause. Clos et envoyé AVANT toute remise à zéro,
+        // sans quoi il serait perdu — ou pire, recollé à la vidéo suivante.
+        if stretchTracker.hasOpenStretch {
+            stretchTracker.dismissed(positionMs)
+        }
+        reportWatchProgress(complete: false)
+
         if let observer = timeObserver, let player {
             player.removeTimeObserver(observer)
         }

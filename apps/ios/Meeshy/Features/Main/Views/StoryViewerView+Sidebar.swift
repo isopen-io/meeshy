@@ -190,6 +190,17 @@ struct StoryActionSidebarView: View {
         .adaptiveOnChange(of: currentStory?.id) { _, _ in
             frozenRailPlan = liveRailPlan
         }
+        // La présence d'une piste audio dans une vidéo est établie par un probe
+        // ASYNCHRONE (`AVURLAsset.loadTracks`) qui conclut souvent après le gel :
+        // le rail restait alors sans bouton son sur une story qui en a un
+        // (constaté 2026-07-25, probe `tracks=1` arrivé ~1 s trop tard).
+        // Transition à sens unique « silencieux → sonore » : un bouton peut
+        // apparaître quand la donnée arrive, jamais disparaître en cours de
+        // lecture — la directive 2026-07-10 (pas de rail qui clignote) tient.
+        .adaptiveOnChange(of: storyHasAudibleSound) { wasAudible, isAudible in
+            guard !wasAudible, isAudible else { return }
+            frozenRailPlan = liveRailPlan
+        }
     }
 
     @ViewBuilder

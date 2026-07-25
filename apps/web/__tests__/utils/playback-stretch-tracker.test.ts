@@ -144,6 +144,25 @@ describe('PlaybackStretchTracker — robustesse', () => {
     ]);
   });
 
+  it('déplacer le curseur à l\'arrêt n\'ouvre aucune écoute', () => {
+    // Parcourir la barre de progression d'un média en pause ne fait rien
+    // entendre : compter cela comme une écoute serait inventer une consommation.
+    const tracker = new PlaybackStretchTracker();
+    tracker.seek(0, 5000);
+
+    expect(tracker.hasOpenStretch).toBe(false);
+    tracker.pause(6000);
+    expect(tracker.drain()).toEqual([]);
+  });
+
+  it('déplacer le curseur en lecture rouvre bien une écoute', () => {
+    const tracker = new PlaybackStretchTracker();
+    tracker.begin(0);
+    tracker.seek(1000, 5000);
+
+    expect(tracker.hasOpenStretch).toBe(true);
+  });
+
   it('drain vide l\'état sans rendre deux fois la même écoute', () => {
     const tracker = new PlaybackStretchTracker();
     tracker.begin(0);

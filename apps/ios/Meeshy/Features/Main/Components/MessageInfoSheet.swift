@@ -11,6 +11,10 @@ struct ParticipantReceipt: Identifiable {
     let color: String
     let deliveredAt: Date?
     let readAt: Date?
+    /// Versions linguistiques dans lesquelles ce lecteur a consulté le message.
+    /// Vide pour une lecture antérieure à la mesure, ou pour un client qui ne
+    /// rapporte pas encore sa langue.
+    var viewedLanguages: [String] = []
 }
 
 struct MessageReadStatusResponse: Decodable {
@@ -23,6 +27,8 @@ struct MessageReadStatusResponse: Decodable {
     /// Per-attachment, per-participant playback progress (audio/video).
     /// Optional so older gateway responses (before this shipped) still decode.
     let attachmentConsumption: [AttachmentConsumptionEntry]?
+    /// Répartition des LECTEURS du message par version linguistique.
+    let languageBreakdown: [LanguageCount]?
 
     struct ReceivedEntry: Decodable {
         let participantId: String
@@ -36,11 +42,23 @@ struct MessageReadStatusResponse: Decodable {
         let displayName: String
         let avatarURL: String?
         let readAt: Date
+        /// Optionnel : une réponse d'un gateway antérieur au prisme n'en porte pas.
+        let viewedLanguages: [String]?
+    }
+
+    /// Répartition des lecteurs par version consultée. Un lecteur qui a basculé
+    /// compte dans CHAQUE version : la somme peut dépasser `readCount`.
+    struct LanguageCount: Decodable {
+        let language: String
+        let count: Int
     }
 
     struct AttachmentConsumptionEntry: Decodable {
         let attachmentId: String
         let participants: [ParticipantConsumption]
+
+        /// Répartition linguistique propre à CE média.
+        let languageBreakdown: [LanguageCount]?
 
         struct ParticipantConsumption: Decodable {
             let participantId: String
@@ -50,6 +68,21 @@ struct MessageReadStatusResponse: Decodable {
             let listenedComplete: Bool
             let lastWatchPositionMs: Int?
             let watchedComplete: Bool
+            /// Portions RÉELLEMENT parcourues, doublons fusionnés. Dit ce que le
+            /// point d'arrêt tait : sauter au générique n'est pas tout écouter.
+            let listenCoverage: [CoverageSegment]?
+            let watchCoverage: [CoverageSegment]?
+            /// Nombre d'écoutes / visionnages ININTERROMPUS.
+            let listenStretchCount: Int?
+            let watchStretchCount: Int?
+            /// Nombre d'ouvertures, pour une image.
+            let viewCount: Int?
+            let viewedLanguages: [String]?
+        }
+
+        struct CoverageSegment: Decodable, Equatable {
+            let startMs: Int
+            let endMs: Int
         }
     }
 }
@@ -71,6 +104,10 @@ struct MessageInfoSheet: View {
     /// `/read-status` response. Lets the author see how far each participant
     /// listened to an audio / watched a video.
     @State private var attachmentConsumption: [String: [ParticipantMediaConsumption]] = [:]
+    /// Répartition linguistique du message et de chaque média — « m'a-t-on lu
+    /// dans ma langue, ou traduit, et dans laquelle ? ».
+    @State private var messageLanguageBreakdown: [MessageReadStatusResponse.LanguageCount] = []
+    @State private var attachmentLanguageBreakdown: [String: [MessageReadStatusResponse.LanguageCount]] = [:]
     @State private var isLoadingReceipts = false
     /// Active-recipient denominator fetched alongside read receipts. Falls back
     /// to the message's server-projected `recipientCount` when the read-status
@@ -443,12 +480,40 @@ struct MessageInfoSheet: View {
                         fraction: mediaFraction(for: entry, type: attachment.type, durationMs: attachment.duration ?? 0),
                         label: mediaProgressLabel(for: entry, type: attachment.type, durationMs: attachment.duration ?? 0),
                         accentHex: contactColor,
-                        isDark: isDark
+                        isDark: isDark,
+                        coverage: coverageSpans(for: entry, type: attachment.type, durationMs: attachment.duration ?? 0),
+                        languages: entry.viewedLanguages ?? [],
+                        showsProgressBar: attachment.type != .image
                     )
+                }
+                if let breakdown = attachmentLanguageBreakdown[attachment.id], !breakdown.isEmpty {
+                    LanguageBreakdownRow(counts: breakdown)
                 }
             }
             .padding(.leading, 44)
             .padding(.top, MeeshySpacing.xs)
+        }
+    }
+
+    /// Portions parcourues, ramenées à des fractions de la durée.
+    ///
+    /// Vide quand la durée est inconnue ou qu'aucune trace n'existe : la barre
+    /// retombe alors sur le remplissage continu, seule information disponible
+    /// pour une écoute antérieure à la mesure.
+    private func coverageSpans(
+        for entry: ParticipantMediaConsumption,
+        type: MeeshyMessageAttachment.AttachmentType,
+        durationMs: Int
+    ) -> [ClosedRange<Double>] {
+        guard durationMs > 0 else { return [] }
+        let segments = type == .video ? entry.watchCoverage : entry.listenCoverage
+        guard let segments, !segments.isEmpty else { return [] }
+
+        return segments.compactMap { segment in
+            let start = min(1, max(0, Double(segment.startMs) / Double(durationMs)))
+            let end = min(1, max(0, Double(segment.endMs) / Double(durationMs)))
+            guard end > start else { return nil }
+            return start...end
         }
     }
 
@@ -470,6 +535,24 @@ struct MessageInfoSheet: View {
         type: MeeshyMessageAttachment.AttachmentType,
         durationMs: Int
     ) -> String {
+        // Une image ne se mesure pas en secondes mais en OUVERTURES : `viewedAt`
+        // seul rendait une image regardée dix fois indistinguable d'une image
+        // entrevue une seule.
+        if type == .image {
+            let count = entry.viewCount ?? 0
+            guard count > 0 else {
+                return String(localized: "common.pending", defaultValue: "En attente", bundle: .main)
+            }
+            return String(
+                format: String(
+                    localized: "message-info.consumption.opened-count",
+                    defaultValue: "Ouverte %d fois",
+                    bundle: .main
+                ),
+                count
+            )
+        }
+
         let isVideo = type == .video
         let complete = isVideo ? entry.watchedComplete : entry.listenedComplete
         if complete {
@@ -758,7 +841,8 @@ struct MessageInfoSheet: View {
                     avatarURL: entry.avatarURL,
                     color: DynamicColorGenerator.colorForName(entry.displayName),
                     deliveredAt: receivedLookup[entry.participantId]?.receivedAt,
-                    readAt: entry.readAt
+                    readAt: entry.readAt,
+                    viewedLanguages: entry.viewedLanguages ?? []
                 )
             }
 
@@ -779,7 +863,11 @@ struct MessageInfoSheet: View {
                 attachmentConsumption = Dictionary(
                     uniqueKeysWithValues: consumption.map { ($0.attachmentId, $0.participants) }
                 )
+                attachmentLanguageBreakdown = Dictionary(
+                    uniqueKeysWithValues: consumption.map { ($0.attachmentId, $0.languageBreakdown ?? []) }
+                )
             }
+            messageLanguageBreakdown = status.languageBreakdown ?? []
         } catch {
             // Non-critical — aggregated counts still visible in timeline
         }
@@ -799,6 +887,15 @@ private struct ParticipantMediaProgressRow: View, Equatable {
     let label: String
     let accentHex: String
     let isDark: Bool
+    /// Portions RÉELLEMENT parcourues, en fractions de la durée. Vide ⇒ la
+    /// barre retombe sur le remplissage continu jusqu'au point d'arrêt, seule
+    /// information disponible pour une écoute antérieure à la mesure.
+    var coverage: [ClosedRange<Double>] = []
+    /// Versions linguistiques consommées, affichées telles quelles.
+    var languages: [String] = []
+    /// Une image n'a pas de progression : une barre vide y suggérerait à tort
+    /// une consommation partielle.
+    var showsProgressBar: Bool = true
 
     private var theme: ThemeManager { ThemeManager.shared }
 
@@ -815,6 +912,9 @@ private struct ParticipantMediaProgressRow: View, Equatable {
                         .font(MeeshyFont.relative(12, weight: .medium))
                         .foregroundColor(theme.textSecondary)
                         .lineLimit(1)
+                    if !languages.isEmpty {
+                        LanguageBadges(codes: languages)
+                    }
                     Spacer(minLength: MeeshySpacing.sm)
                     Text(label)
                         .font(MeeshyFont.relative(10, weight: .medium))
@@ -822,20 +922,120 @@ private struct ParticipantMediaProgressRow: View, Equatable {
                         .monospacedDigit()
                 }
 
+                if showsProgressBar {
                 GeometryReader { geo in
                     let clamped = min(1, max(0, fraction))
                     ZStack(alignment: .leading) {
                         Capsule(style: .continuous)
                             .fill(theme.textMuted.opacity(isDark ? 0.18 : 0.12))
-                        Capsule(style: .continuous)
-                            .fill(Color(hex: accentHex).opacity(0.85))
-                            .frame(width: max(clamped > 0 ? 2 : 0, geo.size.width * CGFloat(clamped)))
+                        if coverage.isEmpty {
+                            Capsule(style: .continuous)
+                                .fill(Color(hex: accentHex).opacity(0.85))
+                                .frame(width: max(clamped > 0 ? 2 : 0, geo.size.width * CGFloat(clamped)))
+                        } else {
+                            // Un trou dans la barre dit ce qu'un remplissage
+                            // continu masque : ce passage n'a jamais été écouté.
+                            ForEach(Array(coverage.enumerated()), id: \.offset) { _, span in
+                                let start = geo.size.width * CGFloat(span.lowerBound)
+                                let width = geo.size.width * CGFloat(span.upperBound - span.lowerBound)
+                                Capsule(style: .continuous)
+                                    .fill(Color(hex: accentHex).opacity(0.85))
+                                    .frame(width: max(2, width))
+                                    .offset(x: start)
+                            }
+                        }
                     }
                 }
                 .frame(height: 3)
+                }
             }
         }
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(name): \(label)")
+        .accessibilityLabel(
+            languages.isEmpty
+                ? "\(name): \(label)"
+                : "\(name): \(label), \(languages.joined(separator: ", "))"
+        )
+    }
+}
+
+// MARK: - Language Breakdown
+
+/// Répartition des consommateurs par version linguistique.
+///
+/// Un lecteur qui a basculé compte dans CHAQUE version qu'il a consultée : la
+/// somme peut donc dépasser le nombre de lecteurs, et c'est exact.
+private struct LanguageBreakdownRow: View, Equatable {
+    let counts: [MessageReadStatusResponse.LanguageCount]
+
+    private var theme: ThemeManager { ThemeManager.shared }
+
+    static func == (lhs: Self, rhs: Self) -> Bool {
+        lhs.counts.map { "\($0.language):\($0.count)" } == rhs.counts.map { "\($0.language):\($0.count)" }
+    }
+
+    var body: some View {
+        HStack(spacing: MeeshySpacing.sm) {
+            Image(systemName: "globe")
+                .font(MeeshyFont.relative(10, weight: .semibold))
+                .foregroundColor(theme.textMuted)
+                .accessibilityHidden(true)
+
+            ForEach(counts, id: \.language) { entry in
+                HStack(spacing: 3) {
+                    LanguageBadges(codes: [entry.language])
+                    Text("\(entry.count)")
+                        .font(MeeshyFont.relative(10, weight: .semibold))
+                        .foregroundColor(theme.textSecondary)
+                        .monospacedDigit()
+                }
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(.top, 2)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(
+            counts
+                .map { "\($0.count) en \($0.language)" }
+                .joined(separator: ", ")
+        )
+    }
+}
+
+// MARK: - Language Badges
+
+/// Versions linguistiques consommées, en pastilles compactes.
+///
+/// Le drapeau seul serait ambigu — plusieurs langues le partagent, et une
+/// langue en a parfois plusieurs. Le CODE est donc toujours écrit ; le drapeau
+/// n'est qu'un repère visuel quand il existe.
+private struct LanguageBadges: View, Equatable {
+    let codes: [String]
+
+    private var theme: ThemeManager { ThemeManager.shared }
+
+    var body: some View {
+        HStack(spacing: 3) {
+            ForEach(codes, id: \.self) { code in
+                Text(badge(for: code))
+                    .font(MeeshyFont.relative(9, weight: .semibold))
+                    .foregroundColor(theme.textMuted)
+                    .padding(.horizontal, 4)
+                    .padding(.vertical, 1)
+                    .background(
+                        Capsule(style: .continuous)
+                            .fill(theme.textMuted.opacity(0.12))
+                    )
+            }
+        }
+        .accessibilityHidden(true)
+    }
+
+    private func badge(for code: String) -> String {
+        let flag = LanguageData.allLanguages
+            .first { $0.code.lowercased() == code.lowercased() }?
+            .flag
+        guard let flag, !flag.isEmpty else { return code.uppercased() }
+        return "\(flag) \(code.uppercased())"
     }
 }
