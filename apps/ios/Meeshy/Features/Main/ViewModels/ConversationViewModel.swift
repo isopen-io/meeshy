@@ -2223,11 +2223,11 @@ class ConversationViewModel: ObservableObject {
     nonisolated static func optimisticListPreview(text: String, messageType: Message.MessageType) -> String {
         if !text.isEmpty { return text }
         switch messageType {
-        case .image: return "📷 Photo"
-        case .video: return "🎥 Vidéo"
-        case .audio: return "🎙️ Message vocal"
-        case .file: return "📎 Fichier"
-        case .location: return "📍 Position"
+        case .image: return String(localized: "media.summary.photo", defaultValue: "📷 Photo", bundle: .main)
+        case .video: return String(localized: "media.summary.video", defaultValue: "🎥 Vidéo", bundle: .main)
+        case .audio: return String(localized: "media.summary.voice", defaultValue: "🎙️ Message vocal", bundle: .main)
+        case .file: return String(localized: "media.summary.file", defaultValue: "📎 Fichier", bundle: .main)
+        case .location: return String(localized: "media.summary.location", defaultValue: "📍 Position", bundle: .main)
         default: return ""
         }
     }

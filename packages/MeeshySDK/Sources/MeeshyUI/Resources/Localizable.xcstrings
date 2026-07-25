@@ -29416,6 +29416,856 @@
           }
         }
       }
+    },
+    "auth.registration.header.pseudo" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Un pseudo unique, comme toi"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "A username as unique as you"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Un usuario único, como tú"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ein Nutzername, so einzigartig wie du"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Um nome de usuário único, como você"
+          }
+        }
+      }
+    },
+    "auth.registration.header.phone" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ton numéro, ta clé de secours"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Your number, your backup key"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tu número, tu llave de respaldo"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Deine Nummer, dein Ersatzschlüssel"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Seu número, sua chave reserva"
+          }
+        }
+      }
+    },
+    "auth.registration.header.email" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ton email, ton filet de sécurité"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Your email, your safety net"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tu correo, tu red de seguridad"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Deine E-Mail, dein Sicherheitsnetz"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Seu e-mail, sua rede de segurança"
+          }
+        }
+      }
+    },
+    "auth.registration.header.identity" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dis-nous qui tu es"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tell us who you are"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cuéntanos quién eres"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sag uns, wer du bist"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Conte quem você é"
+          }
+        }
+      }
+    },
+    "auth.registration.header.password" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mets un code béton!"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pick a rock-solid password!"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "¡Elige una contraseña de hierro!"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wähle ein bombenfestes Passwort!"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Escolha uma senha à prova de bala!"
+          }
+        }
+      }
+    },
+    "auth.registration.header.language" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Parle ta langue, on traduit"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Speak your language, we translate"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Habla tu idioma, nosotros traducimos"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sprich deine Sprache, wir übersetzen"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fale sua língua, a gente traduz"
+          }
+        }
+      }
+    },
+    "auth.registration.header.profile" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Montre-toi sous ton plus beau jour"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Show yourself at your best"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Muéstrate en tu mejor versión"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zeig dich von deiner besten Seite"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mostre o seu melhor lado"
+          }
+        }
+      }
+    },
+    "auth.registration.header.recap" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Le monde t'attend!"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The world is waiting for you!"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "¡El mundo te espera!"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Die Welt wartet auf dich!"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "O mundo está te esperando!"
+          }
+        }
+      }
+    },
+    "auth.registration.subtitle.pseudo" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Choisis le nom que le monde va retenir — de Douala à Paris, de São Paulo à Tokyo. Sois créatif!"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pick the name the world will remember — from Douala to Paris, from São Paulo to Tokyo. Get creative!"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Elige el nombre que el mundo recordará — de Duala a París, de São Paulo a Tokio. ¡Sé creativo!"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wähle den Namen, den sich die Welt merken wird — von Douala bis Paris, von São Paulo bis Tokio. Sei kreativ!"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Escolha o nome que o mundo vai lembrar — de Douala a Paris, de São Paulo a Tóquio. Seja criativo!"
+          }
+        }
+      }
+    },
+    "auth.registration.subtitle.phone" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Il vérifie que ton compte est unique, sécurise tes engagements et te le rend si tu perds l'accès. Jamais affiché publiquement."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "It proves your account is unique, secures your commitments and gets it back to you if you lose access. Never shown publicly."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Confirma que tu cuenta es única, protege tus compromisos y te la devuelve si pierdes el acceso. Nunca se muestra públicamente."
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sie bestätigt, dass dein Konto einzigartig ist, sichert deine Zusagen ab und gibt es dir zurück, wenn du den Zugang verlierst. Wird nie öffentlich angezeigt."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ele confirma que sua conta é única, protege seus compromissos e a devolve se você perder o acesso. Nunca aparece publicamente."
+          }
+        }
+      }
+    },
+    "auth.registration.subtitle.email" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Indispensable pour récupérer ton compte et confirmer tes engagements. Zéro spam, promis!"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Essential to recover your account and confirm your commitments. Zero spam, promise!"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Imprescindible para recuperar tu cuenta y confirmar tus compromisos. ¡Cero spam, prometido!"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Unverzichtbar, um dein Konto wiederherzustellen und deine Zusagen zu bestätigen. Null Spam, versprochen!"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Essencial para recuperar sua conta e confirmar seus compromissos. Zero spam, prometido!"
+          }
+        }
+      }
+    },
+    "auth.registration.subtitle.identity" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ton vrai nom, c'est ce qui permet à tes proches de te retrouver — et de prouver que ton compte est bien à toi."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Your real name is what lets the people close to you find you — and proves the account is really yours."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tu nombre real es lo que permite a tus allegados encontrarte — y demuestra que la cuenta es realmente tuya."
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dein echter Name lässt dich von deinen Nächsten finden — und beweist, dass das Konto wirklich dir gehört."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Seu nome real é o que permite que seus próximos te encontrem — e prova que a conta é realmente sua."
+          }
+        }
+      }
+    },
+    "auth.registration.subtitle.password" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Faut que ce soit fort comme le ndolé de maman! Minimum 8 caractères!"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Make it as strong as your mum's cooking! At least 8 characters!"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "¡Que sea tan fuerte como el guiso de mamá! ¡Mínimo 8 caracteres!"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "So kräftig wie Mamas Eintopf! Mindestens 8 Zeichen!"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Que seja forte como a comida da mamãe! No mínimo 8 caracteres!"
+          }
+        }
+      }
+    },
+    "auth.registration.subtitle.language" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Choisis ta langue, Meeshy traduit tout: tes amis du Sénégal, du Canada, du Brésil, du Japon ou d'Australie te liront dans la leur."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pick your language, Meeshy translates everything: your friends in Senegal, Canada, Brazil, Japan or Australia will read you in theirs."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Elige tu idioma, Meeshy traduce todo: tus amigos de Senegal, Canadá, Brasil, Japón o Australia te leerán en el suyo."
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wähle deine Sprache, Meeshy übersetzt alles: Deine Freunde in Senegal, Kanada, Brasilien, Japan oder Australien lesen dich in ihrer."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Escolha sua língua, o Meeshy traduz tudo: seus amigos do Senegal, Canadá, Brasil, Japão ou Austrália vão te ler na deles."
+          }
+        }
+      }
+    },
+    "auth.registration.subtitle.profile" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Une belle photo et une bannière soignée ouvrent toutes les portes: c'est comme ça qu'on rencontre la crème de la crème, ici et sur les 5 continents."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "A good photo and a polished banner open every door: that's how you meet the very best, here and across all 5 continents."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Una buena foto y un banner cuidado abren todas las puertas: así se conoce a la flor y nata, aquí y en los 5 continentes."
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ein gutes Foto und ein gepflegtes Banner öffnen alle Türen: So trifft man die Crème de la Crème, hier und auf allen 5 Kontinenten."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Uma boa foto e um banner caprichado abrem todas as portas: é assim que se conhece a nata, aqui e nos 5 continentes."
+          }
+        }
+      }
+    },
+    "auth.registration.subtitle.recap" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tu y es! Des rencontres t'attendent sur les 5 continents. Bienvenue dans la famille Meeshy!"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "You're in! Encounters await you across all 5 continents. Welcome to the Meeshy family!"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "¡Ya estás! Te esperan encuentros en los 5 continentes. ¡Bienvenido a la familia Meeshy!"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Du bist dabei! Begegnungen auf allen 5 Kontinenten warten auf dich. Willkommen in der Meeshy-Familie!"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Você chegou! Encontros esperam por você nos 5 continentes. Bem-vindo à família Meeshy!"
+          }
+        }
+      }
+    },
+    "story.composer.tool.title.media" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Médias"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Media"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Multimedia"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Medien"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mídia"
+          }
+        }
+      }
+    },
+    "story.composer.tool.title.audio" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Son"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sound"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sonido"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ton"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Som"
+          }
+        }
+      }
+    },
+    "story.composer.tool.title.drawing" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dessin"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Drawing"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dibujo"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zeichnung"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Desenho"
+          }
+        }
+      }
+    },
+    "story.composer.tool.title.text" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Texte"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Text"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Texto"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Text"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Texto"
+          }
+        }
+      }
+    },
+    "story.composer.tool.title.texture" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fond"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Background"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fondo"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hintergrund"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fundo"
+          }
+        }
+      }
+    },
+    "story.audio.chip.muted" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Coupé"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Muted"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Silenciado"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Stumm"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sem som"
+          }
+        }
+      }
+    },
+    "story.audio.chip.active" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Actif"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Active"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Activo"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aktiv"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ativo"
+          }
+        }
+      }
+    },
+    "story.audio.chip.hint.composer" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Double tap pour sélectionner. Faites glisser pour déplacer."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Double tap to select. Drag to move."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Toca dos veces para seleccionar. Arrastra para mover."
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Doppeltippen zum Auswählen. Ziehen zum Verschieben."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Toque duas vezes para selecionar. Arraste para mover."
+          }
+        }
+      }
+    },
+    "story.audio.chip.hint.reader" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Double tap pour couper ou activer cette piste audio."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Double tap to mute or unmute this audio track."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Toca dos veces para silenciar o activar esta pista de audio."
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Doppeltippen, um diese Tonspur stumm zu schalten oder zu aktivieren."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Toque duas vezes para silenciar ou ativar esta faixa de áudio."
+          }
+        }
+      }
     }
   },
   "version" : "1.0"

@@ -98,11 +98,11 @@ struct ComposerToolSwitcherHeader: View {
 
     static func title(for tool: StoryToolMode) -> String {
         switch tool {
-        case .media:    return "Médias"
-        case .audio:    return "Son"
-        case .drawing:  return "Dessin"
-        case .text:     return "Texte"
-        case .texture:  return "Fond"
+        case .media:    return String(localized: "story.composer.tool.title.media", defaultValue: "Médias", bundle: .module)
+        case .audio:    return String(localized: "story.composer.tool.title.audio", defaultValue: "Son", bundle: .module)
+        case .drawing:  return String(localized: "story.composer.tool.title.drawing", defaultValue: "Dessin", bundle: .module)
+        case .text:     return String(localized: "story.composer.tool.title.text", defaultValue: "Texte", bundle: .module)
+        case .texture:  return String(localized: "story.composer.tool.title.texture", defaultValue: "Fond", bundle: .module)
         case .filters:  return "Effets"
         case .timeline: return "Timeline"
         }

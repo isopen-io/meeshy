@@ -1689,10 +1689,10 @@ public enum PostType: String, CaseIterable, Sendable {
 
     public var displayName: String {
         switch self {
-        case .post: return "Post"
-        case .reel: return "Réel"
-        case .story: return "Story"
-        case .status: return "Status"
+        case .post: return String(localized: "content.type.post", defaultValue: "Post", bundle: .main)
+        case .reel: return String(localized: "content.type.reel", defaultValue: "Réel", bundle: .main)
+        case .story: return String(localized: "content.type.story", defaultValue: "Story", bundle: .main)
+        case .status: return String(localized: "content.type.status", defaultValue: "Statut", bundle: .main)
         }
     }
 

@@ -235,16 +235,16 @@ public struct AudioForegroundChip: View {
         case .composer:
             return isSelected ? "Sélectionné" : "Non sélectionné"
         case .reader:
-            return isUserMuted ? "Coupé" : "Actif"
+            return isUserMuted ? String(localized: "story.audio.chip.muted", defaultValue: "Coupé", bundle: .module) : String(localized: "story.audio.chip.active", defaultValue: "Actif", bundle: .module)
         }
     }
 
     private var accessibilityHintLabel: String {
         switch mode {
         case .composer:
-            return "Double tap pour sélectionner. Faites glisser pour déplacer."
+            return String(localized: "story.audio.chip.hint.composer", defaultValue: "Double tap pour sélectionner. Faites glisser pour déplacer.", bundle: .module)
         case .reader:
-            return "Double tap pour couper ou activer cette piste audio."
+            return String(localized: "story.audio.chip.hint.reader", defaultValue: "Double tap pour couper ou activer cette piste audio.", bundle: .module)
         }
     }
 
