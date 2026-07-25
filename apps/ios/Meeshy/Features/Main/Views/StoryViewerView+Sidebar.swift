@@ -57,7 +57,11 @@ nonisolated struct StoryActionRailPlan: Equatable {
             showsExport: isOwnStory,
             showsSound: hasAudibleSound,
             showsComments: commentCount > 0,
-            showsTranslations: !isOwnStory && hasTranslatableContent
+            // Les traductions ne sont PAS réservées aux lecteurs (changement
+            // 2026-07-25) : l'auteur explore les langues de sa propre story
+            // comme il choisit déjà sa langue d'export. Le Prisme est un outil
+            // de lecture, pas une permission.
+            showsTranslations: hasTranslatableContent
         )
     }
 }
@@ -95,6 +99,10 @@ struct StoryActionSidebarView: View {
     let storyHasTranslatableContent: Bool
     let isGlobalMuted: Bool
     let availableTranslationLanguages: [TranslationLanguage]
+    /// Langue d'exploration en cours (`nil` = la chaine préférée de l'utilisateur
+    /// s'applique, aucun override). Marque le drapeau correspondant dans le strip
+    /// pour que « quelle langue je lis » soit lisible d'un coup d'œil.
+    let activeLanguageCode: String?
     /// Prisme « Exploration » : affiche la story dans la langue choisie (override éphémère).
     let onSelectLanguageOverride: (String) -> Void
 
@@ -469,9 +477,20 @@ struct StoryActionSidebarView: View {
                                 Text(lang.flag)
                                     .font(.system(size: 22))
                                     .frame(width: 38, height: 38)
-                                    .background(Circle().fill(Color.white.opacity(0.1)))
+                                    .background(
+                                        Circle().fill(Color.white.opacity(
+                                            lang.id == activeLanguageCode ? 0.22 : 0.1))
+                                    )
+                                    .overlay {
+                                        // Anneau indigo sur la langue lue — le Prisme
+                                        // signale, il n'interpelle pas.
+                                        if lang.id == activeLanguageCode {
+                                            Circle().stroke(MeeshyColors.indigo400, lineWidth: 2)
+                                        }
+                                    }
                             }
                             .accessibilityLabel(String(localized: "story.viewer.a11y.viewIn", defaultValue: "Voir en \(lang.name)", bundle: .main))
+                            .accessibilityAddTraits(lang.id == activeLanguageCode ? [.isSelected] : [])
                         }
                     }
                     .padding(.horizontal, 10)

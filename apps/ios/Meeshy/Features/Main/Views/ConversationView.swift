@@ -644,6 +644,11 @@ struct ConversationView: View {
                     // see docs/lessons on @EnvironmentObject-across-sheet).
                     .environmentObject(statusViewModel)
             }
+            // Flou du fond quand l'overlay d'appui-long est ouvert — appliqué
+            // AVANT `.overlay` pour ne flouter que la conversation, jamais le
+            // menu (bulle liftée + barres) qui se pose au-dessus, net.
+            .blur(radius: overlayState.showOverlayMenu ? 12 : 0)
+            .animation(.easeOut(duration: 0.28), value: overlayState.showOverlayMenu)
             .overlay { overlayMenuContent }
             .onPreferenceChange(MessageFramePreferenceKey.self) { frames in
                 frameTracker.update(frames)
@@ -754,9 +759,13 @@ struct ConversationView: View {
                 }
             }
             .sheet(item: $overlayState.fullReactionPickerMessage) { msg in
-                EmojiPickerSheet(
-                    quickReactions: ["❤️", "😂", "👍", "🔥", "😍", "😮", "😢", "👏", "🎉"],
-                    onSelect: { emoji in
+                // Picker CATÉGORISÉ (Reactions/Visages/Gestes/Cœurs/Animaux/Objets),
+                // titre « Reactions », SANS Close ni recherche, chrome Liquid Glass —
+                // le « + » de la barre de réactions ouvre ce picker, pas le clavier
+                // emoji standard.
+                CategorizedEmojiPickerSheet(
+                    style: isDark ? .dark : .light,
+                    onReact: { emoji in
                         viewModel.toggleReaction(messageId: msg.id, emoji: emoji)
                         overlayState.fullReactionPickerMessage = nil
                     }
@@ -1153,6 +1162,10 @@ struct ConversationView: View {
                     // et sera utilisée ensuite pour lifter la bulle dans le flow
                     // du menu existant (sans remplacer le menu lui-même).
                     guard overlayState.longPressEnabled else { return }
+                    // Exclusivité mutuelle : si la barre de quick-reaction est
+                    // déjà ouverte, l'appui-long ne fait rien (une seule feature
+                    // active à la fois).
+                    guard overlayState.quickReactionMessageId == nil else { return }
                     guard let msg = viewModel.messages.first(where: { $0.id == messageId }) else { return }
                     if msg.callSummary != nil {
                         overlayState.callDetailMessage = msg
@@ -1171,6 +1184,12 @@ struct ConversationView: View {
                     overlayState.callDetailMessage = msg
                 },
                 onAddReaction: { messageId, bubbleFrame in
+                    // Exclusivité mutuelle : ouvrir la barre de quick-reaction
+                    // ferme d'abord l'overlay d'appui-long s'il est visible.
+                    if overlayState.showOverlayMenu {
+                        overlayState.showOverlayMenu = false
+                        overlayState.overlayMessage = nil
+                    }
                     // Spring-open the emoji bar anchored to the tapped bubble
                     // (appears below it, flips above near the composer).
                     withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {

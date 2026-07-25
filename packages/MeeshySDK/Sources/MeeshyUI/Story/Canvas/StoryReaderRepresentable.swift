@@ -207,10 +207,18 @@ public struct StoryReaderRepresentable: UIViewRepresentable {
     }
 
     public func updateUIView(_ view: StoryCanvasUIView, context: Context) {
+        // Le changement de langue ne touche NI l'id NI le `content` du slide
+        // (la légende du post n'a pas forcément de traduction) : sans ce test,
+        // choisir une langue dans le strip du viewer laissait le canvas afficher
+        // les textes dans l'ancienne langue (bug 2026-07-25).
+        let languagesChanged = view.readerContext.preferredLanguages != preferredLanguages
         let newSlide = storyItem.toRenderableSlide(preferredLanguages: preferredLanguages)
         let identityChanged = newSlide.id != view.slide.id
-        if identityChanged || newSlide.content != view.slide.content {
+        if identityChanged || languagesChanged || newSlide.content != view.slide.content {
             view.slide = newSlide
+        }
+        if languagesChanged {
+            view.setPreferredLanguages(preferredLanguages)
         }
         if identityChanged && !isOutgoing {
             // Reset défensif de la timeline canvas quand l'id slide change :

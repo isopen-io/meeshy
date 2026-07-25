@@ -455,6 +455,94 @@ public struct EmojiFullPickerSheet: View {
     }
 }
 
+/// Picker de réactions CATÉGORISÉ présenté en `.sheet` — titre « Reactions »,
+/// onglets `EmojiCategory` (Reactions / Visages / Gestes / Cœurs / Animaux /
+/// Objets) + grille. VOLONTAIREMENT sans bouton « Close » ni champ de recherche
+/// (contrairement au picker clavier standard) et chrome Liquid Glass
+/// (`adaptiveGlass`). Réutilise le tableau `EmojiCategory` (SSOT des catégories),
+/// partagé avec `EmojiFullPickerSheet` / `EmojiKeyboardPanel`. Pensé pour un
+/// `.sheet(item:)` avec `presentationDetents` fournis par l'appelant.
+public struct CategorizedEmojiPickerSheet: View {
+    public enum Style { case dark, light }
+    public var style: Style
+    public var onReact: ((String) -> Void)?
+
+    @State private var selectedCategory = 0
+    @State private var reactedEmoji: String?
+
+    public init(style: Style = .dark, onReact: ((String) -> Void)? = nil) {
+        self.style = style; self.onReact = onReact
+    }
+
+    public var body: some View {
+        VStack(spacing: 10) {
+            // Titre seul — pas de bouton Close (dismiss via drag/detent) ni recherche.
+            Text(String(localized: "emoji.picker.title", defaultValue: "Reactions", bundle: .module))
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundColor(style == .dark ? .white.opacity(0.85) : .primary)
+                .padding(.top, 16)
+                .padding(.bottom, 2)
+            categoryTabs
+            emojiGrid
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        // Chrome Liquid Glass (iOS 26) / material avant — la feuille translucide
+        // (`adaptiveSheetGlassBackground`) laisse le verre échantillonner le fond.
+        .adaptiveGlass(in: Rectangle())
+        .adaptiveSheetGlassBackground()
+    }
+
+    private var categoryTabs: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 2) {
+                ForEach(Array(EmojiCategory.all.enumerated()), id: \.element.id) { index, category in
+                    Button {
+                        withAnimation(.spring(response: 0.25, dampingFraction: 0.7)) { selectedCategory = index }
+                    } label: {
+                        VStack(spacing: 2) {
+                            Text(category.icon).font(.system(size: 20))
+                            Text(category.name)
+                                .font(.system(size: 9, weight: .medium))
+                                .foregroundColor(selectedCategory == index
+                                    ? (style == .dark ? .white : MeeshyColors.brandPrimary)
+                                    : (style == .dark ? .white.opacity(0.5) : .gray))
+                        }
+                        .padding(.horizontal, 10).padding(.vertical, 6)
+                        .background(
+                            RoundedRectangle(cornerRadius: 10)
+                                .fill(selectedCategory == index
+                                    ? (style == .dark ? Color.white.opacity(0.15) : MeeshyColors.brandPrimary.opacity(0.12))
+                                    : Color.clear)
+                        )
+                    }
+                }
+            }.padding(.horizontal, 12)
+        }.padding(.bottom, 4)
+    }
+
+    private var emojiGrid: some View {
+        let category = EmojiCategory.all[selectedCategory]
+        return ScrollView {
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 2), count: 8), spacing: 10) {
+                ForEach(category.emojis, id: \.self) { emoji in
+                    Button { selectEmoji(emoji) } label: {
+                        Text(emoji).font(.system(size: 30)).frame(maxWidth: .infinity)
+                            .scaleEffect(reactedEmoji == emoji ? 1.35 : 1.0)
+                            .animation(.spring(response: 0.2, dampingFraction: 0.5), value: reactedEmoji)
+                    }
+                }
+            }.padding(.horizontal, 10).padding(.vertical, 8)
+        }
+    }
+
+    private func selectEmoji(_ emoji: String) {
+        HapticFeedback.light()
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.5)) { reactedEmoji = emoji }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { withAnimation { reactedEmoji = nil } }
+        onReact?(emoji)
+    }
+}
+
 public struct EmojiKeyboardPanel: View {
     public enum Style { case dark, light }
     public var style: Style

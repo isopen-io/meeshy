@@ -1228,6 +1228,7 @@ struct StoryViewerView: View {
             storyHasBackgroundAudio: storyHasBackgroundAudio,
             isGlobalMuted: isGlobalMuted,
             availableTranslationLanguages: availableTranslationLanguages,
+            activeLanguageCode: sessionLanguageOverride,
             onReplyToStory: onReplyToStory,
             onSelectLanguageOverride: { lang in
                 withAnimation(.easeInOut(duration: 0.2)) { sessionLanguageOverride = lang }
@@ -1305,9 +1306,18 @@ struct StoryViewerView: View {
 
     // MARK: - Available Translation Languages
 
+    /// Drapeaux proposés par le strip « Traductions ». Couvre le texte du
+    /// CANVAS (`StoryTextObject.sourceLanguage` + clés de ses `translations`)
+    /// autant que la légende du post : avant 2026-07-25 seule la légende était
+    /// consultée, si bien qu'une story faite de texte sur le canvas — le cas
+    /// courant — n'offrait aucune langue à explorer malgré ses traductions.
     private var availableTranslationLanguages: [TranslationLanguage] {
-        guard let translations = currentStory?.translations, !translations.isEmpty else { return [] }
-        let availableCodes = Set(translations.map(\.language))
+        guard let story = currentStory else { return [] }
+        let availableCodes = Set(StoryTextLanguageAvailability.availableLanguages(
+            effects: story.storyEffects,
+            postTranslations: story.translations
+        ))
+        guard !availableCodes.isEmpty else { return [] }
         return TranslationLanguage.all.filter { availableCodes.contains($0.id) }
     }
 
@@ -1485,13 +1495,27 @@ struct StoryViewerView: View {
         for video in videos {
             // Already resolved (pre-probed during prefetch) — keep it.
             if videoAudioTrackPresence[video.id] != nil { continue }
-            guard let url = resolveVideoURL(for: video, in: story) else {
-                videoAudioTrackPresence[video.id] = false
-                continue
-            }
-            let tracks = try? await AVURLAsset(url: url).loadTracks(withMediaType: .audio)
+            let count = await probeAudioTrackCount(for: video, in: story)
             if Task.isCancelled { return }
-            videoAudioTrackPresence[video.id] = (tracks?.isEmpty == false)
+            videoAudioTrackPresence = StoryAudioAvailability.merging(
+                videoAudioTrackPresence, id: video.id, probedTrackCount: count)
+        }
+    }
+
+    /// Nombre de pistes audio de `media`, ou `nil` quand le probe n'a PAS pu
+    /// aboutir (URL non résolue, asset injoignable). La distinction est
+    /// essentielle : les deux probes sautent toute entrée déjà écrite, donc
+    /// enregistrer `false` sur un échec réseau masquait le bouton son pour
+    /// toute la session, réouverture comprise.
+    @MainActor
+    private func probeAudioTrackCount(for media: StoryMediaObject,
+                                      in story: StoryItem) async -> Int? {
+        guard let url = resolveVideoURL(for: media, in: story) else { return nil }
+        do {
+            return try await AVURLAsset(url: url).loadTracks(withMediaType: .audio).count
+        } catch {
+            Logger.media.debug("story sound probe failed for \(media.id, privacy: .public)")
+            return nil
         }
     }
 
@@ -1507,13 +1531,10 @@ struct StoryViewerView: View {
         guard !videos.isEmpty else { return }
         for video in videos {
             if videoAudioTrackPresence[video.id] != nil { continue }
-            guard let url = resolveVideoURL(for: video, in: story) else {
-                videoAudioTrackPresence[video.id] = false
-                continue
-            }
-            let tracks = try? await AVURLAsset(url: url).loadTracks(withMediaType: .audio)
+            let count = await probeAudioTrackCount(for: video, in: story)
             if Task.isCancelled { return }
-            videoAudioTrackPresence[video.id] = (tracks?.isEmpty == false)
+            videoAudioTrackPresence = StoryAudioAvailability.merging(
+                videoAudioTrackPresence, id: video.id, probedTrackCount: count)
         }
     }
 
@@ -1536,7 +1557,12 @@ struct StoryViewerView: View {
 
     var storyHasTranslatableContent: Bool { // internal for cross-file extension access
         guard let story = currentStory else { return false }
-        if let text = story.content, !text.isEmpty { return true }
+        // Texte du canvas ET légende — une story faite de texte posé sur le
+        // canvas est traduisible même sans légende (corrigé 2026-07-25 : seule
+        // la légende comptait, donc le bouton restait absent sur le cas le plus
+        // courant).
+        if StoryTextLanguageAvailability.hasTranslatableText(
+            effects: story.storyEffects, content: story.content) { return true }
         if let effects = story.storyEffects {
             if effects.voiceAttachmentId != nil { return true }
             if let audioObjs = effects.audioPlayerObjects, !audioObjs.isEmpty { return true }

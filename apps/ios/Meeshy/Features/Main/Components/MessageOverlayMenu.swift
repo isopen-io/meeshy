@@ -213,6 +213,19 @@ struct MessageOverlayMenu: View {
             // ── Géométrie native-lean : barre réactions (haut) + bulle + liste verticale (bas) ──
             let nlEmojiBarHeight: CGFloat = 52
             let nlGap: CGFloat = 12
+            // Écart bulle → liste d'actions RÉDUIT (iMessage-like) : le menu colle
+            // presque à la bulle liftée, distinct du gap barre-réactions → bulle.
+            let nlMenuGap: CGFloat = 6
+            // La frame source capturée (`messageBubbleFrame`) englobe le
+            // `.padding(.vertical, 8)` du row de la liste — MessageListView pose
+            // son `.background(GeometryReader{…frame(in:.global)})` sur `content()`
+            // QUI inclut ce padding. La bulle VISIBLE se termine donc ~8pt AVANT
+            // `nlBubbleTop + nlBubbleH`, ce qui creusait un vide sous la bulle.
+            // On soustrait cette bande transparente (scalée par `nlFitScale`) au
+            // seul calcul de `nlMenuY` — `nlBubbleH` (rendu de la bulle) reste
+            // inchangé — pour coller le menu à la bulle VISIBLE, façon iMessage.
+            // Net : gap visible ≈ nlMenuGap (~4-6pt) au lieu de ~14pt.
+            let nlRowBottomPaddingEstimate: CGFloat = 8
             let nlSidePadding: CGFloat = 16
             let nlMenuWidth: CGFloat = MessageActionsMenu.menuWidth
             let nlMenuHeight: CGFloat = MessageActionsMenu.estimatedSize(actionCount: primaryActions.count).height
@@ -220,13 +233,13 @@ struct MessageOverlayMenu: View {
             let nlAvailTop = safeTop + 12
             let nlAvailBottom = screenH - safeBottom - 12
             let nlAvailable = max(160, nlAvailBottom - nlAvailTop)
-            let nlChrome = nlEmojiBarHeight + nlGap * 2 + nlMenuHeight
+            let nlChrome = nlEmojiBarHeight + nlGap + nlMenuGap + nlMenuHeight
             let nlFitScale: CGFloat = (scaledBubbleHeight + nlChrome > nlAvailable)
                 ? max(0.4, min(bubblePreviewScale, max(60, nlAvailable - nlChrome) / max(1, bubbleRect.height)))
                 : bubblePreviewScale
             let nlBubbleW = bubbleRect.width * nlFitScale
             let nlBubbleH = bubbleRect.height * nlFitScale
-            let nlClusterH = nlEmojiBarHeight + nlGap + nlBubbleH + nlGap + nlMenuHeight
+            let nlClusterH = nlEmojiBarHeight + nlGap + nlBubbleH + nlMenuGap + nlMenuHeight
             let nlAnchorX: CGFloat = message.isMe
                 ? bubbleRect.maxX - nlBubbleW / 2
                 : bubbleRect.minX + nlBubbleW / 2
@@ -235,7 +248,7 @@ struct MessageOverlayMenu: View {
             let nlEmojiY = nlClusterTop + nlEmojiBarHeight / 2
             let nlBubbleTop = nlClusterTop + nlEmojiBarHeight + nlGap
             let nlBubbleMidY = nlBubbleTop + nlBubbleH / 2
-            let nlMenuY = nlBubbleTop + nlBubbleH + nlGap + nlMenuHeight / 2
+            let nlMenuY = nlBubbleTop + nlBubbleH - nlRowBottomPaddingEstimate * nlFitScale + nlMenuGap + nlMenuHeight / 2
             let nlMenuX = max(nlSidePadding + nlMenuWidth / 2, min(geometry.size.width - nlSidePadding - nlMenuWidth / 2, nlAnchorX))
             let nlEmojiX = max(nlSidePadding + nlEmojiWidth / 2, min(geometry.size.width - nlSidePadding - nlEmojiWidth / 2, nlAnchorX))
 

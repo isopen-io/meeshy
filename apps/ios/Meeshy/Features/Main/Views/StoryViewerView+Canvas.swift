@@ -770,6 +770,9 @@ struct StoryCardView: View {
     let storyHasBackgroundAudio: Bool
     let isGlobalMuted: Bool
     let availableTranslationLanguages: [TranslationLanguage]
+    /// Langue d'exploration active (`nil` = chaine préférée). Descendue en `let`
+    /// jusqu'au strip pour y marquer le drapeau lu.
+    let activeLanguageCode: String?
     let onReplyToStory: ((ReplyContext) -> Void)?
     /// Prisme « Exploration » : appelé quand l'utilisateur choisit une langue dans le
     /// picker/strip pour afficher le contenu dans cette langue (override éphémère).
@@ -1267,9 +1270,13 @@ struct StoryCardView: View {
 
             // === Translation indicator (Prisme Linguistique — discret) ===
             if isContentTranslated {
+                // Ancré à GAUCHE (2026-07-25) : en bottomTrailing le badge
+                // tombait pile sur le libellé « Traductions » du rail d'actions,
+                // qui occupe toute la colonne droite. Il partage désormais la
+                // bande des badges avec l'indicateur audio (centré), côté libre.
                 translationBadge
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
-                    .padding(.trailing, 16)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
+                    .padding(.leading, 16)
                     .padding(.bottom, topInset + 175)
                     .allowsHitTesting(false)
                     .accessibilityHidden(true)
@@ -1466,6 +1473,7 @@ struct StoryCardView: View {
                     storyHasTranslatableContent: storyHasTranslatableContent,
                     isGlobalMuted: isGlobalMuted,
                     availableTranslationLanguages: availableTranslationLanguages,
+                    activeLanguageCode: activeLanguageCode,
                     onSelectLanguageOverride: onSelectLanguageOverride,
                     showEmojiStrip: $showEmojiStrip,
                     showFullEmojiPicker: $showFullEmojiPicker,

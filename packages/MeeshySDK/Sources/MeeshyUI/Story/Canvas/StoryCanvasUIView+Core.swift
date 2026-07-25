@@ -108,6 +108,25 @@ extension StoryCanvasUIView {
         }
     }
 
+    /// Bascule la chaine de langues en cours de lecture (exploration du Prisme
+    /// depuis le viewer) sans toucher aux resolvers média posés à la
+    /// construction.
+    ///
+    /// Le rebuild des layers est indispensable : le cache de layers est indexé
+    /// sur une signature qui inclut la langue, et l'audio est re-schedulé parce
+    /// que `currentSlideKey` change — une story dont la voix existe en variante
+    /// TTS doit repartir dans la langue choisie.
+    public func setPreferredLanguages(_ languages: [String]) {
+        guard readerContext.preferredLanguages != languages else { return }
+        readerContext = readerContext.withPreferredLanguages(languages)
+        rebuildLayers()
+        if mode == .play {
+            lastAudioConfigRevision = nil
+            reconfigureAudioForPlayback()
+            startAudioPlayback()
+        }
+    }
+
     public func setMode(_ newMode: RenderMode, time: CMTime = .zero) {
         let wasPlay = mode == .play
         let didChange = mode != newMode

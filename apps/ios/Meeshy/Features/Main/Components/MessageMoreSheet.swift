@@ -48,6 +48,16 @@ struct MessageMoreSheet: View {
 
     var body: some View {
         VStack(spacing: 0) {
+            // Bouton de fermeture Liquid Glass en HAUT À DROITE (req 2026-07-25)
+            // — parité avec le « Close » du sheet réactions et le « X » de la vue
+            // Traduire. Remplace l'ancienne capsule « Annuler » épinglée en bas.
+            HStack {
+                Spacer()
+                closeButton
+            }
+            .padding(.horizontal, 16)
+            .padding(.top, 12)
+
             ScrollView(showsIndicators: false) {
                 VStack(spacing: 16) {
                     if let selectedItem, isExploration(selectedItem) {
@@ -94,6 +104,29 @@ struct MessageMoreSheet: View {
         } message: {
             Text(String(localized: "message-more.delete_media.confirm.message", defaultValue: "Cette action est irréversible.", bundle: .main))
         }
+    }
+
+    // MARK: - Close Button (Liquid Glass, haut-droite)
+
+    /// Bouton de fermeture en cercle Liquid Glass, aligné en HAUT À DROITE —
+    /// même chrome que le « X » des vues de détail (`MessageLanguageDetailView`,
+    /// composer story) et le « Close » du sheet réactions. Glyphe nu dans un
+    /// cercle verre. Remplace l'ancienne capsule « Annuler » du bas (req
+    /// 2026-07-25). Ferme la feuille.
+    private var closeButton: some View {
+        Button {
+            HapticFeedback.light()
+            dismiss()
+        } label: {
+            Image(systemName: "xmark")
+                .font(.subheadline.weight(.bold))
+                .foregroundColor(theme.textMuted)
+                .frame(width: 30, height: 30)
+                .adaptiveGlass(in: Circle())
+                .contentShape(Circle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .main))
     }
 
     // MARK: - Glass Grid Card
@@ -334,14 +367,19 @@ struct MessageMoreSheet: View {
                     HapticFeedback.light()
                     withAnimation(.easeInOut(duration: 0.2)) { selectedItem = nil }
                 } label: {
-                    Image(systemName: "xmark.circle.fill")
-                        .font(.subheadline)
+                    // « X » en cercle Liquid Glass (référence : boutons de
+                    // fermeture glass de l'app) — glyphe nu dans un cercle verre.
+                    Image(systemName: "xmark")
+                        .font(.caption.weight(.bold))
                         .foregroundColor(theme.textMuted)
+                        .frame(width: 28, height: 28)
+                        .adaptiveGlass(in: Circle())
+                        .contentShape(Circle())
                 }
                 .buttonStyle(.plain)
-                // Bouton icône seule (xmark.circle.fill) qui replie le contenu
-                // d'exploration inline — sans label, VoiceOver lisait le nom du
-                // symbole. Clé SSOT réutilisée (0 clé neuve).
+                // Bouton icône seule qui replie le contenu d'exploration inline —
+                // sans label texte, VoiceOver lisait le nom du symbole. Clé SSOT
+                // réutilisée (0 clé neuve).
                 .accessibilityLabel(String(localized: "common.close", defaultValue: "Fermer", bundle: .main))
             }
             .padding(.horizontal, 4)

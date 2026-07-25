@@ -43,6 +43,17 @@ struct MeeshyApp: App {
     private static var nearCapacityCancellable: AnyCancellable?
 
     init() {
+        // Prisme Linguistique — l'utilisateur consomme TOUT dans sa langue
+        // préférée, y compris le chrome de l'app (menus, boutons, libellés
+        // système). Applique l'override de langue UI (mis en cache au dernier
+        // login/refresh) le plus TÔT possible, avant la 1re vue. iOS lit
+        // `AppleLanguages` une SEULE fois au démarrage du process → l'override
+        // prend effet au (re)lancement, ce qui est acceptable (l'app est
+        // relancée aux tests). Garde-fous stricts dans `applyIfNeeded` : no-op
+        // si le cache est nil/vide/non-supporté (iOS garde alors la locale
+        // appareil), ne crashe jamais.
+        UILanguageOverride.applyIfNeeded()
+
         // Task 1.3 — register the BGProcessingTask identifier BEFORE the
         // scene is created. `BGTaskScheduler.register` MUST run before
         // `application(_:didFinishLaunchingWithOptions:)` returns, which
@@ -410,6 +421,10 @@ struct MeeshyApp: App {
                     Task { await FriendshipCache.shared.hydrate() }
                     await authManager.checkExistingSession()
                     hasCheckedSession = true
+                    // Prisme Linguistique — mémorise la langue UI (langue
+                    // principale de l'utilisateur) dès que la session cold-start
+                    // est résolue, pour l'appliquer au prochain lancement.
+                    UILanguageOverride.cache(from: authManager.currentUser?.systemLanguage)
                     // Splash gating : trois bornes temporelles concurrentes
                     //   floor   1.0s — laisse l'intro jouer : à 1.0s logo/title
                     //                    sont posés et le sous-titre (spring lancé
@@ -693,6 +708,13 @@ struct MeeshyApp: App {
                 .adaptiveOnChange(of: deepLinkRouter.pendingDeepLink) { _, link in
                     handleGuestDeepLink(link)
                 }
+                // Prisme Linguistique — dès que la langue principale de
+                // l'utilisateur change (login, changement de préférence), on la
+                // met en cache pour l'override de langue UI appliqué au prochain
+                // lancement (cf. `UILanguageOverride`).
+                .adaptiveOnChange(of: authManager.currentUser?.systemLanguage) { _, newLanguage in
+                    UILanguageOverride.cache(from: newLanguage)
+                }
             }
         }
     }
@@ -907,6 +929,63 @@ struct MeeshyApp: App {
                 toastManager.showError(authManager.errorMessage ?? String(localized: "magicLink.error.invalidLink", defaultValue: "Invalid or expired link", bundle: .main))
             }
         }
+    }
+}
+
+// MARK: - UI Language Override (Prisme Linguistique)
+
+/// Force le chrome de l'app (menus, boutons, libellés système) dans la langue
+/// principale configurée de l'utilisateur (`MeeshyUser.systemLanguage`) plutôt
+/// que la locale de l'appareil — le Prisme Linguistique appliqué au chrome :
+/// l'utilisateur consomme TOUT dans sa langue préférée.
+///
+/// Mécanisme : on écrit `AppleLanguages` dans `UserDefaults`. iOS lit cette clé
+/// UNE seule fois au démarrage du process → l'override prend effet au prochain
+/// (re)lancement (acceptable : l'app est relancée aux tests).
+///
+/// Garde-fous : on ne force JAMAIS une langue absente du catalogue traduit
+/// (`Localizable.xcstrings` = fr/en/es/de/pt-BR) — sinon `String(localized:)`
+/// afficherait la source FR à côté de libellés traduits (mélange de langues).
+/// Un cache nil/vide/non-supporté ⇒ no-op total (iOS gère la locale appareil).
+/// Aucune de ces opérations ne peut crasher.
+enum UILanguageOverride {
+    /// Langues réellement traduites dans `Localizable.xcstrings`. Toute langue
+    /// hors de cet ensemble est refusée (pas d'override).
+    static let supportedUICodes: [String] = ["fr", "en", "es", "de", "pt-BR"]
+
+    private static let cacheKey = "meeshy.ui.language"
+    private static let appleLanguagesKey = "AppleLanguages"
+
+    /// Normalise un code de langue vers un code UI supporté, ou `nil`.
+    /// - Comparaison insensible à la casse contre `supportedUICodes`.
+    /// - `pt` (ou `pt_PT`, `pt-BR`…) → `pt-BR` (seule variante portugaise traduite).
+    /// - Sinon réduit à la base 2-lettres lowercase et re-teste l'appartenance.
+    static func normalized(_ raw: String?) -> String? {
+        guard let trimmed = raw?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !trimmed.isEmpty else { return nil }
+        let lower = trimmed.lowercased()
+        if let exact = supportedUICodes.first(where: { $0.lowercased() == lower }) {
+            return exact
+        }
+        let base = lower.split(whereSeparator: { $0 == "-" || $0 == "_" })
+            .first.map(String.init) ?? lower
+        if base == "pt" { return "pt-BR" }
+        return supportedUICodes.first(where: { $0.lowercased() == base })
+    }
+
+    /// Mémorise la langue UI depuis la préférence utilisateur. No-op si la
+    /// langue n'est pas supportée (la valeur précédente / la locale appareil
+    /// reste en place).
+    static func cache(from systemLanguage: String?) {
+        guard let code = normalized(systemLanguage) else { return }
+        UserDefaults.standard.set(code, forKey: cacheKey)
+    }
+
+    /// Applique l'override au tout début du lancement (à appeler depuis
+    /// `MeeshyApp.init()`). No-op si le cache est absent/non-supporté.
+    static func applyIfNeeded() {
+        guard let cached = normalized(UserDefaults.standard.string(forKey: cacheKey)) else { return }
+        UserDefaults.standard.set([cached], forKey: appleLanguagesKey)
     }
 }
 

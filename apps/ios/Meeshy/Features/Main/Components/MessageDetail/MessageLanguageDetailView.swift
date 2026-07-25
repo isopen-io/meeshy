@@ -121,10 +121,16 @@ struct MessageLanguageDetailView: View {
                         Button {
                             withAnimation(.easeInOut(duration: 0.2)) { selectedLanguageCode = nil }
                         } label: {
-                            Image(systemName: "xmark.circle.fill")
-                                .font(.subheadline)
+                            // « X » en cercle Liquid Glass (glyphe nu dans un cercle
+                            // verre) — parité avec les autres boutons de fermeture.
+                            Image(systemName: "xmark")
+                                .font(.caption.weight(.bold))
                                 .foregroundColor(theme.textMuted)
+                                .frame(width: 28, height: 28)
+                                .adaptiveGlass(in: Circle())
+                                .contentShape(Circle())
                         }
+                        .buttonStyle(.plain)
                         .accessibilityLabel(String(localized: "message-detail.a11y.close-translation", defaultValue: "Fermer la traduction", bundle: .main))
                     }
 
