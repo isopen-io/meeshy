@@ -64,6 +64,63 @@ final class StoryExporter_VideoFramePixelTests: XCTestCase {
         XCTAssertLessThan(c.b, 90,
                           "Little blue expected for a red background. Got r=\(c.r) g=\(c.g) b=\(c.b)")
     }
+
+    // MARK: - Bug B — foreground overlay video pixels must be baked
+
+    @MainActor
+    func test_export_foregroundVideoOverlay_bakesOverlayPixels() async throws {
+        try XCTSkipIf(
+            ProcessInfo.processInfo.environment["MEESHY_SKIP_EXPORT_TESTS"] != nil,
+            "Export tests skipped via MEESHY_SKIP_EXPORT_TESTS env var"
+        )
+
+        // Blue image background.
+        let bgImageURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("bgimg_blue_\(UUID().uuidString).png")
+        defer { try? FileManager.default.removeItem(at: bgImageURL) }
+        try BackgroundVideoFixture.makeSolidImage(
+            color: .blue, size: CGSize(width: 1080, height: 1920), at: bgImageURL)
+
+        // Green foreground video overlay (square, centred).
+        let overlayURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("overlay_green_\(UUID().uuidString).mp4")
+        defer { try? FileManager.default.removeItem(at: overlayURL) }
+        try await BackgroundVideoFixture.makeVideo(
+            duration: 2.0,
+            size: CGSize(width: 480, height: 480),
+            at: overlayURL,
+            fill: (b: 0, g: 255, r: 0, a: 255)
+        )
+
+        let outputURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("export_overlay_\(UUID().uuidString).mp4")
+        defer { try? FileManager.default.removeItem(at: outputURL) }
+
+        let slide = BackgroundVideoFixture.imageBackgroundVideoOverlaySlide(
+            imageURL: bgImageURL,
+            overlayVideoURL: overlayURL,
+            overlayDurationSec: 2.0,
+            slideDuration: 2.0
+        )
+
+        try await Task.detached(priority: .userInitiated) {
+            try await StoryExporter.export(slide, to: outputURL)
+        }.value
+
+        // Centre falls inside the overlay → must be GREEN. On the buggy path the
+        // overlay's AVPlayerLayer is not captured, so the centre shows the blue
+        // background instead.
+        let centre = try await ExportPixelProbe.color(ofMP4: outputURL, atSeconds: 0.5, nx: 0.5, ny: 0.5)
+        XCTAssertGreaterThan(centre.g, 150,
+                             "Foreground overlay video (green) must be baked at the centre. Got r=\(centre.r) g=\(centre.g) b=\(centre.b)")
+        XCTAssertLessThan(centre.b, 120,
+                          "Centre must not be the blue background — the overlay covers it. Got r=\(centre.r) g=\(centre.g) b=\(centre.b)")
+
+        // A corner falls outside the overlay → must remain the BLUE background.
+        let corner = try await ExportPixelProbe.color(ofMP4: outputURL, atSeconds: 0.5, nx: 0.08, ny: 0.08)
+        XCTAssertGreaterThan(corner.b, 150,
+                             "Background blue must remain outside the overlay. Got r=\(corner.r) g=\(corner.g) b=\(corner.b)")
+    }
 }
 
 /// Pixel-probing helpers live OUTSIDE the `XCTestCase` subclass on purpose: a

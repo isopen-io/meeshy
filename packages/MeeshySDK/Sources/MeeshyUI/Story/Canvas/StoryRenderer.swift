@@ -111,6 +111,7 @@ public enum StoryRenderer {
                               imageCache: ImageCacheReader? = nil,
                               cache: StoryRendererCache? = nil,
                               backdropProvider: BackdropProvider? = nil,
+                              mediaFrameProvider: ((StoryMediaObject, CMTime) -> CGImage?)? = nil,
                               contentsScale: CGFloat = UIScreen.main.scale,
                               suppressDrawingOverlay: Bool = false) -> CALayer {
         let root = CALayer()
@@ -228,6 +229,20 @@ public enum StoryRenderer {
                     let base = fade ?? kfOverrides.opacity ?? 1.0
                     layer.opacity = Float(base * Double(factor))
                 }
+            }
+
+            // Export overlay video: pose the decoded frame as the media layer's
+            // `contents` each tick. The live `AVPlayerLayer` isn't captured by
+            // `layer.render(in:)`, and the cache doesn't rebuild the layer per
+            // frame (a keyframe-less overlay has a constant signature), so the
+            // frame is refreshed HERE — the same out-of-signature post-pass the
+            // fade block above uses. nil (outside window / decode failure)
+            // clears the contents, matching the live end-of-clip hide.
+            if let mediaFrameProvider,
+               let media = item as? StoryMediaObject,
+               media.kind == .video, !media.isBackground,
+               let mediaLayer = layer as? StoryMediaLayer {
+                mediaLayer.applyExportFrame(mediaFrameProvider(media, time))
             }
 
             // C2 (2026-07-25) — MÊME post-passe pour les textes et stickers.

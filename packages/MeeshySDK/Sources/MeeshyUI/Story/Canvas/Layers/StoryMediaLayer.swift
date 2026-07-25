@@ -251,6 +251,22 @@ public final class StoryMediaLayer: CALayer {
         if shouldRasterize { rasterizationScale = UIScreen.main.scale }
     }
 
+    /// Poses a decoded video frame as this layer's `contents` for the MP4 export
+    /// path. A foreground video renders live through an `AVPlayerLayer` sublayer
+    /// that `CALayer.render(in:)` does NOT capture, and a `thumbHash` placeholder
+    /// sublayer would occlude the frame — so we strip the live sublayers and pose
+    /// the frame as the layer's own contents (which `render(in:)` captures).
+    /// `resizeAspectFill` mirrors the player's `videoGravity`. Idempotent: after
+    /// the first call no sublayers remain to remove.
+    @MainActor
+    public func applyExportFrame(_ image: CGImage?) {
+        sublayers?.forEach { $0.removeFromSuperlayer() }
+        avPlayerLayer = nil
+        avPlayer?.pause()
+        contents = image
+        contentsGravity = .resizeAspectFill
+    }
+
     // MARK: - Sizing
 
     /// Rayon des coins arrondis du média, exprimé en proportion de son petit

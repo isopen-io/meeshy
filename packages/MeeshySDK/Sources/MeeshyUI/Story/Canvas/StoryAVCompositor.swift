@@ -37,6 +37,13 @@ public final class StoryAVCompositor: NSObject, nonisolated AVVideoCompositing, 
     /// `startRequest`.
     internal nonisolated let layerCache = StoryRendererCache()
 
+    /// Decodes foreground overlay video frames per export tick. One instance per
+    /// export session (like `layerCache`); it memoises an `AVAssetImageGenerator`
+    /// per media id. The live foreground video renders through an `AVPlayerLayer`
+    /// that `CALayer.render(in:)` cannot capture, so the compositor paints a
+    /// decoded frame from here as the media layer's contents instead.
+    private nonisolated let foregroundVideoFrameSource = StoryForegroundVideoFrameSource()
+
     /// Backdrop-capture instance reused across the export's frames. Lazily
     /// created on the main actor at the first `renderFrame` so we can stay
     /// `nonisolated` in `init` (AVFoundation instantiates the compositor via
@@ -141,6 +148,13 @@ public final class StoryAVCompositor: NSObject, nonisolated AVVideoCompositing, 
         // bridged main-actor block keeps `buffer` from crossing isolation
         // boundaries (CVPixelBuffer is not Sendable in Swift 6).
         let cache = layerCache
+        // Decode foreground overlay frames HERE, on the compositor's worker
+        // queue — NEVER inside the bridged `main.sync` below, where a synchronous
+        // `AVAssetImageGenerator` decode deadlocks against AVFoundation (the
+        // export would hang indefinitely). The provider then just looks up the
+        // pre-decoded frame by media id.
+        let overlayFrames = foregroundVideoFrameSource.decodeOverlayFrames(
+            slide: instruction.slide, at: request.compositionTime)
         DispatchQueue.main.sync {
             MainActor.assumeIsolated {
                 do {
@@ -154,6 +168,9 @@ public final class StoryAVCompositor: NSObject, nonisolated AVVideoCompositing, 
                                          backgroundVideoTransform: instruction.backgroundVideoTransform,
                                          cache: cache,
                                          backdropCapture: backdropCapture,
+                                         mediaFrameProvider: { media, _ in
+                                             overlayFrames[media.id]
+                                         },
                                          watermark: instruction.watermark)
                     request.finish(withComposedVideoFrame: buffer)
                 } catch {
@@ -201,6 +218,7 @@ public final class StoryAVCompositor: NSObject, nonisolated AVVideoCompositing, 
                                      backgroundVideoTransform: CGAffineTransform = .identity,
                                      cache: StoryRendererCache,
                                      backdropCapture: any BackdropCapturing,
+                                     mediaFrameProvider: ((StoryMediaObject, CMTime) -> CGImage?)? = nil,
                                      watermark: StoryExportWatermark? = nil) throws {
         // Scope check: flush the cache if the slide / languages / mode this
         // compositor is now processing differs from the previous frame's
@@ -226,6 +244,7 @@ public final class StoryAVCompositor: NSObject, nonisolated AVVideoCompositing, 
                                           backdropProvider: { frame in
                                               backdropCapture.cropRegion(frame)
                                           },
+                                          mediaFrameProvider: mediaFrameProvider,
                                           contentsScale: 1.0)
 
         // Opening transition — only visible during the first 0.5s. The

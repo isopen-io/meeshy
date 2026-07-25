@@ -2,6 +2,7 @@ import XCTest
 import AVFoundation
 import CoreMedia
 import CoreGraphics
+import UIKit
 @testable import MeeshyUI
 @testable import MeeshySDK
 
@@ -405,6 +406,58 @@ internal enum BackgroundVideoFixture {
 
         var effects = StoryEffects()
         effects.mediaObjects = [video]
+        effects.timelineDuration = slideDuration
+
+        return StorySlide(id: UUID().uuidString,
+                          effects: effects,
+                          duration: slideDuration,
+                          order: 0)
+    }
+
+    /// Writes a solid-colour PNG at `url` — used as an image background under a
+    /// foreground video overlay so the export's background reads a known colour.
+    static func makeSolidImage(color: UIColor, size: CGSize, at url: URL) throws {
+        let renderer = UIGraphicsImageRenderer(size: size)
+        let image = renderer.image { ctx in
+            color.setFill()
+            ctx.fill(CGRect(origin: .zero, size: size))
+        }
+        guard let data = image.pngData() else {
+            throw NSError(domain: "BackgroundVideoFixture", code: 10,
+                          userInfo: [NSLocalizedDescriptionKey: "pngData failed"])
+        }
+        try data.write(to: url)
+    }
+
+    /// Builds a `StorySlide` with an IMAGE background plus a square FOREGROUND
+    /// video overlay centred on the canvas. Used to prove the exporter bakes
+    /// overlay video pixels (Bug B), distinct from the background video path.
+    static func imageBackgroundVideoOverlaySlide(imageURL: URL,
+                                                 overlayVideoURL: URL,
+                                                 overlayDurationSec: Double,
+                                                 slideDuration: Double) -> StorySlide {
+        let background = StoryMediaObject(
+            postMediaId: UUID().uuidString,
+            mediaURL: imageURL.absoluteString,
+            mediaType: "image",
+            aspectRatio: 9.0 / 16.0,
+            isBackground: true,
+            startTime: 0.0,
+            duration: slideDuration
+        )
+        let overlay = StoryMediaObject(
+            postMediaId: UUID().uuidString,
+            mediaURL: overlayVideoURL.absoluteString,
+            mediaType: "video",
+            aspectRatio: 1.0,
+            scale: 1.0,
+            isBackground: false,
+            startTime: 0.0,
+            duration: overlayDurationSec
+        )
+
+        var effects = StoryEffects()
+        effects.mediaObjects = [background, overlay]
         effects.timelineDuration = slideDuration
 
         return StorySlide(id: UUID().uuidString,
