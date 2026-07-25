@@ -38,26 +38,28 @@ struct StoryAuthorIdentityCard: View {
     var contentOpacity: Double = 1.0
 
     var body: some View {
-        GeometryReader { geo in
-            ZStack {
+        // Le fond vit en `.background`, JAMAIS dans un ZStack avec l'identité.
+        // Dans un ZStack, la bannière `.scaledToFill()` impose sa taille
+        // intrinsèque au conteneur : le bloc identité était alors centré sur un
+        // espace plus large que l'écran et sortait par la gauche (mesuré à
+        // −227 pt le 2026-07-25, l'avatar et le nom coupés au bord).
+        // `.background` ne participe pas au dimensionnement — le centrage ne
+        // peut plus dériver, sans dépendre d'un `GeometryReader` ni d'un
+        // `.position()` calculé.
+        identityContent
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background {
                 bannerBackground
-                LinearGradient(
-                    colors: [.black.opacity(0.62), .black.opacity(0.28), .black.opacity(0.72)],
-                    startPoint: .top, endPoint: .bottom
-                )
-                // Centrage EXPLICITE (directive user 2026-07-14, le bloc identité
-                // rendait visiblement sous le centre réel de l'écran) : plutôt que
-                // de compter sur le centrage ambiant du ZStack (dérive documentée
-                // à travers plusieurs `.ignoresSafeArea()` imbriqués), on positionne
-                // `identityContent` au centre EXACT de `geo.size` — robuste quelle
-                // que soit la cause exacte de la dérive ambiante.
-                identityContent
-                    .position(x: geo.size.width / 2, y: geo.size.height / 2)
+                    .overlay(
+                        LinearGradient(
+                            colors: [.black.opacity(0.62), .black.opacity(0.28), .black.opacity(0.72)],
+                            startPoint: .top, endPoint: .bottom
+                        )
+                    )
             }
-            .frame(width: geo.size.width, height: geo.size.height)
-        }
-        .opacity(contentOpacity)
-        .environment(\.colorScheme, .dark)
+            .clipped()
+            .opacity(contentOpacity)
+            .environment(\.colorScheme, .dark)
     }
 
     /// Fallback UNIQUE (pas de banner / banner en échec ou en chargement) —

@@ -486,6 +486,11 @@ struct StoryViewerView: View {
             startTimer()
             markCurrentViewed()
             prefetchCurrentGroup()
+            // L'interlude ouvre AUSSI la première story de la session, pas
+            // seulement les changements de groupe (directive user 2026-07-25 :
+            // « maintenir les interludes partout »). L'appel vient après
+            // `startTimer()`, qui gèle la lecture tant que `showGroupIntro`.
+            presentGroupIntroIfNeeded()
             // Pré-résolution des identités voisines dès l'ouverture : le
             // premier switch de groupe présente un interstitiel déjà complet.
             prefetchNeighborGroupIntros()
@@ -1624,6 +1629,45 @@ struct StoryViewerView: View {
 
 // MARK: - Group intro (interstitiel d'identité inter-groupes)
 
+/// Quand présenter l'interstitiel d'identité d'un groupe.
+///
+/// Règle simplifiée le 2026-07-25 sur directive user : l'interlude s'affiche
+/// PARTOUT — mes propres stories comprises, à l'ouverture du viewer comme à
+/// chaque changement de groupe, en avant comme en arrière. Les deux exceptions
+/// précédentes (« pas d'interlude sur mon propre groupe », « seulement au
+/// changement de groupe ») produisaient un comportement à trous, difficile à
+/// prévoir pour l'utilisateur.
+///
+/// Seules subsistent deux exclusions techniques : le mode preview du composer,
+/// qui n'a pas d'identité à annoncer, et un groupe sans aucune story affichable.
+nonisolated enum StoryGroupIntroPolicy {
+    static func shouldPresent(isPreviewMode: Bool, hasEntryStory: Bool) -> Bool {
+        !isPreviewMode && hasEntryStory
+    }
+
+    /// Animation de disparition de l'interlude, dictée par la transition
+    /// d'OUVERTURE du slide qui va être révélé (directive user 2026-07-25 :
+    /// « la manière dont l'interlude disparaît dépend de comment le premier
+    /// slide a configuré son apparition »).
+    ///
+    /// L'interlude et le slide forment un seul mouvement : c'est le voile qui
+    /// se retire selon la grammaire choisie par l'auteur, pas un fondu générique
+    /// suivi d'une entrée sans rapport. Les durées reprennent celles documentées
+    /// sur `StoryTransitionEffect`.
+    static func dismissAnimation(for opening: StoryTransitionEffect?) -> Animation {
+        switch opening {
+        case .zoom, .slide:
+            // Les deux entrées à ressort : la sortie doit avoir le même élan,
+            // sinon le slide « rattrape » un voile encore en train de partir.
+            return .spring(response: 0.38, dampingFraction: 0.82)
+        case .reveal:
+            return .easeOut(duration: 0.4)
+        case .fade, .none:
+            return .easeOut(duration: 0.3)
+        }
+    }
+}
+
 extension StoryViewerView {
     /// Présente l'interstitiel d'identité au passage au groupe d'une AUTRE
     /// personne : placeholder immédiat (username/avatar du groupe, déjà en
@@ -1633,13 +1677,13 @@ extension StoryViewerView {
     /// Le gel de lecture passe par `shouldPauseTimer || showGroupIntro`
     /// (timer + canvas + audio gelés en phase, reprise sans saut).
     func presentGroupIntroIfNeeded() {
-        guard !isPreviewMode,
-              let group = currentGroup,
-              group.id != AuthManager.shared.currentUser?.id,
-              // Groupe sans story affichable (tout vu+expiré) → aucun interstitiel
-              // d'identité à montrer (directive user : gating sur "a effectivement
-              // des stories à afficher").
-              Self.entryStory(of: group) != nil else { return }
+        guard let group = currentGroup,
+              StoryGroupIntroPolicy.shouldPresent(
+                  isPreviewMode: isPreviewMode,
+                  // Groupe sans story affichable (tout vu+expiré) → aucun
+                  // interstitiel d'identité à montrer.
+                  hasEntryStory: Self.entryStory(of: group) != nil
+              ) else { return }
         groupIntroTask?.cancel()
         // Identité COMPLÈTE dès la première frame quand le groupe a été
         // pré-résolu (`prefetchNeighborGroupIntros`) ; sinon placeholder
@@ -1715,7 +1759,12 @@ extension StoryViewerView {
     }
 
     private func dismissGroupIntro() {
-        withAnimation(.easeOut(duration: 0.25)) { showGroupIntro = false }
+        // La sortie épouse l'ouverture configurée par l'auteur sur le slide qui
+        // apparaît : l'interlude et le slide forment un seul geste visuel.
+        let opening = currentStory?.storyEffects?.opening
+        withAnimation(StoryGroupIntroPolicy.dismissAnimation(for: opening)) {
+            showGroupIntro = false
+        }
     }
 }
 

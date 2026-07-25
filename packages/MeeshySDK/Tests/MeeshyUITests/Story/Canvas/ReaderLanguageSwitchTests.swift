@@ -91,16 +91,24 @@ final class ReaderLanguageSwitchTests: XCTestCase {
     }
 
     /// Le canvas naît en `.play` et `setReaderContext` lance immédiatement
-    /// l'audio. Si la pause n'est posée qu'au premier `updateUIView`, une story
-    /// créée sous un gel (interlude, commentaires, appel) se fait entendre
-    /// d'abord — c'est le « on entend la story suivante pendant l'interlude ».
-    func test_makeUIView_appliesPauseBeforeStartingAudio() throws {
+    /// l'audio. L'hôte, lui, pose souvent son gel APRÈS coup (l'interstitiel
+    /// d'identité est armé dans `onAppear`/`onChange`, donc après l'évaluation
+    /// du body qui a créé le canvas). Naître en pause supprime la course : sans
+    /// cela on entend la story PENDANT l'interlude.
+    func test_makeUIView_startsPausedBeforeInjectingContext() throws {
         let code = try source("Sources/MeeshyUI/Story/Canvas/StoryReaderRepresentable.swift")
-        guard let pause = code.range(of: "view.setPaused(isPaused || isOutgoing)"),
+        guard let pause = code.range(of: "view.setPaused(true)"),
               let context = code.range(of: "view.setReaderContext(StoryReaderContext(") else {
             return XCTFail("makeUIView ne pose plus la pause ou n'injecte plus le contexte")
         }
         XCTAssertLessThan(pause.lowerBound, context.lowerBound,
                           "la pause doit être posée AVANT l'injection du contexte, qui démarre l'audio")
+    }
+
+    /// C'est `updateUIView` qui rend la lecture — sinon le canvas resterait figé.
+    func test_updateUIView_releasesThePause() throws {
+        let code = try source("Sources/MeeshyUI/Story/Canvas/StoryReaderRepresentable.swift")
+        XCTAssertTrue(code.contains("view.setPaused(isPaused || isOutgoing)"),
+                      "updateUIView doit refléter l'état de pause de l'hôte")
     }
 }
