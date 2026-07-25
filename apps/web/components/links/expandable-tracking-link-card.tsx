@@ -25,6 +25,7 @@ import {
 } from 'lucide-react';
 import type { TrackingLink } from '@meeshy/shared/types/tracking-link';
 import { useI18n } from '@/hooks/useI18n';
+import { formatShortDateTime } from '@/utils/date-format';
 import { useRouter } from 'next/navigation';
 
 interface ExpandableTrackingLinkCardProps {
@@ -42,18 +43,10 @@ export function ExpandableTrackingLinkCard({
   onToggle,
   onDelete
 }: ExpandableTrackingLinkCardProps) {
-  const { t } = useI18n('links');
+  const { t, locale } = useI18n('links');
   const router = useRouter();
 
-  const formatDate = (date: string | Date) => {
-    return new Date(date).toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
-  };
+  const formatDate = (date: string | Date) => formatShortDateTime(date, locale);
 
   return (
     <Card className="relative border-2 hover:border-primary/50 hover:shadow-xl transition-[color,box-shadow] duration-200 overflow-hidden group bg-white dark:bg-gray-950">

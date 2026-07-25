@@ -6,6 +6,7 @@ import {
   formatRelativeDate,
   formatConversationDate,
   formatFullDate,
+  formatShortDateTime,
 } from '../../utils/date-format';
 
 describe('date-format', () => {
@@ -245,6 +246,54 @@ describe('date-format', () => {
       const result = formatConversationDate(fixedOldDate, { t: mockT });
 
       expect(result).toContain('janv');
+    });
+  });
+
+  describe('formatShortDateTime', () => {
+    it('should format month/year in the provided locale (English)', () => {
+      const date = new Date(2025, 10, 5, 14, 30); // Nov 5, 2025 at 14:30
+      const result = formatShortDateTime(date, 'en');
+
+      expect(result).toContain('Nov');
+      expect(result).toContain('2025');
+    });
+
+    it('should format month/year in the provided locale (French)', () => {
+      const date = new Date(2025, 10, 5, 14, 30);
+      const result = formatShortDateTime(date, 'fr');
+
+      // French short month is "nov." (lowercase, with a period)
+      expect(result).toContain('nov');
+      expect(result).toContain('2025');
+    });
+
+    it('should render different strings for different locales', () => {
+      const date = new Date(2025, 10, 5, 14, 30);
+
+      expect(formatShortDateTime(date, 'en')).not.toEqual(
+        formatShortDateTime(date, 'fr')
+      );
+    });
+
+    it('should use 24-hour time (never AM/PM) regardless of locale', () => {
+      const date = new Date(2025, 10, 5, 14, 30);
+      const result = formatShortDateTime(date, 'en');
+
+      expect(result).not.toMatch(/[AP]M/i);
+    });
+
+    it('should default to French when no locale is provided', () => {
+      const date = new Date(2025, 10, 5, 14, 30);
+      const result = formatShortDateTime(date);
+
+      expect(result).toContain('nov');
+    });
+
+    it('should accept string date input', () => {
+      const result = formatShortDateTime('2025-11-05T14:30:00', 'en');
+
+      expect(result).toContain('Nov');
+      expect(result).toContain('2025');
     });
   });
 });

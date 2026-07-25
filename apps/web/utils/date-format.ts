@@ -157,6 +157,34 @@ export function formatFullDate(
   });
 }
 
+/**
+ * Formate une date + heure courte, localisée selon la locale d'interface.
+ * Format : "5 nov. 2025, 14:30" (fr) / "Nov 5, 2025, 14:30" (en)
+ *
+ * Utilisé par les cartes/détails de liens de tracking (métadonnées created/
+ * expires/lastClick). Toujours en 24h (`hour12: false`), cohérent avec
+ * `formatFullDate`/`formatTime`/`formatConversationDate`.
+ *
+ * @param date - La date à formater
+ * @param locale - Locale BCP 47 (défaut: 'fr')
+ * @returns La date formatée
+ */
+export function formatShortDateTime(
+  date: Date | string,
+  locale: string = DEFAULT_LOCALE
+): string {
+  const messageDate = typeof date === 'string' ? new Date(date) : date;
+
+  return messageDate.toLocaleDateString(locale, {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  });
+}
+
 function formatTime(date: Date, locale: string): string {
   return date.toLocaleTimeString(locale, {
     hour: '2-digit',
