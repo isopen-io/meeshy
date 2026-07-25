@@ -111,4 +111,53 @@ final class ReaderLanguageSwitchTests: XCTestCase {
         XCTAssertTrue(code.contains("view.setPaused(isPaused || isOutgoing)"),
                       "updateUIView doit refléter l'état de pause de l'hôte")
     }
+
+    /// Le corps d'une fonction, commentaires retirés — sinon une garde qui
+    /// interdit un motif se déclenche sur le commentaire qui l'explique.
+    private func codeOfFunction(_ signature: String, in file: String, limit: Int = 900) throws -> String {
+        let code = try source(file)
+        guard let range = code.range(of: signature) else {
+            throw XCTSkip("\(signature) introuvable dans \(file)")
+        }
+        // Filtrage AVANT troncature : les commentaires de ce projet sont
+        // denses, les tronquer d'abord ferait sortir la ligne cible de la
+        // fenêtre.
+        let stripped = String(code[range.lowerBound...])
+            .split(separator: "\n", omittingEmptySubsequences: false)
+            .filter { !$0.trimmingCharacters(in: .whitespaces).hasPrefix("//") }
+            .joined(separator: "\n")
+        return String(stripped.prefix(limit))
+    }
+
+    /// TROIS chemins démarrent la lecture, et tous doivent respecter la pause.
+    /// Naître en pause ne suffit pas : le « GO » de fin de chargement et la
+    /// (ré)installation du displayLink sont asynchrones et retombaient PENDANT
+    /// l'interlude, faisant jouer la story sous le gel (bug user 2026-07-25,
+    /// signalé deux fois).
+    func test_contentReadyGo_isGatedOnPause() throws {
+        let body = try codeOfFunction("if pendingBackgroundActivation",
+                                      in: "Sources/MeeshyUI/Story/Canvas/StoryCanvasUIView+ContentReadiness.swift",
+                                      limit: 120)
+        XCTAssertTrue(body.contains("!isPlaybackPaused"),
+                      "le GO de fin de chargement ne doit pas se consommer sous pause")
+    }
+
+    func test_startPlayback_isGatedOnPause() throws {
+        let body = try codeOfFunction("if contentReadyFired",
+                                      in: "Sources/MeeshyUI/Story/Canvas/StoryCanvasUIView+Playback.swift",
+                                      limit: 120)
+        XCTAssertTrue(body.contains("!isPlaybackPaused"),
+                      "startPlayback ne doit pas relancer les médias sous pause")
+    }
+
+    /// Contrepartie indispensable : ce qui n'a pas été consommé sous gel doit
+    /// l'être à la reprise, sinon une story chargée derrière l'interlude ne
+    /// démarrerait jamais son fond.
+    func test_resume_consumesPendingActivation() throws {
+        let body = try codeOfFunction("func setStoryPlaybackPaused(",
+                                      in: "Sources/MeeshyUI/Story/Canvas/StoryCanvasUIView+Playback.swift",
+                                      limit: 1600)
+        XCTAssertTrue(body.contains("pendingBackgroundActivation = false"),
+                      "la reprise doit solder l'activation restée armée")
+    }
 }
