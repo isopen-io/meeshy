@@ -4,6 +4,7 @@ import MeeshySDK
 
 /// `ProfilePostsCounts` — calcul pur des compteurs du bandeau de stats en tête
 /// de l'onglet Postes d'un profil (phase 1, dérivée des postes chargés).
+@MainActor
 final class ProfilePostsCountsTests: XCTestCase {
 
     private func post(_ id: String, _ type: String) -> FeedPost {

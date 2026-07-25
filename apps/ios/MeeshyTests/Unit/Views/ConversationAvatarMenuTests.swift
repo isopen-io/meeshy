@@ -5,6 +5,7 @@ import XCTest
 /// de l'avatar d'une ligne de conversation. Garde-fou contre la régression du
 /// « double Voir le profil » sur les DM : le menu direct ne doit contenir
 /// QU'UNE entrée profil, et le menu de groupe AUCUNE.
+@MainActor
 final class ConversationAvatarMenuTests: XCTestCase {
 
     func test_directRoles_areInfoThenProfile() {
