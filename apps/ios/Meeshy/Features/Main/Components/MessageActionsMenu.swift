@@ -61,7 +61,7 @@ struct MessageActionsMenu: View {
                     .font(MeeshyFont.relative(16))
                 Spacer(minLength: 0)
                 if action == .more {
-                    Image(systemName: "chevron.right")
+                    Image(systemName: "chevron.forward")
                         .font(MeeshyFont.relative(13, weight: .semibold))
                         .opacity(0.4)
                 }

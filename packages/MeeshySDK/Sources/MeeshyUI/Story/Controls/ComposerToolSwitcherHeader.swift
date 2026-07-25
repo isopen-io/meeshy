@@ -33,7 +33,7 @@ struct ComposerToolSwitcherHeader: View {
     private var backButton: some View {
         Button(action: onBack) {
             HStack(spacing: 4) {
-                Image(systemName: "chevron.left")
+                Image(systemName: "chevron.backward")
                     .font(.system(size: 14, weight: .semibold))
                 Text(Self.title(for: currentTool)).font(.system(size: 14, weight: .semibold))
             }

@@ -42,7 +42,7 @@ public struct AnonymousJoinFormView: View {
             HStack {
                 Button(action: onBack) {
                     HStack(spacing: MeeshySpacing.xs + 2) {
-                        Image(systemName: "chevron.left")
+                        Image(systemName: "chevron.backward")
                             .font(MeeshyFont.relative(13, weight: .semibold))
                         Text(String(localized: "joinFlow.form.back", defaultValue: "Retour", bundle: .module))
                             .font(MeeshyFont.relative(14, weight: .medium))
@@ -292,7 +292,7 @@ public struct AnonymousJoinFormView: View {
                     ProgressView()
                         .tint(.white)
                 } else {
-                    Image(systemName: "arrow.right.circle.fill")
+                    Image(systemName: "arrow.forward.circle.fill")
                         .font(MeeshyFont.relative(18))
                     Text(String(localized: "joinFlow.form.submit", defaultValue: "Rejoindre", bundle: .module))
                         .font(MeeshyFont.relative(16, weight: .bold))

@@ -259,7 +259,7 @@ public struct JoinLinkPreviewView: View {
             } else {
                 Button(action: onJoin) {
                     HStack(spacing: MeeshySpacing.sm + 2) {
-                        Image(systemName: "arrow.right.circle.fill")
+                        Image(systemName: "arrow.forward.circle.fill")
                             .font(MeeshyFont.relative(18))
                         Text(String(localized: "joinFlow.preview.joinButton", defaultValue: "Rejoindre la conversation", bundle: .module))
                             .font(MeeshyFont.relative(16, weight: .bold))

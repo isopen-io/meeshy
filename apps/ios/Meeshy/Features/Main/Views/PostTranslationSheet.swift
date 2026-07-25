@@ -157,7 +157,7 @@ struct PostTranslationSheet: View {
                                 .accessibilityLabel(String(localized: "feed.post.translation.confidence.a11y", defaultValue: "Confiance de traduction \(percent)", bundle: .main))
                         }
 
-                        Image(systemName: "chevron.right")
+                        Image(systemName: "chevron.forward")
                             .font(.caption.weight(.semibold))
                             .foregroundColor(theme.textMuted)
                     }

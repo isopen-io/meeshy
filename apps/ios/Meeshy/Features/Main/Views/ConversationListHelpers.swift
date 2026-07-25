@@ -79,7 +79,7 @@ struct SectionHeaderView: View {
                 }
 
                 // Expand/collapse chevron with rotation animation
-                Image(systemName: "chevron.right")
+                Image(systemName: "chevron.forward")
                     .font(.footnote.weight(.semibold))
                     .foregroundColor(Color(hex: section.color))
                     .opacity(isDropTarget ? 0.5 : 1)

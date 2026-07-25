@@ -66,7 +66,7 @@ struct GlobalSearchView: View {
                 HapticFeedback.light()
                 dismiss()
             } label: {
-                Image(systemName: "chevron.left")
+                Image(systemName: "chevron.backward")
                     .font(MeeshyFont.relative(18, weight: .semibold))
                     .foregroundColor(theme.textPrimary)
             }

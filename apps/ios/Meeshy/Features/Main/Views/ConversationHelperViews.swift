@@ -65,7 +65,7 @@ struct ThemedBackButton: View {
             HStack(spacing: 0) {
                 // Chevron — always visible, in a fixed 40-pt slot so the
                 // back affordance stays anchored regardless of pill width
-                Image(systemName: "chevron.left")
+                Image(systemName: "chevron.backward")
                     .font(MeeshyFont.relative(16, weight: .bold))
                     .foregroundStyle(gradientFill)
                     .frame(width: 40, height: 40)

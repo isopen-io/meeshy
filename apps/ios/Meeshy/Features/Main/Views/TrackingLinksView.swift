@@ -52,7 +52,7 @@ struct TrackingLinksView: View {
                 HapticFeedback.light()
                 dismiss()
             } label: {
-                Image(systemName: "chevron.left")
+                Image(systemName: "chevron.backward")
                     .font(MeeshyFont.relative(16, weight: .semibold))
                     .foregroundColor(accent)
             }
@@ -190,7 +190,7 @@ struct TrackingLinksView: View {
             }.padding(.horizontal, 4)
             .accessibilityLabel(String(localized: "common.copyLink", defaultValue: "Copier le lien", bundle: .main))
 
-            Image(systemName: "chevron.right").font(MeeshyFont.relative(12)).foregroundColor(theme.textMuted)
+            Image(systemName: "chevron.forward").font(MeeshyFont.relative(12)).foregroundColor(theme.textMuted)
                 .accessibilityHidden(true)
         }
         .padding(14)

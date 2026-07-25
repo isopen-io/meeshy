@@ -262,7 +262,7 @@ struct MessageLanguageDetailView: View {
                     }
                     .accessibilityLabel(String(localized: "message-detail.a11y.retranslate", defaultValue: "Retraduire", bundle: .main))
 
-                    Image(systemName: isSelected ? "checkmark.circle.fill" : "chevron.right")
+                    Image(systemName: isSelected ? "checkmark.circle.fill" : "chevron.forward")
                         .font(.caption.weight(.medium))
                         .foregroundColor(isSelected ? langColor : theme.textMuted.opacity(0.5))
                 } else if let audioForLang = mergedTranslatedAudios.first(where: { $0.targetLanguage.lowercased() == lang.code.lowercased() }) {
@@ -278,7 +278,7 @@ struct MessageLanguageDetailView: View {
                     }
                     .frame(maxWidth: 180, alignment: .trailing)
 
-                    Image(systemName: isSelected ? "checkmark.circle.fill" : "chevron.right")
+                    Image(systemName: isSelected ? "checkmark.circle.fill" : "chevron.forward")
                         .font(.caption.weight(.medium))
                         .foregroundColor(isSelected ? langColor : theme.textMuted.opacity(0.5))
                 } else {

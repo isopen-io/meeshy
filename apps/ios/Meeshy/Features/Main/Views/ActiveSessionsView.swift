@@ -39,7 +39,7 @@ struct ActiveSessionsView: View {
                 dismiss()
             } label: {
                 HStack(spacing: 4) {
-                    Image(systemName: "chevron.left")
+                    Image(systemName: "chevron.backward")
                         .font(MeeshyFont.relative(14, weight: .semibold))
                     Text(String(localized: "sessions_back", defaultValue: "Retour"))
                         .font(MeeshyFont.relative(15, weight: .medium))

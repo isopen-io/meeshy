@@ -220,7 +220,7 @@ struct ConversationPreferencesTab: View {
                                 .font(MeeshyFont.relative(14))
                                 .foregroundColor(theme.textMuted)
                         }
-                        Image(systemName: "chevron.right")
+                        Image(systemName: "chevron.forward")
                             .font(MeeshyFont.relative(11, weight: .semibold))
                             .foregroundColor(theme.textMuted)
                             .accessibilityHidden(true)

@@ -157,7 +157,7 @@ struct SecurityView: View {
                 dismiss()
             } label: {
                 HStack(spacing: 4) {
-                    Image(systemName: "chevron.left")
+                    Image(systemName: "chevron.backward")
                         .font(.subheadline.weight(.semibold))
                     Text(String(localized: "common.back", defaultValue: "Retour", bundle: .main))
                         .font(.callout.weight(.medium))
@@ -216,7 +216,7 @@ struct SecurityView: View {
 
                     Spacer()
 
-                    Image(systemName: "chevron.right")
+                    Image(systemName: "chevron.forward")
                         .font(.caption.weight(.semibold))
                         .foregroundColor(theme.textMuted)
                 }
@@ -875,7 +875,7 @@ struct SecurityView: View {
 
                     Spacer()
 
-                    Image(systemName: "chevron.right")
+                    Image(systemName: "chevron.forward")
                         .font(.caption.weight(.semibold))
                         .foregroundColor(theme.textMuted)
                 }

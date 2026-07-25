@@ -58,7 +58,7 @@ struct BlockedUsersView: View {
                 dismiss()
             } label: {
                 HStack(spacing: MeeshySpacing.xs) {
-                    Image(systemName: "chevron.left")
+                    Image(systemName: "chevron.backward")
                         .font(MeeshyFont.relative(14, weight: .semibold))
                     Text(String(localized: "common.back", defaultValue: "Retour", bundle: .main))
                         .font(MeeshyFont.relative(15, weight: .medium))

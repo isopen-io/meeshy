@@ -337,7 +337,7 @@ struct StepPhoneView: View {
 
                 Button(action: { viewModel.skipCurrentStep() }) {
                     HStack(spacing: 6) {
-                        Image(systemName: "arrow.right.circle").font(.subheadline)
+                        Image(systemName: "arrow.forward.circle").font(.subheadline)
                         Text(String(localized: "onboarding.skip-step", defaultValue: "Passer cette etape", bundle: .main))
                             .font(.subheadline.weight(.medium))
                     }

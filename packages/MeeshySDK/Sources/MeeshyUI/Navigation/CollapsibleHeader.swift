@@ -255,7 +255,7 @@ public struct CollapsibleHeader<LeadingContent: View, TitleContent: View, Traili
             HapticFeedback.light()
             onBack?()
         } label: {
-            Image(systemName: "chevron.left")
+            Image(systemName: "chevron.backward")
                 .font(.system(size: backArrowSize, weight: .semibold))
                 .foregroundColor(backArrowColor)
                 .frame(minWidth: 44, minHeight: 44)

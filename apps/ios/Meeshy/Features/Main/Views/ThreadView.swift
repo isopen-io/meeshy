@@ -44,7 +44,7 @@ struct ThreadView: View {
                 HapticFeedback.light()
                 dismiss()
             } label: {
-                Image(systemName: "chevron.left")
+                Image(systemName: "chevron.backward")
                     .font(.callout.weight(.semibold))
                     .foregroundColor(Color(hex: accentColor))
             }

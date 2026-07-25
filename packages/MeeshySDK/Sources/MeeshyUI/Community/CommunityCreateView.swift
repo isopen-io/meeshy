@@ -42,7 +42,7 @@ public struct CommunityCreateView: View {
                 onDismiss?()
                 dismiss()
             } label: {
-                Image(systemName: "chevron.left")
+                Image(systemName: "chevron.backward")
                     .font(.system(size: 16, weight: .semibold))
                     .foregroundColor(theme.textPrimary)
                     .frame(width: 36, height: 36)

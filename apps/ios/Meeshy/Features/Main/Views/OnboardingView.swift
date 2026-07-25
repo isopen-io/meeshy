@@ -490,7 +490,7 @@ struct OnboardingView: View {
                          : String(localized: "onboarding.next", bundle: .main))
                         .font(MeeshyFont.relative(MeeshyFont.headlineSize, weight: .bold))
 
-                    Image(systemName: isLastPage ? "arrow.right" : "chevron.right")
+                    Image(systemName: isLastPage ? "arrow.forward" : "chevron.forward")
                         .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
                 }
                 .foregroundColor(.white)

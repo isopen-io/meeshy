@@ -43,7 +43,7 @@ struct CommunityLinksView: View {
                 HapticFeedback.light()
                 dismiss()
             } label: {
-                Image(systemName: "chevron.left")
+                Image(systemName: "chevron.backward")
                     .font(MeeshyFont.relative(16, weight: .semibold))
                     .foregroundColor(accent)
             }
@@ -166,7 +166,7 @@ struct CommunityLinksView: View {
             // duplicate glyph here and re-expose the copy as an `.accessibilityAction`
             // on the combined row below, so VoiceOver users can still copy the invite.
             .accessibilityHidden(true)
-            Image(systemName: "chevron.right").font(MeeshyFont.relative(12)).foregroundColor(theme.textMuted)
+            Image(systemName: "chevron.forward").font(MeeshyFont.relative(12)).foregroundColor(theme.textMuted)
                 .accessibilityHidden(true)
         }
         .padding(14)

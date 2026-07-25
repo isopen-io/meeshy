@@ -121,7 +121,7 @@ struct NewConversationView: View {
             } label: {
                 // Chrome nav glyph: fixed 16pt tap target (doctrine 82i/87i/90i —
                 // header/toolbar chevrons stay fixed, not Dynamic-Type-scaled).
-                Image(systemName: "chevron.left")
+                Image(systemName: "chevron.backward")
                     .font(MeeshyFont.relative(16, weight: .semibold))
                     .foregroundColor(MeeshyColors.indigo400)
             }

@@ -134,7 +134,7 @@ struct OnboardingFlowView: View {
                     UIImpactFeedbackGenerator(style: .light).impactOccurred()
                 }) {
                     HStack(spacing: 4) {
-                        Image(systemName: "chevron.left")
+                        Image(systemName: "chevron.backward")
                             .font(MeeshyFont.relative(15, weight: .semibold))
                         Text(String(localized: "common.back", defaultValue: "Retour", bundle: .main))
                             .font(MeeshyFont.relative(14, weight: .medium))
@@ -249,7 +249,7 @@ struct OnboardingFlowView: View {
     private var buttonIcon: String? {
         switch viewModel.currentStep {
         case .recap: return "sparkles"
-        default: return "arrow.right"
+        default: return "arrow.forward"
         }
     }
 

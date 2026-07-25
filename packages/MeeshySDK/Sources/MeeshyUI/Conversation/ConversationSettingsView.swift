@@ -536,7 +536,7 @@ public struct ConversationSettingsView: View {
                     viewModel.showLeaveConfirm = true
                 } label: {
                     HStack {
-                        Image(systemName: "arrow.right.square.fill")
+                        Image(systemName: "arrow.forward.square.fill")
                         Text(String(localized: "conversation.settings.leave.label", defaultValue: "Quitter la conversation", bundle: .module))
                     }
                     .font(.system(size: 15, weight: .semibold, design: .rounded))

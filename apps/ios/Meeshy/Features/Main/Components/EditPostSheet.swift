@@ -225,7 +225,7 @@ struct EditPostSheet: View {
                             .font(MeeshyFont.relative(15))
                             .foregroundColor(theme.textMuted)
                     }
-                    Image(systemName: "chevron.right")
+                    Image(systemName: "chevron.forward")
                         .font(MeeshyFont.relative(12, weight: .semibold))
                         .foregroundColor(theme.textMuted)
                         .accessibilityHidden(true)

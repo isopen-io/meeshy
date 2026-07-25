@@ -150,7 +150,7 @@ struct VideoEditorToolHeader: View {
                 viewModel.backToTiles()
             } label: {
                 HStack(spacing: 4) {
-                    Image(systemName: "chevron.left")
+                    Image(systemName: "chevron.backward")
                         .font(.system(size: 12, weight: .bold))
                     Text(VideoEditorLabels.title(for: tool))
                         .font(.system(size: 13, weight: .semibold))

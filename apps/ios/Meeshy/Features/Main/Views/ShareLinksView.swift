@@ -59,7 +59,7 @@ struct ShareLinksView: View {
                 HapticFeedback.light()
                 dismiss()
             } label: {
-                Image(systemName: "chevron.left")
+                Image(systemName: "chevron.backward")
                     .font(MeeshyFont.relative(16, weight: .semibold))
                     .foregroundColor(Color(hex: accentColor))
             }
@@ -234,7 +234,7 @@ struct ShareLinksView: View {
             .padding(.horizontal, 4)
             .accessibilityLabel(String(localized: "share.links.copy.a11y", defaultValue: "Copier le lien", bundle: .main))
 
-            Image(systemName: "chevron.right")
+            Image(systemName: "chevron.forward")
                 .font(MeeshyFont.relative(12))
                 .foregroundColor(theme.textMuted)
                 .accessibilityHidden(true)

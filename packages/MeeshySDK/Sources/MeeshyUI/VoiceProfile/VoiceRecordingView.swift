@@ -302,7 +302,7 @@ public struct VoiceRecordingView<Recorder: AudioRecordingProviding>: View {
             onSamplesReady?(data)
         } label: {
             HStack(spacing: 8) {
-                Image(systemName: "arrow.right.circle.fill")
+                Image(systemName: "arrow.forward.circle.fill")
                     .font(.system(size: 16, weight: .semibold))
                 Text(String(localized: "voiceProfile.recording.createProfile", defaultValue: "Creer le profil vocal", bundle: .module))
                     .font(.system(size: 15, weight: .semibold))

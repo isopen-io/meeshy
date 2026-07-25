@@ -1219,7 +1219,7 @@ struct PostDetailView: View {
                     .font(.footnote)
                     .foregroundColor(theme.accentText(repost.authorColor))
                 Spacer()
-                Image(systemName: "chevron.right")
+                Image(systemName: "chevron.forward")
                     .font(.caption2.weight(.semibold))
                     .foregroundColor(theme.textMuted)
             }

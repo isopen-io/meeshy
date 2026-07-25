@@ -54,7 +54,7 @@ struct FriendRequestListView: View {
             Button {
                 dismiss()
             } label: {
-                Image(systemName: "chevron.left")
+                Image(systemName: "chevron.backward")
                     .font(.callout.weight(.semibold))
                     .foregroundColor(theme.textPrimary)
             }

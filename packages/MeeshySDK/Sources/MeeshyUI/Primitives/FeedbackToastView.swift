@@ -68,7 +68,7 @@ public struct FeedbackToastView: View {
 
             if toast.isTappable {
                 Spacer()
-                Image(systemName: "chevron.right")
+                Image(systemName: "chevron.forward")
                     .font(.system(size: 10, weight: .bold))
                     .foregroundColor(.white.opacity(0.7))
             }

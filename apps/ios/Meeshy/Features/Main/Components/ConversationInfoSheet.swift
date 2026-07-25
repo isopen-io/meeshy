@@ -556,7 +556,7 @@ struct ConversationInfoSheet: View {
                 Text(String(localized: "conversation.info.manage_members", defaultValue: "Gerer les membres", bundle: .main))
                     .font(MeeshyFont.relative(13, weight: .semibold))
                 Spacer()
-                Image(systemName: "chevron.right")
+                Image(systemName: "chevron.forward")
                     .font(MeeshyFont.relative(11, weight: .semibold))
                     .foregroundColor(theme.textMuted)
             }
@@ -728,7 +728,7 @@ struct ConversationInfoSheet: View {
                             Text(String(format: String(localized: "conversation.info.pinned.see-all", defaultValue: "Voir les %d messages epingles", bundle: .main), pinned.count))
                                 .font(MeeshyFont.relative(11, weight: .semibold))
                                 .foregroundColor(accent)
-                            Image(systemName: "chevron.right")
+                            Image(systemName: "chevron.forward")
                                 .font(MeeshyFont.relative(9, weight: .bold))
                                 .foregroundColor(accent)
                         }
@@ -951,7 +951,7 @@ struct ConversationInfoSheet: View {
 
                     Spacer()
 
-                    Image(systemName: "chevron.right")
+                    Image(systemName: "chevron.forward")
                         .font(MeeshyFont.relative(12, weight: .semibold))
                         .foregroundColor(theme.textMuted)
                 }
@@ -1001,7 +1001,7 @@ struct ConversationInfoSheet: View {
 
                     Spacer()
 
-                    Image(systemName: "chevron.right")
+                    Image(systemName: "chevron.forward")
                         .font(MeeshyFont.relative(12, weight: .semibold))
                         .foregroundColor(theme.textMuted)
                 }

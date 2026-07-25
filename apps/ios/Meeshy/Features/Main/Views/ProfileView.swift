@@ -541,7 +541,7 @@ struct ProfileView: View {
                             .background(Circle().fill(MeeshyColors.indigo500))
                     }
 
-                    Image(systemName: "chevron.right")
+                    Image(systemName: "chevron.forward")
                         .font(MeeshyFont.relative(12, weight: .semibold))
                         .foregroundColor(theme.textMuted)
                 }
@@ -712,7 +712,7 @@ struct ProfileView: View {
                 }
 
                 if isEditing {
-                    Image(systemName: "chevron.right")
+                    Image(systemName: "chevron.forward")
                         .font(MeeshyFont.relative(12, weight: .semibold))
                         .foregroundColor(theme.textMuted)
                 }

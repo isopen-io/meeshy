@@ -359,7 +359,7 @@ public struct CommunitySettingsView: View {
                     viewModel.showLeaveConfirm = true
                 } label: {
                     HStack {
-                        Image(systemName: "arrow.right.square.fill")
+                        Image(systemName: "arrow.forward.square.fill")
                         Text(String(localized: "community.settings.leave.label", defaultValue: "Quitter la communauté", bundle: .module))
                     }
                     .font(.system(size: 15, weight: .semibold, design: .rounded))

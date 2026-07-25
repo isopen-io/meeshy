@@ -681,7 +681,7 @@ struct MessageDetailSheet: View {
                     }
                     .accessibilityLabel(String(localized: "message-detail.a11y.language.retranslate", defaultValue: "Retraduire", bundle: .main))
 
-                    Image(systemName: isSelected ? "checkmark.circle.fill" : "chevron.right")
+                    Image(systemName: isSelected ? "checkmark.circle.fill" : "chevron.forward")
                         .font(.caption.weight(.medium))
                         .foregroundColor(isSelected ? langColor : theme.textMuted.opacity(0.5))
                         .accessibilityHidden(true)
@@ -699,7 +699,7 @@ struct MessageDetailSheet: View {
                     }
                     .frame(maxWidth: 180, alignment: .trailing)
 
-                    Image(systemName: isSelected ? "checkmark.circle.fill" : "chevron.right")
+                    Image(systemName: isSelected ? "checkmark.circle.fill" : "chevron.forward")
                         .font(.caption.weight(.medium))
                         .foregroundColor(isSelected ? langColor : theme.textMuted.opacity(0.5))
                         .accessibilityHidden(true)

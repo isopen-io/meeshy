@@ -151,7 +151,7 @@ public struct CommunityDetailView: View {
                     dismiss()
                 }
             } label: {
-                Image(systemName: "chevron.left")
+                Image(systemName: "chevron.backward")
                     .font(.system(size: 16, weight: .semibold))
                     .foregroundColor(.white)
                     .frame(width: 36, height: 36)
@@ -373,7 +373,7 @@ public struct CommunityDetailView: View {
                         showSettings = true
                     }
                 } else if !viewModel.isMember {
-                    actionButton(icon: "arrow.right.circle.fill", title: String(localized: "community.detail.action.join", defaultValue: "Rejoindre", bundle: .module)) {
+                    actionButton(icon: "arrow.forward.circle.fill", title: String(localized: "community.detail.action.join", defaultValue: "Rejoindre", bundle: .module)) {
                         Task { await viewModel.joinCommunity() }
                     }
                 }
@@ -725,7 +725,7 @@ struct AddChannelSheet: View {
                 ProgressView()
                     .tint(MeeshyColors.brandPrimary)
             } else if conversation.communityId != nil {
-                Image(systemName: "arrow.right.circle.fill")
+                Image(systemName: "arrow.forward.circle.fill")
                     .font(.system(size: 20))
                     .foregroundColor(Color(hex: "F59E0B"))
             } else {
