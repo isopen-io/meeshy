@@ -137,8 +137,12 @@ public enum LanguageData {
     // (Settings, onboarding). Derived from `allLanguages` so every language's
     // metadata (name, nativeName, flag, color) lives in exactly one place.
     // Aligned with the web `INTERFACE_LANGUAGES` set + Arabic.
-    // de/it/pt have no localized UI bundle yet and fall back to English UI —
-    // message content stays translated independently via the translation base.
+    //
+    // Les sept sont réellement livrées depuis le 2026-07-25 : catalogues app et
+    // SDK, extension de notification et descriptions d'autorisation traduits, et
+    // `UILanguageOverride.supportedUICodes` étendu en conséquence. Ajouter un
+    // code ici sans traduire les catalogues afficherait un panachage de deux
+    // langues — la traduction vient d'abord, la déclaration ensuite.
 
     public static let interfaceLanguageCodes: [String] = ["en", "es", "fr", "pt", "de", "it", "ar"]
 

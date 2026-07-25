@@ -161,8 +161,8 @@ final class LocalizationCatalogGuardTests: XCTestCase {
     /// valeur** : la faire descendre pour « faire passer le test » reviendrait à
     /// entériner une régression que ce test existe précisément pour attraper.
     private static let floors: [String: [String: Int]] = [
-        "app": ["en": 1268, "de": 1256, "es": 1256, "pt-BR": 1256, "it": 1342, "ar": 1342],
-        "SDK": ["en": 883, "de": 773, "es": 773, "pt-BR": 614, "it": 0, "ar": 0],
+        "app": ["en": 1338, "de": 1326, "es": 1326, "pt-BR": 1326, "it": 1342, "ar": 1342],
+        "SDK": ["en": 908, "de": 798, "es": 798, "pt-BR": 639, "it": 1019, "ar": 1019],
     ]
 
     func test_laCouvertureNeRégressePas() throws {
@@ -176,6 +176,47 @@ final class LocalizationCatalogGuardTests: XCTestCase {
                 )
             }
         }
+    }
+
+    // MARK: - Cohérence entre ce qui est proposé et ce qui est livré
+
+    /// Le défaut d'origine : `UILanguageOverride.supportedUICodes` listait cinq
+    /// langues, avec un commentaire affirmant que l'allemand et le portugais
+    /// n'étaient pas traduits — alors qu'ils l'étaient depuis longtemps. Une
+    /// liste écrite à la main se périme sans que rien ne le signale.
+    ///
+    /// Une langue n'est honorée que si elle est **effectivement traduite**. On
+    /// exige donc que chaque code accepté couvre au moins 95 % du catalogue de
+    /// l'app : en dessous, l'utilisateur verrait du français au milieu de sa
+    /// langue, ce qui est pire que de ne pas proposer la langue du tout.
+    func test_touteLangueAcceptéeEstRéellementTraduite() throws {
+        let app = try catalogs().first { $0.name == "app" }!
+        let translatable = app.strings.filter { !$0.value.isEmpty }
+        for code in UILanguageOverride.supportedUICodes where code != app.sourceLanguage {
+            let covered = translatable.values.filter { $0[code] != nil }.count
+            let ratio = Double(covered) / Double(translatable.count)
+            XCTAssertGreaterThan(
+                ratio, 0.95,
+                "\(code) est proposé dans les réglages mais n'est traduit qu'à \(Int(ratio * 100)) % — l'utilisateur verrait un panachage"
+            )
+        }
+    }
+
+    /// Réciproque : une langue traduite mais absente d'`Info.plist` ne sera
+    /// jamais chargée par iOS. Le travail de traduction serait invisible.
+    func test_touteLangueAcceptéeEstDéclaréeDansLeBundle() throws {
+        let url = repoRoot().appendingPathComponent("apps/ios/Meeshy/Info.plist")
+        let data = try Data(contentsOf: url)
+        let plist = try PropertyListSerialization.propertyList(from: data, format: nil)
+        guard let root = plist as? [String: Any],
+              let declared = root["CFBundleLocalizations"] as? [String] else {
+            return XCTFail("CFBundleLocalizations introuvable dans Info.plist")
+        }
+        let missing = UILanguageOverride.supportedUICodes.filter { !declared.contains($0) }
+        XCTAssertTrue(
+            missing.isEmpty,
+            "Langues acceptées mais non déclarées dans CFBundleLocalizations : \(missing) — iOS ne chargera jamais leur catalogue"
+        )
     }
 
     /// Le balayage doit voir de vrais catalogues : un chemin cassé rendrait

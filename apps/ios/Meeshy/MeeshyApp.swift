@@ -943,15 +943,28 @@ struct MeeshyApp: App {
 /// UNE seule fois au démarrage du process → l'override prend effet au prochain
 /// (re)lancement (acceptable : l'app est relancée aux tests).
 ///
-/// Garde-fous : on ne force JAMAIS une langue absente du catalogue traduit
-/// (`Localizable.xcstrings` = fr/en/es/de/pt-BR) — sinon `String(localized:)`
-/// afficherait la source FR à côté de libellés traduits (mélange de langues).
-/// Un cache nil/vide/non-supporté ⇒ no-op total (iOS gère la locale appareil).
+/// Garde-fous : on ne force JAMAIS une langue absente du catalogue traduit —
+/// sinon `String(localized:)` afficherait la source française à côté de
+/// libellés traduits, et l'écran deviendrait un panachage de deux langues.
+/// Un cache nil/vide/non-supporté ⇒ no-op total (iOS garde la locale appareil).
 /// Aucune de ces opérations ne peut crasher.
 enum UILanguageOverride {
-    /// Langues réellement traduites dans `Localizable.xcstrings`. Toute langue
-    /// hors de cet ensemble est refusée (pas d'override).
-    static let supportedUICodes: [String] = ["fr", "en", "es", "de", "pt-BR"]
+    /// Langues réellement traduites dans les catalogues. Toute langue hors de
+    /// cet ensemble est refusée.
+    ///
+    /// La liste est explicite plutôt que dérivée de `Bundle.main.localizations` :
+    /// une langue peut être déclarée dans le bundle bien avant d'être traduite,
+    /// et c'est la traduction — pas la déclaration — qui décide si l'affichage
+    /// tient debout. `LocalizationCatalogGuardTests` vérifie que les deux
+    /// restent d'accord, pour que cette liste ne puisse pas se périmer en
+    /// silence comme elle l'a fait pour l'allemand et le portugais.
+    ///
+    /// `it` et `ar` rejoignent la liste le 2026-07-25 : les deux catalogues
+    /// (app + SDK), l'extension de notification et les descriptions
+    /// d'autorisation y sont complets à 100 %.
+    /// `nonisolated` : une simple liste de codes, lue aussi bien depuis
+    /// `MeeshyApp.init()` que depuis les tests, hors du main actor.
+    nonisolated static let supportedUICodes: [String] = ["fr", "en", "es", "de", "pt-BR", "it", "ar"]
 
     private static let cacheKey = "meeshy.ui.language"
     private static let appleLanguagesKey = "AppleLanguages"

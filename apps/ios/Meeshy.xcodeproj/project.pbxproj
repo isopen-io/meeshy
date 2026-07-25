@@ -2947,6 +2947,7 @@
 				en,
 				es,
 				fr,
+				it,
 				pt,
 				"pt-BR",
 				"zh-Hans",

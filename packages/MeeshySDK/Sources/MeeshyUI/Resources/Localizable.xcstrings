@@ -21,9 +21,22 @@
     },
     "%@  %@" : {
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@  %2$@"
+          }
+        },
         "fr" : {
           "stringUnit" : {
             "state" : "new",
+            "value" : "%1$@  %2$@"
+          }
+        }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "%1$@  %2$@"
           }
         }
@@ -31,9 +44,22 @@
     },
     "%@ — %@" : {
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ — %2$@"
+          }
+        },
         "fr" : {
           "stringUnit" : {
             "state" : "new",
+            "value" : "%1$@ — %2$@"
+          }
+        }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "%1$@ — %2$@"
           }
         }
@@ -41,9 +67,22 @@
     },
     "%@ %@" : {
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ %2$@"
+          }
+        },
         "fr" : {
           "stringUnit" : {
             "state" : "new",
+            "value" : "%1$@ %2$@"
+          }
+        }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "%1$@ %2$@"
           }
         }
@@ -51,9 +90,22 @@
     },
     "%@ %fs" : {
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ %2$fs"
+          }
+        },
         "fr" : {
           "stringUnit" : {
             "state" : "new",
+            "value" : "%1$@ %2$fs"
+          }
+        }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "%1$@ %2$fs"
           }
         }
@@ -61,9 +113,22 @@
     },
     "%@ → %@" : {
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ → %2$@"
+          }
+        },
         "fr" : {
           "stringUnit" : {
             "state" : "new",
+            "value" : "%1$@ → %2$@"
+          }
+        }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "%1$@ → %2$@"
           }
         }
@@ -74,9 +139,22 @@
     },
     "%@, @%@" : {
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@, @%2$@"
+          }
+        },
         "fr" : {
           "stringUnit" : {
             "state" : "new",
+            "value" : "%1$@, @%2$@"
+          }
+        }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "%1$@, @%2$@"
           }
         }
@@ -84,9 +162,22 @@
     },
     "%@. %@" : {
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@. %2$@"
+          }
+        },
         "fr" : {
           "stringUnit" : {
             "state" : "new",
+            "value" : "%1$@. %2$@"
+          }
+        }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "%1$@. %2$@"
           }
         }
@@ -94,9 +185,22 @@
     },
     "%@%@" : {
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@%2$@"
+          }
+        },
         "fr" : {
           "stringUnit" : {
             "state" : "new",
+            "value" : "%1$@%2$@"
+          }
+        }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "%1$@%2$@"
           }
         }
@@ -110,9 +214,22 @@
     },
     "%lld %@" : {
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$lld %2$@"
+          }
+        },
         "fr" : {
           "stringUnit" : {
             "state" : "new",
+            "value" : "%1$lld %2$@"
+          }
+        }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "%1$lld %2$@"
           }
         }
@@ -126,10 +243,23 @@
     },
     "%lld non lue%@" : {
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$lld غير مقروءة%2$@"
+          }
+        },
         "fr" : {
           "stringUnit" : {
             "state" : "new",
             "value" : "%1$lld non lue%2$@"
+          }
+        }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$lld non letta%2$@"
           }
         }
       }
@@ -142,19 +272,45 @@
     },
     "%lld trait%@" : {
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$lld خط%2$@"
+          }
+        },
         "fr" : {
           "stringUnit" : {
             "state" : "new",
             "value" : "%1$lld trait%2$@"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$lld tratto%2$@"
+          }
+        }
       }
     },
     "%lld/%lld" : {
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$lld/%2$lld"
+          }
+        },
         "fr" : {
           "stringUnit" : {
             "state" : "new",
+            "value" : "%1$lld/%2$lld"
+          }
+        }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "%1$lld/%2$lld"
           }
         }
@@ -162,10 +318,23 @@
     },
     "%lld/%lld utilisations" : {
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$lld/%2$lld استخدام"
+          }
+        },
         "fr" : {
           "stringUnit" : {
             "state" : "new",
             "value" : "%1$lld/%2$lld utilisations"
+          }
+        }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$lld/%2$lld utilizzi"
           }
         }
       }
@@ -203,10 +372,23 @@
     "accessibility.message_from_me" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "رسالتي: %@"
+          }
+        },
         "fr" : {
           "stringUnit" : {
             "state" : "new",
             "value" : "Mon message : %@"
+          }
+        }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Il mio messaggio: %@"
           }
         }
       }
@@ -214,10 +396,23 @@
     "accessibility.message_from_other" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "رسالة: %@"
+          }
+        },
         "fr" : {
           "stringUnit" : {
             "state" : "new",
             "value" : "Message : %@"
+          }
+        }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Messaggio: %@"
           }
         }
       }
@@ -252,6 +447,12 @@
     "audience.picker.except.title" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "الجميع باستثناء"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
@@ -276,11 +477,24 @@
             "value" : "Tout le monde sauf"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tutti tranne"
+          }
+        }
       }
     },
     "audience.picker.only.title" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "هؤلاء الأشخاص فقط"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
@@ -305,11 +519,24 @@
             "value" : "Seulement ces personnes"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Solo queste persone"
+          }
+        }
       }
     },
     "audience.picker.search" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "بحث…"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
@@ -332,6 +559,13 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Rechercher…"
+          }
+        }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cerca…"
           }
         }
       }
@@ -15528,6 +15762,12 @@
     "languagePicker.search" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ابحث عن لغة…"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -15552,6 +15792,12 @@
             "value" : "Rechercher une langue…"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cerca una lingua…"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -15563,6 +15809,12 @@
     "languagePicker.title" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "لغة الترجمة"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -15585,6 +15837,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Langue de traduction"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lingua di traduzione"
           }
         },
         "pt-BR" : {
@@ -20131,10 +20389,23 @@
     "post.visibility.community" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "المجتمعات"
+          }
+        },
         "fr" : {
           "stringUnit" : {
             "state" : "new",
             "value" : "Communautés"
+          }
+        }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Community"
           }
         }
       }
@@ -20142,10 +20413,23 @@
     "post.visibility.except" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "باستثناء…"
+          }
+        },
         "fr" : {
           "stringUnit" : {
             "state" : "new",
             "value" : "Sauf…"
+          }
+        }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tranne…"
           }
         }
       }
@@ -20153,10 +20437,23 @@
     "post.visibility.friends" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "جهات الاتصال"
+          }
+        },
         "fr" : {
           "stringUnit" : {
             "state" : "new",
             "value" : "Contacts"
+          }
+        }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Contatti"
           }
         }
       }
@@ -20164,10 +20461,23 @@
     "post.visibility.only" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "فقط…"
+          }
+        },
         "fr" : {
           "stringUnit" : {
             "state" : "new",
             "value" : "Seulement…"
+          }
+        }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Solo…"
           }
         }
       }
@@ -20175,10 +20485,23 @@
     "post.visibility.private" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "خاص"
+          }
+        },
         "fr" : {
           "stringUnit" : {
             "state" : "new",
             "value" : "Privé"
+          }
+        }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Privato"
           }
         }
       }
@@ -20186,10 +20509,23 @@
     "post.visibility.public" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "عام"
+          }
+        },
         "fr" : {
           "stringUnit" : {
             "state" : "new",
             "value" : "Public"
+          }
+        }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pubblico"
           }
         }
       }
@@ -20203,10 +20539,23 @@
     "presence.away" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "بعيد"
+          }
+        },
         "fr" : {
           "stringUnit" : {
             "state" : "new",
             "value" : "Absent"
+          }
+        }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Assente"
           }
         }
       }
@@ -20214,10 +20563,23 @@
     "presence.idle" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "غير نشط"
+          }
+        },
         "fr" : {
           "stringUnit" : {
             "state" : "new",
             "value" : "Inactif"
+          }
+        }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Inattivo"
           }
         }
       }
@@ -20225,10 +20587,23 @@
     "presence.offline" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "غير متصل"
+          }
+        },
         "fr" : {
           "stringUnit" : {
             "state" : "new",
             "value" : "Hors ligne"
+          }
+        }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Non in linea"
           }
         }
       }
@@ -20236,10 +20611,23 @@
     "presence.online" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "متصل"
+          }
+        },
         "fr" : {
           "stringUnit" : {
             "state" : "new",
             "value" : "En ligne"
+          }
+        }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "In linea"
           }
         }
       }
@@ -20247,10 +20635,23 @@
     "presence.recent" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "نشط مؤخرًا"
+          }
+        },
         "fr" : {
           "stringUnit" : {
             "state" : "new",
             "value" : "Actif récemment"
+          }
+        }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Attivo di recente"
           }
         }
       }
@@ -22867,10 +23268,23 @@
     "pull_refresh.armed" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "أفلِت للتحديث"
+          }
+        },
         "fr" : {
           "stringUnit" : {
             "state" : "new",
             "value" : "Relâcher pour rafraîchir"
+          }
+        }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rilascia per aggiornare"
           }
         }
       }
@@ -22878,10 +23292,23 @@
     "pull_refresh.done" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "تم التحديث"
+          }
+        },
         "fr" : {
           "stringUnit" : {
             "state" : "new",
             "value" : "Rafraîchi"
+          }
+        }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aggiornato"
           }
         }
       }
@@ -22889,10 +23316,23 @@
     "pull_refresh.refreshing" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "جارٍ التحديث"
+          }
+        },
         "fr" : {
           "stringUnit" : {
             "state" : "new",
             "value" : "Rafraîchissement en cours"
+          }
+        }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aggiornamento in corso"
           }
         }
       }
@@ -22911,10 +23351,23 @@
     },
     "Recommandé pour %@ : %@" : {
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "موصى به لـ %1$@: %2$@"
+          }
+        },
         "fr" : {
           "stringUnit" : {
             "state" : "new",
             "value" : "Recommandé pour %1$@ : %2$@"
+          }
+        }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Consigliato per %1$@: %2$@"
           }
         }
       }
@@ -22931,6 +23384,12 @@
     "report.reason.fake_profile" : {
       "extractionState" : "manual",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ملف شخصي مزيّف"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
@@ -22955,6 +23414,12 @@
             "value" : "Faux profil"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Profilo falso"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "translated",
@@ -22966,6 +23431,12 @@
     "report.reason.harassment" : {
       "extractionState" : "manual",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "تحرّش"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
@@ -22990,6 +23461,12 @@
             "value" : "Harcèlement"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Molestie"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "translated",
@@ -23001,6 +23478,12 @@
     "report.reason.hate_speech" : {
       "extractionState" : "manual",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "خطاب كراهية"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
@@ -23025,6 +23508,12 @@
             "value" : "Discours haineux"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Incitamento all'odio"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "translated",
@@ -23036,6 +23525,12 @@
     "report.reason.impersonation" : {
       "extractionState" : "manual",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "انتحال هوية"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
@@ -23060,6 +23555,12 @@
             "value" : "Usurpation d'identité"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Furto d'identità"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "translated",
@@ -23071,6 +23572,12 @@
     "report.reason.inappropriate" : {
       "extractionState" : "manual",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "محتوى غير لائق"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
@@ -23095,6 +23602,12 @@
             "value" : "Contenu inapproprié"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Contenuto inappropriato"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "translated",
@@ -23106,6 +23619,12 @@
     "report.reason.other" : {
       "extractionState" : "manual",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "أخرى"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
@@ -23130,6 +23649,12 @@
             "value" : "Autre"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Altro"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "translated",
@@ -23141,6 +23666,12 @@
     "report.reason.spam" : {
       "extractionState" : "manual",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "رسائل مزعجة"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
@@ -23165,6 +23696,12 @@
             "value" : "Spam"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Spam"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "translated",
@@ -23176,6 +23713,12 @@
     "report.reason.violence" : {
       "extractionState" : "manual",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "عنف"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
@@ -23198,6 +23741,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Violence"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Violenza"
           }
         },
         "pt-BR" : {
@@ -34020,6 +34569,12 @@
     "story.timeline.track.image" : {
       "extractionState" : "stale",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "صورة %lld"
+          }
+        },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
@@ -34032,11 +34587,24 @@
             "value" : "Image %lld"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Immagine %lld"
+          }
+        }
       }
     },
     "story.timeline.track.lock" : {
       "extractionState" : "stale",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "قفل"
+          }
+        },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
@@ -34049,10 +34617,23 @@
             "value" : "Verrouiller"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Blocca"
+          }
+        }
       }
     },
     "story.timeline.track.section.audio" : {
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "صوت %lld"
+          }
+        },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
@@ -34065,11 +34646,24 @@
             "value" : "AUDIO %lld"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "AUDIO %lld"
+          }
+        }
       }
     },
     "story.timeline.track.section.bg.a11y" : {
       "extractionState" : "manual",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "الخلفية"
+          }
+        },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
@@ -34082,10 +34676,23 @@
             "value" : "Fond"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sfondo"
+          }
+        }
       }
     },
     "story.timeline.track.section.image" : {
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "صورة %lld"
+          }
+        },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
@@ -34098,10 +34705,23 @@
             "value" : "IMAGE %lld"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "IMMAGINE %lld"
+          }
+        }
       }
     },
     "story.timeline.track.section.text" : {
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "نص %lld"
+          }
+        },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
@@ -34114,10 +34734,23 @@
             "value" : "TEXTE %lld"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "TESTO %lld"
+          }
+        }
       }
     },
     "story.timeline.track.section.video" : {
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "فيديو %lld"
+          }
+        },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
@@ -34130,11 +34763,24 @@
             "value" : "VIDEO %lld"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "VIDEO %lld"
+          }
+        }
       }
     },
     "story.timeline.track.text" : {
       "extractionState" : "stale",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "نص %lld"
+          }
+        },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
@@ -34147,11 +34793,24 @@
             "value" : "Texte %lld"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Testo %lld"
+          }
+        }
       }
     },
     "story.timeline.track.unlock" : {
       "extractionState" : "stale",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "إلغاء القفل"
+          }
+        },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
@@ -34164,11 +34823,24 @@
             "value" : "Déverrouiller"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sblocca"
+          }
+        }
       }
     },
     "story.timeline.track.video" : {
       "extractionState" : "stale",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "فيديو %lld"
+          }
+        },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
@@ -34181,11 +34853,24 @@
             "value" : "Vidéo %lld"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Video %lld"
+          }
+        }
       }
     },
     "story.timeline.transition.add" : {
       "extractionState" : "manual",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "إضافة انتقال"
+          }
+        },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
@@ -34198,10 +34883,23 @@
             "value" : "Ajouter une transition"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aggiungi una transizione"
+          }
+        }
       }
     },
     "story.timeline.transition.crossfade" : {
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "تلاشٍ متقاطع"
+          }
+        },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
@@ -34214,10 +34912,23 @@
             "value" : "Fondu enchaîné"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dissolvenza incrociata"
+          }
+        }
       }
     },
     "story.timeline.transition.delete" : {
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "حذف الانتقال"
+          }
+        },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
@@ -34230,10 +34941,23 @@
             "value" : "Supprimer la transition"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Elimina la transizione"
+          }
+        }
       }
     },
     "story.timeline.transition.dissolve" : {
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ذوبان"
+          }
+        },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
@@ -34246,11 +34970,24 @@
             "value" : "Dissolution"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dissolvenza"
+          }
+        }
       }
     },
     "story.timeline.transition.duration" : {
       "extractionState" : "stale",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "المدة %@"
+          }
+        },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
@@ -34263,10 +35000,23 @@
             "value" : "Durée %@"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Durata %@"
+          }
+        }
       }
     },
     "story.timeline.transition.kind.crossfade" : {
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "تلاشٍ متقاطع"
+          }
+        },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
@@ -34279,10 +35029,23 @@
             "value" : "Fondu enchaîné"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dissolvenza incrociata"
+          }
+        }
       }
     },
     "story.timeline.transition.kind.dissolve" : {
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ذوبان"
+          }
+        },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
@@ -34295,10 +35058,23 @@
             "value" : "Dissolution"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dissolvenza"
+          }
+        }
       }
     },
     "story.timeline.transport.mute" : {
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "كتم الصوت"
+          }
+        },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
@@ -34311,10 +35087,23 @@
             "value" : "Couper le son"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Disattiva l'audio"
+          }
+        }
       }
     },
     "story.timeline.transport.pause" : {
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "إيقاف مؤقت"
+          }
+        },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
@@ -34327,10 +35116,23 @@
             "value" : "Pause"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pausa"
+          }
+        }
       }
     },
     "story.timeline.transport.play" : {
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "تشغيل"
+          }
+        },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
@@ -34343,10 +35145,23 @@
             "value" : "Lecture"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Riproduci"
+          }
+        }
       }
     },
     "story.timeline.transport.timeReadout" : {
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ / %2$@"
+          }
+        },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
@@ -34359,10 +35174,23 @@
             "value" : "%1$@ / %2$@"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ / %2$@"
+          }
+        }
       }
     },
     "story.timeline.transport.unmute" : {
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "تفعيل الصوت"
+          }
+        },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
@@ -34375,10 +35203,23 @@
             "value" : "Activer le son"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Attiva l'audio"
+          }
+        }
       }
     },
     "story.timeline.transport.zoomIn" : {
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "تكبير"
+          }
+        },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
@@ -34391,10 +35232,23 @@
             "value" : "Zoom avant"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ingrandisci"
+          }
+        }
       }
     },
     "story.timeline.transport.zoomOut" : {
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "تصغير"
+          }
+        },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
@@ -34407,10 +35261,23 @@
             "value" : "Zoom arrière"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Riduci"
+          }
+        }
       }
     },
     "story.timeline.transport.zoomReset" : {
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "إعادة ضبط التكبير"
+          }
+        },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
@@ -34423,11 +35290,24 @@
             "value" : "Réinitialiser le zoom"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reimposta lo zoom"
+          }
+        }
       }
     },
     "story.timeline.video" : {
       "extractionState" : "stale",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "فيديو"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -34452,6 +35332,12 @@
             "value" : "Video"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Video"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -34463,6 +35349,12 @@
     "story.tool.audio" : {
       "extractionState" : "manual",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "صوت"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
@@ -34487,11 +35379,24 @@
             "value" : "Son"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Suono"
+          }
+        }
       }
     },
     "story.tool.drawing" : {
       "extractionState" : "manual",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "رسم"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
@@ -34516,11 +35421,24 @@
             "value" : "Dessin"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Disegno"
+          }
+        }
       }
     },
     "story.tool.filters" : {
       "extractionState" : "manual",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "مؤثرات"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
@@ -34545,11 +35463,24 @@
             "value" : "Effets"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Effetti"
+          }
+        }
       }
     },
     "story.tool.media" : {
       "extractionState" : "manual",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "وسائط"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
@@ -34574,11 +35505,24 @@
             "value" : "Médias"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Media"
+          }
+        }
       }
     },
     "story.tool.text" : {
       "extractionState" : "manual",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "نص"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
@@ -34603,11 +35547,24 @@
             "value" : "Texte"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Testo"
+          }
+        }
       }
     },
     "story.tool.texture" : {
       "extractionState" : "manual",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "خلفية"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
@@ -34632,11 +35589,24 @@
             "value" : "Fond"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sfondo"
+          }
+        }
       }
     },
     "story.tool.timeline" : {
       "extractionState" : "manual",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "الخط الزمني"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
@@ -34661,11 +35631,24 @@
             "value" : "Timeline"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Timeline"
+          }
+        }
       }
     },
     "story.toolbar.ambiance" : {
       "extractionState" : "stale",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "الأجواء"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -34690,6 +35673,12 @@
             "value" : "Ambiance"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Atmosfera"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -34701,6 +35690,12 @@
     "story.toolbar.audio" : {
       "extractionState" : "stale",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "الصوت"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -34725,6 +35720,12 @@
             "value" : "Audio"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Audio"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -34736,6 +35737,12 @@
     "story.toolbar.background" : {
       "extractionState" : "stale",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "الخلفية"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -34760,6 +35767,12 @@
             "value" : "Fond"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sfondo"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -34771,6 +35784,12 @@
     "story.toolbar.drawing" : {
       "extractionState" : "stale",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "الرسم"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -34795,6 +35814,12 @@
             "value" : "Dessin"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Disegno"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -34806,6 +35831,12 @@
     "story.toolbar.effects" : {
       "extractionState" : "stale",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "المؤثرات"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -34830,6 +35861,12 @@
             "value" : "Effets"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Effetti"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -34841,6 +35878,12 @@
     "story.toolbar.filter" : {
       "extractionState" : "stale",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "المرشّح"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -34865,6 +35908,12 @@
             "value" : "Filtre"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Filtro"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -34876,6 +35925,12 @@
     "story.toolbar.media" : {
       "extractionState" : "stale",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "الوسائط"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -34900,6 +35955,12 @@
             "value" : "Medias"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Media"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -34911,6 +35972,12 @@
     "story.toolbar.text" : {
       "extractionState" : "stale",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "النص"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -34935,6 +36002,12 @@
             "value" : "Texte"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Testo"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -34946,6 +36019,12 @@
     "story.toolbar.timeline" : {
       "extractionState" : "stale",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "الخط الزمني"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -34970,6 +36049,12 @@
             "value" : "Timeline"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Timeline"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -34981,6 +36066,12 @@
     "story.trackDetail.delete" : {
       "extractionState" : "stale",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "حذف"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -35005,6 +36096,12 @@
             "value" : "Supprimer"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Elimina"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -35016,6 +36113,12 @@
     "story.trackDetail.loop" : {
       "extractionState" : "stale",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "تكرار"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -35040,6 +36143,12 @@
             "value" : "Boucle"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ciclo"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -35051,6 +36160,12 @@
     "story.voiceRecorder.holdToRecord" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "انقر للتسجيل"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
@@ -35075,11 +36190,24 @@
             "value" : "Appuyez pour enregistrer"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tocca per registrare"
+          }
+        }
       }
     },
     "story.voiceRecorder.start" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "تسجيل"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
@@ -35104,11 +36232,24 @@
             "value" : "Enregistrer"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Registra"
+          }
+        }
       }
     },
     "story.voiceRecorder.stop" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "إيقاف التسجيل"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
@@ -35133,11 +36274,24 @@
             "value" : "Arrêter l'enregistrement"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Interrompi la registrazione"
+          }
+        }
       }
     },
     "story.voiceRecorder.title" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "التسجيل"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
@@ -35160,6 +36314,13 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Enregistrement"
+          }
+        }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Registrazione"
           }
         }
       }
@@ -35200,6 +36361,12 @@
     "userIdentity.translation.available" : {
       "extractionState" : "manual",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "الترجمة متاحة"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
@@ -35222,6 +36389,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Traduction disponible"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Traduzione disponibile"
           }
         },
         "pt-BR" : {
@@ -35797,6 +36970,12 @@
     "voiceProfile.age.title" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "التحقق من العمر"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -35821,6 +37000,12 @@
             "value" : "Verification d'age"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Verifica dell'età"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -35832,6 +37017,12 @@
     "voiceProfile.age.tooYoungError" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "يجب أن يكون عمرك 18 عامًا أو أكثر لاستخدام الاستنساخ الصوتي."
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -35856,6 +37047,12 @@
             "value" : "Vous devez avoir 18 ans ou plus pour utiliser le clonage vocal."
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Devi avere almeno 18 anni per usare la clonazione vocale."
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -35867,6 +37064,12 @@
     "voiceProfile.age.verify" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "تحقّق"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -35891,6 +37094,12 @@
             "value" : "Verifier"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Verifica"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -35902,6 +37111,12 @@
     "voiceProfile.complete.description" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ستستخدم ترجماتك الصوتية من الآن فصاعدًا صوتك المستنسَخ."
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -35926,6 +37141,12 @@
             "value" : "Vos traductions audio utiliseront desormais votre voix clonee."
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Le tue traduzioni audio useranno d'ora in poi la tua voce clonata."
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -35937,6 +37158,12 @@
     "voiceProfile.complete.finish" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "إنهاء"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -35961,6 +37188,12 @@
             "value" : "Terminer"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Termina"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -35972,6 +37205,12 @@
     "voiceProfile.complete.title" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "تم إنشاء الملف الصوتي!"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -35996,6 +37235,12 @@
             "value" : "Profil vocal cree !"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Profilo vocale creato!"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -36007,6 +37252,12 @@
     "voiceProfile.consent.continue" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "متابعة"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -36031,6 +37282,12 @@
             "value" : "Continuer"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Continua"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -36042,6 +37299,12 @@
     "voiceProfile.consent.description" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "‏يمكن لـ Meeshy استنساخ صوتك لترجمة رسائلك الصوتية إلى لغات أخرى بصوتك أنت."
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -36066,6 +37329,12 @@
             "value" : "Meeshy peut cloner votre voix pour traduire vos messages audio dans d'autres langues avec votre propre voix."
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Meeshy può clonare la tua voce per tradurre i tuoi messaggi audio in altre lingue con la tua stessa voce."
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -36077,6 +37346,12 @@
     "voiceProfile.consent.point1" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "سجّل بضع عيّنات من صوتك"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -36101,6 +37376,12 @@
             "value" : "Enregistrez quelques echantillons de votre voix"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Registra alcuni campioni della tua voce"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -36112,6 +37393,12 @@
     "voiceProfile.consent.point2" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "يُنشأ نموذج صوتي فريد من عيّناتك"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -36136,6 +37423,12 @@
             "value" : "Un modele vocal unique est cree a partir de vos echantillons"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dai tuoi campioni viene creato un modello vocale unico"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -36147,6 +37440,12 @@
     "voiceProfile.consent.point3" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ستستخدم ترجماتك الصوتية صوتك المستنسَخ"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -36171,6 +37470,12 @@
             "value" : "Vos traductions audio utiliseront votre voix clonee"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Le tue traduzioni audio useranno la tua voce clonata"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -36182,6 +37487,12 @@
     "voiceProfile.consent.point4" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "يمكنك حذف بياناتك الصوتية في أي وقت (اللائحة العامة لحماية البيانات)"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -36206,6 +37517,12 @@
             "value" : "Vous pouvez supprimer vos donnees vocales a tout moment (RGPD)"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Puoi eliminare i tuoi dati vocali in qualsiasi momento (GDPR)"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -36217,6 +37534,12 @@
     "voiceProfile.consent.point5" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "عيّناتك مشفّرة ولا تُشارَك أبدًا"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -36241,6 +37564,12 @@
             "value" : "Vos echantillons sont chiffres et ne sont jamais partages"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "I tuoi campioni sono crittografati e non vengono mai condivisi"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -36252,6 +37581,12 @@
     "voiceProfile.consent.title" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "الاستنساخ الصوتي"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -36276,6 +37611,12 @@
             "value" : "Clonage vocal"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Clonazione vocale"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -36287,6 +37628,12 @@
     "voiceProfile.consent.toggle" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "أوافق على استخدام عيّناتي الصوتية لإنشاء ملف صوتي"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -36311,6 +37658,12 @@
             "value" : "J'accepte que mes echantillons vocaux soient utilises pour creer un profil vocal"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Accetto che i miei campioni vocali siano usati per creare un profilo vocale"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -36322,6 +37675,12 @@
     "voiceProfile.manage.cancelDelete" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "إلغاء"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -36346,6 +37705,12 @@
             "value" : "Annuler"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Annulla"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -36357,6 +37722,12 @@
     "voiceProfile.manage.cloningActive" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "استنساخ الصوت مفعّل"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -36381,6 +37752,12 @@
             "value" : "Clonage vocal actif"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Clonazione vocale attiva"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -36392,6 +37769,12 @@
     "voiceProfile.manage.cloningSubtitle" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "استخدام صوتك في الترجمات"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -36416,6 +37799,12 @@
             "value" : "Utiliser votre voix pour les traductions"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Usa la tua voce per le traduzioni"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -36427,6 +37816,12 @@
     "voiceProfile.manage.close" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "إغلاق"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -36451,6 +37846,12 @@
             "value" : "Fermer"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Chiudi"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -36462,6 +37863,12 @@
     "voiceProfile.manage.deleteAll" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "حذف الكل"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -36486,6 +37893,12 @@
             "value" : "Supprimer tout"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Elimina tutto"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -36497,6 +37910,12 @@
     "voiceProfile.manage.deleteAllData" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "حذف جميع البيانات الصوتية"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -36521,6 +37940,12 @@
             "value" : "Supprimer toutes les donnees vocales"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Elimina tutti i dati vocali"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -36532,6 +37957,12 @@
     "voiceProfile.manage.deleteMessage" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "سيحذف هذا الإجراء ملفك الصوتي وجميع عيّناتك نهائيًا، وسيلغي موافقتك. وهو إجراء لا رجعة فيه (اللائحة العامة لحماية البيانات)."
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -36556,6 +37987,12 @@
             "value" : "Cette action supprimera definitivement votre profil vocal, tous vos echantillons et revoquera votre consentement. Cette action est irreversible (RGPD)."
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Questa azione eliminerà definitivamente il tuo profilo vocale e tutti i tuoi campioni, e revocherà il tuo consenso. È irreversibile (GDPR)."
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -36567,6 +38004,12 @@
     "voiceProfile.manage.deleteTitle" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "حذف الملف الصوتي؟"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -36591,6 +38034,12 @@
             "value" : "Supprimer le profil vocal ?"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Eliminare il profilo vocale?"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -36602,6 +38051,12 @@
     "voiceProfile.manage.gdprNotice" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "متوافق مع اللائحة العامة لحماية البيانات — ستُحذف بياناتك الصوتية نهائيًا من خوادمنا."
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -36626,6 +38081,12 @@
             "value" : "Conforme au RGPD - Vos donnees vocales seront definitivement supprimees de nos serveurs."
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Conforme al GDPR — I tuoi dati vocali saranno eliminati definitivamente dai nostri server."
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -36637,6 +38098,12 @@
     "voiceProfile.manage.noSamples" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "لا توجد عيّنات مسجّلة"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -36661,6 +38128,12 @@
             "value" : "Aucun echantillon enregistre"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nessun campione registrato"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -36672,6 +38145,12 @@
     "voiceProfile.manage.quality" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "الجودة"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -36696,6 +38175,12 @@
             "value" : "Qualite"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Qualità"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -36707,6 +38192,12 @@
     "voiceProfile.manage.sample" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "عيّنة"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -36731,6 +38222,12 @@
             "value" : "Echantillon"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Campione"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -36742,6 +38239,12 @@
     "voiceProfile.manage.samples" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "العيّنات"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -36766,6 +38269,12 @@
             "value" : "Echantillons"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Campioni"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -36777,6 +38286,12 @@
     "voiceProfile.manage.samplesHeader" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "العيّنات الصوتية"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -36801,6 +38316,12 @@
             "value" : "ECHANTILLONS VOCAUX"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "CAMPIONI VOCALI"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -36812,6 +38333,12 @@
     "voiceProfile.manage.title" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "الملف الصوتي"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -36836,6 +38363,12 @@
             "value" : "Profil vocal"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Profilo vocale"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -36847,6 +38380,12 @@
     "voiceProfile.manage.totalDuration" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "المدة الإجمالية"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -36871,6 +38410,12 @@
             "value" : "Duree totale"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Durata totale"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -36882,6 +38427,12 @@
     "voiceProfile.processing.description" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "تجري معالجة عيّناتك. قد يستغرق ذلك بضع دقائق."
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -36906,6 +38457,12 @@
             "value" : "Vos echantillons sont en cours de traitement. Cela peut prendre quelques minutes."
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "I tuoi campioni sono in fase di elaborazione. Potrebbero volerci alcuni minuti."
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -36917,6 +38474,12 @@
     "voiceProfile.processing.title" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "جارٍ إنشاء الملف الصوتي..."
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -36941,6 +38504,12 @@
             "value" : "Creation du profil vocal..."
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Creazione del profilo vocale..."
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -36952,6 +38521,12 @@
     "voiceProfile.recording.createProfile" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "إنشاء الملف الصوتي"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -36976,6 +38551,12 @@
             "value" : "Creer le profil vocal"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Crea il profilo vocale"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -36987,6 +38568,12 @@
     "voiceProfile.recording.description" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "اقرأ النص أدناه بصوت عالٍ. سجّل 3 عيّنات على الأقل مدة كل منها 10 ثوانٍ."
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -37011,6 +38598,12 @@
             "value" : "Lisez le texte ci-dessous a voix haute. Enregistrez au moins 3 echantillons de 10 secondes chacun."
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Leggi ad alta voce il testo qui sotto. Registra almeno 3 campioni da 10 secondi ciascuno."
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -37022,6 +38615,12 @@
     "voiceProfile.recording.readAloud" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "اقرأ هذا النص بصوت عالٍ"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -37046,6 +38645,12 @@
             "value" : "Lisez ce texte a voix haute"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Leggi questo testo ad alta voce"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -37057,6 +38662,12 @@
     "voiceProfile.recording.title" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "سجّل صوتك"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -37081,6 +38692,12 @@
             "value" : "Enregistrez votre voix"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Registra la tua voce"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -37092,6 +38709,12 @@
     "voiceProfile.status.active" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ملف نشط"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -37116,6 +38739,12 @@
             "value" : "Profil actif"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Profilo attivo"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -37127,6 +38756,12 @@
     "voiceProfile.status.expired" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "منتهٍ"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -37151,6 +38786,12 @@
             "value" : "Expire"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Scaduto"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -37162,6 +38803,12 @@
     "voiceProfile.status.failed" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "خطأ"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -37186,6 +38833,12 @@
             "value" : "Erreur"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Errore"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -37197,6 +38850,12 @@
     "voiceProfile.status.noProfile" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "لا يوجد ملف"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -37221,6 +38880,12 @@
             "value" : "Aucun profil"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nessun profilo"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -37232,6 +38897,12 @@
     "voiceProfile.status.pending" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "قيد الانتظار"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -37256,6 +38927,12 @@
             "value" : "En attente"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "In attesa"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -37267,6 +38944,12 @@
     "voiceProfile.status.processing" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "قيد المعالجة..."
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -37291,6 +38974,12 @@
             "value" : "En traitement..."
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "In elaborazione..."
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -37302,6 +38991,12 @@
     "voiceProfile.subtitle.active" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "يُستخدم صوتك في الترجمات الصوتية"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -37326,6 +39021,12 @@
             "value" : "Votre voix est utilisee pour les traductions audio"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La tua voce è usata per le traduzioni audio"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -37337,6 +39038,12 @@
     "voiceProfile.subtitle.expired" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "سجّل عيّنات جديدة"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -37361,6 +39068,12 @@
             "value" : "Enregistrez de nouveaux echantillons"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Registra nuovi campioni"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -37372,6 +39085,12 @@
     "voiceProfile.subtitle.failed" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "فشلت المعالجة، أعِد المحاولة"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -37396,6 +39115,12 @@
             "value" : "Le traitement a echoue, reessayez"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "L'elaborazione non è riuscita, riprova"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -37407,6 +39132,12 @@
     "voiceProfile.subtitle.noProfile" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "أنشئ ملفًا صوتيًا لتفعيل الاستنساخ"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -37431,6 +39162,12 @@
             "value" : "Creez un profil vocal pour activer le clonage"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Crea un profilo vocale per attivare la clonazione"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -37442,6 +39179,12 @@
     "voiceProfile.subtitle.pending" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "في انتظار المعالجة"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -37466,6 +39209,12 @@
             "value" : "En attente de traitement"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "In attesa di elaborazione"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -37477,6 +39226,12 @@
     "voiceProfile.subtitle.processing" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "تجري معالجة عيّناتك"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -37501,6 +39256,12 @@
             "value" : "Vos echantillons sont en cours de traitement"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "I tuoi campioni sono in fase di elaborazione"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -37512,6 +39273,12 @@
     "voiceProfile.wizard.close" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "إغلاق"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -37536,6 +39303,12 @@
             "value" : "Fermer"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Chiudi"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -37547,6 +39320,12 @@
     "voiceProfile.wizard.errorTitle" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "خطأ"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -37571,6 +39350,12 @@
             "value" : "Erreur"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Errore"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -37582,6 +39367,12 @@
     "voiceProfile.wizard.ok" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "حسنًا"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -37606,6 +39397,12 @@
             "value" : "OK"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OK"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -37617,6 +39414,12 @@
     "voiceProfile.wizard.title" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "الملف الصوتي"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -37641,6 +39444,12 @@
             "value" : "Profil vocal"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Profilo vocale"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -37654,10 +39463,23 @@
     },
     "Vous avez rejoint %@ en tant que %@" : {
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "لقد انضممت إلى %1$@ بصفة %2$@"
+          }
+        },
         "fr" : {
           "stringUnit" : {
             "state" : "new",
             "value" : "Vous avez rejoint %1$@ en tant que %2$@"
+          }
+        }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ti sei unito a %1$@ come %2$@"
           }
         }
       }
@@ -37680,6 +39502,12 @@
     "story.composer.opening.fade" : {
       "extractionState" : "manual",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "تلاشٍ"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
@@ -37704,11 +39532,24 @@
             "value" : "Fondu"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dissolvenza"
+          }
+        }
       }
     },
     "story.composer.opening.zoom" : {
       "extractionState" : "manual",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "تكبير"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
@@ -37733,11 +39574,24 @@
             "value" : "Zoom"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zoom"
+          }
+        }
       }
     },
     "story.composer.opening.slide" : {
       "extractionState" : "manual",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "انزلاق"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
@@ -37762,11 +39616,24 @@
             "value" : "Glissement"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Scorrimento"
+          }
+        }
       }
     },
     "story.composer.opening.reveal" : {
       "extractionState" : "manual",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "كشف"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
@@ -37791,11 +39658,24 @@
             "value" : "Révélation"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rivelazione"
+          }
+        }
       }
     },
     "story.textEdit.tool.style" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "نمط النص"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
@@ -37820,11 +39700,24 @@
             "value" : "Style de texte"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Stile del testo"
+          }
+        }
       }
     },
     "story.textEdit.tool.weight" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "سماكة النص"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
@@ -37849,11 +39742,24 @@
             "value" : "Graisse du texte"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Spessore del testo"
+          }
+        }
       }
     },
     "story.textEdit.tool.color" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "لون النص"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
@@ -37878,11 +39784,24 @@
             "value" : "Couleur du texte"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Colore del testo"
+          }
+        }
       }
     },
     "story.textEdit.tool.size" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "حجم النص"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
@@ -37907,11 +39826,24 @@
             "value" : "Taille du texte"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dimensione del testo"
+          }
+        }
       }
     },
     "story.textEdit.tool.align" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "محاذاة النص"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
@@ -37936,11 +39868,24 @@
             "value" : "Alignement du texte"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Allineamento del testo"
+          }
+        }
       }
     },
     "story.textEdit.tool.background" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "خلفية النص"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
@@ -37965,11 +39910,24 @@
             "value" : "Fond du texte"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sfondo del testo"
+          }
+        }
       }
     },
     "story.textEdit.tool.frame" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "إطار النص"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
@@ -37994,11 +39952,24 @@
             "value" : "Cadrage du texte"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cornice del testo"
+          }
+        }
       }
     },
     "story.textEdit.tool.border" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "حدّ النص"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
@@ -38023,11 +39994,24 @@
             "value" : "Contour du texte"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Contorno del testo"
+          }
+        }
       }
     },
     "story.textEdit.finish" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "إنهاء تعديل النص"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
@@ -38052,11 +40036,24 @@
             "value" : "Terminer l'édition du texte"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Termina la modifica del testo"
+          }
+        }
       }
     },
     "story.textEdit.finish.hint" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "يغلق المحرّر ويخفي لوحة المفاتيح"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
@@ -38081,11 +40078,24 @@
             "value" : "Ferme l'éditeur et masque le clavier"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Chiude l'editor e nasconde la tastiera"
+          }
+        }
       }
     },
     "story.textEdit.weight.thin" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "رفيع"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
@@ -38110,11 +40120,24 @@
             "value" : "Fin"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sottile"
+          }
+        }
       }
     },
     "story.textEdit.weight.normal" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "عادي"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
@@ -38139,11 +40162,24 @@
             "value" : "Normal"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Normale"
+          }
+        }
       }
     },
     "story.textEdit.weight.semibold" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "نصف عريض"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
@@ -38168,11 +40204,24 @@
             "value" : "Semi"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Semi"
+          }
+        }
       }
     },
     "story.textEdit.weight.bold" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "عريض"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
@@ -38197,11 +40246,24 @@
             "value" : "Gras"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Grassetto"
+          }
+        }
       }
     },
     "story.textEdit.frame.rounded" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "مستدير"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
@@ -38226,11 +40288,24 @@
             "value" : "Arrondi"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Arrotondato"
+          }
+        }
       }
     },
     "story.textEdit.frame.pill" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "كبسولة"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
@@ -38255,11 +40330,24 @@
             "value" : "Pilule"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pillola"
+          }
+        }
       }
     },
     "story.textEdit.frame.rectangle" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "مربّع"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
@@ -38284,11 +40372,24 @@
             "value" : "Carré"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Quadrato"
+          }
+        }
       }
     },
     "story.textEdit.frame.diamond" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "معيّن"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
@@ -38313,11 +40414,24 @@
             "value" : "Losange"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rombo"
+          }
+        }
       }
     },
     "story.textEdit.frame.cloud" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "سحابة"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
@@ -38342,11 +40456,24 @@
             "value" : "Nuage"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nuvola"
+          }
+        }
       }
     },
     "story.textEdit.frame.speech" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "فقاعة حوار"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
@@ -38371,11 +40498,24 @@
             "value" : "Bulle BD"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fumetto"
+          }
+        }
       }
     },
     "story.textEdit.bg.glass" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "زجاج"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
@@ -38400,11 +40540,24 @@
             "value" : "Verre"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Vetro"
+          }
+        }
       }
     },
     "story.textEdit.bg.black" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "أسود"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
@@ -38429,11 +40582,24 @@
             "value" : "Noir"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nero"
+          }
+        }
       }
     },
     "story.textEdit.bg.black65" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "أسود 65%"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
@@ -38458,11 +40624,24 @@
             "value" : "Noir 65%"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nero 65%"
+          }
+        }
       }
     },
     "story.textEdit.bg.white" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "أبيض"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
@@ -38487,11 +40666,24 @@
             "value" : "Blanc"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bianco"
+          }
+        }
       }
     },
     "story.textEdit.bg.white65" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "أبيض 65%"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
@@ -38516,11 +40708,24 @@
             "value" : "Blanc 65%"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bianco 65%"
+          }
+        }
       }
     },
     "story.textEdit.bg.indigo" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "نيلي"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
@@ -38545,11 +40750,24 @@
             "value" : "Indigo"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Indaco"
+          }
+        }
       }
     },
     "story.textEdit.bg.indigo65" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "نيلي 65%"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
@@ -38574,11 +40792,24 @@
             "value" : "Indigo 65%"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Indaco 65%"
+          }
+        }
       }
     },
     "story.textEdit.bg.pink" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "وردي"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
@@ -38603,11 +40834,24 @@
             "value" : "Rose"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rosa"
+          }
+        }
       }
     },
     "story.textEdit.bg.green" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "أخضر"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
@@ -38632,11 +40876,24 @@
             "value" : "Vert"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Verde"
+          }
+        }
       }
     },
     "story.textEdit.bg.amber" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "كهرماني"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
@@ -38661,11 +40918,24 @@
             "value" : "Ambre"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ambra"
+          }
+        }
       }
     },
     "story.textEdit.bg.red" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "أحمر"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
@@ -38690,11 +40960,24 @@
             "value" : "Rouge"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rosso"
+          }
+        }
       }
     },
     "story.drawEdit.tool.tool" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "فرشاة"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
@@ -38719,11 +41002,24 @@
             "value" : "Pinceau"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pennello"
+          }
+        }
       }
     },
     "story.drawEdit.tool.color" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "لون الخط"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
@@ -38748,11 +41044,24 @@
             "value" : "Couleur du trait"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Colore del tratto"
+          }
+        }
       }
     },
     "story.drawEdit.tool.thickness" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "سماكة الخط"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
@@ -38777,11 +41086,24 @@
             "value" : "Épaisseur du trait"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Spessore del tratto"
+          }
+        }
       }
     },
     "story.drawEdit.tool.smoothing" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "تنعيم الخط"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
@@ -38806,11 +41128,24 @@
             "value" : "Lissage du trait"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Levigatura del tratto"
+          }
+        }
       }
     },
     "story.drawEdit.undo" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "التراجع عن آخر خط"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
@@ -38835,11 +41170,24 @@
             "value" : "Annuler le dernier trait"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Annulla l'ultimo tratto"
+          }
+        }
       }
     },
     "story.drawEdit.redo" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "إعادة الخط الملغى"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
@@ -38864,11 +41212,24 @@
             "value" : "Rétablir le trait annulé"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ripristina il tratto annullato"
+          }
+        }
       }
     },
     "story.drawEdit.unavailable" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "غير متاح"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
@@ -38893,11 +41254,24 @@
             "value" : "Indisponible"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Non disponibile"
+          }
+        }
       }
     },
     "story.drawEdit.finish" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "إنهاء تعديل الرسم"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
@@ -38922,11 +41296,24 @@
             "value" : "Terminer l'édition du dessin"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Termina la modifica del disegno"
+          }
+        }
       }
     },
     "story.drawEdit.finish.hint" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "يغلق أدوات الرسم"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
@@ -38951,11 +41338,24 @@
             "value" : "Ferme les contrôles de dessin"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Chiude i controlli di disegno"
+          }
+        }
       }
     },
     "story.drawEdit.strokeList.count" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld خط"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
@@ -38980,11 +41380,24 @@
             "value" : "%lld trait(s)"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld tratto/i"
+          }
+        }
       }
     },
     "story.drawEdit.strokeList.style" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "نمط الخط"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
@@ -39009,11 +41422,24 @@
             "value" : "Style du trait"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Stile del tratto"
+          }
+        }
       }
     },
     "story.drawEdit.strokeList.delete" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "حذف الخط"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
@@ -39038,11 +41464,24 @@
             "value" : "Supprimer le trait"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Elimina il tratto"
+          }
+        }
       }
     },
     "story.drawEdit.smoothing.raw" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "خام"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
@@ -39067,11 +41506,24 @@
             "value" : "Brut"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Grezzo"
+          }
+        }
       }
     },
     "story.drawEdit.smoothing.curve" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "منحنى"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
@@ -39096,11 +41548,24 @@
             "value" : "Courbe"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Curva"
+          }
+        }
       }
     },
     "story.drawEdit.smoothing.line" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "مستقيم"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
@@ -39125,11 +41590,24 @@
             "value" : "Droite"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Retta"
+          }
+        }
       }
     },
     "story.drawEdit.strokeTool.pen" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "قلم"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
@@ -39154,11 +41632,24 @@
             "value" : "Stylo"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Penna"
+          }
+        }
       }
     },
     "story.drawEdit.strokeTool.marker" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "قلم تحديد"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
@@ -39183,11 +41674,24 @@
             "value" : "Marqueur"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pennarello"
+          }
+        }
       }
     },
     "story.drawEdit.strokeTool.eraser" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ممحاة"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
@@ -39212,10 +41716,23 @@
             "value" : "Gomme"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gomma"
+          }
+        }
       }
     },
     "auth.registration.header.pseudo" : {
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "اسم مستخدم فريد، مثلك"
+          }
+        },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
@@ -39240,6 +41757,12 @@
             "value" : "Ein Nutzername, so einzigartig wie du"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Un nome utente unico, come te"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "translated",
@@ -39250,6 +41773,12 @@
     },
     "auth.registration.header.phone" : {
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "رقمك، مفتاحك الاحتياطي"
+          }
+        },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
@@ -39274,6 +41803,12 @@
             "value" : "Deine Nummer, dein Ersatzschlüssel"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Il tuo numero, la tua chiave di riserva"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "translated",
@@ -39284,6 +41819,12 @@
     },
     "auth.registration.header.email" : {
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "بريدك الإلكتروني، شبكة أمانك"
+          }
+        },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
@@ -39308,6 +41849,12 @@
             "value" : "Deine E-Mail, dein Sicherheitsnetz"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La tua email, la tua rete di sicurezza"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "translated",
@@ -39318,6 +41865,12 @@
     },
     "auth.registration.header.identity" : {
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "أخبرنا من أنت"
+          }
+        },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
@@ -39342,6 +41895,12 @@
             "value" : "Sag uns, wer du bist"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dicci chi sei"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "translated",
@@ -39352,6 +41911,12 @@
     },
     "auth.registration.header.password" : {
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "اختر كلمة مرور متينة!"
+          }
+        },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
@@ -39376,6 +41941,12 @@
             "value" : "Wähle ein bombenfestes Passwort!"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Scegli una password di ferro!"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "translated",
@@ -39386,6 +41957,12 @@
     },
     "auth.registration.header.language" : {
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "تحدّث بلغتك، ونحن نترجم"
+          }
+        },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
@@ -39410,6 +41987,12 @@
             "value" : "Sprich deine Sprache, wir übersetzen"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Parla la tua lingua, noi traduciamo"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "translated",
@@ -39420,6 +42003,12 @@
     },
     "auth.registration.header.profile" : {
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "أظهِر أفضل ما لديك"
+          }
+        },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
@@ -39444,6 +42033,12 @@
             "value" : "Zeig dich von deiner besten Seite"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mostrati al meglio"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "translated",
@@ -39454,6 +42049,12 @@
     },
     "auth.registration.header.recap" : {
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "العالم بانتظارك!"
+          }
+        },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
@@ -39478,6 +42079,12 @@
             "value" : "Die Welt wartet auf dich!"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Il mondo ti aspetta!"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "translated",
@@ -39488,6 +42095,12 @@
     },
     "auth.registration.subtitle.pseudo" : {
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "اختر الاسم الذي سيتذكّره العالم — من دوالا إلى باريس، ومن ساو باولو إلى طوكيو. كن مبدعًا!"
+          }
+        },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
@@ -39512,6 +42125,12 @@
             "value" : "Wähle den Namen, den sich die Welt merken wird — von Douala bis Paris, von São Paulo bis Tokio. Sei kreativ!"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Scegli il nome che il mondo ricorderà — da Douala a Parigi, da São Paulo a Tokyo. Sii creativo!"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "translated",
@@ -39522,6 +42141,12 @@
     },
     "auth.registration.subtitle.phone" : {
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "يؤكّد أن حسابك فريد، ويحمي التزاماتك، ويعيده إليك إن فقدت الوصول. ولا يُعرض علنًا أبدًا."
+          }
+        },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
@@ -39546,6 +42171,12 @@
             "value" : "Sie bestätigt, dass dein Konto einzigartig ist, sichert deine Zusagen ab und gibt es dir zurück, wenn du den Zugang verlierst. Wird nie öffentlich angezeigt."
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Conferma che il tuo account è unico, protegge i tuoi impegni e te lo restituisce se perdi l'accesso. Non viene mai mostrato pubblicamente."
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "translated",
@@ -39556,6 +42187,12 @@
     },
     "auth.registration.subtitle.email" : {
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "لا غنى عنه لاستعادة حسابك وتأكيد التزاماتك. بلا رسائل مزعجة، نَعِدُك!"
+          }
+        },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
@@ -39580,6 +42217,12 @@
             "value" : "Unverzichtbar, um dein Konto wiederherzustellen und deine Zusagen zu bestätigen. Null Spam, versprochen!"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Indispensabile per recuperare il tuo account e confermare i tuoi impegni. Zero spam, promesso!"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "translated",
@@ -39590,6 +42233,12 @@
     },
     "auth.registration.subtitle.identity" : {
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "اسمك الحقيقي هو ما يتيح لمن تحب أن يجدك — ويثبت أن الحساب لك فعلًا."
+          }
+        },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
@@ -39614,6 +42263,12 @@
             "value" : "Dein echter Name lässt dich von deinen Nächsten finden — und beweist, dass das Konto wirklich dir gehört."
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Il tuo vero nome è ciò che permette ai tuoi cari di ritrovarti — e dimostra che l'account è davvero tuo."
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "translated",
@@ -39624,6 +42279,12 @@
     },
     "auth.registration.subtitle.password" : {
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "لتكن متينة مثل طبخ أمك! 8 أحرف على الأقل!"
+          }
+        },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
@@ -39648,6 +42309,12 @@
             "value" : "So kräftig wie Mamas Eintopf! Mindestens 8 Zeichen!"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Deve essere forte come il pranzo della domenica! Minimo 8 caratteri!"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "translated",
@@ -39658,6 +42325,12 @@
     },
     "auth.registration.subtitle.language" : {
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "‏اختر لغتك، وMeeshy يترجم كل شيء: أصدقاؤك في السنغال وكندا والبرازيل واليابان وأستراليا سيقرؤونك بلغتهم."
+          }
+        },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
@@ -39682,6 +42355,12 @@
             "value" : "Wähle deine Sprache, Meeshy übersetzt alles: Deine Freunde in Senegal, Kanada, Brasilien, Japan oder Australien lesen dich in ihrer."
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Scegli la tua lingua, Meeshy traduce tutto: i tuoi amici del Senegal, del Canada, del Brasile, del Giappone o dell'Australia ti leggeranno nella loro."
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "translated",
@@ -39692,6 +42371,12 @@
     },
     "auth.registration.subtitle.profile" : {
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "صورة جميلة وغلاف أنيق يفتحان كل الأبواب: هكذا تلتقي بالأفضل، هنا وفي القارات الخمس."
+          }
+        },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
@@ -39716,6 +42401,12 @@
             "value" : "Ein gutes Foto und ein gepflegtes Banner öffnen alle Türen: So trifft man die Crème de la Crème, hier und auf allen 5 Kontinenten."
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Una bella foto e un banner curato aprono tutte le porte: è così che si incontra il meglio, qui e in tutti e 5 i continenti."
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "translated",
@@ -39726,6 +42417,12 @@
     },
     "auth.registration.subtitle.recap" : {
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "‏وصلت! لقاءات تنتظرك في القارات الخمس. مرحبًا بك في عائلة Meeshy!"
+          }
+        },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
@@ -39750,6 +42447,12 @@
             "value" : "Du bist dabei! Begegnungen auf allen 5 Kontinenten warten auf dich. Willkommen in der Meeshy-Familie!"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ci sei! Ti aspettano incontri in tutti e 5 i continenti. Benvenuto nella famiglia Meeshy!"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "translated",
@@ -39760,6 +42463,12 @@
     },
     "story.composer.tool.title.media" : {
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "وسائط"
+          }
+        },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
@@ -39784,6 +42493,12 @@
             "value" : "Medien"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Media"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "translated",
@@ -39794,6 +42509,12 @@
     },
     "story.composer.tool.title.audio" : {
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "صوت"
+          }
+        },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
@@ -39818,6 +42539,12 @@
             "value" : "Ton"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Suono"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "translated",
@@ -39828,6 +42555,12 @@
     },
     "story.composer.tool.title.drawing" : {
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "رسم"
+          }
+        },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
@@ -39852,6 +42585,12 @@
             "value" : "Zeichnung"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Disegno"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "translated",
@@ -39862,6 +42601,12 @@
     },
     "story.composer.tool.title.text" : {
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "نص"
+          }
+        },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
@@ -39886,6 +42631,12 @@
             "value" : "Text"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Testo"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "translated",
@@ -39896,6 +42647,12 @@
     },
     "story.composer.tool.title.texture" : {
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "خلفية"
+          }
+        },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
@@ -39920,6 +42677,12 @@
             "value" : "Hintergrund"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sfondo"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "translated",
@@ -39930,6 +42693,12 @@
     },
     "story.audio.chip.muted" : {
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "مكتوم"
+          }
+        },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
@@ -39954,6 +42723,12 @@
             "value" : "Stumm"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Muto"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "translated",
@@ -39964,6 +42739,12 @@
     },
     "story.audio.chip.active" : {
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "نشط"
+          }
+        },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
@@ -39988,6 +42769,12 @@
             "value" : "Aktiv"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Attivo"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "translated",
@@ -39998,6 +42785,12 @@
     },
     "story.audio.chip.hint.composer" : {
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "انقر مرتين للتحديد. اسحب للتحريك."
+          }
+        },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
@@ -40022,6 +42815,12 @@
             "value" : "Doppeltippen zum Auswählen. Ziehen zum Verschieben."
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tocca due volte per selezionare. Trascina per spostare."
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "translated",
@@ -40032,6 +42831,12 @@
     },
     "story.audio.chip.hint.reader" : {
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "انقر مرتين لكتم هذا المسار الصوتي أو تفعيله."
+          }
+        },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
@@ -40054,6 +42859,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Doppeltippen, um diese Tonspur stumm zu schalten oder zu aktivieren."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tocca due volte per silenziare o attivare questa traccia audio."
           }
         },
         "pt-BR" : {
