@@ -1127,8 +1127,12 @@ export class MessageReadStatusService {
         for (const entry of existing) {
           const code = languageFor(entry.messageId);
           if (!code) continue;
-          if (entry.viewedLanguages?.includes(code)) continue;
-          if ((entry.viewedLanguages?.length ?? 0) >= MAX_VIEWED_LANGUAGES) continue;
+          // Re-normalise l'existant via le SSOT avant la dédup : une locale
+          // complète héritée (`fr-FR`) désigne la même version que `fr`, et ne
+          // doit ni rouvrir un push doublon ni gonfler le plafond.
+          const known = mergeViewedLanguages(entry.viewedLanguages, []);
+          if (known.includes(code)) continue;
+          if (known.length >= MAX_VIEWED_LANGUAGES) continue;
           byLanguage.set(code, [...(byLanguage.get(code) ?? []), entry.messageId]);
         }
 

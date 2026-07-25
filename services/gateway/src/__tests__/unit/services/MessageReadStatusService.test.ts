@@ -730,6 +730,30 @@ describe('MessageReadStatusService', () => {
       expect(languagePush).toBeUndefined();
     });
 
+    it('ne duplique pas une langue déjà connue sous une locale complète (stock legacy dénormalisé)', async () => {
+      // Une entrée écrite par une version antérieure a pu stocker la locale
+      // complète `fr-FR`. Le lecteur revient dans la même langue, normalisée
+      // en `fr`. `fr-FR` et `fr` désignent la même version : pousser `fr`
+      // créerait un doublon logique. La dédup passe donc par le SSOT
+      // `mergeViewedLanguages`, qui re-normalise l'existant avant comparaison.
+      mockPrisma.message.findFirst.mockResolvedValue({ id: testMessageId, createdAt: new Date('2025-01-01T00:00:00Z') });
+      mockPrisma.conversationReadCursor.findUnique.mockResolvedValue({ lastReadAt: null });
+      mockPrisma.message.findMany.mockResolvedValue([{ id: testMessageId }]);
+      mockPrisma.messageStatusEntry.findMany.mockResolvedValue([
+        { messageId: testMessageId, deliveredAt: new Date(), readAt: new Date(), viewedLanguages: ['fr-FR'] }
+      ]);
+
+      await service.markMessagesAsRead(testParticipantId, testConversationId, testMessageId, {
+        messageIds: [testMessageId],
+        language: 'fr'
+      });
+
+      const languagePush = mockPrisma.messageStatusEntry.updateMany.mock.calls.find(
+        (call: any[]) => call[0]?.data?.viewedLanguages
+      );
+      expect(languagePush).toBeUndefined();
+    });
+
     it('respecte la langue réellement affichée pour un message sans traduction', async () => {
       // Le lecteur préfère l'anglais, mais ce message n'a jamais été traduit :
       // il l'a vu en français. Le déclarer « lu en anglais » mentirait
