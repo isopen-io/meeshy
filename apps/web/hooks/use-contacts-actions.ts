@@ -34,7 +34,7 @@ export function useContactsActions(
       }
 
       const currentUser = JSON.parse(JSON.stringify(authManager.getCurrentUser() || {}) || '{}');
-      const currentUserName = currentUser.displayName || `${currentUser.firstName} ${currentUser.lastName}`.trim() || currentUser.username;
+      const currentUserName = getUserDisplayName(currentUser);
       const contactName = getUserDisplayName(contact);
       const conversationTitle = `${currentUserName} & ${contactName}`;
 
