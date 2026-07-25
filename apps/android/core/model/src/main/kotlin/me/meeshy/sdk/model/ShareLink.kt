@@ -194,3 +194,13 @@ data class MyShareLinkStats(
 data class ToggleShareLinkRequest(
     val isActive: Boolean,
 )
+
+/**
+ * Body for `PATCH /links/{linkId}/extend`. The gateway requires a concrete ISO-8601
+ * [expiresAt] (it rejects a perpetual extend), so this field is non-null by
+ * construction — see [ExtendShareLinkForm].
+ */
+@Serializable
+data class ExtendShareLinkRequest(
+    val expiresAt: String,
+)

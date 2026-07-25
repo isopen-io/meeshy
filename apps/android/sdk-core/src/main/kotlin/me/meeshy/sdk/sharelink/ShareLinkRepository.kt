@@ -2,6 +2,7 @@ package me.meeshy.sdk.sharelink
 
 import me.meeshy.sdk.model.CreatedShareLink
 import me.meeshy.sdk.model.CreateShareLinkRequest
+import me.meeshy.sdk.model.ExtendShareLinkRequest
 import me.meeshy.sdk.model.MyShareLink
 import me.meeshy.sdk.model.MyShareLinkStats
 import me.meeshy.sdk.model.ToggleShareLinkRequest
@@ -36,4 +37,7 @@ public class ShareLinkRepository @Inject constructor(
 
     public suspend fun delete(linkId: String): NetworkResult<Unit> =
         apiCall { linkApi.delete(linkId) }
+
+    public suspend fun extend(linkId: String, expiresAtIso: String): NetworkResult<Unit> =
+        apiCall { linkApi.extend(linkId, ExtendShareLinkRequest(expiresAtIso)) }
 }

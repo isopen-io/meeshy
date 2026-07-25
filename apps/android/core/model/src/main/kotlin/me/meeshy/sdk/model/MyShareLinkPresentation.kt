@@ -1,5 +1,7 @@
 package me.meeshy.sdk.model
 
+import java.time.Instant
+
 /**
  * Pure presentation helpers for a [MyShareLink] — faithful ports of the iOS
  * computed properties (`ShareLinkModels.swift`). Kept framework-free so every
@@ -26,4 +28,17 @@ public fun MyShareLink.joinUrl(webOrigin: String): String {
     val base = webOrigin.trimEnd('/')
     val slug = identifier?.takeIf { it.isNotBlank() } ?: linkId
     return "$base/join/$slug"
+}
+
+/**
+ * Whether the link has passed its expiry at [nowMillis]. Mirrors the gateway guard
+ * (`new Date() > shareLink.expiresAt`): a link with no [MyShareLink.expiresAt] never
+ * expires (`false`), a blank or unparseable timestamp is treated as no-expiry
+ * (`false`, never falsely "expired"), and the boundary instant itself is not yet
+ * expired (strictly-after comparison).
+ */
+public fun MyShareLink.isExpired(nowMillis: Long): Boolean {
+    val raw = expiresAt?.takeIf { it.isNotBlank() } ?: return false
+    val expiry = runCatching { Instant.parse(raw) }.getOrNull() ?: return false
+    return nowMillis > expiry.toEpochMilli()
 }

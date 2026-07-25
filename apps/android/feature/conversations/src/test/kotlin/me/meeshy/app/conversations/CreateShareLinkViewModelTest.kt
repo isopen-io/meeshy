@@ -57,6 +57,11 @@ class CreateShareLinkViewModelTest {
 
         override suspend fun delete(linkId: String): ApiResponse<Unit> =
             ApiResponse(success = true, data = Unit)
+
+        override suspend fun extend(
+            linkId: String,
+            body: me.meeshy.sdk.model.ExtendShareLinkRequest,
+        ): ApiResponse<Unit> = ApiResponse(success = true, data = Unit)
     }
 
     private fun okResponse() = ApiResponse(

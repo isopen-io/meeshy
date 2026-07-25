@@ -100,4 +100,10 @@
     <string name="my_share_links_copied">Link copied</string>
     <string name="my_share_links_share_subject">Join me on Meeshy</string>
     <string name="my_share_links_retry">Retry</string>
+    <string name="my_share_links_extend">Extend expiry</string>
+    <string name="my_share_links_expired">Expired</string>
+    <string name="my_share_links_expiry_24h">24 hours</string>
+    <string name="my_share_links_expiry_7d">7 days</string>
+    <string name="my_share_links_expiry_30d">30 days</string>
+    <string name="my_share_links_expiry_3m">3 months</string>
 </resources>
