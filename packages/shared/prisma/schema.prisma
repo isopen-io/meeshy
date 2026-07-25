@@ -960,6 +960,13 @@ model MessageStatusEntry {
   /// Whether view-once content was revealed/unblurred
   revealedAt   DateTime?
 
+  // ===== LANGUE CONSULTÉE =====
+  /// Codes des versions linguistiques dans lesquelles ce message a été lu.
+  /// Union de la langue résolue au moment de la lecture et des bascules
+  /// manuelles vers une autre traduction.
+  /// @see docs/superpowers/specs/2026-07-24-media-views-enrichment-design.md
+  viewedLanguages String[] @default([])
+
   // ===== METADATA =====
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1006,6 +1013,23 @@ model AttachmentStatusEntry {
   totalListenDurationMs Int       @default(0)
   /// Whether audio was played to completion
   listenedComplete      Boolean   @default(false)
+  /// Trace CHRONOLOGIQUE et MOTIVÉE de l'écoute :
+  /// `[{startMs, endMs, endedBy}]`, `endedBy` ∈ pause | seek | muted |
+  /// completed | dismissed | superseded.
+  ///
+  /// Restitue l'INTERACTION, pas seulement le volume écouté : s'arrêter en
+  /// pause, sauter ailleurs ou laisser le média finir ne racontent pas la même
+  /// chose. `lastPlayPositionMs` ne dit que le point d'arrêt.
+  ///
+  /// Trois lectures en découlent sans champ supplémentaire — le cardinal donne
+  /// le nombre d'écoutes ININTERROMPUES, la fusion des chevauchements donne la
+  /// couverture UNIQUE, et l'écart avec `totalListenDurationMs` (qui compte les
+  /// replays) dit que des passages ont été revus.
+  ///
+  /// Ordre chronologique, jamais trié par position : écouter la fin puis
+  /// revenir au début doit rester lisible dans cet ordre.
+  /// @see docs/superpowers/specs/2026-07-24-media-views-enrichment-design.md
+  listenSegments        Json?
 
   // ===== VIDEO-SPECIFIC =====
   /// When user watched video (first play)
@@ -1018,12 +1042,32 @@ model AttachmentStatusEntry {
   totalWatchDurationMs Int       @default(0)
   /// Whether video was watched to completion
   watchedComplete      Boolean   @default(false)
+  /// Trace chronologique et motivée du visionnage — même forme et mêmes
+  /// lectures que `listenSegments`. Champ distinct par cohérence avec la
+  /// séparation audio/vidéo déjà en place dans ce modèle.
+  watchSegments        Json?
 
   // ===== IMAGE-SPECIFIC =====
   /// Time spent viewing image (ms)
   viewDurationMs Int?
   /// Whether image was zoomed
   wasZoomed      Boolean @default(false)
+  /// Nombre d'ouvertures de l'image. Strict miroir de `listenCount` /
+  /// `watchCount` : `markImageAsViewed` écrasait `viewedAt` sans rien compter,
+  /// si bien qu'une image regardée dix fois était indistinguable d'une image
+  /// entrevue une seule.
+  /// @see docs/superpowers/specs/2026-07-24-media-views-enrichment-design.md
+  viewCount      Int     @default(0)
+
+  // ===== LANGUE CONSULTÉE =====
+  /// Codes des versions linguistiques dans lesquelles ce média a été consommé
+  /// (transcription affichée, piste traduite écoutée). Set : l'ordre n'a pas de
+  /// sens, seule la présence compte.
+  ///
+  /// Rien ne reliait jusqu'ici une consommation à sa langue : la résolution est
+  /// calculée à la volée côté client et perdue aussitôt.
+  /// @see docs/superpowers/specs/2026-07-24-media-views-enrichment-design.md
+  viewedLanguages String[] @default([])
 
   // ===== DOCUMENT-SPECIFIC =====
   /// Number of pages viewed (for PDFs)

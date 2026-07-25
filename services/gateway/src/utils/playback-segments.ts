@@ -10,6 +10,17 @@
  * replays : « 45 s uniques sur 90 s, pour 120 s d'écoute » se lit « a revu des
  * passages ».
  *
+ * Leur **nombre** compte les écoutes ininterrompues : trois segments valent
+ * trois passages distincts, même s'ils se suivent en temps média. Seuls les
+ * segments qui se CHEVAUCHENT fusionnent — l'adjacence ne dit rien du temps
+ * réel, et écraser deux passages jointifs présenterait à tort une écoute
+ * hachée comme continue.
+ *
+ * **Contrat client** : chaque segment rapporté doit correspondre à une écoute
+ * réellement continue. Un client qui échantillonne sa lecture (un point toutes
+ * les dix secondes, par exemple) fusionne ses propres échantillons AVANT de
+ * rapporter — lui seul sait qu'ils n'étaient pas séparés dans le temps.
+ *
  * @see docs/superpowers/specs/2026-07-24-media-views-enrichment-design.md
  */
 
@@ -93,9 +104,12 @@ export function mergePlaybackSegments(
   const merged: PlaybackSegment[] = [];
   for (const segment of sorted) {
     const last = merged[merged.length - 1];
-    // `<=` et non `<` : deux segments qui se touchent exactement décrivent une
-    // écoute continue, pas deux passages distincts.
-    if (last && segment.startMs <= last.endMs) {
+    // `<` et non `<=` : seuls les segments qui se CHEVAUCHENT fusionnent, jamais
+    // ceux qui se touchent. L'adjacence en temps média ne dit rien du temps
+    // réel — écouter la première moitié, s'interrompre dix minutes, puis
+    // reprendre produit deux segments jointifs qu'il serait faux de présenter
+    // comme une écoute d'une traite.
+    if (last && segment.startMs < last.endMs) {
       merged[merged.length - 1] = {
         startMs: last.startMs,
         endMs: Math.max(last.endMs, segment.endMs),

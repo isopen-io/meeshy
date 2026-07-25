@@ -30,9 +30,23 @@ describe('mergePlaybackSegments — fusion', () => {
       .toEqual([seg(0, 900)]);
   });
 
-  it('fusionne deux segments qui se touchent exactement', () => {
+  // L'adjacence en temps MÉDIA ne dit rien du temps RÉEL : écouter la première
+  // moitié, s'interrompre dix minutes, puis reprendre produit exactement ces
+  // deux segments. Les fusionner effacerait l'interruption — or « a écouté
+  // d'une traite » et « a écouté en deux fois » ne se valent pas.
+  //
+  // Corollaire : le CLIENT doit fusionner ses propres échantillons d'une même
+  // session de lecture continue avant de rapporter, lui seul sachant qu'ils
+  // n'étaient pas séparés dans le temps.
+  it('NE fusionne PAS deux segments qui se touchent — écoute interrompue', () => {
     expect(mergePlaybackSegments([seg(0, 500)], [seg(500, 900)]))
-      .toEqual([seg(0, 900)]);
+      .toEqual([seg(0, 500), seg(500, 900)]);
+  });
+
+  it('le nombre de segments compte les écoutes ininterrompues', () => {
+    const merged = mergePlaybackSegments([], [seg(0, 500), seg(500, 900), seg(2000, 2500)]);
+
+    expect(merged).toHaveLength(3);
   });
 
   it('absorbe un segment entièrement contenu dans un autre', () => {
