@@ -1521,12 +1521,14 @@ export function registerMessagesRoutes(
       // Corps absent = client déjà distribué → repli fenêtre (surtout pas un
       // lot vide, qui ne figerait rien et perdrait la lecture).
       let reportedMessageIds: readonly string[] | undefined;
+      let reportedLanguage: string | undefined;
       if (request.body !== undefined && request.body !== null) {
         const bodyResult = MarkReadBodySchema.safeParse(request.body);
         if (!bodyResult.success) {
           return sendBadRequest(reply, 'Corps de requête invalide pour le marquage de lecture');
         }
         reportedMessageIds = bodyResult.data.messageIds;
+        reportedLanguage = bodyResult.data.language;
       }
 
       const { MessageReadStatusService } = await import('../../services/MessageReadStatusService');
@@ -1547,7 +1549,9 @@ export function registerMessagesRoutes(
         currentParticipant.id,
         conversationId,
         undefined,
-        reportedMessageIds ? { messageIds: reportedMessageIds } : undefined
+        reportedMessageIds || reportedLanguage
+          ? { messageIds: reportedMessageIds, language: reportedLanguage }
+          : undefined
       );
       await broadcastReadStatus(userId, currentParticipant.id, conversationId, 'read', authRequest.authContext.type === 'anonymous');
 

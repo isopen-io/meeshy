@@ -4,6 +4,38 @@ const mongoId = z
   .string()
   .regex(/^[0-9a-fA-F]{24}$/, 'Invalid MongoDB ObjectId format');
 
+/**
+ * Code de langue tel qu'il arrive du fil, AVANT normalisation serveur.
+ *
+ * Plus permissif que `languageCodeSchema` de `@meeshy/shared` sur un point : le
+ * séparateur `_`. iOS envoie `Locale.current.identifier`, qui rend `fr_FR` et
+ * non `fr-FR` ; refuser la forme à underscore ferait échouer tout le rapport
+ * pour un séparateur, alors que `normalizeLanguageCode` traite déjà les deux.
+ *
+ * La validation reste FORMELLE : le sens (langue réellement supportée) est
+ * tranché par `normalizeLanguageCode` côté service, seule autorité du repo.
+ */
+const wireLanguageCode = z
+  .string()
+  .trim()
+  .min(2)
+  .max(16)
+  .regex(/^[a-zA-Z]{2,3}([-_][a-zA-Z0-9]+)*$/, 'Invalid language code');
+
+/**
+ * Une écoute réellement CONTINUE, avec ce qui y a mis fin.
+ *
+ * Objet non `.strict()` à dessein : un client d'une version ultérieure peut
+ * enrichir son rapport (vitesse de lecture, par exemple). Zod écarte alors le
+ * champ inconnu au lieu de rejeter l'écoute entière — même tolérance que
+ * `parsePlaybackTrace` côté relecture.
+ */
+const playbackStretch = z.object({
+  startMs: z.number().int().nonnegative(),
+  endMs: z.number().int().nonnegative(),
+  endedBy: z.enum(['pause', 'seek', 'muted', 'completed', 'dismissed', 'superseded'])
+});
+
 // ============================================
 // PARAMS SCHEMAS
 // ============================================
@@ -80,7 +112,14 @@ export const MessageStatusBodySchema = z.object({
 
   timestamp: z.iso
     .datetime()
-    .optional()
+    .optional(),
+
+  /**
+   * Version linguistique sous laquelle CE message a été lu. Sert la bascule
+   * ponctuelle : le lecteur ouvre la traduction d'une bulle sans changer la
+   * langue de toute la conversation.
+   */
+  language: wireLanguageCode.optional()
 }).strict();
 
 /**
@@ -100,7 +139,14 @@ export const MarkReadBodySchema = z.object({
   messageIds: z
     .array(mongoId)
     .max(200)
-    .optional()
+    .optional(),
+
+  /**
+   * Version linguistique affichée au lecteur pendant que ces messages défilaient
+   * sous ses yeux. Une seule valeur pour tout le lot : c'est la résolution de la
+   * conversation, celle qui vaut par défaut pour chaque bulle.
+   */
+  language: wireLanguageCode.optional()
 }).strict();
 
 export const AttachmentStatusBodySchema = z.object({
@@ -124,7 +170,25 @@ export const AttachmentStatusBodySchema = z.object({
 
   wasZoomed: z
     .boolean()
-    .optional()
+    .optional(),
+
+  /**
+   * Trace de l'interaction depuis le dernier rapport : une entrée par écoute
+   * réellement continue, dans l'ordre où elles ont eu lieu.
+   *
+   * Le plafond vaut celui de la trace persistée — au-delà, le serveur écarterait
+   * de toute façon le surplus.
+   */
+  stretches: z
+    .array(playbackStretch)
+    .max(50)
+    .optional(),
+
+  /**
+   * Version linguistique consommée : piste traduite écoutée, transcription
+   * affichée. Sans objet pour une image ou un téléchargement.
+   */
+  language: wireLanguageCode.optional()
 }).strict();
 
 // ============================================

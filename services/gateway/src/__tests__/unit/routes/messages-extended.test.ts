@@ -85,9 +85,12 @@ const mockMarkVideoAsWatched = jest.fn().mockResolvedValue(undefined);
 const mockMarkImageAsViewed = jest.fn().mockResolvedValue(undefined);
 const mockMarkAttachmentAsDownloaded = jest.fn().mockResolvedValue(undefined);
 
+const mockRecordMessageLanguageView = jest.fn().mockResolvedValue(undefined);
+
 jest.mock('../../../services/MessageReadStatusService', () => ({
   MessageReadStatusService: jest.fn().mockImplementation(() => ({
     markMessagesAsRead: (...args: any[]) => mockMarkMessagesAsRead(...args),
+    recordMessageLanguageView: (...args: any[]) => mockRecordMessageLanguageView(...args),
     getLatestMessageSummary: (...args: any[]) => mockGetLatestMessageSummary(...args),
     getMessageStatusDetails: jest.fn().mockResolvedValue({ statuses: [], pagination: {} }),
     getAttachmentStatusDetails: jest.fn().mockResolvedValue({ statuses: [], pagination: {} }),

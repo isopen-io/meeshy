@@ -20,6 +20,18 @@ import { computeContiguousReadPrefix, resolveReadAt } from '../utils/read-exactn
 import { getExactReadTrackingCutover } from '../config/read-exactness-config';
 import { PRIVACY_KEY_MAPPING } from '../config/user-preferences-defaults';
 import { BoundedTtlCache } from '../utils/bounded-cache';
+import { normalizeLanguageCode } from '@meeshy/shared/utils/language-normalize';
+import {
+  appendPlaybackStretches,
+  parsePlaybackTrace,
+  traceCoverage,
+} from '../utils/playback-trace';
+import {
+  mergeViewedLanguages,
+  languageBreakdown,
+  MAX_VIEWED_LANGUAGES,
+} from '../utils/viewed-languages';
+import { coveredDurationMs } from '../utils/playback-segments';
 
 // Logger dédié pour MessageReadStatusService
 const logger = enhancedLogger.child({ module: 'MessageReadStatusService' });
@@ -626,7 +638,15 @@ export class MessageReadStatusService {
     participantId: string,
     conversationId: string,
     latestMessageId?: string,
-    options?: { readonly messageIds?: readonly string[] }
+    options?: {
+      readonly messageIds?: readonly string[];
+      /**
+       * Version linguistique affichée pendant que ces messages défilaient sous
+       * les yeux du lecteur — la résolution de la conversation. Une bascule sur
+       * une bulle précise passe par {@link recordMessageLanguageView}.
+       */
+      readonly language?: string | null;
+    }
   ): Promise<number> {
     // Hoisted so the catch below can release the dedup key when the write
     // fails — a poisoned key would otherwise swallow every retry within the
@@ -711,6 +731,7 @@ export class MessageReadStatusService {
           at: now,
           field: "readAt",
           messageIds: exactMessageIds,
+          language: options?.language,
         });
 
         const cursorTarget = await this._computeExactReadCursorTarget({
@@ -764,6 +785,7 @@ export class MessageReadStatusService {
           since: prevReadAt,
           at: now,
           field: "readAt",
+          language: options?.language,
         });
       }
 
@@ -993,9 +1015,18 @@ export class MessageReadStatusService {
      * été affiché, donc la fenêtre reste correcte pour `deliveredAt`.
      */
     messageIds?: readonly string[];
+    /**
+     * Version linguistique affichée au lecteur. Contrairement à l'horodatage,
+     * elle n'est PAS write-once : un lecteur qui bascule sur la traduction a
+     * réellement consulté les deux versions, et les deux doivent apparaître.
+     * Ignorée pour `deliveredAt` — une livraison n'a pas de langue.
+     */
+    language?: string | null;
     /** @returns nombre d'entrées RÉELLEMENT figées par cet appel. */
   }): Promise<number> {
     const { participantId, conversationId, since, at, field, messageIds } = params;
+    const language =
+      field === "readAt" ? normalizeLanguageCode(params.language) : undefined;
     try {
       const messages = await this.prisma.message.findMany({
         where: {
@@ -1017,7 +1048,12 @@ export class MessageReadStatusService {
 
       const existing = await this.prisma.messageStatusEntry.findMany({
         where: { messageId: { in: ids }, participantId },
-        select: { messageId: true, deliveredAt: true, readAt: true },
+        select: {
+          messageId: true,
+          deliveredAt: true,
+          readAt: true,
+          viewedLanguages: true,
+        },
       });
       const existingIds = new Set(existing.map((e) => e.messageId));
       const toCreate = ids.filter((id) => !existingIds.has(id));
@@ -1027,7 +1063,13 @@ export class MessageReadStatusService {
         const created = await this.prisma.messageStatusEntry.createMany({
           data: toCreate.map((messageId) =>
             field === "readAt"
-              ? { messageId, conversationId, participantId, readAt: at }
+              ? {
+                  messageId,
+                  conversationId,
+                  participantId,
+                  readAt: at,
+                  ...(language ? { viewedLanguages: [language] } : {}),
+                }
               : {
                   messageId,
                   conversationId,
@@ -1055,6 +1097,27 @@ export class MessageReadStatusService {
           data: field === "readAt" ? { readAt: at } : { deliveredAt: at, receivedAt: at },
         });
         frozen += updated?.count ?? toUpdate.length;
+      }
+
+      // La langue s'UNIONNE, là où l'horodatage se fige. Seules les entrées qui
+      // ne la connaissent pas encore sont réécrites : sur le chemin courant — le
+      // lecteur ne change pas de langue entre deux lots — cette passe n'écrit
+      // rien du tout. Les entrées créées ci-dessus l'ont déjà reçue.
+      if (language) {
+        const needsLanguage = existing
+          .filter(
+            (e) =>
+              !e.viewedLanguages?.includes(language) &&
+              (e.viewedLanguages?.length ?? 0) < MAX_VIEWED_LANGUAGES
+          )
+          .map((e) => e.messageId);
+
+        if (needsLanguage.length > 0) {
+          await this.prisma.messageStatusEntry.updateMany({
+            where: { messageId: { in: needsLanguage }, participantId },
+            data: { viewedLanguages: { push: language } },
+          });
+        }
       }
 
       return frozen;
@@ -1742,6 +1805,46 @@ export class MessageReadStatusService {
     }
   }
 
+  /**
+   * Enregistre qu'un message précis a été consulté dans une version linguistique
+   * donnée — la bascule sur une bulle, sans changer la langue de la conversation.
+   *
+   * N'écrit que sur une entrée EXISTANTE : la lecture elle-même est établie par
+   * `markMessagesAsRead`, appelé juste avant sur le même chemin. Créer ici
+   * reviendrait à déclarer lu un message sur la seule foi d'un choix de langue.
+   *
+   * Résilient : une bascule perdue ne doit pas faire échouer la requête.
+   */
+  async recordMessageLanguageView(
+    participantId: string,
+    messageId: string,
+    language: string | null | undefined
+  ): Promise<void> {
+    const code = normalizeLanguageCode(language);
+    if (!code) return;
+
+    try {
+      const entry = await this.prisma.messageStatusEntry.findFirst({
+        where: { messageId, participantId },
+        select: { id: true, viewedLanguages: true },
+      });
+
+      if (!entry) return;
+      if (entry.viewedLanguages?.includes(code)) return;
+      if ((entry.viewedLanguages?.length ?? 0) >= MAX_VIEWED_LANGUAGES) return;
+
+      await this.prisma.messageStatusEntry.update({
+        where: { id: entry.id },
+        data: { viewedLanguages: { push: code } },
+      });
+    } catch (error) {
+      logger.error(
+        `[MessageReadStatus] recordMessageLanguageView failed for message ${messageId}:`,
+        error
+      );
+    }
+  }
+
   async markAudioAsListened(
     participantId: string,
     attachmentId: string,
@@ -1749,6 +1852,10 @@ export class MessageReadStatusService {
       playPositionMs?: number;
       listenDurationMs?: number;
       complete?: boolean;
+      /** Écoutes réellement continues depuis le dernier rapport. */
+      stretches?: readonly unknown[];
+      /** Version linguistique consommée (piste traduite, transcription). */
+      language?: string | null;
     }
   ): Promise<void> {
     try {
@@ -1769,6 +1876,26 @@ export class MessageReadStatusService {
 
       await withRetry(() =>
         this.prisma.$transaction(async (tx) => {
+          // La trace et l'ensemble des langues s'ACCUMULENT : il faut connaître
+          // l'état courant pour y ajouter, ce qu'un upsert seul ne permet pas.
+          // Lu dans la transaction, et le conflit d'unicité (attachment,
+          // participant) fait rejouer l'ensemble via `withRetry`.
+          const previous = await tx.attachmentStatusEntry.findUnique({
+            where: {
+              attachment_participant_status: { attachmentId, participantId },
+            },
+            select: { listenSegments: true, viewedLanguages: true },
+          });
+
+          const trace = appendPlaybackStretches(
+            parsePlaybackTrace(previous?.listenSegments),
+            options?.stretches ?? []
+          );
+          const viewedLanguages = mergeViewedLanguages(
+            previous?.viewedLanguages,
+            options?.language
+          );
+
           await tx.attachmentStatusEntry.upsert({
             where: {
               attachment_participant_status: { attachmentId, participantId },
@@ -1783,6 +1910,8 @@ export class MessageReadStatusService {
               lastPlayPositionMs: options?.playPositionMs,
               totalListenDurationMs: options?.listenDurationMs || 0,
               listenedComplete: options?.complete || false,
+              listenSegments: trace,
+              viewedLanguages,
             },
             update: {
               listenedAt: now,
@@ -1792,6 +1921,8 @@ export class MessageReadStatusService {
                 ? { increment: options.listenDurationMs }
                 : undefined,
               listenedComplete: options?.complete,
+              listenSegments: trace,
+              viewedLanguages,
             },
           });
         })
@@ -1814,6 +1945,10 @@ export class MessageReadStatusService {
       watchPositionMs?: number;
       watchDurationMs?: number;
       complete?: boolean;
+      /** Visionnages réellement continus depuis le dernier rapport. */
+      stretches?: readonly unknown[];
+      /** Version linguistique consommée (sous-titres, piste doublée). */
+      language?: string | null;
     }
   ): Promise<void> {
     try {
@@ -1834,6 +1969,24 @@ export class MessageReadStatusService {
 
       await withRetry(() =>
         this.prisma.$transaction(async (tx) => {
+          // Même raison que pour l'audio : la trace s'accumule, donc se lit
+          // avant de s'écrire. Voir `markAudioAsListened`.
+          const previous = await tx.attachmentStatusEntry.findUnique({
+            where: {
+              attachment_participant_status: { attachmentId, participantId },
+            },
+            select: { watchSegments: true, viewedLanguages: true },
+          });
+
+          const trace = appendPlaybackStretches(
+            parsePlaybackTrace(previous?.watchSegments),
+            options?.stretches ?? []
+          );
+          const viewedLanguages = mergeViewedLanguages(
+            previous?.viewedLanguages,
+            options?.language
+          );
+
           await tx.attachmentStatusEntry.upsert({
             where: {
               attachment_participant_status: { attachmentId, participantId },
@@ -1848,6 +2001,8 @@ export class MessageReadStatusService {
               lastWatchPositionMs: options?.watchPositionMs,
               totalWatchDurationMs: options?.watchDurationMs || 0,
               watchedComplete: options?.complete || false,
+              watchSegments: trace,
+              viewedLanguages,
             },
             update: {
               watchedAt: now,
@@ -1857,6 +2012,8 @@ export class MessageReadStatusService {
                 ? { increment: options.watchDurationMs }
                 : undefined,
               watchedComplete: options?.complete,
+              watchSegments: trace,
+              viewedLanguages,
             },
           });
         })
@@ -1878,6 +2035,8 @@ export class MessageReadStatusService {
     options?: {
       viewDurationMs?: number;
       wasZoomed?: boolean;
+      /** Version linguistique de la légende ou du texte incrusté consulté. */
+      language?: string | null;
     }
   ): Promise<void> {
     try {
@@ -1898,6 +2057,18 @@ export class MessageReadStatusService {
 
       await withRetry(() =>
         this.prisma.$transaction(async (tx) => {
+          const previous = await tx.attachmentStatusEntry.findUnique({
+            where: {
+              attachment_participant_status: { attachmentId, participantId },
+            },
+            select: { viewedLanguages: true },
+          });
+
+          const viewedLanguages = mergeViewedLanguages(
+            previous?.viewedLanguages,
+            options?.language
+          );
+
           await tx.attachmentStatusEntry.upsert({
             where: {
               attachment_participant_status: { attachmentId, participantId },
@@ -1908,13 +2079,19 @@ export class MessageReadStatusService {
               conversationId: attachment.message.conversationId,
               participantId,
               viewedAt: now,
+              viewCount: 1,
               viewDurationMs: options?.viewDurationMs,
               wasZoomed: options?.wasZoomed || false,
+              viewedLanguages,
             },
             update: {
               viewedAt: now,
+              // `viewedAt` était écrasé sans rien compter : une image regardée
+              // dix fois se lisait comme une image entrevue une seule.
+              viewCount: { increment: 1 },
               viewDurationMs: options?.viewDurationMs,
               wasZoomed: options?.wasZoomed,
+              viewedLanguages,
             },
           });
         })

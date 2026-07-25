@@ -39,6 +39,7 @@ interface UpdateMessageBody {
 interface MessageStatusBody {
   status: 'read' | 'delivered';
   timestamp?: string;
+  language?: string;
 }
 
 export default async function messageRoutes(fastify: FastifyInstance) {
@@ -508,7 +509,7 @@ export default async function messageRoutes(fastify: FastifyInstance) {
   }, async (request, reply) => {
     try {
       const { messageId } = request.params;
-      const { status } = request.body;
+      const { status, language } = request.body;
       const authRequest = request as UnifiedAuthRequest;
       const userId = authRequest.authContext.userId;
 
@@ -557,8 +558,20 @@ export default async function messageRoutes(fastify: FastifyInstance) {
         await readStatusService.markMessagesAsRead(
           participant.id,
           message.conversationId,
-          messageId
+          messageId,
+          { language }
         );
+
+        // Bascule sur CETTE bulle : la langue ci-dessus vaut pour la fenêtre
+        // franchie, celle-ci pour le message que le lecteur vient d'ouvrir dans
+        // une autre version. Les deux comptent, l'entrée les unionne.
+        if (language) {
+          await readStatusService.recordMessageLanguageView(
+            participant.id,
+            messageId,
+            language
+          );
+        }
 
         // Diffuser le statut de lecture via Socket.IO
         // Emit to the conversation room AND each registered participant's user
@@ -871,6 +884,8 @@ export default async function messageRoutes(fastify: FastifyInstance) {
       durationMs?: number;
       complete?: boolean;
       wasZoomed?: boolean;
+      stretches?: Array<{ startMs: number; endMs: number; endedBy: string }>;
+      language?: string;
     };
   }>('/attachments/:attachmentId/status', {
     preValidation: [requiredAuth],
@@ -878,7 +893,7 @@ export default async function messageRoutes(fastify: FastifyInstance) {
   }, async (request, reply) => {
     try {
       const { attachmentId } = request.params;
-      const { action, playPositionMs, durationMs, complete, wasZoomed } = request.body;
+      const { action, playPositionMs, durationMs, complete, wasZoomed, stretches, language } = request.body;
       const authRequest = request as UnifiedAuthRequest;
       const userId = authRequest.authContext.userId;
 
@@ -918,20 +933,25 @@ export default async function messageRoutes(fastify: FastifyInstance) {
           await readStatusService.markAudioAsListened(userId, attachmentId, {
             playPositionMs,
             listenDurationMs: durationMs,
-            complete
+            complete,
+            stretches,
+            language
           });
           break;
         case 'watched':
           await readStatusService.markVideoAsWatched(userId, attachmentId, {
             watchPositionMs: playPositionMs,
             watchDurationMs: durationMs,
-            complete
+            complete,
+            stretches,
+            language
           });
           break;
         case 'viewed':
           await readStatusService.markImageAsViewed(userId, attachmentId, {
             viewDurationMs: durationMs,
-            wasZoomed
+            wasZoomed,
+            language
           });
           break;
         case 'downloaded':
