@@ -2754,3 +2754,19 @@ iOS `RelativeTimeFormatter` bundles classification, calendar-day framing AND loc
   touched the single `harness()` factory in `ChatViewModelTest` (all VMs are built there). Seed the new
   `InMemoryAnonymousSessionStore(initial)` via a defaulted harness param so existing call-sites are
   untouched — the store already had an `initial`-arg in-memory fake from the `anonymous-session-store` slice.
+
+## Slice `chat-slow-mode-cooldown` (2026-07-25)
+- **No new VM constructor param needed for slow mode.** The interval + viewer exemption ride in on the
+  existing `conversationRepository.conversationStream` fold, and the clock was already an injected
+  `CacheClock`. So the slice touched `ChatViewModel`/`ChatUiState`/`ChatScreen` in place — no `harness()`
+  signature change, existing tests untouched. Prefer folding new derived state onto an existing stream
+  over widening the constructor when the inputs are already flowing in.
+- **Edits must bypass a send-rate gate.** `ChatViewModel.send()` handles both new sends *and* edits
+  (`editingMessageId != null → applyEdit; return`). Place any slow-mode/rate guard **after** the edit
+  early-return so an edit is never throttled — mirror the composer (`enabled = canSend && (isEditing ||
+  slowMode.canSend)`).
+- **Ceil the remaining-seconds countdown**, never floor: a floor lets the UI read "0s" while the send is
+  still blocked. `((remainingMillis + 999) / 1000)`.
+- **Android string format specifiers vs perl/sed.** Adding `<string>…%1$ds</string>` via `perl -0pi -e`
+  silently ate `$ds` ($d = perl var). Use a literal-safe editor (Edit tool or a `sed` with the exact
+  literal) for resource strings containing `$`.

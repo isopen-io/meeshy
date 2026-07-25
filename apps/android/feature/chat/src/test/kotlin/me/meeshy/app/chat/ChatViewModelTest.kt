@@ -367,6 +367,98 @@ class ChatViewModelTest {
         assertThat(affordances.showsAttachmentLadder).isFalse()
     }
 
+    // MARK: - Slow mode (composer cooldown)
+
+    private fun slowConversation(role: String? = "member", seconds: Int? = 30) = ApiConversation(
+        id = "c1",
+        type = "group",
+        title = "Squad",
+        slowModeSeconds = seconds,
+        participants = listOf(
+            ApiParticipant(id = "p0", userId = "me", username = "atabeth", role = role),
+            ApiParticipant(id = "p1", userId = "u1", username = "bob"),
+        ),
+    )
+
+    @Test
+    fun the_conversation_slow_mode_interval_populates_the_composer_state() = runTest(dispatcher) {
+        val h = harness(flowOf(CacheResult.Empty), currentUser = me, conversation = slowConversation(seconds = 30))
+
+        advanceUntilIdle()
+
+        assertThat(h.vm.state.value.slowModeSeconds).isEqualTo(30)
+        assertThat(h.vm.state.value.slowModeExempt).isFalse()
+        // Never sent yet → active but immediately sendable.
+        val posture = h.vm.state.value.slowModeState(FIXED_NOW)
+        assertThat(posture.isActive).isTrue()
+        assertThat(posture.canSend).isTrue()
+        assertThat(posture.remainingSeconds).isEqualTo(0)
+    }
+
+    @Test
+    fun sending_under_slow_mode_records_the_send_and_blocks_an_immediate_resend() = runTest(dispatcher) {
+        val h = harness(flowOf(CacheResult.Empty), currentUser = me, conversation = slowConversation(seconds = 30))
+        coEvery { h.repo.sendOptimistic(any(), any(), any(), any(), any()) } returns "cmid_1"
+        advanceUntilIdle()
+
+        h.vm.onDraftChange("hello")
+        h.vm.send()
+        advanceUntilIdle()
+
+        assertThat(h.vm.state.value.draft).isEmpty()
+        assertThat(h.vm.state.value.lastSelfSentAtMillis).isEqualTo(FIXED_NOW)
+        val posture = h.vm.state.value.slowModeState(FIXED_NOW)
+        assertThat(posture.canSend).isFalse()
+        assertThat(posture.remainingSeconds).isEqualTo(30)
+
+        // A second send while the cooldown runs is refused — the draft is kept.
+        h.vm.onDraftChange("again")
+        h.vm.send()
+        advanceUntilIdle()
+
+        assertThat(h.vm.state.value.draft).isEqualTo("again")
+        coVerify(exactly = 1) { h.repo.sendOptimistic(any(), any(), any(), any(), any()) }
+    }
+
+    @Test
+    fun an_exempt_moderator_is_never_throttled_between_sends() = runTest(dispatcher) {
+        val h = harness(flowOf(CacheResult.Empty), currentUser = me, conversation = slowConversation(role = "admin", seconds = 30))
+        coEvery { h.repo.sendOptimistic(any(), any(), any(), any(), any()) } returns "cmid_1"
+        advanceUntilIdle()
+
+        assertThat(h.vm.state.value.slowModeExempt).isTrue()
+        assertThat(h.vm.state.value.slowModeState(FIXED_NOW).isActive).isFalse()
+
+        h.vm.onDraftChange("one")
+        h.vm.send()
+        advanceUntilIdle()
+        h.vm.onDraftChange("two")
+        h.vm.send()
+        advanceUntilIdle()
+
+        assertThat(h.vm.state.value.draft).isEmpty()
+        coVerify(exactly = 2) { h.repo.sendOptimistic(any(), any(), any(), any(), any()) }
+    }
+
+    @Test
+    fun slow_mode_off_does_not_throttle_consecutive_sends() = runTest(dispatcher) {
+        val h = harness(flowOf(CacheResult.Empty), currentUser = me, conversation = slowConversation(seconds = null))
+        coEvery { h.repo.sendOptimistic(any(), any(), any(), any(), any()) } returns "cmid_1"
+        advanceUntilIdle()
+
+        assertThat(h.vm.state.value.slowModeSeconds).isNull()
+        assertThat(h.vm.state.value.slowModeState(FIXED_NOW).canSend).isTrue()
+
+        h.vm.onDraftChange("one")
+        h.vm.send()
+        advanceUntilIdle()
+        h.vm.onDraftChange("two")
+        h.vm.send()
+        advanceUntilIdle()
+
+        coVerify(exactly = 2) { h.repo.sendOptimistic(any(), any(), any(), any(), any()) }
+    }
+
     @Test
     fun an_incoming_message_in_the_open_conversation_is_marked_read() = runTest(dispatcher) {
         val h = harness(syncedConversation(), currentUser = me)

@@ -1619,7 +1619,16 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
 - [ ] Conversation info sheet: hero/direct headers; members / media / stats / options tabs
 - [ ] Paginated member list (infinite scroll + search); shared-media grid; pinned-messages list
 - [ ] Member moderation: promote/demote, expel, ban, add member
-- [ ] Conversation moderation: write-role, announcement mode, slow mode, auto-translate
+- [~] Conversation moderation: write-role, announcement mode, slow mode, auto-translate — **slow-mode
+      composer enforcement** landed (slice `chat-slow-mode-cooldown`): pure `SlowModePolicy`/`SlowModeState`
+      (`:sdk-core` `me.meeshy.sdk.composer`) computes send-eligibility + a ceil'd remaining-seconds
+      countdown from `(slowModeSeconds, lastSelfSentAtMillis, now, isExempt)`, with moderator/admin/creator
+      roles exempt via `isExemptRole`. Wired into `ChatUiState`/`ChatViewModel` (carries the interval +
+      viewer exemption from the loaded conversation, records the send timestamp, gates `send()` — edits
+      exempt) and `ChatScreen` (ticking countdown row + disabled send). **SOTA over iOS**, which surfaces
+      `slowModeSeconds` only in the admin picker and never throttles the composer. Remaining for this
+      item: the admin-facing settings picker (write-role / announcement toggle / slow-mode picker /
+      auto-translate) and enforcement on the attachment/voice send paths.
 - [ ] Per-conversation preferences: custom name, reaction emoji, pin, category, tags, mute, mentions-only
 - [ ] Conversation lock: master PIN setup/change/remove + per-conversation 4-digit lock + unlock-all
 - [ ] Leave / archive / delete-for-me / delete-for-all conversation
