@@ -3,6 +3,7 @@
  */
 
 import { authManager } from '@/services/auth-manager.service';
+import { isJWTExpired } from './jwt';
 
 export interface WebSocketDiagnostics {
   timestamp: string;
@@ -31,18 +32,6 @@ export interface WebSocketDiagnostics {
     isPublicPath: boolean;
   };
   recommendations: string[];
-}
-
-/**
- * Vérifie si un JWT est expiré (sans le décoder côté serveur)
- */
-function isJWTExpired(token: string): boolean {
-  try {
-    const payload = JSON.parse(atob(token.split('.')[1]));
-    return payload.exp ? Date.now() >= payload.exp * 1000 : false;
-  } catch {
-    return true; // Si on ne peut pas parser, considérer comme expiré
-  }
 }
 
 /**
