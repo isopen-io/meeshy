@@ -36,6 +36,8 @@ class AuthViewModelTest {
         override suspend fun register(body: RegisterRequest) = response
         override suspend fun refresh(body: RefreshTokenRequest) = response
         override suspend fun me() = ApiResponse<MeEnvelope>(success = false)
+        override suspend fun checkAvailability(username: String?, email: String?, phoneNumber: String?) =
+            ApiResponse<me.meeshy.sdk.model.AvailabilityResult>(success = false)
     }
 
     private fun viewModel(

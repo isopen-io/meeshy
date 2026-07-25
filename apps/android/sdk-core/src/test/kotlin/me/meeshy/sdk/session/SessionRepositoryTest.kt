@@ -19,6 +19,8 @@ private class FakeAuthApi(var meResponse: ApiResponse<MeEnvelope>) : AuthApi {
     override suspend fun register(body: RegisterRequest) = ApiResponse<AuthSession>(success = false)
     override suspend fun refresh(body: RefreshTokenRequest) = ApiResponse<AuthSession>(success = false)
     override suspend fun me() = meResponse
+    override suspend fun checkAvailability(username: String?, email: String?, phoneNumber: String?) =
+        ApiResponse<me.meeshy.sdk.model.AvailabilityResult>(success = false)
 }
 
 class SessionRepositoryTest {

@@ -1,5 +1,55 @@
 # Progress — state & what to do next
 
+> On 2026-07-25 the **app-side availability-debounce network probe** landed (slice
+> `signup-availability-probe`, feature-parity §A → new `[x]` "App-side availability-debounce network
+> probe"; also flips the wizard-VM entry's remaining network-layer follow-up to DONE). This closes the
+> **last orphan seam** of the registration wizard shipped earlier the same day: the three
+> `onUsernameAvailability`/`onEmailAvailability`/`onPhoneAvailability` setters are now driven by real
+> debounced network probes rather than tests alone. **Added (production):** `AvailabilityResult`
+> (`:core:model`, parity with the gateway `GET /auth/check-availability` response —
+> `usernameAvailable`/`suggestions`/`emailAvailable`/`phoneNumberAvailable`/`phoneNumberValid`, every
+> field nullable because the gateway echoes back only the field it was asked to probe);
+> `AuthApi.checkAvailability(username?, email?, phoneNumber?)` (`:core:network` — Retrofit omits null
+> `@Query`s, so a single-field probe hits `?username=…` alone); `AuthRepository.checkAvailability` (`:sdk-core`
+> — wraps `apiCall`, folding transport/HTTP errors into `NetworkResult.Failure`); and in
+> `RegistrationViewModel` three per-field `MutableStateFlow<String>` inputs (fed by the `on…Change`
+> handlers, reset by `skip`'s phone-clear) plus three `launchProbe` pipelines
+> `debounce(1s) → distinctUntilChanged → SignupAvailabilityPolicy.{username,email,phone}Intent → (Check → checkAvailability | Clear → null)`.
+> The intent is called with `previous = null` (the conflated StateFlow already provides
+> `removeDuplicates`, so the policy's `Unchanged` arm is redundant here and left to its own unit tests —
+> an earlier `scan`-based dedup was removed after a mutation showed it was non-load-bearing dead code
+> against a StateFlow source). A failed/unknown probe yields `null` → the proceed gate stays blocked on
+> an "unknown" verdict, never a stale one. **SOTA over iOS:** availability verdicts flow through a
+> background `updateFields` that **preserves** a surfaced `errorMessage` (only a user field-edit clears
+> it via `editFields`), so a late probe can never wipe a registration error banner — a real bug the
+> naive wiring had, caught by the `register…failure` test going red mid-slice. **+9 behavioural tests:**
+> `AuthRepositoryTest` +2 (single probed field forwarded + result/`suggestions` mapped; failure→Failure);
+> `RegistrationViewModelTest` +7 (valid→probe+verdict true; invalid→never-probe+unknown; rapid edits→one
+> probe on the last value; distinct values→probe-each in order; probe-failure→unknown; email probe;
+> phone probe with digits-only normalization `+33 6…`→`33612345678`). Expectations are hand-written
+> literals. **Mutation (RED proof):** dropping the `Check` guard (always probe) fails **7** tests incl.
+> `invalidUsername_afterDebounce_neverProbesAndStaysUnknown` (30 run) — the local-validity gate is
+> load-bearing; RED was also proven first by the fakes failing to compile against the absent
+> `checkAvailability`. **Gate:** `:feature:auth:testDebugUnitTest` 30/30 + `:sdk-core:testDebugUnitTest`
+> (green in isolation) + `:core:model:testDebugUnitTest` + full `:app:assembleDebug` (whole module graph)
+> → BUILD SUCCESSFUL. The full-suite `sdk-core` run failed **only** on the known DataStore-parallel-load
+> timeout flake (`NotificationPreferencesStoreTest.dataStore_setPreferences_isReflectedInTheFlow`,
+> `TimeoutCancellationException`) — green when the module runs in isolation; documented standing debt, not
+> this slice. Reviewer **PASS** (diff `apps/android` only — 3 prod + 3 test files touched, zero production
+> logic outside android; **SDK purity** — the *decision* stays in the pure `:core:model`
+> `SignupAvailabilityPolicy`, the endpoint in `:core:network`, the use-case in `:sdk-core`, and the
+> "when to probe / debounce cadence" orchestration app-side in `:feature:auth`; **SSOT** — no
+> re-implemented validation, the payload mirrors the gateway response; **UDF** — immutable `StateFlow`,
+> pure transitions, cancellation-safe `viewModelScope`; **UX** — a background verdict never blanks an
+> error). **Next slice:** the paged `OnboardingFlowView` Compose screen (per-step field composables +
+> `InteractiveProgressBar` bar row + bottom-bar Back/Skip/Next-or-Register) binding `RegistrationViewModel`
+> incl. the username-suggestion strip surfacing `AvailabilityResult.suggestions` (UI-only,
+> JVM-coverage-exempt); OR the app-side `AnonymousSessionStore` + guest join flow; OR the tracked Kover
+> 90% coverage-gate infra. **Known standing debt (not this slice):** the `:sdk-core`
+> DataStore-parallel-load timeout flake (`ThemeStoreTest`/`InterfaceLanguageStoreTest`/
+> `PrivacyPreferencesStoreTest`/`NotificationPreferencesStoreTest`) — green in isolation, intermittent in
+> the full run.
+
 > On 2026-07-25 the **app-side registration wizard ViewModel** landed (slice
 > `registration-wizard-viewmodel`, feature-parity §A → new `[~]` "App-side registration wizard ViewModel
 > wiring"). This is the **first app-side wiring** turning the ~6 shipped registration cores

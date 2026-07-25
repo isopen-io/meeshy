@@ -4,6 +4,7 @@ import com.google.common.truth.Truth.assertThat
 import kotlinx.coroutines.test.runTest
 import me.meeshy.sdk.model.ApiResponse
 import me.meeshy.sdk.model.AuthSession
+import me.meeshy.sdk.model.AvailabilityResult
 import me.meeshy.sdk.model.LoginRequest
 import me.meeshy.sdk.model.MeEnvelope
 import me.meeshy.sdk.model.MeeshyUser
@@ -18,11 +19,19 @@ import org.junit.Test
 
 class AuthRepositoryTest {
 
-    private class FakeAuthApi(var response: ApiResponse<AuthSession>) : AuthApi {
+    private class FakeAuthApi(
+        var response: ApiResponse<AuthSession>,
+        var availabilityResponse: ApiResponse<AvailabilityResult> = ApiResponse(success = false),
+        val availabilityCalls: MutableList<Triple<String?, String?, String?>> = mutableListOf(),
+    ) : AuthApi {
         override suspend fun login(body: LoginRequest) = response
         override suspend fun register(body: RegisterRequest) = response
         override suspend fun refresh(body: RefreshTokenRequest) = response
         override suspend fun me() = ApiResponse<MeEnvelope>(success = false)
+        override suspend fun checkAvailability(username: String?, email: String?, phoneNumber: String?): ApiResponse<AvailabilityResult> {
+            availabilityCalls += Triple(username, email, phoneNumber)
+            return availabilityResponse
+        }
     }
 
     private fun session() = AuthSession(
@@ -69,6 +78,41 @@ class AuthRepositoryTest {
         assertThat(result).isInstanceOf(NetworkResult.Failure::class.java)
         assertThat(store.isAuthenticated).isFalse()
         assertThat(session.currentUser.value).isNull()
+    }
+
+    @Test
+    fun checkAvailability_success_forwardsOnlyTheProbedFieldAndReturnsResult() = runTest {
+        val store = InMemoryTokenStore()
+        val api = FakeAuthApi(
+            ApiResponse(success = false),
+            availabilityResponse = ApiResponse(
+                success = true,
+                data = AvailabilityResult(usernameAvailable = true, suggestions = listOf("atabeth1")),
+            ),
+        )
+        val (repo, _) = repository(api, store)
+
+        val result = repo.checkAvailability(username = "atabeth")
+
+        assertThat(api.availabilityCalls).containsExactly(Triple("atabeth", null, null))
+        assertThat(result).isInstanceOf(NetworkResult.Success::class.java)
+        assertThat(result.getOrNull()?.usernameAvailable).isTrue()
+        assertThat(result.getOrNull()?.suggestions).containsExactly("atabeth1")
+    }
+
+    @Test
+    fun checkAvailability_failure_returnsFailure() = runTest {
+        val store = InMemoryTokenStore()
+        val api = FakeAuthApi(
+            ApiResponse(success = false),
+            availabilityResponse = ApiResponse(success = false, error = "boom"),
+        )
+        val (repo, _) = repository(api, store)
+
+        val result = repo.checkAvailability(email = "a@b.co")
+
+        assertThat(api.availabilityCalls).containsExactly(Triple(null, "a@b.co", null))
+        assertThat(result).isInstanceOf(NetworkResult.Failure::class.java)
     }
 
     @Test
