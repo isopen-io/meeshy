@@ -1,5 +1,51 @@
 # Progress — state & what to do next
 
+> On 2026-07-25 the **slow-mode composer cooldown** landed (slice `chat-slow-mode-cooldown`,
+> feature-parity §Chat → "Conversation moderation … slow mode" advances to `[~]`). The
+> `Conversation.slowModeSeconds` field the models already carried is now enforced at the composer
+> instead of being silently ignored. **Added (production, all `apps/android`):** the pure, stateless
+> `SlowModePolicy` + `SlowModeState` (`:sdk-core` `me.meeshy.sdk.composer`). `evaluate(slowModeSeconds,
+> lastSelfSentAtMillis, nowMillis, isExempt)` returns whether the composer's send is allowed and, when
+> blocked, a **ceil'd** remaining-seconds countdown (so it never reads "0" while still blocked): a
+> `null`/`≤0` interval or an exempt viewer → `UNTHROTTLED`; a member who never sent → active but
+> immediately sendable; elapsed `≥` interval → sendable; a backwards clock is clamped to a full cooldown
+> (never waved through by a negative remaining). `isExemptRole` routes the role string through the shared
+> `MemberRole` SSOT — moderator/admin/creator bypass slow mode, an unknown/absent role decodes to MEMBER
+> and is throttled. **Wiring (`:feature:chat`):** `ChatUiState` gains `slowModeSeconds`,
+> `slowModeExempt`, `lastSelfSentAtMillis` + a `slowModeState(now)` derivation; `ChatViewModel` folds the
+> conversation's interval + the viewer's role-exemption into state on the conversation stream, records
+> `clock.nowMillis()` as the last-send stamp on each new send, and **gates `send()`** on the cooldown
+> (edits are exempt — they are not new messages). `ChatScreen` renders a subtle ticking hourglass
+> countdown row above the composer and disables the send button while blocked (new i18n key
+> `chat_slow_mode_wait` in EN/FR/ES/PT). The Compose ticker only spins while slow mode is active for the
+> viewer, so a normal conversation pays no recomposition loop. **SOTA over iOS**, which exposes
+> `slowModeSeconds` only in the admin settings picker and never throttles the composer — a member fires
+> faster than the interval and lets the server reject the burst. **+18 behavioural tests:**
+> `SlowModePolicyTest` (14 — off/zero/negative/exempt inactivity, never-sent + boundary + long-idle
+> sendable, just-sent + partial-ceil + sub-second-sliver + backwards-clock blocking, role exemption
+> case-insensitive/member/unknown) + `ChatViewModelTest` +4 (interval populates state, send records +
+> blocks immediate resend, exempt moderator never throttled, slow-mode-off unthrottled). Expectations are
+> hand-written literals asserted through the public API / observable `state`, never internals.
+> **Mutation (RED proof):** neutralizing the VM's `send()` gate (`if (false) return`) fails **exactly**
+> `sending_under_slow_mode_records_the_send_and_blocks_an_immediate_resend` (1 run, 1 failed, no
+> collateral) — the gate is load-bearing. **Gate:** `:sdk-core:testDebugUnitTest` (SlowModePolicyTest) +
+> `:feature:chat:testDebugUnitTest` (ChatViewModelTest) green; `assembleDebug` → BUILD SUCCESSFUL; the
+> full `testDebugUnitTest` run's only failure was the **known DataStore-parallel-load flake**
+> (`ThemeStoreTest`, confirmed green in isolation this run — `BUILD SUCCESSFUL in 6s`), documented
+> standing debt, not this slice. `SlowModePolicyTest` = 15/15, 0 failures. Reviewer **PASS** (diff `apps/android` only — 1 new pure core + its test in
+> `:sdk-core`, VM/state/screen wiring + 4 locale strings + VM test harness in `:feature:chat`, zero
+> production logic elsewhere; **SDK purity** — the *may-I-send-now* cooldown math is a stateless
+> `:sdk-core` building block, the *when-to-tick / when-to-record* orchestration stays app-side in the VM
+> and the Compose ticker; **SSOT** — role exemption reuses `MemberRole`, re-implements no rank logic;
+> **failure paths** — clock skew clamps rather than crashes). **Next slice:** the admin-facing
+> conversation-settings picker (write-role / announcement toggle / slow-mode picker 0/10/30/60/300s /
+> auto-translate — a pure `SettingsForm` core + UI); OR slow-mode enforcement on the attachment/voice
+> send paths (`sendFileAttachment`, voice); OR the guest-join **screen** (`:feature:sharelink`); OR the
+> paged `OnboardingFlowView`; OR the tracked Kover 90% coverage-gate infra.
+> **Known standing debt (not this slice):** the `:sdk-core` DataStore-parallel-load timeout flake
+> (`ThemeStoreTest`/`InterfaceLanguageStoreTest`/`PrivacyPreferencesStoreTest`/`NotificationPreferencesStoreTest`)
+> — green in isolation, intermittent in the full run.
+
 > On 2026-07-25 the **composer gated by participant permissions** landed (slice
 > `composer-attachment-affordances`, feature-parity §Chat → new `[x]` "Composer affordances gated by
 > the viewer's send permissions"). This is a **SOTA improvement over iOS**, whose `UniversalComposerBar`

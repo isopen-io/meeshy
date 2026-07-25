@@ -12,6 +12,7 @@
     <string name="chat_effects_open">Efectos del mensaje</string>
     <string name="chat_attach_file">Adjuntar archivo</string>
     <string name="chat_composer_read_only">No puedes enviar mensajes en esta conversación</string>
+    <string name="chat_slow_mode_wait">Modo lento · espera %1$ds</string>
     <string name="chat_effects_title">Efectos del mensaje</string>
     <string name="chat_effects_done">Listo</string>
     <string name="chat_effects_section_behavior">Comportamiento</string>

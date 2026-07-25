@@ -30,6 +30,8 @@ import me.meeshy.sdk.conversation.MessageRepository
 import me.meeshy.ui.component.bubble.LanguageFlagTapResolver
 import me.meeshy.sdk.composer.ComposerAffordances
 import me.meeshy.sdk.composer.ComposerAttachmentPolicy
+import me.meeshy.sdk.composer.SlowModePolicy
+import me.meeshy.sdk.composer.SlowModeState
 import me.meeshy.sdk.lang.ComposeLanguageDetector
 import me.meeshy.sdk.lang.LanguageResolver
 import me.meeshy.sdk.model.ApiConversation
@@ -140,8 +142,29 @@ data class ChatUiState(
      * session's [ParticipantPermissions] when the viewer joined via a share link;
      * a normal member never carries a stored anonymous session, so it stays null. */
     val composerPermissions: ParticipantPermissions? = null,
+    /** The conversation's slow-mode interval in seconds, or `null`/`0` when off.
+     * Carried from the loaded conversation; feeds [slowModeState]. */
+    val slowModeSeconds: Int? = null,
+    /** Whether the viewer's conversation role (moderator+) bypasses slow mode.
+     * Computed once per conversation load via [SlowModePolicy.isExemptRole]. */
+    val slowModeExempt: Boolean = false,
+    /** When the viewer last sent a message in this conversation (epoch millis),
+     * or `null` if not this session. Advances the slow-mode cooldown. */
+    val lastSelfSentAtMillis: Long? = null,
 ) {
     val canSend: Boolean get() = draft.isNotBlank() || clipboardContent != null
+
+    /** The composer's live slow-mode posture at [nowMillis] — whether the send
+     * action is allowed and, if not, how many seconds remain. Pure derivation over
+     * [SlowModePolicy]; the Compose screen ticks [nowMillis] to animate the
+     * countdown, the ViewModel reads it to gate [ChatViewModel.send]. */
+    fun slowModeState(nowMillis: Long): SlowModeState =
+        SlowModePolicy.evaluate(
+            slowModeSeconds = slowModeSeconds,
+            lastSelfSentAtMillis = lastSelfSentAtMillis,
+            nowMillis = nowMillis,
+            isExempt = slowModeExempt,
+        )
 
     /** The concrete affordances the composer may offer, derived from
      * [composerPermissions] via the pure [ComposerAttachmentPolicy]. A registered
@@ -323,6 +346,9 @@ class ChatViewModel @Inject constructor(
                     .filterNot { it == currentUserId }
                     .distinct()
                     .size
+                val viewerRole = conversation.participants
+                    .firstOrNull { it.userId == currentUserId }
+                    ?.role
                 _state.update {
                     it.copy(
                         conversationTitle = conversation.displayTitle(currentUserId = currentUserId),
@@ -330,6 +356,8 @@ class ChatViewModel @Inject constructor(
                         isGroup = conversation.type.lowercase() != "direct",
                         accentColorHex = conversation.accentHex(),
                         mentionDisplayNames = MentionRoster.displayNames(roster),
+                        slowModeSeconds = conversation.slowModeSeconds,
+                        slowModeExempt = SlowModePolicy.isExemptRole(viewerRole),
                     )
                 }
             }
@@ -790,6 +818,11 @@ class ChatViewModel @Inject constructor(
             applyEdit(editingId, text)
             return
         }
+        // Slow-mode gate: refuse a new send while the cooldown is running (edits
+        // above are exempt — they are not new messages). The draft is kept so the
+        // countdown's tick simply re-enables the send button.
+        val sentAtMillis = clock.nowMillis()
+        if (!_state.value.slowModeState(sentAtMillis).canSend) return
         val user = sessionRepository.currentUser.value ?: return
         val replyToId = _state.value.replyingToMessageId
         val effects = _state.value.pendingEffects
@@ -801,6 +834,7 @@ class ChatViewModel @Inject constructor(
                 mention = it.mention.reset(),
                 pendingEffects = MessageEffects(),
                 isEffectsPickerOpen = false,
+                lastSelfSentAtMillis = sentAtMillis,
             )
         }
         persistDraft("", replyToId = null)

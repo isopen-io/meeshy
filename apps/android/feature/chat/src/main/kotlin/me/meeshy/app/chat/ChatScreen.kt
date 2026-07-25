@@ -111,6 +111,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -151,6 +152,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import me.meeshy.sdk.composer.ComposerAffordances
+import me.meeshy.sdk.composer.SlowModeState
 import me.meeshy.sdk.link.LinkPreview
 import me.meeshy.sdk.link.LinkPreviewOutcome
 import me.meeshy.sdk.link.LinkPreviewParser
@@ -391,6 +393,7 @@ fun ChatScreen(
                     canSend = state.canSend,
                     isEditing = state.isEditing,
                     affordances = state.composerAffordances,
+                    slowMode = rememberComposerSlowMode(state),
                     replyingToLabel = replyTarget?.let { it.senderName ?: it.text.take(40) },
                     hasEffects = state.hasPendingEffects,
                     clipboardContent = state.clipboardContent,
@@ -2267,6 +2270,7 @@ private fun ChatComposer(
     canSend: Boolean,
     isEditing: Boolean,
     affordances: ComposerAffordances,
+    slowMode: SlowModeState,
     replyingToLabel: String?,
     hasEffects: Boolean,
     clipboardContent: ClipboardContent?,
@@ -2388,6 +2392,14 @@ private fun ChatComposer(
                         .padding(horizontal = MeeshySpacing.md, vertical = MeeshySpacing.md),
                 )
             } else {
+                if (!isEditing && slowMode.isActive && !slowMode.canSend) {
+                    ComposerSlowModeNotice(
+                        remainingSeconds = slowMode.remainingSeconds,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = MeeshySpacing.lg, vertical = MeeshySpacing.xs),
+                    )
+                }
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -2430,7 +2442,7 @@ private fun ChatComposer(
                             )
                         }
                     } else {
-                        IconButton(onClick = onSend, enabled = canSend) {
+                        IconButton(onClick = onSend, enabled = canSend && (isEditing || slowMode.canSend)) {
                             Icon(
                                 imageVector = if (isEditing) Icons.Filled.Check else Icons.AutoMirrored.Filled.Send,
                                 contentDescription = stringResource(R.string.chat_send),
@@ -2465,6 +2477,59 @@ private fun ComposerReadOnlyNotice(modifier: Modifier = Modifier) {
         Text(
             text = stringResource(R.string.chat_composer_read_only),
             style = MaterialTheme.typography.bodySmall,
+            color = MeeshyTheme.tokens.textSecondary,
+            modifier = Modifier.padding(start = MeeshySpacing.xs),
+        )
+    }
+}
+
+/**
+ * The live slow-mode posture for the composer, ticked once a second while a
+ * cooldown is running. The ViewModel's [ChatViewModel.send] gate is authoritative;
+ * this is the thin, coverage-exempt Compose glue that animates the countdown so the
+ * send button re-enables the instant the interval clears. The ticker only spins
+ * while slow mode is active for the viewer, so a normal conversation never pays for
+ * a recomposition loop.
+ */
+@Composable
+private fun rememberComposerSlowMode(state: ChatUiState): SlowModeState {
+    val throttled = (state.slowModeSeconds ?: 0) > 0 && !state.slowModeExempt
+    val now by produceState(
+        initialValue = System.currentTimeMillis(),
+        throttled,
+        state.lastSelfSentAtMillis,
+    ) {
+        value = System.currentTimeMillis()
+        while (throttled) {
+            delay(500)
+            value = System.currentTimeMillis()
+        }
+    }
+    return state.slowModeState(now)
+}
+
+/**
+ * A subtle countdown row shown above the composer while slow mode blocks the next
+ * send — an hourglass and the remaining seconds. Prisme discretion: it informs
+ * without a modal or a banner, and self-clears when [remainingSeconds] reaches the
+ * cleared window. SOTA over iOS, which never surfaces the cooldown at all.
+ */
+@Composable
+private fun ComposerSlowModeNotice(remainingSeconds: Int, modifier: Modifier = Modifier) {
+    Row(
+        modifier = modifier,
+        horizontalArrangement = Arrangement.Center,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(
+            imageVector = Icons.Filled.HourglassEmpty,
+            contentDescription = null,
+            tint = MeeshyTheme.tokens.textSecondary,
+            modifier = Modifier.size(14.dp),
+        )
+        Text(
+            text = stringResource(R.string.chat_slow_mode_wait, remainingSeconds),
+            style = MaterialTheme.typography.labelSmall,
             color = MeeshyTheme.tokens.textSecondary,
             modifier = Modifier.padding(start = MeeshySpacing.xs),
         )
