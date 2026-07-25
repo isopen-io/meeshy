@@ -31,34 +31,40 @@ final class PostStatAccessibilityTests: XCTestCase {
         XCTAssertTrue(PostStatAccessibility.repostsLabel(3).contains("3"))
     }
 
-    // MARK: - Accord singulier / pluriel (langue de dev = en)
+    // MARK: - Accord singulier / pluriel (langue de dev = fr)
+    //
+    // Les attentes étaient rédigées en anglais du temps où la langue de
+    // développement l'était. La source du catalogue est le FRANÇAIS : sans
+    // surcharge de langue, c'est lui que résout `String(localized:)`.
+    // Noter que « j'aime » est invariable — le pluriel français ne calque pas
+    // l'anglais, et c'est bien ce que doit lire VoiceOver.
 
     func test_likesLabel_singularForOne() {
-        XCTAssertEqual(PostStatAccessibility.likesLabel(1), "1 like")
+        XCTAssertEqual(PostStatAccessibility.likesLabel(1), "1 j'aime")
     }
 
     func test_likesLabel_pluralForMany() {
-        XCTAssertEqual(PostStatAccessibility.likesLabel(5), "5 likes")
+        XCTAssertEqual(PostStatAccessibility.likesLabel(5), "5 j'aime")
     }
 
     func test_likesLabel_pluralForZero() {
-        XCTAssertEqual(PostStatAccessibility.likesLabel(0), "0 likes")
+        XCTAssertEqual(PostStatAccessibility.likesLabel(0), "0 j'aime")
     }
 
     func test_commentsLabel_singularForOne() {
-        XCTAssertEqual(PostStatAccessibility.commentsLabel(1), "1 comment")
+        XCTAssertEqual(PostStatAccessibility.commentsLabel(1), "1 commentaire")
     }
 
     func test_commentsLabel_pluralForMany() {
-        XCTAssertEqual(PostStatAccessibility.commentsLabel(12), "12 comments")
+        XCTAssertEqual(PostStatAccessibility.commentsLabel(12), "12 commentaires")
     }
 
     func test_repostsLabel_singularForOne() {
-        XCTAssertEqual(PostStatAccessibility.repostsLabel(1), "1 repost")
+        XCTAssertEqual(PostStatAccessibility.repostsLabel(1), "1 repartage")
     }
 
     func test_repostsLabel_pluralForMany() {
-        XCTAssertEqual(PostStatAccessibility.repostsLabel(4), "4 reposts")
+        XCTAssertEqual(PostStatAccessibility.repostsLabel(4), "4 repartages")
     }
 
     // MARK: - Chaque compteur nomme sa propre sémantique (pas de confusion)
