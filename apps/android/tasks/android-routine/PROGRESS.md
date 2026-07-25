@@ -1,5 +1,50 @@
 # Progress — state & what to do next
 
+> On 2026-07-25 the **app-side registration wizard ViewModel** landed (slice
+> `registration-wizard-viewmodel`, feature-parity §A → new `[~]` "App-side registration wizard ViewModel
+> wiring"). This is the **first app-side wiring** turning the ~6 shipped registration cores
+> (`RegistrationStep`/`RegistrationStepNavigator`/`RegistrationStepGate`/`RegistrationProgressBar`/
+> `SignupAvailabilityPolicy`/`PasswordEntry`) from orphan logic into one real observable UDF wizard.
+> New `:feature:auth/RegistrationViewModel` (`@HiltViewModel`) + immutable `RegistrationUiState`
+> (`currentStep` + `RegistrationFields` + `isSubmitting`/`errorMessage`/`isRegistered`). It holds only
+> raw inputs; every decision is *derived* from a pure core, re-implementing none: `canProceed`/
+> `isFirstStep`/`isLastStep`/`fill(step)` are `RegistrationStepGate`/`RegistrationStepNavigator`/
+> `RegistrationProgressBar` calls; `next()`=`advance(currentStep, canProceed)`, `previous()`/`skip()`/
+> `jumpTo()` apply the navigator/progress outcomes (skip performs the `skipPhone=true; phoneNumber=""`
+> field mutation the core signals via `SkipOutcome.clearPhone`); `register()` fires only from a passing
+> RECAP gate, single-flight (`isSubmitting` guard), maps `RegistrationFields.toRegisterRequest`
+> (normalized username/email, blank→null optional names) through `AuthRepository.register`, and binds
+> `RealtimeSessionCoordinator` on success — the exact seam the shipped `AuthViewModel.login` uses. The
+> availability **network probe** (1 s debounce → `checkAvailability`) is deliberately deferred: the VM
+> exposes `onUsernameAvailability`/`onEmailAvailability`/`onPhoneAvailability` as the seam the future
+> network layer drives. **SOTA over iOS:** editing an already-probed username/email/phone **invalidates
+> the stale availability answer** (`…Available=null`) so the proceed gate can never pass on a server
+> verdict belonging to a since-changed value; iOS keeps the old `Bool?` until the debounced probe
+> returns. **+23 behavioural tests** (`RegistrationViewModelTest`): initial state; field-edit +
+> availability invalidation ×3; `next` blocked/passes; `previous` first-noop/back; `skip` phone-clear/
+> non-phone/last-noop; `jumpTo` back/current/upcoming-ignored; `fill` partition; `register`
+> before-recap-noop / blocked-recap-noop / success(marks registered + binds realtime + asserts payload) /
+> failure(surfaces error, no realtime) / while-submitting-noop / blank-names→null. Expectations are
+> hand-written literals. **Mutation (RED proof):** dropping `onUsernameChange`'s `usernameAvailable=null`
+> reset fails **exactly** `editingUsername_invalidatesStaleAvailability` (23 run, 1 failed, no
+> collateral) — proving the stale-availability invalidation is load-bearing; RED was also proven first
+> by the suite failing to compile against the absent VM. **Gate:** `:feature:auth:testDebugUnitTest`
+> green (23/23 new) + `:app:assembleDebug` (whole module graph) → BUILD SUCCESSFUL. Reviewer **PASS**
+> (diff `apps/android` only — 1 new source + 1 new test + tracking docs, zero production logic elsewhere;
+> **SDK purity** — every rule stays in the `:core:model` cores, the VM in `:feature:auth` is a thin
+> caller that only applies immutable state; **SSOT** — no re-implementation of a shipped decision;
+> **UDF** — `ViewModel` + immutable `StateFlow<RegistrationUiState>`, pure transitions; **UX** — natural
+> back/skip/jump-back navigation, no dead-ends). **Next slice:** the paged `OnboardingFlowView` Compose
+> screen (per-step field composables + `InteractiveProgressBar` bar row + bottom-bar Back/Skip/
+> Next-or-Register) binding this VM — UI-only, JVM-coverage-exempt; OR the availability-debounce network
+> layer (an `AuthService.checkAvailability` + a 1 s-debounced `Flow` per field feeding the `on…Availability`
+> seam, `SignupAvailabilityPolicy.usernameIntent`/`emailIntent`/`phoneIntent`-driven), which is
+> JVM-testable and closes the last orphan seam of the wizard; OR the app-side `AnonymousSessionStore` +
+> guest join flow; OR the tracked Kover 90% coverage-gate infra. **Known standing debt (not this
+> slice):** the `:sdk-core` DataStore-parallel-load timeout flake (`ThemeStoreTest`/
+> `InterfaceLanguageStoreTest`/`PrivacyPreferencesStoreTest`) — green in isolation, intermittent in the
+> full run.
+
 > On 2026-07-24 the **transparent token-refresh Authenticator (reactive 401 wiring)** landed (slice
 > `auth-token-refresh-authenticator`, feature-parity §A → "Transparent token refresh on 401 with one
 > retry" stays `[~]` but the app-side wiring the policy core was waiting on is now **done**). This turns

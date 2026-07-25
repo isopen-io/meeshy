@@ -459,6 +459,37 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       bottom-bar composable (Back / Skip / Next-or-Register buttons) + the `RegistrationViewModel`
       wiring `advance`/`previous`/`skip` to `currentStep`, computing `canProceed` from the shipped
       field-validation cores.
+- [~] **App-side registration wizard ViewModel wiring** — **UDF `RegistrationViewModel` shipped**
+      (slice `registration-wizard-viewmodel`, 2026-07-25). The first app-side wiring that turns the
+      shipped registration cores from orphan logic into a real observable wizard. New
+      `:feature:auth/RegistrationViewModel` (`@HiltViewModel`) + immutable `RegistrationUiState`
+      (`currentStep` + `RegistrationFields` + submit flags). Every *decision* defers to a pure core,
+      re-implementing none: `canProceed`/`isFirstStep`/`isLastStep`/`fill(step)` derive from
+      `RegistrationStepGate`/`RegistrationStepNavigator`/`RegistrationProgressBar`; `next()` =
+      `advance(currentStep, canProceed)`, `previous()`/`skip()`/`jumpTo()` apply the navigator/progress
+      outcomes (skip performs the `skipPhone=true; phoneNumber=""` field mutation the core signalled via
+      `SkipOutcome.clearPhone`); `register()` fires only from a passing RECAP gate, single-flight
+      (`isSubmitting` guard), maps `RegistrationFields.toRegisterRequest` (normalized username/email,
+      blank→null optional names via `SignupFieldValidation`) through `AuthRepository.register`, binds
+      `RealtimeSessionCoordinator` on success (mirrors the shipped `AuthViewModel.login` seam). The
+      availability network probe (1 s debounce → `checkAvailability`) is a separate follow-up; the VM
+      exposes `onUsernameAvailability`/`onEmailAvailability`/`onPhoneAvailability` as the seam. **SOTA
+      over iOS:** editing an already-probed username/email/phone **invalidates the stale availability
+      answer** (`…Available=null`) so the proceed gate can never pass on a server verdict that belongs
+      to a since-changed value — iOS keeps the old `Bool?` until the debounced probe returns. +23
+      behavioural tests (`RegistrationViewModelTest` — initial state; field-edit + availability
+      invalidation ×3; `next` blocked/passes; `previous` first-noop/back; `skip` phone-clear/non-phone/
+      last-noop; `jumpTo` back/current/upcoming-ignored; `fill` partition; `register`
+      before-recap-noop / blocked-recap-noop / success-binds-realtime+payload / failure-error+no-realtime
+      / while-submitting-noop / blank-names→null). Expectations are hand-written literals (not
+      tautological). Mutation (RED proof): dropping `onUsernameChange`'s `usernameAvailable=null` reset
+      fails **exactly** `editingUsername_invalidatesStaleAvailability` (23 run, 1 failed, no collateral).
+      RED was also proven first by the suite failing to compile against the absent VM.
+      `:feature:auth:testDebugUnitTest` green (23/23 new) + `:app:assembleDebug` → BUILD SUCCESSFUL
+      (every module compiled). Diff = `apps/android` only. **Follow-up:** the paged `OnboardingFlowView`
+      Compose screen (per-step field composables + `InteractiveProgressBar` bar row + bottom-bar
+      Back/Skip/Next-or-Register) binding this VM, and the availability-debounce network layer feeding
+      the `on…Availability` seam.
 - [~] Phone entry with searchable country-code picker (skippable) — **catalogue core shipped**
       (slice `auth-country-catalog`, 2026-07-20): pure `:core:model` `CountryCatalog` + `Country`
       (faithful port of iOS `CountryPicker`,
