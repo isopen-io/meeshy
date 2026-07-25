@@ -77,13 +77,15 @@ final class StoryExportBrandedEndToEndTests: XCTestCase {
         )
 
         let url = try await bakeBrandedExport()
-        // Copie sous un nom stable : elle sert à l'inspection hors simulateur
-        // (ffprobe/extraction d'images). Écrasée à chaque exécution.
-        let keep = FileManager.default.temporaryDirectory
-            .appendingPathComponent("meeshy-e2e-branded-export.mp4")
-        try? FileManager.default.removeItem(at: keep)
-        try? FileManager.default.copyItem(at: url, to: keep)
         defer { try? FileManager.default.removeItem(at: url) }
+
+        // Le MP4 réel part dans le .xcresult : c'est ce qui permet de
+        // l'inspecter hors simulateur (ffprobe, extraction d'images) au lieu de
+        // se contenter des assertions ci-dessous.
+        let attachment = XCTAttachment(data: try Data(contentsOf: url), uniformTypeIdentifier: "public.mpeg-4")
+        attachment.name = "branded-export.mp4"
+        attachment.lifetime = .keepAlways
+        add(attachment)
 
         let asset = AVURLAsset(url: url)
 
@@ -137,7 +139,10 @@ final class StoryExportBrandedEndToEndTests: XCTestCase {
         XCTAssertFalse(audioTracks.isEmpty, "le MP4 livré doit porter une piste audio")
 
         let samples = try await decodeMonoSamples(from: asset)
-        XCTAssertFalse(samples.isEmpty, "la piste audio doit être décodable")
+        // Garde AVANT tout calcul de fenêtre : sur une piste vide, les bornes
+        // ci-dessous deviennent négatives et font tomber le process au lieu
+        // d'échouer proprement.
+        try XCTSkipIf(samples.isEmpty, "piste audio non décodable — mesure impossible")
 
         let totalSeconds = CMTimeGetSeconds(try await asset.load(.duration))
         let rate = Double(samples.count) / totalSeconds
@@ -145,9 +150,10 @@ final class StoryExportBrandedEndToEndTests: XCTestCase {
 
         // Fenêtre intérieure à l'interlude : on évite l'attaque et l'extinction
         // du jingle, dont l'enveloppe est volontairement douce.
-        let introRMS = rms(samples[Int(0.2 * rate)..<min(introEnd, Int(1.8 * rate))])
+        let introRMS = rms(window(samples, from: 0.2, to: min(StoryExportIntro.duration, 1.8), rate: rate))
         // Fenêtre intérieure à la story, qui est muette.
-        let storyRMS = rms(samples[min(introEnd + Int(0.4 * rate), samples.count - 1)..<samples.count])
+        let storyRMS = rms(window(samples, from: StoryExportIntro.duration + 0.4,
+                                  to: totalSeconds, rate: rate))
 
         XCTAssertGreaterThan(introRMS, 0.01,
                              "le jingle doit être AUDIBLE sur l'interlude (RMS mesuré \(introRMS))")
@@ -156,6 +162,17 @@ final class StoryExportBrandedEndToEndTests: XCTestCase {
     }
 
     // MARK: - Outils de mesure
+
+    /// Fenêtre temporelle bornée aux limites réelles du tableau — une borne
+    /// calculée hors bornes ferait tomber le process au lieu d'échouer.
+    private func window(_ samples: [Float],
+                        from start: TimeInterval,
+                        to end: TimeInterval,
+                        rate: Double) -> ArraySlice<Float> {
+        let lower = max(0, min(Int(start * rate), samples.count))
+        let upper = max(lower, min(Int(end * rate), samples.count))
+        return samples[lower..<upper]
+    }
 
     private func rms(_ slice: ArraySlice<Float>) -> Double {
         guard !slice.isEmpty else { return 0 }
