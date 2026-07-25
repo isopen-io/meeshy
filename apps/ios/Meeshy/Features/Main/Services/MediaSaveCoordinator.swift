@@ -279,15 +279,15 @@ struct AttachmentMediaSaveResolver: MediaSaveSourceResolving {
     }
 }
 
-/// Report production : `POST /attachments/:id/status` action `downloaded`
-/// (même contrat que les chemins historiques ImageViewer/DocumentViewer —
-/// P7-9). Best-effort : un échec ne dégrade jamais un enregistrement réussi.
+/// Report production : action `downloaded`, remontée par le même entonnoir que
+/// tous les autres rapports de consommation (`AttachmentStatusReporter`). Le
+/// rapport est rendu durable par l'outbox — un enregistrement effectué hors
+/// réseau remonte au retour de la connexion. Un échec ne dégrade jamais un
+/// enregistrement réussi.
 struct AttachmentStatusDownloadReporter: MediaSaveDownloadReporting {
     func reportDownloaded(attachmentId: String) async {
         let body = AttachmentStatusBody(action: "downloaded", playPositionMs: 0, durationMs: 0, complete: true)
-        let _: APIResponse<[String: String]>? = try? await APIClient.shared.post(
-            endpoint: "/attachments/\(attachmentId)/status", body: body
-        )
+        await AttachmentStatusReporter.reportAwaiting(attachmentId: attachmentId, body: body)
     }
 }
 

@@ -110,7 +110,11 @@ public enum ComposerMode: Equatable {
 
 // MARK: - Attachment Status Body
 
-public struct AttachmentStatusBody: Encodable, Sendable {
+/// `nonisolated` : un simple corps de requête. `MeeshyUI` isole tout sur le
+/// main actor par défaut (SE-0466), ce qui interdirait au dispatcher d'outbox —
+/// qui tourne hors du main actor — de reconstruire ce corps pour rejouer un
+/// rapport différé.
+public nonisolated struct AttachmentStatusBody: Encodable, Sendable {
     public let action: String
     public let playPositionMs: Int
     public let durationMs: Int

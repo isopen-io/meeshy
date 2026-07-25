@@ -49,8 +49,13 @@ final class OutboxKindCodableTests: XCTestCase {
     /// Toute autre opération (envoi / édition / suppression de message,
     /// réaction, mutations sociales…) représente une écriture utilisateur
     /// qui justifie l'indicateur de synchronisation.
-    func test_allKindsExceptMarkAsRead_countTowardSyncIndicator() {
-        for kind in OutboxKind.allCases where kind != .markAsRead {
+    ///
+    /// `reportAttachmentStatus` rejoint `markAsRead` pour la même raison :
+    /// c'est une télémétrie de lecture, pas un contenu que l'utilisateur
+    /// attend de voir partir.
+    func test_allKindsExceptAcknowledgements_countTowardSyncIndicator() {
+        let acquittements: Set<OutboxKind> = [.markAsRead, .reportAttachmentStatus]
+        for kind in OutboxKind.allCases where !acquittements.contains(kind) {
             XCTAssertTrue(
                 kind.countsTowardSyncIndicator,
                 "\(kind) devrait compter pour l'indicateur de synchronisation"

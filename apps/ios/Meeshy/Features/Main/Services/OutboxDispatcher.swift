@@ -57,6 +57,9 @@ struct OutboxDispatcher: OutboxDispatching {
         case .markStoryViewed:
             try await dispatchMarkStoryViewed(record)
 
+        case .reportAttachmentStatus:
+            try await dispatchReportAttachmentStatus(record)
+
         case .createConversation:
             try await dispatchCreateConversation(record)
 
@@ -259,6 +262,34 @@ struct OutboxDispatcher: OutboxDispatching {
             logger.info("markStoryViewed dispatched story=\(payload.storyId, privacy: .public) cmid=\(payload.clientMutationId, privacy: .public)")
         } catch let MeeshyError.server(statusCode, _) where statusCode == 404 {
             logger.warning("markStoryViewed 404 story=\(payload.storyId, privacy: .public) — story gone, accepting as success")
+        }
+    }
+
+    /// Point 7 — rejoue un rapport de consommation média.
+    ///
+    /// Un attachement supprimé entre-temps (404) rend le rapport sans objet :
+    /// on l'accepte comme un succès pour que la ligne quitte la file, sinon
+    /// elle serait rejouée jusqu'à épuisement des tentatives pour un média qui
+    /// n'existe plus.
+    private func dispatchReportAttachmentStatus(_ record: OutboxRecord) async throws {
+        let payload = try decodePayload(record, as: ReportAttachmentStatusPayload.self)
+        let body = AttachmentStatusBody(
+            action: payload.action,
+            playPositionMs: payload.playPositionMs,
+            durationMs: payload.durationMs,
+            complete: payload.complete,
+            wasZoomed: payload.wasZoomed,
+            stretches: payload.stretches,
+            language: payload.language
+        )
+        do {
+            let _: APIResponse<[String: String]> = try await APIClient.shared.post(
+                endpoint: "/attachments/\(payload.attachmentId)/status",
+                body: body
+            )
+            logger.info("reportAttachmentStatus dispatched att=\(payload.attachmentId, privacy: .public) action=\(payload.action, privacy: .public)")
+        } catch let MeeshyError.server(statusCode, _) where statusCode == 404 {
+            logger.warning("reportAttachmentStatus 404 att=\(payload.attachmentId, privacy: .public) — attachement disparu, accepté comme succès")
         }
     }
 

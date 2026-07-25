@@ -399,20 +399,15 @@ public class AudioPlaybackManager: NSObject, ObservableObject {
         let totalDurationMs = Int(duration * 1000)
         let language = consumedLanguageProvider?()
 
-        Task {
-            let body = AttachmentStatusBody(
-                action: "listened",
-                playPositionMs: positionMs,
-                durationMs: totalDurationMs,
-                complete: complete,
-                stretches: stretches,
-                language: language
-            )
-            let _: APIResponse<[String: String]>? = try? await APIClient.shared.post(
-                endpoint: "/attachments/\(attId)/status",
-                body: body
-            )
-        }
+        let body = AttachmentStatusBody(
+            action: "listened",
+            playPositionMs: positionMs,
+            durationMs: totalDurationMs,
+            complete: complete,
+            stretches: stretches,
+            language: language
+        )
+        AttachmentStatusReporter.report(attachmentId: attId, body: body)
     }
 
     // MARK: - Playback position persistence

@@ -375,3 +375,60 @@ public struct ToggleLikeCommentPayload: Codable, Sendable, Equatable {
         self.liked = liked
     }
 }
+
+// MARK: - Consommation d'un attachement
+
+/// Point 7 — rapport de consommation d'un média, rendu durable.
+///
+/// Les six sites de lecture postaient jusqu'ici en `try?` inline : une écoute
+/// hors-ligne, en avion ou dans un ascenseur était perdue sans trace. Le
+/// rapport passe désormais par l'outbox, comme toute autre écriture.
+///
+/// ## Pourquoi ce kind ne se coalesce PAS
+///
+/// `markStoryViewed` se coalesce parce qu'un « vu » est binaire : le rejouer
+/// deux fois ne dit rien de plus. Un rapport de consommation, lui, porte des
+/// `stretches` DIFFÉRENTS à chaque fois — trois écoutes hors-ligne du même
+/// audio sont trois passages distincts sur trois portions distinctes. Écraser
+/// le rapport précédent par le suivant détruirait précisément ce que la trace
+/// motivée existe pour préserver. Chaque rapport est donc conservé et rejoué
+/// dans l'ordre ; le serveur accumule et dédoublonne par identité de segment.
+public struct ReportAttachmentStatusPayload: Codable, Sendable, Equatable {
+    public let clientMutationId: String
+    public let attachmentId: String
+    /// `listened` | `watched` | `viewed` | `downloaded` — verbe attendu par la
+    /// route gateway `POST /attachments/:id/status`.
+    public let action: String
+    public let playPositionMs: Int
+    public let durationMs: Int
+    public let complete: Bool
+    public let wasZoomed: Bool?
+    public let stretches: [PlaybackStretch]?
+    /// Version linguistique consommée. `nil` quand le lecteur ne peut pas la
+    /// déterminer — mieux vaut ne rien déclarer qu'inventer une langue.
+    public let language: String?
+
+    public init(
+        clientMutationId: String,
+        attachmentId: String,
+        action: String,
+        playPositionMs: Int,
+        durationMs: Int,
+        complete: Bool,
+        wasZoomed: Bool? = nil,
+        stretches: [PlaybackStretch]? = nil,
+        language: String? = nil
+    ) {
+        self.clientMutationId = clientMutationId
+        self.attachmentId = attachmentId
+        self.action = action
+        self.playPositionMs = playPositionMs
+        self.durationMs = durationMs
+        self.complete = complete
+        self.wasZoomed = wasZoomed
+        // Un tableau vide ne dirait rien au serveur et ferait voyager une clé
+        // pour rien — même règle que `AttachmentStatusBody`.
+        self.stretches = (stretches?.isEmpty ?? true) ? nil : stretches
+        self.language = language
+    }
+}

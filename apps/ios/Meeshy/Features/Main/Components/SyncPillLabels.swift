@@ -96,6 +96,7 @@ enum SyncPillLabels {
         switch raw {
         case "markAsRead":              return "Synchronisation des lus"
         case "markStoryViewed":         return "Synchronisation des vues story"
+        case "reportAttachmentStatus":  return "Synchronisation des lectures média"
         case "sendFriendRequest":       return "Demande d'ami"
         case "respondFriendRequest":    return "Réponse demande d'ami"
         case "blockUser":               return "Blocage utilisateur"
@@ -117,6 +118,7 @@ enum SyncPillLabels {
         switch raw {
         case "markAsRead":              return "Lus non synchronisés"
         case "markStoryViewed":         return "Vues story non synchronisées"
+        case "reportAttachmentStatus":  return "Lectures média non synchronisées"
         case "sendFriendRequest":       return "Demande d'ami non envoyée"
         case "respondFriendRequest":    return "Réponse demande d'ami échouée"
         case "blockUser":               return "Blocage non effectué"

@@ -329,20 +329,15 @@ public final class SharedAVPlayerManager: ObservableObject {
 
         let language = consumedLanguageProvider?()
 
-        Task {
-            let body = AttachmentStatusBody(
-                action: "watched",
-                playPositionMs: positionMs,
-                durationMs: totalDurationMs,
-                complete: complete,
-                stretches: stretches,
-                language: language
-            )
-            let _: APIResponse<[String: String]>? = try? await APIClient.shared.post(
-                endpoint: "/attachments/\(attId)/status",
-                body: body
-            )
-        }
+        let body = AttachmentStatusBody(
+            action: "watched",
+            playPositionMs: positionMs,
+            durationMs: totalDurationMs,
+            complete: complete,
+            stretches: stretches,
+            language: language
+        )
+        AttachmentStatusReporter.report(attachmentId: attId, body: body)
     }
 
     // MARK: - Observers

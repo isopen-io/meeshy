@@ -98,6 +98,7 @@ extension OutboxUIItem {
             return mapCreatePost(record: record)
         case .markAsRead,
              .markStoryViewed,
+             .reportAttachmentStatus,
              .sendFriendRequest,
              .respondFriendRequest,
              .blockUser,

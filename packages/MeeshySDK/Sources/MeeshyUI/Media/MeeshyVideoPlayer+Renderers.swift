@@ -774,17 +774,13 @@ internal struct _FullscreenRenderer: View {
         let currentSec = manager.currentTime
         let totalSec = manager.duration
         let attId = player.attachment.id
-        Task {
-            let body = AttachmentStatusBody(
-                action: "watched",
-                playPositionMs: Int((currentSec.isNaN ? 0 : currentSec) * 1000),
-                durationMs: Int((totalSec.isNaN || totalSec.isInfinite ? 0 : totalSec) * 1000),
-                complete: complete
-            )
-            let _: APIResponse<[String: String]>? = try? await APIClient.shared.post(
-                endpoint: "/attachments/\(attId)/status", body: body
-            )
-        }
+        let body = AttachmentStatusBody(
+            action: "watched",
+            playPositionMs: Int((currentSec.isNaN ? 0 : currentSec) * 1000),
+            durationMs: Int((totalSec.isNaN || totalSec.isInfinite ? 0 : totalSec) * 1000),
+            complete: complete
+        )
+        AttachmentStatusReporter.report(attachmentId: attId, body: body)
     }
 
     private func saveToPhotos() {

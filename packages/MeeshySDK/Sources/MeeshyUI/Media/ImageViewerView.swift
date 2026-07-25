@@ -345,16 +345,11 @@ public struct ImageFullscreen: View {
         guard let attId = attachmentId, let start = viewStartTime else { return }
         let viewedMs = Int(Date().timeIntervalSince(start) * 1000)
         guard viewedMs >= 500 else { return }
-        Task {
-            var body = AttachmentStatusBody(
-                action: "viewed", playPositionMs: 0, durationMs: viewedMs, complete: true
-            )
-            body.wasZoomed = scale > 1.05
-            let _: APIResponse<[String: String]>? = try? await APIClient.shared.post(
-                endpoint: "/attachments/\(attId)/status",
-                body: body
-            )
-        }
+        var body = AttachmentStatusBody(
+            action: "viewed", playPositionMs: 0, durationMs: viewedMs, complete: true
+        )
+        body.wasZoomed = scale > 1.05
+        AttachmentStatusReporter.report(attachmentId: attId, body: body)
     }
 
     private func saveToPhotos() {
@@ -371,9 +366,7 @@ public struct ImageFullscreen: View {
             let saved = await PhotoLibraryManager.shared.saveFromURL(url.absoluteString, kind: .image)
             if saved, let attId = attachmentId {
                 let body = AttachmentStatusBody(action: "downloaded", playPositionMs: 0, durationMs: 0, complete: true)
-                let _: APIResponse<[String: String]>? = try? await APIClient.shared.post(
-                    endpoint: "/attachments/\(attId)/status", body: body
-                )
+                AttachmentStatusReporter.report(attachmentId: attId, body: body)
             }
             await MainActor.run {
                 withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {

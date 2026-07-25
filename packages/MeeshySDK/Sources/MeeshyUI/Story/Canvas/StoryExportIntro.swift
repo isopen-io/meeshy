@@ -1,0 +1,301 @@
+import Foundation
+import AVFoundation
+import CoreGraphics
+import CoreText
+import UIKit
+import SwiftUI
+import MeeshySDK
+
+/// Identité d'auteur telle qu'elle est peinte en tête d'un export de story.
+///
+/// Type volontairement plat et opaque : le SDK n'a pas à connaître le modèle
+/// `StoryGroupIntro` de l'app, et l'app garde la main sur la résolution des
+/// images (cache, réseau, fallback). Cf. la règle SDK Purity.
+public struct StoryExportIntroContent: Sendable {
+    public let displayName: String
+    public let username: String
+    public let avatar: CGImage?
+    public let banner: CGImage?
+    /// Hex "RRGGBB" — teinte de repli quand aucune bannière n'est fournie.
+    public let accentColorHex: String
+
+    public init(displayName: String,
+                username: String,
+                avatar: CGImage? = nil,
+                banner: CGImage? = nil,
+                accentColorHex: String) {
+        self.displayName = displayName
+        self.username = username
+        self.avatar = avatar
+        self.banner = banner
+        self.accentColorHex = accentColorHex
+    }
+}
+
+/// Fabrique le préambule d'un export de story : l'interlude d'identité de
+/// l'auteur, tenu pendant la durée de la signature sonore Meeshy.
+///
+/// L'interlude n'appartient PAS à la story — c'est l'emballage de marque, au
+/// même titre que le filigrane. Il est donc composé ici, en amont, et la story
+/// commence après lui.
+public enum StoryExportIntro {
+
+    /// Durée du préambule — calée sur la signature sonore pour que l'image se
+    /// retire exactement quand le jingle s'éteint.
+    public static var duration: TimeInterval { MeeshyBrandJingle.duration }
+
+    /// Peint la carte d'identité : bannière (ou aplat de la couleur d'accent)
+    /// assombrie, avatar rond centré, nom et @username dessous.
+    ///
+    /// Miroir de `StoryAuthorIdentityCard` côté lecture — le spectateur qui
+    /// reçoit le MP4 doit reconnaître l'écran qu'il voit dans l'app.
+    public static func render(_ content: StoryExportIntroContent,
+                              size: CGSize) -> CGImage? {
+        // `scale = 1` IMPÉRATIF : par défaut le renderer applique l'échelle de
+        // l'écran, donc un export 1080×1920 sortirait en 3240×5760 sur un
+        // appareil @3x — hors gabarit de la composition et trois fois trop lourd.
+        let format = UIGraphicsImageRendererFormat.default()
+        format.scale = 1
+        let renderer = UIGraphicsImageRenderer(size: size, format: format)
+        let image = renderer.image { context in
+            let cg = context.cgContext
+            drawBackdrop(content, in: cg, size: size)
+            drawScrim(in: cg, size: size)
+            drawIdentity(content, in: cg, size: size)
+        }
+        return image.cgImage
+    }
+
+    private static func drawBackdrop(_ content: StoryExportIntroContent,
+                                     in cg: CGContext,
+                                     size: CGSize) {
+        let rect = CGRect(origin: .zero, size: size)
+        if let banner = content.banner {
+            // `aspectFill` : la bannière couvre sans jamais laisser de bande.
+            let scale = max(size.width / CGFloat(banner.width),
+                            size.height / CGFloat(banner.height))
+            let drawn = CGSize(width: CGFloat(banner.width) * scale,
+                               height: CGFloat(banner.height) * scale)
+            cg.draw(banner, in: CGRect(x: (size.width - drawn.width) / 2,
+                                       y: (size.height - drawn.height) / 2,
+                                       width: drawn.width,
+                                       height: drawn.height))
+        } else {
+            cg.setFillColor(UIColor(Color(hex: content.accentColorHex)).cgColor)
+            cg.fill(rect)
+        }
+    }
+
+    /// Voile sombre : le nom doit rester lisible quelle que soit la bannière.
+    private static func drawScrim(in cg: CGContext, size: CGSize) {
+        cg.setFillColor(UIColor.black.withAlphaComponent(0.45).cgColor)
+        cg.fill(CGRect(origin: .zero, size: size))
+    }
+
+    private static func drawIdentity(_ content: StoryExportIntroContent,
+                                     in cg: CGContext,
+                                     size: CGSize) {
+        let avatarSide = size.width * 0.28
+        let avatarRect = CGRect(x: (size.width - avatarSide) / 2,
+                                y: size.height * 0.5 - avatarSide * 0.9,
+                                width: avatarSide,
+                                height: avatarSide)
+        cg.saveGState()
+        cg.addEllipse(in: avatarRect)
+        cg.clip()
+        if let avatar = content.avatar {
+            cg.draw(avatar, in: avatarRect)
+        } else {
+            cg.setFillColor(UIColor(Color(hex: content.accentColorHex)).cgColor)
+            cg.fill(avatarRect)
+        }
+        cg.restoreGState()
+
+        let nameSize = size.width * 0.058
+        let handleSize = size.width * 0.036
+        drawCentred(content.displayName,
+                    fontSize: nameSize, weight: .bold,
+                    color: .white, alpha: 1,
+                    y: avatarRect.maxY + nameSize * 0.9, in: size)
+        drawCentred("@\(content.username)",
+                    fontSize: handleSize, weight: .regular,
+                    color: .white, alpha: 0.75,
+                    y: avatarRect.maxY + nameSize * 0.9 + nameSize * 1.4, in: size)
+    }
+
+    private static func drawCentred(_ text: String,
+                                    fontSize: CGFloat,
+                                    weight: UIFont.Weight,
+                                    color: UIColor,
+                                    alpha: CGFloat,
+                                    y: CGFloat,
+                                    in size: CGSize) {
+        let attributes: [NSAttributedString.Key: Any] = [
+            .font: UIFont.systemFont(ofSize: fontSize, weight: weight),
+            .foregroundColor: color.withAlphaComponent(alpha)
+        ]
+        let string = NSAttributedString(string: text, attributes: attributes)
+        let bounds = string.size()
+        string.draw(at: CGPoint(x: (size.width - bounds.width) / 2, y: y))
+    }
+
+    /// Encode l'image en un clip vidéo muet de `duration`, prêt à être inséré
+    /// en tête d'une composition. Deux images suffisent — première et dernière —
+    /// l'image étant fixe : inutile d'encoder 66 frames identiques.
+    public static func makeClip(image: CGImage,
+                                duration: TimeInterval,
+                                size: CGSize) async throws -> URL {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("meeshy-intro-\(UUID().uuidString).mp4")
+        let writer = try AVAssetWriter(outputURL: url, fileType: .mp4)
+        let settings: [String: Any] = [
+            AVVideoCodecKey: AVVideoCodecType.h264,
+            AVVideoWidthKey: Int(size.width),
+            AVVideoHeightKey: Int(size.height)
+        ]
+        let input = AVAssetWriterInput(mediaType: .video, outputSettings: settings)
+        input.expectsMediaDataInRealTime = false
+        let adaptor = AVAssetWriterInputPixelBufferAdaptor(
+            assetWriterInput: input,
+            sourcePixelBufferAttributes: [
+                kCVPixelBufferPixelFormatTypeKey as String: Int(kCVPixelFormatType_32ARGB),
+                kCVPixelBufferWidthKey as String: Int(size.width),
+                kCVPixelBufferHeightKey as String: Int(size.height)
+            ]
+        )
+        guard writer.canAdd(input) else { throw IntroError.writerRejectedInput }
+        writer.add(input)
+        writer.startWriting()
+        writer.startSession(atSourceTime: .zero)
+
+        guard let buffer = pixelBuffer(from: image, size: size) else {
+            writer.cancelWriting()
+            throw IntroError.pixelBufferCreationFailed
+        }
+        // UNE seule frame, et c'est `endSession` qui fixe la durée. Poser une
+        // seconde frame à `duration` la ferait au contraire TENIR à partir de
+        // là, et le clip durait le double (mesuré 4,4 s pour 2,2 s demandées).
+        let end = CMTime(seconds: duration, preferredTimescale: 600)
+        adaptor.append(buffer, withPresentationTime: .zero)
+        input.markAsFinished()
+        writer.endSession(atSourceTime: end)
+        await writer.finishWriting()
+        guard writer.status == .completed else {
+            throw IntroError.encodingFailed(writer.error)
+        }
+        return url
+    }
+
+    private static func pixelBuffer(from image: CGImage, size: CGSize) -> CVPixelBuffer? {
+        var buffer: CVPixelBuffer?
+        let attributes: [String: Any] = [
+            kCVPixelBufferCGImageCompatibilityKey as String: true,
+            kCVPixelBufferCGBitmapContextCompatibilityKey as String: true
+        ]
+        guard CVPixelBufferCreate(kCFAllocatorDefault,
+                                  Int(size.width), Int(size.height),
+                                  kCVPixelFormatType_32ARGB,
+                                  attributes as CFDictionary,
+                                  &buffer) == kCVReturnSuccess,
+              let pixelBuffer = buffer else { return nil }
+
+        CVPixelBufferLockBaseAddress(pixelBuffer, [])
+        defer { CVPixelBufferUnlockBaseAddress(pixelBuffer, []) }
+        guard let context = CGContext(
+            data: CVPixelBufferGetBaseAddress(pixelBuffer),
+            width: Int(size.width), height: Int(size.height),
+            bitsPerComponent: 8,
+            bytesPerRow: CVPixelBufferGetBytesPerRow(pixelBuffer),
+            space: CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo: CGImageAlphaInfo.noneSkipFirst.rawValue
+        ) else { return nil }
+        context.draw(image, in: CGRect(origin: .zero, size: size))
+        return pixelBuffer
+    }
+
+    /// Assemble le MP4 final : l'interlude d'identité et sa signature sonore,
+    /// puis la story.
+    ///
+    /// Assemblage par CONCATÉNATION plutôt qu'en insérant l'intro dans la
+    /// composition de `StoryExporter`. Cette composition est pilotée par un
+    /// `AVVideoComposition` dont les instructions sont datées : y glisser 2,2 s
+    /// en tête obligerait à décaler chaque instruction, chaque keyframe et
+    /// chaque piste audio, pour un export qui fonctionne aujourd'hui. La
+    /// concaténation laisse ce pipeline strictement intact — au prix d'une
+    /// seconde passe d'encodage, acceptable pour un export ponctuel déclenché
+    /// par l'auteur.
+    ///
+    /// - Parameters:
+    ///   - storyURL: le MP4 de la story, tel que produit par `StoryExporter`.
+    ///   - content: identité à peindre sur l'interlude.
+    ///   - renderSize: gabarit du MP4 final — celui de la story.
+    /// - Returns: l'URL du MP4 assemblé. L'appelant en est propriétaire.
+    public static func prepend(to storyURL: URL,
+                               content: StoryExportIntroContent,
+                               renderSize: CGSize) async throws -> URL {
+        guard let image = render(content, size: renderSize) else {
+            throw IntroError.pixelBufferCreationFailed
+        }
+        let introURL = try await makeClip(image: image, duration: duration, size: renderSize)
+        let jingleURL = try MeeshyBrandJingle.renderToTemporaryFile()
+        defer {
+            try? FileManager.default.removeItem(at: introURL)
+            try? FileManager.default.removeItem(at: jingleURL)
+        }
+
+        let composition = AVMutableComposition()
+        guard let video = composition.addMutableTrack(withMediaType: .video,
+                                                      preferredTrackID: kCMPersistentTrackID_Invalid),
+              let audio = composition.addMutableTrack(withMediaType: .audio,
+                                                      preferredTrackID: kCMPersistentTrackID_Invalid)
+        else { throw IntroError.writerRejectedInput }
+
+        let introAsset = AVURLAsset(url: introURL)
+        let introDuration = try await introAsset.load(.duration)
+        if let introVideo = try await introAsset.loadTracks(withMediaType: .video).first {
+            try video.insertTimeRange(CMTimeRange(start: .zero, duration: introDuration),
+                                      of: introVideo, at: .zero)
+        }
+
+        // Le jingle occupe l'intro et RIEN d'autre : la story garde son propre
+        // son intact derrière.
+        let jingleAsset = AVURLAsset(url: jingleURL)
+        if let jingleTrack = try await jingleAsset.loadTracks(withMediaType: .audio).first {
+            let jingleDuration = try await jingleAsset.load(.duration)
+            try audio.insertTimeRange(
+                CMTimeRange(start: .zero, duration: min(jingleDuration, introDuration)),
+                of: jingleTrack, at: .zero)
+        }
+
+        let storyAsset = AVURLAsset(url: storyURL)
+        let storyDuration = try await storyAsset.load(.duration)
+        let storyRange = CMTimeRange(start: .zero, duration: storyDuration)
+        if let storyVideo = try await storyAsset.loadTracks(withMediaType: .video).first {
+            try video.insertTimeRange(storyRange, of: storyVideo, at: introDuration)
+        }
+        if let storyAudio = try await storyAsset.loadTracks(withMediaType: .audio).first {
+            try audio.insertTimeRange(storyRange, of: storyAudio, at: introDuration)
+        } else {
+            // Story muette : sans ce silence explicite, la piste audio s'arrête
+            // à la fin du jingle et certains lecteurs tronquent la vidéo à cette
+            // durée-là.
+            audio.insertEmptyTimeRange(CMTimeRange(start: introDuration, duration: storyDuration))
+        }
+
+        let outputURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("meeshy-story-\(UUID().uuidString).mp4")
+        guard let session = AVAssetExportSession(asset: composition,
+                                                 presetName: AVAssetExportPresetHighestQuality)
+        else { throw IntroError.writerRejectedInput }
+        session.outputURL = outputURL
+        session.outputFileType = .mp4
+        try await session.export(to: outputURL, as: .mp4)
+        return outputURL
+    }
+
+    public enum IntroError: Error {
+        case writerRejectedInput
+        case pixelBufferCreationFailed
+        case encodingFailed(Error?)
+    }
+}

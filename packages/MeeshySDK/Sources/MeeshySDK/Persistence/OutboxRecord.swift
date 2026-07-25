@@ -52,6 +52,10 @@ public enum OutboxKind: String, Codable, CaseIterable, Sendable {
     case createComment
     case deleteComment
     case toggleLikeComment
+    /// Point 7 — consommation d'un média (écoute, visionnage, ouverture,
+    /// enregistrement). Volontairement NON coalescé : chaque rapport porte
+    /// une trace différente, voir `ReportAttachmentStatusPayload`.
+    case reportAttachmentStatus
 }
 
 extension OutboxKind {
@@ -63,9 +67,11 @@ extension OutboxKind {
     /// contenu de la conversation est malgré tout synchronisé. Le compter
     /// ferait croire à l'utilisateur qu'une synchro est en cours alors que
     /// tout est à jour — c'est précisément le bandeau « bloqué » observé.
+    /// `reportAttachmentStatus` relève de la même logique : personne n'attend
+    /// qu'un rapport d'écoute parte pour considérer sa conversation à jour.
     public var countsTowardSyncIndicator: Bool {
         switch self {
-        case .markAsRead:
+        case .markAsRead, .reportAttachmentStatus:
             return false
         default:
             return true
