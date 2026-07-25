@@ -563,6 +563,24 @@
             }
           }
         },
+        "de": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld Kommentar"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld Kommentare"
+                }
+              }
+            }
+          }
+        },
         "en": {
           "variations": {
             "plural": {
@@ -576,6 +594,24 @@
                 "stringUnit": {
                   "state": "translated",
                   "value": "%lld comments"
+                }
+              }
+            }
+          }
+        },
+        "es": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld comentario"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld comentarios"
                 }
               }
             }
@@ -613,6 +649,25 @@
                 "stringUnit": {
                   "state": "translated",
                   "value": "%lld commenti"
+                }
+              }
+            }
+          }
+        }
+      ,
+        "pt-BR": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld comentário"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld comentários"
                 }
               }
             }
@@ -665,6 +720,24 @@
             }
           }
         },
+        "de": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld Like"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld Likes"
+                }
+              }
+            }
+          }
+        },
         "en": {
           "variations": {
             "plural": {
@@ -678,6 +751,24 @@
                 "stringUnit": {
                   "state": "translated",
                   "value": "%lld likes"
+                }
+              }
+            }
+          }
+        },
+        "es": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld me gusta"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld me gusta"
                 }
               }
             }
@@ -715,6 +806,25 @@
                 "stringUnit": {
                   "state": "translated",
                   "value": "%lld mi piace"
+                }
+              }
+            }
+          }
+        }
+      ,
+        "pt-BR": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld curtida"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld curtidas"
                 }
               }
             }
@@ -767,6 +877,24 @@
             }
           }
         },
+        "de": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld Repost"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld Reposts"
+                }
+              }
+            }
+          }
+        },
         "en": {
           "variations": {
             "plural": {
@@ -780,6 +908,24 @@
                 "stringUnit": {
                   "state": "translated",
                   "value": "%lld reposts"
+                }
+              }
+            }
+          }
+        },
+        "es": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld republicación"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld republicaciones"
                 }
               }
             }
@@ -817,6 +963,25 @@
                 "stringUnit": {
                   "state": "translated",
                   "value": "%lld ricondivisioni"
+                }
+              }
+            }
+          }
+        }
+      ,
+        "pt-BR": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld repostagem"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld repostagens"
                 }
               }
             }
@@ -4759,6 +4924,24 @@
             "value": "%1$@ (%2$@)"
           }
         },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ (%2$@)"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ (%2$@)"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ (%2$@)"
+          }
+        },
         "fr": {
           "stringUnit": {
             "state": "new",
@@ -4767,6 +4950,13 @@
         }
       ,
         "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ (%2$@)"
+          }
+        }
+      ,
+        "pt-BR": {
           "stringUnit": {
             "state": "translated",
             "value": "%1$@ (%2$@)"
@@ -4784,6 +4974,24 @@
             "value": "%1$@ @%2$@"
           }
         },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ @%2$@"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ @%2$@"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ @%2$@"
+          }
+        },
         "fr": {
           "stringUnit": {
             "state": "new",
@@ -4792,6 +5000,13 @@
         }
       ,
         "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ @%2$@"
+          }
+        }
+      ,
+        "pt-BR": {
           "stringUnit": {
             "state": "translated",
             "value": "%1$@ @%2$@"
@@ -4899,6 +5114,24 @@
             "value": "%1$@ %2$@ ?"
           }
         },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ %2$@ ?"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ %2$@ ?"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ %2$@ ?"
+          }
+        },
         "fr": {
           "stringUnit": {
             "state": "new",
@@ -4907,6 +5140,13 @@
         }
       ,
         "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ %2$@ ?"
+          }
+        }
+      ,
+        "pt-BR": {
           "stringUnit": {
             "state": "translated",
             "value": "%1$@ %2$@ ?"
@@ -6113,6 +6353,24 @@
             "value": "↩ %1$@: %2$@"
           }
         },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "↩ %1$@: %2$@"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "↩ %1$@: %2$@"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "↩ %1$@: %2$@"
+          }
+        },
         "fr": {
           "stringUnit": {
             "state": "new",
@@ -6121,6 +6379,13 @@
         }
       ,
         "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "↩ %1$@: %2$@"
+          }
+        }
+      ,
+        "pt-BR": {
           "stringUnit": {
             "state": "translated",
             "value": "↩ %1$@: %2$@"
@@ -6504,6 +6769,24 @@
             }
           }
         },
+        "de": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "Zurück, %d ungelesene Nachricht"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "Zurück, %d ungelesene Nachrichten"
+                }
+              }
+            }
+          }
+        },
         "en": {
           "variations": {
             "plural": {
@@ -6517,6 +6800,24 @@
                 "stringUnit": {
                   "state": "translated",
                   "value": "Back, %d unread messages"
+                }
+              }
+            }
+          }
+        },
+        "es": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "Volver, %d mensaje sin leer"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "Volver, %d mensajes sin leer"
                 }
               }
             }
@@ -6554,6 +6855,25 @@
                 "stringUnit": {
                   "state": "translated",
                   "value": "Indietro, %d messaggi non letti"
+                }
+              }
+            }
+          }
+        }
+      ,
+        "pt-BR": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "Voltar, %d mensagem não lida"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "Voltar, %d mensagens não lidas"
                 }
               }
             }
@@ -13221,6 +13541,24 @@
             }
           }
         },
+        "de": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "1 ungelesene Nachricht"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%d ungelesene Nachrichten"
+                }
+              }
+            }
+          }
+        },
         "en": {
           "variations": {
             "plural": {
@@ -13234,6 +13572,24 @@
                 "stringUnit": {
                   "state": "translated",
                   "value": "%d unread messages"
+                }
+              }
+            }
+          }
+        },
+        "es": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "1 mensaje sin leer"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%d mensajes sin leer"
                 }
               }
             }
@@ -13271,6 +13627,25 @@
                 "stringUnit": {
                   "state": "translated",
                   "value": "%d messaggi non letti"
+                }
+              }
+            }
+          }
+        }
+      ,
+        "pt-BR": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "1 mensagem não lida"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%d mensagens não lidas"
                 }
               }
             }
@@ -22872,10 +23247,22 @@
             "value": "نشط"
           }
         },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aktiv"
+          }
+        },
         "en": {
           "stringUnit": {
             "state": "translated",
             "value": "Active"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Activo"
           }
         },
         "fr": {
@@ -22889,6 +23276,13 @@
           "stringUnit": {
             "state": "translated",
             "value": "Attivo"
+          }
+        }
+      ,
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ativo"
           }
         }
       }
@@ -22996,10 +23390,22 @@
             "value": "غير نشط"
           }
         },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Inaktiv"
+          }
+        },
         "en": {
           "stringUnit": {
             "state": "translated",
             "value": "Inactive"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Inactivo"
           }
         },
         "fr": {
@@ -23013,6 +23419,13 @@
           "stringUnit": {
             "state": "translated",
             "value": "Inattivo"
+          }
+        }
+      ,
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Inativo"
           }
         }
       }
@@ -25166,6 +25579,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Se unió el %@"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rejoint le %@"
           }
         },
         "it": {
@@ -32482,6 +32901,24 @@
             "value": "Meeshy %1$@ · %2$@"
           }
         },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Meeshy %1$@ · %2$@"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Meeshy %1$@ · %2$@"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Meeshy %1$@ · %2$@"
+          }
+        },
         "fr": {
           "stringUnit": {
             "state": "new",
@@ -32490,6 +32927,13 @@
         }
       ,
         "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Meeshy %1$@ · %2$@"
+          }
+        }
+      ,
+        "pt-BR": {
           "stringUnit": {
             "state": "translated",
             "value": "Meeshy %1$@ · %2$@"
@@ -34089,10 +34533,22 @@
             "value": "العودة إلى الإشعارات"
           }
         },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zurück zu den Mitteilungen"
+          }
+        },
         "en": {
           "stringUnit": {
             "state": "translated",
             "value": "Back to notifications"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Volver a las notificaciones"
           }
         },
         "fr": {
@@ -34108,6 +34564,13 @@
             "value": "Torna alle notifiche"
           }
         }
+      ,
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Voltar às notificações"
+          }
+        }
       }
     },
     "notifications.story.expired.cta.create": {
@@ -34118,10 +34581,22 @@
             "value": "إنشاء قصة"
           }
         },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Story erstellen"
+          }
+        },
         "en": {
           "stringUnit": {
             "state": "translated",
             "value": "Create a story"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Crear una historia"
           }
         },
         "fr": {
@@ -34137,6 +34612,13 @@
             "value": "Crea una storia"
           }
         }
+      ,
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Criar um story"
+          }
+        }
       }
     },
     "notifications.story.expired.subtitle": {
@@ -34147,10 +34629,22 @@
             "value": "لم تعد هذه القصة متاحة."
           }
         },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Diese Story ist nicht mehr verfügbar."
+          }
+        },
         "en": {
           "stringUnit": {
             "state": "translated",
             "value": "This story is no longer available."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Esta historia ya no está disponible."
           }
         },
         "fr": {
@@ -34166,6 +34660,13 @@
             "value": "Questa storia non è più disponibile."
           }
         }
+      ,
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Este story não está mais disponível."
+          }
+        }
       }
     },
     "notifications.story.expired.title": {
@@ -34176,10 +34677,22 @@
             "value": "قصة منتهية"
           }
         },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Story abgelaufen"
+          }
+        },
         "en": {
           "stringUnit": {
             "state": "translated",
             "value": "Story expired"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Historia caducada"
           }
         },
         "fr": {
@@ -34193,6 +34706,13 @@
           "stringUnit": {
             "state": "translated",
             "value": "Storia scaduta"
+          }
+        }
+      ,
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Story expirado"
           }
         }
       }
@@ -46624,10 +47144,22 @@
             "value": "إعداد UTM"
           }
         },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "UTM-KONFIGURATION"
+          }
+        },
         "en": {
           "stringUnit": {
             "state": "translated",
             "value": "UTM CONFIGURATION"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "CONFIGURACIÓN UTM"
           }
         },
         "fr": {
@@ -46641,6 +47173,13 @@
           "stringUnit": {
             "state": "translated",
             "value": "CONFIGURAZIONE UTM"
+          }
+        }
+      ,
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "CONFIGURAÇÃO UTM"
           }
         }
       }

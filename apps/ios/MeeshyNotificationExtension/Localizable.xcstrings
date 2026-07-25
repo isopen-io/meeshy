@@ -11,6 +11,12 @@
             "value" : "🎵 رسالة صوتية"
           }
         },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🎵 Sprachnachricht"
+          }
+        },
         "en" : {
           "stringUnit" : {
             "state" : "new",
@@ -18,10 +24,36 @@
           }
         }
       ,
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🎵 Mensaje de voz"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🎵 Message vocal"
+          }
+        },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "🎵 Messaggio vocale"
+          }
+        }
+      ,
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🎵 Mensagem de voz"
+          }
+        }
+      ,
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "🎵 语音消息"
           }
         }
       }

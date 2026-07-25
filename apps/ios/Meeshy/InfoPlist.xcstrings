@@ -58,6 +58,12 @@
             "value" : "Meeshy"
           }
         },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Meeshy"
+          }
+        },
         "en" : {
           "stringUnit" : {
             "state" : "new",
@@ -65,7 +71,26 @@
           }
         }
       ,
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Meeshy"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Meeshy"
+          }
+        },
         "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Meeshy"
+          }
+        }
+      ,
+        "pt-BR" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Meeshy"
