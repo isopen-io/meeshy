@@ -43,7 +43,6 @@ Conséquence : la barre avance pendant que le playhead du canvas est encore à 0
 | Id | Défaut | Preuve |
 |---|---|---|
 | D9 | `refreshPrefetchWindowAndTimer()` arme le timer avec la durée du slide **précédent** | appelé sur `onChange(currentStoryIndex)` `StoryViewerView.swift:571` et `currentGroupIndex` `:611`, **avant** `updateStoryDuration()` |
-| D-LANG | Deux `computedTotalDuration()` sur deux slides différentes | viewer : `toRenderableSlide(preferredLanguages: [])` `+Content.swift:630` ; canvas : langues réelles du Prisme `StoryReaderRepresentable.swift:122` |
 | D5 | Canvas sortant du cross-fade monté en `.edit` → `shouldRender` retourne `true` pour tout ; la slide sortante réaffiche **tous** ses éléments hors fenêtre pendant 350-400 ms | `StoryReaderRepresentable.swift:127`, monté `+Canvas.swift:889-894` |
 | D1 | `applyOpening` jamais exécuté sur le canvas du viewer (appelé seulement sur transition edit→play, jamais atteinte car `.id(story.id)` recrée la vue) | `StoryCanvasUIView+Core.swift:133-137` vs `+Canvas.swift:973` |
 | D2 | `closing` appliqué **deux fois** : rootLayer SDK + `closingScale` SwiftUI | `+Playback.swift:266` et `+Content.swift:425` |
@@ -76,8 +75,9 @@ La durée vient de la composition (`effects.timelineDuration`, sinon contenu). L
 1. **Câbler `onPlaybackTime`** dans `StoryViewerView+Canvas.swift:932` → écrit `progress` depuis le playhead réel.
 2. **`StoryReaderTimerController` devient esclave** : il conserve l'auto-advance et un failsafe si le canvas n'émet jamais (slide sans média, canvas détruit), mais n'intègre plus le wall-clock dès qu'un signal playhead arrive.
 3. **Corriger D9** : `updateStoryDuration()` avant tout armement de timer.
-4. **Corriger D-LANG** : `updateStoryDuration()` utilise les mêmes `preferredLanguages` que le canvas.
-5. **Pause unifiée** : vérifier que `isCanvasPlaybackPaused` gèle timer + canvas + vidéo + audio, et que la reprise repart du playhead figé.
+4. **Pause unifiée** : vérifier que `isCanvasPlaybackPaused` gèle timer + canvas + vidéo + audio, et que la reprise repart du playhead figé.
+
+> Vérifié et écarté : `preferredLanguages: []` dans `updateStoryDuration()` (`+Content.swift:630`) est correct. `contentDerivedDuration` compte les mots de `text.text`, le texte **brut** (`StoryModels.swift:1052-1054`), jamais le texte résolu par le Prisme. La langue n'influence pas la durée.
 
 **Unité isolée à extraire** : `StoryPlaybackClock` — struct pure, sans UI.
 
