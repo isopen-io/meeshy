@@ -732,6 +732,19 @@ public struct AudioPlayerView: View {
         )
     }
 
+    /// Transmet au moteur la version linguistique que l'utilisateur a sous les
+    /// yeux, pour qu'elle accompagne le rapport d'écoute.
+    ///
+    /// `"orig"` n'est pas un code de langue mais un sentinelle d'affichage : il
+    /// se traduit par la langue de rédaction de l'audio, celle qui a réellement
+    /// été entendue. Le moteur ne lit rien lui-même — pureté SDK.
+    private func publishConsumedLanguage() {
+        let displayed = selectedAudioLanguage == "orig"
+            ? transcription?.language
+            : selectedAudioLanguage
+        player.consumedLanguageProvider = { displayed }
+    }
+
     /// Pure resolution of the transcription strip's STARTING language: the
     /// caller-resolved Prisme preference (`initialTranscriptionLanguage`)
     /// wins when provided, else `"orig"` — the unchanged default for every
@@ -874,6 +887,7 @@ public struct AudioPlayerView: View {
             if !usesExternalPlayer {
                 player.attachmentId = attachment.id
             }
+            publishConsumedLanguage()
             // BUG A fix — the legacy static autoplay registry is the
             // auto-advance mechanism ONLY for the owned-engine path. When an
             // external coordinator engine drives this view, the coordinator
@@ -922,6 +936,12 @@ public struct AudioPlayerView: View {
             // unregistering so the audio is actually halted.
             player.stop()
             player.unregisterFromCoordinator()
+        }
+        // La langue affichée change → le moteur doit rapporter la NOUVELLE :
+        // le fournisseur capture une valeur, pas une référence, donc il faut le
+        // reposer à chaque bascule.
+        .adaptiveOnChange(of: selectedAudioLanguage) { _, _ in
+            publishConsumedLanguage()
         }
         .adaptiveOnChange(of: player.isPlaying) { _, playing in
             onPlayingChange?(playing)

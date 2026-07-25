@@ -8,6 +8,17 @@ Périmètre : messages / conversations uniquement (stories, posts et réels hors
 > « vues » précise mais fausse : des participants y apparaîtraient comme ayant vu
 > un message jamais affiché.
 
+> **Révisé en cours d'implémentation (2026-07-25).** Trois décisions ont changé
+> par rapport à la rédaction initiale, chacune parce que la version d'origine
+> aurait perdu de l'information :
+>
+> 1. Ce qui est stocké n'est plus une liste de segments fusionnés mais une
+>    **trace chronologique et motivée** — voir §1 et §2.
+> 2. La capture n'échantillonne plus : elle est **pilotée par les événements** du
+>    lecteur — voir §2 bis.
+> 3. La langue déclarée est celle **réellement affichée**, résolue par message,
+>    et non la préférence du lecteur — voir §3 bis.
+
 ## Problème
 
 La feuille « vues » d'un attachement (`MessageViewsDetailView`) affiche aujourd'hui,
@@ -46,11 +57,11 @@ Trois défauts structurels aggravent le tableau :
 
 ```prisma
 // ===== AUDIO-SPECIFIC =====
-/// Portions réellement écoutées, fusionnées : [{startMs, endMs}]
+/// Trace chronologique et motivée : [{startMs, endMs, endedBy}]
 listenSegments Json?
 
 // ===== VIDEO-SPECIFIC =====
-/// Portions réellement regardées, fusionnées : [{startMs, endMs}]
+/// Idem pour le visionnage
 watchSegments Json?
 
 // ===== IMAGE-SPECIFIC =====
@@ -73,13 +84,37 @@ existante du modèle, qui isole déjà chaque famille de média.
 viewedLanguages String[] @default([])
 ```
 
-### Métrique dérivée
+### Ce que la trace stocke, et pourquoi pas des segments
 
-La somme des segments fusionnés donne la **couverture unique**, distincte de
-`totalListenDurationMs` / `totalWatchDurationMs` qui comptabilisent les replays.
-On peut donc afficher « 45 s uniques sur 90 s (50 %), 120 s de lecture totale »,
-c'est-à-dire « a revu des passages ». Aucun champ supplémentaire n'est nécessaire :
-la valeur se calcule à la lecture.
+Une liste de segments fusionnés répond à « quelles portions », jamais à
+« comment ». Or la frontière qui met fin à une écoute EST une information :
+s'arrêter en pause, sauter ailleurs, couper le son ou laisser le média finir ne
+racontent pas la même chose sur l'intérêt porté au contenu.
+
+Ce qui est persisté est donc la suite des écoutes réellement CONTINUES, dans
+l'ordre où elles ont eu lieu, chacune avec son motif de fin (`pause`, `seek`,
+`muted`, `completed`, `dismissed`, `superseded`). Ni tri par position, ni fusion :
+écouter la fin puis revenir au début doit rester lisible dans cet ordre.
+
+**Trois lectures en découlent, sans champ supplémentaire :**
+
+| Lecture | Dérivation |
+| --- | --- |
+| Nombre d'écoutes ininterrompues | cardinal de la trace |
+| Couverture unique (quelles portions) | fusion des chevauchements |
+| Passages revus | écart entre la couverture et `totalListenDurationMs`, qui compte les replays |
+
+« 45 s uniques sur 90 s, pour 120 s d'écoute » se lit donc « a revu des
+passages » — et la trace dit en plus s'il a abandonné ou est allé au bout.
+
+**Plafond.** Au-delà de 50 entrées, ce sont les écoutes les plus COURTES qui
+tombent. Une trace saturée sous-estime donc ce qui a été écouté ; elle n'invente
+jamais une écoute qui n'a pas eu lieu. C'est la direction sûre pour une feuille
+« vues ».
+
+**Rejeu.** Une écoute strictement identique — mêmes bornes, même motif — n'est
+comptée qu'une fois. Une file d'attente hors-ligne peut re-poster son rapport ;
+sans cette garde, « trois écoutes » deviendrait « six » à la reprise du réseau.
 
 ## 2. Fusion de segments — fonction pure
 
@@ -100,13 +135,49 @@ légère **sur-estimation** de la couverture : les écarts comblés sont compté
 vus. C'est un compromis assumé ; à 50 segments la granularité reste très
 supérieure au besoin d'affichage.
 
-Implémentations miroir, mêmes cas de test des deux côtés :
+La fusion sert UNIQUEMENT à dériver la couverture au moment de la lecture ; elle
+ne touche jamais ce qui est stocké. Deux corrections par rapport à la rédaction
+initiale de l'étape 2 :
 
-- TS : `packages/shared/utils/playback-segments.ts` (gateway)
-- Swift : `packages/MeeshySDK/Sources/MeeshySDK/Models/PlaybackSegments.swift`
-  (fusion locale pour l'affichage optimiste)
+- seuls les segments qui se **chevauchent** fusionnent, jamais ceux qui se
+  touchent. L'adjacence en temps média ne dit rien du temps réel : écouter la
+  première moitié, s'interrompre dix minutes, puis reprendre produit deux
+  segments jointifs qu'il serait faux de présenter comme une écoute d'une traite ;
+- le plafond de la fusion vaut celui de la trace, si bien qu'il n'est jamais
+  atteint en pratique — donc jamais la sur-estimation qu'il introduirait.
 
-Ce doublement suit le précédent établi par `resolveUserLanguage()`.
+Implémentation : `services/gateway/src/utils/playback-segments.ts` (fusion) et
+`playback-trace.ts` (accumulation, plafond, rejeu, dérivation).
+
+## 2 bis. Capture — événements, pas échantillons
+
+Relever la position toutes les N secondes perd structurellement du contenu : un
+média d'une seconde n'est jamais relevé, une écoute de 500 ms non plus, et même
+sur du contenu long la portion écoutée entre le dernier relevé et la pause
+disparaît. Réduire l'intervalle ne corrige rien — ça déplace le seuil de perte et
+multiplie les réveils.
+
+Le lecteur, lui, connaît les frontières exactes. `PlaybackStretchTracker` les
+enregistre : `begin`, `pause`, `seek`, `muted`, `completed`, `dismissed`, plus un
+`observe` qui ne fait que retenir la dernière position connue pour pouvoir clore
+proprement une écoute interrompue net.
+
+Miroirs stricts, mêmes cas de test des deux côtés :
+
+- TS : `apps/web/utils/playback-stretch-tracker.ts`
+- Swift : `packages/MeeshySDK/Sources/MeeshySDK/Models/PlaybackStretchTracker.swift`
+
+**Deux gardes d'intégration** valent d'être écrites, parce que les oublier perd
+des données sans rien casser de visible :
+
+1. La trace est vidée AVANT le seuil anti-bavardage réseau, jamais après. Un
+   retour anticipé la laisserait dans le traqueur, qui l'attribuerait ensuite au
+   média SUIVANT.
+2. Le démontage clôt puis envoie avant toute remise à zéro. Quitter l'écran en
+   pleine lecture ne doit pas perdre le dernier passage.
+
+Déplacer le curseur d'un média EN PAUSE n'ouvre aucune écoute : parcourir la
+barre de progression à l'arrêt fabriquerait une consommation qui n'a pas eu lieu.
 
 ## 3. Contrat API
 
@@ -116,28 +187,63 @@ Le schéma Zod est `.strict()` (`validation/messages-schemas.ts:86`) : tout cham
 non déclaré provoque un 400. Deux ajouts :
 
 ```ts
-segments: z
+stretches: z
   .array(z.object({
     startMs: z.number().int().nonnegative(),
     endMs: z.number().int().nonnegative(),
-  }).refine(s => s.endMs >= s.startMs))
-  .max(200)
+    endedBy: z.enum(['pause','seek','muted','completed','dismissed','superseded'])
+  }))
+  .max(50)
   .optional(),
 
-language: z.string().min(2).max(16).optional(),
+language: wireLanguageCode.optional(),
 ```
+
+L'objet interne n'est PAS `.strict()`, à la différence du corps qui le contient :
+un client d'une version ultérieure peut enrichir son rapport, et Zod écarte alors
+le champ inconnu plutôt que de rejeter l'écoute entière.
+
+`wireLanguageCode` est plus permissif que `languageCodeSchema` de shared sur un
+point : le séparateur `_`. iOS envoie `Locale.current.identifier`, donc `fr_FR` ;
+refuser cette forme ferait échouer tout le rapport pour un séparateur. La
+validation reste FORMELLE — le sens est tranché par `normalizeLanguageCode`.
 
 `language` est **singulier** en écriture : le client déclare la langue en cours de
 consommation, le gateway l'unionne dans le set `viewedLanguages`. Envoyer le set
 complet depuis le client exposerait à des écrasements concurrents entre appareils.
 
-Les segments transitent bruts (max 200 par requête) ; la fusion et le plafonnement
-à 50 sont faits côté serveur, qui reste seul maître de l'état stocké.
+La trace transite telle quelle ; l'accumulation, le dédoublonnage et le plafond
+sont faits côté serveur, qui reste seul maître de l'état stocké.
+
+### 3 bis. La langue déclarée est celle AFFICHÉE, pas celle préférée
+
+La rédaction initiale supposait qu'un lecteur consomme dans sa langue préférée.
+C'est faux dès qu'aucune traduction n'existe : c'est alors l'ORIGINAL qui
+s'affiche. Déclarer le message « lu en anglais » mentirait précisément là où
+l'auteur veut savoir s'il a été lu dans sa langue ou traduit.
+
+`ConsumedLanguageResolver` (Swift) et `resolveConsumedLanguage` (TS) suivent donc
+exactement la règle qui choisit le TEXTE : même ordre de préférences, même repli
+sur l'original, même interdit de se rabattre sur une traduction tierce. Une
+bascule manuelle prime — le lecteur a explicitement ouvert cette version-là.
+Toute divergence entre les deux résolutions produirait une statistique fausse,
+d'où les deux implémentations testées sur les mêmes cas.
+
+Conséquence sur le corps de `mark-read` : une seule langue ne suffit pas. Le
+client envoie la **dominante** plus une table d'**exceptions** par message
+(`messageLanguages`), et n'énumère que ce qui diffère — sur une conversation lue
+d'une traite, cette table est vide. Les exceptions sont restreintes aux
+identifiants effectivement envoyés : le schéma n'accepte que des messages du lot,
+et une clé écartée par le plafond de 200 ferait rejeter le corps ENTIER.
+
+Côté serveur, les mises à jour sont regroupées par langue : un lot homogène ne
+coûte qu'un seul `updateMany`, et le chemin courant — le lecteur ne change pas de
+langue entre deux lots — n'écrit rien du tout.
 
 ### Écritures — `MessageReadStatusService`
 
-- `markAudioAsListened` : fusionne dans `listenSegments`, unionne `language`.
-- `markVideoAsWatched` : fusionne dans `watchSegments`, unionne `language`.
+- `markAudioAsListened` : accumule dans `listenSegments`, unionne `language`.
+- `markVideoAsWatched` : accumule dans `watchSegments`, unionne `language`.
 - `markImageAsViewed` : `viewCount: { increment: 1 }` à l'update, `viewCount: 1`
   à la création — strict miroir de `listenCount` / `watchCount`.
 
@@ -154,10 +260,16 @@ même horodatage via `createMany` / `updateMany`, en write-once. Il n'existe auc
 point d'attache par message. Y greffer une langue par message imposerait de
 transporter une table `messageId → langue` et de casser le lot.
 
-C'est inutile, parce que la langue de rendu n'est pas une propriété du message mais
-du couple (lecteur, conversation) : elle découle de `preferredLanguages`, identique
-pour tous les messages affichés au même instant. Seul l'**override manuel** est
-per-message. D'où deux chemins :
+> **Corrigé à l'implémentation.** Le raisonnement ci-dessous — « la langue de
+> rendu est une propriété du couple (lecteur, conversation), donc identique pour
+> tout le lot » — est FAUX. Elle dépend aussi du message : sans traduction
+> disponible, c'est l'original qui s'affiche, quelle que soit la préférence. Voir
+> §3 bis : le lot porte une dominante ET une table d'exceptions.
+
+C'était l'argument initial : la langue de rendu ne serait pas une propriété du
+message mais du couple (lecteur, conversation), découlant de `preferredLanguages`,
+identique pour tous les messages affichés au même instant. Seul l'**override
+manuel** serait per-message. D'où deux chemins :
 
 **Chemin de masse — `POST /conversations/:id/mark-read`**
 Le lot 1 (`2026-07-24-read-exactness-design.md`) dote déjà cette route d'un
@@ -170,13 +282,12 @@ export const MarkReadBodySchema = z.object({
 }).strict();
 ```
 
-Le lot est cohérent par construction : tous les messages d'un même envoi ont été
-affichés au même instant, donc dans la **même** langue résolue. Un seul code
-langue pour tout le lot est donc exact, et non une approximation.
-
-La langue n'est écrite **qu'à la création** des entrées (`createMany`) : les
-entrées préexistantes conservent la langue de leur première lecture. Cela évite un
-read-modify-write sur un lot et respecte la sémantique write-once déjà en place.
+**Ce qui a été livré diffère sur deux points.** Le lot n'est PAS homogène (§3 bis)
+et porte donc `messageLanguages` en plus de `language`. Et la langue n'est pas
+write-once : un lecteur qui bascule a réellement consulté les DEUX versions, elles
+doivent donc s'unionner sur les entrées existantes aussi. Le coût est contenu par
+le regroupement par langue, et nul sur le chemin courant — quand la langue ne
+change pas, aucune écriture n'a lieu.
 
 **Chemin d'override — `POST /messages/:messageId/status`**
 La route existe (`routes/messages.ts:501`), son body est déjà validé par
@@ -189,9 +300,12 @@ action délibérée et rare, donc sans coût de volume.
 Le set final est l'union de la langue de masse et des overrides explicites, ce qui
 restitue exactement « a lu en français, puis a basculé ce message-ci en anglais ».
 
-**Dette observée, hors périmètre** : `OutboxDispatcher.dispatchMarkAsRead`
-(`OutboxDispatcher.swift:265`) poste aujourd'hui `body: nil` et abandonne
-`upToMessageId` et `clientMutationId`, qui ne quittent jamais l'appareil. Ce lot
+**Dette résorbée depuis** : `OutboxDispatcher.dispatchMarkAsRead` poste désormais
+un corps complet — identifiants rapportés, langue dominante, exceptions.
+
+Note historique conservée : `OutboxDispatcher.dispatchMarkAsRead`
+(`OutboxDispatcher.swift:265`) postait `body: nil` et abandonnait
+`upToMessageId` et `clientMutationId`, qui ne quittaient jamais l'appareil. Ce lot
 introduit un body à cet endroit pour y porter `language`, mais **ne corrige pas**
 la perte d'`upToMessageId` : c'est un défaut distinct, à traiter séparément pour
 ne pas mélanger deux changements de comportement dans le même diff.
@@ -272,27 +386,33 @@ en paramètres plutôt que codés en dur.
 existants. Le flush FIFO au retour de connectivité est déjà en place et n'est pas
 modifié.
 
-### Source des segments
+### Source de la trace
 
-`SharedAVPlayerManager.emitWatchSample()` (:337) produit déjà un échantillon toutes
-les ~10 s, bufferisé dans `sessionWatchSamples` et drainé par `drainWatchSamples()`
-pour `EngagementTracker`. Le même flux alimente le reporter : **aucun timer
-supplémentaire**, aucun coût de rendu ajouté.
+> **Abandonné.** Le plan initial réutilisait les `WatchSample` d'engagement, qui
+> échantillonnent une horloge toutes les ~10 s. Ils perdent structurellement les
+> médias courts et les écoutes brèves, et surtout ils ne peuvent pas dire POURQUOI
+> une écoute s'est arrêtée. Voir §2 bis.
 
-Pour l'audio, le `Timer` de `AudioPlayerView` (:451) ne sert aujourd'hui qu'à l'UI.
-Il est étendu pour accumuler des échantillons selon la même cadence, sans changer
-sa périodicité.
+Chaque moteur tient son propre `PlaybackStretchTracker`, alimenté par ses
+frontières réelles. Les `WatchSample` restent en place pour l'engagement : les deux
+mesures coexistent sans se gêner, l'une échantillonne une durée, l'autre restitue
+une interaction.
 
 ### Langue déclarée
 
-- Texte, chemin de masse : la langue résolue de la conversation
-  (`ConversationLanguagePreferences.resolved`, premier élément de
-  `preferredLanguages`) accompagne l'appel `mark-read`.
-- Texte, chemin d'override : `setActiveTranslation(for:translation:)` (:4024)
-  déclare la langue de la traduction choisie pour ce message précis.
-- Audio : `resolvedPreferredTranscriptionLanguage`
-  (`ConversationMediaViews.swift:660`) et l'override `activeAudioLanguageOverrides`
-  jouent le même rôle.
+- Texte, chemin de masse : `ConversationViewModel.splitConsumedLanguages(for:)`
+  résout message par message via `ConsumedLanguageResolver`, puis n'envoie que la
+  dominante et ses exceptions. Résolu au moment de la LECTURE, pas de l'envoi : la
+  file d'attente peut partir longtemps après, et une traduction arrivée entre-temps
+  ne change pas ce que le lecteur avait sous les yeux.
+- Texte, chemin d'override : `POST /messages/:id/status` porte `language`, traité
+  par `recordMessageLanguageView` — qui n'écrit QUE sur une entrée existante. Créer
+  ici reviendrait à déclarer lu un message sur la seule foi d'un choix de langue.
+- Audio : la vue publie `selectedAudioLanguage` au moteur via
+  `consumedLanguageProvider`. Le moteur ne lit aucun singleton — pureté SDK.
+- Vidéo : le point d'accroche existe (`SharedAVPlayerManager
+  .consumedLanguageProvider`) mais reste non branché, faute de sélection de
+  sous-titres côté produit. Déclarer une langue ici serait l'inventer.
 
 Quand la langue résolue est l'originale, la valeur déclarée est le code de la
 langue d'origine du contenu, jamais un marqueur `"orig"` : le set doit rester
@@ -300,29 +420,38 @@ comparable entre participants.
 
 ## 6. iOS — présentation
 
-- **`PlaybackCoverageBar`** (SDK MeeshyUI) : nouvelle vue présentationnelle pure,
-  segments + durée en entrée, rendu en capsules sur une piste. Agnostique, donc SDK.
-- **`MessageViewsDetailView.mediaConsumptionCard`** (:713) : la barre remplace le
-  marqueur de position ; badge `3×` pour les images ; drapeaux de langue par ligne.
-- **`ParticipantMediaProgressRow`** (`MessageInfoSheet.swift:795`) : même barre,
-  label enrichi de la couverture unique.
-- **`ViewsFilter`** (:8) : le cas `viewed` apparaît quand l'attachement est une image,
-  selon le même conditionnement que `listened` / `watched`.
+Livré dans `MessageInfoSheet` plutôt que dans une nouvelle vue SDK : la barre de
+progression par participant y existait déjà (`ParticipantMediaProgressRow`), et
+l'étendre coûtait moins qu'un composant de plus à maintenir.
 
+- La barre dessine les portions parcourues plutôt qu'un remplissage continu — un
+  trou dit ce que le point d'arrêt tait : ce passage n'a jamais été écouté. Repli
+  sur le remplissage continu quand aucune trace n'existe (écoute antérieure à la
+  mesure).
+- Une image n'affiche plus de barre du tout mais son nombre d'ouvertures : une
+  barre vide y suggérerait à tort une consommation partielle.
+- `LanguageBadges` par lecteur et `LanguageBreakdownRow` par média. Le code de
+  langue est toujours écrit ; le drapeau n'est qu'un repère — plusieurs langues
+  partagent un drapeau, et une langue en a parfois plusieurs.
 Fluidité : aucun appel réseau supplémentaire — les champs voyagent dans des
-réponses déjà récupérées. La fusion est en O(n log n) sur ≤ 50 éléments. Les lignes
-participants restent `Equatable` avec `.equatable()`.
+réponses déjà récupérées, et la couverture est dérivée côté serveur. Les lignes
+participants restent `Equatable`.
 
 ## 7. Tests
 
 TDD strict, chaque incrément laissant l'arbre vert.
 
 **TypeScript**
-- `playback-segments.test.ts` — fonction pure : chevauchement, adjacence, segments
-  inversés, plafonnement, idempotence d'une fusion répétée.
-- `MessageReadStatusService.test.ts` — extension : incrément `viewCount`, fusion des
-  segments à l'upsert, union des langues sans doublon, langue de masse écrite à la
-  création seulement et non sur une entrée préexistante.
+- `playback-segments.test.ts` — fusion : chevauchement, adjacence NON fusionnée,
+  segments inversés, plafonnement.
+- `playback-trace.test.ts` — accumulation : ordre chronologique préservé, rejeu
+  non recompté, plafond sacrifiant les plus courtes, relecture défensive d'un
+  `Json?` corrompu.
+- `viewed-languages.test.ts` — union, normalisation, plafond, répartition.
+- `consumed-language.test.ts` — miroir strict du résolveur Swift.
+- `MessageReadStatusService.test.ts` — extension : incrément `viewCount`, trace
+  accumulée à l'upsert, union des langues sans doublon, langue par message
+  respectant les exceptions, regroupement des mises à jour par langue.
 - Filtre de confidentialité — demandeur opt-out, participant opt-out, ligne propre
   toujours visible, chargement groupé des préférences.
 - Routes — nouveaux champs acceptés, segment inversé rejeté en 400, champ inconnu
@@ -330,27 +459,34 @@ TDD strict, chaque incrément laissant l'arbre vert.
   (non-régression du `body: nil` actuel).
 
 **Swift**
-- `PlaybackSegmentsTests` — mêmes cas que la version TS.
-- `AttachmentStatusReporterTests` — seuils respectés, écriture locale avant réseau,
-  enqueue Outbox en cas d'échec réseau, un seul POST par événement.
-- `MediaConsumptionStoreTests` — fusion locale, plafond d'entrées préservé.
+- `PlaybackStretchTrackerTests` — 18 cas, miroir strict de la version TS.
+- `ConsumedLanguageResolverTests` — 18 cas, miroir strict de la version TS.
+- `OutboxDispatcherMarkAsReadEncodingTests` — la langue et les exceptions
+  survivent au round-trip, une table vide disparaît, les exceptions sont
+  restreintes au lot, aucune clé superflue n'atteint un schéma `.strict()`.
 
-Les 165 tests existants de `MessageReadStatusService.test.ts` doivent rester verts.
+Les tests existants de `MessageReadStatusService.test.ts` doivent rester verts.
 
 ## 8. Ordre de livraison
 
 Chaque lot est commité séparément, vert.
 
-1. Fonction pure TS + tests.
-2. Schéma Prisma + types partagés (`prisma generate`, `bun run build` dans `shared`).
-3. Écritures gateway — compteur image, segments, langue d'attachement, puis les
-   deux chemins de langue message (`mark-read` de masse, `/status` per-message)
-   + tests.
-4. Filtre de confidentialité + tests.
-5. Exposition en lecture (`status-details`, `read-status`) + tests.
-6. Miroir Swift de la fonction pure + tests.
-7. `AttachmentStatusReporter` + Outbox, migration des 5 appelants + tests.
-8. UI : `PlaybackCoverageBar`, cartes de consommation, drapeaux, filtre image.
+1. ✅ Fonctions pures TS (`playback-segments`, `playback-trace`,
+   `viewed-languages`) + tests.
+2. ✅ Schéma Prisma + `prisma generate`.
+3. ✅ Écritures gateway — compteur image, trace, langue d'attachement, langue par
+   message (dominante + exceptions) + tests.
+4. ⏸ Filtre de confidentialité dédié aux médias : le filtrage `showReadReceipts`
+   du lot 1 couvre déjà `readBy` et, par conséquent, `languageBreakdown` du
+   message. La réciprocité sur `attachmentConsumption` reste à faire.
+5. ✅ Exposition en lecture (`status-details`, `read-status`) + tests.
+6. ✅ Miroirs Swift (`PlaybackStretchTracker`, `ConsumedLanguageResolver`) + tests.
+7. ⏳ Entonnoir unique d'écriture : les moteurs audio et vidéo produisent la trace
+   et transmettent la langue, mais les cinq sites de POST n'ont pas encore été
+   fondus en un reporter unique, et `attachmentStatus` n'est pas encore un
+   `OutboxKind` — une consommation média hors-ligne reste perdue.
+8. ✅ UI iOS : couverture trouée, compteur d'ouvertures, drapeaux, répartition.
+9. ⏸ UI web équivalente : non commencée.
 
 ## Hors périmètre
 
