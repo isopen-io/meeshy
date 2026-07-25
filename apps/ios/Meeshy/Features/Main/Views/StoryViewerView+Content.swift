@@ -590,7 +590,15 @@ extension StoryViewerView {
         isContentReady = false
         hasFiredFadeOut = false
         hasFiredNextPrefetch = false
+        // Toutes les surfaces du reader tombent au changement de slide, pas
+        // seulement les commentaires : un strip de langues ou une barre d'emojis
+        // laissés ouverts se retrouvaient posés sur la story SUIVANTE, à laquelle
+        // ils ne se rapportent plus (directive user 2026-07-25).
         showCommentsOverlay = false
+        showLanguageOptions = false
+        showFullLanguagePicker = false
+        showEmojiStrip = false
+        showFullEmojiPicker = false
         replyingToStoryComment = nil
         storyCommentRepliesMap = [:]
         storyCommentExpandedThreads = []

@@ -1234,6 +1234,8 @@ struct StoryViewerView: View {
             isGlobalMuted: isGlobalMuted,
             availableTranslationLanguages: availableTranslationLanguages,
             activeLanguageCode: sessionLanguageOverride,
+            hasActiveReaderFeature: hasActiveReaderFeature,
+            onDismissActiveReaderFeature: { dismissActiveReaderFeature() },
             onReplyToStory: onReplyToStory,
             onSelectLanguageOverride: { lang in
                 withAnimation(.easeInOut(duration: 0.2)) { sessionLanguageOverride = lang }
@@ -1307,6 +1309,35 @@ struct StoryViewerView: View {
 
     private var isOwnStory: Bool {
         currentGroup?.id == AuthManager.shared.currentUser?.id
+    }
+
+    // MARK: - Surfaces du reader
+
+    /// Surfaces que le reader ouvre PAR-DESSUS la story : strip de langues,
+    /// barre d'emojis, overlay de commentaires, sélecteurs plein écran.
+    ///
+    /// Elles ont toutes le même contrat (directive user 2026-07-25) : un toucher
+    /// n'importe où les referme, et un changement de slide aussi. Sans ce
+    /// contrat commun, chaque surface exigeait un geste différent — et taper à
+    /// côté faisait avancer la story au lieu de la refermer.
+    var hasActiveReaderFeature: Bool { // internal for cross-file extension access
+        showLanguageOptions || showFullLanguagePicker
+            || showEmojiStrip || showFullEmojiPicker
+            || showCommentsOverlay
+    }
+
+    /// Referme toute surface ouverte. Idempotent : sans surface, ne fait rien.
+    @discardableResult
+    func dismissActiveReaderFeature() -> Bool { // internal for cross-file extension access
+        guard hasActiveReaderFeature else { return false }
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+            showLanguageOptions = false
+            showFullLanguagePicker = false
+            showEmojiStrip = false
+            showFullEmojiPicker = false
+            showCommentsOverlay = false
+        }
+        return true
     }
 
     // MARK: - Available Translation Languages

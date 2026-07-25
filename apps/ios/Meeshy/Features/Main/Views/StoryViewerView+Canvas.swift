@@ -52,6 +52,14 @@ struct StoryGestureOverlayView: View {
     let onChromeVisibilityChange: (Bool) -> Void
     /// Double tap dans la bande centrale → bascule pause / lecture.
     let onTogglePause: () -> Void
+    /// `true` quand une surface du reader est ouverte (strip de langues, barre
+    /// d'emojis, overlay de commentaires, sélecteurs plein écran). Le prochain
+    /// toucher la referme AU LIEU de naviguer — sinon l'utilisateur avance dans
+    /// la story en croyant simplement fermer ce qu'il vient d'ouvrir
+    /// (directive user 2026-07-25).
+    let hasActiveFeature: Bool
+    /// Ferme la surface ouverte. Appelé à la place de toute autre action.
+    let onDismissActiveFeature: () -> Void
     /// État de session « plein écran » lu depuis le parent. Détermine le
     /// sens du toggle du chrome (voir doc ci-dessus).
     let isFullscreenStorySession: Bool
@@ -121,6 +129,16 @@ struct StoryGestureOverlayView: View {
                             touchStartLocation = value.startLocation
                             holdActive = false
                             holdArmingTask?.cancel()
+
+                            // Une surface ouverte se ferme au premier toucher, où
+                            // qu'il tombe, et rien d'autre ne se produit :
+                            // `isResumingTap` neutralise le relâchement pour que
+                            // la story n'avance pas par la même occasion.
+                            if hasActiveFeature {
+                                isResumingTap = true
+                                onDismissActiveFeature()
+                                return
+                            }
 
                             let ctx = StoryGestureContext(
                                 holdActive: false,
@@ -795,6 +813,10 @@ struct StoryCardView: View {
     /// Langue d'exploration active (`nil` = chaine préférée). Descendue en `let`
     /// jusqu'au strip pour y marquer le drapeau lu.
     let activeLanguageCode: String?
+    /// `true` quand une surface du reader est ouverte — le prochain toucher la
+    /// referme au lieu de naviguer.
+    let hasActiveReaderFeature: Bool
+    let onDismissActiveReaderFeature: () -> Void
     let onReplyToStory: ((ReplyContext) -> Void)?
     /// Prisme « Exploration » : appelé quand l'utilisateur choisit une langue dans le
     /// picker/strip pour afficher le contenu dans cette langue (override éphémère).
@@ -1373,6 +1395,8 @@ struct StoryCardView: View {
                     // swipe vertical (plein écran) changent le cadrage.
                     isLongPressPaused.toggle()
                 },
+                hasActiveFeature: hasActiveReaderFeature,
+                onDismissActiveFeature: onDismissActiveReaderFeature,
                 isFullscreenStorySession: isFullscreenStorySession
             )
 

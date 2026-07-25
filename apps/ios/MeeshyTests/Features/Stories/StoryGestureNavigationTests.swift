@@ -237,3 +237,69 @@ final class StoryLongPressToggleGuardTests: XCTestCase {
                       "un second long-press doit rendre la lecture")
     }
 }
+
+/// Directive user 2026-07-25 : une surface du reader se referme « en touchant
+/// n'importe où sur l'écran ou lorsque la story termine ». Sans ce contrat, taper
+/// à côté d'un strip ouvert faisait AVANCER la story au lieu de le refermer.
+@MainActor
+final class StoryReaderFeatureDismissGuardTests: XCTestCase {
+
+    private func source(_ file: String) throws -> String {
+        try String(
+            contentsOf: URL(fileURLWithPath: #filePath)
+                .deletingLastPathComponent()   // Stories
+                .deletingLastPathComponent()   // Features
+                .deletingLastPathComponent()   // MeeshyTests
+                .deletingLastPathComponent()   // ios
+                .appendingPathComponent("Meeshy/Features/Main/Views/\(file)"),
+            encoding: .utf8
+        )
+    }
+
+    /// Le toucher doit court-circuiter TOUTE autre décision, y compris la
+    /// navigation prev/next.
+    func test_touchDown_dismissesActiveFeatureBeforeAnythingElse() throws {
+        let code = try source("StoryViewerView+Canvas.swift")
+        guard let touchDown = code.range(of: "// ===== TOUCH DOWN ====="),
+              let context = code.range(of: "let ctx = StoryGestureContext(") else {
+            return XCTFail("structure de l'overlay gestuel inattendue")
+        }
+        let block = String(code[touchDown.lowerBound..<context.lowerBound])
+
+        XCTAssertTrue(block.contains("if hasActiveFeature {"),
+                      "la fermeture doit être évaluée dès le touch-down")
+        XCTAssertTrue(block.contains("onDismissActiveFeature()"),
+                      "le touch-down doit refermer la surface ouverte")
+    }
+
+    /// Toutes les surfaces partagent le même contrat — en oublier une ferait
+    /// réapparaître le comportement inégal que la directive corrige.
+    func test_viewerTracksEveryReaderSurface() throws {
+        let code = try source("StoryViewerView.swift")
+        guard let range = code.range(of: "var hasActiveReaderFeature: Bool") else {
+            return XCTFail("hasActiveReaderFeature introuvable")
+        }
+        let block = String(code[range.lowerBound...].prefix(320))
+
+        for surface in ["showLanguageOptions", "showFullLanguagePicker",
+                        "showEmojiStrip", "showFullEmojiPicker", "showCommentsOverlay"] {
+            XCTAssertTrue(block.contains(surface),
+                          "\(surface) doit compter comme une surface du reader")
+        }
+    }
+
+    /// Un changement de slide referme aussi tout : une surface laissée ouverte se
+    /// retrouverait posée sur la story SUIVANTE.
+    func test_startTimer_closesEverySurface() throws {
+        let code = try source("StoryViewerView+Content.swift")
+        guard let range = code.range(of: "func startTimer() {") else {
+            return XCTFail("startTimer introuvable")
+        }
+        let block = String(code[range.lowerBound...].prefix(1200))
+
+        for surface in ["showCommentsOverlay = false", "showLanguageOptions = false",
+                        "showEmojiStrip = false", "showFullEmojiPicker = false"] {
+            XCTAssertTrue(block.contains(surface), "startTimer doit remettre à zéro : \(surface)")
+        }
+    }
+}
