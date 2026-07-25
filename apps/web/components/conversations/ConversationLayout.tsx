@@ -462,64 +462,14 @@ export function ConversationLayout({ selectedConversationId }: ConversationLayou
     instanceId,
   ]);
 
-  // Marquer comme lu à l'ouverture d'une conversation
-  const hasMarkedAsReadOnOpenRef = useRef<string | null>(null);
-  useEffect(() => {
-    const conversationId = selectedConversation?.id;
-    if (!conversationId) return;
+  // Ouvrir une conversation ne la marque PLUS lue en entier : elle en marquait
+  // 200 quand 10 tenaient à l'écran. C'est `useSeenMessages` (ConversationView)
+  // qui rapporte les messages réellement affichés, et le serveur qui décide du
+  // compteur — d'où la disparition de la remise à zéro optimiste.
+  // @see docs/superpowers/specs/2026-07-24-read-exactness-design.md
 
-    hasMarkedAsReadOnOpenRef.current = conversationId;
-    conversationsService.markAsRead(conversationId)
-      .then(() => {
-        setConversations(prev =>
-          prev.map(conv =>
-            conv.id === conversationId ? { ...conv, unreadCount: 0 } : conv
-          )
-        );
-      })
-      .catch(() => {});
-  }, [selectedConversation?.id, setConversations]);
-
-  // Marquer comme lu quand scroll vers le bas
-  useEffect(() => {
-    const container = messagesScrollRef.current;
-    const conversationId = selectedConversation?.id;
-    if (!container || !conversationId) return;
-
-    let markAsReadTimeout: NodeJS.Timeout | null = null;
-    let hasMarkedAsRead = false;
-
-    const handleScroll = () => {
-      const { scrollTop, scrollHeight, clientHeight } = container;
-      const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
-
-      if (distanceFromBottom < 100 && !hasMarkedAsRead) {
-        if (markAsReadTimeout) clearTimeout(markAsReadTimeout);
-
-        markAsReadTimeout = setTimeout(() => {
-          hasMarkedAsRead = true;
-          conversationsService
-            .markAsRead(conversationId)
-            .then(() => {
-              setConversations(prev =>
-                prev.map(conv =>
-                  conv.id === conversationId ? { ...conv, unreadCount: 0 } : conv
-                )
-              );
-            })
-            .catch(console.error);
-        }, 500);
-      }
-    };
-
-    container.addEventListener('scroll', handleScroll);
-    handleScroll();
-
-    return () => {
-      container.removeEventListener('scroll', handleScroll);
-      if (markAsReadTimeout) clearTimeout(markAsReadTimeout);
-    };
-  }, [selectedConversation?.id, setConversations]);
+  // Le défilement près du bas ne marque plus rien non plus : il ne dit pas ce
+  // qui a été vu, seulement où se trouve la barre. L'observer s'en charge.
 
   // Reconnexion automatique
   useEffect(() => {
@@ -666,18 +616,8 @@ export function ConversationLayout({ selectedConversationId }: ConversationLayou
         markMessageFailed(optimistic._tempId);
       }
 
-      // Mark as read after send
-      if (conversationId) {
-        conversationsService.markAsRead(conversationId)
-          .then(() => {
-            setConversations(prev =>
-              prev.map(conv =>
-                conv.id === conversationId ? { ...conv, unreadCount: 0 } : conv
-              )
-            );
-          })
-          .catch(console.error);
-      }
+      // Envoyer un message ne marque plus la conversation lue : les bulles
+      // affichées à ce moment le seront par l'observer, les autres non.
     } catch (error) {
       console.error('[ConversationLayout] Send error:', error);
       markMessageFailed(optimistic._tempId);
