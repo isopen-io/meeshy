@@ -67,6 +67,58 @@ final class StoryExportBrandedEndToEndTests: XCTestCase {
         )
     }
 
+    /// Fabrique un MP4 « story » qui porte SA PROPRE piste audio, plus courte
+    /// que sa vidéo — le cas courant d'une story dont la musique s'arrête avant
+    /// la fin. Le chemin `prepend` qui réinsère l'audio de la story derrière
+    /// l'interlude n'était exercé par aucun test.
+    private func makeStoryWithShorterAudio(video: TimeInterval,
+                                           audio: TimeInterval,
+                                           size: CGSize) async throws -> URL {
+        let frame = UIGraphicsImageRenderer(size: size, format: {
+            let f = UIGraphicsImageRendererFormat.default(); f.scale = 1; return f
+        }()).image { ctx in
+            UIColor.systemOrange.setFill()
+            ctx.fill(CGRect(origin: .zero, size: size))
+        }.cgImage!
+        let videoURL = try await StoryExportIntro.makeClip(image: frame, duration: video, size: size)
+        let audioURL = try MeeshyBrandJingle.renderToTemporaryFile()
+        defer {
+            try? FileManager.default.removeItem(at: videoURL)
+            try? FileManager.default.removeItem(at: audioURL)
+        }
+
+        let composition = AVMutableComposition()
+        let videoAsset = AVURLAsset(url: videoURL)
+        let audioAsset = AVURLAsset(url: audioURL)
+        if let source = try await videoAsset.loadTracks(withMediaType: .video).first,
+           let track = composition.addMutableTrack(withMediaType: .video,
+                                                   preferredTrackID: kCMPersistentTrackID_Invalid) {
+            try track.insertTimeRange(CMTimeRange(start: .zero,
+                                                  duration: try await videoAsset.load(.duration)),
+                                      of: source, at: .zero)
+        }
+        if let source = try await audioAsset.loadTracks(withMediaType: .audio).first,
+           let track = composition.addMutableTrack(withMediaType: .audio,
+                                                   preferredTrackID: kCMPersistentTrackID_Invalid) {
+            let available = try await audioAsset.load(.duration)
+            let wanted = CMTime(seconds: audio, preferredTimescale: 600)
+            try track.insertTimeRange(CMTimeRange(start: .zero, duration: min(available, wanted)),
+                                      of: source, at: .zero)
+        }
+
+        let outputURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("meeshy-e2e-storyaudio-\(UUID().uuidString).mp4")
+        let session = try XCTUnwrap(AVAssetExportSession(asset: composition,
+                                                         presetName: AVAssetExportPresetHighestQuality))
+        session.outputURL = outputURL
+        session.outputFileType = .mp4
+        await session.export()
+        guard session.status == .completed else {
+            throw XCTSkip("fixture non encodable : \(String(describing: session.error))")
+        }
+        return outputURL
+    }
+
     // MARK: - Le fichier livré
 
     /// Un seul bake, toutes les assertions : l'export réel coûte plusieurs
@@ -171,6 +223,49 @@ final class StoryExportBrandedEndToEndTests: XCTestCase {
         // elle habille l'interlude, elle ne l'accompagne pas jusqu'au bout.
         XCTAssertLessThan(audioSeconds, totalSeconds,
                           "la piste audio (\(audioSeconds)s) ne doit pas couvrir toute la vidéo (\(totalSeconds)s)")
+    }
+
+    /// Une story SONORE doit garder son son derrière l'interlude. Et son audio
+    /// est très souvent plus court que sa vidéo (la musique s'arrête avant la
+    /// fin) : réinsérer la durée VIDÉO sur une piste audio plus courte est
+    /// exactement ce qui fait échouer `insertTimeRange`. En cas d'échec le
+    /// service livre la story SANS interlude, silencieusement — d'où ce test.
+    func test_brandedExport_keepsTheStoryOwnAudio_evenWhenShorterThanItsVideo() async throws {
+        try XCTSkipIf(
+            ProcessInfo.processInfo.environment["MEESHY_SKIP_EXPORT_TESTS"] != nil,
+            "Export tests skipped via MEESHY_SKIP_EXPORT_TESTS env var"
+        )
+
+        let size = CGSize(width: 270, height: 480)
+        let storyVideo: TimeInterval = 3.0
+        let storyAudio: TimeInterval = 1.6
+        let story = try await makeStoryWithShorterAudio(video: storyVideo, audio: storyAudio, size: size)
+        defer { try? FileManager.default.removeItem(at: story) }
+
+        let url = try await StoryExportIntro.prepend(to: story,
+                                                     content: makeIntro(),
+                                                     renderSize: size)
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        let asset = AVURLAsset(url: url)
+        let delivered = CMTimeGetSeconds(try await asset.load(.duration))
+        XCTAssertEqual(delivered, StoryExportIntro.duration + storyVideo, accuracy: 0.25,
+                       "la story sonore ne doit être ni tronquée ni allongée")
+
+        let samples = try await decodeMonoSamples(from: asset)
+        try XCTSkipIf(samples.isEmpty, "piste audio non décodable — mesure impossible")
+        let rate = Self.decodeSampleRate
+
+        // Le son PROPRE de la story, juste après l'interlude.
+        let storyRMS = rms(window(samples, from: StoryExportIntro.duration + 0.2,
+                                  to: StoryExportIntro.duration + storyAudio - 0.2, rate: rate))
+        XCTAssertGreaterThan(storyRMS, 0.01,
+                             "le son de la story doit survivre au préambule (RMS \(storyRMS))")
+
+        // Et le jingle reste sur l'interlude.
+        let introRMS = rms(window(samples, from: 0.2, to: 1.8, rate: rate))
+        XCTAssertGreaterThan(introRMS, 0.01,
+                             "le jingle doit rester audible sur l'interlude (RMS \(introRMS))")
     }
 
     // MARK: - Outils de mesure

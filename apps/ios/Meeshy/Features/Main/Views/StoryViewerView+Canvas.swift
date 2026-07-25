@@ -808,6 +808,9 @@ struct StoryCardView: View {
     /// (`StoryViewerView.storyHasBackgroundAudio`) et descendue en `let`
     /// jusqu'à la leaf view, comme `storyHasAudibleSound` juste au-dessus.
     let storyHasBackgroundAudio: Bool
+    /// Présence d'une transcription affichable — pilote l'entrée « Transcription »
+    /// du menu « … ». Même règle de descente en primitive que ci-dessus.
+    let storyHasAudioTranscript: Bool
     let isGlobalMuted: Bool
     let availableTranslationLanguages: [TranslationLanguage]
     /// Langue d'exploration active (`nil` = chaine préférée). Descendue en `let`
@@ -838,6 +841,7 @@ struct StoryCardView: View {
     @Binding var showEmojiStrip: Bool
     @Binding var showFullEmojiPicker: Bool
     @Binding var showCommentsOverlay: Bool
+    @Binding var showAudioTranscript: Bool
     @Binding var showLanguageOptions: Bool
     @Binding var showFullLanguagePicker: Bool
     @Binding var showViewersSheet: Bool
@@ -1433,6 +1437,8 @@ struct StoryCardView: View {
                     currentStory: currentStory,
                     isOwnStory: isOwnStory,
                     hasBackgroundAudio: storyHasBackgroundAudio,
+                    hasAudioTranscript: storyHasAudioTranscript,
+                    showAudioTranscript: $showAudioTranscript,
                     selectedProfileUser: $selectedProfileUser,
                     editAndRepostAsPostSource: $editAndRepostAsPostSource,
                     showReportSheet: $showReportSheet,

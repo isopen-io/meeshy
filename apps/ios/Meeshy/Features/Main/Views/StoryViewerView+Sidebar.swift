@@ -469,6 +469,11 @@ struct StoryHeaderView: View {
     /// Primitive passée par le parent (règle « Zero Unnecessary Re-render » —
     /// une leaf view ne recalcule pas d'état viewer, elle reçoit un `Bool`).
     let hasBackgroundAudio: Bool
+    /// La story porte-t-elle une transcription affichable ? Primitive, même
+    /// règle : le header ne consulte pas les `StoryEffects` lui-même.
+    let hasAudioTranscript: Bool
+    /// Bascule d'affichage de la transcription, pilotée depuis le menu « … ».
+    @Binding var showAudioTranscript: Bool
 
     @Binding var selectedProfileUser: ProfileSheetUser?
     @Binding var editAndRepostAsPostSource: RepostPostSourceWrapper?
@@ -713,6 +718,26 @@ struct StoryHeaderView: View {
                             ? "arrow.down.right.and.arrow.up.left"
                             : "arrow.up.left.and.arrow.down.right"
                     )
+                }
+
+                // Transcription de l'audio parlé — item 7a : elle vit ICI, dans
+                // les options, et non en bandeau permanent sur la story. Le
+                // texte affiché suit la langue choisie via « Traductions »,
+                // puisqu'il se résout sur la même chaîne de langues préférées.
+                if hasAudioTranscript {
+                    Button {
+                        HapticFeedback.light()
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                            showAudioTranscript.toggle()
+                        }
+                    } label: {
+                        Label(
+                            showAudioTranscript
+                                ? String(localized: "story.viewer.transcript.hide", defaultValue: "Masquer la transcription", bundle: .main)
+                                : String(localized: "story.viewer.transcript.show", defaultValue: "Afficher la transcription", bundle: .main),
+                            systemImage: showAudioTranscript ? "captions.bubble.fill" : "captions.bubble"
+                        )
+                    }
                 }
 
                 Divider()

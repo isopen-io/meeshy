@@ -228,6 +228,10 @@ struct StoryViewerView: View {
     /// `resolvedViewerLanguageChain` tant qu'elle est non-nil. Éphémère : réinitialisée au
     /// changement de slide. `nil` = affichage selon les préférences de base uniquement.
     @State var sessionLanguageOverride: String? = nil // internal for cross-file extension access
+    /// Affichage de la transcription de l'audio parlé, basculé depuis le menu « … ».
+    /// Éteint par défaut (directive user 2026-07-25) : la transcription est une
+    /// AIDE qu'on demande, pas un bandeau imposé par-dessus la story.
+    @State var showAudioTranscript = false // internal for cross-file extension access
     @StateObject private var keyboard = KeyboardObserver()
     @Environment(\.scenePhase) var scenePhase // internal for cross-file extension access (shouldPauseTimer)
 
@@ -676,6 +680,11 @@ struct StoryViewerView: View {
         // d'abord dans la langue préférée de base. `adaptiveOnChange` = wrapper iOS 16.
         .adaptiveOnChange(of: currentStory?.id) { _, _ in
             if sessionLanguageOverride != nil { sessionLanguageOverride = nil }
+            // Même contrat éphémère pour la transcription : elle est demandée
+            // POUR une story, pas pour la session. La laisser ouverte imposerait
+            // un bandeau sur les stories suivantes, qui n'ont peut-être même pas
+            // de son (directive user 2026-07-25).
+            if showAudioTranscript { showAudioTranscript = false }
         }
         .sheet(isPresented: $showViewersSheet, onDismiss: {
             resumeTimer()
@@ -1231,6 +1240,7 @@ struct StoryViewerView: View {
             storyHasAudibleSound: storyHasAudibleSound,
             storyHasTranslatableContent: storyHasTranslatableContent,
             storyHasBackgroundAudio: storyHasBackgroundAudio,
+            storyHasAudioTranscript: storyHasAudioTranscript,
             isGlobalMuted: isGlobalMuted,
             availableTranslationLanguages: availableTranslationLanguages,
             activeLanguageCode: sessionLanguageOverride,
@@ -1251,6 +1261,7 @@ struct StoryViewerView: View {
             showEmojiStrip: $showEmojiStrip,
             showFullEmojiPicker: $showFullEmojiPicker,
             showCommentsOverlay: $showCommentsOverlay,
+            showAudioTranscript: $showAudioTranscript,
             showLanguageOptions: $showLanguageOptions,
             showFullLanguagePicker: $showFullLanguagePicker,
             showViewersSheet: $showViewersSheet,
@@ -1324,6 +1335,7 @@ struct StoryViewerView: View {
         showLanguageOptions || showFullLanguagePicker
             || showEmojiStrip || showFullEmojiPicker
             || showCommentsOverlay
+            || showAudioTranscript
     }
 
     /// Referme toute surface ouverte. Idempotent : sans surface, ne fait rien.
@@ -1336,6 +1348,7 @@ struct StoryViewerView: View {
             showEmojiStrip = false
             showFullEmojiPicker = false
             showCommentsOverlay = false
+            showAudioTranscript = false
         }
         return true
     }
@@ -1628,24 +1641,24 @@ struct StoryViewerView: View {
     // MARK: - Voice Caption
 
     var currentVoiceCaption: String? { // internal for cross-file extension access
+        // La transcription ne s'affiche QUE sur demande, via le menu « … »
+        // (directive user 2026-07-25, item 7a).
+        guard showAudioTranscript else { return nil }
         guard let effects = currentStory?.storyEffects,
-              effects.voiceAttachmentId != nil,
-              let transcriptions = effects.voiceTranscriptions,
-              !transcriptions.isEmpty else { return nil }
-        // Prisme Linguistique : on essaie la CHAÎNE complète des langues préférées
-        // (systemLanguage > regionalLanguage > customDestination > deviceLocale),
-        // pas seulement la première + défaut "en". Sans ça, un viewer dont la
-        // langue SECONDAIRE (ex. regionalLanguage) a une transcription mais pas
-        // la primaire voyait une langue arbitraire (la 1ʳᵉ entrée, souvent
-        // l'original parlé) au lieu de sa secondaire — violation du Prisme
-        // (bug 2026-06-01).
-        for lang in resolvedViewerLanguageChain {
-            if let t = transcriptions.first(where: { $0.language == lang })?.content { return t }
-        }
-        // Aucune langue préférée ne matche → transcription ORIGINALE (1ʳᵉ entrée =
-        // langue parlée d'origine par convention gateway). On ne choisit JAMAIS
-        // une traduction arbitraire d'une autre langue (règle Prisme).
-        return transcriptions.first?.content
+              effects.voiceAttachmentId != nil else { return nil }
+        // Résolution déléguée au moteur du SDK : la chaîne complète des langues
+        // préférées d'abord (systemLanguage > regionalLanguage >
+        // customDestination > deviceLocale, override d'exploration en tête),
+        // puis la langue PARLÉE d'origine. Jamais une traduction arbitraire.
+        return StoryAudioTranscript.resolve(effects: effects,
+                                            preferredLanguages: resolvedViewerLanguageChain)?.content
+    }
+
+    /// La story porte-t-elle une transcription qu'on puisse afficher ?
+    /// Pilote l'entrée « Transcription » du menu « … ».
+    var storyHasAudioTranscript: Bool { // internal for cross-file extension access
+        guard let effects = currentStory?.storyEffects, effects.voiceAttachmentId != nil else { return false }
+        return StoryAudioTranscript.hasTranscript(effects: effects)
     }
 
 
