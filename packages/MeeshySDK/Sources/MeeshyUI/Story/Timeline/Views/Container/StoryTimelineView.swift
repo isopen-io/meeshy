@@ -352,12 +352,12 @@ public struct StoryTimelineView: View {
                 : MeeshyColors.indigo50.opacity(0.32)
         )
         .gesture(swipeUpExpand)
-        // Full editing surface: selecting a clip, keyframe or transition
-        // floats its inspector over the tracks — same host the Pro layout
-        // used, so selection is never a dead end in the unified timeline.
-        .overlay(alignment: .bottomTrailing) {
-            TimelineInspectorHost(viewModel: viewModel)
-        }
+        // Surface d'édition complète : sélectionner un clip, un keyframe ou une
+        // transition ouvre son inspecteur en SHEET (item 8, 2026-07-25). Le
+        // survol translucide qu'on utilisait avant recouvrait précisément la
+        // piste qu'on réglait ; la sheet libère la timeline et apporte les
+        // affordances système (poignée, glisser-fermer, paliers de hauteur).
+        .timelineInspectorSheet(viewModel: viewModel)
         .accessibilityElement(children: .contain)
         .accessibilityLabel(String(localized: "story.timeline.container", defaultValue: "Timeline", bundle: .module))
     }
