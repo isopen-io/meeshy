@@ -61,6 +61,8 @@ import me.meeshy.app.feed.UserPostsScreen
 import me.meeshy.app.feed.FeedScreen
 import me.meeshy.app.feed.PostDetailScreen
 import me.meeshy.app.feed.PostDetailViewModel
+import me.meeshy.app.conversations.CreateShareLinkScreen
+import me.meeshy.app.conversations.CreateShareLinkViewModel
 import me.meeshy.app.notifications.NotificationsScreen
 import me.meeshy.app.reels.ReelsScreen
 import me.meeshy.app.profile.ProfileScreen
@@ -92,6 +94,10 @@ object Routes {
     const val CONVERSATIONS = "conversations"
     const val NEW_CONVERSATION = "conversations/new"
     const val CONVERSATIONS_DEEP_LINK = "meeshy://conversations"
+    const val CREATE_SHARE_LINK =
+        "conversations/{${CreateShareLinkViewModel.CONVERSATION_ID_ARG}}/share-link/new"
+    fun createShareLink(conversationId: String): String =
+        "conversations/$conversationId/share-link/new"
     const val CHAT = "chat/{${ChatViewModel.CONVERSATION_ID_ARG}}"
     const val CHAT_DEEP_LINK = "meeshy://$CHAT"
     const val CONVERSATION_DEEP_LINK = "meeshy://conversations/{${ChatViewModel.CONVERSATION_ID_ARG}}"
@@ -321,6 +327,17 @@ fun MeeshyApp(
                     },
                 )
             }
+            composable(
+                route = Routes.CREATE_SHARE_LINK,
+                arguments = listOf(
+                    navArgument(CreateShareLinkViewModel.CONVERSATION_ID_ARG) { type = NavType.StringType },
+                ),
+            ) {
+                CreateShareLinkScreen(
+                    onBack = { navController.popBackStack() },
+                    onCreated = { navController.popBackStack() },
+                )
+            }
             composable(Routes.NEW_CONVERSATION) {
                 NewConversationScreen(
                     onBack = { navController.popBackStack() },
@@ -365,6 +382,9 @@ fun MeeshyApp(
                                 autoAnswer = true,
                             ),
                         )
+                    },
+                    onCreateShareLink = {
+                        navController.navigate(Routes.createShareLink(conversationId))
                     },
                     // A live local call (minimised/floating) suppresses the rejoin
                     // pill — don't offer to rejoin the call this device is in.

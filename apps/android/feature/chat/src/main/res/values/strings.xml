@@ -156,4 +156,5 @@
     <string name="conversation_settings_role_member">Everyone</string>
     <string name="conversation_settings_slow_mode_off">Off</string>
     <string name="conversation_settings_slow_mode_seconds">%1$d s</string>
+    <string name="chat_create_share_link">Create share link</string>
 </resources>

@@ -127,6 +127,46 @@ data class CreateShareLinkRequest(
     val requireBirthday: Boolean = false,
 )
 
+/**
+ * Wire response of `POST /links` — the gateway wraps the created link as
+ * `{ data: { linkId, conversationId, shareLink: { id, linkId, name, isActive } } }`.
+ * Port of iOS `CreateShareLinkResponse`.
+ */
+@Serializable
+data class CreateShareLinkResponse(
+    val linkId: String = "",
+    val conversationId: String = "",
+    val shareLink: CreateShareLinkDetail = CreateShareLinkDetail(),
+)
+
+@Serializable
+data class CreateShareLinkDetail(
+    val id: String = "",
+    val linkId: String = "",
+    val name: String? = null,
+    val isActive: Boolean = false,
+)
+
+/** Flattened result of a successful create — port of iOS `CreatedShareLink`. */
+data class CreatedShareLink(
+    val id: String,
+    val linkId: String,
+    val conversationId: String,
+    val name: String?,
+    val isActive: Boolean,
+) {
+    companion object {
+        fun from(response: CreateShareLinkResponse): CreatedShareLink =
+            CreatedShareLink(
+                id = response.shareLink.id,
+                linkId = response.linkId.ifBlank { response.shareLink.linkId },
+                conversationId = response.conversationId,
+                name = response.shareLink.name,
+                isActive = response.shareLink.isActive,
+            )
+    }
+}
+
 /** A user's own share link — port of MyShareLink (ShareLinkModels.swift). */
 @Serializable
 data class MyShareLink(
