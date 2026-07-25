@@ -139,6 +139,19 @@ extension StoryCanvasUIView {
         // foreground + le fond vidéo rejouaient à la réouverture de l'app
         // alors qu'aucun viewer n'était visible (bug user 2026-06-11).
         guard mode == .play, window != nil else { return }
+        // Une story mise en pause AVANT le passage en arrière-plan doit revenir
+        // en pause : sans ce gate, quitter l'app puis y revenir relançait les
+        // médias sous une slide visuellement gelée (long-press, double tap,
+        // interstitiel d'identité, overlay commentaires). Miroir exact du
+        // traitement que `didMoveToWindow` applique déjà au ré-attachement.
+        guard !isPlaybackPaused else { return }
+        // Réaligne les players sur le playhead AVANT de les relancer. Le
+        // playhead est l'unique source de vérité du temps de la slide ; pendant
+        // le background il ne bouge pas alors que les AVPlayer, eux, ont pu être
+        // arrêtés à des positions distinctes. Sans ce recalage, fond, vidéos
+        // foreground et audio repartaient chacun d'où ils s'étaient arrêtés —
+        // c'est là que naissent les décalages son/image après un aller-retour.
+        pushSlidePlayheadToLayers()
         // Reprise gated par layer : ne relance que les vidéos foreground dont
         // le canvas avait levé `isPlaybackActive` (slide à l'écran, non pausée),
         // en phase avec la reprise de la vidéo de fond.

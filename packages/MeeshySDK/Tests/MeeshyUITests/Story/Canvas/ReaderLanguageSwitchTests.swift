@@ -160,4 +160,47 @@ final class ReaderLanguageSwitchTests: XCTestCase {
         XCTAssertTrue(body.contains("pendingBackgroundActivation = false"),
                       "la reprise doit solder l'activation restée armée")
     }
+
+    // MARK: - Synchronisation des points de lecture
+
+    /// QUATRIÈME chemin de reprise : le retour d'arrière-plan. Il relançait les
+    /// médias sans consulter la pause — quitter l'app sur une story en pause
+    /// (long-press, interlude, commentaires) puis y revenir la faisait repartir
+    /// sous une slide gelée.
+    func test_willEnterForeground_respectsPause() throws {
+        let body = try codeOfFunction("func handleWillEnterForeground() {",
+                                      in: "Sources/MeeshyUI/Story/Canvas/StoryCanvasUIView+Lifecycle.swift",
+                                      limit: 700)
+        XCTAssertTrue(body.contains("guard !isPlaybackPaused else { return }"),
+                      "le retour d'arrière-plan doit respecter la pause en cours")
+    }
+
+    /// Le playhead est l'unique source de vérité du temps de la slide. Toute
+    /// reprise doit y RECALER les players avant de les relancer, sinon fond,
+    /// vidéos foreground et audio repartent chacun de leur position propre —
+    /// c'est là que naissent les décalages son/image.
+    func test_willEnterForeground_realignsBeforeResuming() throws {
+        let body = try codeOfFunction("func handleWillEnterForeground() {",
+                                      in: "Sources/MeeshyUI/Story/Canvas/StoryCanvasUIView+Lifecycle.swift",
+                                      limit: 700)
+        guard let align = body.range(of: "pushSlidePlayheadToLayers()"),
+              let resume = body.range(of: "backgroundLayer.handleAppLifecycle(active: true)") else {
+            return XCTFail("le retour d'arrière-plan ne recale plus le playhead")
+        }
+        XCTAssertLessThan(align.lowerBound, resume.lowerBound,
+                          "le recalage doit précéder la relance des players")
+    }
+
+    /// Même exigence pour la reprise de pause : recaler puis relancer.
+    func test_resume_realignsBeforeResuming() throws {
+        let body = try codeOfFunction("func setStoryPlaybackPaused(",
+                                      in: "Sources/MeeshyUI/Story/Canvas/StoryCanvasUIView+Playback.swift",
+                                      limit: 1600)
+        guard let align = body.range(of: "pushSlidePlayheadToLayers()"),
+              let resume = body.range(of: "backgroundLayer.isPlaybackActive = true") else {
+            return XCTFail("la reprise ne recale plus le playhead")
+        }
+        XCTAssertLessThan(align.lowerBound, resume.lowerBound,
+                          "le recalage doit précéder la relance des players")
+    }
 }
