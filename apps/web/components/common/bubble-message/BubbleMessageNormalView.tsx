@@ -20,6 +20,7 @@ import { MessageContent } from './MessageContent';
 import { MessageAttachmentsSection } from './MessageAttachmentsSection';
 import { MessageReadStatusDetails } from './MessageReadStatusDetails';
 import { useMessageInteractions } from '@/hooks/use-message-interactions';
+import { usePrivacyPreferences } from '@/stores/user-preferences-store';
 import { useMessageDisplay } from '@/hooks/use-message-display';
 
 interface BubbleMessageNormalViewProps {
@@ -152,6 +153,11 @@ export const BubbleMessageNormalView = memo(function BubbleMessageNormalView({
 
   // State pour le dialog de détails de lecture
   const [showReadStatusDetails, setShowReadStatusDetails] = useState(false);
+  // Réciprocité : qui ne partage pas ses accusés ne voit pas ceux des
+  // autres. On masque l'entrée de menu plutôt que d'ouvrir une feuille
+  // vide — le serveur ne renverra rien de toute façon.
+  // @see docs/superpowers/specs/2026-07-24-read-exactness-design.md
+  const { preferences: privacyPreferences } = usePrivacyPreferences();
 
   // Handler pour les quick reactions
   const handleQuickReaction = useCallback((emoji: string) => {
@@ -252,7 +258,7 @@ export const BubbleMessageNormalView = memo(function BubbleMessageNormalView({
               onReport={canReportMessage() ? handleReportMessage : undefined}
               onEdit={canModifyMessage() ? handleEditMessage : undefined}
               onDelete={canDeleteMessage() ? handleDeleteMessage : undefined}
-              onViewInfo={isOwnMessage ? () => setShowReadStatusDetails(true) : undefined}
+              onViewInfo={isOwnMessage && privacyPreferences.showReadReceipts ? () => setShowReadStatusDetails(true) : undefined}
               t={tBubble}
               tReport={tReport}
               translationError={translationError}

@@ -8,69 +8,11 @@ import { cn } from '@/lib/utils';
 import { ExpandableMessageText } from './ExpandableMessageText';
 import { MessageReactions } from '@/components/common/message-reactions';
 import { MessageReplyPreview } from './MessageReplyPreview';
-import { useMessageReadStatus, useReadStatusSummary } from '@/stores/conversation-ui-store';
+import { DeliveryIndicator } from './DeliveryIndicator';
 import type { useReactionsQuery } from '@/hooks/queries/use-reactions-query';
 import type { TFunction } from '@/hooks/use-i18n';
 
 type UseReactionsQueryReturn = ReturnType<typeof useReactionsQuery>;
-
-const DeliveryIndicator = memo(function DeliveryIndicator({
-  isOwnMessage,
-  messageId,
-  conversationId,
-}: {
-  isOwnMessage: boolean;
-  messageId: string;
-  conversationId: string;
-}) {
-  const messageSummary = useMessageReadStatus(messageId);
-  const conversationSummary = useReadStatusSummary(conversationId);
-
-  if (!isOwnMessage) return null;
-
-  // Per-message status takes priority, fallback to conversation-level summary
-  const summary = messageSummary || conversationSummary;
-
-  if (!summary) {
-    // No status info yet — show single gray check (sent)
-    return <Check className="h-3 w-3 text-white/60 flex-shrink-0" />;
-  }
-
-  const { totalMembers, deliveredCount, readCount } = summary;
-
-  // Read by all: double blue/green checks
-  if (totalMembers > 0 && readCount >= totalMembers) {
-    return (
-      <span className="inline-flex -space-x-1.5 flex-shrink-0">
-        <Check className="h-3 w-3 text-sky-300" />
-        <Check className="h-3 w-3 text-sky-300" />
-      </span>
-    );
-  }
-
-  // At least some have read: double blue checks
-  if (readCount > 0) {
-    return (
-      <span className="inline-flex -space-x-1.5 flex-shrink-0">
-        <Check className="h-3 w-3 text-sky-300" />
-        <Check className="h-3 w-3 text-sky-300" />
-      </span>
-    );
-  }
-
-  // Delivered but not read: double gray/white checks
-  if (deliveredCount > 0) {
-    return (
-      <span className="inline-flex -space-x-1.5 flex-shrink-0">
-        <Check className="h-3 w-3 text-white/60" />
-        <Check className="h-3 w-3 text-white/60" />
-      </span>
-    );
-  }
-
-  // Sent only: single gray/white check
-  return <Check className="h-3 w-3 text-white/60 flex-shrink-0" />;
-});
 
 interface MessageContentProps {
   message: {
