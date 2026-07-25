@@ -214,6 +214,7 @@ export default async function messageReadStatusRoutes(fastify: FastifyInstance) 
       // chemin par fenêtre. Corps absent = client non mis à jour → repli fenêtre.
       let reportedMessageIds: readonly string[] | undefined;
       let reportedLanguage: string | undefined;
+      let reportedMessageLanguages: Readonly<Record<string, string>> | undefined;
       if (request.body !== undefined && request.body !== null) {
         const bodyResult = MarkReadBodySchema.safeParse(request.body);
         if (!bodyResult.success) {
@@ -221,6 +222,7 @@ export default async function messageReadStatusRoutes(fastify: FastifyInstance) 
         }
         reportedMessageIds = bodyResult.data.messageIds;
         reportedLanguage = bodyResult.data.language;
+        reportedMessageLanguages = bodyResult.data.messageLanguages;
       }
 
       // Compteur AVANT marquage — nombre de messages marqués comme lus,
@@ -234,8 +236,12 @@ export default async function messageReadStatusRoutes(fastify: FastifyInstance) 
         membership.id,
         conversationId,
         undefined,
-        reportedMessageIds || reportedLanguage
-          ? { messageIds: reportedMessageIds, language: reportedLanguage }
+        reportedMessageIds || reportedLanguage || reportedMessageLanguages
+          ? {
+              messageIds: reportedMessageIds,
+              language: reportedLanguage,
+              messageLanguages: reportedMessageLanguages
+            }
           : undefined
       );
       const effectiveMarkedCount = reportedMessageIds ? frozenCount : markedCount;

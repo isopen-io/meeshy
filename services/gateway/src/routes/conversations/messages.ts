@@ -1522,6 +1522,7 @@ export function registerMessagesRoutes(
       // lot vide, qui ne figerait rien et perdrait la lecture).
       let reportedMessageIds: readonly string[] | undefined;
       let reportedLanguage: string | undefined;
+      let reportedMessageLanguages: Readonly<Record<string, string>> | undefined;
       if (request.body !== undefined && request.body !== null) {
         const bodyResult = MarkReadBodySchema.safeParse(request.body);
         if (!bodyResult.success) {
@@ -1529,6 +1530,7 @@ export function registerMessagesRoutes(
         }
         reportedMessageIds = bodyResult.data.messageIds;
         reportedLanguage = bodyResult.data.language;
+        reportedMessageLanguages = bodyResult.data.messageLanguages;
       }
 
       const { MessageReadStatusService } = await import('../../services/MessageReadStatusService');
@@ -1549,8 +1551,12 @@ export function registerMessagesRoutes(
         currentParticipant.id,
         conversationId,
         undefined,
-        reportedMessageIds || reportedLanguage
-          ? { messageIds: reportedMessageIds, language: reportedLanguage }
+        reportedMessageIds || reportedLanguage || reportedMessageLanguages
+          ? {
+              messageIds: reportedMessageIds,
+              language: reportedLanguage,
+              messageLanguages: reportedMessageLanguages
+            }
           : undefined
       );
       await broadcastReadStatus(userId, currentParticipant.id, conversationId, 'read', authRequest.authContext.type === 'anonymous');

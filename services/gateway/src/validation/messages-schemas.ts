@@ -146,7 +146,25 @@ export const MarkReadBodySchema = z.object({
    * sous ses yeux. Une seule valeur pour tout le lot : c'est la résolution de la
    * conversation, celle qui vaut par défaut pour chaque bulle.
    */
-  language: wireLanguageCode.optional()
+  language: wireLanguageCode.optional(),
+
+  /**
+   * EXCEPTIONS à la langue du lot, par message.
+   *
+   * La langue rendue n'est pas toujours celle que le lecteur préfère : quand
+   * aucune traduction n'existe encore, c'est l'ORIGINAL qui s'affiche. Déclarer
+   * tout le lot dans la langue préférée mentirait précisément là où l'auteur a
+   * besoin de savoir — « m'a-t-on lu dans ma langue ou traduit ? ».
+   *
+   * Le client n'envoie que ce qui diffère : sur une conversation lue d'un bloc,
+   * cette table est vide ou presque.
+   */
+  messageLanguages: z
+    .record(mongoId, wireLanguageCode)
+    .refine((table) => Object.keys(table).length <= 200, {
+      message: 'Too many per-message languages'
+    })
+    .optional()
 }).strict();
 
 export const AttachmentStatusBodySchema = z.object({

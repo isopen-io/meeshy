@@ -730,6 +730,75 @@ describe('MessageReadStatusService', () => {
       expect(languagePush).toBeUndefined();
     });
 
+    it('respecte la langue réellement affichée pour un message sans traduction', async () => {
+      // Le lecteur préfère l'anglais, mais ce message n'a jamais été traduit :
+      // il l'a vu en français. Le déclarer « lu en anglais » mentirait
+      // précisément là où l'auteur veut savoir.
+      mockPrisma.message.findFirst.mockResolvedValue({ id: testMessageId2, createdAt: new Date('2025-01-01T00:00:00Z') });
+      mockPrisma.conversationReadCursor.findUnique.mockResolvedValue({ lastReadAt: null });
+      mockPrisma.message.findMany.mockResolvedValue([{ id: testMessageId }, { id: testMessageId2 }]);
+      mockPrisma.messageStatusEntry.findMany.mockResolvedValue([]);
+
+      await service.markMessagesAsRead(testParticipantId, testConversationId, testMessageId2, {
+        messageIds: [testMessageId, testMessageId2],
+        language: 'en',
+        messageLanguages: { [testMessageId2]: 'fr' }
+      });
+
+      expect(mockPrisma.messageStatusEntry.createMany).toHaveBeenCalledWith({
+        data: [
+          expect.objectContaining({ messageId: testMessageId, viewedLanguages: ['en'] }),
+          expect.objectContaining({ messageId: testMessageId2, viewedLanguages: ['fr'] })
+        ]
+      });
+    });
+
+    it('regroupe les mises à jour par langue plutôt qu\'une par message', async () => {
+      mockPrisma.message.findFirst.mockResolvedValue({ id: testMessageId2, createdAt: new Date('2025-01-01T00:00:00Z') });
+      mockPrisma.conversationReadCursor.findUnique.mockResolvedValue({ lastReadAt: null });
+      mockPrisma.message.findMany.mockResolvedValue([{ id: testMessageId }, { id: testMessageId2 }]);
+      mockPrisma.messageStatusEntry.findMany.mockResolvedValue([
+        { messageId: testMessageId, deliveredAt: new Date(), readAt: new Date(), viewedLanguages: [] },
+        { messageId: testMessageId2, deliveredAt: new Date(), readAt: new Date(), viewedLanguages: [] }
+      ]);
+
+      await service.markMessagesAsRead(testParticipantId, testConversationId, testMessageId2, {
+        messageIds: [testMessageId, testMessageId2],
+        language: 'en'
+      });
+
+      const languagePushes = mockPrisma.messageStatusEntry.updateMany.mock.calls.filter(
+        (call: any[]) => call[0]?.data?.viewedLanguages
+      );
+      expect(languagePushes).toHaveLength(1);
+      expect(languagePushes[0][0].where.messageId.in).toEqual([testMessageId, testMessageId2]);
+    });
+
+    it('sépare les groupes quand une exception s\'en écarte', async () => {
+      mockPrisma.message.findFirst.mockResolvedValue({ id: testMessageId2, createdAt: new Date('2025-01-01T00:00:00Z') });
+      mockPrisma.conversationReadCursor.findUnique.mockResolvedValue({ lastReadAt: null });
+      mockPrisma.message.findMany.mockResolvedValue([{ id: testMessageId }, { id: testMessageId2 }]);
+      mockPrisma.messageStatusEntry.findMany.mockResolvedValue([
+        { messageId: testMessageId, deliveredAt: new Date(), readAt: new Date(), viewedLanguages: [] },
+        { messageId: testMessageId2, deliveredAt: new Date(), readAt: new Date(), viewedLanguages: [] }
+      ]);
+
+      await service.markMessagesAsRead(testParticipantId, testConversationId, testMessageId2, {
+        messageIds: [testMessageId, testMessageId2],
+        language: 'en',
+        messageLanguages: { [testMessageId2]: 'fr' }
+      });
+
+      const languagePushes = mockPrisma.messageStatusEntry.updateMany.mock.calls
+        .filter((call: any[]) => call[0]?.data?.viewedLanguages)
+        .map((call: any[]) => [call[0].data.viewedLanguages.push, call[0].where.messageId.in]);
+
+      expect(languagePushes).toEqual([
+        ['en', [testMessageId]],
+        ['fr', [testMessageId2]]
+      ]);
+    });
+
     it('ne touche pas aux langues quand aucune n\'est rapportée', async () => {
       mockPrisma.message.findFirst.mockResolvedValue({ id: testMessageId, createdAt: new Date('2025-01-01T00:00:00Z') });
       mockPrisma.conversationReadCursor.findUnique.mockResolvedValue({ lastReadAt: null });
@@ -1445,9 +1514,207 @@ describe('MessageReadStatusService', () => {
             listenedComplete: false,
             lastWatchPositionMs: null,
             watchedComplete: false,
+            listenCoverage: [],
+            watchCoverage: [],
+            listenStretchCount: 0,
+            watchStretchCount: 0,
+            viewCount: 0,
+            viewedLanguages: [],
           },
         ],
+        languageBreakdown: [],
       });
+    });
+
+    // ── Enrichissements du lot 2 ─────────────────────────────────────────
+
+    it('dit dans quelle langue chaque lecteur a lu le message', async () => {
+      const readAt = new Date('2025-01-01T10:05:00Z');
+      mockPrisma.message.findUnique.mockResolvedValue({
+        id: testMessageId,
+        createdAt: new Date('2025-01-01T10:00:00Z'),
+        senderId: testParticipantId,
+        anonymousSenderId: null,
+        conversationId: testConversationId,
+      });
+      mockPrisma.participant.findMany.mockResolvedValue([
+        { id: testParticipantId, displayName: 'Sender', avatar: null, user: null },
+        { id: testParticipantId2, displayName: 'Bob', avatar: null, user: null },
+      ]);
+      mockPrisma.conversationReadCursor.findMany.mockResolvedValue([]);
+      mockPrisma.messageStatusEntry.findMany.mockResolvedValue([
+        {
+          participantId: testParticipantId2,
+          deliveredAt: readAt,
+          receivedAt: readAt,
+          readAt,
+          viewedLanguages: ['fr', 'en'],
+        },
+      ]);
+
+      const result = await service.getMessageReadStatus(testMessageId, testConversationId);
+
+      expect(result.readBy[0].viewedLanguages).toEqual(['fr', 'en']);
+      // Un lecteur qui a basculé compte dans CHAQUE version : la somme des
+      // compteurs peut dépasser `readCount`, et c'est exact.
+      expect(result.languageBreakdown).toEqual([
+        { language: 'en', count: 1 },
+        { language: 'fr', count: 1 },
+      ]);
+      expect(result.readCount).toBe(1);
+    });
+
+    it('rend une répartition vide quand aucun client ne rapporte sa langue', async () => {
+      const readAt = new Date('2025-01-01T10:05:00Z');
+      mockPrisma.message.findUnique.mockResolvedValue({
+        id: testMessageId,
+        createdAt: new Date('2025-01-01T10:00:00Z'),
+        senderId: testParticipantId,
+        anonymousSenderId: null,
+        conversationId: testConversationId,
+      });
+      mockPrisma.participant.findMany.mockResolvedValue([
+        { id: testParticipantId, displayName: 'Sender', avatar: null, user: null },
+        { id: testParticipantId2, displayName: 'Bob', avatar: null, user: null },
+      ]);
+      mockPrisma.conversationReadCursor.findMany.mockResolvedValue([]);
+      mockPrisma.messageStatusEntry.findMany.mockResolvedValue([
+        { participantId: testParticipantId2, deliveredAt: readAt, receivedAt: readAt, readAt, viewedLanguages: [] },
+      ]);
+
+      const result = await service.getMessageReadStatus(testMessageId, testConversationId);
+
+      expect(result.readBy[0].viewedLanguages).toEqual([]);
+      expect(result.languageBreakdown).toEqual([]);
+    });
+
+    it('résume la consommation par la couverture, pas par le point d\'arrêt', async () => {
+      // `lastPlayPositionMs` ne dit que là où le lecteur s'est arrêté : celui
+      // qui saute au générique est indistinguable de celui qui a tout écouté.
+      mockPrisma.message.findUnique.mockResolvedValue({
+        id: testMessageId,
+        createdAt: new Date('2025-01-01T10:00:00Z'),
+        senderId: testParticipantId,
+        anonymousSenderId: null,
+        conversationId: testConversationId,
+      });
+      mockPrisma.participant.findMany.mockResolvedValue([
+        { id: testParticipantId, displayName: 'User1', avatar: null, user: null },
+        { id: testParticipantId2, displayName: 'User2', avatar: null, user: null },
+      ]);
+      mockPrisma.conversationReadCursor.findMany.mockResolvedValue([]);
+      mockPrisma.attachmentStatusEntry.findMany.mockResolvedValue([
+        {
+          attachmentId: testAttachmentId,
+          participantId: testParticipantId2,
+          lastPlayPositionMs: 9500,
+          listenedComplete: false,
+          lastWatchPositionMs: null,
+          watchedComplete: false,
+          // Il a écouté le début, puis sauté à la fin : deux écoutes, une
+          // couverture trouée, un point d'arrêt qui ment.
+          listenSegments: [
+            { startMs: 0, endMs: 1000, endedBy: 'seek' },
+            { startMs: 9000, endMs: 9500, endedBy: 'pause' },
+          ],
+          watchSegments: null,
+          viewCount: 0,
+          viewedLanguages: [],
+        },
+      ]);
+
+      const result = await service.getMessageReadStatus(testMessageId, testConversationId);
+      const consumer = result.attachmentConsumption[0].participants[0];
+
+      expect(consumer.listenStretchCount).toBe(2);
+      expect(consumer.listenCoverage).toEqual([
+        { startMs: 0, endMs: 1000 },
+        { startMs: 9000, endMs: 9500 },
+      ]);
+    });
+
+    it('remonte une image ouverte plusieurs fois, sans piste de lecture', async () => {
+      mockPrisma.message.findUnique.mockResolvedValue({
+        id: testMessageId,
+        createdAt: new Date('2025-01-01T10:00:00Z'),
+        senderId: testParticipantId,
+        anonymousSenderId: null,
+        conversationId: testConversationId,
+      });
+      mockPrisma.participant.findMany.mockResolvedValue([
+        { id: testParticipantId, displayName: 'User1', avatar: null, user: null },
+        { id: testParticipantId2, displayName: 'User2', avatar: null, user: null },
+      ]);
+      mockPrisma.conversationReadCursor.findMany.mockResolvedValue([]);
+      mockPrisma.attachmentStatusEntry.findMany.mockResolvedValue([
+        {
+          attachmentId: testAttachmentId,
+          participantId: testParticipantId2,
+          lastPlayPositionMs: null,
+          listenedComplete: false,
+          lastWatchPositionMs: null,
+          watchedComplete: false,
+          listenSegments: null,
+          watchSegments: null,
+          viewCount: 3,
+          viewedLanguages: [],
+        },
+      ]);
+
+      const result = await service.getMessageReadStatus(testMessageId, testConversationId);
+
+      expect(result.attachmentConsumption[0].participants[0].viewCount).toBe(3);
+    });
+
+    it('répartit les consommateurs du média par langue', async () => {
+      const thirdParticipantId = '507f1f77bcf86cd799439099';
+      mockPrisma.message.findUnique.mockResolvedValue({
+        id: testMessageId,
+        createdAt: new Date('2025-01-01T10:00:00Z'),
+        senderId: testParticipantId,
+        anonymousSenderId: null,
+        conversationId: testConversationId,
+      });
+      mockPrisma.participant.findMany.mockResolvedValue([
+        { id: testParticipantId, displayName: 'Sender', avatar: null, user: null },
+        { id: testParticipantId2, displayName: 'Bob', avatar: null, user: null },
+        { id: thirdParticipantId, displayName: 'Carol', avatar: null, user: null },
+      ]);
+      mockPrisma.conversationReadCursor.findMany.mockResolvedValue([]);
+      mockPrisma.attachmentStatusEntry.findMany.mockResolvedValue([
+        {
+          attachmentId: testAttachmentId,
+          participantId: testParticipantId2,
+          lastPlayPositionMs: 1000,
+          listenedComplete: false,
+          lastWatchPositionMs: null,
+          watchedComplete: false,
+          listenSegments: null,
+          watchSegments: null,
+          viewCount: 0,
+          viewedLanguages: ['fr'],
+        },
+        {
+          attachmentId: testAttachmentId,
+          participantId: thirdParticipantId,
+          lastPlayPositionMs: 2000,
+          listenedComplete: true,
+          lastWatchPositionMs: null,
+          watchedComplete: false,
+          listenSegments: null,
+          watchSegments: null,
+          viewCount: 0,
+          // Carol a basculé : les deux versions comptent.
+          viewedLanguages: ['fr', 'en'],
+        },
+      ]);
+
+      const result = await service.getMessageReadStatus(testMessageId, testConversationId);
+
+      expect(result.attachmentConsumption[0].languageBreakdown).toEqual([
+        { language: 'fr', count: 2 },
+        { language: 'en', count: 1 },
+      ]);
     });
 
     it('should group multiple participants under the same attachment', async () => {
@@ -3865,6 +4132,81 @@ describe('MessageReadStatusService', () => {
       expect(result.statuses[0].username).toBe('Charlie');
       expect(result.statuses[0].viewedAt).toBe(viewedAt);
       expect(result.pagination.total).toBe(1);
+    });
+
+    it('sert la trace détaillée, avec les motifs d\'arrêt', async () => {
+      // La vue de détail est la seule à porter la trace complète : c'est elle
+      // qui dit qu'une écoute s'est arrêtée en pause plutôt qu'en abandon.
+      mockPrisma.attachmentStatusEntry.count.mockResolvedValue(1);
+      mockPrisma.attachmentStatusEntry.findMany.mockResolvedValue([
+        {
+          participantId: 'p1',
+          viewedAt: null,
+          downloadedAt: null,
+          listenedAt: new Date('2025-01-01T10:00:00Z'),
+          watchedAt: null,
+          listenCount: 2,
+          watchCount: 0,
+          listenedComplete: false,
+          watchedComplete: false,
+          lastPlayPositionMs: 9500,
+          lastWatchPositionMs: null,
+          listenSegments: [
+            { startMs: 0, endMs: 1000, endedBy: 'seek' },
+            { startMs: 9000, endMs: 9500, endedBy: 'dismissed' },
+          ],
+          watchSegments: null,
+          viewCount: 0,
+          viewedLanguages: ['fr'],
+        },
+      ]);
+      mockPrisma.participant.findMany.mockResolvedValue([
+        { id: 'p1', displayName: 'Dana', avatar: null },
+      ]);
+
+      const result = await service.getAttachmentStatusDetails(testAttachmentId);
+      const status = result.statuses[0];
+
+      expect(status.listenStretches).toEqual([
+        { startMs: 0, endMs: 1000, endedBy: 'seek' },
+        { startMs: 9000, endMs: 9500, endedBy: 'dismissed' },
+      ]);
+      // 1000 + 500 : la couverture ne compte pas le trou entre les deux.
+      expect(status.coveredListenMs).toBe(1500);
+      expect(status.viewedLanguages).toEqual(['fr']);
+      expect(result.languageBreakdown).toEqual([{ language: 'fr', count: 1 }]);
+    });
+
+    it('ne casse pas sur une trace corrompue en base', async () => {
+      mockPrisma.attachmentStatusEntry.count.mockResolvedValue(1);
+      mockPrisma.attachmentStatusEntry.findMany.mockResolvedValue([
+        {
+          participantId: 'p1',
+          viewedAt: null,
+          downloadedAt: null,
+          listenedAt: new Date('2025-01-01T10:00:00Z'),
+          watchedAt: null,
+          listenCount: 1,
+          watchCount: 0,
+          listenedComplete: false,
+          watchedComplete: false,
+          lastPlayPositionMs: null,
+          lastWatchPositionMs: null,
+          listenSegments: 'pas un tableau',
+          watchSegments: [{ startMs: 'nope' }],
+          viewCount: 0,
+          viewedLanguages: null,
+        },
+      ]);
+      mockPrisma.participant.findMany.mockResolvedValue([
+        { id: 'p1', displayName: 'Dana', avatar: null },
+      ]);
+
+      const result = await service.getAttachmentStatusDetails(testAttachmentId);
+
+      expect(result.statuses[0].listenStretches).toEqual([]);
+      expect(result.statuses[0].watchStretches).toEqual([]);
+      expect(result.statuses[0].viewedLanguages).toEqual([]);
     });
 
     // Regression: same avatar-resolution rule as the message read-status lists —

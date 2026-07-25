@@ -646,6 +646,8 @@ export class MessageReadStatusService {
        * une bulle précise passe par {@link recordMessageLanguageView}.
        */
       readonly language?: string | null;
+      /** Exceptions par message — cf. `freezeMessageStatus`. */
+      readonly messageLanguages?: Readonly<Record<string, string>>;
     }
   ): Promise<number> {
     // Hoisted so the catch below can release the dedup key when the write
@@ -732,6 +734,7 @@ export class MessageReadStatusService {
           field: "readAt",
           messageIds: exactMessageIds,
           language: options?.language,
+          messageLanguages: options?.messageLanguages,
         });
 
         const cursorTarget = await this._computeExactReadCursorTarget({
@@ -786,6 +789,7 @@ export class MessageReadStatusService {
           at: now,
           field: "readAt",
           language: options?.language,
+          messageLanguages: options?.messageLanguages,
         });
       }
 
@@ -1022,11 +1026,21 @@ export class MessageReadStatusService {
      * Ignorée pour `deliveredAt` — une livraison n'a pas de langue.
      */
     language?: string | null;
+    /**
+     * EXCEPTIONS à `language`, par message. La langue rendue n'est pas toujours
+     * celle que le lecteur préfère : sans traduction disponible, c'est
+     * l'ORIGINAL qui s'affiche. Le client ne déclare que ce qui diffère.
+     */
+    messageLanguages?: Readonly<Record<string, string>>;
     /** @returns nombre d'entrées RÉELLEMENT figées par cet appel. */
   }): Promise<number> {
     const { participantId, conversationId, since, at, field, messageIds } = params;
-    const language =
+    const defaultLanguage =
       field === "readAt" ? normalizeLanguageCode(params.language) : undefined;
+    const perMessage = field === "readAt" ? params.messageLanguages : undefined;
+    const languageFor = (messageId: string): string | undefined =>
+      normalizeLanguageCode(perMessage?.[messageId]) ?? defaultLanguage;
+    const anyLanguage = Boolean(defaultLanguage) || Boolean(perMessage && Object.keys(perMessage).length);
     try {
       const messages = await this.prisma.message.findMany({
         where: {
@@ -1068,7 +1082,9 @@ export class MessageReadStatusService {
                   conversationId,
                   participantId,
                   readAt: at,
-                  ...(language ? { viewedLanguages: [language] } : {}),
+                  ...(languageFor(messageId)
+                    ? { viewedLanguages: [languageFor(messageId) as string] }
+                    : {}),
                 }
               : {
                   messageId,
@@ -1103,19 +1119,23 @@ export class MessageReadStatusService {
       // ne la connaissent pas encore sont réécrites : sur le chemin courant — le
       // lecteur ne change pas de langue entre deux lots — cette passe n'écrit
       // rien du tout. Les entrées créées ci-dessus l'ont déjà reçue.
-      if (language) {
-        const needsLanguage = existing
-          .filter(
-            (e) =>
-              !e.viewedLanguages?.includes(language) &&
-              (e.viewedLanguages?.length ?? 0) < MAX_VIEWED_LANGUAGES
-          )
-          .map((e) => e.messageId);
+      if (anyLanguage) {
+        // Regroupé par langue : un lot lu d'une traite n'en compte qu'une, donc
+        // un seul `updateMany`. Les exceptions (message resté dans sa langue
+        // d'origine faute de traduction) forment les groupes suivants.
+        const byLanguage = new Map<string, string[]>();
+        for (const entry of existing) {
+          const code = languageFor(entry.messageId);
+          if (!code) continue;
+          if (entry.viewedLanguages?.includes(code)) continue;
+          if ((entry.viewedLanguages?.length ?? 0) >= MAX_VIEWED_LANGUAGES) continue;
+          byLanguage.set(code, [...(byLanguage.get(code) ?? []), entry.messageId]);
+        }
 
-        if (needsLanguage.length > 0) {
+        for (const [code, ids] of byLanguage) {
           await this.prisma.messageStatusEntry.updateMany({
-            where: { messageId: { in: needsLanguage }, participantId },
-            data: { viewedLanguages: { push: language } },
+            where: { messageId: { in: ids }, participantId },
+            data: { viewedLanguages: { push: code } },
           });
         }
       }
@@ -1145,7 +1165,13 @@ export class MessageReadStatusService {
     readCount: number;
     notSeenCount: number;
     receivedBy: Array<{ participantId: string; displayName: string; avatarURL: string | null; receivedAt: Date }>;
-    readBy: Array<{ participantId: string; displayName: string; avatarURL: string | null; readAt: Date }>;
+    readBy: Array<{
+      participantId: string;
+      displayName: string;
+      avatarURL: string | null;
+      readAt: Date;
+      viewedLanguages: string[];
+    }>;
     notSeenBy: Array<{ participantId: string; displayName: string; avatarURL: string | null }>;
     attachmentConsumption: Array<{
       attachmentId: string;
@@ -1157,8 +1183,17 @@ export class MessageReadStatusService {
         listenedComplete: boolean;
         lastWatchPositionMs: number | null;
         watchedComplete: boolean;
+        listenCoverage: Array<{ startMs: number; endMs: number }>;
+        watchCoverage: Array<{ startMs: number; endMs: number }>;
+        listenStretchCount: number;
+        watchStretchCount: number;
+        viewCount: number;
+        viewedLanguages: string[];
       }>;
+      languageBreakdown: Array<{ language: string; count: number }>;
     }>;
+    /** Répartition des LECTEURS du message par version linguistique consultée. */
+    languageBreakdown: Array<{ language: string; count: number }>;
   }> {
     try {
       const message = await this.prisma.message.findUnique({
@@ -1225,7 +1260,13 @@ export class MessageReadStatusService {
       // pour les messages franchis AVANT l'introduction du gel (legacy).
       const frozenEntries = await this.prisma.messageStatusEntry.findMany({
         where: { messageId },
-        select: { participantId: true, deliveredAt: true, receivedAt: true, readAt: true },
+        select: {
+          participantId: true,
+          deliveredAt: true,
+          receivedAt: true,
+          readAt: true,
+          viewedLanguages: true,
+        },
       });
       const frozenByParticipant = new Map(
         frozenEntries.map(e => [e.participantId, e])
@@ -1237,8 +1278,18 @@ export class MessageReadStatusService {
         avatarURL: string | null;
         receivedAt: Date;
       }> = [];
-      const readBy: Array<{ participantId: string; displayName: string; avatarURL: string | null; readAt: Date }> =
-        [];
+      const readBy: Array<{
+        participantId: string;
+        displayName: string;
+        avatarURL: string | null;
+        readAt: Date;
+        /**
+         * Versions linguistiques dans lesquelles ce lecteur a consulté le
+         * message. Vide pour une lecture antérieure à la mesure, ou pour un
+         * client qui ne rapporte pas encore sa langue.
+         */
+        viewedLanguages: string[];
+      }> = [];
 
       const cursorByParticipant = new Map(cursors.map(c => [c.participantId, c]));
 
@@ -1290,6 +1341,7 @@ export class MessageReadStatusService {
             displayName: participant.displayName,
             avatarURL,
             readAt,
+            viewedLanguages: frozen?.viewedLanguages ?? [],
           });
         }
       }
@@ -1312,6 +1364,10 @@ export class MessageReadStatusService {
           listenedComplete: true,
           lastWatchPositionMs: true,
           watchedComplete: true,
+          listenSegments: true,
+          watchSegments: true,
+          viewCount: true,
+          viewedLanguages: true,
         },
       });
 
@@ -1325,6 +1381,20 @@ export class MessageReadStatusService {
           listenedComplete: boolean;
           lastWatchPositionMs: number | null;
           watchedComplete: boolean;
+          /**
+           * Portions réellement parcourues, un passage réécouté ne comptant
+           * qu'une fois — de quoi dessiner une barre de couverture. C'est le
+           * RÉSUMÉ : la trace détaillée, avec les motifs d'arrêt, n'est servie
+           * que par `getAttachmentStatusDetails`, à l'ouverture de la feuille.
+           */
+          listenCoverage: Array<{ startMs: number; endMs: number }>;
+          watchCoverage: Array<{ startMs: number; endMs: number }>;
+          /** Nombre d'écoutes / visionnages ININTERROMPUS. */
+          listenStretchCount: number;
+          watchStretchCount: number;
+          /** Nombre d'ouvertures, pour une image. */
+          viewCount: number;
+          viewedLanguages: string[];
         }>
       >();
 
@@ -1332,13 +1402,22 @@ export class MessageReadStatusService {
         const participant = participantById.get(entry.participantId);
         if (!participant) continue; // orphan entry — participant deleted/banned/inactive
 
-        // Skip rows with no audio/video signal (e.g. download-only or image
-        // entries): nothing to display as playback progress.
+        const listenTrace = parsePlaybackTrace(entry.listenSegments);
+        const watchTrace = parsePlaybackTrace(entry.watchSegments);
+
+        // Ne garder que les lignes porteuses d'un signal de consommation. Le
+        // compteur d'ouvertures et les langues comptent désormais au même titre
+        // que la position : une image ouverte trois fois est une consommation,
+        // même sans piste de lecture.
         const hasMediaSignal =
           entry.lastPlayPositionMs != null ||
           entry.listenedComplete ||
           entry.lastWatchPositionMs != null ||
-          entry.watchedComplete;
+          entry.watchedComplete ||
+          entry.viewCount > 0 ||
+          listenTrace.length > 0 ||
+          watchTrace.length > 0 ||
+          (entry.viewedLanguages?.length ?? 0) > 0;
         if (!hasMediaSignal) continue;
 
         const list = consumptionByAttachment.get(entry.attachmentId) ?? [];
@@ -1350,12 +1429,26 @@ export class MessageReadStatusService {
           listenedComplete: entry.listenedComplete,
           lastWatchPositionMs: entry.lastWatchPositionMs ?? null,
           watchedComplete: entry.watchedComplete,
+          listenCoverage: traceCoverage(listenTrace),
+          watchCoverage: traceCoverage(watchTrace),
+          listenStretchCount: listenTrace.length,
+          watchStretchCount: watchTrace.length,
+          viewCount: entry.viewCount ?? 0,
+          viewedLanguages: entry.viewedLanguages ?? [],
         });
         consumptionByAttachment.set(entry.attachmentId, list);
       }
 
       const attachmentConsumption = Array.from(consumptionByAttachment.entries()).map(
-        ([attachmentId, participants]) => ({ attachmentId, participants })
+        ([attachmentId, participants]) => ({
+          attachmentId,
+          participants,
+          // Répartition par langue du média lui-même, calculée sur les SEULS
+          // participants déjà retenus ci-dessus : ceux qui refusent les accusés
+          // de lecture sont sortis en amont et ne doivent pas reparaître par ce
+          // biais.
+          languageBreakdown: languageBreakdown(participants),
+        })
       );
 
       // Compute not-seen participants (active but no cursor matching this message)
@@ -1383,6 +1476,12 @@ export class MessageReadStatusService {
         readBy,
         notSeenBy,
         attachmentConsumption,
+        // Prisme linguistique du message : combien de lecteurs par version.
+        // Dérivé de `readBy`, donc déjà purgé des participants qui refusent les
+        // accusés de lecture. Un lecteur qui a basculé compte dans chacune des
+        // versions qu'il a consultées — la somme peut dépasser `readCount`, et
+        // c'est exact.
+        languageBreakdown: languageBreakdown(readBy),
       };
     } catch (error) {
       logger.error(
@@ -1704,7 +1803,29 @@ export class MessageReadStatusService {
       watchedComplete: boolean;
       lastPlayPositionMs: number | null;
       lastWatchPositionMs: number | null;
+      /**
+       * Trace de l'interaction : une entrée par écoute réellement continue,
+       * dans l'ordre du temps, avec ce qui y a mis fin. Servie ici et nulle
+       * part ailleurs — c'est la vue de détail, ouverte à la demande.
+       */
+      listenStretches: Array<{ startMs: number; endMs: number; endedBy: string }>;
+      watchStretches: Array<{ startMs: number; endMs: number; endedBy: string }>;
+      /** Portions parcourues, doublons fusionnés — pour la barre de couverture. */
+      listenCoverage: Array<{ startMs: number; endMs: number }>;
+      watchCoverage: Array<{ startMs: number; endMs: number }>;
+      /**
+       * Durée réellement couverte. Comparée à `totalListenDurationMs`, qui
+       * compte les replays, l'écart dit que des passages ont été REVUS.
+       */
+      coveredListenMs: number;
+      coveredWatchMs: number;
+      /** Nombre d'ouvertures d'une image. */
+      viewCount: number;
+      /** Versions linguistiques consommées par ce participant. */
+      viewedLanguages: string[];
     }>;
+    /** Répartition des consommateurs par version linguistique. */
+    languageBreakdown: Array<{ language: string; count: number }>;
     pagination: {
       total: number;
       limit: number;
@@ -1746,6 +1867,10 @@ export class MessageReadStatusService {
           watchedComplete: true,
           lastPlayPositionMs: true,
           lastWatchPositionMs: true,
+          listenSegments: true,
+          watchSegments: true,
+          viewCount: true,
+          viewedLanguages: true,
         },
       });
 
@@ -1769,6 +1894,10 @@ export class MessageReadStatusService {
         .map((s) => {
           const participant = participantById.get(s.participantId);
           if (!participant) return null; // skip orphan rows
+          const listenStretches = parsePlaybackTrace(s.listenSegments);
+          const watchStretches = parsePlaybackTrace(s.watchSegments);
+          const listenCoverage = traceCoverage(listenStretches);
+          const watchCoverage = traceCoverage(watchStretches);
           return {
             participantId: s.participantId,
             username: participant.displayName || "Unknown",
@@ -1783,12 +1912,24 @@ export class MessageReadStatusService {
             watchedComplete: s.watchedComplete,
             lastPlayPositionMs: s.lastPlayPositionMs,
             lastWatchPositionMs: s.lastWatchPositionMs,
+            listenStretches,
+            watchStretches,
+            listenCoverage,
+            watchCoverage,
+            coveredListenMs: coveredDurationMs(listenCoverage),
+            coveredWatchMs: coveredDurationMs(watchCoverage),
+            viewCount: s.viewCount ?? 0,
+            viewedLanguages: s.viewedLanguages ?? [],
           };
         })
         .filter((s): s is NonNullable<typeof s> => s !== null);
 
       return {
         statuses: enrichedStatuses,
+        // Calculée sur la PAGE, comme le reste de la charge : au-delà, il
+        // faudrait relire toute la table pour un chiffre que la pagination
+        // rendrait de toute façon incohérent avec ce qui est affiché.
+        languageBreakdown: languageBreakdown(enrichedStatuses),
         pagination: {
           total,
           limit,
