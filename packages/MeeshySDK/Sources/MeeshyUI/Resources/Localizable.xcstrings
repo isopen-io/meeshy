@@ -23253,6 +23253,12 @@
     "story.audioEditor.retranscribe" : {
       "extractionState" : "stale",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "إعادة النسخ النصي"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -23277,6 +23283,12 @@
             "value" : "Retranscrire"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ritrascrivi"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -23288,6 +23300,12 @@
     "story.audioEditor.tapTranscribe" : {
       "extractionState" : "stale",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "انقر على «نسخ نصي»"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -23312,6 +23330,12 @@
             "value" : "Appuyez sur « Transcrire »"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tocca « Trascrivi »"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -23323,6 +23347,12 @@
     "story.audioEditor.title" : {
       "extractionState" : "stale",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "محرّر الصوت"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -23347,6 +23377,12 @@
             "value" : "Éditeur audio"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Editor audio"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -23358,6 +23394,12 @@
     "story.audioEditor.transcribe" : {
       "extractionState" : "stale",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "نسخ نصي"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -23382,6 +23424,12 @@
             "value" : "Transcrire"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Trascrivi"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -23393,6 +23441,12 @@
     "story.audioEditor.transcribing" : {
       "extractionState" : "stale",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "جارٍ النسخ النصي…"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -23417,6 +23471,12 @@
             "value" : "Transcription en cours…"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Trascrizione in corso…"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -23428,6 +23488,12 @@
     "story.audioEditor.transcription" : {
       "extractionState" : "stale",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "النسخ النصي"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -23452,6 +23518,12 @@
             "value" : "Transcription"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Trascrizione"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -23463,6 +23535,12 @@
     "story.audioEditor.transcriptionFailed" : {
       "extractionState" : "stale",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "تعذّر النسخ النصي"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -23487,6 +23565,12 @@
             "value" : "Transcription impossible"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Trascrizione non riuscita"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -23498,6 +23582,12 @@
     "story.audioEditor.useRecording" : {
       "extractionState" : "stale",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "استخدام هذا التسجيل"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -23522,6 +23612,12 @@
             "value" : "Utiliser cet enregistrement"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Usa questa registrazione"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -23533,6 +23629,12 @@
     "story.audioPanel.library" : {
       "extractionState" : "stale",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "المكتبة"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -23557,6 +23659,12 @@
             "value" : "Bibliothèque"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Libreria"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -23568,6 +23676,12 @@
     "story.audioPanel.noAudio" : {
       "extractionState" : "stale",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "لا يوجد صوت"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -23592,6 +23706,12 @@
             "value" : "Aucun son"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nessun suono"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -23603,6 +23723,12 @@
     "story.audioPanel.noSound" : {
       "extractionState" : "stale",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "لا توجد أصوات متاحة"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -23627,6 +23753,12 @@
             "value" : "Aucun son disponible"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nessun suono disponibile"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -23638,6 +23770,12 @@
     "story.audioPanel.record" : {
       "extractionState" : "stale",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "تسجيل"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -23662,6 +23800,12 @@
             "value" : "Enregistrer"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Registra"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -23673,6 +23817,12 @@
     "story.audioPanel.searchSound" : {
       "extractionState" : "stale",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ابحث عن صوت..."
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -23697,6 +23847,12 @@
             "value" : "Rechercher un son..."
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cerca un suono..."
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -23708,6 +23864,12 @@
     "story.audioSource.library" : {
       "extractionState" : "stale",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "المكتبة"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -23732,6 +23894,12 @@
             "value" : "Bibliothèque"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Libreria"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -23743,6 +23911,12 @@
     "story.audioSource.record" : {
       "extractionState" : "stale",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "تسجيل"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -23767,6 +23941,12 @@
             "value" : "Enregistrer"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Registra"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -23778,6 +23958,12 @@
     "story.audioSource.title" : {
       "extractionState" : "stale",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "مصدر الصوت"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -23802,6 +23988,12 @@
             "value" : "Source audio"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sorgente audio"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -23813,6 +24005,12 @@
     "story.background.gradient" : {
       "extractionState" : "manual",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "خلفية متدرّجة"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
@@ -23837,11 +24035,24 @@
             "value" : "Fond dégradé"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sfondo sfumato"
+          }
+        }
       }
     },
     "story.background.swatch" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "لون الخلفية"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
@@ -23866,11 +24077,24 @@
             "value" : "Couleur de fond"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Colore di sfondo"
+          }
+        }
       }
     },
     "story.background.swatch.hint" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "انقر لتطبيق هذه الخلفية."
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
@@ -23895,11 +24119,24 @@
             "value" : "Touchez pour appliquer ce fond."
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tocca per applicare questo sfondo."
+          }
+        }
       }
     },
     "story.canvas.a11y.backgroundPhoto" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "صورة الخلفية"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
@@ -23924,11 +24161,24 @@
             "value" : "Photo de fond"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Foto di sfondo"
+          }
+        }
       }
     },
     "story.canvas.a11y.backgroundVideo" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "فيديو الخلفية"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
@@ -23953,11 +24203,24 @@
             "value" : "Vidéo de fond"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Video di sfondo"
+          }
+        }
       }
     },
     "story.canvas.a11y.sendToBack" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "إرسال إلى الخلف"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
@@ -23982,11 +24245,24 @@
             "value" : "Mettre à l'arrière"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Porta dietro"
+          }
+        }
       }
     },
     "story.canvas.a11y.sticker" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ملصق"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
@@ -24011,11 +24287,24 @@
             "value" : "Sticker"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sticker"
+          }
+        }
       }
     },
     "story.canvas.a11y.textPrefix" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "نص"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
@@ -24040,11 +24329,24 @@
             "value" : "Texte"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Testo"
+          }
+        }
       }
     },
     "story.canvas.layer.background" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "الخلفية"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -24069,6 +24371,12 @@
             "value" : "Arrière-plan"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sfondo"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -24080,6 +24388,12 @@
     "story.canvas.layer.canvas" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "لوحة الرسم"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -24104,6 +24418,12 @@
             "value" : "Canvas"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Canvas"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -24115,6 +24435,12 @@
     "story.canvas.layer.foreground" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "المقدّمة"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -24139,6 +24465,12 @@
             "value" : "Premier plan"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Primo piano"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -24150,6 +24482,12 @@
     "story.canvas.layer.indicator.label" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "الطبقة النشطة: %@"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
@@ -24174,11 +24512,24 @@
             "value" : "Couche active : %@"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Livello attivo: %@"
+          }
+        }
       }
     },
     "story.composer.addAudioFile" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "صوت"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
@@ -24200,6 +24551,13 @@
         "fr" : {
           "stringUnit" : {
             "state" : "new",
+            "value" : "Audio"
+          }
+        }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Audio"
           }
         }
@@ -24208,6 +24566,12 @@
     "story.composer.addPhotoVideo" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "صورة/فيديو"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
@@ -24232,11 +24596,24 @@
             "value" : "Photo/Video"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Foto/Video"
+          }
+        }
       }
     },
     "story.composer.addSlide" : {
       "extractionState" : "manual",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "إضافة شريحة"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
@@ -24261,11 +24638,24 @@
             "value" : "Ajouter un slide"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aggiungi una slide"
+          }
+        }
       }
     },
     "story.composer.addText" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "إضافة نص"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -24290,6 +24680,12 @@
             "value" : "Ajouter du texte"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aggiungi del testo"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -24301,6 +24697,12 @@
     "story.composer.anotherText" : {
       "extractionState" : "stale",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "نص آخر"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -24325,6 +24727,12 @@
             "value" : "Autre texte"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Altro testo"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -24336,6 +24744,12 @@
     "story.composer.audioLabel" : {
       "extractionState" : "stale",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "الصوت"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -24360,6 +24774,12 @@
             "value" : "Audio"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Audio"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -24371,6 +24791,12 @@
     "story.composer.backgroundLabel" : {
       "extractionState" : "stale",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "الخلفية"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -24395,6 +24821,12 @@
             "value" : "Arriere-plan"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sfondo"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -24406,6 +24838,12 @@
     "story.composer.cancel" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "إلغاء"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -24428,6 +24866,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Annuler"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Annulla"
           }
         },
         "pt-BR" : {
@@ -24441,6 +24885,12 @@
     "story.composer.cancelAction" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "إلغاء"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -24465,6 +24915,12 @@
             "value" : "Annuler"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Annulla"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -24476,6 +24932,12 @@
     "story.composer.changePhoto" : {
       "extractionState" : "stale",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "تغيير الصورة"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -24500,6 +24962,12 @@
             "value" : "Changer photo"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cambia foto"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -24511,6 +24979,12 @@
     "story.composer.clearDraft" : {
       "extractionState" : "stale",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "حذف المسودة"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -24535,6 +25009,12 @@
             "value" : "Effacer le brouillon"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Elimina la bozza"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -24546,6 +25026,12 @@
     "story.composer.closingEffect" : {
       "extractionState" : "stale",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "تأثير الإغلاق"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -24570,6 +25056,12 @@
             "value" : "Effet de fermeture"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Effetto di chiusura"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -24581,6 +25073,12 @@
     "story.composer.deleteAllSlides" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "حذف كل الشرائح"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -24605,6 +25103,12 @@
             "value" : "Supprimer tous les slides"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Elimina tutte le slide"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -24616,6 +25120,12 @@
     "story.composer.deleteSlide" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "حذف"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -24640,6 +25150,12 @@
             "value" : "Supprimer"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Elimina"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -24651,6 +25167,12 @@
     "story.composer.done" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "حسنًا"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
@@ -24675,11 +25197,24 @@
             "value" : "OK"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OK"
+          }
+        }
       }
     },
     "story.composer.duplicateSlide" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "تكرار"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -24704,6 +25239,12 @@
             "value" : "Dupliquer"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Duplica"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -24715,6 +25256,12 @@
     "story.composer.edit" : {
       "extractionState" : "stale",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "تعديل"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -24739,6 +25286,12 @@
             "value" : "Éditer"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Modifica"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -24750,6 +25303,12 @@
     "story.composer.empty.subtitle" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "اختر أداة للبدء"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
@@ -24774,11 +25333,24 @@
             "value" : "Choisissez un outil pour démarrer"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Scegli uno strumento per iniziare"
+          }
+        }
       }
     },
     "story.composer.empty.tile.drawing" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "رسم"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
@@ -24803,11 +25375,24 @@
             "value" : "Dessin"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Disegno"
+          }
+        }
       }
     },
     "story.composer.empty.tile.drawing.sub" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "قلم وألوان"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
@@ -24832,11 +25417,24 @@
             "value" : "Pencil et couleurs"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pennello e colori"
+          }
+        }
       }
     },
     "story.composer.empty.tile.filters" : {
       "extractionState" : "stale",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "مؤثرات"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
@@ -24861,11 +25459,24 @@
             "value" : "Effets"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Effetti"
+          }
+        }
       }
     },
     "story.composer.empty.tile.filters.sub" : {
       "extractionState" : "stale",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "مرشّحات بصرية"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
@@ -24890,11 +25501,24 @@
             "value" : "Filtres visuels"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Filtri visivi"
+          }
+        }
       }
     },
     "story.composer.empty.tile.media" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "وسائط"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
@@ -24919,11 +25543,24 @@
             "value" : "Médias"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Media"
+          }
+        }
       }
     },
     "story.composer.empty.tile.media.sub" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "صور، فيديو"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
@@ -24948,11 +25585,24 @@
             "value" : "Photos, vidéos"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Foto, video"
+          }
+        }
       }
     },
     "story.composer.empty.tile.son" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "صوت"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
@@ -24977,11 +25627,24 @@
             "value" : "Son"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Suono"
+          }
+        }
       }
     },
     "story.composer.empty.tile.son.sub" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "موسيقى، صوت بشري"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
@@ -25006,11 +25669,24 @@
             "value" : "Musique, voix"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Musica, voce"
+          }
+        }
       }
     },
     "story.composer.empty.tile.text" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "نص"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
@@ -25035,11 +25711,24 @@
             "value" : "Texte"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Testo"
+          }
+        }
       }
     },
     "story.composer.empty.tile.text.sub" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "نمط، لون، زجاج"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
@@ -25064,11 +25753,24 @@
             "value" : "Style, couleur, verre"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Stile, colore, vetro"
+          }
+        }
       }
     },
     "story.composer.empty.tile.timeline" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "الخط الزمني"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
@@ -25093,11 +25795,24 @@
             "value" : "Timeline"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Timeline"
+          }
+        }
       }
     },
     "story.composer.empty.tile.timeline.sub" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "المونتاج والمدة"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
@@ -25122,11 +25837,24 @@
             "value" : "Montage et durée"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Montaggio e durata"
+          }
+        }
       }
     },
     "story.composer.empty.title" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ابدأ قصتك"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
@@ -25151,11 +25879,24 @@
             "value" : "Commencez votre story"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Inizia la tua storia"
+          }
+        }
       }
     },
     "story.composer.fab.badge" : {
       "extractionState" : "manual",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld عنصر نشط"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
@@ -25180,11 +25921,24 @@
             "value" : "%lld élément(s) actif(s)"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld elemento/i attivo/i"
+          }
+        }
       }
     },
     "story.composer.fab.badge.none" : {
       "extractionState" : "manual",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "لا توجد عناصر"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
@@ -25209,11 +25963,24 @@
             "value" : "Aucun élément"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nessun elemento"
+          }
+        }
       }
     },
     "story.composer.fab.hint.close" : {
       "extractionState" : "manual",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "انقر مرتين للإغلاق."
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
@@ -25238,11 +26005,24 @@
             "value" : "Touchez deux fois pour fermer."
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tocca due volte per chiudere."
+          }
+        }
       }
     },
     "story.composer.fab.hint.open" : {
       "extractionState" : "manual",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "انقر مرتين للفتح."
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
@@ -25267,11 +26047,24 @@
             "value" : "Touchez deux fois pour ouvrir."
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tocca due volte per aprire."
+          }
+        }
       }
     },
     "story.composer.fab.open" : {
       "extractionState" : "manual",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "فتح أداة %@"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
@@ -25296,11 +26089,24 @@
             "value" : "Ouvrir l'outil %@"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Apri lo strumento %@"
+          }
+        }
       }
     },
     "story.composer.friends" : {
       "extractionState" : "stale",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "الأصدقاء"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -25325,6 +26131,12 @@
             "value" : "Amis"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Amici"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -25336,6 +26148,12 @@
     "story.composer.grabber" : {
       "extractionState" : "manual",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "مقبض شريط الأدوات"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
@@ -25360,11 +26178,24 @@
             "value" : "Poignée de la barre d'outils"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Maniglia della barra strumenti"
+          }
+        }
       }
     },
     "story.composer.grabber.hint.dismiss" : {
       "extractionState" : "manual",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "اسحب لأسفل للتصغير أو الإغلاق."
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
@@ -25389,11 +26220,24 @@
             "value" : "Faites glisser vers le bas pour réduire ou fermer."
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Trascina verso il basso per ridurre o chiudere."
+          }
+        }
       }
     },
     "story.composer.grabber.hint.resize" : {
       "extractionState" : "manual",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "اسحب لأعلى للتكبير، ولأسفل للتصغير أو الإغلاق."
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
@@ -25418,11 +26262,24 @@
             "value" : "Faites glisser vers le haut pour agrandir, vers le bas pour réduire ou fermer."
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Trascina verso l'alto per ingrandire, verso il basso per ridurre o chiudere."
+          }
+        }
       }
     },
     "story.composer.image" : {
       "extractionState" : "stale",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "صورة"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
@@ -25441,6 +26298,12 @@
             "value" : "Imagen"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Immagine"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "translated",
@@ -25452,6 +26315,12 @@
     "story.composer.imageLabel" : {
       "extractionState" : "stale",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "صورة"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -25476,6 +26345,12 @@
             "value" : "Image"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Immagine"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -25487,6 +26362,12 @@
     "story.composer.library" : {
       "extractionState" : "stale",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "المكتبة"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -25511,6 +26392,12 @@
             "value" : "Bibliotheque"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Libreria"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -25522,6 +26409,12 @@
     "story.composer.loadingImage" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "جارٍ تحميل الصورة..."
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
@@ -25546,11 +26439,24 @@
             "value" : "Chargement de l'image..."
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Caricamento dell'immagine..."
+          }
+        }
       }
     },
     "story.composer.loadingVideo" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "جارٍ تحميل الفيديو..."
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
@@ -25575,11 +26481,24 @@
             "value" : "Chargement de la video..."
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Caricamento del video..."
+          }
+        }
       }
     },
     "story.composer.mediaLoadFailedMessage" : {
       "extractionState" : "manual",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "تعذّر تحميل هذه الوسائط. تأكّد من تنزيلها على الجهاز (iCloud) ثم أعِد المحاولة."
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
@@ -25604,11 +26523,24 @@
             "value" : "Ce média n'a pas pu être chargé. Vérifiez qu'il est téléchargé sur l'appareil (iCloud) et réessayez."
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Non è stato possibile caricare questo media. Verifica che sia scaricato sul dispositivo (iCloud) e riprova."
+          }
+        }
       }
     },
     "story.composer.mediaLoadFailedTitle" : {
       "extractionState" : "manual",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "تعذّر التحميل"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
@@ -25633,11 +26565,24 @@
             "value" : "Chargement impossible"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Caricamento impossibile"
+          }
+        }
       }
     },
     "story.composer.mediaLostMultiple" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "لم تعد %lld من وسائط مسودتك متاحة (ملفات محذوفة). أُعيدت الشرائح من دون هذه الوسائط."
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
@@ -25662,11 +26607,24 @@
             "value" : "%lld médias de votre brouillon ne sont plus disponibles (fichiers supprimés). Les slides ont été restaurés sans ces médias."
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld media della tua bozza non sono più disponibili (file eliminati). Le slide sono state ripristinate senza questi media."
+          }
+        }
       }
     },
     "story.composer.mediaLostSingle" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "لم تعد إحدى وسائط مسودتك متاحة (ملف محذوف). أُعيدت الشريحة من دون هذه الوسائط — أعِد التصوير إن لزم."
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
@@ -25691,11 +26649,24 @@
             "value" : "Un média de votre brouillon n'est plus disponible (fichier supprimé). Le slide a été restauré sans ce média — retake si nécessaire."
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Un media della tua bozza non è più disponibile (file eliminato). La slide è stata ripristinata senza questo media — rifallo se necessario."
+          }
+        }
       }
     },
     "story.composer.mediaLostTitle" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "وسائط غير متاحة"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
@@ -25720,11 +26691,24 @@
             "value" : "Médias indisponibles"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Media non disponibili"
+          }
+        }
       }
     },
     "story.composer.noEffect" : {
       "extractionState" : "stale",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "بلا"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -25749,6 +26733,12 @@
             "value" : "Aucun"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nessuno"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -25760,6 +26750,12 @@
     "story.composer.ok" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "حسنًا"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
@@ -25784,11 +26780,24 @@
             "value" : "OK"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OK"
+          }
+        }
       }
     },
     "story.composer.openingEffect" : {
       "extractionState" : "stale",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "تأثير الافتتاح"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -25813,6 +26822,12 @@
             "value" : "Effet d'ouverture"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Effetto di apertura"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -25824,6 +26839,12 @@
     "story.composer.openingHint" : {
       "extractionState" : "manual",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "حركة دخول الشريحة الحالية، تظهر في المعاينة وأثناء التشغيل."
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
@@ -25848,11 +26869,24 @@
             "value" : "Animation d'entrée du slide courant, visible en aperçu et en lecture."
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Animazione di entrata della slide corrente, visibile in anteprima e in riproduzione."
+          }
+        }
       }
     },
     "story.composer.openingNone" : {
       "extractionState" : "manual",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "بلا"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
@@ -25877,11 +26911,24 @@
             "value" : "Aucune"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nessuna"
+          }
+        }
       }
     },
     "story.composer.openingTitle" : {
       "extractionState" : "manual",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "افتتاح الشريحة"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
@@ -25906,11 +26953,24 @@
             "value" : "Ouverture du slide"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Apertura della slide"
+          }
+        }
       }
     },
     "story.composer.photo" : {
       "extractionState" : "stale",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "صورة"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -25935,6 +26995,12 @@
             "value" : "Photo"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Foto"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -25946,6 +27012,12 @@
     "story.composer.private" : {
       "extractionState" : "stale",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "خاصة"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -25970,6 +27042,12 @@
             "value" : "Prive"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Privata"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -25981,6 +27059,12 @@
     "story.composer.public" : {
       "extractionState" : "stale",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "علنية"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -26005,6 +27089,12 @@
             "value" : "Public"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pubblica"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -26016,6 +27106,12 @@
     "story.composer.publish" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "نشر"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -26040,6 +27136,12 @@
             "value" : "Publier"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pubblica"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -26051,6 +27153,12 @@
     "story.composer.quit" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "خروج"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -26075,6 +27183,12 @@
             "value" : "Quitter"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Esci"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -26086,6 +27200,12 @@
     "story.composer.quitWithoutPublishing" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "الخروج دون نشر؟"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -26110,6 +27230,12 @@
             "value" : "Quitter sans publier ?"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Uscire senza pubblicare?"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -26121,6 +27247,12 @@
     "story.composer.record" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "تسجيل"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
@@ -26145,11 +27277,24 @@
             "value" : "Enregistrer"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Registra"
+          }
+        }
       }
     },
     "story.composer.recordAudio" : {
       "extractionState" : "stale",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "تسجيل"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -26172,6 +27317,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Enregistrer"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Registra"
           }
         },
         "pt-BR" : {
@@ -26185,6 +27336,12 @@
     "story.composer.recordVocal" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "تسجيل مقطع صوتي"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -26209,6 +27366,12 @@
             "value" : "Enregistrer un vocal"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Registra un vocale"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -26220,6 +27383,12 @@
     "story.composer.redo" : {
       "extractionState" : "manual",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "إعادة"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
@@ -26244,11 +27413,24 @@
             "value" : "Rétablir"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ripristina"
+          }
+        }
       }
     },
     "story.composer.resume" : {
       "extractionState" : "stale",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "استئناف"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -26273,6 +27455,12 @@
             "value" : "Reprendre"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Riprendi"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -26284,6 +27472,12 @@
     "story.composer.resumeStory" : {
       "extractionState" : "stale",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "استئناف قصتك؟"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -26308,6 +27502,12 @@
             "value" : "Reprendre votre story ?"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Riprendere la tua storia?"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -26319,6 +27519,12 @@
     "story.composer.save" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "حفظ"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -26343,6 +27549,12 @@
             "value" : "Sauvegarder"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Salva"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -26354,6 +27566,12 @@
     "story.composer.saveDraft" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "حفظ المسودة"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -26378,6 +27596,12 @@
             "value" : "Sauvegarder le brouillon"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Salva la bozza"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -26389,6 +27613,12 @@
     "story.composer.showTools" : {
       "extractionState" : "manual",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "عرض الأدوات"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
@@ -26413,11 +27643,24 @@
             "value" : "Afficher les outils"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mostra gli strumenti"
+          }
+        }
       }
     },
     "story.composer.text.empty" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "نص فارغ"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
@@ -26442,11 +27685,24 @@
             "value" : "Texte vide"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Testo vuoto"
+          }
+        }
       }
     },
     "story.composer.timeline" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "الخط الزمني"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
@@ -26471,11 +27727,24 @@
             "value" : "Timeline"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Timeline"
+          }
+        }
       }
     },
     "story.composer.tool.back" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "رجوع"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
@@ -26500,11 +27769,24 @@
             "value" : "Retour"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Indietro"
+          }
+        }
       }
     },
     "story.composer.tool.switch.hint" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "يفتح المحرّر"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
@@ -26529,11 +27811,24 @@
             "value" : "Ouvre l'éditeur"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Apre l'editor"
+          }
+        }
       }
     },
     "story.composer.transitions" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "الانتقالات"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
@@ -26558,11 +27853,24 @@
             "value" : "Transitions"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Transizioni"
+          }
+        }
       }
     },
     "story.composer.undo" : {
       "extractionState" : "manual",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "تراجع"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
@@ -26587,11 +27895,24 @@
             "value" : "Annuler"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Annulla"
+          }
+        }
       }
     },
     "story.composer.unpublishedDraft" : {
       "extractionState" : "stale",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "لديك مسودة غير منشورة."
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -26616,6 +27937,12 @@
             "value" : "Vous avez un brouillon non publie."
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hai una bozza non pubblicata."
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -26627,6 +27954,12 @@
     "story.composer.video" : {
       "extractionState" : "stale",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "فيديو"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
@@ -26645,6 +27978,12 @@
             "value" : "Video"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Video"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "translated",
@@ -26656,6 +27995,12 @@
     "story.composer.videoLabel" : {
       "extractionState" : "stale",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "فيديو"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -26680,6 +28025,12 @@
             "value" : "Video"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Video"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -26691,6 +28042,12 @@
     "story.composer.visibility" : {
       "extractionState" : "stale",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "الظهور"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -26715,6 +28072,12 @@
             "value" : "Visibilite"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Visibilità"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -26726,6 +28089,12 @@
     "story.draft.freshness.days" : {
       "extractionState" : "manual",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "عُدّلت قبل %lld ي"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
@@ -26750,11 +28119,24 @@
             "value" : "modifié il y a %lld j"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "modificata %lld g fa"
+          }
+        }
       }
     },
     "story.draft.freshness.hours" : {
       "extractionState" : "manual",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "عُدّلت قبل %lld س"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
@@ -26779,11 +28161,24 @@
             "value" : "modifié il y a %lld h"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "modificata %lld h fa"
+          }
+        }
       }
     },
     "story.draft.freshness.minutes" : {
       "extractionState" : "manual",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "عُدّلت قبل %lld د"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
@@ -26808,11 +28203,24 @@
             "value" : "modifié il y a %lld min"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "modificata %lld min fa"
+          }
+        }
       }
     },
     "story.draft.freshness.now" : {
       "extractionState" : "manual",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "عُدّلت للتو"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
@@ -26837,11 +28245,24 @@
             "value" : "modifié à l'instant"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "modificata proprio ora"
+          }
+        }
       }
     },
     "story.draft.resume.a11y" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "مسودة قصة، %lld شريحة"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
@@ -26866,11 +28287,24 @@
             "value" : "Brouillon de story, %lld slide(s)"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bozza di storia, %lld slide"
+          }
+        }
       }
     },
     "story.draft.resume.discard" : {
       "extractionState" : "manual",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "البدء من جديد"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
@@ -26895,11 +28329,24 @@
             "value" : "Recommencer"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ricomincia"
+          }
+        }
       }
     },
     "story.draft.resume.resume" : {
       "extractionState" : "manual",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "استئناف"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
@@ -26924,11 +28371,24 @@
             "value" : "Reprendre"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Riprendi"
+          }
+        }
       }
     },
     "story.draft.resume.slides" : {
       "extractionState" : "manual",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld شريحة"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
@@ -26953,11 +28413,24 @@
             "value" : "%lld slide(s)"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld slide"
+          }
+        }
       }
     },
     "story.draft.resume.title" : {
       "extractionState" : "manual",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "استئناف قصتك؟"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
@@ -26982,11 +28455,24 @@
             "value" : "Reprendre votre story ?"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Riprendere la tua storia?"
+          }
+        }
       }
     },
     "story.drawing.brushSize" : {
       "extractionState" : "stale",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "حجم الفرشاة"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -27011,6 +28497,12 @@
             "value" : "Taille pinceau"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dimensione pennello"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -27022,6 +28514,12 @@
     "story.drawing.eraser" : {
       "extractionState" : "stale",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ممحاة"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -27046,6 +28544,12 @@
             "value" : "Gomme"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gomma"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -27057,6 +28561,12 @@
     "story.drawing.marker" : {
       "extractionState" : "stale",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "قلم تحديد"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -27081,6 +28591,12 @@
             "value" : "Marker"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pennarello"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -27092,6 +28608,12 @@
     "story.drawing.pen" : {
       "extractionState" : "stale",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "قلم"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -27116,6 +28638,12 @@
             "value" : "Pen"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Penna"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -27127,6 +28655,12 @@
     "story.drawing.redo" : {
       "extractionState" : "stale",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "إعادة"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -27151,6 +28685,12 @@
             "value" : "Restaurer"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ripristina"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -27162,6 +28702,12 @@
     "story.drawing.undo" : {
       "extractionState" : "stale",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "تراجع"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -27186,6 +28732,12 @@
             "value" : "Annuler"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Annulla"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -27197,6 +28749,12 @@
     "story.filter.original" : {
       "extractionState" : "stale",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "الأصل"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -27221,6 +28779,12 @@
             "value" : "Original"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Originale"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -27232,6 +28796,12 @@
     "story.filters.intensity" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "الشدّة"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
@@ -27256,11 +28826,24 @@
             "value" : "Intensite"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Intensità"
+          }
+        }
       }
     },
     "story.language.search" : {
       "extractionState" : "manual",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ابحث عن لغة"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
@@ -27285,11 +28868,24 @@
             "value" : "Rechercher une langue"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cerca una lingua"
+          }
+        }
       }
     },
     "story.language.title" : {
       "extractionState" : "manual",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "لغة المحتوى"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
@@ -27314,11 +28910,24 @@
             "value" : "Langue du contenu"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lingua del contenuto"
+          }
+        }
       }
     },
     "story.media.background" : {
       "extractionState" : "manual",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "الخلفية"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
@@ -27343,11 +28952,24 @@
             "value" : "Fond"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sfondo"
+          }
+        }
       }
     },
     "story.media.foreground" : {
       "extractionState" : "manual",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "المقدّمة"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
@@ -27372,11 +28994,24 @@
             "value" : "Premier plan"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Primo piano"
+          }
+        }
       }
     },
     "story.media.image" : {
       "extractionState" : "manual",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "صورة"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
@@ -27401,11 +29036,24 @@
             "value" : "Image"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Immagine"
+          }
+        }
       }
     },
     "story.media.video" : {
       "extractionState" : "manual",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "فيديو"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
@@ -27430,11 +29078,24 @@
             "value" : "Vidéo"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Video"
+          }
+        }
       }
     },
     "story.placement.background" : {
       "extractionState" : "stale",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "الخلفية"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -27459,6 +29120,12 @@
             "value" : "Arrière-plan"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sfondo"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -27470,6 +29137,12 @@
     "story.placement.backgroundSubtitle" : {
       "extractionState" : "stale",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "يملأ الشريحة"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -27494,6 +29167,12 @@
             "value" : "Remplit la slide"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Riempie la slide"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -27505,6 +29184,12 @@
     "story.placement.foreground" : {
       "extractionState" : "stale",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "المقدّمة"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -27529,6 +29214,12 @@
             "value" : "Premier plan"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Primo piano"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -27540,6 +29231,12 @@
     "story.placement.foregroundSubtitle" : {
       "extractionState" : "stale",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "عنصر قابل للسحب"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -27564,6 +29261,12 @@
             "value" : "Élément draggable"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Elemento trascinabile"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -27575,6 +29278,12 @@
     "story.post.cancel" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "إلغاء"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -27599,6 +29308,12 @@
             "value" : "Cancel"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Annulla"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -27610,6 +29325,12 @@
     "story.post.create" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "إنشاء"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -27634,6 +29355,12 @@
             "value" : "Create"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Crea"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -27645,6 +29372,12 @@
     "story.post.friends" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "الأصدقاء"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -27669,6 +29402,12 @@
             "value" : "Friends"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Amici"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -27680,6 +29419,12 @@
     "story.post.howFeeling" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "كيف تشعر؟"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -27704,6 +29449,12 @@
             "value" : "How are you feeling?"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Come ti senti?"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -27715,6 +29466,12 @@
     "story.post.media" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "وسائط"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -27739,6 +29496,12 @@
             "value" : "Média"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Media"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -27750,6 +29513,12 @@
     "story.post.private" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "خاص"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -27774,6 +29543,12 @@
             "value" : "Private"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Privato"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -27785,6 +29560,12 @@
     "story.post.public" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "عام"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -27809,6 +29590,12 @@
             "value" : "Public"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pubblico"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -27820,6 +29607,12 @@
     "story.post.publish" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "نشر"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -27844,6 +29637,12 @@
             "value" : "Post"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pubblica"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -27855,6 +29654,12 @@
     "story.post.tapStoryEditor" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "انقر لفتح محرّر القصص"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -27879,6 +29684,12 @@
             "value" : "Tap to open Story Editor"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tocca per aprire l'editor di storie"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -27890,6 +29701,12 @@
     "story.post.whatOnYourMind" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "بماذا تفكّر؟"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -27914,6 +29731,12 @@
             "value" : "What's on your mind?"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "A cosa stai pensando?"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -27925,6 +29748,12 @@
     "story.reader.loading" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "جارٍ تحميل القصة…"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -27949,6 +29778,12 @@
             "value" : "Chargement de la story…"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Caricamento della storia…"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -27959,6 +29794,12 @@
     },
     "story.repost.reprojected" : {
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "أُعيد وضع %d عنصر ليناسب التنسيق الجديد"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
@@ -27983,11 +29824,24 @@
             "value" : "%d élément(s) repositionné(s) pour le nouveau format"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%d elemento/i riposizionato/i per il nuovo formato"
+          }
+        }
       }
     },
     "story.slide.addSlide" : {
       "extractionState" : "stale",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "إضافة شريحة"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -28012,6 +29866,12 @@
             "value" : "Add slide"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aggiungi slide"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -28023,6 +29883,12 @@
     "story.slide.delete" : {
       "extractionState" : "stale",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "حذف"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -28047,6 +29913,12 @@
             "value" : "Delete"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Elimina"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -28058,6 +29930,12 @@
     "story.slide.duplicate" : {
       "extractionState" : "stale",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "تكرار"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -28082,6 +29960,12 @@
             "value" : "Duplicate"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Duplica"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -28093,6 +29977,12 @@
     "story.sticker.title" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "الملصقات"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
@@ -28117,11 +30007,24 @@
             "value" : "Stickers"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sticker"
+          }
+        }
       }
     },
     "story.textEditor.color" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "اللون"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -28146,6 +30049,12 @@
             "value" : "Couleur"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Colore"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -28157,6 +30066,12 @@
     "story.textEditor.duration" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "المدة"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -28181,6 +30096,12 @@
             "value" : "Duree"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Durata"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -28192,6 +30113,12 @@
     "story.textEditor.fadeIn" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "تلاشٍ عند الظهور"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -28216,6 +30143,12 @@
             "value" : "Fondu in"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dissolvenza in entrata"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -28227,6 +30160,12 @@
     "story.textEditor.fadeOut" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "تلاشٍ عند الاختفاء"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -28251,6 +30190,12 @@
             "value" : "Fondu out"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dissolvenza in uscita"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -28262,6 +30207,12 @@
     "story.textEditor.placeholder" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "عبّر عن نفسك…"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -28286,6 +30237,12 @@
             "value" : "Exprimez-vous…"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Esprimiti…"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -28297,6 +30254,12 @@
     "story.textEditor.size" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "الحجم"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -28321,6 +30284,12 @@
             "value" : "Taille"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dimensione"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -28332,6 +30301,12 @@
     "story.textEditor.start" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "البداية"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -28356,6 +30331,12 @@
             "value" : "Debut"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Inizio"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -28367,6 +30348,12 @@
     "story.textEditor.style" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "النمط"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -28391,6 +30378,12 @@
             "value" : "Style"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Stile"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -28402,6 +30395,12 @@
     "story.textEditor.timing" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "التوقيت"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -28426,6 +30425,12 @@
             "value" : "Timing"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tempi"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -28437,6 +30442,12 @@
     "story.textEditor.title" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "نص"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
@@ -28461,10 +30472,23 @@
             "value" : "Texte"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Testo"
+          }
+        }
       }
     },
     "story.timeline.a11y.audio.muted_suffix" : {
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "، مكتوم"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
@@ -28489,6 +30513,12 @@
             "value" : ", muet"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : ", muto"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "translated",
@@ -28499,6 +30529,12 @@
     },
     "story.timeline.a11y.clip.audio" : {
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "مقطع صوتي %@"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
@@ -28523,6 +30559,12 @@
             "value" : "Clip audio %@"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Clip audio %@"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "translated",
@@ -28533,6 +30575,12 @@
     },
     "story.timeline.a11y.clip.displayedRange" : {
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "يُعرض من %.1fs إلى %.1fs"
+          }
+        },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
@@ -28545,10 +30593,23 @@
             "value" : "Affiché de %.1fs à %.1fs"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Visualizzato da %.1fs a %.1fs"
+          }
+        }
       }
     },
     "story.timeline.a11y.clip.image" : {
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "مقطع صورة %@"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
@@ -28573,6 +30634,12 @@
             "value" : "Clip image %@"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Clip immagine %@"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "translated",
@@ -28583,6 +30650,12 @@
     },
     "story.timeline.a11y.clip.text" : {
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "نص %@"
+          }
+        },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
@@ -28595,10 +30668,23 @@
             "value" : "Texte %@"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Testo %@"
+          }
+        }
       }
     },
     "story.timeline.a11y.clip.timeRange" : {
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "البداية %.2fs، المدة %.2fs"
+          }
+        },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
@@ -28611,10 +30697,23 @@
             "value" : "Début %.2fs, durée %.2fs"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Inizio %.2fs, durata %.2fs"
+          }
+        }
       }
     },
     "story.timeline.a11y.clip.video" : {
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "مقطع فيديو %@"
+          }
+        },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
@@ -28627,10 +30726,23 @@
             "value" : "Clip vidéo %@"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Clip video %@"
+          }
+        }
       }
     },
     "story.timeline.a11y.durationHandle" : {
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "مقبض مدة الشريحة"
+          }
+        },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
@@ -28643,10 +30755,23 @@
             "value" : "Poignée durée du slide"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Maniglia durata della slide"
+          }
+        }
       }
     },
     "story.timeline.a11y.keyframe" : {
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "إطار مفتاحي عند %@"
+          }
+        },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
@@ -28659,21 +30784,47 @@
             "value" : "Keyframe à %@"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Keyframe a %@"
+          }
+        }
       }
     },
     "story.timeline.a11y.offline" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "غير متصل — ستُنشر قصتك عند عودة الاتصال"
+          }
+        },
         "fr" : {
           "stringUnit" : {
             "state" : "new",
             "value" : "Hors-ligne — votre story sera publiée à la reconnexion"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Non in linea — la tua storia sarà pubblicata alla riconnessione"
+          }
+        }
       }
     },
     "story.timeline.a11y.playhead" : {
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "رأس التشغيل"
+          }
+        },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
@@ -28686,10 +30837,23 @@
             "value" : "Tête de lecture"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Testina di riproduzione"
+          }
+        }
       }
     },
     "story.timeline.a11y.snap.off" : {
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "المحاذاة معطّلة"
+          }
+        },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
@@ -28702,10 +30866,23 @@
             "value" : "Magnétisme désactivé"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aggancio disattivato"
+          }
+        }
       }
     },
     "story.timeline.a11y.snap.on" : {
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "المحاذاة مفعّلة"
+          }
+        },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
@@ -28718,10 +30895,23 @@
             "value" : "Magnétisme activé"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aggancio attivato"
+          }
+        }
       }
     },
     "story.timeline.a11y.transition" : {
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "انتقال %1$@ بين %2$@ و%3$@"
+          }
+        },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
@@ -28734,11 +30924,24 @@
             "value" : "Transition %1$@ entre %2$@ et %3$@"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Transizione %1$@ tra %2$@ e %3$@"
+          }
+        }
       }
     },
     "story.timeline.addContent" : {
       "extractionState" : "stale",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "أضِف محتوى لعرض الخط الزمني"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -28763,6 +30966,12 @@
             "value" : "Ajoutez du contenu pour voir la timeline"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aggiungi del contenuto per vedere la timeline"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -28774,6 +30983,12 @@
     "story.timeline.audio" : {
       "extractionState" : "stale",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "صوت"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -28798,6 +31013,12 @@
             "value" : "Audio"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Audio"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -28809,6 +31030,12 @@
     "story.timeline.bgAudio" : {
       "extractionState" : "stale",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "صوت الخلفية"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -28833,6 +31060,12 @@
             "value" : "Audio BG"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Audio sfondo"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -28844,6 +31077,12 @@
     "story.timeline.bgImage" : {
       "extractionState" : "stale",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "صورة الخلفية"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -28868,6 +31107,12 @@
             "value" : "Image Fond"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Immagine sfondo"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -28879,6 +31124,12 @@
     "story.timeline.bgImageElement" : {
       "extractionState" : "stale",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "صورة الخلفية"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -28903,6 +31154,12 @@
             "value" : "Image BG"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Immagine sfondo"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -28914,6 +31171,12 @@
     "story.timeline.bgVideo" : {
       "extractionState" : "stale",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "فيديو الخلفية"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -28938,6 +31201,12 @@
             "value" : "Video BG"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Video sfondo"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -28949,6 +31218,12 @@
     "story.timeline.clip.audio" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "صوت"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
@@ -28973,11 +31248,24 @@
             "value" : "Audio"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Audio"
+          }
+        }
       }
     },
     "story.timeline.clip.backgroundImage" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "صورة الخلفية"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
@@ -29002,11 +31290,24 @@
             "value" : "Image de fond"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Immagine di sfondo"
+          }
+        }
       }
     },
     "story.timeline.clip.bringToFront" : {
       "extractionState" : "stale",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "إحضار إلى الأمام"
+          }
+        },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
@@ -29019,10 +31320,23 @@
             "value" : "Mettre devant"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Porta davanti"
+          }
+        }
       }
     },
     "story.timeline.clip.delete" : {
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "حذف"
+          }
+        },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
@@ -29035,11 +31349,24 @@
             "value" : "Supprimer"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Elimina"
+          }
+        }
       }
     },
     "story.timeline.clip.duplicate" : {
       "extractionState" : "stale",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "تكرار"
+          }
+        },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
@@ -29052,10 +31379,23 @@
             "value" : "Dupliquer"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Duplica"
+          }
+        }
       }
     },
     "story.timeline.clip.image" : {
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "صورة"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
@@ -29080,11 +31420,24 @@
             "value" : "Image"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Immagine"
+          }
+        }
       }
     },
     "story.timeline.clip.split" : {
       "extractionState" : "stale",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "القص عند رأس التشغيل"
+          }
+        },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
@@ -29097,11 +31450,24 @@
             "value" : "Couper au playhead"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Taglia alla testina"
+          }
+        }
       }
     },
     "story.timeline.clip.toggleBackground" : {
       "extractionState" : "stale",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "التبديل بين الخلفية والمقدّمة"
+          }
+        },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
@@ -29114,10 +31480,23 @@
             "value" : "Basculer fond / premier plan"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Alterna sfondo / primo piano"
+          }
+        }
       }
     },
     "story.timeline.clip.tooltip.duration" : {
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "المدة %@"
+          }
+        },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
@@ -29130,11 +31509,24 @@
             "value" : "Durée %@"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Durata %@"
+          }
+        }
       }
     },
     "story.timeline.clip.tooltip.fadeIn" : {
       "extractionState" : "stale",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "تلاشٍ عند الظهور %@"
+          }
+        },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
@@ -29147,11 +31539,24 @@
             "value" : "Fondu entrée %@"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dissolvenza in entrata %@"
+          }
+        }
       }
     },
     "story.timeline.clip.tooltip.fadeOut" : {
       "extractionState" : "stale",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "تلاشٍ عند الاختفاء %@"
+          }
+        },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
@@ -29164,10 +31569,23 @@
             "value" : "Fondu sortie %@"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dissolvenza in uscita %@"
+          }
+        }
       }
     },
     "story.timeline.clip.tooltip.start" : {
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "البداية %@"
+          }
+        },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
@@ -29180,10 +31598,23 @@
             "value" : "Début %@"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Inizio %@"
+          }
+        }
       }
     },
     "story.timeline.clip.video" : {
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "فيديو"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
@@ -29208,11 +31639,24 @@
             "value" : "Vidéo"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Video"
+          }
+        }
       }
     },
     "story.timeline.drawing" : {
       "extractionState" : "stale",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "رسم"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -29237,6 +31681,12 @@
             "value" : "Dessin"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Disegno"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -29248,6 +31698,12 @@
     "story.timeline.empty.addContent" : {
       "extractionState" : "stale",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "أضِف محتوى لعرض الخط الزمني"
+          }
+        },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
@@ -29260,11 +31716,24 @@
             "value" : "Ajoutez du contenu pour voir la timeline"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aggiungi del contenuto per vedere la timeline"
+          }
+        }
       }
     },
     "story.timeline.empty.addMediaPrompt" : {
       "extractionState" : "stale",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "+ وسائط"
+          }
+        },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
@@ -29277,11 +31746,24 @@
             "value" : "+ Média"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "+ Media"
+          }
+        }
       }
     },
     "story.timeline.empty.subtitle" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "أضِف فيديو أو صورة أو صوتًا أو نصًّا من شريط المحرّر."
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
@@ -29306,11 +31788,24 @@
             "value" : "Ajoute une vidéo, une photo, du son ou du texte depuis la barre du composer."
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aggiungi un video, una foto, del suono o del testo dalla barra del compositore."
+          }
+        }
       }
     },
     "story.timeline.empty.title" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "لا توجد مسارات"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
@@ -29335,11 +31830,24 @@
             "value" : "Aucune piste"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nessuna traccia"
+          }
+        }
       }
     },
     "story.timeline.error.assetLoadFailed" : {
       "extractionState" : "stale",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "تعذّر تحميل %@"
+          }
+        },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
@@ -29352,11 +31860,24 @@
             "value" : "Impossible de charger %@"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Impossibile caricare %@"
+          }
+        }
       }
     },
     "story.timeline.error.audioFailed" : {
       "extractionState" : "stale",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "الصوت غير متاح — معاينة صامتة"
+          }
+        },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
@@ -29369,11 +31890,24 @@
             "value" : "Audio indisponible — preview muette"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Audio non disponibile — anteprima muta"
+          }
+        }
       }
     },
     "story.timeline.error.diskFull" : {
       "extractionState" : "stale",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "مساحة غير كافية"
+          }
+        },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
@@ -29386,11 +31920,24 @@
             "value" : "Espace insuffisant"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Spazio insufficiente"
+          }
+        }
       }
     },
     "story.timeline.error.mediaUnavailable" : {
       "extractionState" : "stale",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "الوسائط غير متاحة"
+          }
+        },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
@@ -29403,10 +31950,23 @@
             "value" : "Média indisponible"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Media non disponibile"
+          }
+        }
       }
     },
     "story.timeline.export.button" : {
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "التصدير إلى فيديو MP4"
+          }
+        },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
@@ -29419,10 +31979,23 @@
             "value" : "Exporter en vidéo MP4"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Esporta in video MP4"
+          }
+        }
       }
     },
     "story.timeline.export.exporting" : {
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "جارٍ تصدير الفيديو…"
+          }
+        },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
@@ -29435,10 +32008,23 @@
             "value" : "Export de la vidéo…"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Esportazione del video…"
+          }
+        }
       }
     },
     "story.timeline.export.failedTitle" : {
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "تعذّر التصدير"
+          }
+        },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
@@ -29451,11 +32037,24 @@
             "value" : "Export impossible"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Esportazione impossibile"
+          }
+        }
       }
     },
     "story.timeline.export.preview.close" : {
       "extractionState" : "manual",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "إغلاق"
+          }
+        },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
@@ -29468,11 +32067,24 @@
             "value" : "Fermer"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Chiudi"
+          }
+        }
       }
     },
     "story.timeline.export.preview.save" : {
       "extractionState" : "manual",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "الحفظ في الصور"
+          }
+        },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
@@ -29485,11 +32097,24 @@
             "value" : "Enregistrer dans Photos"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Salva in Foto"
+          }
+        }
       }
     },
     "story.timeline.export.preview.saved" : {
       "extractionState" : "manual",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "حُفظ في الصور"
+          }
+        },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
@@ -29502,11 +32127,24 @@
             "value" : "Enregistrée dans Photos"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Salvata in Foto"
+          }
+        }
       }
     },
     "story.timeline.export.preview.share" : {
       "extractionState" : "manual",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "مشاركة الفيديو"
+          }
+        },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
@@ -29519,11 +32157,24 @@
             "value" : "Partager la vidéo"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Condividi il video"
+          }
+        }
       }
     },
     "story.timeline.export.previewTitle" : {
       "extractionState" : "stale",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "معاينة التصدير"
+          }
+        },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
@@ -29536,11 +32187,24 @@
             "value" : "Aperçu de l'export"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Anteprima dell'esportazione"
+          }
+        }
       }
     },
     "story.timeline.image" : {
       "extractionState" : "stale",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "صورة"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -29565,6 +32229,12 @@
             "value" : "Image"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Immagine"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -29576,6 +32246,12 @@
     "story.timeline.indicator.offline" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "غير متصل"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
@@ -29600,11 +32276,24 @@
             "value" : "Hors-ligne"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Non in linea"
+          }
+        }
       }
     },
     "story.timeline.inspector.animate" : {
       "extractionState" : "manual",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "تحريك عند رأس التشغيل"
+          }
+        },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
@@ -29617,11 +32306,24 @@
             "value" : "Animer au playhead"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Anima alla testina"
+          }
+        }
       }
     },
     "story.timeline.inspector.animate.caption" : {
       "extractionState" : "manual",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "مرحلة حركة: تثبّت الموضع والمقياس والشفافية عند هذه اللحظة — وينتقل العنصر من مرحلة إلى أخرى أثناء التشغيل."
+          }
+        },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
@@ -29634,11 +32336,24 @@
             "value" : "Étape d'animation : fige position, échelle et opacité à cet instant — l'élément glisse d'une étape à l'autre pendant la lecture."
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fase di animazione: fissa posizione, scala e opacità in questo istante — l'elemento scorre da una fase all'altra durante la riproduzione."
+          }
+        }
       }
     },
     "story.timeline.inspector.animate.hint" : {
       "extractionState" : "manual",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "يضع مرحلة حركة عند موضع التشغيل"
+          }
+        },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
@@ -29651,11 +32366,24 @@
             "value" : "Pose une étape d'animation à la position de lecture"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Inserisce una fase di animazione alla posizione di riproduzione"
+          }
+        }
       }
     },
     "story.timeline.inspector.animation" : {
       "extractionState" : "manual",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "الحركة"
+          }
+        },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
@@ -29668,11 +32396,24 @@
             "value" : "Animation"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Animazione"
+          }
+        }
       }
     },
     "story.timeline.inspector.animation.hint" : {
       "extractionState" : "manual",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "يعرض إعدادات حركة المقطع"
+          }
+        },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
@@ -29685,10 +32426,23 @@
             "value" : "Affiche les réglages d'animation du clip"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mostra le impostazioni di animazione del clip"
+          }
+        }
       }
     },
     "story.timeline.inspector.background" : {
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "الخلفية"
+          }
+        },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
@@ -29701,11 +32455,24 @@
             "value" : "Fond"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sfondo"
+          }
+        }
       }
     },
     "story.timeline.inspector.background.hint" : {
       "extractionState" : "manual",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "تغطّي الخلفية الشريحة بأكملها — ويُتجاهل البداية والمدة. عطّل «الخلفية» لوضع هذه الوسائط على الخط الزمني."
+          }
+        },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
@@ -29718,11 +32485,24 @@
             "value" : "Le fond couvre toute la slide — début/durée ignorés. Désactivez « Fond » pour caler ce média sur la timeline."
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lo sfondo copre l'intera slide — inizio e durata sono ignorati. Disattiva « Sfondo » per posizionare questo media sulla timeline."
+          }
+        }
       }
     },
     "story.timeline.inspector.close" : {
       "extractionState" : "manual",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "إغلاق"
+          }
+        },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
@@ -29735,11 +32515,24 @@
             "value" : "Fermer"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Chiudi"
+          }
+        }
       }
     },
     "story.timeline.inspector.delete.cancel" : {
       "extractionState" : "manual",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "إلغاء"
+          }
+        },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
@@ -29752,11 +32545,24 @@
             "value" : "Annuler"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Annulla"
+          }
+        }
       }
     },
     "story.timeline.inspector.delete.confirm" : {
       "extractionState" : "manual",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "حذف"
+          }
+        },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
@@ -29769,11 +32575,24 @@
             "value" : "Supprimer"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Elimina"
+          }
+        }
       }
     },
     "story.timeline.inspector.delete.confirmMessage" : {
       "extractionState" : "manual",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "سيُزال المقطع نهائيًا من الخط الزمني."
+          }
+        },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
@@ -29786,11 +32605,24 @@
             "value" : "Le clip sera définitivement retiré de la timeline."
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Il clip sarà rimosso definitivamente dalla timeline."
+          }
+        }
       }
     },
     "story.timeline.inspector.delete.confirmTitle" : {
       "extractionState" : "manual",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "حذف هذا المقطع؟"
+          }
+        },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
@@ -29803,11 +32635,24 @@
             "value" : "Supprimer ce clip ?"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Eliminare questo clip?"
+          }
+        }
       }
     },
     "story.timeline.inspector.delete.hint" : {
       "extractionState" : "manual",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "يطلب تأكيدًا قبل الحذف"
+          }
+        },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
@@ -29820,11 +32665,24 @@
             "value" : "Demande une confirmation avant la suppression"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Chiede una conferma prima dell'eliminazione"
+          }
+        }
       }
     },
     "story.timeline.inspector.details" : {
       "extractionState" : "manual",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "التفاصيل"
+          }
+        },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
@@ -29837,11 +32695,24 @@
             "value" : "Détails"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dettagli"
+          }
+        }
       }
     },
     "story.timeline.inspector.details.hint" : {
       "extractionState" : "manual",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "يعرض بداية المقطع ومدته ومعلوماته"
+          }
+        },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
@@ -29854,10 +32725,23 @@
             "value" : "Affiche le début, la durée et les informations du clip"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mostra l'inizio, la durata e le informazioni del clip"
+          }
+        }
       }
     },
     "story.timeline.inspector.duration" : {
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "المدة"
+          }
+        },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
@@ -29870,11 +32754,24 @@
             "value" : "Durée"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Durata"
+          }
+        }
       }
     },
     "story.timeline.inspector.easing.easeIn" : {
       "extractionState" : "manual",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "تسارع"
+          }
+        },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
@@ -29887,11 +32784,24 @@
             "value" : "Accélère"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Accelera"
+          }
+        }
       }
     },
     "story.timeline.inspector.easing.easeInOut" : {
       "extractionState" : "manual",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ناعمة"
+          }
+        },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
@@ -29904,11 +32814,24 @@
             "value" : "Douce"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Morbida"
+          }
+        }
       }
     },
     "story.timeline.inspector.easing.easeOut" : {
       "extractionState" : "manual",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "تباطؤ"
+          }
+        },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
@@ -29921,10 +32844,23 @@
             "value" : "Décélère"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Decelera"
+          }
+        }
       }
     },
     "story.timeline.inspector.easing.label" : {
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "منحنى الحركة: %@"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
@@ -29949,6 +32885,12 @@
             "value" : "Easing : %@"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Easing: %@"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "translated",
@@ -29959,6 +32901,12 @@
     },
     "story.timeline.inspector.easing.linear" : {
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "خطية"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
@@ -29983,6 +32931,12 @@
             "value" : "Linéaire"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lineare"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "translated",
@@ -29994,6 +32948,12 @@
     "story.timeline.inspector.easing.section" : {
       "extractionState" : "manual",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "المنحنى"
+          }
+        },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
@@ -30006,11 +32966,24 @@
             "value" : "Courbe"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Curva"
+          }
+        }
       }
     },
     "story.timeline.inspector.end" : {
       "extractionState" : "manual",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "النهاية"
+          }
+        },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
@@ -30023,11 +32996,24 @@
             "value" : "Fin"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fine"
+          }
+        }
       }
     },
     "story.timeline.inspector.fade.off" : {
       "extractionState" : "manual",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "معطّل"
+          }
+        },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
@@ -30040,11 +33026,24 @@
             "value" : "off"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "off"
+          }
+        }
       }
     },
     "story.timeline.inspector.fadeIn" : {
       "extractionState" : "manual",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "الظهور (تلاشٍ)"
+          }
+        },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
@@ -30057,11 +33056,24 @@
             "value" : "Apparition (fondu)"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Comparsa (dissolvenza)"
+          }
+        }
       }
     },
     "story.timeline.inspector.fadeOut" : {
       "extractionState" : "manual",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "الاختفاء (تلاشٍ)"
+          }
+        },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
@@ -30074,10 +33086,23 @@
             "value" : "Disparition (fondu)"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Scomparsa (dissolvenza)"
+          }
+        }
       }
     },
     "story.timeline.inspector.loop" : {
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "تكرار"
+          }
+        },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
@@ -30090,10 +33115,23 @@
             "value" : "Boucle"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ciclo"
+          }
+        }
       }
     },
     "story.timeline.inspector.start" : {
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "البداية"
+          }
+        },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
@@ -30106,11 +33144,24 @@
             "value" : "Début"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Inizio"
+          }
+        }
       }
     },
     "story.timeline.inspector.timing.move" : {
       "extractionState" : "manual",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "موضع المقطع"
+          }
+        },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
@@ -30123,11 +33174,24 @@
             "value" : "Position du clip"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Posizione del clip"
+          }
+        }
       }
     },
     "story.timeline.inspector.transition.duration" : {
       "extractionState" : "manual",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "المدة"
+          }
+        },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
@@ -30140,11 +33204,24 @@
             "value" : "Durée"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Durata"
+          }
+        }
       }
     },
     "story.timeline.inspector.transition.title" : {
       "extractionState" : "manual",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "الانتقال بين المقاطع"
+          }
+        },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
@@ -30157,10 +33234,23 @@
             "value" : "Transition entre les clips"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Transizione tra i clip"
+          }
+        }
       }
     },
     "story.timeline.inspector.volume" : {
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "مستوى الصوت"
+          }
+        },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
@@ -30173,11 +33263,24 @@
             "value" : "Volume"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Volume"
+          }
+        }
       }
     },
     "story.timeline.keyframe.add" : {
       "extractionState" : "stale",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "إضافة إطار مفتاحي"
+          }
+        },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
@@ -30190,10 +33293,23 @@
             "value" : "Ajouter keyframe"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aggiungi keyframe"
+          }
+        }
       }
     },
     "story.timeline.keyframe.delete" : {
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "حذف الإطار المفتاحي"
+          }
+        },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
@@ -30206,10 +33322,23 @@
             "value" : "Supprimer keyframe"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Elimina keyframe"
+          }
+        }
       }
     },
     "story.timeline.keyframe.opacity" : {
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "الشفافية"
+          }
+        },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
@@ -30222,10 +33351,23 @@
             "value" : "Opacité"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Opacità"
+          }
+        }
       }
     },
     "story.timeline.keyframe.position" : {
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "الموضع"
+          }
+        },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
@@ -30238,10 +33380,23 @@
             "value" : "Position"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Posizione"
+          }
+        }
       }
     },
     "story.timeline.keyframe.scale" : {
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "المقياس"
+          }
+        },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
@@ -30254,11 +33409,24 @@
             "value" : "Échelle"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Scala"
+          }
+        }
       }
     },
     "story.timeline.mediaUnavailable" : {
       "extractionState" : "stale",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "الوسائط غير متاحة"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -30283,6 +33451,12 @@
             "value" : "Media non disponible"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Media non disponibile"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -30294,6 +33468,12 @@
     "story.timeline.ops.extend" : {
       "extractionState" : "manual",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "إطالة الخط الزمني 10 ثوانٍ"
+          }
+        },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
@@ -30306,11 +33486,24 @@
             "value" : "Prolonger la timeline de 10 secondes"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Prolunga la timeline di 10 secondi"
+          }
+        }
       }
     },
     "story.timeline.section.audio" : {
       "extractionState" : "stale",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "الصوت"
+          }
+        },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
@@ -30323,11 +33516,24 @@
             "value" : "AUDIO"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "AUDIO"
+          }
+        }
       }
     },
     "story.timeline.section.contenu" : {
       "extractionState" : "stale",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "المحتوى"
+          }
+        },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
@@ -30340,11 +33546,24 @@
             "value" : "CONTENU"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "CONTENUTO"
+          }
+        }
       }
     },
     "story.timeline.section.effets" : {
       "extractionState" : "stale",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "المؤثرات"
+          }
+        },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
@@ -30357,11 +33576,24 @@
             "value" : "EFFETS"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "EFFETTI"
+          }
+        }
       }
     },
     "story.timeline.snapGuide.clipEnd" : {
       "extractionState" : "stale",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "النهاية %@"
+          }
+        },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
@@ -30374,11 +33606,24 @@
             "value" : "Fin %@"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fine %@"
+          }
+        }
       }
     },
     "story.timeline.snapGuide.clipStart" : {
       "extractionState" : "stale",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "البداية %@"
+          }
+        },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
@@ -30391,11 +33636,24 @@
             "value" : "Début %@"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Inizio %@"
+          }
+        }
       }
     },
     "story.timeline.snapGuide.gridMajor" : {
       "extractionState" : "stale",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@"
+          }
+        },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
@@ -30403,6 +33661,13 @@
           }
         },
         "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@"
+          }
+        }
+      ,
+        "it" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "%@"
@@ -30413,6 +33678,12 @@
     "story.timeline.snapGuide.keyframe" : {
       "extractionState" : "stale",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "إطار مفتاحي %@"
+          }
+        },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
@@ -30420,6 +33691,13 @@
           }
         },
         "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Keyframe %@"
+          }
+        }
+      ,
+        "it" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Keyframe %@"
@@ -30430,6 +33708,12 @@
     "story.timeline.snapGuide.playhead" : {
       "extractionState" : "stale",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "رأس التشغيل %@"
+          }
+        },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
@@ -30442,11 +33726,24 @@
             "value" : "Playhead %@"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Testina %@"
+          }
+        }
       }
     },
     "story.timeline.text" : {
       "extractionState" : "stale",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "نص"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -30471,6 +33768,12 @@
             "value" : "Texte"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Testo"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -30481,6 +33784,12 @@
     },
     "story.timeline.toolbar.collapseTracks" : {
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "طيّ"
+          }
+        },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
@@ -30493,10 +33802,23 @@
             "value" : "Replier"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Riduci"
+          }
+        }
       }
     },
     "story.timeline.toolbar.deployTracks" : {
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "+ %lld مسار"
+          }
+        },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
@@ -30509,10 +33831,23 @@
             "value" : "+ %lld piste(s)"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "+ %lld traccia/e"
+          }
+        }
       }
     },
     "story.timeline.toolbar.redo" : {
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "إعادة"
+          }
+        },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
@@ -30525,10 +33860,23 @@
             "value" : "Rétablir"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ripristina"
+          }
+        }
       }
     },
     "story.timeline.toolbar.snap" : {
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "المحاذاة"
+          }
+        },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
@@ -30541,10 +33889,23 @@
             "value" : "Magnétisme"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aggancio"
+          }
+        }
       }
     },
     "story.timeline.toolbar.undo" : {
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "تراجع"
+          }
+        },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
@@ -30557,11 +33918,24 @@
             "value" : "Annuler"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Annulla"
+          }
+        }
       }
     },
     "story.timeline.track.audio" : {
       "extractionState" : "stale",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "صوت %lld"
+          }
+        },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
@@ -30574,11 +33948,24 @@
             "value" : "Audio %lld"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Audio %lld"
+          }
+        }
       }
     },
     "story.timeline.track.bgAudio" : {
       "extractionState" : "stale",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "صوت الخلفية"
+          }
+        },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
@@ -30591,11 +33978,24 @@
             "value" : "Audio fond"
           }
         }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Audio sfondo"
+          }
+        }
       }
     },
     "story.timeline.track.bgVideo" : {
       "extractionState" : "stale",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "فيديو الخلفية"
+          }
+        },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
@@ -30606,6 +34006,13 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Vidéo fond"
+          }
+        }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Video sfondo"
           }
         }
       }
