@@ -23,6 +23,8 @@ import UIKit
 final class StoryExportBrandedEndToEndTests: XCTestCase {
 
     private static let storyDuration: TimeInterval = 3.0
+    /// Fréquence imposée au décodage PCM des mesures ci-dessous.
+    private static let decodeSampleRate: Double = 48_000
 
     // MARK: - Fixture
 
@@ -145,13 +147,19 @@ final class StoryExportBrandedEndToEndTests: XCTestCase {
         try XCTSkipIf(samples.isEmpty, "piste audio non décodable — mesure impossible")
 
         let totalSeconds = CMTimeGetSeconds(try await asset.load(.duration))
-        let rate = Double(samples.count) / totalSeconds
-        let introEnd = Int(StoryExportIntro.duration * rate)
+        // Fréquence RÉELLE de décodage, celle demandée au reader — surtout pas
+        // `samples.count / durée vidéo` : la piste audio est plus courte que la
+        // vidéo (la story est muette), et cette division décalerait toutes les
+        // fenêtres vers l'arrière, jusqu'à mesurer le jingle en croyant mesurer
+        // la story.
+        let rate = Self.decodeSampleRate
+        let audioSeconds = Double(samples.count) / rate
 
         // Fenêtre intérieure à l'interlude : on évite l'attaque et l'extinction
         // du jingle, dont l'enveloppe est volontairement douce.
         let introRMS = rms(window(samples, from: 0.2, to: min(StoryExportIntro.duration, 1.8), rate: rate))
-        // Fenêtre intérieure à la story, qui est muette.
+        // Fenêtre intérieure à la story, qui est muette. Vide si la piste
+        // s'arrête avec le jingle — c'est alors du silence, donc conforme.
         let storyRMS = rms(window(samples, from: StoryExportIntro.duration + 0.4,
                                   to: totalSeconds, rate: rate))
 
@@ -159,6 +167,10 @@ final class StoryExportBrandedEndToEndTests: XCTestCase {
                              "le jingle doit être AUDIBLE sur l'interlude (RMS mesuré \(introRMS))")
         XCTAssertLessThan(storyRMS, introRMS / 4,
                           "le jingle ne doit pas déborder sur la story (intro \(introRMS) vs story \(storyRMS))")
+        // La signature sonore ne doit pas non plus s'étaler sur toute la vidéo :
+        // elle habille l'interlude, elle ne l'accompagne pas jusqu'au bout.
+        XCTAssertLessThan(audioSeconds, totalSeconds,
+                          "la piste audio (\(audioSeconds)s) ne doit pas couvrir toute la vidéo (\(totalSeconds)s)")
     }
 
     // MARK: - Outils de mesure
@@ -190,7 +202,7 @@ final class StoryExportBrandedEndToEndTests: XCTestCase {
             AVLinearPCMIsFloatKey: true,
             AVLinearPCMIsNonInterleaved: false,
             AVNumberOfChannelsKey: 1,
-            AVSampleRateKey: 48_000
+            AVSampleRateKey: Self.decodeSampleRate
         ])
         reader.add(output)
         reader.startReading()

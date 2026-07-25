@@ -4,6 +4,12 @@
     "forward.empty": {
       "extractionState": "manual",
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "لا توجد محادثات"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -28,6 +34,12 @@
             "value": "Aucune conversation"
           }
         },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nessuna conversazione"
+          }
+        },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
@@ -39,6 +51,12 @@
     "forward.empty.subtitle": {
       "extractionState": "manual",
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "انضم إلى محادثة أو ابدأ واحدة لإعادة توجيه الرسائل إليها."
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -63,6 +81,12 @@
             "value": "Rejoignez ou démarrez une conversation pour y transférer des messages."
           }
         },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unisciti o avvia una conversazione per inoltrarvi i messaggi."
+          }
+        },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
@@ -74,6 +98,12 @@
     "forward.title": {
       "extractionState": "manual",
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "إعادة توجيه"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -98,6 +128,12 @@
             "value": "Transférer"
           }
         },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Inoltra"
+          }
+        },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
@@ -109,6 +145,12 @@
     "forward.search-placeholder": {
       "extractionState": "manual",
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ابحث عن محادثة"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -133,6 +175,12 @@
             "value": "Rechercher une conversation"
           }
         },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cerca una conversazione"
+          }
+        },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
@@ -144,6 +192,12 @@
     "forward.media-placeholder": {
       "extractionState": "manual",
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "[وسائط]"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -168,6 +222,12 @@
             "value": "[Média]"
           }
         },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "[Media]"
+          }
+        },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
@@ -179,6 +239,12 @@
     "forward.members-count": {
       "extractionState": "manual",
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "• %d أعضاء"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -203,6 +269,12 @@
             "value": "• %d membres"
           }
         },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "• %d membri"
+          }
+        },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
@@ -214,6 +286,12 @@
     "forward.sent": {
       "extractionState": "manual",
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تمت إعادة التوجيه"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -238,6 +316,12 @@
             "value": "Transféré"
           }
         },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Inoltrato"
+          }
+        },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
@@ -249,6 +333,12 @@
     "forward.sending": {
       "extractionState": "manual",
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "جارٍ الإرسال"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -273,6 +363,12 @@
             "value": "Envoi en cours"
           }
         },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Invio in corso"
+          }
+        },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
@@ -284,6 +380,12 @@
     "forward.this-conversation": {
       "extractionState": "manual",
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "هذه المحادثة"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -308,6 +410,12 @@
             "value": "cette conversation"
           }
         },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "questa conversazione"
+          }
+        },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
@@ -319,6 +427,12 @@
     "forward.send-a11y": {
       "extractionState": "manual",
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "إعادة التوجيه إلى %@"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -343,6 +457,12 @@
             "value": "Transférer à %@"
           }
         },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Inoltra a %@"
+          }
+        },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
@@ -354,6 +474,12 @@
     "forward.retry-send-a11y": {
       "extractionState": "manual",
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "إعادة محاولة التوجيه إلى %@"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -376,6 +502,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Réessayer le transfert à %@"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Riprova l'inoltro a %@"
           }
         },
         "pt-BR": {
@@ -1921,6 +2053,12 @@
     "deeplink.conversation.error": {
       "extractionState": "manual",
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تعذّر فتح المحادثة"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -1943,6 +2081,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Impossible d'ouvrir la conversation"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Impossibile aprire la conversazione"
           }
         },
         "pt-BR": {
@@ -3723,6 +3867,12 @@
     "stats.timeline.chart.a11y": {
       "extractionState": "manual",
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "رسم بياني للنشاط خلال 30 يومًا"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -3745,6 +3895,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Graphique d'activité sur 30 jours"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Grafico dell'attività su 30 giorni"
           }
         },
         "pt-BR": {
@@ -3853,6 +4009,12 @@
     "stats.timeline.chart.a11y.empty": {
       "extractionState": "manual",
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "لم يُسجَّل أي نشاط"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -3877,6 +4039,12 @@
             "value": "Aucune activité enregistrée"
           }
         },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nessuna attività registrata"
+          }
+        },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
@@ -3888,6 +4056,12 @@
     "stats.timeline.chart.a11y.summary": {
       "extractionState": "manual",
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$lld رسالة إجمالًا، وذروة %2$lld في يوم واحد، و%3$lld في اليوم الأحدث"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -3912,6 +4086,12 @@
             "value": "%1$lld messages au total, pic de %2$lld en une journée, %3$lld le jour le plus récent"
           }
         },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$lld messaggi in totale, picco di %2$lld in un giorno, %3$lld nel giorno più recente"
+          }
+        },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
@@ -3923,6 +4103,12 @@
     "composer.recording.stopAndAttach.hint": {
       "extractionState": "manual",
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "يضع الرسالة الصوتية في المرفقات لتعديلها قبل الإرسال"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -3947,6 +4133,12 @@
             "value": "Place le message vocal dans les pièces jointes pour l'éditer avant l'envoi"
           }
         },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Inserisce il messaggio vocale negli allegati per modificarlo prima dell'invio"
+          }
+        },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
@@ -3958,6 +4150,12 @@
     "composer.recording.cancel.hint": {
       "extractionState": "manual",
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "يحذف الرسالة الصوتية الجارية"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -3982,6 +4180,12 @@
             "value": "Supprime le message vocal en cours"
           }
         },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Elimina il messaggio vocale in corso"
+          }
+        },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
@@ -3993,6 +4197,12 @@
     "bubble.content.hidden.hint": {
       "extractionState": "manual",
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "انقر لكشف المحتوى"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -4017,6 +4227,12 @@
             "value": "Toucher pour révéler le contenu"
           }
         },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tocca per rivelare il contenuto"
+          }
+        },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
@@ -4027,6 +4243,12 @@
     },
     "·": {
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "·"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -4040,6 +4262,12 @@
           }
         },
         "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "·"
+          }
+        },
+        "it": {
           "stringUnit": {
             "state": "translated",
             "value": "·"
@@ -4055,6 +4283,12 @@
     },
     "· %@": {
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "· %@"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -4068,6 +4302,12 @@
           }
         },
         "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "· %@"
+          }
+        },
+        "it": {
           "stringUnit": {
             "state": "translated",
             "value": "· %@"
@@ -4128,6 +4368,12 @@
     },
     "(%@)": {
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "(%@)"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -4141,6 +4387,12 @@
           }
         },
         "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "(%@)"
+          }
+        },
+        "it": {
           "stringUnit": {
             "state": "translated",
             "value": "(%@)"
@@ -4160,6 +4412,12 @@
     },
     "@%@": {
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "@%@"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -4173,6 +4431,12 @@
           }
         },
         "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "@%@"
+          }
+        },
+        "it": {
           "stringUnit": {
             "state": "translated",
             "value": "@%@"
@@ -4192,6 +4456,12 @@
     },
     "%@": {
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -4205,6 +4475,12 @@
           }
         },
         "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@"
+          }
+        },
+        "it": {
           "stringUnit": {
             "state": "translated",
             "value": "%@"
@@ -4222,9 +4498,22 @@
       "comment": "A label displaying the language of the original post, followed by an arrow and the same language name. The argument is the string “feed.post.translation.original”.",
       "isCommentAutoGenerated": true,
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ (%2$@)"
+          }
+        },
         "fr": {
           "stringUnit": {
             "state": "new",
+            "value": "%1$@ (%2$@)"
+          }
+        }
+      ,
+        "it": {
+          "stringUnit": {
+            "state": "translated",
             "value": "%1$@ (%2$@)"
           }
         }
@@ -4234,9 +4523,22 @@
       "comment": "The title of the view, including the username to which it is being reported. The argument is the string “report.user.title”.",
       "isCommentAutoGenerated": true,
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ @%2$@"
+          }
+        },
         "fr": {
           "stringUnit": {
             "state": "new",
+            "value": "%1$@ @%2$@"
+          }
+        }
+      ,
+        "it": {
+          "stringUnit": {
+            "state": "translated",
             "value": "%1$@ @%2$@"
           }
         }
@@ -4244,6 +4546,12 @@
     },
     "%@ / %@": {
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ / %2$@"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -4265,6 +4573,12 @@
         "fr": {
           "stringUnit": {
             "state": "new",
+            "value": "%1$@ / %2$@"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
             "value": "%1$@ / %2$@"
           }
         },
@@ -4278,6 +4592,12 @@
     },
     "%@ %@": {
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ %2$@"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -4299,6 +4619,12 @@
         "fr": {
           "stringUnit": {
             "state": "new",
+            "value": "%1$@ %2$@"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
             "value": "%1$@ %2$@"
           }
         },
@@ -4312,9 +4638,22 @@
     },
     "%@ %@ ?": {
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ %2$@ ?"
+          }
+        },
         "fr": {
           "stringUnit": {
             "state": "new",
+            "value": "%1$@ %2$@ ?"
+          }
+        }
+      ,
+        "it": {
+          "stringUnit": {
+            "state": "translated",
             "value": "%1$@ %2$@ ?"
           }
         }
@@ -4322,6 +4661,12 @@
     },
     "%@ × %@": {
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ × %2$@"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -4343,6 +4688,12 @@
         "fr": {
           "stringUnit": {
             "state": "new",
+            "value": "%1$@ × %2$@"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
             "value": "%1$@ × %2$@"
           }
         },
@@ -4357,6 +4708,12 @@
     "%@ caractères": {
       "extractionState": "stale",
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ حرفًا"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -4375,6 +4732,12 @@
             "value": "%@ caracteres"
           }
         },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ caratteri"
+          }
+        },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
@@ -4386,6 +4749,12 @@
     "%@ clics": {
       "extractionState": "stale",
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ نقرة"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -4404,6 +4773,12 @@
             "value": "%@ clics"
           }
         },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ clic"
+          }
+        },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
@@ -4415,6 +4790,12 @@
     "%@ commentaires": {
       "extractionState": "stale",
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ تعليقًا"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -4433,6 +4814,12 @@
             "value": "%@ comentarios"
           }
         },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ commenti"
+          }
+        },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
@@ -4444,6 +4831,12 @@
     "%@ effet(s) actif(s)": {
       "extractionState": "stale",
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ تأثير نشط"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -4462,6 +4855,12 @@
             "value": "%@ efecto(s) activo(s)"
           }
         },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ effetto/i attivo/i"
+          }
+        },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
@@ -4473,6 +4872,12 @@
     "%@ locuteurs detectes": {
       "extractionState": "stale",
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ متحدثين تم رصدهم"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -4491,6 +4896,12 @@
             "value": "%@ locutores detectados"
           }
         },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ interlocutori rilevati"
+          }
+        },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
@@ -4502,6 +4913,12 @@
     "%@ membre%@": {
       "extractionState": "stale",
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ عضو%2$@"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -4526,6 +4943,12 @@
             "value": "%1$@ membre%2$@"
           }
         },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ membro%2$@"
+          }
+        },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
@@ -4537,6 +4960,12 @@
     "%@ membres · %@": {
       "extractionState": "stale",
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ أعضاء · %2$@"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -4561,6 +4990,12 @@
             "value": "%1$@ membres · %2$@"
           }
         },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ membri · %2$@"
+          }
+        },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
@@ -4571,6 +5006,12 @@
     },
     "%@ pages": {
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ صفحة"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -4589,6 +5030,12 @@
             "value": "%@ páginas"
           }
         },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ pagine"
+          }
+        },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
@@ -4600,6 +5047,12 @@
     "%@ rejoints": {
       "extractionState": "stale",
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ انضمام"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -4618,6 +5071,12 @@
             "value": "%@ unidos"
           }
         },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ iscritti"
+          }
+        },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
@@ -4629,6 +5088,12 @@
     "%@ reponses": {
       "extractionState": "stale",
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ رد"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -4645,6 +5110,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "%@ respuestas"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ risposte"
           }
         },
         "pt-BR": {
@@ -4658,6 +5129,12 @@
     "%@ réponses": {
       "extractionState": "stale",
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ رد"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -4674,6 +5151,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "%@ respuestas"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ risposte"
           }
         },
         "pt-BR": {
@@ -4691,6 +5174,12 @@
     "%@ utilisation%@ maximum": {
       "extractionState": "stale",
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ استخدام%2$@ كحد أقصى"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -4715,6 +5204,12 @@
             "value": "%1$@ utilisation%2$@ maximum"
           }
         },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ utilizzo%2$@ massimo"
+          }
+        },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
@@ -4726,6 +5221,12 @@
     "%@ verrou(s)": {
       "extractionState": "stale",
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ قفل"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -4744,6 +5245,12 @@
             "value": "%@ bloqueo(s)"
           }
         },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ blocco/i"
+          }
+        },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
@@ -4755,6 +5262,12 @@
     "%@ vue%@": {
       "extractionState": "stale",
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ مشاهدة%2$@"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -4779,6 +5292,12 @@
             "value": "%1$@ vue%2$@"
           }
         },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ visualizzazione%2$@"
+          }
+        },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
@@ -4790,6 +5309,12 @@
     "%@ Vues": {
       "extractionState": "stale",
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ مشاهدة"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -4808,6 +5333,12 @@
             "value": "%@ Vistas"
           }
         },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ visualizzazioni"
+          }
+        },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
@@ -4818,6 +5349,12 @@
     },
     "%@/%@": {
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@/%2$@"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -4842,6 +5379,12 @@
             "value": "%1$@/%2$@"
           }
         },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@/%2$@"
+          }
+        },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
@@ -4852,6 +5395,12 @@
     },
     "%@/%@ fichiers": {
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@/%2$@ ملف"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -4876,6 +5425,12 @@
             "value": "%1$@/%2$@ fichiers"
           }
         },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@/%2$@ file"
+          }
+        },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
@@ -4886,6 +5441,12 @@
     },
     "%@/122": {
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@/122"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -4904,6 +5465,12 @@
             "value": "%@/122"
           }
         },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@/122"
+          }
+        },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
@@ -4915,6 +5482,12 @@
     "%@/150 caracteres": {
       "extractionState": "stale",
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@/150 حرفًا"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -4933,6 +5506,12 @@
             "value": "%@/150 caracteres"
           }
         },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@/150 caratteri"
+          }
+        },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
@@ -4943,6 +5522,12 @@
     },
     "%@/500": {
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@/500"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -4961,6 +5546,12 @@
             "value": "%@/500"
           }
         },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@/500"
+          }
+        },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
@@ -4971,6 +5562,12 @@
     },
     "%@%@": {
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@%2$@"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -4995,6 +5592,12 @@
             "value": "%1$@%2$@"
           }
         },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@%2$@"
+          }
+        },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
@@ -5005,6 +5608,12 @@
     },
     "%@%%": {
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@%%"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -5018,6 +5627,12 @@
           }
         },
         "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@%%"
+          }
+        },
+        "it": {
           "stringUnit": {
             "state": "translated",
             "value": "%@%%"
@@ -5090,6 +5705,12 @@
     "%lld membres": {
       "extractionState": "stale",
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld أعضاء"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -5108,6 +5729,12 @@
             "value": "%lld miembros"
           }
         },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld membri"
+          }
+        },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
@@ -5118,6 +5745,12 @@
     },
     "•": {
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "•"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -5136,6 +5769,12 @@
             "value": "•"
           }
         },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "•"
+          }
+        },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
@@ -5147,6 +5786,12 @@
     "• %@ membres": {
       "extractionState": "stale",
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "• %@ أعضاء"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -5165,6 +5810,12 @@
             "value": "• %@ miembros"
           }
         },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "• %@ membri"
+          }
+        },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
@@ -5177,9 +5828,22 @@
       "comment": "A chip that appears next to a reply, showing the name of the person who replied and a preview of their message. The first argument is a Unicode arrow pointing downwards. The second argument is the name of the person who replied. The third argument is a preview of the reply message.",
       "isCommentAutoGenerated": true,
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "↩ %1$@: %2$@"
+          }
+        },
         "fr": {
           "stringUnit": {
             "state": "new",
+            "value": "↩ %1$@: %2$@"
+          }
+        }
+      ,
+        "it": {
+          "stringUnit": {
+            "state": "translated",
             "value": "↩ %1$@: %2$@"
           }
         }
@@ -5187,6 +5851,12 @@
     },
     "+": {
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "+"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -5200,6 +5870,12 @@
           }
         },
         "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "+"
+          }
+        },
+        "it": {
           "stringUnit": {
             "state": "translated",
             "value": "+"
@@ -5215,6 +5891,12 @@
     },
     "+%@": {
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "+%@"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -5228,6 +5910,12 @@
           }
         },
         "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "+%@"
+          }
+        },
+        "it": {
           "stringUnit": {
             "state": "translated",
             "value": "+%@"
@@ -5243,6 +5931,12 @@
     },
     "💭": {
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "💭"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -5256,6 +5950,12 @@
           }
         },
         "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "💭"
+          }
+        },
+        "it": {
           "stringUnit": {
             "state": "translated",
             "value": "💭"
@@ -5272,6 +5972,12 @@
     "2024-2026 Meeshy. Tous droits reserves.": {
       "extractionState": "stale",
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "2024-2026 Meeshy. جميع الحقوق محفوظة."
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -5290,6 +5996,12 @@
             "value": "2024-2026 Meeshy. Todos los derechos reservados."
           }
         },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "2024-2026 Meeshy. Tutti i diritti riservati."
+          }
+        },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
@@ -5301,6 +6013,12 @@
     "A propos": {
       "extractionState": "stale",
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "حول"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -5317,6 +6035,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Acerca de"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Informazioni"
           }
         },
         "pt-BR": {
@@ -5330,6 +6054,12 @@
     "À propos": {
       "extractionState": "stale",
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "حول"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -5348,6 +6078,12 @@
             "value": "Acerca de"
           }
         },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Informazioni"
+          }
+        },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
@@ -5359,6 +6095,12 @@
     "a republié": {
       "extractionState": "stale",
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "أعاد النشر"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -5375,6 +6117,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "ha republicado"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ha ricondiviso"
           }
         },
         "pt-BR": {
@@ -10320,6 +11068,12 @@
     "Accepter": {
       "extractionState": "stale",
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "قبول"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -10336,6 +11090,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Aceptar"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Accetta"
           }
         },
         "pt-BR": {
@@ -12034,6 +12794,12 @@
     "Action irreversible": {
       "extractionState": "stale",
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "إجراء لا رجعة فيه"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -12052,6 +12818,12 @@
             "value": "Acción irreversible"
           }
         },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Azione irreversibile"
+          }
+        },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
@@ -12063,6 +12835,12 @@
     "Action sélectionnée": {
       "extractionState": "stale",
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تم تحديد الإجراء"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -12079,6 +12857,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Acción seleccionada"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Azione selezionata"
           }
         },
         "pt-BR": {
@@ -13220,6 +14004,12 @@
     "Actions rapides": {
       "extractionState": "stale",
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "إجراءات سريعة"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -13238,6 +14028,12 @@
             "value": "Acciones rápidas"
           }
         },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Azioni rapide"
+          }
+        },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
@@ -13249,6 +14045,12 @@
     "ACTIVITE": {
       "extractionState": "stale",
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "النشاط"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -13267,6 +14069,12 @@
             "value": "ACTIVIDAD"
           }
         },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ATTIVITÀ"
+          }
+        },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
@@ -13278,6 +14086,12 @@
     "Aide et support": {
       "extractionState": "stale",
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "المساعدة والدعم"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -13296,6 +14110,12 @@
             "value": "Ayuda y soporte"
           }
         },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aiuto e assistenza"
+          }
+        },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
@@ -13307,6 +14127,12 @@
     "Ajouter": {
       "extractionState": "stale",
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "إضافة"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -13325,6 +14151,12 @@
             "value": "Añadir"
           }
         },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aggiungi"
+          }
+        },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
@@ -13336,6 +14168,12 @@
     "Ajouter des echantillons": {
       "extractionState": "stale",
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "إضافة عيّنات"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -13354,6 +14192,12 @@
             "value": "Añadir muestras"
           }
         },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aggiungi campioni"
+          }
+        },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
@@ -13365,6 +14209,12 @@
     "Ajouter un membre": {
       "extractionState": "stale",
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "إضافة عضو"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -13383,6 +14233,12 @@
             "value": "Añadir un miembro"
           }
         },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aggiungi un membro"
+          }
+        },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
@@ -13394,6 +14250,12 @@
     "Ajoutez ces widgets a votre ecran d'accueil pour un acces rapide.": {
       "extractionState": "stale",
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "أضِف عناصر الواجهة هذه إلى شاشتك الرئيسية للوصول السريع."
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -13412,6 +14274,12 @@
             "value": "Añade estos widgets a tu pantalla de inicio para un acceso rápido."
           }
         },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aggiungi questi widget alla schermata Home per un accesso rapido."
+          }
+        },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
@@ -13423,6 +14291,12 @@
     "Analyse en cours...": {
       "extractionState": "stale",
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "جارٍ التحليل..."
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -13441,6 +14315,12 @@
             "value": "Analizando..."
           }
         },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Analisi in corso..."
+          }
+        },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
@@ -13452,6 +14332,12 @@
     "Annuler": {
       "extractionState": "stale",
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "إلغاء"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -13470,6 +14356,12 @@
             "value": "Cancelar"
           }
         },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Annulla"
+          }
+        },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
@@ -13481,6 +14373,12 @@
     "Aperçu": {
       "extractionState": "stale",
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "معاينة"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -13499,6 +14397,12 @@
             "value": "Vista previa"
           }
         },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Anteprima"
+          }
+        },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
@@ -13510,6 +14414,12 @@
     "Apercu de ton profil": {
       "extractionState": "stale",
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "معاينة ملفك الشخصي"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -13528,6 +14438,12 @@
             "value": "Vista previa de tu perfil"
           }
         },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Anteprima del tuo profilo"
+          }
+        },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
@@ -13539,6 +14455,12 @@
     "Apparence": {
       "extractionState": "stale",
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "المظهر"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -13557,6 +14479,12 @@
             "value": "Apariencia"
           }
         },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aspetto"
+          }
+        },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
@@ -13568,6 +14496,12 @@
     "Appel en cours...": {
       "extractionState": "stale",
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "جارٍ الاتصال..."
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -13586,6 +14520,12 @@
             "value": "Llamada en curso..."
           }
         },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Chiamata in corso..."
+          }
+        },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
@@ -13597,6 +14537,12 @@
     "Appuyez pour vérifier le numéro de sécurité": {
       "extractionState": "stale",
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "انقر للتحقق من رقم الأمان"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -13615,6 +14561,12 @@
             "value": "Toca para verificar el número de seguridad"
           }
         },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tocca per verificare il numero di sicurezza"
+          }
+        },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
@@ -13626,6 +14578,12 @@
     "Archiver": {
       "extractionState": "stale",
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "أرشفة"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -13644,6 +14602,12 @@
             "value": "Archivar"
           }
         },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Archivia"
+          }
+        },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
@@ -13655,6 +14619,12 @@
     "Aucun echantillon disponible": {
       "extractionState": "stale",
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "لا توجد عيّنات متاحة"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -13673,6 +14643,12 @@
             "value": "Sin muestras disponibles"
           }
         },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nessun campione disponibile"
+          }
+        },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
@@ -13684,6 +14660,12 @@
     "Aucun favori": {
       "extractionState": "stale",
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "لا توجد مفضّلات"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -13702,6 +14684,12 @@
             "value": "Sin favoritos"
           }
         },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nessun preferito"
+          }
+        },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
@@ -13713,6 +14701,12 @@
     "Aucun lien de parrainage": {
       "extractionState": "stale",
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "لا يوجد رابط إحالة"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -13731,6 +14725,12 @@
             "value": "Sin enlaces de patrocinio"
           }
         },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nessun link di invito"
+          }
+        },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
@@ -13742,6 +14742,12 @@
     "Aucun lien de partage": {
       "extractionState": "stale",
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "لا يوجد رابط مشاركة"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -13760,6 +14766,12 @@
             "value": "Sin enlaces de compartir"
           }
         },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nessun link di condivisione"
+          }
+        },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
@@ -13771,6 +14783,12 @@
     "Aucun lien de tracking": {
       "extractionState": "stale",
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "لا يوجد رابط تتبّع"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -13789,6 +14807,12 @@
             "value": "Sin enlaces de seguimiento"
           }
         },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nessun link di tracciamento"
+          }
+        },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
@@ -13800,6 +14824,12 @@
     "Aucun message": {
       "extractionState": "stale",
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "لا توجد رسائل"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -13818,6 +14848,12 @@
             "value": "Sin mensajes"
           }
         },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nessun messaggio"
+          }
+        },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
@@ -13829,6 +14865,12 @@
     "Aucun profil vocal": {
       "extractionState": "stale",
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "لا يوجد ملف صوتي"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -13847,6 +14889,12 @@
             "value": "Sin perfil vocal"
           }
         },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nessun profilo vocale"
+          }
+        },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
@@ -13858,6 +14906,12 @@
     "Aucun résultat": {
       "extractionState": "stale",
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "لا توجد نتائج"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -13876,6 +14930,12 @@
             "value": "Sin resultados"
           }
         },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nessun risultato"
+          }
+        },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
@@ -13887,6 +14947,12 @@
     "Aucun utilisateur bloque": {
       "extractionState": "stale",
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "لا يوجد مستخدمون محظورون"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -13905,6 +14971,12 @@
             "value": "Sin usuarios bloqueados"
           }
         },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nessun utente bloccato"
+          }
+        },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
@@ -13916,6 +14988,12 @@
     "Aucun utilisateur trouve": {
       "extractionState": "stale",
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "لم يُعثر على أي مستخدم"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -13934,6 +15012,12 @@
             "value": "Ningún usuario encontrado"
           }
         },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nessun utente trovato"
+          }
+        },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
@@ -13945,6 +15029,12 @@
     "Aucune": {
       "extractionState": "stale",
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "لا شيء"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -13963,6 +15053,12 @@
             "value": "Ninguna"
           }
         },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nessuna"
+          }
+        },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
@@ -13974,6 +15070,12 @@
     "Aucune communauté administrée": {
       "extractionState": "stale",
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "لا توجد مجتمعات تديرها"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -13992,6 +15094,12 @@
             "value": "Sin comunidades administradas"
           }
         },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nessuna community amministrata"
+          }
+        },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
@@ -14003,6 +15111,12 @@
     "Aucune conversation": {
       "extractionState": "stale",
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "لا توجد محادثات"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -14021,6 +15135,12 @@
             "value": "Sin conversaciones"
           }
         },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nessuna conversazione"
+          }
+        },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
@@ -14032,6 +15152,12 @@
     "Aucune demande": {
       "extractionState": "stale",
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "لا توجد طلبات"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -14050,6 +15176,12 @@
             "value": "Sin solicitudes"
           }
         },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nessuna richiesta"
+          }
+        },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
@@ -14061,6 +15193,12 @@
     "Aucune donnée": {
       "extractionState": "stale",
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "لا توجد بيانات"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -14079,6 +15217,12 @@
             "value": "Sin datos"
           }
         },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nessun dato"
+          }
+        },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
@@ -14090,6 +15234,12 @@
     "Aucune transcription": {
       "extractionState": "stale",
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "لا يوجد نص"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -14108,6 +15258,12 @@
             "value": "Sin transcripción"
           }
         },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nessuna trascrizione"
+          }
+        },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
@@ -14119,6 +15275,12 @@
     "Audio": {
       "extractionState": "stale",
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "صوت"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -14137,6 +15299,12 @@
             "value": "Audio"
           }
         },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Audio"
+          }
+        },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
@@ -14148,6 +15316,12 @@
     "audio.consent.notice.action": {
       "extractionState": "manual",
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "التفعيل في الإعدادات"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -14172,6 +15346,12 @@
             "value": "Activer dans les Réglages"
           }
         },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Attiva nelle Impostazioni"
+          }
+        },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
@@ -14183,6 +15363,12 @@
     "audio.consent.notice.message": {
       "extractionState": "manual",
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "فعّل الموافقة الصوتية لتُنسَخ رسائلك الصوتية نصًّا وتُترجَم."
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -14207,6 +15393,12 @@
             "value": "Active le consentement vocal pour que tes messages audio soient transcrits et traduits."
           }
         },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Attiva il consenso vocale affinché i tuoi messaggi audio siano trascritti e tradotti."
+          }
+        },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
@@ -14218,6 +15410,12 @@
     "Aujourd'hui": {
       "extractionState": "stale",
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "اليوم"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -14234,6 +15432,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Hoy"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Oggi"
           }
         },
         "pt-BR": {
@@ -15046,6 +16250,12 @@
     "Autre compte": {
       "extractionState": "stale",
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "حساب آخر"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -15064,6 +16274,12 @@
             "value": "Otra cuenta"
           }
         },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Altro account"
+          }
+        },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
@@ -15077,6 +16293,12 @@
       "extractionState": "stale",
       "isCommentAutoGenerated": true,
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "لغات أخرى"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -15095,6 +16317,12 @@
             "value": "Otros idiomas"
           }
         },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Altre lingue"
+          }
+        },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
@@ -15106,6 +16334,12 @@
     "BADGES": {
       "extractionState": "stale",
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "الشارات"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -15124,6 +16358,12 @@
             "value": "INSIGNIAS"
           }
         },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "BADGE"
+          }
+        },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
@@ -15135,6 +16375,12 @@
     "Bienvenue sur Meeshy": {
       "extractionState": "stale",
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "مرحبًا بك في Meeshy"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -15153,6 +16399,12 @@
             "value": "Bienvenido a Meeshy"
           }
         },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Benvenuto su Meeshy"
+          }
+        },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
@@ -15164,6 +16416,12 @@
     "Bienvenue sur Meeshy! En utilisant notre application, tu acceptes les conditions suivantes:\n\n1. UTILISATION RESPONSABLE\nMeeshy est fait pour connecter les gens positivement. Pas de contenu offensant ou illegal.\n\n2. TON COMPTE\nTu es responsable de ton compte. Garde ton mot de passe secret!\n\n3. TES DONNEES\nOn protege tes donnees avec le chiffrement de bout en bout. Tes messages sont prives.\n\n4. TRADUCTION\nLa traduction est automatique et peut ne pas etre parfaite. C'est un outil, pas une science exacte!\n\n5. RESPECT\nTraite les autres comme tu voudrais etre traite. On est une communaute!\n\nOn est ensemble!": {
       "extractionState": "stale",
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "مرحبًا بك في Meeshy! باستخدامك تطبيقنا، فإنك توافق على الشروط التالية:\n\n1. الاستخدام المسؤول\nصُمِّم Meeshy ليقرّب الناس بشكل إيجابي. لا مكان لمحتوى مسيء أو غير قانوني.\n\n2. حسابك\nأنت مسؤول عن حسابك. حافظ على سرية كلمة المرور!\n\n3. بياناتك\nنحمي بياناتك بالتشفير من طرف إلى طرف. رسائلك خاصة.\n\n4. الترجمة\nالترجمة آلية وقد لا تكون مثالية. إنها أداة، وليست علمًا دقيقًا!\n\n5. الاحترام\nعامِل الآخرين كما تحب أن تُعامَل. نحن مجتمع واحد!\n\nنحن معًا!"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -15182,6 +16440,12 @@
             "value": "¡Bienvenido a Meeshy! Al usar nuestra aplicación, aceptas las siguientes condiciones:\n\n1. USO RESPONSABLE\nMeeshy está hecho para conectar personas positivamente. Sin contenido ofensivo o ilegal.\n\n2. TU CUENTA\nEres responsable de tu cuenta. ¡Mantén tu contraseña en secreto!\n\n3. TUS DATOS\nProtegemos tus datos con cifrado de extremo a extremo. Tus mensajes son privados.\n\n4. TRADUCCIÓN\nLa traducción es automática y puede no ser perfecta. ¡Es una herramienta, no una ciencia exacta!\n\n5. RESPETO\nTrata a los demás como te gustaría ser tratado. ¡Somos una comunidad!\n\n¡Estamos juntos!"
           }
         },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Benvenuto su Meeshy! Usando la nostra app, accetti le condizioni seguenti:\n\n1. USO RESPONSABILE\nMeeshy è fatto per mettere in contatto le persone in modo positivo. Nessun contenuto offensivo o illegale.\n\n2. IL TUO ACCOUNT\nSei responsabile del tuo account. Tieni segreta la tua password!\n\n3. I TUOI DATI\nProteggiamo i tuoi dati con la crittografia end-to-end. I tuoi messaggi sono privati.\n\n4. TRADUZIONE\nLa traduzione è automatica e può non essere perfetta. È uno strumento, non una scienza esatta!\n\n5. RISPETTO\nTratta gli altri come vorresti essere trattato. Siamo una community!\n\nSiamo insieme!"
+          }
+        },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
@@ -15193,6 +16457,12 @@
     "Bio (optionnel)": {
       "extractionState": "stale",
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "نبذة (اختيارية)"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -15211,6 +16481,12 @@
             "value": "Bio (opcional)"
           }
         },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bio (facoltativa)"
+          }
+        },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
@@ -15222,6 +16498,12 @@
     "block.confirm.message": {
       "extractionState": "stale",
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "لن يتمكّن هذا الشخص من إرسال رسائل إليك في هذه المحادثة."
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -15246,6 +16528,12 @@
             "value": "Cette personne ne pourra plus vous envoyer de messages dans cette conversation."
           }
         },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Questa persona non potrà più inviarti messaggi in questa conversazione."
+          }
+        },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
@@ -15257,6 +16545,12 @@
     "block.confirm.title": {
       "extractionState": "stale",
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "حظر هذا المستخدم؟"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -15281,6 +16575,12 @@
             "value": "Bloquer cet utilisateur ?"
           }
         },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bloccare questo utente?"
+          }
+        },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
@@ -15292,6 +16592,12 @@
     "Bloquer": {
       "extractionState": "stale",
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "حظر"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -15310,6 +16616,12 @@
             "value": "Bloquear"
           }
         },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Blocca"
+          }
+        },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
@@ -15321,6 +16633,12 @@
     "Bloquer cet utilisateur": {
       "extractionState": "stale",
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "حظر هذا المستخدم"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -15339,6 +16657,12 @@
             "value": "Bloquear este usuario"
           }
         },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Blocca questo utente"
+          }
+        },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
@@ -15350,6 +16674,12 @@
     "Bloquer cet utilisateur ?": {
       "extractionState": "stale",
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "حظر هذا المستخدم؟"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -15368,6 +16698,12 @@
             "value": "¿Bloquear este usuario?"
           }
         },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bloccare questo utente?"
+          }
+        },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
@@ -15379,6 +16715,12 @@
     "Blur": {
       "extractionState": "stale",
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تمويه"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -15397,6 +16739,12 @@
             "value": "Desenfoque"
           }
         },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sfocatura"
+          }
+        },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
@@ -15408,6 +16756,12 @@
     "bubble.expand.more": {
       "extractionState": "manual",
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "عرض المزيد"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -15432,6 +16786,12 @@
             "value": "Voir plus"
           }
         },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vedi altro"
+          }
+        },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
@@ -15443,6 +16803,12 @@
     "bubble.expand.more.hint": {
       "extractionState": "manual",
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "يعرض الرسالة كاملة"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -15467,6 +16833,12 @@
             "value": "Affiche le message complet"
           }
         },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mostra il messaggio completo"
+          }
+        },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
@@ -15478,6 +16850,12 @@
     "Cache media": {
       "extractionState": "stale",
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ذاكرة الوسائط المؤقتة"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -15494,6 +16872,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Caché de medios"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cache dei media"
           }
         },
         "pt-BR": {
@@ -18515,6 +19899,12 @@
     "calls.detail.transcript": {
       "extractionState": "manual",
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "النص"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -18537,6 +19927,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Transcription"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Trascrizione"
           }
         },
         "pt-BR": {
@@ -19208,6 +20604,12 @@
     "camera.capture.photo": {
       "extractionState": "manual",
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "التقاط صورة"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -19232,6 +20634,12 @@
             "value": "Prendre une photo"
           }
         },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Scatta una foto"
+          }
+        },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
@@ -19243,6 +20651,12 @@
     "camera.close": {
       "extractionState": "manual",
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "إغلاق"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -19267,6 +20681,12 @@
             "value": "Fermer"
           }
         },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Chiudi"
+          }
+        },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
@@ -19278,6 +20698,12 @@
     "camera.flash.auto": {
       "extractionState": "manual",
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "فلاش تلقائي"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -19302,6 +20728,12 @@
             "value": "Flash automatique"
           }
         },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Flash automatico"
+          }
+        },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
@@ -19313,6 +20745,12 @@
     "camera.flash.off": {
       "extractionState": "manual",
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "الفلاش معطّل"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -19337,6 +20775,12 @@
             "value": "Flash désactivé"
           }
         },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Flash disattivato"
+          }
+        },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
@@ -19348,6 +20792,12 @@
     "camera.flash.on": {
       "extractionState": "manual",
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "الفلاش مفعّل"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -19372,6 +20822,12 @@
             "value": "Flash activé"
           }
         },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Flash attivato"
+          }
+        },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
@@ -19383,6 +20839,12 @@
     "camera.mode.photo": {
       "extractionState": "manual",
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "صورة"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -19407,6 +20869,12 @@
             "value": "Photo"
           }
         },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Foto"
+          }
+        },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
@@ -19418,6 +20886,12 @@
     "camera.mode.video": {
       "extractionState": "manual",
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "فيديو"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -19442,6 +20916,12 @@
             "value": "Vidéo"
           }
         },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Video"
+          }
+        },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
@@ -19453,6 +20933,12 @@
     "camera.record.start": {
       "extractionState": "manual",
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "بدء التسجيل"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -19477,6 +20963,12 @@
             "value": "Démarrer l'enregistrement"
           }
         },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Avvia la registrazione"
+          }
+        },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
@@ -19488,6 +20980,12 @@
     "camera.record.stop": {
       "extractionState": "manual",
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "إيقاف التسجيل"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -19512,6 +21010,12 @@
             "value": "Arrêter l'enregistrement"
           }
         },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Interrompi la registrazione"
+          }
+        },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
@@ -19523,6 +21027,12 @@
     "camera.recording": {
       "extractionState": "manual",
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "جارٍ التسجيل"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -19547,6 +21057,12 @@
             "value": "Enregistrement en cours"
           }
         },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Registrazione in corso"
+          }
+        },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
@@ -19558,6 +21074,12 @@
     "camera.switch": {
       "extractionState": "manual",
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تبديل الكاميرا"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -19582,6 +21104,12 @@
             "value": "Changer de caméra"
           }
         },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cambia fotocamera"
+          }
+        },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
@@ -19593,6 +21121,12 @@
     "Ce compte a ete desactive.": {
       "extractionState": "stale",
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تم تعطيل هذا الحساب."
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -19611,6 +21145,12 @@
             "value": "Esta cuenta ha sido desactivada."
           }
         },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Questo account è stato disattivato."
+          }
+        },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
@@ -19622,6 +21162,12 @@
     "Cela supprimera tous les medias mis en cache localement. Ils seront retelecharges si necessaire.": {
       "extractionState": "stale",
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "سيؤدي هذا إلى حذف جميع الوسائط المخزَّنة محليًا. وسيُعاد تنزيلها عند الحاجة."
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -19640,6 +21186,12 @@
             "value": "Esto eliminará todos los medios almacenados localmente. Se volverán a descargar si es necesario."
           }
         },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Verranno eliminati tutti i media memorizzati localmente. Saranno riscaricati se necessario."
+          }
+        },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
@@ -19651,6 +21203,12 @@
     "Cette action est irreversible": {
       "extractionState": "stale",
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "هذا الإجراء لا رجعة فيه"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -19669,6 +21227,12 @@
             "value": "Esta acción es irreversible"
           }
         },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Questa azione è irreversibile"
+          }
+        },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
@@ -19680,6 +21244,12 @@
     "Cette action est irréversible.": {
       "extractionState": "stale",
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "هذا الإجراء لا رجعة فيه."
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -19698,6 +21268,12 @@
             "value": "Esta acción es irreversible."
           }
         },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Questa azione è irreversibile."
+          }
+        },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
@@ -19709,6 +21285,12 @@
     "Cette action est irréversible. Le lien ne sera plus accessible.": {
       "extractionState": "stale",
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "هذا الإجراء لا رجعة فيه. لن يعود الرابط متاحًا."
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -19727,6 +21309,12 @@
             "value": "Esta acción es irreversible. El enlace ya no será accesible."
           }
         },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Questa azione è irreversibile. Il link non sarà più accessibile."
+          }
+        },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
@@ -19738,6 +21326,12 @@
     "Cette action est irreversible. Toutes vos donnees vocales seront supprimees conformement au RGPD.": {
       "extractionState": "stale",
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "هذا الإجراء لا رجعة فيه. ستُحذف جميع بياناتك الصوتية وفقًا للائحة حماية البيانات."
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -19756,6 +21350,12 @@
             "value": "Esta acción es irreversible. Todos tus datos vocales serán eliminados conforme al RGPD."
           }
         },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Questa azione è irreversibile. Tutti i tuoi dati vocali saranno eliminati in conformità al GDPR."
+          }
+        },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
@@ -19767,6 +21367,12 @@
     "Cette etape est optionnelle": {
       "extractionState": "stale",
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "هذه الخطوة اختيارية"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -19785,6 +21391,12 @@
             "value": "Este paso es opcional"
           }
         },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Questo passaggio è facoltativo"
+          }
+        },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
@@ -19796,6 +21408,12 @@
     "Cette personne ne pourra plus acceder a la conversation.": {
       "extractionState": "stale",
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "لن يتمكّن هذا الشخص من الوصول إلى المحادثة."
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -19814,6 +21432,12 @@
             "value": "Esta persona ya no podrá acceder a la conversación."
           }
         },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Questa persona non potrà più accedere alla conversazione."
+          }
+        },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
@@ -19825,6 +21449,12 @@
     "Cette personne ne pourra plus vous envoyer de messages dans cette conversation.": {
       "extractionState": "stale",
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "لن يتمكّن هذا الشخص من إرسال رسائل إليك في هذه المحادثة."
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -19843,6 +21473,12 @@
             "value": "Esta persona ya no podrá enviarte mensajes en esta conversación."
           }
         },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Questa persona non potrà più inviarti messaggi in questa conversazione."
+          }
+        },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
@@ -19854,6 +21490,12 @@
     "Changer le mot de passe": {
       "extractionState": "stale",
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تغيير كلمة المرور"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -19872,6 +21514,12 @@
             "value": "Cambiar contraseña"
           }
         },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cambia la password"
+          }
+        },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
@@ -19883,6 +21531,12 @@
     "Chargement...": {
       "extractionState": "stale",
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "جارٍ التحميل..."
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -19901,6 +21555,12 @@
             "value": "Cargando..."
           }
         },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Caricamento..."
+          }
+        },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
@@ -19914,6 +21574,12 @@
       "extractionState": "stale",
       "isCommentAutoGenerated": true,
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تحميل المزيد"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -19932,6 +21598,12 @@
             "value": "Cargar más"
           }
         },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Carica altro"
+          }
+        },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
@@ -19943,6 +21615,12 @@
     "Chiffrement de bout en bout": {
       "extractionState": "stale",
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تشفير من طرف إلى طرف"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -19961,6 +21639,12 @@
             "value": "Cifrado de extremo a extremo"
           }
         },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Crittografia end-to-end"
+          }
+        },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
@@ -19972,6 +21656,12 @@
     "Choisir un groupe ou une communauté": {
       "extractionState": "stale",
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "اختر مجموعة أو مجتمعًا"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -19990,6 +21680,12 @@
             "value": "Elegir un grupo o una comunidad"
           }
         },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Scegli un gruppo o una community"
+          }
+        },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
@@ -20001,6 +21697,12 @@
     "Choisir un lieu": {
       "extractionState": "stale",
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "اختر موقعًا"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -20019,6 +21721,12 @@
             "value": "Elegir una ubicación"
           }
         },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Scegli un luogo"
+          }
+        },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
@@ -20030,6 +21738,12 @@
     "Choisissez les types de medias a telecharger automatiquement selon votre connexion.": {
       "extractionState": "stale",
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "اختر أنواع الوسائط التي تُنزَّل تلقائيًا حسب نوع اتصالك."
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -20048,6 +21762,12 @@
             "value": "Elige qué tipos de medios descargar automáticamente según tu conexión."
           }
         },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Scegli i tipi di media da scaricare automaticamente in base alla tua connessione."
+          }
+        },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
@@ -20059,6 +21779,12 @@
     "Clonage vocal actif": {
       "extractionState": "stale",
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "استنساخ الصوت مفعّل"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -20077,6 +21803,12 @@
             "value": "Clonación vocal activa"
           }
         },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Clonazione vocale attiva"
+          }
+        },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
@@ -20088,6 +21820,12 @@
     "Clone": {
       "extractionState": "stale",
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "نسخة"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -20106,6 +21844,12 @@
             "value": "Clonar"
           }
         },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Clone"
+          }
+        },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
@@ -20117,6 +21861,12 @@
     "Code envoye par SMS": {
       "extractionState": "stale",
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "رمز مُرسَل عبر رسالة نصية"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -20135,6 +21885,12 @@
             "value": "Código enviado por SMS"
           }
         },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Codice inviato via SMS"
+          }
+        },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
@@ -20146,6 +21902,12 @@
     "Commencer": {
       "extractionState": "stale",
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ابدأ"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -20164,6 +21926,12 @@
             "value": "Comenzar"
           }
         },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Inizia"
+          }
+        },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
@@ -20175,6 +21943,12 @@
     "Commencer a utiliser Meeshy": {
       "extractionState": "stale",
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ابدأ استخدام Meeshy"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -20193,6 +21967,12 @@
             "value": "Empezar a usar Meeshy"
           }
         },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Inizia a usare Meeshy"
+          }
+        },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
@@ -20204,6 +21984,12 @@
     "Commencer une discussion": {
       "extractionState": "stale",
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ابدأ محادثة"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -20222,6 +22008,12 @@
             "value": "Iniciar una conversación"
           }
         },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Inizia una conversazione"
+          }
+        },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
@@ -20233,6 +22025,12 @@
     "Commencez a discuter avec vos amis ou rejoignez une communaute": {
       "extractionState": "stale",
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ابدأ الدردشة مع أصدقائك أو انضم إلى مجتمع"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -20251,6 +22049,12 @@
             "value": "Comienza a chatear con amigos o únete a una comunidad"
           }
         },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Inizia a chiacchierare con i tuoi amici o unisciti a una community"
+          }
+        },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
@@ -20262,6 +22066,12 @@
     "Comment ca marche": {
       "extractionState": "stale",
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "كيف يعمل"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -20280,6 +22090,12 @@
             "value": "Cómo funciona"
           }
         },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Come funziona"
+          }
+        },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
@@ -20291,6 +22107,12 @@
     "Comment tu te sens ?": {
       "extractionState": "stale",
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "كيف تشعر؟"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -20309,6 +22131,12 @@
             "value": "¿Cómo te sientes?"
           }
         },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Come ti senti?"
+          }
+        },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
@@ -20320,6 +22148,12 @@
     "comment.action.copy": {
       "extractionState": "manual",
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "نسخ النص"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -20344,6 +22178,12 @@
             "value": "Copier le texte"
           }
         },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Copia il testo"
+          }
+        },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
@@ -20355,6 +22195,12 @@
     "comment.action.delete": {
       "extractionState": "manual",
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "حذف"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -20379,6 +22225,12 @@
             "value": "Supprimer"
           }
         },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Elimina"
+          }
+        },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
@@ -20392,6 +22244,12 @@
       "extractionState": "stale",
       "isCommentAutoGenerated": true,
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "التعليقات"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -20408,6 +22266,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Comentarios"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Commenti"
           }
         },
         "pt-BR": {
@@ -20669,6 +22533,12 @@
     "Communautés": {
       "extractionState": "stale",
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "المجتمعات"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -20687,6 +22557,12 @@
             "value": "Comunidades"
           }
         },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Community"
+          }
+        },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
@@ -20698,6 +22574,12 @@
     "communities.title": {
       "extractionState": "stale",
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "المجتمعات"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -20722,6 +22604,12 @@
             "value": "Communautés"
           }
         },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Community"
+          }
+        },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
@@ -20733,6 +22621,12 @@
     "complet": {
       "extractionState": "stale",
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "مكتمل"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -20751,6 +22645,12 @@
             "value": "completo"
           }
         },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "completo"
+          }
+        },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
@@ -20762,6 +22662,12 @@
     "Compris": {
       "extractionState": "stale",
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "فهمت"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -20780,6 +22686,12 @@
             "value": "Entendido"
           }
         },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ho capito"
+          }
+        },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
@@ -20791,6 +22703,12 @@
     "Compte": {
       "extractionState": "stale",
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "الحساب"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -20809,6 +22727,12 @@
             "value": "Cuenta"
           }
         },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Account"
+          }
+        },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
@@ -20820,6 +22744,12 @@
     "Comptes sauvegardés": {
       "extractionState": "stale",
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "الحسابات المحفوظة"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -20838,6 +22768,12 @@
             "value": "Cuentas guardadas"
           }
         },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Account salvati"
+          }
+        },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
@@ -20849,6 +22785,12 @@
     "Conditions": {
       "extractionState": "stale",
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "الشروط"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -20867,6 +22809,12 @@
             "value": "Condiciones"
           }
         },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Condizioni"
+          }
+        },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
@@ -20878,6 +22826,12 @@
     "Conditions d'utilisation": {
       "extractionState": "stale",
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "شروط الاستخدام"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -20896,6 +22850,12 @@
             "value": "Condiciones de uso"
           }
         },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Condizioni d'uso"
+          }
+        },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
@@ -20907,6 +22867,12 @@
     "Confidentialite": {
       "extractionState": "stale",
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "الخصوصية"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -20923,6 +22889,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Privacidad"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Privacy"
           }
         },
         "pt-BR": {
@@ -20936,6 +22908,12 @@
     "Confidentialité": {
       "extractionState": "stale",
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "الخصوصية"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -20954,6 +22932,12 @@
             "value": "Privacidad"
           }
         },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Privacy"
+          }
+        },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
@@ -20965,6 +22949,12 @@
     "Configurer": {
       "extractionState": "stale",
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "إعداد"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -20983,6 +22973,12 @@
             "value": "Configurar"
           }
         },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Configura"
+          }
+        },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
@@ -20994,6 +22990,12 @@
     "Configurez d'abord un master PIN dans Paramètres > Sécurité pour verrouiller des conversations.": {
       "extractionState": "stale",
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "أعِدّ أولًا رمز PIN رئيسيًا في الإعدادات > الأمان لقفل المحادثات."
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -21012,6 +23014,12 @@
             "value": "Configura primero un PIN maestro en Ajustes > Seguridad para bloquear conversaciones."
           }
         },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Configura prima un PIN principale in Impostazioni > Sicurezza per bloccare le conversazioni."
+          }
+        },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
@@ -21023,6 +23031,12 @@
     "Confirmer": {
       "extractionState": "stale",
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تأكيد"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -21041,6 +23055,12 @@
             "value": "Confirmar"
           }
         },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Conferma"
+          }
+        },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
@@ -21052,6 +23072,12 @@
     "Conformement au RGPD, vous pouvez exporter toutes vos donnees personnelles.": {
       "extractionState": "stale",
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "وفقًا للائحة حماية البيانات، يمكنك تصدير جميع بياناتك الشخصية."
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -21070,6 +23096,12 @@
             "value": "Conforme al RGPD, puedes exportar todos tus datos personales."
           }
         },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "In conformità al GDPR, puoi esportare tutti i tuoi dati personali."
+          }
+        },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
@@ -21081,6 +23113,12 @@
     "Connecte": {
       "extractionState": "stale",
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "متصل"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -21099,6 +23137,12 @@
             "value": "Conectado"
           }
         },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Connesso"
+          }
+        },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
@@ -21110,6 +23154,12 @@
     "connection.offline": {
       "extractionState": "stale",
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "غير متصل"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -21134,6 +23184,12 @@
             "value": "Hors ligne"
           }
         },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Non in linea"
+          }
+        },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
@@ -21145,6 +23201,12 @@
     "connection.reconnecting": {
       "extractionState": "stale",
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "جارٍ إعادة الاتصال"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -21169,6 +23231,12 @@
             "value": "Reconnexion en cours"
           }
         },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Riconnessione in corso"
+          }
+        },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
@@ -21180,6 +23248,12 @@
     "Connexion par lien magique": {
       "extractionState": "stale",
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تسجيل الدخول برابط سحري"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -21198,6 +23272,12 @@
             "value": "Conexión por enlace mágico"
           }
         },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Accesso con link magico"
+          }
+        },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
@@ -21209,6 +23289,12 @@
     "Connexion sans mot de passe": {
       "extractionState": "stale",
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تسجيل الدخول بدون كلمة مرور"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -21227,6 +23313,12 @@
             "value": "Conexión sin contraseña"
           }
         },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Accesso senza password"
+          }
+        },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
@@ -21238,6 +23330,12 @@
     "Connexion...": {
       "extractionState": "stale",
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "جارٍ الاتصال..."
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -21256,6 +23354,12 @@
             "value": "Conectando..."
           }
         },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Connessione..."
+          }
+        },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
@@ -21267,6 +23371,12 @@
     "Conseils Meeshy": {
       "extractionState": "stale",
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "نصائح Meeshy"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -21285,6 +23395,12 @@
             "value": "Consejos Meeshy"
           }
         },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Consigli Meeshy"
+          }
+        },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
@@ -21296,6 +23412,12 @@
     "Contact partage": {
       "extractionState": "stale",
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "جهة اتصال مشارَكة"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -21314,6 +23436,12 @@
             "value": "Contacto compartido"
           }
         },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Contatto condiviso"
+          }
+        },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
@@ -21325,6 +23453,12 @@
     "contacts.requests.received.intent": {
       "extractionState": "manual",
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "يرغب في التواصل معك"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -21349,6 +23483,12 @@
             "value": "Souhaite entrer en contact avec vous"
           }
         },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Desidera mettersi in contatto con te"
+          }
+        },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
@@ -21360,6 +23500,12 @@
     "Contenu": {
       "extractionState": "stale",
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "المحتوى"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -21378,6 +23524,12 @@
             "value": "Contenido"
           }
         },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Contenuto"
+          }
+        },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
@@ -21389,6 +23541,12 @@
     "Contenu du presse-papier": {
       "extractionState": "stale",
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "محتوى الحافظة"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -21405,6 +23563,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Contenido del portapapeles"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Contenuto degli appunti"
           }
         },
         "pt-BR": {
@@ -22076,6 +24240,12 @@
     "Conversation": {
       "extractionState": "stale",
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "محادثة"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -22092,6 +24262,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Conversación"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Conversazione"
           }
         },
         "pt-BR": {
@@ -23932,6 +26108,12 @@
     "Conversations récentes": {
       "extractionState": "stale",
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "المحادثات الأخيرة"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -23950,6 +26132,12 @@
             "value": "Conversaciones recientes"
           }
         },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Conversazioni recenti"
+          }
+        },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
@@ -23961,6 +26149,12 @@
     "conversations.empty.action": {
       "extractionState": "stale",
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ابدأ محادثة"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -23985,6 +26179,12 @@
             "value": "Commencer une discussion"
           }
         },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Inizia una conversazione"
+          }
+        },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
@@ -23996,6 +26196,12 @@
     "conversations.empty.subtitle": {
       "extractionState": "stale",
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ابدأ الدردشة مع أصدقائك أو انضم إلى مجتمع"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -24020,6 +26226,12 @@
             "value": "Commencez a discuter avec vos amis ou rejoignez une communaute"
           }
         },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Inizia a chiacchierare con i tuoi amici o unisciti a una community"
+          }
+        },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
@@ -24031,6 +26243,12 @@
     "conversations.empty.title": {
       "extractionState": "stale",
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "لا توجد محادثات"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -24055,6 +26273,12 @@
             "value": "Aucune conversation"
           }
         },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nessuna conversazione"
+          }
+        },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
@@ -24066,6 +26290,12 @@
     "conversations.error.retry": {
       "extractionState": "manual",
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "إعادة المحاولة"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -24090,6 +26320,12 @@
             "value": "Réessayer"
           }
         },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Riprova"
+          }
+        },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
@@ -24101,6 +26337,12 @@
     "conversations.error.subtitle": {
       "extractionState": "manual",
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تعذّر تحميل محادثاتك."
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -24125,6 +26367,12 @@
             "value": "Impossible de charger vos conversations."
           }
         },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Impossibile caricare le tue conversazioni."
+          }
+        },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
@@ -24136,6 +26384,12 @@
     "conversations.error.title": {
       "extractionState": "manual",
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "حدث خطأ"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -24160,6 +26414,12 @@
             "value": "Une erreur est survenue"
           }
         },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Si è verificato un errore"
+          }
+        },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
@@ -24171,6 +26431,12 @@
     "conversations.pagination.allLoaded": {
       "extractionState": "manual",
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تم تحميل جميع المحادثات"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -24195,6 +26461,12 @@
             "value": "Toutes les conversations sont chargées"
           }
         },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tutte le conversazioni sono state caricate"
+          }
+        },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
@@ -24206,6 +26478,12 @@
     "conversations.pagination.errorTitle": {
       "extractionState": "manual",
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تعذّر تحميل المزيد"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -24230,6 +26508,12 @@
             "value": "Impossible de charger plus"
           }
         },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Impossibile caricarne altre"
+          }
+        },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
@@ -24241,6 +26525,12 @@
     "conversations.pagination.retry": {
       "extractionState": "manual",
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "إعادة المحاولة"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -24265,6 +26555,12 @@
             "value": "Réessayer"
           }
         },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Riprova"
+          }
+        },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
@@ -24276,6 +26572,12 @@
     "Copier": {
       "extractionState": "stale",
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "نسخ"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -24294,6 +26596,12 @@
             "value": "Copiar"
           }
         },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Copia"
+          }
+        },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
@@ -24305,6 +26613,12 @@
     "Creation de ton compte...": {
       "extractionState": "stale",
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "جارٍ إنشاء حسابك..."
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -24323,6 +26637,12 @@
             "value": "Creando tu cuenta..."
           }
         },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Creazione del tuo account..."
+          }
+        },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
@@ -24334,6 +26654,12 @@
     "Cree le %@": {
       "extractionState": "stale",
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "أُنشئ في %@"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -24352,6 +26678,12 @@
             "value": "Creado el %@"
           }
         },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Creato il %@"
+          }
+        },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
@@ -24363,6 +26695,12 @@
     "Creer le lien": {
       "extractionState": "stale",
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "إنشاء الرابط"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -24379,6 +26717,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Crear enlace"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Crea il link"
           }
         },
         "pt-BR": {
@@ -24392,6 +26736,12 @@
     "Créer le lien": {
       "extractionState": "stale",
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "إنشاء الرابط"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -24410,6 +26760,12 @@
             "value": "Crear enlace"
           }
         },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Crea il link"
+          }
+        },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
@@ -24421,6 +26777,12 @@
     "Creer un compte": {
       "extractionState": "stale",
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "إنشاء حساب"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -24439,6 +26801,12 @@
             "value": "Crear una cuenta"
           }
         },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Crea un account"
+          }
+        },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
@@ -24450,6 +26818,12 @@
     "Creer un profil vocal": {
       "extractionState": "stale",
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "إنشاء ملف صوتي"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -24468,6 +26842,12 @@
             "value": "Crear un perfil vocal"
           }
         },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Crea un profilo vocale"
+          }
+        },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
@@ -24479,6 +26859,12 @@
     "Créez un groupe ou une communauté pour partager un lien d'invitation": {
       "extractionState": "stale",
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "أنشئ مجموعة أو مجتمعًا لمشاركة رابط دعوة"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -24497,6 +26883,12 @@
             "value": "Crea un grupo o comunidad para compartir un enlace de invitación"
           }
         },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Crea un gruppo o una community per condividere un link d'invito"
+          }
+        },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
@@ -24508,6 +26900,12 @@
     "Créez un lien pour inviter des personnes dans une conversation": {
       "extractionState": "stale",
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "أنشئ رابطًا لدعوة أشخاص إلى محادثة"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -24526,6 +26924,12 @@
             "value": "Crea un enlace para invitar personas a una conversación"
           }
         },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Crea un link per invitare persone in una conversazione"
+          }
+        },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
@@ -24537,6 +26941,12 @@
     "Creez un lien pour inviter vos amis": {
       "extractionState": "stale",
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "أنشئ رابطًا لدعوة أصدقائك"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -24555,6 +26965,12 @@
             "value": "Crea un enlace para invitar a tus amigos"
           }
         },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Crea un link per invitare i tuoi amici"
+          }
+        },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
@@ -24566,6 +26982,12 @@
     "Créez un lien pour suivre vos clics et campagnes": {
       "extractionState": "stale",
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "أنشئ رابطًا لتتبّع نقراتك وحملاتك"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -24584,6 +27006,12 @@
             "value": "Crea un enlace para rastrear tus clics y campañas"
           }
         },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Crea un link per monitorare i tuoi clic e le tue campagne"
+          }
+        },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
@@ -24595,6 +27023,12 @@
     "Creez un profil vocal pour que vos messages traduits conservent votre voix naturelle.": {
       "extractionState": "stale",
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "أنشئ ملفًا صوتيًا لتحتفظ رسائلك المترجمة بصوتك الطبيعي."
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -24613,6 +27047,12 @@
             "value": "Crea un perfil vocal para que tus mensajes traducidos conserven tu voz natural."
           }
         },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Crea un profilo vocale affinché i tuoi messaggi tradotti conservino la tua voce naturale."
+          }
+        },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
@@ -24624,6 +27064,12 @@
     "Criteres de securite": {
       "extractionState": "stale",
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "معايير الأمان"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -24642,6 +27088,12 @@
             "value": "Criterios de seguridad"
           }
         },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Criteri di sicurezza"
+          }
+        },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
@@ -24653,6 +27105,12 @@
     "date.dayBeforeYesterday": {
       "extractionState": "stale",
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "أول أمس"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -24677,6 +27135,12 @@
             "value": "Avant-hier"
           }
         },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "L'altro ieri"
+          }
+        },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
@@ -24688,6 +27152,12 @@
     "date.today": {
       "extractionState": "stale",
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "اليوم"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -24712,6 +27182,12 @@
             "value": "Aujourd'hui"
           }
         },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Oggi"
+          }
+        },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
@@ -24723,6 +27199,12 @@
     "date.yesterday": {
       "extractionState": "stale",
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "أمس"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -24747,6 +27229,12 @@
             "value": "Hier"
           }
         },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ieri"
+          }
+        },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
@@ -24758,6 +27246,12 @@
     "Debloquer": {
       "extractionState": "stale",
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "إلغاء الحظر"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -24776,6 +27270,12 @@
             "value": "Desbloquear"
           }
         },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sblocca"
+          }
+        },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
@@ -24787,6 +27287,12 @@
     "Debloquer %@ ?": {
       "extractionState": "stale",
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "إلغاء حظر %@؟"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -24805,6 +27311,12 @@
             "value": "¿Desbloquear a %@?"
           }
         },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sbloccare %@?"
+          }
+        },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
@@ -24816,6 +27328,12 @@
     "Déconnexion": {
       "extractionState": "stale",
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تسجيل الخروج"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -24834,6 +27352,12 @@
             "value": "Cerrar sesión"
           }
         },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Esci"
+          }
+        },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
@@ -24847,6 +27371,12 @@
       "extractionState": "stale",
       "isCommentAutoGenerated": true,
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "مطلوبة"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -24865,6 +27395,12 @@
             "value": "Solicitada"
           }
         },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Richiesta"
+          }
+        },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
@@ -24876,6 +27412,12 @@
     "Demandes d'amis": {
       "extractionState": "stale",
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "طلبات الصداقة"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -24894,6 +27436,12 @@
             "value": "Solicitudes de amistad"
           }
         },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Richieste di amicizia"
+          }
+        },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
@@ -24905,6 +27453,12 @@
     "Déplacer vers...": {
       "extractionState": "stale",
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "نقل إلى..."
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -24923,6 +27477,12 @@
             "value": "Mover a..."
           }
         },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sposta in..."
+          }
+        },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
@@ -24934,6 +27494,12 @@
     "Deplacez la carte pour choisir": {
       "extractionState": "stale",
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "حرّك الخريطة للاختيار"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -24952,6 +27518,12 @@
             "value": "Mueve el mapa para elegir"
           }
         },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sposta la mappa per scegliere"
+          }
+        },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
@@ -24963,6 +27535,12 @@
     "Depuis": {
       "extractionState": "stale",
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "منذ"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -24981,6 +27559,12 @@
             "value": "Desde"
           }
         },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Da"
+          }
+        },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
@@ -24992,6 +27576,12 @@
     "Dernier clic : %@": {
       "extractionState": "stale",
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "آخر نقرة: %@"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -25010,6 +27600,12 @@
             "value": "Último clic: %@"
           }
         },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ultimo clic: %@"
+          }
+        },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
@@ -25021,6 +27617,12 @@
     "Désépingler": {
       "extractionState": "stale",
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "إلغاء التثبيت"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -25039,6 +27641,12 @@
             "value": "Desfijar"
           }
         },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rimuovi dai fissati"
+          }
+        },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
@@ -25050,6 +27658,12 @@
     "Details (optionnel)": {
       "extractionState": "stale",
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تفاصيل (اختيارية)"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -25068,6 +27682,12 @@
             "value": "Detalles (opcional)"
           }
         },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dettagli (facoltativi)"
+          }
+        },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
@@ -25079,6 +27699,12 @@
     "Detectee": {
       "extractionState": "stale",
       "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "مكتشَفة"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -25095,6 +27721,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Detectada"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rilevata"
           }
         },
         "pt-BR": {
