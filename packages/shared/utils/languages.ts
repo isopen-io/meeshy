@@ -427,10 +427,10 @@ export const SUPPORTED_LANGUAGES: readonly SupportedLanguageInfo[] = [
   {
     code: 'hy',
     name: 'Armenian',
-    nativeName: 'Հdelays',
+    nativeName: 'Հայերեն',
     flag: '🇦🇲',
     color: 'bg-red-500',
-    translateText: 'Թdelays delays այdelays delays delays delays հdelays',
+    translateText: 'Թարգմանել այս հաղորդագրությունը հայերեն',
     supportsTTS: true,
     supportsSTT: true,
     supportsVoiceCloning: false,
