@@ -25,6 +25,19 @@ const MAX_SESSIONS_PER_USER = parseInt(process.env.MAX_SESSIONS_PER_USER || '10'
 let prisma: PrismaClient;
 
 /**
+ * MongoDB filter for active sessions (invalidatedAt is null or field doesn't exist)
+ * In MongoDB, when a field is not included during creation, it doesn't exist in the document.
+ * Querying with `invalidatedAt: null` will only match documents where the field is explicitly null,
+ * not documents where the field is missing. This filter handles both cases.
+ */
+const ACTIVE_SESSION_FILTER = {
+  OR: [
+    { invalidatedAt: null },
+    { invalidatedAt: { isSet: false } }
+  ]
+};
+
+/**
  * Initialize the session service with a prisma client
  * Must be called before using any session functions
  */
@@ -178,7 +191,7 @@ export async function validateSession(token: string): Promise<SessionData | null
       sessionToken,
       isValid: true,
       expiresAt: { gt: new Date() },
-      invalidatedAt: null,
+      ...ACTIVE_SESSION_FILTER,
     },
   });
 
@@ -209,7 +222,7 @@ export async function getUserSessions(
     where: {
       userId,
       isValid: true,
-      invalidatedAt: null,
+      ...ACTIVE_SESSION_FILTER,
       expiresAt: { gt: new Date() },
     },
     orderBy: { lastActivityAt: 'desc' },
@@ -323,11 +336,15 @@ export async function cleanupExpiredSessions(): Promise<number> {
   const db = getPrisma();
   const result = await db.userSession.updateMany({
     where: {
-      OR: [
-        { expiresAt: { lt: new Date() } },
-        { isValid: false },
+      AND: [
+        {
+          OR: [
+            { expiresAt: { lt: new Date() } },
+            { isValid: false },
+          ],
+        },
+        ACTIVE_SESSION_FILTER,
       ],
-      invalidatedAt: null,
     },
     data: {
       isValid: false,
@@ -551,7 +568,7 @@ async function enforceSessionLimit(userId: string): Promise<void> {
     where: {
       userId,
       isValid: true,
-      invalidatedAt: null,
+      ...ACTIVE_SESSION_FILTER,
     },
     orderBy: { lastActivityAt: 'asc' },
   });
