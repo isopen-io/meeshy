@@ -51,7 +51,7 @@ export function GroupsLayout({ selectedGroupIdentifier }: GroupsLayoutProps) {
   const router = useRouter();
   const user = useUser();
   const isAuthChecking = useIsAuthChecking();
-  const { t: tGroups } = useI18n('groups');
+  const { t: tGroups, locale } = useI18n('groups');
   const { t: tConv } = useI18n('conversations');
 
   // États UI
@@ -283,6 +283,7 @@ export function GroupsLayout({ selectedGroupIdentifier }: GroupsLayoutProps) {
                 onCopyIdentifier={copyIdentifier}
                 onSettingsClick={() => setIsSettingsModalOpen(true)}
                 tGroups={tGroups}
+                locale={locale}
               />
             ) : (
               <EmptySelection tGroups={tGroups} />

@@ -6,6 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Check, AlertCircle, Trash2 } from 'lucide-react';
 import { useI18n } from '@/hooks/useI18n';
+import { formatShortDate } from '@/utils/date-format';
 import type { VoiceProfileDetails } from '@meeshy/shared/types/voice-api';
 
 interface VoiceProfileInfoProps {
@@ -21,7 +22,7 @@ interface VoiceProfileInfoProps {
  * - Bouton de suppression
  */
 export function VoiceProfileInfo({ profile, onDelete }: VoiceProfileInfoProps) {
-  const { t } = useI18n('settings');
+  const { t, locale } = useI18n('settings');
 
   return (
     <Card>
@@ -49,7 +50,7 @@ export function VoiceProfileInfo({ profile, onDelete }: VoiceProfileInfoProps) {
             <Label className="text-muted-foreground">{t('voiceProfile.existing.expires', 'Expire')}</Label>
             <p className="font-medium">
               {profile.expiresAt
-                ? new Date(profile.expiresAt).toLocaleDateString()
+                ? formatShortDate(profile.expiresAt, locale)
                 : t('voiceProfile.existing.noExpiry', 'Pas d\'expiration')
               }
             </p>

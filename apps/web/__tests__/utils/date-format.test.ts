@@ -7,6 +7,7 @@ import {
   formatConversationDate,
   formatFullDate,
   formatShortDateTime,
+  formatShortDate,
 } from '../../utils/date-format';
 
 describe('date-format', () => {
@@ -291,6 +292,56 @@ describe('date-format', () => {
 
     it('should accept string date input', () => {
       const result = formatShortDateTime('2025-11-05T14:30:00', 'en');
+
+      expect(result).toContain('Nov');
+      expect(result).toContain('2025');
+    });
+  });
+
+  describe('formatShortDate', () => {
+    it('should format month/year in the provided locale (English)', () => {
+      const date = new Date(2025, 10, 5); // Nov 5, 2025
+      const result = formatShortDate(date, 'en');
+
+      expect(result).toContain('Nov');
+      expect(result).toContain('5');
+      expect(result).toContain('2025');
+    });
+
+    it('should format month/year in the provided locale (French)', () => {
+      const date = new Date(2025, 10, 5);
+      const result = formatShortDate(date, 'fr');
+
+      // French short month is "nov." (lowercase, with a period)
+      expect(result).toContain('nov');
+      expect(result).toContain('2025');
+    });
+
+    it('should render different strings for different locales', () => {
+      const date = new Date(2025, 10, 5);
+
+      expect(formatShortDate(date, 'en')).not.toEqual(
+        formatShortDate(date, 'fr')
+      );
+    });
+
+    it('should not include any time component (no colon)', () => {
+      const date = new Date(2025, 10, 5, 14, 30);
+      const result = formatShortDate(date, 'en');
+
+      expect(result).not.toContain(':');
+      expect(result).not.toMatch(/[AP]M/i);
+    });
+
+    it('should default to French when no locale is provided', () => {
+      const date = new Date(2025, 10, 5);
+      const result = formatShortDate(date);
+
+      expect(result).toContain('nov');
+    });
+
+    it('should accept string date input', () => {
+      const result = formatShortDate('2025-11-05T14:30:00', 'en');
 
       expect(result).toContain('Nov');
       expect(result).toContain('2025');
