@@ -28,6 +28,8 @@ import me.meeshy.sdk.conversation.LocalMessage
 import me.meeshy.sdk.conversation.LocalSendState
 import me.meeshy.sdk.conversation.MessageRepository
 import me.meeshy.ui.component.bubble.LanguageFlagTapResolver
+import me.meeshy.sdk.composer.ComposerAffordances
+import me.meeshy.sdk.composer.ComposerAttachmentPolicy
 import me.meeshy.sdk.lang.ComposeLanguageDetector
 import me.meeshy.sdk.lang.LanguageResolver
 import me.meeshy.sdk.model.ApiConversation
@@ -63,6 +65,7 @@ import me.meeshy.sdk.model.PinAction
 import me.meeshy.sdk.model.StarredAttachmentKind
 import me.meeshy.sdk.model.StarredMessage
 import me.meeshy.sdk.model.isoToEpochMillisOrNull
+import me.meeshy.sdk.model.ParticipantPermissions
 import me.meeshy.sdk.model.ReactionUpdateEvent
 import me.meeshy.sdk.net.MeeshyConfig
 import me.meeshy.sdk.outbox.OutboxFlushWorker
@@ -71,6 +74,7 @@ import me.meeshy.sdk.model.report.ReportReason
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.reaction.ReactionRepository
 import me.meeshy.sdk.report.ReportRepository
+import me.meeshy.sdk.session.AnonymousSessionStore
 import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.socket.MessageSocketManager
 import me.meeshy.sdk.theme.accentHex
@@ -131,8 +135,20 @@ data class ChatUiState(
      * `location:live-*` socket events (see [LiveLocationEventFold]). Drives the badges
      * surfaced above the message list. */
     val liveLocations: LiveLocationSessions = LiveLocationSessions.EMPTY,
+    /** The viewer's hardened send permissions for THIS conversation, or `null` for a
+     * registered member (the full posture). Populated from the anonymous guest
+     * session's [ParticipantPermissions] when the viewer joined via a share link;
+     * a normal member never carries a stored anonymous session, so it stays null. */
+    val composerPermissions: ParticipantPermissions? = null,
 ) {
     val canSend: Boolean get() = draft.isNotBlank() || clipboardContent != null
+
+    /** The concrete affordances the composer may offer, derived from
+     * [composerPermissions] via the pure [ComposerAttachmentPolicy]. A registered
+     * member (null permissions) gets every affordance; a share-link guest is gated
+     * to the capabilities the join hardened. */
+    val composerAffordances: ComposerAffordances
+        get() = ComposerAttachmentPolicy.affordances(composerPermissions)
     val isEditing: Boolean get() = editingMessageId != null
 
     /** The live-location sessions to render as badges, in registry order. The badge
@@ -212,6 +228,7 @@ class ChatViewModel @Inject constructor(
     private val reportRepository: ReportRepository,
     private val mediaUploadQueue: MediaUploadQueue,
     private val mentionSearch: MentionSearch,
+    private val anonymousSessionStore: AnonymousSessionStore,
     savedStateHandle: SavedStateHandle,
 ) : ViewModel() {
 
@@ -261,6 +278,8 @@ class ChatViewModel @Inject constructor(
 
     init {
         viewModelScope.launch { markConversationRead() }
+
+        viewModelScope.launch { loadComposerPermissions() }
 
         refreshActiveCall()
 
@@ -563,6 +582,24 @@ class ChatViewModel @Inject constructor(
             throw e
         } catch (_: Exception) {
         }
+    }
+
+    /**
+     * Fold the viewer's hardened send permissions into the composer state. A
+     * share-link guest carries a persisted [AnonymousSessionStore] context whose
+     * capabilities gate the composer; a registered member has no stored anonymous
+     * session, so the permissions stay `null` and the composer keeps the full
+     * posture. A store failure degrades to the full posture (never a crash).
+     */
+    private suspend fun loadComposerPermissions() {
+        val permissions = try {
+            anonymousSessionStore.load()?.permissions
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            null
+        } ?: return
+        _state.update { it.copy(composerPermissions = permissions) }
     }
 
     /**

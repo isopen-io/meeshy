@@ -779,8 +779,10 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       the `X-Session-Token` on the `TokenStore`. SOTA over iOS: a malformed 2xx join persists nothing,
       and `leave()` always clears local state + token even on a server failure (mutation-proven).
       +21 behavioural tests. `AnonymousSessionContext` is now `@Serializable` for persistence.
-      Still needs: the guest-join **screen** (link-preview → form → success) and the composer
-      consuming `permissions` to gate the attachment bar.
+      The **composer now consumes those hardened `permissions`** (slice `composer-attachment-affordances`,
+      2026-07-25 — see §C): the pure `ComposerAttachmentPolicy` gates the attach/mic/read-only affordances,
+      wired into `ChatViewModel`/`ChatScreen` off the persisted anonymous session. Still needs: the
+      guest-join **screen** (link-preview → form → success).
 - [ ] Login/logout teardown wiping E2EE keys and per-user caches
 - [ ] Splash screen with brand animation + minimum display duration
 
@@ -894,6 +896,15 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
 - [ ] In-app dashboard ("Tableau de bord"): unread count, recent conversations, link stats, quick actions
 
 ## C. Chat / Messaging
+- [x] **Composer affordances gated by the viewer's send permissions** (slice
+      `composer-attachment-affordances`, 2026-07-25 — **SOTA over iOS**, whose composer never consults
+      `ParticipantPermissions`). Pure `:sdk-core` `ComposerAttachmentPolicy` maps a `ParticipantPermissions?`
+      → immutable `ComposerAffordances` (per-kind flags + `showsAttachmentLadder` [links excluded — inline
+      in text] + `isReadOnly` = `!canSendText`); null = registered-user full posture. `ChatViewModel` folds
+      the persisted anonymous session's hardened `permissions` into `ChatUiState.composerPermissions` (store
+      failure → full posture, never a crash); `ChatScreen` hides the attach-file button unless the ladder is
+      offerable, hides the mic unless `canSendAudios`, and shows a muted lock-row `ComposerReadOnlyNotice`
+      (i18n EN/FR/ES/PT) for a muted guest. +11 tests (8 policy + 3 VM), mutation-proven.
 - [x] Real-time 1:1 / group chat: send, edit, delete (for-me / for-everyone, 2h window), reply, forward
       **Edit 2-hour window now enforced** via pure `:core:model` `MessageEditability.canEdit(isOwn,
       createdAtMillis, nowMillis, windowMillis=2h)` SSOT (port of iOS's `Date().timeIntervalSince(createdAt)
