@@ -121,9 +121,10 @@ struct StoryViewerView: View {
     /// première frame — plus d'enrichissement visible en second temps.
     @State var groupIntroCache: [String: StoryViewModel.StoryGroupIntro] = [:]
     /// 2,6 s (directive user 2026-07-14) : l'intro présente l'identité sans
-    /// ralentir l'enchaînement — assez pour lire nom + présence. Vue UNIQUE
-    /// désormais (`NeighborGroupCubeFace` n'affiche plus d'identité pendant le
-    /// drag — cf. son commentaire) : c'est la seule carte de transition.
+    /// ralentir l'enchaînement — assez pour lire nom + présence. RENDU unique
+    /// désormais : l'interstitiel et la face du cube (`NeighborGroupCubeFace`,
+    /// qui révèle ce même interlude au doigt depuis 2026-07-25) montrent tous
+    /// deux `StoryAuthorIdentityCard` — une seule carte, deux surfaces.
     static let groupIntroDuration: TimeInterval = 2.6
     /// True once the visible slide's background media is fully usable (real
     /// bitmap / video `.readyToPlay` / solid color). Gates the progress timer
@@ -426,6 +427,21 @@ struct StoryViewerView: View {
             neighborGroup: neighborCubeGroup,
             neighborEntryStory: neighborCubeGroup.flatMap { Self.entryStory(of: $0) },
             neighborDirection: neighborPreviewDirection,
+            // Interlude révélé au doigt : on ne descend QUE l'identité déjà
+            // pré-résolue par `prefetchNeighborGroupIntros()`. Pas de
+            // placeholder « username seul » ici — une carte d'identité sans
+            // bannière ni nom réel serait un flash vide pendant le geste ;
+            // la face du cube se dégrade alors sur son backdrop flouté.
+            neighborIntro: neighborCubeGroup.flatMap { groupIntroCache[$0.id] },
+            // Même résolution que l'interstitiel : realtime PresenceManager
+            // d'abord (le plus frais), sinon le snapshot serveur embarqué par
+            // le payload stories. Lookups O(1) synchrones descendus en
+            // primitives (règle « Zero Unnecessary Re-render » : pas
+            // d'@ObservedObject sur ces singletons dans la face du cube).
+            neighborPresence: neighborCubeGroup.flatMap {
+                PresenceManager.shared.presenceMap[$0.id] ?? $0.authorPresence
+            },
+            neighborIsFriend: neighborCubeGroup.map { FriendshipCache.shared.isFriend($0.id) } ?? false,
             isPresented: $isPresented,
             makeStoryCard: { geometry in storyCard(geometry: geometry) }
         )
@@ -1104,8 +1120,14 @@ struct StoryViewerView: View {
     }
 
     private var cardOffsetY: CGFloat {
-        if isDismissing { return -screenH * 0.35 }
-        return dragOffset * 0.5
+        // La sortie CONTINUE le geste : le doigt allait vers le bas, la carte
+        // s'en va vers le bas. Elle partait vers le HAUT, ce qui cassait la
+        // continuité du swipe de fermeture (directive user 2026-07-25).
+        if isDismissing { return screenH * 0.35 }
+        // Suivi 1:1 du doigt. L'amorti à 0,5 rendait le retour en arrière
+        // infidèle : la carte ne revenait pas sous le doigt, et l'annulation
+        // du geste ne se « sentait » pas.
+        return dragOffset
     }
 
     @State var showEmojiStrip = false // internal for cross-file extension access
@@ -1668,10 +1690,13 @@ extension StoryViewerView {
     }
 }
 
-/// Interstitiel plein écran : bannière du profil en FOND (ThumbHash placeholder,
-/// fallback gradient couleur avatar → noir), voile de lisibilité, et au centre
-/// l'identité : avatar, nom, @username, présence en ligne, mood (emoji + message).
-/// Tap n'importe où = passer directement au slide.
+/// Interstitiel plein écran de l'interlude inter-groupes. Le RENDU d'identité
+/// (bannière, voile, avatar/nom/présence/mood) est délégué à
+/// `StoryAuthorIdentityCard` — vue partagée avec `NeighborGroupCubeFace`, la
+/// face entrante du cube qui révèle ce même interlude AU DOIGT pendant le swipe
+/// (directive user 2026-07-25). Cet overlay ne possède plus que ce qui lui est
+/// propre : la base opaque, les gestes (double-tap = skip, tap gauche = retour
+/// au groupe précédent) et le résumé VoiceOver.
 private struct StoryGroupIntroOverlay: View {
     let intro: StoryViewModel.StoryGroupIntro
     let avatarURL: String?
@@ -1700,19 +1725,13 @@ private struct StoryGroupIntroOverlay: View {
                 // visibles SOUS l'interstitiel (IMG_0976). L'intro est un ÉCRAN,
                 // pas un voile.
                 Color.black
-                bannerBackground
-                LinearGradient(
-                    colors: [.black.opacity(0.62), .black.opacity(0.28), .black.opacity(0.72)],
-                    startPoint: .top, endPoint: .bottom
+                StoryAuthorIdentityCard(
+                    intro: intro,
+                    avatarURL: avatarURL,
+                    avatarColor: avatarColor,
+                    presence: presence,
+                    isFriend: isFriend
                 )
-                // Centrage EXPLICITE (directive user 2026-07-14, le bloc identité
-                // rendait visiblement sous le centre réel de l'écran) : plutôt que
-                // de compter sur le centrage ambiant du ZStack (dérive documentée
-                // à travers plusieurs `.ignoresSafeArea()` imbriqués), on positionne
-                // `identityContent` au centre EXACT de `geo.size` — robuste quelle
-                // que soit la cause exacte de la dérive ambiante.
-                identityContent
-                    .position(x: geo.size.width / 2, y: geo.size.height / 2)
             }
             .frame(width: geo.size.width, height: geo.size.height)
             .contentShape(Rectangle())
@@ -1741,125 +1760,15 @@ private struct StoryGroupIntroOverlay: View {
                                   defaultValue: "Touchez pour passer à la story"))
     }
 
-    /// Fallback UNIQUE (pas de banner / banner en échec ou en chargement) —
-    /// une seule définition consommée par les deux branches de
-    /// `bannerBackground` pour qu'elles ne puissent jamais diverger visuellement.
-    private var avatarColorFallbackGradient: LinearGradient {
-        LinearGradient(
-            colors: [Color(hex: avatarColor), .black],
-            startPoint: .topLeading, endPoint: .bottomTrailing
-        )
-    }
-
-    private var bannerBackground: some View {
-        Group {
-            if let banner = intro.bannerURL, !banner.isEmpty {
-                // `showsStatusOverlays: false` : en échec/chargement de la
-                // bannière, AUCUN spinner ni bouton Retry ne doit saigner au
-                // centre de l'écran sous l'avatar (IMG_1155/1158, directive
-                // user 2026-07-13) — le fallback reste le gradient/thumbHash.
-                CachedAsyncImage(
-                    url: banner,
-                    thumbHash: intro.bannerThumbHash,
-                    showsStatusOverlays: false
-                ) {
-                    avatarColorFallbackGradient
-                }
-                .scaledToFill()
-            } else {
-                avatarColorFallbackGradient
-            }
-        }
-        // Verrou de taille — même piège que `NeighborGroupCubeFace` : une
-        // bannière dont le ratio diffère de l'écran peut proposer une taille
-        // intrinsèque asymétrique et faire dériver le centrage de
-        // `identityContent` au-dessus. `Color.black` (premier enfant du
-        // ZStack parent) ancre déjà normalement ce ZStack au plein écran,
-        // mais ce verrou explicite rend l'invariant local et robuste aux
-        // futurs changements de composition du parent.
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .clipped()
-    }
-
-    private var identityContent: some View {
-        VStack(spacing: 14) {
-            // `storyTray` = 88 pt, le plus grand context avatar — l'identité
-            // est le sujet de l'écran. Présence + mood délégués au badge/capsule
-            // dédiés ci-dessous (plus lisibles qu'un dot 10 pt sur l'avatar).
-            MeeshyAvatar(
-                name: intro.displayName ?? intro.username,
-                context: .storyTray,
-                accentColor: avatarColor,
-                avatarURL: avatarURL
-            )
-            VStack(spacing: 4) {
-                Text(intro.displayName ?? intro.username)
-                    .font(.title2.weight(.bold))
-                    .foregroundStyle(.white)
-                if intro.displayName != nil {
-                    Text("@\(intro.username)")
-                        .font(.subheadline)
-                        .foregroundStyle(.white.opacity(0.75))
-                }
-            }
-            if isFriend {
-                presenceBadge
-            }
-            if let emoji = intro.moodEmoji {
-                HStack(spacing: 8) {
-                    Text(emoji).font(.title3)
-                    if let message = intro.moodMessage, !message.isEmpty {
-                        Text(message)
-                            .font(.subheadline)
-                            .foregroundStyle(.white.opacity(0.9))
-                            .lineLimit(2)
-                    }
-                }
-                .padding(.horizontal, 14)
-                .padding(.vertical, 8)
-                .background(.ultraThinMaterial, in: Capsule())
-            }
-        }
-        .padding(.horizontal, 32)
-    }
-
-    // Règle 1/3/5 : au-delà de 5 min d'inactivité (offline), AUCUN badge —
-    // pas de dot gris « Hors ligne » sur l'intro de groupe.
-    @ViewBuilder
-    private var presenceBadge: some View {
-        let state = presence?.state ?? .offline
-        if state.showsIndicator {
-            HStack(spacing: 6) {
-                Circle()
-                    .fill(state.dotColor)
-                    .frame(width: 9, height: 9)
-                Text(presenceLabel(state))
-                    .font(.caption.weight(.medium))
-                    .foregroundStyle(.white.opacity(0.85))
-            }
-        }
-    }
-
-    private func presenceLabel(_ state: PresenceState) -> String {
-        switch state {
-        case .online:
-            return String(localized: "story.groupIntro.online", defaultValue: "En ligne")
-        case .idle:
-            return String(localized: "story.groupIntro.idle", defaultValue: "Inactif·ve")
-        case .away:
-            return String(localized: "story.groupIntro.away", defaultValue: "Absent·e")
-        case .offline:
-            return String(localized: "story.groupIntro.offline", defaultValue: "Hors ligne")
-        }
-    }
-
     private var accessibilitySummary: String {
         var parts = [intro.displayName ?? intro.username]
         // Même règle que le badge visuel : le statut de présence n'est
         // annoncé à VoiceOver que pour un ami ET quand un indicateur est
         // affiché (online/away/idle) — offline reste muet.
         let state = presence?.state ?? .offline
-        if isFriend, state.showsIndicator { parts.append(presenceLabel(state)) }
+        if isFriend, state.showsIndicator {
+            parts.append(StoryAuthorIdentityCard.presenceLabel(state))
+        }
         if let message = intro.moodMessage { parts.append(message) }
         return parts.joined(separator: ", ")
     }

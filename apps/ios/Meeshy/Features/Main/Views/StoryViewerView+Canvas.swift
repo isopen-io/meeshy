@@ -1335,15 +1335,14 @@ struct StoryCardView: View {
                 },
                 onTogglePause: {
                     // `isLongPressPaused` est la source de vérité unique de la
-                    // pause : le double tap la bascule comme le fait le hold,
-                    // donc timer, vidéo de fond, audios et effets gèlent et
-                    // repartent ensemble.
+                    // pause : le double tap la bascule, donc timer, vidéo de
+                    // fond, audios et effets gèlent et repartent ensemble.
+                    //
+                    // Le double tap NE TOUCHE PAS au chrome (directive user
+                    // 2026-07-25) : c'est une pause, pas une mise en immersion.
+                    // Seuls le long-press (immersion pendant le maintien) et le
+                    // swipe vertical (plein écran) changent le cadrage.
                     isLongPressPaused.toggle()
-                    withAnimation(.spring(response: 0.32, dampingFraction: 0.78)) {
-                        chromeVisible = isLongPressPaused
-                            ? isFullscreenStorySession
-                            : !isFullscreenStorySession
-                    }
                 },
                 isFullscreenStorySession: isFullscreenStorySession
             )
@@ -1924,6 +1923,13 @@ struct StoryViewerContentView: View {
     let neighborGroup: StoryGroup?
     let neighborEntryStory: StoryItem?
     let neighborDirection: Int
+    // Interlude du voisin révélé AU DOIGT (directive user 2026-07-25) —
+    // valeurs OPAQUES résolues par `StoryViewerView` (cache d'intros
+    // pré-résolues + présence + amitié) et descendues jusqu'à la face du cube.
+    // `nil` = pas encore résolu → la face reste sur son backdrop seul.
+    let neighborIntro: StoryViewModel.StoryGroupIntro?
+    let neighborPresence: UserPresence?
+    let neighborIsFriend: Bool
 
     @Binding var isPresented: Bool
 
@@ -1974,9 +1980,17 @@ struct StoryViewerContentView: View {
                             radius: 40, y: 15
                         )
 
-                    if neighborGroup != nil, neighborDirection != 0 {
+                    if let neighborGroup, neighborDirection != 0 {
                         let incomingX = totalSlideX + (neighborDirection == 1 ? cubeWidth : -cubeWidth)
-                        NeighborGroupCubeFace(entryStory: neighborEntryStory)
+                        NeighborGroupCubeFace(
+                            entryStory: neighborEntryStory,
+                            intro: neighborIntro,
+                            avatarURL: neighborGroup.avatarURL,
+                            avatarColor: neighborGroup.avatarColor,
+                            presence: neighborPresence,
+                            isFriend: neighborIsFriend,
+                            revealProgress: slideProgress
+                        )
                             .frame(width: geometry.size.width, height: geometry.size.height)
                             .clipShape(RoundedRectangle(cornerRadius: cardCornerRadius + slideProgress * 16, style: .continuous))
                             .offset(x: incomingX, y: cardOffsetY)
@@ -2003,23 +2017,49 @@ struct StoryViewerContentView: View {
 
 // MARK: - Neighbor Group Cube Face (Lot 3)
 
-/// Face entrante du cube inter-groupes : aperçu statique LÉGER du groupe
-/// voisin (thumbHash flouté du slide d'entrée SEUL, jamais d'identité) —
-/// jamais une seconde `StoryCardView` interactive (les états du viewer sont
+/// Face entrante du cube inter-groupes : backdrop statique LÉGER du groupe
+/// voisin (thumbHash flouté du slide d'entrée + voile), surmonté de l'interlude
+/// d'identité — jamais une seconde `StoryCardView` interactive (les états du viewer sont
 /// mono-slide, et rendre deux piles complètes pendant un geste 60-120 Hz
 /// coûterait un frame budget entier). Parité reels : la face entrante est un
 /// rendu du média, le swap vers la vraie carte se fait au commit, masqué par
 /// l'arête à 90°. Le vrai canvas du voisin est déjà chaud (prefetch
 /// inter-groupes), donc la première frame réelle suit instantanément.
 ///
-/// AUCUN bloc identité (avatar/nom) ici — directive user 2026-07-14 : le
-/// double affichage (cet aperçu PUIS `StoryGroupIntroOverlay` juste après le
-/// commit) montrait deux cartes quasi-identiques à la suite. La seule carte
-/// d'identité de la transition inter-groupes est désormais
-/// `StoryGroupIntroOverlay` — cet aperçu reste un simple indice visuel
-/// transitoire pendant que le doigt bouge.
+/// L'identité de l'auteur voisin monte AU DOIGT par-dessus ce backdrop, via
+/// `StoryAuthorIdentityCard` — la vue d'identité PARTAGÉE avec
+/// `StoryGroupIntroOverlay` (directive user 2026-07-25, règle 4 de la
+/// navigation gestuelle : « le swipe doit afficher l'interlude du groupe
+/// suivant en mode cube, l'animation suit le geste »). Cela RENVERSE la
+/// contrainte du 2026-07-14 (« aucune identité ici »), qui visait deux rendus
+/// DIFFÉRENTS s'enchaînant : face du cube puis interstitiel. Avec une seule
+/// implémentation, le doigt révèle progressivement exactement la carte que
+/// l'interstitiel prolongera au commit — plus de double affichage divergent.
+///
+/// `intro == nil` (voisin pas encore résolu par `prefetchNeighborGroupIntros`)
+/// → backdrop SEUL, jamais un placeholder d'identité vide.
 struct NeighborGroupCubeFace: View {
     let entryStory: StoryItem?
+    /// Identité pré-résolue du groupe voisin (`groupIntroCache`). `nil` tant
+    /// que la résolution n'a pas abouti → aucune identité rendue.
+    let intro: StoryViewModel.StoryGroupIntro?
+    let avatarURL: String?
+    let avatarColor: String
+    let presence: UserPresence?
+    let isFriend: Bool
+    /// Avancement du geste (0 = au repos, 1 = arête à 90°). Pilote la montée
+    /// de l'identité — l'effet SUIT le doigt.
+    let revealProgress: CGFloat
+
+    /// Courbe de révélation PURE : l'identité reste invisible sur les tout
+    /// premiers points de course (un micro-drag ne doit pas flasher un
+    /// visage), puis monte linéairement pour être pleine bien avant le commit
+    /// — l'interstitiel qui suit prend alors le relais sans saut d'opacité.
+    static func identityOpacity(forProgress progress: CGFloat) -> Double {
+        let start: CGFloat = 0.08
+        let full: CGFloat = 0.55
+        return Double(min(max((progress - start) / (full - start), 0), 1))
+    }
 
     private var backdrop: UIImage? {
         guard let story = entryStory else { return nil }
@@ -2058,6 +2098,16 @@ struct NeighborGroupCubeFace: View {
                 )
             }
             Color.black.opacity(0.35)
+            if let intro {
+                StoryAuthorIdentityCard(
+                    intro: intro,
+                    avatarURL: avatarURL,
+                    avatarColor: avatarColor,
+                    presence: presence,
+                    isFriend: isFriend,
+                    contentOpacity: Self.identityOpacity(forProgress: revealProgress)
+                )
+            }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .clipped()
