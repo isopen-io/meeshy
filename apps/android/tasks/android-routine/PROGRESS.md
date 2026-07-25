@@ -1,5 +1,437 @@
 # Progress — state & what to do next
 
+> On 2026-07-25 the **slow-mode composer cooldown** landed (slice `chat-slow-mode-cooldown`,
+> feature-parity §Chat → "Conversation moderation … slow mode" advances to `[~]`). The
+> `Conversation.slowModeSeconds` field the models already carried is now enforced at the composer
+> instead of being silently ignored. **Added (production, all `apps/android`):** the pure, stateless
+> `SlowModePolicy` + `SlowModeState` (`:sdk-core` `me.meeshy.sdk.composer`). `evaluate(slowModeSeconds,
+> lastSelfSentAtMillis, nowMillis, isExempt)` returns whether the composer's send is allowed and, when
+> blocked, a **ceil'd** remaining-seconds countdown (so it never reads "0" while still blocked): a
+> `null`/`≤0` interval or an exempt viewer → `UNTHROTTLED`; a member who never sent → active but
+> immediately sendable; elapsed `≥` interval → sendable; a backwards clock is clamped to a full cooldown
+> (never waved through by a negative remaining). `isExemptRole` routes the role string through the shared
+> `MemberRole` SSOT — moderator/admin/creator bypass slow mode, an unknown/absent role decodes to MEMBER
+> and is throttled. **Wiring (`:feature:chat`):** `ChatUiState` gains `slowModeSeconds`,
+> `slowModeExempt`, `lastSelfSentAtMillis` + a `slowModeState(now)` derivation; `ChatViewModel` folds the
+> conversation's interval + the viewer's role-exemption into state on the conversation stream, records
+> `clock.nowMillis()` as the last-send stamp on each new send, and **gates `send()`** on the cooldown
+> (edits are exempt — they are not new messages). `ChatScreen` renders a subtle ticking hourglass
+> countdown row above the composer and disables the send button while blocked (new i18n key
+> `chat_slow_mode_wait` in EN/FR/ES/PT). The Compose ticker only spins while slow mode is active for the
+> viewer, so a normal conversation pays no recomposition loop. **SOTA over iOS**, which exposes
+> `slowModeSeconds` only in the admin settings picker and never throttles the composer — a member fires
+> faster than the interval and lets the server reject the burst. **+18 behavioural tests:**
+> `SlowModePolicyTest` (14 — off/zero/negative/exempt inactivity, never-sent + boundary + long-idle
+> sendable, just-sent + partial-ceil + sub-second-sliver + backwards-clock blocking, role exemption
+> case-insensitive/member/unknown) + `ChatViewModelTest` +4 (interval populates state, send records +
+> blocks immediate resend, exempt moderator never throttled, slow-mode-off unthrottled). Expectations are
+> hand-written literals asserted through the public API / observable `state`, never internals.
+> **Mutation (RED proof):** neutralizing the VM's `send()` gate (`if (false) return`) fails **exactly**
+> `sending_under_slow_mode_records_the_send_and_blocks_an_immediate_resend` (1 run, 1 failed, no
+> collateral) — the gate is load-bearing. **Gate:** `:sdk-core:testDebugUnitTest` (SlowModePolicyTest) +
+> `:feature:chat:testDebugUnitTest` (ChatViewModelTest) green; `assembleDebug` → BUILD SUCCESSFUL; the
+> full `testDebugUnitTest` run's only failure was the **known DataStore-parallel-load flake**
+> (`ThemeStoreTest`, confirmed green in isolation this run — `BUILD SUCCESSFUL in 6s`), documented
+> standing debt, not this slice. `SlowModePolicyTest` = 15/15, 0 failures. Reviewer **PASS** (diff `apps/android` only — 1 new pure core + its test in
+> `:sdk-core`, VM/state/screen wiring + 4 locale strings + VM test harness in `:feature:chat`, zero
+> production logic elsewhere; **SDK purity** — the *may-I-send-now* cooldown math is a stateless
+> `:sdk-core` building block, the *when-to-tick / when-to-record* orchestration stays app-side in the VM
+> and the Compose ticker; **SSOT** — role exemption reuses `MemberRole`, re-implements no rank logic;
+> **failure paths** — clock skew clamps rather than crashes). **Next slice:** the admin-facing
+> conversation-settings picker (write-role / announcement toggle / slow-mode picker 0/10/30/60/300s /
+> auto-translate — a pure `SettingsForm` core + UI); OR slow-mode enforcement on the attachment/voice
+> send paths (`sendFileAttachment`, voice); OR the guest-join **screen** (`:feature:sharelink`); OR the
+> paged `OnboardingFlowView`; OR the tracked Kover 90% coverage-gate infra.
+> **Known standing debt (not this slice):** the `:sdk-core` DataStore-parallel-load timeout flake
+> (`ThemeStoreTest`/`InterfaceLanguageStoreTest`/`PrivacyPreferencesStoreTest`/`NotificationPreferencesStoreTest`)
+> — green in isolation, intermittent in the full run.
+
+> On 2026-07-25 the **composer gated by participant permissions** landed (slice
+> `composer-attachment-affordances`, feature-parity §Chat → new `[x]` "Composer affordances gated by
+> the viewer's send permissions"). This is a **SOTA improvement over iOS**, whose `UniversalComposerBar`
+> never consults `ParticipantPermissions` — a denied guest still sees affordances the server later
+> rejects. Android gates them at the source of truth instead, consuming the hardened permission set the
+> `anonymous-session-store` slice just made durable. **Added (production, all `apps/android`):** the
+> pure, stateless `ComposerAttachmentPolicy` (`:sdk-core` `me.meeshy.sdk.composer`) mapping a
+> `ParticipantPermissions?` → an immutable `ComposerAffordances` (per-kind booleans + two derived
+> getters: `showsAttachmentLadder` = images/files/videos/audios/locations OR'd — **links excluded**, they
+> ride inline in text; `isReadOnly` = `!canSendText`). A **null** permission set is the registered-user
+> posture — everything granted — so a normal member is never gated by a missing/anonymous record.
+> **Wiring (`:feature:chat`):** `ChatUiState` gains `composerPermissions: ParticipantPermissions?` + a
+> derived `composerAffordances` getter; `ChatViewModel` injects the (already Hilt-provided)
+> `AnonymousSessionStore` and folds `store.load()?.permissions` into the state at init via
+> `loadComposerPermissions()` (a store failure degrades to the full posture, never a crash). `ChatScreen`
+> consumes `state.composerAffordances`: the attach-file button hides unless `showsAttachmentLadder`, the
+> mic hides unless `canSendAudios`, and an `isReadOnly` guest gets a muted lock-row `ComposerReadOnlyNotice`
+> (new i18n key `chat_composer_read_only` in EN/FR/ES/PT) replacing the input entirely. **+11 behavioural
+> tests:** `ComposerAttachmentPolicyTest` (8 — null→full, defaultUser→full, defaultAnonymous→text+images
+> only w/ ladder open, all-denied→read-only+no-ladder, asymmetric field-for-field map, locations-alone→ladder,
+> links-alone→no-ladder, text-only→usable+no-ladder) + `ChatViewModelTest` +3 (registered member keeps full
+> composer, share-link guest gated to `defaultAnonymous`, muted guest → read-only). Expectations are
+> hand-written literals asserted through the public API / observable `state`, never internals.
+> **Mutation (RED proof):** flipping the policy's null branch to `defaultAnonymous` fails **exactly**
+> `null permissions grant the full registered-user posture`; dropping the VM's `_state.update` fold fails
+> **exactly** the 3 new VM tests — both the pure map and the wiring are load-bearing. **Gate:**
+> `./apps/android/meeshy.sh check` (whole module graph, `assembleDebug` + every JVM unit suite) →
+> **BUILD SUCCESSFUL** (no flake this run). Reviewer **PASS** (diff `apps/android` only — 1 new pure core +
+> its test in `:sdk-core`, VM/state/screen wiring + 4 locale strings + VM test harness in `:feature:chat`,
+> zero production logic elsewhere; **SDK purity** — the *what-may-the-composer-offer* rule is a stateless
+> `:sdk-core` building block, the *when-to-load-permissions* orchestration stays app-side in the VM;
+> **SSOT** — reuses `ParticipantPermissions.defaultUser`/`defaultAnonymous`, re-implements no capability
+> logic; **failure paths** — store failure → full posture, never a crash). **Next slice:** the guest-join
+> **screen** (`:feature:sharelink`: link-preview → join form → success, driving `AnonymousSessionRepository`,
+> UI-only); OR the composer wiring the *per-conversation* `ApiConversationParticipant.permissions` (needs
+> the rich participant shape surfaced through `Conversation.participants`, today lightweight `ApiParticipant`);
+> OR the paged `OnboardingFlowView` Compose screen; OR the tracked Kover 90% coverage-gate infra.
+> **Known standing debt (not this slice):** the `:sdk-core` DataStore-parallel-load timeout flake
+> (`ThemeStoreTest`/`InterfaceLanguageStoreTest`/`PrivacyPreferencesStoreTest`/`NotificationPreferencesStoreTest`)
+> — green in isolation, intermittent in the full run (did not recur this run).
+
+> On 2026-07-25 the **anonymous-session join/restore/leave use-case + persistence** landed (slice
+> `anonymous-session-store`, feature-parity §A → the `[~]` "Anonymous sessions" item advances: the
+> permission-hardening core shipped 2026-07-22 is now wired into a real, non-orphan vertical slice).
+> This turns the shipped `AnonymousJoinResponse.toSessionContext()` hardening core from orphan logic
+> into the guest-session lifecycle. **Added (production, all `apps/android`):** `ShareLinkApi`
+> (`:core:network` — the three **no-JWT** anonymous endpoints `GET anonymous/link/{identifier}`,
+> `POST anonymous/join/{linkId}`, `POST anonymous/leave`, port of iOS `ShareLinkService`; wired into
+> `MeeshyApi.shareLinks` + a `NetworkModule` provider); `LeaveAnonymousRequest` (`:core:model`);
+> `AnonymousSessionContext` made `@Serializable` so the **whole hardened context** (token +
+> force-denied capability set) persists, not just the raw token; the single-value
+> `AnonymousSessionStore` (`:sdk-core` — `interface` + `InMemory` + durable `DataStoreAnonymousSessionStore`,
+> JSON blob under one key, corrupt/legacy value decodes to `null` = cache miss, mirrors the proven
+> `ConversationDraftStore` pattern; Hilt provider in `SdkModule` over a `meeshy_anonymous_session`
+> DataStore); and `AnonymousSessionRepository` (`:sdk-core`) with `join(linkId, request)` /
+> `restore()` / `leave()`. **`join`** folds `toSessionContext()` — a 2xx body that can't form a real
+> session (missing participant/conversation, blank token) becomes a `NetworkResult.Failure(code=PARSE)`
+> and **persists nothing**, else installs `tokenStore.sessionToken` + `store.save(ctx)`. **`restore`**
+> re-hydrates a persisted guest on app start, re-installing its `X-Session-Token`, `null` when absent.
+> **`leave`** does a best-effort server call then **always** drops the local session + token.
+> **SOTA over iOS:** iOS force-unwraps the join response (crash on malformed) and its leave leaves the
+> local session intact on a network error — Android degrades gracefully on both. **+21 behavioural
+> tests:** `AnonymousSessionStoreTest` (11 — InMemory + DataStore load/save/replace/clear/seed/reopen/
+> corrupt-decode) + `AnonymousSessionRepositoryTest` (10 — join success persists+hardens+installs token,
+> join malformed/blank-token/network-failure → Failure + no persist, restore with/without stored
+> session, leave server-ok/server-fail/no-token). Expectations are hand-written literals; asserted via
+> the public API + observable side effects (`store.load()`, `tokenStore.sessionToken`), never internals.
+> **Mutation (RED proof):** gating `leave()`'s local clear on `NetworkResult.Success` fails **exactly**
+> `leave_serverFailure_stillClearsLocalStateAndToken` (9 run, 1 failed, no collateral) — the
+> always-clear-locally guarantee is load-bearing. **Gate:** `:app:assembleDebug` (whole module graph
+> incl. the new DI/API wiring) → BUILD SUCCESSFUL; `:core:model` + `:core:network` +
+> `:sdk-core` (targeted slice tests) green; full `:sdk-core:testDebugUnitTest` = **871/872**, the sole
+> failure the **known DataStore-parallel-load flake** (`ThemeStoreTest.dataStore_setThemeMode_…`, green
+> in isolation — confirmed this run), documented standing debt, not this slice. **ENV recipe fix**
+> (new, added to `ROUTINE.md`/`NOTES.md`): Gradle needs `export LANG=C.utf8 LC_ALL=C.utf8` + `./gradlew
+> --stop`, else `:sdk-core` test compilation dies with an *Internal compiler error*
+> (`InvalidPathException` writing a `.class` whose backtick name holds a non-ASCII em-dash). Reviewer
+> **PASS** (diff `apps/android` only — 4 prod files touched in core/sdk-core + 1 new API + 2 new stores/
+> repo + 2 new test files + tracking docs, zero production logic outside android; **SDK purity** — the
+> hardening *decision* stays in pure `:core:model`, the endpoints in `:core:network`, the use-case +
+> stateless persistence in `:sdk-core`, and the "when to join/leave" orchestration is left for the
+> app-side guest-join screen; **SSOT** — no re-implemented hardening, `toSessionContext()` reused as-is;
+> **failure paths** — malformed/offline/no-token all degrade to a coherent state, never a crash).
+> **Next slice:** the guest-join **screen** (`:feature:auth` or a new `:feature:sharelink` —
+> link-preview via `getLinkInfo` → join form → success), driving `AnonymousSessionRepository` (UI-only,
+> JVM-coverage-exempt); OR the composer consuming `ParticipantPermissions` to gate the attachment bar;
+> OR the paged `OnboardingFlowView` Compose screen; OR the tracked Kover 90% coverage-gate infra.
+> **Known standing debt (not this slice):** the `:sdk-core` DataStore-parallel-load timeout flake
+> (`ThemeStoreTest`/`InterfaceLanguageStoreTest`/`PrivacyPreferencesStoreTest`/
+> `NotificationPreferencesStoreTest`) — green in isolation, intermittent in the full run.
+
+> On 2026-07-25 the **app-side availability-debounce network probe** landed (slice
+> `signup-availability-probe`, feature-parity §A → new `[x]` "App-side availability-debounce network
+> probe"; also flips the wizard-VM entry's remaining network-layer follow-up to DONE). This closes the
+> **last orphan seam** of the registration wizard shipped earlier the same day: the three
+> `onUsernameAvailability`/`onEmailAvailability`/`onPhoneAvailability` setters are now driven by real
+> debounced network probes rather than tests alone. **Added (production):** `AvailabilityResult`
+> (`:core:model`, parity with the gateway `GET /auth/check-availability` response —
+> `usernameAvailable`/`suggestions`/`emailAvailable`/`phoneNumberAvailable`/`phoneNumberValid`, every
+> field nullable because the gateway echoes back only the field it was asked to probe);
+> `AuthApi.checkAvailability(username?, email?, phoneNumber?)` (`:core:network` — Retrofit omits null
+> `@Query`s, so a single-field probe hits `?username=…` alone); `AuthRepository.checkAvailability` (`:sdk-core`
+> — wraps `apiCall`, folding transport/HTTP errors into `NetworkResult.Failure`); and in
+> `RegistrationViewModel` three per-field `MutableStateFlow<String>` inputs (fed by the `on…Change`
+> handlers, reset by `skip`'s phone-clear) plus three `launchProbe` pipelines
+> `debounce(1s) → distinctUntilChanged → SignupAvailabilityPolicy.{username,email,phone}Intent → (Check → checkAvailability | Clear → null)`.
+> The intent is called with `previous = null` (the conflated StateFlow already provides
+> `removeDuplicates`, so the policy's `Unchanged` arm is redundant here and left to its own unit tests —
+> an earlier `scan`-based dedup was removed after a mutation showed it was non-load-bearing dead code
+> against a StateFlow source). A failed/unknown probe yields `null` → the proceed gate stays blocked on
+> an "unknown" verdict, never a stale one. **SOTA over iOS:** availability verdicts flow through a
+> background `updateFields` that **preserves** a surfaced `errorMessage` (only a user field-edit clears
+> it via `editFields`), so a late probe can never wipe a registration error banner — a real bug the
+> naive wiring had, caught by the `register…failure` test going red mid-slice. **+9 behavioural tests:**
+> `AuthRepositoryTest` +2 (single probed field forwarded + result/`suggestions` mapped; failure→Failure);
+> `RegistrationViewModelTest` +7 (valid→probe+verdict true; invalid→never-probe+unknown; rapid edits→one
+> probe on the last value; distinct values→probe-each in order; probe-failure→unknown; email probe;
+> phone probe with digits-only normalization `+33 6…`→`33612345678`). Expectations are hand-written
+> literals. **Mutation (RED proof):** dropping the `Check` guard (always probe) fails **7** tests incl.
+> `invalidUsername_afterDebounce_neverProbesAndStaysUnknown` (30 run) — the local-validity gate is
+> load-bearing; RED was also proven first by the fakes failing to compile against the absent
+> `checkAvailability`. **Gate:** `:feature:auth:testDebugUnitTest` 30/30 + `:sdk-core:testDebugUnitTest`
+> (green in isolation) + `:core:model:testDebugUnitTest` + full `:app:assembleDebug` (whole module graph)
+> → BUILD SUCCESSFUL. The full-suite `sdk-core` run failed **only** on the known DataStore-parallel-load
+> timeout flake (`NotificationPreferencesStoreTest.dataStore_setPreferences_isReflectedInTheFlow`,
+> `TimeoutCancellationException`) — green when the module runs in isolation; documented standing debt, not
+> this slice. Reviewer **PASS** (diff `apps/android` only — 3 prod + 3 test files touched, zero production
+> logic outside android; **SDK purity** — the *decision* stays in the pure `:core:model`
+> `SignupAvailabilityPolicy`, the endpoint in `:core:network`, the use-case in `:sdk-core`, and the
+> "when to probe / debounce cadence" orchestration app-side in `:feature:auth`; **SSOT** — no
+> re-implemented validation, the payload mirrors the gateway response; **UDF** — immutable `StateFlow`,
+> pure transitions, cancellation-safe `viewModelScope`; **UX** — a background verdict never blanks an
+> error). **Next slice:** the paged `OnboardingFlowView` Compose screen (per-step field composables +
+> `InteractiveProgressBar` bar row + bottom-bar Back/Skip/Next-or-Register) binding `RegistrationViewModel`
+> incl. the username-suggestion strip surfacing `AvailabilityResult.suggestions` (UI-only,
+> JVM-coverage-exempt); OR the app-side `AnonymousSessionStore` + guest join flow; OR the tracked Kover
+> 90% coverage-gate infra. **Known standing debt (not this slice):** the `:sdk-core`
+> DataStore-parallel-load timeout flake (`ThemeStoreTest`/`InterfaceLanguageStoreTest`/
+> `PrivacyPreferencesStoreTest`/`NotificationPreferencesStoreTest`) — green in isolation, intermittent in
+> the full run.
+
+> On 2026-07-25 the **app-side registration wizard ViewModel** landed (slice
+> `registration-wizard-viewmodel`, feature-parity §A → new `[~]` "App-side registration wizard ViewModel
+> wiring"). This is the **first app-side wiring** turning the ~6 shipped registration cores
+> (`RegistrationStep`/`RegistrationStepNavigator`/`RegistrationStepGate`/`RegistrationProgressBar`/
+> `SignupAvailabilityPolicy`/`PasswordEntry`) from orphan logic into one real observable UDF wizard.
+> New `:feature:auth/RegistrationViewModel` (`@HiltViewModel`) + immutable `RegistrationUiState`
+> (`currentStep` + `RegistrationFields` + `isSubmitting`/`errorMessage`/`isRegistered`). It holds only
+> raw inputs; every decision is *derived* from a pure core, re-implementing none: `canProceed`/
+> `isFirstStep`/`isLastStep`/`fill(step)` are `RegistrationStepGate`/`RegistrationStepNavigator`/
+> `RegistrationProgressBar` calls; `next()`=`advance(currentStep, canProceed)`, `previous()`/`skip()`/
+> `jumpTo()` apply the navigator/progress outcomes (skip performs the `skipPhone=true; phoneNumber=""`
+> field mutation the core signals via `SkipOutcome.clearPhone`); `register()` fires only from a passing
+> RECAP gate, single-flight (`isSubmitting` guard), maps `RegistrationFields.toRegisterRequest`
+> (normalized username/email, blank→null optional names) through `AuthRepository.register`, and binds
+> `RealtimeSessionCoordinator` on success — the exact seam the shipped `AuthViewModel.login` uses. The
+> availability **network probe** (1 s debounce → `checkAvailability`) is deliberately deferred: the VM
+> exposes `onUsernameAvailability`/`onEmailAvailability`/`onPhoneAvailability` as the seam the future
+> network layer drives. **SOTA over iOS:** editing an already-probed username/email/phone **invalidates
+> the stale availability answer** (`…Available=null`) so the proceed gate can never pass on a server
+> verdict belonging to a since-changed value; iOS keeps the old `Bool?` until the debounced probe
+> returns. **+23 behavioural tests** (`RegistrationViewModelTest`): initial state; field-edit +
+> availability invalidation ×3; `next` blocked/passes; `previous` first-noop/back; `skip` phone-clear/
+> non-phone/last-noop; `jumpTo` back/current/upcoming-ignored; `fill` partition; `register`
+> before-recap-noop / blocked-recap-noop / success(marks registered + binds realtime + asserts payload) /
+> failure(surfaces error, no realtime) / while-submitting-noop / blank-names→null. Expectations are
+> hand-written literals. **Mutation (RED proof):** dropping `onUsernameChange`'s `usernameAvailable=null`
+> reset fails **exactly** `editingUsername_invalidatesStaleAvailability` (23 run, 1 failed, no
+> collateral) — proving the stale-availability invalidation is load-bearing; RED was also proven first
+> by the suite failing to compile against the absent VM. **Gate:** `:feature:auth:testDebugUnitTest`
+> green (23/23 new) + `:app:assembleDebug` (whole module graph) → BUILD SUCCESSFUL. Reviewer **PASS**
+> (diff `apps/android` only — 1 new source + 1 new test + tracking docs, zero production logic elsewhere;
+> **SDK purity** — every rule stays in the `:core:model` cores, the VM in `:feature:auth` is a thin
+> caller that only applies immutable state; **SSOT** — no re-implementation of a shipped decision;
+> **UDF** — `ViewModel` + immutable `StateFlow<RegistrationUiState>`, pure transitions; **UX** — natural
+> back/skip/jump-back navigation, no dead-ends). **Next slice:** the paged `OnboardingFlowView` Compose
+> screen (per-step field composables + `InteractiveProgressBar` bar row + bottom-bar Back/Skip/
+> Next-or-Register) binding this VM — UI-only, JVM-coverage-exempt; OR the availability-debounce network
+> layer (an `AuthService.checkAvailability` + a 1 s-debounced `Flow` per field feeding the `on…Availability`
+> seam, `SignupAvailabilityPolicy.usernameIntent`/`emailIntent`/`phoneIntent`-driven), which is
+> JVM-testable and closes the last orphan seam of the wizard; OR the app-side `AnonymousSessionStore` +
+> guest join flow; OR the tracked Kover 90% coverage-gate infra. **Known standing debt (not this
+> slice):** the `:sdk-core` DataStore-parallel-load timeout flake (`ThemeStoreTest`/
+> `InterfaceLanguageStoreTest`/`PrivacyPreferencesStoreTest`) — green in isolation, intermittent in the
+> full run.
+
+> On 2026-07-24 the **transparent token-refresh Authenticator (reactive 401 wiring)** landed (slice
+> `auth-token-refresh-authenticator`, feature-parity §A → "Transparent token refresh on 401 with one
+> retry" stays `[~]` but the app-side wiring the policy core was waiting on is now **done**). This turns
+> the pure `TokenRefreshPolicy.decideOn401` shipped 2026-07-22 into real OkHttp behaviour. New
+> `:core:network/RefreshAuthenticator` (an `okhttp3.Authenticator`) + a `fun interface TokenRefresher`
+> (synchronous refresh → new JWT or null). On every 401 it asks `decideOn401(endpoint, serverMessage =
+> null, hasRefreshedOn401 = response.priorResponse != null)` and: **RefreshAndRetry** → call the
+> refresher, on a real token rewrite `Authorization: Bearer …` on the replay of the *original* request
+> (URL + method preserved) and persist it to the `TokenStore`; on a null/blank token → teardown;
+> **Teardown** (already-retried, or a handshake/`/auth/refresh` endpoint) → `tokenStore.clear()` + give
+> up; **InvalidCredentials** (`/auth/login` 401) → give up **without** clearing an existing session.
+> `serverMessage` is `null` on purpose: the invalid-vs-expired branch depends only on the endpoint, and
+> the authenticator never surfaces the credentials message (the repository does, off the 401 body), so
+> peeking the body would be wasted work. The `/api/v1/…` path is normalised to the policy's `/auth/…`
+> form via a private `endpointOf` (strips a configurable `apiPathPrefix`). **SOTA over iOS:** a blank
+> refreshed token is treated as a teardown (iOS trusts any non-nil string); the retry-once loop guard
+> is OkHttp-native (`priorResponse`) rather than a hand-rolled counter. **Wired for real** in
+> `MeeshyApi.create`: a lateinit-bound refresher calls `auth.refresh(RefreshTokenRequest(sessionToken))`
+> in `runBlocking` (Authenticator runs on a background dispatcher thread — blocking is legal) and cannot
+> recurse because `/auth/refresh` is policy-ineligible. **+11 behavioural tests** (`RefreshAuthenticatorTest`,
+> constructed `Response`s + a fake refresher, no MockWebServer): refresh+replay / preserve-url+method /
+> refresh-null-teardown / refresh-blank-teardown / second-attempt-loop-guard-teardown / login-invalid-
+> creds-preserves-session / refresh-endpoint-teardown / register-teardown / magic-link-teardown / no-
+> prefix-normalises / custom-prefix-strips. Every arm of `authenticate` + both `endpointOf` branches
+> hit. **Mutation check (RED proof):** forcing `hasRefreshed = false` fails **exactly**
+> `eligibleEndpoint_secondAttempt_priorResponsePresent_tearsDownWithoutRefreshing` (18 run, 1 failed,
+> no collateral) — proving the loop guard is load-bearing. **Gate:** `:core:network:testDebugUnitTest`
+> green (11/11 new) + `gradle assembleDebug testDebugUnitTest` (all modules) → BUILD SUCCESSFUL.
+> Reviewer **PASS** (diff `apps/android` only — 1 new source + 1 new test + `MeeshyApi.create` wiring +
+> tracking docs, zero production logic elsewhere; **SDK purity** — the *decision* stays in the pure
+> `:core:model` policy, the Authenticator is thin framework glue in `:core:network` where OkHttp lives,
+> the refresher is injected; **SSOT** — every branch defers to `TokenRefreshPolicy`, re-implementing no
+> decision; **UX/security** — a live session is never torn down by a wrong-password 401, and a dead
+> session can never spin forever). **Next slice:** the app-side `AnonymousSessionStore` (persist
+> `sessionToken` per `linkId`, mirroring iOS Keychain `AnonymousSessionStore`) + guest join flow calling
+> `AnonymousJoinResponse.toSessionContext`; OR the still-`[ ]` app-side `RegistrationViewModel`/
+> `OnboardingFlowView` wiring of the shipped auth cores (all per-step gates + `LanguageStepSelection` +
+> `RegistrationStepGate.canProceed` are ready to feed a real UDF ViewModel — JVM-testable with
+> Turbine/MockK); OR the tracked Kover 90% coverage-gate infra. **Known standing debt (not this slice):**
+> the `:sdk-core` DataStore-parallel-load timeout flake (`ThemeStoreTest`/`InterfaceLanguageStoreTest`/
+> `PrivacyPreferencesStoreTest`) — green in isolation, intermittent in the full run.
+
+> On 2026-07-22 the **anonymous-session permission-hardening core** landed (slice
+> `anonymous-session-permissions-core`, feature-parity §A → advances "Anonymous (shared-link) sessions
+> with restricted send permissions" `[ ]`→`[~]`). The security-critical piece of guest sessions: a
+> shared-link guest may only ever send **text + images (+ optionally files)** — videos, audios,
+> locations and links are **force-denied regardless of what the gateway advertises**. Added to
+> `:core:model`: `ParticipantPermissions.defaultUser` (all 7 true) / `.defaultAnonymous` (messages +
+> images only) — port of iOS `ParticipantModels.swift`; the `ParticipantPermissions.anonymous(messages,
+> files, images)` factory that hard-codes videos/audios/locations/links = false (the hardening SSOT,
+> reused by `defaultAnonymous` and by the transform); and `AnonymousSession.kt`'s
+> `AnonymousSessionContext` + `AnonymousJoinResponse.toSessionContext(): AnonymousSessionContext?`
+> (port of iOS app-side `AnonymousSessionContext.swift`'s `toSessionContext`). **SOTA over iOS:** iOS
+> force-unwraps `participant`/`conversation` in the transform (a malformed join response crashes) and
+> never guards a blank token; the Android port returns `null` when the response can't form a real
+> session (missing participant/conversation, or a blank `X-Session-Token`), degrading gracefully. **+12
+> behavioural tests** (`AnonymousSessionContextTest`): 3 `anonymous()` (all-true forced-false /
+> pass-through negotiable / all-denied), `defaultAnonymous`, `defaultUser`, 7 `toSessionContext`
+> (hardens ignoring unnegotiable grants / carries negotiable flags / maps every identifier / null
+> participant / null conversation / blank token / empty token). Expectations are hand-written literals.
+> **Mutation check (RED proof):** flipping the `anonymous()` factory's `canSendVideos = false` → `true`
+> fails **exactly** the 4 hardening assertions (`anonymous_forcesFourCapabilitiesFalse`,
+> `anonymous_deniesEverything`, `defaultAnonymous_grantsOnlyMessagesAndImages`,
+> `toSessionContext_hardensGuestCapabilities`) — 12 run, 4 failed, no collateral — proving the forcing
+> is load-bearing across every consumer of the SSOT; RED was also proven first by the suite failing to
+> compile against the absent `defaultUser`/`defaultAnonymous`/`anonymous`/`AnonymousSessionContext`/
+> `toSessionContext` symbols. **Gate:** `:core:model:testDebugUnitTest` green (whole module, new suite
+> 12/12) + `assembleDebug testDebugUnitTest` (all modules) → BUILD SUCCESSFUL. Reviewer **PASS** (diff
+> `apps/android` only — 1 modified + 1 new source + 1 new test + tracking docs, zero production logic
+> elsewhere; **SDK purity** — pure companion factories + a stateless extension transform in
+> `:core:model`, zero framework/singleton coupling, the store/join-flow/composer wiring stays
+> app-side/pending; **SSOT** — the `anonymous()` factory is the single home of the guest-capability
+> forcing, reused by `defaultAnonymous` and `toSessionContext`; **UX/security** — a guest can never be
+> tricked into an attachment the product forbids, even by a compromised/buggy server). **Next slice:**
+> the app-side wiring of this core — an `AnonymousSessionStore` (persist `sessionToken` per `linkId`,
+> mirroring iOS Keychain `AnonymousSessionStore`), the guest join flow calling `toSessionContext`, and
+> the composer reading `permissions` to gate the attachment bar + the `X-Session-Token` header; OR the
+> still-`[ ]` app-side `RegistrationViewModel`/`OnboardingFlowView` wiring of the shipped auth cores; OR
+> the OkHttp `Authenticator` wiring the token-refresh decision core into `:core:network`; OR the tracked
+> Kover 90% coverage-gate infra. **Known standing debt (not this slice):** the `:sdk-core`
+> DataStore-parallel-load timeout flake (`ThemeStoreTest`/`InterfaceLanguageStoreTest`/
+> `PrivacyPreferencesStoreTest`) — green in isolation, intermittent in the full run.
+
+> On 2026-07-22 the **token-refresh decision core (reactive 401 + endpoint eligibility)** landed
+> (slice `auth-token-refresh-policy-core`, feature-parity §A → advances "Transparent token refresh on
+> 401 with one retry" `[ ]`→`[~]`). Extended the pure `:core:model/auth/TokenRefreshPolicy` (previously
+> only the proactive `shouldRefresh`) with the endpoint eligibility gate (`isRefreshEligible`), the
+> proactive call-site gate (`shouldRefreshBeforeSend`), the 401 credential-vs-session mapping
+> (`mapUnauthorized` → `UnauthorizedMapping`), the reactive 401 decision (`decideOn401` →
+> `Unauthorized401Decision{InvalidCredentials, RefreshAndRetry, Teardown}`), and the replay
+> classification (`classifyRetryStatus` → `RetryOutcome{Success, Teardown, ServerError}`) — a faithful
+> port of iOS `APIClient.requestWithHeaders`/`mapUnauthorized`, with a blank-server-message fallback
+> improving on iOS's nil-only coalesce. +29 behavioural tests, mutation-proven. Gate:
+> `:core:model:testDebugUnitTest` (whole module) + `:app:assembleDebug` → BUILD SUCCESSFUL. Reviewer
+> PASS. **Next slice:** the OkHttp `Authenticator`/interceptor in `:core:network` that *wires* these
+> decisions (proactive `shouldRefreshBeforeSend` before send, `decideOn401`→`RefreshAndRetry` on a 401,
+> `classifyRetryStatus` on the replay) into `AuthRepository.restoreSession`/`refresh`; OR the still-`[ ]`
+> app-side `RegistrationViewModel`/`OnboardingFlowView` wiring of the shipped auth cores; OR the tracked
+> Kover 90% coverage-gate infra.
+>
+> On 2026-07-22 the **content-language step picker + live-preview decision core** landed (slice
+> `auth-language-step-selection-core`, feature-parity §A → advances "System + regional language
+> selection with live translation preview" `[ ]` → `[~]`). This is the pure interaction + preview
+> primitive behind the 8-step wizard's Step 6. Parity source: iOS `StepLanguageView`
+> (`apps/ios/Meeshy/Features/Auth/Onboarding/OnboardingStepViews.swift`) over
+> `RegistrationViewModel.systemLanguage`/`.regionalLanguage`. One pure
+> `:core:model/auth/LanguageStepSelection.kt` holding **`LanguageSlot`** (SYSTEM/REGIONAL — iOS
+> `LanguageTarget`), **`LanguageSelectionState`** (immutable `(systemLanguage, regionalLanguage)`
+> pair), and the **`LanguageStepSelection`** object. Decisions: `pickerLanguages` =
+> `LanguageData.allLanguagesCommonFirst` (**reuses the catalogue SSOT**, mirroring iOS
+> `LanguageSelector.defaultLanguages` = `LanguageData.allLanguagesCommonFirst` — ordering/metadata
+> never drift); `filter(query)` (empty → whole list, else case-insensitive `nativeName`/`code`
+> contains, faithful to iOS `filteredLanguages` incl. the untrimmed `isEmpty` guard);
+> `summaryLabel(code)` (`"<flag> <nativeName>"` or raw-code fallback); `selectedLanguageName(code)`
+> (nativeName or raw-code, the preview description); `translationPreview(systemLanguage)` (verbatim
+> port of iOS `translatedExample` — 11 explicit arms + a French default for every other language incl.
+> English); `isSelected(slot, code, state)` (slot-aware highlight, reads only the edited slot);
+> `select(slot, code, state)` (slot-aware immutable write, the other slot untouched). **SOTA note:**
+> iOS spreads the filter + summary-label fallback + slot-aware write + preview switch across a SwiftUI
+> `View` body and its `@State editingTarget`; Android lifts the whole thing into one framework-free
+> SSOT *reusing* `LanguageData`, so the app-side picker composable is a thin caller feeding
+> `select`/`filter`/`translationPreview` and `systemLanguage.isNotEmpty()` straight into
+> `RegistrationStepGate`. **+32 behavioural tests** (`LanguageStepSelectionTest`): 2 pickerLanguages /
+> 5 filter / 3 summaryLabel / 2 selectedLanguageName / 13 translationPreview / 3 isSelected / 4 select.
+> Expectations are hand-written literals. **Mutation check (RED proof):** flipping `summaryLabel`'s
+> raw-code fallback to `""` fails **exactly** `summaryLabel_unknownCode_fallsBackToRawCode` (32 run,
+> 1 failed, no collateral) — behavioural, not tautological; RED was also proven first by the suite
+> failing to compile against the absent `LanguageStepSelection`/`LanguageSlot`/`LanguageSelectionState`
+> types. **Gate (system Gradle 8.14.3, `LANG=C.UTF-8`, `$HOME/android-sdk`; the wrapper's
+> gradle-distribution download is 403-blocked in this container, so system Gradle is the gate):**
+> `:core:model:testDebugUnitTest` green (whole module, new suite 32/32) + `:app:assembleDebug` → BUILD
+> SUCCESSFUL (every module compiled). Reviewer **PASS** (diff `apps/android` only — 1 new source file +
+> 1 test + tracking docs, zero production logic in web/ios/gateway/shared; **SDK purity** — a pure object
+> + enum + data class in `:core:model`, zero framework/singleton coupling, the picker composable stays
+> app-side/pending; **SSOT** — `pickerLanguages`/`summaryLabel`/`selectedLanguageName` all resolve through
+> `LanguageData`, re-implementing nothing; **UX** — the slot-aware selection + live-preview mapping are
+> faithfully encoded so Step 6 stays coherent with iOS; no coverage floor lowered, no test weakened).
+>
+> **Next slice:** the app-side `StepLanguageView` composable (system/regional tab, searchable grid driven
+> by `filter`, summary cards via `summaryLabel`, the live-preview example card via `translationPreview`/
+> `selectedLanguageName`) inside the still-pending `RegistrationViewModel`/`OnboardingFlowView`
+> scaffold; OR that whole app-side registration-wizard wiring (`RegistrationStepGate.canProceed` →
+> `RegistrationStepNavigator.advance` + `RegistrationProgressBar` off `currentStep`, DataStore-backed
+> field state); OR the app-side JWT-refresh wiring (OkHttp `Authenticator` + persistent session
+> restore); OR the tracked Kover 90% coverage-gate infra. **Known standing debt (not this slice):**
+> (1) the `:sdk-core` DataStore-parallel-load timeout flake (`ThemeStoreTest` /
+> `InterfaceLanguageStoreTest` / `PrivacyPreferencesStoreTest`) — green in isolation, intermittent in
+> the full run; a "harden the DataStore test harness against parallel-load timeout" follow-up, tracked
+> and unclaimed.
+
+> On 2026-07-22 the **unified registration per-step proceed-gate core** landed (slice
+> `registration-step-gate-core`, feature-parity §A → advances "Profile photo / banner / bio optional
+> step; registration recap + terms acceptance" `[ ]` → `[~]`). This is the **capstone SSOT** of the
+> 8-step wizard: the single decision that answers "may the bottom bar's Next/Register button advance?"
+> for every step, faithfully porting iOS `RegistrationViewModel.canProceed` (the computed
+> `switch currentStep` var, `packages/MeeshySDK/Sources/MeeshyUI/Auth/RegistrationViewModel.swift`).
+> One pure `:core:model/auth/RegistrationStepGate.kt` holding **`RegistrationFields`** (an immutable
+> snapshot of the exact `@Published` inputs iOS reads — tri-state `Boolean?` availability distinguishing
+> not-probed from confirmed-taken) + the **`RegistrationStepGate`** object. `canProceed(step, fields)`
+> **composes the already-shipped per-field cores** instead of re-implementing them: PSEUDO/PHONE/EMAIL →
+> `SignupAvailabilityPolicy.{username,phone,email}StepCanProceed` (local validity AND server availability,
+> phone honouring `skipPhone`); PASSWORD → `PasswordEntry.evaluate(...).canProceed` (≥8 AND confirm match).
+> The four arms with no prior core are encoded verbatim from iOS: IDENTITY → first & last name both
+> `isNotBlank()` (iOS trims both with `.whitespacesAndNewlines`); LANGUAGE → `systemLanguage.isNotEmpty()`
+> (iOS `!systemLanguage.isEmpty`); PROFILE → always `true` (the optional photo/bio step); RECAP →
+> `acceptTerms`. **SOTA note:** iOS spreads the eight-arm decision inside a stateful ViewModel computed var
+> re-inlining the username/email/phone/password rules that also live elsewhere; Android lifts the whole
+> decision into one framework-free SSOT reusing the shipped cores, so the app-side `RegistrationViewModel`
+> is a thin caller that feeds this boolean straight into `RegistrationStepNavigator.advance`. **+26
+> behavioural tests** (`RegistrationStepGateTest`): 4 pseudo / 4 phone / 3 email / 5 identity (incl.
+> whitespace-only) / 3 password / 2 language / 1 profile-always / 2 recap, plus 2 whole-wizard compositions
+> (every step green for a fully-valid snapshot; only PROFILE green for an empty one). Expectations are
+> hand-written literals. **Mutation check (RED proof):** flipping the RECAP arm to a constant `true` fails
+> **exactly** `recap_termsNotAccepted_blocks` + `onlyProfileProceeds_forAnEmptySnapshot` (26 run, 2 failed,
+> no collateral) — behavioural, not tautological; RED was also proven first by the suite failing to compile
+> against the absent `RegistrationFields`/`RegistrationStepGate` types. **Gate (system Gradle 8.14.3,
+> `LANG=C.UTF-8`, `$HOME/android-sdk`; the wrapper's gradle-distribution download is 403-blocked in this
+> container, so system Gradle is the gate):** `:core:model:testDebugUnitTest` green (whole module, new
+> suite 26/26) + `:app:assembleDebug` → BUILD SUCCESSFUL (every module compiled). Reviewer **PASS** (diff
+> `apps/android` only — 1 new source file + 1 test + tracking docs, zero production logic in
+> web/ios/gateway/shared; **SDK purity** — a pure object + data class in `:core:model`, zero
+> framework/singleton coupling, the ViewModel + step composables stay app-side/pending; **SSOT** — the gate
+> *reuses* `SignupAvailabilityPolicy`/`PasswordEntry`, re-implementing nothing; **UX** — the eight-arm
+> advance rule is faithfully encoded so the wizard's forward gating stays coherent; no coverage floor
+> lowered, no test weakened).
+>
+> **Next slice:** the app-side `RegistrationViewModel` + `OnboardingFlowView`-style composable wiring
+> `RegistrationStepGate.canProceed(currentStep, fields)` → `RegistrationStepNavigator.advance`/`previous`/
+> `skip` and `RegistrationProgressBar.fill`/`jumpTarget` off `currentStep`, with a DataStore-backed field
+> state; OR the still-`[ ]` **System + regional language selection with live translation preview** step
+> (its inference core `SignupRegionInference` already shipped — this is the app-side language-picker
+> composable + a small "which languages are selectable / preview target" decision core); OR the app-side
+> wiring of the JWT-refresh core (OkHttp `Authenticator` + persistent session restore); OR the tracked
+> Kover 90% coverage-gate infra. **Known standing debt (not this slice):** (1) the `:sdk-core`
+> DataStore-parallel-load timeout flake (`ThemeStoreTest` / `InterfaceLanguageStoreTest` /
+> `PrivacyPreferencesStoreTest`) — green in isolation, intermittent in the full run; (2) the deterministic
+> `:feature:profile` `ProfileHeaderBuilderTest` red on clean `main` (presence AWAY-window vs
+> `AWAY_WINDOW_MS` divergence) awaiting the `profile-presence-window-reconcile` repair slice. Both remain
+> tracked and unclaimed.
+
 > On 2026-07-22 the **registration step-navigation decision core** landed (slice
 > `registration-step-navigation-core`, feature-parity §A → advances a new box "Bottom-bar step
 > navigation (next / previous / skip)" `[ ]` → `[~]`, the sibling of the progress-bar core). This is
@@ -6892,6 +7324,85 @@ After Stories richness is sufficient, advance to the **Calls** area
 (`feature-parity.md` §"Calls").
 
 ## Run log
+
+### 2026-07-22 — slice `anonymous-session-permissions-core` ✅ impl + local gate green + reviewer PASS → PR → merge
+- **Rule #0:** one open android-track PR at start — #2283 `claude/apps/android/auth-token-refresh-policy-core`
+  (prior iteration, `mergeable_state: clean`, apps/android-only, CI has path filters so no required
+  checks run on an apps/android diff). **Squash-merged it to main first** (sha `75942ed7`), synced local
+  `main` to `origin/main`, then branched `claude/apps/android/anonymous-session-permissions-core`.
+- **Slice:** the security-critical decision layer of anonymous (shared-link) guest sessions. Build-order
+  §A Auth. Advances feature-parity "Anonymous (shared-link) sessions with restricted send permissions"
+  `[ ]`→`[~]` (decision layer; the store/join-flow/composer wiring remains a follow-up).
+- **Added (production):**
+  - `ParticipantPermissions` companion (`Participant.kt`): `defaultUser` (all 7 true), `defaultAnonymous`
+    (messages + images only), and `anonymous(canSendMessages, canSendFiles, canSendImages)` — the
+    hardening SSOT that hard-codes `canSendVideos/Audios/Locations/Links = false`. Port of iOS
+    `ParticipantModels.swift` `defaultUser`/`defaultAnonymous`.
+  - `AnonymousSession.kt`: `AnonymousSessionContext(sessionToken, participantId, permissions, linkId,
+    conversationId)` + `AnonymousJoinResponse.toSessionContext(): AnonymousSessionContext?` — port of iOS
+    app-side `AnonymousSessionContext.swift`. Trusts only the server's messages/files/images flags,
+    force-denies the other four via `anonymous()`. **SOTA over iOS:** returns `null` (not a crash) when
+    participant/conversation is missing or the session token is blank.
+- **Tests:** +12 `AnonymousSessionContextTest` (3 `anonymous()` / `defaultAnonymous` / `defaultUser` /
+  7 `toSessionContext` incl. null participant, null conversation, blank + empty token, identifier
+  mapping with distinct literals to catch a field swap). Expectations are hand-written literals.
+- **Mutation check (RED proof):** flipping the `anonymous()` factory's `canSendVideos = false` → `true`
+  fails **exactly** the 4 hardening assertions (12 run, 4 failed, no collateral) — the forcing is
+  load-bearing across every consumer of the SSOT (`defaultAnonymous`, `toSessionContext`). RED also
+  proven by the suite failing to compile against the absent symbols first.
+- **Verify (system Gradle 8.14.3, `LANG=C.UTF-8`, `$HOME/android-sdk`; the wrapper's gradle-distribution
+  download is 403-blocked in this container, so system Gradle is the gate):** `:core:model:testDebugUnitTest`
+  green (whole module, new suite 12/12) + `assembleDebug testDebugUnitTest` (all modules) → BUILD SUCCESSFUL.
+- **Reviewer:** PASS — diff `apps/android` only (1 modified + 1 new source + 1 new test + tracking docs,
+  zero production logic elsewhere); **SDK purity** — pure companion factories + a stateless extension
+  transform in `:core:model`, zero framework/singleton coupling, the store/join-flow/composer wiring
+  stays app-side/pending; **SSOT** — `anonymous()` is the single home of the guest-capability forcing;
+  **UX/security** — a guest can never be tricked into a forbidden attachment even by a buggy/compromised
+  server; no coverage floor lowered, no test weakened.
+
+### 2026-07-22 — slice `auth-token-refresh-policy-core` ✅ impl + local gate green + reviewer PASS → PR → merge
+- **Rule #0:** no open PR on the android track (`claude/apps/android/*`) at start (open PRs were all
+  iOS `laughing-*` / `story-*` / `ci/*`). Local `main` already synced to `origin/main` (`49d5f591`).
+  Branched `claude/apps/android/auth-token-refresh-policy-core`.
+- **Slice:** extended the pure `:core:model/auth/TokenRefreshPolicy` (which previously held only the
+  proactive `shouldRefresh` = iOS `refreshSession(force:)` guard) with the **endpoint-aware, reactive**
+  side of transparent session refresh, lifted out of iOS `APIClient.requestWithHeaders` /
+  `APIClient.mapUnauthorized`. Build-order area §A Auth (first in the parity sequence). Completes the
+  feature-parity item "Transparent token refresh on 401 with one retry" at the **decision** layer
+  (`[ ]`→`[~]`); the OkHttp `Authenticator`/interceptor wiring in `:core:network` stays a follow-up.
+- **Added (production):** in `JwtExpiry.kt`'s `TokenRefreshPolicy` object —
+  - `isRefreshEligible(endpoint)` = iOS `!isRefreshOrAuth` (`/auth/refresh`, `/auth/login*`,
+    `/auth/register*`, `/auth/magic-link*` are opted out; everything else eligible).
+  - `shouldRefreshBeforeSend(endpoint, token, now, margin)` = iOS proactive gate `if let token,
+    shouldAttemptRefresh && isTokenExpired` — token-present AND eligible AND expired.
+  - `UnauthorizedMapping{InvalidCredentials(message), SessionExpired}` + `mapUnauthorized(endpoint,
+    serverMessage)` = iOS `mapUnauthorized`; a 401 on `/auth/login*` is wrong-credentials (never a
+    teardown), anywhere else session-expired. **SOTA improvement over iOS:** blank server message also
+    falls back to `DEFAULT_INVALID_CREDENTIALS_MESSAGE` (iOS only nil-coalesces).
+  - `Unauthorized401Decision{InvalidCredentials, RefreshAndRetry, Teardown}` + `decideOn401(endpoint,
+    serverMessage, hasRefreshedOn401)` = iOS's 401 branch: credentials surface as-is; an eligible,
+    not-yet-retried endpoint earns one refresh+replay; otherwise teardown (already retried, or an
+    ineligible/handshake endpoint whose refresh token is itself dead).
+  - `RetryOutcome{Success, Teardown, ServerError(status)}` + `classifyRetryStatus(status)` = iOS's
+    post-refresh cascade (2xx→success, 401→teardown, else→server error).
+- **Tests:** +29 `TokenRefreshPolicyTest` (7 eligible / 6 shouldRefreshBeforeSend incl. absent+blank
+  token, margin boundary, handshake opt-out / 6 mapUnauthorized incl. null+blank fallback,
+  login/2fa/refresh/regular / 5 decideOn401 incl. already-retried, handshake-refresh, login-even-after-
+  flag / 5 classifyRetryStatus incl. 299 boundary, 403-not-teardown). Existing `JwtExpiryTest`
+  (`shouldRefresh`) untouched and still green. Expectations are hand-written literals.
+- **Mutation check (RED proof):** dropping the `!hasRefreshedOn401` guard from `decideOn401` fails
+  **exactly** `on401_regularEndpointAfterAlreadyRefreshing_tearsDown` (29 run, 1 failed, no collateral)
+  — behavioural, not tautological.
+- **Verify (system Gradle 8.14.3, `LANG=C.UTF-8`, `$HOME/android-sdk`; the wrapper's gradle-distribution
+  download is 403-blocked in this container, so system Gradle is the gate):**
+  `:core:model:testDebugUnitTest` green (whole module, new suite 29/29) + `:app:assembleDebug` → BUILD
+  SUCCESSFUL (every module compiled).
+- **Reviewer:** PASS — diff `apps/android` only (1 modified source file + 1 new test + tracking docs,
+  zero production logic in web/ios/gateway/shared); **SDK purity** — a pure object + sealed decisions in
+  `:core:model`, zero framework/singleton coupling, the OkHttp wiring stays app/`:core:network`-side and
+  pending; **SSOT** — reuses `JwtExpiry.isExpired`, re-implementing no expiry logic; **UX/coherence** —
+  the credential-vs-session distinction means a wrong password never triggers a spurious session
+  teardown; no coverage floor lowered, no test weakened.
 
 ### 2026-07-21 — slice `auth-password-requirements` ✅ impl + local gate green + reviewer PASS → PR (CI pending)
 - **Rule #0:** no open PR on the android track (`claude/apps/android/*`) at start (only iOS `laughing-*`

@@ -11,6 +11,8 @@
     <string name="chat_record_voice">Enregistrer un message vocal</string>
     <string name="chat_effects_open">Effets du message</string>
     <string name="chat_attach_file">Joindre un fichier</string>
+    <string name="chat_composer_read_only">Vous ne pouvez pas envoyer de messages dans cette conversation</string>
+    <string name="chat_slow_mode_wait">Mode lent · attendez %1$ds</string>
     <string name="chat_effects_title">Effets du message</string>
     <string name="chat_effects_done">OK</string>
     <string name="chat_effects_section_behavior">Comportement</string>

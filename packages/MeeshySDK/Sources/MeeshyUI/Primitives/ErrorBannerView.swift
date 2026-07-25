@@ -50,7 +50,7 @@ public struct ErrorBannerView: View {
                 Image(systemName: "xmark")
                     .font(.system(size: MeeshyFont.footnoteSize, weight: .bold))
                     .foregroundColor(.white.opacity(0.8))
-                    .frame(width: 24, height: 24)
+                    .meeshyTapTarget()
             }
         }
         .padding(.horizontal, MeeshySpacing.lg)
@@ -76,6 +76,13 @@ public struct ErrorBannerView: View {
         .onTapGesture {
             dismiss()
         }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(currentError.errorDescription ?? "")
+        .accessibilityAddTraits(.isButton)
+        .accessibilityHint(String(localized: "Double-tap to dismiss this error message.", defaultValue: "Double-tap to dismiss this error message."))
+        .accessibilityAction {
+            dismiss()
+        }
     }
 
     private func show() {
@@ -85,7 +92,7 @@ public struct ErrorBannerView: View {
         }
         HapticFeedback.error()
         dismissTask = Task { @MainActor in
-            try? await Task.sleep(nanoseconds: 4_000_000_000)
+            try? await Task.sleep(for: .seconds(4))
             guard !Task.isCancelled else { return }
             dismiss()
         }

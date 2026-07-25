@@ -7,7 +7,7 @@ import os
 /// Immutable capture of the three profile-editable fields, returned by
 /// `AuthManaging.applyLocalProfileChanges` and consumed by
 /// `restoreLocalProfileSnapshot` for optimistic-rollback flows.
-public struct ProfileSnapshot: Sendable, Equatable {
+public struct ProfileSnapshot: Sendable, Equatable, Codable {
     public let displayName: String?
     public let bio: String?
     public let avatarUrl: String?
@@ -66,6 +66,13 @@ public protocol AuthManaging: AnyObject {
     /// EditProfileViewModel when `OfflineQueue.outcomeStream` emits
     /// `.exhausted` for the corresponding `updateProfile` row.
     func restoreLocalProfileSnapshot(_ snapshot: ProfileSnapshot)
+
+    /// Reflects a confirmed `voicePublic` change onto `currentUser` (in-memory
+    /// publish + keychain persist) after a successful `PATCH /users/me`. Without
+    /// it, a screen that re-derives its toggle from `currentUser.voicePublic`
+    /// (e.g. VoiceProfileManageViewModel.loadProfile) would restore the stale
+    /// value on reopen.
+    func applyLocalVoicePublicChange(_ isPublic: Bool)
 }
 
 // MARK: - Implementation
@@ -147,6 +154,7 @@ public final class AuthManager: ObservableObject, AuthManaging {
     private func userKey(for userId: String) -> String { "meeshy_user_\(userId)" }
     private func sessionTokenKey(for userId: String) -> String { "meeshy_session_token_\(userId)" }
     private func tokenDateUDKey(for userId: String) -> String { "meeshy_token_date_\(userId)" }
+    private func pendingProfileKey(for userId: String) -> String { "meeshy_pending_profile_\(userId)" }
 
     // MARK: - Active user
 
@@ -478,6 +486,7 @@ public final class AuthManager: ObservableObject, AuthManaging {
         keychain.delete(forKey: sessionTokenKey(for: userId), account: nil)
         keychain.delete(forKey: userKey(for: userId), account: nil)
         keychain.delete(forKey: tokenDateUDKey(for: userId), account: nil)
+        keychain.delete(forKey: pendingProfileKey(for: userId), account: nil)
         removeFromSavedAccounts(userId: userId)
 
         activeUserId = nil
@@ -534,12 +543,14 @@ public final class AuthManager: ObservableObject, AuthManaging {
         keychain.delete(forKey: sessionTokenKey(for: userId), account: nil)
         keychain.delete(forKey: userKey(for: userId), account: nil)
         keychain.delete(forKey: tokenDateUDKey(for: userId), account: nil)
+        keychain.delete(forKey: pendingProfileKey(for: userId), account: nil)
         removeFromSavedAccounts(userId: userId)
 
         if activeUserId == userId {
             activeUserId = nil
             currentUser = nil
             isAuthenticated = false
+            pendingOptimisticProfile = nil
             APIClient.shared.authToken = nil
         }
     }
@@ -577,6 +588,15 @@ public final class AuthManager: ObservableObject, AuthManaging {
                 keychain.delete(forKey: userKey(for: userId), account: nil)
             }
         }
+
+        // U3-cont'd — reload any optimistic-profile guard left pending by a
+        // kill+relaunch BEFORE the background revalidation Task below can
+        // run. Without this, a process restart silently drops the in-memory
+        // guard and the /auth/me revalidation clobbers the just-hydrated
+        // (correct) optimistic bio/displayName/avatar with the stale
+        // pre-edit server value while the updateProfile outbox row is still
+        // in flight.
+        pendingOptimisticProfile = loadPendingProfileFromKeychain(userId: userId)
 
         APIClient.shared.authToken = token
         isAuthenticated = true
@@ -639,8 +659,8 @@ public final class AuthManager: ObservableObject, AuthManaging {
     // MARK: - Handle 401 (called from APIClient during active session)
 
     public func handleUnauthorized() {
-        guard activeUserId != nil else {
-            // No active user at all — nothing to refresh, no state to clear.
+        guard isAuthenticated else {
+            // No active session — nothing to refresh.
             return
         }
 
@@ -715,7 +735,10 @@ public final class AuthManager: ObservableObject, AuthManaging {
         // pending guard is nil (cleared on logout), so this is a no-op.
         let resolved = Self.resolveServerUserWithOptimistic(user, pending: pendingOptimisticProfile)
         currentUser = resolved.user
-        if resolved.clearedPending { pendingOptimisticProfile = nil }
+        if resolved.clearedPending {
+            pendingOptimisticProfile = nil
+            clearPendingProfileFromKeychain(userId: userId)
+        }
         isAuthenticated = true
         // Hydrate session-scoped caches not carried by the auth payload (block
         // list). Skip on token rotation — already warm.
@@ -767,6 +790,38 @@ public final class AuthManager: ObservableObject, AuthManaging {
         }
     }
 
+    /// U3-cont'd — `pendingOptimisticProfile` guards a revalidation/refresh
+    /// response from clobbering an in-flight optimistic edit, but was
+    /// in-memory only: a kill+relaunch while the `updateProfile` outbox row
+    /// was still unconfirmed dropped the guard, so the next cold start's
+    /// `/auth/me` revalidation clobbered the correctly keychain-hydrated
+    /// optimistic profile with the stale pre-edit server value (no version/
+    /// timestamp compare recovers from that). Persisting the guard itself —
+    /// not just the optimistic user — closes that window: `checkExistingSession`
+    /// reloads it before the revalidation Task can run.
+    private func savePendingProfileToKeychain(_ snapshot: ProfileSnapshot, userId: String) {
+        do {
+            let encoded = try JSONEncoder().encode(snapshot)
+            guard let jsonString = String(data: encoded, encoding: .utf8) else {
+                Logger.auth.error("Failed to convert pending profile guard to UTF8 string for userId \(userId, privacy: .public)")
+                return
+            }
+            try keychain.save(jsonString, forKey: pendingProfileKey(for: userId), account: nil)
+        } catch {
+            Logger.auth.error("Failed to persist pending profile guard for userId \(userId, privacy: .public): \(error.localizedDescription, privacy: .public)")
+        }
+    }
+
+    private func loadPendingProfileFromKeychain(userId: String) -> ProfileSnapshot? {
+        guard let jsonString = keychain.load(forKey: pendingProfileKey(for: userId), account: nil),
+              let data = jsonString.data(using: .utf8) else { return nil }
+        return try? JSONDecoder().decode(ProfileSnapshot.self, from: data)
+    }
+
+    private func clearPendingProfileFromKeychain(userId: String) {
+        keychain.delete(forKey: pendingProfileKey(for: userId), account: nil)
+    }
+
     private func sanitizeDataURIs(_ user: MeeshyUser) -> MeeshyUser {
         let hasDataAvatar = user.avatar?.hasPrefix("data:") == true
         let hasDataBanner = user.banner?.hasPrefix("data:") == true
@@ -809,7 +864,10 @@ public final class AuthManager: ObservableObject, AuthManaging {
         // server already reflects the edit).
         let resolved = Self.resolveServerUserWithOptimistic(user, pending: pendingOptimisticProfile)
         self.currentUser = resolved.user
-        if resolved.clearedPending { pendingOptimisticProfile = nil }
+        if resolved.clearedPending {
+            pendingOptimisticProfile = nil
+            clearPendingProfileFromKeychain(userId: userId)
+        }
         self.updateSavedAccountActivity(from: user)
     }
 
@@ -1022,10 +1080,16 @@ public final class AuthManager: ObservableObject, AuthManaging {
         currentUser = updated
         // U3 — remember the optimistic profile so a revalidation/refresh can't
         // clobber it, and persist to the keychain so it survives a cold start
-        // (cold-start hydration reads currentUser from the keychain).
-        pendingOptimisticProfile = ProfileSnapshot(
+        // (cold-start hydration reads currentUser from the keychain). The
+        // guard itself is ALSO persisted (not just the optimistic user) —
+        // see `savePendingProfileToKeychain` — so a kill+relaunch before the
+        // outbox row confirms still protects the edit from the boot-time
+        // `/auth/me` revalidation.
+        let pending = ProfileSnapshot(
             displayName: updated.displayName, bio: updated.bio, avatarUrl: updated.avatar)
+        pendingOptimisticProfile = pending
         saveUserToKeychain(updated, userId: updated.id)
+        savePendingProfileToKeychain(pending, userId: updated.id)
         return snapshot
     }
 
@@ -1040,6 +1104,16 @@ public final class AuthManager: ObservableObject, AuthManaging {
         // U3 — the optimistic edit was rolled back; drop the guard + persist.
         pendingOptimisticProfile = nil
         saveUserToKeychain(reverted, userId: reverted.id)
+        clearPendingProfileFromKeychain(userId: reverted.id)
+    }
+
+    public func applyLocalVoicePublicChange(_ isPublic: Bool) {
+        guard let user = currentUser else { return }
+        let updated = user.withProfileChanges(voicePublic: isPublic)
+        currentUser = updated
+        // The change is already server-confirmed (called after PATCH /users/me),
+        // so it doesn't join the optimistic guard — just persist for cold start.
+        saveUserToKeychain(updated, userId: updated.id)
     }
 
     /// U3 — merge any in-flight optimistic profile onto a freshly-fetched server

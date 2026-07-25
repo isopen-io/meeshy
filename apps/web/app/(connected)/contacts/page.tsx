@@ -28,6 +28,7 @@ import { apiService } from '@/services/api.service';
 import type { ContactTab, ContactSortOption, FriendRequest } from '@/types/contacts';
 import type { BlockedUser, User } from '@meeshy/shared/types';
 import { getUserDisplayName } from '@/utils/user-display-name';
+import { formatLastSeenLabel } from '@/utils/presence-format';
 import {
   Users,
   UserCheck,
@@ -46,25 +47,6 @@ import {
   Ban,
   CheckCircle,
 } from 'lucide-react';
-
-// ─── Helpers ─────────────────────────────────────────────────────────────
-
-type TFn = (key: string, params?: Record<string, unknown>) => string;
-
-function formatLastSeen(t: TFn, locale: string, isOnline: boolean, lastActiveAt?: string): string {
-  if (isOnline) return t('status.online');
-  if (!lastActiveAt) return t('status.neverSeen');
-  const last = new Date(lastActiveAt).getTime();
-  if (Number.isNaN(last)) return t('status.offline');
-  const diffMin = Math.floor((Date.now() - last) / 60_000);
-  if (diffMin < 1) return t('status.justNow');
-  if (diffMin < 60) return t('status.minutesAgo', { count: diffMin });
-  const diffH = Math.floor(diffMin / 60);
-  if (diffH < 24) return t('status.hoursAgo', { count: diffH });
-  const diffD = Math.floor(diffH / 24);
-  if (diffD < 7) return t('status.daysAgo', { count: diffD });
-  return t('status.lastSeenDate', { date: new Date(lastActiveAt).toLocaleDateString(locale) });
-}
 
 // ─── Row primitives (links dashboard-v1 aesthetic) ─────────────────────────
 
@@ -227,7 +209,7 @@ export default function ContactsPage() {
           avatar={contact.avatar}
           name={contact.name}
           username={contact.username}
-          meta={formatLastSeen(t, locale, contact.isOnline, contact.lastActiveAt)}
+          meta={formatLastSeenLabel({ isOnline: contact.isOnline, lastActiveAt: contact.lastActiveAt, t, locale })}
           userId={contact.id}
           isOnline={contact.isOnline}
           lastActiveAt={contact.lastActiveAt}

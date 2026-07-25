@@ -50,19 +50,40 @@ final class NewConversationViewModel: ObservableObject {
     /// itself and trigger navigation. Cleared back to `nil` by `consume…`.
     @Published private(set) var createdConversation: MeeshyConversation?
 
+    /// The user's contacts (accepted friends), shown by default before any
+    /// search is typed — the picker is contact-first: browse who you already
+    /// know, then fall back to platform-wide search. Mapped from
+    /// `FriendRequestUser` so they render through the same `userRow` as search
+    /// results.
+    @Published private(set) var contacts: [SearchedUser] = []
+    /// `true` only while contacts are being fetched AND none are cached yet
+    /// (cold start) — drives a skeleton instead of a blank screen. Stays
+    /// `false` when cached contacts are already on screen (Cache-First: no
+    /// spinner over existing data).
+    @Published private(set) var isLoadingContacts = false
+
     // MARK: - Dependencies
 
     private let api: APIClientProviding
+    private let friendService: FriendServiceProviding
     private let currentUserIdProvider: @MainActor () -> String?
     private var searchTask: Task<Void, Never>?
 
     static let searchDebounce: UInt64 = 350_000_000  // ns
 
+    /// Reuses the same GRDB cache the Contacts directory populates
+    /// (`ContactsListViewModel`) so a user who has visited Contacts sees their
+    /// list here instantly. Read-only from this VM — `ContactsListViewModel`
+    /// remains the single writer of that cache.
+    private let contactsCacheKey = FriendshipCache.PersistenceKeys.friendsList
+
     init(
         api: APIClientProviding = APIClient.shared,
+        friendService: FriendServiceProviding = FriendService.shared,
         currentUserIdProvider: @MainActor @escaping () -> String? = { AuthManager.shared.currentUser?.id }
     ) {
         self.api = api
+        self.friendService = friendService
         self.currentUserIdProvider = currentUserIdProvider
     }
 
@@ -119,6 +140,58 @@ final class NewConversationViewModel: ObservableObject {
             // 2026-07-21; matches the existing `.private` convention for
             // user-entered PII, e.g. `MagicLinkView`'s email log).
             Logger.network.warning("[NewConversationViewModel] user search failed for query=\(query, privacy: .private): \(error.localizedDescription, privacy: .public)")
+        }
+    }
+
+    // MARK: - Contacts
+
+    /// Loads the user's contacts (accepted friends) for the default,
+    /// pre-search surface. Cache-First: serves the GRDB-cached list
+    /// immediately (`.fresh`/`.stale`) and silently revalidates on `.stale`;
+    /// only a cold cache shows the loading skeleton. Idempotent — safe to call
+    /// from `.task`/`.onAppear` on every presentation.
+    func loadContacts() async {
+        let cached = await CacheCoordinator.shared.friends.load(for: contactsCacheKey)
+
+        switch cached {
+        case .fresh(let data, _):
+            contacts = data.map(SearchedUser.init(friend:))
+            isLoadingContacts = false
+            return
+
+        case .stale(let data, _):
+            contacts = data.map(SearchedUser.init(friend:))
+            isLoadingContacts = false
+            await fetchContactsFromNetwork()
+            return
+
+        case .expired, .empty:
+            isLoadingContacts = contacts.isEmpty
+        }
+
+        await fetchContactsFromNetwork()
+    }
+
+    /// Fetches accepted friends from the gateway and aggregates them through
+    /// `FriendListAggregator` (the shared "who is a contact" definition). Does
+    /// NOT write the friends cache — `ContactsListViewModel` owns that store;
+    /// this VM only reads it to avoid a two-writer race.
+    private func fetchContactsFromNetwork() async {
+        do {
+            async let receivedResponse = friendService.receivedRequests(offset: 0, limit: 100)
+            async let sentResponse = friendService.sentRequests(offset: 0, limit: 100)
+            let (received, sent) = try await (receivedResponse, sentResponse)
+
+            let friends = FriendListAggregator.aggregate(
+                received: received.data,
+                sent: sent.data,
+                currentUserId: currentUserIdProvider() ?? ""
+            )
+            contacts = friends.map(SearchedUser.init(friend:))
+            isLoadingContacts = false
+        } catch {
+            isLoadingContacts = false
+            Logger.network.warning("[NewConversationViewModel] contacts load failed: \(error.localizedDescription, privacy: .public)")
         }
     }
 

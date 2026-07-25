@@ -1,6 +1,7 @@
 package me.meeshy.sdk.auth
 
 import me.meeshy.sdk.model.AuthSession
+import me.meeshy.sdk.model.AvailabilityResult
 import me.meeshy.sdk.model.LoginRequest
 import me.meeshy.sdk.model.RegisterRequest
 import me.meeshy.sdk.net.NetworkResult
@@ -27,6 +28,19 @@ class AuthRepository @Inject constructor(
     suspend fun register(request: RegisterRequest): NetworkResult<AuthSession> =
         apiCall { authApi.register(request) }
             .also { if (it is NetworkResult.Success) storeSession(it.data) }
+
+    /**
+     * Probe the availability of a single signup field (username / email / phone).
+     * Pass exactly the one being checked; the others stay `null` and are omitted
+     * from the request. A transport/HTTP failure folds into [NetworkResult.Failure]
+     * so the caller can degrade to an "unknown" verdict rather than a stale answer.
+     */
+    suspend fun checkAvailability(
+        username: String? = null,
+        email: String? = null,
+        phoneNumber: String? = null,
+    ): NetworkResult<AvailabilityResult> =
+        apiCall { authApi.checkAvailability(username, email, phoneNumber) }
 
     /** Re-hydrates the session on app start when a token is already present. */
     suspend fun restoreSession() {

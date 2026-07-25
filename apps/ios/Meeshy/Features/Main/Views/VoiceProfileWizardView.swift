@@ -123,7 +123,7 @@ struct VoiceProfileWizardView: View {
 
                 Button {
                     HapticFeedback.medium()
-                    Task { await viewModel.grantConsent() }
+                    viewModel.proceedToAgeVerification()
                 } label: {
                     HStack(spacing: 8) {
                         if viewModel.isLoading {
@@ -190,19 +190,32 @@ struct VoiceProfileWizardView: View {
 
             Button {
                 HapticFeedback.medium()
-                viewModel.confirmAgeVerification()
+                Task { await viewModel.grantConsent() }
             } label: {
-                Text(String(localized: "voice.profile.wizard.confirm", defaultValue: "Confirmer", bundle: .main))
-                    .font(MeeshyFont.relative(16, weight: .semibold))
-                    .foregroundColor(.white)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 16)
-                    .background(
-                        RoundedRectangle(cornerRadius: 14)
-                            .fill(Color(hex: accentColor))
-                    )
+                HStack(spacing: 8) {
+                    if viewModel.isLoading {
+                        ProgressView().tint(.white)
+                    }
+                    Text(String(localized: "voice.profile.wizard.confirm", defaultValue: "Confirmer", bundle: .main))
+                        .font(MeeshyFont.relative(16, weight: .semibold))
+                }
+                .foregroundColor(.white)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 16)
+                .background(
+                    RoundedRectangle(cornerRadius: 14)
+                        .fill(Color(hex: accentColor))
+                )
             }
+            .disabled(viewModel.isLoading)
             .padding(.horizontal, 20)
+
+            if let error = viewModel.error {
+                Text(error)
+                    .font(MeeshyFont.relative(13, weight: .medium))
+                    .foregroundColor(MeeshyColors.error)
+                    .padding(.horizontal, 20)
+            }
 
             Spacer()
         }
@@ -232,6 +245,13 @@ struct VoiceProfileWizardView: View {
                 ) { audioDataList in
                     HapticFeedback.success()
                     Task { await viewModel.uploadSamples(audioDataList) }
+                }
+
+                if let error = viewModel.error {
+                    Text(error)
+                        .font(MeeshyFont.relative(13, weight: .medium))
+                        .foregroundColor(MeeshyColors.error)
+                        .padding(.horizontal, 20)
                 }
 
                 Spacer().frame(height: 32)

@@ -24,6 +24,7 @@ import {
 import { usePostSocketCacheSync } from '@/hooks/queries/use-post-socket-cache-sync';
 import { usePostRoom } from '@/hooks/social/use-post-room';
 import { usePreferredLanguage } from '@/hooks/use-post-translation';
+import { useCommentTarget } from '@/hooks/use-comment-target';
 import { PostDetail } from '@/components/v2/PostDetail';
 import { PostEditor } from '@/components/v2/PostEditor';
 import { RepostModal } from '@/components/v2/RepostModal';
@@ -57,18 +58,12 @@ export default function PostDetailPage() {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const userLanguage = usePreferredLanguage();
 
-  // Notification → comment navigation: the gateway link builder appends a
-  // `#comment-<id>` anchor (or a `?comment=<id>` query) so a tapped comment /
-  // reply / comment-like notification lands on the exact comment. Read it once
-  // on mount and hand it to PostDetail → CommentList for scroll + highlight.
-  const [targetCommentId, setTargetCommentId] = useState<string | null>(null);
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    const fromHash = window.location.hash.match(/^#comment-(.+)$/)?.[1];
-    const fromQuery = new URLSearchParams(window.location.search).get('comment');
-    const target = fromHash ?? fromQuery;
-    if (target) setTargetCommentId(target);
-  }, []);
+  // Notification → comment navigation: the link builder appends a
+  // `#comment-<id>` anchor (plus `?parent=<id>` when the target is a reply, or
+  // a legacy `?comment=<id>` query). Read REACTIVELY (hashchange / popstate /
+  // client navigations) so landing on this already-mounted page with a new
+  // target re-runs the scroll + highlight in PostDetail → CommentList.
+  const { targetCommentId, targetParentCommentId } = useCommentTarget();
 
   const postQuery = usePostQuery(postId);
   const commentsQuery = useCommentsInfiniteQuery({ postId, enabled: !!postId });
@@ -254,6 +249,7 @@ export default function PostDetailPage() {
             onUnlikeComment={(commentId) => unlikeCommentMutation.mutate({ postId: post.id, commentId })}
             onDeleteComment={(commentId) => deleteCommentMutation.mutate({ postId: post.id, commentId })}
             targetCommentId={targetCommentId}
+            targetParentCommentId={targetParentCommentId}
           />
         </main>
 

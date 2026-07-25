@@ -71,6 +71,18 @@ final class MessageListViewController: UIViewController {
     /// server id (which is what `ReplyReference.messageId` carries —
     /// gateway sends `replyTo.id`, not the local UUID).
     private var serverIdToLocalId: [String: String] = [:]
+
+    // MARK: Suivi de lecture exact
+    /// Traduit les apparitions/disparitions de cellules en messages réellement
+    /// lus. Le seuil de présence distingue une lecture d'un défilement.
+    /// Voir `docs/superpowers/specs/2026-07-24-read-exactness-design.md`.
+    fileprivate var seenAccumulator = SeenMessageAccumulator()
+    /// Uniquement touché depuis le MainActor (`viewDidLoad`,
+    /// `dismantleUIViewController`), donc sans `nonisolated(unsafe)` : cette
+    /// échappatoire n'était nécessaire que pour un accès en `deinit`, qui a été
+    /// supprimé au profit du démontage explicite.
+    fileprivate var seenTimer: Timer?
+    fileprivate var lastSeenActivityMs: Int = 0
     private var pendingReconfigureMessageIds = Set<String>()
     private var reconfigureDebounceTimer: Timer?
 
@@ -86,6 +98,13 @@ final class MessageListViewController: UIViewController {
     /// Invoked when the scroll position crosses the near-bottom threshold.
     /// Drives the floating "scroll to latest" button in the parent SwiftUI view.
     var onNearBottomChanged: ((Bool) -> Void)?
+    /// Identifiants SERVEUR des messages restés assez longtemps à l'écran pour
+    /// compter comme lus. Le gateway ne marque plus lus que les messages qu'un
+    /// client lui nomme : sans ce signal, il retombe sur son chemin par fenêtre
+    /// temporelle, qui déclarait lus 200 messages quand 10 tenaient à l'écran.
+    ///
+    /// Voir `docs/superpowers/specs/2026-07-24-read-exactness-design.md`.
+    var onMessagesSeen: (([String]) -> Void)?
     /// Invoked when the user taps a story reply preview inside a bubble.
     /// Receives the story id (NOT the message id). Wire to the parent's
     /// story viewer presentation logic.
@@ -106,6 +125,31 @@ final class MessageListViewController: UIViewController {
     /// bulle, fourni par `ConversationView`. Quand présent (donc iOS 26+), la
     /// cellule attache le menu natif et DÉSACTIVE le long-press custom.
     var nativeMessageMenu: ((Message) -> AnyView)?
+    /// id de la bulle présentée dans l'overlay d'appui long. La cellule live
+    /// correspondante passe à `opacity 0` (masquée) le temps de l'overlay —
+    /// seule la copie élevée reste visible (anti double-bulle fantôme). Ne
+    /// reconfigure QUE les cellules VISIBLES concernées (ancienne + nouvelle) :
+    /// les items du diffable sont keyés par `localId`, on résout donc l'id
+    /// ciblé via le store, borné aux cellules à l'écran.
+    var overlaidMessageId: String? {
+        didSet {
+            guard oldValue != overlaidMessageId, isViewLoaded else { return }
+            let targets = Set([oldValue, overlaidMessageId].compactMap { $0 })
+            guard !targets.isEmpty else { return }
+            let affected = collectionView.indexPathsForVisibleItems
+                .compactMap { dataSource.itemIdentifier(for: $0) }
+                .filter { item in
+                    guard case .message(let localId) = item,
+                          let m = store.domainMessage(for: localId, currentUserId: currentUserId)
+                    else { return false }
+                    return targets.contains(m.id)
+                }
+            guard !affected.isEmpty else { return }
+            var snap = dataSource.snapshot()
+            snap.reconfigureItems(affected)
+            dataSource.apply(snap, animatingDifferences: false)
+        }
+    }
     /// Add reaction. Carries the message id and the tapped bubble cell's
     /// on-screen frame (window coords; `nil` when the cell is not realized)
     /// so the quick-reaction bar can anchor to the bubble.
@@ -176,6 +220,12 @@ final class MessageListViewController: UIViewController {
     required init?(coder: NSCoder) { fatalError() }
 
     deinit {
+        // Ni vidange ni invalidation du timer ici : `deinit` n'est pas isolé au
+        // MainActor et `Timer` n'est pas Sendable — y toucher ne compile pas
+        // sous Swift 6. (`CADisplayLink` ci-dessous passe, lui, ce qui rend le
+        // geste trompeusement naturel.) Le démontage passe par
+        // `dismantleUIViewController`, qui vide puis arrête le suivi ; le timer
+        // capture `self` faiblement, donc il ne retient pas ce contrôleur.
         slowScrollDisplayLink?.invalidate()
         slowScrollDisplayLink = nil
     }
@@ -219,6 +269,7 @@ final class MessageListViewController: UIViewController {
         configureStickyDayOverlay()
         configureDataSource()
         observeStore()
+        startSeenTracking()
         // Apply the initial snapshot from whatever the store already holds.
         // The store's `messagesDidChange` PassthroughSubject is fire-and-forget:
         // any emission that happened before this VC subscribed is lost. The
@@ -642,6 +693,9 @@ final class MessageListViewController: UIViewController {
                     isMine: isMine,
                     messageId: messageId,
                     messageCreatedAt: message.createdAt,
+                    // Masquée pendant que l'overlay d'appui long présente CETTE
+                    // bulle : seule la copie élevée reste visible (anti ghost).
+                    isHiddenForOverlay: message.id == self.overlaidMessageId,
                     resistance: hasTimebasedMedia ? .resistant : .normal,
                     onSwipeReply: { swipeReplyHandler?(messageId) },
                     onSwipeForward: { swipeForwardHandler?(messageId) },
@@ -1205,9 +1259,88 @@ final class MessageListViewController: UIViewController {
     }
 }
 
+// MARK: - Suivi de lecture exact
+
+extension MessageListViewController {
+
+    /// Résout l'identifiant SERVEUR d'une cellule.
+    ///
+    /// Le diffable est indexé par `localId` ; un message encore en vol n'a pas
+    /// de `serverId`. Renvoyer `nil` dans ce cas écarte naturellement les
+    /// messages optimistes — inutile de filtrer un préfixe `cid_` ailleurs, et
+    /// le gateway rejetterait de toute façon tout le lot en 400.
+    func serverMessageId(at indexPath: IndexPath) -> String? {
+        guard case .message(let localId)? = dataSource.itemIdentifier(for: indexPath) else {
+            return nil
+        }
+        return store.message(for: localId)?.serverId
+    }
+
+    /// Vide l'accumulateur et signale ce qui a été acquis.
+    ///
+    /// Appelé au démontage et au passage en arrière-plan : fermer une
+    /// conversation ne doit pas perdre une lecture déjà acquise.
+    func flushSeenMessages() {
+        let seen = seenAccumulator.drain(at: Self.nowMs())
+        guard !seen.isEmpty else { return }
+        onMessagesSeen?(seen)
+    }
+
+    static func nowMs() -> Int {
+        Int(Date().timeIntervalSince1970 * 1000)
+    }
+
+    /// Réveil périodique : le seuil de présence doit se déclencher même quand
+    /// l'utilisateur ne bouge plus et qu'aucun événement de défilement n'arrive.
+    func startSeenTracking() {
+        seenTimer?.invalidate()
+        let timer = Timer.scheduledTimer(withTimeInterval: 0.25, repeats: true) { [weak self] _ in
+            Task { @MainActor in
+                guard let self else { return }
+                let now = Self.nowMs()
+                if self.seenAccumulator.isBatchReady(at: now)
+                    || now - self.lastSeenActivityMs >= 1000 {
+                    self.lastSeenActivityMs = now
+                    self.flushSeenMessages()
+                }
+            }
+        }
+        timer.tolerance = 0.1
+        seenTimer = timer
+    }
+
+    func stopSeenTracking() {
+        seenTimer?.invalidate()
+        seenTimer = nil
+    }
+}
+
 // MARK: - UICollectionViewDelegate
 
 extension MessageListViewController: UICollectionViewDelegate {
+
+    func collectionView(
+        _ collectionView: UICollectionView,
+        willDisplay cell: UICollectionViewCell,
+        forItemAt indexPath: IndexPath
+    ) {
+        guard let serverId = serverMessageId(at: indexPath) else { return }
+        let now = Self.nowMs()
+        lastSeenActivityMs = now
+        seenAccumulator.appeared(serverId, at: now)
+    }
+
+    func collectionView(
+        _ collectionView: UICollectionView,
+        didEndDisplaying cell: UICollectionViewCell,
+        forItemAt indexPath: IndexPath
+    ) {
+        guard let serverId = serverMessageId(at: indexPath) else { return }
+        let now = Self.nowMs()
+        lastSeenActivityMs = now
+        seenAccumulator.disappeared(serverId, at: now)
+    }
+
     func scrollViewDidScroll(_ scrollView: UIScrollView) {
         let offset = scrollView.contentOffset.y
         let contentHeight = scrollView.contentSize.height

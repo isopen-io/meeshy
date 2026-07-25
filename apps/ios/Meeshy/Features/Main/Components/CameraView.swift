@@ -20,13 +20,19 @@ struct CameraView: View {
         ZStack {
             Color.black.ignoresSafeArea()
 
-            CameraPreviewLayer(session: camera.session)
-                .ignoresSafeArea()
+            if camera.permission.needsSettingsRedirect {
+                permissionDeniedPanel
+            } else {
+                CameraPreviewLayer(session: camera.session)
+                    .ignoresSafeArea()
+            }
 
             VStack(spacing: 0) {
                 topBar
                 Spacer()
-                bottomControls
+                if !camera.permission.needsSettingsRedirect {
+                    bottomControls
+                }
             }
 
             if camera.isTakingPhoto {
@@ -48,6 +54,45 @@ struct CameraView: View {
             dismiss()
         }
         .statusBarHidden()
+    }
+
+    // MARK: - Permission Denied
+
+    /// Remplace le preview quand l'accès caméra est refusé ou restreint.
+    /// Avant, `configure()` sortait en silence et l'utilisateur restait devant
+    /// un écran noir sans explication ni recours.
+    private var permissionDeniedPanel: some View {
+        VStack(spacing: 16) {
+            Image(systemName: "camera.fill")
+                .font(.system(size: 44, weight: .light))
+                .foregroundColor(.white.opacity(0.7))
+
+            Text(String(localized: "camera.permission.denied.title",
+                        defaultValue: "Accès à la caméra refusé", bundle: .main))
+                .font(MeeshyFont.relative(17, weight: .semibold))
+                .foregroundColor(.white)
+
+            Text(String(localized: "camera.permission.denied.body",
+                        defaultValue: "Autorisez Meeshy à utiliser la caméra pour prendre des photos et des vidéos.",
+                        bundle: .main))
+                .font(MeeshyFont.relative(14))
+                .foregroundColor(.white.opacity(0.7))
+                .multilineTextAlignment(.center)
+
+            Button {
+                MediaPermissionCoordinator.openSettings()
+            } label: {
+                Text(String(localized: "camera.permission.openSettings",
+                            defaultValue: "Ouvrir les Réglages", bundle: .main))
+                    .font(MeeshyFont.relative(15, weight: .semibold))
+                    .foregroundColor(.black)
+                    .padding(.horizontal, 24)
+                    .frame(height: 44)
+                    .background(Capsule().fill(.white))
+            }
+        }
+        .padding(.horizontal, 40)
+        .accessibilityElement(children: .contain)
     }
 
     // MARK: - Top Bar
@@ -145,6 +190,9 @@ struct CameraView: View {
             modeTab(String(localized: "camera.mode.video", defaultValue: "Vidéo", bundle: .main), selected: isVideoMode) {
                 withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { isVideoMode = true }
                 HapticFeedback.light()
+                // Le micro est demandé ICI — au moment où le son devient utile —
+                // et non à l'ouverture de la caméra.
+                Task { await camera.enableAudioCaptureIfNeeded() }
             }
         }
     }
@@ -188,10 +236,16 @@ struct CameraView: View {
         Button {
             if camera.isRecordingVideo {
                 camera.stopRecording()
+                HapticFeedback.medium()
             } else {
-                camera.startRecording()
+                // Filet : couvre le cas où l'on arrive en mode Vidéo autrement
+                // que par l'onglet (préselection, restauration d'état).
+                Task {
+                    await camera.enableAudioCaptureIfNeeded()
+                    camera.startRecording()
+                    HapticFeedback.medium()
+                }
             }
-            HapticFeedback.medium()
         } label: {
             ZStack {
                 Circle()
@@ -249,6 +303,14 @@ final class CameraModel: NSObject, ObservableObject {
     @Published var isTakingPhoto = false
     @Published var isRecordingVideo = false
     @Published var recordingDuration: TimeInterval = 0
+    /// État de l'autorisation caméra. `.denied`/`.restricted` fait rendre à la
+    /// vue un panneau « Ouvrir les Réglages » au lieu d'un preview noir muet.
+    @Published private(set) var permission: MediaPermissionState = .notDetermined
+
+    /// L'entrée audio est ajoutée paresseusement (mode Vidéo), pas au montage
+    /// de la session — cf. `enableAudioCaptureIfNeeded()`.
+    private var hasAudioInput = false
+    private var didAnnounceMicrophoneRefusal = false
 
     private var photoOutput = AVCapturePhotoOutput()
     private var videoOutput = AVCaptureMovieFileOutput()
@@ -271,15 +333,21 @@ final class CameraModel: NSObject, ObservableObject {
     private var pendingSwitchPosition: AVCaptureDevice.Position?
     private var pendingStopRequested = false
 
+    /// Demande la caméra puis monte la session. Un refus (au prompt ou déjà
+    /// enregistré dans TCC) publie `permission = .denied` au lieu de sortir en
+    /// silence : la vue rend alors un panneau explicatif plutôt qu'un preview
+    /// noir permanent sans le moindre indice.
+    ///
+    /// Le micro n'est PAS demandé ici — voir `enableAudioCaptureIfNeeded()`.
     func configure() {
-        guard AVCaptureDevice.authorizationStatus(for: .video) == .authorized ||
-              AVCaptureDevice.authorizationStatus(for: .video) == .notDetermined else { return }
-
-        AVCaptureDevice.requestAccess(for: .video) { [weak self] granted in
-            guard granted else { return }
-            AVCaptureDevice.requestAccess(for: .audio) { _ in
-                Task { @MainActor in self?.setupSession() }
-            }
+        Task { @MainActor [weak self] in
+            let state = await MediaPermissionCoordinator.ensureCamera(announcesRefusal: false)
+                ? MediaPermissionState.granted
+                : MediaPermissionState.camera
+            guard let self else { return }
+            self.permission = state
+            guard state.isUsable else { return }
+            self.setupSession()
         }
     }
 
@@ -289,12 +357,6 @@ final class CameraModel: NSObject, ObservableObject {
 
         addVideoInput(position: .back)
 
-        if let audioDevice = AVCaptureDevice.default(for: .audio),
-           let audioInput = try? AVCaptureDeviceInput(device: audioDevice),
-           session.canAddInput(audioInput) {
-            session.addInput(audioInput)
-        }
-
         if session.canAddOutput(photoOutput) { session.addOutput(photoOutput) }
         if session.canAddOutput(videoOutput) { session.addOutput(videoOutput) }
 
@@ -303,6 +365,39 @@ final class CameraModel: NSObject, ObservableObject {
         Task.detached { [weak self] in
             self?.session.startRunning()
         }
+    }
+
+    /// Demande le micro et branche l'entrée audio, au premier passage en mode
+    /// Vidéo (et défensivement avant un enregistrement).
+    ///
+    /// Historiquement le micro était demandé dès l'ouverture de la caméra, y
+    /// compris pour quelqu'un qui ne prend qu'une photo : un prompt sans motif
+    /// visible, que l'utilisateur refuse souvent — définitivement. Il arrive
+    /// désormais au moment où le son sert réellement.
+    ///
+    /// Un refus n'empêche pas de filmer : la capture continue sans piste audio
+    /// (`mergeSegments` gère l'absence de piste audio), avec un toast explicatif.
+    func enableAudioCaptureIfNeeded() async {
+        guard !hasAudioInput else { return }
+        guard await MediaPermissionCoordinator.ensureMicrophone(announcesRefusal: false) else {
+            guard !didAnnounceMicrophoneRefusal else { return }
+            didAnnounceMicrophoneRefusal = true
+            FeedbackToastManager.shared.showError(
+                String(localized: "camera.microphone.denied",
+                       defaultValue: "Micro refusé — la vidéo sera muette. Toucher pour ouvrir les Réglages",
+                       bundle: .main)
+            ) { MediaPermissionCoordinator.openSettings() }
+            return
+        }
+
+        guard let audioDevice = AVCaptureDevice.default(for: .audio),
+              let audioInput = try? AVCaptureDeviceInput(device: audioDevice) else { return }
+        session.beginConfiguration()
+        if session.canAddInput(audioInput) {
+            session.addInput(audioInput)
+            hasAudioInput = true
+        }
+        session.commitConfiguration()
     }
 
     private func addVideoInput(position: AVCaptureDevice.Position) {
@@ -438,17 +533,39 @@ final class CameraModel: NSObject, ObservableObject {
             if let lastSegment = segments.last {
                 capturedVideoURL = lastSegment
                 capturedVideoId = UUID().uuidString
-                Task { await PhotoLibraryManager.shared.saveVideo(at: lastSegment) }
+                Task { await Self.saveToPhotoLibrary { await PhotoLibraryManager.shared.saveVideo(at: lastSegment) } }
             }
             return
         }
         capturedVideoURL = finalURL
         capturedVideoId = UUID().uuidString
-        Task { await PhotoLibraryManager.shared.saveVideo(at: finalURL) }
+        Task { await Self.saveToPhotoLibrary { await PhotoLibraryManager.shared.saveVideo(at: finalURL) } }
         if segments.count > 1 {
             for segment in segments where segment != finalURL {
                 try? FileManager.default.removeItem(at: segment)
             }
+        }
+    }
+
+    /// Enregistre une capture dans l'album Meeshy et **rend le refus visible**.
+    /// `PhotoLibraryManager` demande `.addOnly` et renvoie `false` sur refus,
+    /// mais les trois appels de ce fichier jetaient ce booléen : une photo prise
+    /// puis jamais retrouvée dans Photos, sans un mot. Le média part de toute
+    /// façon dans le composer — l'échec de sauvegarde n'est donc pas bloquant.
+    nonisolated static func saveToPhotoLibrary(_ save: () async -> Bool) async {
+        guard await save() == false else { return }
+        let state = PhotoLibraryManager.shared.authorizationState
+        await MainActor.run {
+            guard state.needsSettingsRedirect else {
+                FeedbackToastManager.shared.showError(
+                    String(localized: "camera.save.failed",
+                           defaultValue: "Impossible d'enregistrer dans Photos", bundle: .main)
+                )
+                return
+            }
+            FeedbackToastManager.shared.showError(
+                MediaPermissionCoordinator.deniedMessage(for: .photoLibraryAdd)
+            ) { MediaPermissionCoordinator.openSettings() }
         }
     }
 
@@ -518,7 +635,7 @@ extension CameraModel: AVCapturePhotoCaptureDelegate {
         // re-encoded UIImage. `PhotoLibraryManager` is deliberately non-@MainActor
         // so its `performChanges` block runs on Photos' own queue without the
         // executor-isolation SIGTRAP the previous inline save hit.
-        Task { await PhotoLibraryManager.shared.saveImage(data) }
+        Task { await CameraModel.saveToPhotoLibrary { await PhotoLibraryManager.shared.saveImage(data) } }
     }
 }
 

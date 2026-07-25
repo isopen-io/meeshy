@@ -75,12 +75,14 @@ extension ConversationListView {
         if conversation.type == .direct, let calleeId = conversation.participantUserId {
             Button {
                 HapticFeedback.medium()
-                CallManager.shared.startCall(
-                    conversationId: conversation.id,
-                    userId: calleeId,
-                    displayName: conversation.name,
-                    isVideo: false
-                )
+                Task {
+                    await CallManager.shared.requestPermissionsThenStartCall(
+                        conversationId: conversation.id,
+                        userId: calleeId,
+                        displayName: conversation.name,
+                        isVideo: false
+                    )
+                }
             } label: {
                 Label(
                     String(localized: "context.call", defaultValue: "Appeler", bundle: .main),
@@ -443,12 +445,14 @@ extension ConversationListView {
                         onCall: (conversation.type == .direct && conversation.participantUserId != nil) ? {
                             dismissContextMenu()
                             if let uid = conversation.participantUserId {
-                                CallManager.shared.startCall(
-                                    conversationId: conversation.id,
-                                    userId: uid,
-                                    displayName: conversation.name,
-                                    isVideo: false
-                                )
+                                Task {
+                                    await CallManager.shared.requestPermissionsThenStartCall(
+                                        conversationId: conversation.id,
+                                        userId: uid,
+                                        displayName: conversation.name,
+                                        isVideo: false
+                                    )
+                                }
                             }
                         } : nil,
                         onSearch: {

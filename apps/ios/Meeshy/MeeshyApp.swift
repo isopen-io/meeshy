@@ -187,6 +187,12 @@ struct MeeshyApp: App {
                     NotificationToastManager.shared.conversationPresentationProvider = { conversationId in
                         WidgetDataManager.shared.conversationToastPresentation(forId: conversationId)
                     }
+                    // « Vibrations » : le SDK gate sur `vibrationEnabled` et
+                    // appelle ce player à l'apparition d'un toast — l'haptique
+                    // vit app-side (le SDK core n'importe pas UIKit).
+                    NotificationToastManager.shared.hapticPlayer = {
+                        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                    }
                     await CacheCoordinator.shared.start()
                     // Touch PresenceManager early so it has subscribed to
                     // `presence:snapshot` + `user:status` + `didReconnect`
@@ -219,6 +225,14 @@ struct MeeshyApp: App {
                     // inflight record regardless of kind or id prefix.
                     let bootPool = dependencies.dbPool
                     await OfflineQueue.shared.configure(pool: bootPool)
+
+                    // Wire preference mutations to flush the outbox immediately after
+                    // enqueue so changes don't get stuck `.pending` until boot/foreground
+                    // transition. The SDK cannot import app-side OutboxFlushTrigger
+                    // (SDK purity), so we inject this Sendable closure at boot.
+                    UserPreferencesManager.shared.onSettingsMutationEnqueued = {
+                        Task { await OutboxFlushTrigger.flushNow() }
+                    }
 
                     // Phase 4 §6.1.1 — boot crash recovery. Any record left
                     // `.inflight` from a previous process (the app was killed

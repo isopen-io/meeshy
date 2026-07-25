@@ -98,6 +98,13 @@ struct StoryViewerView: View {
     /// (tray, deep link, story-reaction redirect) on the existing path.
     var initialAction: StoryViewerInitialAction? = nil
 
+    /// Commentaire ciblé par la notification : l'overlay commentaires scrolle
+    /// dessus (au lieu du dernier) une fois la liste chargée. `parent` sert de
+    /// repli de scroll pour une réponse dont le thread n'est pas déplié.
+    /// Non-private : consommés par StoryViewerView+Content (fichier extension).
+    var targetCommentId: String? = nil
+    var targetParentCommentId: String? = nil
+
     static let heartEmoji = "\u{2764}\u{FE0F}"
 
     @State var currentStoryIndex = 0 // internal for cross-file extension access
@@ -285,12 +292,21 @@ struct StoryViewerView: View {
     /// not when somebody else has (bug 2026-05-28).
     @State var storyCurrentUserReactions: [String] = []
     @State var storyComments: [FeedComment] = []
+    /// Pagination des commentaires top-level de la story — suivie pour la
+    /// chasse paginée d'un commentaire notifié hors de la première page (50).
+    @State var storyCommentsNextCursor: String?
+    @State var storyCommentsHasMore = false
     @State var isLoadingComments = false
     @State var storyCommentCount: Int = 0
     @State var replyingToStoryComment: FeedComment? = nil
     @State var storyCommentRepliesMap: [String: [FeedComment]] = [:]
     @State var storyCommentExpandedThreads: Set<String> = []
     @State var storyCommentLoadingReplies: Set<String> = []
+    /// Pagination des réponses par commentaire racine (endpoint replies paginé
+    /// ASC 20/page). NON-private : consommé par l'extension frère
+    /// StoryViewerView+Content (piège protection level cross-file).
+    @State var storyCommentRepliesHasMore: [String: Bool] = [:]
+    @State var storyCommentRepliesNextCursor: [String: String] = [:]
     /// Optimistic local tracking of liked comments (id ∈ set => current user reacted).
     @State var storyCommentLikedIds: Set<String> = []
     /// Local like-count delta keyed by comment id, applied on top of the server `comment.likes`
@@ -400,7 +416,6 @@ struct StoryViewerView: View {
     private var viewerContent: some View {
         StoryViewerContentView(
             prefetcher: prefetcher,
-            isPreviewMode: isPreviewMode,
             cardScale: cardScale,
             cardCornerRadius: cardCornerRadius,
             cardOpacity: cardOpacity,
@@ -1127,9 +1142,17 @@ struct StoryViewerView: View {
             storyCommentRepliesMap: storyCommentRepliesMap,
             storyCommentExpandedThreads: storyCommentExpandedThreads,
             storyCommentLoadingReplies: storyCommentLoadingReplies,
+            storyCommentRepliesHasMore: storyCommentRepliesHasMore,
             isLoadingComments: isLoadingComments,
             userLang: AuthManager.shared.currentUser?.preferredContentLanguages.first ?? "fr",
             isStoryExpired: currentStory?.isExpired() ?? false,
+            targetCommentId: targetCommentId,
+            targetParentCommentId: targetParentCommentId,
+            huntTargetComment: { await huntTargetStoryComment() },
+            loadMoreStoryCommentReplies: { await loadMoreStoryCommentReplies(commentId: $0) },
+            revealTargetReply: { parentId, replyId in
+                await revealTargetStoryReply(parentId: parentId, replyId: replyId)
+            },
             showCommentsOverlay: $showCommentsOverlay,
             replyingToStoryComment: $replyingToStoryComment,
             keyboard: keyboard,

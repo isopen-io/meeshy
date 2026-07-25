@@ -246,6 +246,10 @@ struct UniversalComposerBar: View {
     @State var sendBounce = false
     @State var focusBounce = false
     @State var showAttachOptions = false
+    /// Dernière sélection multiple reportée par `RecentMediaStrip`, pour que le
+    /// raccourci photothèque de la poignée préselectionne les mêmes assets.
+    /// Non-`private` : muté depuis `UniversalComposerBar+Attachments.swift`.
+    @State var recentStripSelectionIds: [String] = []
     @State private var attachButtonPressed = false
     @State var currentLanguage: String = "fr"
     // Voice recording

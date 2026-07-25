@@ -247,20 +247,20 @@ public struct StoryVoiceRecorder<Recorder: AudioRecordingProviding>: View {
         guard !recorder.isRecording else { return }
         hasCompleted = false
 
-        // `requestRecordPermission` rappelle sur la queue
-        // `com.avaudiosession.tccserver`. Sous `defaultIsolation(MainActor)`
-        // (MeeshyUI), le closure littéral fourni hérite lui-même de
-        // `@MainActor` ; son prologue (`swift_task_isCurrentExecutorImpl`)
-        // vérifie l'exécuteur À L'ENTRÉE — sur la queue TCC — et trappe
-        // (`EXC_BREAKPOINT`) AVANT même qu'un `Task { @MainActor in }` interne
-        // ne s'exécute (crash 1re demande de permission micro story, 2026-06-15).
-        // On isole donc la demande dans un helper `nonisolated` : son callback
-        // ne fait que `resume` la continuation (aucun check d'acteur), puis on
-        // traite le résultat sur le MainActor via `await`.
+        // La demande passe par `DevicePermissions` (SDK core), dont le callback
+        // est confiné dans un helper `nonisolated` : le système rappelle sur la
+        // queue TCC, et sous `defaultIsolation(MainActor)` (MeeshyUI) un closure
+        // littéral y hériterait de `@MainActor` — son prologue
+        // (`swift_task_isCurrentExecutorImpl`) vérifie l'exécuteur À L'ENTRÉE et
+        // trappe (`EXC_BREAKPOINT`) AVANT même qu'un `Task { @MainActor in }`
+        // interne ne s'exécute (crash 1re demande de permission micro story,
+        // 2026-06-15). Le résultat est consommé ici sur le MainActor via `await`.
         Task { @MainActor in
-            let granted = await AVAudioSession.requestMicrophonePermission()
-            guard granted else {
-                errorMessage = String(localized: "audio.recorder.micDenied", defaultValue: "Permission micro refus\u{00E9}e", bundle: .module)
+            let state = await DevicePermissions.requestMicrophone()
+            guard state.isUsable else {
+                errorMessage = state.needsSettingsRedirect
+                    ? String(localized: "audio.recorder.micDeniedSettings", defaultValue: "Micro refus\u{00E9} \u{2014} autorisez-le dans R\u{00E9}glages", bundle: .module)
+                    : String(localized: "audio.recorder.micDenied", defaultValue: "Permission micro refus\u{00E9}e", bundle: .module)
                 return
             }
             errorMessage = nil

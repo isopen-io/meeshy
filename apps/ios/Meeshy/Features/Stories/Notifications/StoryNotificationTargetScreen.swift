@@ -32,12 +32,19 @@ public struct StoryNotificationTargetScreen: View {
     @EnvironmentObject private var storyViewerCoordinator: StoryViewerCoordinator
     @Environment(\.dismiss) private var dismiss
 
+    private let commentId: String?
+    private let parentCommentId: String?
+
     public init(
         storyId: String,
         intent: StoryIntent,
         context: StoryNotificationContext,
+        commentId: String? = nil,
+        parentCommentId: String? = nil,
         storyService: StoryServiceProviding = StoryService.shared
     ) {
+        self.commentId = commentId
+        self.parentCommentId = parentCommentId
         _vm = StateObject(wrappedValue: StoryNotificationTargetViewModel(
             storyId: storyId,
             intent: intent,
@@ -56,6 +63,8 @@ public struct StoryNotificationTargetScreen: View {
                     post: post,
                     intent: vm.intent,
                     viewerCoordinator: storyViewerCoordinator,
+                    commentId: commentId,
+                    parentCommentId: parentCommentId,
                     dismiss: { dismiss() }
                 )
             case .expired:

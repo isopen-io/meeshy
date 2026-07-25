@@ -19,6 +19,7 @@ import { FailedMessageBanner } from '@/components/messages/failed-message-banner
 import { PinnedMessageBanner } from './PinnedMessageBanner';
 import { MessageSearch } from './MessageSearch';
 import { ErrorBoundary } from '@/components/common/ErrorBoundary';
+import { useSeenMessages } from '@/hooks/use-seen-messages';
 import { getAuthToken } from '@/utils/token-utils';
 import type { Conversation, Message, User } from '@meeshy/shared/types';
 import type { Participant } from '@meeshy/shared/types/participant';
@@ -195,6 +196,16 @@ export const ConversationView = memo(forwardRef<HTMLDivElement, ConversationView
       isSearchOpen,
       onSearchClose,
     } = props;
+
+    // Suivi de lecture exact — rapporte au serveur les messages RÉELLEMENT
+    // affichés. Branché ICI et non dans ConversationLayout : le div scrollable
+    // est monté par ce composant, c'est donc le seul endroit où le ref est
+    // déjà peuplé au premier effet.
+    // @see docs/superpowers/specs/2026-07-24-read-exactness-design.md
+    useSeenMessages({
+      containerRef: scrollContainerRef,
+      conversationId: conversation?.id ?? null,
+    });
 
     // Search panel state (controlled locally when parent doesn't supply it)
     const [localSearchOpen, setLocalSearchOpen] = useState(false);

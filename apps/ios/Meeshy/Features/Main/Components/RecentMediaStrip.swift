@@ -94,26 +94,38 @@ final class RecentMediaStripModel: NSObject, ObservableObject, PHPhotoLibraryCha
         }
     }
 
+    /// Charge la tête de photothèque SANS jamais déclencher de prompt.
+    ///
+    /// Le strip est monté dès l'ouverture du composer : demander ici revenait à
+    /// réclamer l'accès aux photos avant la moindre intention de l'utilisateur —
+    /// un prompt sans contexte, souvent refusé définitivement. Tant que l'accès
+    /// n'est pas accordé, la vue affiche une tuile d'invitation dont le tap
+    /// appelle `requestAccess()`.
     func load(limit: Int = 40) {
         guard !didLoad else { return }
         didLoad = true
         fetchLimit = limit
-        switch status {
-        case .authorized, .limited:
-            fetch(limit: limit)
-        case .notDetermined:
-            PHPhotoLibrary.requestAuthorization(for: .readWrite) { [weak self] newStatus in
-                Task { @MainActor in
-                    guard let self else { return }
-                    self.status = newStatus
-                    if newStatus == .authorized || newStatus == .limited {
-                        self.fetch(limit: limit)
-                    }
-                }
-            }
-        default:
-            break
-        }
+        guard status == .authorized || status == .limited else { return }
+        fetch(limit: limit)
+    }
+
+    /// Demande déclenchée par un geste explicite (tap sur la tuile d'accès).
+    /// `announcesRefusal: false` : la tuile explique déjà le refus sur place,
+    /// un toast en plus ferait doublon sur le même geste.
+    func requestAccess() async {
+        let granted = await MediaPermissionCoordinator.ensurePhotoLibraryRead(announcesRefusal: false)
+        status = PHPhotoLibrary.authorizationStatus(for: .readWrite)
+        guard granted else { return }
+        fetch(limit: fetchLimit)
+    }
+
+    /// `true` tant que le strip n'a rien à montrer faute d'autorisation.
+    var needsAuthorization: Bool {
+        status != .authorized && status != .limited
+    }
+
+    var isAuthorizationRefused: Bool {
+        status == .denied || status == .restricted
     }
 
     private func fetch(limit: Int) {
@@ -146,6 +158,35 @@ final class RecentMediaStripModel: NSObject, ObservableObject, PHPhotoLibraryCha
         }
     }
 
+    // MARK: - PhotoKit request seam
+    //
+    // Every completion below is declared as an explicitly `@Sendable`-typed
+    // local instead of being written inline as a trailing closure. This is NOT
+    // stylistic.
+    //
+    // The target compiles under MainActor default isolation, so a closure
+    // literal written inside this `@MainActor` class inherits `@MainActor`.
+    // Swift 6 then emits a dynamic isolation assertion in the closure's
+    // PROLOGUE — `swift_task_isCurrentExecutor` — which traps the instant
+    // PhotoKit invokes it from its own queue, before the body runs. Wrapping
+    // the body in `Task { @MainActor in }` does not help: the trap happens at
+    // entry, so the Task is never reached.
+    //
+    // `PHImageManager.h` documents the video handlers verbatim as "The result
+    // handler is called on an arbitrary queue" — so `requestAVAsset` and
+    // `requestPlayerItem` trapped every single time. That is the crash in
+    // Meeshy-2026-07-11-131634.ips (thread `com.apple.photos.requestAVAsset`,
+    // EXC_BREAKPOINT in `closure #1 in closure #1 in resolveVideo(_:)`), seen
+    // 7× across builds 1201→1235: tapping any video in the strip killed the app.
+    //
+    // The image handlers are documented as main-thread, so they never trapped —
+    // but they carry the same latent prologue, and one `.opportunistic`
+    // delivery mode (which the header says may call back "synchronously on the
+    // calling thread") would arm them. They go through the same seam so the
+    // whole file is queue-agnostic by construction.
+    //
+    // Same fix, same reason as `CallTranscriptionService.requestPermission()`.
+
     /// Square thumbnail for a cell. `.fastFormat` guarantees a single callback,
     /// which keeps the continuation safe (multi-callback modes would resume it
     /// more than once).
@@ -156,11 +197,13 @@ final class RecentMediaStripModel: NSObject, ObservableObject, PHPhotoLibraryCha
         options.isNetworkAccessAllowed = true
         options.isSynchronous = false
         return await withCheckedContinuation { (continuation: CheckedContinuation<ImageBox, Never>) in
-            imageManager.requestImage(
-                for: asset, targetSize: size, contentMode: .aspectFill, options: options
-            ) { image, _ in
+            let completion: @Sendable (UIImage?, [AnyHashable: Any]?) -> Void = { image, _ in
                 continuation.resume(returning: ImageBox(image: image))
             }
+            imageManager.requestImage(
+                for: asset, targetSize: size, contentMode: .aspectFill, options: options,
+                resultHandler: completion
+            )
         }.image
     }
 
@@ -174,14 +217,16 @@ final class RecentMediaStripModel: NSObject, ObservableObject, PHPhotoLibraryCha
         options.isNetworkAccessAllowed = true
         options.isSynchronous = false
         return await withCheckedContinuation { (continuation: CheckedContinuation<ImageBox, Never>) in
+            let completion: @Sendable (UIImage?, [AnyHashable: Any]?) -> Void = { image, _ in
+                continuation.resume(returning: ImageBox(image: image))
+            }
             imageManager.requestImage(
                 for: asset,
                 targetSize: CGSize(width: 1024, height: 1024),
                 contentMode: .aspectFit,
-                options: options
-            ) { image, _ in
-                continuation.resume(returning: ImageBox(image: image))
-            }
+                options: options,
+                resultHandler: completion
+            )
         }.image
     }
 
@@ -194,9 +239,10 @@ final class RecentMediaStripModel: NSObject, ObservableObject, PHPhotoLibraryCha
         options.deliveryMode = .automatic
         options.isNetworkAccessAllowed = true
         return await withCheckedContinuation { (continuation: CheckedContinuation<PlayerItemBox, Never>) in
-            imageManager.requestPlayerItem(forVideo: asset, options: options) { item, _ in
+            let completion: @Sendable (AVPlayerItem?, [AnyHashable: Any]?) -> Void = { item, _ in
                 continuation.resume(returning: PlayerItemBox(item: item))
             }
+            imageManager.requestPlayerItem(forVideo: asset, options: options, resultHandler: completion)
         }.item
     }
 
@@ -216,14 +262,16 @@ final class RecentMediaStripModel: NSObject, ObservableObject, PHPhotoLibraryCha
         options.isNetworkAccessAllowed = true
         options.isSynchronous = false
         let box = await withCheckedContinuation { (continuation: CheckedContinuation<ImageBox, Never>) in
+            let completion: @Sendable (UIImage?, [AnyHashable: Any]?) -> Void = { image, _ in
+                continuation.resume(returning: ImageBox(image: image))
+            }
             imageManager.requestImage(
                 for: asset,
                 targetSize: CGSize(width: 2048, height: 2048),
                 contentMode: .aspectFit,
-                options: options
-            ) { image, _ in
-                continuation.resume(returning: ImageBox(image: image))
-            }
+                options: options,
+                resultHandler: completion
+            )
         }
         return box.image.map { .image($0) }
     }
@@ -233,7 +281,7 @@ final class RecentMediaStripModel: NSObject, ObservableObject, PHPhotoLibraryCha
         options.deliveryMode = .highQualityFormat
         options.isNetworkAccessAllowed = true
         let url: URL? = await withCheckedContinuation { (continuation: CheckedContinuation<URL?, Never>) in
-            imageManager.requestAVAsset(forVideo: asset, options: options) { avAsset, _, _ in
+            let completion: @Sendable (AVAsset?, AVAudioMix?, [AnyHashable: Any]?) -> Void = { avAsset, _, _ in
                 guard let urlAsset = avAsset as? AVURLAsset else {
                     continuation.resume(returning: nil)
                     return
@@ -247,6 +295,7 @@ final class RecentMediaStripModel: NSObject, ObservableObject, PHPhotoLibraryCha
                     continuation.resume(returning: nil)
                 }
             }
+            imageManager.requestAVAsset(forVideo: asset, options: options, resultHandler: completion)
         }
         return url.map { .video($0) }
     }
@@ -272,6 +321,11 @@ struct RecentMediaStrip: View {
     /// handed to the host, which opens its editor before staging the result.
     /// `nil` hides the action (hosts without an editor flow).
     var onEdit: ((RecentMediaPick) -> Void)? = nil
+    /// Mirrors the multi-selection outwards so a host that offers its OWN
+    /// shortcut to the full library (the panel grab handle) can preselect the
+    /// same assets — same invariant as `onOpenLibrary`: leaving the strip for
+    /// the picker must never lose the user's picks.
+    var onSelectionChanged: (([String]) -> Void)? = nil
 
     @StateObject private var model = RecentMediaStripModel()
     @State private var resolvingId: String?
@@ -312,7 +366,9 @@ struct RecentMediaStrip: View {
                     .transition(.move(edge: .top).combined(with: .opacity))
             }
             Group {
-                if usesGridLayout {
+                if model.needsAuthorization {
+                    authorizationTile
+                } else if usesGridLayout {
                     regularGrid
                 } else {
                     compactStrip
@@ -321,6 +377,46 @@ struct RecentMediaStrip: View {
             }
         }
         .task { model.load() }
+        .adaptiveOnChange(of: selection.ids) { _, ids in onSelectionChanged?(ids) }
+    }
+
+    /// Remplace la grille tant que la photothèque n'est pas accessible.
+    ///
+    /// Deux états : jamais demandé (le tap déclenche le prompt, au moment où
+    /// l'utilisateur montre son intérêt) et refus définitif (le tap ouvre les
+    /// Réglages — auparavant le strip restait simplement vide, sans un mot).
+    private var authorizationTile: some View {
+        Button {
+            HapticFeedback.light()
+            if model.isAuthorizationRefused {
+                MediaPermissionCoordinator.openSettings()
+            } else {
+                Task { await model.requestAccess() }
+            }
+        } label: {
+            HStack(spacing: 10) {
+                Image(systemName: "photo.on.rectangle.angled")
+                    .font(MeeshyFont.relative(18, weight: .medium))
+                    .foregroundColor(Color(hex: accentColor))
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(model.isAuthorizationRefused
+                         ? String(localized: "composer.recent.accessDenied", defaultValue: "Accès aux photos refusé", bundle: .main)
+                         : String(localized: "composer.recent.grantAccess", defaultValue: "Autoriser l'accès aux photos", bundle: .main))
+                        .font(MeeshyFont.relative(13, weight: .semibold))
+                        .foregroundColor(.primary)
+                    Text(model.isAuthorizationRefused
+                         ? String(localized: "composer.recent.accessDenied.hint", defaultValue: "Toucher pour ouvrir les Réglages", bundle: .main)
+                         : String(localized: "composer.recent.grantAccess.hint", defaultValue: "Pour retrouver vos médias récents ici", bundle: .main))
+                        .font(MeeshyFont.relative(11))
+                        .foregroundColor(.secondary)
+                }
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, hPadding)
+            .padding(.vertical, 14)
+        }
+        .buttonStyle(.plain)
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     /// Shown while multi-selecting: cancel on the left, a counting "Ajouter"
@@ -447,6 +543,25 @@ struct RecentMediaStrip: View {
         addSingle(asset)
     }
 
+    /// `resolve` renvoie `nil` quand PhotoKit ne peut pas matérialiser l'asset :
+    /// vidéo iCloud non redescendue, ralenti/timelapse rendu en `AVComposition`
+    /// plutôt qu'en fichier, ou copie temporaire en échec. Ces trois cas
+    /// sortaient en silence : le spinner tournait puis le tap ne faisait RIEN,
+    /// sans le moindre moyen pour l'utilisateur de comprendre pourquoi son média
+    /// n'arrivait pas dans les pièces jointes. Le passage par la photothèque
+    /// complète (`PHPicker`, hors-process) reste la porte de sortie.
+    private func announceResolutionFailure(count: Int = 1) {
+        FeedbackToastManager.shared.showError(
+            count > 1
+                ? String(localized: "recentMedia.resolveFailed.multiple",
+                         defaultValue: "\(count) médias n'ont pas pu être préparés — passez par la photothèque complète",
+                         bundle: .main)
+                : String(localized: "recentMedia.resolveFailed",
+                         defaultValue: "Ce média n'a pas pu être préparé — passez par la photothèque complète",
+                         bundle: .main)
+        )
+    }
+
     /// Resolves the asset and hands it to the host — the "Ajouter" path.
     private func addSingle(_ asset: PHAsset) {
         guard resolvingId == nil, !isBatchResolving else { return }
@@ -455,7 +570,7 @@ struct RecentMediaStrip: View {
         Task {
             let pick = await model.resolve(asset)
             resolvingId = nil
-            if let pick { onSelect(pick) }
+            if let pick { onSelect(pick) } else { announceResolutionFailure() }
         }
     }
 
@@ -487,14 +602,18 @@ struct RecentMediaStrip: View {
         isBatchResolving = true
         let ids = selection.ids
         Task {
+            var failures = 0
             for id in ids {
                 guard let asset = model.assets.first(where: { $0.localIdentifier == id }) else { continue }
                 resolvingId = id
-                if let pick = await model.resolve(asset) { onSelect(pick) }
+                if let pick = await model.resolve(asset) { onSelect(pick) } else { failures += 1 }
             }
             resolvingId = nil
             isBatchResolving = false
             exitSelection()
+            // Un seul message pour le lot : un toast par échec noierait les
+            // médias qui, eux, sont bien arrivés dans la barre de pièces jointes.
+            if failures > 0 { announceResolutionFailure(count: failures) }
         }
     }
 
@@ -507,7 +626,7 @@ struct RecentMediaStrip: View {
         Task {
             let pick = await model.resolve(asset)
             resolvingId = nil
-            if let pick { onEdit(pick) }
+            if let pick { onEdit(pick) } else { announceResolutionFailure() }
         }
     }
 

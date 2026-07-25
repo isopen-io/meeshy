@@ -396,9 +396,11 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       and each step gate incl. null/false availability + skipPhone). Mutation (RED proof): the username
       step gate `== true` → `!= false` fails **exactly** `usernameStep_blockedWhenAvailabilityNull`
       (43 run, 1 failed, no collateral). `:core:model:testDebugUnitTest` green + full `:app:assembleDebug`
-      → BUILD SUCCESSFUL. Diff = `apps/android` only. **Follow-up:** the app-side `AuthService.checkAvailability`
-      call + the wizard step composables (username/email/phone fields) driving these cores off the 1 s debounce,
-      and the username-suggestion strip.
+      → BUILD SUCCESSFUL. Diff = `apps/android` only. **Follow-up (network probe now DONE — slice
+      `signup-availability-probe`, 2026-07-25):** `AuthApi.checkAvailability` + `AuthRepository.checkAvailability`
+      + the three debounced probe pipelines in `RegistrationViewModel` now drive these cores off the 1 s
+      debounce, feeding the `on…Availability` seam. Remaining: the wizard step composables (username/email/
+      phone fields) + the username-suggestion strip.
 - [~] Interactive step progress bar with jump-back to completed steps —
       **step-set + progress-bar decision core shipped** (slice `registration-progress-bar-core`,
       2026-07-22). Pure `:core:model` `RegistrationStep` (8-step ordinal enum: `PSEUDO`..`RECAP`
@@ -459,6 +461,61 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       bottom-bar composable (Back / Skip / Next-or-Register buttons) + the `RegistrationViewModel`
       wiring `advance`/`previous`/`skip` to `currentStep`, computing `canProceed` from the shipped
       field-validation cores.
+- [~] **App-side registration wizard ViewModel wiring** — **UDF `RegistrationViewModel` shipped**
+      (slice `registration-wizard-viewmodel`, 2026-07-25). The first app-side wiring that turns the
+      shipped registration cores from orphan logic into a real observable wizard. New
+      `:feature:auth/RegistrationViewModel` (`@HiltViewModel`) + immutable `RegistrationUiState`
+      (`currentStep` + `RegistrationFields` + submit flags). Every *decision* defers to a pure core,
+      re-implementing none: `canProceed`/`isFirstStep`/`isLastStep`/`fill(step)` derive from
+      `RegistrationStepGate`/`RegistrationStepNavigator`/`RegistrationProgressBar`; `next()` =
+      `advance(currentStep, canProceed)`, `previous()`/`skip()`/`jumpTo()` apply the navigator/progress
+      outcomes (skip performs the `skipPhone=true; phoneNumber=""` field mutation the core signalled via
+      `SkipOutcome.clearPhone`); `register()` fires only from a passing RECAP gate, single-flight
+      (`isSubmitting` guard), maps `RegistrationFields.toRegisterRequest` (normalized username/email,
+      blank→null optional names via `SignupFieldValidation`) through `AuthRepository.register`, binds
+      `RealtimeSessionCoordinator` on success (mirrors the shipped `AuthViewModel.login` seam). The
+      availability network probe (1 s debounce → `checkAvailability`) is a separate follow-up; the VM
+      exposes `onUsernameAvailability`/`onEmailAvailability`/`onPhoneAvailability` as the seam. **SOTA
+      over iOS:** editing an already-probed username/email/phone **invalidates the stale availability
+      answer** (`…Available=null`) so the proceed gate can never pass on a server verdict that belongs
+      to a since-changed value — iOS keeps the old `Bool?` until the debounced probe returns. +23
+      behavioural tests (`RegistrationViewModelTest` — initial state; field-edit + availability
+      invalidation ×3; `next` blocked/passes; `previous` first-noop/back; `skip` phone-clear/non-phone/
+      last-noop; `jumpTo` back/current/upcoming-ignored; `fill` partition; `register`
+      before-recap-noop / blocked-recap-noop / success-binds-realtime+payload / failure-error+no-realtime
+      / while-submitting-noop / blank-names→null). Expectations are hand-written literals (not
+      tautological). Mutation (RED proof): dropping `onUsernameChange`'s `usernameAvailable=null` reset
+      fails **exactly** `editingUsername_invalidatesStaleAvailability` (23 run, 1 failed, no collateral).
+      RED was also proven first by the suite failing to compile against the absent VM.
+      `:feature:auth:testDebugUnitTest` green (23/23 new) + `:app:assembleDebug` → BUILD SUCCESSFUL
+      (every module compiled). Diff = `apps/android` only. **Follow-up:** the paged `OnboardingFlowView`
+      Compose screen (per-step field composables + `InteractiveProgressBar` bar row + bottom-bar
+      Back/Skip/Next-or-Register) binding this VM. *(The availability-debounce network layer feeding the
+      `on…Availability` seam is now **DONE** — see the next entry.)*
+- [x] **App-side availability-debounce network probe** — **shipped** (slice `signup-availability-probe`,
+      2026-07-25). Closes the last orphan seam of the registration wizard: the three
+      `onUsernameAvailability`/`onEmailAvailability`/`onPhoneAvailability` setters are now driven by real
+      debounced network probes instead of tests only. New `AvailabilityResult` (`:core:model`, parity with
+      the gateway `GET /auth/check-availability` response: `usernameAvailable`/`suggestions`/
+      `emailAvailable`/`phoneNumberAvailable`/`phoneNumberValid`, all nullable — the gateway echoes only the
+      probed field); `AuthApi.checkAvailability(username?, email?, phoneNumber?)` (`:core:network`, Retrofit
+      omits null `@Query`s so a single-field probe hits `?username=…` alone); `AuthRepository.checkAvailability`
+      (`:sdk-core`, folds transport/HTTP errors into `NetworkResult.Failure`). `RegistrationViewModel` gains
+      three per-field `MutableStateFlow<String>` inputs (fed by the `on…Change` handlers + reset by `skip`'s
+      phone-clear) and three `launchProbe` pipelines: `debounce(1s) → distinctUntilChanged → SignupAvailabilityPolicy.{username,email,phone}Intent → Check ? checkAvailability : clear`.
+      A failed/unknown probe yields `null` (gate stays blocked on "unknown", never a stale answer). **SOTA
+      over iOS:** availability updates go through a background `updateFields` that **preserves** a surfaced
+      `errorMessage` (only a user field-edit clears it), so a late verdict can't wipe a registration error;
+      the debounce/dedup is the conflated StateFlow itself (no hand-rolled `removeDuplicates` state). +9
+      behavioural tests (`AuthRepositoryTest` +2: single-field forwarded + result mapped / failure→Failure;
+      `RegistrationViewModelTest` +7: valid→probe+verdict, invalid→no-probe+unknown, rapid-edits→single
+      probe on last value, distinct values→probe-each, probe-failure→unknown, email probe, phone probe with
+      digits-only normalization). Mutation (RED proof): dropping the `Check` guard (always probe) fails
+      **7** tests incl. `invalidUsername_afterDebounce_neverProbesAndStaysUnknown` (30 run) — the
+      local-validity gate is load-bearing. `:feature:auth:testDebugUnitTest` 30/30 +
+      `:sdk-core:testDebugUnitTest` + `:core:model:testDebugUnitTest` green in isolation +
+      `:app:assembleDebug` → BUILD SUCCESSFUL (whole graph). Diff = `apps/android` only. **Follow-up:** the
+      username-suggestion strip (surface `AvailabilityResult.suggestions`), and the Compose onboarding screen.
 - [~] Phone entry with searchable country-code picker (skippable) — **catalogue core shipped**
       (slice `auth-country-catalog`, 2026-07-20): pure `:core:model` `CountryCatalog` + `Country`
       (faithful port of iOS `CountryPicker`,
@@ -502,8 +559,71 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       `apps/android` only. **Follow-up:** first/last-name capture (Step 3) + the app-side `StepPasswordView`
       composable (needs the registration wizard scaffold) rendering the checklist card + strength bar
       + match card driven by these cores.
-- [ ] System + regional language selection with live translation preview
-- [ ] Profile photo / banner / bio optional step; registration recap + terms acceptance
+- [~] System + regional language selection with live translation preview — **picker + preview
+      decision core shipped** (slice `auth-language-step-selection-core`, 2026-07-22). Pure
+      `:core:model/auth/LanguageStepSelection.kt` (`LanguageSlot` enum + `LanguageSelectionState`
+      data class + `LanguageStepSelection` object), a faithful port of iOS `StepLanguageView`
+      (`apps/ios/Meeshy/Features/Auth/Onboarding/OnboardingStepViews.swift`) over
+      `RegistrationViewModel.systemLanguage`/`.regionalLanguage`. Decisions: `pickerLanguages`
+      (= `LanguageData.allLanguagesCommonFirst`, reusing the catalogue SSOT — mirrors iOS
+      `LanguageSelector.defaultLanguages`, no drift); `filter(query)` (empty query → whole list,
+      else case-insensitive `nativeName`/`code` contains — faithful to iOS `filteredLanguages`,
+      untrimmed `isEmpty` guard); `summaryLabel(code)` (`"<flag> <nativeName>"` or raw-code fallback);
+      `selectedLanguageName(code)` (nativeName or raw-code fallback, the preview description);
+      `translationPreview(systemLanguage)` (verbatim port of iOS `translatedExample` — 11 explicit
+      arms + French default for every other language incl. English); `isSelected(slot, code, state)`
+      (slot-aware highlight, reads only the edited slot); `select(slot, code, state)` (slot-aware
+      immutable write, other slot untouched). **SOTA note:** iOS scatters the filter, summary-label
+      fallback, slot-aware write, and preview switch across a SwiftUI `View` body + `@State
+      editingTarget`; Android lifts every decision into one framework-free SSOT reusing `LanguageData`,
+      so the picker composable is a thin caller and every branch is JVM-testable. **+32 behavioural
+      tests** (`LanguageStepSelectionTest`): 2 pickerLanguages / 5 filter (empty / by-name / by-code /
+      no-match / no-dup) / 3 summaryLabel (known / unknown / blank) / 2 selectedLanguageName /
+      13 translationPreview (11 arms + unknown→fr + english→fr default) / 3 isSelected (system /
+      regional / slot-isolation) / 4 select (system / regional / inert reselect / input-unmutated).
+      Expectations are hand-written literals (not tautological). **Mutation check (RED proof):**
+      flipping `summaryLabel`'s raw-code fallback to `""` fails **exactly**
+      `summaryLabel_unknownCode_fallsBackToRawCode` (32 run, 1 failed, no collateral); RED was also
+      proven first by the suite failing to compile against the absent `LanguageStepSelection`/
+      `LanguageSlot`/`LanguageSelectionState` types. **Gate (system Gradle 8.14.3, `LANG=C.UTF-8`,
+      `$HOME/android-sdk`):** `:core:model:testDebugUnitTest` green (whole module) + `:app:assembleDebug`
+      → BUILD SUCCESSFUL (every module compiled). Diff = `apps/android` only (1 new source file +
+      1 test + tracking docs). **Follow-up:** the app-side `StepLanguageView` composable (system/regional
+      tab, searchable grid driven by `filter`, summary cards via `summaryLabel`, the live-preview
+      example card via `translationPreview`/`selectedLanguageName`) wired into the `RegistrationViewModel`
+      + the `RegistrationStepGate` LANGUAGE arm (`systemLanguage.isNotEmpty()`).
+- [~] Profile photo / banner / bio optional step; registration recap + terms acceptance —
+      **unified per-step proceed-gate core shipped** (slice `registration-step-gate-core`, 2026-07-22).
+      Pure `:core:model/auth/RegistrationStepGate.kt` — the SSOT capstone that answers the wizard's
+      advance decision for **all 8 steps**, a faithful port of iOS `RegistrationViewModel.canProceed`
+      (`packages/MeeshySDK/Sources/MeeshyUI/Auth/RegistrationViewModel.swift`, the computed
+      `switch currentStep` var gating the bottom bar's Next/Register button). `RegistrationStepGate.
+      canProceed(step, fields)` over an immutable **`RegistrationFields`** snapshot (the exact
+      `@Published` inputs iOS reads; tri-state `Boolean?` availability = not-probed vs confirmed-taken).
+      **Composes the already-shipped per-field cores** rather than re-implementing them: PSEUDO/PHONE/EMAIL
+      → `SignupAvailabilityPolicy.{username,phone,email}StepCanProceed` (local validity AND server
+      availability, phone honouring `skipPhone`); PASSWORD → `PasswordEntry.evaluate(...).canProceed`
+      (≥8 AND confirm match). The four arms with no prior core are encoded verbatim from iOS: IDENTITY →
+      first & last name both non-blank (iOS trims both → `isNotBlank`); LANGUAGE → `systemLanguage.
+      isNotEmpty()` (iOS `!systemLanguage.isEmpty`, a picker-sourced code); PROFILE → always `true` (the
+      optional photo/bio step); RECAP → `acceptTerms`. **SOTA note:** iOS spreads the eight-arm decision
+      inside a stateful ViewModel computed var re-inlining the username/email/phone/password rules; Android
+      lifts the whole decision into one framework-free SSOT reusing the shipped cores, so the ViewModel is a
+      thin caller feeding this boolean straight into `RegistrationStepNavigator.advance`. **+26 behavioural
+      tests** (`RegistrationStepGateTest` — 4 pseudo (valid+available / invalid / null / false); 4 phone
+      (skipped-short / valid+available / too-short / null); 3 email; 5 identity (both / first-blank /
+      last-blank / both-blank / whitespace-only); 3 password; 2 language; 1 profile-always; 2 recap; plus 2
+      whole-wizard compositions — every step green for a fully-valid snapshot, only PROFILE green for an
+      empty one). Expectations are hand-written literals (not tautological). **Mutation check (RED proof):**
+      flipping the RECAP arm to a constant `true` fails **exactly** `recap_termsNotAccepted_blocks` +
+      `onlyProfileProceeds_forAnEmptySnapshot` (26 run, 2 failed, no collateral); RED was also proven first
+      by the suite failing to compile against the absent `RegistrationFields`/`RegistrationStepGate` types.
+      **Gate (system Gradle 8.14.3, `LANG=C.UTF-8`, `$HOME/android-sdk`):** `:core:model:testDebugUnitTest`
+      green (whole module, new suite 26/26) + `:app:assembleDebug` → BUILD SUCCESSFUL (every module
+      compiled). Diff = `apps/android` only (1 new source file + 1 test + tracking docs). **Follow-up:** the
+      app-side profile photo/banner/bio step composables + the recap screen (terms checkbox → `acceptTerms`)
+      + the `RegistrationViewModel` wiring `RegistrationStepGate.canProceed(currentStep, fields)` into
+      `RegistrationStepNavigator.advance`, and the still-`[ ]` System+regional language selection step above.
 - [~] Email verification by 6-digit code (OTP autofill, resend, success animation) —
       **field sanitiser + completeness gate + verify/resend/edit gates core shipped** (slice
       `auth-otp-verification-core`, 2026-07-21). Pure `:core:model` `OtpCodeField` +
@@ -621,9 +741,48 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       `:core:model` module green + `:app:assembleDebug` BUILD SUCCESSFUL. **Follow-up:** the app-side
       wiring — `AuthInterceptor`/`AuthRepository` consulting `TokenRefreshPolicy` before a request
       and on app-start restore, plus the DataStore/EncryptedTokenStore session rehydration.
-- [ ] Transparent token refresh on 401 with one retry — the `JwtExpiry`/`TokenRefreshPolicy` core
-      above is the shared primitive; still needs the OkHttp `Authenticator`/interceptor retry wiring.
-- [ ] Anonymous (shared-link) sessions with restricted send permissions
+- [~] Transparent token refresh on 401 with one retry — the `JwtExpiry`/`TokenRefreshPolicy` core
+      above is the shared primitive. Decision layer complete (slice
+      `auth-token-refresh-policy-core`, 2026-07-22): `TokenRefreshPolicy` now carries the endpoint
+      **eligibility gate** (`isRefreshEligible` = iOS `!isRefreshOrAuth` for `/auth/refresh`,
+      `/auth/login*`, `/auth/register*`, `/auth/magic-link*`), the **proactive** call-site gate
+      (`shouldRefreshBeforeSend` = iOS `if let token, shouldAttemptRefresh && isTokenExpired`), the
+      **401 credential-vs-session mapping** (`mapUnauthorized` → `InvalidCredentials`/`SessionExpired`,
+      iOS `mapUnauthorized`, blank-message fallback improving on iOS's nil-only coalesce), the
+      **reactive 401 decision** (`decideOn401` → `InvalidCredentials`/`RefreshAndRetry`/`Teardown`,
+      refresh-once via `hasRefreshedOn401`), and the **replay classification**
+      (`classifyRetryStatus` → `Success`/`Teardown`/`ServerError`). +29 behavioural tests, mutation-proven.
+      **Wiring landed** (slice `auth-token-refresh-authenticator`, 2026-07-24): the concrete OkHttp
+      `RefreshAuthenticator` in `:core:network` now feeds `decideOn401` on every real 401 — refresh
+      once (via an injected synchronous `TokenRefresher`) then replay with the renewed bearer,
+      teardown on a dead/already-retried session, and pass invalid-credentials through **without**
+      clearing an existing session. It uses `Response.priorResponse` as the retry-once loop guard,
+      normalises the `/api/v1/…` path to the policy's `/auth/…` form, and treats a null **or blank**
+      refreshed token as a teardown (SOTA graceful guard over a naive non-null check). Wired into
+      `MeeshyApi.create` with a lateinit-bound refresher (`AuthApi.refresh` in `runBlocking`) that
+      cannot recurse because `/auth/refresh` is policy-ineligible. +11 behavioural tests
+      (`RefreshAuthenticatorTest`), all branches of `authenticate` + `endpointOf` covered.
+- [~] Anonymous (shared-link) sessions with restricted send permissions — the
+      **permission-hardening decision core** landed (slice `anonymous-session-permissions-core`,
+      2026-07-22): `ParticipantPermissions.defaultUser`/`.defaultAnonymous` (port of iOS
+      `ParticipantModels.swift`), the `ParticipantPermissions.anonymous(messages, files, images)`
+      SSOT that **force-denies videos/audios/locations/links** regardless of the server payload,
+      and `AnonymousJoinResponse.toSessionContext()` → `AnonymousSessionContext?` (port of iOS
+      `AnonymousSessionContext.swift`, returning `null` for a malformed response — missing
+      participant/conversation or blank session token — instead of iOS's force-unwrap crash).
+      +12 behavioural tests, mutation-proven. The **join/restore/leave use-case + persistence**
+      landed next (slice `anonymous-session-store`, 2026-07-25): `ShareLinkApi`
+      (`anonymous/link/{id}`, `anonymous/join/{linkId}`, `anonymous/leave` — the no-JWT endpoints,
+      port of iOS `ShareLinkService`), the single-value `AnonymousSessionStore`
+      (`InMemory` + durable `DataStore`, persisting the **whole hardened context**, corrupt→null),
+      and `AnonymousSessionRepository.join/restore/leave` feeding `toSessionContext()` and installing
+      the `X-Session-Token` on the `TokenStore`. SOTA over iOS: a malformed 2xx join persists nothing,
+      and `leave()` always clears local state + token even on a server failure (mutation-proven).
+      +21 behavioural tests. `AnonymousSessionContext` is now `@Serializable` for persistence.
+      The **composer now consumes those hardened `permissions`** (slice `composer-attachment-affordances`,
+      2026-07-25 — see §C): the pure `ComposerAttachmentPolicy` gates the attach/mic/read-only affordances,
+      wired into `ChatViewModel`/`ChatScreen` off the persisted anonymous session. Still needs: the
+      guest-join **screen** (link-preview → form → success).
 - [ ] Login/logout teardown wiping E2EE keys and per-user caches
 - [ ] Splash screen with brand animation + minimum display duration
 
@@ -737,6 +896,15 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
 - [ ] In-app dashboard ("Tableau de bord"): unread count, recent conversations, link stats, quick actions
 
 ## C. Chat / Messaging
+- [x] **Composer affordances gated by the viewer's send permissions** (slice
+      `composer-attachment-affordances`, 2026-07-25 — **SOTA over iOS**, whose composer never consults
+      `ParticipantPermissions`). Pure `:sdk-core` `ComposerAttachmentPolicy` maps a `ParticipantPermissions?`
+      → immutable `ComposerAffordances` (per-kind flags + `showsAttachmentLadder` [links excluded — inline
+      in text] + `isReadOnly` = `!canSendText`); null = registered-user full posture. `ChatViewModel` folds
+      the persisted anonymous session's hardened `permissions` into `ChatUiState.composerPermissions` (store
+      failure → full posture, never a crash); `ChatScreen` hides the attach-file button unless the ladder is
+      offerable, hides the mic unless `canSendAudios`, and shows a muted lock-row `ComposerReadOnlyNotice`
+      (i18n EN/FR/ES/PT) for a muted guest. +11 tests (8 policy + 3 VM), mutation-proven.
 - [x] Real-time 1:1 / group chat: send, edit, delete (for-me / for-everyone, 2h window), reply, forward
       **Edit 2-hour window now enforced** via pure `:core:model` `MessageEditability.canEdit(isOwn,
       createdAtMillis, nowMillis, windowMillis=2h)` SSOT (port of iOS's `Date().timeIntervalSince(createdAt)
@@ -1451,7 +1619,16 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
 - [ ] Conversation info sheet: hero/direct headers; members / media / stats / options tabs
 - [ ] Paginated member list (infinite scroll + search); shared-media grid; pinned-messages list
 - [ ] Member moderation: promote/demote, expel, ban, add member
-- [ ] Conversation moderation: write-role, announcement mode, slow mode, auto-translate
+- [~] Conversation moderation: write-role, announcement mode, slow mode, auto-translate — **slow-mode
+      composer enforcement** landed (slice `chat-slow-mode-cooldown`): pure `SlowModePolicy`/`SlowModeState`
+      (`:sdk-core` `me.meeshy.sdk.composer`) computes send-eligibility + a ceil'd remaining-seconds
+      countdown from `(slowModeSeconds, lastSelfSentAtMillis, now, isExempt)`, with moderator/admin/creator
+      roles exempt via `isExemptRole`. Wired into `ChatUiState`/`ChatViewModel` (carries the interval +
+      viewer exemption from the loaded conversation, records the send timestamp, gates `send()` — edits
+      exempt) and `ChatScreen` (ticking countdown row + disabled send). **SOTA over iOS**, which surfaces
+      `slowModeSeconds` only in the admin picker and never throttles the composer. Remaining for this
+      item: the admin-facing settings picker (write-role / announcement toggle / slow-mode picker /
+      auto-translate) and enforcement on the attachment/voice send paths.
 - [ ] Per-conversation preferences: custom name, reaction emoji, pin, category, tags, mute, mentions-only
 - [ ] Conversation lock: master PIN setup/change/remove + per-conversation 4-digit lock + unlock-all
 - [ ] Leave / archive / delete-for-me / delete-for-all conversation

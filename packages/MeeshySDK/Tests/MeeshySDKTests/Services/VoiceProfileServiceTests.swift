@@ -1,6 +1,10 @@
 import XCTest
 @testable import MeeshySDK
 
+/// Tests du réalignement `VoiceProfileService` ↔ API gateway réelle
+/// (`services/gateway/src/routes/voice-profile.ts`) : profil unique
+/// (`/register` + `PUT /:profileId`), lecture `VoiceProfileDetails` mappée vers
+/// le domaine, pas de collection d'échantillons ni de route toggle-cloning.
 final class VoiceProfileServiceTests: XCTestCase {
 
     private var mock: MockAPIClient!
@@ -19,70 +23,61 @@ final class VoiceProfileServiceTests: XCTestCase {
 
     // MARK: - Helpers
 
-    // Wire format gateway : le schema de réponse Fastify ne sérialise que les
-    // trois timestamps (voir services/gateway/src/routes/voice-profile.ts) —
-    // les booléens (hasConsent, voiceCloningEnabled…) sont dérivés côté SDK.
+    private func decode<T: Decodable>(_ json: [String: Any]) -> T {
+        let data = try! JSONSerialization.data(withJSONObject: json)
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        return try! decoder.decode(T.self, from: data)
+    }
+
     private func makeConsentStatus(hasConsent: Bool = true) -> VoiceConsentStatus {
         var json: [String: Any] = [
             "voiceCloningEnabledAt": NSNull(),
             "ageVerificationConsentAt": "2026-01-01T00:00:00Z"
         ]
         json["voiceRecordingConsentAt"] = hasConsent ? "2026-01-01T00:00:00Z" : NSNull()
-        let data = try! JSONSerialization.data(withJSONObject: json)
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
-        return try! decoder.decode(VoiceConsentStatus.self, from: data)
+        return decode(json)
     }
 
     private func makeConsentResponse() -> VoiceConsentResponse {
-        let json: [String: Any] = ["voiceRecordingConsentAt": "2026-01-01T00:00:00Z"]
-        let data = try! JSONSerialization.data(withJSONObject: json)
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
-        return try! decoder.decode(VoiceConsentResponse.self, from: data)
+        decode(["voiceRecordingConsentAt": "2026-01-01T00:00:00Z"])
     }
 
-    private func makeVoiceProfile() -> VoiceProfile {
-        let json: [String: Any] = [
-            "id": "vp-1",
+    /// Forme wire `VoiceProfileDetails` du gateway (noms `qualityScore`,
+    /// `audioCount`, `audioDurationMs`, `exists`…).
+    private func makeProfileDetails(exists: Bool = true, needsCalibration: Bool = false) -> VoiceProfileDetails {
+        decode([
+            "profileId": exists ? "vp-1" : NSNull(),
             "userId": "user-1",
-            "status": "ready",
-            "sampleCount": 3,
-            "totalDurationMs": 45000,
+            "exists": exists,
+            "qualityScore": 85,
+            "audioDurationMs": 45000,
+            "audioCount": 3,
+            "version": 1,
             "createdAt": "2026-01-01T00:00:00Z",
-            "updatedAt": "2026-01-02T00:00:00Z"
-        ]
-        let data = try! JSONSerialization.data(withJSONObject: json)
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
-        return try! decoder.decode(VoiceProfile.self, from: data)
+            "updatedAt": "2026-01-02T00:00:00Z",
+            "needsCalibration": needsCalibration
+        ])
     }
 
-    private func makeVoiceSample(id: String = "vs-1") -> VoiceSample {
-        let json: [String: Any] = [
-            "id": id,
+    private func makeRegisterResponse() -> VoiceProfileRegisterResponse {
+        decode([
             "profileId": "vp-1",
-            "durationMs": 15000,
-            "status": "processed",
-            "createdAt": "2026-01-01T00:00:00Z"
-        ]
-        let data = try! JSONSerialization.data(withJSONObject: json)
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
-        return try! decoder.decode(VoiceSample.self, from: data)
+            "qualityScore": 85,
+            "audioDurationMs": 15000,
+            "needsCalibration": false
+        ])
     }
 
     // MARK: - getConsentStatus
 
     func test_getConsentStatus_success_returnsStatus() async throws {
-        let status = makeConsentStatus(hasConsent: true)
-        let response = APIResponse<VoiceConsentStatus>(success: true, data: status, error: nil)
-        mock.stub("/voice-profile/consent", result: response)
+        let response = APIResponse<VoiceConsentStatus>(success: true, data: makeConsentStatus(hasConsent: true), error: nil)
+        mock.stub("/voice/profile/consent", result: response)
 
         let result = try await service.getConsentStatus()
 
-        XCTAssertEqual(mock.requestCount, 1)
-        XCTAssertEqual(mock.lastRequest?.endpoint, "/voice-profile/consent")
+        XCTAssertEqual(mock.lastRequest?.endpoint, "/voice/profile/consent")
         XCTAssertEqual(mock.lastRequest?.method, "GET")
         XCTAssertTrue(result.hasConsent)
     }
@@ -102,99 +97,129 @@ final class VoiceProfileServiceTests: XCTestCase {
         }
     }
 
-    // MARK: - grantConsent
+    // MARK: - grantConsent / revokeConsent
 
-    func test_grantConsent_success_callsPostEndpoint() async throws {
-        let consentResponse = makeConsentResponse()
-        let response = APIResponse<VoiceConsentResponse>(success: true, data: consentResponse, error: nil)
-        mock.stub("/voice-profile/consent", result: response)
+    func test_grantConsent_success_callsPostConsent() async throws {
+        let response = APIResponse<VoiceConsentResponse>(success: true, data: makeConsentResponse(), error: nil)
+        mock.stub("/voice/profile/consent", result: response)
 
         let result = try await service.grantConsent(voiceCloningConsent: true, birthDate: "2000-01-01")
 
-        XCTAssertEqual(mock.requestCount, 1)
-        XCTAssertEqual(mock.lastRequest?.endpoint, "/voice-profile/consent")
+        XCTAssertEqual(mock.lastRequest?.endpoint, "/voice/profile/consent")
         XCTAssertEqual(mock.lastRequest?.method, "POST")
+        XCTAssertEqual(mock.lastRequest?.bodyJSON?["voiceRecordingConsent"] as? Bool, true)
         XCTAssertNotNil(result.consentedAt)
     }
 
-    // MARK: - revokeConsent
-
-    func test_revokeConsent_success_callsPostEndpoint() async throws {
-        let consentResponse = makeConsentResponse()
-        let response = APIResponse<VoiceConsentResponse>(success: true, data: consentResponse, error: nil)
-        mock.stub("/voice-profile/consent", result: response)
+    func test_revokeConsent_success_callsPostConsent() async throws {
+        let response = APIResponse<VoiceConsentResponse>(success: true, data: makeConsentResponse(), error: nil)
+        mock.stub("/voice/profile/consent", result: response)
 
         try await service.revokeConsent()
 
-        XCTAssertEqual(mock.requestCount, 1)
-        XCTAssertEqual(mock.lastRequest?.endpoint, "/voice-profile/consent")
+        XCTAssertEqual(mock.lastRequest?.endpoint, "/voice/profile/consent")
         XCTAssertEqual(mock.lastRequest?.method, "POST")
+        XCTAssertEqual(mock.lastRequest?.bodyJSON?["voiceRecordingConsent"] as? Bool, false)
     }
 
-    // MARK: - getProfile
+    // MARK: - getProfile (mappe VoiceProfileDetails → VoiceProfile)
 
-    func test_getProfile_success_returnsProfile() async throws {
-        let profile = makeVoiceProfile()
-        let response = APIResponse<VoiceProfile?>(success: true, data: profile, error: nil)
-        mock.stub("/voice-profile", result: response)
+    func test_getProfile_exists_mapsGatewayFieldsToDomain() async throws {
+        let response = APIResponse<VoiceProfileDetails>(success: true, data: makeProfileDetails(exists: true), error: nil)
+        mock.stub("/voice/profile", result: response)
 
         let result = try await service.getProfile()
 
-        XCTAssertEqual(mock.requestCount, 1)
-        XCTAssertEqual(mock.lastRequest?.endpoint, "/voice-profile")
+        XCTAssertEqual(mock.lastRequest?.endpoint, "/voice/profile")
         XCTAssertEqual(mock.lastRequest?.method, "GET")
-        XCTAssertNotNil(result)
         XCTAssertEqual(result?.id, "vp-1")
         XCTAssertEqual(result?.status, .ready)
+        XCTAssertEqual(result?.sampleCount, 3)          // ← audioCount
+        XCTAssertEqual(result?.totalDurationMs, 45000)  // ← audioDurationMs
+        XCTAssertEqual(result?.quality ?? 0, 0.85, accuracy: 0.001) // qualityScore/100
         XCTAssertTrue(result?.isReady == true)
     }
 
-    func test_getProfile_noProfile_returnsNil() async throws {
-        let response = APIResponse<VoiceProfile?>(success: true, data: nil, error: nil)
-        mock.stub("/voice-profile", result: response)
+    func test_getProfile_notExists_returnsNil() async throws {
+        let response = APIResponse<VoiceProfileDetails>(success: true, data: makeProfileDetails(exists: false), error: nil)
+        mock.stub("/voice/profile", result: response)
 
         let result = try await service.getProfile()
 
         XCTAssertNil(result)
     }
 
-    // MARK: - getSamples
+    func test_getProfile_needsCalibration_statusExpired() async throws {
+        let response = APIResponse<VoiceProfileDetails>(success: true, data: makeProfileDetails(exists: true, needsCalibration: true), error: nil)
+        mock.stub("/voice/profile", result: response)
 
-    func test_getSamples_success_returnsSamples() async throws {
-        let samples = [makeVoiceSample(id: "vs-1"), makeVoiceSample(id: "vs-2")]
-        let response = APIResponse<[VoiceSample]>(success: true, data: samples, error: nil)
-        mock.stub("/voice-profile/samples", result: response)
+        let result = try await service.getProfile()
 
-        let result = try await service.getSamples()
-
-        XCTAssertEqual(mock.requestCount, 1)
-        XCTAssertEqual(mock.lastRequest?.endpoint, "/voice-profile/samples")
-        XCTAssertEqual(result.count, 2)
+        XCTAssertEqual(result?.status, .expired)
     }
 
-    // MARK: - toggleVoiceCloning
+    // MARK: - getSamples (aucune route gateway → vide, sans requête)
 
-    func test_toggleVoiceCloning_enabled_callsCorrectEndpoint() async throws {
-        let response = APIResponse<[String: Bool]>(success: true, data: ["enabled": true], error: nil)
-        mock.stub("/voice-profile/toggle-cloning", result: response)
+    func test_getSamples_returnsEmptyWithoutRequest() async throws {
+        let result = try await service.getSamples()
+
+        XCTAssertTrue(result.isEmpty)
+        XCTAssertEqual(mock.requestCount, 0)
+    }
+
+    // MARK: - uploadSample (register si pas de profil, PUT sinon)
+
+    func test_uploadSample_noProfile_createsViaRegister() async throws {
+        mock.stub("/voice/profile", result: APIResponse<VoiceProfileDetails>(success: true, data: makeProfileDetails(exists: false), error: nil))
+        mock.stub("/voice/profile/register", result: APIResponse<VoiceProfileRegisterResponse>(success: true, data: makeRegisterResponse(), error: nil))
+
+        let result = try await service.uploadSample(audioData: Data(repeating: 0, count: 16000), durationMs: 10000)
+
+        XCTAssertEqual(result.profileId, "vp-1")
+        XCTAssertEqual(result.sampleCount, 1)
+        XCTAssertEqual(mock.lastRequest?.endpoint, "/voice/profile/register")
+        XCTAssertEqual(mock.lastRequest?.method, "POST")
+    }
+
+    func test_uploadSample_existingProfile_calibratesViaPut() async throws {
+        mock.stub("/voice/profile", result: APIResponse<VoiceProfileDetails>(success: true, data: makeProfileDetails(exists: true), error: nil))
+        mock.stub("/voice/profile/vp-1", result: APIResponse<VoiceProfileRegisterResponse>(success: true, data: makeRegisterResponse(), error: nil))
+
+        let result = try await service.uploadSample(audioData: Data(repeating: 0, count: 16000), durationMs: 10000)
+
+        XCTAssertEqual(result.profileId, "vp-1")
+        XCTAssertEqual(mock.lastRequest?.endpoint, "/voice/profile/vp-1")
+        XCTAssertEqual(mock.lastRequest?.method, "PUT")
+    }
+
+    // MARK: - toggleVoiceCloning (piloté par le consentement)
+
+    func test_toggleVoiceCloning_enabled_postsConsentWithFlag() async throws {
+        mock.stub("/voice/profile/consent", result: APIResponse<VoiceConsentResponse>(success: true, data: makeConsentResponse(), error: nil))
 
         try await service.toggleVoiceCloning(enabled: true)
 
-        XCTAssertEqual(mock.requestCount, 1)
-        XCTAssertEqual(mock.lastRequest?.endpoint, "/voice-profile/toggle-cloning")
+        XCTAssertEqual(mock.lastRequest?.endpoint, "/voice/profile/consent")
         XCTAssertEqual(mock.lastRequest?.method, "POST")
+        XCTAssertEqual(mock.lastRequest?.bodyJSON?["voiceCloningConsent"] as? Bool, true)
+    }
+
+    func test_toggleVoiceCloning_disabled_sendsExplicitFalse() async throws {
+        mock.stub("/voice/profile/consent", result: APIResponse<VoiceConsentResponse>(success: true, data: makeConsentResponse(), error: nil))
+
+        try await service.toggleVoiceCloning(enabled: false)
+
+        XCTAssertEqual(mock.lastRequest?.bodyJSON?["voiceCloningConsent"] as? Bool, false)
     }
 
     // MARK: - deleteProfile
 
     func test_deleteProfile_success_callsDeleteEndpoint() async throws {
-        let response = APIResponse<[String: Bool]>(success: true, data: ["deleted": true], error: nil)
-        mock.stub("/voice-profile", result: response)
+        mock.stub("/voice/profile", result: APIResponse<[String: Bool]>(success: true, data: ["deleted": true], error: nil))
 
         try await service.deleteProfile()
 
-        XCTAssertEqual(mock.requestCount, 1)
-        XCTAssertEqual(mock.lastRequest?.endpoint, "/voice-profile")
+        XCTAssertEqual(mock.lastRequest?.endpoint, "/voice/profile")
         XCTAssertEqual(mock.lastRequest?.method, "DELETE")
     }
 
@@ -215,16 +240,11 @@ final class VoiceProfileServiceTests: XCTestCase {
         }
     }
 
-    // MARK: - deleteSample
+    // MARK: - deleteSample (aucune route gateway → no-op)
 
-    func test_deleteSample_success_callsDeleteEndpoint() async throws {
-        let response = APIResponse<[String: Bool]>(success: true, data: ["deleted": true], error: nil)
-        mock.stub("/voice-profile/samples/vs-123", result: response)
-
+    func test_deleteSample_isNoOpWithoutRequest() async throws {
         try await service.deleteSample(sampleId: "vs-123")
 
-        XCTAssertEqual(mock.requestCount, 1)
-        XCTAssertEqual(mock.lastRequest?.endpoint, "/voice-profile/samples/vs-123")
-        XCTAssertEqual(mock.lastRequest?.method, "DELETE")
+        XCTAssertEqual(mock.requestCount, 0)
     }
 }

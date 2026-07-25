@@ -4,6 +4,12 @@ import PhotosUI
 import MeeshySDK
 import MeeshyUI
 
+/// Éditeur de profil RÉDUIT : displayName / bio / avatar uniquement.
+/// Les préférences de langue (systemLanguage, regionalLanguage,
+/// customDestinationLanguage) NE se règlent PAS ici — elles vivent dans
+/// `ProfileView.saveProfile` (+ pickers dédiés) et le schema gateway
+/// `updateUserProfileSchema`. Ne pas y ajouter de champs langue sans étendre
+/// `UpdateProfilePayload`/`dispatchUpdateProfile` en conséquence.
 struct EditProfileView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.colorScheme) private var colorScheme

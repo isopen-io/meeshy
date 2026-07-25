@@ -170,7 +170,7 @@ export type { AudioPostComposerProps } from './AudioPostComposer';
 export { TranslationToggle } from './TranslationToggle';
 export type { TranslationToggleProps, TranslationItem } from './TranslationToggle';
 
-export { getFlag, getLanguageName, FLAG_MAP, LANGUAGE_NAMES } from './flags';
+export { getFlag, getLanguageName } from './flags';
 
 export { ReactionPicker } from './ReactionPicker';
 export type { ReactionPickerProps } from './ReactionPicker';

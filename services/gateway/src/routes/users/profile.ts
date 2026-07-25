@@ -148,7 +148,11 @@ export async function updateUserProfile(fastify: FastifyInstance) {
       if (body.bio !== undefined) updateData.bio = SecuritySanitizer.sanitizeText(body.bio);
 
       if (body.systemLanguage !== undefined) updateData.systemLanguage = body.systemLanguage;
-      if (body.regionalLanguage !== undefined) updateData.regionalLanguage = body.regionalLanguage;
+      if (body.regionalLanguage !== undefined) {
+        // Chaîne vide = effacement de la langue secondaire → null (le Prisme la
+        // traite comme absente). Mirror de customDestinationLanguage.
+        updateData.regionalLanguage = body.regionalLanguage === '' ? null : body.regionalLanguage;
+      }
       if (body.customDestinationLanguage !== undefined) {
         updateData.customDestinationLanguage = body.customDestinationLanguage === '' ? null : body.customDestinationLanguage;
       }

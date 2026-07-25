@@ -446,6 +446,31 @@ describe('notification-helpers - Structure Groupée V2', () => {
       expect(getNotificationLink(n)).toBe('/post/pc#comment-cc');
     });
 
+    it('comment_reply avec parentCommentId (context) → ?parent=…#comment-…', () => {
+      const n = makeNotif({
+        type: NotificationTypeEnum.COMMENT_REPLY,
+        context: { postId: 'p3', commentId: 'r1', parentCommentId: 'c9' },
+      });
+      expect(getNotificationLink(n)).toBe('/post/p3?parent=c9#comment-r1');
+    });
+
+    it('replie sur metadata.parentCommentId si absent du context', () => {
+      const n = makeNotif({
+        type: NotificationTypeEnum.STORY_THREAD_REPLY,
+        context: { postId: 's6', commentId: 'r2' },
+        metadata: { parentCommentId: 'c7' } as any,
+      });
+      expect(getNotificationLink(n)).toBe('/story/s6?parent=c7#comment-r2');
+    });
+
+    it('parentCommentId sans commentId → pas de ?parent (lien inchangé)', () => {
+      const n = makeNotif({
+        type: NotificationTypeEnum.POST_COMMENT,
+        context: { postId: 'p4', parentCommentId: 'c1' },
+      });
+      expect(getNotificationLink(n)).toBe('/post/p4');
+    });
+
     it('comment_reaction sans postId → null (gap données gateway)', () => {
       const n = makeNotif({ type: NotificationTypeEnum.COMMENT_REACTION, context: {}, metadata: { reactionEmoji: '❤️' } as any });
       expect(getNotificationLink(n)).toBeNull();

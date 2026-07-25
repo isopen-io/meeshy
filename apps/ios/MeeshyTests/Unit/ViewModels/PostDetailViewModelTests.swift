@@ -200,6 +200,141 @@ final class PostDetailViewModelTests: XCTestCase {
         await CacheCoordinator.shared.comments.invalidate(for: "post-\(postId)")
     }
 
+    // MARK: - loadCommentsUntilPresent (chasse paginée — commentaire notifié)
+
+    private static func makeAPIComment(id: String) -> APIPostComment {
+        JSONStub.decode("""
+        {"id":"\(id)","content":"c-\(id)","createdAt":"2026-01-01T00:00:00.000Z","author":{"id":"a1","username":"alice"}}
+        """)
+    }
+
+    func test_loadCommentsUntilPresent_targetOnThirdPage_pagesUntilFound() async {
+        let (sut, mock) = makeSUT()
+        mock.getCommentsResultsQueue = [
+            .success(Self.makePaginatedComments(comments: [Self.makeAPIComment(id: "p1c")], hasMore: true, nextCursor: "cur1")),
+            .success(Self.makePaginatedComments(comments: [Self.makeAPIComment(id: "p2c")], hasMore: true, nextCursor: "cur2")),
+            .success(Self.makePaginatedComments(comments: [Self.makeAPIComment(id: "target")], hasMore: true, nextCursor: "cur3")),
+        ]
+
+        let found = await sut.loadCommentsUntilPresent("target", postId: "post-1")
+
+        XCTAssertTrue(found)
+        XCTAssertEqual(mock.getCommentsCallCount, 3, "s'arrête dès que la cible est chargée")
+        XCTAssertTrue(sut.topLevelComments.contains { $0.id == "target" })
+    }
+
+    func test_loadCommentsUntilPresent_targetAlreadyLoaded_makesNoNetworkCall() async {
+        let (sut, mock) = makeSUT()
+        mock.getCommentsResultsQueue = [
+            .success(Self.makePaginatedComments(comments: [Self.makeAPIComment(id: "target")], hasMore: false)),
+        ]
+        await sut.loadMoreComments("post-1")
+        mock.getCommentsCallCount = 0
+
+        let found = await sut.loadCommentsUntilPresent("target", postId: "post-1")
+
+        XCTAssertTrue(found)
+        XCTAssertEqual(mock.getCommentsCallCount, 0)
+    }
+
+    func test_loadCommentsUntilPresent_exhaustedList_returnsFalse() async {
+        let (sut, mock) = makeSUT()
+        mock.getCommentsResultsQueue = [
+            .success(Self.makePaginatedComments(comments: [Self.makeAPIComment(id: "other")], hasMore: false)),
+        ]
+
+        let found = await sut.loadCommentsUntilPresent("missing", postId: "post-1")
+
+        XCTAssertFalse(found)
+        XCTAssertEqual(mock.getCommentsCallCount, 1, "s'arrête quand hasMore devient faux")
+    }
+
+    // MARK: - Replies pagination (fil de réponses > 20 — endpoint paginé ASC)
+
+    private static func makeAPIReply(id: String, parentId: String) -> APIPostComment {
+        JSONStub.decode("""
+        {"id":"\(id)","content":"r-\(id)","parentId":"\(parentId)","createdAt":"2026-01-01T00:00:00.000Z","author":{"id":"a1","username":"alice"}}
+        """)
+    }
+
+    func test_loadReplies_recordsHasMoreAndCursor() async {
+        let (sut, mock) = makeSUT()
+        mock.getCommentRepliesResultsQueue = [
+            .success(Self.makePaginatedComments(
+                comments: [Self.makeAPIReply(id: "r1", parentId: "cThread")],
+                hasMore: true, nextCursor: "rcur1"
+            )),
+        ]
+
+        await sut.loadReplies(postId: "p1", commentId: "cThread")
+
+        XCTAssertEqual(sut.repliesMap["cThread"]?.map(\.id), ["r1"])
+        XCTAssertEqual(sut.repliesHasMore["cThread"], true)
+        XCTAssertEqual(sut.repliesNextCursor["cThread"], "rcur1")
+    }
+
+    func test_loadMoreReplies_appendsWithoutDuplicates() async {
+        let (sut, mock) = makeSUT()
+        mock.getCommentRepliesResultsQueue = [
+            .success(Self.makePaginatedComments(
+                comments: [Self.makeAPIReply(id: "r1", parentId: "cThread"),
+                           Self.makeAPIReply(id: "r2", parentId: "cThread")],
+                hasMore: true, nextCursor: "rcur1"
+            )),
+            .success(Self.makePaginatedComments(
+                comments: [Self.makeAPIReply(id: "r2", parentId: "cThread"),
+                           Self.makeAPIReply(id: "r3", parentId: "cThread")],
+                hasMore: false
+            )),
+        ]
+        await sut.loadReplies(postId: "p1", commentId: "cThread")
+
+        await sut.loadMoreReplies("cThread", postId: "p1")
+
+        XCTAssertEqual(sut.repliesMap["cThread"]?.map(\.id), ["r1", "r2", "r3"], "append + dédup, jamais de replace")
+        XCTAssertEqual(sut.repliesHasMore["cThread"], false)
+        XCTAssertEqual(mock.lastGetCommentRepliesCursor, "rcur1", "la page suivante part du curseur enregistré")
+    }
+
+    func test_loadRepliesUntilPresent_targetOnThirdPage_huntsUntilFound() async {
+        let (sut, mock) = makeSUT()
+        mock.getCommentRepliesResultsQueue = [
+            .success(Self.makePaginatedComments(
+                comments: [Self.makeAPIReply(id: "r1", parentId: "cThread")],
+                hasMore: true, nextCursor: "rcur1"
+            )),
+            .success(Self.makePaginatedComments(
+                comments: [Self.makeAPIReply(id: "r2", parentId: "cThread")],
+                hasMore: true, nextCursor: "rcur2"
+            )),
+            .success(Self.makePaginatedComments(
+                comments: [Self.makeAPIReply(id: "rTarget", parentId: "cThread")],
+                hasMore: true, nextCursor: "rcur3"
+            )),
+        ]
+
+        let found = await sut.loadRepliesUntilPresent("rTarget", in: "cThread", postId: "p1")
+
+        XCTAssertTrue(found)
+        XCTAssertEqual(mock.getCommentRepliesCallCount, 3, "s'arrête dès que la réponse ciblée est chargée")
+        XCTAssertEqual(sut.repliesMap["cThread"]?.map(\.id), ["r1", "r2", "rTarget"])
+    }
+
+    func test_loadRepliesUntilPresent_exhaustedThread_returnsFalse() async {
+        let (sut, mock) = makeSUT()
+        mock.getCommentRepliesResultsQueue = [
+            .success(Self.makePaginatedComments(
+                comments: [Self.makeAPIReply(id: "r1", parentId: "cThread")],
+                hasMore: false
+            )),
+        ]
+
+        let found = await sut.loadRepliesUntilPresent("missing", in: "cThread", postId: "p1")
+
+        XCTAssertFalse(found)
+        XCTAssertEqual(mock.getCommentRepliesCallCount, 1, "s'arrête à l'épuisement du fil (hasMore=false)")
+    }
+
     // MARK: - sendComment
 
     func test_sendComment_success_insertsOptimisticCommentAtTop() async {

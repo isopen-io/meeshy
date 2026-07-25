@@ -265,6 +265,16 @@ struct OutboxDispatcher: OutboxDispatching {
     private func dispatchMarkAsRead(_ record: OutboxRecord) async throws {
         let payload = try decodePayload(record, as: MarkAsReadPayload.self)
         do {
+            // Le corps porte les messages RÉELLEMENT affichés. Sans lui, le
+            // gateway retombe sur son chemin par fenêtre temporelle, qui
+            // déclare lus des messages jamais montrés. Un payload legacy
+            // (`messageIds == nil`) continue de poster sans corps : c'est le
+            // seul comportement sûr pour un enregistrement non informé.
+            let reported = payload.messageIds.map(MarkAsReadBody.cap) ?? []
+            let body = reported.isEmpty
+                ? nil
+                : try JSONEncoder().encode(MarkAsReadBody(messageIds: reported))
+
             // Decode the envelope loosely as a dictionary (same pattern as
             // `dispatchUpdateProfile` / `dispatchCreateConversation` above).
             // The mark-read response `data` carries a string `message` field,
@@ -274,10 +284,13 @@ struct OutboxDispatcher: OutboxDispatching {
             let _: APIResponse<[String: AnyCodable]> = try await APIClient.shared.request(
                 endpoint: "/conversations/\(payload.conversationId)/mark-read",
                 method: "POST",
-                body: nil,
+                body: body,
                 queryItems: nil
             )
-            logger.info("markAsRead dispatched for conversation \(payload.conversationId, privacy: .public) cmid=\(payload.clientMutationId, privacy: .public)")
+            // Le nombre d'ids rapportés est le seul moyen de distinguer, en
+            // production, un marquage exact d'un repli par fenêtre : sans lui,
+            // un observateur débranché passerait inaperçu.
+            logger.info("markAsRead dispatched for conversation \(payload.conversationId, privacy: .public) cmid=\(payload.clientMutationId, privacy: .public) reportedIds=\(reported.isEmpty ? "none(window-fallback)" : String(reported.count), privacy: .public)")
         } catch let MeeshyError.server(statusCode, _) where statusCode == 404 {
             logger.warning("markAsRead 404 for conversation \(payload.conversationId, privacy: .public) — conversation gone, accepting as success")
         }
@@ -968,6 +981,27 @@ struct OutboxDispatcher: OutboxDispatching {
 /// gateway: `{ avatar: string }`).
 nonisolated struct UpdateProfileAvatarBody: Encodable {
     let avatar: String
+}
+
+/// Corps de `POST /conversations/:id/mark-read` — les messages RÉELLEMENT
+/// affichés. `MarkReadBodySchema` est `.strict()` côté gateway : toute clé non
+/// déclarée rejette la requête ENTIÈRE en 400, ce qui perdrait aussi les
+/// lectures légitimes du même lot. D'où un type qui ne porte que `messageIds`.
+/// `internal` (et non `private`) pour que son contrat d'encodage soit
+/// directement testable depuis `MeeshyTests`.
+///
+/// Voir `docs/superpowers/specs/2026-07-24-read-exactness-design.md`.
+nonisolated struct MarkAsReadBody: Encodable {
+    let messageIds: [String]
+
+    /// Plafond accepté par le gateway.
+    static let limit = 200
+
+    /// Tronque en gardant les PLUS RÉCENTS : ce sont ceux que l'utilisateur
+    /// vient de voir, et dépasser la borne ferait rejeter tout le lot.
+    static func cap(_ ids: [String]) -> [String] {
+        ids.count <= limit ? ids : Array(ids.suffix(limit))
+    }
 }
 
 /// Wire body for `PATCH /users/me`. Deliberately has NO `avatar` property —

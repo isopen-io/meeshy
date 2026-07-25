@@ -213,6 +213,16 @@ describe('language-code normalization at the write boundary', () => {
     expect(parsed.customDestinationLanguage).toBe('de');
   });
 
+  it('updateUserProfileSchema accepts an empty regionalLanguage (clear secondary language)', () => {
+    const result = updateUserProfileSchema.safeParse({ regionalLanguage: '' });
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data.regionalLanguage).toBe('');
+  });
+
+  it('updateUserProfileSchema still rejects an unsupported regionalLanguage code', () => {
+    expect(updateUserProfileSchema.safeParse({ regionalLanguage: 'zz' }).success).toBe(false);
+  });
+
   it('AuthSchemas.register lowercases system/regional language', () => {
     const parsed = AuthSchemas.register.parse({
       username: 'alice',

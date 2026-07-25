@@ -94,6 +94,39 @@ final class VoiceProfileManageViewModelTests: XCTestCase {
         XCTAssertNotNil(sut.error)
     }
 
+    // MARK: - toggleVoicePublic
+
+    func test_toggleVoicePublic_success_persistsVoicePublicToAuthManager() async {
+        let userService = MockUserService()
+        let auth = MockAuthManager()
+        auth.simulateLoggedIn(user: MeeshyUser(id: "u1", username: "alice", displayName: "Alice"))
+        let sut = VoiceProfileManageViewModel(userService: userService, authManager: auth)
+
+        await sut.toggleVoicePublic(enabled: true)
+
+        XCTAssertTrue(sut.isVoicePublic)
+        XCTAssertEqual(userService.updateProfileCallCount, 1)
+        XCTAssertEqual(userService.lastUpdateProfileRequest?.voicePublic, true)
+        // Sans cette persistance, une réouverture (loadProfile lit currentUser.voicePublic)
+        // restaurerait l'ancienne valeur → le toggle « saute » en arrière.
+        XCTAssertEqual(auth.currentUser?.voicePublic, true)
+    }
+
+    func test_toggleVoicePublic_error_rollsBackAndLeavesAuthManagerUntouched() async {
+        let userService = MockUserService()
+        userService.updateProfileResult = .failure(NSError(domain: "test", code: 500))
+        let auth = MockAuthManager()
+        auth.simulateLoggedIn(user: MeeshyUser(id: "u1", username: "alice", displayName: "Alice"))
+        let sut = VoiceProfileManageViewModel(userService: userService, authManager: auth)
+        sut.isVoicePublic = false
+
+        await sut.toggleVoicePublic(enabled: true)
+
+        XCTAssertFalse(sut.isVoicePublic)
+        XCTAssertNotNil(sut.error)
+        XCTAssertNil(auth.currentUser?.voicePublic)
+    }
+
     // MARK: - deleteSample
 
     func test_deleteSample_success_removesFromList() async {

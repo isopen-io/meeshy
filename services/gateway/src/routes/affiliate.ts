@@ -105,8 +105,16 @@ export default async function affiliateRoutes(fastify: FastifyInstance) {
                 },
                 maxUses: { type: 'number', nullable: true, description: 'Maximum uses allowed' },
                 currentUses: { type: 'number', description: 'Current use count' },
+                isActive: { type: 'boolean', description: 'Whether token is active' },
                 expiresAt: { type: 'string', format: 'date-time', nullable: true, description: 'Expiration date' },
-                createdAt: { type: 'string', format: 'date-time', description: 'Creation timestamp' }
+                createdAt: { type: 'string', format: 'date-time', description: 'Creation timestamp' },
+                _count: {
+                  type: 'object',
+                  properties: {
+                    affiliations: { type: 'number', description: 'Number of successful referrals' }
+                  }
+                },
+                clickCount: { type: 'number', description: 'Number of link clicks' }
               }
             }
           }
@@ -169,8 +177,11 @@ export default async function affiliateRoutes(fastify: FastifyInstance) {
         affiliateLink,
         maxUses: affiliateToken.maxUses,
         currentUses: affiliateToken.currentUses,
+        isActive: !affiliateToken.expiresAt || affiliateToken.expiresAt > new Date(),
         expiresAt: affiliateToken.expiresAt?.toISOString(),
-        createdAt: affiliateToken.createdAt.toISOString()
+        createdAt: affiliateToken.createdAt.toISOString(),
+        _count: { affiliations: 0 },
+        clickCount: 0
       });
     } catch (error) {
       logger.error('Erreur création token affiliation', error as Error);

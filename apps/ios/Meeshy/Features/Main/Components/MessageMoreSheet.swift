@@ -20,6 +20,16 @@ struct MessageMoreSheet: View {
     var onForward: (() -> Void)? = nil
     var onThread: (() -> Void)? = nil
     var onDeleteMedia: (() -> Void)? = nil
+    var onPin: (() -> Void)? = nil
+    var onToggleStar: (() -> Void)? = nil
+    /// Suppression du message entier — route vers le dialogue riche
+    /// (« pour tous » / « pour moi ») de `ConversationView`.
+    var onDeleteMessage: (() -> Void)? = nil
+    var onEdit: (() -> Void)? = nil
+    var onCopy: (() -> Void)? = nil
+    var onShare: (() -> Void)? = nil
+    /// Ajout d'une réaction depuis la vue « Réactions » de « Plus… » (voir + ajouter).
+    var onReact: ((String) -> Void)? = nil
     var onSelectTranslation: ((MessageTranslation?) -> Void)? = nil
     var onSelectAudioLanguage: ((String?) -> Void)? = nil
     var onReport: ((String, String?) -> Void)? = nil
@@ -40,14 +50,21 @@ struct MessageMoreSheet: View {
         VStack(spacing: 0) {
             ScrollView(showsIndicators: false) {
                 VStack(spacing: 16) {
-                    glassGridCard
-                        .padding(.horizontal, 14)
-                        .padding(.top, 8)
-
                     if let selectedItem, isExploration(selectedItem) {
+                        // Morph (req 2026-07-24) : au tap d'un item explorable, la
+                        // grille complète se replie en une BANDE D'ICÔNES horizontale
+                        // scrollable (Liquid Glass) — le contenu de l'item sélectionné
+                        // s'affiche dessous, laissant la place au détail.
+                        explorableTabStrip(selected: selectedItem)
+                            .padding(.horizontal, 14)
+                            .padding(.top, 8)
                         inlineContent(for: selectedItem)
                             .id(selectedItem)
                             .transition(.opacity.combined(with: .move(edge: .top)))
+                    } else {
+                        glassGridCard
+                            .padding(.horizontal, 14)
+                            .padding(.top, 8)
                     }
                 }
                 .padding(.bottom, 24)
@@ -95,6 +112,52 @@ struct MessageMoreSheet: View {
         .shadow(color: .black.opacity(0.14), radius: 18, x: 0, y: 8)
     }
 
+    // MARK: - Bande d'icônes horizontale (morph)
+
+    /// TOUS les items des sections — la bande horizontale (morph) les affiche
+    /// tous (feedback 2026-07-24 : « il faut toute la liste en horizontal »).
+    /// Les actions s'exécutent au tap, les explorables basculent le contenu.
+    private var allMoreItems: [MoreItem] {
+        sections.flatMap { section -> [MoreItem] in
+            switch section { case .actions(let i), .info(let i), .moderation(let i): return i }
+        }
+    }
+
+    /// Bande d'icônes horizontale scrollable (Liquid Glass) : un onglet par item
+    /// explorable, l'actif teinté à sa couleur. Le retour à la grille complète se
+    /// fait via le bouton de fermeture de `inlineContent`.
+    private func explorableTabStrip(selected: MoreItem) -> some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 10) {
+                ForEach(allMoreItems, id: \.self) { item in
+                    let color = colorFor(item)
+                    let isActive = item == selected
+                    Button {
+                        handleMoreItemTap(item)
+                    } label: {
+                        Image(systemName: symbol(item))
+                            .font(.callout.weight(.semibold))
+                            .foregroundColor(isActive ? color : theme.textSecondary)
+                            .frame(width: 44, height: 44)
+                            .background(
+                                Circle().fill(isActive
+                                    ? color.opacity(isDark ? 0.35 : 0.18)
+                                    : (isDark ? Color.white.opacity(0.06) : Color.black.opacity(0.05)))
+                            )
+                            .overlay(Circle().stroke(isActive ? color.opacity(0.5) : .clear, lineWidth: 1.5))
+                    }
+                    .buttonStyle(MorePelletButtonStyle())
+                    .accessibilityLabel(labelText(item))
+                    .accessibilityAddTraits(isActive ? [.isSelected] : [])
+                }
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+        }
+        .adaptiveGlass(in: Capsule(), tint: accent.opacity(0.10))
+        .shadow(color: accent.opacity(0.10), radius: 8, x: 0, y: 3)
+    }
+
     @ViewBuilder
     private func sectionGrid(for section: MoreSection) -> some View {
         switch section {
@@ -129,6 +192,37 @@ struct MessageMoreSheet: View {
 
     // MARK: - Pellet Button
 
+    /// Action commune d'un item (grille OU bande horizontale) : explorable →
+    /// bascule le contenu inline ; deleteMedia → confirmation ; sinon → exécute
+    /// le callback + ferme la feuille.
+    private func handleMoreItemTap(_ item: MoreItem) {
+        if isExploration(item) {
+            HapticFeedback.light()
+            withAnimation(.easeInOut(duration: 0.2)) {
+                selectedItem = (selectedItem == item) ? nil : item
+            }
+        } else if item == .deleteMedia {
+            // Destructif → confirmation obligatoire (jamais de suppression directe).
+            HapticFeedback.medium()
+            showDeleteMediaConfirm = true
+        } else {
+            HapticFeedback.medium()
+            switch item {
+            case .reply: onReply?()
+            case .forward: onForward?()
+            case .thread: onThread?()
+            case .pin, .unpin: onPin?()
+            case .star, .unstar: onToggleStar?()
+            case .delete: onDeleteMessage?()
+            case .edit: onEdit?()
+            case .copy: onCopy?()
+            case .share: onShare?()
+            default: break
+            }
+            dismiss()
+        }
+    }
+
     private func pellet(_ item: MoreItem, index: Int) -> some View {
         let color = colorFor(item)
         let isActive = selectedItem == item && isExploration(item)
@@ -140,26 +234,7 @@ struct MessageMoreSheet: View {
             : (isDark ? 0.12 : 0.06)
 
         return Button {
-            if isExploration(item) {
-                HapticFeedback.light()
-                withAnimation(.easeInOut(duration: 0.2)) {
-                    selectedItem = (selectedItem == item) ? nil : item
-                }
-            } else if item == .deleteMedia {
-                // Destructif → confirmation obligatoire, la feuille reste ouverte
-                // jusqu'à la validation (jamais de suppression directe).
-                HapticFeedback.medium()
-                showDeleteMediaConfirm = true
-            } else {
-                HapticFeedback.medium()
-                switch item {
-                case .reply: onReply?()
-                case .forward: onForward?()
-                case .thread: onThread?()
-                default: break
-                }
-                dismiss()
-            }
+            handleMoreItemTap(item)
         } label: {
             VStack(spacing: 5) {
                 ZStack {
@@ -213,7 +288,7 @@ struct MessageMoreSheet: View {
 
     private func isExploration(_ item: MoreItem) -> Bool {
         switch item {
-        case .reply, .forward, .thread, .deleteMedia: return false
+        case .reply, .forward, .thread, .deleteMedia, .pin, .unpin, .star, .unstar, .delete, .edit, .copy, .share: return false
         case .views, .reactions, .language, .transcription, .sentiment, .history, .report: return true
         }
     }
@@ -224,6 +299,12 @@ struct MessageMoreSheet: View {
         case .forward: return MeeshyColors.indigo500
         case .thread: return MeeshyColors.warning
         case .deleteMedia: return MeeshyColors.error
+        case .pin, .unpin: return MeeshyColors.indigo400
+        case .star, .unstar: return MeeshyColors.warning
+        case .delete: return MeeshyColors.error
+        case .edit: return MeeshyColors.indigo500
+        case .copy: return MeeshyColors.indigo400
+        case .share: return MeeshyColors.info
         case .language: return MeeshyColors.info
         case .views: return MeeshyColors.success
         case .reactions: return MeeshyColors.warning
@@ -284,7 +365,7 @@ struct MessageMoreSheet: View {
         case .views:
             MessageViewsDetailView(message: message, contactColor: contactColor, conversationId: conversationId)
         case .reactions:
-            MessageReactionsDetailView(message: message, contactColor: contactColor, conversationId: conversationId)
+            MessageReactionsDetailView(message: message, contactColor: contactColor, conversationId: conversationId, onReact: onReact)
         case .transcription:
             MessageTranscriptionDetailView(message: message, contactColor: contactColor, conversationId: conversationId,
                 transcription: transcription, translatedAudios: translatedAudios, onSelectAudioLanguage: onSelectAudioLanguage)
@@ -294,7 +375,7 @@ struct MessageMoreSheet: View {
             MessageEditsDetailView(message: message, editRevisions: editRevisions)
         case .report:
             MessageReportDetailView(message: message, onReport: { onReport?($0, $1); dismiss() }, onDismiss: { dismiss() })
-        case .reply, .forward, .thread, .deleteMedia:
+        case .reply, .forward, .thread, .deleteMedia, .pin, .unpin, .star, .unstar, .delete, .edit, .copy, .share:
             EmptyView()
         }
     }
@@ -305,6 +386,14 @@ struct MessageMoreSheet: View {
         case .forward: return "arrowshape.turn.up.right"
         case .thread: return "bubble.left.and.bubble.right"
         case .deleteMedia: return "paperclip.badge.ellipsis"
+        case .pin: return "pin"
+        case .unpin: return "pin.slash"
+        case .star: return "star"
+        case .unstar: return "star.slash"
+        case .delete: return "trash"
+        case .edit: return "pencil"
+        case .copy: return "doc.on.doc"
+        case .share: return "square.and.arrow.up"
         case .language: return "globe"
         case .views: return "eye"
         case .reactions: return "face.smiling"
@@ -321,7 +410,15 @@ struct MessageMoreSheet: View {
         case .forward: return String(localized: "message-detail.tab.forward", defaultValue: "Transférer", bundle: .main)
         case .thread: return String(localized: "action.thread", defaultValue: "Discussion", bundle: .main)
         case .deleteMedia: return String(localized: "action.delete_media", defaultValue: "Supprimer le média", bundle: .main)
-        case .language: return String(localized: "message-detail.tab.language", defaultValue: "Langue", bundle: .main)
+        case .pin: return String(localized: "action.pin", defaultValue: "Épingler", bundle: .main)
+        case .unpin: return String(localized: "action.unpin", defaultValue: "Désépingler", bundle: .main)
+        case .star: return String(localized: "action.favorite", defaultValue: "Favori", bundle: .main)
+        case .unstar: return String(localized: "action.unfavorite", defaultValue: "Retirer le favori", bundle: .main)
+        case .delete: return String(localized: "common.delete", defaultValue: "Supprimer", bundle: .main)
+        case .edit: return String(localized: "action.edit", defaultValue: "Éditer", bundle: .main)
+        case .copy: return String(localized: "action.copy", defaultValue: "Copier", bundle: .main)
+        case .share: return String(localized: "action.share", defaultValue: "Partager", bundle: .main)
+        case .language: return String(localized: "message-detail.tab.language", defaultValue: "Traduire", bundle: .main)
         case .views: return String(localized: "message-detail.tab.views", defaultValue: "Qui a vu", bundle: .main)
         case .reactions: return String(localized: "message-detail.tab.reactions", defaultValue: "Réactions", bundle: .main)
         case .transcription: return String(localized: "message-detail.tab.transcription", defaultValue: "Transcription", bundle: .main)

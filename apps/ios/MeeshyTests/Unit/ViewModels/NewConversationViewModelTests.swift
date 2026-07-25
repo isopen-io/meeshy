@@ -12,15 +12,34 @@ import MeeshySDK
 @MainActor
 final class NewConversationViewModelTests: XCTestCase {
 
+    // MARK: - Cache hygiene
+    //
+    // `loadContacts` reads the shared `friends_list` GRDB cache first, so a
+    // residue left by another suite (e.g. `ContactsListViewModelTests`, which
+    // writes the same key) would short-circuit the network path under test.
+    // Clear it before and after every test to keep the contacts tests
+    // deterministic.
+    override func setUp() async throws {
+        try await super.setUp()
+        await CacheCoordinator.shared.friends.invalidate(for: FriendshipCache.PersistenceKeys.friendsList)
+    }
+
+    override func tearDown() async throws {
+        await CacheCoordinator.shared.friends.invalidate(for: FriendshipCache.PersistenceKeys.friendsList)
+        try await super.tearDown()
+    }
+
     // MARK: - Factory
 
     private func makeSUT(
         api: MockAPIClientForApp? = nil,
+        friendService: MockFriendService? = nil,
         currentUserId: String = "current-user"
     ) -> (sut: NewConversationViewModel, api: MockAPIClientForApp) {
         let api = api ?? MockAPIClientForApp()
         let sut = NewConversationViewModel(
             api: api,
+            friendService: friendService ?? MockFriendService(),
             currentUserIdProvider: { currentUserId }
         )
         return (sut, api)
@@ -281,5 +300,75 @@ final class NewConversationViewModelTests: XCTestCase {
 
         XCTAssertNil(sut.createdConversation,
                      "After consumption the navigation hand-off must not refire on next render")
+    }
+
+    // MARK: - loadContacts (contact-first default surface)
+
+    func test_loadContacts_populatesContactsFromAcceptedFriends() async {
+        let friends = MockFriendService()
+        let accepted = FriendRequestFixture.make(
+            id: "r1", senderId: "alice-id", receiverId: "current-user",
+            status: "accepted", senderUsername: "alice"
+        )
+        friends.receivedRequestsResult = .success(FriendRequestFixture.makePaginated(requests: [accepted]))
+        friends.sentRequestsResult = .success(FriendRequestFixture.makePaginated(requests: []))
+        let (sut, _) = makeSUT(friendService: friends)
+
+        await sut.loadContacts()
+
+        XCTAssertEqual(sut.contacts.map(\.id), ["alice-id"])
+        XCTAssertEqual(sut.contacts.first?.username, "alice")
+        XCTAssertFalse(sut.isLoadingContacts)
+    }
+
+    func test_loadContacts_filtersToAcceptedRequestsOnly() async {
+        let friends = MockFriendService()
+        let accepted = FriendRequestFixture.make(
+            id: "r1", senderId: "alice-id", receiverId: "current-user",
+            status: "accepted", senderUsername: "alice"
+        )
+        let pending = FriendRequestFixture.make(
+            id: "r2", senderId: "bob-id", receiverId: "current-user",
+            status: "pending", senderUsername: "bob"
+        )
+        friends.receivedRequestsResult = .success(FriendRequestFixture.makePaginated(requests: [accepted, pending]))
+        friends.sentRequestsResult = .success(FriendRequestFixture.makePaginated(requests: []))
+        let (sut, _) = makeSUT(friendService: friends)
+
+        await sut.loadContacts()
+
+        XCTAssertEqual(sut.contacts.map(\.username), ["alice"],
+                       "Only accepted friend requests are contacts; pending requests must not appear")
+    }
+
+    func test_loadContacts_mergesSentAndReceivedAcceptedFriends() async {
+        let friends = MockFriendService()
+        let received = FriendRequestFixture.make(
+            id: "r1", senderId: "alice-id", receiverId: "current-user",
+            status: "accepted", senderUsername: "alice"
+        )
+        let sent = FriendRequestFixture.make(
+            id: "r2", senderId: "current-user", receiverId: "bob-id",
+            status: "accepted", receiverUsername: "bob"
+        )
+        friends.receivedRequestsResult = .success(FriendRequestFixture.makePaginated(requests: [received]))
+        friends.sentRequestsResult = .success(FriendRequestFixture.makePaginated(requests: [sent]))
+        let (sut, _) = makeSUT(friendService: friends)
+
+        await sut.loadContacts()
+
+        XCTAssertEqual(Set(sut.contacts.map(\.username)), ["alice", "bob"])
+    }
+
+    func test_loadContacts_networkFailure_leavesContactsEmptyAndStopsSpinner() async {
+        let friends = MockFriendService()
+        friends.receivedRequestsResult = .failure(NSError(domain: "TestNetwork", code: 503))
+        let (sut, _) = makeSUT(friendService: friends)
+
+        await sut.loadContacts()
+
+        XCTAssertTrue(sut.contacts.isEmpty)
+        XCTAssertFalse(sut.isLoadingContacts,
+                       "A failed contacts fetch must clear the loading flag so the empty state can render")
     }
 }

@@ -247,6 +247,38 @@ describe('PATCH /users/me — customDestinationLanguage empty string (line 151)'
   });
 });
 
+// ─── regionalLanguage='' → null (clear secondary language) ───────────────────
+
+describe('PATCH /users/me — regionalLanguage empty string (clear)', () => {
+  it('maps empty string to null in updateData', async () => {
+    const prisma = makePrisma();
+    const app = await buildApp({ prisma });
+    const res = await app.inject({
+      method: 'PATCH', url: '/users/me',
+      payload: { regionalLanguage: '' },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(prisma.user.update).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ regionalLanguage: null }) })
+    );
+    await app.close();
+  });
+
+  it('maps non-empty regionalLanguage string normally', async () => {
+    const prisma = makePrisma();
+    const app = await buildApp({ prisma });
+    const res = await app.inject({
+      method: 'PATCH', url: '/users/me',
+      payload: { regionalLanguage: 'es' },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(prisma.user.update).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ regionalLanguage: 'es' }) })
+    );
+    await app.close();
+  });
+});
+
 // ─── Line 194: onDuplicate callback in withMutationLog ───────────────────────
 
 describe('PATCH /users/me — onDuplicate callback (line 194)', () => {
@@ -657,6 +689,52 @@ describe('GET /users/phone/:phone — phone without + prefix (line 1174)', () =>
     const app = await buildApp({ routes: [getUserByPhone] });
     const res = await app.inject({ method: 'GET', url: '/users/phone/33699999999' });
     expect(res.statusCode).toBe(200);
+    await app.close();
+  });
+});
+
+// ─── updateUserRequestSchema RÉEL — la couche de validation Fastify elle-même ─
+// Le reste du fichier mocke @meeshy/shared/types/api-schemas (schema permissif) :
+// ces tests montent le schema réel pour verrouiller ce que la route accepte
+// AVANT Zod/handler — c'est cette couche qui rejetait regionalLanguage=''.
+
+describe('updateUserRequestSchema (réel) — validation body Fastify', () => {
+  const { updateUserRequestSchema: realSchema } = jest.requireActual(
+    '@meeshy/shared/types/api-schemas'
+  ) as { updateUserRequestSchema: Record<string, unknown> };
+
+  async function buildSchemaApp(): Promise<FastifyInstance> {
+    const app = Fastify({ logger: false });
+    app.patch('/users/me', { schema: { body: realSchema } }, async () => ({ ok: true }));
+    await app.ready();
+    return app;
+  }
+
+  it("accepte regionalLanguage='' (clear) au niveau du schema de route", async () => {
+    const app = await buildSchemaApp();
+    const res = await app.inject({
+      method: 'PATCH',
+      url: '/users/me',
+      payload: { regionalLanguage: '' },
+    });
+    expect(res.statusCode).toBe(200);
+    await app.close();
+  });
+
+  it('accepte un code langue normal et rejette un code trop long', async () => {
+    const app = await buildSchemaApp();
+    const ok = await app.inject({
+      method: 'PATCH',
+      url: '/users/me',
+      payload: { regionalLanguage: 'fr' },
+    });
+    expect(ok.statusCode).toBe(200);
+    const tooLong = await app.inject({
+      method: 'PATCH',
+      url: '/users/me',
+      payload: { regionalLanguage: 'toolong' },
+    });
+    expect(tooLong.statusCode).toBe(400);
     await app.close();
   });
 });

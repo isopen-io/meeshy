@@ -30,6 +30,14 @@ struct ThreadedCommentSection: View {
     var replyMoodResolver: ((String) -> String?)? = nil
     var replyStoryResolver: ((String) -> StoryRingState)? = nil
     var replyPresenceResolver: ((String) -> PresenceState?)? = nil
+    /// Vrai quand le serveur a d'autres pages de réponses au-delà de celles
+    /// chargées (le endpoint replies est paginé à 20). Affiche le bouton
+    /// « Voir plus de réponses » en bas du fil déplié.
+    var hasMoreReplies: Bool = false
+    var onLoadMoreReplies: (() async -> Void)? = nil
+    /// Réponse surlignée (cible d'une notification). Le tint de section reste
+    /// porté par le parent ; ici on teinte la rangée de la RÉPONSE ciblée.
+    var highlightedCommentId: String? = nil
 
     @EnvironmentObject private var statusViewModel: StatusViewModel
 
@@ -134,7 +142,36 @@ struct ThreadedCommentSection: View {
                         presenceState: replyPresenceResolver?(reply.authorId) ?? nil
                     )
                     .padding(.leading, 36)
+                    // Même style que le tint de section (les deux appelants) —
+                    // au niveau de la rangée pour cibler UNE réponse précise.
+                    .background(
+                        RoundedRectangle(cornerRadius: 12)
+                            .fill(Color(hex: accentColor).opacity(highlightedCommentId == reply.id ? 0.12 : 0))
+                    )
+                    .animation(.easeInOut(duration: 0.4), value: highlightedCommentId)
+                    // Ancre de scroll par RÉPONSE (le ciblage notification peut
+                    // viser une réponse, pas seulement la section parente).
+                    .id("comment-\(reply.id)")
                     .transition(.opacity.combined(with: .move(edge: .top)))
+                }
+
+                if hasMoreReplies, let onLoadMoreReplies {
+                    Button {
+                        HapticFeedback.light()
+                        Task { await onLoadMoreReplies() }
+                    } label: {
+                        HStack(spacing: 4) {
+                            Image(systemName: "chevron.down")
+                                .font(MeeshyFont.relative(10, weight: .bold))
+                            Text(String(localized: "feed.comments.load_more_replies", defaultValue: "Voir plus de réponses", bundle: .main))
+                                .font(MeeshyFont.relative(12, weight: .semibold))
+                        }
+                        .foregroundColor(Color(hex: accentColor))
+                    }
+                    .frame(minHeight: 44)
+                    .padding(.leading, 36)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .accessibilityLabel(String(localized: "a11y.comment.load_more_replies", defaultValue: "Charger plus de réponses", bundle: .main))
                 }
             }
         }
@@ -174,6 +211,11 @@ struct CommentsSheetView: View {
     @State private var highlightedCommentId: String? = nil
     /// Garde-fou : ne défile vers la cible qu'une seule fois.
     @State private var didScrollToTargetComment: Bool = false
+    /// Curseur de pagination du GET commentaires — suivi pour la chasse
+    /// paginée d'un commentaire notifié hors de la première page.
+    @State private var commentsNextCursor: String?
+    @State private var commentsHasMore: Bool = false
+    @State private var isHuntingTargetComment: Bool = false
     @State private var composerLanguage: String = DefaultComposerLanguage.resolve()
     @State private var commentBlurEnabled: Bool = false
     @State private var commentEffects: MessageEffects = .none
@@ -181,6 +223,10 @@ struct CommentsSheetView: View {
     @State private var repliesMap: [String: [FeedComment]] = [:]
     @State private var expandedThreads: Set<String> = []
     @State private var loadingReplies: Set<String> = []
+    /// Pagination des réponses par commentaire racine (endpoint replies paginé
+    /// ASC 20/page) — miroir de `PostDetailViewModel.repliesHasMore/NextCursor`.
+    @State private var repliesHasMore: [String: Bool] = [:]
+    @State private var repliesNextCursor: [String: String] = [:]
 
     /// Hoisted like state — keyed by commentId, seeded from API `currentUserReactions`.
     @State private var likedIds: Set<String> = []
@@ -378,7 +424,10 @@ struct CommentsSheetView: View {
                                     presenceState: PresenceManager.shared.presenceMap[comment.authorId]?.state,
                                     replyMoodResolver: { statusViewModel.statusForUser(userId: $0)?.moodEmoji },
                                     replyStoryResolver: { storyViewModel.storyRingState(forUserId: $0) },
-                                    replyPresenceResolver: { PresenceManager.shared.presenceMap[$0]?.state }
+                                    replyPresenceResolver: { PresenceManager.shared.presenceMap[$0]?.state },
+                                    hasMoreReplies: expandedThreads.contains(comment.id) && (repliesHasMore[comment.id] ?? false),
+                                    onLoadMoreReplies: { await loadMoreReplies(commentId: comment.id) },
+                                    highlightedCommentId: highlightedCommentId
                                 )
                                 .background(
                                     RoundedRectangle(cornerRadius: 12)
@@ -620,33 +669,59 @@ struct CommentsSheetView: View {
         }
         do {
             let response = try await PostService.shared.getComments(postId: post.id, cursor: nil, limit: 20)
-            let langs = AuthManager.shared.currentUser?.preferredContentLanguages ?? []
-            let fetched = response.data.map { c -> FeedComment in
-                let translated = PostDetailViewModel.resolveCommentTranslation(
-                    translations: c.translations, originalLanguage: c.originalLanguage, preferredLanguages: langs
-                )
-                return FeedComment(
-                    id: c.id, author: c.author.name, authorId: c.author.id,
-                    authorAvatarURL: c.author.avatar,
-                    content: c.content, timestamp: c.createdAt,
-                    likes: c.likeCount ?? 0, replies: c.replyCount ?? 0,
-                    parentId: c.parentId, effectFlags: c.effectFlags ?? 0,
-                    originalLanguage: c.originalLanguage, translatedContent: translated,
-                    currentUserReactions: c.currentUserReactions
-                )
-            }
+            let fetched = mapFetchedComments(response.data)
             // Merge, never overwrite: `liveComments` may already carry an
             // optimistic send or a socket-reconciled comment that landed
             // while this GET was in flight — the server snapshot the GET
             // resolved from can't know about either yet.
             liveComments = Self.mergeFetchedComments(current: liveComments ?? post.comments, fetched: fetched)
             seedLikedIds(from: fetched)
+            commentsNextCursor = response.pagination?.nextCursor
+            commentsHasMore = response.pagination?.hasMore ?? false
             try? await CacheCoordinator.shared.comments.save(fetched, for: cacheKey)
         } catch {
             // Network failed — keep whatever we already have (embedded top-3
             // or the cached stale page loaded above). Matches this sheet's
             // existing silent-fail pattern for supplementary loads (e.g. the
             // replies prefetch above).
+        }
+    }
+
+    private func mapFetchedComments(_ data: [APIPostComment]) -> [FeedComment] {
+        let langs = AuthManager.shared.currentUser?.preferredContentLanguages ?? []
+        return data.map { c -> FeedComment in
+            let translated = PostDetailViewModel.resolveCommentTranslation(
+                translations: c.translations, originalLanguage: c.originalLanguage, preferredLanguages: langs
+            )
+            return FeedComment(
+                id: c.id, author: c.author.name, authorId: c.author.id,
+                authorAvatarURL: c.author.avatar,
+                content: c.content, timestamp: c.createdAt,
+                likes: c.likeCount ?? 0, replies: c.replyCount ?? 0,
+                parentId: c.parentId, effectFlags: c.effectFlags ?? 0,
+                originalLanguage: c.originalLanguage, translatedContent: translated,
+                currentUserReactions: c.currentUserReactions
+            )
+        }
+    }
+
+    /// Page suivante (plus ancienne) du fil — utilisée par la chasse paginée
+    /// d'un commentaire notifié hors de la première page.
+    private func loadNextCommentsPage() async {
+        guard commentsHasMore else { return }
+        do {
+            let response = try await PostService.shared.getComments(
+                postId: post.id, cursor: commentsNextCursor, limit: 20
+            )
+            let fetched = mapFetchedComments(response.data)
+            liveComments = Self.mergeFetchedComments(current: liveComments ?? post.comments, fetched: fetched)
+            seedLikedIds(from: fetched)
+            commentsNextCursor = response.pagination?.nextCursor
+            commentsHasMore = response.pagination?.hasMore ?? false
+        } catch {
+            // Échec réseau : stopper la chasse proprement (la liste reste
+            // utilisable, le ciblage se désarmera côté appelant).
+            commentsHasMore = false
         }
     }
 
@@ -661,17 +736,55 @@ struct CommentsSheetView: View {
         // Only top-level sections carry a scroll anchor. For a reply, that's the
         // parent comment; otherwise the comment itself.
         let sectionId = targetParentCommentId.flatMap { $0.isEmpty ? nil : $0 } ?? target
-        guard topLevelComments.contains(where: { $0.id == sectionId }) else { return }
+        guard topLevelComments.contains(where: { $0.id == sectionId }) else {
+            // Cible au-delà de la première page : chasse paginée bornée —
+            // chaque page re-déclenche ce scroll via l'onChange sur
+            // topLevelComments.count ; échec (cap/fin) → désarmer le ciblage.
+            if !isHuntingTargetComment {
+                isHuntingTargetComment = true
+                Task {
+                    let found = await CommentTargetHunter.hunt(
+                        isPresent: { topLevelComments.contains { $0.id == sectionId } },
+                        hasMore: { commentsHasMore },
+                        loadNextPage: { await loadNextCommentsPage() }
+                    )
+                    if !found { didScrollToTargetComment = true }
+                }
+            }
+            return
+        }
         didScrollToTargetComment = true
 
-        if let parentId = targetParentCommentId, !parentId.isEmpty, !expandedThreads.contains(parentId) {
-            Task { await toggleThread(parentId) }
+        if let parentId = targetParentCommentId, !parentId.isEmpty, target != sectionId {
+            // Cible = une RÉPONSE. Déplier le parent (awaité — ancrer avant
+            // l'expansion décale la section), CHASSER la page de réponses qui
+            // contient la cible (le fil est paginé à 20), puis scroller sur la
+            // rangée de la réponse elle-même. Repli : section + highlight du
+            // parent si la chasse échoue (cap / fin de fil / réseau).
+            Task {
+                if !expandedThreads.contains(parentId) {
+                    await toggleThread(parentId)
+                }
+                let found = await loadRepliesUntilPresent(target, in: parentId)
+                if found {
+                    withAnimation { proxy.scrollTo("comment-\(target)", anchor: .center) }
+                    applyTargetHighlight(target)
+                } else {
+                    withAnimation { proxy.scrollTo("comment-\(sectionId)", anchor: .top) }
+                    applyTargetHighlight(sectionId)
+                }
+            }
+        } else {
+            withAnimation { proxy.scrollTo("comment-\(sectionId)", anchor: .top) }
+            applyTargetHighlight(sectionId)
         }
+    }
 
-        withAnimation { proxy.scrollTo("comment-\(sectionId)", anchor: .top) }
-        highlightedCommentId = sectionId
+    /// Surligne `id` puis désarme après 2,6 s (si toujours actif).
+    private func applyTargetHighlight(_ id: String) {
+        highlightedCommentId = id
         DispatchQueue.main.asyncAfter(deadline: .now() + 2.6) {
-            if highlightedCommentId == sectionId { highlightedCommentId = nil }
+            if highlightedCommentId == id { highlightedCommentId = nil }
         }
     }
 
@@ -761,25 +874,10 @@ struct CommentsSheetView: View {
             let response = try await PostService.shared.getCommentReplies(
                 postId: post.id, commentId: commentId
             )
-            let langs = AuthManager.shared.currentUser?.preferredContentLanguages ?? []
-            let replies = response.data.map { c -> FeedComment in
-                let translated = PostDetailViewModel.resolveCommentTranslation(
-                    translations: c.translations, originalLanguage: c.originalLanguage,
-                    preferredLanguages: langs
-                )
-                return FeedComment(
-                    id: c.id, author: c.author.name, authorId: c.author.id,
-                    authorUsername: c.author.username,
-                    authorAvatarURL: c.author.avatar,
-                    content: c.content, timestamp: c.createdAt,
-                    likes: c.likeCount ?? 0, replies: c.replyCount ?? 0,
-                    parentId: commentId,
-                    originalLanguage: c.originalLanguage, translatedContent: translated,
-                    currentUserReactions: c.currentUserReactions,
-                    media: (c.media ?? []).map { $0.toFeedMedia() }
-                )
-            }
+            let replies = mapFetchedReplies(response.data, parentId: commentId)
             repliesMap[commentId] = replies
+            repliesNextCursor[commentId] = response.pagination?.nextCursor
+            repliesHasMore[commentId] = response.pagination?.hasMore ?? false
             // Sème l'état "liké par moi" des réponses chargées (elles portent
             // `currentUserReactions` depuis `loadReplies`/`getCommentReplies`).
             seedLikedIds(from: replies)
@@ -788,6 +886,77 @@ struct CommentsSheetView: View {
             try? await CacheCoordinator.shared.comments.save(replies, for: "replies-\(commentId)")
         } catch {
             expandedThreads.remove(commentId)
+        }
+    }
+
+    /// Page suivante des réponses d'un fil (curseur `gt`, tri ASC → APPEND).
+    /// Jamais de remplacement : les réponses arrivées par le socket
+    /// (`comment:added`) pendant la pagination sont préservées (dédup par id).
+    /// NOTE : `repliesHasMore[id] == nil` (fil hydraté du cache par le `.task`,
+    /// pagination jamais enregistrée) n'est PAS bloquant — `cursor: nil`
+    /// signifie « page 1 », ce qu'il faut pour récupérer un vrai curseur
+    /// (même fix documenté que `loadMoreComments` côté VM). Seul `false`
+    /// (fin de fil connue) stoppe.
+    private func loadMoreReplies(commentId: String) async {
+        guard !loadingReplies.contains(commentId), repliesHasMore[commentId] != false else { return }
+        loadingReplies.insert(commentId)
+        defer { loadingReplies.remove(commentId) }
+        do {
+            let response = try await PostService.shared.getCommentReplies(
+                postId: post.id, commentId: commentId,
+                cursor: repliesNextCursor[commentId], limit: 20
+            )
+            let fetched = mapFetchedReplies(response.data, parentId: commentId)
+            let existing = repliesMap[commentId] ?? []
+            let existingIds = Set(existing.map(\.id))
+            let unique = fetched.filter { !existingIds.contains($0.id) }
+            repliesMap[commentId] = existing + unique
+            repliesNextCursor[commentId] = response.pagination?.nextCursor
+            repliesHasMore[commentId] = response.pagination?.hasMore ?? false
+            seedLikedIds(from: unique)
+            try? await CacheCoordinator.shared.comments.save(
+                repliesMap[commentId] ?? [], for: "replies-\(commentId)"
+            )
+        } catch {
+            // Échec réseau : stopper proprement la pagination (et toute chasse
+            // en cours) — le fil garde les pages déjà chargées.
+            repliesHasMore[commentId] = false
+        }
+    }
+
+    /// Chasse paginée bornée d'une RÉPONSE notifiée hors de la première page
+    /// de son fil (miroir de `PostDetailViewModel.loadRepliesUntilPresent`).
+    private func loadRepliesUntilPresent(_ replyId: String, in commentId: String) async -> Bool {
+        if repliesMap[commentId] == nil {
+            await loadReplies(commentId: commentId)
+        }
+        return await CommentTargetHunter.hunt(
+            isPresent: { repliesMap[commentId]?.contains(where: { $0.id == replyId }) ?? false },
+            // `nil` = pagination inconnue (fil hydraté du cache) → tenter la
+            // page 1 pour récupérer un curseur ; seul `false` arrête la chasse.
+            hasMore: { repliesHasMore[commentId] != false },
+            loadNextPage: { await loadMoreReplies(commentId: commentId) }
+        )
+    }
+
+    private func mapFetchedReplies(_ data: [APIPostComment], parentId: String) -> [FeedComment] {
+        let langs = AuthManager.shared.currentUser?.preferredContentLanguages ?? []
+        return data.map { c -> FeedComment in
+            let translated = PostDetailViewModel.resolveCommentTranslation(
+                translations: c.translations, originalLanguage: c.originalLanguage,
+                preferredLanguages: langs
+            )
+            return FeedComment(
+                id: c.id, author: c.author.name, authorId: c.author.id,
+                authorUsername: c.author.username,
+                authorAvatarURL: c.author.avatar,
+                content: c.content, timestamp: c.createdAt,
+                likes: c.likeCount ?? 0, replies: c.replyCount ?? 0,
+                parentId: parentId,
+                originalLanguage: c.originalLanguage, translatedContent: translated,
+                currentUserReactions: c.currentUserReactions,
+                media: (c.media ?? []).map { $0.toFeedMedia() }
+            )
         }
     }
 

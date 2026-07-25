@@ -351,6 +351,12 @@ struct MessageOverlayMenu: View {
                             custom: userCustomDestinationLanguage
                         )
                     )
+                    // Gate Equatable (H3) : pendant le drag 60 fps
+                    // (`clusterDragOffset`) le body du GeometryReader se
+                    // ré-évalue ; sans ce gate, `ThemedMessageBubble` se
+                    // re-rendrait à chaque frame. Ses inputs sont stables
+                    // pendant le drag → EquatableView saute son body.
+                    .equatable()
                     .frame(width: bubbleRect.width, height: bubbleRect.height, alignment: .leading)
                     .scaleEffect(nlFitScale, anchor: .center)
                     .frame(width: nlBubbleW, height: nlBubbleH)
@@ -376,6 +382,11 @@ struct MessageOverlayMenu: View {
             }
         }
         .ignoresSafeArea()
+        // A11y (C2) : l'overlay est MODAL — VoiceOver piège le focus dedans
+        // (ignore la conversation derrière) ; le geste d'échappement (scrub
+        // 2 doigts) le ferme, comme un `.contextMenu` natif.
+        .accessibilityAddTraits(.isModal)
+        .accessibilityAction(.escape) { dismiss() }
         .onAppear {
             HapticFeedback.medium()
             // Entree spring — courbe de reponse de qualite iMessage. La
@@ -415,21 +426,19 @@ struct MessageOverlayMenu: View {
         .frame(maxWidth: 280)
     }
 
-    // MARK: - Dismiss Background (light blur — silhouettes stay readable)
+    // MARK: - Dismiss Background (dim only, no full-screen blur → glass stays vibrant)
 
     private var dismissBackground: some View {
-        // Flou doux (`thinMaterial`) double d'une voile sombre retenue +
-        // une lueur radiale teintee a l'accent de la conversation. Les
-        // silhouettes de bulles restent lisibles derriere, mais le texte
-        // sous-jacent se floute pour ne pas concurrencer le preview. La
-        // lueur indigo/accent ancre l'overlay dans l'identite Meeshy.
+        // Assombrissement NET + lueur radiale accent, SANS `.thinMaterial`
+        // plein écran. Sur iOS 26, le `glassEffect` de la pastille et du menu
+        // échantillonne le contenu RÉEL (assombri) situé derrière eux → verre
+        // VIBRANT façon iMessage. Un flou plein écran derrière le verre le
+        // faisait échantillonner du flou (flou-sur-flou) → verre plat, non
+        // natif. iMessage assombrit lui aussi sans matériau flou derrière la
+        // pastille/le menu.
         ZStack {
-            Rectangle()
-                .fill(.thinMaterial)
-                .opacity(isVisible ? 1 : 0)
-
             Color.black
-                .opacity(isVisible ? 0.22 : 0)
+                .opacity(isVisible ? (isDark ? 0.5 : 0.4) : 0)
 
             RadialGradient(
                 colors: [

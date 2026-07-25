@@ -58,6 +58,9 @@ struct PostDetailView: View {
     /// Garde-fou : ne défile vers la cible qu'une seule fois (les commentaires
     /// peuvent arriver après le premier rendu via le chargement paginé).
     @State private var didScrollToTargetComment: Bool = false
+    /// Latch de la chasse paginée (cible hors des pages chargées) — une seule
+    /// chasse par présentation.
+    @State private var isHuntingTargetComment: Bool = false
     /// Texte du composer, lié au `UniversalComposerBar`. Permet de préremplir une
     /// @mention quand on répond à une réponse (niveau 2) — l'auteur ciblé est
     /// notifié via `user_mentioned` même si la réponse est reparentée à la racine.
@@ -452,7 +455,11 @@ struct PostDetailView: View {
                 presenceState: PresenceManager.shared.presenceMap[comment.authorId]?.state,
                 replyMoodResolver: { statusViewModel.statusForUser(userId: $0)?.moodEmoji },
                 replyStoryResolver: { storyViewModel.storyRingState(forUserId: $0) },
-                replyPresenceResolver: { PresenceManager.shared.presenceMap[$0]?.state }
+                replyPresenceResolver: { PresenceManager.shared.presenceMap[$0]?.state },
+                hasMoreReplies: viewModel.expandedThreads.contains(comment.id)
+                    && (viewModel.repliesHasMore[comment.id] ?? false),
+                onLoadMoreReplies: { await viewModel.loadMoreReplies(comment.id, postId: postId) },
+                highlightedCommentId: highlightedCommentId
             )
             .padding(.horizontal, 16)
             .padding(.vertical, highlightedCommentId == comment.id ? 6 : 0)
@@ -505,18 +512,52 @@ struct PostDetailView: View {
         // Only top-level sections carry a scroll anchor. For a reply, that's the
         // parent comment; otherwise the comment itself.
         let sectionId = targetParentCommentId.flatMap { $0.isEmpty ? nil : $0 } ?? target
-        guard viewModel.topLevelComments.contains(where: { $0.id == sectionId }) else { return }
+        guard viewModel.topLevelComments.contains(where: { $0.id == sectionId }) else {
+            // Cible au-delà des pages chargées (20/page) : chasse paginée
+            // bornée. Chaque page qui arrive re-déclenche ce scroll via
+            // l'onChange sur topLevelComments.count ; si la chasse échoue
+            // (cap ou fin de liste), on désarme le ciblage.
+            if !isHuntingTargetComment {
+                isHuntingTargetComment = true
+                Task {
+                    let found = await viewModel.loadCommentsUntilPresent(sectionId, postId: postId)
+                    if !found { didScrollToTargetComment = true }
+                }
+            }
+            return
+        }
         didScrollToTargetComment = true
 
-        if let parentId = targetParentCommentId, !parentId.isEmpty,
-           !viewModel.expandedThreads.contains(parentId) {
-            Task { await viewModel.toggleThread(parentId, postId: postId) }
+        if let parentId = targetParentCommentId, !parentId.isEmpty, target != sectionId {
+            // Cible = une RÉPONSE. Déplier le parent (awaité — ancrer avant
+            // l'expansion décale la section), CHASSER la page de réponses qui
+            // contient la cible (le fil est paginé à 20), puis scroller sur la
+            // rangée de la réponse elle-même. Repli : section + highlight du
+            // parent si la chasse échoue (cap / fin de fil / réseau).
+            Task {
+                if !viewModel.expandedThreads.contains(parentId) {
+                    await viewModel.toggleThread(parentId, postId: postId)
+                }
+                let found = await viewModel.loadRepliesUntilPresent(target, in: parentId, postId: postId)
+                if found {
+                    withAnimation { proxy.scrollTo("comment-\(target)", anchor: .center) }
+                    applyTargetHighlight(target)
+                } else {
+                    withAnimation { proxy.scrollTo("comment-\(sectionId)", anchor: .top) }
+                    applyTargetHighlight(sectionId)
+                }
+            }
+        } else {
+            withAnimation { proxy.scrollTo("comment-\(sectionId)", anchor: .top) }
+            applyTargetHighlight(sectionId)
         }
+    }
 
-        withAnimation { proxy.scrollTo("comment-\(sectionId)", anchor: .top) }
-        highlightedCommentId = sectionId
+    /// Surligne `id` puis désarme après 2,6 s (si toujours actif).
+    private func applyTargetHighlight(_ id: String) {
+        highlightedCommentId = id
         DispatchQueue.main.asyncAfter(deadline: .now() + 2.6) {
-            if highlightedCommentId == sectionId { highlightedCommentId = nil }
+            if highlightedCommentId == id { highlightedCommentId = nil }
         }
     }
 

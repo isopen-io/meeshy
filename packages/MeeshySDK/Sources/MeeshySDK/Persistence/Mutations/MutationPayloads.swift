@@ -36,10 +36,27 @@ public struct MarkAsReadPayload: Codable, Sendable, Equatable {
     public let conversationId: String
     public let upToMessageId: String
 
-    public init(clientMutationId: String, conversationId: String, upToMessageId: String) {
+    /// Identifiants SERVEUR des messages réellement affichés.
+    ///
+    /// Optionnel à dessein : les enregistrements d'outbox déjà persistés ont été
+    /// sérialisés sans ce champ, et le rendre obligatoire casserait leur
+    /// décodage après mise à jour de l'app — les lectures en attente seraient
+    /// perdues en silence. `nil` signifie « client non informé » et laisse le
+    /// serveur sur son repli historique.
+    ///
+    /// Voir `docs/superpowers/specs/2026-07-24-read-exactness-design.md`.
+    public let messageIds: [String]?
+
+    public init(
+        clientMutationId: String,
+        conversationId: String,
+        upToMessageId: String,
+        messageIds: [String]? = nil
+    ) {
         self.clientMutationId = clientMutationId
         self.conversationId = conversationId
         self.upToMessageId = upToMessageId
+        self.messageIds = messageIds
     }
 }
 

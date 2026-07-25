@@ -21,6 +21,7 @@ import {
 import type { TrackingLink } from '@meeshy/shared/types/tracking-link';
 import { getTrackingLinkStats } from '@/services/tracking-links';
 import { useI18n } from '@/hooks/useI18n';
+import { formatShortDateTime } from '@/utils/date-format';
 import { toast } from 'sonner';
 
 interface TrackingLinkDetailsModalProps {
@@ -34,7 +35,7 @@ export function TrackingLinkDetailsModal({
   isOpen, 
   onClose 
 }: TrackingLinkDetailsModalProps) {
-  const { t } = useI18n('links');
+  const { t, locale } = useI18n('links');
   const [stats, setStats] = useState<unknown>(null);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -57,15 +58,7 @@ export function TrackingLinkDetailsModal({
     }
   };
 
-  const formatDate = (date: string | Date) => {
-    return new Date(date).toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
-  };
+  const formatDate = (date: string | Date) => formatShortDateTime(date, locale);
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
@@ -292,7 +285,7 @@ export function TrackingLinkDetailsModal({
                         .sort(([a], [b]) => new Date(b).getTime() - new Date(a).getTime())
                         .map(([date, clicks]: unknown) => (
                           <div key={date} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
-                            <span className="font-medium">{new Date(date).toLocaleDateString()}</span>
+                            <span className="font-medium">{new Date(date).toLocaleDateString(locale)}</span>
                             <Badge variant="outline">{clicks} clicks</Badge>
                           </div>
                         ))}

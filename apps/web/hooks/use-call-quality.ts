@@ -38,22 +38,30 @@ export function useCallQuality({
    */
   const calculateQualityLevel = useCallback(
     (packetLoss: number, rtt: number): ConnectionQualityLevel => {
+      // RTT boundaries are round-trip and calibrated for MOBILE / long-haul
+      // links, not domestic wired: a 4G/5G baseline runs 150-300ms and an
+      // intercontinental hop 250-350ms with zero congestion. The pre-fix
+      // thresholds (good < 200ms, fair < 300ms) flipped those healthy calls
+      // straight to the orange/red indicator at 00:06. Packet loss — the real
+      // congestion signal — keeps its tighter bands. Mirrors the iOS ladder in
+      // VideoQualityLevel.from (WebRTCTypes.swift): good < 300, fair < 450.
+
       // Excellent: < 1% packet loss, < 100ms RTT
       if (packetLoss < 1 && rtt < 100) {
         return 'excellent';
       }
 
-      // Good: 1-3% packet loss, 100-200ms RTT
-      if (packetLoss < 3 && rtt < 200) {
+      // Good: 1-3% packet loss, up to 300ms RTT (mobile/international baseline)
+      if (packetLoss < 3 && rtt < 300) {
         return 'good';
       }
 
-      // Fair: 3-5% packet loss, 200-300ms RTT
-      if (packetLoss < 5 && rtt < 300) {
+      // Fair: 3-5% packet loss, up to 450ms RTT (distant but usable)
+      if (packetLoss < 5 && rtt < 450) {
         return 'fair';
       }
 
-      // Poor: > 5% packet loss or > 300ms RTT
+      // Poor: >= 5% packet loss or >= 450ms RTT
       return 'poor';
     },
     []

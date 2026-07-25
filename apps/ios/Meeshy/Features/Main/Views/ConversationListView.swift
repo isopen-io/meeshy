@@ -1041,20 +1041,30 @@ struct ConversationListView: View {
                     } else {
                         sectionsContent
                             .transition(.opacity)
-                    }
 
-                    // Pagination footer driven by `paginationState`.
-                    // - .loadingMore: spinner while a page is in flight
-                    // - .exhausted:   discreet "all loaded" hint once
-                    //                 the gateway signalled hasMore=false
-                    //                 (only shown for non-trivial lists)
-                    // - .error:       inline retry button (transient
-                    //                 errors keep hasMore=true)
-                    // - .idle:        invisible spacer that triggers
-                    //                 loadMore via onAppear once the
-                    //                 user reaches the tail (back-up to
-                    //                 the per-row threshold trigger)
-                    ConversationPaginationFooter()
+                        // Pagination footer driven by `paginationState`.
+                        // - .loadingMore: spinner while a page is in flight
+                        // - .exhausted:   discreet "all loaded" hint once
+                        //                 the gateway signalled hasMore=false
+                        //                 (only shown for non-trivial lists)
+                        // - .error:       inline retry button (transient
+                        //                 errors keep hasMore=true)
+                        // - .idle:        invisible spacer that triggers
+                        //                 loadMore via onAppear once the
+                        //                 user reaches the tail (back-up to
+                        //                 the per-row threshold trigger)
+                        //
+                        // Rendered ONLY inside this `else` (non-empty list): an
+                        // empty list already surfaces its OWN error/empty state
+                        // — the `.syncError` branch above carries its own big
+                        // "Retry" (forceRefresh). Rendering the pagination
+                        // footer alongside it stacked a SECOND "Couldn't load
+                        // more / Retry" (paginationState `.error` → loadMore) on
+                        // a cold-start sync failure — the duplicate-retry bug.
+                        // Pagination is only meaningful when there is content to
+                        // page through.
+                        ConversationPaginationFooter()
+                    }
 
                     Color.clear.frame(height: 280)
                         .adaptiveOnChange(of: draggingConversation) { oldValue, newValue in

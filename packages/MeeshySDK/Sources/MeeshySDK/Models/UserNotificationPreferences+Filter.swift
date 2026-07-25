@@ -96,8 +96,10 @@ public extension UserNotificationPreferences {
             return replyEnabled
         case .messageEdited, .messageDeleted, .messagePinned, .messageForwarded:
             return newMessageEnabled
-        case .missedCall, .legacyCallMissed, .incomingCall, .incomingCallAlert, .callEnded, .callDeclined, .legacyCallIncoming:
+        case .missedCall, .legacyCallMissed, .callEnded, .callDeclined:
             return missedCallEnabled
+        case .incomingCall, .incomingCallAlert, .legacyCallIncoming:
+            return callsEnabled
         case .userMentioned, .mention, .legacyMention:
             return mentionEnabled
         case .messageReaction, .reaction, .legacyMessageReaction:
@@ -106,7 +108,8 @@ public extension UserNotificationPreferences {
             return contactRequestEnabled
         case .contactAccepted, .friendAccepted, .legacyFriendAccepted:
             return contactRequestEnabled
-        case .newConversation, .addedToConversation, .removedFromConversation:
+        case .newConversation, .newConversationDirect, .newConversationGroup,
+             .addedToConversation, .removedFromConversation:
             return conversationEnabled
         case .communityInvite, .legacyGroupInvite:
             return groupInviteEnabled
@@ -125,8 +128,12 @@ public extension UserNotificationPreferences {
             return storyReactionEnabled
         case .commentReply:
             return commentReplyEnabled
-        case .commentLike:
+        case .commentLike, .commentReaction:
             return commentLikeEnabled
+        case .storyNewComment, .friendStoryComment, .storyThreadReply:
+            return postCommentEnabled
+        case .friendNewPost, .friendNewStory, .friendNewMood:
+            return friendContentEnabled
         case .securityAlert, .loginNewDevice, .legacySystemAlert, .passwordChanged,
              .twoFactorEnabled, .twoFactorDisabled, .system, .maintenance, .updateAvailable:
             return systemEnabled

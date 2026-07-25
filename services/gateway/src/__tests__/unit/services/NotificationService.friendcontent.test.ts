@@ -725,6 +725,46 @@ describe('NotificationService — Phase 4F: friend content fan-out', () => {
       const call = calls.find((c) => c[0].data.userId === FRIEND_1);
       expect(call![0].data.metadata.contentType).toBe('REEL');
     });
+
+    // `postType` est la clé que lisent le payload push (`data.postType`) et le
+    // routage client. Sans ce miroir, un réel d'ami arrivait sans discriminant
+    // et ouvrait le détail de post plat au lieu du lecteur immersif.
+    it('test_createFriendContentNotificationsBatch_REEL_mirrorsDiscriminantIntoPostType', async () => {
+      (prisma.friendRequest.findMany as jest.Mock).mockResolvedValue([
+        makeFriendRequest(AUTHOR_ID, FRIEND_1),
+      ]);
+
+      await service.createFriendContentNotificationsBatch({
+        postId: POST_ID,
+        authorId: AUTHOR_ID,
+        contentType: 'REEL',
+      });
+
+      const calls = (prisma.notification.create as jest.Mock).mock.calls as Array<
+        [{ data: { metadata: { postType?: string }; userId: string } }]
+      >;
+      const call = calls.find((c) => c[0].data.userId === FRIEND_1);
+      expect(call![0].data.metadata.postType).toBe('REEL');
+    });
+
+    it('test_createFriendContentNotificationsBatch_STORY_mirrorsDiscriminantIntoPostType', async () => {
+      (prisma.friendRequest.findMany as jest.Mock).mockResolvedValue([
+        makeFriendRequest(AUTHOR_ID, FRIEND_1),
+      ]);
+
+      await service.createFriendContentNotificationsBatch({
+        postId: POST_ID,
+        authorId: AUTHOR_ID,
+        contentType: 'STORY',
+      });
+
+      const calls = (prisma.notification.create as jest.Mock).mock.calls as Array<
+        [{ data: { metadata: { postType?: string; contentType?: string }; userId: string } }]
+      >;
+      const call = calls.find((c) => c[0].data.userId === FRIEND_1);
+      expect(call![0].data.metadata.postType).toBe('STORY');
+      expect(call![0].data.metadata.contentType).toBe('STORY');
+    });
   });
 
   // =====================================================

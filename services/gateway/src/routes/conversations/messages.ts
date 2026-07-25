@@ -18,6 +18,9 @@ import { createError, sendErrorResponse } from '@meeshy/shared/utils/errors';
 import { resolveParticipantAvatar, resolveParticipantDisplayName } from '@meeshy/shared/utils/participant-helpers';
 import { resolveUserLanguage } from '@meeshy/shared/utils/conversation-helpers';
 import { resolveConversationId } from '../../utils/conversation-id-cache';
+import { MarkReadBodySchema } from '../../validation/messages-schemas';
+import { resolveReadAt } from '../../utils/read-exactness';
+import { getExactReadTrackingCutover } from '../../config/read-exactness-config';
 import { UnifiedAuthRequest } from '../../middleware/auth';
 import { validatePagination, buildPaginationMeta, buildCursorPaginationMeta } from '../../utils/pagination';
 import { messageValidationHook } from '../../middleware/rate-limiter';
@@ -1064,10 +1067,14 @@ export function registerMessagesRoutes(
             for (const participantId of evaluatedParticipantIds) {
               const cursor = cursorByParticipant.get(participantId);
               const cursorDelivered = cursor?.lastDeliveredAt && cursor.lastDeliveredAt >= msg.createdAt ? cursor.lastDeliveredAt : null;
-              const cursorRead = cursor?.lastReadAt && cursor.lastReadAt >= msg.createdAt ? cursor.lastReadAt : null;
               const frozen = frozenForMsg?.get(participantId);
               const deliveredAt = frozen?.receivedAt ?? frozen?.deliveredAt ?? cursorDelivered;
-              const readAt = frozen?.readAt ?? cursorRead;
+              const readAt = resolveReadAt({
+                frozenReadAt: frozen?.readAt ?? null,
+                cursorLastReadAt: cursor?.lastReadAt ?? null,
+                messageCreatedAt: msg.createdAt,
+                cutover: getExactReadTrackingCutover(),
+              });
               if (deliveredAt) deliveredCount++;
               if (readAt) readCount++;
             }
@@ -1511,18 +1518,40 @@ export function registerMessagesRoutes(
         return sendForbidden(reply, 'Not a participant');
       }
 
+      // Corps absent = client déjà distribué → repli fenêtre (surtout pas un
+      // lot vide, qui ne figerait rien et perdrait la lecture).
+      let reportedMessageIds: readonly string[] | undefined;
+      if (request.body !== undefined && request.body !== null) {
+        const bodyResult = MarkReadBodySchema.safeParse(request.body);
+        if (!bodyResult.success) {
+          return sendBadRequest(reply, 'Corps de requête invalide pour le marquage de lecture');
+        }
+        reportedMessageIds = bodyResult.data.messageIds;
+      }
+
       const { MessageReadStatusService } = await import('../../services/MessageReadStatusService');
       const readStatusService = new MessageReadStatusService(prisma);
 
       const unreadCount = await readStatusService.getUnreadCount(currentParticipant.id, conversationId);
-      if (unreadCount === 0) {
+      // Le raccourci « 0 non-lu → ne rien faire » ne vaut que SANS ids
+      // rapportés : le curseur peut buter sur un trou et annoncer 0 alors que
+      // le client vient d'afficher des messages situés après ce trou.
+      if (unreadCount === 0 && !reportedMessageIds) {
         return sendSuccess(reply, { markedCount: 0 });
       }
 
-      await readStatusService.markMessagesAsRead(currentParticipant.id, conversationId);
+      // `markedCount` compte ce qui a RÉELLEMENT été figé. Le nombre d'ids
+      // rapportés sur-compterait (certains étaient déjà lus) et le compteur de
+      // non-lus inclurait des messages jamais rapportés.
+      const frozenCount = await readStatusService.markMessagesAsRead(
+        currentParticipant.id,
+        conversationId,
+        undefined,
+        reportedMessageIds ? { messageIds: reportedMessageIds } : undefined
+      );
       await broadcastReadStatus(userId, currentParticipant.id, conversationId, 'read', authRequest.authContext.type === 'anonymous');
 
-      return sendSuccess(reply, { markedCount: unreadCount });
+      return sendSuccess(reply, { markedCount: reportedMessageIds ? frozenCount : unreadCount });
 
     } catch (error) {
       logger.error('Error marking conversation as read', error);

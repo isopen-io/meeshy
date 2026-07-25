@@ -64,6 +64,17 @@ public final class NotificationCoordinator: ObservableObject {
     /// OUR own reads. Injectable for tests; defaults to the auth singleton.
     private let currentUserIdProvider: @MainActor () -> String?
 
+    /// Whether the app-icon badge is allowed to display a non-zero count.
+    /// Mirrors the user's `notificationBadgeEnabled` preference so disabling the
+    /// "Badges" toggle actually clears the icon badge. The widget/app-group
+    /// counter is intentionally NOT gated (it's a distinct surface).
+    private let badgeEnabledProvider: @MainActor () -> Bool
+
+    /// Publisher des changements du toggle « Badges ». Injectable pour les
+    /// tests ; `nil` → observation par défaut de
+    /// `UserPreferencesManager.shared.$notification` au `start()`.
+    private let badgeEnabledChanges: AnyPublisher<Bool, Never>?
+
     /// Ids of conversations the user has muted. Muted conversations still show
     /// their unread badge on their own row, but MUST NOT nag the app-icon badge
     /// or the widget unread counter — the whole point of muting is to silence
@@ -79,11 +90,15 @@ public final class NotificationCoordinator: ObservableObject {
     public init(
         badgeWriter: NotificationBadgeWriting = SystemNotificationBadgeWriter(),
         appGroupSuiteName: String = "group.me.meeshy.apps",
-        currentUserIdProvider: @escaping @MainActor () -> String? = { AuthManager.shared.currentUser?.id }
+        currentUserIdProvider: @escaping @MainActor () -> String? = { AuthManager.shared.currentUser?.id },
+        badgeEnabledProvider: @escaping @MainActor () -> Bool = { UserPreferencesManager.shared.notification.notificationBadgeEnabled },
+        badgeEnabledChanges: AnyPublisher<Bool, Never>? = nil
     ) {
         self.badgeWriter = badgeWriter
         self.appGroupDefaults = UserDefaults(suiteName: appGroupSuiteName)
         self.currentUserIdProvider = currentUserIdProvider
+        self.badgeEnabledProvider = badgeEnabledProvider
+        self.badgeEnabledChanges = badgeEnabledChanges
     }
 
     // MARK: - Lifecycle
@@ -92,8 +107,27 @@ public final class NotificationCoordinator: ObservableObject {
     public func start() {
         guard !isRunning else { return }
         subscribeToSocketEvents()
+        subscribeToBadgePreference()
         isRunning = true
         logger.info("NotificationCoordinator started")
+    }
+
+    /// Basculer le toggle « Badges » réécrit l'icône immédiatement — sans ça,
+    /// un badge résiduel reste affiché jusqu'au prochain event socket ou
+    /// passage en background.
+    private func subscribeToBadgePreference() {
+        let changes = badgeEnabledChanges
+            ?? UserPreferencesManager.shared.$notification
+                .map(\.notificationBadgeEnabled)
+                .removeDuplicates()
+                .dropFirst()
+                .eraseToAnyPublisher()
+        changes
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                self?.scheduleSync()
+            }
+            .store(in: &cancellables)
     }
 
     /// Tear down state on logout. Clears badge and cached counts.
@@ -314,7 +348,10 @@ public final class NotificationCoordinator: ObservableObject {
     /// Immediately push badge + widget updates. Exposed for tests and scene-phase callbacks.
     public func syncNow() async {
         let count = badgeTotal
-        await badgeWriter.setBadgeCount(count)
+        // La pref « Badges » ne gate QUE l'icône d'app ; le widget/app-group
+        // (surface distincte) conserve le vrai total.
+        let badgeCount = badgeEnabledProvider() ? count : 0
+        await badgeWriter.setBadgeCount(badgeCount)
         appGroupDefaults?.set(count, forKey: Self.unreadCountKey)
         widgetSink?.publishUnreadCount(count)
         widgetSink?.reloadTimelines()

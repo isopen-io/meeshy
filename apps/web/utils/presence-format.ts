@@ -46,6 +46,50 @@ export function formatPresenceLabel(o: FormatPresenceLabelOptions): string {
   return o.t('status.lastSeenDateTime', { date, time });
 }
 
+export type FormatLastSeenLabelOptions = {
+  lastActiveAt?: Date | string | number | null;
+  isOnline?: boolean | null;
+  t: Translate;
+  locale?: string;
+  now?: number;
+};
+
+/**
+ * Variante tolérante de `formatPresenceLabel` pour les surfaces liste (contacts)
+ * où `lastActiveAt` peut être absent ou illisible.
+ *
+ * - `lastActiveAt` absent (`null`/`undefined`) → `status.online` si la règle de
+ *   présence canonique classe l'utilisateur en ligne (backend `isOnline`
+ *   autoritatif), sinon `status.neverSeen`.
+ * - `lastActiveAt` illisible (`NaN`) → `status.offline`.
+ * - sinon → délègue à `formatPresenceLabel` (règle 1/3/5 partagée, math de jour
+ *   calendaire, heure exacte) — donc le libellé s'accorde toujours avec la
+ *   pastille de présence (`getUserPresenceStatus`).
+ *
+ * Remplace les copies locales divergentes qui testaient le `isOnline` brut et
+ * calculaient les jours en fenêtres de 24 h écoulées (off-by-one, DST-unsafe,
+ * heure perdue au-delà de 24 h).
+ */
+export function formatLastSeenLabel(o: FormatLastSeenLabelOptions): string {
+  if (o.lastActiveAt === null || o.lastActiveAt === undefined) {
+    const online =
+      getUserPresenceStatus({ isOnline: o.isOnline }, o.now ?? Date.now()) === 'online';
+    return o.t(online ? 'status.online' : 'status.neverSeen');
+  }
+
+  if (Number.isNaN(new Date(o.lastActiveAt).getTime())) {
+    return o.t('status.offline');
+  }
+
+  return formatPresenceLabel({
+    lastActiveAt: o.lastActiveAt,
+    isOnline: o.isOnline,
+    t: o.t,
+    locale: o.locale,
+    now: o.now,
+  });
+}
+
 /**
  * Couleur du libellé selon la règle de présence canonique 1/3/5 : vert online,
  * orange en absence courte (away), gris inactif (idle) et hors ligne. Délègue

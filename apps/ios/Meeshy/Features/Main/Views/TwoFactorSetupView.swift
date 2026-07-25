@@ -113,17 +113,17 @@ struct TwoFactorSetupView: View {
                     .foregroundColor(theme.textMuted)
 
                 HStack(spacing: 8) {
-                    Text(setup.otpauthUrl)
+                    Text(setup.secret)
                         .font(.system(.subheadline, design: .monospaced).weight(.semibold))
                         .foregroundColor(theme.textPrimary)
                         .lineLimit(1)
                         .minimumScaleFactor(0.7)
                         .textSelection(.enabled)
                         .accessibilityLabel(String(localized: "a11y_2fa_secret_key", defaultValue: "Clé secrète"))
-                        .accessibilityValue(setup.otpauthUrl)
+                        .accessibilityValue(setup.secret)
 
                     Button {
-                        UIPasteboard.general.string = setup.otpauthUrl
+                        UIPasteboard.general.string = setup.secret
                         HapticFeedback.light()
                         copiedKey = true
                         DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
@@ -131,7 +131,7 @@ struct TwoFactorSetupView: View {
                         }
                         // Clear sensitive OTP secret from clipboard after 30s
                         DispatchQueue.main.asyncAfter(deadline: .now() + 30) {
-                            if UIPasteboard.general.string == setup.otpauthUrl {
+                            if UIPasteboard.general.string == setup.secret {
                                 UIPasteboard.general.string = ""
                             }
                         }

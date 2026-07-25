@@ -17,6 +17,12 @@ import type {
   MarkAsReadResponse,
 } from './types';
 
+/** ObjectId MongoDB — écarte les ids optimistes `cid_<uuid>` des messages en vol. */
+const SERVER_MESSAGE_ID = /^[0-9a-fA-F]{24}$/;
+
+/** Plafond du lot accepté par `MarkReadBodySchema` côté gateway. */
+const MARK_READ_BATCH_LIMIT = 200;
+
 /**
  * Service pour les opérations sur les messages
  */
@@ -44,19 +50,28 @@ export class MessagesService {
     after?: string
   ): Promise<GetMessagesResponse> {
     try {
-      const requestKey = `messages-${conversationId}`;
-      const controller = this.createRequestController(requestKey);
-
       const offset = (page - 1) * limit;
 
       const queryParams: Record<string, unknown> = { limit };
+      let mode: 'after' | 'before' | 'offset';
       if (after) {
         queryParams.after = after;
+        mode = 'after';
       } else if (cursor) {
         queryParams.before = cursor;
+        mode = 'before';
       } else {
         queryParams.offset = offset;
+        mode = 'offset';
       }
+
+      // La clé d'annulation inclut le MODE de lecture. Scopée à la seule
+      // conversation, elle faisait s'annuler mutuellement les deux lectures
+      // légitimement concurrentes d'une conversation ouverte — la pagination
+      // (offset/before) et le rattrapage avant (after) — celle qui perdait la
+      // course remontait `REQUEST_CANCELLED` et ses messages disparaissaient.
+      const requestKey = `messages-${conversationId}-${mode}`;
+      const controller = this.createRequestController(requestKey);
 
       if (signal) {
         signal.addEventListener('abort', () => controller.abort(), { once: true });
@@ -122,10 +137,34 @@ export class MessagesService {
   }
 
   /**
-   * Marquer une conversation comme lue
+   * Marquer une conversation comme lue.
+   *
+   * `messageIds` porte les messages RÉELLEMENT affichés. Sans eux, le gateway
+   * retombe sur son chemin historique par fenêtre temporelle, qui déclare lus
+   * des messages jamais montrés — ouvrir une conversation à 200 non-lus les
+   * marquait tous lus.
+   *
+   * @see docs/superpowers/specs/2026-07-24-read-exactness-design.md
    */
-  async markAsRead(conversationId: string): Promise<void> {
-    await apiService.post(`/conversations/${conversationId}/mark-as-read`);
+  async markAsRead(conversationId: string, messageIds?: readonly string[]): Promise<void> {
+    const url = `/conversations/${conversationId}/mark-as-read`;
+
+    // Les messages en cours d'envoi portent un `cid_<uuid>` et non un ObjectId.
+    // En laisser passer un ferait rejeter TOUT le lot en 400, donc perdre les
+    // lectures réelles qui l'accompagnaient.
+    const serverIds = (messageIds ?? []).filter(id => SERVER_MESSAGE_ID.test(id));
+
+    if (serverIds.length === 0) {
+      // Un corps `{messageIds: []}` signifierait « rien n'a été affiché » et
+      // ferait travailler le serveur pour rien. L'absence de corps conserve le
+      // repli historique, seul comportement sûr pour un appel non informé.
+      await apiService.post(url);
+      return;
+    }
+
+    // Le serveur plafonne à 200. On garde les plus récents : ce sont ceux que
+    // l'utilisateur vient de voir.
+    await apiService.post(url, { messageIds: serverIds.slice(-MARK_READ_BATCH_LIMIT) });
   }
 
   /**

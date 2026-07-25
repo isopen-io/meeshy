@@ -179,6 +179,10 @@ struct StepPseudoView: View {
                     isAvailable: viewModel.usernameAvailable
                 )
                 .focused($isFocused)
+                // AutoFill : c'est l'identifiant que iOS associera au mot de
+                // passe généré à l'étape suivante. Sans lui, rien n'est proposé
+                // à l'enregistrement au trousseau en fin d'inscription.
+                .textContentType(.username)
                 .textInputAutocapitalization(.never)
                 .autocorrectionDisabled()
 
@@ -462,6 +466,7 @@ struct StepEmailView: View {
                     isAvailable: viewModel.emailAvailable
                 )
                 .focused($isFocused)
+                .textContentType(.emailAddress)
                 .textInputAutocapitalization(.never)
                 .autocorrectionDisabled()
 
@@ -600,6 +605,11 @@ struct StepPasswordView: View {
                         isSecure: true
                     )
                     .focused($focusedField, equals: .password)
+                    // `.newPassword` déclenche la proposition de mot de passe
+                    // fort ET, à la fin du flux, la boîte « Enregistrer ce mot
+                    // de passe ? » du trousseau. Sans lui, l'inscription ne
+                    // laissait aucune trace dans le gestionnaire.
+                    .textContentType(.newPassword)
                     .textInputAutocapitalization(.never)
 
                     if !viewModel.password.isEmpty {
@@ -616,6 +626,7 @@ struct StepPasswordView: View {
                             isSecure: true
                         )
                         .focused($focusedField, equals: .confirm)
+                        .textContentType(.newPassword)
                         .textInputAutocapitalization(.never)
                         .transition(.asymmetric(
                             insertion: .move(edge: .top).combined(with: .opacity),
@@ -1272,7 +1283,10 @@ struct StepRecapView: View {
                         .frame(width: 24, height: 24)
                     if viewModel.acceptTerms {
                         RoundedRectangle(cornerRadius: 6).fill(MeeshyColors.success).frame(width: 24, height: 24)
+                        // Glyphe décoratif : l'état coché est porté par le trait `.isSelected` sur le bouton
+                        // (WCAG 1.4.1) — masqué pour éviter une annonce brute « checkmark » dans le label.
                         Image(systemName: "checkmark").font(.subheadline.weight(.bold)).foregroundColor(.white)
+                            .accessibilityHidden(true)
                     }
                 }
 
@@ -1287,6 +1301,10 @@ struct StepRecapView: View {
             }
         }
         .buttonStyle(PlainButtonStyle())
+        // La case « J'accepte les conditions » ne signale son état coché que par la couleur/le
+        // checkmark — on porte l'état via le trait `.isSelected` pour que VoiceOver annonce
+        // « sélectionné » sur ce consentement (WCAG 1.4.1, miroir CallsTab.chip/StepLanguageView).
+        .accessibilityAddTraits(viewModel.acceptTerms ? .isSelected : [])
         .bounceOnTap(scale: 0.96)
         .padding(14)
         .background(RoundedRectangle(cornerRadius: 14).fill(Color(.systemGray6).opacity(0.6)))

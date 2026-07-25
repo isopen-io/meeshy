@@ -189,10 +189,10 @@ public struct MeeshyForgotPasswordView: View {
                     .foregroundStyle(.secondary)
                     .padding(.horizontal, 24)
 
-                AuthTextField(title: String(localized: "auth.forgotPassword.fullUsername", defaultValue: "Nom d'utilisateur complet", bundle: .module), icon: "person.fill", text: $fullUsername)
+                AuthTextField(title: String(localized: "auth.forgotPassword.fullUsername", defaultValue: "Nom d'utilisateur complet", bundle: .module), icon: "person.fill", text: $fullUsername, textContentType: .username)
                     .padding(.horizontal, 24)
 
-                AuthTextField(title: String(localized: "auth.forgotPassword.fullEmail", defaultValue: "Email complet", bundle: .module), icon: "envelope.fill", text: $fullEmail, keyboardType: .emailAddress)
+                AuthTextField(title: String(localized: "auth.forgotPassword.fullEmail", defaultValue: "Email complet", bundle: .module), icon: "envelope.fill", text: $fullEmail, keyboardType: .emailAddress, textContentType: .emailAddress)
                     .padding(.horizontal, 24)
 
                 errorView
@@ -209,7 +209,7 @@ public struct MeeshyForgotPasswordView: View {
                     .foregroundStyle(.secondary)
                     .padding(.horizontal, 24)
 
-                AuthTextField(title: String(localized: "auth.forgotPassword.verificationCode", defaultValue: "Code a 6 chiffres", bundle: .module), icon: "number", text: $verificationCode, keyboardType: .numberPad)
+                AuthTextField(title: String(localized: "auth.forgotPassword.verificationCode", defaultValue: "Code a 6 chiffres", bundle: .module), icon: "number", text: $verificationCode, keyboardType: .numberPad, textContentType: .oneTimeCode)
                     .padding(.horizontal, 24)
 
                 errorView
@@ -250,13 +250,13 @@ public struct MeeshyForgotPasswordView: View {
                         .foregroundStyle(.white)
                         .padding(.horizontal, 24)
                     } else {
-                        AuthTextField(title: String(localized: "auth.forgotPassword.newPassword", defaultValue: "Nouveau mot de passe", bundle: .module), icon: "lock.fill", text: $newPassword, isSecure: true)
+                        AuthTextField(title: String(localized: "auth.forgotPassword.newPassword", defaultValue: "Nouveau mot de passe", bundle: .module), icon: "lock.fill", text: $newPassword, isSecure: true, textContentType: .newPassword)
                             .padding(.horizontal, 24)
 
                         PasswordStrengthIndicator(password: newPassword)
                             .padding(.horizontal, 24)
 
-                        AuthTextField(title: String(localized: "auth.forgotPassword.confirmPassword", defaultValue: "Confirmer le mot de passe", bundle: .module), icon: "lock.fill", text: $confirmPassword, isSecure: true)
+                        AuthTextField(title: String(localized: "auth.forgotPassword.confirmPassword", defaultValue: "Confirmer le mot de passe", bundle: .module), icon: "lock.fill", text: $confirmPassword, isSecure: true, textContentType: .newPassword)
                             .padding(.horizontal, 24)
 
                         if newPassword != confirmPassword && !confirmPassword.isEmpty {

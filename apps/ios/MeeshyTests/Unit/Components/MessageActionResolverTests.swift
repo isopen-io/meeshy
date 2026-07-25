@@ -17,51 +17,98 @@ final class MessageActionResolverTests: XCTestCase {
             saveableAttachmentCount: saveableAttachmentCount)
     }
 
-    func test_primaryActions_singleAttachment_includesSaveMediaBeforePin() {
-        let a = MessageActionResolver.primaryActions(ctx(hasMedia: true, saveableAttachmentCount: 1))
-        XCTAssertEqual(a, [.translate, .copy, .saveMedia, .pin, .star, .more])
-    }
+    // MARK: - primaryActions : liste COMPACTE de l'overlay (≤ actions clés + .more)
 
-    func test_primaryActions_multiAttachment_dropsSaveMedia() {
-        let a = MessageActionResolver.primaryActions(ctx(hasMedia: true, saveableAttachmentCount: 3))
-        XCTAssertFalse(a.contains(.saveMedia), "multi-attachment passe par la galerie, pas le menu")
-    }
-
-    func test_primaryActions_noAttachment_dropsSaveMedia() {
+    func test_primaryActions_receivedText_isTranslateCopyMore() {
         let a = MessageActionResolver.primaryActions(ctx())
-        XCTAssertFalse(a.contains(.saveMedia))
+        XCTAssertEqual(a, [.translate, .copy, .more])
     }
 
-    func test_primaryActions_receivedTextBasic_isTranslateCopyPinStarMore() {
-        let a = MessageActionResolver.primaryActions(ctx())
-        XCTAssertEqual(a, [.translate, .copy, .pin, .star, .more])
-    }
-
-    func test_primaryActions_ownEditableText_includesEditAndDelete() {
+    func test_primaryActions_ownEditableText_isEditTranslateCopyMore() {
         let a = MessageActionResolver.primaryActions(ctx(isMine: true, canEdit: true, canDelete: true))
-        XCTAssertEqual(a, [.edit, .translate, .copy, .pin, .star, .more, .delete])
+        XCTAssertEqual(a, [.edit, .translate, .copy, .more])
     }
 
-    func test_primaryActions_pinnedStarred_showsUnpinUnstar() {
-        let a = MessageActionResolver.primaryActions(ctx(isPinned: true, isStarred: true))
-        XCTAssertTrue(a.contains(.unpin))
-        XCTAssertTrue(a.contains(.unstar))
-        XCTAssertFalse(a.contains(.pin))
-        XCTAssertFalse(a.contains(.star))
+    func test_primaryActions_neverContainsDelete_evenWhenDeletable() {
+        let a = MessageActionResolver.primaryActions(ctx(isMine: true, canEdit: true, canDelete: true))
+        XCTAssertFalse(a.contains(.delete), "Supprimer vit dans « Plus… », jamais dans le menu compact")
     }
 
-    func test_primaryActions_noText_dropsCopyAndEdit() {
-        let a = MessageActionResolver.primaryActions(ctx(isMine: true, canEdit: true, hasText: false, hasMedia: true))
-        XCTAssertFalse(a.contains(.copy))
-        XCTAssertFalse(a.contains(.edit))
+    func test_primaryActions_neverContainsPinStar_movedToMore() {
+        let unpinned = MessageActionResolver.primaryActions(ctx())
+        XCTAssertFalse(unpinned.contains(.pin))
+        XCTAssertFalse(unpinned.contains(.star))
+        let pinnedStarred = MessageActionResolver.primaryActions(ctx(isPinned: true, isStarred: true))
+        XCTAssertFalse(pinnedStarred.contains(.unpin))
+        XCTAssertFalse(pinnedStarred.contains(.unstar))
     }
 
-    func test_moreSections_alwaysHasReplyForwardThread() {
-        let sections = MessageActionResolver.moreSections(ctx())
-        guard case .actions(let items)? = sections.first(where: { if case .actions = $0 { return true }; return false }) else {
-            return XCTFail("actions section missing")
+    func test_primaryActions_alwaysEndsWithMore() {
+        XCTAssertEqual(MessageActionResolver.primaryActions(ctx()).last, .more)
+        XCTAssertEqual(MessageActionResolver.primaryActions(ctx(hasText: false, hasMedia: true, saveableAttachmentCount: 1)).last, .more)
+        XCTAssertEqual(MessageActionResolver.primaryActions(ctx(hasText: false, hasMedia: true, saveableAttachmentCount: 5)).last, .more)
+    }
+
+    func test_primaryActions_singleMediaNoText_isSaveMediaMore() {
+        let a = MessageActionResolver.primaryActions(ctx(hasText: false, hasMedia: true, saveableAttachmentCount: 1))
+        XCTAssertEqual(a, [.saveMedia, .more])
+    }
+
+    func test_primaryActions_multiMediaNoText_dropsSaveMedia_fallsBackToPin() {
+        let a = MessageActionResolver.primaryActions(ctx(hasText: false, hasMedia: true, saveableAttachmentCount: 3))
+        XCTAssertFalse(a.contains(.saveMedia), "multi-attachment passe par la galerie, pas le menu")
+        XCTAssertEqual(a, [.pin, .more], "aucune action clé → repli pin pour ne pas afficher un menu vide")
+    }
+
+    func test_primaryActions_imageOnly_dropsTranslate() {
+        let a = MessageActionResolver.primaryActions(ctx(hasText: false, hasMedia: true, saveableAttachmentCount: 1))
+        XCTAssertFalse(a.contains(.translate), "Traduire n'a pas de sens sur un média sans texte")
+    }
+
+    func test_primaryActions_isNeverEmptyBesidesMore() {
+        // Contexte dégénéré : ni texte, ni média enregistrable, ni rien
+        let a = MessageActionResolver.primaryActions(ctx(hasText: false))
+        XCTAssertGreaterThanOrEqual(a.count, 2)
+        XCTAssertEqual(a.last, .more)
+    }
+
+    // MARK: - moreSections : SSOT « Plus… » (accueille pin/star/delete sortis du primaire)
+
+    func test_moreSections_actionsIncludePinAndStar() {
+        let items = actionItems(MessageActionResolver.moreSections(ctx()))
+        XCTAssertTrue(items.contains(.pin))
+        XCTAssertTrue(items.contains(.star))
+    }
+
+    func test_moreSections_pinnedStarred_showUnpinUnstar() {
+        let items = actionItems(MessageActionResolver.moreSections(ctx(isPinned: true, isStarred: true)))
+        XCTAssertTrue(items.contains(.unpin))
+        XCTAssertTrue(items.contains(.unstar))
+        XCTAssertFalse(items.contains(.pin))
+        XCTAssertFalse(items.contains(.star))
+    }
+
+    func test_moreSections_canDelete_includesMessageDelete() {
+        let items = actionItems(MessageActionResolver.moreSections(ctx(isMine: true, canDelete: true)))
+        XCTAssertTrue(items.contains(.delete), "la suppression du message est routée vers « Plus… »")
+    }
+
+    func test_moreSections_cannotDelete_omitsMessageDelete() {
+        let items = actionItems(MessageActionResolver.moreSections(ctx(canDelete: false)))
+        XCTAssertFalse(items.contains(.delete))
+    }
+
+    func test_moreSections_startsWithReplyForwardThread() {
+        let items = actionItems(MessageActionResolver.moreSections(ctx()))
+        XCTAssertEqual(Array(items.prefix(3)), [.reply, .forward, .thread])
+    }
+
+    func test_moreSections_deleteMediaBeforeMessageDelete_whenBothPresent() {
+        let items = actionItems(MessageActionResolver.moreSections(ctx(isMine: true, canDelete: true, hasMedia: true)))
+        guard let mediaIdx = items.firstIndex(of: .deleteMedia), let msgIdx = items.firstIndex(of: .delete) else {
+            return XCTFail("deleteMedia et delete attendus")
         }
-        XCTAssertEqual(items, [.reply, .forward, .thread])
+        XCTAssertLessThan(mediaIdx, msgIdx)
     }
 
     func test_moreSections_timebasedMedia_showsTranscriptionNotSentiment() {
@@ -84,13 +131,48 @@ final class MessageActionResolverTests: XCTestCase {
         XCTAssertEqual(items, [.report])
     }
 
-    func test_moreSections_neverContainsLanguage() {
-        for section in MessageActionResolver.moreSections(ctx(isMine: true, canEdit: true, canDelete: true,
-            hasMedia: true, hasTimebasedMedia: true, isEdited: true, hasEditRevisions: true)) {
-            let items: [MoreItem]
-            switch section { case .actions(let i), .info(let i), .moderation(let i): items = i }
-            XCTAssertFalse(items.contains(.language))
-        }
+    // « Plus… » enrichi (req 2026-07-24) : éditer / copier / partager / traduire /
+    // transcription y sont désormais disponibles (menu complet).
+
+    func test_moreSections_actionsIncludeShare() {
+        let items = actionItems(MessageActionResolver.moreSections(ctx()))
+        XCTAssertTrue(items.contains(.share), "« Partager » disponible dans « Plus… »")
+    }
+
+    func test_moreSections_ownEditableText_actionsIncludeEditAndCopy() {
+        let items = actionItems(MessageActionResolver.moreSections(ctx(isMine: true, canEdit: true)))
+        XCTAssertTrue(items.contains(.edit))
+        XCTAssertTrue(items.contains(.copy))
+    }
+
+    func test_moreSections_receivedText_actionsOmitEdit_keepCopy() {
+        let items = actionItems(MessageActionResolver.moreSections(ctx(isMine: false)))
+        XCTAssertFalse(items.contains(.edit), "pas d'édition d'un message reçu")
+        XCTAssertTrue(items.contains(.copy))
+    }
+
+    func test_moreSections_text_infoIncludesLanguageAndReactions() {
+        let items = infoItems(MessageActionResolver.moreSections(ctx()))
+        XCTAssertTrue(items.contains(.language), "Traduire (langue) explorable dans « Plus… »")
+        XCTAssertTrue(items.contains(.reactions), "Réactions explorables (voir + ajouter) dans « Plus… »")
+    }
+
+    func test_moreSections_mediaNoText_infoOmitsLanguageAndSentiment() {
+        let items = infoItems(MessageActionResolver.moreSections(ctx(hasText: false, hasMedia: true)))
+        XCTAssertFalse(items.contains(.language), "pas de traduction sans texte ni piste temporelle")
+        XCTAssertFalse(items.contains(.sentiment))
+    }
+
+    func test_moreSections_timebasedMedia_infoIncludesLanguage() {
+        let items = infoItems(MessageActionResolver.moreSections(ctx(hasText: false, hasMedia: true, hasTimebasedMedia: true)))
+        XCTAssertTrue(items.contains(.language), "audio/vidéo → traduction (langue) disponible")
+    }
+
+    // MARK: - Helpers
+
+    private func actionItems(_ sections: [MoreSection]) -> [MoreItem] {
+        for s in sections { if case .actions(let items) = s { return items } }
+        return []
     }
 
     private func infoItems(_ sections: [MoreSection]) -> [MoreItem] {

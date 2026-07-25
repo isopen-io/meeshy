@@ -433,7 +433,7 @@ final class NotificationListViewModel: ObservableObject {
         // `[weak self]` obligatoire : une capture forte rendait le `deinit`
         // (et donc son cancel) inatteignable pendant le sleep + l'appel API.
         refreshTask = Task { [weak self] in
-            try? await Task.sleep(nanoseconds: 500_000_000)
+            try? await Task.sleep(for: .seconds(0.5))
             guard !Task.isCancelled else { return }
             await self?.refreshFromAPI()
         }

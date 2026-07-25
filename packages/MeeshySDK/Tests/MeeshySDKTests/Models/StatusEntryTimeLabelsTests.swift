@@ -64,7 +64,12 @@ final class StatusEntryTimeLabelsTests: XCTestCase {
     }
 
     func test_timeRemaining_minutesLeft_isLocalizedMinutesLabel() {
-        let status = makeStatus(createdAt: Date(), expiresAt: Date().addingTimeInterval(45 * 60))
+        // +30 s de marge, comme le test des heures ci-dessus. `timeRemaining`
+        // TRONQUE (`Int(timeIntervalSinceNow) / 60`) : viser 45 min pile rendait
+        // l'assertion dépendante du délai entre la construction de la date et la
+        // lecture de la propriété — « 44min » dès qu'une milliseconde s'écoule,
+        // ce qui rougissait SDK Tests en CI sans rien dire du comportement testé.
+        let status = makeStatus(createdAt: Date(), expiresAt: Date().addingTimeInterval(45 * 60 + 30))
         XCTAssertEqual(status.timeRemaining, "Expire dans 45min")
     }
 }

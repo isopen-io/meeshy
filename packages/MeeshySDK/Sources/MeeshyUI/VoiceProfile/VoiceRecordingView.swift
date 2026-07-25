@@ -15,6 +15,8 @@ public struct VoiceRecordingView<Recorder: AudioRecordingProviding>: View {
     // orphelinait un AVAudioRecorder live (micro chaud, timer leaké).
     @StateObject private var recorder: Recorder
     @State private var recordedSamples: [RecordedSample] = []
+    /// Refus micro : le tap sur « Enregistrer » ne produisait rien du tout.
+    @State private var permissionMessage: String?
 
     public init(recorder: @autoclosure @escaping () -> Recorder, accentColor: String = MeeshyColors.brandPrimaryHex, minimumSamples: Int = 3,
                 minimumDurationSeconds: Int = 10, onSamplesReady: (([Data]) -> Void)? = nil) {
@@ -40,6 +42,14 @@ public struct VoiceRecordingView<Recorder: AudioRecordingProviding>: View {
             samplesList
 
             Spacer()
+
+            if let permissionMessage {
+                Text(permissionMessage)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundColor(MeeshyColors.error)
+                    .multilineTextAlignment(.center)
+                    .transition(.opacity)
+            }
 
             // Controls always at the bottom
             recordingControls
@@ -215,8 +225,23 @@ public struct VoiceRecordingView<Recorder: AudioRecordingProviding>: View {
     // MARK: - Helpers
 
     private func startRecording() {
-        recorder.configure(with: .voiceSample)
-        recorder.startRecording()
+        // Demande explicite AVANT d'activer la session : sinon le prompt TCC
+        // arrive pendant que l'enregistrement tourne déjà et le premier
+        // échantillon vocal est muet. Callback confiné `nonisolated` côté SDK
+        // (cf. `DevicePermissions.swift`) — obligatoire sous
+        // `defaultIsolation(MainActor)`.
+        Task { @MainActor in
+            let state = await DevicePermissions.requestMicrophone()
+            guard state.isUsable else {
+                permissionMessage = state.needsSettingsRedirect
+                    ? String(localized: "audio.recorder.micDeniedSettings", defaultValue: "Micro refus\u{00E9} \u{2014} autorisez-le dans R\u{00E9}glages", bundle: .module)
+                    : String(localized: "audio.recorder.micDenied", defaultValue: "Permission micro refus\u{00E9}e", bundle: .module)
+                return
+            }
+            permissionMessage = nil
+            recorder.configure(with: .voiceSample)
+            recorder.startRecording()
+        }
     }
 
     private func stopRecording() {
