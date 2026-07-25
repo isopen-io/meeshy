@@ -63,6 +63,7 @@ import me.meeshy.app.feed.PostDetailScreen
 import me.meeshy.app.feed.PostDetailViewModel
 import me.meeshy.app.conversations.CreateShareLinkScreen
 import me.meeshy.app.conversations.CreateShareLinkViewModel
+import me.meeshy.app.conversations.MyShareLinksScreen
 import me.meeshy.app.notifications.NotificationsScreen
 import me.meeshy.app.reels.ReelsScreen
 import me.meeshy.app.profile.ProfileScreen
@@ -98,6 +99,7 @@ object Routes {
         "conversations/{${CreateShareLinkViewModel.CONVERSATION_ID_ARG}}/share-link/new"
     fun createShareLink(conversationId: String): String =
         "conversations/$conversationId/share-link/new"
+    const val MY_SHARE_LINKS = "share-links"
     const val CHAT = "chat/{${ChatViewModel.CONVERSATION_ID_ARG}}"
     const val CHAT_DEEP_LINK = "meeshy://$CHAT"
     const val CONVERSATION_DEEP_LINK = "meeshy://conversations/{${ChatViewModel.CONVERSATION_ID_ARG}}"
@@ -338,6 +340,9 @@ fun MeeshyApp(
                     onCreated = { navController.popBackStack() },
                 )
             }
+            composable(Routes.MY_SHARE_LINKS) {
+                MyShareLinksScreen(onBack = { navController.popBackStack() })
+            }
             composable(Routes.NEW_CONVERSATION) {
                 NewConversationScreen(
                     onBack = { navController.popBackStack() },
@@ -440,6 +445,7 @@ fun MeeshyApp(
                     },
                     onOpenProfile = { userId -> navController.navigate(Routes.profile(userId)) },
                     onOpenStarred = { navController.navigate(Routes.STARRED) },
+                    onOpenShareLinks = { navController.navigate(Routes.MY_SHARE_LINKS) },
                     onOpenChangePassword = { navController.navigate(Routes.CHANGE_PASSWORD) },
                     onOpenAutoDownload = { navController.navigate(Routes.MEDIA_DOWNLOAD) },
                     onOpenMediaCache = { navController.navigate(Routes.MEDIA_CACHE) },

@@ -2,6 +2,24 @@
 
 Append-only log of gotchas and decisions that save time next run.
 
+## Lesson (2026-07-25, `sharelink-my-links`) — verify gateway routes, don't trust the iOS SDK's endpoint strings
+`iOS ShareLinkService` calls `GET /links?offset=&limit=`, `GET /links/stats`, `PATCH /links/{linkId}`
+(plain), `DELETE /links/{linkId}`. Reading the **gateway** (`services/gateway/src/routes/links/{user,admin}.ts`)
+showed the plain `PATCH /links/{id}` is a generic update; the purpose-built **activate/deactivate** route is
+`PATCH /links/{linkId}/toggle` with a `{ isActive }` body (returns the updated link). The list/stats routes
+match (`GET /links`, `GET /links/stats`). **Always confirm the real route + response shape in the gateway
+before wiring an Android endpoint** — porting the iOS SDK's endpoint string verbatim would have hit the wrong
+handler. `ApiResponse<Unit>` deserialises a populated `data` object fine (Json `ignoreUnknownKeys=true`),
+so toggle/delete need no response DTO — the VM does the optimistic update locally.
+
+Also: an optimistic reducer can keep **derived** aggregate stats locally exact when the server derivation is
+known — here `MyShareLinkStats.totalUses = _sum(currentUses)`, so `removed` subtracts the link's own
+`currentUses` (not a guess). Snapshot the pre-mutation state in the VM and restore it on failure (rollback);
+`coerceAtLeast(0)` every counter so an inconsistent server stat can't drive a badge negative.
+
+Compose `by state` needs `import androidx.compose.runtime.getValue` (delegate) — the delegate error
+("has no method getValue") is this missing import, not a type mismatch.
+
 ## Lesson (2026-07-25, `sharelink-create`) — inject the clock at the VM edge; add resources BEFORE compiling
 Shipped the share-link CREATION side (owner-facing counterpart to guest-join).
 1. **A time-dependent wire field (`expiresAt`) belongs in a pure function that takes `nowMillis: Long`,

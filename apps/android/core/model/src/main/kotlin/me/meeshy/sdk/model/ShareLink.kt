@@ -188,3 +188,9 @@ data class MyShareLinkStats(
     val activeLinks: Int = 0,
     val totalUses: Int = 0,
 )
+
+/** Body for `PATCH /links/{linkId}/toggle` — port of iOS `toggleLink`'s `ToggleBody`. */
+@Serializable
+data class ToggleShareLinkRequest(
+    val isActive: Boolean,
+)
