@@ -47,16 +47,33 @@ public struct MarkAsReadPayload: Codable, Sendable, Equatable {
     /// Voir `docs/superpowers/specs/2026-07-24-read-exactness-design.md`.
     public let messageIds: [String]?
 
+    /// Version linguistique affichée pendant que ce lot défilait — la résolution
+    /// de la conversation, celle qui vaut par défaut pour chaque bulle.
+    ///
+    /// Optionnelle pour la même raison que `messageIds` : un enregistrement
+    /// d'outbox sérialisé par une version antérieure ne la porte pas, et la
+    /// rendre obligatoire perdrait ces lectures au décodage.
+    public let language: String?
+
+    /// EXCEPTIONS à `language`, par message. Sans traduction disponible, c'est
+    /// l'ORIGINAL qui s'affiche : déclarer tout le lot dans la langue préférée
+    /// mentirait là où l'auteur a précisément besoin de savoir.
+    public let messageLanguages: [String: String]?
+
     public init(
         clientMutationId: String,
         conversationId: String,
         upToMessageId: String,
-        messageIds: [String]? = nil
+        messageIds: [String]? = nil,
+        language: String? = nil,
+        messageLanguages: [String: String]? = nil
     ) {
         self.clientMutationId = clientMutationId
         self.conversationId = conversationId
         self.upToMessageId = upToMessageId
         self.messageIds = messageIds
+        self.language = language
+        self.messageLanguages = (messageLanguages?.isEmpty ?? true) ? nil : messageLanguages
     }
 }
 

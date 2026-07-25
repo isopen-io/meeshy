@@ -273,7 +273,15 @@ struct OutboxDispatcher: OutboxDispatching {
             let reported = payload.messageIds.map(MarkAsReadBody.cap) ?? []
             let body = reported.isEmpty
                 ? nil
-                : try JSONEncoder().encode(MarkAsReadBody(messageIds: reported))
+                : try JSONEncoder().encode(
+                    MarkAsReadBody(
+                        messageIds: reported,
+                        language: payload.language,
+                        messageLanguages: MarkAsReadBody.scopedLanguages(
+                            payload.messageLanguages, to: reported
+                        )
+                    )
+                )
 
             // Decode the envelope loosely as a dictionary (same pattern as
             // `dispatchUpdateProfile` / `dispatchCreateConversation` above).
@@ -994,6 +1002,15 @@ nonisolated struct UpdateProfileAvatarBody: Encodable {
 nonisolated struct MarkAsReadBody: Encodable {
     let messageIds: [String]
 
+    /// Version linguistique affichée pendant que le lot défilait.
+    var language: String?
+
+    /// EXCEPTIONS à `language`, par message : sans traduction disponible, c'est
+    /// l'ORIGINAL qui s'affiche. Restreintes au lot réellement envoyé — le
+    /// gateway n'accepte que des identifiants qu'il vient de recevoir, une clé
+    /// écartée par le plafond ferait rejeter le corps entier.
+    var messageLanguages: [String: String]?
+
     /// Plafond accepté par le gateway.
     static let limit = 200
 
@@ -1001,6 +1018,17 @@ nonisolated struct MarkAsReadBody: Encodable {
     /// vient de voir, et dépasser la borne ferait rejeter tout le lot.
     static func cap(_ ids: [String]) -> [String] {
         ids.count <= limit ? ids : Array(ids.suffix(limit))
+    }
+
+    /// Restreint les exceptions aux identifiants effectivement rapportés.
+    static func scopedLanguages(
+        _ table: [String: String]?,
+        to reported: [String]
+    ) -> [String: String]? {
+        guard let table, !table.isEmpty else { return nil }
+        let allowed = Set(reported)
+        let scoped = table.filter { allowed.contains($0.key) }
+        return scoped.isEmpty ? nil : scoped
     }
 }
 

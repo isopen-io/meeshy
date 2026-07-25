@@ -3539,13 +3539,19 @@ class ConversationViewModel: ObservableObject {
         // outbox kinds. Fall back to the legacy `PendingStatusQueue` if
         // the outbox enqueue itself fails (e.g. pool not configured).
         let lastMessageId = messages.last?.id ?? ""
+        // Résolu ICI, pas au moment de l'envoi : la file d'attente peut partir
+        // longtemps après, et une traduction arrivée entre-temps ne change pas
+        // ce que le lecteur avait sous les yeux.
+        let languages = messageIds.map { splitConsumedLanguages(for: $0) }
         Task {
             let cmid = ClientMutationId.generate()
             let payload = MarkAsReadPayload(
                 clientMutationId: cmid,
                 conversationId: convId,
                 upToMessageId: lastMessageId,
-                messageIds: messageIds
+                messageIds: messageIds,
+                language: languages?.language,
+                messageLanguages: languages?.exceptions
             )
             do {
                 try await OfflineQueue.shared.enqueue(.markAsRead, payload: payload, conversationId: convId)
@@ -4087,6 +4093,53 @@ class ConversationViewModel: ObservableObject {
         }
         translationResolutionCache.updateValue(nil, forKey: messageId)
         return nil
+    }
+
+    /// Version linguistique que le lecteur a RÉELLEMENT sous les yeux pour ce
+    /// message.
+    ///
+    /// Ce n'est pas sa langue préférée : sans traduction disponible, c'est
+    /// l'ORIGINAL qui s'affiche. La résolution suit donc exactement celle du
+    /// TEXTE (`preferredTranslation(for:)`) via `ConsumedLanguageResolver` —
+    /// toute divergence entre les deux produirait une statistique fausse.
+    ///
+    /// Une bascule manuelle prime : le lecteur a explicitement ouvert cette
+    /// version-là.
+    func consumedLanguage(for messageId: String) -> String? {
+        guard let index = messageIndex(for: messageId) else { return nil }
+        let manual = activeTranslationOverrides[messageId].flatMap { $0?.targetLanguage }
+        return ConsumedLanguageResolver.resolve(
+            originalLanguage: messages[index].originalLanguage,
+            availableTranslations: (messageTranslations[messageId] ?? []).map(\.targetLanguage),
+            preferredLanguages: preferredLanguages,
+            manualSelection: manual
+        )
+    }
+
+    /// Répartit un lot entre la langue DOMINANTE et ses exceptions — la forme
+    /// qu'attend le corps de `mark-read`. Miroir de `splitConsumedLanguages`
+    /// côté web : sur une conversation lue d'une traite, la table d'exceptions
+    /// est vide et rien de superflu ne voyage.
+    func splitConsumedLanguages(
+        for messageIds: [String]
+    ) -> (language: String?, exceptions: [String: String]) {
+        var resolved: [String: String] = [:]
+        var counts: [String: Int] = [:]
+        for id in messageIds {
+            guard let code = consumedLanguage(for: id) else { continue }
+            resolved[id] = code
+            counts[code, default: 0] += 1
+        }
+
+        // À égalité, le code alphabétiquement premier : deux exécutions sur les
+        // mêmes données doivent produire le même corps de requête.
+        guard let dominant = counts
+            .sorted(by: { $0.value != $1.value ? $0.value > $1.value : $0.key < $1.key })
+            .first?.key
+        else { return (nil, [:]) }
+
+        let exceptions = resolved.filter { $0.value != dominant }
+        return (dominant, exceptions)
     }
 
     // MARK: - Transcription Retry for Audio Messages

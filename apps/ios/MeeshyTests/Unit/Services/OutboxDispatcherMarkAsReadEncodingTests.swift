@@ -73,6 +73,87 @@ final class OutboxDispatcherMarkAsReadEncodingTests: XCTestCase {
         XCTAssertFalse(json.contains("upToMessageId"))
     }
 
+    // MARK: - Prisme linguistique
+
+    /// Même raison que `messageIds` : un enregistrement sérialisé avant le
+    /// prisme ne porte pas ces champs, et les rendre obligatoires perdrait les
+    /// lectures en attente au décodage.
+    func test_markAsReadPayload_decodesRecordWithoutLanguages() throws {
+        let legacy = """
+        {"clientMutationId":"cm-1","conversationId":"conv-1","upToMessageId":"m-1","messageIds":["\(idA)"]}
+        """.data(using: .utf8)!
+
+        let payload = try JSONDecoder().decode(MarkAsReadPayload.self, from: legacy)
+
+        XCTAssertNil(payload.language)
+        XCTAssertNil(payload.messageLanguages)
+    }
+
+    func test_markAsReadPayload_roundTripsLanguages() throws {
+        let payload = MarkAsReadPayload(
+            clientMutationId: "cm-1",
+            conversationId: "conv-1",
+            upToMessageId: idB,
+            messageIds: [idA, idB],
+            language: "en",
+            messageLanguages: [idB: "fr"]
+        )
+
+        let data = try JSONEncoder().encode(payload)
+        let decoded = try JSONDecoder().decode(MarkAsReadPayload.self, from: data)
+
+        XCTAssertEqual(decoded.language, "en")
+        XCTAssertEqual(decoded.messageLanguages, [idB: "fr"])
+    }
+
+    /// Une table vide ne dit rien et ferait voyager une clé pour rien.
+    func test_emptyExceptionTable_isDroppedAtConstruction() throws {
+        let payload = MarkAsReadPayload(
+            clientMutationId: "cm-1",
+            conversationId: "conv-1",
+            upToMessageId: idB,
+            messageIds: [idA],
+            language: "en",
+            messageLanguages: [:]
+        )
+
+        XCTAssertNil(payload.messageLanguages)
+    }
+
+    func test_markAsReadBody_encodesTheLanguages() throws {
+        let json = try encodeToJSON(
+            MarkAsReadBody(messageIds: [idA, idB], language: "en", messageLanguages: [idB: "fr"])
+        )
+
+        XCTAssertTrue(json.contains("\"language\":\"en\""))
+        XCTAssertTrue(json.contains("messageLanguages"))
+        XCTAssertTrue(json.contains("\"fr\""))
+    }
+
+    /// Le schéma n'accepte que des identifiants du lot : une clé écartée par le
+    /// plafond ferait rejeter le corps ENTIER, donc perdre aussi les lectures
+    /// réelles qui l'accompagnaient.
+    func test_exceptions_areScopedToTheReportedBatch() throws {
+        let scoped = MarkAsReadBody.scopedLanguages([idA: "fr", idB: "de"], to: [idA])
+
+        XCTAssertEqual(scoped, [idA: "fr"])
+    }
+
+    func test_exceptions_becomeNilWhenNoneSurviveTheBatch() throws {
+        XCTAssertNil(MarkAsReadBody.scopedLanguages([idB: "de"], to: [idA]))
+        XCTAssertNil(MarkAsReadBody.scopedLanguages(nil, to: [idA]))
+        XCTAssertNil(MarkAsReadBody.scopedLanguages([:], to: [idA]))
+    }
+
+    /// Sans langue, aucune clé ne doit apparaître : le schéma est `.strict()`,
+    /// mais surtout une clé `null` n'apprendrait rien au serveur.
+    func test_markAsReadBody_omitsLanguagesWhenAbsent() throws {
+        let json = try encodeToJSON(MarkAsReadBody(messageIds: [idA]))
+
+        XCTAssertFalse(json.contains("language"))
+        XCTAssertFalse(json.contains("messageLanguages"))
+    }
+
     // MARK: - Choix du corps
 
     func test_reportedIds_areCappedAtTheServerLimit() throws {
