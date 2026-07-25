@@ -193,6 +193,7 @@ final class MockShareExporter: StoryVideoExportServiceProviding {
     func prepareExport(
         slide: StorySlide,
         languages: [String],
+        watermark: StoryExportWatermark?,
         intro: StoryExportIntroContent?,
         onProgress: ((Double) -> Void)?,
         onPhaseChange: ((StoryExportPhase) -> Void)?

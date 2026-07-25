@@ -122,10 +122,15 @@ final class StoryExportShareViewModel: ObservableObject {
         // (AVAssetWriter), mais le résultat tardif est nettoyé ici.
         exportTask?.cancel()
         let exporter = self.exporter
+        // Filigrane Meeshy animé (logo + « meeshy » + pseudo de l'auteur), baké sur
+        // chaque frame et alternant les coins toutes les 5 s. L'export est
+        // auteur-only, donc `currentUser` EST l'auteur de la story.
+        let watermark = MeeshyExportWatermark.make(username: AuthManager.shared.currentUser?.username)
         let task = Task { [weak self] in
             let url = await exporter.prepareExport(
                 slide: slide,
                 languages: langs,
+                watermark: watermark,
                 intro: Self.brandIntroContent(),
                 onProgress: { [weak self] fraction in
                     self?.progress = fraction

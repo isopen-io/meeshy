@@ -299,6 +299,7 @@ final class MockStoryExporter: StoryExporting, @unchecked Sendable {
         slide: StorySlide,
         to outputURL: URL,
         languages: [String],
+        watermark: StoryExportWatermark?,
         progress: (@Sendable (Double) -> Void)?
     ) async throws {
         lock.withLock {

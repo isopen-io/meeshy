@@ -88,6 +88,7 @@ protocol StoryVideoExportServiceProviding {
     func prepareExport(
         slide: StorySlide,
         languages: [String],
+        watermark: StoryExportWatermark?,
         intro: StoryExportIntroContent?,
         onProgress: ((Double) -> Void)?,
         onPhaseChange: ((StoryExportPhase) -> Void)?
@@ -133,6 +134,7 @@ final class StoryVideoExportService: StoryVideoExportServiceProviding {
     func prepareExport(
         slide: StorySlide,
         languages: [String] = [],
+        watermark: StoryExportWatermark? = nil,
         intro: StoryExportIntroContent? = nil,
         onProgress: ((Double) -> Void)? = nil,
         onPhaseChange: ((StoryExportPhase) -> Void)? = nil
@@ -183,6 +185,7 @@ final class StoryVideoExportService: StoryVideoExportServiceProviding {
                 slide: slide,
                 to: outputURL,
                 languages: languages,
+                watermark: watermark,
                 progress: progressTrampoline
             )
             logger.info("StoryVideoExportService : export complete for slide \(slide.id, privacy: .public)")
@@ -259,6 +262,7 @@ protocol StoryExporting: Sendable {
         slide: StorySlide,
         to outputURL: URL,
         languages: [String],
+        watermark: StoryExportWatermark?,
         progress: (@Sendable (Double) -> Void)?
     ) async throws
 }
@@ -272,8 +276,10 @@ struct SystemStoryExporter: StoryExporting {
         slide: StorySlide,
         to outputURL: URL,
         languages: [String],
+        watermark: StoryExportWatermark?,
         progress: (@Sendable (Double) -> Void)?
     ) async throws {
-        try await StoryExporter.export(slide, to: outputURL, languages: languages, progress: progress)
+        try await StoryExporter.export(slide, to: outputURL, languages: languages,
+                                       watermark: watermark, progress: progress)
     }
 }
