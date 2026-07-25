@@ -642,6 +642,33 @@ extension ThemedConversationRow: @MainActor Equatable {
     }
 }
 
+// MARK: - Avatar context menu (pure, testable)
+
+/// Rôles des entrées du menu contextuel de l'avatar d'une ligne de conversation.
+enum AvatarMenuRole: Equatable {
+    case conversationInfo
+    case profile
+    case shareLink
+}
+
+/// Construction PURE des rôles du menu contextuel de l'avatar. Isolée ici pour
+/// garantir qu'un DM n'expose QU'UNE entrée profil : le doublon historique
+/// « Voir le profil » venait de l'auto-injection SDK (`MeeshyAvatar`) combinée à
+/// l'entrée localisée de l'app. On coupe l'auto-injection (voir le câblage
+/// `onViewProfile: nil` plus bas) et cette entrée devient l'unique source.
+enum ConversationAvatarMenu {
+    /// DM : détails de la conversation puis profil (entrée profil unique).
+    static func directRoles() -> [AvatarMenuRole] {
+        [.conversationInfo, .profile]
+    }
+
+    /// Groupe : détails de la conversation, plus le lien de partage si éligible.
+    /// Jamais d'entrée profil (un avatar de groupe n'ouvre pas un profil unique).
+    static func groupRoles(canShare: Bool) -> [AvatarMenuRole] {
+        canShare ? [.conversationInfo, .shareLink] : [.conversationInfo]
+    }
+}
+
 // MARK: - Conversation Avatar View (extracted struct to avoid PAC issues with @State + escaping closures)
 
 private struct ConversationAvatarView: View {
@@ -660,28 +687,33 @@ private struct ConversationAvatarView: View {
     private var isDirect: Bool { conversation.type == .direct }
 
     private var directContextMenuItems: [AvatarContextMenuItem] {
-        var items: [AvatarContextMenuItem] = []
-        items.append(AvatarContextMenuItem(label: String(localized: "Conversation", bundle: .main), icon: "info.circle.fill") {
-            onViewConversationInfo?()
-        })
-        items.append(AvatarContextMenuItem(label: String(localized: "Voir le profil", bundle: .main), icon: "person.circle.fill") {
-            onViewProfile?()
-        })
-        return items
+        ConversationAvatarMenu.directRoles().map { menuItem(for: $0) }
     }
 
     private var groupContextMenuItems: [AvatarContextMenuItem] {
-        var items: [AvatarContextMenuItem] = []
-        items.append(AvatarContextMenuItem(label: String(localized: "conversation.info", defaultValue: "Infos conversation", bundle: .main), icon: "info.circle.fill") {
-            onViewConversationInfo?()
-        })
         let sharableTypes: [MeeshyConversation.ConversationType] = [.group, .public, .global, .broadcast]
-        if sharableTypes.contains(conversation.type), let handler = onCreateShareLink {
-            items.append(AvatarContextMenuItem(label: String(localized: "menu.create_share_link", bundle: .main), icon: "link.badge.plus") {
-                handler()
-            })
+        let canShare = sharableTypes.contains(conversation.type) && onCreateShareLink != nil
+        return ConversationAvatarMenu.groupRoles(canShare: canShare).map { menuItem(for: $0) }
+    }
+
+    private func menuItem(for role: AvatarMenuRole) -> AvatarContextMenuItem {
+        switch role {
+        case .conversationInfo:
+            return AvatarContextMenuItem(
+                label: String(localized: "conversation.info", defaultValue: "Infos conversation", bundle: .main),
+                icon: "info.circle.fill"
+            ) { onViewConversationInfo?() }
+        case .profile:
+            return AvatarContextMenuItem(
+                label: String(localized: "Voir le profil", bundle: .main),
+                icon: "person.circle.fill"
+            ) { onViewProfile?() }
+        case .shareLink:
+            return AvatarContextMenuItem(
+                label: String(localized: "menu.create_share_link", bundle: .main),
+                icon: "link.badge.plus"
+            ) { onCreateShareLink?() }
         }
-        return items
     }
 
     var body: some View {
@@ -695,10 +727,14 @@ private struct ConversationAvatarView: View {
                 storyState: storyRingState,
                 moodEmoji: moodStatus?.moodEmoji,
                 presenceState: (isDirect && moodStatus == nil) ? presenceState : nil,
-                // DM : tap → story (si non lu) ou profil via la logique MeeshyAvatar handleTap()
-                // Groupe : tap → infos conversation directement via onTap
-                onTap: isDirect ? nil : onViewConversationInfo,
-                onViewProfile: isDirect ? onViewProfile : nil,
+                // DM : tap → story (si non lue) sinon profil, via handleTap() de MeeshyAvatar.
+                //   Le handler profil passe par `onTap` (et NON `onViewProfile`) pour
+                //   préserver le tap-vers-profil sans déclencher l'auto-injection d'une
+                //   entrée « Voir le profil » codée en dur par MeeshyAvatar. L'entrée
+                //   profil localisée est fournie une seule fois par `directContextMenuItems`.
+                // Groupe : tap → infos conversation directement via onTap.
+                onTap: isDirect ? onViewProfile : onViewConversationInfo,
+                onViewProfile: nil,
                 onViewStory: (isDirect && storyRingState != .none) ? onViewStory : nil,
                 onMoodTap: onMoodBadgeTap,
                 onOnlineTap: {
