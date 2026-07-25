@@ -117,13 +117,30 @@ public struct AttachmentStatusBody: Encodable, Sendable {
     public let complete: Bool
     public var wasZoomed: Bool?
 
+    /// Écoutes RÉELLEMENT continues depuis le dernier rapport, dans l'ordre où
+    /// elles ont eu lieu, chacune avec ce qui y a mis fin.
+    ///
+    /// `playPositionMs` ne dit que le point d'arrêt : celui qui saute au
+    /// générique y est indistinguable de celui qui a tout écouté.
+    public var stretches: [PlaybackStretch]?
+
+    /// Version linguistique consommée — piste traduite, sous-titres,
+    /// transcription affichée. Omise quand le lecteur ne peut pas la déterminer :
+    /// mieux vaut ne rien déclarer qu'inventer une langue.
+    public var language: String?
+
     public init(action: String, playPositionMs: Int, durationMs: Int,
-                complete: Bool, wasZoomed: Bool? = nil) {
+                complete: Bool, wasZoomed: Bool? = nil,
+                stretches: [PlaybackStretch]? = nil, language: String? = nil) {
         self.action = action
         self.playPositionMs = playPositionMs
         self.durationMs = durationMs
         self.complete = complete
         self.wasZoomed = wasZoomed
+        // Un tableau vide n'apprend rien au serveur et ferait voyager une clé
+        // pour rien : on ne transmet que ce qui a été observé.
+        self.stretches = (stretches?.isEmpty ?? true) ? nil : stretches
+        self.language = language
     }
 }
 

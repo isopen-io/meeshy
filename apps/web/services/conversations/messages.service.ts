@@ -6,6 +6,7 @@
 import { apiService } from '../api.service';
 import { logger } from '@/utils/logger';
 import { transformersService } from './transformers.service';
+import { splitConsumedLanguages } from '@/utils/consumed-language';
 import type {
   Message,
   SendMessageRequest,
@@ -146,7 +147,16 @@ export class MessagesService {
    *
    * @see docs/superpowers/specs/2026-07-24-read-exactness-design.md
    */
-  async markAsRead(conversationId: string, messageIds?: readonly string[]): Promise<void> {
+  async markAsRead(
+    conversationId: string,
+    messageIds?: readonly string[],
+    /**
+     * Version linguistique réellement affichée pour chacun de ces messages.
+     * Absente pour un appelant qui ne la connaît pas — mieux vaut ne rien
+     * déclarer qu'attribuer au lecteur une langue qu'il n'a pas vue.
+     */
+    consumedLanguages?: ReadonlyMap<string, string | null>
+  ): Promise<void> {
     const url = `/conversations/${conversationId}/mark-as-read`;
 
     // Les messages en cours d'envoi portent un `cid_<uuid>` et non un ObjectId.
@@ -164,7 +174,18 @@ export class MessagesService {
 
     // Le serveur plafonne à 200. On garde les plus récents : ce sont ceux que
     // l'utilisateur vient de voir.
-    await apiService.post(url, { messageIds: serverIds.slice(-MARK_READ_BATCH_LIMIT) });
+    const reported = serverIds.slice(-MARK_READ_BATCH_LIMIT);
+
+    // Les langues sont restreintes au lot RÉELLEMENT envoyé : déclarer la
+    // langue d'un message écarté par le plafond ferait rejeter le corps entier
+    // (le serveur n'accepte que des identifiants du lot).
+    const languages = consumedLanguages
+      ? splitConsumedLanguages(
+          new Map(reported.map(id => [id, consumedLanguages.get(id) ?? null]))
+        )
+      : {};
+
+    await apiService.post(url, { messageIds: reported, ...languages });
   }
 
   /**

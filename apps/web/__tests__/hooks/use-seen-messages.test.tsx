@@ -54,12 +54,22 @@ function makeBubble(messageId: string): HTMLElement {
   return el;
 }
 
-function setup(container: HTMLElement, conversationId: string | null = 'conv-1') {
+function setup(
+  container: HTMLElement,
+  conversationId: string | null = 'conv-1',
+  resolveLanguage?: (messageId: string) => string | null
+) {
   const ref = createRef<HTMLDivElement>();
   (ref as { current: HTMLElement | null }).current = container;
   return renderHook(
     ({ id }: { id: string | null }) =>
-      useSeenMessages({ containerRef: ref, conversationId: id, dwellMs: 300, idleMs: 1000 }),
+      useSeenMessages({
+        containerRef: ref,
+        conversationId: id,
+        dwellMs: 300,
+        idleMs: 1000,
+        resolveLanguage,
+      }),
     { initialProps: { id: conversationId } }
   );
 }
@@ -115,6 +125,32 @@ describe('useSeenMessages', () => {
     expect(observedTargets.has(bubble)).toBe(false);
   });
 
+  it('joint la version linguistique réellement affichée à chaque message vu', () => {
+    // Sans elle, « qui a lu » ne dit pas « dans quelle langue » — la moitié de
+    // l'information manque à l'auteur.
+    const bubble = makeBubble(A);
+    container.appendChild(bubble);
+    const { unmount } = setup(container, 'conv-1', () => 'fr');
+
+    act(() => { intersectionCallback?.([{ target: bubble, isIntersecting: true }]); });
+    act(() => { jest.advanceTimersByTime(1500); });
+    act(() => { unmount(); });
+
+    expect(mockMarkAsRead).toHaveBeenCalledWith('conv-1', [A], new Map([[A, 'fr']]));
+  });
+
+  it('n\'invente pas de langue quand la résolution échoue', () => {
+    const bubble = makeBubble(A);
+    container.appendChild(bubble);
+    const { unmount } = setup(container, 'conv-1', () => null);
+
+    act(() => { intersectionCallback?.([{ target: bubble, isIntersecting: true }]); });
+    act(() => { jest.advanceTimersByTime(1500); });
+    act(() => { unmount(); });
+
+    expect(mockMarkAsRead).toHaveBeenCalledWith('conv-1', [A], new Map([[A, null]]));
+  });
+
   it('reports a message that stayed visible past the dwell threshold', () => {
     const bubble = makeBubble(A);
     container.appendChild(bubble);
@@ -123,7 +159,7 @@ describe('useSeenMessages', () => {
     act(() => { intersectionCallback?.([{ target: bubble, isIntersecting: true }]); });
     act(() => { jest.advanceTimersByTime(1500); });
 
-    expect(mockMarkAsRead).toHaveBeenCalledWith('conv-1', [A]);
+    expect(mockMarkAsRead).toHaveBeenCalledWith('conv-1', [A], undefined);
     unmount();
   });
 
@@ -155,7 +191,7 @@ describe('useSeenMessages', () => {
     // Fermer la conversation ne doit pas perdre cette lecture.
     act(() => { unmount(); });
 
-    expect(mockMarkAsRead).toHaveBeenCalledWith('conv-1', [A]);
+    expect(mockMarkAsRead).toHaveBeenCalledWith('conv-1', [A], undefined);
   });
 
   it('never reports the same message twice', () => {

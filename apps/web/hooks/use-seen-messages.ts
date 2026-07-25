@@ -40,6 +40,18 @@ export type UseSeenMessagesOptions = {
   readonly conversationId: string | null;
   readonly dwellMs?: number;
   readonly idleMs?: number;
+  /**
+   * Version linguistique RÉELLEMENT affichée pour un message donné.
+   *
+   * Le hook ne connaît que des nœuds du DOM ; la résolution appartient à
+   * l'appelant, qui détient les messages et les préférences du lecteur. Rendre
+   * `null` — ou omettre la fonction — n'attribue aucune langue, ce qui vaut
+   * mieux que d'en inventer une.
+   *
+   * Doit rester STABLE entre les rendus : elle fait partie des dépendances de
+   * l'effet, une fonction recréée à chaque rendu reconstruirait les observers.
+   */
+  readonly resolveLanguage?: (messageId: string) => string | null;
 };
 
 function messageIdOf(node: Node): string | null {
@@ -54,6 +66,7 @@ export function useSeenMessages({
   conversationId,
   dwellMs = DEFAULT_DWELL_MS,
   idleMs = DEFAULT_IDLE_MS,
+  resolveLanguage,
 }: UseSeenMessagesOptions): void {
   // Conservé entre les rendus pour que le démontage puisse vider ce qui a été
   // acquis sans être encore parti.
@@ -70,7 +83,13 @@ export function useSeenMessages({
 
     const send = (ids: string[]) => {
       if (ids.length === 0) return;
-      void messagesService.markAsRead(conversationId, ids).catch((error) => {
+      // La langue est résolue au moment du DÉPART, pas de l'apparition : une
+      // traduction arrivée entre-temps change ce que le lecteur a sous les yeux,
+      // et c'est l'état courant qui fait foi.
+      const languages = resolveLanguage
+        ? new Map(ids.map((id) => [id, resolveLanguage(id)]))
+        : undefined;
+      void messagesService.markAsRead(conversationId, ids, languages).catch((error) => {
         // Une lecture perdue n'est pas un incident bloquant : le prochain lot
         // repartira, et le serveur est write-once.
         logger.warn('[SeenMessages]', 'échec du signalement de lecture', { error });
@@ -150,5 +169,5 @@ export function useSeenMessages({
       flush();
       flushRef.current = null;
     };
-  }, [containerRef, conversationId, dwellMs, idleMs]);
+  }, [containerRef, conversationId, dwellMs, idleMs, resolveLanguage]);
 }

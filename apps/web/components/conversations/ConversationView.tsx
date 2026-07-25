@@ -9,7 +9,7 @@
  * @module components/conversations/ConversationView
  */
 
-import React, { memo, forwardRef, useMemo, useState } from 'react';
+import React, { memo, forwardRef, useCallback, useMemo, useRef, useState } from 'react';
 import { cn } from '@/lib/utils';
 import { ConversationHeader } from './ConversationHeader';
 import { ConversationMessages } from './ConversationMessages';
@@ -20,6 +20,7 @@ import { PinnedMessageBanner } from './PinnedMessageBanner';
 import { MessageSearch } from './MessageSearch';
 import { ErrorBoundary } from '@/components/common/ErrorBoundary';
 import { useSeenMessages } from '@/hooks/use-seen-messages';
+import { resolveConsumedLanguage } from '@/utils/consumed-language';
 import { getAuthToken } from '@/utils/token-utils';
 import type { Conversation, Message, User } from '@meeshy/shared/types';
 import type { Participant } from '@meeshy/shared/types/participant';
@@ -197,6 +198,39 @@ export const ConversationView = memo(forwardRef<HTMLDivElement, ConversationView
       onSearchClose,
     } = props;
 
+    // Prisme linguistique : quelle version le lecteur a-t-il sous les yeux pour
+    // chaque bulle. Lu à travers un ref pour que l'identité de la fonction reste
+    // STABLE — `useSeenMessages` la garde en dépendance, et une fonction recréée
+    // à chaque arrivée de message reconstruirait les observers en boucle.
+    const messagesRef = useRef(messages);
+    messagesRef.current = messages;
+
+    const preferredLanguages = useMemo(
+      () =>
+        [
+          currentUser.systemLanguage,
+          currentUser.regionalLanguage,
+          currentUser.customDestinationLanguage,
+        ].filter((code): code is string => Boolean(code)),
+      [
+        currentUser.systemLanguage,
+        currentUser.regionalLanguage,
+        currentUser.customDestinationLanguage,
+      ]
+    );
+    const preferredLanguagesRef = useRef(preferredLanguages);
+    preferredLanguagesRef.current = preferredLanguages;
+
+    const resolveLanguage = useCallback((messageId: string): string | null => {
+      const message = messagesRef.current.find(m => m.id === messageId);
+      if (!message) return null;
+      return resolveConsumedLanguage({
+        originalLanguage: message.originalLanguage,
+        availableTranslations: (message.translations ?? []).map(t => t.targetLanguage),
+        preferredLanguages: preferredLanguagesRef.current,
+      });
+    }, []);
+
     // Suivi de lecture exact — rapporte au serveur les messages RÉELLEMENT
     // affichés. Branché ICI et non dans ConversationLayout : le div scrollable
     // est monté par ce composant, c'est donc le seul endroit où le ref est
@@ -205,6 +239,7 @@ export const ConversationView = memo(forwardRef<HTMLDivElement, ConversationView
     useSeenMessages({
       containerRef: scrollContainerRef,
       conversationId: conversation?.id ?? null,
+      resolveLanguage,
     });
 
     // Search panel state (controlled locally when parent doesn't supply it)
