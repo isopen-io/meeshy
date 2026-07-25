@@ -1710,7 +1710,11 @@ struct StoryCardView: View {
 
             // === Layer 10: Full Language Picker overlay (transparent — story stays visible) ===
             if showFullLanguagePicker {
-                LanguagePickerSheet(style: .dark) { lang in
+                LanguagePickerSheet(
+                    style: .dark,
+                    availableLanguageIds: Set(availableTranslationLanguages.map(\.id)),
+                    activeLanguageId: activeLanguageCode
+                ) { lang in
                     LanguageUsageTracker.recordUsage(languageId: lang.id)
                     // Prisme « Exploration » : affiche immédiatement dans la langue choisie
                     // (override prépendu à la chaine) ; la traduction est demandée si absente

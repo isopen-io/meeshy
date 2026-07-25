@@ -428,28 +428,26 @@ struct StoryActionSidebarView: View {
                 }
             }
 
-            // 6. Translate — brand cyan when active (only for stories with text/audio)
+            // 6. Traductions — ouvre DIRECTEMENT la feuille de langues.
+            //
+            // Le strip de drapeaux qui sortait à côté du bouton est supprimé
+            // (directive user 2026-07-25) : il chevauchait le libellé du rail,
+            // n'offrait que les langues déjà traduites, et obligeait à un
+            // second tap (« + ») pour en demander une autre. La feuille fait
+            // les deux — langues prêtes en tête et pastillées, les autres
+            // déclenchant la traduction de TOUT le texte de la story — sans
+            // dupliquer le chemin.
             if railPlan.showsTranslations {
                 StoryActionButton(
                     icon: "textformat.abc",
                     label: String(localized: "story.viewer.action.translations", defaultValue: "Traductions", bundle: .main),
-                    isActive: showLanguageOptions,
+                    isActive: showFullLanguagePicker,
                     activeColor: MeeshyColors.indigo400,
                     activeGlow: MeeshyColors.indigo400
                 ) {
                     HapticFeedback.light()
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                        showLanguageOptions.toggle()
-                    }
-                }
-                .overlay(alignment: .trailing) {
-                    if showLanguageOptions {
-                        languageScrollStrip
-                            .transition(.asymmetric(
-                                insertion: .scale(scale: 0.8, anchor: .trailing).combined(with: .opacity),
-                                removal: .opacity
-                            ))
-                            .offset(x: -56)
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                        showFullLanguagePicker = true
                     }
                 }
                 .zIndex(10)
@@ -457,92 +455,6 @@ struct StoryActionSidebarView: View {
         }
     }
 
-    // MARK: - Language Scroll Strip
-
-    private var languageScrollStrip: some View {
-        let available = availableTranslationLanguages
-
-        return HStack(spacing: 0) {
-            if !available.isEmpty {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 8) {
-                        ForEach(LanguageUsageTracker.sorted(available)) { lang in
-                            Button {
-                                HapticFeedback.light()
-                                LanguageUsageTracker.recordUsage(languageId: lang.id)
-                                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                                    showLanguageOptions = false
-                                }
-                                // Prisme « Exploration » : bascule l'affichage dans la
-                                // langue choisie (override) ; demande la traduction si absente.
-                                onSelectLanguageOverride(lang.id)
-                                guard let story = currentStory else { return }
-                                Task {
-                                    await StoryInteractionService().requestTranslation(
-                                        storyId: story.id,
-                                        targetLanguage: lang.id
-                                    )
-                                }
-                            } label: {
-                                // Drapeau dans un cercle de dimension fixe 38×38 : figé (déborderait s'il scalait, doctrine 86i) ; le bouton porte le libellé
-                                Text(lang.flag)
-                                    .font(.system(size: 22))
-                                    .frame(width: 38, height: 38)
-                                    .background(
-                                        Circle().fill(Color.white.opacity(
-                                            lang.id == activeLanguageCode ? 0.22 : 0.1))
-                                    )
-                                    .overlay {
-                                        // Anneau indigo sur la langue lue — le Prisme
-                                        // signale, il n'interpelle pas.
-                                        if lang.id == activeLanguageCode {
-                                            Circle().stroke(MeeshyColors.indigo400, lineWidth: 2)
-                                        }
-                                    }
-                            }
-                            .accessibilityLabel(String(localized: "story.viewer.a11y.viewIn", defaultValue: "Voir en \(lang.name)", bundle: .main))
-                            .accessibilityAddTraits(lang.id == activeLanguageCode ? [.isSelected] : [])
-                        }
-                    }
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 6)
-                }
-                .frame(width: min(CGFloat(available.count) * 46 + 20, 222), height: 50)
-            }
-
-            Button {
-                HapticFeedback.light()
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                    showLanguageOptions = false
-                }
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                    showFullLanguagePicker = true
-                }
-            } label: {
-                ZStack {
-                    Circle()
-                        .fill(Color.white.opacity(0.15))
-                        .frame(width: 38, height: 38)
-                    // Glyphe dans un cercle de dimension fixe 38×38 : figé (déborderait s'il scalait, doctrine 86i) ; le bouton porte le libellé
-                    Image(systemName: "plus")
-                        .font(.system(size: 13, weight: .bold))
-                        .foregroundColor(.white.opacity(0.85))
-                }
-            }
-            .padding(.trailing, 10)
-            .padding(.vertical, 6)
-            .accessibilityLabel(String(localized: "story.viewer.a11y.requestTranslation", defaultValue: "Demander une traduction", bundle: .main))
-            .accessibilityHint(String(localized: "story.viewer.a11y.requestTranslation.hint", defaultValue: "Ouvre la liste des langues pour demander une nouvelle traduction", bundle: .main))
-        }
-        .background(
-            Capsule()
-                .fill(.ultraThinMaterial)
-                .overlay(Capsule().fill(Color.black.opacity(0.4)))
-                .overlay(Capsule().stroke(Color.white.opacity(0.1), lineWidth: 0.5))
-        )
-        .accessibilityElement(children: .contain)
-        .accessibilityLabel(String(localized: "story.viewer.a11y.availableTranslations", defaultValue: "Traductions disponibles", bundle: .main))
-    }
 }
 
 // MARK: - Story Header
