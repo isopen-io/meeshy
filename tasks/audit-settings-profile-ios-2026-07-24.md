@@ -146,3 +146,52 @@ Tous grisés `opacity 0.55` + `allowsHitTesting(false)`, aucun toggle instancié
 - **P1 (#5–#9)** : cohérence & messages ; certains nécessitent un ajustement gateway (schema, type notif).
 - **P2 (#10–#15)** : nettoyage de code mort + décisions produit (afficher/masquer affordances).
 - **Placeholders privacy** : aucune action code — décision produit (activer côté backend puis retirer du Set `comingSoon`).
+
+---
+
+# Vérification visuelle E2E sur simulateur Meeshy-iOS26 — 2026-07-25
+
+> Workflow `settings-e2e-visual-audit` (38 agents, ~2h50) : 13 unités vérifiées séquentiellement en pilotage visuel réel
+> (navigation accessibilité + screenshots lus + kill/relaunch + contre-vérification API `gate.meeshy.me`), puis 13 groupes
+> de correctifs (haiku, escalade sonnet), rebuild, re-vérification ciblée. Build testé : main (18 correctifs inclus).
+
+## Bilan initial : 37 checks — 22 OK · 9 KO · 3 PARTIAL · 3 BLOCKED
+
+## Correctifs de l'audit statique PROUVÉS visuellement
+
+- #1 2FA clé manuelle base32 sans `otpauth://` ✓ · #6 voicemail absent ✓ · #8 JSON/CSV exclusif ✓ · #9 toggle Media absent ✓
+- #11 étape âge du wizard : consent→âge→recording, birthDate transmis (confirmé API : `ageVerificationConsentAt` horodaté) ✓
+- #13 « Noter l'app » présent ✓ · #10 liste échantillons absente ✓ · #7 message mdp actuel incorrect dédié ✓ (affiché en anglais — simulateur en `en-US`, pas un défaut)
+- Suppression de compte gardée par confirmation textuelle ✓ · les 19 lignes du hub ouvrent des écrans réels ✓ · thème/langue à effet immédiat ✓
+
+## Corrigés pendant le run (10 fixes appliqués : 8 haiku + 2 sonnet)
+
+1. **Crash « Starred messages »** — fatal `ThemeManager` `@EnvironmentObject` non injecté via RootView → pattern `.shared` ; re-prouvé vert en Reverify
+2. DataStorageView : taille réelle du cache affichée (images+audio+vidéos)
+3. Gateway export : schema `data:{type:'object'}` sans `properties` strippait tout le payload (fast-json-stringify)
+4. SessionService SDK : décodage tolérant du format de réponse gateway
+5. ChangePassword : clé de localisation `auth.password.change.error.current` manquante ajoutée
+6. Gateway affiliate : champs manquants (`isActive`, `_count`…) dans la réponse de création de lien
+7. Gateway user-stats : footgun Prisma `JsonNull`/`DbNull`
+8. UserPreferencesManager : `pendingCategories` persisté (badges)
+9. AuthManager : garde optimiste `pendingOptimisticProfile` persistée (ne survivait pas au kill — bio perdue)
+10. Wizard vocal : gestion d'erreur d'upload vérifiée/renforcée (échec silencieux constaté en Verify)
+
+## KO restants — en attente de DÉPLOIEMENT (code prêt sur main, prod `gate.meeshy.me` en retard)
+
+- Export de données (schema strip corrigé) · Stats utilisateur (JsonNull corrigé) · Clear langue régionale (#5, `z.literal('')` mergé)
+- → résolus par `push main → CI deploy` ; **re-tester ces 3 écrans après déploiement**.
+
+## Nouveaux défauts découverts par la Reverify (backlog priorisé)
+
+1. **[SDK/offline] PATCH préférences jamais expédié à chaud** : `syncCategoryToBackend` enqueue dans `OfflineQueue` sans dispatch immédiat → toute préférence modifiée est perdue au kill+relaunch (reproduit 2/2 : `showOnlineStatus`, badges ; PATCH jamais reçu par le gateway, confirmé API). Fix : flush immédiat après enqueue + `fetchFromBackend()` au cold boot doit attendre le flush initial de l'outbox.
+2. **[Gateway] Sessions actives toujours vides** : 4 call-sites de `SessionService.ts` filtrent `invalidatedAt: null` — en Prisma+MongoDB, `null` ne matche PAS les champs ABSENTS (`{ isSet: false }` requis) et `createSession` n'écrit jamais ce champ.
+3. **[Gateway] `select` du middleware auth omet `bio`** (+ phoneNumber, banner, profileCompletionRate…) → `GET /auth/me` renvoie un profil incomplet → bio stale après relance à froid.
+4. **[iOS/a11y] `ProfileView.swift:647`** : interpolation d'un `Binding<String>` dans `accessibilityLabel` → VoiceOver lit la description de debug.
+5. **[iOS] SupportView `mailto:` sans fallback** `canOpenURL` (Mail.app supprimable depuis iOS 13) — mineur.
+
+## Limites d'environnement (pas des défauts)
+
+- Compte de test sans profil vocal → 3 checks voice-manage BLOCKED (prévoir une fixture/seed de profil vocal `ready`)
+- Simulateur sans Mail.app ; langue système `en-US` (messages localisés servis en anglais)
+- CTA « Create a voice profile » invisible dans l'arbre d'accessibilité (état vide de VoiceProfileManageView) — gêne VoiceOver et l'automatisation UI

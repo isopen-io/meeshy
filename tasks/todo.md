@@ -40,7 +40,12 @@
 
 ## Review
 
-(à compléter en fin de run)
+Run terminé 2026-07-25 (~2h50, 38 agents, 0 erreur). Verify 13/13 unités (37 checks : 22 OK/9 KO/3 PARTIAL/3 BLOCKED) ;
+10 correctifs appliqués (8 haiku + 2 sonnet, 3 non-applicables justifiés) ; rebuild vert ; Reverify 11 unités.
+Crash Starred Messages corrigé et re-prouvé. 3 KO résiduels attendent le déploiement gateway (export, stats, langue régionale).
+Nouveaux bugs découverts (backlog) : OfflineQueue sans dispatch immédiat des PATCH prefs (perte au cold restart),
+`invalidatedAt: null` vs `isSet` Prisma+MongoDB (sessions vides), `select` auth sans `bio` (profil stale), a11y Binding ProfileView.
+Détail complet : `tasks/audit-settings-profile-ios-2026-07-24.md` § « Vérification visuelle E2E ».
 
 ---
 
