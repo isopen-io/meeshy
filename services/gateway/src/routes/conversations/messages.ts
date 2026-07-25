@@ -1540,7 +1540,10 @@ export function registerMessagesRoutes(
         return sendSuccess(reply, { markedCount: 0 });
       }
 
-      await readStatusService.markMessagesAsRead(
+      // `markedCount` compte ce qui a RÉELLEMENT été figé. Le nombre d'ids
+      // rapportés sur-compterait (certains étaient déjà lus) et le compteur de
+      // non-lus inclurait des messages jamais rapportés.
+      const frozenCount = await readStatusService.markMessagesAsRead(
         currentParticipant.id,
         conversationId,
         undefined,
@@ -1548,7 +1551,7 @@ export function registerMessagesRoutes(
       );
       await broadcastReadStatus(userId, currentParticipant.id, conversationId, 'read', authRequest.authContext.type === 'anonymous');
 
-      return sendSuccess(reply, { markedCount: reportedMessageIds?.length ?? unreadCount });
+      return sendSuccess(reply, { markedCount: reportedMessageIds ? frozenCount : unreadCount });
 
     } catch (error) {
       logger.error('Error marking conversation as read', error);

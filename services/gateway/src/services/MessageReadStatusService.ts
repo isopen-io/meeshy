@@ -627,7 +627,7 @@ export class MessageReadStatusService {
     conversationId: string,
     latestMessageId?: string,
     options?: { readonly messageIds?: readonly string[] }
-  ): Promise<void> {
+  ): Promise<number> {
     // Hoisted so the catch below can release the dedup key when the write
     // fails — a poisoned key would otherwise swallow every retry within the
     // TTL and silently drop the read receipt.
@@ -647,7 +647,7 @@ export class MessageReadStatusService {
           orderBy: { createdAt: "desc" },
           select: { id: true },
         });
-        if (!latestMessage) return;
+        if (!latestMessage) return 0;
         messageId = latestMessage.id;
       }
 
@@ -666,7 +666,7 @@ export class MessageReadStatusService {
           lastCall &&
           dedupNow - lastCall < MessageReadStatusService.DEDUP_TTL_MS
         ) {
-          return;
+          return 0;
         }
         MessageReadStatusService.recentActionCache.set(dedupKey, dedupNow);
       }
@@ -699,11 +699,12 @@ export class MessageReadStatusService {
       // evaluated atomically inside the write, never on a snapshot read
       // earlier — see _advanceCursor. Never rolls the read cursor back to an
       // older message — that would resurrect already-read messages as unread.
+      let frozenCount = 0;
       if (exactMessageIds) {
         // MODE EXACT — l'ordre est inversé par rapport au mode hérité : on fige
         // d'abord, car un message affiché EST lu, que le curseur puisse avancer
         // ou non. Le curseur ne s'aligne qu'ensuite, sur ce qui est réellement lu.
-        await this.freezeMessageStatus({
+        frozenCount = await this.freezeMessageStatus({
           participantId,
           conversationId,
           since: prevReadAt,
@@ -748,7 +749,7 @@ export class MessageReadStatusService {
           logger.info(
             `[MessageReadStatus] Ignoring stale read receipt for participant ${participantId} in conversation ${conversationId}`
           );
-          return;
+          return 0;
         }
 
         // Précision absolue : fige un `MessageStatusEntry.readAt` par message
@@ -757,7 +758,7 @@ export class MessageReadStatusService {
         // `now` à chaque ouverture — collapsant tous les anciens messages à la
         // même date. Le curseur reste l'index rapide ; la date par message est
         // gelée à la première lecture.
-        await this.freezeMessageStatus({
+        frozenCount = await this.freezeMessageStatus({
           participantId,
           conversationId,
           since: prevReadAt,
@@ -823,6 +824,8 @@ export class MessageReadStatusService {
           notifError
         );
       }
+
+      return frozenCount;
     } catch (error) {
       // Release the dedup key so a retry within the TTL is not swallowed by the
       // gate — the failed attempt recorded nothing, so the receipt must still
@@ -990,7 +993,8 @@ export class MessageReadStatusService {
      * été affiché, donc la fenêtre reste correcte pour `deliveredAt`.
      */
     messageIds?: readonly string[];
-  }): Promise<void> {
+    /** @returns nombre d'entrées RÉELLEMENT figées par cet appel. */
+  }): Promise<number> {
     const { participantId, conversationId, since, at, field, messageIds } = params;
     try {
       const messages = await this.prisma.message.findMany({
@@ -1008,7 +1012,7 @@ export class MessageReadStatusService {
         select: { id: true },
       });
 
-      if (messages.length === 0) return;
+      if (messages.length === 0) return 0;
       const ids = messages.map((m) => m.id);
 
       const existing = await this.prisma.messageStatusEntry.findMany({
@@ -1018,8 +1022,9 @@ export class MessageReadStatusService {
       const existingIds = new Set(existing.map((e) => e.messageId));
       const toCreate = ids.filter((id) => !existingIds.has(id));
 
+      let frozen = 0;
       if (toCreate.length > 0) {
-        await this.prisma.messageStatusEntry.createMany({
+        const created = await this.prisma.messageStatusEntry.createMany({
           data: toCreate.map((messageId) =>
             field === "readAt"
               ? { messageId, conversationId, participantId, readAt: at }
@@ -1032,6 +1037,7 @@ export class MessageReadStatusService {
                 }
           ),
         });
+        frozen += created?.count ?? toCreate.length;
       }
 
       // Write-once: ne renseigne le champ que sur les entrées où il est encore
@@ -1041,19 +1047,25 @@ export class MessageReadStatusService {
         .map((e) => e.messageId);
 
       if (toUpdate.length > 0) {
-        await this.prisma.messageStatusEntry.updateMany({
+        const updated = await this.prisma.messageStatusEntry.updateMany({
           where:
             field === "readAt"
               ? { messageId: { in: toUpdate }, participantId, readAt: null }
               : { messageId: { in: toUpdate }, participantId, deliveredAt: null },
           data: field === "readAt" ? { readAt: at } : { deliveredAt: at, receivedAt: at },
         });
+        frozen += updated?.count ?? toUpdate.length;
       }
+
+      return frozen;
     } catch (error) {
       logger.error(
         `[MessageReadStatus] freezeMessageStatus(${field}) failed for participant ${participantId} in conversation ${conversationId}:`,
         error
       );
+      // Ne jette jamais : une erreur de gel ne doit pas faire échouer le
+      // marquage du curseur. Rien n'a été figé, le compte est donc nul.
+      return 0;
     }
   }
 

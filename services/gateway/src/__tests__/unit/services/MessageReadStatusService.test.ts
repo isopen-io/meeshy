@@ -666,6 +666,44 @@ describe('MessageReadStatusService', () => {
       });
     });
 
+    // `markedCount` doit compter ce qui a RÉELLEMENT été figé. Ni le nombre
+    // d'ids rapportés (certains étaient déjà lus), ni le compteur de non-lus
+    // (il inclut des messages non rapportés) ne disent la vérité.
+    it('exact mode: returns the number of entries actually frozen', async () => {
+      const msgA = '507f1f77bcf86cd799439021';
+      const msgB = '507f1f77bcf86cd799439022';
+      mockPrisma.message.findFirst.mockResolvedValue({ id: msgB, createdAt: new Date('2025-01-02T00:00:00Z') });
+      mockPrisma.conversationReadCursor.findUnique.mockResolvedValue({ lastReadAt: new Date('2024-12-01T00:00:00Z') });
+      mockPrisma.message.findMany.mockResolvedValue([{ id: msgA }, { id: msgB }]);
+      // msgB porte déjà un readAt : seul msgA sera effectivement figé.
+      mockPrisma.messageStatusEntry.findMany.mockResolvedValue([
+        { messageId: msgB, deliveredAt: new Date('2025-01-02T00:00:01Z'), readAt: new Date('2025-01-02T00:00:02Z') }
+      ]);
+      mockPrisma.messageStatusEntry.createMany.mockResolvedValue({ count: 1 });
+
+      const frozen = await service.markMessagesAsRead(testParticipantId, testConversationId, undefined, {
+        messageIds: [msgA, msgB]
+      });
+
+      expect(frozen).toBe(1);
+    });
+
+    it('exact mode: reports zero when every reported message was already read', async () => {
+      const msgA = '507f1f77bcf86cd799439021';
+      mockPrisma.message.findFirst.mockResolvedValue({ id: msgA, createdAt: new Date('2025-01-02T00:00:00Z') });
+      mockPrisma.conversationReadCursor.findUnique.mockResolvedValue({ lastReadAt: new Date('2024-12-01T00:00:00Z') });
+      mockPrisma.message.findMany.mockResolvedValue([{ id: msgA }]);
+      mockPrisma.messageStatusEntry.findMany.mockResolvedValue([
+        { messageId: msgA, deliveredAt: new Date('2025-01-02T00:00:01Z'), readAt: new Date('2025-01-02T00:00:02Z') }
+      ]);
+
+      const frozen = await service.markMessagesAsRead(testParticipantId, testConversationId, undefined, {
+        messageIds: [msgA]
+      });
+
+      expect(frozen).toBe(0);
+    });
+
     it('exact mode: keeps the ownership guards so a client cannot mark arbitrary messages read', async () => {
       mockPrisma.message.findFirst.mockResolvedValue({ id: testMessageId, createdAt: new Date('2025-01-01T00:00:00Z') });
       mockPrisma.conversationReadCursor.findUnique.mockResolvedValue(null);
@@ -3816,9 +3854,12 @@ describe('MessageReadStatusService', () => {
       // participant.findUnique throws inside the notification-sync try block
       mockPrisma.participant.findUnique.mockRejectedValue(new Error('participant lookup fail'));
 
+      // L'intention est « ne jette pas » : la panne de synchronisation des
+      // notifications est avalée. La méthode rend désormais le nombre d'entrées
+      // figées plutôt que `undefined` — le contrat vérifié ici est la résolution.
       await expect(
         service.markMessagesAsRead(testParticipantId, testConversationId, testMessageId)
-      ).resolves.toBeUndefined();
+      ).resolves.toEqual(expect.any(Number));
     });
   });
 

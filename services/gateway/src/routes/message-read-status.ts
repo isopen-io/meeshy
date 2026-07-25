@@ -226,12 +226,15 @@ export default async function messageReadStatusRoutes(fastify: FastifyInstance) 
       const markedCount = await readStatusService.getUnreadCount(membership.id, conversationId);
 
       // Marquer comme lu (participantId, pas userId)
-      await readStatusService.markMessagesAsRead(
+      // Même sémantique que /conversations/:id/mark-read : en mode exact,
+      // `markedCount` est le nombre d'entrées réellement figées.
+      const frozenCount = await readStatusService.markMessagesAsRead(
         membership.id,
         conversationId,
         undefined,
         reportedMessageIds ? { messageIds: reportedMessageIds } : undefined
       );
+      const effectiveMarkedCount = reportedMessageIds ? frozenCount : markedCount;
 
       // PRIVACY: Vérifier si l'utilisateur a activé showReadReceipts avant de broadcaster
       const shouldShowReadReceipts = await privacyPreferencesService.shouldShowReadReceipts(
@@ -262,7 +265,7 @@ export default async function messageReadStatusRoutes(fastify: FastifyInstance) 
         }
       }
 
-      return sendSuccess(reply, { markedCount });
+      return sendSuccess(reply, { markedCount: effectiveMarkedCount });
 
     } catch (error) {
       logger.error('Error marking messages as read', error as Error);
