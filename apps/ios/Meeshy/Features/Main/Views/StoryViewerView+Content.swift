@@ -201,12 +201,15 @@ extension StoryViewerView {
                 let dx = value.translation.width
                 let dy = value.translation.height
 
-                // Decide axis on first significant movement
+                // Decide axis on first significant movement.
+                // L'axe vertical accepte désormais les DEUX sens : le swipe
+                // haut active le plein écran (spec 2026-07-25), il ne peut
+                // donc plus être filtré par `dy > 0`.
                 if gestureAxis == 0 {
                     if abs(dx) > abs(dy) + 8 {
                         gestureAxis = 1 // horizontal
                         pauseTimer()
-                    } else if dy > abs(dx) + 8 && dy > 0 {
+                    } else if abs(dy) > abs(dx) + 8 {
                         gestureAxis = 2 // vertical
                         pauseTimer()
                     }
@@ -219,7 +222,13 @@ extension StoryViewerView {
                     // chaque tick : le geste est réversible mi-course.
                     let total = groupSlide + dx
                     neighborPreviewDirection = total < 0 ? 1 : (total > 0 ? -1 : 0)
-                case 2: if dy > 0 { dragOffset = dy }
+                case 2:
+                    // Vers le bas : la carte suit le doigt (dismiss ou sortie
+                    // de plein écran). Vers le haut : on ne translate pas la
+                    // carte — l'entrée en plein écran est un changement de
+                    // cadrage, pas un déplacement ; on garde `dragOffset` à 0
+                    // pour ne pas décoller la story de l'écran.
+                    dragOffset = max(0, dy)
                 default: break
                 }
             }
@@ -273,20 +282,53 @@ extension StoryViewerView {
                         resumeTimer()
                     }
 
-                case 2: // Vertical — dismiss
-                    if value.translation.height > 120 || value.predictedEndTranslation.height > 350 {
+                case 2: // Vertical — plein écran / dismiss
+                    // Le swipe bas porte deux sens : en plein écran il REVIENT
+                    // au mode fenêtré, sinon il quitte la story. Décision
+                    // isolée et testée dans `StoryVerticalGestureDecisions`.
+                    switch StoryVerticalGestureDecisions.decide(
+                        translationY: value.translation.height,
+                        predictedY: value.predictedEndTranslation.height,
+                        isFullscreen: isFullscreenStorySession,
+                        threshold: 120
+                    ) {
+                    case .dismissViewer:
                         dismissViewer()
-                    } else {
-                        withAnimation(.spring(response: 0.35, dampingFraction: 0.75)) {
-                            dragOffset = 0
-                        }
-                        resumeTimer()
+                    case .enterFullscreen:
+                        HapticFeedback.light()
+                        setFullscreenSession(true)
+                        snapDragOffsetBack()
+                    case .exitFullscreen:
+                        HapticFeedback.light()
+                        setFullscreenSession(false)
+                        snapDragOffsetBack()
+                    case .cancel, .none:
+                        snapDragOffsetBack()
                     }
 
                 default:
                     snapBackAll()
                 }
             }
+    }
+
+    /// Bascule la session plein écran et synchronise l'état au repos du chrome.
+    /// Même mécanique que l'entrée par le menu « … » (`StoryViewerView+Sidebar`)
+    /// — un seul comportement, deux points d'entrée.
+    func setFullscreenSession(_ enabled: Bool) {
+        isFullscreenStorySession = enabled
+        withAnimation(.spring(response: 0.32, dampingFraction: 0.78)) {
+            chromeVisible = !enabled
+        }
+    }
+
+    /// Ramène la carte à sa position de repos après un geste vertical non
+    /// validé (ou validé sans dismiss), et relance la lecture.
+    private func snapDragOffsetBack() {
+        withAnimation(.spring(response: 0.35, dampingFraction: 0.75)) {
+            dragOffset = 0
+        }
+        resumeTimer()
     }
 
     private func snapBackAll() {

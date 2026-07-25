@@ -50,6 +50,8 @@ struct StoryGestureOverlayView: View {
     /// - en mode plein écran (`isFullscreenStorySession == true`) : inverse.
     /// Le parent applique l'animation et coupe le clavier au besoin.
     let onChromeVisibilityChange: (Bool) -> Void
+    /// Double tap dans la bande centrale → bascule pause / lecture.
+    let onTogglePause: () -> Void
     /// État de session « plein écran » lu depuis le parent. Détermine le
     /// sens du toggle du chrome (voir doc ci-dessus).
     let isFullscreenStorySession: Bool
@@ -57,6 +59,8 @@ struct StoryGestureOverlayView: View {
     /// Seuil au-delà duquel un touch sur l'écran cesse d'être un tap de
     /// navigation prev/next et devient un hold (toggle pause + hide chrome).
     private let holdThresholdSeconds: TimeInterval = 0.2
+    /// Fenêtre pendant laquelle deux taps centrés comptent pour un double tap.
+    private let doubleTapWindowSeconds: TimeInterval = 0.3
     /// Marge horizontale/verticale autorisée avant qu'un drag soit considéré
     /// comme un swipe (et donc ignoré par cet overlay — laissé au drag
     /// gesture parent qui gère le dismiss).
@@ -75,6 +79,11 @@ struct StoryGestureOverlayView: View {
     /// était `true` au touch-down, on l'a remis à `false`, et le release
     /// doit être consommé (pas de nav, pas de hold).
     @State private var isResumingTap: Bool = false
+    /// Horodatage du dernier tap consommé dans la bande centrale. Sert à
+    /// reconnaître un double tap SANS recognizer concurrent : `TapGesture(count: 2)`
+    /// aurait imposé au tap simple d'attendre son échec, ajoutant ~250 ms au
+    /// geste de navigation. Ici les bords naviguent toujours immédiatement.
+    @State private var lastCenterTapTime: Date? = nil
 
     /// Surveille les transitions d'état de la scène pour annuler un hold
     /// armé si l'app passe inactive (incoming call, lock, app-switcher) —
@@ -182,6 +191,28 @@ struct StoryGestureOverlayView: View {
                             isResumingTap: isResumingTap,
                             isComposerEngaged: isComposerEngaged
                         )
+                        // Double tap dans la bande centrale : deux relâchements
+                        // rapprochés au même endroit. Évalué AVANT la décision
+                        // de tap simple, qui reste `.none` au centre — donc
+                        // aucun effet de bord à annuler si le second tap arrive.
+                        let isCleanTap = !ctx.holdActive && !ctx.isResumingTap
+                            && !ctx.isComposerEngaged && elapsed < holdThresholdSeconds
+                        if isCleanTap,
+                           StoryGestureDecisions.decideDoubleTap(
+                               context: ctx,
+                               touchStartX: value.startLocation.x,
+                               width: geometry.size.width) == .togglePause {
+                            let now = Date()
+                            if let previous = lastCenterTapTime,
+                               now.timeIntervalSince(previous) <= doubleTapWindowSeconds {
+                                lastCenterTapTime = nil
+                                HapticFeedback.medium()
+                                onTogglePause()
+                                return
+                            }
+                            lastCenterTapTime = now
+                        }
+
                         switch StoryGestureDecisions.decideTouchUp(
                             context: ctx,
                             touchStartX: value.startLocation.x,
@@ -1300,6 +1331,18 @@ struct StoryCardView: View {
                             #selector(UIResponder.resignFirstResponder),
                             to: nil, from: nil, for: nil
                         )
+                    }
+                },
+                onTogglePause: {
+                    // `isLongPressPaused` est la source de vérité unique de la
+                    // pause : le double tap la bascule comme le fait le hold,
+                    // donc timer, vidéo de fond, audios et effets gèlent et
+                    // repartent ensemble.
+                    isLongPressPaused.toggle()
+                    withAnimation(.spring(response: 0.32, dampingFraction: 0.78)) {
+                        chromeVisible = isLongPressPaused
+                            ? isFullscreenStorySession
+                            : !isFullscreenStorySession
                     }
                 },
                 isFullscreenStorySession: isFullscreenStorySession
