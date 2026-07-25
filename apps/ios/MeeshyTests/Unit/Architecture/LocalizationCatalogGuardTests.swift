@@ -4,22 +4,24 @@ import XCTest
 /// Gardes sur les catalogues de chaînes.
 ///
 /// L'app déclare sept langues d'interface (`LanguageData.interfaceLanguageCodes`)
-/// mais n'en a longtemps livré que cinq : choisir « Italiano » ou « العربية »
-/// laissait l'utilisateur devant une interface anglaise, sans le moindre signal.
-/// Ces tests mesurent l'écart au lieu de le laisser dériver en silence.
+/// mais n'en avait longtemps livré que cinq, et de façon incomplète : choisir
+/// « Italiano » ou « العربية » laissait l'utilisateur devant une interface
+/// anglaise, sans le moindre signal, et l'allemand comme le portugais avaient
+/// des pans entiers en français.
 ///
-/// Deux natures de garde ici :
+/// **Les six langues non-source sont complètes depuis le 2026-07-25.** Ces
+/// tests ne mesurent donc plus un écart : ils le rendent impossible à rouvrir.
 ///
 /// - **Les marqueurs de format sont un invariant dur.** Une traduction qui perd
 ///   un `%@` ou intervertit `%1$@` et `%2$@` affiche un nom à la place d'une
 ///   date, ou tronque la phrase. C'est un défaut visible en production que rien
 ///   d'autre ne rattrape : le test échoue, sans tolérance.
 ///
-/// - **La couverture est un plancher, pas une cible.** Traduire ~2 500 clés se
-///   fait par lots ; exiger 100 % ferait échouer le test dès le premier commit
-///   utile. On épingle donc le niveau atteint : il ne peut que monter. Quand une
-///   langue atteint 100 %, son plancher devient 100 % et la régression devient
-///   impossible.
+/// - **La couverture est verrouillée à 100 %.** Les planchers valaient jadis le
+///   niveau atteint, pour qu'un travail par lots reste possible ; maintenant
+///   qu'ils sont au maximum, toute clé ajoutée sans sa traduction fait échouer
+///   le test. C'est voulu : une clé qui entre dans le catalogue sans traduction
+///   ressort en français chez tous les autres utilisateurs.
 final class LocalizationCatalogGuardTests: XCTestCase {
 
     // MARK: - Catalogues
@@ -160,9 +162,11 @@ final class LocalizationCatalogGuardTests: XCTestCase {
     /// Plancher atteint, par catalogue et par langue. **Ne jamais baisser une
     /// valeur** : la faire descendre pour « faire passer le test » reviendrait à
     /// entériner une régression que ce test existe précisément pour attraper.
+    /// **Toutes à 100 % depuis le 2026-07-25.** Ces planchers sont donc des
+    /// verrous : toute clé ajoutée sans sa traduction fait échouer le test.
     private static let floors: [String: [String: Int]] = [
-        "app": ["en": 1338, "de": 1326, "es": 1326, "pt-BR": 1326, "it": 1342, "ar": 1342],
-        "SDK": ["en": 908, "de": 798, "es": 798, "pt-BR": 639, "it": 1019, "ar": 1019],
+        "app": ["en": 1343, "de": 1343, "es": 1343, "pt-BR": 1343, "it": 1343, "ar": 1343],
+        "SDK": ["en": 1019, "de": 1019, "es": 1019, "pt-BR": 1019, "it": 1019, "ar": 1019, "fr": 1019],
     ]
 
     func test_laCouvertureNeRégressePas() throws {

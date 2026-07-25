@@ -859,6 +859,13 @@
             "value" : "Tutti tranne"
           }
         }
+      ,
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Todos exceto"
+          }
+        }
       }
     },
     "audience.picker.only.title" : {
@@ -901,6 +908,13 @@
             "value" : "Solo queste persone"
           }
         }
+      ,
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Apenas estas pessoas"
+          }
+        }
       }
     },
     "audience.picker.search" : {
@@ -941,6 +955,13 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Cerca…"
+          }
+        }
+      ,
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Buscar…"
           }
         }
       }
@@ -27394,6 +27415,13 @@
             "value" : "Sfondo sfumato"
           }
         }
+      ,
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fundo degradê"
+          }
+        }
       }
     },
     "story.background.swatch" : {
@@ -27434,6 +27462,13 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Colore di sfondo"
+          }
+        }
+      ,
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cor de fundo"
           }
         }
       }
@@ -27478,6 +27513,13 @@
             "value" : "Tocca per applicare questo sfondo."
           }
         }
+      ,
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Toque para aplicar este fundo."
+          }
+        }
       }
     },
     "story.canvas.a11y.backgroundPhoto" : {
@@ -27518,6 +27560,13 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Foto di sfondo"
+          }
+        }
+      ,
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Foto de fundo"
           }
         }
       }
@@ -27562,6 +27611,13 @@
             "value" : "Video di sfondo"
           }
         }
+      ,
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Vídeo de fundo"
+          }
+        }
       }
     },
     "story.canvas.a11y.sendToBack" : {
@@ -27602,6 +27658,13 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Porta dietro"
+          }
+        }
+      ,
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enviar para trás"
           }
         }
       }
@@ -27646,6 +27709,13 @@
             "value" : "Sticker"
           }
         }
+      ,
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Figurinha"
+          }
+        }
       }
     },
     "story.canvas.a11y.textPrefix" : {
@@ -27686,6 +27756,13 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Testo"
+          }
+        }
+      ,
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Texto"
           }
         }
       }
@@ -27871,6 +27948,13 @@
             "value" : "Livello attivo: %@"
           }
         }
+      ,
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Camada ativa: %@"
+          }
+        }
       }
     },
     "story.composer.addAudioFile" : {
@@ -27911,6 +27995,13 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Audio"
+          }
+        }
+      ,
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Áudio"
           }
         }
       }
@@ -27955,6 +28046,13 @@
             "value" : "Foto/Video"
           }
         }
+      ,
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Foto/Vídeo"
+          }
+        }
       }
     },
     "story.composer.addSlide" : {
@@ -27995,6 +28093,13 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Aggiungi una slide"
+          }
+        }
+      ,
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Adicionar um slide"
           }
         }
       }
@@ -28556,6 +28661,13 @@
             "value" : "OK"
           }
         }
+      ,
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OK"
+          }
+        }
       }
     },
     "story.composer.duplicateSlide" : {
@@ -28692,6 +28804,13 @@
             "value" : "Scegli uno strumento per iniziare"
           }
         }
+      ,
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Escolha uma ferramenta para começar"
+          }
+        }
       }
     },
     "story.composer.empty.tile.drawing" : {
@@ -28732,6 +28851,13 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Disegno"
+          }
+        }
+      ,
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Desenho"
           }
         }
       }
@@ -28776,6 +28902,13 @@
             "value" : "Pennello e colori"
           }
         }
+      ,
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pincel e cores"
+          }
+        }
       }
     },
     "story.composer.empty.tile.filters" : {
@@ -28816,6 +28949,13 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Effetti"
+          }
+        }
+      ,
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Efeitos"
           }
         }
       }
@@ -28860,6 +29000,13 @@
             "value" : "Filtri visivi"
           }
         }
+      ,
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Filtros visuais"
+          }
+        }
       }
     },
     "story.composer.empty.tile.media" : {
@@ -28900,6 +29047,13 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Media"
+          }
+        }
+      ,
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mídia"
           }
         }
       }
@@ -28944,6 +29098,13 @@
             "value" : "Foto, video"
           }
         }
+      ,
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fotos, vídeos"
+          }
+        }
       }
     },
     "story.composer.empty.tile.son" : {
@@ -28984,6 +29145,13 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Suono"
+          }
+        }
+      ,
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Som"
           }
         }
       }
@@ -29028,6 +29196,13 @@
             "value" : "Musica, voce"
           }
         }
+      ,
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Música, voz"
+          }
+        }
       }
     },
     "story.composer.empty.tile.text" : {
@@ -29068,6 +29243,13 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Testo"
+          }
+        }
+      ,
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Texto"
           }
         }
       }
@@ -29112,6 +29294,13 @@
             "value" : "Stile, colore, vetro"
           }
         }
+      ,
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Estilo, cor, vidro"
+          }
+        }
       }
     },
     "story.composer.empty.tile.timeline" : {
@@ -29152,6 +29341,13 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Timeline"
+          }
+        }
+      ,
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Linha do tempo"
           }
         }
       }
@@ -29196,6 +29392,13 @@
             "value" : "Montaggio e durata"
           }
         }
+      ,
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Montagem e duração"
+          }
+        }
       }
     },
     "story.composer.empty.title" : {
@@ -29236,6 +29439,13 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Inizia la tua storia"
+          }
+        }
+      ,
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Comece seu story"
           }
         }
       }
@@ -29280,6 +29490,13 @@
             "value" : "%lld elemento/i attivo/i"
           }
         }
+      ,
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld elemento(s) ativo(s)"
+          }
+        }
       }
     },
     "story.composer.fab.badge.none" : {
@@ -29320,6 +29537,13 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Nessun elemento"
+          }
+        }
+      ,
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nenhum elemento"
           }
         }
       }
@@ -29364,6 +29588,13 @@
             "value" : "Tocca due volte per chiudere."
           }
         }
+      ,
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Toque duas vezes para fechar."
+          }
+        }
       }
     },
     "story.composer.fab.hint.open" : {
@@ -29406,6 +29637,13 @@
             "value" : "Tocca due volte per aprire."
           }
         }
+      ,
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Toque duas vezes para abrir."
+          }
+        }
       }
     },
     "story.composer.fab.open" : {
@@ -29446,6 +29684,13 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Apri lo strumento %@"
+          }
+        }
+      ,
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Abrir a ferramenta %@"
           }
         }
       }
@@ -29537,6 +29782,13 @@
             "value" : "Maniglia della barra strumenti"
           }
         }
+      ,
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Alça da barra de ferramentas"
+          }
+        }
       }
     },
     "story.composer.grabber.hint.dismiss" : {
@@ -29579,6 +29831,13 @@
             "value" : "Trascina verso il basso per ridurre o chiudere."
           }
         }
+      ,
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Arraste para baixo para reduzir ou fechar."
+          }
+        }
       }
     },
     "story.composer.grabber.hint.resize" : {
@@ -29619,6 +29878,13 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Trascina verso l'alto per ingrandire, verso il basso per ridurre o chiudere."
+          }
+        }
+      ,
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Arraste para cima para ampliar, para baixo para reduzir ou fechar."
           }
         }
       }
@@ -29804,6 +30070,13 @@
             "value" : "Caricamento dell'immagine..."
           }
         }
+      ,
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Carregando a imagem..."
+          }
+        }
       }
     },
     "story.composer.loadingVideo" : {
@@ -29844,6 +30117,13 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Caricamento del video..."
+          }
+        }
+      ,
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Carregando o vídeo..."
           }
         }
       }
@@ -29888,6 +30168,13 @@
             "value" : "Non è stato possibile caricare questo media. Verifica che sia scaricato sul dispositivo (iCloud) e riprova."
           }
         }
+      ,
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Não foi possível carregar esta mídia. Verifique se ela está baixada no dispositivo (iCloud) e tente novamente."
+          }
+        }
       }
     },
     "story.composer.mediaLoadFailedTitle" : {
@@ -29928,6 +30215,13 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Caricamento impossibile"
+          }
+        }
+      ,
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Não foi possível carregar"
           }
         }
       }
@@ -29972,6 +30266,13 @@
             "value" : "%lld media della tua bozza non sono più disponibili (file eliminati). Le slide sono state ripristinate senza questi media."
           }
         }
+      ,
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld mídias do seu rascunho não estão mais disponíveis (arquivos excluídos). Os slides foram restaurados sem essas mídias."
+          }
+        }
       }
     },
     "story.composer.mediaLostSingle" : {
@@ -30014,6 +30315,13 @@
             "value" : "Un media della tua bozza non è più disponibile (file eliminato). La slide è stata ripristinata senza questo media — rifallo se necessario."
           }
         }
+      ,
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Uma mídia do seu rascunho não está mais disponível (arquivo excluído). O slide foi restaurado sem essa mídia — refaça se necessário."
+          }
+        }
       }
     },
     "story.composer.mediaLostTitle" : {
@@ -30054,6 +30362,13 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Media non disponibili"
+          }
+        }
+      ,
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mídias indisponíveis"
           }
         }
       }
@@ -30140,6 +30455,13 @@
         }
       ,
         "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OK"
+          }
+        }
+      ,
+        "pt-BR" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "OK"
@@ -30234,6 +30556,13 @@
             "value" : "Animazione di entrata della slide corrente, visibile in anteprima e in riproduzione."
           }
         }
+      ,
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Animação de entrada do slide atual, visível na prévia e na reprodução."
+          }
+        }
       }
     },
     "story.composer.openingNone" : {
@@ -30276,6 +30605,13 @@
             "value" : "Nessuna"
           }
         }
+      ,
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nenhuma"
+          }
+        }
       }
     },
     "story.composer.openingTitle" : {
@@ -30316,6 +30652,13 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Apertura della slide"
+          }
+        }
+      ,
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Abertura do slide"
           }
         }
       }
@@ -30642,6 +30985,13 @@
             "value" : "Registra"
           }
         }
+      ,
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gravar"
+          }
+        }
       }
     },
     "story.composer.recordAudio" : {
@@ -30776,6 +31126,13 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Ripristina"
+          }
+        }
+      ,
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Refazer"
           }
         }
       }
@@ -31008,6 +31365,13 @@
             "value" : "Mostra gli strumenti"
           }
         }
+      ,
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mostrar as ferramentas"
+          }
+        }
       }
     },
     "story.composer.text.empty" : {
@@ -31048,6 +31412,13 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Testo vuoto"
+          }
+        }
+      ,
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Texto vazio"
           }
         }
       }
@@ -31092,6 +31463,13 @@
             "value" : "Timeline"
           }
         }
+      ,
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Linha do tempo"
+          }
+        }
       }
     },
     "story.composer.tool.back" : {
@@ -31132,6 +31510,13 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Indietro"
+          }
+        }
+      ,
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Voltar"
           }
         }
       }
@@ -31176,6 +31561,13 @@
             "value" : "Apre l'editor"
           }
         }
+      ,
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Abre o editor"
+          }
+        }
       }
     },
     "story.composer.transitions" : {
@@ -31218,6 +31610,13 @@
             "value" : "Transizioni"
           }
         }
+      ,
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Transições"
+          }
+        }
       }
     },
     "story.composer.undo" : {
@@ -31258,6 +31657,13 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Annulla"
+          }
+        }
+      ,
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Desfazer"
           }
         }
       }
@@ -31490,6 +31896,13 @@
             "value" : "modificata %lld g fa"
           }
         }
+      ,
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "modificado há %lld d"
+          }
+        }
       }
     },
     "story.draft.freshness.hours" : {
@@ -31530,6 +31943,13 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "modificata %lld h fa"
+          }
+        }
+      ,
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "modificado há %lld h"
           }
         }
       }
@@ -31574,6 +31994,13 @@
             "value" : "modificata %lld min fa"
           }
         }
+      ,
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "modificado há %lld min"
+          }
+        }
       }
     },
     "story.draft.freshness.now" : {
@@ -31614,6 +32041,13 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "modificata proprio ora"
+          }
+        }
+      ,
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "modificado agora mesmo"
           }
         }
       }
@@ -31658,6 +32092,13 @@
             "value" : "Bozza di storia, %lld slide"
           }
         }
+      ,
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rascunho de story, %lld slide(s)"
+          }
+        }
       }
     },
     "story.draft.resume.discard" : {
@@ -31698,6 +32139,13 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Ricomincia"
+          }
+        }
+      ,
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Recomeçar"
           }
         }
       }
@@ -31742,6 +32190,13 @@
             "value" : "Riprendi"
           }
         }
+      ,
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Retomar"
+          }
+        }
       }
     },
     "story.draft.resume.slides" : {
@@ -31784,6 +32239,13 @@
             "value" : "%lld slide"
           }
         }
+      ,
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld slide(s)"
+          }
+        }
       }
     },
     "story.draft.resume.title" : {
@@ -31824,6 +32286,13 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Riprendere la tua storia?"
+          }
+        }
+      ,
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Retomar seu story?"
           }
         }
       }
@@ -32197,6 +32666,13 @@
             "value" : "Intensità"
           }
         }
+      ,
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Intensidade"
+          }
+        }
       }
     },
     "story.language.search" : {
@@ -32237,6 +32713,13 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Cerca una lingua"
+          }
+        }
+      ,
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Buscar um idioma"
           }
         }
       }
@@ -32281,6 +32764,13 @@
             "value" : "Lingua del contenuto"
           }
         }
+      ,
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Idioma do conteúdo"
+          }
+        }
       }
     },
     "story.media.background" : {
@@ -32321,6 +32811,13 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Sfondo"
+          }
+        }
+      ,
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fundo"
           }
         }
       }
@@ -32365,6 +32862,13 @@
             "value" : "Primo piano"
           }
         }
+      ,
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Primeiro plano"
+          }
+        }
       }
     },
     "story.media.image" : {
@@ -32407,6 +32911,13 @@
             "value" : "Immagine"
           }
         }
+      ,
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Imagem"
+          }
+        }
       }
     },
     "story.media.video" : {
@@ -32447,6 +32958,13 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Video"
+          }
+        }
+      ,
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Vídeo"
           }
         }
       }
@@ -33195,6 +33713,13 @@
             "value" : "%d elemento/i riposizionato/i per il nuovo formato"
           }
         }
+      ,
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%d elemento(s) reposicionado(s) para o novo formato"
+          }
+        }
       }
     },
     "story.slide.addSlide" : {
@@ -33376,6 +33901,13 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Sticker"
+          }
+        }
+      ,
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Figurinhas"
           }
         }
       }
@@ -33841,6 +34373,13 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Testo"
+          }
+        }
+      ,
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Texto"
           }
         }
       }
@@ -34834,6 +35373,13 @@
             "value" : "Audio"
           }
         }
+      ,
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Áudio"
+          }
+        }
       }
     },
     "story.timeline.clip.backgroundImage" : {
@@ -34874,6 +35420,13 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Immagine di sfondo"
+          }
+        }
+      ,
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Imagem de fundo"
           }
         }
       }
@@ -35061,6 +35614,13 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Immagine"
+          }
+        }
+      ,
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Imagem"
           }
         }
       }
@@ -35396,6 +35956,13 @@
             "value" : "Video"
           }
         }
+      ,
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Vídeo"
+          }
+        }
       }
     },
     "story.timeline.drawing" : {
@@ -35583,6 +36150,13 @@
             "value" : "Aggiungi un video, una foto, del suono o del testo dalla barra del compositore."
           }
         }
+      ,
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Adicione um vídeo, uma foto, som ou texto pela barra do compositor."
+          }
+        }
       }
     },
     "story.timeline.empty.title" : {
@@ -35623,6 +36197,13 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Nessuna traccia"
+          }
+        }
+      ,
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nenhuma faixa"
           }
         }
       }
@@ -36297,6 +36878,13 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Non in linea"
+          }
+        }
+      ,
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Offline"
           }
         }
       }
@@ -40316,6 +40904,13 @@
             "value" : "Suono"
           }
         }
+      ,
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Som"
+          }
+        }
       }
     },
     "story.tool.drawing" : {
@@ -40356,6 +40951,13 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Disegno"
+          }
+        }
+      ,
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Desenho"
           }
         }
       }
@@ -40400,6 +41002,13 @@
             "value" : "Effetti"
           }
         }
+      ,
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Efeitos"
+          }
+        }
       }
     },
     "story.tool.media" : {
@@ -40440,6 +41049,13 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Media"
+          }
+        }
+      ,
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mídia"
           }
         }
       }
@@ -40484,6 +41100,13 @@
             "value" : "Testo"
           }
         }
+      ,
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Texto"
+          }
+        }
       }
     },
     "story.tool.texture" : {
@@ -40526,6 +41149,13 @@
             "value" : "Sfondo"
           }
         }
+      ,
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fundo"
+          }
+        }
       }
     },
     "story.tool.timeline" : {
@@ -40566,6 +41196,13 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Timeline"
+          }
+        }
+      ,
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Linha do tempo"
           }
         }
       }
@@ -41127,6 +41764,13 @@
             "value" : "Tocca per registrare"
           }
         }
+      ,
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Toque para gravar"
+          }
+        }
       }
     },
     "story.voiceRecorder.start" : {
@@ -41167,6 +41811,13 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Registra"
+          }
+        }
+      ,
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gravar"
           }
         }
       }
@@ -41211,6 +41862,13 @@
             "value" : "Interrompi la registrazione"
           }
         }
+      ,
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Parar a gravação"
+          }
+        }
       }
     },
     "story.voiceRecorder.title" : {
@@ -41251,6 +41909,13 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Registrazione"
+          }
+        }
+      ,
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gravação"
           }
         }
       }
@@ -41381,6 +42046,13 @@
             "value" : "Ritaglio"
           }
         }
+      ,
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Corte"
+          }
+        }
       }
     },
     "videoEditor.category.style" : {
@@ -41421,6 +42093,13 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Stile"
+          }
+        }
+      ,
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Estilo"
           }
         }
       }
@@ -41465,6 +42144,13 @@
             "value" : "Colore"
           }
         }
+      ,
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cor"
+          }
+        }
       }
     },
     "videoEditor.tool.audio" : {
@@ -41505,6 +42191,13 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Audio"
+          }
+        }
+      ,
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Áudio"
           }
         }
       }
@@ -41549,6 +42242,13 @@
             "value" : "Sottotitoli"
           }
         }
+      ,
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Legendas"
+          }
+        }
       }
     },
     "videoEditor.tool.crop" : {
@@ -41589,6 +42289,13 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Inquadra"
+          }
+        }
+      ,
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enquadrar"
           }
         }
       }
@@ -41633,6 +42340,13 @@
             "value" : "Filtri"
           }
         }
+      ,
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Filtros"
+          }
+        }
       }
     },
     "videoEditor.tool.rotate" : {
@@ -41673,6 +42387,13 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Ruota"
+          }
+        }
+      ,
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Girar"
           }
         }
       }
@@ -41717,6 +42438,13 @@
             "value" : "Velocità"
           }
         }
+      ,
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Velocidade"
+          }
+        }
       }
     },
     "videoEditor.tool.split" : {
@@ -41759,6 +42487,13 @@
             "value" : "Dividi"
           }
         }
+      ,
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dividir"
+          }
+        }
       }
     },
     "videoEditor.tool.trim" : {
@@ -41799,6 +42534,13 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Ritaglia"
+          }
+        }
+      ,
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aparar"
           }
         }
       }
@@ -44494,6 +45236,13 @@
             "value" : "Dissolvenza"
           }
         }
+      ,
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fade"
+          }
+        }
       }
     },
     "story.composer.opening.zoom" : {
@@ -44531,6 +45280,13 @@
         }
       ,
         "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zoom"
+          }
+        }
+      ,
+        "pt-BR" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Zoom"
@@ -44578,6 +45334,13 @@
             "value" : "Scorrimento"
           }
         }
+      ,
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Deslizamento"
+          }
+        }
       }
     },
     "story.composer.opening.reveal" : {
@@ -44618,6 +45381,13 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Rivelazione"
+          }
+        }
+      ,
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Revelação"
           }
         }
       }
@@ -44662,6 +45432,13 @@
             "value" : "Stile del testo"
           }
         }
+      ,
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Estilo do texto"
+          }
+        }
       }
     },
     "story.textEdit.tool.weight" : {
@@ -44702,6 +45479,13 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Spessore del testo"
+          }
+        }
+      ,
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Espessura do texto"
           }
         }
       }
@@ -44746,6 +45530,13 @@
             "value" : "Colore del testo"
           }
         }
+      ,
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cor do texto"
+          }
+        }
       }
     },
     "story.textEdit.tool.size" : {
@@ -44786,6 +45577,13 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Dimensione del testo"
+          }
+        }
+      ,
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tamanho do texto"
           }
         }
       }
@@ -44830,6 +45628,13 @@
             "value" : "Allineamento del testo"
           }
         }
+      ,
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Alinhamento do texto"
+          }
+        }
       }
     },
     "story.textEdit.tool.background" : {
@@ -44870,6 +45675,13 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Sfondo del testo"
+          }
+        }
+      ,
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fundo do texto"
           }
         }
       }
@@ -44914,6 +45726,13 @@
             "value" : "Cornice del testo"
           }
         }
+      ,
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Moldura do texto"
+          }
+        }
       }
     },
     "story.textEdit.tool.border" : {
@@ -44954,6 +45773,13 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Contorno del testo"
+          }
+        }
+      ,
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Contorno do texto"
           }
         }
       }
@@ -44998,6 +45824,13 @@
             "value" : "Termina la modifica del testo"
           }
         }
+      ,
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Terminar a edição do texto"
+          }
+        }
       }
     },
     "story.textEdit.finish.hint" : {
@@ -45038,6 +45871,13 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Chiude l'editor e nasconde la tastiera"
+          }
+        }
+      ,
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fecha o editor e oculta o teclado"
           }
         }
       }
@@ -45082,6 +45922,13 @@
             "value" : "Sottile"
           }
         }
+      ,
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fino"
+          }
+        }
       }
     },
     "story.textEdit.weight.normal" : {
@@ -45124,6 +45971,13 @@
             "value" : "Normale"
           }
         }
+      ,
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Normal"
+          }
+        }
       }
     },
     "story.textEdit.weight.semibold" : {
@@ -45161,6 +46015,13 @@
         }
       ,
         "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Semi"
+          }
+        }
+      ,
+        "pt-BR" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Semi"
@@ -45208,6 +46069,13 @@
             "value" : "Grassetto"
           }
         }
+      ,
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Negrito"
+          }
+        }
       }
     },
     "story.textEdit.frame.rounded" : {
@@ -45248,6 +46116,13 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Arrotondato"
+          }
+        }
+      ,
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Arredondado"
           }
         }
       }
@@ -45292,6 +46167,13 @@
             "value" : "Pillola"
           }
         }
+      ,
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cápsula"
+          }
+        }
       }
     },
     "story.textEdit.frame.rectangle" : {
@@ -45332,6 +46214,13 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Quadrato"
+          }
+        }
+      ,
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Quadrado"
           }
         }
       }
@@ -45376,6 +46265,13 @@
             "value" : "Rombo"
           }
         }
+      ,
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Losango"
+          }
+        }
       }
     },
     "story.textEdit.frame.cloud" : {
@@ -45416,6 +46312,13 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Nuvola"
+          }
+        }
+      ,
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nuvem"
           }
         }
       }
@@ -45460,6 +46363,13 @@
             "value" : "Fumetto"
           }
         }
+      ,
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Balão de fala"
+          }
+        }
       }
     },
     "story.textEdit.bg.glass" : {
@@ -45500,6 +46410,13 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Vetro"
+          }
+        }
+      ,
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Vidro"
           }
         }
       }
@@ -45544,6 +46461,13 @@
             "value" : "Nero"
           }
         }
+      ,
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Preto"
+          }
+        }
       }
     },
     "story.textEdit.bg.black65" : {
@@ -45584,6 +46508,13 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Nero 65%"
+          }
+        }
+      ,
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Preto 65%"
           }
         }
       }
@@ -45628,6 +46559,13 @@
             "value" : "Bianco"
           }
         }
+      ,
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Branco"
+          }
+        }
       }
     },
     "story.textEdit.bg.white65" : {
@@ -45668,6 +46606,13 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Bianco 65%"
+          }
+        }
+      ,
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Branco 65%"
           }
         }
       }
@@ -45712,6 +46657,13 @@
             "value" : "Indaco"
           }
         }
+      ,
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Índigo"
+          }
+        }
       }
     },
     "story.textEdit.bg.indigo65" : {
@@ -45754,6 +46706,13 @@
             "value" : "Indaco 65%"
           }
         }
+      ,
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Índigo 65%"
+          }
+        }
       }
     },
     "story.textEdit.bg.pink" : {
@@ -45791,6 +46750,13 @@
         }
       ,
         "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rosa"
+          }
+        }
+      ,
+        "pt-BR" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Rosa"
@@ -45838,6 +46804,13 @@
             "value" : "Verde"
           }
         }
+      ,
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Verde"
+          }
+        }
       }
     },
     "story.textEdit.bg.amber" : {
@@ -45878,6 +46851,13 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Ambra"
+          }
+        }
+      ,
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Âmbar"
           }
         }
       }
@@ -45922,6 +46902,13 @@
             "value" : "Rosso"
           }
         }
+      ,
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Vermelho"
+          }
+        }
       }
     },
     "story.drawEdit.tool.tool" : {
@@ -45962,6 +46949,13 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Pennello"
+          }
+        }
+      ,
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pincel"
           }
         }
       }
@@ -46006,6 +47000,13 @@
             "value" : "Colore del tratto"
           }
         }
+      ,
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cor do traço"
+          }
+        }
       }
     },
     "story.drawEdit.tool.thickness" : {
@@ -46046,6 +47047,13 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Spessore del tratto"
+          }
+        }
+      ,
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Espessura do traço"
           }
         }
       }
@@ -46090,6 +47098,13 @@
             "value" : "Levigatura del tratto"
           }
         }
+      ,
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Suavização do traço"
+          }
+        }
       }
     },
     "story.drawEdit.undo" : {
@@ -46130,6 +47145,13 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Annulla l'ultimo tratto"
+          }
+        }
+      ,
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Desfazer o último traço"
           }
         }
       }
@@ -46174,6 +47196,13 @@
             "value" : "Ripristina il tratto annullato"
           }
         }
+      ,
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Refazer o traço desfeito"
+          }
+        }
       }
     },
     "story.drawEdit.unavailable" : {
@@ -46214,6 +47243,13 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Non disponibile"
+          }
+        }
+      ,
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Indisponível"
           }
         }
       }
@@ -46258,6 +47294,13 @@
             "value" : "Termina la modifica del disegno"
           }
         }
+      ,
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Terminar a edição do desenho"
+          }
+        }
       }
     },
     "story.drawEdit.finish.hint" : {
@@ -46298,6 +47341,13 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Chiude i controlli di disegno"
+          }
+        }
+      ,
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fecha os controles de desenho"
           }
         }
       }
@@ -46342,6 +47392,13 @@
             "value" : "%lld tratto/i"
           }
         }
+      ,
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld traço(s)"
+          }
+        }
       }
     },
     "story.drawEdit.strokeList.style" : {
@@ -46382,6 +47439,13 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Stile del tratto"
+          }
+        }
+      ,
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Estilo do traço"
           }
         }
       }
@@ -46426,6 +47490,13 @@
             "value" : "Elimina il tratto"
           }
         }
+      ,
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Excluir o traço"
+          }
+        }
       }
     },
     "story.drawEdit.smoothing.raw" : {
@@ -46468,6 +47539,13 @@
             "value" : "Grezzo"
           }
         }
+      ,
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bruto"
+          }
+        }
       }
     },
     "story.drawEdit.smoothing.curve" : {
@@ -46505,6 +47583,13 @@
         }
       ,
         "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Curva"
+          }
+        }
+      ,
+        "pt-BR" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Curva"
@@ -46552,6 +47637,13 @@
             "value" : "Retta"
           }
         }
+      ,
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reta"
+          }
+        }
       }
     },
     "story.drawEdit.strokeTool.pen" : {
@@ -46592,6 +47684,13 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Penna"
+          }
+        }
+      ,
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Caneta"
           }
         }
       }
@@ -46636,6 +47735,13 @@
             "value" : "Pennarello"
           }
         }
+      ,
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Marcador"
+          }
+        }
       }
     },
     "story.drawEdit.strokeTool.eraser" : {
@@ -46676,6 +47782,13 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Gomma"
+          }
+        }
+      ,
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Borracha"
           }
         }
       }
