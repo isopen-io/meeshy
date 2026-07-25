@@ -185,7 +185,7 @@ struct StoryGestureOverlayView: View {
                         switch StoryGestureDecisions.decideTouchUp(
                             context: ctx,
                             touchStartX: value.startLocation.x,
-                            halfWidth: geometry.size.width / 2,
+                            width: geometry.size.width,
                             elapsed: elapsed,
                             holdThreshold: holdThresholdSeconds
                         ) {
@@ -212,6 +212,8 @@ struct StoryGestureOverlayView: View {
                         case .navigateNext:
                             HapticFeedback.light()
                             onNext()
+                        case .togglePause:
+                            break  // décidé sur le double tap, pas au touchUp
                         case .resumeFromPause:
                             break  // décidé au touchDown, pas au touchUp
                         }
@@ -271,10 +273,82 @@ enum StoryGestureAction: Equatable {
     /// Touch-up d'un long-press confirmé : la story reste en pause
     /// (`isPaused` est resté `true`), pas de nav.
     case confirmLongPressPause
-    /// Tap court → navigation slide précédente (côté gauche).
+    /// Tap court → navigation slide précédente (bande gauche).
     case navigatePrevious
-    /// Tap court → navigation slide suivante (côté droit ou centre).
+    /// Tap court → navigation slide suivante (bande droite).
     case navigateNext
+    /// Double tap dans la bande centrale → bascule pause / lecture.
+    case togglePause
+}
+
+/// Bande horizontale sous le doigt, au touch-down.
+///
+/// La navigation par tap est le geste le plus fréquent d'une story : elle doit
+/// rester IMMÉDIATE. Un double tap actif sur tout l'écran forcerait le tap
+/// simple à attendre l'échec du double tap (~250 ms) et rendrait la navigation
+/// molle. On réserve donc une bande centrale au double tap, et les bords
+/// naviguent sans délai (décision utilisateur 2026-07-25).
+///
+/// Le long-press reste un raccourci de pause disponible sur toute la surface.
+enum StoryTapZone: Equatable {
+    case previous
+    case center
+    case next
+
+    /// Fraction de largeur occupée par CHAQUE bande de navigation.
+    static let edgeFraction: CGFloat = 0.30
+
+    static func zone(forX x: CGFloat, width: CGFloat) -> StoryTapZone {
+        // Largeur dégénérée : pas de division, on garde le comportement
+        // historique du bord (`.next`).
+        guard width > 0 else { return .next }
+        let edge = width * edgeFraction
+        if x < edge { return .previous }
+        if x >= width - edge { return .next }
+        return .center
+    }
+}
+
+/// Action verticale résolue au relâchement d'un drag vertical.
+enum StoryVerticalGestureAction: Equatable {
+    /// Sous le seuil : la vue revient à sa position initiale.
+    case cancel
+    /// Swipe haut en mode fenêtré → passe en plein écran.
+    case enterFullscreen
+    /// Swipe bas en plein écran → revient en mode fenêtré (ne quitte PAS).
+    case exitFullscreen
+    /// Swipe bas en mode fenêtré → quitte la story.
+    case dismissViewer
+    /// Rien à faire (swipe haut alors qu'on est déjà en plein écran).
+    case none
+}
+
+/// Décide du sort d'un drag vertical selon l'état plein écran.
+///
+/// Le swipe bas porte DEUX sens selon le contexte ; la règle « sortir du plein
+/// écran » prime sur « quitter la story » (spec 2026-07-25), sinon il serait
+/// impossible de revenir en mode fenêtré au doigt.
+enum StoryVerticalGestureDecisions {
+
+    /// - Parameters:
+    ///   - translationY: translation verticale courante (positif = vers le bas).
+    ///   - predictedY: translation projetée par l'inertie — permet de valider
+    ///     un flick court mais rapide.
+    ///   - isFullscreen: état plein écran au moment du relâchement.
+    ///   - threshold: distance de validation en points.
+    static func decide(translationY: CGFloat,
+                       predictedY: CGFloat,
+                       isFullscreen: Bool,
+                       threshold: CGFloat) -> StoryVerticalGestureAction {
+        let predictionThreshold = threshold * 2.5
+
+        let goesDown = translationY > threshold || predictedY > predictionThreshold
+        let goesUp = translationY < -threshold || predictedY < -predictionThreshold
+
+        if goesDown { return isFullscreen ? .exitFullscreen : .dismissViewer }
+        if goesUp { return isFullscreen ? .none : .enterFullscreen }
+        return .cancel
+    }
 }
 
 /// Namespace de fonctions pures qui décident des transitions de l'overlay
@@ -298,14 +372,18 @@ enum StoryGestureDecisions {
     ///
     /// - Parameters:
     ///   - context: état courant du toucher.
-    ///   - touchStartX: coordonnée X du touch-down (pour décider prev/next).
-    ///   - halfWidth: largeur / 2 du viewport.
+    ///   - touchStartX: coordonnée X du touch-down (pour décider la bande).
+    ///   - width: largeur du viewport.
     ///   - elapsed: durée écoulée depuis le touch-down (s).
     ///   - holdThreshold: seuil long-press en secondes.
+    ///
+    /// La bande centrale ne navigue PAS : elle est réservée au double tap
+    /// (pause). Sans cela, le premier tap d'un double tap ferait avancer la
+    /// story avant l'arrivée du second.
     static func decideTouchUp(
         context: StoryGestureContext,
         touchStartX: CGFloat,
-        halfWidth: CGFloat,
+        width: CGFloat,
         elapsed: TimeInterval,
         holdThreshold: TimeInterval
     ) -> StoryGestureAction {
@@ -315,7 +393,25 @@ enum StoryGestureDecisions {
         // Race rare : seuil franchi mais le tick `onChanged` n'a pas posé
         // `holdActive = true` à temps. On évite la nav surprise.
         if elapsed >= holdThreshold { return .none }
-        return touchStartX < halfWidth ? .navigatePrevious : .navigateNext
+        switch StoryTapZone.zone(forX: touchStartX, width: width) {
+        case .previous: return .navigatePrevious
+        case .next: return .navigateNext
+        case .center: return .none
+        }
+    }
+
+    /// Décide quoi faire sur un DOUBLE TAP.
+    ///
+    /// Actif uniquement dans la bande centrale : sur les bords, les deux taps
+    /// ont déjà navigué immédiatement, il n'y a plus rien à décider.
+    static func decideDoubleTap(
+        context: StoryGestureContext,
+        touchStartX: CGFloat,
+        width: CGFloat
+    ) -> StoryGestureAction {
+        if context.isComposerEngaged { return .dismissComposer }
+        guard StoryTapZone.zone(forX: touchStartX, width: width) == .center else { return .none }
+        return .togglePause
     }
 }
 

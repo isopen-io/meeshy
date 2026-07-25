@@ -62,7 +62,7 @@ final class StoryGestureDecisionsTests: XCTestCase {
         let action = StoryGestureDecisions.decideTouchUp(
             context: ctx,
             touchStartX: 50,
-            halfWidth: 200,
+            width: 400,
             elapsed: 0.05,
             holdThreshold: 0.2
         )
@@ -83,7 +83,7 @@ final class StoryGestureDecisionsTests: XCTestCase {
         let action = StoryGestureDecisions.decideTouchUp(
             context: ctx,
             touchStartX: 350,   // right half — would normally navigate next
-            halfWidth: 200,
+            width: 400,
             elapsed: 0.06,
             holdThreshold: 0.2
         )
@@ -104,7 +104,7 @@ final class StoryGestureDecisionsTests: XCTestCase {
         let action = StoryGestureDecisions.decideTouchUp(
             context: ctx,
             touchStartX: 50,
-            halfWidth: 200,
+            width: 400,
             elapsed: 0.25,
             holdThreshold: 0.2
         )
@@ -127,7 +127,7 @@ final class StoryGestureDecisionsTests: XCTestCase {
         let action = StoryGestureDecisions.decideTouchUp(
             context: ctx,
             touchStartX: 50,
-            halfWidth: 200,
+            width: 400,
             elapsed: 0.21,
             holdThreshold: 0.2
         )
@@ -136,7 +136,7 @@ final class StoryGestureDecisionsTests: XCTestCase {
 
     // MARK: - decideTouchUp — short tap navigation
 
-    func test_touchUp_shortTapLeftHalf_navigatesPrevious() {
+    func test_touchUp_shortTapLeftEdge_navigatesPrevious() {
         let ctx = StoryGestureContext(
             holdActive: false,
             isPaused: false,
@@ -146,14 +146,14 @@ final class StoryGestureDecisionsTests: XCTestCase {
         let action = StoryGestureDecisions.decideTouchUp(
             context: ctx,
             touchStartX: 50,
-            halfWidth: 200,
+            width: 400,
             elapsed: 0.05,
             holdThreshold: 0.2
         )
         XCTAssertEqual(action, .navigatePrevious)
     }
 
-    func test_touchUp_shortTapRightHalf_navigatesNext() {
+    func test_touchUp_shortTapRightEdge_navigatesNext() {
         let ctx = StoryGestureContext(
             holdActive: false,
             isPaused: false,
@@ -163,16 +163,18 @@ final class StoryGestureDecisionsTests: XCTestCase {
         let action = StoryGestureDecisions.decideTouchUp(
             context: ctx,
             touchStartX: 300,
-            halfWidth: 200,
+            width: 400,
             elapsed: 0.05,
             holdThreshold: 0.2
         )
         XCTAssertEqual(action, .navigateNext)
     }
 
-    func test_touchUp_shortTapExactlyAtHalfWidth_navigatesNext() {
-        // Boundary check : `touchStartX < halfWidth` is the prev condition;
-        // exact equality should fall through to `next`.
+    /// Le milieu exact appartenait au côté `next` quand l'écran était coupé en
+    /// deux. Depuis l'introduction des bandes 30/40/30 (spec 2026-07-25), le
+    /// centre est réservé au double tap et ne navigue plus.
+    /// Voir `StoryGestureNavigationTests` pour la couverture des trois bandes.
+    func test_touchUp_shortTapAtExactCenter_doesNotNavigate() {
         let ctx = StoryGestureContext(
             holdActive: false,
             isPaused: false,
@@ -182,11 +184,11 @@ final class StoryGestureDecisionsTests: XCTestCase {
         let action = StoryGestureDecisions.decideTouchUp(
             context: ctx,
             touchStartX: 200,
-            halfWidth: 200,
+            width: 400,
             elapsed: 0.05,
             holdThreshold: 0.2
         )
-        XCTAssertEqual(action, .navigateNext)
+        XCTAssertEqual(action, .none)
     }
 
     // MARK: - End-to-end flow
@@ -213,7 +215,7 @@ final class StoryGestureDecisionsTests: XCTestCase {
             StoryGestureDecisions.decideTouchUp(
                 context: ctx,
                 touchStartX: 50,
-                halfWidth: 200,
+                width: 400,
                 elapsed: 0.25,
                 holdThreshold: 0.2
             ),
@@ -237,7 +239,7 @@ final class StoryGestureDecisionsTests: XCTestCase {
             StoryGestureDecisions.decideTouchUp(
                 context: ctx,
                 touchStartX: 350,
-                halfWidth: 200,
+                width: 400,
                 elapsed: 0.08,
                 holdThreshold: 0.2
             ),
