@@ -107,20 +107,20 @@ final class StoryExportBrandedEndToEndTests: XCTestCase {
         XCTAssertEqual(natural.width, CanvasGeometry.designSize.width, accuracy: 1)
         XCTAssertEqual(natural.height, CanvasGeometry.designSize.height, accuracy: 1)
 
-        // 3. L'image de l'interlude est bien en tête : au quart de sa durée, le
-        //    coin est l'indigo de marque (hors avatar, hors texte).
-        let introPixel = try await cornerPixel(of: asset, atSeconds: StoryExportIntro.duration * 0.25)
+        // 3. L'image de l'interlude est bien en tête : au quart de sa durée,
+        //    l'écran est dominé par l'indigo de marque.
+        let introPixel = try await averageColour(of: asset, atSeconds: StoryExportIntro.duration * 0.25)
         XCTAssertGreaterThan(introPixel.blue, introPixel.red,
-                             "l'interlude doit montrer l'indigo de marque")
+                             "l'interlude doit montrer l'indigo de marque (mesuré \(introPixel))")
         XCTAssertGreaterThan(introPixel.blue, 40,
-                             "le voile de lisibilité ne doit pas tout éteindre")
+                             "le voile de lisibilité ne doit pas tout éteindre (mesuré \(introPixel))")
 
-        // 4. La story suit : au milieu de la story, le coin n'est plus l'indigo
-        //    de l'interlude — sinon l'interlude aurait mangé toute la vidéo.
-        let storyPixel = try await cornerPixel(of: asset,
-                                               atSeconds: StoryExportIntro.duration + Self.storyDuration / 2)
-        XCTAssertNotEqual(storyPixel.blue, introPixel.blue, accuracy: 8,
-                          "passé l'interlude, l'image doit avoir changé")
+        // 4. La story suit : au milieu de la story, l'image n'est plus
+        //    l'interlude — sinon celui-ci aurait mangé toute la vidéo.
+        let storyPixel = try await averageColour(of: asset,
+                                                 atSeconds: StoryExportIntro.duration + Self.storyDuration / 2)
+        XCTAssertLessThan(storyPixel.blue, introPixel.blue / 2,
+                          "passé l'interlude, l'image doit avoir changé (interlude \(introPixel) vs story \(storyPixel))")
     }
 
     /// Le jingle DOIT s'entendre sur l'interlude et se taire ensuite. Mesuré en
@@ -229,20 +229,31 @@ final class StoryExportBrandedEndToEndTests: XCTestCase {
 
     private struct Pixel { let red: Int; let green: Int; let blue: Int }
 
-    private func cornerPixel(of asset: AVURLAsset, atSeconds seconds: TimeInterval) async throws -> Pixel {
+    /// Couleur MOYENNE de l'image à `seconds` — l'image entière réduite à un
+    /// pixel. Discriminant net entre l'interlude (aplat indigo, moyenne claire)
+    /// et la story (fond noir, moyenne quasi nulle), et insensible au cadrage
+    /// contrairement à un pixel isolé.
+    ///
+    /// Le tampon est alloué explicitement : passer `&tableau` à `CGContext` ne
+    /// garantit le pointeur que le temps de l'appel, et tout dessin ultérieur
+    /// écrirait dans une mémoire libérée — les valeurs relues n'auraient alors
+    /// aucun sens, et les assertions passeraient sur du bruit.
+    private func averageColour(of asset: AVURLAsset, atSeconds seconds: TimeInterval) async throws -> Pixel {
         let generator = AVAssetImageGenerator(asset: asset)
         generator.appliesPreferredTrackTransform = true
         generator.requestedTimeToleranceBefore = .zero
         generator.requestedTimeToleranceAfter = CMTime(seconds: 0.1, preferredTimescale: 600)
         let (image, _) = try await generator.image(at: CMTime(seconds: seconds, preferredTimescale: 600))
 
-        var pixel = [UInt8](repeating: 0, count: 4)
-        let context = try XCTUnwrap(CGContext(data: &pixel, width: 1, height: 1,
+        let buffer = UnsafeMutablePointer<UInt8>.allocate(capacity: 4)
+        buffer.initialize(repeating: 0, count: 4)
+        defer { buffer.deallocate() }
+        let context = try XCTUnwrap(CGContext(data: buffer, width: 1, height: 1,
                                               bitsPerComponent: 8, bytesPerRow: 4,
                                               space: CGColorSpaceCreateDeviceRGB(),
                                               bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue))
-        // Un pixel du coin haut-gauche : hors avatar, hors texte, c'est le fond.
-        context.draw(image, in: CGRect(x: -8, y: -Double(image.height) + 16, width: Double(image.width), height: Double(image.height)))
-        return Pixel(red: Int(pixel[0]), green: Int(pixel[1]), blue: Int(pixel[2]))
+        context.interpolationQuality = .medium
+        context.draw(image, in: CGRect(x: 0, y: 0, width: 1, height: 1))
+        return Pixel(red: Int(buffer[0]), green: Int(buffer[1]), blue: Int(buffer[2]))
     }
 }
