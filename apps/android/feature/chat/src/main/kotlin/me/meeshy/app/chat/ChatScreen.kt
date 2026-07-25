@@ -55,6 +55,7 @@ import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Gradient
 import androidx.compose.material.icons.filled.Grain
 import androidx.compose.material.icons.filled.HourglassEmpty
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.LooksOne
 import androidx.compose.material.icons.filled.Star
@@ -149,6 +150,7 @@ import kotlin.math.roundToInt
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.compose.LifecycleResumeEffect
+import me.meeshy.sdk.composer.ComposerAffordances
 import me.meeshy.sdk.link.LinkPreview
 import me.meeshy.sdk.link.LinkPreviewOutcome
 import me.meeshy.sdk.link.LinkPreviewParser
@@ -388,6 +390,7 @@ fun ChatScreen(
                     draft = state.draft,
                     canSend = state.canSend,
                     isEditing = state.isEditing,
+                    affordances = state.composerAffordances,
                     replyingToLabel = replyTarget?.let { it.senderName ?: it.text.take(40) },
                     hasEffects = state.hasPendingEffects,
                     clipboardContent = state.clipboardContent,
@@ -2263,6 +2266,7 @@ private fun ChatComposer(
     draft: String,
     canSend: Boolean,
     isEditing: Boolean,
+    affordances: ComposerAffordances,
     replyingToLabel: String?,
     hasEffects: Boolean,
     clipboardContent: ClipboardContent?,
@@ -2377,6 +2381,12 @@ private fun ChatComposer(
                     onSend = { recording = recording.stop().session },
                     modifier = Modifier.padding(horizontal = MeeshySpacing.md, vertical = MeeshySpacing.sm),
                 )
+            } else if (affordances.isReadOnly) {
+                ComposerReadOnlyNotice(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = MeeshySpacing.md, vertical = MeeshySpacing.md),
+                )
             } else {
                 Row(
                     modifier = Modifier
@@ -2385,12 +2395,14 @@ private fun ChatComposer(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     if (!isEditing) {
-                        IconButton(onClick = { filePicker.launch("*/*") }) {
-                            Icon(
-                                imageVector = Icons.Filled.AttachFile,
-                                contentDescription = stringResource(R.string.chat_attach_file),
-                                tint = MeeshyTheme.tokens.textSecondary,
-                            )
+                        if (affordances.showsAttachmentLadder) {
+                            IconButton(onClick = { filePicker.launch("*/*") }) {
+                                Icon(
+                                    imageVector = Icons.Filled.AttachFile,
+                                    contentDescription = stringResource(R.string.chat_attach_file),
+                                    tint = MeeshyTheme.tokens.textSecondary,
+                                )
+                            }
                         }
                         IconButton(onClick = onOpenEffects) {
                             Icon(
@@ -2407,7 +2419,9 @@ private fun ChatComposer(
                         placeholder = { Text(stringResource(R.string.chat_message_placeholder)) },
                         maxLines = 4,
                     )
-                    if (!isEditing && draft.isBlank() && clipboardContent == null) {
+                    if (!isEditing && draft.isBlank() && clipboardContent == null &&
+                        affordances.canSendAudios
+                    ) {
                         IconButton(onClick = { recording = recording.start() }) {
                             Icon(
                                 imageVector = Icons.Filled.Mic,
@@ -2426,6 +2440,34 @@ private fun ChatComposer(
                 }
             }
         }
+    }
+}
+
+/**
+ * Read-only composer state for a participant whose permissions deny sending text
+ * (a share-link guest with `canSendMessages = false`). The thin, coverage-exempt
+ * Compose glue over [ComposerAffordances.isReadOnly] — a muted lock row that
+ * replaces the input entirely so the guest can read but never post.
+ */
+@Composable
+private fun ComposerReadOnlyNotice(modifier: Modifier = Modifier) {
+    Row(
+        modifier = modifier,
+        horizontalArrangement = Arrangement.Center,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(
+            imageVector = Icons.Filled.Lock,
+            contentDescription = null,
+            tint = MeeshyTheme.tokens.textSecondary,
+            modifier = Modifier.size(16.dp),
+        )
+        Text(
+            text = stringResource(R.string.chat_composer_read_only),
+            style = MaterialTheme.typography.bodySmall,
+            color = MeeshyTheme.tokens.textSecondary,
+            modifier = Modifier.padding(start = MeeshySpacing.xs),
+        )
     }
 }
 

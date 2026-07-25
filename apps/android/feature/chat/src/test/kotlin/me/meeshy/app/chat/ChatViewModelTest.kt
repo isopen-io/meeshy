@@ -43,8 +43,11 @@ import me.meeshy.sdk.model.ApiConversation
 import me.meeshy.sdk.model.ApiMessage
 import me.meeshy.sdk.model.ApiMessageAttachment
 import me.meeshy.sdk.model.ApiMessageReplyPreview
+import me.meeshy.sdk.model.AnonymousSessionContext
 import me.meeshy.sdk.model.ApiParticipant
 import me.meeshy.sdk.model.ApiTextTranslation
+import me.meeshy.sdk.model.ParticipantPermissions
+import me.meeshy.sdk.session.InMemoryAnonymousSessionStore
 import me.meeshy.sdk.model.ConversationDraft
 import me.meeshy.sdk.model.EphemeralDuration
 import me.meeshy.sdk.model.MeeshyUser
@@ -100,6 +103,14 @@ class ChatViewModelTest {
     }
 
     private fun synced(message: ApiMessage) = LocalMessage(message)
+
+    private fun anonymousGuestSession(permissions: ParticipantPermissions) = AnonymousSessionContext(
+        sessionToken = "guest-token",
+        participantId = "p-guest",
+        permissions = permissions,
+        linkId = "link-1",
+        conversationId = "c1",
+    )
 
     private val reactionAdded = MutableSharedFlow<ReactionUpdateEvent>()
     private val reactionRemoved = MutableSharedFlow<ReactionUpdateEvent>()
@@ -175,6 +186,7 @@ class ChatViewModelTest {
         targetConversations: List<ApiConversation> = emptyList(),
         activeCall: ActiveCallSession? = null,
         mentionSearch: MentionSearch = FakeMentionSearch(),
+        anonymousSession: AnonymousSessionContext? = null,
     ): Harness {
         val repo = mockk<MessageRepository>(relaxed = true)
         every { repo.messagesStream(any(), any(), any()) } returns stream
@@ -193,6 +205,7 @@ class ChatViewModelTest {
         val reportRepo = mockk<ReportRepository>(relaxed = true)
         val mediaQueue = mockk<MediaUploadQueue>(relaxed = true)
         coEvery { mediaQueue.enqueue(any()) } returns "upload-cmid"
+        val anonymousStore = InMemoryAnonymousSessionStore(anonymousSession)
         val handle = SavedStateHandle(mapOf(ChatViewModel.CONVERSATION_ID_ARG to "c1"))
         val socket = socketManager()
         val emojiUsage = InMemoryEmojiUsageStore()
@@ -221,6 +234,7 @@ class ChatViewModelTest {
                 reportRepo,
                 mediaQueue,
                 mentionSearch,
+                anonymousStore,
                 handle,
             ),
             repo,
@@ -293,6 +307,64 @@ class ChatViewModelTest {
         advanceUntilIdle()
 
         assertThat(h.vm.state.value.activeCall).isNull()
+    }
+
+    @Test
+    fun a_registered_member_with_no_anonymous_session_keeps_the_full_composer() = runTest(dispatcher) {
+        val h = harness(syncedConversation(), currentUser = me, anonymousSession = null)
+
+        advanceUntilIdle()
+
+        val affordances = h.vm.state.value.composerAffordances
+        assertThat(h.vm.state.value.composerPermissions).isNull()
+        assertThat(affordances.isReadOnly).isFalse()
+        assertThat(affordances.showsAttachmentLadder).isTrue()
+        assertThat(affordances.canSendAudios).isTrue()
+    }
+
+    @Test
+    fun a_share_link_guest_gates_the_composer_to_its_hardened_permissions() = runTest(dispatcher) {
+        val h = harness(
+            syncedConversation(),
+            currentUser = me,
+            anonymousSession = anonymousGuestSession(ParticipantPermissions.defaultAnonymous),
+        )
+
+        advanceUntilIdle()
+
+        val affordances = h.vm.state.value.composerAffordances
+        assertThat(h.vm.state.value.composerPermissions).isEqualTo(ParticipantPermissions.defaultAnonymous)
+        // defaultAnonymous: text + images only, everything else denied.
+        assertThat(affordances.isReadOnly).isFalse()
+        assertThat(affordances.canSendImages).isTrue()
+        assertThat(affordances.showsAttachmentLadder).isTrue()
+        assertThat(affordances.canSendAudios).isFalse()
+        assertThat(affordances.canSendVideos).isFalse()
+        assertThat(affordances.canSendLocations).isFalse()
+    }
+
+    @Test
+    fun a_muted_guest_makes_the_composer_read_only() = runTest(dispatcher) {
+        val muted = ParticipantPermissions(
+            canSendMessages = false,
+            canSendFiles = false,
+            canSendImages = false,
+            canSendVideos = false,
+            canSendAudios = false,
+            canSendLocations = false,
+            canSendLinks = false,
+        )
+        val h = harness(
+            syncedConversation(),
+            currentUser = me,
+            anonymousSession = anonymousGuestSession(muted),
+        )
+
+        advanceUntilIdle()
+
+        val affordances = h.vm.state.value.composerAffordances
+        assertThat(affordances.isReadOnly).isTrue()
+        assertThat(affordances.showsAttachmentLadder).isFalse()
     }
 
     @Test
