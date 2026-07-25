@@ -56,6 +56,11 @@ export const storyAuthorSelect = Prisma.validator<Prisma.UserSelect>()({
   ...authorSelect,
   isOnline: true,
   lastActiveAt: true,
+  // `banner` complète l'interstitiel : c'était le dernier élément encore
+  // résolu paresseusement (GET /users/:id par auteur, cf.
+  // StoryViewModel.resolveGroupIntro). Même raisonnement que la présence
+  // ci-dessus — l'interstitiel doit être complet à l'instant du switch.
+  banner: true,
 });
 
 /**

@@ -1,5 +1,6 @@
 import {
   authorSelect,
+  storyAuthorSelect,
   mediaSelect,
   mediaInclude,
   commentMediaInclude,
@@ -20,6 +21,23 @@ describe('posts/postIncludes — canonical shared selects', () => {
         displayName: true,
         avatar: true,
       });
+    });
+  });
+
+  describe('storyAuthorSelect', () => {
+    it("inclut banner pour que l'interstitiel d'identité soit complet sans résolution paresseuse", () => {
+      expect(storyAuthorSelect).toHaveProperty('banner', true);
+    });
+
+    it('reste un sur-ensemble de authorSelect', () => {
+      for (const key of Object.keys(authorSelect)) {
+        expect(storyAuthorSelect).toHaveProperty(key);
+      }
+    });
+
+    it('conserve la présence déjà embarquée', () => {
+      expect(storyAuthorSelect).toHaveProperty('isOnline', true);
+      expect(storyAuthorSelect).toHaveProperty('lastActiveAt', true);
     });
   });
 
