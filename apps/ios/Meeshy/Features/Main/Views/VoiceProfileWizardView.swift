@@ -232,7 +232,7 @@ struct VoiceProfileWizardView: View {
                     .font(MeeshyFont.relative(22, weight: .bold, design: .rounded))
                     .foregroundColor(theme.textPrimary)
 
-                Text(String(localized: "voice.profile.wizard.recording.description", defaultValue: "Lisez les phrases affichees a voix haute. Minimum 3 echantillons de 10 secondes.", bundle: .main))
+                Text(String(localized: "voice.profile.wizard.recording.description", defaultValue: "Lisez à voix haute les deux ou trois phrases affichées, sans forcer le ton. Minimum 3 échantillons de 10 secondes.", bundle: .main))
                     .font(MeeshyFont.relative(14))
                     .multilineTextAlignment(.center)
                     .foregroundColor(theme.textSecondary)
@@ -241,7 +241,9 @@ struct VoiceProfileWizardView: View {
                 VoiceRecordingView(
                     accentColor: accentColor,
                     minimumSamples: 3,
-                    minimumDurationSeconds: 10
+                    minimumDurationSeconds: 10,
+                    // La langue PARLÉE, pas celle de l'interface.
+                    initialLanguage: AuthManager.shared.currentUser?.systemLanguage
                 ) { audioDataList in
                     HapticFeedback.success()
                     Task { await viewModel.uploadSamples(audioDataList) }

@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback } from 'react';
+import { useCallback, useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -11,6 +11,7 @@ import { cn } from '@/lib/utils';
 import { useI18n } from '@/hooks/useI18n';
 import { useVoiceRecording, MIN_RECORDING_SECONDS, MAX_RECORDING_SECONDS } from '@/hooks/use-voice-recording';
 import { READING_TEXTS, AVAILABLE_LANGUAGES } from '@/lib/voice-profile-utils';
+import { voicePromptAt, voicePromptsFor } from '@/lib/voice-profile-prompts';
 import { toast } from 'sonner';
 
 const STOP_AFTER_SECONDS = 12;
@@ -58,7 +59,16 @@ export function VoiceRecorder({
     onRecordingComplete,
   });
 
-  const readingText = READING_TEXTS[sourceLanguage] || READING_TEXTS['en'];
+  // Décalage tiré une seule fois par montage : relu d'une session à l'autre, un
+  // texte est récité de mémoire — donc à plat, sans l'intonation recherchée.
+  const [promptRotation] = useState(() => Math.floor(Math.random() * 5));
+
+  // Série prosodique quand la langue en a une (question, exclamation,
+  // énumération) ; sinon le texte unique historique, qui couvre bien plus de
+  // langues. Retirer ce repli régresserait le swahili, l'amharique, etc.
+  const prompt = voicePromptAt(sourceLanguage, 0, promptRotation);
+  const readingText = prompt?.text ?? READING_TEXTS[sourceLanguage] ?? READING_TEXTS['en'];
+  const hasPromptSeries = voicePromptsFor(sourceLanguage).length > 0;
 
   const handleSourceLanguageChange = useCallback((value: string) => {
     onSourceLanguageChange(value);
@@ -180,7 +190,23 @@ export function VoiceRecorder({
           <Label className="text-xs text-muted-foreground mb-2 block">
             {t('voiceProfile.create.readThis', 'Lisez ce texte à haute voix')} ({languageNames[sourceLanguage] || sourceLanguage})
           </Label>
-          <p className="text-lg leading-relaxed">{readingText}</p>
+          <p
+            className="text-lg leading-relaxed"
+            // Le sens de lecture suit le TEXTE, pas l'interface : un arabophone
+            // dont l'app est en français lit quand même de droite à gauche.
+            dir={prompt?.isRightToLeft ? 'rtl' : undefined}
+            lang={prompt?.language ?? sourceLanguage}
+          >
+            {readingText}
+          </p>
+          {hasPromptSeries && (
+            <p className="mt-2 text-xs text-muted-foreground">
+              {t(
+                'voiceProfile.create.readNaturally',
+                'Lisez sans forcer le ton : la question et l\'exclamation servent à capter vos intonations.'
+              )}
+            </p>
+          )}
         </div>
 
         {/* Transcription en temps réel */}

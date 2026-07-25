@@ -8,6 +8,9 @@ public struct VoiceRecordingView<Recorder: AudioRecordingProviding>: View {
     let minimumSamples: Int
     let minimumDurationSeconds: Int
     let onSamplesReady: (([Data]) -> Void)?
+    /// Langue dans laquelle l'utilisateur va PARLER — pas celle de l'interface.
+    /// Un arabophone dont l'app est en français doit pouvoir lire en arabe.
+    let initialLanguage: String?
 
     // `@StateObject` (et non `@ObservedObject`) : tous les call sites passent
     // par l'init de convenance qui crée le recorder inline — en observed,
@@ -17,23 +20,46 @@ public struct VoiceRecordingView<Recorder: AudioRecordingProviding>: View {
     @State private var recordedSamples: [RecordedSample] = []
     /// Refus micro : le tap sur « Enregistrer » ne produisait rien du tout.
     @State private var permissionMessage: String?
+    /// Langue de lecture, modifiable en cours de route : on ne découvre parfois
+    /// qu'au premier essai qu'on préfère s'enregistrer dans une autre langue.
+    @State private var spokenLanguage: String
+    /// Décalage tiré une seule fois par présentation de la vue. Relu d'une
+    /// session à l'autre, un texte est récité de mémoire — donc à plat, sans
+    /// l'intonation qu'on cherche justement à capturer.
+    @State private var rotation: Int = 0
 
     public init(recorder: @autoclosure @escaping () -> Recorder, accentColor: String = MeeshyColors.brandPrimaryHex, minimumSamples: Int = 3,
-                minimumDurationSeconds: Int = 10, onSamplesReady: (([Data]) -> Void)? = nil) {
+                minimumDurationSeconds: Int = 10, initialLanguage: String? = nil,
+                onSamplesReady: (([Data]) -> Void)? = nil) {
         self._recorder = StateObject(wrappedValue: recorder())
         self.accentColor = accentColor
         self.minimumSamples = minimumSamples
         self.minimumDurationSeconds = minimumDurationSeconds
+        self.initialLanguage = initialLanguage
         self.onSamplesReady = onSamplesReady
+        // Résolu par le catalogue : une langue non couverte retombe sur
+        // l'anglais, et le sélecteur doit refléter ce qui est RÉELLEMENT lu.
+        self._spokenLanguage = State(
+            initialValue: VoiceProfilePrompts.prompts(for: initialLanguage).first?.languageCode
+                ?? VoiceProfilePrompts.supportedLanguageCodes.first
+                ?? "en"
+        )
     }
 
-    private let sampleTexts = [
-        "Bonjour, je m'appelle et j'utilise Meeshy pour communiquer avec mes amis dans le monde entier.",
-        "La traduction vocale en temps reel permet de briser les barrieres linguistiques facilement.",
-        "J'aime partager des moments importants avec les personnes qui comptent pour moi.",
-        "La technologie nous rapproche les uns des autres, peu importe la distance.",
-        "Chaque jour est une nouvelle opportunite de decouvrir et d'apprendre quelque chose de nouveau.",
-    ]
+    /// Texte à lire pour l'échantillon en cours.
+    ///
+    /// Vient de `VoiceProfilePrompts` (SDK) : cinq séries de deux à trois
+    /// phrases par langue, chacune visant un contour prosodique différent —
+    /// déclaratif, interrogatif, exclamatif, énumératif, chiffré. La liste
+    /// figée d'avant ne portait qu'une phrase déclarative, trop courte pour la
+    /// durée minimale exigée, et en français uniquement.
+    private var currentPrompt: VoiceProfilePrompts.Prompt? {
+        VoiceProfilePrompts.prompt(
+            for: spokenLanguage,
+            at: recordedSamples.count,
+            rotation: rotation
+        )
+    }
 
     public var body: some View {
         VStack(spacing: 16) {
@@ -59,6 +85,14 @@ public struct VoiceRecordingView<Recorder: AudioRecordingProviding>: View {
             }
         }
         .padding(.horizontal, 20)
+        .onAppear {
+            // Tiré une seule fois : le décalage doit rester stable pendant
+            // toute la session, sinon le texte changerait sous les yeux de
+            // l'utilisateur entre deux rendus.
+            if rotation == 0 {
+                rotation = Int.random(in: 0..<max(1, VoiceProfilePrompts.prompts(for: spokenLanguage).count))
+            }
+        }
         .onDisappear {
             // Dismiss (X du wizard, swipe-down) pendant un enregistrement :
             // sans ce cancel, le micro et la session audio restaient actifs.
@@ -76,7 +110,7 @@ public struct VoiceRecordingView<Recorder: AudioRecordingProviding>: View {
                 Image(systemName: "text.quote")
                     .font(.system(size: 12, weight: .medium))
                     .foregroundColor(Color(hex: accentColor))
-                Text(String(localized: "voiceProfile.recording.readAloud", defaultValue: "Lisez ce texte a voix haute", bundle: .module))
+                Text(String(localized: "voiceProfile.recording.readAloud", defaultValue: "Lisez ce texte à voix haute", bundle: .module))
                     .font(.system(size: 11, weight: .semibold))
                     .foregroundColor(.secondary)
                 Spacer()
@@ -85,17 +119,78 @@ public struct VoiceRecordingView<Recorder: AudioRecordingProviding>: View {
                     .foregroundColor(Color(hex: accentColor))
             }
 
-            Text(sampleTexts[min(recordedSamples.count, sampleTexts.count - 1)])
-                .font(.system(size: 14, weight: .medium))
-                .foregroundColor(.primary)
-                .multilineTextAlignment(.leading)
-                .fixedSize(horizontal: false, vertical: true)
-                .padding(12)
+            if let prompt = currentPrompt {
+                Text(prompt.text)
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundColor(.primary)
+                    .multilineTextAlignment(prompt.isRightToLeft ? .trailing : .leading)
+                    .frame(maxWidth: .infinity, alignment: prompt.isRightToLeft ? .trailing : .leading)
+                    // Le sens de lecture suit le TEXTE, pas l'interface : un
+                    // arabophone dont l'app est en français lit quand même de
+                    // droite à gauche.
+                    .environment(\.layoutDirection, prompt.isRightToLeft ? .rightToLeft : .leftToRight)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(12)
+                    .background(
+                        RoundedRectangle(cornerRadius: 12)
+                            .fill(Color(hex: accentColor).opacity(0.06))
+                    )
+                    // Sans cette clé, SwiftUI réutilise le rendu précédent et le
+                    // texte semble ne pas changer d'un échantillon à l'autre.
+                    .id(prompt.text)
+            }
+
+            languagePicker
+        }
+    }
+
+    // MARK: - Langue parlée
+
+    /// La langue dans laquelle on s'enregistre n'est pas celle de l'interface.
+    /// Sans ce choix, un hispanophone utilisant l'app en anglais devait lire un
+    /// texte anglais — et enregistrait donc une prosodie qui n'est pas la sienne.
+    @ViewBuilder
+    private var languagePicker: some View {
+        let codes = VoiceProfilePrompts.supportedLanguageCodes
+        if codes.count > 1 {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 6) {
+                    ForEach(codes, id: \.self) { code in
+                        languageChip(code)
+                    }
+                }
+                .padding(.horizontal, 2)
+            }
+            // Changer de langue en cours d'enregistrement produirait un profil
+            // mi-figue mi-raisin : le choix se fige au premier échantillon.
+            .disabled(!recordedSamples.isEmpty || recorder.isRecording)
+            .opacity(recordedSamples.isEmpty && !recorder.isRecording ? 1 : 0.4)
+            .accessibilityLabel(
+                String(localized: "voiceProfile.recording.languagePicker",
+                       defaultValue: "Langue d'enregistrement", bundle: .module)
+            )
+        }
+    }
+
+    private func languageChip(_ code: String) -> some View {
+        let info = LanguageData.allLanguages.first { $0.code == code }
+        let isSelected = code == spokenLanguage
+        return Button {
+            spokenLanguage = code
+            HapticFeedback.light()
+        } label: {
+            Text("\(info?.flag ?? "") \(info?.nativeName ?? code.uppercased())")
+                .font(.system(size: 11, weight: isSelected ? .bold : .medium))
+                .foregroundColor(isSelected ? Color(hex: accentColor) : .secondary)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 5)
                 .background(
-                    RoundedRectangle(cornerRadius: 12)
-                        .fill(Color(hex: accentColor).opacity(0.06))
+                    Capsule(style: .continuous)
+                        .fill(Color(hex: accentColor).opacity(isSelected ? 0.14 : 0.05))
                 )
         }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(isSelected ? [.isSelected] : [])
     }
 
     // MARK: - Recording Controls
@@ -263,12 +358,14 @@ public struct VoiceRecordingView<Recorder: AudioRecordingProviding>: View {
 
 extension VoiceRecordingView where Recorder == DefaultSDKAudioRecorder {
     public init(accentColor: String = MeeshyColors.brandPrimaryHex, minimumSamples: Int = 3,
-                minimumDurationSeconds: Int = 10, onSamplesReady: (([Data]) -> Void)? = nil) {
+                minimumDurationSeconds: Int = 10, initialLanguage: String? = nil,
+                onSamplesReady: (([Data]) -> Void)? = nil) {
         self.init(
             recorder: DefaultSDKAudioRecorder(),
             accentColor: accentColor,
             minimumSamples: minimumSamples,
             minimumDurationSeconds: minimumDurationSeconds,
+            initialLanguage: initialLanguage,
             onSamplesReady: onSamplesReady
         )
     }
