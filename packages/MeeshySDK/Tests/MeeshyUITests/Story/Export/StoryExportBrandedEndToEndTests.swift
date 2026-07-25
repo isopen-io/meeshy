@@ -198,15 +198,19 @@ final class StoryExportBrandedEndToEndTests: XCTestCase {
         var samples: [Float] = []
         while let buffer = output.copyNextSampleBuffer() {
             guard let block = CMSampleBufferGetDataBuffer(buffer) else { continue }
-            var length = 0
-            var pointer: UnsafeMutablePointer<Int8>?
-            guard CMBlockBufferGetDataPointer(block, atOffset: 0, lengthAtOffsetOut: nil,
-                                              totalLengthOut: &length,
-                                              dataPointerOut: &pointer) == kCMBlockBufferNoErr,
-                  let raw = pointer else { continue }
-            raw.withMemoryRebound(to: Float.self, capacity: length / 4) { floats in
-                samples.append(contentsOf: UnsafeBufferPointer(start: floats, count: length / 4))
+            let length = CMBlockBufferGetDataLength(block)
+            guard length >= MemoryLayout<Float>.size else { continue }
+            // COPIE plutôt que réinterprétation du pointeur interne : le buffer
+            // de CoreMedia n'est ni garanti contigu ni aligné sur 4 octets, et
+            // le relire en place fait tomber le process (SIGSEGV constaté).
+            var chunk = [Float](repeating: 0, count: length / MemoryLayout<Float>.size)
+            let copied = chunk.withUnsafeMutableBytes { destination -> OSStatus in
+                guard let base = destination.baseAddress else { return -1 }
+                return CMBlockBufferCopyDataBytes(block, atOffset: 0,
+                                                  dataLength: length, destination: base)
             }
+            guard copied == kCMBlockBufferNoErr else { continue }
+            samples.append(contentsOf: chunk)
         }
         return samples
     }

@@ -304,7 +304,16 @@ public enum StoryExportIntro {
         else { throw IntroError.writerRejectedInput }
         session.outputURL = outputURL
         session.outputFileType = .mp4
-        try await session.export(to: outputURL, as: .mp4)
+
+        // MÊME appel que `StoryExporter` : `export()` sans argument, qui lit
+        // `outputURL`/`outputFileType` posés ci-dessus. Le `export(to:as:)`
+        // d'iOS 18 est proscrit ici — combiné à ces deux propriétés il fait
+        // tomber le process en SIGSEGV (constaté sur iOS 18.2), ce qui
+        // emportait toute la suite de tests avec lui.
+        await session.export()
+        guard session.status == .completed else {
+            throw IntroError.encodingFailed(session.error)
+        }
         return outputURL
     }
 
