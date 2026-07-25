@@ -2770,3 +2770,21 @@ iOS `RelativeTimeFormatter` bundles classification, calendar-day framing AND loc
 - **Android string format specifiers vs perl/sed.** Adding `<string>…%1$ds</string>` via `perl -0pi -e`
   silently ate `$ds` ($d = perl var). Use a literal-safe editor (Edit tool or a `sed` with the exact
   literal) for resource strings containing `$`.
+
+## Slice `composer-send-gate` (2026-07-25)
+- **Consolidate scattered client-side gates into one pure verdict.** `send()` checked slow-mode only;
+  `sendFileAttachment()` checked neither slow-mode nor permissions and never recorded the cooldown stamp.
+  A single `ComposerSendGate.evaluate(kind, affordances, slowMode)` folding both `ComposerAffordances`
+  and `SlowModeState` lets every send path enforce identical rules — cheaper to reason about than N
+  ad-hoc `if` checks that drift. When two paths "should behave the same", make the sameness a value.
+- **Precedence matters and must be a test.** A hard capability denial outranks the cooldown; the reverse
+  order would let a denied guest's block surface a misleading countdown. Assert the winner *and* that no
+  residual timer leaks (`cooldownSeconds == 0` on a capability block).
+- **Record the send stamp on EVERY new-message path, not just text.** Moving `lastSelfSentAtMillis` into
+  `sendFileAttachment` is what makes file↔text share one cooldown. A gate that reads a stamp is only as
+  correct as the paths that write it — audit all writers when you add a reader.
+- **Compute the classifier inputs before the coroutine.** `sendFileAttachment` resolved mime inside
+  `viewModelScope.launch`; the gate needs the kind *synchronously* to decide before any state mutation.
+  Hoist mime/messageType above the gate and reuse them inside the coroutine (no double resolution).
+- **`ComposerSendKind.entries`** (Kotlin 1.9 enum entries) works here — used it to assert the gate permits
+  every kind under a full posture without hand-listing them.
