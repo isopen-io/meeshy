@@ -18,20 +18,30 @@ export interface AuthState {
  */
 export function isUserAnonymous(user: User | null): boolean {
   if (!user) return false;
-  
-  const hasAnonymousProperties = user.hasOwnProperty('sessionToken') ||
-                                user.hasOwnProperty('shareLinkId') ||
-                                user.hasOwnProperty('isAnonymous');
+
+  const candidate = user as Partial<
+    Record<'sessionToken' | 'shareLinkId' | 'isAnonymous', unknown>
+  >;
+
+  // `sessionToken` / `shareLinkId` ne figurent QUE sur l'objet de compatibilité
+  // anonyme (cf. gateway `auth.ts`). `isAnonymous` doit être testé sur sa VALEUR :
+  // le gateway émet `isAnonymous: false` sur l'utilisateur inscrit, un simple
+  // `hasOwnProperty` le classerait anonyme à tort.
+  const hasAnonymousProperties =
+    candidate.sessionToken !== undefined ||
+    candidate.shareLinkId !== undefined ||
+    candidate.isAnonymous === true;
 
   const anonymousSession = authManager.getAnonymousSession();
   const hasAnonymousToken = !!anonymousSession?.token;
-  
+
+  // Pas de clause de longueur : un ObjectId Mongo (24 hex) ou un UUID (36) ne
+  // dit RIEN de l'anonymat. Seuls les préfixes explicites signalent un anonyme.
   const hasAnonymousId = !!(user.id && (
-    user.id.startsWith('anon_') || 
-    user.id.includes('anonymous') ||
-    user.id.length > 20
+    user.id.startsWith('anon_') ||
+    user.id.includes('anonymous')
   ));
-  
+
   return hasAnonymousProperties || hasAnonymousToken || hasAnonymousId;
 }
 
