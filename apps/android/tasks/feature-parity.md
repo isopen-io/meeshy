@@ -905,6 +905,16 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       failure → full posture, never a crash); `ChatScreen` hides the attach-file button unless the ladder is
       offerable, hides the mic unless `canSendAudios`, and shows a muted lock-row `ComposerReadOnlyNotice`
       (i18n EN/FR/ES/PT) for a muted guest. +11 tests (8 policy + 3 VM), mutation-proven.
+- [x] **All send paths enforce one gate (read-only + per-kind capability + slow-mode)** (slice
+      `composer-send-gate`, 2026-07-25 — **SOTA over iOS**, whose attachment handlers bypass both the
+      permission set and the slow-mode interval). Pure `:sdk-core` `ComposerSendGate.evaluate(kind,
+      affordances, slowMode)` folds `ComposerAffordances` + `SlowModeState` into one `SendDecision`; a hard
+      capability denial (read-only text / denied attachment kind) outranks the cooldown (no residual timer
+      leaks), only a permitted kind is throttled; `ComposerSendKind.fromMessageType()` classifies the pick.
+      `ChatViewModel.send()` gates `TEXT` (read-only defense added to its slow-mode check); `sendFileAttachment()`
+      gates the resolved kind and records `lastSelfSentAtMillis` on a delivered attachment so file↔text share
+      one cooldown. Closes the bypass where a picked file skipped both gates and never started the cooldown.
+      +20 tests (15 gate + 5 VM), mutation-proven (neutralizing the file gate fails exactly the 3 file-gate tests).
 - [x] Real-time 1:1 / group chat: send, edit, delete (for-me / for-everyone, 2h window), reply, forward
       **Edit 2-hour window now enforced** via pure `:core:model` `MessageEditability.canEdit(isOwn,
       createdAtMillis, nowMillis, windowMillis=2h)` SSOT (port of iOS's `Date().timeIntervalSince(createdAt)

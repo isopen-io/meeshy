@@ -30,6 +30,8 @@ import me.meeshy.sdk.conversation.MessageRepository
 import me.meeshy.ui.component.bubble.LanguageFlagTapResolver
 import me.meeshy.sdk.composer.ComposerAffordances
 import me.meeshy.sdk.composer.ComposerAttachmentPolicy
+import me.meeshy.sdk.composer.ComposerSendGate
+import me.meeshy.sdk.composer.ComposerSendKind
 import me.meeshy.sdk.composer.SlowModePolicy
 import me.meeshy.sdk.composer.SlowModeState
 import me.meeshy.sdk.lang.ComposeLanguageDetector
@@ -818,11 +820,17 @@ class ChatViewModel @Inject constructor(
             applyEdit(editingId, text)
             return
         }
-        // Slow-mode gate: refuse a new send while the cooldown is running (edits
-        // above are exempt — they are not new messages). The draft is kept so the
-        // countdown's tick simply re-enables the send button.
+        // Unified send gate: refuse a new send while a slow-mode cooldown is running
+        // or the viewer is read-only (edits above are exempt — they are not new
+        // messages). The draft is kept so the countdown's tick simply re-enables the
+        // send button.
         val sentAtMillis = clock.nowMillis()
-        if (!_state.value.slowModeState(sentAtMillis).canSend) return
+        val gate = ComposerSendGate.evaluate(
+            ComposerSendKind.TEXT,
+            _state.value.composerAffordances,
+            _state.value.slowModeState(sentAtMillis),
+        )
+        if (!gate.allowed) return
         val user = sessionRepository.currentUser.value ?: return
         val replyToId = _state.value.replyingToMessageId
         val effects = _state.value.pendingEffects
@@ -929,6 +937,20 @@ class ChatViewModel @Inject constructor(
     fun sendFileAttachment(bytes: ByteArray, fileName: String, declaredMimeType: String?) {
         if (bytes.isEmpty()) return
         val user = sessionRepository.currentUser.value ?: return
+        val safeName = fileName.trim().ifBlank { DEFAULT_ATTACHMENT_NAME }
+        val mime = MimeTypeResolver.resolve(declaredMimeType, safeName)
+        val messageType = AttachmentMessageType.forMime(mime)
+        // Same unified gate the text path uses: a denied attachment capability or a
+        // running slow-mode cooldown refuses the pick before it leaves the composer.
+        // The "+" ladder stays visible during a cooldown, so this is where the block
+        // is really enforced — and a delivered attachment starts the cooldown too.
+        val sentAtMillis = clock.nowMillis()
+        val gate = ComposerSendGate.evaluate(
+            ComposerSendKind.fromMessageType(messageType),
+            _state.value.composerAffordances,
+            _state.value.slowModeState(sentAtMillis),
+        )
+        if (!gate.allowed) return
         val text = _state.value.draft.trim()
         val replyToId = _state.value.replyingToMessageId
         val effects = _state.value.pendingEffects
@@ -940,13 +962,12 @@ class ChatViewModel @Inject constructor(
                 mention = it.mention.reset(),
                 pendingEffects = MessageEffects(),
                 isEffectsPickerOpen = false,
+                lastSelfSentAtMillis = sentAtMillis,
             )
         }
         persistDraft("", replyToId = null)
         viewModelScope.launch {
             try {
-                val safeName = fileName.trim().ifBlank { DEFAULT_ATTACHMENT_NAME }
-                val mime = MimeTypeResolver.resolve(declaredMimeType, safeName)
                 val uploadCmid = mediaUploadQueue.enqueue(
                     MediaUploadItem(bytes = bytes, fileName = safeName, mimeType = mime),
                 )
@@ -960,7 +981,7 @@ class ChatViewModel @Inject constructor(
                     sender = user,
                     replyToId = replyToId,
                     effects = effects,
-                    messageType = AttachmentMessageType.forMime(mime),
+                    messageType = messageType,
                     attachmentUploadCmids = listOf(uploadCmid),
                     attachments = listOf(
                         ApiMessageAttachment(

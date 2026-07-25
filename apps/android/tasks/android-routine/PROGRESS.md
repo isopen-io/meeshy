@@ -1,5 +1,49 @@
 # Progress — state & what to do next
 
+> On 2026-07-25 the **unified composer send gate** landed (slice `composer-send-gate`,
+> feature-parity §Chat → new `[x]` "All send paths enforce one gate (read-only + per-kind
+> capability + slow-mode)"). This closes a real bypass: `sendFileAttachment` ignored **both** the
+> slow-mode cooldown **and** the participant permissions, and never recorded the cooldown stamp — so a
+> throttled member (or a denied guest) could fire a picked file the server would reject, and a file send
+> never started the cooldown. **Added (production, all `apps/android`):** the pure, stateless
+> `ComposerSendGate` (`:sdk-core` `me.meeshy.sdk.composer`). `evaluate(kind, affordances, slowMode)`
+> folds the viewer's per-kind `ComposerAffordances` and the conversation's live `SlowModeState` into one
+> `SendDecision(allowed, blockReason?, cooldownSeconds)`. **Precedence:** a hard capability denial
+> (read-only text, or a denied attachment kind) **outranks** the cooldown — a denied guest is refused
+> regardless of the timer and no residual countdown leaks through; only a *permitted* kind is ever
+> throttled. `ComposerSendKind.fromMessageType()` maps the gateway label (image/video/audio/file, else
+> file) so the attachment path classifies its pick. **Wiring (`:feature:chat`):** `send()` now consults
+> the gate for `TEXT` (adds read-only defense to the slow-mode check it already had — behaviour-preserving
+> for a full member); `sendFileAttachment()` computes mime/messageType up front, gates on the resolved
+> kind, records `lastSelfSentAtMillis` on a delivered attachment (so file → text and text → file share one
+> cooldown), and reuses the precomputed values in the coroutine. **SOTA over iOS**, whose composer applies
+> neither `ParticipantPermissions` nor a slow-mode interval to the send action and whose attachment
+> handlers bypass both. **Tests:** `ComposerSendGateTest` (15 — full+unthrottled permits every kind,
+> read-only text, per-kind capability denial ×5, asymmetric text-denied-but-image-granted, cooldown on
+> text+file surfaces remaining seconds, capability-outranks-cooldown ×2, message-type→kind mapping incl.
+> null/blank/unknown→file) + `ChatViewModelTest` (+5 — file under slow mode records the stamp & blocks an
+> immediate second file, a text cooldown throttles a picked file, a defaultAnonymous guest is denied a PDF
+> but still sends a PNG, a muted guest cannot send text and keeps the draft). Expectations are hand-written
+> literals asserted through the public API / observable `state`, never internals. **Mutation (RED proof):**
+> neutralizing the `sendFileAttachment` gate fails **exactly** the 3 file-gate tests
+> (`…blocks_an_immediate_second_file`, `…throttles_a_picked_file`, `…denied_the_file_capability…`) while
+> the permitted-image and read-only-text tests stay green — the file gate is load-bearing. **Gate:**
+> `./apps/android/meeshy.sh check` (whole module graph, `assembleDebug` + every JVM unit suite) →
+> **BUILD SUCCESSFUL**. Reviewer **PASS** (diff `apps/android` only — 1 new pure core + its test in
+> `:sdk-core`, VM/state wiring + VM test harness in `:feature:chat`, zero production logic elsewhere, **0
+> new i18n keys** — the existing slow-mode countdown row already surfaces the cooldown; **SDK purity** —
+> the *is-this-send-permitted* rule is a stateless `:sdk-core` building block, the *when-to-record-the-stamp*
+> orchestration stays app-side in the VM; **SSOT** — composes the existing `ComposerAffordances` + `SlowModeState`,
+> re-implements no capability or cooldown logic; **failure paths** — a blocked pick is inert, never a crash).
+> **Next slice:** slow-mode enforcement on the **voice** send path once a dedicated `sendVoice` exists
+> (today voice rides `sendFileAttachment`, so it's already gated as AUDIO); OR the admin-facing
+> conversation-settings picker (write-role / announcement / slow-mode 0/10/30/60/300s / auto-translate —
+> a pure `SettingsForm` core, but needs a new update endpoint + screen); OR the guest-join **screen**
+> (`:feature:sharelink`); OR the paged `OnboardingFlowView`; OR the tracked Kover 90% coverage-gate infra.
+> **Known standing debt (not this slice):** the `:sdk-core` DataStore-parallel-load timeout flake
+> (`ThemeStoreTest`/`InterfaceLanguageStoreTest`/`PrivacyPreferencesStoreTest`/`NotificationPreferencesStoreTest`)
+> — green in isolation, intermittent in the full run.
+
 > On 2026-07-25 the **slow-mode composer cooldown** landed (slice `chat-slow-mode-cooldown`,
 > feature-parity §Chat → "Conversation moderation … slow mode" advances to `[~]`). The
 > `Conversation.slowModeSeconds` field the models already carried is now enforced at the composer
