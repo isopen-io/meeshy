@@ -30,6 +30,81 @@ import MeeshyUI
 // freeze the UI. We therefore render a growing WINDOW (`visiblePosts`) that
 // starts small and extends via the infinite-scroll sentinel, bounding the
 // synchronous work to a handful of cards per frame.
+// MARK: - Stats band (pure counts + view)
+
+/// Compteurs du bandeau de stats en tête de l'onglet Postes d'un profil.
+/// Phase 1 (hybride) : dérivés des postes DÉJÀ chargés — donc des bornes basses
+/// tant que `hasMore` (affichées « N+ »). `posts` = type POST hors réels/stories.
+/// La phase 2 (backend) réalimentera le même bandeau avec des totaux exacts.
+struct ProfilePostsCounts: Equatable {
+    let posts: Int
+    let reels: Int
+    let stories: Int
+    let isApproximate: Bool
+
+    static func compute(from posts: [FeedPost], hasMore: Bool) -> ProfilePostsCounts {
+        ProfilePostsCounts(
+            posts: posts.filter { !$0.isReel && !$0.isStory }.count,
+            reels: posts.filter(\.isReel).count,
+            stories: posts.filter(\.isStory).count,
+            isApproximate: hasMore
+        )
+    }
+
+    /// « N+ » quand le compteur est une borne basse strictement positive, « N » sinon.
+    static func displayValue(_ value: Int, isApproximate: Bool) -> String {
+        (isApproximate && value > 0) ? "\(value)+" : "\(value)"
+    }
+}
+
+/// Bande horizontale de 3 mini-stats (Postes / Réels / Stories) affichée en tête
+/// du listing. Style aligné sur `miniStatChip` (icône + valeur arrondie + label).
+/// Valeurs opaques : agnostique de leur provenance (phase 1 dérivée / phase 2 backend).
+private struct ProfilePostsStatsBand: View {
+    let counts: ProfilePostsCounts
+
+    private var theme: ThemeManager { ThemeManager.shared }
+    /// Profil non lié à une conversation → accent de marque (indigo500).
+    private let accentHex = "6366F1"
+
+    var body: some View {
+        HStack(spacing: 8) {
+            chip(icon: "square.grid.2x2.fill", value: counts.posts,
+                 label: String(localized: "profile.posts.stat.posts", defaultValue: "Postes", bundle: .main))
+            chip(icon: "play.rectangle.fill", value: counts.reels,
+                 label: String(localized: "profile.posts.stat.reels", defaultValue: "Réels", bundle: .main))
+            chip(icon: "circle.dashed", value: counts.stories,
+                 label: String(localized: "profile.posts.stat.stories", defaultValue: "Stories", bundle: .main))
+        }
+    }
+
+    private func chip(icon: String, value: Int, label: String) -> some View {
+        let display = ProfilePostsCounts.displayValue(value, isApproximate: counts.isApproximate)
+        return VStack(spacing: 4) {
+            Image(systemName: icon)
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundColor(MeeshyColors.indigo500)
+            Text(display)
+                .font(.system(size: 18, weight: .bold, design: .rounded))
+                .foregroundColor(theme.textPrimary)
+                .monospacedDigit()
+                .lineLimit(1)
+                .minimumScaleFactor(0.6)
+            Text(label)
+                .font(.caption2)
+                .foregroundColor(theme.textMuted)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 12)
+        .background(theme.surfaceGradient(tint: accentHex))
+        .glassCard(cornerRadius: 14)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(Text("\(display) \(label)"))
+    }
+}
+
 struct ProfileUserPostsList: View {
     let userId: String
     /// Opens a standard post (host pushes the full PostDetail).
@@ -71,6 +146,10 @@ struct ProfileUserPostsList: View {
                     emptyState
                 }
             } else {
+                ProfilePostsStatsBand(counts: viewModel.postsCounts)
+                    .padding(.horizontal, 12)
+                    .padding(.bottom, 4)
+
                 ForEach(viewModel.visiblePosts) { post in
                     card(for: post)
                         .onAppear { viewModel.trackImpression(post.id) }
@@ -367,6 +446,9 @@ final class ProfileUserPostsViewModel: ObservableObject {
     var visiblePosts: [FeedPost] { Array(posts.prefix(renderWindow)) }
     var hasMoreToRender: Bool { renderWindow < posts.count }
     var reels: [FeedPost] { posts.filter(\.isReel) }
+
+    /// Compteurs du bandeau de stats (phase 1 : dérivés des postes chargés).
+    var postsCounts: ProfilePostsCounts { .compute(from: posts, hasMore: hasMore) }
 
     // MARK: - Derived engagement state
 
