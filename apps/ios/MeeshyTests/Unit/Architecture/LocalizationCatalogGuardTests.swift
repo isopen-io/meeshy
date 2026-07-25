@@ -159,26 +159,41 @@ final class LocalizationCatalogGuardTests: XCTestCase {
 
     // MARK: - Couverture
 
-    /// Plancher atteint, par catalogue et par langue. **Ne jamais baisser une
-    /// valeur** : la faire descendre pour « faire passer le test » reviendrait à
-    /// entériner une régression que ce test existe précisément pour attraper.
-    /// **Toutes à 100 % depuis le 2026-07-25.** Ces planchers sont donc des
-    /// verrous : toute clé ajoutée sans sa traduction fait échouer le test.
-    private static let floors: [String: [String: Int]] = [
-        "app": ["en": 1343, "de": 1343, "es": 1343, "pt-BR": 1343, "it": 1343, "ar": 1343],
-        "SDK": ["en": 1019, "de": 1019, "es": 1019, "pt-BR": 1019, "it": 1019, "ar": 1019, "fr": 1019],
+    /// Langues qui doivent couvrir INTÉGRALEMENT chaque catalogue.
+    /// **Toutes à 100 % depuis le 2026-07-25.**
+    private static let requiredLanguages: [String: [String]] = [
+        "app": ["en", "de", "es", "pt-BR", "it", "ar"],
+        "SDK": ["en", "de", "es", "pt-BR", "it", "ar", "fr"],
     ]
 
-    func test_laCouvertureNeRégressePas() throws {
+    /// L'invariant est la COMPLÉTUDE, pas le volume : aucune clé traduisible ne
+    /// doit avoir de trou.
+    ///
+    /// C'était auparavant un plancher chiffré par langue (« au moins 1343 clés
+    /// couvertes »). Il attrapait bien la régression visée — une clé ajoutée
+    /// sans sa traduction — mais il échouait AUSSI quand on supprimait une clé
+    /// morte, ce qui est un nettoyage légitime : le compteur descendait sans
+    /// qu'aucune traduction n'ait été perdue. On était alors poussé à baisser
+    /// le plancher, geste que le commentaire d'origine interdisait à juste
+    /// titre, faute de pouvoir distinguer les deux cas.
+    ///
+    /// Exiger zéro trou lève l'ambiguïté et resserre la garde : le volume peut
+    /// varier librement, mais une clé sans sa traduction échoue toujours, et le
+    /// message nomme la clé fautive au lieu d'un écart de compteur.
+    func test_aucuneCléTraduisibleNaDeTrou() throws {
         for catalog in try catalogs() {
-            guard let floors = Self.floors[catalog.name] else { continue }
-            for (lang, floor) in floors {
-                let covered = catalog.strings.values.filter { $0[lang] != nil }.count
-                XCTAssertGreaterThanOrEqual(
-                    covered, floor,
-                    "[\(catalog.name)/\(lang)] couverture tombée à \(covered), plancher \(floor)"
-                )
-            }
+            guard let required = Self.requiredLanguages[catalog.name] else { continue }
+            let gaps: [String] = catalog.strings
+                .filter { !$0.value.isEmpty }
+                .compactMap { key, langs in
+                    let missing = required.filter { langs[$0] == nil }.sorted()
+                    return missing.isEmpty ? nil : "\(key) → manque \(missing.joined(separator: ", "))"
+                }
+                .sorted()
+            XCTAssertTrue(
+                gaps.isEmpty,
+                "[\(catalog.name)] \(gaps.count) clé(s) incomplète(s) :\n\(gaps.prefix(25).joined(separator: "\n"))"
+            )
         }
     }
 
