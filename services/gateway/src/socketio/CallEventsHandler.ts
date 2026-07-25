@@ -284,6 +284,49 @@ export class CallEventsHandler {
     return out;
   }
 
+  /**
+   * GW6(b) — users with at least one ACTIVE `voip` push token. A callee
+   * without one (iOS-app-on-Mac, expired/never-registered PushKit token)
+   * would get a `voip` send that dies on `No active tokens found` — the call
+   * is totally silent app-killed. Those callees fall back to a standard
+   * `apns` alert with the SAME payload (data.type 'call' + callId +
+   * iceServers) so tapping the banner drives the existing
+   * `.incomingCallAlert` navigation. Fail-open toward `voip` (historical
+   * behavior) on query error.
+   */
+  private async resolveVoipCapableUsers(userIds: string[]): Promise<Set<string>> {
+    if (userIds.length === 0) return new Set();
+    try {
+      const rows = await this.prisma.pushToken.findMany({
+        where: { userId: { in: userIds }, type: 'voip', isActive: true },
+        select: { userId: true },
+      });
+      return new Set(rows.map(r => r.userId));
+    } catch (error) {
+      logger.error('VoIP token resolution failed — assuming voip-capable', { error });
+      return new Set(userIds);
+    }
+  }
+
+  /**
+   * GW6(c) — a socket's `appForeground=true` is only trusted while the socket
+   * is FRESH (last inbound packet within this window). A zombie socket (app
+   * crashed / network died without presence:app-state=false) stays flagged
+   * foreground until the Socket.IO ping timeout (~45s) — during that window a
+   * ring would be lost. Window > pingInterval (25s) + jitter so a healthy
+   * idle-foreground client (which only pongs every 25s) is never
+   * misclassified — a false-stale would force a CallKit banner over the
+   * in-app UI (client dedups by callId, but avoid it by construction).
+   */
+  private static readonly FOREGROUND_SOCKET_STALENESS_MS = 32_000;
+
+  private isFreshForegroundSocket(socketData: { appForeground?: boolean; lastSeenAt?: number } | undefined): boolean {
+    if (socketData?.appForeground !== true) return false;
+    const lastSeenAt = socketData.lastSeenAt;
+    if (typeof lastSeenAt !== 'number') return true;
+    return Date.now() - lastSeenAt <= CallEventsHandler.FOREGROUND_SOCKET_STALENESS_MS;
+  }
+
   /** Release the periodic cleanup interval. Call when shutting down the handler. */
   destroy(): void {
     if (this.bufferCleanupInterval !== null) {
@@ -1417,6 +1460,19 @@ export class CallEventsHandler {
     const rememberAuth = (uid: string) => { cachedUserId = uid; };
     const recoverUserId = (): string | undefined => getUserId(socket.id) ?? cachedUserId;
 
+    // GW6(c) — freshness stamp for the stale-foreground guard. Every inbound
+    // engine packet (messages, acks, pongs — pongs flow every pingInterval
+    // 25s on a healthy connection) proves the client end is alive. A socket
+    // whose lastSeenAt goes stale while still flagged appForeground=true is a
+    // zombie: the ringing fan-out stops trusting its foreground claim.
+    socket.data.lastSeenAt = Date.now();
+    const engineConn = (socket as { conn?: { on?: (event: string, cb: () => void) => void } }).conn;
+    if (engineConn?.on) {
+      engineConn.on('packet', () => {
+        socket.data.lastSeenAt = Date.now();
+      });
+    }
+
     // Audit P1-20 — Anonymous (X-Session-Token) users must NOT be able to
     // initiate or join calls. The REST routes already enforce this with
     // `allowAnonymous: false`; this socket gate aligns the WS surface.
@@ -1738,7 +1794,10 @@ export class CallEventsHandler {
           // ONLY if at least one of its sockets is FOREGROUND. A backgrounded
           // socket still receives this emit but iOS has suspended the app so it
           // can't act on it → that member also needs a VoIP push (below).
-          if (memberSockets.some((s: any) => s.data?.appForeground === true)) {
+          // GW6(c) — appForeground is only trusted on a FRESH socket (see
+          // isFreshForegroundSocket): a zombie foreground socket must not
+          // suppress the VoIP push (iOS dedups by callId anyway).
+          if (memberSockets.some((s: any) => this.isFreshForegroundSocket(s.data))) {
             foregroundUserIds.add(memberId);
           }
           const memberIceServers = this.callService.generateIceServers(memberId);
@@ -1815,6 +1874,10 @@ export class CallEventsHandler {
           // the existing 'voip' behavior.
           const offlineCountries = await this.resolveDeviceCountries(offlineUserIds);
 
+          // GW6(b) — callees without an active voip token get a standard
+          // apns alert instead (same payload, `.incomingCallAlert` routing).
+          const voipCapableUsers = await this.resolveVoipCapableUsers(offlineUserIds);
+
           for (const offlineUserId of offlineUserIds) {
             // Per-user TURN credentials so the answerer's RTCPeerConnection has
             // TURN at construction time (VoIPPushManager.didReceiveIncomingPush
@@ -1846,7 +1909,7 @@ export class CallEventsHandler {
                   iceServers: JSON.stringify(memberIceServers),
                 },
               },
-              types: isChinaDevice ? ['apns'] : ['voip'],
+              types: isChinaDevice || !voipCapableUsers.has(offlineUserId) ? ['apns'] : ['voip'],
               bypassDnd: true,
             }).catch(err => {
               logger.error('Failed to send VoIP push', { userId: offlineUserId, error: err });

@@ -524,13 +524,10 @@ struct ParticipantsView: View {
         return parts.joined(separator: ", ")
     }
 
-    // Présence annoncée seulement quand un dot est visible (online/recent/away).
+    // Présence annoncée seulement quand un dot est visible (online/away/idle).
     // `offline` reste muet — parité avec le visuel (offline = pas de dot).
     private func presenceAccessibilityLabel(_ presence: PresenceState) -> String? {
-        switch presence {
-        case .online, .recent, .away: return presence.localizedLabel
-        case .offline: return nil
-        }
+        presence.showsIndicator ? presence.localizedLabel : nil
     }
 
     private func roleDisplayLabel(_ role: String) -> String {
@@ -547,8 +544,13 @@ struct ParticipantsView: View {
         }
     }
 
-    private func relativeTime(from date: Date) -> String {
-        date.formatted(.relative(presentation: .numeric))
+    /// Delegates to the SSOT `RelativeTimeFormatter` (`.long` style — detail
+    /// surfaces) instead of the raw `Date.formatted(.relative(...))` API,
+    /// which RelativeTimeFormatter's own header comment explicitly lists
+    /// "participants" as a surface it replaced. `static` + injectable `now`
+    /// so it's unit-testable without a live view.
+    static func relativeTime(from date: Date, now: Date = Date()) -> String {
+        RelativeTimeFormatter.longString(for: date, now: now)
     }
 
     private func shortDate(_ date: Date) -> String {

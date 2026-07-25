@@ -87,14 +87,17 @@ public final class PhotoLibraryManager: @unchecked Sendable {
         }
     }
 
-    /// Save media from a URL string. Downloads via cache, determines type from extension/MIME.
+    /// Save media from a URL string. Downloads via cache, routes to the image
+    /// or video save path based on the caller-supplied `kind` — replaces the
+    /// previous substring sniffing (`.contains("video")` / `.contains(".mp4")`),
+    /// which could misclassify any URL whose path merely contained one of
+    /// those substrings. `AttachmentKind` is the single source of truth for
+    /// media family (mirrors `MediaSaveRequest.kind` in the app's unified
+    /// save flow, `MediaSaveCoordinator.swift`).
     @discardableResult
-    public func saveFromURL(_ urlString: String) async -> Bool {
-        let lower = urlString.lowercased()
-        let isVideo = lower.contains(".mp4") || lower.contains(".mov") || lower.contains(".m4v") || lower.contains("video")
-
+    public func saveFromURL(_ urlString: String, kind: AttachmentKind) async -> Bool {
         do {
-            if isVideo {
+            if kind == .video {
                 let localURL = try await CacheCoordinator.shared.video.localFileURLOrThrow(for: urlString)
                 return await saveVideo(at: localURL)
             } else {
@@ -108,25 +111,22 @@ public final class PhotoLibraryManager: @unchecked Sendable {
 
     // MARK: - Authorization
 
+    /// Demande l'accès `.addOnly` (écriture seule). Délègue à
+    /// `DevicePermissions` — source unique des demandes TCC, dont le callback
+    /// est confiné `nonisolated` (cf. `DevicePermissions.swift`).
     public func requestAuthorization() async -> Bool {
-        let status = PHPhotoLibrary.authorizationStatus(for: .addOnly)
-        switch status {
-        case .authorized, .limited:
-            return true
-        case .notDetermined:
-            return await withCheckedContinuation { continuation in
-                PHPhotoLibrary.requestAuthorization(for: .addOnly) { newStatus in
-                    continuation.resume(returning: newStatus == .authorized || newStatus == .limited)
-                }
-            }
-        default:
-            return false
-        }
+        await DevicePermissions.requestPhotoLibraryAdd().isUsable
     }
 
     public var isAuthorized: Bool {
-        let status = PHPhotoLibrary.authorizationStatus(for: .addOnly)
-        return status == .authorized || status == .limited
+        MediaPermissionState.photoLibraryAdd.isUsable
+    }
+
+    /// État courant, sans jamais prompter — permet aux appelants de distinguer
+    /// « pas encore demandé » d'un refus définitif (qui, lui, mérite un renvoi
+    /// vers les Réglages plutôt qu'un nouveau prompt qui n'apparaîtra jamais).
+    public var authorizationState: MediaPermissionState {
+        MediaPermissionState.photoLibraryAdd
     }
 
     // MARK: - Album Management

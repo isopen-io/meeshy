@@ -1770,7 +1770,6 @@ struct StoryCardView: View {
 /// unit instead of inflating `StoryViewerView.body`'s opaque type.
 struct StoryViewerContentView: View {
     let prefetcher: StoryReaderPrefetcher
-    let isPreviewMode: Bool
 
     // Card transform inputs
     let cardScale: CGFloat
@@ -1852,28 +1851,10 @@ struct StoryViewerContentView: View {
                             .accessibilityHidden(true)
                     }
 
-                    // Bouton ✕ uniquement en preview mode
-                    if isPreviewMode {
-                        VStack {
-                            HStack {
-                                Button {
-                                    isPresented = false
-                                } label: {
-                                    Image(systemName: "xmark")
-                                        // Doctrine 82i : glyphe de chrome dans un cadre tap fixe 36×36 → figé.
-                                        .font(.system(size: 16, weight: .semibold))
-                                        .foregroundColor(.white)
-                                        .frame(width: 36, height: 36)
-                                        .background(Circle().fill(Color.black.opacity(0.5)))
-                                }
-                                .accessibilityLabel(String(localized: "story.viewer.close", defaultValue: "Close story", bundle: .main))
-                                .padding(.leading, 16)
-                                .padding(.top, max(geometry.safeAreaInsets.top, 59) + 4)
-                                Spacer()
-                            }
-                            Spacer()
-                        }
-                    }
+                    // La croix de fermeture du preview est portée par le
+                    // `StoryHeaderView` (coin haut-droit, `dismissViewer()`).
+                    // Pas de bouton ✕ additionnel en haut-gauche — une seule
+                    // croix de fermeture (directive user 2026-07-23).
 
                 }
             }

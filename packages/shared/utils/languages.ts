@@ -1157,11 +1157,12 @@ function initializeLanguageCache() {
 export function getLanguageInfo(code: string | undefined): SupportedLanguageInfo {
   initializeLanguageCache();
 
-  if (!code || code.trim() === '' || code === 'unknown') {
+  const normalizedCode = code?.toLowerCase().trim() ?? '';
+
+  if (normalizedCode === '' || normalizedCode === 'unknown') {
     return languageCache.get('fr')!;
   }
 
-  const normalizedCode = code.toLowerCase().trim();
   const found = languageCache.get(normalizedCode);
 
   if (found) {

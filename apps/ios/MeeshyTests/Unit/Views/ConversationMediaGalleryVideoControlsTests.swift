@@ -58,7 +58,7 @@ final class ConversationMediaGalleryVideoControlsTests: XCTestCase {
         guard let start = source.range(of: "private var playOrDownloadButton") else {
             XCTFail("playOrDownloadButton not found"); return
         }
-        let end = source.index(start.lowerBound, offsetBy: 900, limitedBy: source.endIndex) ?? source.endIndex
+        let end = source.index(start.lowerBound, offsetBy: 1400, limitedBy: source.endIndex) ?? source.endIndex
         let body = String(source[start.lowerBound..<end])
         XCTAssertTrue(
             body.contains(".adaptiveGlassProminent(in: Circle()"),

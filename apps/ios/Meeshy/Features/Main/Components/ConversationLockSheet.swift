@@ -118,6 +118,19 @@ struct ConversationLockSheet: View {
         }
         .offset(x: shakeOffset)
         .padding(.vertical, 4)
+        // Les points de progression ne sont que visuels : VoiceOver n'a aucun
+        // moyen de percevoir combien de chiffres ont été saisis (parité clavier
+        // code natif iOS). On regroupe la rangée en un seul élément portant la
+        // progression « N sur M ».
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(String(localized: "conversation.lock.a11y.progress", defaultValue: "Chiffres saisis", bundle: .main))
+        .accessibilityValue(
+            String(
+                format: String(localized: "conversation.lock.a11y.progress-value", defaultValue: "%1$d sur %2$d", bundle: .main),
+                currentPin.count,
+                pinLength
+            )
+        )
     }
 
     // MARK: - Numpad

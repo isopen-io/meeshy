@@ -230,6 +230,21 @@ export interface NotificationContext {
    *  Le client affiche « expirée » et explique ainsi la perte d'accès.
    *  @see schema.prisma Post.expiresAt */
   readonly postExpiresAt?: string;
+  /** GW5 — Date de création ISO du message notifié : la NSE iOS pré-persiste
+   *  la bulle avec le VRAI timestamp serveur (pas l'heure de réception du
+   *  push). @see schema.prisma Message.createdAt */
+  readonly messageCreatedAt?: string;
+  /** GW5 — Type du message notifié (`text`, `audio`, `image`, …) pour que la
+   *  bulle pré-persistée par la NSE porte le bon rendu.
+   *  @see schema.prisma Message.messageType */
+  readonly messageType?: string;
+  /** GW5 — Prisme : traduction du message vers la langue résolue du
+   *  destinataire quand elle existe déjà en DB au fan-out (tronquée à 200
+   *  chars, jamais chiffrée). Absente = le contenu original est déjà dans la
+   *  langue du destinataire (règle Prisme : pas de fallback translations.first). */
+  readonly translatedContent?: string;
+  /** GW5 — Langue de `translatedContent` (code du Prisme, ex. `en`). */
+  readonly translatedLanguage?: string;
 }
 
 /**

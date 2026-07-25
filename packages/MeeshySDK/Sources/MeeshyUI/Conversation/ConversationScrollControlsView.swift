@@ -102,7 +102,16 @@ public struct ConversationScrollControlsView: View {
     /// d'animation dans la sous-vue" ; le garde sur hasTypingIndicator evite tout
     /// tick utile quand personne ne tape.
     @State private var typingDotPhase: Int = 0
-    private let typingDotTimer = Timer.publish(every: 0.5, on: .main, in: .common).autoconnect()
+    // `@State` (not `let`) — a plain stored `let` re-evaluates its initializer
+    // every time ConversationView reconstructs this leaf view (any unrelated
+    // body re-evaluation — the very churn this view was pulled out to avoid,
+    // see comment above), handing `.onReceive` a brand-new, not-yet-ticked
+    // Timer.publish().autoconnect() each time. If reconstructions happen
+    // faster than the 0.5s interval, the publisher never survives long enough
+    // to fire and the typing-dot animation freezes. `@State`'s initial-value
+    // expression runs once per view identity, preserving the same connected
+    // publisher instance across re-renders.
+    @State private var typingDotTimer = Timer.publish(every: 0.5, on: .main, in: .common).autoconnect()
 
     /// Couleur de contenu lisible sur la teinte glass. L'accent est déterministe
     /// par conversation et peut tomber sur une couleur claire (jaune/cyan/vert) —

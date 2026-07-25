@@ -51,8 +51,10 @@ final class StoryInteractionService {
 
     /// Posts a comment (or a reply if `parentId` is set). Optimistic UI
     /// already inserted the comment locally before this call — see
-    /// `StoryViewerView+Content.sendComment` — so a failure here is
-    /// recoverable on next refresh.
+    /// `StoryViewerView+Content.sendComment`. Throws on failure so the
+    /// caller can roll that optimistic insert back instead of leaving a
+    /// phantom `temp_` comment that silently never made it to the server
+    /// (most visible offline, where the whole call fails).
     func postComment(
         storyId: String,
         content: String,
@@ -61,7 +63,7 @@ final class StoryInteractionService {
         parentId: String? = nil,
         attachmentIds: [String]? = nil,
         mobileTranscription: MobileTranscriptionPayload? = nil
-    ) async {
+    ) async throws {
         let body = StoryCommentBody(
             content: content,
             originalLanguage: originalLanguage,
@@ -77,6 +79,7 @@ final class StoryInteractionService {
             )
         } catch {
             Self.logger.error("Failed to post comment on story \(storyId, privacy: .public): \(error.localizedDescription)")
+            throw error
         }
     }
 
@@ -112,9 +115,16 @@ final class StoryInteractionService {
         }
     }
 
-    /// Toggles the user's reaction (emoji) on a story. Fire-and-forget:
-    /// the optimistic UI in the viewer already flipped the like badge.
-    func react(storyId: String, emoji: String) async {
+    /// Toggles the user's reaction (emoji) on a story. Unlike the other
+    /// fire-and-forget methods above, this one THROWS on failure — the
+    /// optimistic UI in the viewer already flipped the like badge and
+    /// bumped the counter (`StoryViewerView.triggerStoryReaction`), and
+    /// the caller (`sendReaction` in `StoryViewerView+Content.swift`)
+    /// needs to know when to roll that back. The concrete reproducible
+    /// case is the gateway's 409 `REACTION_LIMIT_REACHED` conflict (the
+    /// user changes emoji faster than the optimistic guard catches it),
+    /// but any failure must roll back — not just that one code.
+    func react(storyId: String, emoji: String) async throws {
         let body = ReactionRequest(emoji: emoji)
         do {
             let _: APIResponse<AnyCodable> = try await api.post(
@@ -123,6 +133,7 @@ final class StoryInteractionService {
             )
         } catch {
             Self.logger.error("Failed to react on story \(storyId, privacy: .public) with emoji: \(error.localizedDescription)")
+            throw error
         }
     }
 

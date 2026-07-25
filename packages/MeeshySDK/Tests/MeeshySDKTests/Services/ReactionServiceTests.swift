@@ -19,7 +19,7 @@ final class ReactionServiceTests: XCTestCase {
 
     // MARK: - add
 
-    func testAddPostsReactionToEndpoint() async throws {
+    func test_add_validReaction_postsToReactionsEndpoint() async throws {
         let response = APIResponse<DiscardedReactionResponse>(success: true, data: DiscardedReactionResponse(), error: nil)
         mock.stub("/reactions", result: response)
 
@@ -30,7 +30,7 @@ final class ReactionServiceTests: XCTestCase {
         XCTAssertEqual(mock.lastRequest?.method, "POST")
     }
 
-    func testAddWithDifferentEmoji() async throws {
+    func test_add_differentEmoji_postsToReactionsEndpoint() async throws {
         let response = APIResponse<DiscardedReactionResponse>(success: true, data: DiscardedReactionResponse(), error: nil)
         mock.stub("/reactions", result: response)
 
@@ -42,7 +42,7 @@ final class ReactionServiceTests: XCTestCase {
 
     // MARK: - remove
 
-    func testRemoveCallsDeleteWithEncodedEmoji() async throws {
+    func test_remove_validEmoji_callsDeleteWithEncodedEmoji() async throws {
         let response = APIResponse<DiscardedReactionResponse>(success: true, data: DiscardedReactionResponse(), error: nil)
         mock.stub("/reactions/msg001/thumbsup", result: response)
 
@@ -53,7 +53,7 @@ final class ReactionServiceTests: XCTestCase {
         XCTAssertEqual(mock.lastRequest?.method, "DELETE")
     }
 
-    func testRemoveWithUnicodeEmoji() async throws {
+    func test_remove_unicodeEmoji_encodesEmojiInEndpoint() async throws {
         let emoji = "\u{1F44D}"
         let encoded = emoji.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? emoji
         let response = APIResponse<DiscardedReactionResponse>(success: true, data: DiscardedReactionResponse(), error: nil)
@@ -68,7 +68,7 @@ final class ReactionServiceTests: XCTestCase {
 
     // MARK: - fetchDetails
 
-    func testFetchDetailsReturnsReactionSyncResponse() async throws {
+    func test_fetchDetails_withReactions_returnsReactionSyncResponse() async throws {
         let userDetail = ReactionUserDetail(userId: "u1", username: "alice", avatar: nil)
         let group = ReactionGroup(emoji: "heart", count: 2, users: [userDetail])
         let syncResponse = ReactionSyncResponse(
@@ -94,7 +94,7 @@ final class ReactionServiceTests: XCTestCase {
         XCTAssertEqual(result.userReactions, ["heart"])
     }
 
-    func testFetchDetailsWithEmptyReactions() async throws {
+    func test_fetchDetails_noReactions_returnsEmptyResponse() async throws {
         let syncResponse = ReactionSyncResponse(
             messageId: "msg002",
             reactions: [],
@@ -114,7 +114,7 @@ final class ReactionServiceTests: XCTestCase {
 
     // MARK: - Error handling
 
-    func testAddPropagatesNetworkError() async {
+    func test_add_networkError_propagatesError() async {
         mock.errorToThrow = MeeshyError.network(.noConnection)
 
         do {
@@ -131,7 +131,7 @@ final class ReactionServiceTests: XCTestCase {
         }
     }
 
-    func testFetchDetailsPropagatesServerError() async {
+    func test_fetchDetails_serverError_propagatesError() async {
         mock.errorToThrow = MeeshyError.server(statusCode: 500, message: "Internal Server Error")
 
         do {

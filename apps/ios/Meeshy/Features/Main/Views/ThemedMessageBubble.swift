@@ -349,10 +349,50 @@ struct ThemedMessageBubble: View {
 //   - group-context flags recomputed by parent on neighbor changes
 //   - user-level prefs (language, audio language) flipped from settings
 //   - effects flags (one-shot or persistent) and reaction identity
+//   - mention display names resolved asynchronously from cache
+//   - per-attachment audio enrichment (transcription/translation) for
+//     multi-track messages, scoped to this message's own attachments
 // Fields whose changes are guaranteed to bump `updatedAt` (content, isEdited,
 // pinnedAt, expiresAt, etc.) are intentionally NOT compared here — relying on
 // `updatedAt` keeps the comparison tight while still covering them.
 extension ThemedMessageBubble: @MainActor Equatable {
+    /// Full-fidelity key for one owned audio attachment's enrichment state —
+    /// compares the actual `MessageTranscription`/`MessageTranslatedAudio`
+    /// values (both already `Equatable`), not a lossy string projection, so
+    /// an in-place update that changes segments/url/quality/cloned without
+    /// touching text or count still invalidates the gate.
+    private struct AudioEnrichmentKey: Equatable {
+        let id: String
+        let transcription: MessageTranscription?
+        let translatedAudios: [MessageTranslatedAudio]
+    }
+
+    /// Signature of the `allAudioItems` entries owned by THIS message's audio
+    /// attachments.
+    ///
+    /// `allAudioItems` is conversation-wide (every audio attachment across
+    /// every loaded message), so comparing the raw arrays would invalidate
+    /// every audio bubble whenever ANY track anywhere gets enriched. Filtering
+    /// to the ids that belong to `message.attachments` keeps the comparison
+    /// scoped to what this bubble actually renders (see
+    /// `BubbleStandardLayout`'s multi-track carousel, which keys per-page
+    /// transcription/translatedAudios off exactly this same id set — the
+    /// per-message `transcription`/`translatedAudios` slots compared above
+    /// only ever hold the LAST track's data).
+    ///
+    /// Most messages own zero audio attachments (text/system/deleted bubbles)
+    /// — this is the hot no-op comparison path (last operand of the `&&`
+    /// chain below), so bail out before touching the conversation-wide
+    /// `allAudioItems` array at all when there's nothing of ours to find in it.
+    private static func audioEnrichmentSignature(_ bubble: ThemedMessageBubble) -> [AudioEnrichmentKey] {
+        let ownedIds = Set(bubble.message.attachments.filter { $0.type == .audio }.map(\.id))
+        guard !ownedIds.isEmpty else { return [] }
+        return bubble.allAudioItems
+            .filter { ownedIds.contains($0.id) }
+            .sorted { $0.id < $1.id }
+            .map { AudioEnrichmentKey(id: $0.id, transcription: $0.transcription, translatedAudios: $0.translatedAudios) }
+    }
+
     static func == (lhs: ThemedMessageBubble, rhs: ThemedMessageBubble) -> Bool {
         // Message identity & server-bumped lifecycle
         lhs.message.id == rhs.message.id &&
@@ -407,7 +447,13 @@ extension ThemedMessageBubble: @MainActor Equatable {
         lhs.activeDisplayLangCode == rhs.activeDisplayLangCode &&
         lhs.secondaryLangCode == rhs.secondaryLangCode &&
         lhs.voiceConsentMissing == rhs.voiceConsentMissing &&
-        lhs.standalone == rhs.standalone
+        lhs.standalone == rhs.standalone &&
+        // Mentions — `mentionDisplayNames` populates lazily as the mentioned
+        // user's profile lands in cache; a raw `@username` token must resolve
+        // to the display name WITHOUT any `message.updatedAt` bump.
+        lhs.mentionDisplayNames == rhs.mentionDisplayNames &&
+        // Multi-track audio enrichment (see `audioEnrichmentSignature` above).
+        Self.audioEnrichmentSignature(lhs) == Self.audioEnrichmentSignature(rhs)
     }
 }
 

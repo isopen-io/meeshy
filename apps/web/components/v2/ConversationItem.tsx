@@ -272,7 +272,9 @@ export const ConversationItem = memo(function ConversationItem({
           )}
 
           {/* Indicateur en ligne (conversations directes uniquement).
-              Offline (>30min) : aucun dot — vert online/recent, orange away. */}
+              Règle 1/3/5 : offline (>5min) = aucun dot — vert online, orange
+              away, gris idle. Ici seul isOnline est disponible (pas de
+              lastActiveAt) : chemin binaire online/offline, vert-ou-rien. */}
           {!conversation.isGroup && presence !== 'offline' && (
             <div
               className={`absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full border-2 transition-colors duration-300 ${presenceDotClassV2[presence]}`}

@@ -134,6 +134,19 @@ describe('date-format', () => {
       const result = formatConversationDate(now.toISOString(), { t: mockT });
       expect(result).toMatch(/^\d{2}:\d{2}$/);
     });
+
+    it('should return time only for a future date (client clock skew across midnight)', () => {
+      // A message stamped on tomorrow's local calendar day — happens when the
+      // client clock lags the server across a midnight boundary. calendarDayDiff
+      // then yields a negative diff, which must be treated as "today" (time only),
+      // never as a weekday-labelled past date.
+      const tomorrow = new Date();
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      tomorrow.setHours(0, 10, 0, 0);
+
+      const result = formatConversationDate(tomorrow, { t: mockT });
+      expect(result).toMatch(/^\d{2}:\d{2}$/);
+    });
   });
 
   describe('formatFullDate', () => {

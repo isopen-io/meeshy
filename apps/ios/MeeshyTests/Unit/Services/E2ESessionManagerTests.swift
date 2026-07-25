@@ -80,4 +80,32 @@ final class E2ESessionManagerTests: XCTestCase {
             failedAt: now.addingTimeInterval(-600), now: now, cooldown: 600)
         XCTAssertFalse(result)
     }
+
+    // MARK: - resolveWipeUserId (P1 — clearSessions() Keychain-namespace fix)
+    //
+    // `clearSessions()` runs from MeeshyApp's `adaptiveOnChange(of:
+    // authManager.isAuthenticated)` `else` branch, which only fires AFTER
+    // `AuthManager.logout()` has already nil'd `currentUser`. Reading
+    // `currentUserId()` fresh at that point always returns `nil`, so the
+    // Keychain wipe silently targeted the wrong (un-namespaced) entry and
+    // the outgoing user's E2EE session keys survived on disk.
+
+    func test_resolveWipeUserId_currentAvailable_returnsCurrent() {
+        XCTAssertEqual(SessionManager.resolveWipeUserId(current: "userA", cached: "userB"), "userA")
+    }
+
+    func test_resolveWipeUserId_currentNil_fallsBackToCached() {
+        XCTAssertEqual(SessionManager.resolveWipeUserId(current: nil, cached: "userA"), "userA")
+    }
+
+    func test_resolveWipeUserId_bothNil_returnsNil() {
+        XCTAssertNil(SessionManager.resolveWipeUserId(current: nil, cached: nil))
+    }
+
+    func test_resolveWipeUserId_bothAvailable_prefersCurrentOverCached() {
+        // `current` reflects the live AuthManager state and should always
+        // win when available — `cached` is only a fallback for the
+        // already-wiped case.
+        XCTAssertEqual(SessionManager.resolveWipeUserId(current: "freshUser", cached: "staleUser"), "freshUser")
+    }
 }

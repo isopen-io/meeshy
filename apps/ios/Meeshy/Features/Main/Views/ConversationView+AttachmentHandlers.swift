@@ -22,6 +22,19 @@ extension ConversationView {
         hasAudio && consentMissing && !alreadyPrompted
     }
 
+    /// Read a local attachment's bytes off the MainActor. `Data(contentsOf:)`
+    /// is a synchronous read; a multi-attachment send (dozens of MB of video)
+    /// previously read every file inline on the MainActor — either while
+    /// building the optimistic-send plan or inside the upload loop's `Task`
+    /// (which inherits MainActor isolation by default) — freezing the UI for
+    /// the whole read duration. Hops to a detached background Task — the
+    /// same technique previously implemented in `AttachmentSendService.swift`
+    /// (removed as dead code, 0 call sites) but never applied to this, the
+    /// actually-live send path.
+    nonisolated static func readAttachmentFileBytes(_ url: URL) async -> Data? {
+        await Task.detached(priority: .utility) { try? Data(contentsOf: url) }.value
+    }
+
     // MARK: - Recording Functions
     func startRecording() {
         audioRecorder.startRecording()
@@ -141,13 +154,21 @@ extension ConversationView {
             let locals: [MeeshyMessageAttachment] = group.attachments.compactMap { att in
                 guard let fileURL = mediaFiles[att.id] else { return nil }
                 let isImage = att.mimeType.hasPrefix("image/")
-                if isImage, let data = try? Data(contentsOf: fileURL), let image = UIImage(data: data) {
+                if isImage {
                     // Seed in-memory NSCache + on-disk image cache so the
                     // optimistic bubble keeps the picture across navigation
                     // until the server `message:new` reconciliation lands.
-                    DiskCacheStore.cacheImageForPreview(image, key: fileURL.absoluteString)
+                    // The read hops off the MainActor (readAttachmentFileBytes)
+                    // — this compactMap runs synchronously on the tap-Send
+                    // call stack, so a raw `Data(contentsOf:)` here froze the
+                    // UI for the whole read of every selected photo/video.
                     let persistKey = fileURL.absoluteString
-                    Task { await CacheCoordinator.shared.images.save(data, for: persistKey) }
+                    Task {
+                        guard let data = await ConversationView.readAttachmentFileBytes(fileURL),
+                              let image = UIImage(data: data) else { return }
+                        DiskCacheStore.cacheImageForPreview(image, key: persistKey)
+                        await CacheCoordinator.shared.images.save(data, for: persistKey)
+                    }
                 }
                 // A video/audio file:// URL cannot be decoded as a still — seed
                 // a ThumbHash from the generated thumbnail so the bubble shows a
@@ -321,7 +342,12 @@ extension ConversationView {
                     await uploader.setExpectedBatch(totalFiles: uploadableAttachments.count, totalBytes: plannedBytes)
                     for att in send.group.attachments {
                         guard let fileURL = mediaFiles[att.id] else { continue }
-                        let fileData = try? Data(contentsOf: fileURL)
+                        // Off-MainActor read: this `Task` inherits the
+                        // MainActor isolation of `sendMessageWithAttachments`
+                        // (project default actor isolation), so a raw
+                        // `Data(contentsOf:)` here froze the UI for the
+                        // duration of every large video/photo read on send.
+                        let fileData = await ConversationView.readAttachmentFileBytes(fileURL)
                         let thumbHash = thumbnails[att.id]?.toThumbHash()
                         let mime = send.group.kind == .audio ? "audio/mp4" : att.mimeType
                         let result = try await uploader.uploadFile(
@@ -497,6 +523,7 @@ extension ConversationView {
     func handleFileImport(_ result: Result<[URL], Error>) {
         switch result {
         case .success(let urls):
+            var importedAny = false
             for url in urls {
                 guard url.startAccessingSecurityScopedResource() else { continue }
                 defer { url.stopAccessingSecurityScopedResource() }
@@ -505,9 +532,21 @@ extension ConversationView {
                 let fileSize = getFileSize(url)
                 let mimeType = mimeTypeForURL(url)
 
-                // Copy to temp directory (security-scoped resource expires)
+                // Copy to temp directory (security-scoped resource expires).
+                // A silent `try?` here previously let a failed copy through:
+                // the attachment was added to the composer pointing at a
+                // tempURL that never existed, only failing at the very end
+                // of the send pipeline with no diagnosable cause. Skip this
+                // file and surface the failure instead of adding a phantom
+                // attachment.
                 let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent("file_\(UUID().uuidString)_\(fileName)")
-                try? FileManager.default.copyItem(at: url, to: tempURL)
+                do {
+                    try FileManager.default.copyItem(at: url, to: tempURL)
+                } catch {
+                    Logger.messages.error("File import copy failed for \(fileName, privacy: .public): \(error.localizedDescription, privacy: .public)")
+                    FeedbackToastManager.shared.showError("Échec de l'import de \(fileName)")
+                    continue
+                }
 
                 let attachmentId = UUID().uuidString
                 let attachment = MessageAttachment(
@@ -521,8 +560,9 @@ extension ConversationView {
                 )
                 composerState.pendingMediaFiles[attachmentId] = tempURL
                 composerState.pendingAttachments.append(attachment)
+                importedAny = true
             }
-            HapticFeedback.light()
+            if importedAny { HapticFeedback.light() }
         case .failure:
             composerState.actionAlert = "Erreur lors de l'import"
         }

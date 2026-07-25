@@ -44,7 +44,6 @@ struct iPadRootView: View {
     // CallManager n'est PLUS observé ici : la présentation d'appel passe par
     // `.modifier(CallPresentationLayer())` (partagé avec RootView) qui isole le
     // churn d'appel hors de `iPadRootView.body`. Cf. watchdog 0x8BADF00D.
-    @ObservedObject var networkMonitor = NetworkMonitor.shared
     @ObservedObject var notificationManager = NotificationToastManager.shared
     @EnvironmentObject var deepLinkRouter: DeepLinkRouter
     @Environment(\.colorScheme) var systemColorScheme
@@ -173,6 +172,12 @@ struct iPadRootView: View {
                 guard let payload, AuthManager.shared.isAuthenticated else { return }
                 handlePushNotificationTap(payload)
                 PushNotificationManager.shared.clearPendingNotification()
+            }
+            // Navigation par id demandée par une vue sans accès aux helpers de
+            // résolution (StarredMessagesView) — highlight scopé déjà parké.
+            .onReceive(NotificationCenter.default.publisher(for: .meeshyNavigateToConversation)) { notification in
+                guard let conversationId = notification.object as? String, !conversationId.isEmpty else { return }
+                navigateToConversationById(conversationId, highlightMessageId: router.pendingHighlightMessageId)
             }
             .onReceive(NotificationCenter.default.publisher(for: Notification.Name("sendMessageToUser"))) { notification in
                 handleSendMessageToUser(notification)

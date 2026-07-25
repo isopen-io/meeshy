@@ -6,8 +6,9 @@ import me.meeshy.ui.theme.MeeshyPalette
 import org.junit.Test
 
 /**
- * Central presence dot rule (parity web/iOS): online+recent -> green (Success),
- * away -> orange (Warning), offline / no data -> no dot (null).
+ * Central presence dot rule 1/3/5 (parity web/iOS): online -> green (Success),
+ * away -> orange (Warning), idle -> grey DISPLAYED (Neutral400),
+ * offline / no data -> no dot (null).
  */
 class MeeshyAvatarTest {
 
@@ -17,13 +18,13 @@ class MeeshyAvatarTest {
     }
 
     @Test
-    fun `recent presence is the green success colour`() {
-        assertThat(meeshyPresenceDotColor(PresenceState.RECENT)).isEqualTo(MeeshyPalette.Success)
+    fun `away presence is the orange warning colour`() {
+        assertThat(meeshyPresenceDotColor(PresenceState.AWAY)).isEqualTo(MeeshyPalette.Warning)
     }
 
     @Test
-    fun `away presence is the orange warning colour`() {
-        assertThat(meeshyPresenceDotColor(PresenceState.AWAY)).isEqualTo(MeeshyPalette.Warning)
+    fun `idle presence is the grey neutral colour (displayed)`() {
+        assertThat(meeshyPresenceDotColor(PresenceState.IDLE)).isEqualTo(MeeshyPalette.Neutral400)
     }
 
     @Test

@@ -219,4 +219,102 @@ final class DependencyContainerTests: XCTestCase {
             atPath: appSupport.appendingPathComponent("Database").path
         ))
     }
+
+    // MARK: - N1 — busy_timeout on the shared message store
+
+    /// The App Group message store is written by TWO processes (app +
+    /// notification service extension), each holding its own `DatabasePool`.
+    /// GRDB's default `busyMode` is `.immediateError`: a cross-pool write
+    /// collision surfaces as `SQLITE_BUSY` instead of waiting, which the NSE
+    /// swallows silently — the pre-persisted bubble is simply lost.
+    /// `dbConfig()` must therefore configure a busy timeout so a concurrent
+    /// writer WAITS for the lock instead of failing.
+    func test_dbConfig_busyTimeout_absorbsConcurrentCrossPoolWriter() async throws {
+        let dir = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("meeshy-tests-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(
+            at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let dbPath = dir.appendingPathComponent("busy.sqlite").path
+
+        let appPool = try DatabasePool(
+            path: dbPath, configuration: DependencyContainer.dbConfig())
+        let nsePool = try DatabasePool(
+            path: dbPath, configuration: DependencyContainer.dbConfig())
+
+        try await appPool.write { db in
+            try db.execute(sql: "CREATE TABLE IF NOT EXISTS t (id INTEGER PRIMARY KEY, v TEXT)")
+        }
+
+        // Writer A grabs the write lock and holds it for 500 ms — long enough
+        // for writer B to collide, far shorter than the 5 s busy timeout.
+        let holdingWriter = Task.detached {
+            try appPool.writeWithoutTransaction { db in
+                try db.execute(sql: "BEGIN IMMEDIATE")
+                Thread.sleep(forTimeInterval: 0.5)
+                try db.execute(sql: "INSERT INTO t (v) VALUES ('a')")
+                try db.execute(sql: "COMMIT")
+            }
+        }
+
+        // Give writer A time to acquire the lock before B attempts its write.
+        try await Task.sleep(nanoseconds: 100_000_000)
+
+        // Without a busy timeout this throws SQLITE_BUSY. With
+        // `busyMode: .timeout(5)` it waits for A's commit and succeeds.
+        try await nsePool.write { db in
+            try db.execute(sql: "INSERT INTO t (v) VALUES ('b')")
+        }
+
+        _ = try await holdingWriter.value
+
+        let count = try await appPool.read { db in
+            try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM t") ?? 0
+        }
+        XCTAssertEqual(count, 2, "Both writers must have landed their row")
+    }
+
+    // MARK: - N2 — explicit file protection on the shared message store
+
+    /// The NSE is woken while the device is LOCKED. The main app carries the
+    /// `default-data-protection = NSFileProtectionComplete` entitlement, so a
+    /// database file (re)created by the app would inherit `.complete` and the
+    /// NSE could neither open nor write it until the next unlock. The path
+    /// resolver must therefore pin `.completeUntilFirstUserAuthentication` on
+    /// the Database directory AND on the sqlite file + WAL/SHM sidecars,
+    /// mirroring `AppDatabase.resolveDatabaseURL`.
+    func test_databasePath_appliesCompleteUntilFirstUserAuthenticationProtection() throws {
+        let dir = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("meeshy-tests-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(
+            at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        // Pre-create the database files as a previous app run would have,
+        // with no explicit protection class.
+        let dbDir = dir.appendingPathComponent("Database")
+        try FileManager.default.createDirectory(
+            at: dbDir, withIntermediateDirectories: true)
+        let sqlitePath = dbDir.appendingPathComponent("meeshy_messages.sqlite").path
+        for suffix in ["", "-wal", "-shm"] {
+            FileManager.default.createFile(atPath: sqlitePath + suffix, contents: Data())
+        }
+
+        let resolved = DependencyContainer.databasePath(groupContainer: dir)
+        XCTAssertEqual(resolved, sqlitePath)
+
+        var checkedPaths = [dbDir.path]
+        checkedPaths += ["", "-wal", "-shm"].map { sqlitePath + $0 }
+        for path in checkedPaths {
+            let attributes = try FileManager.default.attributesOfItem(atPath: path)
+            guard let protection = attributes[.protectionKey] as? FileProtectionType else {
+                throw XCTSkip("File protection attributes are not recorded on this platform")
+            }
+            XCTAssertEqual(
+                protection,
+                .completeUntilFirstUserAuthentication,
+                "\(path) must stay writable for the NSE while the device is locked"
+            )
+        }
+    }
 }

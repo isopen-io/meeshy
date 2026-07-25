@@ -271,38 +271,35 @@ struct VoiceProfileManageView: View {
 
     // MARK: - Samples
 
+    // Le gateway ne modélise pas de collection d'échantillons éditables (profil
+    // vocal unique) : la liste par-item et son bouton de suppression ont été
+    // retirés (UI morte — getSamples() renvoyait toujours []). Le nombre réel
+    // d'échantillons est affiché par infoCard (profile.sampleCount) ; l'ajout
+    // d'échantillons de calibration reste fonctionnel via « Ajouter ».
     private var samplesSection: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack {
+        HStack {
+            VStack(alignment: .leading, spacing: 4) {
                 Text(String(localized: "voice.profile.voiceSamples", defaultValue: "Echantillons vocaux", bundle: .main))
                     .font(MeeshyFont.relative(15, weight: .semibold))
                     .foregroundColor(theme.textPrimary)
-                Spacer()
-                Button {
-                    HapticFeedback.light()
-                    showAddSamples = true
-                } label: {
-                    HStack(spacing: 4) {
-                        Image(systemName: "plus")
-                            .font(MeeshyFont.relative(12, weight: .semibold))
-                        Text(String(localized: "voice.profile.add", defaultValue: "Ajouter", bundle: .main))
-                            .font(MeeshyFont.relative(13, weight: .semibold))
-                    }
-                    .foregroundColor(Color(hex: accentColor))
-                }
+                Text(String(localized: "voice.profile.addSamples.hint", defaultValue: "Ajoutez des echantillons pour affiner votre voix", bundle: .main))
+                    .font(MeeshyFont.relative(12))
+                    .foregroundColor(theme.textSecondary)
             }
-
-            if viewModel.samples.isEmpty {
-                Text(String(localized: "voice.profile.noSamples", defaultValue: "Aucun echantillon disponible", bundle: .main))
-                    .font(MeeshyFont.relative(13))
-                    .foregroundColor(theme.textMuted)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 12)
-            } else {
-                ForEach(viewModel.samples) { sample in
-                    sampleRow(sample)
+            Spacer()
+            Button {
+                HapticFeedback.light()
+                showAddSamples = true
+            } label: {
+                HStack(spacing: 4) {
+                    Image(systemName: "plus")
+                        .font(MeeshyFont.relative(12, weight: .semibold))
+                    Text(String(localized: "voice.profile.add", defaultValue: "Ajouter", bundle: .main))
+                        .font(MeeshyFont.relative(13, weight: .semibold))
                 }
+                .foregroundColor(Color(hex: accentColor))
             }
+            .accessibilityLabel(String(localized: "voice.profile.add", defaultValue: "Ajouter", bundle: .main))
         }
         .padding(16)
         .background(
@@ -310,44 +307,7 @@ struct VoiceProfileManageView: View {
                 .fill(theme.backgroundSecondary)
         )
         .padding(.horizontal, 16)
-    }
-
-    private func sampleRow(_ sample: VoiceSample) -> some View {
-        HStack(spacing: 10) {
-            Image(systemName: "waveform")
-                .font(MeeshyFont.relative(14))
-                .foregroundColor(Color(hex: accentColor))
-
-            Text("\(sample.durationSeconds)s")
-                .font(MeeshyFont.relative(13, weight: .medium, design: .monospaced))
-                .foregroundColor(theme.textPrimary)
-
-            Text(sample.status)
-                .font(MeeshyFont.relative(11, weight: .medium))
-                .foregroundColor(theme.textMuted)
-                .padding(.horizontal, 6)
-                .padding(.vertical, 2)
-                .background(Capsule().fill(theme.textMuted.opacity(0.15)))
-
-            Spacer()
-
-            Text(sample.createdAt.formatted(date: .abbreviated, time: .omitted))
-                .font(MeeshyFont.relative(11))
-                .foregroundColor(theme.textMuted)
-
-            Button {
-                HapticFeedback.light()
-                Task { await viewModel.deleteSample(id: sample.id) }
-            } label: {
-                Image(systemName: "trash")
-                    .font(MeeshyFont.relative(13))
-                    .foregroundColor(MeeshyColors.error.opacity(0.7))
-                    .frame(width: 44, height: 44)
-                    .contentShape(Rectangle())
-            }
-            .accessibilityLabel(String(localized: "voice.profile.deleteSample", defaultValue: "Supprimer l'échantillon", bundle: .main))
-        }
-        .padding(.vertical, 6)
+        .accessibilityElement(children: .combine)
     }
 
     // MARK: - Actions

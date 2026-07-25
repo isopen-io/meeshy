@@ -40,6 +40,13 @@ public protocol PostServiceProviding: Sendable {
     func getPost(postId: String) async throws -> APIPost
     func getComments(postId: String, cursor: String?, limit: Int) async throws -> PaginatedAPIResponse<[APIPostComment]>
     func addComment(postId: String, content: String, parentId: String?, effectFlags: Int?, attachmentIds: [String]?, mobileTranscription: MobileTranscriptionPayload?, originalLanguage: String?) async throws -> APIPostComment
+    /// Idempotent text-only variant — sends `clientMutationId` as the
+    /// `X-Client-Mutation-Id` header so the gateway `MutationLog` replays the
+    /// recorded result instead of duplicating the comment on retry (offline
+    /// outbox flush, notification quick-comment). A default implementation
+    /// forwards to the full `addComment` so existing conformers stay
+    /// source-compatible.
+    func addComment(postId: String, content: String, parentId: String?, effectFlags: Int?, clientMutationId: String?) async throws -> APIPostComment
     func likeComment(postId: String, commentId: String) async throws
     func unlikeComment(postId: String, commentId: String) async throws
     func deleteComment(postId: String, commentId: String) async throws
@@ -66,6 +73,20 @@ public extension PostServiceProviding {
     /// depuis que `addComment` porte `attachmentIds` / `mobileTranscription` /
     /// `originalLanguage` (les protocoles Swift ne supportent pas les valeurs par défaut).
     func addComment(postId: String, content: String, parentId: String? = nil, effectFlags: Int? = nil) async throws -> APIPostComment {
+        try await addComment(postId: postId, content: content, parentId: parentId, effectFlags: effectFlags,
+                             attachmentIds: nil, mobileTranscription: nil, originalLanguage: nil)
+    }
+
+    /// Default for the idempotent variant: drop the mutation id and fall
+    /// through to the full `addComment`. `PostService` overrides this to send
+    /// the `X-Client-Mutation-Id` header; mocks may override to record it.
+    func addComment(
+        postId: String,
+        content: String,
+        parentId: String?,
+        effectFlags: Int?,
+        clientMutationId: String?
+    ) async throws -> APIPostComment {
         try await addComment(postId: postId, content: content, parentId: parentId, effectFlags: effectFlags,
                              attachmentIds: nil, mobileTranscription: nil, originalLanguage: nil)
     }
@@ -119,6 +140,35 @@ public final class PostService: PostServiceProviding, @unchecked Sendable {
                                         attachmentIds: attachmentIds, mobileTranscription: mobileTranscription,
                                         originalLanguage: originalLanguage)
         let response: APIResponse<APIPostComment> = try await api.post(endpoint: "/posts/\(postId)/comments", body: body)
+        return response.data
+    }
+
+    public func addComment(
+        postId: String,
+        content: String,
+        parentId: String? = nil,
+        effectFlags: Int? = nil,
+        clientMutationId: String? = nil
+    ) async throws -> APIPostComment {
+        guard let clientMutationId, !clientMutationId.isEmpty else {
+            return try await addComment(
+                postId: postId,
+                content: content,
+                parentId: parentId,
+                effectFlags: effectFlags,
+                attachmentIds: nil,
+                mobileTranscription: nil,
+                originalLanguage: nil
+            )
+        }
+        let body = CreateCommentRequest(content: content, parentId: parentId, effectFlags: effectFlags)
+        let response: APIResponse<APIPostComment> = try await api.requestWithHeaders(
+            endpoint: "/posts/\(postId)/comments",
+            method: "POST",
+            body: try JSONEncoder().encode(body),
+            queryItems: nil,
+            headers: ["X-Client-Mutation-Id": clientMutationId]
+        )
         return response.data
     }
 

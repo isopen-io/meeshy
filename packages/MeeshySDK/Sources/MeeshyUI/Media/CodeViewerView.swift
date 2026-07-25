@@ -11,12 +11,15 @@ public struct CodeViewerView: View {
     public var accentColor: String = MeeshyColors.brandPrimaryHex
     public var onDelete: (() -> Void)? = nil
 
-    @ObservedObject private var theme = ThemeManager.shared
+    // Leaf view rendered per-bubble — do not @ObservedObject the ThemeManager
+    // singleton (cf. ChatBubble.swift precedent). Dark/light comes reactively
+    // from the environment instead.
+    @Environment(\.colorScheme) private var colorScheme
     @State private var showFullViewer = false
     @State private var codeContent: String?
     @State private var isLoading = true
 
-    private var isDark: Bool { theme.mode.isDark || context.isImmersive }
+    private var isDark: Bool { colorScheme == .dark || context.isImmersive }
     private var accent: Color { Color(hex: accentColor) }
     private var langColor: Color { Color(hex: language.color) }
     private var syntaxTheme: SyntaxTheme { .github(isDark: isDark) }
@@ -224,10 +227,12 @@ public struct CodeFullSheet: View {
     public let accentColor: String
 
     @Environment(\.dismiss) private var dismiss
-    @ObservedObject private var theme = ThemeManager.shared
+    // Do not @ObservedObject the ThemeManager singleton (cf. ChatBubble.swift
+    // precedent) — colorScheme drives isDark directly.
+    @Environment(\.colorScheme) private var colorScheme
 
     private var langColor: Color { Color(hex: language.color) }
-    private var isDark: Bool { theme.mode.isDark }
+    private var isDark: Bool { colorScheme == .dark }
     private var syntaxTheme: SyntaxTheme { .github(isDark: isDark) }
 
     public init(attachment: MeeshyMessageAttachment, language: CodeLanguage,
@@ -328,11 +333,11 @@ public struct CodeFullSheet: View {
 
             Text(attachment.originalName.isEmpty ? language.displayName : attachment.originalName)
                 .font(.system(size: 16, weight: .semibold))
-                .foregroundColor(theme.textPrimary)
+                .foregroundColor(MeeshyColors.textPrimary(isDark: isDark))
 
             Text(String(localized: "media.code.loadingFile", defaultValue: "Chargement du fichier...", bundle: .module))
                 .font(.system(size: 14))
-                .foregroundColor(theme.textMuted)
+                .foregroundColor(MeeshyColors.textMuted(isDark: isDark))
         }
     }
 }

@@ -290,7 +290,7 @@ final class UserServiceTests: XCTestCase {
         XCTAssertEqual(request1.customDestinationLanguage, "es")
 
         // Invalid ISO 639-1 code
-        let request2 = UpdateProfileRequest(systemLanguage: "invalid", regionalLanguage: "xx-YY", customDestinationLanguage: "")
+        let request2 = UpdateProfileRequest(systemLanguage: "invalid", regionalLanguage: "xx-YY", customDestinationLanguage: "not-a-code")
         XCTAssertNil(request2.systemLanguage)
         XCTAssertNil(request2.regionalLanguage)
         XCTAssertNil(request2.customDestinationLanguage)
@@ -300,5 +300,13 @@ final class UserServiceTests: XCTestCase {
         XCTAssertNil(request3.systemLanguage)
         XCTAssertNil(request3.regionalLanguage)
         XCTAssertNil(request3.customDestinationLanguage)
+
+        // Empty string on customDestinationLanguage is a deliberate "clear"
+        // signal the gateway schema explicitly accepts via `z.literal('')`
+        // (unlike systemLanguage/regionalLanguage, which require a real code
+        // with no empty-string variant) — it must survive as "", not collapse
+        // to nil, or the gateway can never distinguish "clear" from "untouched".
+        let request4 = UpdateProfileRequest(customDestinationLanguage: "")
+        XCTAssertEqual(request4.customDestinationLanguage, "")
     }
 }

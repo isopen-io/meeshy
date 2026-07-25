@@ -307,9 +307,12 @@ struct ConversationInfoSheet: View {
             // CachedAsyncImage (vs raw AsyncImage) caches the banner so reopening
             // the info sheet doesn't re-download it, and decodes it at the 140-pt
             // banner size rather than full resolution.
+            // showsStatusOverlays: false — echec silencieux vers le gradient
+            // deja fourni ; pas de bouton retry sur une banniere decorative.
             CachedAsyncImage(
                 url: bannerURL,
-                targetSize: CGSize(width: 400, height: 140)
+                targetSize: CGSize(width: 400, height: 140),
+                showsStatusOverlays: false
             ) {
                 heroBannerPlaceholder
             }
@@ -413,9 +416,10 @@ struct ConversationInfoSheet: View {
                     }
                 }
                 .frame(maxWidth: .infinity)
-                // Active tab is otherwise signalled by accent underline + fill +
-                // weight only — the `.isSelected` trait lets VoiceOver announce
-                // which tab is selected (mirror of GlobalSearchView.tabButton).
+                // Selected tab is otherwise signalled by weight/color + the
+                // underline bar alone — expose it to VoiceOver via the trait so
+                // non-sighted users know which tab is active (HIG: never rely on
+                // color to convey state; WCAG 1.4.1). Localised by iOS, 0 key.
                 .accessibilityAddTraits(isSelected ? [.isSelected] : [])
             }
         }

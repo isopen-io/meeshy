@@ -160,6 +160,7 @@ describe('NotificationPreferenceSchema', () => {
       vibrationEnabled: true,
       newMessageEnabled: true,
       missedCallEnabled: true,
+      callsEnabled: false,
       voicemailEnabled: true,
       systemEnabled: false,
       conversationEnabled: true,
@@ -174,6 +175,7 @@ describe('NotificationPreferenceSchema', () => {
       dndStartTime: '20:00',
       dndEndTime: '07:30',
       dndDays: ['sat', 'sun'] as const,
+      dndUtcOffsetMinutes: 540,
       showPreview: true,
       showSenderName: true,
       groupNotifications: true,
@@ -183,7 +185,8 @@ describe('NotificationPreferenceSchema', () => {
       postRepostEnabled: true,
       storyReactionEnabled: true,
       commentReplyEnabled: true,
-      commentLikeEnabled: false
+      commentLikeEnabled: false,
+      friendContentEnabled: false
     };
 
     const result = NotificationPreferenceSchema.parse(valid);

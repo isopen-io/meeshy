@@ -57,6 +57,7 @@ describe('AuthHandler', () => {
     mockPrisma = createMockPrisma();
     mockStatusService = {
       updateLastSeen: jest.fn(),
+      noteHeartbeat: jest.fn(),
       markConnected: jest.fn(),
       markDisconnected: jest.fn()
     } as unknown as StatusService;
@@ -969,7 +970,7 @@ describe('AuthHandler', () => {
 
       await authHandler.handleHeartbeat(mockSocket);
 
-      expect(mockStatusService.updateLastSeen).not.toHaveBeenCalled();
+      expect(mockStatusService.noteHeartbeat).not.toHaveBeenCalled();
       expect(mockPrisma.user.update).not.toHaveBeenCalled();
     });
 
@@ -979,10 +980,10 @@ describe('AuthHandler', () => {
 
       await authHandler.handleHeartbeat(createMockSocket());
 
-      expect(mockStatusService.updateLastSeen).not.toHaveBeenCalled();
+      expect(mockStatusService.noteHeartbeat).not.toHaveBeenCalled();
     });
 
-    it('should update lastSeen and DB lastActiveAt for registered user', async () => {
+    it('should refresh presence via the throttled heartbeat path for a registered user (no per-beat DB write)', async () => {
       socketToUser.set('socket-123', 'user-123');
       connectedUsers.set('user-123', {
         id: 'user-123',
@@ -993,16 +994,11 @@ describe('AuthHandler', () => {
 
       await authHandler.handleHeartbeat(createMockSocket());
 
-      expect(mockStatusService.updateLastSeen).toHaveBeenCalledWith('user-123', false);
-      expect(mockPrisma.user.update).toHaveBeenCalledWith(
-        expect.objectContaining({
-          where: { id: 'user-123' },
-          data: { lastActiveAt: expect.any(Date) }
-        })
-      );
+      expect(mockStatusService.noteHeartbeat).toHaveBeenCalledWith('user-123', false);
+      expect(mockPrisma.user.update).not.toHaveBeenCalled();
     });
 
-    it('should update lastSeen but skip DB update for anonymous user', async () => {
+    it('should pass the anonymous flag through to noteHeartbeat', async () => {
       socketToUser.set('socket-123', 'anon-123');
       connectedUsers.set('anon-123', {
         id: 'anon-123',
@@ -1013,11 +1009,11 @@ describe('AuthHandler', () => {
 
       await authHandler.handleHeartbeat(createMockSocket());
 
-      expect(mockStatusService.updateLastSeen).toHaveBeenCalledWith('anon-123', true);
+      expect(mockStatusService.noteHeartbeat).toHaveBeenCalledWith('anon-123', true);
       expect(mockPrisma.user.update).not.toHaveBeenCalled();
     });
 
-    it('should not throw when prisma.user.update fails (best-effort)', async () => {
+    it('should not throw when noteHeartbeat throws (best-effort)', async () => {
       socketToUser.set('socket-123', 'user-123');
       connectedUsers.set('user-123', {
         id: 'user-123',
@@ -1025,10 +1021,12 @@ describe('AuthHandler', () => {
         isAnonymous: false,
         language: 'en'
       });
-      (mockPrisma.user.update as jest.Mock).mockRejectedValue(new Error('DB timeout'));
+      (mockStatusService.noteHeartbeat as jest.Mock).mockImplementation(() => {
+        throw new Error('DB timeout');
+      });
 
       await expect(authHandler.handleHeartbeat(createMockSocket())).resolves.toBeUndefined();
-      expect(mockStatusService.updateLastSeen).toHaveBeenCalledWith('user-123', false);
+      expect(mockStatusService.noteHeartbeat).toHaveBeenCalledWith('user-123', false);
     });
 
     it('should emit heartbeat:ack immediately with serverTime', async () => {
@@ -1088,6 +1086,58 @@ describe('AuthHandler', () => {
       );
       expect(emitCall).toBeDefined();
       expect(emitCall![1].latencyHintMs).toBeUndefined();
+    });
+  });
+
+  describe('handleEnginePong', () => {
+    it('should refresh presence via the throttled heartbeat path (clients with no applicative heartbeat)', () => {
+      socketToUser.set('socket-123', 'user-123');
+      connectedUsers.set('user-123', {
+        id: 'user-123',
+        socketId: 'socket-123',
+        isAnonymous: false,
+        language: 'en'
+      });
+
+      authHandler.handleEnginePong(createMockSocket());
+
+      expect(mockStatusService.noteHeartbeat).toHaveBeenCalledWith('user-123', false);
+      expect(mockPrisma.user.update).not.toHaveBeenCalled();
+    });
+
+    it('should pass the anonymous flag through to noteHeartbeat', () => {
+      socketToUser.set('socket-123', 'anon-123');
+      connectedUsers.set('anon-123', {
+        id: 'anon-123',
+        socketId: 'socket-123',
+        isAnonymous: true,
+        language: 'fr'
+      });
+
+      authHandler.handleEnginePong(createMockSocket());
+
+      expect(mockStatusService.noteHeartbeat).toHaveBeenCalledWith('anon-123', true);
+    });
+
+    it('should ignore pongs from unauthenticated sockets', () => {
+      authHandler.handleEnginePong(createMockSocket({ id: 'unknown-socket' }));
+
+      expect(mockStatusService.noteHeartbeat).not.toHaveBeenCalled();
+    });
+
+    it('should not throw when noteHeartbeat throws (best-effort)', () => {
+      socketToUser.set('socket-123', 'user-123');
+      connectedUsers.set('user-123', {
+        id: 'user-123',
+        socketId: 'socket-123',
+        isAnonymous: false,
+        language: 'en'
+      });
+      (mockStatusService.noteHeartbeat as jest.Mock).mockImplementation(() => {
+        throw new Error('DB timeout');
+      });
+
+      expect(() => authHandler.handleEnginePong(createMockSocket())).not.toThrow();
     });
   });
 });

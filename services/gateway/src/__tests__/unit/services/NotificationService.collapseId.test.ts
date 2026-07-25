@@ -34,6 +34,7 @@ jest.mock('@meeshy/shared/prisma/client', () => {
     },
     notificationPreference: { findUnique: jest.fn() },
     userPreferences: { findUnique: jest.fn() },
+    userConversationPreferences: { findMany: jest.fn().mockResolvedValue([]) },
     user: { findUnique: jest.fn() },
     conversation: { findUnique: jest.fn() },
     // Race-condition guard in createMessageNotification refetches the live message.

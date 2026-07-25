@@ -41,31 +41,16 @@ struct CallParticipantVisual: View {
     }
 
     private var avatarView: some View {
-        let name = callManager.remoteUsername ?? "?"
-        let initial = String(name.prefix(1)).uppercased()
-
-        return ZStack {
-            Circle()
-                .fill(MeeshyColors.brandGradient)
-
-            Text(initial)
-                .font(.system(.callout, design: .rounded).weight(.bold))
-                .foregroundColor(.white)
-
-            if let avatar = remoteProfile?.avatar, !avatar.isEmpty {
-                CachedAsyncImage(
-                    url: avatar,
-                    targetSize: CGSize(width: diameter, height: diameter),
-                    thumbHash: remoteProfile?.avatarThumbHash
-                ) {
-                    Color.clear
-                }
-                .scaledToFill()
-                .frame(width: diameter, height: diameter)
-                .clipShape(Circle())
-            }
-        }
-        .frame(width: diameter, height: diameter)
+        // CachedAvatarImage : échec silencieux (initiales 2 lettres + accent
+        // indigo), zéro bouton retry sur un cercle d'appel 44-56pt — la
+        // résolution du profil reste cache-first via resolveRemoteProfile.
+        CachedAvatarImage(
+            urlString: remoteProfile?.avatar,
+            thumbHash: remoteProfile?.avatarThumbHash,
+            name: callManager.remoteUsername ?? "?",
+            size: diameter,
+            accentColor: MeeshyColors.brandPrimaryHex
+        )
         .accessibilityHidden(true)
     }
 

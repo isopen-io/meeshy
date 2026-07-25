@@ -146,7 +146,7 @@ public struct StoryComposerView: View {
     // Défaut « Contacts » (PostVisibility.friends) : une story est d'abord
     // partagée avec ses contacts, pas publiquement. L'audience publique reste
     // un choix explicite via le sélecteur globe. Aligné sur le défaut du VM app
-    // (`StoryViewModel.publishStory(visibility: "FRIENDS")`).
+    // (`StoryViewModel.publishStoryInBackground(visibility: "FRIENDS")`).
     @State var visibility: String = "FRIENDS"
     @State var visibilityUserIds: [String] = []
     @State var audiencePickerMode: PostVisibility?

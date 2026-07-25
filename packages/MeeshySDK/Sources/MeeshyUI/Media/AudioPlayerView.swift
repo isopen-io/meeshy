@@ -15,6 +15,14 @@ public class AudioPlaybackManager: NSObject, ObservableObject {
     @Published public var duration: TimeInterval = 0
     @Published public var speed: PlaybackSpeed = .x1_0
     @Published public var isLoading = false
+    /// Mirrors `SharedAVPlayerManager.shouldLoop` (the video engine): when
+    /// `true`, natural end-of-playback seeks back to 0 and replays instead of
+    /// tearing the engine down — used by the reels pager so an audio reel
+    /// loops exactly like a video reel instead of going silent forever after
+    /// one pass. Reset to `false` by `resetState()` on every new
+    /// `play`/`playLocal` call, same as the video engine's `cleanup()` — the
+    /// caller must opt back in per attachment, it never carries across tracks.
+    @Published public var shouldLoop = false
 
     public var onPlaybackFinished: (() -> Void)?
 
@@ -239,6 +247,9 @@ public class AudioPlaybackManager: NSObject, ObservableObject {
         listenStartTime = nil
         loadTask?.cancel()
         loadTask = nil
+        // Never carries across tracks — mirrors SharedAVPlayerManager.cleanup()
+        // resetting shouldLoop=false; the caller re-opts-in per attachment.
+        shouldLoop = false
     }
 
     public func stop() {
@@ -311,6 +322,21 @@ public class AudioPlaybackManager: NSObject, ObservableObject {
         if let attId = attachmentId {
             MediaConsumptionStore.shared.record(fraction: 1, complete: true, for: attId)
             AudioPlaybackPositionStore.shared.clear(for: attId)
+        }
+        // Reels pager parity — mirrors SharedAVPlayerManager's video loop:
+        // seek back to 0 and replay, keeping the player + session alive,
+        // instead of tearing everything down. Without this an audio reel
+        // stopped for good after one pass while its video-reel sibling looped
+        // forever (incohérence pager réels).
+        if shouldLoop, let player {
+            player.currentTime = 0
+            currentTime = 0
+            progress = 0
+            listenStartTime = Date()
+            player.play()
+            isPlaying = true
+            startProgressTimer()
+            return
         }
         timer?.invalidate()
         timer = nil
@@ -522,29 +548,15 @@ extension AudioPlayerView {
         return "\(left) / \(right)"
     }
 
-    /// ByteCountFormatter binaire avec arrondi entier. Reproduit le même
-    /// format que `AttachmentDownloader.fmt` côté app pour cohérence
-    /// visuelle entre les badges DownloadBadgeView et les labels audio.
+    /// Delegates to the single SDK-wide `formatMediaFileSize` helper so the
+    /// audio play-button label, the download badges (image/video) and the
+    /// upload progress bar always render the exact same string for the same
+    /// byte count. Previously this used its own binary (1024-based)
+    /// `ByteCountFormatter` while the app's `AttachmentDownloader.fmt` used a
+    /// decimal (1000-based) one — despite a comment claiming they matched.
     nonisolated public static func formatBytes(_ bytes: Int64) -> String {
-        byteFormatter.string(fromByteCount: bytes)
+        formatMediaFileSize(bytes)
     }
-
-    /// Formatter configure une seule fois et reutilise. `formatBytes` est appele
-    /// au rendu de chaque bulle audio (label de taille) ET a chaque tick de
-    /// progression de telechargement ("410 KB / 850 KB") — creer un
-    /// ByteCountFormatter a chaque appel etait une allocation repetee dans un
-    /// chemin chaud. La config est constante et le formatter n'est que lu
-    /// (string(fromByteCount:) ne le mute pas), donc sur en lecture concurrente
-    /// au meme titre que DateFormatter/NumberFormatter (thread-safe iOS 7+).
-    nonisolated(unsafe) private static let byteFormatter: ByteCountFormatter = {
-        let formatter = ByteCountFormatter()
-        formatter.countStyle = .binary
-        formatter.allowedUnits = [.useKB, .useMB, .useGB]
-        formatter.includesUnit = true
-        formatter.includesCount = true
-        formatter.zeroPadsFractionDigits = false
-        return formatter
-    }()
 }
 
 public struct AudioPlayerView: View {
@@ -554,6 +566,15 @@ public struct AudioPlayerView: View {
     public var accentColor: String = MeeshyColors.brandPrimaryHex
     public var transcription: MessageTranscription? = nil
     public var translatedAudios: [MessageTranslatedAudio] = []
+    /// Prisme Linguistique: the language code the transcription STRIP should
+    /// default to, resolved by the caller (app) the same way
+    /// `preferredTranslation` resolves text — `nil` (default, unchanged for
+    /// every existing call site) means "show the original". The SDK stays
+    /// agnostic of the resolution rule itself (systemLanguage > regional >
+    /// custom > deviceLocale); it only renders whichever code it is handed.
+    /// This ONLY seeds the transcription display — it never changes which
+    /// audio track plays, that stays the original by default.
+    public var initialTranscriptionLanguage: String? = nil
 
     public var onFullscreen: (() -> Void)? = nil
     public var onRequestTranscription: (() -> Void)? = nil
@@ -612,9 +633,33 @@ public struct AudioPlayerView: View {
     @MainActor
     private static let sharedNoopExternal = AudioPlaybackManager(registerWithCoordinator: false)
 
-    @ObservedObject private var theme = ThemeManager.shared
+    // Leaf view rendered once per audio bubble — observing the ThemeManager
+    // singleton via @ObservedObject here would invalidate EVERY audio bubble
+    // on screen on every theme publish (Zero Unnecessary Re-render,
+    // CLAUDE.md). `colorScheme` is the blessed leaf-view alternative for a
+    // simple dark/light read; ThemeManager.mode itself is kept in sync with
+    // it (see `ThemeManager.syncWithSystem`).
+    @Environment(\.colorScheme) private var colorScheme
     @State private var isTranscriptionExpanded = false
-    @State private var selectedAudioLanguage: String = "orig"
+    /// Seeded from `initialTranscriptionLanguage` in `init` (Prisme default),
+    /// then owned by user interaction (language pill taps, `externalLanguage`)
+    /// exactly like before. Internal (not `private`) so `@testable import`
+    /// can observe the seeding decision from MeeshyUITests without exposing
+    /// it publicly — same pattern as `usesExternalPlayer` above.
+    @State internal var selectedAudioLanguage: String
+    /// B9 fix — `selectedAudioLanguage` now doubles as the Prisme-seeded
+    /// transcription-STRIP default AND the user's explicit playback-language
+    /// pick, but only the latter may steer which audio track plays. Starts
+    /// `false` unconditionally (even when `initialTranscriptionLanguage` seeds
+    /// a non-"orig" value) and flips to `true` exclusively inside
+    /// `switchToLanguage` — the single choke point reached by an explicit
+    /// language-pill tap or an `externalLanguage` binding change, never by the
+    /// automatic Prisme seed. Consulted by `resolvePlaybackUrl` so
+    /// `currentAudioUrl` keeps resolving to the original track until the user
+    /// actually explores another language, per `initialTranscriptionLanguage`'s
+    /// own contract above. Internal for the same testability reason as
+    /// `selectedAudioLanguage`.
+    @State internal var hasUserSelectedAudioLanguage = false
     @State private var isRetranscribing = false
     /// `true` between the moment the user taps "Transcrire" / "Re-transcrire"
     /// and the moment the server-pushed transcription lands in `transcription`.
@@ -632,7 +677,7 @@ public struct AudioPlayerView: View {
     /// reply/forward de la bulle indéfiniment.
     @GestureState private var isUserScrubbing = false
 
-    private var isDark: Bool { theme.mode.isDark || context.isImmersive }
+    private var isDark: Bool { colorScheme == .dark || context.isImmersive }
     private var accent: Color { Color(hex: accentColor) }
 
     private var displaySegments: [TranscriptionDisplaySegment] {
@@ -641,6 +686,17 @@ public struct AudioPlayerView: View {
             transcription: transcription,
             translatedAudios: translatedAudios
         )
+    }
+
+    /// Pure resolution of the transcription strip's STARTING language: the
+    /// caller-resolved Prisme preference (`initialTranscriptionLanguage`)
+    /// wins when provided, else `"orig"` — the unchanged default for every
+    /// existing call site. Extracted as a `nonisolated static` helper (same
+    /// pattern as `shouldDelegateToParent` / `shouldStopOwnedEngineOnDisappear`
+    /// elsewhere in this file) so the seeding decision is unit-testable
+    /// without a SwiftUI render lifecycle.
+    nonisolated public static func resolveInitialTranscriptionLanguage(_ initialTranscriptionLanguage: String?) -> String {
+        initialTranscriptionLanguage ?? "orig"
     }
 
     /// Pure resolution of the transcription strip segments. Falls back to a
@@ -694,6 +750,7 @@ public struct AudioPlayerView: View {
         attachment: MeeshyMessageAttachment, context: MediaPlayerContext,
         accentColor: String = MeeshyColors.brandPrimaryHex, transcription: MessageTranscription? = nil,
         translatedAudios: [MessageTranslatedAudio] = [],
+        initialTranscriptionLanguage: String? = nil,
         onFullscreen: (() -> Void)? = nil,
         onRequestTranscription: (() -> Void)? = nil,
         onRetranscribe: (() -> Void)? = nil,
@@ -709,6 +766,10 @@ public struct AudioPlayerView: View {
     ) {
         self.attachment = attachment; self.context = context; self.accentColor = accentColor
         self.transcription = transcription; self.translatedAudios = translatedAudios
+        self.initialTranscriptionLanguage = initialTranscriptionLanguage
+        self._selectedAudioLanguage = State(
+            initialValue: AudioPlayerView.resolveInitialTranscriptionLanguage(initialTranscriptionLanguage)
+        )
         self.onFullscreen = onFullscreen; self.onRequestTranscription = onRequestTranscription
         self.onRetranscribe = onRetranscribe
         self.onDelete = onDelete; self.onEdit = onEdit
@@ -818,11 +879,11 @@ public struct AudioPlayerView: View {
             player.stop()
             player.unregisterFromCoordinator()
         }
-        .onChange(of: player.isPlaying) { playing in
+        .adaptiveOnChange(of: player.isPlaying) { _, playing in
             onPlayingChange?(playing)
             if playing { loadWaveformSamples() }
         }
-        .onChange(of: externalLanguage?.wrappedValue) { newLang in
+        .adaptiveOnChange(of: externalLanguage?.wrappedValue) { _, newLang in
             let code = newLang ?? "orig"
             guard code != selectedAudioLanguage else { return }
             switchToLanguage(code)
@@ -854,6 +915,12 @@ public struct AudioPlayerView: View {
         // which goes through handlePlayTap() — gated by availability.
         player.stop()
 
+        // B9 fix — this is the only place `selectedAudioLanguage` changes in
+        // response to genuine user intent (pill tap / externalLanguage
+        // binding), as opposed to the automatic Prisme seed applied once in
+        // `init`. Recording that here is what lets `resolvePlaybackUrl` tell
+        // the two apart.
+        hasUserSelectedAudioLanguage = true
         withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
             selectedAudioLanguage = code
         }
@@ -1201,11 +1268,40 @@ public struct AudioPlayerView: View {
     }
 
     private var currentAudioUrl: String {
-        if selectedAudioLanguage != "orig",
-           let translated = translatedAudios.first(where: { $0.targetLanguage.lowercased() == selectedAudioLanguage.lowercased() }) {
-            return translated.url
-        }
-        return attachment.fileUrl
+        AudioPlayerView.resolvePlaybackUrl(
+            selectedLanguage: selectedAudioLanguage,
+            isUserSelected: hasUserSelectedAudioLanguage,
+            translatedAudios: translatedAudios,
+            originalUrl: attachment.fileUrl
+        )
+    }
+
+    /// Pure resolution of the actual URL `handlePlayTap` hands the playback
+    /// engine. B9 fix — `selectedLanguage` alone is NOT sufficient: it is
+    /// also the Prisme-auto-seeded transcription-strip default (see
+    /// `initialTranscriptionLanguage`), which must never affect which audio
+    /// track plays. Only `isUserSelected == true` (set exclusively by
+    /// `switchToLanguage`, i.e. an explicit pill tap or `externalLanguage`
+    /// change) may steer playback to a translated track; otherwise this
+    /// always resolves to `originalUrl`, matching
+    /// `initialTranscriptionLanguage`'s documented contract and the Prisme
+    /// rule that playback defaults to the original. Extracted as a
+    /// `nonisolated static` helper — same pattern as
+    /// `resolveInitialTranscriptionLanguage` / `shouldDelegateToParent`
+    /// elsewhere in this file — so it is unit-testable without a SwiftUI
+    /// render lifecycle.
+    nonisolated internal static func resolvePlaybackUrl(
+        selectedLanguage: String,
+        isUserSelected: Bool,
+        translatedAudios: [MessageTranslatedAudio],
+        originalUrl: String
+    ) -> String {
+        guard isUserSelected, selectedLanguage != "orig",
+              let translated = translatedAudios.first(where: {
+                  $0.targetLanguage.lowercased() == selectedLanguage.lowercased()
+              })
+        else { return originalUrl }
+        return translated.url
     }
 
     // MARK: - Play Button

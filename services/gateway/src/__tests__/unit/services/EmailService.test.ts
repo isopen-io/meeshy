@@ -534,6 +534,71 @@ describe('EmailService', () => {
       expect(body.htmlContent).toContain('Olá');
     });
 
+    // Regression: language preferences can arrive as canonical ISO 639-2/639-3
+    // 3-letter codes (`user.systemLanguage`, cross-platform locales). A blind
+    // `substring(0, 2)` mapped `'spa'` → `'sp'` and `'por'` → `'po'` — neither
+    // in the supported set — so a Spanish/Portuguese user silently received the
+    // English default. Normalization must reduce them to `'es'` / `'pt'`.
+    it('should send email in Spanish for the ISO 639-2 code "spa"', async () => {
+      const { EmailService } = await getEmailServiceWithEnv({
+        BREVO_API_KEY: 'test-brevo-key'
+      });
+      const service = new EmailService();
+
+      mockAxiosPost.mockReturnValueOnce(createSuccessResponse({ messageId: 'msg-123' }));
+
+      await service.sendPasswordResetEmail({
+        to: 'user@example.com',
+        name: 'Carlos',
+        resetLink: 'https://example.com/reset',
+        expiryMinutes: 15,
+        language: 'spa'
+      });
+
+      const body = mockAxiosPost.mock.calls[0][1] as any;
+      expect(body.htmlContent).toContain('Hola');
+    });
+
+    it('should send email in Portuguese for the ISO 639-2 code "por"', async () => {
+      const { EmailService } = await getEmailServiceWithEnv({
+        BREVO_API_KEY: 'test-brevo-key'
+      });
+      const service = new EmailService();
+
+      mockAxiosPost.mockReturnValueOnce(createSuccessResponse({ messageId: 'msg-123' }));
+
+      await service.sendPasswordResetEmail({
+        to: 'user@example.com',
+        name: 'João',
+        resetLink: 'https://example.com/reset',
+        expiryMinutes: 15,
+        language: 'por'
+      });
+
+      const body = mockAxiosPost.mock.calls[0][1] as any;
+      expect(body.htmlContent).toContain('Olá');
+    });
+
+    it('should send email in Portuguese for the BCP-47 locale "pt-BR"', async () => {
+      const { EmailService } = await getEmailServiceWithEnv({
+        BREVO_API_KEY: 'test-brevo-key'
+      });
+      const service = new EmailService();
+
+      mockAxiosPost.mockReturnValueOnce(createSuccessResponse({ messageId: 'msg-123' }));
+
+      await service.sendPasswordResetEmail({
+        to: 'user@example.com',
+        name: 'João',
+        resetLink: 'https://example.com/reset',
+        expiryMinutes: 15,
+        language: 'pt-BR'
+      });
+
+      const body = mockAxiosPost.mock.calls[0][1] as any;
+      expect(body.htmlContent).toContain('Olá');
+    });
+
     it('should fallback to English for unsupported language', async () => {
       const { EmailService } = await getEmailServiceWithEnv({
         BREVO_API_KEY: 'test-brevo-key'

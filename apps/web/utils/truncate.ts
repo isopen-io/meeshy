@@ -21,7 +21,7 @@
  * Même doctrine « découper par point de code, jamais par unité UTF-16 » que
  * {@link ../utils/initials.ts} (getInitials). Garantit `result.length <= max`.
  */
-function sliceCodePoints(value: string, max: number): string {
+export function sliceCodePoints(value: string, max: number): string {
   if (max <= 0) return '';
   let out = '';
   for (const cp of value) {

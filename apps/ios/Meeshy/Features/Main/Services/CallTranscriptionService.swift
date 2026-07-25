@@ -171,6 +171,16 @@ final class CallTranscriptionService: ObservableObject, CallTranscriptionService
     private var persistedSegments: [TranscriptionSegment] = []
 
     private let audioEngine = AVAudioEngine()
+    /// Guards every `audioEngine`/tap touch in `stopLocalCapture()`. Merely
+    /// *accessing* `audioEngine.inputNode` for the first time lazily
+    /// activates the process's audio session — safe on a real device, but an
+    /// uncatchable crash (SIGABRT) in the unit test host, which has no
+    /// microphone entitlement/hardware. `resetForCallEnd`/`stopTranscribing`
+    /// must be callable from a service that never ran `startLocalCapture`
+    /// (e.g. a receive-only call, or any test exercising end-of-call
+    /// teardown without first starting capture) without ever touching
+    /// `audioEngine` at all.
+    private var isCaptureActive = false
     private var recognizer: SFSpeechRecognizer?
     private var request: SFSpeechAudioBufferRecognitionRequest?
     private var recognitionTask: SFSpeechRecognitionTask?
@@ -356,11 +366,18 @@ final class CallTranscriptionService: ObservableObject, CallTranscriptionService
         input.installTap(onBus: 0, bufferSize: 1024, format: format, block: tapBlock)
         audioEngine.prepare()
         try audioEngine.start()
+        isCaptureActive = true
         observeConfigurationChanges()
         observeAudioInterruptions()
     }
 
     private func stopLocalCapture() {
+        // Never touch `audioEngine` when capture was never started (fix
+        // 2026-07-21, crash CallTranscriptionServiceTests via
+        // `resetForCallEnd`/`applyRecognitionError`) — see `isCaptureActive`'s
+        // doc comment.
+        guard isCaptureActive else { return }
+
         // removeTap(onBus:) must run unconditionally, NOT only while the
         // engine is running. An AVAudioSession interruption (Siri, an
         // incoming GSM call, an alarm — all common mid-call) auto-stops the
@@ -374,6 +391,7 @@ final class CallTranscriptionService: ObservableObject, CallTranscriptionService
         if audioEngine.isRunning {
             audioEngine.stop()
         }
+        isCaptureActive = false
     }
 
     /// A route change mid-capture (Bluetooth connect/disconnect, headphones,

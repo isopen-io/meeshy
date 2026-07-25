@@ -56,7 +56,27 @@ jest.mock('../../../../middleware/auth', () => ({
 }));
 
 jest.mock('../../../../routes/auth/types', () => ({
-  formatUserResponse: jest.fn((user: any) => ({ id: user.id, username: user.username })),
+  formatUserResponse: jest.fn((user: any) => ({
+    id: user.id,
+    username: user.username,
+    email: user.email,
+    firstName: user.firstName,
+    lastName: user.lastName,
+    displayName: user.displayName,
+    bio: user.bio,
+    avatar: user.avatar,
+    banner: user.banner,
+    phoneNumber: user.phoneNumber,
+    role: user.role,
+    isActive: user.isActive,
+    systemLanguage: user.systemLanguage,
+    regionalLanguage: user.regionalLanguage,
+    customDestinationLanguage: user.customDestinationLanguage,
+    isOnline: user.isOnline,
+    lastActiveAt: user.lastActiveAt,
+    emailVerifiedAt: user.emailVerifiedAt,
+    profileCompletionRate: user.profileCompletionRate,
+  })),
 }));
 
 // ─── Import after mocks ───────────────────────────────────────────────────────
@@ -249,6 +269,38 @@ describe('GET /me — unknown auth type', () => {
     });
     const res = await app.inject({ method: 'GET', url: '/me' });
     expect(res.statusCode).toBe(404);
+    await app.close();
+  });
+});
+
+describe('GET /me — registered user includes profile fields', () => {
+  it('returns 200 with user profile including bio, phoneNumber, banner, profileCompletionRate', async () => {
+    const userWithProfileFields = {
+      ...mockUser,
+      bio: 'This is my bio',
+      phoneNumber: '+33612345678',
+      banner: 'https://example.com/banner.jpg',
+      profileCompletionRate: 75,
+      emailVerifiedAt: new Date(),
+    };
+    const app = await buildApp({
+      authContext: {
+        isAuthenticated: true,
+        type: 'user',
+        userId: USER_ID,
+        registeredUser: userWithProfileFields as any,
+        displayName: 'Alice Smith',
+      },
+    });
+    const res = await app.inject({ method: 'GET', url: '/me' });
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body.success).toBe(true);
+    expect(body.data.user).toBeDefined();
+    expect(body.data.user.bio).toBe('This is my bio');
+    expect(body.data.user.phoneNumber).toBe('+33612345678');
+    expect(body.data.user.banner).toBe('https://example.com/banner.jpg');
+    expect(body.data.user.profileCompletionRate).toBe(75);
     await app.close();
   });
 });

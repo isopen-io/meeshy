@@ -1007,6 +1007,13 @@ export class MeeshySocketIOManager {
         this.authHandler.handleHeartbeat(socket, data).catch((error) => logger.error('[HEARTBEAT] Error:', error));
       });
 
+      // Engine-level pong: couvre les clients SANS heartbeat applicatif
+      // (Android) — un connecté-passif reste 'online' sous la garde 5 min.
+      socket.conn.on('packet', (packet: { type?: string }) => {
+        if (packet?.type !== 'pong') return;
+        this.authHandler.handleEnginePong(socket);
+      });
+
       socket.on(CLIENT_EVENTS.ADMIN_AGENT_SUBSCRIBE, (callback?: (response: SocketIOResponse) => void) => {
         this.adminAgentHandler.handleSubscribe(socket, callback).catch((error) => logger.error('[ADMIN_AGENT_SUBSCRIBE] Error:', error));
       });

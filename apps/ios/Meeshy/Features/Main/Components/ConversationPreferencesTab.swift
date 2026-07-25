@@ -243,11 +243,11 @@ struct ConversationPreferencesTab: View {
     }
 
     private var organizationSection: some View {
-        settingsSection(title: String(localized: "conversation.prefs.section.organization", defaultValue: "Organisation", bundle: .main), icon: "folder.fill", color: "3B82F6") {
+        settingsSection(title: String(localized: "conversation.prefs.section.organization", defaultValue: "Organisation", bundle: .main), icon: "folder.fill", color: MeeshyColors.infoHex) {
             // Pin toggle
             settingsToggleRow(
                 icon: "pin.fill",
-                iconColor: "3B82F6",
+                iconColor: MeeshyColors.infoHex,
                 title: String(localized: "conversation.prefs.pin", defaultValue: "Pin", bundle: .main),
                 tint: MeeshyColors.info,
                 isOn: Binding(

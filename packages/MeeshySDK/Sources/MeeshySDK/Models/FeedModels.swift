@@ -470,24 +470,28 @@ public struct FeedPost: Identifiable, Sendable {
     public var bookmarkCount: Int = 0
     /// Server-issued share count (every `POST /posts/:id/share` increments it).
     public var shareCount: Int = 0
-    /// Server-issued unique-view count (`Post.viewCount`). Runtime-only like the
-    /// other counters above — set via `APIPost.toFeedPost`, not cached/Codable.
+    /// Server-issued unique-view count (`Post.viewCount`). Set via
+    /// `APIPost.toFeedPost` and persisted through the Codable round-trip
+    /// below so a cache-first render doesn't flash it back to 0.
     public var viewCount: Int = 0
     /// Server-issued post-open count (`Post.postOpenCount`) — TOTAL full-frame
     /// openings of this post: immersive reel player OR post Detail page (the
     /// concept is generic to any Post, not just reels). This is what the eye
     /// badge shows ("vues totales"). Derived server-side from PostEngagement
-    /// sessions on the `reels`/`detail` surfaces. Runtime-only.
+    /// sessions on the `reels`/`detail` surfaces. Persisted through the
+    /// Codable round-trip below (see `viewCount` note).
     public var postOpenCount: Int = 0
     /// Server-issued impression count (`Post.impressionCount`) — total
     /// exposures, NEVER deduplicated: each feed appearance AND each Detail
     /// open counts. This is what the "Impressions" (chart) badge shows.
-    /// Runtime-only — set via `APIPost.toFeedPost`, not cached/Codable.
+    /// Persisted through the Codable round-trip below (see `viewCount` note).
     public var impressionCount: Int = 0
     /// Server-issued qualified-view count (`Post.qualifiedViewCount`) — total
-    /// sessions reaching the 2.5s-OR-30% threshold. Runtime-only.
+    /// sessions reaching the 2.5s-OR-30% threshold. Persisted through the
+    /// Codable round-trip below (see `viewCount` note).
     public var qualifiedViewCount: Int = 0
-    /// Server-issued playback-completion count (`Post.playCount`). Runtime-only.
+    /// Server-issued playback-completion count (`Post.playCount`). Persisted
+    /// through the Codable round-trip below (see `viewCount` note).
     public var playCount: Int = 0
     public var repost: RepostContent? = nil
     public var repostAuthor: String? = nil
@@ -550,6 +554,31 @@ public struct FeedPost: Identifiable, Sendable {
         return copy
     }
 
+    /// Companion to `resolved(preferredLanguages:)`: returns the language code
+    /// that `displayContent` is currently showing, using the exact same
+    /// deterministic Prisme algorithm (short-circuit on original ∈ preferred,
+    /// else the first preferred language with a matching translation, else
+    /// the original) — never `translations.keys.first` (dictionary iteration
+    /// order is non-deterministic in Swift). Used by the feed card to know
+    /// which language flag is "active" without re-deriving it unsafely.
+    ///
+    /// `originalLanguage == nil` does NOT short-circuit to `nil`: `resolved()`
+    /// still matches `translations` against `preferredLanguages` in that case
+    /// (its `if let original = originalLanguage?.lowercased(), preferred.contains(original)`
+    /// simply fails and falls into the same preferred-language loop). This
+    /// mirrors that — `nil` only when there's truly no language to report
+    /// (no original AND no preferred-language translation matches).
+    public func resolvedLanguageCode(preferredLanguages: [String]) -> String? {
+        let origLang = originalLanguage?.lowercased()
+        guard let dict = translations, !dict.isEmpty else { return origLang }
+        let preferred = preferredLanguages.filter { !$0.isEmpty }.map { $0.lowercased() }
+        if let origLang, preferred.contains(origLang) { return origLang }
+        for lang in preferred {
+            if dict.keys.contains(where: { $0.lowercased() == lang }) { return lang }
+        }
+        return origLang
+    }
+
     public init(id: String = UUID().uuidString, author: String, authorId: String = "", authorUsername: String? = nil,
                 authorAvatarURL: String? = nil,
                 type: String? = nil, content: String, timestamp: Date = Date(), likes: Int = 0,
@@ -573,7 +602,10 @@ public struct FeedPost: Identifiable, Sendable {
 extension FeedPost: Codable {
     enum CodingKeys: String, CodingKey {
         case id, author, authorId, authorUsername, authorAvatarURL, type, content, timestamp, likes, isLiked
-        case comments, commentCount, repost, repostAuthor, isQuote, media
+        case isBookmarkedByMe, isRepostedByMe
+        case comments, commentCount, repostCount, bookmarkCount, shareCount
+        case viewCount, postOpenCount, impressionCount, qualifiedViewCount, playCount
+        case repost, repostAuthor, isQuote, media
         case originalLanguage, translations, translatedContent
         case storyEffects, audioUrl
     }
@@ -590,8 +622,23 @@ extension FeedPost: Codable {
         timestamp = try c.decode(Date.self, forKey: .timestamp)
         likes = try c.decode(Int.self, forKey: .likes)
         isLiked = try c.decode(Bool.self, forKey: .isLiked)
+        // Engagement counters + "by me" flags are server-augmented (set via
+        // `APIPost.toFeedPost`, never through the memberwise init) — a cached
+        // page persisted before these fields existed simply lacks the keys.
+        // `decodeIfPresent` + a falsy default keeps that page loadable instead
+        // of throwing `keyNotFound` and dropping the whole cached feed.
+        isBookmarkedByMe = try c.decodeIfPresent(Bool.self, forKey: .isBookmarkedByMe) ?? false
+        isRepostedByMe = try c.decodeIfPresent(Bool.self, forKey: .isRepostedByMe) ?? false
         comments = try c.decode([FeedComment].self, forKey: .comments)
         commentCount = try c.decode(Int.self, forKey: .commentCount)
+        repostCount = try c.decodeIfPresent(Int.self, forKey: .repostCount) ?? 0
+        bookmarkCount = try c.decodeIfPresent(Int.self, forKey: .bookmarkCount) ?? 0
+        shareCount = try c.decodeIfPresent(Int.self, forKey: .shareCount) ?? 0
+        viewCount = try c.decodeIfPresent(Int.self, forKey: .viewCount) ?? 0
+        postOpenCount = try c.decodeIfPresent(Int.self, forKey: .postOpenCount) ?? 0
+        impressionCount = try c.decodeIfPresent(Int.self, forKey: .impressionCount) ?? 0
+        qualifiedViewCount = try c.decodeIfPresent(Int.self, forKey: .qualifiedViewCount) ?? 0
+        playCount = try c.decodeIfPresent(Int.self, forKey: .playCount) ?? 0
         repost = try c.decodeIfPresent(RepostContent.self, forKey: .repost)
         repostAuthor = try c.decodeIfPresent(String.self, forKey: .repostAuthor)
         isQuote = try c.decode(Bool.self, forKey: .isQuote)
@@ -617,8 +664,18 @@ extension FeedPost: Codable {
         try c.encode(timestamp, forKey: .timestamp)
         try c.encode(likes, forKey: .likes)
         try c.encode(isLiked, forKey: .isLiked)
+        try c.encode(isBookmarkedByMe, forKey: .isBookmarkedByMe)
+        try c.encode(isRepostedByMe, forKey: .isRepostedByMe)
         try c.encode(comments, forKey: .comments)
         try c.encode(commentCount, forKey: .commentCount)
+        try c.encode(repostCount, forKey: .repostCount)
+        try c.encode(bookmarkCount, forKey: .bookmarkCount)
+        try c.encode(shareCount, forKey: .shareCount)
+        try c.encode(viewCount, forKey: .viewCount)
+        try c.encode(postOpenCount, forKey: .postOpenCount)
+        try c.encode(impressionCount, forKey: .impressionCount)
+        try c.encode(qualifiedViewCount, forKey: .qualifiedViewCount)
+        try c.encode(playCount, forKey: .playCount)
         try c.encodeIfPresent(repost, forKey: .repost)
         try c.encodeIfPresent(repostAuthor, forKey: .repostAuthor)
         try c.encode(isQuote, forKey: .isQuote)

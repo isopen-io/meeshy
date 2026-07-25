@@ -43,8 +43,11 @@ import me.meeshy.sdk.model.ApiConversation
 import me.meeshy.sdk.model.ApiMessage
 import me.meeshy.sdk.model.ApiMessageAttachment
 import me.meeshy.sdk.model.ApiMessageReplyPreview
+import me.meeshy.sdk.model.AnonymousSessionContext
 import me.meeshy.sdk.model.ApiParticipant
 import me.meeshy.sdk.model.ApiTextTranslation
+import me.meeshy.sdk.model.ParticipantPermissions
+import me.meeshy.sdk.session.InMemoryAnonymousSessionStore
 import me.meeshy.sdk.model.ConversationDraft
 import me.meeshy.sdk.model.EphemeralDuration
 import me.meeshy.sdk.model.MeeshyUser
@@ -100,6 +103,14 @@ class ChatViewModelTest {
     }
 
     private fun synced(message: ApiMessage) = LocalMessage(message)
+
+    private fun anonymousGuestSession(permissions: ParticipantPermissions) = AnonymousSessionContext(
+        sessionToken = "guest-token",
+        participantId = "p-guest",
+        permissions = permissions,
+        linkId = "link-1",
+        conversationId = "c1",
+    )
 
     private val reactionAdded = MutableSharedFlow<ReactionUpdateEvent>()
     private val reactionRemoved = MutableSharedFlow<ReactionUpdateEvent>()
@@ -175,6 +186,7 @@ class ChatViewModelTest {
         targetConversations: List<ApiConversation> = emptyList(),
         activeCall: ActiveCallSession? = null,
         mentionSearch: MentionSearch = FakeMentionSearch(),
+        anonymousSession: AnonymousSessionContext? = null,
     ): Harness {
         val repo = mockk<MessageRepository>(relaxed = true)
         every { repo.messagesStream(any(), any(), any()) } returns stream
@@ -193,6 +205,7 @@ class ChatViewModelTest {
         val reportRepo = mockk<ReportRepository>(relaxed = true)
         val mediaQueue = mockk<MediaUploadQueue>(relaxed = true)
         coEvery { mediaQueue.enqueue(any()) } returns "upload-cmid"
+        val anonymousStore = InMemoryAnonymousSessionStore(anonymousSession)
         val handle = SavedStateHandle(mapOf(ChatViewModel.CONVERSATION_ID_ARG to "c1"))
         val socket = socketManager()
         val emojiUsage = InMemoryEmojiUsageStore()
@@ -221,6 +234,7 @@ class ChatViewModelTest {
                 reportRepo,
                 mediaQueue,
                 mentionSearch,
+                anonymousStore,
                 handle,
             ),
             repo,
@@ -293,6 +307,156 @@ class ChatViewModelTest {
         advanceUntilIdle()
 
         assertThat(h.vm.state.value.activeCall).isNull()
+    }
+
+    @Test
+    fun a_registered_member_with_no_anonymous_session_keeps_the_full_composer() = runTest(dispatcher) {
+        val h = harness(syncedConversation(), currentUser = me, anonymousSession = null)
+
+        advanceUntilIdle()
+
+        val affordances = h.vm.state.value.composerAffordances
+        assertThat(h.vm.state.value.composerPermissions).isNull()
+        assertThat(affordances.isReadOnly).isFalse()
+        assertThat(affordances.showsAttachmentLadder).isTrue()
+        assertThat(affordances.canSendAudios).isTrue()
+    }
+
+    @Test
+    fun a_share_link_guest_gates_the_composer_to_its_hardened_permissions() = runTest(dispatcher) {
+        val h = harness(
+            syncedConversation(),
+            currentUser = me,
+            anonymousSession = anonymousGuestSession(ParticipantPermissions.defaultAnonymous),
+        )
+
+        advanceUntilIdle()
+
+        val affordances = h.vm.state.value.composerAffordances
+        assertThat(h.vm.state.value.composerPermissions).isEqualTo(ParticipantPermissions.defaultAnonymous)
+        // defaultAnonymous: text + images only, everything else denied.
+        assertThat(affordances.isReadOnly).isFalse()
+        assertThat(affordances.canSendImages).isTrue()
+        assertThat(affordances.showsAttachmentLadder).isTrue()
+        assertThat(affordances.canSendAudios).isFalse()
+        assertThat(affordances.canSendVideos).isFalse()
+        assertThat(affordances.canSendLocations).isFalse()
+    }
+
+    @Test
+    fun a_muted_guest_makes_the_composer_read_only() = runTest(dispatcher) {
+        val muted = ParticipantPermissions(
+            canSendMessages = false,
+            canSendFiles = false,
+            canSendImages = false,
+            canSendVideos = false,
+            canSendAudios = false,
+            canSendLocations = false,
+            canSendLinks = false,
+        )
+        val h = harness(
+            syncedConversation(),
+            currentUser = me,
+            anonymousSession = anonymousGuestSession(muted),
+        )
+
+        advanceUntilIdle()
+
+        val affordances = h.vm.state.value.composerAffordances
+        assertThat(affordances.isReadOnly).isTrue()
+        assertThat(affordances.showsAttachmentLadder).isFalse()
+    }
+
+    // MARK: - Slow mode (composer cooldown)
+
+    private fun slowConversation(role: String? = "member", seconds: Int? = 30) = ApiConversation(
+        id = "c1",
+        type = "group",
+        title = "Squad",
+        slowModeSeconds = seconds,
+        participants = listOf(
+            ApiParticipant(id = "p0", userId = "me", username = "atabeth", role = role),
+            ApiParticipant(id = "p1", userId = "u1", username = "bob"),
+        ),
+    )
+
+    @Test
+    fun the_conversation_slow_mode_interval_populates_the_composer_state() = runTest(dispatcher) {
+        val h = harness(flowOf(CacheResult.Empty), currentUser = me, conversation = slowConversation(seconds = 30))
+
+        advanceUntilIdle()
+
+        assertThat(h.vm.state.value.slowModeSeconds).isEqualTo(30)
+        assertThat(h.vm.state.value.slowModeExempt).isFalse()
+        // Never sent yet → active but immediately sendable.
+        val posture = h.vm.state.value.slowModeState(FIXED_NOW)
+        assertThat(posture.isActive).isTrue()
+        assertThat(posture.canSend).isTrue()
+        assertThat(posture.remainingSeconds).isEqualTo(0)
+    }
+
+    @Test
+    fun sending_under_slow_mode_records_the_send_and_blocks_an_immediate_resend() = runTest(dispatcher) {
+        val h = harness(flowOf(CacheResult.Empty), currentUser = me, conversation = slowConversation(seconds = 30))
+        coEvery { h.repo.sendOptimistic(any(), any(), any(), any(), any()) } returns "cmid_1"
+        advanceUntilIdle()
+
+        h.vm.onDraftChange("hello")
+        h.vm.send()
+        advanceUntilIdle()
+
+        assertThat(h.vm.state.value.draft).isEmpty()
+        assertThat(h.vm.state.value.lastSelfSentAtMillis).isEqualTo(FIXED_NOW)
+        val posture = h.vm.state.value.slowModeState(FIXED_NOW)
+        assertThat(posture.canSend).isFalse()
+        assertThat(posture.remainingSeconds).isEqualTo(30)
+
+        // A second send while the cooldown runs is refused — the draft is kept.
+        h.vm.onDraftChange("again")
+        h.vm.send()
+        advanceUntilIdle()
+
+        assertThat(h.vm.state.value.draft).isEqualTo("again")
+        coVerify(exactly = 1) { h.repo.sendOptimistic(any(), any(), any(), any(), any()) }
+    }
+
+    @Test
+    fun an_exempt_moderator_is_never_throttled_between_sends() = runTest(dispatcher) {
+        val h = harness(flowOf(CacheResult.Empty), currentUser = me, conversation = slowConversation(role = "admin", seconds = 30))
+        coEvery { h.repo.sendOptimistic(any(), any(), any(), any(), any()) } returns "cmid_1"
+        advanceUntilIdle()
+
+        assertThat(h.vm.state.value.slowModeExempt).isTrue()
+        assertThat(h.vm.state.value.slowModeState(FIXED_NOW).isActive).isFalse()
+
+        h.vm.onDraftChange("one")
+        h.vm.send()
+        advanceUntilIdle()
+        h.vm.onDraftChange("two")
+        h.vm.send()
+        advanceUntilIdle()
+
+        assertThat(h.vm.state.value.draft).isEmpty()
+        coVerify(exactly = 2) { h.repo.sendOptimistic(any(), any(), any(), any(), any()) }
+    }
+
+    @Test
+    fun slow_mode_off_does_not_throttle_consecutive_sends() = runTest(dispatcher) {
+        val h = harness(flowOf(CacheResult.Empty), currentUser = me, conversation = slowConversation(seconds = null))
+        coEvery { h.repo.sendOptimistic(any(), any(), any(), any(), any()) } returns "cmid_1"
+        advanceUntilIdle()
+
+        assertThat(h.vm.state.value.slowModeSeconds).isNull()
+        assertThat(h.vm.state.value.slowModeState(FIXED_NOW).canSend).isTrue()
+
+        h.vm.onDraftChange("one")
+        h.vm.send()
+        advanceUntilIdle()
+        h.vm.onDraftChange("two")
+        h.vm.send()
+        advanceUntilIdle()
+
+        coVerify(exactly = 2) { h.repo.sendOptimistic(any(), any(), any(), any(), any()) }
     }
 
     @Test

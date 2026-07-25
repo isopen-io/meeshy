@@ -91,4 +91,57 @@ struct EmbeddableVideoResolverTests {
         let v = EmbeddableVideoResolver.resolve(urlString: "https://youtu.be/dQw4w9WgXcQ?t=90")!
         #expect(v.watchURL.absoluteString == "https://www.youtube.com/watch?v=dQw4w9WgXcQ&t=90s")
     }
+
+    @Test("videoId avec lettre Unicode (accent) tronqué sous le minimum → rejeté")
+    func unicodeVideoIdRejectedByAsciiFilter() {
+        let v = EmbeddableVideoResolver.resolve(urlString: "https://youtu.be/café12345678")
+        #expect(v == nil)
+    }
+
+    @Test("videoId avec chiffre Unicode non-ASCII (Devanagari) → rejeté")
+    func unicodeDigitVideoIdRejected() {
+        // "\u{0966}" = chiffre Devanagari '0', accepté par Character.isNumber mais pas ASCII.
+        let v = EmbeddableVideoResolver.resolve(urlString: "https://youtu.be/abc123\u{0966}\u{0966}\u{0966}")
+        #expect(v == nil)
+    }
+
+    @Test("thumbnailURL/embedURL ne force-unwrap jamais même avec un videoId Unicode construit directement")
+    func neverForceCrashesOnDirectUnicodeVideoId() {
+        let v = EmbeddedVideo(provider: .youtube, videoId: "日本語テスト1234", startSeconds: nil)
+        let thumb = v.thumbnailURL()
+        let embed = v.embedURL
+        let watch = v.watchURL
+        #expect(thumb.scheme == "https")
+        #expect(embed.scheme == "https")
+        #expect(watch.scheme == "https")
+    }
+
+    @Test("videoId contenant '/' construit directement ne peut pas injecter de segment de chemin")
+    func directVideoIdWithSlashCannotInjectPathSegment() {
+        let v = EmbeddedVideo(provider: .youtube, videoId: "abc/../../evil", startSeconds: nil)
+        let thumb = v.thumbnailURL()
+        #expect(thumb.host == "img.youtube.com")
+        #expect(thumb.absoluteString == "https://img.youtube.com/vi/abc%2F..%2F..%2Fevil/hqdefault.jpg")
+        // La garde d'injection porte sur l'URL ÉMISE : les `/` du videoId sont
+        // percent-encodés, donc aucun segment n'est injecté et `standardized`
+        // (qui résout les `..` réels) ne peut pas remonter l'arborescence.
+        //
+        // Ne PAS asserter sur `pathComponents` : cette propriété décode les
+        // percent-escapes avant de découper, si bien qu'elle rend
+        // ["abc", "..", "..", "evil"] pour une URL pourtant sûre. Elle décrit le
+        // comportement de Foundation — qui a changé avec Xcode 26 — et non le
+        // nôtre ; l'y adosser faisait échouer ce test sans qu'aucune injection
+        // ne soit possible.
+        #expect(thumb.standardized.absoluteString == thumb.absoluteString)
+        let embed = v.embedURL
+        #expect(embed.host == "www.youtube.com")
+        #expect(embed.absoluteString == "https://www.youtube.com/embed/abc%2F..%2F..%2Fevil")
+        #expect(embed.standardized.absoluteString == embed.absoluteString)
+    }
+
+    @Test("make() rejette un id ASCII valide suivi de garbage plutôt que de le tronquer")
+    func longValidAsciiPrefixFollowedByGarbageIsRejectedNotTruncated() {
+        let v = EmbeddableVideoResolver.resolve(urlString: "https://youtu.be/abc123défault")
+        #expect(v == nil)
+    }
 }

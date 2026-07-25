@@ -845,6 +845,14 @@ struct CallView: View {
                 Text(callManager.formattedDuration)
                     .font(.body.weight(.medium).monospacedDigit())
                     .foregroundColor(durationColor)
+                    // Without an explicit label the combined capsule announces a
+                    // context-free "1:23" (the signal glyph is invisible on a
+                    // healthy link) — VoiceOver users can't tell it is the call
+                    // timer. Static label + dynamic value mirror the video badge
+                    // (and FloatingCallPillView 211i): the label reads once, the
+                    // timer updates via .accessibilityValue under .updatesFrequently.
+                    .accessibilityLabel(String(localized: "call.duration.a11y.label"))
+                    .accessibilityValue(callManager.formattedDuration)
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 6)
@@ -852,7 +860,14 @@ struct CallView: View {
                 Capsule()
                     .fill(durationColor.opacity(0.15))
             )
-            .accessibilityElement(children: .combine)
+            // Naked-readout fix (doctrine 206i/210i/211i): the combined element
+            // previously announced a bare "0:34" with no context. Signal state is
+            // already surfaced by the separate statusPill row here (unlike the video
+            // badge), so this label carries only call-duration context — no double
+            // announcement. Reuses the existing `call.duration.a11y.label` key.
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(String(localized: "call.duration.a11y.label"))
+            .accessibilityValue(callManager.formattedDuration)
             .accessibilityAddTraits(.updatesFrequently)
 
             // Status indicators
@@ -911,8 +926,17 @@ struct CallView: View {
                     Text(callManager.formattedDuration)
                         .font(.caption.weight(.medium).monospacedDigit())
                         .foregroundColor(durationColor)
+                        // Same context-free-timer fix as audioCallLayout: this
+                        // caption-mode header has no status-pill row, so the
+                        // labelled value is the only place the timer gains meaning.
+                        .accessibilityLabel(String(localized: "call.duration.a11y.label"))
+                        .accessibilityValue(callManager.formattedDuration)
                 }
-                .accessibilityElement(children: .combine)
+                // Same naked-readout fix as audioCallLayout — captions-active
+                // compact header. Bare "0:34" → "Durée de l'appel, 0:34".
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(String(localized: "call.duration.a11y.label"))
+                .accessibilityValue(callManager.formattedDuration)
                 .accessibilityAddTraits(.updatesFrequently)
             }
 
@@ -1462,6 +1486,10 @@ struct CallView: View {
                 Text(callManager.formattedDuration)
                     .font(.footnote.weight(.medium).monospacedDigit())
                     .foregroundColor(.white.opacity(0.45))
+                    // Final call-total duration: same naked-readout fix, static
+                    // (no .updatesFrequently). Bare "0:34" → "Durée de l'appel, 0:34".
+                    .accessibilityLabel(String(localized: "call.duration.a11y.label"))
+                    .accessibilityValue(callManager.formattedDuration)
             }
 
             if callManager.canRetryCall {
@@ -1477,7 +1505,7 @@ struct CallView: View {
                     .foregroundColor(.white)
                     .padding(.horizontal, 24)
                     .padding(.vertical, 12)
-                    .background(Capsule().fill(Color.green))
+                    .background(Capsule().fill(MeeshyColors.success))
                 }
                 .padding(.top, 8)
                 .accessibilityLabel(String(localized: "call.action.retry", defaultValue: "Réessayer", bundle: .main))

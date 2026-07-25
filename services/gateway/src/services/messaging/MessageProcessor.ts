@@ -1111,20 +1111,22 @@ export class MessageProcessor {
 
       const candidateRegularRecipients = memberIds.filter(id => !alreadyNotified.has(id));
 
-      // Fetch mentionsOnly preferences for all candidate recipients
+      // GW3 — single widened query: a candidate leaves the regular fan-out if
+      // they opted for mentions-only OR muted the conversation (both suppress
+      // new_message; mentions pierce the mute via the dedicated batch above).
       const conversationPrefs = candidateRegularRecipients.length > 0
         ? await this.prisma.userConversationPreferences.findMany({
             where: {
               conversationId: data.conversationId,
               userId: { in: candidateRegularRecipients },
-              mentionsOnly: true,
+              OR: [{ mentionsOnly: true }, { isMuted: true }],
             },
             select: { userId: true },
           })
         : [];
 
-      const mentionsOnlyUserIds = new Set(conversationPrefs.map(p => p.userId));
-      const regularRecipients = candidateRegularRecipients.filter(id => !mentionsOnlyUserIds.has(id));
+      const suppressedUserIds = new Set(conversationPrefs.map(p => p.userId));
+      const regularRecipients = candidateRegularRecipients.filter(id => !suppressedUserIds.has(id));
 
       if (regularRecipients.length > 0) {
         await Promise.all(regularRecipients.map(recipientUserId =>

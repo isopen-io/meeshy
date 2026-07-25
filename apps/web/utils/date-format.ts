@@ -105,8 +105,11 @@ export function formatConversationDate(
   // Différence en jours calendaires (comparaison des minuits locaux)
   const diffDays = calendarDayDiff(messageDate.getTime(), now.getTime());
 
-  // Si c'est aujourd'hui, afficher seulement l'heure
-  if (diffDays === 0) {
+  // Si c'est aujourd'hui — ou dans le futur (décalage d'horloge client sur une
+  // frontière de minuit → diffDays négatif) — afficher seulement l'heure.
+  // Sans ce garde `<= 0`, un timestamp de demain retombait sur la branche
+  // `diffDays < 7` et s'affichait avec un jour de semaine (ex. « Mer. 00:10 »).
+  if (diffDays <= 0) {
     return formatTime(messageDate, locale);
   }
 

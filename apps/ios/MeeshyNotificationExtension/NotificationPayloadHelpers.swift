@@ -183,4 +183,80 @@ nonisolated enum NotificationPayloadHelpers {
             comment: "Push body fallback for an audio-only message when the gateway body is empty (E2EE caption)."
         )
     }
+
+    /// N4 — maps the push payload's `attachmentMimeType` to the
+    /// `messageType` / `contentType` pair stored on the pre-persisted
+    /// `MessageRecord`, so the bubble written by the NSE renders as the right
+    /// media kind BEFORE the canonical REST payload overwrites it (previously
+    /// hardcoded to `"text"`, showing an empty text bubble for a voice memo).
+    ///
+    /// Values mirror `MeeshyMessage.MessageType` raw values (`text`, `image`,
+    /// `audio`, `video`). Unknown / absent mime → `text`, matching the
+    /// gateway's default for caption-only messages.
+    nonisolated static func mediaMessageTypes(
+        forAttachmentMimeType mimeType: String?
+    ) -> (messageType: String, contentType: String) {
+        let normalized = mimeType?
+            .trimmingCharacters(in: .whitespaces)
+            .lowercased() ?? ""
+        if normalized.hasPrefix("audio/") { return ("audio", "audio") }
+        if normalized.hasPrefix("video/") { return ("video", "video") }
+        if normalized.hasPrefix("image/") { return ("image", "image") }
+        return ("text", "text")
+    }
+
+    /// R3 — social push types whose banner exposes the inline « Commenter »
+    /// text action. A type is commentable when the produced comment has an
+    /// unambiguous target:
+    ///  - comment / thread notifications (`post_comment`, `comment_reply`,
+    ///    `story_new_comment`, `story_thread_reply`, `friend_story_comment`)
+    ///    → threaded reply to THE notified comment ;
+    ///  - `friend_new_post` → root comment on the new post.
+    /// Reactions / likes / moods / new stories stay on plain `MEESHY_SOCIAL`
+    /// (a Comment button there would be misleading).
+    nonisolated static let commentableSocialTypes: Set<String> = [
+        "post_comment",
+        "comment_reply",
+        "story_new_comment",
+        "story_thread_reply",
+        "friend_story_comment",
+        "friend_new_post"
+    ]
+
+    /// Category for a social push: `MEESHY_SOCIAL_COMMENTABLE` when the type
+    /// is commentable AND the payload carries a `postId` (the comment
+    /// endpoint's target), plain `MEESHY_SOCIAL` otherwise. Identifiers are a
+    /// cross-layer contract — the gateway (`category` push field) and
+    /// `AppDelegate.registerNotificationCategories` use the SAME strings.
+    nonisolated static func socialCategoryIdentifier(
+        type: String,
+        postId: String?
+    ) -> String {
+        guard commentableSocialTypes.contains(type),
+              let postId,
+              !postId.trimmingCharacters(in: .whitespaces).isEmpty else {
+            return "MEESHY_SOCIAL"
+        }
+        return "MEESHY_SOCIAL_COMMENTABLE"
+    }
+
+    /// G4d — call categories are SPLIT by call state so a terminated call
+    /// never shows an « Answer » button:
+    ///  - `incoming_call` (regular-APNs ringing path — China devices, VoIP
+    ///    fallback) → `MEESHY_CALL_INCOMING` [answer, decline] ;
+    ///  - terminal states (`missed_call`, `call_ended`, `call_declined`,
+    ///    `call_recording_ready`) → `MEESHY_CALL_MISSED` [callback, view].
+    /// Returns `nil` for non-call types. Identifiers are a cross-layer
+    /// contract shared with the gateway `category` push field and
+    /// `AppDelegate.registerNotificationCategories`.
+    nonisolated static func callCategoryIdentifier(type: String) -> String? {
+        switch type {
+        case "incoming_call":
+            return "MEESHY_CALL_INCOMING"
+        case "missed_call", "call_ended", "call_declined", "call_recording_ready":
+            return "MEESHY_CALL_MISSED"
+        default:
+            return nil
+        }
+    }
 }

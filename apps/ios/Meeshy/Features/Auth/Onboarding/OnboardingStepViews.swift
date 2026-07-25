@@ -179,6 +179,10 @@ struct StepPseudoView: View {
                     isAvailable: viewModel.usernameAvailable
                 )
                 .focused($isFocused)
+                // AutoFill : c'est l'identifiant que iOS associera au mot de
+                // passe généré à l'étape suivante. Sans lui, rien n'est proposé
+                // à l'enregistrement au trousseau en fin d'inscription.
+                .textContentType(.username)
                 .textInputAutocapitalization(.never)
                 .autocorrectionDisabled()
 
@@ -462,6 +466,7 @@ struct StepEmailView: View {
                     isAvailable: viewModel.emailAvailable
                 )
                 .focused($isFocused)
+                .textContentType(.emailAddress)
                 .textInputAutocapitalization(.never)
                 .autocorrectionDisabled()
 
@@ -600,6 +605,11 @@ struct StepPasswordView: View {
                         isSecure: true
                     )
                     .focused($focusedField, equals: .password)
+                    // `.newPassword` déclenche la proposition de mot de passe
+                    // fort ET, à la fin du flux, la boîte « Enregistrer ce mot
+                    // de passe ? » du trousseau. Sans lui, l'inscription ne
+                    // laissait aucune trace dans le gestionnaire.
+                    .textContentType(.newPassword)
                     .textInputAutocapitalization(.never)
 
                     if !viewModel.password.isEmpty {
@@ -616,6 +626,7 @@ struct StepPasswordView: View {
                             isSecure: true
                         )
                         .focused($focusedField, equals: .confirm)
+                        .textContentType(.newPassword)
                         .textInputAutocapitalization(.never)
                         .transition(.asymmetric(
                             insertion: .move(edge: .top).combined(with: .opacity),
@@ -1095,6 +1106,8 @@ struct StepProfileView: View {
                         .padding(8).background(Circle().fill(Color.black.opacity(0.5)))
                 }
                 .padding(8)
+                // Bouton icône-seule (camera.fill) : sans libellé, VoiceOver annonce un « bouton » anonyme (WCAG 4.1.2).
+                .accessibilityLabel(String(localized: "onboarding.photo.banner.a11y", defaultValue: "Ajouter une photo de bannière", bundle: .main))
             }
 
             HStack {
@@ -1126,6 +1139,8 @@ struct StepProfileView: View {
                             .font(.caption2).foregroundColor(.white)
                             .padding(6).background(Circle().fill(viewModel.currentStep.accentColor))
                     }
+                    // Bouton icône-seule (camera.fill) : sans libellé, VoiceOver annonce un « bouton » anonyme (WCAG 4.1.2).
+                    .accessibilityLabel(String(localized: "onboarding.photo.profile.a11y", defaultValue: "Ajouter une photo de profil", bundle: .main))
                 }
                 .offset(y: -30)
                 .padding(.leading, 16)

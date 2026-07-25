@@ -4,6 +4,21 @@
 **Scope**: Gateway + Web App + iOS App + MeeshySDK
 **Goal**: Systeme fonctionnel end-to-end de statuts de livraison, lecture, et consommation media (WhatsApp-style + detail per-user + tracking audio/video)
 
+> ### ⚠️ Partiellement remplacé — note ajoutée le 2026-07-25
+>
+> La règle de lecture décrite ici (§ « Cursor »), `cursor.lastReadAt >=
+> message.createdAt ⟹ lu`, déclarait lus des messages jamais affichés : ouvrir
+> une conversation à 200 non-lus les marquait tous lus, et l'expéditeur voyait
+> 200 accusés.
+>
+> `docs/superpowers/specs/2026-07-24-read-exactness-design.md` la remplace :
+> **livré = récupéré** (le modèle par fenêtre y reste correct et inchangé), mais
+> **lu = affiché**, le client rapportant les identifiants réellement visibles et
+> le curseur s'arrêtant au premier message non vu.
+>
+> La bascule est opt-in (`EXACT_READ_TRACKING_SINCE`) : tant qu'elle n'est pas
+> armée, le comportement décrit dans ce document reste celui en vigueur.
+
 ---
 
 ## 1. Etat Actuel — Audit des Incoherences

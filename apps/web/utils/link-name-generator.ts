@@ -1,9 +1,15 @@
 /**
- * Générateur de noms de liens de partage automatiques
- * Génère des noms descriptifs basés sur le type de canal/destinataires
- * Format: "Canal [type] - [durée]" ou "Lien [limite] - [durée]"
- * Limite automatiquement à 32 caractères maximum
+ * Générateur de noms de liens de partage automatiques.
+ * Produit un nom descriptif à partir du canal de diffusion et du titre de la
+ * conversation.
+ *
+ * Format: "{ChannelType} ({titre}) - {durée}"  (ex. « Lien LinkedIn (Ma conv…) - 7j »).
+ * Le titre est borné à 20 unités UTF-16 et le nom complet plafonné à 60
+ * (découpe par point de code — cf. sliceCodePoints, jamais au milieu d'une paire
+ * de substitution).
  */
+
+import { sliceCodePoints } from './truncate';
 
 export interface LinkNameOptions {
   conversationTitle: string;
@@ -18,8 +24,6 @@ export interface LinkNameOptions {
    */
   sharingContext?: string;
 }
-
-const MAX_LINK_NAME_LENGTH = 32;
 
 /**
  * Génère un nom de lien basé sur le canal de diffusion et les destinataires
@@ -43,11 +47,14 @@ export function generateLinkName(options: LinkNameOptions): string {
   // Déterminer la durée courte
   const shortDuration = getShortDuration(durationDays, language);
 
-  // Tronquer le titre de la conversation si trop long
+  // Tronquer le titre de la conversation si trop long. Découpe par point de code
+  // (jamais par unité UTF-16) pour ne pas couper une paire de substitution — un
+  // emoji tombant sur la limite deviendrait sinon une demi-paire isolée rendue
+  // « � ». Même doctrine que sliceCodePoints (truncate.ts, itér. 187).
   const maxTitleLength = 20;
   let truncatedTitle = conversationTitle;
   if (conversationTitle.length > maxTitleLength) {
-    truncatedTitle = conversationTitle.substring(0, maxTitleLength - 3) + '...';
+    truncatedTitle = sliceCodePoints(conversationTitle, maxTitleLength - 3) + '...';
   }
 
   // Construire le nom avec le titre de la conversation entre parenthèses
@@ -56,7 +63,7 @@ export function generateLinkName(options: LinkNameOptions): string {
   // S'assurer que le résultat ne dépasse pas 60 caractères (augmenté pour inclure le titre)
   const MAX_TOTAL_LENGTH = 60;
   if (linkName.length > MAX_TOTAL_LENGTH) {
-    return linkName.substring(0, MAX_TOTAL_LENGTH - 3) + '...';
+    return sliceCodePoints(linkName, MAX_TOTAL_LENGTH - 3) + '...';
   }
 
   return linkName;
@@ -263,30 +270,8 @@ function getChannelType(
  * Retourne la durée en format court selon la langue
  */
 function getShortDuration(durationDays: number | undefined, language: string): string {
-  if (!durationDays) {
-    switch (language) {
-      case 'fr':
-        return '∞';
-      case 'en':
-        return '∞';
-      case 'es':
-        return '∞';
-      case 'de':
-        return '∞';
-      case 'it':
-        return '∞';
-      case 'pt':
-        return '∞';
-      case 'zh':
-        return '∞';
-      case 'ja':
-        return '∞';
-      case 'ar':
-        return '∞';
-      default:
-        return '∞';
-    }
-  }
+  // Lien sans expiration : le symbole infini est universel (non localisé).
+  if (!durationDays) return '∞';
 
   switch (language) {
     case 'fr':

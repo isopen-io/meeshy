@@ -391,6 +391,10 @@ struct MessageListView: UIViewControllerRepresentable {
     /// résolues) — mêmes callbacks que l'overlay custom. `nil` < iOS 26 (le
     /// long-press custom → overlay reste alors le chemin).
     var nativeMessageMenu: ((Message) -> AnyView)? = nil
+    /// id de la bulle présentée dans l'overlay custom d'appui long — la
+    /// cellule live correspondante est masquée (opacity 0) le temps de
+    /// l'overlay (anti double-bulle fantôme). `nil` = aucune.
+    var overlaidMessageId: String? = nil
     /// Long-press on a call-summary notice → request the shared call-detail
     /// sheet for that message, distinct from `onLongPress`'s regular-message menu.
     var onCallDetailRequest: ((String) -> Void)?
@@ -459,6 +463,7 @@ struct MessageListView: UIViewControllerRepresentable {
         vc.onSwipeForward = onSwipeForward
         vc.onLongPress = onLongPress
         vc.nativeMessageMenu = nativeMessageMenu
+        vc.overlaidMessageId = overlaidMessageId
         vc.onAddReaction = onAddReaction
         vc.onToggleReaction = onToggleReaction
         vc.onReactToAttachment = onReactToAttachment
@@ -513,6 +518,7 @@ struct MessageListView: UIViewControllerRepresentable {
         vc.onSwipeForward = onSwipeForward
         vc.onLongPress = onLongPress
         vc.nativeMessageMenu = nativeMessageMenu
+        vc.overlaidMessageId = overlaidMessageId
         vc.onAddReaction = onAddReaction
         vc.onToggleReaction = onToggleReaction
         vc.onReactToAttachment = onReactToAttachment

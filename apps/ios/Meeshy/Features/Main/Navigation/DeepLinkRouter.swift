@@ -510,7 +510,13 @@ final class DeepLinkRouter: ObservableObject {
             pendingDeepLink = .magicLink(token: token)
             return true
 
-        case "conversation":
+        case "c", "conversation":
+            // meeshy://c/{id} — short alias mirroring the Universal Link
+            // `/c/<id>` shape (and `DeepLinkParser.parseCustomScheme`'s own
+            // `case "c", "conversation":`) so a pasted/handwritten short
+            // scheme URL doesn't silently no-op. Previously only
+            // `"conversation"` was handled here, dropping `meeshy://c/<id>`
+            // even though the parser already resolved it to `.conversation`.
             guard let conversationId = nonEmptyIdentifier(at: 0, in: pathComponents) else { return false }
             pendingDeepLink = .conversation(id: conversationId)
             return true

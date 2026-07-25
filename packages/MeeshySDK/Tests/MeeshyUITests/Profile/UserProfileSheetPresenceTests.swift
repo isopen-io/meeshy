@@ -80,41 +80,41 @@ final class UserProfileSheetPresenceTests: XCTestCase {
         XCTAssertEqual(UserProfileSheet(user: makeUser(isOnline: nil)).resolvedPresence, .offline)
     }
 
-    func test_resolvedPresence_noProvider_offlineButRecentlyActive_returnsAway() {
+    func test_resolvedPresence_noProvider_disconnectedActive2minAgo_returnsAway() {
         let sut = UserProfileSheet(
-            user: makeUser(isOnline: false, lastActiveAt: Date().addingTimeInterval(-600))
+            user: makeUser(isOnline: false, lastActiveAt: Date().addingTimeInterval(-120))
         )
         XCTAssertEqual(sut.resolvedPresence, .away)
     }
 
     func test_resolvedPresence_noProvider_connectedWithStaleTimestamp_returnsOnline() {
         // isOnline backend est autoritatif : connecté = vert, même si le
-        // dernier lastActiveAt date de quelques minutes.
+        // dernier lastActiveAt date de quelques minutes (garde 5 min).
         let sut = UserProfileSheet(
             user: makeUser(isOnline: true, lastActiveAt: Date().addingTimeInterval(-180))
         )
         XCTAssertEqual(sut.resolvedPresence, .online)
     }
 
-    func test_resolvedPresence_noProvider_disconnectedButRecentlyActive_returnsRecent() {
+    func test_resolvedPresence_noProvider_disconnectedActive4minAgo_returnsIdle() {
         let sut = UserProfileSheet(
-            user: makeUser(isOnline: false, lastActiveAt: Date().addingTimeInterval(-180))
+            user: makeUser(isOnline: false, lastActiveAt: Date().addingTimeInterval(-240))
         )
-        XCTAssertEqual(sut.resolvedPresence, .recent)
+        XCTAssertEqual(sut.resolvedPresence, .idle)
     }
 
-    func test_resolvedPresence_noProvider_onlineButIdleOver30min_returnsOffline() {
-        // Garde anti-stale : un flag isOnline avec lastActiveAt > 30min est une
+    func test_resolvedPresence_noProvider_onlineButStaleOver5min_returnsOffline() {
+        // Garde anti-stale : un flag isOnline avec lastActiveAt > 5min est une
         // donnee incoherente -> la decroissance temporelle prime (offline).
         let sut = UserProfileSheet(
-            user: makeUser(isOnline: true, lastActiveAt: Date().addingTimeInterval(-2700))
+            user: makeUser(isOnline: true, lastActiveAt: Date().addingTimeInterval(-600))
         )
         XCTAssertEqual(sut.resolvedPresence, .offline)
     }
 
-    func test_resolvedPresence_noProvider_offlinePast30min_returnsOffline() {
+    func test_resolvedPresence_noProvider_offlinePast5min_returnsOffline() {
         let sut = UserProfileSheet(
-            user: makeUser(isOnline: false, lastActiveAt: Date().addingTimeInterval(-1860))
+            user: makeUser(isOnline: false, lastActiveAt: Date().addingTimeInterval(-360))
         )
         XCTAssertEqual(sut.resolvedPresence, .offline)
     }

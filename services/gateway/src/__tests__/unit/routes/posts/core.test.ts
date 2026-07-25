@@ -47,15 +47,11 @@ jest.mock('../../../../services/MentionService', () => ({
   })),
 }));
 
+// GW1 — the routes consume the DECORATED fastify.notificationService (wired
+// instance), not a locally constructed NotificationService: mocks are injected
+// via app.decorate in buildApp below.
 const mockCreatePostMentionNotificationsBatch = jest.fn<any>().mockResolvedValue(undefined);
 const mockCreateFriendContentNotificationsBatch = jest.fn<any>().mockResolvedValue(undefined);
-
-jest.mock('../../../../services/notifications/NotificationService', () => ({
-  NotificationService: jest.fn().mockImplementation(() => ({
-    createPostMentionNotificationsBatch: (...args: any[]) => mockCreatePostMentionNotificationsBatch(...args),
-    createFriendContentNotificationsBatch: (...args: any[]) => mockCreateFriendContentNotificationsBatch(...args),
-  })),
-}));
 
 jest.mock('../../../../middleware/rate-limiter', () => ({
   createPostRouteRateLimitConfig: jest.fn<any>().mockReturnValue({}),
@@ -102,6 +98,11 @@ async function buildApp(opts: {
   const app = Fastify({ logger: false });
   const prisma = {} as any;
   const requiredAuth = makePreValidationAuth(authenticated);
+
+  app.decorate('notificationService', {
+    createPostMentionNotificationsBatch: (...args: any[]) => mockCreatePostMentionNotificationsBatch(...args),
+    createFriendContentNotificationsBatch: (...args: any[]) => mockCreateFriendContentNotificationsBatch(...args),
+  } as any);
 
   if (withSocialEvents) {
     app.decorate('socialEvents', {

@@ -41,7 +41,7 @@ public struct StoryTimelineView: View {
         public let kind: Kind
         public let clipIds: [String]
         public enum Kind: Equatable {
-            case video, audio, text, image
+            case video, audio, text, image, sticker
             case bgVideo, bgAudio, bgImage
 
             /// Vrai pour les pistes de la section FOND — dérivé du flag
@@ -49,7 +49,7 @@ public struct StoryTimelineView: View {
             public var isBackgroundSection: Bool {
                 switch self {
                 case .bgVideo, .bgAudio, .bgImage: return true
-                case .video, .audio, .text, .image: return false
+                case .video, .audio, .text, .image, .sticker: return false
                 }
             }
         }
@@ -70,6 +70,7 @@ public struct StoryTimelineView: View {
         let fgAudios: [StoryAudioPlayerObject]
         let fgVideos: [StoryMediaObject]
         let texts: [StoryTextObject]
+        let stickers: [StorySticker]
 
         init(project: TimelineProject) {
             let isVideo: (StoryMediaObject) -> Bool = { $0.mediaType == StoryMediaKind.video.rawValue }
@@ -81,7 +82,15 @@ public struct StoryTimelineView: View {
             fgAudios = project.audioPlayerObjects.filter { !($0.isBackground ?? false) }
             fgVideos = project.mediaObjects.filter { !$0.isBackground && isVideo($0) }
             texts = project.textObjects
+            stickers = project.stickerObjects
         }
+    }
+
+    /// Titre de piste sticker, avec fallback intégré (« Sticker N ») pour ne PAS
+    /// dépendre d'une clé absente du catalogue — évite d'éditer le xcstrings.
+    private static func stickerTrackTitle(index: Int) -> String {
+        String(format: String(localized: "story.timeline.track.section.sticker",
+                              defaultValue: "Sticker %d", bundle: .module), index)
     }
 
     private static func sectionTitle(formatKey: String, index: Int) -> String {
@@ -120,6 +129,14 @@ public struct StoryTimelineView: View {
                       formatKey: "story.timeline.track.section.video", kind: .video)
         appendGrouped(sections.texts.map(\.id), id: "text-1",
                       formatKey: "story.timeline.track.section.text", kind: .text)
+        if !sections.stickers.isEmpty {
+            allTracks.append(CompactTrack(
+                id: "sticker-1",
+                title: stickerTrackTitle(index: 1),
+                kind: .sticker,
+                clipIds: sections.stickers.map(\.id)
+            ))
+        }
 
         let nonEmpty = allTracks.filter { !$0.isEmpty }
         var picked: [CompactTrack] = []
@@ -168,6 +185,16 @@ public struct StoryTimelineView: View {
                    formatKey: "story.timeline.track.section.video", kind: .video, clipId: \.id)
         appendEach(sections.texts, idPrefix: "text",
                    formatKey: "story.timeline.track.section.text", kind: .text, clipId: \.id)
+        // Section AVANT-PLAN — STICKERS (emoji overlays), listés pour indiquer
+        // QUAND ils apparaissent. Titre avec fallback intégré (pas de clé xcstrings).
+        for (index, sticker) in sections.stickers.enumerated() {
+            tracks.append(CompactTrack(
+                id: "sticker-\(index + 1)",
+                title: stickerTrackTitle(index: index + 1),
+                kind: .sticker,
+                clipIds: [sticker.id]
+            ))
+        }
         return tracks.filter { !$0.isEmpty }
     }
 
@@ -210,6 +237,7 @@ public struct StoryTimelineView: View {
         case .image:   return "IMAGE_\(index)"
         case .audio:   return "AUDIO_\(index)"
         case .text:    return "TEXT_\(index)"
+        case .sticker: return "STICKER_\(index)"
         }
     }
 
@@ -235,6 +263,12 @@ public struct StoryTimelineView: View {
                 let start = Float(t.startTime ?? 0)
                 let dur = TimelineGeometry.effectiveClipDuration(
                     startTime: start, duration: t.duration.map { Float($0) },
+                    slideDuration: project.slideDuration)
+                maxEnd = max(maxEnd, start + dur)
+            } else if let s = project.stickerObjects.first(where: { $0.id == id }) {
+                let start = Float(s.startTime ?? 0)
+                let dur = TimelineGeometry.effectiveClipDuration(
+                    startTime: start, duration: s.duration.map { Float($0) },
                     slideDuration: project.slideDuration)
                 maxEnd = max(maxEnd, start + dur)
             }
@@ -543,6 +577,7 @@ public struct StoryTimelineView: View {
         case .bgImage, .image: return "8B5CF6"
         case .bgAudio, .audio: return "818CF8"
         case .text:            return "A5B4FC"
+        case .sticker:         return "C7D2FE"
         }
     }
 
@@ -556,6 +591,7 @@ public struct StoryTimelineView: View {
         case .bgImage, .image: return "photo.fill"
         case .bgAudio, .audio: return "waveform"
         case .text:            return "textformat"
+        case .sticker:         return "face.smiling"
         }
     }
 
@@ -756,6 +792,51 @@ public struct StoryTimelineView: View {
                 }
             )
             .equatable()
+        } else if let sticker = viewModel.project.stickerObjects.first(where: { $0.id == clipId }) {
+            // Sticker = overlay temporel comme le texte (même famille start/durée).
+            // On réutilise `TextClipBar` avec l'emoji comme contenu ; déplacer la
+            // barre fixe QUAND le sticker apparaît, et l'aimant s'accroche aux
+            // bords des autres objets (cf. magneticSnapCandidates).
+            TextClipBar(
+                clipId: sticker.id,
+                content: sticker.emoji,
+                startTime: Float(sticker.startTime ?? 0),
+                duration: TimelineGeometry.effectiveClipDuration(
+                    startTime: Float(sticker.startTime ?? 0),
+                    duration: sticker.duration.map { Float($0) },
+                    slideDuration: viewModel.project.slideDuration),
+                isSelected: viewModel.selection.selectedClipId == sticker.id,
+                isLocked: false,
+                isDark: colorScheme == .dark,
+                geometry: geometry,
+                laneHeight: laneHeight,
+                onTap: { viewModel.selectClip(id: sticker.id) },
+                onDoubleTap: { viewModel.selectClip(id: sticker.id) },
+                onLongPress: { viewModel.selectClip(id: sticker.id) },
+                onMoveDelta: { delta in
+                    let stickerId = sticker.id
+                    if viewModel.selection.activeDrag?.clipId != stickerId {
+                        viewModel.beginClipDrag(clipId: stickerId)
+                    }
+                    guard let drag = viewModel.selection.activeDrag else { return }
+                    viewModel.dragClipMoved(
+                        rawTime: drag.originalStartTime + Float(delta) / Float(geometry.pixelsPerSecond),
+                        snapCandidates: []
+                    )
+                },
+                onMoveEnded: {
+                    viewModel.endClipDrag()
+                },
+                onTrimStartDelta: { delta in
+                    viewModel.trimClipStart(id: sticker.id,
+                                            deltaTimeSeconds: Float(delta) / Float(geometry.pixelsPerSecond))
+                },
+                onTrimEndDelta: { delta in
+                    viewModel.trimClipEnd(id: sticker.id,
+                                          deltaTimeSeconds: Float(delta) / Float(geometry.pixelsPerSecond))
+                }
+            )
+            .equatable()
         }
     }
 
@@ -764,6 +845,7 @@ public struct StoryTimelineView: View {
         if !viewModel.project.mediaObjects.filter({ !($0.mediaType == "audio") }).isEmpty { c += 1 }
         if !viewModel.project.audioPlayerObjects.isEmpty { c += 1 }
         if !viewModel.project.textObjects.isEmpty { c += 1 }
+        if !viewModel.project.stickerObjects.isEmpty { c += 1 }
         return c
     }
 }

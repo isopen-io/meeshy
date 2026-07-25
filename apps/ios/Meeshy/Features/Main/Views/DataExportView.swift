@@ -9,9 +9,8 @@ struct DataExportView: View {
     private var isDark: Bool { colorScheme == .dark }
     private var theme: ThemeManager { ThemeManager.shared }
 
-    @State private var selectedFormats: Set<ExportFormat> = [.json]
+    @State private var selectedFormat: ExportFormat = .json
     @State private var includeMessages = true
-    @State private var includeMedia = false
     @State private var includeContacts = true
     @State private var isExporting = false
     @State private var exportComplete = false
@@ -153,11 +152,7 @@ struct DataExportView: View {
                 ForEach(ExportFormat.allCases) { format in
                     Button {
                         HapticFeedback.light()
-                        if selectedFormats.contains(format) {
-                            selectedFormats.remove(format)
-                        } else {
-                            selectedFormats.insert(format)
-                        }
+                        selectedFormat = format
                     } label: {
                         VStack(spacing: 6) {
                             Image(systemName: format.icon)
@@ -166,20 +161,20 @@ struct DataExportView: View {
                             Text(format.rawValue)
                                 .font(MeeshyFont.relative(12, weight: .semibold))
                         }
-                        .foregroundColor(selectedFormats.contains(format) ? .white : Color(hex: accentColor))
+                        .foregroundColor(selectedFormat == format ? .white : Color(hex: accentColor))
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 16)
                         .background(
                             RoundedRectangle(cornerRadius: 14)
                                 .fill(
-                                    selectedFormats.contains(format)
+                                    selectedFormat == format
                                         ? Color(hex: accentColor)
                                         : Color(hex: accentColor).opacity(0.12)
                                 )
                         )
                     }
                     .accessibilityLabel(format.rawValue)
-                    .accessibilityAddTraits(selectedFormats.contains(format) ? .isSelected : [])
+                    .accessibilityAddTraits(selectedFormat == format ? .isSelected : [])
                 }
             }
         }
@@ -191,7 +186,6 @@ struct DataExportView: View {
 
             VStack(spacing: 0) {
                 toggleRow(title: String(localized: "settings.data.export.content.messages", defaultValue: "Messages", bundle: .main), icon: "bubble.left.fill", color: MeeshyColors.error, isOn: $includeMessages)
-                toggleRow(title: String(localized: "settings.data.export.content.media", defaultValue: "Media", bundle: .main), icon: "photo.fill", color: MeeshyColors.brandDeep, isOn: $includeMedia)
                 toggleRow(title: String(localized: "settings.data.export.content.contacts", defaultValue: "Contacts", bundle: .main), icon: "person.2.fill", color: MeeshyColors.indigo500, isOn: $includeContacts)
             }
             .background(
@@ -283,7 +277,7 @@ struct DataExportView: View {
                     .fill(exportComplete ? MeeshyColors.success : Color(hex: accentColor))
             )
         }
-        .disabled(isExporting || selectedFormats.isEmpty)
+        .disabled(isExporting)
         .accessibilityLabel(String(localized: "settings.data.export.button.start", defaultValue: "Exporter mes donnees", bundle: .main))
         .accessibilityHint(isExporting
             ? String(localized: "settings.data.export.hint.exporting", defaultValue: "Export en cours", bundle: .main)
@@ -317,7 +311,7 @@ struct DataExportView: View {
         if includeMessages { types.append("messages") }
         if includeContacts { types.append("contacts") }
 
-        let format = selectedFormats.contains(.csv) ? "csv" : "json"
+        let format = selectedFormat.apiValue
         let service = exportService
 
         Task {
@@ -326,7 +320,7 @@ struct DataExportView: View {
                 let encoder = JSONEncoder()
                 encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
                 encoder.dateEncodingStrategy = .iso8601
-                let jsonData = try encoder.encode(ExportWrapper(data: result))
+                let jsonData = try encoder.encode(result)
 
                 await MainActor.run {
                     exportedData = jsonData
@@ -346,22 +340,4 @@ struct DataExportView: View {
     }
 }
 
-// MARK: - Encodable wrapper for sharing
-
-private struct ExportWrapper: Encodable {
-    let data: DataExportData
-
-    func encode(to encoder: Encoder) throws {
-        var container = encoder.container(keyedBy: CodingKeys.self)
-        try container.encode(data.exportDate, forKey: .exportDate)
-        try container.encode(data.format, forKey: .format)
-        try container.encode(data.requestedTypes, forKey: .requestedTypes)
-        try container.encodeIfPresent(data.messagesCount, forKey: .messagesCount)
-        try container.encodeIfPresent(data.contactsCount, forKey: .contactsCount)
-    }
-
-    enum CodingKeys: String, CodingKey {
-        case exportDate, format, requestedTypes, messagesCount, contactsCount
-    }
-}
 

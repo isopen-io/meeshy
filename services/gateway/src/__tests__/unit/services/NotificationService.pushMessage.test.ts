@@ -73,6 +73,10 @@ jest.mock('@meeshy/shared/prisma/client', () => {
     postMedia: {
       findFirst: jest.fn(),
     },
+    // GW3 — reaction/reply fan-out consults the per-conversation mute.
+    userConversationPreferences: {
+      findMany: jest.fn().mockResolvedValue([]),
+    },
   };
 
   return {
@@ -112,7 +116,7 @@ jest.mock('../../../utils/logger-enhanced', () => ({
   },
 }));
 
-import { NotificationService } from '../../../services/notifications/NotificationService';
+import { NotificationService, pushCategoryForNotificationType } from '../../../services/notifications/NotificationService';
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 
 const RECIPIENT_ID = '507f1f77bcf86cd799439011';
@@ -508,5 +512,568 @@ describe('NotificationService — message push title/body', () => {
       expect(payload.data?.unreadCount).toBeUndefined();
       expect(sendToUser).toHaveBeenCalledTimes(1);
     });
+  });
+
+  // GW4 — producers set native threadId (conversation grouping) + category
+  // (actionable iOS banners). The transport already forwards both (APNs
+  // thread-id/category, FCM aps) — the NSE stays as fallback only.
+  describe('GW4 — native threadId + category on push payloads', () => {
+    type ThreadedPayload = { threadId?: string; category?: string };
+
+    beforeEach(() => {
+      (prisma.conversation.findUnique as jest.Mock).mockResolvedValue({
+        title: 'Chat', type: 'direct',
+      });
+      (prisma.user.findUnique as jest.Mock).mockResolvedValue({
+        username: 'alice', displayName: 'Alice Martin', avatar: null,
+      });
+      (prisma.postMedia.findFirst as jest.Mock).mockResolvedValue(null);
+      (prisma.userConversationPreferences.findMany as jest.Mock).mockResolvedValue([]);
+    });
+
+    it('test_newMessagePush_carriesConversationThreadIdAndMessageCategory', async () => {
+      await service.createMessageNotification({
+        recipientUserId: RECIPIENT_ID,
+        senderId: SENDER_ID,
+        messageId: MESSAGE_ID,
+        conversationId: CONVERSATION_ID,
+        messagePreview: 'Salut !',
+      });
+
+      const payload = lastPushPayload() as ThreadedPayload;
+      expect(payload.threadId).toBe(CONVERSATION_ID);
+      expect(payload.category).toBe('MEESHY_MESSAGE');
+    });
+
+    it('test_mentionPush_carriesMentionCategory', async () => {
+      await service.createMentionNotification({
+        mentionedUserId: RECIPIENT_ID,
+        mentionerUserId: SENDER_ID,
+        messageId: MESSAGE_ID,
+        conversationId: CONVERSATION_ID,
+        messagePreview: 'hello @you',
+      });
+
+      const payload = lastPushPayload() as ThreadedPayload;
+      expect(payload.threadId).toBe(CONVERSATION_ID);
+      expect(payload.category).toBe('MEESHY_MENTION');
+    });
+
+    it('test_reactionPush_carriesMessageCategory', async () => {
+      (prisma.message.findUnique as jest.Mock).mockResolvedValue({ content: 'msg' });
+
+      await service.createReactionNotification({
+        messageAuthorId: RECIPIENT_ID,
+        reactorUserId: SENDER_ID,
+        messageId: MESSAGE_ID,
+        conversationId: CONVERSATION_ID,
+        reactionEmoji: '❤️',
+      });
+
+      const payload = lastPushPayload() as ThreadedPayload;
+      expect(payload.threadId).toBe(CONVERSATION_ID);
+      expect(payload.category).toBe('MEESHY_MESSAGE');
+    });
+
+    it('test_postCommentPush_carriesSocialCategory_noThreadId', async () => {
+      await service.createPostCommentNotification({
+        actorId: SENDER_ID,
+        postId: 'aaaaaaaaaaaaaaaaaaaaaaaa',
+        postAuthorId: RECIPIENT_ID,
+        commentId: 'bbbbbbbbbbbbbbbbbbbbbbbb',
+        commentPreview: 'Nice post!',
+      });
+
+      const payload = lastPushPayload() as ThreadedPayload;
+      expect(payload.category).toBe('MEESHY_SOCIAL');
+      expect(payload.threadId).toBeUndefined();
+    });
+
+    it('test_missedCallPush_carriesMissedCallCategory', async () => {
+      await service.createMissedCallNotification({
+        recipientUserId: RECIPIENT_ID,
+        callerId: SENDER_ID,
+        conversationId: CONVERSATION_ID,
+        callSessionId: 'cccccccccccccccccccccccc',
+        callType: 'audio',
+      });
+
+      const payload = lastPushPayload() as ThreadedPayload;
+      expect(payload.threadId).toBe(CONVERSATION_ID);
+      expect(payload.category).toBe('MEESHY_CALL_MISSED');
+    });
+
+    it('test_friendRequestPush_carriesFriendRequestCategory', async () => {
+      await service.createFriendRequestNotification({
+        recipientUserId: RECIPIENT_ID,
+        requesterId: SENDER_ID,
+        friendRequestId: 'dddddddddddddddddddddddd',
+      });
+
+      const payload = lastPushPayload() as ThreadedPayload;
+      expect(payload.category).toBe('MEESHY_FRIEND_REQUEST');
+      expect(payload.threadId).toBeUndefined();
+    });
+  });
+
+  // GW5 — payload enrichment for NSE persistence: createdAt + messageType
+  // always for messages, plus the Prism-resolved translation for the
+  // recipient when one already exists in DB at fan-out time. APNs 4KB
+  // budget: the translation is the FIRST field dropped when oversized.
+  describe('GW5 — data carries createdAt/messageType and Prism translation', () => {
+    const MSG_CREATED_AT = new Date('2026-07-20T09:30:00.000Z');
+
+    function mockLiveMessage(overrides: Record<string, unknown> = {}) {
+      (prisma.message.findUnique as jest.Mock).mockResolvedValue({
+        deletedAt: null,
+        expiresAt: null,
+        isViewOnce: false,
+        viewOnceCount: 0,
+        createdAt: MSG_CREATED_AT,
+        messageType: 'text',
+        translations: null,
+        ...overrides,
+      });
+    }
+
+    function mockRecipientLanguage(systemLanguage: string) {
+      (prisma.user.findUnique as jest.Mock).mockImplementation(({ where }: any) => {
+        if (where.id === RECIPIENT_ID) {
+          return Promise.resolve({
+            systemLanguage,
+            regionalLanguage: null,
+            customDestinationLanguage: null,
+            deviceLocale: null,
+          });
+        }
+        return Promise.resolve({ username: 'alice', displayName: 'Alice Martin', avatar: null });
+      });
+    }
+
+    async function sendMessageNotification(extra: Record<string, unknown> = {}) {
+      await service.createMessageNotification({
+        recipientUserId: RECIPIENT_ID,
+        senderId: SENDER_ID,
+        messageId: MESSAGE_ID,
+        conversationId: CONVERSATION_ID,
+        messagePreview: 'Bonjour tout le monde',
+        ...extra,
+      });
+    }
+
+    beforeEach(() => {
+      (prisma.conversation.findUnique as jest.Mock).mockResolvedValue({
+        title: 'Chat', type: 'direct',
+      });
+      mockRecipientLanguage('en');
+    });
+
+    it('test_messagePush_dataCarriesCreatedAtIsoAndMessageType', async () => {
+      mockLiveMessage({ messageType: 'audio' });
+
+      await sendMessageNotification();
+
+      const data = (lastPushPayload().data ?? {}) as Record<string, string>;
+      expect(data.createdAt).toBe('2026-07-20T09:30:00.000Z');
+      expect(data.messageType).toBe('audio');
+    });
+
+    it('test_messagePush_translationMatchingPrismLanguage_isIncluded', async () => {
+      mockLiveMessage({
+        translations: {
+          en: { text: 'Hello everyone', translationModel: 'medium', createdAt: MSG_CREATED_AT },
+          de: { text: 'Hallo zusammen', translationModel: 'medium', createdAt: MSG_CREATED_AT },
+        },
+      });
+
+      await sendMessageNotification();
+
+      const data = (lastPushPayload().data ?? {}) as Record<string, string>;
+      expect(data.translatedContent).toBe('Hello everyone');
+      expect(data.translatedLanguage).toBe('en');
+    });
+
+    it('test_messagePush_noMatchingTranslation_fieldsAbsent', async () => {
+      mockLiveMessage({
+        translations: {
+          de: { text: 'Hallo zusammen', translationModel: 'medium', createdAt: MSG_CREATED_AT },
+        },
+      });
+
+      await sendMessageNotification();
+
+      const data = (lastPushPayload().data ?? {}) as Record<string, string>;
+      expect(data).not.toHaveProperty('translatedContent');
+      expect(data).not.toHaveProperty('translatedLanguage');
+    });
+
+    it('test_messagePush_encryptedTranslation_isNeverPushed', async () => {
+      mockLiveMessage({
+        translations: {
+          en: { text: 'ciphertextbase64', translationModel: 'medium', isEncrypted: true, createdAt: MSG_CREATED_AT },
+        },
+      });
+
+      await sendMessageNotification();
+
+      const data = (lastPushPayload().data ?? {}) as Record<string, string>;
+      expect(data).not.toHaveProperty('translatedContent');
+    });
+
+    it('test_messagePush_translationTruncatedTo200Chars', async () => {
+      mockLiveMessage({
+        translations: {
+          en: { text: 'x'.repeat(300), translationModel: 'medium', createdAt: MSG_CREATED_AT },
+        },
+      });
+
+      await sendMessageNotification();
+
+      const data = (lastPushPayload().data ?? {}) as Record<string, string>;
+      expect(data.translatedContent).toHaveLength(200);
+    });
+
+    it('test_messagePush_normalPayloadStaysUnderApns4KBBudget', async () => {
+      mockLiveMessage({
+        translations: {
+          en: { text: 'Hello everyone', translationModel: 'medium', createdAt: MSG_CREATED_AT },
+        },
+      });
+
+      await sendMessageNotification({ encryptedContent: 'shortciphertext' });
+
+      const payload = lastPushPayload();
+      expect(Buffer.byteLength(JSON.stringify(payload), 'utf8')).toBeLessThan(4096);
+      expect((payload.data ?? {}).translatedContent).toBe('Hello everyone');
+    });
+
+    function payloadBytes(p: unknown): number {
+      return Buffer.byteLength(JSON.stringify(p), 'utf8');
+    }
+
+    it('test_messagePush_oversized_dropsTranslationFirst_keepsEncryptedContent', async () => {
+      mockLiveMessage({
+        translations: {
+          en: { text: 'y'.repeat(300), translationModel: 'medium', createdAt: MSG_CREATED_AT },
+        },
+      });
+
+      // Probe: measure the fixed payload overhead with a known-size ciphertext,
+      // then pick E so that WITHOUT the translation the payload fits (50B slack)
+      // while WITH it the 3800B guard overflows — translation must be the first
+      // (and only) field sacrificed.
+      await sendMessageNotification({ encryptedContent: 'z'.repeat(10) });
+      const probe = lastPushPayload() as { data?: Record<string, string> };
+      expect(probe.data?.translatedContent).toBe('y'.repeat(200));
+      const { translatedContent: _tc, translatedLanguage: _tl, ...probeSansTranslation } = probe.data!;
+      const bytesSansTranslation = payloadBytes({ ...probe, data: probeSansTranslation });
+      const E = 3800 - 50 - (bytesSansTranslation - 10);
+
+      await sendMessageNotification({ encryptedContent: 'z'.repeat(E) });
+
+      const payload = lastPushPayload();
+      const data = (payload.data ?? {}) as Record<string, string>;
+      expect(data).not.toHaveProperty('translatedContent');
+      expect(data).not.toHaveProperty('translatedLanguage');
+      expect(data.encryptedContent).toBe('z'.repeat(E));
+      expect(data.createdAt).toBe('2026-07-20T09:30:00.000Z');
+      expect(payloadBytes(payload)).toBeLessThanOrEqual(3800);
+    });
+
+    it('test_messagePush_stillOversizedAfterTranslationDrop_dropsEncryptedContentToo', async () => {
+      // encryptedContent ALONE busts the budget: dropping the translation is
+      // not enough — the guard must re-check and degrade further (generic
+      // banner delivered) instead of shipping a payload APNs rejects
+      // PayloadTooLarge (no banner at all + a strike on a healthy token).
+      mockLiveMessage({
+        translations: {
+          en: { text: 'y'.repeat(300), translationModel: 'medium', createdAt: MSG_CREATED_AT },
+        },
+      });
+
+      await sendMessageNotification({ encryptedContent: 'z'.repeat(3800) });
+
+      const payload = lastPushPayload();
+      const data = (payload.data ?? {}) as Record<string, string>;
+      expect(data).not.toHaveProperty('translatedContent');
+      expect(data).not.toHaveProperty('translatedLanguage');
+      expect(data).not.toHaveProperty('encryptedContent');
+      expect(data.createdAt).toBe('2026-07-20T09:30:00.000Z');
+      expect(payloadBytes(payload)).toBeLessThanOrEqual(3800);
+    });
+  });
+
+  // GW7 — delivery.pushSent tracking, showPreview/showSenderName privacy
+  // substitutions, and timezone-aware DND via the shared isWithinDnd helper.
+  describe('GW7 — pushSent, showPreview/showSenderName, tz-aware DND', () => {
+    async function createAndFlush() {
+      await service.createMessageNotification({
+        recipientUserId: RECIPIENT_ID,
+        senderId: SENDER_ID,
+        messageId: MESSAGE_ID,
+        conversationId: CONVERSATION_ID,
+        messagePreview: 'Salut, comment ça va ?',
+      });
+      await new Promise(r => setImmediate(r));
+    }
+
+    beforeEach(() => {
+      (prisma.conversation.findUnique as jest.Mock).mockResolvedValue({
+        title: 'Équipe Dev', type: 'group',
+      });
+      (prisma.user.findUnique as jest.Mock).mockResolvedValue({
+        username: 'alice', displayName: 'Alice Martin', avatar: null,
+      });
+      (prisma.notification.update as jest.Mock).mockResolvedValue({});
+    });
+
+    it('test_pushSent_flippedTrueAfterAtLeastOneSuccessfulDelivery', async () => {
+      sendToUser.mockResolvedValue([
+        { success: false, tokenId: 't-dead' },
+        { success: true, tokenId: 't-live' },
+      ]);
+
+      await createAndFlush();
+
+      expect(prisma.notification.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 'notif-msg-1' },
+          data: expect.objectContaining({
+            delivery: expect.objectContaining({ pushSent: true }),
+          }),
+        })
+      );
+    });
+
+    it('test_pushSent_notFlippedWhenEveryDeliveryFailed', async () => {
+      sendToUser.mockResolvedValue([{ success: false, tokenId: 't-dead' }]);
+
+      await createAndFlush();
+
+      expect(prisma.notification.update).not.toHaveBeenCalled();
+    });
+
+    it('test_showPreviewFalse_bodyIsLocalizedGeneric_subtitleDropped', async () => {
+      (prisma.userPreferences.findUnique as jest.Mock).mockResolvedValue({
+        notification: { showPreview: false },
+      });
+
+      await createAndFlush();
+
+      const payload = lastPushPayload() as { title: string; subtitle?: string; body: string };
+      expect(payload.body).toBe('Nouvelle notification');
+      expect(payload.subtitle).toBeUndefined();
+      expect(payload.title).toBe('Alice Martin');
+    });
+
+    it('test_pushSent_flipRereadsDelivery_preservesConcurrentEmailState', async () => {
+      // Between creation and the flip, another writer (daily email digest) may
+      // have set emailSent:true. The flip must re-read `delivery` and merge —
+      // never rewrite the stale creation snapshot { emailSent: false }.
+      sendToUser.mockResolvedValue([{ success: true, tokenId: 't-live' }]);
+      (prisma.notification.findUnique as jest.Mock).mockResolvedValue({
+        delivery: { emailSent: true, emailSentAt: '2026-07-20T10:00:00.000Z', pushSent: false },
+      });
+
+      await createAndFlush();
+
+      expect(prisma.notification.update).toHaveBeenCalledWith({
+        where: { id: 'notif-msg-1' },
+        data: {
+          delivery: {
+            emailSent: true,
+            emailSentAt: '2026-07-20T10:00:00.000Z',
+            pushSent: true,
+          },
+        },
+      });
+    });
+
+    it('test_showPreviewFalse_dataOmitsContentBearingFields', async () => {
+      // showPreview:false replaces title/body, but the NSE unconditionally
+      // rewrites the body from data.encryptedContent and attaches the media
+      // from data.attachmentUrl — every content-bearing data field must be
+      // omitted or the private mode is defeated on the device.
+      (prisma.userPreferences.findUnique as jest.Mock).mockResolvedValue({
+        notification: { showPreview: false },
+      });
+      (prisma.message.findUnique as jest.Mock).mockResolvedValue({
+        deletedAt: null,
+        expiresAt: null,
+        isViewOnce: false,
+        viewOnceCount: 0,
+        createdAt: new Date('2026-07-20T09:30:00.000Z'),
+        messageType: 'text',
+        translations: { fr: { text: 'Salut à tous', translationModel: 'medium' } },
+      });
+
+      await service.createMessageNotification({
+        recipientUserId: RECIPIENT_ID,
+        senderId: SENDER_ID,
+        messageId: MESSAGE_ID,
+        conversationId: CONVERSATION_ID,
+        messagePreview: 'Salut, comment ça va ?',
+        encryptedContent: 'CIPHERTEXTBASE64',
+        firstAttachmentUrl: 'https://cdn.meeshy.me/x.jpg',
+        firstAttachmentMimeType: 'image/jpeg',
+      });
+
+      const data = (lastPushPayload() as { data?: Record<string, string> }).data!;
+      expect(data).not.toHaveProperty('encryptedContent');
+      expect(data).not.toHaveProperty('translatedContent');
+      expect(data).not.toHaveProperty('translatedLanguage');
+      expect(data).not.toHaveProperty('attachmentUrl');
+      expect(data).not.toHaveProperty('attachmentMimeType');
+      expect(data).not.toHaveProperty('attachmentDurationMs');
+      // Navigation context must survive — only content is stripped.
+      expect(data.conversationId).toBe(CONVERSATION_ID);
+      expect(data.messageId).toBe(MESSAGE_ID);
+    });
+
+    it('test_showPreviewFalse_replyPush_bodyLocalizedToRecipientLang', async () => {
+      (prisma.userPreferences.findUnique as jest.Mock).mockResolvedValue({
+        notification: { showPreview: false },
+      });
+      (prisma.user.findUnique as jest.Mock).mockImplementation(({ where }: any) => {
+        if (where.id === RECIPIENT_ID) {
+          return Promise.resolve({
+            systemLanguage: 'en',
+            regionalLanguage: null,
+            customDestinationLanguage: null,
+            deviceLocale: null,
+          });
+        }
+        return Promise.resolve({ username: 'alice', displayName: 'Alice Martin', avatar: null });
+      });
+
+      await service.createReplyNotification({
+        recipientUserId: RECIPIENT_ID,
+        replierUserId: SENDER_ID,
+        messageId: MESSAGE_ID,
+        conversationId: CONVERSATION_ID,
+        messagePreview: 'Une réponse',
+      });
+
+      expect((lastPushPayload() as { body: string }).body).toBe('New notification');
+    });
+
+    it('test_showPreviewFalse_reactionPush_bodyLocalizedToRecipientLang', async () => {
+      (prisma.userPreferences.findUnique as jest.Mock).mockResolvedValue({
+        notification: { showPreview: false },
+      });
+      (prisma.user.findUnique as jest.Mock).mockImplementation(({ where }: any) => {
+        if (where.id === RECIPIENT_ID) {
+          return Promise.resolve({
+            systemLanguage: 'en',
+            regionalLanguage: null,
+            customDestinationLanguage: null,
+            deviceLocale: null,
+          });
+        }
+        return Promise.resolve({ username: 'alice', displayName: 'Alice Martin', avatar: null });
+      });
+
+      await service.createReactionNotification({
+        messageAuthorId: RECIPIENT_ID,
+        reactorUserId: SENDER_ID,
+        messageId: MESSAGE_ID,
+        conversationId: CONVERSATION_ID,
+        reactionEmoji: '❤️',
+      });
+
+      expect((lastPushPayload() as { body: string }).body).toBe('New notification');
+    });
+
+    it('test_showSenderNameFalse_titleIsGeneric_bodyKeepsContent', async () => {
+      (prisma.userPreferences.findUnique as jest.Mock).mockResolvedValue({
+        notification: { showSenderName: false },
+      });
+
+      await createAndFlush();
+
+      const payload = lastPushPayload() as { title: string; body: string };
+      expect(payload.title).toBe('Meeshy');
+      expect(payload.body).toBe('Salut, comment ça va ?');
+    });
+
+    describe('tz-aware DND (shared isWithinDnd)', () => {
+      afterEach(() => {
+        jest.useRealTimers();
+      });
+
+      function mockTokyoDnd() {
+        (prisma.userPreferences.findUnique as jest.Mock).mockResolvedValue({
+          notification: {
+            dndEnabled: true,
+            dndStartTime: '22:00',
+            dndEndTime: '08:00',
+            dndUtcOffsetMinutes: 540,
+          },
+        });
+      }
+
+      it('blocks the notification at 23:00 Tokyo local (14:00 UTC)', async () => {
+        jest.useFakeTimers();
+        jest.setSystemTime(new Date('2026-07-20T14:00:00.000Z'));
+        mockTokyoDnd();
+
+        const result = await service.createMessageNotification({
+          recipientUserId: RECIPIENT_ID,
+          senderId: SENDER_ID,
+          messageId: MESSAGE_ID,
+          conversationId: CONVERSATION_ID,
+          messagePreview: 'Salut !',
+        });
+
+        expect(result).toBeNull();
+        expect(prisma.notification.create).not.toHaveBeenCalled();
+      });
+
+      it('allows the notification at 12:00 Tokyo local (03:00 UTC)', async () => {
+        jest.useFakeTimers();
+        jest.setSystemTime(new Date('2026-07-20T03:00:00.000Z'));
+        mockTokyoDnd();
+
+        const result = await service.createMessageNotification({
+          recipientUserId: RECIPIENT_ID,
+          senderId: SENDER_ID,
+          messageId: MESSAGE_ID,
+          conversationId: CONVERSATION_ID,
+          messagePreview: 'Salut !',
+        });
+
+        expect(result).not.toBeNull();
+        expect(prisma.notification.create).toHaveBeenCalled();
+      });
+    });
+  });
+});
+
+// ─── GW4 — pure type → category mapping ──────────────────────────────────────
+
+describe('pushCategoryForNotificationType', () => {
+  it('mirrors the iOS NSE mapping with the CALL split (incoming vs missed)', () => {
+    expect(pushCategoryForNotificationType('new_message')).toBe('MEESHY_MESSAGE');
+    expect(pushCategoryForNotificationType('message_reply')).toBe('MEESHY_MESSAGE');
+    expect(pushCategoryForNotificationType('message_reaction')).toBe('MEESHY_MESSAGE');
+    expect(pushCategoryForNotificationType('new_conversation_direct')).toBe('MEESHY_MESSAGE');
+    expect(pushCategoryForNotificationType('user_mentioned')).toBe('MEESHY_MENTION');
+    expect(pushCategoryForNotificationType('mention')).toBe('MEESHY_MENTION');
+    expect(pushCategoryForNotificationType('friend_request')).toBe('MEESHY_FRIEND_REQUEST');
+    expect(pushCategoryForNotificationType('contact_request')).toBe('MEESHY_FRIEND_REQUEST');
+    expect(pushCategoryForNotificationType('post_like')).toBe('MEESHY_SOCIAL');
+    expect(pushCategoryForNotificationType('post_comment')).toBe('MEESHY_SOCIAL');
+    expect(pushCategoryForNotificationType('story_new_comment')).toBe('MEESHY_SOCIAL');
+    expect(pushCategoryForNotificationType('friend_new_post')).toBe('MEESHY_SOCIAL');
+    expect(pushCategoryForNotificationType('incoming_call')).toBe('MEESHY_CALL_INCOMING');
+    expect(pushCategoryForNotificationType('missed_call')).toBe('MEESHY_CALL_MISSED');
+    expect(pushCategoryForNotificationType('call_ended')).toBe('MEESHY_CALL_MISSED');
+    expect(pushCategoryForNotificationType('call_declined')).toBe('MEESHY_CALL_MISSED');
+  });
+
+  it('returns undefined for unmapped types (no misleading actions)', () => {
+    expect(pushCategoryForNotificationType('system')).toBeUndefined();
+    expect(pushCategoryForNotificationType('login_new_device')).toBeUndefined();
+    expect(pushCategoryForNotificationType('made_up_type')).toBeUndefined();
   });
 });

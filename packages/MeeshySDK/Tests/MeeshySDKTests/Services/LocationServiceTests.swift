@@ -7,7 +7,7 @@ final class LocationServiceTests: XCTestCase {
 
     // MARK: - Publisher existence
 
-    func testLocationSharedPublisherReceivesEvents() {
+    func test_locationSharedPublisher_eventSent_deliversToSubscriber() {
         let service = LocationService.shared
         var received: LocationSharedEvent?
         let expectation = expectation(description: "locationShared event received")
@@ -32,7 +32,7 @@ final class LocationServiceTests: XCTestCase {
         cancellable.cancel()
     }
 
-    func testLiveLocationStartedPublisherReceivesEvents() {
+    func test_liveLocationStartedPublisher_eventSent_deliversToSubscriber() {
         let service = LocationService.shared
         var received: LiveLocationStartedEvent?
         let expectation = expectation(description: "liveLocationStarted event received")
@@ -56,7 +56,7 @@ final class LocationServiceTests: XCTestCase {
         cancellable.cancel()
     }
 
-    func testLiveLocationUpdatedPublisherReceivesEvents() {
+    func test_liveLocationUpdatedPublisher_eventSent_deliversToSubscriber() {
         let service = LocationService.shared
         var received: LiveLocationUpdatedEvent?
         let expectation = expectation(description: "liveLocationUpdated event received")
@@ -80,7 +80,7 @@ final class LocationServiceTests: XCTestCase {
         cancellable.cancel()
     }
 
-    func testLiveLocationStoppedPublisherReceivesEvents() {
+    func test_liveLocationStoppedPublisher_eventSent_deliversToSubscriber() {
         let service = LocationService.shared
         var received: LiveLocationStoppedEvent?
         let expectation = expectation(description: "liveLocationStopped event received")
@@ -99,7 +99,7 @@ final class LocationServiceTests: XCTestCase {
         cancellable.cancel()
     }
 
-    func testProtocolConformance() {
+    func test_locationService_asProtocol_exposesAllPublishers() {
         let service: LocationServiceProviding = LocationService.shared
         XCTAssertNotNil(service.locationShared)
         XCTAssertNotNil(service.liveLocationStarted)
@@ -107,7 +107,7 @@ final class LocationServiceTests: XCTestCase {
         XCTAssertNotNil(service.liveLocationStopped)
     }
 
-    func testMultipleSubscribersReceiveEvents() {
+    func test_locationSharedPublisher_multipleSubscribers_allReceiveEvent() {
         let service = LocationService.shared
         var received1: LocationSharedEvent?
         var received2: LocationSharedEvent?

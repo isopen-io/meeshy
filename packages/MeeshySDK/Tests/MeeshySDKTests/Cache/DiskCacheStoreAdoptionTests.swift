@@ -132,8 +132,8 @@ final class DiskCacheStoreAdoptionTests: XCTestCase {
         let canonicalKey = "https://media.meeshy.me/images/photo.jpg"
         await store.adoptImage(localFile: localURL, for: canonicalKey)
 
-        // cacheImageForPreview hops onto MainActor — give it a turn before reading.
-        try await Task.sleep(nanoseconds: 50_000_000)
+        // cacheImageForPreview (2026-07-21) inserts synchronously — no
+        // MainActor hop to await anymore.
         let cachedImage = DiskCacheStore.cachedImage(for: canonicalKey)
         XCTAssertNotNil(cachedImage,
             "adoptImage must seed DiskCacheStore.cachedImage(for:) for instant render")

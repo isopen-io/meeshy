@@ -80,6 +80,21 @@ describe('messaging-utils', () => {
       const result = validateMessageContent('Hello!');
       expect(result.isValid).toBe(true);
     });
+
+    it('should measure length after trimming (surrounding whitespace does not count)', () => {
+      const atMax = 'a'.repeat(MAX_MESSAGE_LENGTH);
+      const padded = `   ${atMax}\n\n`;
+      const result = validateMessageContent(padded);
+      expect(result.isValid).toBe(true);
+      expect(result.error).toBeUndefined();
+    });
+
+    it('should reject when trimmed content still exceeds max length', () => {
+      const tooLong = `  ${'a'.repeat(MAX_MESSAGE_LENGTH + 1)}  `;
+      const result = validateMessageContent(tooLong);
+      expect(result.isValid).toBe(false);
+      expect(result.error).toContain('ne peut pas dépasser');
+    });
   });
 
   describe('prepareMessageMetadata', () => {

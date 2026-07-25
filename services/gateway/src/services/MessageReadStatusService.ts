@@ -16,9 +16,42 @@
 import { PrismaClient, Message, Prisma } from "@meeshy/shared/prisma/client";
 import { resolveParticipantAvatar } from '@meeshy/shared/utils/participant-helpers';
 import { enhancedLogger } from '../utils/logger-enhanced';
+import { computeContiguousReadPrefix, resolveReadAt } from '../utils/read-exactness';
+import { getExactReadTrackingCutover } from '../config/read-exactness-config';
+import { PRIVACY_KEY_MAPPING } from '../config/user-preferences-defaults';
+import { BoundedTtlCache } from '../utils/bounded-cache';
 
 // Logger dédié pour MessageReadStatusService
 const logger = enhancedLogger.child({ module: 'MessageReadStatusService' });
+
+/**
+ * Borne du balayage cherchant jusqu'où le curseur de lecture peut avancer.
+ * Protège d'un scan non maîtrisé sur une conversation très en retard : le
+ * curseur rattrapera au passage suivant.
+ */
+const EXACT_CURSOR_SCAN_LIMIT = 500;
+
+/**
+ * Mémoïsation de la préférence « accusés de lecture » par utilisateur.
+ *
+ * `getLatestMessageSummary` est appelée à CHAQUE accusé de lecture, depuis cinq
+ * sites dont des handlers socket : sans cache, le filtre d'exclusion y ajouterait
+ * une requête payée en permanence. Partagée au niveau module parce que le service
+ * est construit par requête — une instance par appel n'aurait rien mémoïsé.
+ *
+ * `BoundedTtlCache` plutôt qu'une Map : elle borne la mémoire et expire seule,
+ * sans le `setInterval` de `PrivacyPreferencesService` qui, capturant `this`,
+ * empêcherait la collecte de chaque instance.
+ *
+ * TTL de 5 min, aligné sur `PrivacyPreferencesService`. Conséquence assumée :
+ * désactiver ses accusés met jusqu'à 5 min à masquer l'utilisateur des vues déjà
+ * chaudes — la préférence n'a pas à être instantanée, et l'écriture continue
+ * d'être enregistrée pendant ce temps.
+ */
+const READ_RECEIPT_OPT_OUT_CACHE = new BoundedTtlCache<string, boolean>({
+  maxSize: 5000,
+  ttlMs: 5 * 60 * 1000,
+});
 
 
 // Helper pour retry des transactions en cas de deadlock (P2034)
@@ -65,6 +98,13 @@ export class MessageReadStatusService {
    * TTL: 2 secondes (nettoyé automatiquement)
    */
   private static recentActionCache = new Map<string, number>();
+
+  /**
+   * Exposée en statique pour suivre la convention de `recentActionCache` : les
+   * tests la vident dans leur `beforeEach` pour rester isolés d'un cache dont la
+   * portée est le processus.
+   */
+  private static readReceiptOptOutCache = READ_RECEIPT_OPT_OUT_CACHE;
   private static readonly DEDUP_TTL_MS = 2000;
   private static readonly dedupCleanupInterval = (() => {
     const handle = setInterval(() => MessageReadStatusService.cleanupDedupCache(), 30_000);
@@ -574,15 +614,25 @@ export class MessageReadStatusService {
    * Marque les messages comme lus pour un utilisateur
    * Simplifié: Met à jour `lastReadAt` dans `ConversationReadCursor`.
    */
+  /**
+   * @param options.messageIds Identifiants des messages RÉELLEMENT affichés,
+   *   rapportés par le client. Quand ils sont fournis, le gel `readAt` est borné
+   *   à ces messages. En leur absence — binaires clients déjà distribués, qui
+   *   postent un corps vide — on retombe sur la fenêtre temporelle historique,
+   *   qui sur-déclare.
+   * @see docs/superpowers/specs/2026-07-24-read-exactness-design.md
+   */
   async markMessagesAsRead(
     participantId: string,
     conversationId: string,
-    latestMessageId?: string
-  ): Promise<void> {
+    latestMessageId?: string,
+    options?: { readonly messageIds?: readonly string[] }
+  ): Promise<number> {
     // Hoisted so the catch below can release the dedup key when the write
     // fails — a poisoned key would otherwise swallow every retry within the
     // TTL and silently drop the read receipt.
     let dedupKey: string | undefined;
+    const exactMessageIds = options?.messageIds;
     try {
       // Resolve the effective target message id BEFORE the dedup gate. When the
       // caller omits latestMessageId, the dedup key must reflect the ACTUAL
@@ -597,24 +647,29 @@ export class MessageReadStatusService {
           orderBy: { createdAt: "desc" },
           select: { id: true },
         });
-        if (!latestMessage) return;
+        if (!latestMessage) return 0;
         messageId = latestMessage.id;
       }
 
-      // Keyed by the RESOLVED messageId so a genuinely newer message always
-      // produces a distinct key and is never swallowed by the TTL gate — only
-      // identical repeats (same message within the TTL) are deduped.
-      dedupKey = `${participantId}:${conversationId}:read:${messageId}`;
-      const dedupNow = Date.now();
-      const lastCall = MessageReadStatusService.recentActionCache.get(dedupKey);
+      // La garde de déduplication est indexée sur le message le plus RÉCENT de
+      // la conversation. En mode exact, deux lots successifs de messages
+      // affichés partagent ce même message : la clé serait identique et le
+      // second lot silencieusement avalé, donc perdu. La garde est neutralisée
+      // dans ce mode — les écritures y sont write-once, donc déjà idempotentes,
+      // et elle n'y protégeait que d'un travail redondant marginal.
+      if (!exactMessageIds) {
+        dedupKey = `${participantId}:${conversationId}:read:${messageId}`;
+        const dedupNow = Date.now();
+        const lastCall = MessageReadStatusService.recentActionCache.get(dedupKey);
 
-      if (
-        lastCall &&
-        dedupNow - lastCall < MessageReadStatusService.DEDUP_TTL_MS
-      ) {
-        return;
+        if (
+          lastCall &&
+          dedupNow - lastCall < MessageReadStatusService.DEDUP_TTL_MS
+        ) {
+          return 0;
+        }
+        MessageReadStatusService.recentActionCache.set(dedupKey, dedupNow);
       }
-      MessageReadStatusService.recentActionCache.set(dedupKey, dedupNow);
 
       const now = new Date();
 
@@ -644,36 +699,73 @@ export class MessageReadStatusService {
       // evaluated atomically inside the write, never on a snapshot read
       // earlier — see _advanceCursor. Never rolls the read cursor back to an
       // older message — that would resurrect already-read messages as unread.
-      const advanced = await this._advanceCursor({
-        participantId,
-        conversationId,
-        messageId,
-        now,
-        cursorExists,
-        idField: "lastReadMessageId",
-        atField: "lastReadAt",
-        resetUnreadCount: true,
-      });
-      if (!advanced) {
-        logger.info(
-          `[MessageReadStatus] Ignoring stale read receipt for participant ${participantId} in conversation ${conversationId}`
-        );
-        return;
-      }
+      let frozenCount = 0;
+      if (exactMessageIds) {
+        // MODE EXACT — l'ordre est inversé par rapport au mode hérité : on fige
+        // d'abord, car un message affiché EST lu, que le curseur puisse avancer
+        // ou non. Le curseur ne s'aligne qu'ensuite, sur ce qui est réellement lu.
+        frozenCount = await this.freezeMessageStatus({
+          participantId,
+          conversationId,
+          since: prevReadAt,
+          at: now,
+          field: "readAt",
+          messageIds: exactMessageIds,
+        });
 
-      // Précision absolue : fige un `MessageStatusEntry.readAt` par message
-      // nouvellement franchi (write-once). Sans cela, le statut "lu" de chaque
-      // message suivrait le curseur mobile `lastReadAt`, qui ré-avance à
-      // `now` à chaque ouverture — collapsant tous les anciens messages à la
-      // même date. Le curseur reste l'index rapide ; la date par message est
-      // gelée à la première lecture.
-      await this.freezeMessageStatus({
-        participantId,
-        conversationId,
-        since: prevReadAt,
-        at: now,
-        field: "readAt",
-      });
+        const cursorTarget = await this._computeExactReadCursorTarget({
+          participantId,
+          conversationId,
+          since: prevReadAt,
+        });
+
+        // `null` = le message suivant immédiatement le curseur n'a pas été vu.
+        // Le curseur ne bouge pas : sauter au bas d'une conversation ne doit
+        // pas vider le badge de non-lus de ce qui a été survolé.
+        if (cursorTarget) {
+          await this._advanceCursor({
+            participantId,
+            conversationId,
+            messageId: cursorTarget,
+            now,
+            cursorExists,
+            idField: "lastReadMessageId",
+            atField: "lastReadAt",
+            resetUnreadCount: false,
+          });
+        }
+      } else {
+        const advanced = await this._advanceCursor({
+          participantId,
+          conversationId,
+          messageId,
+          now,
+          cursorExists,
+          idField: "lastReadMessageId",
+          atField: "lastReadAt",
+          resetUnreadCount: true,
+        });
+        if (!advanced) {
+          logger.info(
+            `[MessageReadStatus] Ignoring stale read receipt for participant ${participantId} in conversation ${conversationId}`
+          );
+          return 0;
+        }
+
+        // Précision absolue : fige un `MessageStatusEntry.readAt` par message
+        // nouvellement franchi (write-once). Sans cela, le statut "lu" de chaque
+        // message suivrait le curseur mobile `lastReadAt`, qui ré-avance à
+        // `now` à chaque ouverture — collapsant tous les anciens messages à la
+        // même date. Le curseur reste l'index rapide ; la date par message est
+        // gelée à la première lecture.
+        frozenCount = await this.freezeMessageStatus({
+          participantId,
+          conversationId,
+          since: prevReadAt,
+          at: now,
+          field: "readAt",
+        });
+      }
 
       // Read implies delivered: a message can never be read without first having
       // been delivered. When a recipient opens a conversation whose newest
@@ -732,6 +824,8 @@ export class MessageReadStatusService {
           notifError
         );
       }
+
+      return frozenCount;
     } catch (error) {
       // Release the dedup key so a retry within the TTL is not swallowed by the
       // gate — the failed attempt recorded nothing, so the receipt must still
@@ -744,6 +838,135 @@ export class MessageReadStatusService {
         error
       );
       throw error;
+    }
+  }
+
+  /**
+   * Participants dont le propriétaire a désactivé ses accusés de lecture.
+   *
+   * Ils sortent du **numérateur et du dénominateur** des statuts exposés aux
+   * autres. Les retirer du seul numérateur rendrait le total définitivement
+   * inatteignable, ce qui trahirait leur existence ; garder le compteur en
+   * masquant leur nom laisserait déduire trivialement qu'ils ont lu.
+   *
+   * Une seule requête indexée, sur la clé issue de sa source de vérité plutôt
+   * que dupliquée ici. Les participants anonymes et bots n'ont pas de `userId`,
+   * donc pas de préférence stockée : ils restent visibles (défaut `true`).
+   *
+   * Repli **ouvert** en cas d'erreur — tout le monde reste visible. C'est la
+   * convention déjà retenue par `PrivacyPreferencesService.fetchFromDatabase`,
+   * et échouer fermé masquerait les accusés de TOUS sur un incident transitoire.
+   *
+   * @see docs/superpowers/specs/2026-07-24-read-exactness-design.md
+   */
+  private async _loadReadReceiptOptOuts(
+    participants: ReadonlyArray<{ id: string; userId?: string | null }>
+  ): Promise<Set<string>> {
+    const participantsByUserId = new Map<string, string[]>();
+    for (const participant of participants) {
+      if (!participant.userId) continue;
+      const known = participantsByUserId.get(participant.userId);
+      if (known) known.push(participant.id);
+      else participantsByUserId.set(participant.userId, [participant.id]);
+    }
+
+    if (participantsByUserId.size === 0) return new Set();
+
+    const excluded = new Set<string>();
+    const unresolved: string[] = [];
+
+    const exclude = (userId: string) => {
+      for (const participantId of participantsByUserId.get(userId) ?? []) {
+        excluded.add(participantId);
+      }
+    };
+
+    for (const userId of participantsByUserId.keys()) {
+      const cached = MessageReadStatusService.readReceiptOptOutCache.get(userId);
+      if (cached === undefined) unresolved.push(userId);
+      else if (cached) exclude(userId);
+    }
+
+    if (unresolved.length === 0) return excluded;
+
+    try {
+      const optedOut = await this.prisma.userPreference.findMany({
+        where: {
+          userId: { in: unresolved },
+          key: PRIVACY_KEY_MAPPING.showReadReceipts,
+          value: "false",
+        },
+        select: { userId: true },
+      });
+
+      const optedOutIds = new Set(optedOut.map((row) => row.userId));
+      for (const userId of unresolved) {
+        const isOptOut = optedOutIds.has(userId);
+        MessageReadStatusService.readReceiptOptOutCache.set(userId, isOptOut);
+        if (isOptOut) exclude(userId);
+      }
+      return excluded;
+    } catch (error) {
+      logger.error(
+        "[MessageReadStatus] _loadReadReceiptOptOuts failed — everyone stays visible:",
+        error
+      );
+      return new Set();
+    }
+  }
+
+  /**
+   * Détermine jusqu'où le curseur de lecture peut avancer sans franchir un
+   * message non lu, en repartant de sa position courante.
+   *
+   * Le compteur de non-lus dérive du curseur (`createdAt > lastReadAt`) : le
+   * laisser sauter par-dessus des messages jamais affichés reviendrait à les
+   * déclarer lus par ricochet, ce que tout ce lot corrige. On s'arrête donc au
+   * premier trou.
+   *
+   * Résilient : ne jette jamais — à défaut, le curseur reste en place et
+   * rattrapera au passage suivant.
+   */
+  private async _computeExactReadCursorTarget(params: {
+    participantId: string;
+    conversationId: string;
+    since: Date | null;
+  }): Promise<string | null> {
+    const { participantId, conversationId, since } = params;
+    try {
+      const candidates = await this.prisma.message.findMany({
+        where: {
+          conversationId,
+          deletedAt: null,
+          senderId: { not: participantId },
+          ...(since ? { createdAt: { gt: since } } : {}),
+        },
+        orderBy: { createdAt: "asc" },
+        take: EXACT_CURSOR_SCAN_LIMIT,
+        select: { id: true },
+      });
+      if (candidates.length === 0) return null;
+
+      const orderedIds = candidates.map((m) => m.id);
+      const readEntries = await this.prisma.messageStatusEntry.findMany({
+        where: {
+          messageId: { in: orderedIds },
+          participantId,
+          readAt: { not: null },
+        },
+        select: { messageId: true },
+      });
+
+      return computeContiguousReadPrefix(
+        orderedIds,
+        new Set(readEntries.map((e) => e.messageId))
+      );
+    } catch (error) {
+      logger.error(
+        `[MessageReadStatus] _computeExactReadCursorTarget failed for participant ${participantId} in conversation ${conversationId}:`,
+        error
+      );
+      return null;
     }
   }
 
@@ -762,20 +985,34 @@ export class MessageReadStatusService {
     since: Date | null;
     at: Date;
     field: "readAt" | "deliveredAt";
-  }): Promise<void> {
-    const { participantId, conversationId, since, at, field } = params;
+    /**
+     * Restreint le gel aux messages réellement affichés. Une liste VIDE est
+     * significative — « rien n'a été affiché » — et ne retombe donc pas sur la
+     * fenêtre. Seule l'absence du paramètre déclenche le repli historique.
+     * Réservé à `readAt` : un message récupéré est livré même s'il n'a jamais
+     * été affiché, donc la fenêtre reste correcte pour `deliveredAt`.
+     */
+    messageIds?: readonly string[];
+    /** @returns nombre d'entrées RÉELLEMENT figées par cet appel. */
+  }): Promise<number> {
+    const { participantId, conversationId, since, at, field, messageIds } = params;
     try {
       const messages = await this.prisma.message.findMany({
         where: {
+          // Ces trois gardes tiennent dans les deux modes : une liste d'ids
+          // forgée par un client ne permet pas de marquer lu un message d'une
+          // autre conversation, supprimé, ou émis par le participant lui-même.
           conversationId,
           deletedAt: null,
           senderId: { not: participantId },
-          createdAt: { lte: at, ...(since ? { gt: since } : {}) },
+          ...(messageIds
+            ? { id: { in: [...messageIds] } }
+            : { createdAt: { lte: at, ...(since ? { gt: since } : {}) } }),
         },
         select: { id: true },
       });
 
-      if (messages.length === 0) return;
+      if (messages.length === 0) return 0;
       const ids = messages.map((m) => m.id);
 
       const existing = await this.prisma.messageStatusEntry.findMany({
@@ -785,8 +1022,9 @@ export class MessageReadStatusService {
       const existingIds = new Set(existing.map((e) => e.messageId));
       const toCreate = ids.filter((id) => !existingIds.has(id));
 
+      let frozen = 0;
       if (toCreate.length > 0) {
-        await this.prisma.messageStatusEntry.createMany({
+        const created = await this.prisma.messageStatusEntry.createMany({
           data: toCreate.map((messageId) =>
             field === "readAt"
               ? { messageId, conversationId, participantId, readAt: at }
@@ -799,6 +1037,7 @@ export class MessageReadStatusService {
                 }
           ),
         });
+        frozen += created?.count ?? toCreate.length;
       }
 
       // Write-once: ne renseigne le champ que sur les entrées où il est encore
@@ -808,19 +1047,25 @@ export class MessageReadStatusService {
         .map((e) => e.messageId);
 
       if (toUpdate.length > 0) {
-        await this.prisma.messageStatusEntry.updateMany({
+        const updated = await this.prisma.messageStatusEntry.updateMany({
           where:
             field === "readAt"
               ? { messageId: { in: toUpdate }, participantId, readAt: null }
               : { messageId: { in: toUpdate }, participantId, deliveredAt: null },
           data: field === "readAt" ? { readAt: at } : { deliveredAt: at, receivedAt: at },
         });
+        frozen += updated?.count ?? toUpdate.length;
       }
+
+      return frozen;
     } catch (error) {
       logger.error(
         `[MessageReadStatus] freezeMessageStatus(${field}) failed for participant ${participantId} in conversation ${conversationId}:`,
         error
       );
+      // Ne jette jamais : une erreur de gel ne doit pas faire échouer le
+      // marquage du curseur. Rien n'a été figé, le compte est donc nul.
+      return 0;
     }
   }
 
@@ -860,15 +1105,21 @@ export class MessageReadStatusService {
 
       if (!message) throw new Error(`Message ${messageId} not found`);
 
-      const participants = await this.prisma.participant.findMany({
+      const allParticipants = await this.prisma.participant.findMany({
         where: { conversationId, isActive: true },
         select: {
           id: true,
+          userId: true,
           displayName: true,
           avatar: true,
           user: { select: { avatar: true } },
         },
       });
+
+      // Filtré EN AMONT : les opt-out disparaissent ainsi du dénominateur
+      // (`totalMembers`) comme du numérateur, sans traitement séparé.
+      const optedOut = await this._loadReadReceiptOptOuts(allParticipants);
+      const participants = allParticipants.filter((p) => !optedOut.has(p.id));
 
       // Denominator = active recipients EXCLUDING the sender, by IDENTITY. A
       // blind `participants.length - 1` drops an active recipient when the
@@ -952,14 +1203,14 @@ export class MessageReadStatusService {
           cursor?.lastDeliveredAt && cursor.lastDeliveredAt >= message.createdAt
             ? cursor.lastDeliveredAt
             : null;
-        const cursorRead =
-          cursor?.lastReadAt && cursor.lastReadAt >= message.createdAt
-            ? cursor.lastReadAt
-            : null;
-
         const frozen = frozenByParticipant.get(participantId);
         const receivedAt = frozen?.receivedAt ?? frozen?.deliveredAt ?? cursorDelivered;
-        const readAt = frozen?.readAt ?? cursorRead;
+        const readAt = resolveReadAt({
+          frozenReadAt: frozen?.readAt ?? null,
+          cursorLastReadAt: cursor?.lastReadAt ?? null,
+          messageCreatedAt: message.createdAt,
+          cutover: getExactReadTrackingCutover(),
+        });
 
         if (receivedAt) {
           receivedBy.push({
@@ -1092,11 +1343,16 @@ export class MessageReadStatusService {
         select: { id: true, createdAt: true, senderId: true },
       });
 
+      const allActiveParticipants = await this.prisma.participant.findMany({
+        where: { conversationId, isActive: true },
+        select: { id: true, userId: true },
+      });
+
+      // Même règle que les trois autres lecteurs : l'opt-out est retiré avant
+      // tout comptage, donc absent du numérateur comme du dénominateur.
+      const optedOut = await this._loadReadReceiptOptOuts(allActiveParticipants);
       const activeParticipantIds = new Set(
-        (await this.prisma.participant.findMany({
-          where: { conversationId, isActive: true },
-          select: { id: true },
-        })).map(p => p.id)
+        allActiveParticipants.filter(p => !optedOut.has(p.id)).map(p => p.id)
       );
 
       const cursors = await this.prisma.conversationReadCursor.findMany({
@@ -1171,14 +1427,14 @@ export class MessageReadStatusService {
             cursor?.lastDeliveredAt && cursor.lastDeliveredAt >= msg.createdAt
               ? cursor.lastDeliveredAt
               : null;
-          const cursorRead =
-            cursor?.lastReadAt && cursor.lastReadAt >= msg.createdAt
-              ? cursor.lastReadAt
-              : null;
-
           const frozen = frozenForMsg?.get(participantId);
           const receivedAt = frozen?.receivedAt ?? frozen?.deliveredAt ?? cursorDelivered;
-          const readAt = frozen?.readAt ?? cursorRead;
+          const readAt = resolveReadAt({
+            frozenReadAt: frozen?.readAt ?? null,
+            cursorLastReadAt: cursor?.lastReadAt ?? null,
+            messageCreatedAt: msg.createdAt,
+            cutover: getExactReadTrackingCutover(),
+          });
 
           if (receivedAt) receivedCount++;
           if (readAt) readCount++;
@@ -1271,7 +1527,7 @@ export class MessageReadStatusService {
         ...frozenEntries.map(e => e.participantId),
       ]));
 
-      const participants = evaluatedParticipantIds.length
+      const allParticipants = evaluatedParticipantIds.length
         ? await this.prisma.participant.findMany({
             where: {
               id: { in: evaluatedParticipantIds },
@@ -1279,12 +1535,19 @@ export class MessageReadStatusService {
             },
             select: {
               id: true,
+              userId: true,
               displayName: true,
               avatar: true,
               user: { select: { avatar: true } },
             },
           })
         : [];
+
+      // Absents de `participantById`, les opt-out sont ignorés par la boucle
+      // (`continue` sur participant introuvable) et disparaissent donc aussi
+      // bien de la liste que de son total.
+      const optedOut = await this._loadReadReceiptOptOuts(allParticipants);
+      const participants = allParticipants.filter(p => !optedOut.has(p.id));
 
       const participantById = new Map(
         participants.map(p => [p.id, p])
@@ -1309,15 +1572,15 @@ export class MessageReadStatusService {
           cursor?.lastDeliveredAt && cursor.lastDeliveredAt >= message.createdAt
             ? cursor.lastDeliveredAt
             : null;
-        const cursorRead =
-          cursor?.lastReadAt && cursor.lastReadAt >= message.createdAt
-            ? cursor.lastReadAt
-            : null;
-
         const frozen = frozenByParticipant.get(participantId);
         const deliveredAt = frozen?.deliveredAt ?? cursorDelivered;
         const receivedAt = frozen?.receivedAt ?? frozen?.deliveredAt ?? cursorDelivered;
-        const readAt = frozen?.readAt ?? cursorRead;
+        const readAt = resolveReadAt({
+          frozenReadAt: frozen?.readAt ?? null,
+          cursorLastReadAt: cursor?.lastReadAt ?? null,
+          messageCreatedAt: message.createdAt,
+          cutover: getExactReadTrackingCutover(),
+        });
         const readDevice = frozen?.readDevice ?? null;
 
         if (filter === "delivered" && !deliveredAt) continue;
@@ -1778,10 +2041,16 @@ export class MessageReadStatusService {
         return { totalMembers: 0, deliveredCount: 0, readCount: 0 };
       }
 
-      const activeParticipants = await this.prisma.participant.findMany({
+      const allActiveParticipants = await this.prisma.participant.findMany({
         where: { conversationId, isActive: true, id: { not: latestMessage.senderId } },
-        select: { id: true }
+        select: { id: true, userId: true }
       });
+
+      // Ce résumé alimente les events READ_STATUS_UPDATED diffusés à toute la
+      // conversation. Sans ce filtre, la lecture d'un participant opt-out y
+      // ressortait, contournant le gate d'émission posé côté route.
+      const optedOut = await this._loadReadReceiptOptOuts(allActiveParticipants);
+      const activeParticipants = allActiveParticipants.filter(p => !optedOut.has(p.id));
       const totalMembers = activeParticipants.length;
       const activeIds = new Set(activeParticipants.map(p => p.id));
 
@@ -1828,14 +2097,14 @@ export class MessageReadStatusService {
           cursor?.lastDeliveredAt && cursor.lastDeliveredAt >= latestMessage.createdAt
             ? cursor.lastDeliveredAt
             : null;
-        const cursorRead =
-          cursor?.lastReadAt && cursor.lastReadAt >= latestMessage.createdAt
-            ? cursor.lastReadAt
-            : null;
-
         const frozen = frozenByParticipant.get(participantId);
         const receivedAt = frozen?.receivedAt ?? frozen?.deliveredAt ?? cursorDelivered;
-        const readAt = frozen?.readAt ?? cursorRead;
+        const readAt = resolveReadAt({
+          frozenReadAt: frozen?.readAt ?? null,
+          cursorLastReadAt: cursor?.lastReadAt ?? null,
+          messageCreatedAt: latestMessage.createdAt,
+          cutover: getExactReadTrackingCutover(),
+        });
 
         if (receivedAt) deliveredCount++;
         if (readAt) readCount++;

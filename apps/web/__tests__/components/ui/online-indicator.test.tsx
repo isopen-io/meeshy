@@ -1,8 +1,9 @@
 /**
  * OnlineIndicator — derivation du statut de presence.
  * Sans prop `status`, le dot derive via getUserStatus({ isOnline, lastActiveAt }).
- * Regle produit : online (isOnline backend OU <=60s) & recent (<=5min) → VERT
- * (pulse sur online) ; away (5-30min) → ORANGE ; offline (>30min) → GRIS.
+ * Regle produit 1/3/5 : online (isOnline backend <=5min OU activité <=60s) → VERT
+ * pulse ; away (1-3min) → ORANGE ; idle (3-5min) → GRIS AFFICHÉ ;
+ * offline (>5min) → AUCUN dot.
  */
 
 import { render } from '@testing-library/react';
@@ -23,12 +24,12 @@ describe('OnlineIndicator', () => {
       const dot = getDot(container);
       expect(dot?.className).toContain('bg-emerald-400');
       expect(dot?.className).toContain('animate-pulse');
-      expect(dot?.className).not.toContain('bg-orange-400');
+      expect(dot?.className).not.toContain('bg-amber-400');
     });
 
-    it('renders a green pulsing dot when the backend flags the user online, even with stale lastActiveAt', () => {
+    it('renders a green pulsing dot when the backend flags the user online within the 5min guard', () => {
       const { container } = render(
-        <OnlineIndicator isOnline={true} lastActiveAt={minutesAgo(10)} />
+        <OnlineIndicator isOnline={true} lastActiveAt={minutesAgo(4)} />
       );
 
       const dot = getDot(container);
@@ -36,19 +37,9 @@ describe('OnlineIndicator', () => {
       expect(dot?.className).toContain('animate-pulse');
     });
 
-    it('renders a green (non-pulsing) dot when disconnected but active within the last 5 minutes', () => {
+    it('renders an orange dot (away) when disconnected between 1 and 3 minutes ago', () => {
       const { container } = render(
-        <OnlineIndicator isOnline={false} lastActiveAt={minutesAgo(3)} />
-      );
-
-      const dot = getDot(container);
-      expect(dot?.className).toContain('bg-emerald-400');
-      expect(dot?.className).not.toContain('animate-pulse');
-    });
-
-    it('renders an orange dot (away) when disconnected between 5 and 30 minutes ago', () => {
-      const { container } = render(
-        <OnlineIndicator isOnline={false} lastActiveAt={minutesAgo(10)} />
+        <OnlineIndicator isOnline={false} lastActiveAt={minutesAgo(2)} />
       );
 
       const dot = getDot(container);
@@ -56,9 +47,28 @@ describe('OnlineIndicator', () => {
       expect(dot?.className).not.toContain('bg-emerald-400');
     });
 
-    it('renders no dot (offline) when long-disconnected (over 30 min)', () => {
+    it('renders a grey dot (idle) when disconnected between 3 and 5 minutes ago', () => {
       const { container } = render(
-        <OnlineIndicator isOnline={false} lastActiveAt={minutesAgo(45)} />
+        <OnlineIndicator isOnline={false} lastActiveAt={minutesAgo(4)} />
+      );
+
+      const dot = getDot(container);
+      expect(dot?.className).toContain('bg-gray-400');
+      expect(dot?.className).not.toContain('bg-emerald-400');
+      expect(dot?.className).not.toContain('animate-pulse');
+    });
+
+    it('renders no dot (offline) when long-disconnected (over 5 min)', () => {
+      const { container } = render(
+        <OnlineIndicator isOnline={false} lastActiveAt={minutesAgo(6)} />
+      );
+
+      expect(getDot(container)).toBeNull();
+    });
+
+    it('renders no dot (offline) when the backend online flag is stale (beyond 5 min)', () => {
+      const { container } = render(
+        <OnlineIndicator isOnline={true} lastActiveAt={minutesAgo(10)} />
       );
 
       expect(getDot(container)).toBeNull();
@@ -74,7 +84,7 @@ describe('OnlineIndicator', () => {
   describe('explicit status prop precedence', () => {
     it('keeps the provided away status (orange) even when the derived one would differ', () => {
       const { container } = render(
-        <OnlineIndicator isOnline={true} lastActiveAt={minutesAgo(1)} status="away" />
+        <OnlineIndicator isOnline={true} lastActiveAt={secondsAgo(30)} status="away" />
       );
 
       const dot = getDot(container);
@@ -82,9 +92,18 @@ describe('OnlineIndicator', () => {
       expect(dot?.className).not.toContain('bg-emerald-400');
     });
 
+    it('renders the grey idle dot when the explicit status is idle', () => {
+      const { container } = render(
+        <OnlineIndicator isOnline={true} lastActiveAt={secondsAgo(30)} status="idle" />
+      );
+
+      const dot = getDot(container);
+      expect(dot?.className).toContain('bg-gray-400');
+    });
+
     it('renders nothing when the explicit status is offline', () => {
       const { container } = render(
-        <OnlineIndicator isOnline={true} lastActiveAt={minutesAgo(1)} status="offline" />
+        <OnlineIndicator isOnline={true} lastActiveAt={secondsAgo(30)} status="offline" />
       );
 
       expect(getDot(container)).toBeNull();

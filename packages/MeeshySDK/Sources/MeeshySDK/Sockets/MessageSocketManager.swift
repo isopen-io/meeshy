@@ -934,7 +934,14 @@ public struct SocketNotificationEvent: Decodable, Sendable {
     public var postId: String? { context?.postId ?? metadata?.postId }
     public var commentId: String? { context?.commentId ?? metadata?.commentId }
     public var parentCommentId: String? { context?.parentCommentId ?? metadata?.parentCommentId }
-    public var postType: String? { metadata?.postType }
+    /// Discriminant d'entité : `postType` fait autorité, `contentType` sert de
+    /// repli (famille `friend_new_*`). Le NOM du type de notification n'est
+    /// JAMAIS un discriminant — `story_thread_reply` est émis pour n'importe
+    /// quel contenu commenté, réel inclus.
+    public var postType: String? {
+        let explicit = metadata?.postType
+        return explicit?.isEmpty == false ? explicit : metadata?.contentType
+    }
     public var messagePreview: String? { metadata?.commentPreview }
     public var conversationTitle: String? { context?.conversationTitle }
     public var conversationAvatar: String? { context?.conversationAvatar }
@@ -985,6 +992,10 @@ public struct SocketNotificationMetadata: Decodable, Sendable {
     public let commentId: String?
     public let parentCommentId: String?
     public let postType: String?
+    /// Discriminant d'entité de la famille `friend_new_*`, que la gateway a
+    /// historiquement émis SOUS CE NOM au lieu de `postType`. Lu en repli pour
+    /// que le nouveau réel d'un ami n'atterrisse pas sur le détail de post plat.
+    public let contentType: String?
     public let commentPreview: String?
     public let emoji: String?
     public let attachments: SocketNotificationAttachments?

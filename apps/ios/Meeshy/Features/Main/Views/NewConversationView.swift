@@ -54,6 +54,12 @@ struct NewConversationView: View {
                 resultsList
             }
         }
+        // Contact-first: load the user's contacts as soon as the picker opens,
+        // before any search is typed. Cache-First inside the VM keeps this
+        // instant when the friends cache is warm.
+        .task {
+            await viewModel.loadContacts()
+        }
         .adaptiveOnChange(of: searchQuery) { _, newValue in
             viewModel.search(query: newValue)
         }
@@ -286,19 +292,39 @@ struct NewConversationView: View {
 
     // MARK: - Results List
 
+    /// The picker is contact-first: browsing the user's own contacts is the
+    /// default surface, and platform-wide search only takes over once the
+    /// query reaches the ViewModel's 2-character threshold. Below that the
+    /// contacts list stays visible so a single stray keystroke never blanks
+    /// the screen.
+    private var isSearchActive: Bool {
+        searchQuery.trimmingCharacters(in: .whitespaces).count >= 2
+    }
+
     private var resultsList: some View {
         ScrollView(showsIndicators: false) {
             LazyVStack(spacing: 4) {
-                if viewModel.searchResults.isEmpty && !searchQuery.isEmpty && !viewModel.isSearching {
-                    emptyState
+                if isSearchActive {
+                    searchResultsSection
                 } else {
-                    ForEach(viewModel.searchResults) { user in
-                        userRow(user)
-                    }
+                    contactsSection
                 }
             }
             .padding(.horizontal, 16)
             .padding(.top, 4)
+        }
+    }
+
+    // MARK: - Search Results Section
+
+    @ViewBuilder
+    private var searchResultsSection: some View {
+        if viewModel.searchResults.isEmpty && !viewModel.isSearching {
+            emptyState
+        } else {
+            ForEach(viewModel.searchResults) { user in
+                userRow(user)
+            }
         }
     }
 
@@ -314,6 +340,91 @@ struct NewConversationView: View {
                 .foregroundColor(theme.textMuted)
         }
         .frame(maxWidth: .infinity)
+        .padding(.top, 60)
+        .accessibilityElement(children: .combine)
+    }
+
+    // MARK: - Contacts Section (default surface)
+
+    @ViewBuilder
+    private var contactsSection: some View {
+        if viewModel.contacts.isEmpty {
+            if viewModel.isLoadingContacts {
+                contactsLoadingState
+            } else {
+                contactsEmptyState
+            }
+        } else {
+            contactsSectionHeader
+            ForEach(viewModel.contacts) { user in
+                userRow(user)
+            }
+        }
+    }
+
+    private var contactsSectionHeader: some View {
+        HStack {
+            Text(String(localized: "new_conversation.contacts.section", defaultValue: "Vos contacts", bundle: .main))
+                .font(MeeshyFont.relative(12, weight: .semibold))
+                .foregroundColor(theme.textMuted)
+                .textCase(.uppercase)
+            Spacer()
+        }
+        .padding(.horizontal, 14)
+        .padding(.top, 6)
+        .padding(.bottom, 2)
+        .accessibilityAddTraits(.isHeader)
+    }
+
+    private var contactsLoadingState: some View {
+        VStack(spacing: 4) {
+            ForEach(0..<6, id: \.self) { _ in
+                contactSkeletonRow
+            }
+        }
+        .padding(.top, 4)
+        .accessibilityLabel(String(localized: "new_conversation.contacts.loading", defaultValue: "Chargement des contacts", bundle: .main))
+    }
+
+    private var contactSkeletonRow: some View {
+        HStack(spacing: 12) {
+            Circle()
+                .fill(theme.textMuted.opacity(0.12))
+                .frame(width: 44, height: 44)
+            VStack(alignment: .leading, spacing: 4) {
+                RoundedRectangle(cornerRadius: 4)
+                    .fill(theme.textMuted.opacity(0.12))
+                    .frame(width: 120, height: 12)
+                RoundedRectangle(cornerRadius: 3)
+                    .fill(theme.textMuted.opacity(0.08))
+                    .frame(width: 80, height: 10)
+            }
+            Spacer()
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .shimmer()
+        .accessibilityHidden(true)
+    }
+
+    private var contactsEmptyState: some View {
+        VStack(spacing: 12) {
+            Image(systemName: "person.2")
+                .font(MeeshyFont.relative(36))
+                .foregroundColor(theme.textMuted.opacity(0.5))
+                .accessibilityHidden(true)
+
+            Text(String(localized: "new_conversation.contacts.empty.title", defaultValue: "Aucun contact", bundle: .main))
+                .font(MeeshyFont.relative(15, weight: .semibold))
+                .foregroundColor(theme.textPrimary)
+
+            Text(String(localized: "new_conversation.contacts.empty.subtitle", defaultValue: "Recherchez un utilisateur pour d\u{00E9}marrer une conversation.", bundle: .main))
+                .font(MeeshyFont.relative(13, weight: .medium))
+                .foregroundColor(theme.textMuted)
+                .multilineTextAlignment(.center)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.horizontal, 32)
         .padding(.top, 60)
         .accessibilityElement(children: .combine)
     }
@@ -433,6 +544,27 @@ struct SearchedUser: Decodable, Identifiable {
     let isOnline: Bool?
     let lastActiveAt: Date?
     let avatar: String?
+}
+
+extension SearchedUser {
+    /// Bridges an SDK `FriendRequestUser` (the contact list model) into the
+    /// picker's `SearchedUser` so the user's contacts render through the exact
+    /// same `userRow` and feed the same selection flow as platform search
+    /// results. `email` is absent from the friend payload (`nil`) — it is not
+    /// surfaced in the row anyway.
+    init(friend: FriendRequestUser) {
+        self.init(
+            id: friend.id,
+            username: friend.username,
+            firstName: friend.firstName,
+            lastName: friend.lastName,
+            displayName: friend.displayName,
+            email: nil,
+            isOnline: friend.isOnline,
+            lastActiveAt: friend.lastActiveAt,
+            avatar: friend.avatar
+        )
+    }
 }
 
 // MARK: - Notification Name

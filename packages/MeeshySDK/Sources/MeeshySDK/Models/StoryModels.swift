@@ -1882,10 +1882,11 @@ public struct StoryItem: Identifiable, Codable, Sendable {
             originalRepostOfId: originalRepostOfId, repostAuthorName: repostAuthorName,
             repostAuthorUsername: repostAuthorUsername,
             visibility: visibility, audioUrl: audioUrl, isViewed: isViewed,
+            viewedAt: viewedAt, updatedAt: updatedAt,
             translations: self.translations,
             backgroundAudio: backgroundAudio,
             reactionCount: reactionCount, commentCount: commentCount,
-            shareCount: shareCount, viewCount: viewCount, repostCount: repostCount,
+            shareCount: shareCount, viewCount: viewCount, impressionCount: impressionCount, repostCount: repostCount,
             currentUserReactions: currentUserReactions
         )
     }
@@ -1946,24 +1947,35 @@ public struct StatusEntry: Identifiable, Codable, CacheIdentifiable {
     public var reactionSummary: [String: Int]?
     public let viaUsername: String?
 
+    /// Reuses the story countdown's own catalog keys (`story.viewer.expires*`
+    /// in `story.viewer.expiresNow`/`expiresInHours`/`expiresInMinutes`) rather
+    /// than minting duplicate ones — a status is the same "ephemeral post"
+    /// concept as a story, just without a dedicated seconds-level key, so
+    /// anything under a minute collapses into the same "expiring soon" label
+    /// (mirrors `StoryViewerView+Content.storyTimeRemaining`, which has no
+    /// seconds granularity either). Previously hardcoded the bare English
+    /// word "expired" regardless of the user's language — Prisme violation.
     public var timeRemaining: String {
         guard let expires = expiresAt else { return "" }
         let seconds = Int(expires.timeIntervalSinceNow)
-        if seconds <= 0 { return "expired" }
-        if seconds < 60 { return "\(seconds)s" }
-        return "\(seconds / 60)min"
+        if seconds < 60 {
+            return String(localized: "story.viewer.expiresNow", defaultValue: "Expire bientôt", bundle: .main)
+        }
+        let hours = seconds / 3600
+        if hours > 0 {
+            return String(localized: "story.viewer.expiresInHours", defaultValue: "Expire dans \(hours)h", bundle: .main)
+        }
+        let minutes = seconds / 60
+        return String(localized: "story.viewer.expiresInMinutes", defaultValue: "Expire dans \(minutes)min", bundle: .main)
     }
 
+    /// Was a hand-rolled French-only relative-time string built from scratch —
+    /// re-forging exactly what `RelativeTimeFormatter` (this same module,
+    /// already used by `StoryItem`) exists to centralize. Delegates instead so
+    /// a StatusEntry gets the same 5-language coverage, day-boundary "hier",
+    /// and absolute-date fallback as every other relative timestamp in the app.
     public var timeAgo: String {
-        let seconds = Int(-createdAt.timeIntervalSinceNow)
-        if seconds < 5 { return "il y a quelques secondes" }
-        if seconds < 60 { return "il y a \(seconds)s" }
-        let minutes = seconds / 60
-        if minutes < 60 { return "il y a \(minutes)min" }
-        let hours = minutes / 60
-        let remainingMin = minutes % 60
-        if remainingMin == 0 { return "il y a \(hours)h" }
-        return "il y a \(hours)h \(remainingMin)min"
+        RelativeTimeFormatter.longString(for: createdAt)
     }
 
     public init(id: String, userId: String, username: String, avatarColor: String, moodEmoji: String,
@@ -2334,6 +2346,9 @@ public struct TimelineProject: Codable, Sendable {
     public var mediaObjects: [StoryMediaObject]
     public var audioPlayerObjects: [StoryAudioPlayerObject]
     public var textObjects: [StoryTextObject]
+    /// Stickers (emoji overlays) du slide — listés dans la timeline pour indiquer
+    /// leur fenêtre d'apparition (startTime/duration), déplaçables comme les textes.
+    public var stickerObjects: [StorySticker]
     public var clipTransitions: [StoryClipTransition]
 
     /// Read-only snapshot of the slide's inter-slide entry/exit animation,
@@ -2349,6 +2364,7 @@ public struct TimelineProject: Codable, Sendable {
                 mediaObjects: [StoryMediaObject] = [],
                 audioPlayerObjects: [StoryAudioPlayerObject] = [],
                 textObjects: [StoryTextObject] = [],
+                stickerObjects: [StorySticker] = [],
                 clipTransitions: [StoryClipTransition] = [],
                 openingEffect: StoryTransitionEffect? = nil,
                 closingEffect: StoryTransitionEffect? = nil) {
@@ -2357,6 +2373,7 @@ public struct TimelineProject: Codable, Sendable {
         self.mediaObjects = mediaObjects
         self.audioPlayerObjects = audioPlayerObjects
         self.textObjects = textObjects
+        self.stickerObjects = stickerObjects
         self.clipTransitions = clipTransitions
         self.openingEffect = openingEffect
         self.closingEffect = closingEffect
@@ -2373,6 +2390,7 @@ public struct TimelineProject: Codable, Sendable {
         self.mediaObjects = slide.effects.mediaObjects ?? []
         self.audioPlayerObjects = slide.effects.audioPlayerObjects ?? []
         self.textObjects = slide.effects.textObjects
+        self.stickerObjects = slide.effects.stickerObjects ?? []
         self.clipTransitions = slide.effects.clipTransitions ?? []
         self.openingEffect = slide.effects.opening
         self.closingEffect = slide.effects.closing
@@ -2398,6 +2416,7 @@ public struct TimelineProject: Codable, Sendable {
         slide.effects.mediaObjects = mediaObjects.isEmpty ? nil : mediaObjects
         slide.effects.audioPlayerObjects = audioPlayerObjects.isEmpty ? nil : audioPlayerObjects
         slide.effects.textObjects = textObjects
+        slide.effects.stickerObjects = stickerObjects.isEmpty ? nil : stickerObjects
         slide.effects.clipTransitions = clipTransitions.isEmpty ? nil : clipTransitions
 
         // Calculé APRÈS l'écriture des arrays pour que `contentDerivedDuration()`
@@ -2438,6 +2457,12 @@ public enum TimelineClipKind: String, Codable, CaseIterable, Sendable {
     case image
     case audio
     case text
+    /// Sticker (emoji) overlay — même famille temporelle que `text` (startTime /
+    /// duration / fadeIn / fadeOut, pas de keyframes). Listé et déplaçable dans
+    /// la timeline pour indiquer QUAND il apparaît ; ajout/suppression restent
+    /// côté canvas (le sticker picker), d'où les branches `.sticker` qui lèvent
+    /// `invalidState` dans les commandes non exposées à la timeline.
+    case sticker
 }
 
 // MARK: - Edit Commands (12 concrete cases)
@@ -2520,6 +2545,10 @@ public struct AddClipCommand: EditCommand {
                                 startTime: Double(startTime),
                                 duration: Double(duration))
             )
+        case .sticker:
+            // Les stickers sont ajoutés via le picker du canvas, jamais depuis la
+            // timeline — cette commande n'est donc jamais construite avec `.sticker`.
+            throw EditCommandError.invalidState(reason: "stickers are added on the canvas, not the timeline")
         }
     }
 
@@ -2531,6 +2560,8 @@ public struct AddClipCommand: EditCommand {
             project.audioPlayerObjects.removeAll { $0.id == clipId }
         case .text:
             project.textObjects.removeAll { $0.id == clipId }
+        case .sticker:
+            throw EditCommandError.invalidState(reason: "stickers are added on the canvas, not the timeline")
         }
     }
 }
@@ -2580,6 +2611,8 @@ public struct DeleteClipCommand: EditCommand {
                 throw EditCommandError.clipNotFound(id: clipId)
             }
             project.textObjects.removeAll { $0.id == clipId }
+        case .sticker:
+            throw EditCommandError.invalidState(reason: "stickers are removed on the canvas, not the timeline")
         }
     }
 
@@ -2603,6 +2636,8 @@ public struct DeleteClipCommand: EditCommand {
             }
             let idx = min(insertionIndex, project.textObjects.count)
             project.textObjects.insert(snap, at: idx)
+        case .sticker:
+            throw EditCommandError.invalidState(reason: "stickers are removed on the canvas, not the timeline")
         }
     }
 }
@@ -2654,6 +2689,11 @@ public struct MoveClipCommand: EditCommand {
                 throw EditCommandError.clipNotFound(id: clipId)
             }
             project.textObjects[idx].startTime = Double(startTime)
+        case .sticker:
+            guard let idx = project.stickerObjects.firstIndex(where: { $0.id == clipId }) else {
+                throw EditCommandError.clipNotFound(id: clipId)
+            }
+            project.stickerObjects[idx].startTime = Double(startTime)
         }
     }
 }
@@ -2715,6 +2755,12 @@ public struct TrimClipCommand: EditCommand {
             }
             project.textObjects[idx].startTime = Double(startTime)
             project.textObjects[idx].duration = Double(duration)
+        case .sticker:
+            guard let idx = project.stickerObjects.firstIndex(where: { $0.id == clipId }) else {
+                throw EditCommandError.clipNotFound(id: clipId)
+            }
+            project.stickerObjects[idx].startTime = Double(startTime)
+            project.stickerObjects[idx].duration = Double(duration)
         }
     }
 }
@@ -2792,6 +2838,8 @@ public struct SplitClipCommand: EditCommand {
             right.startTime = Double(originalStart + splitAtRelativeTime)
             right.duration = Double(max(0, originalDuration - splitAtRelativeTime))
             project.textObjects.replaceSubrange(idx...idx, with: [left, right])
+        case .sticker:
+            throw EditCommandError.invalidState(reason: "stickers cannot be split on the timeline")
         }
     }
 
@@ -2836,6 +2884,8 @@ public struct SplitClipCommand: EditCommand {
             let lower = min(leftIdx, rightIdx)
             let upper = max(leftIdx, rightIdx)
             project.textObjects.replaceSubrange(lower...upper, with: [restored])
+        case .sticker:
+            throw EditCommandError.invalidState(reason: "stickers cannot be split on the timeline")
         }
     }
 }
@@ -2956,6 +3006,8 @@ private extension TimelineProject {
             textObjects[idx].keyframes = arr.isEmpty ? nil : arr
         case .audio:
             throw EditCommandError.invalidState(reason: "audio clips do not support keyframes")
+        case .sticker:
+            throw EditCommandError.invalidState(reason: "sticker clips do not support keyframes")
         }
     }
 }
@@ -3303,6 +3355,8 @@ public struct SetClipPropertyCommand: EditCommand {
                 throw EditCommandError.clipNotFound(id: clipId)
             }
             apply(property: property, to: &project.textObjects[idx], useNew: useNew)
+        case .sticker:
+            throw EditCommandError.invalidState(reason: "sticker properties are edited on the canvas, not the timeline")
         }
     }
 

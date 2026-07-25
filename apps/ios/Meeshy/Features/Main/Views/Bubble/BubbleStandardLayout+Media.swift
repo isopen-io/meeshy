@@ -940,10 +940,33 @@ struct BubbleCarouselView: View {
 
     // MARK: - Prefetch
 
+    /// Pure gate: should this attachment kind be prefetched given the
+    /// resolved auto-download policy? Extracted so the wiring in
+    /// `prefetchAdjacentPages` (2026-07-21 fix — the ±1 carousel neighbor
+    /// prefetch previously ignored `MediaDownloadPolicyEngine` entirely,
+    /// burning cellular data against 'Never'/'Wi-Fi only') is testable
+    /// without spinning up the full carousel view.
+    nonisolated static func shouldPrefetchAttachment(
+        kind: MessageAttachment.AttachmentType,
+        allowImage: Bool,
+        allowVideo: Bool
+    ) -> Bool {
+        kind == .video ? allowVideo : allowImage
+    }
+
     private func prefetchAdjacentPages(around index: Int) {
         let prefetchRange = max(0, index - 1)...min(items.count - 1, index + 1)
+        // Respect the user's auto-download policy — mirrors
+        // ConversationMediaHandler.prefetchRecentMedia. Without this gate the
+        // ±1 neighbor prefetch pulled full-size media over cellular
+        // regardless of the 'Never'/'Wi-Fi only' preference.
+        let condition = NetworkConditionMonitor.shared.condition
+        let prefs = MediaDownloadPreferencesStore.shared.preferences
+        let allowImage = MediaDownloadPolicyEngine.shouldAutoDownload(kind: .image, condition: condition, prefs: prefs)
+        let allowVideo = MediaDownloadPolicyEngine.shouldAutoDownload(kind: .video, condition: condition, prefs: prefs)
         for i in prefetchRange {
             let attachment = items[i]
+            guard Self.shouldPrefetchAttachment(kind: attachment.type, allowImage: allowImage, allowVideo: allowVideo) else { continue }
             // BUG C fix : pour une vidéo, NE JAMAIS prefetch le body MP4 dans
             // le cache image (téléchargement complet + échec de décodage
             // UIImage). On prefetch le thumbnail uniquement ; si absent, skip.

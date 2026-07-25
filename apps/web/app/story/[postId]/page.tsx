@@ -9,6 +9,7 @@ import { usePostRoom } from '@/hooks/social/use-post-room';
 import { usePostSocketCacheSync } from '@/hooks/queries/use-post-socket-cache-sync';
 import { postToStoryData } from '@/lib/story-transforms';
 import { usePreferredLanguage } from '@/hooks/use-post-translation';
+import { useCommentTarget } from '@/hooks/use-comment-target';
 import { useAuthStore } from '@/stores/auth-store';
 import { useI18n } from '@/hooks/useI18n';
 
@@ -28,6 +29,10 @@ export default function StoryPage() {
   const currentUserId = useAuthStore((s) => s.user?.id) ?? '';
   const toastCtx = useToast();
   const { t } = useI18n('story');
+
+  // Notification → comment navigation (`?parent=<id>#comment-<id>`) : lecture
+  // réactive, transmise au StoryViewer qui ouvre son panneau de commentaires.
+  const { targetCommentId, targetParentCommentId } = useCommentTarget();
 
   const { data: post, isLoading, isError } = usePostQuery(postId);
   const { recordView } = useRecordStoryViewMutation();
@@ -81,6 +86,8 @@ export default function StoryPage() {
         onView={(id) => recordView(id)}
         onReply={handleReply}
         onDelete={handleDelete}
+        targetCommentId={targetCommentId}
+        targetParentCommentId={targetParentCommentId}
       />
     );
   }

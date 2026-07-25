@@ -248,7 +248,7 @@ export function ConversationParticipantsDrawer({
         );
       });
 
-  // Separer actifs (vert : online + recent) / inactifs via getUserStatus (temps reel)
+  // Separer actifs (dot rendu : online + away + idle, < 5min) / hors ligne via getUserStatus (temps reel)
   const onlineParticipants = filteredParticipants.filter(p => {
     const storeUser = p.userId ? getUserByIdFn(p.userId) : undefined;
     return isPresenceActive(getUserStatus(storeUser || p.user as ParticipantUser));
@@ -749,7 +749,8 @@ export function ConversationParticipantsDrawer({
                   )}
                 </motion.div>
 
-                {/* Section Hors ligne */}
+                {/* Section Hors ligne — groupement conservé, sans dot gris d'en-tête
+                    (offline ne rend jamais de dot ; le libellé suffit) */}
                 <motion.div
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
@@ -757,7 +758,6 @@ export function ConversationParticipantsDrawer({
                 >
                   <div className="flex items-center justify-between mb-3 px-2">
                     <span className="text-sm font-semibold text-gray-700 dark:text-gray-300 flex items-center gap-2">
-                      <div className={`h-2 w-2 rounded-full ${PRESENCE_DOT_CLASS.offline}`} />
                       {t('conversationDetails.offline')}
                     </span>
                     <Badge variant="outline" className="backdrop-blur-sm bg-gray-500/10 text-gray-600 dark:text-gray-400 border-gray-500/30">

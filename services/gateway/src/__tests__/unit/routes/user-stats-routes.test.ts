@@ -43,8 +43,8 @@ function makePrisma(overrides: PrismaOverrides = {}): PrismaClient {
 
   return {
     message: {
-      count: jest.fn((args: { where?: { NOT?: unknown } }) =>
-        Promise.resolve(args?.where?.NOT ? translationCount : messageCount)
+      count: jest.fn((args: { where?: { translations?: unknown } }) =>
+        Promise.resolve(args?.where?.translations ? translationCount : messageCount)
       ),
       groupBy: jest.fn(() =>
         Promise.resolve(languages.map((l) => ({ originalLanguage: l })))

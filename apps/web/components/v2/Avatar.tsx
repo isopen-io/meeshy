@@ -5,7 +5,7 @@ import Image from 'next/image';
 import { cn } from '@/lib/utils';
 import { buildAttachmentUrl } from '@/utils/attachment-url';
 
-export type AvatarPresence = 'online' | 'recent' | 'away' | 'offline';
+export type AvatarPresence = 'online' | 'away' | 'idle' | 'offline';
 
 export interface AvatarProps {
   src?: string | null;
@@ -23,14 +23,14 @@ export interface AvatarProps {
  * usages comme Badge) : la présence doit rendre le même hex exact que le web
  * classique (PRESENCE_DOT_CLASS), iOS (MeeshyColors.success/.warning) et
  * Android (MeeshyPalette.Success/Warning), quel que soit le thème actif.
- * Vert = online/recent, orange = away, gris = offline.
+ * Vert = online, orange = away, gris = idle (AFFICHÉ) ; offline = aucun dot.
  * Consommé aussi par ConversationItem — ne pas redéclarer.
  */
 export const presenceDotClassV2: Record<AvatarPresence, string> = {
-  online: 'bg-emerald-400 animate-pulse', // actif <= 60s : vert + pulse (#34D399)
-  recent: 'bg-emerald-400', // actif <= 5min : vert (#34D399)
-  away: 'bg-amber-400', // absent 5-30min : orange (#FBBF24)
-  offline: 'bg-gray-400', // hors ligne > 30min : gris (#9CA3AF)
+  online: 'bg-emerald-400 animate-pulse', // actif <= 60s (ou isOnline <= 5min) : vert + pulse (#34D399)
+  away: 'bg-amber-400', // absent 1-3min : orange (#FBBF24)
+  idle: 'bg-gray-400', // inactif 3-5min : gris AFFICHÉ (#9CA3AF)
+  offline: 'bg-gray-400', // hors ligne > 5min : jamais rendu en dot (gating offline)
 };
 
 const sizeMap = {

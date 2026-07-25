@@ -13,6 +13,10 @@ final class MockAPIClient: APIClientProviding, @unchecked Sendable {
         let method: String
         let bodyJSON: [String: Any]?
         let queryItems: [URLQueryItem]?
+        /// Extra headers passed via `requestWithHeaders` (e.g. `X-Client-Mutation-Id`,
+        /// an explicit `Authorization` override). `nil` for requests made via the
+        /// headerless `request`/`post`/... entry points.
+        let headers: [String: String]?
 
         var path: String { endpoint }
     }
@@ -74,6 +78,25 @@ final class MockAPIClient: APIClientProviding, @unchecked Sendable {
         queryItems: [URLQueryItem]?
     ) async throws -> T {
         recordRequest(endpoint: endpoint, method: method, bodyData: body, queryItems: queryItems)
+        if let error = endpointErrors[endpoint] { throw error }
+        if let error = errorToThrow { throw error }
+        guard let result = stubs[endpoint] as? T else {
+            throw NoStubError.missing(endpoint: endpoint, type: "\(T.self)", available: Array(stubs.keys))
+        }
+        return result
+    }
+
+    /// Overrides the protocol's default (header-dropping) fallback so tests
+    /// can assert on explicit headers (`X-Client-Mutation-Id`, an explicit
+    /// `Authorization` override) instead of silently losing them.
+    func requestWithHeaders<T: Decodable>(
+        endpoint: String,
+        method: String,
+        body: Data?,
+        queryItems: [URLQueryItem]?,
+        headers: [String: String]?
+    ) async throws -> T {
+        recordRequest(endpoint: endpoint, method: method, bodyData: body, queryItems: queryItems, headers: headers)
         if let error = endpointErrors[endpoint] { throw error }
         if let error = errorToThrow { throw error }
         guard let result = stubs[endpoint] as? T else {
@@ -153,14 +176,17 @@ final class MockAPIClient: APIClientProviding, @unchecked Sendable {
 
     // MARK: - Internal recording helpers
 
-    private func recordRequest(endpoint: String, method: String, bodyData: Data?, queryItems: [URLQueryItem]? = nil) {
+    private func recordRequest(
+        endpoint: String, method: String, bodyData: Data?,
+        queryItems: [URLQueryItem]? = nil, headers: [String: String]? = nil
+    ) {
         let json = bodyData.flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: Any] }
-        requests.append(RecordedRequest(endpoint: endpoint, method: method, bodyJSON: json, queryItems: queryItems))
+        requests.append(RecordedRequest(endpoint: endpoint, method: method, bodyJSON: json, queryItems: queryItems, headers: headers))
     }
 
     private func recordRequest<U: Encodable>(endpoint: String, method: String, encodableBody: U) {
         let data = try? JSONEncoder().encode(encodableBody)
         let json = data.flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: Any] }
-        requests.append(RecordedRequest(endpoint: endpoint, method: method, bodyJSON: json, queryItems: nil))
+        requests.append(RecordedRequest(endpoint: endpoint, method: method, bodyJSON: json, queryItems: nil, headers: nil))
     }
 }

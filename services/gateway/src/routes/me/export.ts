@@ -57,7 +57,36 @@ export async function dataExportRoutes(fastify: FastifyInstance) {
             type: 'object',
             properties: {
               success: { type: 'boolean' },
-              data: { type: 'object' },
+              data: {
+                type: 'object',
+                properties: {
+                  exportDate: { type: 'string' },
+                  format: { type: 'string' },
+                  requestedTypes: { type: 'array', items: { type: 'string' } },
+                  profile: {
+                    type: 'object',
+                    additionalProperties: true,
+                    nullable: true,
+                  },
+                  messages: {
+                    type: 'array',
+                    items: { type: 'object', additionalProperties: true },
+                    nullable: true,
+                  },
+                  messagesCount: { type: 'integer', nullable: true },
+                  contacts: {
+                    type: 'array',
+                    items: { type: 'object', additionalProperties: true },
+                    nullable: true,
+                  },
+                  contactsCount: { type: 'integer', nullable: true },
+                  csv: {
+                    type: 'object',
+                    additionalProperties: { type: 'string' },
+                    nullable: true,
+                  },
+                },
+              },
             },
           },
           401: {

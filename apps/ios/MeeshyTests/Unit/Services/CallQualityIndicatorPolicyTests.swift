@@ -15,6 +15,16 @@ import XCTest
 @MainActor
 final class QualityLevelMergePolicyTests: XCTestCase {
 
+    func test_bweWarmupSeconds_outlastsGccConvergenceWindow() {
+        // GCC ramps from its ~300 kbps kick-off and needs ~20-30 s to converge
+        // toward the true path capacity on a healthy link. A too-short warm-up
+        // let the still-ramping estimate constrain the level via min(heuristic,
+        // bwe) mid-call, flipping the video indicator to 'fair'/'good' on a good
+        // connection. The warm-up must outlast a realistic convergence window.
+        XCTAssertGreaterThanOrEqual(CallReliabilityPolicy.bweWarmupSeconds, 25,
+                                    "BWE warm-up must span GCC convergence (~25-30 s) so the ramp is not read as network degradation")
+    }
+
     func test_effectiveQualityLevel_audioOnly_ignoresBweSignal() {
         let level = CallReliabilityPolicy.effectiveQualityLevel(
             heuristic: .excellent,

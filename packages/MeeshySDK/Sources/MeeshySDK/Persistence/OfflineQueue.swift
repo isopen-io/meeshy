@@ -497,6 +497,24 @@ public protocol OfflineMessageQueueing: Sendable {
     /// Durable offline message DELETE (T11). Cancels a pending send / supersedes
     /// a pending edit for the same `clientMessageId` (see `enqueueDelete` impl).
     func enqueueDelete(_ payload: OfflineDeletePayload) async throws
+    /// Resets an exhausted/failed outbox row for `cmid` back to `.pending` so
+    /// the flusher replays it with its ORIGINAL payload (attachments, reply,
+    /// etc. all preserved) — used by the manual "retry" affordance on a
+    /// `.failed` bubble that carries attachments (see
+    /// `ConversationViewModel.retryMessage`, which cannot reconstruct real
+    /// uploaded attachment ids from the displayed `Message` alone).
+    func retryByClientMessageId(_ cmid: String) async throws
+    /// Cancels a still-`.pending` `.sendMessage` outbox row for `cmid`, if
+    /// one exists — used when the user deletes a `.failed` message that a
+    /// prior `retryByClientMessageId` reset back to pending, so the reset
+    /// send can never dispatch after the local delete (see
+    /// `ConversationViewModel.deleteMessage`'s `.failed` short-circuit).
+    /// Deliberately narrower than `enqueueDelete`: it MUST NEVER insert a new
+    /// `.deleteMessage` row when no pending send exists — that would
+    /// eventually hit the REST delete endpoint with the bogus local id the
+    /// `.failed` short-circuit exists specifically to avoid. No-op (not an
+    /// error) when there is nothing pending to cancel.
+    func cancelPendingSend(clientMessageId: String) async
 }
 
 extension OfflineQueue: OfflineMessageQueueing {}
@@ -773,6 +791,28 @@ public actor OfflineQueue {
             throw OfflineQueueError.itemNotFound
         }
         try await retryItem(row.id)
+    }
+
+    /// See `OfflineMessageQueueing.cancelPendingSend(clientMessageId:)`.
+    /// Only ever DELETEs an existing `.pending` `.sendMessage` row — never
+    /// inserts a `.deleteMessage` row, unlike `enqueueDelete`, so it stays
+    /// safe to call unconditionally even when nothing is pending.
+    public func cancelPendingSend(clientMessageId cmid: String) async {
+        guard let pool = outboxPool else { return }
+        do {
+            try await pool.write { db in
+                if let existing = try OutboxRecord
+                    .filter(Column("clientMessageId") == cmid)
+                    .filter(Column("kind") == OutboxKind.sendMessage.rawValue)
+                    .filter(Column("status") == OutboxStatus.pending.rawValue)
+                    .fetchOne(db) {
+                    _ = try OutboxRecord.deleteOne(db, key: existing.id)
+                }
+            }
+        } catch {
+            logger.error("cancelPendingSend failed: \(error.localizedDescription, privacy: .public)")
+        }
+        await refreshPendingCount()
     }
 
     // MARK: - Pending Count

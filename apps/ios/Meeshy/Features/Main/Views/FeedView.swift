@@ -225,11 +225,63 @@ struct FeedView: View {
                 // REST fallback when the socket fails (noSocket, timeout,
                 // gateway hiccup). Mirrors the SocialSocketManager call but
                 // hits the persisted `POST/DELETE /posts/:id/like` route.
-                // Only roll the optimistic update back if the REST call
-                // also fails — that keeps the heart visible whenever the
-                // server actually recorded the toggle.
                 let restOK = await postReactionViaREST(postId: postId, like: !wasLiked)
                 if !restOK {
+                    // Both the live socket call and the REST fallback failed —
+                    // most commonly because the device is offline. Durably
+                    // enqueue the toggle (existing `.toggleLikePost` outbox
+                    // kind, same one `FeedViewModel.likePost` already uses)
+                    // instead of silently rolling back and losing the like —
+                    // the OutboxDispatcher replays it on reconnect and the
+                    // canonical `post:liked`/`post:unliked` broadcast handled
+                    // above reconciles `postLikedIds`/`postLikeDelta` once it
+                    // lands.
+                    let cmid = ClientMutationId.generate()
+                    do {
+                        let payload = ToggleLikePostPayload(
+                            clientMutationId: cmid,
+                            postId: postId,
+                            liked: !wasLiked
+                        )
+                        try await OfflineQueue.shared.enqueue(.toggleLikePost, payload: payload, conversationId: nil)
+
+                        // Roll back the optimistic toggle if the outbox exhausts
+                        // its retry budget (server permanently rejects). Mirrors
+                        // `FeedViewModel.likePost`'s `observeOutcome` — without
+                        // this, a permanently-failing like/unlike stays stuck in
+                        // the UI forever: no `post:liked`/`post:unliked` broadcast
+                        // will ever arrive for a mutation the outbox gave up on,
+                        // and the feed re-seed explicitly skips posts with a live
+                        // `postLikeDelta`.
+                        observePostLikeOutcome(cmid: cmid, postId: postId, wasLiked: wasLiked)
+                    } catch {
+                        // The outbox itself refused the row (pool not
+                        // configured, encoding failure) — only now is rolling
+                        // back the optimistic UI honest.
+                        if wasLiked {
+                            postLikedIds.insert(postId)
+                            postLikeDelta[postId, default: 0] += 1
+                        } else {
+                            postLikedIds.remove(postId)
+                            postLikeDelta[postId, default: 0] -= 1
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /// Subscribes to `OfflineQueue.shared.outcomeStream(for: cmid)` and rolls
+    /// the optimistic like/unlike back to its pre-toggle state if the row is
+    /// escalated to `.exhausted` (retry budget spent — the server permanently
+    /// rejected it). `.applied` is a no-op: the optimistic state is already
+    /// final. Same rollback arithmetic as the synchronous enqueue-refusal
+    /// catch above, since both restore the identical pre-toggle snapshot.
+    private func observePostLikeOutcome(cmid: String, postId: String, wasLiked: Bool) {
+        Task { @MainActor in
+            let stream = await OfflineQueue.shared.outcomeStream(for: cmid)
+            for await event in stream {
+                if case .exhausted = event {
                     if wasLiked {
                         postLikedIds.insert(postId)
                         postLikeDelta[postId, default: 0] += 1
@@ -237,6 +289,9 @@ struct FeedView: View {
                         postLikedIds.remove(postId)
                         postLikeDelta[postId, default: 0] -= 1
                     }
+                    FeedbackToastManager.shared.showError(
+                        String(localized: "feed.like.error", defaultValue: "Error liking post", bundle: .main)
+                    )
                 }
             }
         }
@@ -393,10 +448,6 @@ struct FeedView: View {
     private func sharePostWithLink(postId: String) {
         guard !postShareInFlightIds.contains(postId) else { return }
         postShareInFlightIds.insert(postId)
-        // Optimistic share counter bump — the gateway always increments
-        // shareCount on POST /posts/:id/share regardless of mint success,
-        // so we mirror that even when we fall back to the raw URL.
-        postShareDelta[postId, default: 0] += 1
         Task {
             defer {
                 Task { @MainActor in
@@ -405,12 +456,19 @@ struct FeedView: View {
             }
             if let shortUrl = await viewModel.sharePost(postId, generateLink: true),
                let url = URL(string: shortUrl) {
+                // Bump AFTER the confirmed REST success — `sharePost` only
+                // returns non-nil once the gateway actually recorded the
+                // share (and incremented `shareCount`). Bumping beforehand
+                // left the counter permanently inflated whenever the REST
+                // call failed, because the raw-URL fallback below almost
+                // always succeeds and the old "undo" branch never ran.
+                postShareDelta[postId, default: 0] += 1
                 shareableLink = ShareableLink(url: url)
             } else if let raw = ShareableLink.fallback(forPostId: postId) {
+                // `sharePost` already surfaced an error toast; the gateway
+                // never recorded this share, so no counter bump — the user
+                // can still forward the raw (untracked) post link.
                 shareableLink = raw
-            } else {
-                // Both REST and fallback failed → undo the optimistic bump.
-                postShareDelta[postId, default: 0] -= 1
             }
         }
     }
@@ -421,6 +479,20 @@ struct FeedView: View {
     }
 
     private var posts: [FeedPost] { viewModel.posts }
+
+    /// Fingerprint of the like/bookmark/repost "by me" flags across the
+    /// loaded feed, used ONLY to drive the re-seeding `adaptiveOnChange`
+    /// below. `FeedPost: Equatable` is intentionally id-only (it powers
+    /// `.equatable()` list-row diffing) — observing `viewModel.posts`
+    /// directly there silently skipped re-seeding whenever a refresh
+    /// returned the SAME post ids with DIFFERENT flags (e.g. a repost
+    /// confirmed on another device, or a stale-then-fresh cache pass): the
+    /// repost/bookmark icon stayed unfilled forever because `[FeedPost]`
+    /// compared "unchanged". This fingerprint changes whenever any flag
+    /// does, independent of the id-only `Equatable`.
+    private var feedFlagsFingerprint: [String] {
+        viewModel.posts.map { "\($0.id)|\($0.isLiked)|\($0.isBookmarkedByMe)|\($0.isRepostedByMe)" }
+    }
 
     private var newPostsBannerText: String {
         let count = viewModel.newPostsCount
@@ -767,9 +839,6 @@ struct FeedView: View {
             onBookmark: { postId in
                 togglePostBookmark(postId: postId)
             },
-            onSendComment: { postId, content, parentId in
-                Task { await viewModel.sendComment(postId: postId, content: content, parentId: parentId) }
-            },
             onSelectLanguage: { postId, language in
                 viewModel.setTranslationOverride(postId: postId, language: language)
             },
@@ -1030,7 +1099,8 @@ struct FeedView: View {
             // iPhone feed). Cheap no-op when already loaded by iPadRootView.
             await storyViewModel.loadStories()
         }
-        .adaptiveOnChange(of: viewModel.posts) { _, newPosts in
+        .adaptiveOnChange(of: feedFlagsFingerprint) { _, _ in
+            let newPosts = viewModel.posts
             // Merge liked / bookmarked / reposted state when new pages
             // arrive. Only seed posts not yet tracked to avoid overwriting
             // optimistic state from in-flight toggles.

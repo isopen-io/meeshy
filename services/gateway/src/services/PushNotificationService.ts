@@ -13,6 +13,7 @@ import {
   NOTIFICATION_PREFERENCE_DEFAULTS,
   type NotificationPreference as NotifPrefs,
 } from '@meeshy/shared/types/preferences';
+import { isWithinDnd } from '@meeshy/shared/utils/notification-dnd';
 import { enhancedLogger, performanceLogger } from '../utils/logger-enhanced';
 import { CircuitBreaker } from '../utils/circuitBreaker';
 
@@ -44,6 +45,13 @@ export interface PushNotificationPayload {
    * incoming call to CallKit or the system kills the app.
    */
   silent?: boolean;
+  /**
+   * GW8 — préférence utilisateur `soundEnabled:false` : la bannière reste
+   * visible mais AUCUN son n'est joué (clé `sound` omise côté APNs/FCM).
+   * Distinct de `silent` (push background invisible). Posé uniquement par
+   * `applyDeliveryPreferences`, jamais par un producteur.
+   */
+  muted?: boolean;
   data?: Record<string, string>;
   link?: string;
   badge?: number;
@@ -82,8 +90,11 @@ export interface SendPushOptions {
   // Skip the DND-hours/days check in `isPushAllowed` — for call-management
   // pushes only (incoming VoIP ring, its silent cancel, answered-elsewhere).
   // A DND schedule is meant for message notifications; every comparable
-  // product (FaceTime, WhatsApp, Signal) still rings through it. Does NOT
-  // bypass `pushEnabled: false`, which is an explicit opt-out of all push.
+  // product (FaceTime, WhatsApp, Signal) still rings through it. Note (GW6):
+  // call pushes are a dedicated category — `isPushAllowed` short-circuits on
+  // `callsEnabled` alone for them, so neither this flag nor `pushEnabled:
+  // false` governs call pushes (see isCallRelatedPush / the isCallPush
+  // early-return). `pushEnabled: false` still blocks every NON-call push.
   bypassDnd?: boolean;
 }
 
@@ -282,50 +293,71 @@ export class PushNotificationService {
   }
 
   /**
-   * Vérifie si les push sont autorisés selon UserPreferences.notification
+   * GW6 — a call push is any send targeting a `voip` token OR carrying a
+   * call-management data type (`call` ring, `call_cancel` / `call_answered_elsewhere`
+   * stop-ring). `missed_call` is deliberately NOT in this set: it is a regular
+   * notification governed by missedCallEnabled/pushEnabled.
    */
-  private async isPushAllowed(userId: string, bypassDnd = false): Promise<boolean> {
+  private isCallRelatedPush(options: SendPushOptions): boolean {
+    if (options.types?.includes('voip')) return true;
+    const dataType = options.payload.data?.type;
+    return dataType === 'call' || dataType === 'call_cancel' || dataType === 'call_answered_elsewhere';
+  }
+
+  /**
+   * Charge UserPreferences.notification fusionnées avec les défauts.
+   * Fail open : sur erreur DB, tout est considéré activé (défauts).
+   */
+  private async loadNotifPrefs(userId: string): Promise<NotifPrefs> {
     try {
       const userPrefs = await this.prisma.userPreferences.findUnique({
         where: { userId },
         select: { notification: true },
       });
       const raw = (userPrefs?.notification ?? {}) as Record<string, unknown>;
-      const prefs: NotifPrefs = { ...NOTIFICATION_PREFERENCE_DEFAULTS, ...raw };
-
-      if (!prefs.pushEnabled) return false;
-
-      // Vérifier DND
-      if (prefs.dndEnabled && !bypassDnd) {
-        const now = new Date();
-        const currentTime = `${now.getUTCHours().toString().padStart(2, '0')}:${now.getUTCMinutes().toString().padStart(2, '0')}`;
-        const start = prefs.dndStartTime;
-        const end = prefs.dndEndTime;
-        const overnight = start > end;
-        const inWindow = overnight
-          ? currentTime >= start || currentTime < end
-          : currentTime >= start && currentTime < end;
-
-        if (inWindow && prefs.dndDays && prefs.dndDays.length > 0) {
-          const dayMap = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'] as const;
-          // Une fenêtre nocturne (start > end) déborde sur le lendemain : sa
-          // tranche du matin (00:00 → end) appartient à la nuit qui a COMMENCÉ
-          // la veille. Le filtre dndDays doit donc être testé contre le jour de
-          // DÉBUT de la fenêtre, pas contre le jour courant — sinon un matin est
-          // rattaché au mauvais jour (silence quand il faut notifier, et vice-versa).
-          const inMorningTail = overnight && currentTime < end;
-          const windowStartDay =
-            dayMap[inMorningTail ? (now.getUTCDay() + 6) % 7 : now.getUTCDay()];
-          if (!prefs.dndDays.includes(windowStartDay as any)) return true; // jour de début non sélectionné
-        }
-
-        if (inWindow) return false;
-      }
-
-      return true;
+      return { ...NOTIFICATION_PREFERENCE_DEFAULTS, ...raw };
     } catch {
-      return true; // fail open
+      return { ...NOTIFICATION_PREFERENCE_DEFAULTS };
     }
+  }
+
+  /**
+   * Vérifie si les push sont autorisés selon UserPreferences.notification
+   */
+  private isPushAllowed(prefs: NotifPrefs, bypassDnd = false, isCallPush = false): boolean {
+    // GW6 — call pushes are a dedicated category: only `callsEnabled`
+    // governs them. Neither pushEnabled:false nor the DND window applies
+    // (calls ring through DND — producers also set bypassDnd:true).
+    if (isCallPush) return prefs.callsEnabled ?? true;
+
+    if (!prefs.pushEnabled) return false;
+
+    // Vérifier DND — GW7 : helper PARTAGÉ tz-aware `isWithinDnd`
+    // (packages/shared), même implémentation que
+    // NotificationService.isDNDActive. La fenêtre est évaluée dans l'heure
+    // locale utilisateur (dndUtcOffsetMinutes, 0 = UTC historique).
+    if (!bypassDnd && isWithinDnd(prefs)) return false;
+
+    return true;
+  }
+
+  /**
+   * GW8 — applique les préférences de LIVRAISON au chokepoint transport,
+   * pour couvrir tous les producteurs sans exception :
+   *   - `soundEnabled:false`   → bannière sans son (`muted`)
+   *   - `notificationBadgeEnabled:false` → `aps.badge` forcé à 0 (miroir du
+   *     gate icône de NotificationCoordinator iOS ; `data.unreadCount` reste
+   *     intact pour le widget, qui garde le vrai total)
+   *   - `groupNotifications:false` → `threadId` retiré (plus d'empilement
+   *     par conversation)
+   * Jamais appliqué aux pushes d'appel (data-only, sonnerie à part entière).
+   */
+  private applyDeliveryPreferences(payload: PushNotificationPayload, prefs: NotifPrefs): PushNotificationPayload {
+    const out: PushNotificationPayload = { ...payload };
+    if (prefs.soundEnabled === false) out.muted = true;
+    if (prefs.notificationBadgeEnabled === false && out.badge !== undefined) out.badge = 0;
+    if (prefs.groupNotifications === false) delete out.threadId;
+    return out;
   }
 
   /**
@@ -341,11 +373,16 @@ export class PushNotificationService {
     const { userId, payload, types, platforms, bypassDnd } = options;
 
     // Vérifier les préférences push utilisateur (UserPreferences.notification)
-    const pushAllowed = await this.isPushAllowed(userId, bypassDnd);
+    const isCallPush = this.isCallRelatedPush(options);
+    const notifPrefs = await this.loadNotifPrefs(userId);
+    const pushAllowed = this.isPushAllowed(notifPrefs, bypassDnd, isCallPush);
     if (!pushAllowed) {
       pushLogger.info('Push blocked by user preferences', { userId });
       return [];
     }
+
+    // GW8 — Sons / Badges / regroupement appliqués une fois pour toutes ici.
+    const effectivePayload = isCallPush ? payload : this.applyDeliveryPreferences(payload, notifPrefs);
 
     // The `ENABLE_VOIP_PUSH` kill switch must gate every path that can reach
     // a `voip` token, not just a narrow helper — the real incoming-call push
@@ -402,11 +439,11 @@ export class PushNotificationService {
           let result: PushResult;
 
           if (tokenRecord.type === 'fcm') {
-            result = await this.sendViaFCM(tokenRecord, payload);
+            result = await this.sendViaFCM(tokenRecord, effectivePayload);
           } else if (tokenRecord.type === 'apns') {
-            result = await this.sendViaAPNS(tokenRecord, payload, false);
+            result = await this.sendViaAPNS(tokenRecord, effectivePayload, false);
           } else if (tokenRecord.type === 'voip') {
-            result = await this.sendViaAPNS(tokenRecord, payload, true);
+            result = await this.sendViaAPNS(tokenRecord, effectivePayload, true);
           } else {
             result = { success: false, tokenId: tokenRecord.id, error: `Unknown token type: ${tokenRecord.type}` };
           }
@@ -506,7 +543,7 @@ export class PushNotificationService {
         // one as APNs honours the more specific payload.
         const apsBase: Record<string, unknown> = {
           badge: payload.badge,
-          sound: payload.sound || 'default',
+          ...(payload.muted ? {} : { sound: payload.sound || 'default' }),
           category: payload.category,
           'thread-id': payload.threadId,
           'mutable-content': 1,
@@ -541,7 +578,7 @@ export class PushNotificationService {
           : {
               priority: 'high',
               notification: {
-                sound: payload.sound || 'default',
+                ...(payload.muted ? {} : { sound: payload.sound || 'default' }),
                 channelId: 'meeshy_notifications',
                 ...(payload.badge !== undefined ? { notificationCount: payload.badge } : {}),
               },
@@ -686,7 +723,10 @@ export class PushNotificationService {
           notification.badge = payload.badge;
         }
 
-        notification.sound = payload.sound || 'default';
+        // GW8 — `muted` = bannière visible sans son : la clé `sound` doit être
+        // ABSENTE du payload compilé (une valeur vide/inconnue rejouerait le
+        // son par défaut côté APNs).
+        notification.sound = payload.muted ? (undefined as never) : (payload.sound || 'default');
       }
       notification.topic = isVoIP
         ? config.apns.voipBundleId

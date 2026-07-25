@@ -287,10 +287,13 @@ extension ConversationView {
                 // Same behaviour as the previous inline "+" button: close the
                 // quick bar, then promote to the full detail sheet on the
                 // react tab. The slight delay lets the transition complete
-                // before the sheet animates in.
-                let resolved = viewModel.messageIndex(for: messageId).map { viewModel.messages[$0] } ?? viewModel.messages.first
+                // before the sheet animates in. If the message is no longer
+                // resolvable (scrolled out of the loaded window, deleted),
+                // there is no safe fallback — NEVER default to
+                // `messages.first` (the oldest loaded message): that would
+                // silently open the sheet to react on the wrong message.
                 closeReactionBar()
-                guard let msg = resolved else { return }
+                guard let msg = viewModel.messageIndex(for: messageId).map({ viewModel.messages[$0] }) else { return }
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
                     overlayState.fullReactionPickerMessage = msg
                 }
@@ -309,7 +312,10 @@ extension ConversationView {
             }
             messageActionButton(icon: "doc.on.doc.fill", label: String(localized: "action.copy", defaultValue: "Copier"), color: MeeshyColors.trackingAccentHex) {
                 if let msg = viewModel.messageIndex(for: messageId).map({ viewModel.messages[$0] }) {
-                    UIPasteboard.general.string = msg.content
+                    // Prisme: copy what's actually DISPLAYED (the preferred
+                    // translation when one is showing), never blindly the
+                    // original — matches the long-press menu's Copier below.
+                    UIPasteboard.general.string = viewModel.preferredTranslation(for: msg.id)?.translatedContent ?? msg.content
                 }
                 closeReactionBar()
             }
@@ -388,49 +394,6 @@ extension ConversationView {
         }
         .ignoresSafeArea()
         .transition(.scale(scale: 0.9).combined(with: .opacity))
-    }
-
-    // MARK: - Failed Message Retry
-    func failedMessageBar(for msg: Message) -> some View {
-        HStack(spacing: 8) {
-            Image(systemName: "exclamationmark.triangle.fill")
-                .font(MeeshyFont.relative(11))
-                .foregroundColor(MeeshyColors.error)
-                .accessibilityHidden(true)
-
-            Text(String(localized: "conversation.view.send_failed", defaultValue: "Échec de l'envoi", bundle: .main))
-                .font(MeeshyFont.relative(11, weight: .medium))
-                .foregroundColor(MeeshyColors.error)
-
-            Text("·")
-                .foregroundColor(theme.textMuted)
-                .accessibilityHidden(true)
-
-            Button {
-                HapticFeedback.light()
-                Task { await viewModel.retryMessage(messageId: msg.id) }
-            } label: {
-                Text(String(localized: "conversation.view.retry", defaultValue: "Réessayer", bundle: .main))
-                    .font(MeeshyFont.relative(11, weight: .bold))
-                    .foregroundColor(Color(hex: accentColor))
-            }
-            .accessibilityLabel(String(localized: "conversation.view.retry_send", defaultValue: "Reessayer l'envoi du message", bundle: .main))
-
-            Button {
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                    viewModel.removeFailedMessage(messageId: msg.id)
-                }
-            } label: {
-                Text(String(localized: "common.delete", defaultValue: "Supprimer", bundle: .main))
-                    .font(MeeshyFont.relative(11, weight: .medium))
-                    .foregroundColor(theme.textMuted)
-            }
-            .accessibilityLabel(String(localized: "conversation.view.delete_failed", defaultValue: "Supprimer le message en echec", bundle: .main))
-        }
-        .frame(maxWidth: .infinity, alignment: .trailing)
-        .padding(.horizontal, 16)
-        .padding(.top, 2)
-        .transition(.opacity.combined(with: .move(edge: .top)))
     }
 
     // MARK: - Reply Count

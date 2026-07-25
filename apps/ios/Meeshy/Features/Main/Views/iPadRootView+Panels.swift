@@ -126,7 +126,7 @@ extension iPadRootView {
                                 .navigationBarHidden(true)
         case .conversation:
             EmptyView()
-        case .storyNotificationTarget(let storyId, let intent, let context):
+        case .storyNotificationTarget(let storyId, let intent, let context, let commentId, let parentCommentId):
             // Mirrors iPhone (RootView) so that tapping a story-related
             // notification on iPad lands on the same Phase E/F screen
             // (loading → active → expired). The screen presents the viewer
@@ -134,7 +134,9 @@ extension iPadRootView {
             StoryNotificationTargetScreen(
                 storyId: storyId,
                 intent: intent,
-                context: context
+                context: context,
+                commentId: commentId,
+                parentCommentId: parentCommentId
             )
             .navigationBarHidden(true)
         }

@@ -83,6 +83,26 @@ export const MessageStatusBodySchema = z.object({
     .optional()
 }).strict();
 
+/**
+ * Suivi de lecture exact — le client rapporte les messages RÉELLEMENT affichés.
+ *
+ * Partagé par les DEUX points d'entrée de marquage : `/mark-read`
+ * (`routes/conversations/messages.ts`, utilisé par iOS) et `/mark-as-read`
+ * (`routes/message-read-status.ts`, utilisé par la webapp). N'en doter qu'un
+ * laisserait l'autre client sur le chemin par fenêtre, qui sur-déclare.
+ *
+ * Le corps reste OPTIONNEL : les binaires déjà distribués n'en envoient pas, et
+ * les priver du repli perdrait toute lecture jusqu'à leur mise à jour.
+ *
+ * @see docs/superpowers/specs/2026-07-24-read-exactness-design.md
+ */
+export const MarkReadBodySchema = z.object({
+  messageIds: z
+    .array(mongoId)
+    .max(200)
+    .optional()
+}).strict();
+
 export const AttachmentStatusBodySchema = z.object({
   action: z.enum(['listened', 'watched', 'viewed', 'downloaded']),
 

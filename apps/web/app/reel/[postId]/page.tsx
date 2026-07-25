@@ -136,10 +136,17 @@ export default function ReelPage() {
   // (not push) so Back returns to where the user came from, not this redirect.
   useEffect(() => {
     if (typeof window === 'undefined' || !postId) return;
+    const searchParams = new URLSearchParams(window.location.search);
     const anchorCommentId = window.location.hash.match(/^#comment-(.+)$/)?.[1]
-      ?? new URLSearchParams(window.location.search).get('comment');
+      ?? searchParams.get('comment');
     if (anchorCommentId) {
-      router.replace(`/feeds/post/${postId}#comment-${anchorCommentId}`);
+      // Préserver `?parent=<id>` (cible = réponse) pour que la page post
+      // déplie le bon thread et surligne la réponse exacte.
+      const parentCommentId = searchParams.get('parent');
+      const parentQuery = parentCommentId
+        ? `?parent=${encodeURIComponent(parentCommentId)}`
+        : '';
+      router.replace(`/feeds/post/${postId}${parentQuery}#comment-${anchorCommentId}`);
     }
   }, [postId, router]);
 

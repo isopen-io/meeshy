@@ -293,10 +293,33 @@ struct ForwardPickerSheet: View {
         await refreshConversations()
     }
 
+    /// Offline: durably enqueues instead of attempting — and losing — the
+    /// direct REST POST (the same `ofq_*` outbox row
+    /// `OutboxDispatcher.dispatchSendMessage` already replays for
+    /// `ConversationViewModel`). Gated on `NetworkMonitor.shared.isOnline`
+    /// mirroring `ConversationViewModel.sendMessage`'s offline branch.
     private func forwardTo(_ targetConversation: Conversation) {
         sendingToId = targetConversation.id
         failedToIds.remove(targetConversation.id)
         Task {
+            guard NetworkMonitor.shared.isOnline else {
+                let item = OfflineQueueItem(
+                    conversationId: targetConversation.id,
+                    content: message.content,
+                    forwardedFromId: message.id,
+                    forwardedFromConversationId: sourceConversationId
+                )
+                do {
+                    try await OfflineQueue.shared.enqueue(item)
+                    sentToIds.insert(targetConversation.id)
+                    HapticFeedback.success()
+                } catch {
+                    failedToIds.insert(targetConversation.id)
+                    HapticFeedback.error()
+                }
+                sendingToId = nil
+                return
+            }
             do {
                 let body = SendMessageRequest(
                     content: message.content.isEmpty ? nil : message.content,

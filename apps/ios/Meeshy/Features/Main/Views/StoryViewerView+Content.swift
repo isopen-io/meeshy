@@ -735,21 +735,35 @@ extension StoryViewerView {
         // puis transmis via `attachmentIds` ; la ligne serveur réconcilie via le socket
         // `comment:added` (qui porte désormais le média). Le commentaire optimiste
         // affiche déjà le média local.
+        //
+        // Both the media upload and the comment POST now THROW instead of being
+        // silently swallowed by `try?` — a media upload failure used to publish
+        // the comment WITHOUT its media (silent data loss); a POST failure left
+        // the optimistic `temp_` comment/reply on screen forever even offline
+        // (no rollback). Either failure now rolls back the exact optimistic
+        // insert via the pure `rollingBackOptimisticComment` — same snapshot/
+        // rollback discipline as `sendReaction`.
         let language = composerLanguage
+        let tempCommentId = optimisticComment.id
         Task {
-            var attachmentIds: [String]? = nil
-            if let pendingMedia, let uploadedId = try? await CommentMediaUploader.upload(pendingMedia) {
-                attachmentIds = [uploadedId]
+            do {
+                var attachmentIds: [String]? = nil
+                if let pendingMedia {
+                    attachmentIds = [try await CommentMediaUploader.upload(pendingMedia)]
+                }
+                try await StoryInteractionService().postComment(
+                    storyId: story.id,
+                    content: text,
+                    originalLanguage: language,
+                    effectFlags: effectFlags,
+                    parentId: parentId,
+                    attachmentIds: attachmentIds,
+                    mobileTranscription: pendingMedia?.mobileTranscription
+                )
+            } catch {
+                rollbackOptimisticComment(id: tempCommentId, parentId: parentId)
+                HapticFeedback.error()
             }
-            await StoryInteractionService().postComment(
-                storyId: story.id,
-                content: text,
-                originalLanguage: language,
-                effectFlags: effectFlags,
-                parentId: parentId,
-                attachmentIds: attachmentIds,
-                mobileTranscription: pendingMedia?.mobileTranscription
-            )
         }
 
         // Dismiss composer and give feedback
@@ -760,14 +774,98 @@ extension StoryViewerView {
         }
     }
 
-    func sendReaction(emoji: String) {
+    /// Pure core of the rollback — no `@State` access, so it's unit-testable
+    /// without a live view (mirrors the "extract the pure decision" pattern
+    /// used elsewhere in the codebase). Removes the failed `temp_` comment
+    /// (top-level) or reply (routes back out of the parent's reply count +
+    /// the replies map) and decrements the shared counter exactly once,
+    /// symmetrically with how `sendComment` incremented it.
+    static func rollingBackOptimisticComment(
+        id: String,
+        parentId: String?,
+        comments: [FeedComment],
+        repliesMap: [String: [FeedComment]],
+        commentCount: Int
+    ) -> (comments: [FeedComment], repliesMap: [String: [FeedComment]], commentCount: Int) {
+        var comments = comments
+        var repliesMap = repliesMap
+        if let parentId {
+            if var replies = repliesMap[parentId] {
+                replies.removeAll { $0.id == id }
+                repliesMap[parentId] = replies
+            }
+            if let idx = comments.firstIndex(where: { $0.id == parentId }) {
+                comments[idx].replies = max(0, comments[idx].replies - 1)
+            }
+        } else {
+            comments.removeAll { $0.id == id }
+        }
+        return (comments, repliesMap, max(0, commentCount - 1))
+    }
+
+    private func rollbackOptimisticComment(id: String, parentId: String?) {
+        let result = Self.rollingBackOptimisticComment(
+            id: id, parentId: parentId,
+            comments: storyComments, repliesMap: storyCommentRepliesMap, commentCount: storyCommentCount
+        )
+        storyComments = result.comments
+        storyCommentRepliesMap = result.repliesMap
+        storyCommentCount = result.commentCount
+    }
+
+    /// `priorReactions`/`priorCount` is the snapshot `triggerStoryReaction` took
+    /// BEFORE its optimistic emoji append / counter bump — the sole rollback
+    /// target. `StoryInteractionService.react` now throws (most notably the
+    /// gateway's 409 REACTION_LIMIT_REACHED conflict), so a rejected reaction
+    /// restores the exact prior state instead of leaving a phantom emoji and
+    /// an inflated counter forever.
+    ///
+    /// `interactionService` is injectable (defaults to the real service) so
+    /// `StoryViewerReactionRollbackTests` can exercise this exact method —
+    /// including the swipe-away guard below — against a `MockAPIClientForApp`
+    /// instead of re-implementing the snapshot/rollback logic as local
+    /// variables in a test that never calls production code.
+    func sendReaction(
+        emoji: String,
+        priorReactions: [String],
+        priorCount: Int,
+        interactionService: StoryInteractionService = StoryInteractionService()
+    ) {
         guard let story = currentStory else { return }
         EngagementTracker.shared.recordAction(.reacted, surface: .storyViewer)
 
-        // Fire & forget like
         Task {
-            await StoryInteractionService().react(storyId: story.id, emoji: emoji)
+            do {
+                try await interactionService.react(storyId: story.id, emoji: emoji)
+            } catch {
+                if let target = Self.reactionRollbackTarget(
+                    currentStoryId: currentStory?.id,
+                    originatingStoryId: story.id,
+                    priorReactions: priorReactions,
+                    priorCount: priorCount
+                ) {
+                    storyCurrentUserReactions = target.reactions
+                    storyReactionCount = target.count
+                    HapticFeedback.error()
+                }
+            }
         }
+    }
+
+    /// Pure rollback decision for a rejected reaction — extracted so the
+    /// swipe-away guard is directly unit-testable
+    /// (`StoryViewerReactionRollbackTests`) without constructing a live view.
+    /// Returns `nil` when the viewer has moved to a different story since the
+    /// reaction was sent — those `@State` fields already belong to that other
+    /// story now and must not be touched.
+    nonisolated static func reactionRollbackTarget(
+        currentStoryId: String?,
+        originatingStoryId: String,
+        priorReactions: [String],
+        priorCount: Int
+    ) -> (reactions: [String], count: Int)? {
+        guard currentStoryId == originatingStoryId else { return nil }
+        return (priorReactions, priorCount)
     }
 
     func shareStory() {
@@ -1154,6 +1252,11 @@ struct StoryCommentThread: View {
     let userLang: String
     let makeRow: (FeedComment, String) -> StoryCommentRowView
     let onToggleThread: () -> Void
+    /// Vrai quand le serveur a d'autres pages de réponses au-delà de celles
+    /// chargées (endpoint replies paginé à 20) — affiche « Voir plus de
+    /// réponses » en bas du fil déplié.
+    var hasMoreReplies: Bool = false
+    var onLoadMoreReplies: (() async -> Void)? = nil
 
     var body: some View {
         makeRow(comment, userLang)
@@ -1205,6 +1308,25 @@ struct StoryCommentThread: View {
                     .padding(.leading, 32)
                     .id(reply.id)
             }
+
+            if hasMoreReplies, let onLoadMoreReplies {
+                Button {
+                    HapticFeedback.light()
+                    Task { await onLoadMoreReplies() }
+                } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: "chevron.down")
+                            .font(MeeshyFont.relative(9, weight: .bold))
+                        Text(String(localized: "story.viewer.comments.loadMoreReplies", defaultValue: "Voir plus de réponses", bundle: .main))
+                            .font(MeeshyFont.relative(11, weight: .semibold))
+                    }
+                    .foregroundColor(StoryCommentRowView.legibleAuthorColor(hex: comment.authorColor))
+                    .padding(.leading, 40)
+                    .padding(.vertical, 4)
+                    .storyOverlayLegible()
+                }
+                .accessibilityLabel(String(localized: "a11y.story.comments.loadMoreReplies", defaultValue: "Charger plus de réponses", bundle: .main))
+            }
         }
     }
 }
@@ -1215,12 +1337,35 @@ struct StoryCommentsOverlayView: View {
     let storyCommentRepliesMap: [String: [FeedComment]]
     let storyCommentExpandedThreads: Set<String>
     let storyCommentLoadingReplies: Set<String>
+    /// Pagination des réponses par fil (endpoint replies paginé à 20) — pilote
+    /// le bouton « Voir plus de réponses » de chaque `StoryCommentThread`.
+    var storyCommentRepliesHasMore: [String: Bool] = [:]
     let isLoadingComments: Bool
     let userLang: String
     /// Vrai quand la story consultée est expirée. Affiche une bannière au-dessus
     /// de la liste pour que les commentaires/réactions restent visibles tout en
     /// indiquant que la story n'est plus accessible (spec 2026-06-23).
     var isStoryExpired: Bool = false
+
+    /// Commentaire ciblé par une notification : premier scroll de la liste
+    /// dirigé sur lui (repli : parent de thread) au lieu du dernier commentaire.
+    var targetCommentId: String? = nil
+    var targetParentCommentId: String? = nil
+    /// Chasse paginée fournie par le parent quand la cible n'est pas dans les
+    /// pages chargées (les pages qui arrivent re-déclenchent le scroll via
+    /// l'onChange sur le count).
+    var huntTargetComment: (() async -> Void)? = nil
+    /// Page suivante des réponses d'un fil (commentId) — câblé sur
+    /// `loadMoreStoryCommentReplies` côté StoryViewerView.
+    var loadMoreStoryCommentReplies: ((String) async -> Void)? = nil
+    /// Ciblage d'une RÉPONSE : déplie le fil du parent (parentId) puis chasse
+    /// les pages de réponses jusqu'à la cible (replyId). Retourne `true` si la
+    /// réponse est chargée à l'issue de la chasse.
+    var revealTargetReply: ((_ parentId: String, _ replyId: String) async -> Bool)? = nil
+    /// Latch — un seul ciblage par montage de l'overlay, ensuite la liste
+    /// reprend le comportement historique (suivre le dernier commentaire).
+    @State private var hasScrolledToTargetStoryComment = false
+    @State private var hasRequestedTargetHunt = false
 
     @Binding var showCommentsOverlay: Bool
     /// Réservation visuelle. Quand non-nil, le composer principal (un
@@ -1391,7 +1536,12 @@ struct StoryCommentsOverlayView: View {
                             isLoadingReplies: storyCommentLoadingReplies.contains(comment.id),
                             userLang: userLang,
                             makeRow: makeStoryCommentRow,
-                            onToggleThread: { Task { await toggleStoryCommentThread(comment.id) } }
+                            onToggleThread: { Task { await toggleStoryCommentThread(comment.id) } },
+                            hasMoreReplies: storyCommentExpandedThreads.contains(comment.id)
+                                && (storyCommentRepliesHasMore[comment.id] ?? false),
+                            onLoadMoreReplies: loadMoreStoryCommentReplies.map { load -> (() async -> Void) in
+                                { await load(comment.id) }
+                            }
                         )
                     }
 
@@ -1421,6 +1571,50 @@ struct StoryCommentsOverlayView: View {
                 .padding(.bottom, 12)
             }
             .adaptiveOnChange(of: storyComments.count) { _, _ in
+                // Notification → RÉPONSE précise : le parent est chargé
+                // (top-level) mais la cible n'y est pas — c'est une réponse.
+                // Déplier le fil du parent + chasser ses pages de réponses via
+                // la closure du parent, puis scroller sur la rangée de la
+                // réponse elle-même (les ancres `.id(reply.id)` existent déjà).
+                // Repli : scroll sur le parent si la chasse échoue.
+                if !hasScrolledToTargetStoryComment,
+                   let target = targetCommentId,
+                   let parentId = targetParentCommentId, parentId != target,
+                   topLevelComments.contains(where: { $0.id == parentId }),
+                   !topLevelComments.contains(where: { $0.id == target }),
+                   let reveal = revealTargetReply {
+                    hasScrolledToTargetStoryComment = true
+                    Task {
+                        let found = await reveal(parentId, target)
+                        withAnimation(.easeOut(duration: 0.3)) {
+                            proxy.scrollTo(found ? target : parentId, anchor: .center)
+                        }
+                    }
+                    return
+                }
+                // Notification → commentaire précis : au premier chargement où
+                // la cible (ou son parent de thread) est présente, scroller
+                // dessus au lieu du dernier commentaire. Une seule fois par
+                // présentation ; ensuite comportement historique (suivre le
+                // dernier commentaire).
+                if !hasScrolledToTargetStoryComment,
+                   let anchorId = [targetCommentId, targetParentCommentId]
+                       .compactMap({ $0 })
+                       .first(where: { id in storyComments.contains { $0.id == id } }) {
+                    hasScrolledToTargetStoryComment = true
+                    withAnimation(.easeOut(duration: 0.3)) {
+                        proxy.scrollTo(anchorId, anchor: .center)
+                    }
+                    return
+                }
+                // Cible hors des pages chargées : demander la chasse paginée
+                // une seule fois — ses pages re-déclencheront ce onChange.
+                if !hasScrolledToTargetStoryComment, !hasRequestedTargetHunt,
+                   targetCommentId != nil || targetParentCommentId != nil,
+                   let hunt = huntTargetComment {
+                    hasRequestedTargetHunt = true
+                    Task { await hunt() }
+                }
                 if let last = storyComments.last {
                     withAnimation(.easeOut(duration: 0.3)) {
                         proxy.scrollTo(last.id, anchor: .bottom)
@@ -1486,31 +1680,88 @@ extension StoryViewerView {
             let response = try await PostService.shared.getCommentReplies(
                 postId: story.id, commentId: commentId
             )
-            let langs = AuthManager.shared.currentUser?.preferredContentLanguages ?? []
-            let replies = response.data.map { c -> FeedComment in
-                let translated = PostDetailViewModel.resolveCommentTranslation(
-                    translations: c.translations, originalLanguage: c.originalLanguage,
-                    preferredLanguages: langs
-                )
-                return FeedComment(
-                    id: c.id, author: c.author.name, authorId: c.author.id,
-                    authorUsername: c.author.username,
-                    authorAvatarURL: c.author.avatar,
-                    content: c.content, timestamp: c.createdAt,
-                    likes: c.likeCount ?? 0, replies: c.replyCount ?? 0,
-                    parentId: commentId,
-                    originalLanguage: c.originalLanguage, translatedContent: translated,
-                    currentUserReactions: c.currentUserReactions,
-                    media: (c.media ?? []).map { $0.toFeedMedia() }
-                )
-            }
-            storyCommentRepliesMap[commentId] = replies
+            // Refetch-on-expand = première page → REPLACE + réinitialisation
+            // du curseur ; les pages suivantes (loadMoreStoryCommentReplies)
+            // s'append-ent dessus.
+            storyCommentRepliesMap[commentId] = mapStoryReplies(response.data, parentId: commentId)
+            storyCommentRepliesNextCursor[commentId] = response.pagination?.nextCursor
+            storyCommentRepliesHasMore[commentId] = response.pagination?.hasMore ?? false
         } catch {
             // Échec réseau transitoire : on garde le thread OUVERT (le
             // refermer punissait l'utilisateur qui venait de l'ouvrir) —
             // il affiche son état vide/spinner et le prochain toggle ou
             // refetch opportuniste réessaiera.
             Logger.messages.error("[StoryViewer] loadStoryCommentReplies failed for \(commentId, privacy: .public): \(error.localizedDescription, privacy: .public)")
+        }
+    }
+
+    /// Page suivante (curseur `gt`, tri ASC → APPEND) des réponses d'un fil de
+    /// commentaire de story. Jamais de remplacement : les réponses posées
+    /// optimistiquement / par socket restent en place (dédup par id).
+    /// NOTE : `storyCommentRepliesHasMore[id] == nil` (pagination jamais
+    /// enregistrée — premier fetch échoué) n'est PAS bloquant : `cursor: nil`
+    /// signifie « page 1 » et récupère un vrai curseur. Seul `false` stoppe.
+    func loadMoreStoryCommentReplies(commentId: String) async {
+        guard let story = currentStory,
+              storyCommentRepliesHasMore[commentId] != false,
+              !storyCommentLoadingReplies.contains(commentId) else { return }
+        storyCommentLoadingReplies.insert(commentId)
+        defer { storyCommentLoadingReplies.remove(commentId) }
+        do {
+            let response = try await PostService.shared.getCommentReplies(
+                postId: story.id, commentId: commentId,
+                cursor: storyCommentRepliesNextCursor[commentId], limit: 20
+            )
+            let fetched = mapStoryReplies(response.data, parentId: commentId)
+            let existing = storyCommentRepliesMap[commentId] ?? []
+            let existingIds = Set(existing.map(\.id))
+            storyCommentRepliesMap[commentId] = existing + fetched.filter { !existingIds.contains($0.id) }
+            storyCommentRepliesNextCursor[commentId] = response.pagination?.nextCursor
+            storyCommentRepliesHasMore[commentId] = response.pagination?.hasMore ?? false
+        } catch {
+            // Échec réseau : stopper proprement la pagination (et toute chasse
+            // en cours) — le fil garde les pages déjà chargées.
+            storyCommentRepliesHasMore[commentId] = false
+        }
+    }
+
+    /// Ciblage d'une RÉPONSE notifiée : déplie le fil du parent (refetch page 1,
+    /// curseur réinitialisé) puis chasse les pages de réponses jusqu'à la cible
+    /// (borné — cf. `CommentTargetHunter`). Retourne `true` si la réponse est
+    /// chargée à l'issue de la chasse.
+    func revealTargetStoryReply(parentId: String, replyId: String) async -> Bool {
+        if !storyCommentExpandedThreads.contains(parentId) {
+            await toggleStoryCommentThread(parentId)
+        } else if storyCommentRepliesMap[parentId] == nil {
+            await loadStoryCommentReplies(commentId: parentId)
+        }
+        return await CommentTargetHunter.hunt(
+            isPresent: { storyCommentRepliesMap[parentId]?.contains(where: { $0.id == replyId }) ?? false },
+            // `nil` = pagination inconnue (premier fetch échoué) → retenter la
+            // page 1 ; seul `false` (fin de fil connue) arrête la chasse.
+            hasMore: { storyCommentRepliesHasMore[parentId] != false },
+            loadNextPage: { await loadMoreStoryCommentReplies(commentId: parentId) }
+        )
+    }
+
+    private func mapStoryReplies(_ data: [APIPostComment], parentId: String) -> [FeedComment] {
+        let langs = AuthManager.shared.currentUser?.preferredContentLanguages ?? []
+        return data.map { c -> FeedComment in
+            let translated = PostDetailViewModel.resolveCommentTranslation(
+                translations: c.translations, originalLanguage: c.originalLanguage,
+                preferredLanguages: langs
+            )
+            return FeedComment(
+                id: c.id, author: c.author.name, authorId: c.author.id,
+                authorUsername: c.author.username,
+                authorAvatarURL: c.author.avatar,
+                content: c.content, timestamp: c.createdAt,
+                likes: c.likeCount ?? 0, replies: c.replyCount ?? 0,
+                parentId: parentId,
+                originalLanguage: c.originalLanguage, translatedContent: translated,
+                currentUserReactions: c.currentUserReactions,
+                media: (c.media ?? []).map { $0.toFeedMedia() }
+            )
         }
     }
 
@@ -1576,6 +1827,101 @@ extension StoryViewerView {
     /// réinitialise le delta à 0, et on synchronise `storyCommentLikedIds`
     /// depuis `hasCurrentUser`. Le résultat affiché — `comment.likes + delta`
     /// — converge vers la vérité serveur sans flicker.
+    /// Realtime asymmetry fix (mirrors `PostDetailViewModel.subscribeToSocket`'s
+    /// `commentAdded` sink): a `comment:added` broadcast for the currently
+    /// viewed story used to only move the sidebar's denormalized count (via
+    /// `StoryViewModel`'s `storyGroups` mutation → the `.adaptiveOnChange(of:
+    /// currentStory?.commentCount)` mirror) — the comments overlay's own
+    /// `storyComments`/`storyCommentRepliesMap` never received the new row, so
+    /// a viewer with the overlay open needed to close and reopen it to see a
+    /// comment someone else just posted.
+    func applyStoryCommentAdded(_ data: SocketCommentAddedData) {
+        guard data.postId == currentStory?.id else { return }
+
+        let translatedContent = PostDetailViewModel.resolveCommentTranslation(
+            translations: data.comment.translations,
+            originalLanguage: data.comment.originalLanguage,
+            preferredLanguages: resolvedViewerLanguageChain
+        )
+        let comment = FeedComment(
+            id: data.comment.id,
+            author: data.comment.author.name,
+            authorId: data.comment.author.id,
+            authorUsername: data.comment.author.username,
+            authorAvatarURL: data.comment.author.avatar,
+            content: data.comment.content,
+            timestamp: data.comment.createdAt,
+            likes: data.comment.likeCount ?? 0,
+            replies: data.comment.replyCount ?? 0,
+            parentId: data.comment.parentId,
+            effectFlags: data.comment.effectFlags ?? 0,
+            originalLanguage: data.comment.originalLanguage,
+            translatedContent: translatedContent,
+            currentUserReactions: data.comment.currentUserReactions,
+            media: (data.comment.media ?? []).map { $0.toFeedMedia() }
+        )
+
+        let result = Self.applyingStoryCommentAdded(
+            comment: comment,
+            expandedThreads: storyCommentExpandedThreads,
+            comments: storyComments,
+            repliesMap: storyCommentRepliesMap
+        )
+        storyComments = result.comments
+        storyCommentRepliesMap = result.repliesMap
+        storyCommentCount = data.commentCount
+    }
+
+    /// Pure routing/dedup decision for a `comment:added` broadcast — extracted
+    /// so it's directly unit-testable (`StoryViewerCommentRealtimeTests`)
+    /// without constructing a live view (mirrors `rollingBackOptimisticComment`
+    /// just above). The echoed broadcast for OUR OWN just-sent comment/reply:
+    /// `sendComment` already inserted an optimistic `temp_` placeholder and
+    /// bumped the counters synchronously — it never reconciles that
+    /// placeholder on POST success. Without the `isTwin` check the server's
+    /// real row lands ALONGSIDE the temp_ one (visible duplicate) and, for a
+    /// reply, the parent's `replies` count gets incremented a second time.
+    /// Mirrors `FeedCommentsSheet`'s `isTwin` reconciliation for the
+    /// equivalent case.
+    nonisolated static func applyingStoryCommentAdded(
+        comment: FeedComment,
+        expandedThreads: Set<String>,
+        comments: [FeedComment],
+        repliesMap: [String: [FeedComment]]
+    ) -> (comments: [FeedComment], repliesMap: [String: [FeedComment]]) {
+        var comments = comments
+        var repliesMap = repliesMap
+
+        func isTwin(_ c: FeedComment) -> Bool {
+            c.id.hasPrefix("temp_")
+                && c.authorId == comment.authorId
+                && c.content == comment.content
+                && c.parentId == comment.parentId
+        }
+
+        if let parentId = comment.parentId {
+            var existing = repliesMap[parentId] ?? []
+            if let idx = existing.firstIndex(where: isTwin) {
+                existing[idx] = comment
+                repliesMap[parentId] = existing
+            } else {
+                if expandedThreads.contains(parentId), !existing.contains(where: { $0.id == comment.id }) {
+                    existing.append(comment)
+                    repliesMap[parentId] = existing
+                }
+                if let idx = comments.firstIndex(where: { $0.id == parentId }) {
+                    comments[idx].replies += 1
+                }
+            }
+        } else if let idx = comments.firstIndex(where: isTwin) {
+            comments[idx] = comment
+        } else if !comments.contains(where: { $0.id == comment.id }) {
+            comments.append(comment)
+        }
+
+        return (comments, repliesMap)
+    }
+
     func applyCommentReactionEvent(_ event: SocketCommentReactionUpdateEvent) {
         // 2026-05-29 : on ne gate plus sur `showCommentsOverlay` — l'état doit
         // rester aligné sur le serveur même quand l'overlay est fermé.
@@ -1732,6 +2078,8 @@ extension StoryViewerView {
                 )
             }
             storyComments = comments
+            storyCommentsNextCursor = response.pagination?.nextCursor
+            storyCommentsHasMore = response.pagination?.hasMore ?? false
             storyCommentLikedIds = Self.computeLikedIds(from: response.data)
             let topAll = comments.filter { $0.parentId == nil }
             storyCommentCount = topAll.count + topAll.reduce(0) { $0 + $1.replies }
@@ -1749,6 +2097,55 @@ extension StoryViewerView {
             // l'avaler (diagnostic des overlays vides signalés).
             Logger.messages.error("[StoryViewer] fetchStoryComments failed: \(error.localizedDescription, privacy: .public)")
         }
+    }
+
+    /// Page suivante (plus ancienne) des commentaires top-level de la story —
+    /// utilisée par la chasse paginée d'un commentaire notifié hors de la
+    /// première page. Append + dédup (jamais de remplacement : le fetch plein
+    /// reste le seul à réinitialiser la liste).
+    func loadNextStoryCommentsPage() async {
+        guard storyCommentsHasMore, let story = currentStory else { return }
+        let langs = AuthManager.shared.currentUser?.preferredContentLanguages ?? []
+        do {
+            let response = try await PostService.shared.getComments(
+                postId: story.id, cursor: storyCommentsNextCursor, limit: 50
+            )
+            if let now = currentStory?.id, now != story.id { return }
+            let fetched = response.data.map { c -> FeedComment in
+                FeedComment(
+                    id: c.id, author: c.author.name, authorId: c.author.id,
+                    authorUsername: c.author.username,
+                    authorAvatarURL: c.author.avatar,
+                    content: c.content, timestamp: c.createdAt,
+                    likes: c.likeCount ?? 0, replies: c.replyCount ?? 0,
+                    parentId: c.parentId,
+                    originalLanguage: c.originalLanguage,
+                    translatedContent: PostDetailViewModel.resolveCommentTranslation(
+                        translations: c.translations, originalLanguage: c.originalLanguage, preferredLanguages: langs
+                    ),
+                    currentUserReactions: c.currentUserReactions,
+                    media: (c.media ?? []).map { $0.toFeedMedia() }
+                )
+            }
+            let existing = Set(storyComments.map(\.id))
+            storyComments.append(contentsOf: fetched.filter { !existing.contains($0.id) })
+            storyCommentsNextCursor = response.pagination?.nextCursor
+            storyCommentsHasMore = response.pagination?.hasMore ?? false
+        } catch {
+            storyCommentsHasMore = false
+        }
+    }
+
+    /// Chasse bornée du commentaire ciblé par la notification (racine ou
+    /// parent de thread) — cf. `CommentTargetHunter`.
+    func huntTargetStoryComment() async {
+        let anchors = [targetCommentId, targetParentCommentId].compactMap { $0 }
+        guard !anchors.isEmpty else { return }
+        _ = await CommentTargetHunter.hunt(
+            isPresent: { storyComments.contains { anchors.contains($0.id) } },
+            hasMore: { storyCommentsHasMore },
+            loadNextPage: { await loadNextStoryCommentsPage() }
+        )
     }
 
     /// Seeds `storyCommentCount` for the slide that just became visible.

@@ -292,11 +292,13 @@ final class CallManagerAudioSessionTests: XCTestCase {
         guard let fnRange = source.range(of: "func toggleVideo()") else {
             XCTFail("toggleVideo() not found in CallManager.swift"); return
         }
-        // Widened from 2000 (audit finding — toggleVideo() now also chains onto
-        // signalOfferAnswerTask before actuating, see the doc-comment on
-        // `survivalVideoTask`; the extra capture/await line pushes
-        // downgradeFromVideo() further into the body).
-        let endIdx = source.index(fnRange.lowerBound, offsetBy: 2500, limitedBy: source.endIndex) ?? source.endIndex
+        // Borné par la fonction SUIVANTE plutôt que par un compteur de caractères.
+        // Le slice à taille fixe avait déjà dû être élargi une fois (2000 → 2500,
+        // chaînage sur signalOfferAnswerTask) et a re-cassé quand le pré-flight
+        // de permission caméra (2026-07-23) a repoussé downgradeFromVideo() plus
+        // bas : la garde échouait sur une troncature, pas sur une régression.
+        let endIdx = source.range(of: "func switchCamera()", range: fnRange.upperBound..<source.endIndex)?.lowerBound
+            ?? source.endIndex
         let fnBody = String(source[fnRange.lowerBound ..< endIdx])
 
         XCTAssertTrue(

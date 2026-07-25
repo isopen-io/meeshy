@@ -39,6 +39,7 @@ export class StatusService {
   private activityCache = new Map<string, number>();
   private connectionCache = new Map<string, number>();
   private onlineEnsureCache = new Map<string, number>(); // throttle pour ensureUserOnline
+  private heartbeatCache = new Map<string, number>(); // throttle pour noteHeartbeat (60s)
 
   // Guard contre les race conditions: empêche les updates fire-and-forget après un disconnect
   private disconnectedUsers = new Map<string, number>(); // key -> timestamp disconnect
@@ -52,6 +53,7 @@ export class StatusService {
   private readonly ACTIVITY_THROTTLE_MS = 5000; // 5 secondes (activité légère)
   private readonly CONNECTION_THROTTLE_MS = 60000; // 1 minute (actions significatives)
   private readonly ONLINE_ENSURE_THROTTLE_MS = 60000; // 1 minute (mise en ligne via REST)
+  private readonly HEARTBEAT_THROTTLE_MS = 60000; // 1 minute (heartbeat socket)
 
   // Callback pour broadcaster les changements de présence (set par MeeshySocketIOManager)
   private presenceCallback: ((userId: string, isOnline: boolean, isAnonymous: boolean) => void) | null = null;
@@ -139,6 +141,7 @@ export class StatusService {
     this.activityCache.delete(key);
     this.connectionCache.delete(isAnonymous ? `anon_connection_${userId}` : userId);
     this.onlineEnsureCache.delete(onlineKey);
+    this.heartbeatCache.delete(isAnonymous ? `anon_heartbeat_${userId}` : `heartbeat_${userId}`);
 
     // Supprimer la clé Redis de présence
     const redisKey = `presence:${isAnonymous ? 'anon' : 'user'}:${userId}`;
@@ -204,7 +207,7 @@ export class StatusService {
     }
 
     this.activityCache.set(userId, now);
-    this.metrics.cacheSize = this.activityCache.size + this.connectionCache.size + this.onlineEnsureCache.size;
+    this.metrics.cacheSize = this.computeCacheSize();
 
     // Renouveler le TTL Redis de présence
     this.cache.set(`presence:user:${userId}`, String(now), this.PRESENCE_TTL_SECONDS).catch(() => {});
@@ -246,7 +249,7 @@ export class StatusService {
     }
 
     this.connectionCache.set(userId, now);
-    this.metrics.cacheSize = this.activityCache.size + this.connectionCache.size + this.onlineEnsureCache.size;
+    this.metrics.cacheSize = this.computeCacheSize();
 
     // Update asynchrone (ne bloque pas la requête)
     this.prisma.user.update({
@@ -286,7 +289,7 @@ export class StatusService {
     }
 
     this.activityCache.set(cacheKey, now);
-    this.metrics.cacheSize = this.activityCache.size + this.connectionCache.size + this.onlineEnsureCache.size;
+    this.metrics.cacheSize = this.computeCacheSize();
 
     // Renouveler le TTL Redis de présence
     this.cache.set(`presence:anon:${participantId}`, String(now), this.PRESENCE_TTL_SECONDS).catch(() => {});
@@ -330,7 +333,7 @@ export class StatusService {
     }
 
     this.connectionCache.set(cacheKey, now);
-    this.metrics.cacheSize = this.activityCache.size + this.connectionCache.size + this.onlineEnsureCache.size;
+    this.metrics.cacheSize = this.computeCacheSize();
 
     // Update asynchrone (ne bloque pas la requête)
     this.prisma.participant.update({
@@ -346,6 +349,60 @@ export class StatusService {
       this.metrics.failedUpdates++;
       logger.error(`❌ Failed to update anonymous lastActiveAt (${participantId}):`, err);
     });
+  }
+
+  /**
+   * Rafraîchir lastActiveAt sur heartbeat socket (throttle 60 s, pattern
+   * ensureUserOnline). Corollaire de la garde anti-stale 5 min de la règle de
+   * présence 1/3/5 : un connecté PASSIF (app ouverte, aucune requête ni
+   * événement) ne génère que des heartbeats — sans ce refresh il « disparaît »
+   * au bout de 5 min alors qu'il est en ligne. Au plus une écriture DB par
+   * minute et par utilisateur ; bypass le throttle activité 5 s via
+   * forceUpdateLastSeen (le gate 60 s espace déjà les écritures).
+   *
+   * Après le write DB, le refresh est broadcast via presenceCallback
+   * (USER_STATUS avec lastActiveAt frais) : les viewers DÉJÀ connectés
+   * re-reçoivent un timestamp neuf avant l'expiration de leur garde 5 min —
+   * sans ce push, seule la DB serait fraîche et le connecté-passif passerait
+   * offline chez eux (leur store ne resync que sur focus/online).
+   */
+  noteHeartbeat(userId: string, isAnonymous: boolean = false): void {
+    this.metrics.totalRequests++;
+
+    const guardKey = isAnonymous ? `anon_activity_${userId}` : userId;
+    if (this.disconnectedUsers.has(guardKey)) return;
+
+    const cacheKey = isAnonymous ? `anon_heartbeat_${userId}` : `heartbeat_${userId}`;
+    const now = Date.now();
+    const lastBeat = this.heartbeatCache.get(cacheKey) || 0;
+    if (now - lastBeat < this.HEARTBEAT_THROTTLE_MS) {
+      this.metrics.throttledRequests++;
+      return;
+    }
+
+    this.heartbeatCache.set(cacheKey, now);
+    this.metrics.cacheSize = this.computeCacheSize();
+
+    this.forceUpdateLastSeen(userId, isAnonymous)
+      .then(() => {
+        this.metrics.successfulUpdates++;
+        this.metrics.activityUpdates++;
+        if (this.presenceCallback) {
+          this.presenceCallback(userId, true, isAnonymous);
+        }
+        logger.debug(`✓ ${isAnonymous ? 'Anonymous' : 'User'} ${userId} lastActiveAt updated (heartbeat)`);
+      })
+      .catch(err => {
+        this.metrics.failedUpdates++;
+        logger.error(`❌ Failed to update lastActiveAt on heartbeat (${userId}):`, err);
+      });
+  }
+
+  private computeCacheSize(): number {
+    return this.activityCache.size
+      + this.connectionCache.size
+      + this.onlineEnsureCache.size
+      + this.heartbeatCache.size;
   }
 
   /**
@@ -415,6 +472,14 @@ export class StatusService {
       }
     }
 
+    // Nettoyer le cache heartbeat
+    for (const [key, timestamp] of this.heartbeatCache.entries()) {
+      if (now - timestamp > this.CACHE_MAX_AGE_MS) {
+        this.heartbeatCache.delete(key);
+        deletedCount++;
+      }
+    }
+
     // Purger les entries disconnectedUsers de plus de 60s (évite fuite mémoire)
     for (const [key, timestamp] of this.disconnectedUsers.entries()) {
       if (now - timestamp > this.DISCONNECT_GUARD_MAX_AGE_MS) {
@@ -423,7 +488,7 @@ export class StatusService {
       }
     }
 
-    this.metrics.cacheSize = this.activityCache.size + this.connectionCache.size + this.onlineEnsureCache.size;
+    this.metrics.cacheSize = this.computeCacheSize();
 
     if (deletedCount > 0) {
       logger.debug(`🧹 Cache cleanup: ${deletedCount} entrées supprimées (taille: ${this.metrics.cacheSize})`);
@@ -499,7 +564,7 @@ export class StatusService {
       throttledRequests: 0,
       successfulUpdates: 0,
       failedUpdates: 0,
-      cacheSize: this.activityCache.size + this.connectionCache.size,
+      cacheSize: this.computeCacheSize(),
       activityUpdates: 0,
       connectionUpdates: 0
     };
@@ -518,6 +583,7 @@ export class StatusService {
     this.activityCache.clear();
     this.connectionCache.clear();
     this.onlineEnsureCache.clear();
+    this.heartbeatCache.clear();
     this.disconnectedUsers.clear();
     logger.info('🛑 StatusService arrêté');
   }

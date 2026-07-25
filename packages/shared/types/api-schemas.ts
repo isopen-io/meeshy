@@ -3253,7 +3253,7 @@ export const updateUserRequestSchema = {
     avatar: { type: 'string', format: 'uri', description: 'Avatar image URL' },
     phoneNumber: { type: 'string', description: 'Phone number' },
     systemLanguage: { type: 'string', minLength: 2, maxLength: 5, description: 'System language code' },
-    regionalLanguage: { type: 'string', minLength: 2, maxLength: 5, description: 'Regional language code' },
+    regionalLanguage: { type: 'string', maxLength: 5, description: 'Regional language code (empty string clears)' },
     customDestinationLanguage: { type: 'string', maxLength: 5, nullable: true, description: 'Custom destination language (empty string allowed)' },
     autoTranslateEnabled: { type: 'boolean', description: 'Enable auto-translation' },
     timezone: { type: 'string', description: 'User timezone (IANA format)' },

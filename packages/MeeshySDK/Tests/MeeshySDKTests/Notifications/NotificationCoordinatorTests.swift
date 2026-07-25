@@ -471,6 +471,27 @@ final class NotificationCoordinatorTests: XCTestCase {
         XCTAssertEqual(UserDefaults(suiteName: suite)?.integer(forKey: "unread_count"), 3)
     }
 
+    func test_syncNow_whenBadgeDisabled_writesZeroBadgeButKeepsWidgetCount() async {
+        let suite = "group.test.meeshy.coordinator.\(UUID().uuidString)"
+        createdSuiteNames.append(suite)
+        UserDefaults(suiteName: suite)?.removePersistentDomain(forName: suite)
+        let writer = MockBadgeWriter()
+        let sink = MockWidgetSink()
+        let sut = NotificationCoordinator(
+            badgeWriter: writer, appGroupSuiteName: suite,
+            badgeEnabledProvider: { false }
+        )
+        sut.widgetSink = sink
+        sut.registerConversations([makeConversation(id: "a", unread: 3)])
+
+        await sut.syncNow()
+
+        // Pref « Badges » désactivée → l'icône d'app ne montre aucun badge…
+        XCTAssertEqual(writer.writes.last, 0)
+        // …mais le widget (compteur distinct) garde le vrai total.
+        XCTAssertEqual(sink.publishedUnread.last, 3)
+    }
+
     // MARK: - reset
 
     func test_reset_clearsStateAndBadge() {
@@ -523,5 +544,39 @@ final class NotificationCoordinatorTests: XCTestCase {
 
         XCTAssertTrue(runningAfterFirst)
         XCTAssertTrue(sut.isRunning)
+    }
+
+    // MARK: - Badge preference change → resync immédiat
+
+    /// Basculer le toggle « Badges » doit réécrire l'icône TOUT DE SUITE :
+    /// avant ce correctif, le badge restait affiché jusqu'au prochain event
+    /// socket ou passage en background.
+    func test_badgePreferenceChange_resyncsBadgeImmediately() {
+        let suite = "group.test.meeshy.coordinator.\(UUID().uuidString)"
+        createdSuiteNames.append(suite)
+        let writer = MockBadgeWriter()
+        let changes = PassthroughSubject<Bool, Never>()
+        var badgeEnabled = true
+        let sut = NotificationCoordinator(
+            badgeWriter: writer,
+            appGroupSuiteName: suite,
+            badgeEnabledProvider: { badgeEnabled },
+            badgeEnabledChanges: changes.eraseToAnyPublisher()
+        )
+        sut.start()
+        sut.applyConversationUnread(conversationId: "c1", unreadCount: 7)
+        waitFor("initial badge write") { writer.writes.last == 7 }
+
+        badgeEnabled = false
+        changes.send(false)
+
+        waitFor("badge cleared after toggle off") { writer.writes.last == 0 }
+        XCTAssertEqual(writer.writes.last, 0)
+
+        badgeEnabled = true
+        changes.send(true)
+
+        waitFor("badge restored after toggle on") { writer.writes.last == 7 }
+        XCTAssertEqual(writer.writes.last, 7)
     }
 }

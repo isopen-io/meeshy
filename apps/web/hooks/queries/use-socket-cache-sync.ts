@@ -38,6 +38,47 @@ type CachedMessage = Message & {
   translatedAudios?: Record<string, SocketIOTranslation>;
 };
 
+// Socket payloads carry timestamps as ISO strings, while everything the REST
+// layer puts in the conversation cache went through
+// `transformersService.transformConversationData`, which materialises them as
+// `Date` — the shape `Conversation` declares. Writing the raw string back into
+// a cached conversation left the cache holding both shapes for the same field.
+function toDate(value: unknown): Date | null {
+  if (value instanceof Date) return Number.isNaN(value.getTime()) ? null : value;
+  if (typeof value !== 'string' && typeof value !== 'number') return null;
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+const CONVERSATION_DATE_FIELDS = new Set([
+  'lastMessageAt',
+  'createdAt',
+  'updatedAt',
+  'encryptionEnabledAt',
+]);
+
+/**
+ * Turns an untyped `conversation:updated` payload into a patch that matches
+ * `Conversation`: date fields are materialised, and an unparseable date is
+ * dropped rather than overwriting a valid cached value with garbage.
+ *
+ * The final assertion is the trust boundary: the event declares an
+ * `[key: string]: unknown` index signature (the gateway spreads whichever
+ * fields changed), so no narrower type can be inferred from it.
+ */
+export function normalizeConversationPatch(raw: Record<string, unknown>): Partial<Conversation> {
+  const patch: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(raw)) {
+    if (!CONVERSATION_DATE_FIELDS.has(key)) {
+      patch[key] = value;
+      continue;
+    }
+    const asDate = toDate(value);
+    if (asDate) patch[key] = asDate;
+  }
+  return patch as Partial<Conversation>;
+}
+
 type InfiniteConversationData = {
   pages: { conversations: Conversation[]; pagination: any }[];
   pageParams: number[];
@@ -134,6 +175,42 @@ interface UseSocketCacheSyncOptions {
   enabled?: boolean;
 }
 
+type InfiniteMessagesData = {
+  pages: { messages: Message[]; hasMore: boolean; total: number }[];
+  pageParams: number[];
+};
+
+/**
+ * Every cached message list that belongs to `conversationId`.
+ *
+ * A conversation can be opened by its ObjectId (`/conversations/:id`) OR by its
+ * identifier — the home page mounts the global conversation as `"meeshy"` — and
+ * the cache key mirrors whichever the screen used. Socket payloads always carry
+ * the resolved ObjectId, so keying the write on that alone silently skipped the
+ * slug-keyed entry and left the global conversation frozen until a reload.
+ * Alias entries are recognised by the `conversationId` their cached messages
+ * carry, which is the resolved ObjectId in every case.
+ */
+function messageCacheKeysFor(
+  queryClient: ReturnType<typeof useQueryClient>,
+  conversationId: string
+): unknown[][] {
+  const keys: unknown[][] = [];
+  for (const query of queryClient.getQueryCache().findAll({ queryKey: queryKeys.messages.lists() })) {
+    const key = query.queryKey as unknown[];
+    if (key[2] === conversationId) {
+      keys.push(key);
+      continue;
+    }
+    const data = query.state.data as InfiniteMessagesData | undefined;
+    const belongsToConversation = data?.pages?.some((page) =>
+      page.messages?.some((m) => m.conversationId === conversationId)
+    );
+    if (belongsToConversation) keys.push(key);
+  }
+  return keys;
+}
+
 export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
   const { conversationId, enabled = true } = options;
   const queryClient = useQueryClient();
@@ -145,11 +222,21 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
     const handleNewMessage = (message: Message) => {
       const targetConversationId = message.conversationId;
 
-      // Update infinite messages query
-      queryClient.setQueryData(
-        queryKeys.messages.infinite(targetConversationId),
-        (old: { pages: { messages: Message[]; hasMore: boolean; total: number }[]; pageParams: number[] } | undefined) => {
+      // Tracks whether the message actually landed in a cache entry. When the
+      // conversation has no cached page yet (initial fetch still in flight, or
+      // conversation never opened this session) the updater below bails out and
+      // the message would be lost for good: the socket layer already marked its
+      // id as "seen" for 5 minutes, so no re-delivery repairs the gap, and with
+      // `staleTime: Infinity` nothing re-reads the server either.
+      let landedInCache = false;
+
+      // Update every cached message list of this conversation (ObjectId-keyed
+      // and identifier-keyed alike).
+      const updateMessagesCache = (
+        old: InfiniteMessagesData | undefined
+      ): InfiniteMessagesData | undefined => {
           if (!old) return old;
+          landedInCache = true;
 
           // Single-pass: ID dedup + own-message optimistic replacement
           const currentUser = useAuthStore.getState().user;
@@ -211,8 +298,20 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
                 : page
             ),
           };
-        }
-      );
+      };
+
+      for (const key of messageCacheKeysFor(queryClient, targetConversationId)) {
+        queryClient.setQueryData(key, updateMessagesCache);
+      }
+
+      // No cache entry to write into: mark the query stale so the in-flight
+      // fetch is re-issued (and any later mount re-reads) from the server —
+      // the only source able to close the gap this message would leave.
+      if (!landedInCache) {
+        queryClient.invalidateQueries({
+          queryKey: queryKeys.messages.infinite(targetConversationId),
+        });
+      }
 
       // Update ALL conversation list variants with latest message AND move to top
       queryClient.setQueriesData<Conversation[]>(
@@ -309,21 +408,22 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
     const handleMessageEdited = (message: Message) => {
       const targetConversationId = message.conversationId;
 
-      queryClient.setQueryData(
-        queryKeys.messages.infinite(targetConversationId),
-        (old: { pages: { messages: Message[]; hasMore: boolean; total: number }[]; pageParams: number[] } | undefined) => {
-          if (!old) return old;
-          return {
-            ...old,
-            pages: old.pages.map((page) => ({
-              ...page,
-              messages: page.messages.map((m) =>
-                m.id === message.id && !isStaleEdit(m, message) ? { ...m, ...message } : m
-              ),
-            })),
-          };
-        }
-      );
+      const applyEdit = (old: InfiniteMessagesData | undefined): InfiniteMessagesData | undefined => {
+        if (!old) return old;
+        return {
+          ...old,
+          pages: old.pages.map((page) => ({
+            ...page,
+            messages: page.messages.map((m) =>
+              m.id === message.id && !isStaleEdit(m, message) ? { ...m, ...message } : m
+            ),
+          })),
+        };
+      };
+
+      for (const key of messageCacheKeysFor(queryClient, targetConversationId)) {
+        queryClient.setQueryData(key, applyEdit);
+      }
 
       // Update lastMessage in ALL conversation list variants if this edited message is the last one
       queryClient.setQueriesData<Conversation[]>(
@@ -745,13 +845,16 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
         }
       );
 
+      const linkLastMessage = linkMsg as unknown as Message;
+      const linkLastMessageAt = toDate(linkMsg.createdAt) ?? new Date();
+
       queryClient.setQueriesData<Conversation[]>(
         { queryKey: queryKeys.conversations.lists() },
         (old) => {
           if (!old) return old;
           const idx = old.findIndex((c) => c.id === linkConvId);
           if (idx === -1) return old;
-          const updated = { ...old[idx], lastMessage: linkMsg as unknown as Message, lastMessageAt: linkMsg.createdAt as string ?? new Date().toISOString() };
+          const updated: Conversation = { ...old[idx], lastMessage: linkLastMessage, lastMessageAt: linkLastMessageAt };
           return [updated, ...old.filter((_, i) => i !== idx)];
         }
       );
@@ -759,7 +862,7 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
       updateInfiniteConversationCache(queryClient, (convs) => {
         const idx = convs.findIndex((c) => c.id === linkConvId);
         if (idx === -1) return convs;
-        const updated = { ...convs[idx], lastMessage: linkMsg as unknown as Message, lastMessageAt: linkMsg.createdAt as string ?? new Date().toISOString() };
+        const updated: Conversation = { ...convs[idx], lastMessage: linkLastMessage, lastMessageAt: linkLastMessageAt };
         return [updated, ...convs.filter((_, i) => i !== idx)];
       });
     };
@@ -826,8 +929,9 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
     const handleConversationUpdated = (data: { conversationId: string; updatedBy: { id: string }; updatedAt: string; [key: string]: unknown }) => {
       const { conversationId: updatedId, updatedBy: _updatedBy, ...rest } = data;
       if (!updatedId) return;
+      const patch = normalizeConversationPatch(rest);
       updateInfiniteConversationCache(queryClient, (convs) =>
-        convs.map((c) => c.id === updatedId ? { ...c, ...rest } : c)
+        convs.map((c) => c.id === updatedId ? { ...c, ...patch } : c)
       );
     };
 

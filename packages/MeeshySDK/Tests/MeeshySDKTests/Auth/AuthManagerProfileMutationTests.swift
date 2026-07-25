@@ -106,4 +106,97 @@ final class AuthManagerProfileMutationTests: XCTestCase {
         XCTAssertEqual(r.user.bio, "Bio")
         XCTAssertFalse(r.clearedPending)
     }
+
+    // MARK: - ProfileSnapshot Codable
+
+    /// The guard must survive a process kill+relaunch (persisted to the
+    /// keychain, decoded back on the next cold start) — round trip parity
+    /// is the minimum bar for that.
+    func test_profileSnapshot_encodesAndDecodesRoundTrip() throws {
+        let snapshot = ProfileSnapshot(displayName: "Bob", bio: "World", avatarUrl: "https://cdn/new.jpg")
+
+        let data = try JSONEncoder().encode(snapshot)
+        let decoded = try JSONDecoder().decode(ProfileSnapshot.self, from: data)
+
+        XCTAssertEqual(decoded, snapshot)
+    }
+}
+
+// MARK: - Pending profile guard survives a cold start (keychain-backed)
+
+/// `pendingOptimisticProfile` was in-memory only: killing the app while an
+/// `updateProfile` outbox row was still unconfirmed dropped the guard, so the
+/// next cold start's `/auth/me` revalidation could clobber the correctly
+/// keychain-hydrated optimistic edit with the stale pre-edit server value.
+/// These tests swap in an `InMemoryKeychainStore` (production `KeychainManager`
+/// silently no-ops outside an app host) to prove the guard itself is now
+/// persisted/cleared under a real keychain, mirroring `AuthManagerRefreshTests`.
+@MainActor
+final class AuthManagerPendingProfilePersistenceTests: XCTestCase {
+    private var originalKeychain: (any KeychainStoring)!
+    private var mockKeychain: InMemoryKeychainStoreForPendingProfileTests!
+
+    override func setUp() async throws {
+        try await super.setUp()
+        originalKeychain = AuthManager.shared.keychain
+        mockKeychain = InMemoryKeychainStoreForPendingProfileTests()
+        AuthManager.shared.keychain = mockKeychain
+    }
+
+    override func tearDown() async throws {
+        AuthManager.shared.keychain = originalKeychain
+        try await super.tearDown()
+    }
+
+    private func makeUser() -> MeeshyUser {
+        MeeshyUser(id: "u1", username: "alice", displayName: "Alice", bio: "Hello", avatar: "https://cdn/old.jpg")
+    }
+
+    func test_applyLocalProfileChanges_persistsPendingGuardToKeychain() {
+        let auth = AuthManager.shared
+        auth.currentUser = makeUser()
+
+        _ = auth.applyLocalProfileChanges(displayName: nil, bio: "World -qa", avatarUrl: nil)
+
+        let stored = mockKeychain.load(forKey: "meeshy_pending_profile_u1", account: nil)
+        XCTAssertNotNil(stored, "the optimistic guard must survive a process kill — nothing was persisted")
+        let decoded = try? JSONDecoder().decode(ProfileSnapshot.self, from: Data(stored!.utf8))
+        XCTAssertEqual(decoded?.bio, "World -qa")
+    }
+
+    func test_restoreLocalProfileSnapshot_clearsPersistedGuard() {
+        let auth = AuthManager.shared
+        auth.currentUser = makeUser()
+        let snapshot = auth.applyLocalProfileChanges(displayName: nil, bio: "World -qa", avatarUrl: nil)
+        XCTAssertNotNil(mockKeychain.load(forKey: "meeshy_pending_profile_u1", account: nil))
+
+        auth.restoreLocalProfileSnapshot(snapshot)
+
+        XCTAssertNil(mockKeychain.load(forKey: "meeshy_pending_profile_u1", account: nil),
+                      "a rolled-back edit must not leave a stale guard behind for the next cold start")
+    }
+}
+
+private final class InMemoryKeychainStoreForPendingProfileTests: KeychainStoring, @unchecked Sendable {
+    private var store: [String: String] = [:]
+
+    func save(_ value: String, forKey key: String, account: String?) throws {
+        store[key] = value
+    }
+
+    func load(forKey key: String, account: String?) -> String? {
+        store[key]
+    }
+
+    func delete(forKey key: String, account: String?) {
+        store.removeValue(forKey: key)
+    }
+
+    func saveAsync(_ value: String, forKey key: String, account: String?) async throws {
+        try save(value, forKey: key, account: account)
+    }
+
+    func loadAsync(forKey key: String, account: String?) async -> String? {
+        load(forKey: key, account: account)
+    }
 }

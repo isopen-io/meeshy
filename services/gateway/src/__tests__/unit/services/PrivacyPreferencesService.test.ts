@@ -25,7 +25,7 @@ jest.mock('../../../utils/logger-enhanced', () => ({
 import { PrivacyPreferencesService } from '../../../services/PrivacyPreferencesService';
 import { PRIVACY_PREFERENCES_DEFAULTS } from '../../../config/user-preferences-defaults';
 
-function makePrisma(rows: { key: string; value: string }[] = []) {
+function makePrisma(rows: { userId?: string; key: string; value: string }[] = []) {
   return {
     userPreference: {
       findMany: jest.fn().mockResolvedValue(rows),
@@ -377,17 +377,78 @@ describe('PrivacyPreferencesService', () => {
       expect(result.size).toBe(0);
     });
 
-    it('fetches registered users from DB in parallel', async () => {
+    // Auparavant, cette méthode enchaînait des appels unitaires : N participants
+    // non mis en cache produisaient N requêtes. Les chemins d'accusés de lecture
+    // l'interrogent pour tous les membres d'une conversation — un grand groupe à
+    // cache froid déclenchait donc une rafale de requêtes.
+    it('fetches all uncached registered users in a SINGLE query', async () => {
       const prisma = makePrisma([]);
       svc = new PrivacyPreferencesService(prisma);
 
       await svc.getPreferencesForUsers([
         { id: 'reg_A', isAnonymous: false },
         { id: 'reg_B', isAnonymous: false },
+        { id: 'reg_C', isAnonymous: false },
       ]);
 
-      // Both users required a DB call
-      expect(prisma.userPreference.findMany).toHaveBeenCalledTimes(2);
+      expect(prisma.userPreference.findMany).toHaveBeenCalledTimes(1);
+      expect(prisma.userPreference.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            userId: { in: ['reg_A', 'reg_B', 'reg_C'] },
+          }),
+        })
+      );
+    });
+
+    it('attributes each stored row to its own user', async () => {
+      const prisma = makePrisma([
+        { userId: 'reg_A', key: 'show-read-receipts', value: 'false' },
+        { userId: 'reg_B', key: 'show-read-receipts', value: 'true' },
+      ]);
+      svc = new PrivacyPreferencesService(prisma);
+
+      const result = await svc.getPreferencesForUsers([
+        { id: 'reg_A', isAnonymous: false },
+        { id: 'reg_B', isAnonymous: false },
+      ]);
+
+      expect(result.get('reg_A')?.showReadReceipts).toBe(false);
+      expect(result.get('reg_B')?.showReadReceipts).toBe(true);
+    });
+
+    it('serves cached users without re-querying, and batches only the misses', async () => {
+      const prisma = makePrisma([]);
+      svc = new PrivacyPreferencesService(prisma);
+
+      await svc.getPreferences('reg_A');
+      (prisma.userPreference.findMany as jest.Mock).mockClear();
+
+      await svc.getPreferencesForUsers([
+        { id: 'reg_A', isAnonymous: false },
+        { id: 'reg_B', isAnonymous: false },
+      ]);
+
+      expect(prisma.userPreference.findMany).toHaveBeenCalledTimes(1);
+      expect(prisma.userPreference.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({ userId: { in: ['reg_B'] } }),
+        })
+      );
+    });
+
+    it('falls back to defaults for every user when the batch query fails', async () => {
+      const prisma = makePrisma([]);
+      prisma.userPreference.findMany = jest.fn().mockRejectedValue(new Error('DB down'));
+      svc = new PrivacyPreferencesService(prisma);
+
+      const result = await svc.getPreferencesForUsers([
+        { id: 'reg_A', isAnonymous: false },
+        { id: 'reg_B', isAnonymous: false },
+      ]);
+
+      expect(result.get('reg_A')).toEqual(PRIVACY_PREFERENCES_DEFAULTS);
+      expect(result.get('reg_B')).toEqual(PRIVACY_PREFERENCES_DEFAULTS);
     });
   });
 

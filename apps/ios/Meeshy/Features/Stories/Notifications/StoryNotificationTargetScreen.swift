@@ -14,6 +14,9 @@ import MeeshySDK
 //               (comments overlay vs. viewers/reactions sheet) so the user
 //               lands on the surface that maps to the notification trigger.
 //   .expired  → `StoryExpiredContent` empty-state with "Create a story" CTA.
+//   .offline  → `StoryNotificationOfflineContent` retry state — a confirmed
+//               404 is the only thing allowed to claim `.expired`; any other
+//               failure (no connectivity, timeout, 5xx) lands here instead.
 //
 // Dependencies:
 // - `StoryServiceProviding` is injected through the initialiser with a
@@ -29,12 +32,19 @@ public struct StoryNotificationTargetScreen: View {
     @EnvironmentObject private var storyViewerCoordinator: StoryViewerCoordinator
     @Environment(\.dismiss) private var dismiss
 
+    private let commentId: String?
+    private let parentCommentId: String?
+
     public init(
         storyId: String,
         intent: StoryIntent,
         context: StoryNotificationContext,
+        commentId: String? = nil,
+        parentCommentId: String? = nil,
         storyService: StoryServiceProviding = StoryService.shared
     ) {
+        self.commentId = commentId
+        self.parentCommentId = parentCommentId
         _vm = StateObject(wrappedValue: StoryNotificationTargetViewModel(
             storyId: storyId,
             intent: intent,
@@ -53,10 +63,16 @@ public struct StoryNotificationTargetScreen: View {
                     post: post,
                     intent: vm.intent,
                     viewerCoordinator: storyViewerCoordinator,
+                    commentId: commentId,
+                    parentCommentId: parentCommentId,
                     dismiss: { dismiss() }
                 )
             case .expired:
                 StoryExpiredContent(storyId: vm.storyId, context: vm.context)
+            case .offline:
+                StoryNotificationOfflineContent {
+                    Task { await vm.load() }
+                }
             }
         }
         .task { await vm.load() }

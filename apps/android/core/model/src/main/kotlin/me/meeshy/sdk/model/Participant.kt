@@ -20,7 +20,43 @@ data class ParticipantPermissions(
     val canSendAudios: Boolean = true,
     val canSendLocations: Boolean = true,
     val canSendLinks: Boolean = true,
-)
+) {
+    companion object {
+        /** Registered user: every capability granted — port of iOS `defaultUser`. */
+        val defaultUser: ParticipantPermissions = ParticipantPermissions()
+
+        /**
+         * Baseline guest posture — port of iOS `ParticipantPermissions.defaultAnonymous`:
+         * text messages and images only, everything else denied.
+         */
+        val defaultAnonymous: ParticipantPermissions = anonymous(
+            canSendMessages = true,
+            canSendFiles = false,
+            canSendImages = true,
+        )
+
+        /**
+         * Harden a set of server-advertised guest capabilities: only messages,
+         * files and images are ever negotiable for an anonymous participant —
+         * videos, audios, locations and links are ALWAYS denied regardless of
+         * what the server sent (port of the forcing in iOS
+         * `AnonymousJoinResponse.toSessionContext`).
+         */
+        fun anonymous(
+            canSendMessages: Boolean,
+            canSendFiles: Boolean,
+            canSendImages: Boolean,
+        ): ParticipantPermissions = ParticipantPermissions(
+            canSendMessages = canSendMessages,
+            canSendFiles = canSendFiles,
+            canSendImages = canSendImages,
+            canSendVideos = false,
+            canSendAudios = false,
+            canSendLocations = false,
+            canSendLinks = false,
+        )
+    }
+}
 
 /** Anonymous user profile — port of AnonymousProfile (ParticipantModels.swift). */
 @Serializable

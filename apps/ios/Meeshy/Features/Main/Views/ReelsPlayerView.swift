@@ -146,8 +146,8 @@ struct ReelsPlayerView: View {
             // both in the SAME Task so `begin` never races ahead of the deferred `end`
             // (which would drop the previous reel's qualified view).
             Task {
-                if old != nil {
-                    finalizeReelSession()
+                if let old {
+                    finalizeReelSession(for: old)
                     await EngagementTracker.shared.end(surface: .reels)
                 }
                 guard let newId else { return }
@@ -188,17 +188,30 @@ struct ReelsPlayerView: View {
             // Quitte la post room du réel actif (real-time like) + finalise la session
             // d'engagement (watch-time + vue qualifiée) du réel courant.
             viewModel.leaveActivePostRoom()
-            finalizeReelSession()
+            finalizeReelSession(for: viewModel.currentId)
             Task { await EngagementTracker.shared.end(surface: .reels) }
         }
         .statusBarHidden(true)
     }
 
-    /// Finalizes the current reel's engagement session: pushes the real watch-time,
-    /// the drained heartbeat samples (→ server's 30%/90% qualified-view rule), and
+    /// Finalizes `reelId`'s engagement session: pushes the real watch-time, the
+    /// drained heartbeat samples (→ server's 30%/90% qualified-view rule), and
     /// whether playback reached the end (→ playCount). Does NOT call `end` — the
     /// caller orders `end` (and any subsequent `begin`) around it.
-    private func finalizeReelSession() {
+    ///
+    /// Only reads the SHARED VIDEO engine when `reelId` is actually a video reel
+    /// (`ReelWatchAttachmentPolicy.shouldAttachVideoWatch`) — audio/image reels
+    /// don't drive `SharedAVPlayerManager` at all, so reading it unconditionally
+    /// attached whatever video last played (possibly a DIFFERENT, since-closed
+    /// reel) to this session: inflated playCount / qualified views on the wrong
+    /// reel, and the audio reel's own watch-time never attached anywhere (a
+    /// separate, still-open gap — the per-page `AudioPlaybackManager` instance
+    /// lives inside `ReelPageView`, out of this parent's reach).
+    private func finalizeReelSession(for reelId: String?) {
+        guard let reelId,
+              let reel = viewModel.reels.first(where: { $0.id == reelId }),
+              ReelWatchAttachmentPolicy.shouldAttachVideoWatch(mediaType: reel.primaryReelDisplayMedia?.type)
+        else { return }
         let m = SharedAVPlayerManager.shared
         let watchMs = m.currentTime.isNaN ? 0 : Int(m.currentTime * 1000)
         let durMs = m.duration > 0 ? Int(m.duration * 1000) : nil
@@ -303,9 +316,14 @@ struct ReelsPlayerView: View {
             }
             .accessibilityElement(children: .combine)
         } else {
-            ProgressView()
-                .tint(.white)
-                .scaleEffect(1.4)
+            // Instant App cold-start: a shimmering full-bleed placeholder (same
+            // treatment as `ReelPoster`'s own loading state) instead of a bare
+            // spinner — `hasLoadedOnce` only ever stays `false` for the instant
+            // between `seed()`/`coldStart()` being called and their (cache-first,
+            // synchronous) first `apply(reels:startId:)`.
+            Color.black.shimmer()
+                .ignoresSafeArea()
+                .accessibilityHidden(true)
         }
     }
 
@@ -375,6 +393,50 @@ enum ReelMediaAutostart {
     /// a re-render / reveal flip from restarting in-place audio.
     nonisolated static func shouldLoadAudio(currentUrl: String?, url: String) -> Bool {
         currentUrl != url
+    }
+}
+
+// MARK: - Reel Watch Attachment Policy (pure)
+
+/// `finalizeReelSession` reads the SHARED video engine (`SharedAVPlayerManager`)
+/// only when the reel actually being finalized is a video reel — pure,
+/// testable gate mirroring `ReelMediaAutostart`.
+enum ReelWatchAttachmentPolicy {
+    nonisolated static func shouldAttachVideoWatch(mediaType: FeedMediaType?) -> Bool {
+        mediaType == .video
+    }
+}
+
+// MARK: - Reel Audio Language Resolver (Prisme, pure)
+
+/// Prisme Linguistique — pure resolution of the TTS language to auto-select for
+/// an audio reel, mirroring `FeedPost.resolved(preferredLanguages:)`: short-
+/// circuits when the audio's ORIGINAL language is already among the user's
+/// preferred languages (nothing to translate), otherwise returns the first
+/// preferred language — in PRIORITY order, not TTS-payload order — that has an
+/// available translated audio. Returns `nil` when nothing should be
+/// auto-selected (the original stays authoritative; the user can still pick a
+/// language via a flag).
+///
+/// Extracted as a pure function (mirrors `ReelMediaAutostart`) so the
+/// short-circuit + priority-ordering rules are unit-testable without
+/// instantiating the view. Fixes the bug where `autoSelectPreferredAudioLanguage`
+/// iterated the TTS payload order first — a French audio for a French-preferring
+/// user was auto-switched to whichever TTS translation the payload listed first
+/// (e.g. English), because the original-language short-circuit didn't exist and
+/// the preferred-language priority order was never honored.
+enum ReelAudioLanguageResolver {
+    nonisolated static func preferredAudioLanguage(
+        original: String?,
+        preferredLanguages: [String],
+        availableLanguages: [String]
+    ) -> String? {
+        let preferred = preferredLanguages.filter { !$0.isEmpty }.map { $0.lowercased() }
+        if let original = original?.lowercased(), preferred.contains(original) {
+            return nil
+        }
+        let available = Set(availableLanguages.map { $0.lowercased() })
+        return preferred.first { available.contains($0) }
     }
 }
 
@@ -637,13 +699,11 @@ struct ReelPageView: View {
     /// chosen a language.
     private func autoSelectPreferredAudioLanguage() {
         guard selectedLanguage == nil, let audioMedia else { return }
-        let preferred = AuthManager.shared.currentUser?.preferredContentLanguages ?? []
-        let targets = audioMedia.translatedAudios.map(\.targetLanguage)
-        if let match = targets.first(where: { code in
-            preferred.contains { $0.lowercased() == code.lowercased() }
-        }) {
-            selectedLanguage = match
-        }
+        selectedLanguage = ReelAudioLanguageResolver.preferredAudioLanguage(
+            original: metaOriginalLanguage,
+            preferredLanguages: AuthManager.shared.currentUser?.preferredContentLanguages ?? [],
+            availableLanguages: audioMedia.translatedAudios.map(\.targetLanguage)
+        )
     }
 
     // MARK: Immersive mode
@@ -1109,17 +1169,26 @@ private struct ReelVideoView: View {
     /// already `true`, so they play normally.
     let revealCompleted: Bool
 
-    @ObservedObject private var manager = SharedAVPlayerManager.shared
+    // Plain reference (NOT @ObservedObject): only `player` identity and
+    // `activeURL` matter for this page wrapper (backdrop + poster +
+    // GeometryReader) — `ReelScrubBar` is the one view that legitimately needs
+    // the 5-10Hz `currentTime` ticks. Observing the singleton here re-rendered
+    // the WHOLE page on every tick. Scoped via onReceive($activeURL/$player).
+    private let manager = SharedAVPlayerManager.shared
+    @State private var activeURL: String = SharedAVPlayerManager.shared.activeURL
+    @State private var player: AVPlayer?
 
     private var attachment: MeeshyMessageAttachment { media.toMessageAttachment() }
     private var isShowingThis: Bool {
-        manager.player != nil && manager.activeURL == attachment.fileUrl
+        player != nil && activeURL == attachment.fileUrl
     }
 
     var body: some View {
         VideoAvailabilityResolver(attachment: attachment, autoDownload: true) { availability, _ in
             content(ready: availability == .ready)
         }
+        .onReceive(manager.$activeURL) { activeURL = $0 }
+        .onReceive(manager.$player) { player = $0 }
     }
 
     @ViewBuilder
@@ -1142,7 +1211,7 @@ private struct ReelVideoView: View {
                 // Tap-to-pause is handled by the page-level tap zone (ReelPageView),
                 // so this surface stays gesture-free to avoid swallowing scrub/rail
                 // touches.
-                if isActive, ready, isShowingThis, let player = manager.player {
+                if isActive, ready, isShowingThis, let player {
                     ReelVideoSurface(player: player, videoGravity: .resizeAspect)
                         .frame(width: geo.size.width, height: geo.size.height)
                         .clipped()
@@ -1203,16 +1272,21 @@ private struct ReelVideoView: View {
         // l'abonnement `CallManager.$callState` dans `ReelsPlayerView`.
         guard isActive, ready, !MediaSessionCoordinator.shared.isCallActive else { return }
         if manager.activeURL != attachment.fileUrl {
-            manager.attachmentId = media.id
-            manager.load(urlString: attachment.fileUrl)
+            manager.load(urlString: attachment.fileUrl, attachmentId: media.id)
         }
-        // Le viewer plein écran joue TOUJOURS avec le son. `isMuted` est une
-        // préférence GLOBALE de session qui survit à `pause()`/`stop()` et que la
-        // surface de fond du feed (`ReelFeedVideoSurface`) force à `true` de façon
-        // inconditionnelle. À l'entrée depuis le feed sur la MÊME url, le
-        // court-circuit `activeURL == fileUrl` ci-dessus saute `load()`, donc le
-        // démutage DOIT être inconditionnel ici (miroir exact du feed qui mute
-        // inconditionnellement) — sinon le 1er réel joue muet.
+        // Le viewer plein écran joue TOUJOURS avec le son. La surface de fond du
+        // feed (`ReelFeedVideoSurface`) exprime maintenant son silence via
+        // `isForceMuted` (intention PAR SURFACE, transitoire) plutôt que la
+        // préférence globale `isMuted` — elle se relâche d'elle-même en perdant
+        // l'activité, mais on la réaffirme ici en défense en profondeur : sur
+        // l'entrée depuis le feed pour la MÊME url, le court-circuit
+        // `activeURL == fileUrl` ci-dessus saute `load()` (qui l'aurait sinon
+        // réinitialisée via `cleanup()`), et l'ordre exact des transitions
+        // `isActive` entre le feed et le viewer n'est pas garanti.
+        manager.isForceMuted = false
+        // `isMuted` reste réaffirmé inconditionnellement : c'est la préférence
+        // utilisateur globale (persistée entre vidéos par design), mais le
+        // viewer plein écran est le contexte où le son est TOUJOURS attendu.
         manager.isMuted = false
         // Looping MUST be (re)asserted AFTER `load()`. `load()` calls
         // `cleanup()` internally, which resets `shouldLoop = false`; setting it

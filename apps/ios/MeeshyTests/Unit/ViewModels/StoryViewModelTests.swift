@@ -1203,20 +1203,6 @@ final class StoryViewModelTests: XCTestCase {
         XCTAssertFalse(sut.showStoryComposer, "Composer should close when publishing starts")
     }
 
-    func test_publishError_setsError() async {
-        mockAPI.authToken = "token"
-        mockPostService.createStoryResult = .failure(APIError.networkError(URLError(.timedOut)))
-
-        await sut.publishStory(
-            effects: StoryEffects(),
-            content: "Error story",
-            image: nil
-        )
-
-        XCTAssertNotNil(sut.publishError)
-        XCTAssertFalse(sut.isPublishing)
-    }
-
     // MARK: - executeQueuedPublish() Tests (V3 reconstruction)
 
     private static func makeTextOnlySlide(
@@ -1327,6 +1313,41 @@ final class StoryViewModelTests: XCTestCase {
         } catch {
             XCTFail("Expected StoryPublishUnrecoverableError, got \(type(of: error))")
         }
+    }
+
+    /// P2 — a foreground media object declared in the slide's effects but with
+    /// no matching entry in `loadedImages`/`loadedVideoURLs` (composer/state
+    /// desync — e.g. the queue replay has no `StoryMediaReference` for it)
+    /// used to be silently dropped: neither the `.video` nor `.image` branch
+    /// of the upload loop matched, no log fired, and the layer would simply
+    /// never render for any viewer. Symmetrical with the audio branch (which
+    /// already logs `"clip will be uploaded but unplayable"` on the same kind
+    /// of miss): the publish must still succeed, just without that one layer.
+    func test_executeQueuedPublish_mediaObjectWithoutLoadedAsset_skipsWithoutThrowing() async throws {
+        mockAPI.authToken = "test-token"
+        let orphanMedia = StoryMediaObject(
+            id: "orphan-1",
+            mediaType: "image",
+            aspectRatio: 1.0
+        )
+        let slide = StorySlide(
+            id: UUID().uuidString,
+            content: "Text with a dangling media ref",
+            effects: StoryEffects(mediaObjects: [orphanMedia]),
+            duration: 5,
+            order: 0
+        )
+        // No `StoryMediaReference` for "orphan-1" — `loadedImages` stays empty.
+        let item = try Self.makeQueueItem(slides: [slide])
+        mockPostService.createStoryResult = .success(Self.makeStoryAPIPost(
+            id: "post-orphan-media", content: slide.content, authorId: "a1", authorUsername: "alice"
+        ))
+
+        let result = try await sut.executeQueuedPublish(item: item)
+
+        XCTAssertEqual(result, "post-orphan-media",
+            "A media object without a loaded asset must be skipped, not crash the whole publish")
+        XCTAssertEqual(mockPostService.createStoryCallCount, 1)
     }
 
     func test_executeQueuedPublish_textOnlySingleSlide_returnsLastPostId() async throws {

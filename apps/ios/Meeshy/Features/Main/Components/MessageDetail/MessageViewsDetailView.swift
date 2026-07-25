@@ -412,23 +412,23 @@ struct MessageViewsDetailView: View {
         switch level {
         case 3:
             icon = "eye.fill"
-            label = "Lu"
+            label = String(localized: "bubble.delivery.read", defaultValue: "Lu", bundle: .main)
             color = .green
         case 2:
             icon = "checkmark.circle.fill"
-            label = "Distribue"
+            label = String(localized: "bubble.delivery.delivered", defaultValue: "Distribué", bundle: .main)
             color = accent
         case 1:
             icon = "checkmark"
-            label = "Envoye"
+            label = String(localized: "bubble.delivery.sent", defaultValue: "Envoyé", bundle: .main)
             color = accent.opacity(0.7)
         case 0:
             icon = "arrow.up.circle"
-            label = "Envoi..."
+            label = String(localized: "bubble.delivery.sending", defaultValue: "Envoi en cours", bundle: .main)
             color = theme.textMuted
         default:
             icon = "exclamationmark.circle"
-            label = "Echec"
+            label = String(localized: "bubble.delivery.failed", defaultValue: "Échec de l'envoi", bundle: .main)
             color = .red
         }
 
@@ -445,6 +445,7 @@ struct MessageViewsDetailView: View {
             Capsule()
                 .fill(color.opacity(0.12))
         )
+        .accessibilityElement(children: .combine)
     }
 
     private func metaInfoRow(icon: String, label: String, value: String, accent: Color, valueColor: Color? = nil) -> some View {
@@ -485,7 +486,7 @@ struct MessageViewsDetailView: View {
                 loadingIndicator(accent: accent)
             } else if let status = readStatusData {
                 if status.receivedBy.isEmpty {
-                    emptyStateView(icon: "checkmark.circle", text: "Aucune confirmation de distribution", accent: accent)
+                    emptyStateView(icon: "checkmark.circle", text: String(localized: "message-detail.views.delivered.empty", defaultValue: "Aucune confirmation de distribution", bundle: .main), accent: accent)
                 } else {
                     timelineBanner(
                         icon: "checkmark.circle.fill",
@@ -521,7 +522,7 @@ struct MessageViewsDetailView: View {
                 loadingIndicator(accent: accent)
             } else if let status = readStatusData {
                 if status.readBy.isEmpty {
-                    emptyStateView(icon: "eye.slash", text: "Personne n'a lu ce message", accent: accent)
+                    emptyStateView(icon: "eye.slash", text: String(localized: "message-detail.views.read.empty", defaultValue: "Personne n'a lu ce message", bundle: .main), accent: accent)
                 } else {
                     timelineBanner(
                         icon: "eye.fill",
@@ -558,7 +559,7 @@ struct MessageViewsDetailView: View {
             } else if let status = readStatusData {
                 let notSeen = status.notSeenBy ?? []
                 if notSeen.isEmpty {
-                    emptyStateView(icon: "checkmark.circle", text: "Tout le monde a recu le message", accent: accent)
+                    emptyStateView(icon: "checkmark.circle", text: String(localized: "message-detail.views.not-seen.empty", defaultValue: "Tout le monde a recu le message", bundle: .main), accent: accent)
                 } else {
                     timelineBanner(
                         icon: "eye.slash.fill",
@@ -604,7 +605,7 @@ struct MessageViewsDetailView: View {
                 }
 
                 if audioAttachments.isEmpty {
-                    emptyStateView(icon: "headphones", text: "Aucun audio attache", accent: accent)
+                    emptyStateView(icon: "headphones", text: String(localized: "message-detail.views.audio.empty", defaultValue: "Aucun audio attache", bundle: .main), accent: accent)
                 }
             }
         }
@@ -628,7 +629,7 @@ struct MessageViewsDetailView: View {
                 }
 
                 if videoAttachments.isEmpty {
-                    emptyStateView(icon: "play.rectangle", text: "Aucune video attachee", accent: accent)
+                    emptyStateView(icon: "play.rectangle", text: String(localized: "message-detail.views.video.empty", defaultValue: "Aucune video attachee", bundle: .main), accent: accent)
                 }
             }
         }

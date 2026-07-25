@@ -654,12 +654,15 @@ public actor DiskCacheStore: ReadableCacheStore {
     /// Pre-cache an image in the static UIImage NSCache for immediate display
     /// in ProgressiveCachedImage. Used for optimistic media messages where the
     /// local file URL is set as the attachment URL before upload.
+    ///
+    /// Inserts synchronously via `cacheIfWithinBudget` — matches the fix
+    /// already applied to `image(for:)`/`warmedImage(for:)`: a
+    /// `Task { @MainActor in … }` deferral here bought nothing (`NSCache` is
+    /// thread-safe) and raced the very next synchronous `cachedImage(for:)`
+    /// read on the optimistic-send path, plus skipped the oversized-bitmap
+    /// budget guard entirely.
     public nonisolated static func cacheImageForPreview(_ image: UIImage, key: String) {
-        let cacheKey = Self.fileKey(for: key)
-        let cost = image.cgImage.map { $0.bytesPerRow * $0.height } ?? 0
-        Task { @MainActor in
-            Self._imageCache.setObject(image, forKey: cacheKey as NSString, cost: cost)
-        }
+        Self.cacheIfWithinBudget(image, key: Self.fileKey(for: key))
     }
 
     // MARK: - File Key

@@ -422,9 +422,13 @@ nonisolated enum CallReliabilityPolicy {
 
     /// Seconds after quality-monitor start during which the BWE signal is
     /// ignored: GCC ramps from its conservative kick-off estimate (~300 kbps)
-    /// and converges in ~5-10 s on a healthy path — reading the ramp as
-    /// .poor flags a perfectly good call.
-    static let bweWarmupSeconds: TimeInterval = 15
+    /// and, on a high-RTT intercontinental path (Africa↔Asia, 250-450 ms), needs
+    /// ~20-30 s to converge toward true capacity — its additive-increase step is
+    /// per-RTT, so a longer round-trip means a slower ramp. Reading the still-
+    /// climbing estimate as .fair/.poor flagged a perfectly good call mid-call;
+    /// 30 s outlasts a realistic convergence window before min(heuristic, bwe)
+    /// is allowed to constrain the level.
+    static let bweWarmupSeconds: TimeInterval = 30
 
     /// Merge policy for the two quality signals (RTT/loss heuristic vs TWCC
     /// GCC bandwidth estimate). The BWE ladder is calibrated against VIDEO
@@ -912,25 +916,38 @@ nonisolated enum QualityThresholds {
     /// RTT at or below this value → good audio quality (default bitrate). Above → min bitrate.
     static let goodRTT: Double = 250
     /// RTT above this value → critical video tier (severe congestion).
-    static let poorRTT: Double = 500
+    /// 800 ms round-trip ≈ 400 ms one-way, the ITU-T G.114 conversational
+    /// acceptability limit. Below it a distant intercontinental link
+    /// (Africa↔Asia backbone alone is 155-221 ms RTT before any last mile —
+    /// WACS 155, 2Africa 158, ACC-1 221) stays 'poor', not 'critical'. The
+    /// prior 500 ms boundary flagged healthy long-haul mobile calls as critical.
+    static let poorRTT: Double = 800
 
     static let excellentPacketLoss: Double = 0.01
     static let goodPacketLoss: Double = 0.05
     static let poorPacketLoss: Double = 0.10
 
     // MARK: Video quality tier boundaries (used by VideoQualityLevel.from(rtt:packetLoss:))
-    // Note: excellentRTT (100), poorRTT (500), excellentPacketLoss (0.01),
-    // goodPacketLoss (0.05), and poorPacketLoss (0.10) are shared across both
-    // audio and video classification; the two intermediate video boundaries below
-    // are video-specific.
+    // Note: excellentRTT (100), poorRTT (800), excellentPacketLoss (0.01),
+    // goodPacketLoss (0.05), and poorPacketLoss (0.10) are also referenced by the
+    // video ladder; the two intermediate video boundaries below are video-specific.
+    //
+    // The RTT ladder is calibrated round-trip against ITU-T G.114 one-way targets
+    // (RTT ≈ 2× one-way) and REAL long-haul baselines, NOT a domestic wired link:
+    // an Africa↔Asia submarine backbone is already 155-221 ms RTT before the
+    // mobile last mile, so a healthy intercontinental call routinely sits at
+    // 250-450 ms. The prior boundaries (fair >200, poor >300) painted those calls
+    // orange/red at 00:06. Packet loss — the true congestion signal — keeps its
+    // tighter bands (see below). Web mirror: apps/web/hooks/use-call-quality.ts.
 
-    /// RTT boundary between good and fair video quality tiers.
+    /// RTT boundary between good and fair video quality tiers (~150 ms one-way).
     /// Above this → at most .fair; at or below → may be .good or .excellent.
-    static let videoFairRTT: Double = 200
+    static let videoFairRTT: Double = 300
 
-    /// RTT boundary between fair and poor video quality tiers.
+    /// RTT boundary between fair and poor video quality tiers (~250 ms one-way).
+    /// Sized to keep an Africa↔Asia backbone hop + a mobile last mile in 'fair'.
     /// Above this → at most .poor; at or below → may be .fair or better.
-    static let videoPoorRTT: Double = 300
+    static let videoPoorRTT: Double = 500
 
     /// Packet-loss boundary between fair and poor video quality.
     /// Above this → at most .poor; at or below → may be .fair or better.

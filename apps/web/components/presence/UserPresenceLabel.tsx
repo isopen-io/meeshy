@@ -30,12 +30,12 @@ export const UserPresenceLabel = memo(function UserPresenceLabel({
 
   const labels: Record<UserStatus, string> = {
     online: t('status.online'),
-    recent: t('status.recent', { defaultValue: 'Actif récemment' }),
     away: t('status.away', { defaultValue: 'Absent' }),
+    idle: t('status.idle', { defaultValue: 'Inactif' }),
     offline: t('status.offline'),
   };
 
-  // Au-dela de 30min (offline) : plus aucune info de presence, sauf texte custom.
+  // Au-dela de 5min (offline) : plus aucune info de presence, sauf texte custom.
   if (status === 'offline' && !children) return null;
 
   return (

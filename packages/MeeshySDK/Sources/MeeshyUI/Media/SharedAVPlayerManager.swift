@@ -22,7 +22,26 @@ public final class SharedAVPlayerManager: ObservableObject {
     /// Toggle via le bouton mute du fullscreen overlay. Propagé à
     /// `AVPlayer.isMuted` automatiquement via `didSet`.
     @Published public var isMuted: Bool = false {
-        didSet { player?.isMuted = isMuted }
+        didSet { applyMuteState() }
+    }
+
+    /// Intention de mute PAR SURFACE, orthogonale à `isMuted` (la préférence
+    /// utilisateur globale posée par le bouton mute du fullscreen overlay).
+    /// Avant ce champ, le feed posait directement `isMuted = true` pour son
+    /// autoplay silencieux — ce qui fuitait vers la surface suivante (galerie
+    /// de conversation jouant en silence alors que l'utilisateur n'avait rien
+    /// demandé). Transitoire : reset par `cleanup()`, ne traverse pas un
+    /// changement d'attachment ni de surface (contrairement à `isMuted`).
+    @Published public var isForceMuted: Bool = false {
+        didSet { applyMuteState() }
+    }
+
+    /// Mute effectivement appliqué au player courant : préférence utilisateur
+    /// (`isMuted`) OU intention ponctuelle d'une surface (`isForceMuted`).
+    public var effectiveMuted: Bool { isMuted || isForceMuted }
+
+    private func applyMuteState() {
+        player?.isMuted = effectiveMuted
     }
 
     /// Si vrai, le notification handler de fin de lecture seek(0) + play()
@@ -61,19 +80,20 @@ public final class SharedAVPlayerManager: ObservableObject {
 
     // MARK: - Load
 
-    public func load(urlString: String) {
+    public func load(urlString: String, attachmentId: String? = nil) {
         guard !urlString.isEmpty else { return }
         guard urlString != activeURL else { return }
 
         cleanup()
+        // Posé APRÈS `cleanup()` (qui le remet à `nil`) : tous les appelants
+        // posaient auparavant `manager.attachmentId` AVANT `load()`, donc
+        // `cleanup()` l'effaçait silencieusement à chaque chargement et
+        // `reportWatchProgress` ne déclenchait jamais (tracking de consommation
+        // mort depuis l'origine — aucun POST watched, aucune barre de progression).
+        self.attachmentId = attachmentId
 
         guard let url = MeeshyConfig.resolveMediaURL(urlString) else { return }
         let resolved = url.absoluteString
-
-        // Session de lecture via la source UNIQUE (call-aware) : ne reconfigure pas
-        // la session pendant un appel VoIP — la vidéo joue alors sous la session de
-        // l'appel (micro préservé). Cf. MediaSessionCoordinator.activatePlaybackSync.
-        MediaSessionCoordinator.shared.activatePlaybackSync(options: [.duckOthers])
 
         activeURL = urlString
 
@@ -106,9 +126,29 @@ public final class SharedAVPlayerManager: ObservableObject {
 
     // MARK: - Playback Controls
 
+    /// Pure, testable decision: should starting playback (re)activate the
+    /// `.duckOthers` audio session? A surface that intends to be silent (feed
+    /// autoplay) has no audible output — activating the ducking session for it
+    /// would needlessly duck the user's own music for a video that produces no
+    /// sound. `nonisolated static` mirrors `MediaSessionCoordinator
+    /// .shouldManageSession(callActive:)`.
+    public nonisolated static func shouldDuckOthersOnPlay(effectiveMuted: Bool) -> Bool {
+        !effectiveMuted
+    }
+
     public func play() {
         guard let player else { return }
         PlaybackCoordinator.shared.willStartPlaying(video: self)
+        // Session de lecture via la source UNIQUE (call-aware) : ne reconfigure
+        // pas la session pendant un appel VoIP — la vidéo joue alors sous la
+        // session de l'appel (micro préservé). Cf.
+        // MediaSessionCoordinator.activatePlaybackSync. Gated on `effectiveMuted`
+        // (moved out of `load()`, where it fired unconditionally BEFORE a caller
+        // had any chance to express its mute intent — the feed's silent autoplay
+        // ducked the user's music indefinitely for a video producing no sound).
+        if Self.shouldDuckOthersOnPlay(effectiveMuted: effectiveMuted) {
+            MediaSessionCoordinator.shared.activatePlaybackSync(options: [.duckOthers])
+        }
         player.play()
         player.rate = Float(playbackSpeed.rawValue)
         isPlaying = true
@@ -270,10 +310,10 @@ public final class SharedAVPlayerManager: ObservableObject {
     // MARK: - Observers
 
     private func setupObservers(for player: AVPlayer) {
-        // Sync immédiat de la pref mute globale sur le nouveau player. Sans
+        // Sync immédiat de l'état de mute effectif sur le nouveau player. Sans
         // ça, un user qui mute en fullscreen puis ouvre une nouvelle vidéo
         // entend le son revenir alors que l'icône mute reste activée.
-        player.isMuted = isMuted
+        player.isMuted = effectiveMuted
 
         // The active reel is on-screen: lift the offscreen preroll bitrate cap so
         // ABR can pick the best rendition (thermal-aware — stays capped when hot).
@@ -367,8 +407,11 @@ public final class SharedAVPlayerManager: ObservableObject {
         pipController = nil
         pipDelegate = nil
         // shouldLoop reset : ne traverse pas un changement d'attachment.
-        // isMuted NON reset : préférence globale session.
+        // isForceMuted reset : intention par-surface TRANSITOIRE, ne traverse
+        // pas non plus un changement d'attachment/surface.
+        // isMuted NON reset : préférence globale session utilisateur.
         shouldLoop = false
+        isForceMuted = false
     }
 }
 

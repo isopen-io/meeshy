@@ -112,7 +112,7 @@ public struct MediaTranscriptionView: View {
             }
             .frame(maxHeight: maxHeight)
             .background(transcriptionBackground)
-            .onChange(of: activeIndex) { idx in
+            .adaptiveOnChange(of: activeIndex) { _, idx in
                 if let idx = idx {
                     withAnimation(.easeInOut(duration: 0.3)) {
                         proxy.scrollTo("segment-\(idx)", anchor: .center)

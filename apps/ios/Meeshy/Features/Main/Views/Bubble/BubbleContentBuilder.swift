@@ -19,7 +19,13 @@ extension BubbleContent {
         timeString: String? = nil,
         isEditSaving: Bool = false,
         hasEditHistory: Bool = false,
-        recipientCount: Int = 1
+        recipientCount: Int = 1,
+        // 4th axis of the Prisme étendu (2026-05-26) — device locale, gated
+        // identically to `regional`/`custom` in `buildAvailableFlags` (only
+        // surfaced when a translation actually exists for it). Default `nil`
+        // keeps every existing call site (none of which pass this yet)
+        // unchanged. See CLAUDE.md "Prisme Linguistique" for resolution order.
+        deviceLocale: String? = nil
     ) {
         self.messageId = message.id
         self.isMe = message.isMe
@@ -124,6 +130,7 @@ extension BubbleContent {
                 preferredLang: preferredTranslation?.targetLanguage.lowercased(),
                 regional: userLanguages.regional?.lowercased(),
                 custom: userLanguages.custom?.lowercased(),
+                deviceLocale: deviceLocale?.lowercased(),
                 translations: translations,
                 translatedAudios: translatedAudios
             )
@@ -248,6 +255,10 @@ extension BubbleContent {
         preferredLang: String?,
         regional: String?,
         custom: String?,
+        // 4th axis of the Prisme étendu (2026-05-26) — gated identically to
+        // `regional`/`custom`: only surfaced when a translation (text or
+        // audio) actually exists for it. Never supplants the first 3 axes.
+        deviceLocale: String? = nil,
         translations: [MessageTranslation],
         translatedAudios: [MessageTranslatedAudio]
     ) -> [String] {
@@ -265,6 +276,9 @@ extension BubbleContent {
         }
         if let c = custom, !seen.contains(c), hasTranslation(c) {
             all.append(c); seen.insert(c)
+        }
+        if let d = deviceLocale, !seen.contains(d), hasTranslation(d) {
+            all.append(d); seen.insert(d)
         }
         return all.filter { $0 != activeLang }
     }

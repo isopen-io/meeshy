@@ -87,6 +87,7 @@ function makeContentHarness(usersById: Record<string, any>) {
     },
     conversation: { findUnique: async () => null },
     userPreferences: { findUnique: async () => null },
+    userConversationPreferences: { findMany: async () => [] },
     notification: {
       create: async (args: any) => { created.push(args.data); return { id: 'n1', ...args.data, createdAt: new Date() }; },
       count: async () => 0,

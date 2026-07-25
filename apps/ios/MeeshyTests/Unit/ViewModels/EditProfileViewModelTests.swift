@@ -89,15 +89,41 @@ final class EditProfileViewModelTests: XCTestCase {
     // MARK: - saveProfile happy path (no avatar)
 
     func test_save_appliesOptimisticLocally_beforeEnqueue() async {
-        let (sut, doubles) = makeSUT(currentUser: makeUser(displayName: "Alice"))
+        let (sut, doubles) = makeSUT(currentUser: makeUser(displayName: "Alice", bio: "Hello world"))
         sut.displayName = "Bob"
 
         await sut.saveProfile(onDismiss: {})
 
         XCTAssertEqual(doubles.auth.appliedProfileChanges.count, 1)
         XCTAssertEqual(doubles.auth.appliedProfileChanges.first?.displayName, "Bob")
-        XCTAssertEqual(doubles.auth.appliedProfileChanges.first?.bio, "Hello world")
+        // bio was never touched — it must be omitted (nil), not resent, so
+        // `withProfileChanges`'s `bio ?? self.bio` keeps the existing value
+        // rather than the caller re-asserting a value that happens to match.
+        XCTAssertNil(doubles.auth.appliedProfileChanges.first?.bio)
         XCTAssertNil(doubles.auth.appliedProfileChanges.first?.avatarUrl)
+    }
+
+    func test_save_clearingBio_sendsEmptyString_notOmitted() async {
+        let (sut, doubles) = makeSUT(currentUser: makeUser(bio: "Hello world"))
+        sut.bio = ""
+
+        await sut.saveProfile(onDismiss: {})
+
+        let payload = doubles.queue.lastPayload as? UpdateProfilePayload
+        XCTAssertEqual(payload?.bio, "",
+            "Clearing a previously-set bio must send an explicit empty string, not omit the field")
+        XCTAssertEqual(doubles.auth.appliedProfileChanges.first?.bio, "",
+            "The optimistic apply must also reflect the clear, not silently keep the old bio")
+    }
+
+    func test_save_bioUnchanged_omitsFieldFromPayload() async {
+        let (sut, doubles) = makeSUT(currentUser: makeUser(bio: "Hello world"))
+        sut.displayName = "Bob"
+
+        await sut.saveProfile(onDismiss: {})
+
+        let payload = doubles.queue.lastPayload as? UpdateProfilePayload
+        XCTAssertNil(payload?.bio, "Untouched bio must be omitted (nil), not resent")
     }
 
     func test_save_enqueuesUpdateProfilePayload_withCmid() async {

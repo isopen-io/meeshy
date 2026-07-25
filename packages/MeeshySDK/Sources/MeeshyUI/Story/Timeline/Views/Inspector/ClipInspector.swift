@@ -224,11 +224,10 @@ public struct ClipInspector: View {
         _StateProbe(volume: volume, fadeIn: fadeIn, fadeOut: fadeOut, loop: loop, background: background)
     }
 
+    /// Full ms-precision time readout. Delegates to `TransportBar.formatTime`
+    /// (the SSOT for this format) — never re-derive the formula here.
     public static func formatTime(seconds: Float) -> String {
-        let total = max(0, seconds)
-        let minutes = Int(total) / 60
-        let remainder = total - Float(minutes * 60)
-        return String(format: "%d:%06.3f", minutes, remainder)
+        TransportBar.formatTime(seconds: seconds)
     }
 
     /// True when the clip's media carries audio playback (`.video` or `.audio`).

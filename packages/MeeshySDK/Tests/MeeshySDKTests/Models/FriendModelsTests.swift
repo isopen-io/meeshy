@@ -20,7 +20,7 @@ final class FriendModelsTests: XCTestCase {
 
     // MARK: - FriendRequest
 
-    func testFriendRequestDecodingWithNestedUsers() throws {
+    func test_friendRequest_decodeWithNestedUsers_populatesAllFields() throws {
         let json = """
         {
             "id": "fr1",
@@ -65,7 +65,7 @@ final class FriendModelsTests: XCTestCase {
         XCTAssertNotNil(request.updatedAt)
     }
 
-    func testFriendRequestDecodingWithoutOptionalMessage() throws {
+    func test_friendRequest_decodeWithoutMessage_optionalsAreNil() throws {
         let json = """
         {
             "id": "fr2",
@@ -86,7 +86,7 @@ final class FriendModelsTests: XCTestCase {
 
     // MARK: - FriendRequestUser
 
-    func testFriendRequestUserNameUsesDisplayName() throws {
+    func test_friendRequestUser_name_prefersDisplayName() throws {
         let json = """
         {"id":"u1","username":"alice","firstName":"Alice","lastName":"W","displayName":"Alice Wonderland","avatar":null}
         """.data(using: .utf8)!
@@ -95,7 +95,7 @@ final class FriendModelsTests: XCTestCase {
         XCTAssertEqual(user.name, "Alice Wonderland")
     }
 
-    func testFriendRequestUserNameFallsBackToFirstAndLastName() throws {
+    func test_friendRequestUser_nameWithoutDisplayName_fallsBackToFirstAndLastName() throws {
         let json = """
         {"id":"u2","username":"bob","firstName":"Bob","lastName":"Smith","displayName":null,"avatar":null}
         """.data(using: .utf8)!
@@ -104,7 +104,7 @@ final class FriendModelsTests: XCTestCase {
         XCTAssertEqual(user.name, "Bob Smith")
     }
 
-    func testFriendRequestUserNameFallsBackToUsername() throws {
+    func test_friendRequestUser_nameWithoutAnyName_fallsBackToUsername() throws {
         let json = """
         {"id":"u3","username":"charlie","firstName":null,"lastName":null,"displayName":null,"avatar":null}
         """.data(using: .utf8)!
@@ -113,7 +113,7 @@ final class FriendModelsTests: XCTestCase {
         XCTAssertEqual(user.name, "charlie")
     }
 
-    func testFriendRequestUserNameWithOnlyFirstName() throws {
+    func test_friendRequestUser_nameWithOnlyFirstName_returnsFirstName() throws {
         let json = """
         {"id":"u4","username":"delta","firstName":"Delta","lastName":null,"displayName":null,"avatar":null}
         """.data(using: .utf8)!
@@ -124,7 +124,7 @@ final class FriendModelsTests: XCTestCase {
 
     // MARK: - SendFriendRequest
 
-    func testSendFriendRequestEncoding() throws {
+    func test_sendFriendRequest_encode_includesReceiverIdAndMessage() throws {
         let request = SendFriendRequest(receiverId: "user42", message: "Hey!")
         let data = try JSONEncoder().encode(request)
         let dict = try JSONSerialization.jsonObject(with: data) as! [String: Any]
@@ -133,7 +133,7 @@ final class FriendModelsTests: XCTestCase {
         XCTAssertEqual(dict["message"] as? String, "Hey!")
     }
 
-    func testSendFriendRequestEncodingWithNilMessage() throws {
+    func test_sendFriendRequest_encodeWithNilMessage_omitsOrNullsMessage() throws {
         let request = SendFriendRequest(receiverId: "user43")
         let data = try JSONEncoder().encode(request)
         let dict = try JSONSerialization.jsonObject(with: data) as! [String: Any]
@@ -145,7 +145,7 @@ final class FriendModelsTests: XCTestCase {
 
     // MARK: - RespondFriendRequest
 
-    func testRespondFriendRequestAccepted() throws {
+    func test_respondFriendRequest_accepted_encodesStatusAccepted() throws {
         let response = RespondFriendRequest(accepted: true)
         let data = try JSONEncoder().encode(response)
         let dict = try JSONSerialization.jsonObject(with: data) as! [String: Any]
@@ -153,7 +153,7 @@ final class FriendModelsTests: XCTestCase {
         XCTAssertEqual(dict["status"] as? String, "accepted")
     }
 
-    func testRespondFriendRequestRejected() throws {
+    func test_respondFriendRequest_rejected_encodesStatusRejected() throws {
         let response = RespondFriendRequest(accepted: false)
         let data = try JSONEncoder().encode(response)
         let dict = try JSONSerialization.jsonObject(with: data) as! [String: Any]

@@ -61,6 +61,23 @@ struct UserStatsView: View {
     private var scrollContent: some View {
         ScrollView(showsIndicators: false) {
             VStack(spacing: 20) {
+                if let errorMessage = viewModel.errorMessage {
+                    HStack(spacing: 12) {
+                        Image(systemName: "exclamationmark.circle.fill")
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundColor(MeeshyColors.error)
+                            .accessibilityHidden(true)
+                        Text(errorMessage)
+                            .font(MeeshyFont.relative(13, weight: .medium))
+                            .foregroundColor(MeeshyColors.error)
+                        Spacer()
+                    }
+                    .padding(12)
+                    .background(
+                        RoundedRectangle(cornerRadius: 10)
+                            .fill(MeeshyColors.error.opacity(0.1))
+                    )
+                }
                 statsCards
                 if !viewModel.timeline.isEmpty {
                     timelineChart
@@ -196,6 +213,7 @@ final class UserStatsViewModel: ObservableObject {
     @Published var stats: UserStats?
     @Published var timeline: [TimelinePoint] = []
     @Published var isLoading = false
+    @Published var errorMessage: String?
 
     private static let logger = Logger(subsystem: "me.meeshy.app", category: "stats")
 
@@ -239,10 +257,12 @@ final class UserStatsViewModel: ObservableObject {
             let (s, t) = try await (statsTask, timelineTask)
             stats = s
             timeline = t
+            errorMessage = nil
             try? await CacheCoordinator.shared.stats.save([s], for: userId)
             try? await CacheCoordinator.shared.timeline.save(t, for: "timeline_\(userId)")
         } catch {
             UserStatsViewModel.logger.error("stats refresh failed: \(error.localizedDescription)")
+            errorMessage = error.localizedDescription
         }
         isLoading = false
     }

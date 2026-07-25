@@ -106,6 +106,31 @@ final class MessageListViewController: UIViewController {
     /// bulle, fourni par `ConversationView`. Quand présent (donc iOS 26+), la
     /// cellule attache le menu natif et DÉSACTIVE le long-press custom.
     var nativeMessageMenu: ((Message) -> AnyView)?
+    /// id de la bulle présentée dans l'overlay d'appui long. La cellule live
+    /// correspondante passe à `opacity 0` (masquée) le temps de l'overlay —
+    /// seule la copie élevée reste visible (anti double-bulle fantôme). Ne
+    /// reconfigure QUE les cellules VISIBLES concernées (ancienne + nouvelle) :
+    /// les items du diffable sont keyés par `localId`, on résout donc l'id
+    /// ciblé via le store, borné aux cellules à l'écran.
+    var overlaidMessageId: String? {
+        didSet {
+            guard oldValue != overlaidMessageId, isViewLoaded else { return }
+            let targets = Set([oldValue, overlaidMessageId].compactMap { $0 })
+            guard !targets.isEmpty else { return }
+            let affected = collectionView.indexPathsForVisibleItems
+                .compactMap { dataSource.itemIdentifier(for: $0) }
+                .filter { item in
+                    guard case .message(let localId) = item,
+                          let m = store.domainMessage(for: localId, currentUserId: currentUserId)
+                    else { return false }
+                    return targets.contains(m.id)
+                }
+            guard !affected.isEmpty else { return }
+            var snap = dataSource.snapshot()
+            snap.reconfigureItems(affected)
+            dataSource.apply(snap, animatingDifferences: false)
+        }
+    }
     /// Add reaction. Carries the message id and the tapped bubble cell's
     /// on-screen frame (window coords; `nil` when the cell is not realized)
     /// so the quick-reaction bar can anchor to the bubble.
@@ -642,6 +667,9 @@ final class MessageListViewController: UIViewController {
                     isMine: isMine,
                     messageId: messageId,
                     messageCreatedAt: message.createdAt,
+                    // Masquée pendant que l'overlay d'appui long présente CETTE
+                    // bulle : seule la copie élevée reste visible (anti ghost).
+                    isHiddenForOverlay: message.id == self.overlaidMessageId,
                     resistance: hasTimebasedMedia ? .resistant : .normal,
                     onSwipeReply: { swipeReplyHandler?(messageId) },
                     onSwipeForward: { swipeForwardHandler?(messageId) },

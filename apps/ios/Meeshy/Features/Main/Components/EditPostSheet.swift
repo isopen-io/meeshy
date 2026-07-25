@@ -290,6 +290,16 @@ struct EditPostSheet: View {
             .clipShape(RoundedRectangle(cornerRadius: 10))
             .overlay(RoundedRectangle(cornerRadius: 10).stroke(theme.inputBorder, lineWidth: 1))
             .opacity(removed ? 0.35 : 1)
+            // Sans label, la bande de vignettes se lit comme une série de boutons
+            // « Retirer le média » identiques : VoiceOver n'annonce ni le TYPE du
+            // média ni son état « retiré » (transmis par la seule opacité 0.35,
+            // violation WCAG 1.4.1). On décrit chaque vignette comme UN élément
+            // (kind + état) ; le bouton retirer/restaurer reste un frère atteignable.
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(mediaKindLabel(item.kind))
+            .accessibilityValue(removed
+                ? String(localized: "feed.post.edit.media.removed.a11y", defaultValue: "Retiré", bundle: .main)
+                : "")
 
             Button {
                 toggleRemove(item.id)
@@ -330,6 +340,18 @@ struct EditPostSheet: View {
         case .image: return "photo"
         case .document: return "doc"
         case .location: return "mappin.and.ellipse"
+        }
+    }
+
+    /// Noms courts localisés du type de média, pour l'annonce VoiceOver de chaque
+    /// vignette (les glyphes SF Symbols étant décoratifs / masqués).
+    private func mediaKindLabel(_ kind: EditablePostMedia.Kind) -> String {
+        switch kind {
+        case .image: return String(localized: "feed.post.edit.media.kind.image", defaultValue: "Image", bundle: .main)
+        case .video: return String(localized: "feed.post.edit.media.kind.video", defaultValue: "Vidéo", bundle: .main)
+        case .audio: return String(localized: "feed.post.edit.media.kind.audio", defaultValue: "Audio", bundle: .main)
+        case .document: return String(localized: "feed.post.edit.media.kind.document", defaultValue: "Document", bundle: .main)
+        case .location: return String(localized: "feed.post.edit.media.kind.location", defaultValue: "Position", bundle: .main)
         }
     }
 

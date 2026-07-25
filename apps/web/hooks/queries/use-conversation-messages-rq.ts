@@ -10,7 +10,7 @@
 'use client';
 
 import { useCallback, useMemo, useRef, useEffect } from 'react';
-import { useQueryClient, useInfiniteQuery, useIsRestoring, focusManager } from '@tanstack/react-query';
+import { useQueryClient, useInfiniteQuery, focusManager } from '@tanstack/react-query';
 import { queryKeys } from '@/lib/react-query/query-keys';
 import { conversationsService } from '@/services/conversations.service';
 import { apiService } from '@/services/api.service';
@@ -107,6 +107,49 @@ export async function fetchMessagesFromService(
   }
 }
 
+type MessagesPage = { messages: Message[]; hasMore: boolean; total: number; nextCursor?: string | null };
+type InfiniteMessagesData = { pages: MessagesPage[]; pageParams: unknown[] };
+
+function clientMessageIdOf(message: Message): string | null {
+  const asRecord = message as Message & { clientMessageId?: string; _tempId?: string };
+  return asRecord.clientMessageId ?? asRecord._tempId ?? null;
+}
+
+/**
+ * Re-reading the newest page REPLACES it in the infinite cache. Two classes of
+ * locally-known messages are not (yet) in that server page and must survive:
+ * messages delivered by Socket.IO that the REST read cannot see yet (replica
+ * lag / read-after-write), and optimistic messages still in flight. Anything
+ * older than the server page is authoritative server state and is dropped as
+ * usual, so deletions still propagate.
+ */
+export function mergePendingLocalMessages(
+  serverMessages: Message[],
+  cached: InfiniteMessagesData | undefined
+): Message[] {
+  if (!cached) return serverMessages;
+
+  const serverIds = new Set(serverMessages.map((m) => m.id));
+  const serverClientIds = new Set(
+    serverMessages.map(clientMessageIdOf).filter((id): id is string => !!id)
+  );
+  const newestServerMs = serverMessages.reduce((max, m) => {
+    const t = m.createdAt ? new Date(m.createdAt).getTime() : 0;
+    return t > max ? t : max;
+  }, 0);
+
+  const preserved = cached.pages.flatMap((page) => page.messages).filter((m) => {
+    if (serverIds.has(m.id)) return false;
+    const clientId = clientMessageIdOf(m);
+    if (clientId && serverClientIds.has(clientId)) return false;
+    if (isOptimisticMessage(m)) return true;
+    const createdMs = m.createdAt ? new Date(m.createdAt).getTime() : 0;
+    return createdMs > newestServerMs;
+  });
+
+  return preserved.length > 0 ? [...preserved, ...serverMessages] : serverMessages;
+}
+
 export function useConversationMessagesRQ(
   conversationId: string | null,
   currentUser: User | null,
@@ -146,8 +189,14 @@ export function useConversationMessagesRQ(
     refetch,
   } = useInfiniteQuery({
     queryKey,
-    queryFn: ({ pageParam = 1, signal }) =>
-      fetchMessagesFromService(conversationId!, pageParam, limit, linkId, signal),
+    queryFn: async ({ pageParam = 1, signal }) => {
+      const page = await fetchMessagesFromService(conversationId!, pageParam, limit, linkId, signal);
+      // Only the newest page (initial page param) can be contradicted by
+      // locally-known messages; older pages are pure history.
+      if (pageParam !== 1) return page;
+      const cached = queryClient.getQueryData<InfiniteMessagesData>(queryKey);
+      return { ...page, messages: mergePendingLocalMessages(page.messages, cached) };
+    },
     initialPageParam: 1 as number | string,
     getNextPageParam: (lastPage, allPages) => {
       if (!lastPage.hasMore) return undefined;
@@ -166,14 +215,16 @@ export function useConversationMessagesRQ(
       return undefined;
     },
     enabled: enabled && !!conversationId,
-    // Socket.IO est la source de vérité pour la liste de messages ouverte.
-    // Un refetch au focus/reconnexion REMPLACE les pages du cache infini par
-    // les pages serveur ; si un message reçu via socket vient d'être ajouté au
-    // cache mais que la lecture REST ne le renvoie pas encore (lag de réplica
-    // MongoDB / read-after-write), il est effacé de l'écran — le message
-    // "apparaît puis disparaît" et ne revient qu'au rechargement (F5).
-    // On désactive donc ces refetch destructeurs pour CETTE requête : le
-    // socket maintient déjà la liste à jour (cf. handleNewMessage).
+    // Ouvrir une conversation relit TOUJOURS la dernière page côté serveur.
+    // Le client global tourne en `staleTime: Infinity` + `refetchOnMount: false`
+    // (Socket.IO est la source temps réel) ; sans cette dérogation, une page
+    // servie par le cache pouvait rester affichée indéfiniment et un message
+    // manquant ne réapparaissait jamais, même après plusieurs F5.
+    // Le refetch n'est plus destructeur : `queryFn` refusionne les messages
+    // locaux que la lecture REST ne voit pas encore (socket + optimistes).
+    refetchOnMount: 'always',
+    // Focus / reconnexion restent servis par le catch-up incrémental
+    // (`syncNewerMessages`), moins coûteux qu'un refetch complet des pages.
     refetchOnWindowFocus: false,
     refetchOnReconnect: false,
     select: (data) => ({
@@ -604,20 +655,14 @@ export function useConversationMessagesRQ(
     void syncNewerMessages();
   }, [isSocketConnected, syncNewerMessages]);
 
-  // Trigger 2 — conversation open/mount: the socket may already be connected
-  // (no reconnect edge) while the cached entry is stale. Waits for the async
-  // IndexedDB cache restore (useIsRestoring) so an F5 doesn't race the persister;
-  // cold opens (no cache entry) are handled by the initial queryFn fetch.
-  const isRestoring = useIsRestoring();
+  // NOTE — il n'y a volontairement PAS de catch-up au montage : ouvrir une
+  // conversation relit désormais la dernière page côté serveur
+  // (`refetchOnMount: 'always'` ci-dessus), ce qui couvre strictement plus que
+  // le watermark « en avant » du catch-up — lequel, par construction, ne peut
+  // pas combler un trou antérieur au message le plus récent déjà en cache.
+  // Les deux lectures au montage se seraient de surcroît concurrencées.
 
-  useEffect(() => {
-    if (isRestoring || !enabled || !conversationId || linkId) return;
-    if (!queryClient.getQueryData(queryKey)) return;
-
-    void syncNewerMessages();
-  }, [isRestoring, enabled, conversationId, linkId, queryClient, queryKey, syncNewerMessages]);
-
-  // Trigger 3 — window focus: safety net replacing the destructive
+  // Trigger 2 — window focus: safety net replacing the destructive
   // refetchOnWindowFocus (disabled above). Debounced so rapid tab switches
   // coalesce into one catch-up.
   useEffect(() => {

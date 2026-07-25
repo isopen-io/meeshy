@@ -137,18 +137,26 @@ actor MediaCompressor {
             let png = downsampled.pngData() ?? data
             return CompressedImageResult(data: png, mimeType: "image/png")
 
-        case "image/heic", "image/heif":
+        // HEIC/HEIF ("High Efficiency" camera capture) falls straight through
+        // to `default`: most web clients (and non-Apple browsers) cannot
+        // decode HEIC inline, so re-encoding it as HEIC here would leave a
+        // format the web can't render regardless of file extension. The
+        // default branch already transcodes to a real JPEG stream with a
+        // matching mimeType/extension — reusing it fixes both the mismatched
+        // `.jpg` extension AND actual cross-platform rendering in one move.
+        //
+        // On transcode failure (corrupt/exotic source), both fallbacks below
+        // return the UNTOUCHED original bytes tagged with the ORIGINALLY
+        // detected `mime` — never hardcode "image/jpeg" here, or real HEIC
+        // bytes end up mislabeled on the failure path (the mismatch this
+        // branch exists to eliminate on the success path).
+        default:
             guard let downsampled = downsample(data: data, maxDimension: maxDimension) else {
                 return CompressedImageResult(data: data, mimeType: mime)
             }
-            let compressed = downsampled.heicData(compressionQuality: quality) ?? data
-            return CompressedImageResult(data: compressed, mimeType: mime)
-
-        default:
-            guard let downsampled = downsample(data: data, maxDimension: maxDimension) else {
-                return CompressedImageResult(data: data, mimeType: "image/jpeg")
+            guard let jpeg = downsampled.jpegData(compressionQuality: quality) else {
+                return CompressedImageResult(data: data, mimeType: mime)
             }
-            let jpeg = downsampled.jpegData(compressionQuality: quality) ?? data
             return CompressedImageResult(data: jpeg, mimeType: "image/jpeg")
         }
     }
@@ -548,19 +556,5 @@ enum CompressionError: LocalizedError {
         case .exportSessionFailed: return "Video compression failed"
         case .noVideoTrack: return "No video track found in source file"
         }
-    }
-}
-
-// MARK: - UIImage HEIC Extension
-
-private nonisolated extension UIImage {
-    func heicData(compressionQuality: CGFloat) -> Data? {
-        guard let cgImage else { return nil }
-        let data = NSMutableData()
-        guard let dest = CGImageDestinationCreateWithData(data, "public.heic" as CFString, 1, nil) else { return nil }
-        let options: [CFString: Any] = [kCGImageDestinationLossyCompressionQuality: compressionQuality]
-        CGImageDestinationAddImage(dest, cgImage, options as CFDictionary)
-        guard CGImageDestinationFinalize(dest) else { return nil }
-        return data as Data
     }
 }

@@ -743,6 +743,41 @@ describe('MessageProcessor — notification flows', () => {
     const processor = makeProcessor(); // no notificationService
     await expect(processor.saveMessage({ ...baseData })).resolves.toBeDefined();
   });
+
+  // GW3 — per-conversation mute: muted recipients leave the regular fan-out
+  // through the SAME widened prefs query as mentionsOnly (no extra round-trip).
+  it('excludes muted recipients from regular fan-out via the widened prefs query', async () => {
+    msgCreate.mockResolvedValue(makeMessage());
+    partFindUnique.mockResolvedValue({ userId: 'sender-user' });
+    userFindUnique.mockResolvedValue({ username: 'sender', displayName: 'Sender', avatar: null });
+    convFindUnique.mockResolvedValue({
+      title: 'T', type: 'group',
+      participants: [{ userId: 'sender-user' }, { userId: 'muted-user' }, { userId: 'normal-user' }],
+    });
+    prefFindMany.mockResolvedValue([{ userId: 'muted-user' }]);
+    attFindMany.mockResolvedValue([]);
+
+    const notifSvc = {
+      createReplyNotification: mockCreateReplyNotification,
+      createMessageNotification: mockCreateMessageNotification,
+      createMentionNotificationsBatch: mockCreateMentionNotificationsBatch,
+    };
+    const processor = makeProcessor(notifSvc);
+    await processor.saveMessage({ ...baseData, content: 'Hello everyone' });
+    await new Promise(r => setImmediate(r));
+
+    expect(prefFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          OR: [{ mentionsOnly: true }, { isMuted: true }],
+        }),
+      })
+    );
+    expect(mockCreateMessageNotification).toHaveBeenCalledTimes(1);
+    expect(mockCreateMessageNotification.mock.calls[0][0]).toEqual(
+      expect.objectContaining({ recipientUserId: 'normal-user' })
+    );
+  });
 });
 
 // ── extractTranscriptionText (module-level fn) ──────────────────────────────

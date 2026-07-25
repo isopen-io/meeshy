@@ -127,9 +127,17 @@ final class TestSleeper: Sleeping, @unchecked Sendable {
 final class MockFeedbackToast: FeedbackToastSurfacing {
     var successMessages: [String] = []
     var errorMessages: [String] = []
+    /// Actions de tap capturées (renvoi vers les Réglages après un refus de
+    /// permission) — les exécuter dans un test ouvrirait les Réglages, donc on
+    /// se contente de vérifier leur présence.
+    var errorTapActions: [() -> Void] = []
 
     func showSuccess(_ message: String) { successMessages.append(message) }
     func showError(_ message: String)   { errorMessages.append(message) }
+    func showError(_ message: String, tapAction: @escaping () -> Void) {
+        errorMessages.append(message)
+        errorTapActions.append(tapAction)
+    }
 }
 
 // MARK: - MockHaptic

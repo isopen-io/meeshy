@@ -22,6 +22,14 @@ public protocol AuthServiceProviding: Sendable {
     /// below falls back to the legacy fire-and-forget `logout()` for
     /// conformers that don't override it.
     func logoutThrowing() async throws
+    /// D5.hygiene — variant that pins the Authorization header to an
+    /// explicitly captured `token`, decoupled from `APIClient.shared.authToken`'s
+    /// live value. `AuthManager.logout()` wipes that shared property
+    /// concurrently with the retry loop's `Task`, so reading it lazily at
+    /// send-time was a race that frequently sent the server logout with NO
+    /// Authorization header at all. Default forwards to the parameterless
+    /// variant for conformers that haven't opted in (tests, stubs).
+    func logoutThrowing(token: String) async throws
 }
 
 public extension AuthServiceProviding {
@@ -31,6 +39,10 @@ public extension AuthServiceProviding {
     /// retry loop behaves correctly.
     func logoutThrowing() async throws {
         await logout()
+    }
+
+    func logoutThrowing(token: String) async throws {
+        try await logoutThrowing()
     }
 }
 
@@ -270,5 +282,19 @@ public final class AuthService: AuthServiceProviding, @unchecked Sendable {
     /// offline at the moment of logout.
     public func logoutThrowing() async throws {
         let _: APIResponse<[String: Bool]> = try await api.request(endpoint: "/auth/logout", method: "POST")
+    }
+
+    /// D5.hygiene — sends the explicit `token` as the Authorization header
+    /// via `requestWithHeaders`, instead of relying on `APIClient.shared.authToken`
+    /// (which `AuthManager.logout()` may have already wiped to `nil` by the
+    /// time this retry loop actually sends its request).
+    public func logoutThrowing(token: String) async throws {
+        let _: APIResponse<[String: Bool]> = try await api.requestWithHeaders(
+            endpoint: "/auth/logout",
+            method: "POST",
+            body: nil,
+            queryItems: nil,
+            headers: ["Authorization": "Bearer \(token)"]
+        )
     }
 }

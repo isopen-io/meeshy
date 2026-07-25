@@ -54,16 +54,16 @@ public final class JoinFlowViewModel: ObservableObject {
             let message: String
             switch error {
             case .server(404, _):
-                message = "Ce lien de conversation est introuvable"
+                message = String(localized: "joinFlow.error.linkNotFound", defaultValue: "Ce lien de conversation est introuvable", bundle: .module)
             case .server(410, let msg):
                 message = msg
             default:
-                message = error.errorDescription ?? "Erreur inconnue"
+                message = error.errorDescription ?? String(localized: "joinFlow.error.unknown", defaultValue: "Erreur inconnue", bundle: .module)
             }
             errorMessage = message
             phase = .error(message)
         } catch {
-            let message = "Impossible de charger les informations du lien"
+            let message = String(localized: "joinFlow.error.loadFailed", defaultValue: "Impossible de charger les informations du lien", bundle: .module)
             errorMessage = message
             phase = .error(message)
         }
@@ -125,14 +125,14 @@ public final class JoinFlowViewModel: ObservableObject {
             case .server(410, let msg):
                 errorMessage = msg
             case .server(429, _):
-                errorMessage = "Trop d'utilisateurs connectes"
+                errorMessage = String(localized: "joinFlow.error.tooManyUsers", defaultValue: "Trop d'utilisateurs connectes", bundle: .module)
             case .auth:
                 errorMessage = error.errorDescription
             default:
-                errorMessage = error.errorDescription ?? "Erreur lors de la connexion"
+                errorMessage = error.errorDescription ?? String(localized: "joinFlow.error.joinFailed", defaultValue: "Erreur lors de la connexion", bundle: .module)
             }
         } catch {
-            errorMessage = "Erreur inattendue"
+            errorMessage = String(localized: "joinFlow.error.unexpected", defaultValue: "Erreur inattendue", bundle: .module)
         }
 
         isSubmitting = false

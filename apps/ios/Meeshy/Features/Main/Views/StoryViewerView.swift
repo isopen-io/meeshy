@@ -98,6 +98,13 @@ struct StoryViewerView: View {
     /// (tray, deep link, story-reaction redirect) on the existing path.
     var initialAction: StoryViewerInitialAction? = nil
 
+    /// Commentaire ciblé par la notification : l'overlay commentaires scrolle
+    /// dessus (au lieu du dernier) une fois la liste chargée. `parent` sert de
+    /// repli de scroll pour une réponse dont le thread n'est pas déplié.
+    /// Non-private : consommés par StoryViewerView+Content (fichier extension).
+    var targetCommentId: String? = nil
+    var targetParentCommentId: String? = nil
+
     static let heartEmoji = "\u{2764}\u{FE0F}"
 
     @State var currentStoryIndex = 0 // internal for cross-file extension access
@@ -285,12 +292,21 @@ struct StoryViewerView: View {
     /// not when somebody else has (bug 2026-05-28).
     @State var storyCurrentUserReactions: [String] = []
     @State var storyComments: [FeedComment] = []
+    /// Pagination des commentaires top-level de la story — suivie pour la
+    /// chasse paginée d'un commentaire notifié hors de la première page (50).
+    @State var storyCommentsNextCursor: String?
+    @State var storyCommentsHasMore = false
     @State var isLoadingComments = false
     @State var storyCommentCount: Int = 0
     @State var replyingToStoryComment: FeedComment? = nil
     @State var storyCommentRepliesMap: [String: [FeedComment]] = [:]
     @State var storyCommentExpandedThreads: Set<String> = []
     @State var storyCommentLoadingReplies: Set<String> = []
+    /// Pagination des réponses par commentaire racine (endpoint replies paginé
+    /// ASC 20/page). NON-private : consommé par l'extension frère
+    /// StoryViewerView+Content (piège protection level cross-file).
+    @State var storyCommentRepliesHasMore: [String: Bool] = [:]
+    @State var storyCommentRepliesNextCursor: [String: String] = [:]
     /// Optimistic local tracking of liked comments (id ∈ set => current user reacted).
     @State var storyCommentLikedIds: Set<String> = []
     /// Local like-count delta keyed by comment id, applied on top of the server `comment.likes`
@@ -400,7 +416,6 @@ struct StoryViewerView: View {
     private var viewerContent: some View {
         StoryViewerContentView(
             prefetcher: prefetcher,
-            isPreviewMode: isPreviewMode,
             cardScale: cardScale,
             cardCornerRadius: cardCornerRadius,
             cardOpacity: cardOpacity,
@@ -615,6 +630,21 @@ struct StoryViewerView: View {
         .adaptiveOnChange(of: currentStory?.reactionCount) { _, newCount in
             storyReactionCount = newCount ?? 0
             storyCurrentUserReactions = currentStory?.currentUserReactions ?? []
+        }
+        // Mirror of the reaction sink above (asymmetry fix): `StoryViewModel`
+        // applies `comment:added`/`comment:deleted` to `storyGroups` the same
+        // way it applies `story:reacted`, but nothing re-derived the sidebar's
+        // @State counter from it — a comment posted by another viewer never
+        // moved the visible count until the user swiped away and back.
+        .adaptiveOnChange(of: currentStory?.commentCount) { _, newCount in
+            storyCommentCount = newCount ?? 0
+        }
+        // The counter mirror above keeps the number honest, but the comments
+        // OVERLAY itself (when open) never received the new comment's content —
+        // only a full close/reopen picked it up. Mirrors
+        // `PostDetailViewModel.subscribeToSocket`'s `commentAdded` sink.
+        .onReceive(SocialSocketManager.shared.commentAdded.receive(on: DispatchQueue.main)) { data in
+            applyStoryCommentAdded(data)
         }
     }
 
@@ -1112,9 +1142,17 @@ struct StoryViewerView: View {
             storyCommentRepliesMap: storyCommentRepliesMap,
             storyCommentExpandedThreads: storyCommentExpandedThreads,
             storyCommentLoadingReplies: storyCommentLoadingReplies,
+            storyCommentRepliesHasMore: storyCommentRepliesHasMore,
             isLoadingComments: isLoadingComments,
             userLang: AuthManager.shared.currentUser?.preferredContentLanguages.first ?? "fr",
             isStoryExpired: currentStory?.isExpired() ?? false,
+            targetCommentId: targetCommentId,
+            targetParentCommentId: targetParentCommentId,
+            huntTargetComment: { await huntTargetStoryComment() },
+            loadMoreStoryCommentReplies: { await loadMoreStoryCommentReplies(commentId: $0) },
+            revealTargetReply: { parentId, replyId in
+                await revealTargetStoryReply(parentId: parentId, replyId: replyId)
+            },
             showCommentsOverlay: $showCommentsOverlay,
             replyingToStoryComment: $replyingToStoryComment,
             keyboard: keyboard,
@@ -1293,6 +1331,15 @@ struct StoryViewerView: View {
             }
         }
 
+        // Snapshot captured BEFORE the optimistic mutation below — the sole
+        // rollback target if the network call fails (most notably the
+        // gateway's 409 REACTION_LIMIT_REACHED conflict when the user's
+        // emoji actually differs from an existing server-side reaction).
+        // Without this the optimistic emoji/counter bump was never undone:
+        // the UI kept the refused emoji and an inflated count forever.
+        let priorReactions = storyCurrentUserReactions
+        let priorCount = storyReactionCount
+
         // N'incrémenter le compteur QUE pour une réaction réellement nouvelle :
         // re-taper le même emoji ne crée pas une nouvelle réaction côté serveur
         // (l'array `storyCurrentUserReactions` est dédupliqué), donc l'ancien
@@ -1303,7 +1350,7 @@ struct StoryViewerView: View {
             storyReactionCount += 1
         }
         heartBouncePulse += 1
-        sendReaction(emoji: emoji)
+        sendReaction(emoji: emoji, priorReactions: priorReactions, priorCount: priorCount)
     }
 
     // MARK: - Computed Bottom Padding
@@ -1354,7 +1401,12 @@ struct StoryViewerView: View {
     /// celle-ci est PRÉPENDUE à la chaine (priorité la plus haute) sans supprimer les
     /// préférences de base — cf. Prisme « Exploration ». L'override est éphémère : il se
     /// réinitialise au changement de slide (cf. `.onChange(of: currentStory?.id)`).
-    private var resolvedViewerLanguageChain: [String] {
+    ///
+    /// Internal (not private): `StoryViewerView+Content.swift` needs it for
+    /// Prisme-correct resolution of realtime socket comments
+    /// (`applyStoryCommentAdded`) — the cross-file-private-access trap
+    /// documented in apps/ios/CLAUDE.md.
+    var resolvedViewerLanguageChain: [String] {
         Self.viewerLanguageChain(
             base: AuthManager.shared.currentUser?.preferredContentLanguages ?? [],
             override: sessionLanguageOverride
@@ -1771,16 +1823,20 @@ private struct StoryGroupIntroOverlay: View {
         .padding(.horizontal, 32)
     }
 
+    // Règle 1/3/5 : au-delà de 5 min d'inactivité (offline), AUCUN badge —
+    // pas de dot gris « Hors ligne » sur l'intro de groupe.
     @ViewBuilder
     private var presenceBadge: some View {
         let state = presence?.state ?? .offline
-        HStack(spacing: 6) {
-            Circle()
-                .fill(state.dotColor)
-                .frame(width: 9, height: 9)
-            Text(presenceLabel(state))
-                .font(.caption.weight(.medium))
-                .foregroundStyle(.white.opacity(0.85))
+        if state.showsIndicator {
+            HStack(spacing: 6) {
+                Circle()
+                    .fill(state.dotColor)
+                    .frame(width: 9, height: 9)
+                Text(presenceLabel(state))
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(.white.opacity(0.85))
+            }
         }
     }
 
@@ -1788,8 +1844,8 @@ private struct StoryGroupIntroOverlay: View {
         switch state {
         case .online:
             return String(localized: "story.groupIntro.online", defaultValue: "En ligne")
-        case .recent:
-            return String(localized: "story.groupIntro.recent", defaultValue: "Actif·ve récemment")
+        case .idle:
+            return String(localized: "story.groupIntro.idle", defaultValue: "Inactif·ve")
         case .away:
             return String(localized: "story.groupIntro.away", defaultValue: "Absent·e")
         case .offline:
@@ -1800,8 +1856,10 @@ private struct StoryGroupIntroOverlay: View {
     private var accessibilitySummary: String {
         var parts = [intro.displayName ?? intro.username]
         // Même règle que le badge visuel : le statut de présence n'est
-        // annoncé à VoiceOver que pour un ami.
-        if isFriend { parts.append(presenceLabel(presence?.state ?? .offline)) }
+        // annoncé à VoiceOver que pour un ami ET quand un indicateur est
+        // affiché (online/away/idle) — offline reste muet.
+        let state = presence?.state ?? .offline
+        if isFriend, state.showsIndicator { parts.append(presenceLabel(state)) }
         if let message = intro.moodMessage { parts.append(message) }
         return parts.joined(separator: ", ")
     }

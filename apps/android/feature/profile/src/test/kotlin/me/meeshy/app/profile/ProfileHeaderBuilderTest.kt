@@ -148,14 +148,32 @@ class ProfileHeaderBuilderTest {
     }
 
     @Test
-    fun `presence is away when disconnected and idle past the window`() {
-        // isOnline=false here (not true): the anti-stale guard makes isOnline
-        // authoritative up to 30min, so a connected user stays ONLINE even with
-        // a 10min-old lastActiveAt (see the test above). The away-decay path
-        // only applies to a disconnected user with a frozen timestamp.
-        val stale = java.time.Instant.ofEpochMilli(now - 600_000L).toString()
-        assertThat(ProfileHeaderBuilder.build(user(isOnline = false, lastActiveAt = stale), now).presence)
+    fun `presence is away when disconnected and idle two minutes`() {
+        // Canonical 1/3/5 rule (SSOT: packages/shared/utils/user-presence.ts,
+        // mirrored in Presence.kt UserPresence.state + iOS UserPresence.state):
+        // a disconnected user whose frozen lastActiveAt sits in the 60s..3min
+        // window resolves to AWAY (orange). isOnline=false here — a connected
+        // user would stay ONLINE up to the 5min anti-stale guard.
+        val awayAgo = java.time.Instant.ofEpochMilli(now - 120_000L).toString()
+        assertThat(ProfileHeaderBuilder.build(user(isOnline = false, lastActiveAt = awayAgo), now).presence)
             .isEqualTo(PresenceState.AWAY)
+    }
+
+    @Test
+    fun `presence is idle when disconnected and idle four minutes`() {
+        // 3min..5min -> IDLE (grey, still displayed) per the 1/3/5 rule.
+        val idleAgo = java.time.Instant.ofEpochMilli(now - 240_000L).toString()
+        assertThat(ProfileHeaderBuilder.build(user(isOnline = false, lastActiveAt = idleAgo), now).presence)
+            .isEqualTo(PresenceState.IDLE)
+    }
+
+    @Test
+    fun `presence is offline when disconnected past the five minute window`() {
+        // > 5min -> OFFLINE (no dot). A 10min-old frozen timestamp is offline,
+        // not away — there is no 30min window; the offline boundary is 5min.
+        val offlineAgo = java.time.Instant.ofEpochMilli(now - 600_000L).toString()
+        assertThat(ProfileHeaderBuilder.build(user(isOnline = false, lastActiveAt = offlineAgo), now).presence)
+            .isEqualTo(PresenceState.OFFLINE)
     }
 
     // ---- last seen -------------------------------------------------------
@@ -169,10 +187,18 @@ class ProfileHeaderBuilderTest {
 
     @Test
     fun `last seen carries the parsed instant for an away user`() {
-        val stale = java.time.Instant.ofEpochMilli(now - 600_000L).toString()
-        val header = ProfileHeaderBuilder.build(user(isOnline = false, lastActiveAt = stale), now)
+        val awayAgo = java.time.Instant.ofEpochMilli(now - 120_000L).toString()
+        val header = ProfileHeaderBuilder.build(user(isOnline = false, lastActiveAt = awayAgo), now)
         assertThat(header.presence).isEqualTo(PresenceState.AWAY)
-        assertThat(header.lastSeenEpochMillis).isEqualTo(now - 600_000L)
+        assertThat(header.lastSeenEpochMillis).isEqualTo(now - 120_000L)
+    }
+
+    @Test
+    fun `last seen carries the parsed instant for an idle user`() {
+        val idleAgo = java.time.Instant.ofEpochMilli(now - 240_000L).toString()
+        val header = ProfileHeaderBuilder.build(user(isOnline = false, lastActiveAt = idleAgo), now)
+        assertThat(header.presence).isEqualTo(PresenceState.IDLE)
+        assertThat(header.lastSeenEpochMillis).isEqualTo(now - 240_000L)
     }
 
     @Test

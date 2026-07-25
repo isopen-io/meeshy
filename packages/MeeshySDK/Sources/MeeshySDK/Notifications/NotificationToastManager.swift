@@ -43,6 +43,13 @@ public final class NotificationToastManager: ObservableObject {
     /// (it lives in the app target), so we ask for a pull closure instead.
     public var focusFilterProvider: (@MainActor () -> FocusFilterSnapshot)?
 
+    /// Joueur d'haptique injecté par la cible app (le SDK core n'importe pas
+    /// UIKit) — même pattern que `focusFilterProvider`. Appelé à l'apparition
+    /// d'un toast, UNIQUEMENT si la préférence « Vibrations »
+    /// (`vibrationEnabled`) est active : c'est le consommateur réel de ce
+    /// toggle côté in-app.
+    public var hapticPlayer: (@MainActor () -> Void)?
+
     /// Présentation Local-First (nom renommé + emoji favori) d'une conversation
     /// pour les toasts in-app. Le SDK ne peut pas lire le snapshot local des
     /// conversations de l'app, donc la cible app injecte une closure de pull —
@@ -276,7 +283,9 @@ public final class NotificationToastManager: ObservableObject {
 
     // MARK: - Event Handlers
 
-    private func handleNewNotification(_ event: SocketNotificationEvent) {
+    // Interne (pas private) : point d'entrée des tests pour dérouler le
+    // pipeline complet dedup → persist → prefs → toast/haptique.
+    func handleNewNotification(_ event: SocketNotificationEvent) {
         // Muting logic: suppress the in-app toast if the user is already
         // viewing the relevant content. Le contenu étant consommé en direct,
         // la notification ne doit pas rester non lue : on la marque lue côté
@@ -390,6 +399,9 @@ public final class NotificationToastManager: ObservableObject {
     // MARK: - Toast
 
     private func showToast(_ event: SocketNotificationEvent) {
+        if UserPreferencesManager.shared.notification.vibrationEnabled {
+            hapticPlayer?()
+        }
         toastDismissTask?.cancel()
         currentToast = event
 

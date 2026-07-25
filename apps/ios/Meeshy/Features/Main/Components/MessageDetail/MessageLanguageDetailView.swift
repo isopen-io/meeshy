@@ -30,27 +30,6 @@ struct MessageLanguageDetailView: View {
     @State private var mergedTranslatedAudios: [MessageTranslatedAudio] = []
     @State private var translatingAudioLanguages: Set<String> = []
 
-    static let supportedLanguages: [(code: String, flag: String, name: String)] = [
-        ("fr", "\u{1F1EB}\u{1F1F7}", "Fran\u{00e7}ais"),
-        ("en", "\u{1F1EC}\u{1F1E7}", "English"),
-        ("es", "\u{1F1EA}\u{1F1F8}", "Espa\u{00f1}ol"),
-        ("de", "\u{1F1E9}\u{1F1EA}", "Deutsch"),
-        ("ar", "\u{1F1F8}\u{1F1E6}", "\u{0627}\u{0644}\u{0639}\u{0631}\u{0628}\u{064A}\u{0629}"),
-        ("zh", "\u{1F1E8}\u{1F1F3}", "\u{4E2D}\u{6587}"),
-        ("pt", "\u{1F1F5}\u{1F1F9}", "Portugu\u{00EA}s"),
-        ("it", "\u{1F1EE}\u{1F1F9}", "Italiano"),
-        ("ja", "\u{1F1EF}\u{1F1F5}", "\u{65E5}\u{672C}\u{8A9E}"),
-        ("ko", "\u{1F1F0}\u{1F1F7}", "\u{D55C}\u{AD6D}\u{C5B4}"),
-        ("ru", "\u{1F1F7}\u{1F1FA}", "\u{0420}\u{0443}\u{0441}\u{0441}\u{043A}\u{0438}\u{0439}"),
-        ("hi", "\u{1F1EE}\u{1F1F3}", "\u{0939}\u{093F}\u{0928}\u{094D}\u{0926}\u{0940}"),
-        ("tr", "\u{1F1F9}\u{1F1F7}", "T\u{00FC}rk\u{00e7}e"),
-        ("nl", "\u{1F1F3}\u{1F1F1}", "Nederlands"),
-        ("pl", "\u{1F1F5}\u{1F1F1}", "Polski"),
-        ("vi", "\u{1F1FB}\u{1F1F3}", "Ti\u{1EBF}ng Vi\u{1EC7}t"),
-        ("th", "\u{1F1F9}\u{1F1ED}", "\u{0E44}\u{0E17}\u{0E22}"),
-        ("sv", "\u{1F1F8}\u{1F1EA}", "Svenska")
-    ]
-
     var body: some View {
         content
             .onAppear { Task { await loadExistingTranslations() } }
@@ -172,7 +151,7 @@ struct MessageLanguageDetailView: View {
                 .frame(height: 0.5)
 
             // Language list
-            ForEach(Self.supportedLanguages.filter { $0.code != originalLang }, id: \.code) { lang in
+            ForEach(LanguageDisplay.translationPickerLanguages.filter { $0.code != originalLang }, id: \.code) { lang in
                 languageRow(lang, originalLang: originalLang)
             }
 
@@ -190,7 +169,7 @@ struct MessageLanguageDetailView: View {
         .animation(.spring(response: 0.35, dampingFraction: 0.8), value: translations.count)
     }
 
-    private func languageRow(_ lang: (code: String, flag: String, name: String), originalLang: String) -> some View {
+    private func languageRow(_ lang: LanguageDisplay, originalLang: String) -> some View {
         let langColor = Color(hex: LanguageDisplay.colorHex(for:lang.code))
         let hasTranslation = translations[lang.code] != nil
         let isTranslating = translatingLanguages.contains(lang.code) || translatingAudioLanguages.contains(lang.code)
@@ -463,7 +442,7 @@ struct MessageLanguageDetailView: View {
         }
     }
 
-    private static func languageName(for code: String) -> String {
-        supportedLanguages.first { $0.code == code }?.name ?? code.uppercased()
+    static func languageName(for code: String) -> String {
+        LanguageDisplay.from(code: code)?.name ?? code.uppercased()
     }
 }

@@ -53,8 +53,6 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
 
     @Published var storyGroups: [StoryGroup] = []
     @Published var isLoading = false
-    @Published var isPublishing = false
-    @Published var publishError: String?
     @Published var showStoryComposer = false
     @Published var activeUpload: StoryUploadState?
     private var uploadTask: Task<Void, Never>?
@@ -742,147 +740,6 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
         return group.hasUnviewed ? .unread : .read
     }
 
-    // MARK: - Publish Story
-
-    func publishStory(effects: StoryEffects, content: String?, image: UIImage?, originalLanguage: String? = nil, visibility: String = "FRIENDS") async {
-        guard !isPublishing else { return }
-        isPublishing = true
-        publishError = nil
-
-        do {
-            var uploadResult: TusUploadResult? = nil
-
-            if let image {
-                let serverOrigin = MeeshyConfig.shared.serverOrigin
-                guard let baseURL = URL(string: serverOrigin),
-                      let token = api.authToken else {
-                    publishError = "Authentication required"
-                    isPublishing = false
-                    return
-                }
-
-                let compressed = await MediaCompressor.shared.compressImage(image)
-                let fileName = "image_\(UUID().uuidString).\(compressed.fileExtension)"
-                let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent(fileName)
-                try compressed.data.write(to: tempURL)
-                defer { try? FileManager.default.removeItem(at: tempURL) }
-
-                let thumbHash = image.toThumbHash()
-                let uploader = TusUploadManager(baseURL: baseURL)
-                uploadResult = try await uploader.uploadFile(fileURL: tempURL, mimeType: compressed.mimeType, token: token, uploadContext: "story", thumbHash: thumbHash)
-            }
-
-            let post = try await postService.createStory(
-                content: content,
-                storyEffects: effects,
-                visibility: visibility,
-                visibilityUserIds: nil,
-                originalLanguage: originalLanguage,
-                mediaIds: uploadResult.map { [$0.id] },
-                repostOfId: nil
-            )
-
-            let media = buildFeedMedia(from: post, fallback: uploadResult)
-            let newItem = StoryItem(id: post.id, content: post.content, media: media,
-                                     storyEffects: effects, createdAt: post.createdAt, isViewed: true)
-            insertOrAppendStoryItem(newItem, forAuthor: post.author)
-            showStoryComposer = false
-            FeedbackToastManager.shared.showSuccess(String(localized: "story.published", defaultValue: "Story published", bundle: .main))
-        } catch {
-            publishError = "Failed to publish story"
-            FeedbackToastManager.shared.showError(String(localized: "story.publishError", defaultValue: "Failed to publish story", bundle: .main))
-        }
-
-        isPublishing = false
-    }
-    // MARK: - Publish Single Story (throws)
-
-    @MainActor
-    func publishStorySingle(
-        effects: StoryEffects,
-        content: String?,
-        image: UIImage?,
-        loadedImages: [String: UIImage] = [:],
-        loadedVideoURLs: [String: URL] = [:],
-        originalLanguage: String? = nil,
-        visibility: String = "FRIENDS"
-    ) async throws {
-        let serverOrigin = MeeshyConfig.shared.serverOrigin
-        guard let baseURL = URL(string: serverOrigin),
-              let token = api.authToken else {
-            throw URLError(.userAuthenticationRequired)
-        }
-        let uploader = TusUploadManager(baseURL: baseURL)
-
-        // 1. Upload background thumbnail (image de fond du slide)
-        var uploadResult: TusUploadResult? = nil
-        if let image {
-            let thumbHash = image.toThumbHash()
-            let compressed = await MediaCompressor.shared.compressImage(image)
-            let fileName = "image_\(UUID().uuidString).\(compressed.fileExtension)"
-            let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent(fileName)
-            try compressed.data.write(to: tempURL)
-            defer { try? FileManager.default.removeItem(at: tempURL) }
-            uploadResult = try await uploader.uploadFile(
-                fileURL: tempURL, mimeType: compressed.mimeType,
-                token: token, uploadContext: "story", thumbHash: thumbHash
-            )
-        }
-
-        // 2. Upload médias foreground (image/vidéo posés sur le canvas)
-        var updatedEffects = effects
-        var foregroundMediaIds: [String] = []
-        if var mediaObjects = updatedEffects.mediaObjects {
-            for i in mediaObjects.indices where mediaObjects[i].postMediaId.isEmpty {
-                let obj = mediaObjects[i]
-                if obj.kind == .video, let videoURL = loadedVideoURLs[obj.id] {
-                    let result = try await uploader.uploadFile(
-                        fileURL: videoURL, mimeType: "video/mp4",
-                        token: token, uploadContext: "story"
-                    )
-                    mediaObjects[i].postMediaId = result.id
-                    mediaObjects[i].mediaURL = result.fileUrl
-                    foregroundMediaIds.append(result.id)
-                } else if obj.kind == .image, let uiImage = loadedImages[obj.id] {
-                    let fgThumbHash = uiImage.toThumbHash()
-                    let compressed = await MediaCompressor.shared.compressImage(uiImage)
-                    let fileName = "image_\(UUID().uuidString).\(compressed.fileExtension)"
-                    let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent(fileName)
-                    try compressed.data.write(to: tempURL)
-                    defer { try? FileManager.default.removeItem(at: tempURL) }
-                    let result = try await uploader.uploadFile(
-                        fileURL: tempURL, mimeType: compressed.mimeType,
-                        token: token, uploadContext: "story", thumbHash: fgThumbHash
-                    )
-                    mediaObjects[i].postMediaId = result.id
-                    mediaObjects[i].mediaURL = result.fileUrl
-                    foregroundMediaIds.append(result.id)
-                }
-            }
-            updatedEffects.mediaObjects = mediaObjects
-        }
-
-        // 3. Composer la liste complète des mediaIds (thumbnail + foreground)
-        var allMediaIds: [String] = []
-        if let id = uploadResult?.id { allMediaIds.append(id) }
-        allMediaIds.append(contentsOf: foregroundMediaIds)
-
-        let post = try await postService.createStory(
-            content: content,
-            storyEffects: updatedEffects,
-            visibility: visibility,
-            visibilityUserIds: nil,
-            originalLanguage: originalLanguage,
-            mediaIds: allMediaIds.isEmpty ? nil : allMediaIds,
-            repostOfId: nil
-        )
-
-        let media = buildFeedMedia(from: post, fallback: uploadResult)
-        let newItem = StoryItem(id: post.id, content: post.content, media: media,
-                                 storyEffects: updatedEffects, createdAt: post.createdAt, isViewed: true)
-        insertOrAppendStoryItem(newItem, forAuthor: post.author)
-    }
-
     // MARK: - Background Publishing
 
     func publishStoryInBackground(
@@ -1389,6 +1246,16 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
                         mediaObjects[i].postMediaId = result.id
                         mediaObjects[i].mediaURL = result.fileUrl
                         foregroundMediaIds.append(result.id)
+                    } else {
+                        // Symmetric with the audio branch below: a declared
+                        // foreground media object with no matching loaded asset
+                        // used to be silently skipped — no log, no guard — and
+                        // the layer would render as an invisible gap for every
+                        // viewer. `postMediaId` stays empty so this object is
+                        // simply left out of `mediaIds`/the effects it feeds.
+                        os.Logger.storyAudio.error(
+                            "publish foreground media asset missing kind=\(obj.mediaType, privacy: .public) id=\(obj.id, privacy: .public) slide=\(slide.id, privacy: .public) — layer will be invisible to viewers (postMediaId stays empty)"
+                        )
                     }
                     mediaIdx += 1
                     let mediaProgress = Double(mediaIdx) / Double(max(1, mediaCount))

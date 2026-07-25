@@ -34,10 +34,6 @@ final class ConversationOptionsViewModel: ObservableObject {
         setupDebounce()
     }
 
-    enum LoadState: Equatable {
-        case idle, loading, loaded, error(String)
-    }
-
     func load() async {
         // The store owns the mutable per-user state (pin/mute/archive/section/
         // reaction/tags). Hydrate it (version-gated, so an in-flight optimistic

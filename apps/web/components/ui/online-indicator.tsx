@@ -8,7 +8,7 @@ interface OnlineIndicatorProps {
   isOnline: boolean;
   size?: 'sm' | 'md' | 'lg';
   className?: string;
-  // Support pour statut détaillé (online/recent/away/offline)
+  // Support pour statut détaillé (online/away/idle/offline)
   status?: UserStatus;
   // Tooltip personnalisé
   tooltip?: string;
@@ -33,16 +33,17 @@ export function OnlineIndicator({
   // Messages par défaut
   const defaultTooltips: Record<UserStatus, string> = {
     online: 'En ligne',
-    recent: 'Actif récemment',
     away: 'Absent',
+    idle: 'Inactif',
     offline: 'Hors ligne',
   };
 
   // Déterminer le statut effectif — sans prop status, dériver via la règle canonique
   const effectiveStatus = status ?? getUserStatus({ isOnline, lastActiveAt });
 
-  // Au-dela de 30min (offline) : aucun indicateur (dot masqué). Le gris reste
-  // défini dans PRESENCE_DOT_CLASS pour les usages labellisés, pas ici.
+  // Au-dela de 5min (offline) : aucun indicateur (dot masqué). Le gris AFFICHÉ
+  // est l'état idle (3-5min) ; le gris offline reste défini dans
+  // PRESENCE_DOT_CLASS pour les usages labellisés, pas ici.
   if (effectiveStatus === 'offline') return null;
 
   // Générer le tooltip

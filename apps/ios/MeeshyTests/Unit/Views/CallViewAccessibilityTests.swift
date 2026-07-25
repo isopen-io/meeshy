@@ -454,6 +454,84 @@ final class CallViewAccessibilityTests: XCTestCase {
         )
     }
 
+    // MARK: - Audio duration capsule VoiceOver context (212i)
+
+    /// Both audio-call surfaces render `Text(callManager.formattedDuration)` inside
+    /// a `.accessibilityElement(children: .combine)` capsule. On a HEALTHY link the
+    /// `TransientCallSignalGlyph` beside it is invisible, so the combined element
+    /// used to announce a context-free "1:23" — VoiceOver users could not tell it
+    /// was the call timer. The duration Text must carry an explicit label + value
+    /// (reusing the video badge's `call.duration.a11y.label`) so it reads
+    /// "Durée de l'appel, 1:23", while keeping `.combine` so the glyph's own
+    /// signal label still merges in when the link degrades.
+    private func audioDurationCapsuleVicinity(_ source: String, layout marker: String) throws -> String {
+        guard let layoutRange = source.range(of: marker) else {
+            XCTFail("CallView must define \(marker)")
+            return ""
+        }
+        guard let durationRange = source.range(
+            of: "Text(callManager.formattedDuration)",
+            range: layoutRange.upperBound..<source.endIndex
+        ) else {
+            XCTFail("\(marker) must render Text(callManager.formattedDuration)")
+            return ""
+        }
+        let end = source.index(durationRange.lowerBound, offsetBy: 1900, limitedBy: source.endIndex) ?? source.endIndex
+        return String(source[durationRange.lowerBound ..< end])
+    }
+
+    func test_audioCallLayout_durationCapsule_hasLabelledAccessibilityValue() throws {
+        let source = try callViewSource()
+        let vicinity = try audioDurationCapsuleVicinity(source, layout: "private var audioCallLayout: some View {")
+        XCTAssertTrue(
+            vicinity.contains("accessibilityLabel(String(localized: \"call.duration.a11y.label\"))"),
+            "audioCallLayout's duration Text must carry an explicit call.duration.a11y.label so " +
+            "VoiceOver announces the timer with context, not a context-free '1:23' when the signal " +
+            "glyph is invisible on a healthy link."
+        )
+        XCTAssertTrue(
+            vicinity.contains("accessibilityValue(callManager.formattedDuration)"),
+            "audioCallLayout's duration Text must expose the timer via .accessibilityValue so the " +
+            "static label reads once and the dynamic value updates separately (paired with the " +
+            "capsule's existing .updatesFrequently trait)."
+        )
+    }
+
+    func test_compactAudioCallHeader_durationCapsule_hasLabelledAccessibilityValue() throws {
+        let source = try callViewSource()
+        let vicinity = try audioDurationCapsuleVicinity(source, layout: "private var compactAudioCallHeader: some View {")
+        XCTAssertTrue(
+            vicinity.contains("accessibilityLabel(String(localized: \"call.duration.a11y.label\"))"),
+            "compactAudioCallHeader's duration Text must carry the same explicit " +
+            "call.duration.a11y.label — this caption-mode header has no status-pill row, so the " +
+            "labelled value is the only place the timer gains meaning for VoiceOver."
+        )
+        XCTAssertTrue(
+            vicinity.contains("accessibilityValue(callManager.formattedDuration)"),
+            "compactAudioCallHeader's duration Text must expose the timer via .accessibilityValue."
+        )
+    }
+
+    /// Doctrine 206i/210i/211i: the capsule now collapses to `.ignore` (not
+    /// `.combine`) — combining previously let the signal glyph's own label
+    /// leak through and announce a naked "0:34" with no context when the
+    /// glyph was invisible on a healthy link. Unlike the video badge, the
+    /// audio layout already surfaces degraded-signal state via the separate
+    /// `statusPill` row, so folding the capsule into one opaque
+    /// call-duration-only element causes no information loss.
+    func test_audioDurationCapsules_collapseToIgnoreForNakedReadoutFix() throws {
+        let source = try callViewSource()
+        for marker in ["private var audioCallLayout: some View {", "private var compactAudioCallHeader: some View {"] {
+            let vicinity = try audioDurationCapsuleVicinity(source, layout: marker)
+            XCTAssertTrue(
+                vicinity.contains(".accessibilityElement(children: .ignore)"),
+                "\(marker)'s duration capsule must collapse to children: .ignore so the composed " +
+                "call-duration label reads instead of a context-free timer digit (signal state is " +
+                "already surfaced separately via statusPill)."
+            )
+        }
+    }
+
     // MARK: - Video duration badge does not swallow child accessibility content
 
     /// `.accessibilityLabel`/`.accessibilityValue` applied directly to a

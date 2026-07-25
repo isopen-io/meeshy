@@ -123,6 +123,12 @@ interface StoryViewerProps {
   onDelete?: (storyId: string) => void;
   /** Whether to show the comments panel (default: true) */
   enableComments?: boolean;
+  /** Commentaire ciblé par une navigation notification (`#comment-<id>`) :
+   *  ouvre automatiquement le panneau et délègue scroll + surlignage (et la
+   *  chasse aux pages) au CommentList. */
+  targetCommentId?: string | null;
+  /** Parent top-level quand `targetCommentId` est une réponse (`?parent=`). */
+  targetParentCommentId?: string | null;
 }
 
 // ============================================================================
@@ -361,6 +367,8 @@ function StoryViewer({
   onReply,
   onDelete,
   enableComments = true,
+  targetCommentId,
+  targetParentCommentId,
 }: StoryViewerProps) {
   const { t } = useI18n('common');
   const [currentIndex, setCurrentIndex] = useState(initialIndex);
@@ -613,6 +621,14 @@ function StoryViewer({
     setShowComments(false);
     setIsPaused(false);
   }, []);
+
+  // Ciblage d'un commentaire depuis une notification : le panneau s'ouvre de
+  // lui-même (timeline en pause, comme un clic sur le bouton commentaires) —
+  // le CommentList fait ensuite la chasse + scroll + surlignage. Déclaré APRÈS
+  // le reset sur changement de story pour gagner l'ordre d'exécution au mount.
+  useEffect(() => {
+    if (enableComments && targetCommentId) handleOpenComments();
+  }, [enableComments, targetCommentId, handleOpenComments]);
 
   // Viewers list (author only) — pause the timeline while it's open, mirroring
   // the comments panel.
@@ -1047,6 +1063,8 @@ function StoryViewer({
                   onUnlikeComment={handleUnlikeComment}
                   onDeleteComment={handleDeleteComment}
                   onSubmitComment={handleSubmitComment}
+                  targetCommentId={targetCommentId}
+                  targetParentCommentId={targetParentCommentId}
                   className="text-white"
                 />
               </div>

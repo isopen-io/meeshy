@@ -1,5 +1,372 @@
 # @meeshy/gateway
 
+## 1.16.0
+
+### Minor Changes
+
+- Changements automatiques détectés :
+
+  - build cassé — MeeshyColors.error est déjà un Color
+  - curseur de lecture borné au préfixe contigu réellement lu
+  - borne le gel readAt aux messages réellement affichés
+
+## 1.15.0
+
+### Minor Changes
+
+- Changements automatiques détectés :
+
+  - « Plus… » bande = TOUTES les actions + bouton « + » réactions
+  - fonctions pures du suivi de lecture exact
+  - chasse au commentaire ciblé côté web + parité story/réel
+  - crash device à l'ouverture — AnyView sur l'overlay menu
+  - mutations de préférences persistées et flushées immédiatement
+  - « Plus… » morph icônes horizontales + Réactions voir+ajouter
+  - « Plus… » enrichi — éditer/copier/partager/traduire + partage réel
+  - chasse paginée bornée — le commentaire notifié est TOUJOURS atteint
+  - le tap mène à l'entité EXACTE — story/réel/réponse/iPad
+  - overlay a11y modale + isolation du drag (fluidité)
+  - gating NSE app tuée (miroir App Group) + toggle « Appels entrants »
+  - câblage effectif des préférences — chaque toggle a un consommateur réel
+  - overlay custom partout + masquage cellule (anti double-bulle)
+  - menu appui-long compact + « Plus… » unifié (pin/star/delete)
+  - checkpoint câblage réglages/profil (iOS + SDK + gateway)
+  - aligner VoiceProfileService sur les routes réelles du gateway
+  - footer de pagination rendu uniquement sur liste non vide
+  - picker de conversation contact-first + polish story/thème
+  - recalibrer les seuils RTT de l'indicateur qualité pour les liens long-courrier
+  - garde d'injection insensible à Foundation + mesure du coalescing
+  - tirer la poignée vers le haut ouvre toute la photothèque
+  - fiabiliser les deux tests qui rougissaient SDK Tests
+  - ne plus avaler en silence un média non résolvable du strip photothèque
+  - stop the photo-strip video pick from killing the app (SIGTRAP PhotoKit)
+  - notifications absentes de la cloche et de la page en temps réel
+  - ancrer Button et Badge au graphe client (build Docker rouge)
+  - retirer les blocs dupliqués par un auto-merge (SDK Tests rouge)
+  - demander les permissions média AVANT d'engager appel et capture
+  - AutoFill trousseau sur les champs d'identifiants
+  - dates ISO écrites dans le cache conversations (3 erreurs TS)
+  - router par l'entité, jamais par le nom du type
+  - messages reçus invisibles jusqu'à plusieurs rechargements
+  - anonymous-session permission hardening core
+  - endpoint-aware token-refresh + reactive 401 decision core (#2283)
+  - converge last-seen label on formatPresenceLabel SSOT, drop 2 divergent copies (197)
+  - sent single check is regular weight, not semibold
+  - await actor-isolated SettingsActionQueue.count/pendingItems
+  - delegate display-name/initials/last-seen to SSOT helpers (196) (#2281)
+  - content-language step picker + live-preview decision core (#2280)
+  - normalize language codes via SSOT, drop last blind slice(0,2) truncations (195) (#2279)
+  - unified registration per-step proceed-gate core (#2277)
+  - visible, draggable sticker lane (view layer)
+  - sticker clips in the data layer (list + move + trim, undoable)
+  - registration step-navigation decision core (next/previous/skip) (#2274)
+  - resolve language badge flags via normalizeLanguageCode SSOT (194) (#2273)
+  - registration progress-bar decision core (jump-back gate) (#2272)
+  - unify media-card flag lookup on shared flags.ts (193) (#2271)
+  - pure JWT-expiry decoder + refresh-decision core (#2270)
+  - handleUnauthorized guards on isAuthenticated instead of activeUserId
+  - render time-only for future/clock-skewed conversation dates (192) (#2268)
+  - StoryCanvasSnapshotTests — missing import + record real baselines
+  - cancel leftover tokenRefreshTask between AuthServiceTests
+  - email-link password-recovery flow core (guarded 2-state machine + send gate) (#2267)
+  - stop swallowing waitForCondition cancellation in filter pipeline test
+  - stopLocalCapture never touches AVAudioEngine when capture never started
+  - make MeeshyError typed catch blocks exhaustive in AuthServiceTests
+  - drop dead constant, fix header doc, collapse vacant ∞ switch (191) (#2266)
+  - remove permanent XCTSkipIf from AuthManagerRefreshTests via keychain seam
+  - pure phone-recovery flow core (state machine + input gates) (#2265)
+  - rename 52 test functions to test*{method}*{condition}\_{expectedResult}
+  - replace wall-clock sleeps with deterministic waits (#1869)
+  - gate perf benchmark suites out of ios-tests.yml, grant photos-add for camera guard
+  - unfreeze dot-pulse timers in SyncPill + ConversationScrollControlsView
+  - stop iPadRootView re-rendering on every network flap
+  - rank auto-preview against rendered order; loadState-first empty branch; private-log search query
+  - ThemedConversationRow VoiceOver label + live-ticking timestamp
+  - NewConversationViewModel.performSearch surfaces failures distinctly
+  - distinguish idle/search-empty branches; cap preview auto-load to first 20 rows
+  - presence pastilles refresh via debounced signal
+  - audioEnrichmentSignature - skip scan when no owned audio, compare full enrichment content
+  - localize join-flow and registration error messages
+  - handle meeshy://c/<id> short alias in custom-scheme router
+  - close Equatable gate gaps + add deviceLocale flag axis
+  - align stale test expectations with intentional a11y doctrine changes
+  - normalize code before the empty/'unknown' sentinel in getLanguageInfo (190) (#2255)
+  - labelled VoiceOver value for CallView audio duration capsules (212i)
+  - VoiceOver label+value for CallView duration readouts (212i)
+  - VoiceOver labels for DownloadBadgeView media controls (195i)
+  - VoiceOver username + online status for KeypadTab result row (212i)
+  - VoiceOver kind+state for EditPostSheet media thumbnails (211i)
+  - localize MessageViewsDetailView empty-state strings (213i)
+  - localize MessageViewsDetailView deliveryBadge via SSOT keys (208i)
+  - localize InviteFriendsSheet type name + expiration picker (209i)
+  - VoiceOver progress for ConversationLockSheet PIN dots (208i)
+  - VoiceOver label + value for call duration in FloatingCallPillView (211i) (#2253)
+  - reconcile ProfileHeaderBuilderTest to the 1/3/5 presence SSOT (#2254)
+  - measure validateMessageContent length after trim to match send path (189) (#2249)
+  - group ProfileView stats card into one VoiceOver element with hint (210i) (#2252)
+  - VoiceOver label + value for audio recording duration timer (210i) (#2251)
+  - dead xcstrings key + locale-dependent test assertions (B12/B17)
+  - post-merge compile — LoadState namespace collision, AnyKeyPath Sendable
+  - full a11y pass on MessageDetailSheet + LanguageDisplay dedup
+  - consume LanguageDisplay for the 18-language translation picker set
+  - relativeTime delegates to RelativeTimeFormatter.longString
+  - GlobalSearchView.formatTimeAgo delegates to RelativeTimeFormatter
+  - ClipInspector.formatTime delegates to TransportBar SSOT
+  - use MeeshySDK.LoadState instead of local shadow enum
+  - reject truncated ASCII videoId instead of accepting prefix, encode '/' in path segment
+  - annotate TextAnalyzer @MainActor, drop @unchecked Sendable
+  - log AppDatabase in-memory fallback migration failures
+  - restrict EmbeddableVideoResolver videoId to ASCII, drop force-unwraps
+  - grey out allowContactRequests/allowGroupInvites too (placebo)
+  - reflect application.theme back into ThemeManager after sync
+  - DnD hours use DatePicker(.hourAndMinute) instead of free TextField
+  - applyRemote skips pending categories; drop dead auto-DL engine
+  - remove dead 'Langue de l'interface' picker
+  - grey out 5 placebo privacy toggles instead of faking effect
+  - mark makeEmptyResponse @MainActor (AnyCodable's Decodable conformance is MainActor-isolated, 7th occurrence of the SE-0466 footgun)
+  - fix real test failures surfaced by first green build after Vague 4
+  - mark ReelEngineOwnershipPolicy nonisolated (4th occurrence of the SE-0466 default-isolation footgun this session)
+  - resolve build errors surfaced by build after Vague 4 merges
+  - propagate attachmentId-as-load-param fix to MeeshyVideoPlayer+Renderers + reset ownsEngine on disappear
+  - fix actor-isolation compile breaks + ThreadView optimistic-reply drop
+  - ThreadView seeds replies from cache, sends via outbox
+  - overlay menu audio preview resolves disk cache first
+  - seed reactions detail from message.reactions
+  - route share/forward sends through the offline outbox
+  - MessageForwardDetailView loads conversations cache-first
+  - BlockedUsersView routes through cache-first BlockedViewModel
+  - route sendFriendRequest through the durable outbox
+  - FriendRequestListView routes through cache-first RequestsViewModel
+  - preserve original mime on HEIC downsample/encode failure
+  - regenerate pbxproj — drop stale AttachmentSendService refs
+  - cacheImageForPreview inserts synchronously with budget guard
+  - gate bubble carousel ±1 prefetch on MediaDownloadPolicyEngine
+  - delete dead AttachmentSendService (0 call sites, 2 latent bugs)
+  - transcode HEIC/HEIF photos to real JPEG, not renamed HEIC
+  - do/catch on file-import copy, drop phantom attachments
+  - hop synchronous Data(contentsOf:) off the MainActor on send
+  - B9 findings — auto-seeded language never steers playback; race loser never awaits its own cancelled task
+  - apply Prisme Linguistique to audio transcription default language
+  - startDownloadFlow honors registerInFlightDownload's Bool contract
+  - AudioPlaybackManager gains shouldLoop, mirroring the video reel engine
+  - sweep AuthTextField/AudioPlayerView/MediaTranscriptionView onto adaptiveOnChange
+  - unify byte-size formatting behind one SDK helper
+  - AudioPlayerManager playLocalFile/playData no longer swallow errors
+  - AudioPlayerView leaf view no longer observes ThemeManager singleton
+  - CachedBannerImage.pixelSize accounts for full-bleed width
+  - CodeViewerView colorScheme migration (Zero Unnecessary Re-render)
+  - DocumentViewerView accessibility labels + colorScheme migration
+  - fullscreen image bypasses network policy gate + dedupe fetch cascade (SDK purity)
+  - transient network failure no longer permanently kills pagination
+  - wire attachmentId/isForceMuted, scope re-render, fix repost pause, Prisme audio
+  - attachmentId survives load() cleanup, per-surface mute intent
+  - reconcile self-echo comment:added against optimistic temp\_ entry (P1)
+  - remove dead publishStory/publishStorySingle pipelines (P3)
+  - roll back optimistic comment/reply on post or media failure (P1)
+  - discriminate 404 vs network error on notification tap (P2)
+  - mirror commentCount realtime updates in the open viewer (P2)
+  - localize StatusEntry.timeAgo/timeRemaining (P2)
+  - preserve viewedAt/updatedAt/impressionCount across translation merge (P2)
+  - log foreground media asset missing during publish (P2)
+  - roll back optimistic reaction on any react() failure (P1)
+  - isolate test_pullToRefresh_resetsCursorAndRefetches from shared cache singleton
+  - native EmptyStateView for RequestsTab empty state (207i) (#2228)
+  - saved-account picker list core (multi-account) (#2250)
+  - server-environment selector enum + URL-derivation core (#2248)
+  - code-point-safe truncation of share-link conversation titles (188) (#2247)
+  - 6-digit OTP field sanitiser + verify/resend gate core (#2245)
+  - resolve build errors surfaced by device build after Vague 3 merges
+  - VoiceOver labels for OnboardingStepViews photo buttons (208i)
+  - VoiceOver label for ConversationView error-banner dismiss (208i)
+  - RequestsTab empty-state → AdaptiveContentUnavailableView (208i)
+  - legal screens open in the user's preferred language (208i)
+  - info-token consolidation for ConversationPreferencesTab organizationSection (208i)
+  - close remaining Prisme + retry/delete race gaps in send fallback
+  - VoiceOver handle+last-seen in ContactsListTab row label (208i)
+  - tokenize CallView retry CTA green to MeeshyColors.success (208i)
+  - restate handle + last-seen in ContactsListTab row VoiceOver label (208i)
+  - P1/P2 — settings-flush 429 no longer terminal, mapUnauthorized scope narrowed to login
+  - bumpToTop clears stale preview/translations, .expired branch gets VM-level coverage
+  - remediation B5 — comments merge race, like/comment outbox rollback, Prisme code mirror
+  - merge offline settings-queue payloads field-by-field
+  - re-inject StatusViewModel across ForwardPickerSheet sheet boundary
+  - honor Prisme in Copier + drop wrong-message reaction-picker fallback
+  - route .failed message delete through local purge, no REST resurrection
+  - stop hardcoding originalLanguage to fr on send fallback paths
+  - route manual retry of failed media messages through the durable outbox
+  - restore offline pagination via GRDB cache fallback
+  - recover pagination after a fresh-cache-only session
+  - map effectFlags/translation/reactions on realtime comment:added
+  - P1/P2 — bound the proactive session refresh + capture the logout token before the wipe
+  - P1 — UserProfileViewModel reads blocked state from BlockService, not the login snapshot
+  - re-seed like/bookmark/repost flags after flag-only refresh; share count bumps only on confirmed success
+  - P2 — do/catch + log the boot-recovery call before the outbox flusher
+  - comments sheet fetches full comment list instead of embedded top-3
+  - P1 — replace dead `catch APIError` sites with the real MeeshyError type
+  - drop FeedPostCard's onSendComment param (leftover from previous commit)
+  - route like + comment send through the durable outbox on failure
+  - persist engagement counters + bookmark/repost flags through FeedPost Codable
+  - Unicode-safe community slugs + code-point-safe truncation (187)
+  - P1 — clearSessions() targets the outgoing user's Keychain namespace, not nil
+  - deterministic Prisme language resolution in feed card + clearTranslationOverride
+  - P1 — map 401 on login/2FA/register/magic-link to invalidCredentials, not sessionExpired
+  - fetch-then-replace refresh + surface offline data past expiry
+  - P0 — teardown full session before applying a magic link while already authenticated
+  - reset stale last-message fields on lightweight bumps, search by displayName
+  - recover on-disk data past expiry via loadIgnoringExpiry
+  - drop permanently-failing settings actions after maxAttempts
+  - repair offline profile save (endpoint, silent encode, clearing)
+  - dispatch avatar PATCH separately from strict /users/me body
+  - decode gateway's fileUrl key for avatar uploads
+  - no retry button on 7 avatar/banner sites (Lane AV, D2)
+  - full VoiceOver label for CallsTab call-journal row (207i)
+  - magic-link countdown state-machine + strict email gate cores (#2225)
+  - remove dead xcstrings key story.groupIntro.recent (superseded by .idle in presence 1/3/5 rule)
+  - social pushes carry triggering commentId; friend_request carries friendRequestId
+  - mark NSEDecryptor statics nonisolated under MainActor default isolation (test build was failing)
+  - VoiceOver label + count value for reaction filter capsules (206i)
+  - stop treating apostrophe as a quote + preserve newlines in deepCleanTranslationOutput (186) (#2223)
+  - native EmptyStateView for ContactsListTab empty state (205i)
+  - pure signup local-validation gate + availability-debounce policy core (#2221)
+  - accent-fold + non-degenerate auto username handle
+  - native EmptyStateView for VoiceProfileManageView empty hero (204i)
+  - pure signup device-locale language/country inference core (#2218)
+  - VoiceOver selected-state for BubbleFooter translation flag strip (203i)
+  - localize FeedPostCard+Media document/pages/location labels (202i)
+  - Unicode-aware name normalization for account recovery (#2215)
+  - localize SyncPill VoiceOver hint + multi-signal label (201i)
+  - password requirements checklist + confirm-gate cores (#2213)
+  - VoiceOver labels for DnD time fields in NotificationSettingsView (200i)
+  - VoiceOver selected-state trait for ThemedConversationRow (195i) (#2196)
+  - accent-color for ConversationPreferencesTab "My display" section (199i)
+  - pure country/dial-code catalogue core (CountryCatalog) (#2210)
+  - email digest preserves each notification's delivery state
+  - private-mode push carries no content, localized generic body, APNs budget re-check, mute before throttle
+  - harden background action flow — expiration lease, outbox pool wiring, friend-response fallback
+  - VoiceOver selected-state for onboarding language step (198i)
+  - device-locale 4th-priority resolution + BCP-47 normalisation (#2208)
+  - heartbeat refresh reaches live viewers + engine-pong coverage + metrics coherence
+  - honor showPreview/showSenderName, tz-aware DND (shared), track pushSent
+  - pin MainActor closure types on injected seams (Swift 6 isolation)
+  - retry voip token registration; drop unused FirebaseMessaging link
+  - dedicated callsEnabled pref, alert fallback when no voip token, stale-foreground guard
+  - friend request actions actually call API; split call categories (no Answer on ended calls)
+  - inline comment action on social pushes (threaded reply, durable outbox)
+  - refresh lastActiveAt on socket heartbeat (passive-connected stays online under 5min guard)
+  - push payload carries createdAt/messageType and Prism-resolved translation
+  - reliable action handler — background task, token restore, durable outbox reply
+  - 1/3/5 rule mirror
+  - native threadId + category on push payloads
+  - 1/3/5 rule — idle grey dot displayed, offline hidden everywhere
+  - labeled surfaces follow 1/3/5 — no badge/element beyond 5min
+  - apply per-conversation mute to message/reply/reaction fan-out (mentions pierce)
+  - pre-persisted bubble carries media type from attachment mime
+  - read namespaced E2EE session key (restore encrypted push preview & pre-persist)
+  - 30s tick + flip windows aligned to 1/3/5
+  - 1/3/5 rule — idle grey state displayed, 5min stale guard
+  - busy_timeout on both pools + explicit file protection for shared message DB
+  - friendContentEnabled preference gating friend content pushes
+  - wire posts notifications to configured service (friend_new_post push)
+  - surface silent failures + localize ForwardPickerSheet (197i)
+  - VoiceOver structure for CommentAttachmentsTray staged chips (197i)
+  - native empty state for ActiveSessionsView (196i)
+  - update timeline panel-height test 320 -> 392 (#2173)
+  - hide decorative glyphs in EditPostSheet language row (196i)
+  - VoiceOver selected state for VideoFiltersPanel preset pills (192i)
+  - localize + VoiceOver selected-state for ConversationDashboard period picker (192i) (#2167)
+  - localize + tokenize + VoiceOver Siri snippet views (195i)
+  - VoiceOver structure for CreateTrackingLinkView (190i) (#2163)
+  - shared CharacterCountLabel (188i) (#2159)
+  - VoiceOver value+label for video position Slider in MessageOverlayMenu (195i)
+  - localize BrandSignature VoiceOver label (195i)
+  - VoiceOver selected-state + count for MessageViewsDetailView filter capsules (195i)
+  - VoiceOver structure for ThreadView (195i)
+  - native Button retry for StatusBarView error indicator (195i)
+  - cold-start skeleton for CommunityLinksView (195i)
+  - VoiceOver labels for ChangePasswordView secure fields (193i)
+  - VoiceOver-reachable clear-all action for KeypadTab (189i) (#2162)
+  - locale-aware + VoiceOver-labelled translation-confidence badge in PostTranslationSheet (186i) (#2149)
+  - VoiceOver selected-state for MessageDetailSheet selectors (193i)
+  - conversation messages modal with infinite load on the user fiche
+  - VoiceOver structure for LinksHubView cards (194i) (#2174)
+  - VoiceOver selected-state for MessageDetailSheet segmented selectors (194i)
+  - Dynamic Type + VoiceOver + localize TopLevelCommentCell (187i) (#2153)
+  - VoiceOver retranslate label + selected-state for MessageDetailSheet languageRow (193i)
+  - dedup ProfileUserPostsList empty state to EmptyStateView (183i) (#2148)
+  - VoiceOver selected-state for MessageDetailSheet filters (193i)
+  - accessible page control + hide demo bubbles for OnboardingView (186i) (#2145)
+  - VoiceOver selected-state for MessageDetailSheet selectors (192i)
+  - localize CameraView mode tabs + VoiceOver labels for capture controls (185i) (#2141)
+  - native ContentUnavailableView for FriendRequestListView empty state (185i) (#2140)
+  - brand-color consolidation for TermsOfServiceView (194i)
+  - VoiceOver reachability for StatusBubbleOverlay (191i) (#2168)
+  - Indigo brand-color consolidation for DataStorageView (182i)
+  - VoiceOver selected-state for ConversationInfoSheet tab selector (194i)
+  - VoiceOver-reachable delete + heading for GlobalSearchView recent searches (191i) (#2164)
+  - VoiceOver slider values for VideoFilterControlView (189i) (#2161)
+  - VoiceOver structure for LinksHubView cards (194i)
+  - VoiceOver selected-state + close label for MessageMoreSheet (186i) (#2157)
+  - VoiceOver online/blocked status for NewConversationView row (185i) (#2155)
+  - brand-color consolidation for DataStorageView (186i) (#2154)
+  - Dynamic Type for shared EmptyStateView primitive (181i) (#2151)
+  - VoiceOver structure for CreateShareLinkView (186i) (#2150)
+  - VoiceOver selected-state for AudioFullscreenView speed + language pickers (186i) (#2144)
+  - Indigo brand-color consolidation for the Affiliate pair (180i) (#2142)
+  - localize + VoiceOver selected-state for RequestsTab filter pills (185i) (#2139)
+  - VoiceOver labels + selected state for MessageLanguageDetailView (185i) (#2137)
+  - localize + VoiceOver selected-state for PeopleDiscoveryView sub-tabs (178i) (#2114)
+  - VoiceOver selected-state for segmented pickers (186i) (#2143)
+  - normalize case in language display helpers to match shared SSOT (184) (#2171)
+  - VoiceOver-reachable Unblock + loading label for BlockedTab (193i) (#2170)
+  - dedup TrackingLinksView empty state to EmptyStateView (184i) (#2138)
+  - raise CommonSchemas.language max length to 6 so bas-CM parses (184) (#2172)
+  - timeline operations band, +10s extend, sectioned wider tiles, 5-800% zoom (timeline-ops-band-round)
+  - band shadow no longer bleeds above the timeline header (band-shadow-compositing-group)
+  - pure rolling live-transcript accumulator (call-transcript-buffer) (#2169)
+  - resolve inflect plural labels explicitly (fixes red iOS Tests) (#2165)
+  - canvas returns to its static state when playback ends (timeline-playback-end-static-canvas)
+  - timeline panel spans the full sheet width (timeline-panel-edge-to-edge)
+  - timeline lanes ordered by sections — BG then FG (timeline-bg-fg-sections)
+  - pure call-reliability decision core (call-reliability-policy) (#2166)
+  - VoiceOver-reachable copy action for CommunityLinksView rows (183i) (#2134)
+  - VoiceOver structure for TrackingLinkDetailView (180i) (#2122)
+  - P2P data-channel control protocol codec (call-datachannel-protocol) (#2160)
+  - native DisclosureGroup + ShareLink label for CrashReportSheet (178i) (#2120)
+  - explicit ISO 639-3→639-1 reduction, stop mapping Filipino to Finnish (#2067)
+  - drop dead inner .combine on transcription banner
+  - VoiceOver labels for ConversationMediaGalleryView (180i) (#2124)
+  - localize + VoiceOver + Dynamic Type for CategoryPickerView (178i) (#2102)
+  - repair app build broken by today's a11y merges (app-build-a11y-merge-repair)
+  - finger-first clip timing bar + labeled inspector actions (clip-inspector-timing-bar)
+  - chrome scheme follows real background-media luminance (story-chrome-media-luminance)
+  - VoiceOver selected-state for StatusComposerView pickers (184i) (#2135)
+  - deterministic StoryPublishQueue tests — reset leaked publish handler in setUp
+  - VoiceOver structure for EditProfileView (151i) (#1988)
+  - VoiceOver structure for MessageTranscriptionDetailView (179i) (#2123)
+  - Dynamic Type + VoiceOver for ReplyCell (182i) (#2133)
+  - VoiceOver labels for feed post stat counters (179i) (#2119)
+  - dedup BlockedTab empty state to EmptyStateView (179i) (#2111)
+  - localize + VoiceOver the send-history card in MessageViewsDetailView (178i) (#2107)
+  - VoiceOver structure for EmailVerificationView (178i) (#2100)
+  - correct false cross-field-validation claim on attachmentTranslationsMapSchema (183) (#2132)
+  - native ShareLink for TrackingLinkDetailView URL share (180i) (#2121)
+  - VoiceOver label + Dynamic Type for VideoFullscreenPlayer dismiss (179i) (#2106)
+  - VoiceOver structure for BlockedUsersView (178i) (#2101)
+  - split KeypadTab result-row interactive controls for VoiceOver (181i) (#2130)
+  - brand-color consolidation + VoiceOver headers for MediaDownloadSettingsView (179i) (#2125)
+  - Reduce Motion + decorative VoiceOver for ReelAudioBackdrop (178i) (#2113)
+  - localize + reuse SSOT keys for scroll-to-bottom button (178i) (#2112)
+  - VoiceOver selection state for MessageReportDetailView (178i) (#2103)
+  - VoiceOver structure for DiscoverTab search + result rows (178i) (#2099)
+  - VoiceOver active/inactive status + fix concat for ShareLinksView (178i) (#2098)
+  - native empty states for AddParticipantSheet (176i) (#2097)
+  - dedup ShareLinksView empty state to EmptyStateView + heading trait (178i) (#2096)
+  - Dynamic Type + VoiceOver for MessageViewsDetailView state icons (144i) (#1974)
+  - pure in-call video-filter config + presets + auto-degrade cores (call-video-filter-config) (#2136)
+  - bound deviceCountry debounce cache + clamp explicit limit=0 to floor (183) (#2146)
+  - revert pytest-asyncio 1.4.0 -> 0.25.2 (pytest pinned 8.3.4)
+  - revert protobuf 7.35.1 -> 6.33.6 (grpcio-tools 1.76.0 caps <7.0.0)
+
 ## 1.14.0
 
 ### Minor Changes

@@ -52,6 +52,10 @@ final class VoiceProfileManageViewModel: ObservableObject {
 
         do {
             _ = try await userService.updateProfile(UpdateProfileRequest(voicePublic: enabled))
+            // Refléter le changement confirmé sur currentUser : sinon une réouverture
+            // (loadProfile lit authManager.currentUser?.voicePublic) restaurerait la
+            // valeur stale et le toggle « sauterait » en arrière.
+            authManager.applyLocalVoicePublicChange(enabled)
         } catch {
             isVoicePublic = previous
             self.error = "Erreur lors du changement de visibilite du profil vocal."

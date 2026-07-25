@@ -261,6 +261,100 @@ final class BubbleContentMatrixTests: XCTestCase {
         XCTAssertEqual(flags, ["en", "es"])
     }
 
+    /// Prisme étendu 2026-05-26 — 4e axe de résolution (`deviceLocale`), gated
+    /// EXACTLY like `regional`/`custom`: only surfaced when a translation (text
+    /// or audio) actually exists for it. See CLAUDE.md "Prisme Linguistique".
+    func test_buildAvailableFlags_includesDeviceLocale_whenTranslationExists() {
+        let flags = BubbleContent.buildAvailableFlags(
+            activeLang: "fr",
+            originalLang: "fr",
+            preferredLang: nil,
+            regional: nil,
+            custom: nil,
+            deviceLocale: "de",
+            translations: [
+                MessageTranslation(
+                    id: "t1",
+                    messageId: "m1",
+                    sourceLanguage: "fr",
+                    targetLanguage: "de",
+                    translatedContent: "Hallo",
+                    translationModel: "nllb",
+                    confidenceScore: nil
+                ),
+            ],
+            translatedAudios: []
+        )
+        XCTAssertEqual(flags, ["de"])
+    }
+
+    /// Same gating as `regional`/`custom`: no translation → no flag, even
+    /// though a `deviceLocale` value was supplied.
+    func test_buildAvailableFlags_excludesDeviceLocale_whenNoTranslationExists() {
+        let flags = BubbleContent.buildAvailableFlags(
+            activeLang: "fr",
+            originalLang: "fr",
+            preferredLang: nil,
+            regional: nil,
+            custom: nil,
+            deviceLocale: "de",
+            translations: [],
+            translatedAudios: []
+        )
+        XCTAssertEqual(flags, [])
+    }
+
+    /// Deduplication: a `deviceLocale` equal to an already-included code
+    /// (here `regional`) must not produce a duplicate flag.
+    func test_buildAvailableFlags_deduplicatesDeviceLocale_againstRegional() {
+        let flags = BubbleContent.buildAvailableFlags(
+            activeLang: "fr",
+            originalLang: "fr",
+            preferredLang: nil,
+            regional: "de",
+            custom: nil,
+            deviceLocale: "de",
+            translations: [
+                MessageTranslation(
+                    id: "t1",
+                    messageId: "m1",
+                    sourceLanguage: "fr",
+                    targetLanguage: "de",
+                    translatedContent: "Hallo",
+                    translationModel: "nllb",
+                    confidenceScore: nil
+                ),
+            ],
+            translatedAudios: []
+        )
+        XCTAssertEqual(flags, ["de"])
+    }
+
+    /// End-to-end: the `BubbleContent` init plumbs `deviceLocale` all the way
+    /// through to `content.translation.availableFlags` — not just the pure
+    /// helper.
+    func test_init_deviceLocale_surfacesInAvailableFlags() {
+        let msg = makeMessage(content: "Bonjour")
+        let content = BubbleContent(
+            message: msg,
+            translations: [
+                MessageTranslation(
+                    id: "t1",
+                    messageId: "m1",
+                    sourceLanguage: "fr",
+                    targetLanguage: "de",
+                    translatedContent: "Hallo",
+                    translationModel: "nllb",
+                    confidenceScore: nil
+                ),
+            ],
+            preferredTranslation: nil,
+            currentUserId: "u1",
+            deviceLocale: "de"
+        )
+        XCTAssertEqual(content.translation?.availableFlags, ["de"])
+    }
+
     func test_resolveEffectiveContent_returnsOriginalWhenActiveLangIsOriginal() {
         let msg = makeMessage(content: "Bonjour")
         let resolved = BubbleContent.resolveEffectiveContent(

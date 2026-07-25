@@ -181,6 +181,16 @@ struct AudioPostComposerView: View {
             Text(formattedDuration)
                 .font(.system(.largeTitle, design: .monospaced).weight(.light))
                 .foregroundColor(theme.textPrimary)
+                // A bare monospaced "0:34" reads to VoiceOver as a context-less
+                // number. Name what the timer measures via the label (elapsed
+                // while recording vs. the recorded length in preview) and expose
+                // the running time as the value.
+                .accessibilityLabel(audioRecorder.isRecording
+                    ? String(localized: "Durée d'enregistrement",
+                             defaultValue: "Dur\u{00E9}e d'enregistrement")
+                    : String(localized: "Durée enregistrée",
+                             defaultValue: "Dur\u{00E9}e enregistr\u{00E9}e"))
+                .accessibilityValue(formattedDuration)
         } else if phase == .transcribing {
             VStack(spacing: 4) {
                 Text(String(localized: "Transcription en cours...", defaultValue: "Transcription en cours..."))

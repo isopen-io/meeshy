@@ -284,6 +284,15 @@ struct SettingsView: View {
                                     .font(MeeshyFont.relative(14))
                                 Text(pref.label)
                                     .font(MeeshyFont.relative(9, weight: .medium))
+                                    // Un seul segment = une seule ligne : sous
+                                    // grande taille Dynamic Type le libellé
+                                    // débordait et repassait à la ligne
+                                    // (« Aut o », « So mbr e »). On le garde sur
+                                    // une ligne, on l'amincit légèrement, puis on
+                                    // tronque avec « … » si vraiment trop long.
+                                    .lineLimit(1)
+                                    .minimumScaleFactor(0.8)
+                                    .truncationMode(.tail)
                             }
                             .foregroundColor(theme.preference == pref ? Color(hex: pref.tintColor) : theme.textMuted)
                             .padding(.horizontal, MeeshySpacing.sm + 2)
@@ -299,23 +308,15 @@ struct SettingsView: View {
                     }
                 }
             }
-
-            settingsRow(icon: "globe", title: String(localized: "settings.interface_language", bundle: .main), color: MeeshyColors.indigo300Hex) {
-                Picker("", selection: Binding(
-                    get: { prefs.application.interfaceLanguage },
-                    set: { val in prefs.updateApplication { $0.interfaceLanguage = val } }
-                )) {
-                    ForEach(LanguageData.interfaceLanguages, id: \.code) { lang in
-                        HStack {
-                            Text(lang.flag)
-                            Text(lang.nativeName)
-                        }
-                        .tag(lang.code)
-                    }
-                }
-                .pickerStyle(.menu)
-                .tint(MeeshyColors.indigo400)
-            }
+            // Le picker "Langue de l'interface" a été retiré (P1, placebo
+            // audit 2026-07-20) : `application.interfaceLanguage` était
+            // écrit ici mais jamais lu — aucun `.environment(\.locale)`
+            // n'existe dans l'app, donc changer la sélection n'avait AUCUN
+            // effet visible. Appliquer réellement exigerait de poser
+            // `.environment(\.locale, …)` à la racine de l'arbre de vues
+            // (`MeeshyApp.swift`), fichier exclusif de la lane Auth & session
+            // — hors-scope ici. Cf. tasks/audit-backlog-2026-07-20.md LANE
+            // Réglages, item P1.
         }
     }
 

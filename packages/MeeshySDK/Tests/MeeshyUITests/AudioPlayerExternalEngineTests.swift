@@ -135,4 +135,30 @@ struct AudioPlayerExternalEngineTests {
             bubbleAttachmentId: "att_42"
         ) == true)
     }
+
+    // MARK: - Reels loop parity (shouldLoop mirrors SharedAVPlayerManager)
+
+    /// Mirrors `SharedAVPlayerManager.shouldLoop`'s default so every existing
+    /// caller (conversation bubbles, feed posts, composer preview) keeps its
+    /// current "stop for good at the end" behavior unless a caller explicitly
+    /// opts in (the reels pager).
+    @Test("shouldLoop defaults to false")
+    @MainActor
+    func test_shouldLoop_defaultsToFalse() {
+        let engine = AudioPlaybackManager(registerWithCoordinator: false)
+        #expect(engine.shouldLoop == false)
+    }
+
+    /// Mirrors `SharedAVPlayerManager.cleanup()` resetting `shouldLoop` on
+    /// every teardown: the flag must never carry across a track switch on
+    /// the SAME engine instance — the reels pager must opt back in after
+    /// every `play`/`playLocal` call, exactly like it already does for video.
+    @Test("shouldLoop is reset to false when a new track starts loading")
+    @MainActor
+    func test_shouldLoop_resetOnNewPlay() {
+        let engine = AudioPlaybackManager(registerWithCoordinator: false)
+        engine.shouldLoop = true
+        engine.play(urlString: "")
+        #expect(engine.shouldLoop == false)
+    }
 }

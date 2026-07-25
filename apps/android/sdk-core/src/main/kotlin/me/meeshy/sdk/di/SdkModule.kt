@@ -33,6 +33,8 @@ import me.meeshy.sdk.privacy.DataStorePrivacyPreferencesStore
 import me.meeshy.sdk.privacy.PrivacyPreferencesStore
 import me.meeshy.sdk.reaction.EmojiUsageStore
 import me.meeshy.sdk.reaction.SharedPrefsEmojiUsageStore
+import me.meeshy.sdk.session.AnonymousSessionStore
+import me.meeshy.sdk.session.DataStoreAnonymousSessionStore
 import me.meeshy.sdk.theme.DataStoreThemeStore
 import me.meeshy.sdk.theme.ThemeStore
 import javax.inject.Singleton
@@ -138,6 +140,19 @@ object SdkModule {
             context.preferencesDataStoreFile("meeshy_conversation_drafts")
         }
         return DataStoreConversationDraftStore(dataStore, json)
+    }
+
+    @Provides
+    @Singleton
+    fun providesAnonymousSessionStore(
+        @ApplicationContext context: Context,
+        json: Json,
+    ): AnonymousSessionStore {
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+        val dataStore = PreferenceDataStoreFactory.create(scope = scope) {
+            context.preferencesDataStoreFile("meeshy_anonymous_session")
+        }
+        return DataStoreAnonymousSessionStore(dataStore, json)
     }
 
     @Provides

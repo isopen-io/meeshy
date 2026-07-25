@@ -80,7 +80,7 @@ describe('HeaderAvatar presence', () => {
   });
 
   it('recomputes status decay on the store tick without any user mutation', () => {
-    const sixMinutesAgo = new Date(Date.now() - 6 * 60 * 1000);
+    const twoMinutesAgo = new Date(Date.now() - 2 * 60 * 1000);
     act(() => {
       useUserStore.getState().mergeParticipants([buildUser({ id: 'user-1', isOnline: undefined, lastActiveAt: new Date() })]);
     });
@@ -92,7 +92,7 @@ describe('HeaderAvatar presence', () => {
       const state = useUserStore.getState();
       const user = state.usersMap.get('user-1');
       if (user) {
-        (user as { lastActiveAt?: Date }).lastActiveAt = sixMinutesAgo;
+        (user as { lastActiveAt?: Date }).lastActiveAt = twoMinutesAgo;
       }
       state.triggerStatusTick();
     });

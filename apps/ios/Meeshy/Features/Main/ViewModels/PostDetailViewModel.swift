@@ -17,6 +17,11 @@ class PostDetailViewModel: ObservableObject {
     @Published var repliesMap: [String: [FeedComment]] = [:]
     @Published var expandedThreads: Set<String> = []
     @Published private(set) var loadingReplies: Set<String> = []
+    /// Pagination des réponses par commentaire racine (le endpoint replies est
+    /// paginé ASC, curseur `gt`, 20/page) — sans ce suivi, un fil de plus de
+    /// 20 réponses était silencieusement tronqué à la première page.
+    @Published var repliesHasMore: [String: Bool] = [:]
+    @Published var repliesNextCursor: [String: String] = [:]
 
     @Published private(set) var _topLevelComments: [FeedComment] = []
     var topLevelComments: [FeedComment] { _topLevelComments }
@@ -179,8 +184,31 @@ class PostDetailViewModel: ObservableObject {
         Task { [weak self] in await self?.preloadReplyPreviews(postId: postId) }
     }
 
+    /// Notification → commentaire hors de la première page : suit le curseur
+    /// existant jusqu'à ce que le commentaire top-level ciblé soit chargé
+    /// (borné — cf. `CommentTargetHunter`). Retourne `true` si la cible est
+    /// présente à l'issue de la chasse.
+    @discardableResult
+    func loadCommentsUntilPresent(_ commentId: String, postId: String) async -> Bool {
+        await CommentTargetHunter.hunt(
+            isPresent: { [weak self] in
+                self?.topLevelComments.contains(where: { $0.id == commentId }) ?? true
+            },
+            hasMore: { [weak self] in self?.hasMoreComments ?? false },
+            loadNextPage: { [weak self] in await self?.loadMoreComments(postId) }
+        )
+    }
+
     func loadMoreComments(_ postId: String) async {
-        guard !isLoadingComments, hasMoreComments, commentCursor != nil else { return }
+        // NOTE: no `commentCursor != nil` guard on purpose — see
+        // `FeedViewModel.loadMoreIfNeeded`'s identical fix. `loadComments`'s
+        // `.fresh` cache branch never touches the network, so `commentCursor`
+        // stays `nil` while `hasMoreComments` stays at its initial `true`,
+        // permanently stalling pagination for the whole session. `hasMoreComments`
+        // alone is a safe gate — it's always set together with `commentCursor`
+        // by `fetchCommentsFromNetwork`, and `cursor: nil` there already means
+        // "fetch page 1", exactly what's needed to recover a real cursor.
+        guard !isLoadingComments, hasMoreComments else { return }
         await fetchCommentsFromNetwork(postId, cacheKey: "post-\(postId)")
     }
 
@@ -259,28 +287,11 @@ class PostDetailViewModel: ObservableObject {
             let response = try await postService.getCommentReplies(
                 postId: postId, commentId: commentId, cursor: nil, limit: 20
             )
-            let langs = preferredLanguages
-            let payload = response.data
-            let replies = await Task.detached(priority: .userInitiated) {
-                payload.map { c -> FeedComment in
-                    let translated = PostDetailViewModel.resolveCommentTranslation(
-                        translations: c.translations, originalLanguage: c.originalLanguage,
-                        preferredLanguages: langs
-                    )
-                    return FeedComment(
-                        id: c.id, author: c.author.name, authorId: c.author.id,
-                        authorUsername: c.author.username,
-                        authorAvatarURL: c.author.avatar,
-                        content: c.content, timestamp: c.createdAt,
-                        likes: c.likeCount ?? 0, replies: c.replyCount ?? 0,
-                        parentId: commentId,
-                        originalLanguage: c.originalLanguage, translatedContent: translated,
-                        currentUserReactions: c.currentUserReactions,
-                        media: (c.media ?? []).map { $0.toFeedMedia() }
-                    )
-                }
-            }.value
+            let replies = await Self.mapReplies(
+                response.data, parentId: commentId, preferredLanguages: preferredLanguages
+            )
             repliesMap[commentId] = replies
+            recordRepliesPagination(response.pagination, for: commentId)
             seedCommentLikes(from: replies)
             // Persiste les réponses sous "replies-{commentId}" pour hydrater
             // l'aperçu (2 premières) instantanément à la ré-ouverture du post
@@ -289,6 +300,98 @@ class PostDetailViewModel: ObservableObject {
         } catch {
             expandedThreads.remove(commentId)
         }
+    }
+
+    /// Page suivante des réponses d'un fil (curseur `gt`, tri ASC → les pages
+    /// suivantes sont plus récentes, donc APPEND). Jamais de remplacement :
+    /// les réponses insérées par le socket (`comment:added`) pendant la
+    /// pagination sont préservées via la dédup par id.
+    /// NOTE : `repliesHasMore[id] == nil` (fil hydraté du cache par
+    /// `preloadReplyPreviews`, pagination jamais enregistrée) n'est PAS
+    /// bloquant — même fix documenté que `loadMoreComments` : `cursor: nil`
+    /// signifie « page 1 », exactement ce qu'il faut pour récupérer un vrai
+    /// curseur. Seul `false` (fin de fil connue) stoppe.
+    func loadMoreReplies(_ commentId: String, postId: String) async {
+        guard !loadingReplies.contains(commentId), repliesHasMore[commentId] != false else { return }
+        loadingReplies.insert(commentId)
+        defer { loadingReplies.remove(commentId) }
+        do {
+            let response = try await postService.getCommentReplies(
+                postId: postId, commentId: commentId,
+                cursor: repliesNextCursor[commentId], limit: 20
+            )
+            let fetched = await Self.mapReplies(
+                response.data, parentId: commentId, preferredLanguages: preferredLanguages
+            )
+            let existing = repliesMap[commentId] ?? []
+            let existingIds = Set(existing.map(\.id))
+            let unique = fetched.filter { !existingIds.contains($0.id) }
+            repliesMap[commentId] = existing + unique
+            recordRepliesPagination(response.pagination, for: commentId)
+            seedCommentLikes(from: unique)
+            try? await CacheCoordinator.shared.comments.save(
+                repliesMap[commentId] ?? [], for: "replies-\(commentId)"
+            )
+        } catch {
+            // Échec réseau : stopper proprement la pagination (et toute chasse
+            // en cours) — le fil reste utilisable avec les pages déjà chargées.
+            repliesHasMore[commentId] = false
+        }
+    }
+
+    /// Notification → réponse hors de la première page de son fil : suit le
+    /// curseur des réponses jusqu'à ce que la réponse ciblée soit chargée
+    /// (borné — cf. `CommentTargetHunter`). Charge la première page si le fil
+    /// n'a pas encore été ouvert. Retourne `true` si la cible est présente.
+    @discardableResult
+    func loadRepliesUntilPresent(_ replyId: String, in commentId: String, postId: String) async -> Bool {
+        if repliesMap[commentId] == nil {
+            await loadReplies(postId: postId, commentId: commentId)
+        }
+        return await CommentTargetHunter.hunt(
+            isPresent: { [weak self] in
+                guard let self else { return true }
+                return self.repliesMap[commentId]?.contains(where: { $0.id == replyId }) ?? false
+            },
+            // `nil` = pagination inconnue (fil hydraté du cache) → tenter la
+            // page 1 pour récupérer un curseur ; seul `false` arrête la chasse.
+            hasMore: { [weak self] in
+                guard let self else { return false }
+                return self.repliesHasMore[commentId] != false
+            },
+            loadNextPage: { [weak self] in await self?.loadMoreReplies(commentId, postId: postId) }
+        )
+    }
+
+    private func recordRepliesPagination(_ pagination: CursorPagination?, for commentId: String) {
+        repliesNextCursor[commentId] = pagination?.nextCursor
+        repliesHasMore[commentId] = pagination?.hasMore ?? false
+    }
+
+    /// Mappe une page de réponses API → domaine hors MainActor (décodage +
+    /// résolution Prisme off-main, même forme que `fetchCommentsFromNetwork`).
+    private static func mapReplies(
+        _ payload: [APIPostComment], parentId: String, preferredLanguages: [String]
+    ) async -> [FeedComment] {
+        await Task.detached(priority: .userInitiated) {
+            payload.map { c -> FeedComment in
+                let translated = PostDetailViewModel.resolveCommentTranslation(
+                    translations: c.translations, originalLanguage: c.originalLanguage,
+                    preferredLanguages: preferredLanguages
+                )
+                return FeedComment(
+                    id: c.id, author: c.author.name, authorId: c.author.id,
+                    authorUsername: c.author.username,
+                    authorAvatarURL: c.author.avatar,
+                    content: c.content, timestamp: c.createdAt,
+                    likes: c.likeCount ?? 0, replies: c.replyCount ?? 0,
+                    parentId: parentId,
+                    originalLanguage: c.originalLanguage, translatedContent: translated,
+                    currentUserReactions: c.currentUserReactions,
+                    media: (c.media ?? []).map { $0.toFeedMedia() }
+                )
+            }
+        }.value
     }
 
     /// Précharge l'aperçu des réponses (les 2 premières s'affichent sans tap)
@@ -723,6 +826,17 @@ class PostDetailViewModel: ObservableObject {
             .sink { [weak self] data in
                 guard let self else { return }
                 let parentId = data.comment.parentId
+                // Prisme + effects parity with the REST comment mapping
+                // (`loadComments`/`loadReplies`): a comment arriving in real
+                // time while the detail sheet is open used to render as a
+                // blank row for a media/effect comment (effectFlags dropped)
+                // and always in its original language (resolveCommentTranslation
+                // never consulted).
+                let translatedContent = PostDetailViewModel.resolveCommentTranslation(
+                    translations: data.comment.translations,
+                    originalLanguage: data.comment.originalLanguage,
+                    preferredLanguages: self.preferredLanguages
+                )
                 let comment = FeedComment(
                     id: data.comment.id, author: data.comment.author.name,
                     authorId: data.comment.author.id,
@@ -731,6 +845,9 @@ class PostDetailViewModel: ObservableObject {
                     content: data.comment.content, timestamp: data.comment.createdAt,
                     likes: data.comment.likeCount ?? 0, replies: data.comment.replyCount ?? 0,
                     parentId: parentId,
+                    effectFlags: data.comment.effectFlags ?? 0,
+                    originalLanguage: data.comment.originalLanguage,
+                    translatedContent: translatedContent,
                     currentUserReactions: data.comment.currentUserReactions,
                     media: (data.comment.media ?? []).map { $0.toFeedMedia() }
                 )

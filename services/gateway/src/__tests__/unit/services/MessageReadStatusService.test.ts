@@ -56,6 +56,9 @@ const mockPrisma: any = {
     findMany: jest.fn(),
     update: jest.fn()
   },
+  userPreference: {
+    findMany: jest.fn()
+  },
   messageAttachment: {
     findUnique: jest.fn(),
     update: jest.fn()
@@ -98,6 +101,9 @@ describe('MessageReadStatusService', () => {
 
     // Clear the static dedup cache to ensure tests are isolated
     (MessageReadStatusService as any).recentActionCache.clear();
+    // Idem pour le cache d'opt-out « accusés de lecture » : sa portée est le
+    // processus, une entrée laissée par un test fausserait le suivant.
+    (MessageReadStatusService as any).readReceiptOptOutCache.clear();
 
     // Suppress console output in tests
     console.log = jest.fn();
@@ -119,6 +125,8 @@ describe('MessageReadStatusService', () => {
     // Default: no per-participant media consumption rows (getMessageReadStatus).
     // Individual tests override this to exercise the attachmentConsumption path.
     mockPrisma.attachmentStatusEntry.findMany.mockResolvedValue([]);
+    // Default: personne n'a désactivé ses accusés de lecture.
+    mockPrisma.userPreference.findMany.mockResolvedValue([]);
 
     // Create service instance with mock Prisma
     service = new MessageReadStatusService(mockPrisma as any);
@@ -599,7 +607,12 @@ describe('MessageReadStatusService', () => {
       expect(mockPrisma.conversationReadCursor.create).not.toHaveBeenCalled();
     });
 
-    it('should freeze a write-once readAt per message newly crossed', async () => {
+    // Chemin HÉRITÉ : sans ids rapportés (binaires clients déjà distribués), le
+    // gel retombe sur la fenêtre temporelle. Ce comportement sur-déclare — c'est
+    // précisément ce que le mode exact ci-dessous corrige — mais il doit être
+    // préservé tant que des clients postent un corps vide.
+    // @see docs/superpowers/specs/2026-07-24-read-exactness-design.md
+    it('legacy path (no reported ids): freezes the whole time window', async () => {
       const messageDate = new Date('2025-01-01T00:00:00Z');
       mockPrisma.message.findFirst.mockResolvedValue({ id: testMessageId, createdAt: messageDate });
       // Previous read cursor is older → window has newly-read messages.
@@ -627,6 +640,188 @@ describe('MessageReadStatusService', () => {
           expect.objectContaining({ messageId: testMessageId2, participantId: testParticipantId, readAt: expect.any(Date) })
         ]
       });
+    });
+
+    it('exact mode: freezes ONLY the reported messages, not the whole window', async () => {
+      mockPrisma.message.findFirst.mockResolvedValue({ id: testMessageId, createdAt: new Date('2025-01-01T00:00:00Z') });
+      mockPrisma.conversationReadCursor.findUnique.mockResolvedValue({ lastReadAt: new Date('2024-12-01T00:00:00Z') });
+      // La requête est bornée par la liste d'ids : seul le message rapporté revient.
+      mockPrisma.message.findMany.mockResolvedValue([{ id: testMessageId }]);
+      mockPrisma.messageStatusEntry.findMany.mockResolvedValue([]);
+
+      await service.markMessagesAsRead(testParticipantId, testConversationId, testMessageId, {
+        messageIds: [testMessageId]
+      });
+
+      const readFreezeWhere = mockPrisma.message.findMany.mock.calls[0][0].where;
+      expect(readFreezeWhere).toEqual(expect.objectContaining({ id: { in: [testMessageId] } }));
+      // Aucune fenêtre temporelle : c'est l'affichage réel qui fait foi.
+      expect(readFreezeWhere.createdAt).toBeUndefined();
+
+      // testMessageId2 était dans la fenêtre mais n'a jamais été affiché.
+      expect(mockPrisma.messageStatusEntry.createMany).toHaveBeenCalledWith({
+        data: [
+          expect.objectContaining({ messageId: testMessageId, participantId: testParticipantId, readAt: expect.any(Date) })
+        ]
+      });
+    });
+
+    // `markedCount` doit compter ce qui a RÉELLEMENT été figé. Ni le nombre
+    // d'ids rapportés (certains étaient déjà lus), ni le compteur de non-lus
+    // (il inclut des messages non rapportés) ne disent la vérité.
+    it('exact mode: returns the number of entries actually frozen', async () => {
+      const msgA = '507f1f77bcf86cd799439021';
+      const msgB = '507f1f77bcf86cd799439022';
+      mockPrisma.message.findFirst.mockResolvedValue({ id: msgB, createdAt: new Date('2025-01-02T00:00:00Z') });
+      mockPrisma.conversationReadCursor.findUnique.mockResolvedValue({ lastReadAt: new Date('2024-12-01T00:00:00Z') });
+      mockPrisma.message.findMany.mockResolvedValue([{ id: msgA }, { id: msgB }]);
+      // msgB porte déjà un readAt : seul msgA sera effectivement figé.
+      mockPrisma.messageStatusEntry.findMany.mockResolvedValue([
+        { messageId: msgB, deliveredAt: new Date('2025-01-02T00:00:01Z'), readAt: new Date('2025-01-02T00:00:02Z') }
+      ]);
+      mockPrisma.messageStatusEntry.createMany.mockResolvedValue({ count: 1 });
+
+      const frozen = await service.markMessagesAsRead(testParticipantId, testConversationId, undefined, {
+        messageIds: [msgA, msgB]
+      });
+
+      expect(frozen).toBe(1);
+    });
+
+    it('exact mode: reports zero when every reported message was already read', async () => {
+      const msgA = '507f1f77bcf86cd799439021';
+      mockPrisma.message.findFirst.mockResolvedValue({ id: msgA, createdAt: new Date('2025-01-02T00:00:00Z') });
+      mockPrisma.conversationReadCursor.findUnique.mockResolvedValue({ lastReadAt: new Date('2024-12-01T00:00:00Z') });
+      mockPrisma.message.findMany.mockResolvedValue([{ id: msgA }]);
+      mockPrisma.messageStatusEntry.findMany.mockResolvedValue([
+        { messageId: msgA, deliveredAt: new Date('2025-01-02T00:00:01Z'), readAt: new Date('2025-01-02T00:00:02Z') }
+      ]);
+
+      const frozen = await service.markMessagesAsRead(testParticipantId, testConversationId, undefined, {
+        messageIds: [msgA]
+      });
+
+      expect(frozen).toBe(0);
+    });
+
+    it('exact mode: keeps the ownership guards so a client cannot mark arbitrary messages read', async () => {
+      mockPrisma.message.findFirst.mockResolvedValue({ id: testMessageId, createdAt: new Date('2025-01-01T00:00:00Z') });
+      mockPrisma.conversationReadCursor.findUnique.mockResolvedValue(null);
+      mockPrisma.message.findMany.mockResolvedValue([{ id: testMessageId }]);
+      mockPrisma.messageStatusEntry.findMany.mockResolvedValue([]);
+
+      await service.markMessagesAsRead(testParticipantId, testConversationId, testMessageId, {
+        messageIds: [testMessageId, 'ffffffffffffffffffffffff']
+      });
+
+      // Un id forgé hors conversation, supprimé, ou émis par le participant
+      // lui-même reste filtré par la base — la liste d'ids ne contourne rien.
+      expect(mockPrisma.message.findMany.mock.calls[0][0].where).toEqual(
+        expect.objectContaining({
+          conversationId: testConversationId,
+          deletedAt: null,
+          senderId: { not: testParticipantId }
+        })
+      );
+    });
+
+    it('exact mode: the delivered freeze stays window-based (delivered = fetched)', async () => {
+      mockPrisma.message.findFirst.mockResolvedValue({ id: testMessageId, createdAt: new Date('2025-01-01T00:00:00Z') });
+      mockPrisma.conversationReadCursor.findUnique.mockResolvedValue({
+        lastReadAt: new Date('2024-12-01T00:00:00Z'),
+        lastDeliveredAt: new Date('2024-12-01T00:00:00Z')
+      });
+      mockPrisma.message.findMany.mockResolvedValue([{ id: testMessageId }]);
+      mockPrisma.messageStatusEntry.findMany.mockResolvedValue([]);
+
+      await service.markMessagesAsRead(testParticipantId, testConversationId, testMessageId, {
+        messageIds: [testMessageId]
+      });
+
+      // Second appel = gel de la livraison : un message récupéré EST livré,
+      // même s'il n'a pas été affiché. La fenêtre y reste correcte.
+      const deliveredFreezeWhere = mockPrisma.message.findMany.mock.calls[1][0].where;
+      expect(deliveredFreezeWhere.createdAt).toEqual(
+        expect.objectContaining({ gt: new Date('2024-12-01T00:00:00Z') })
+      );
+      expect(deliveredFreezeWhere.id).toBeUndefined();
+    });
+
+    // Curseur exact — le curseur borne le compteur de non-lus, il ne doit donc
+    // jamais franchir un message que le participant n'a pas vu.
+
+    it('exact mode: advances the read cursor only up to the contiguous read prefix', async () => {
+      const msgA = '507f1f77bcf86cd799439021';
+      const msgB = '507f1f77bcf86cd799439022';
+      const msgC = '507f1f77bcf86cd799439023';
+      mockPrisma.message.findFirst.mockResolvedValue({ id: msgC, createdAt: new Date('2025-01-03T00:00:00Z') });
+      mockPrisma.conversationReadCursor.findUnique.mockResolvedValue({ lastReadAt: new Date('2024-12-01T00:00:00Z') });
+
+      mockPrisma.message.findMany
+        .mockResolvedValueOnce([{ id: msgA }, { id: msgC }])            // gel borné
+        .mockResolvedValueOnce([{ id: msgA }, { id: msgB }, { id: msgC }]) // balayage du préfixe
+        .mockResolvedValue([]);
+      mockPrisma.messageStatusEntry.findMany
+        .mockResolvedValueOnce([])                                       // gel : rien de figé
+        .mockResolvedValueOnce([{ messageId: msgA }, { messageId: msgC }]) // A et C lus, B non
+        .mockResolvedValue([]);
+
+      await service.markMessagesAsRead(testParticipantId, testConversationId, undefined, {
+        messageIds: [msgA, msgC]
+      });
+
+      // C a bien été lu et figé, mais B ne l'a pas été : le curseur s'arrête à A.
+      const readAdvance = mockPrisma.conversationReadCursor.updateMany.mock.calls.find(
+        (c: any) => c[0].data?.lastReadMessageId !== undefined
+      );
+      expect(readAdvance[0].data.lastReadMessageId).toBe(msgA);
+    });
+
+    it('exact mode: leaves the read cursor untouched when the very next message is unread', async () => {
+      const msgA = '507f1f77bcf86cd799439021';
+      const msgB = '507f1f77bcf86cd799439022';
+      mockPrisma.message.findFirst.mockResolvedValue({ id: msgB, createdAt: new Date('2025-01-02T00:00:00Z') });
+      mockPrisma.conversationReadCursor.findUnique.mockResolvedValue({ lastReadAt: new Date('2024-12-01T00:00:00Z') });
+
+      mockPrisma.message.findMany
+        .mockResolvedValueOnce([{ id: msgB }])
+        .mockResolvedValueOnce([{ id: msgA }, { id: msgB }])
+        .mockResolvedValue([]);
+      mockPrisma.messageStatusEntry.findMany
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([{ messageId: msgB }]) // A jamais affiché
+        .mockResolvedValue([]);
+
+      await service.markMessagesAsRead(testParticipantId, testConversationId, undefined, {
+        messageIds: [msgB]
+      });
+
+      // Sauter au bas d'une conversation ne vide pas le badge : A reste non lu.
+      const readAdvance = mockPrisma.conversationReadCursor.updateMany.mock.calls.find(
+        (c: any) => c[0].data?.lastReadMessageId !== undefined
+      );
+      expect(readAdvance).toBeUndefined();
+      // Le message affiché est malgré tout figé comme lu.
+      expect(mockPrisma.messageStatusEntry.createMany).toHaveBeenCalled();
+    });
+
+    it('exact mode: two successive batches are both applied (dedup must not swallow the second)', async () => {
+      const msgA = '507f1f77bcf86cd799439021';
+      const msgB = '507f1f77bcf86cd799439022';
+      // Le message le plus récent est le MÊME pour les deux lots : une clé de
+      // dédup fondée sur lui seul avalerait silencieusement le second lot.
+      mockPrisma.message.findFirst.mockResolvedValue({ id: msgB, createdAt: new Date('2025-01-02T00:00:00Z') });
+      mockPrisma.conversationReadCursor.findUnique.mockResolvedValue({ lastReadAt: new Date('2024-12-01T00:00:00Z') });
+      mockPrisma.message.findMany.mockResolvedValue([{ id: msgA }]);
+      mockPrisma.messageStatusEntry.findMany.mockResolvedValue([]);
+
+      await service.markMessagesAsRead(testParticipantId, testConversationId, undefined, { messageIds: [msgA] });
+      const afterFirst = mockPrisma.messageStatusEntry.createMany.mock.calls.length;
+
+      mockPrisma.message.findMany.mockResolvedValue([{ id: msgB }]);
+      await service.markMessagesAsRead(testParticipantId, testConversationId, undefined, { messageIds: [msgB] });
+
+      expect(mockPrisma.messageStatusEntry.createMany.mock.calls.length).toBeGreaterThan(afterFirst);
     });
 
     it('should set readAt on a delivery-created entry without overwriting deliveredAt (write-once)', async () => {
@@ -3659,9 +3854,12 @@ describe('MessageReadStatusService', () => {
       // participant.findUnique throws inside the notification-sync try block
       mockPrisma.participant.findUnique.mockRejectedValue(new Error('participant lookup fail'));
 
+      // L'intention est « ne jette pas » : la panne de synchronisation des
+      // notifications est avalée. La méthode rend désormais le nombre d'entrées
+      // figées plutôt que `undefined` — le contrat vérifié ici est la résolution.
       await expect(
         service.markMessagesAsRead(testParticipantId, testConversationId, testMessageId)
-      ).resolves.toBeUndefined();
+      ).resolves.toEqual(expect.any(Number));
     });
   });
 
@@ -3677,6 +3875,315 @@ describe('MessageReadStatusService', () => {
     it('returns empty Map when participantIds array is empty', async () => {
       const result = await service.getUnreadCountsForConversations([], [testConversationId]);
       expect(result).toEqual(new Map());
+    });
+  });
+
+  // ───────────────────────────────────────────────────────────────────────────
+  // Bascule EXACT_READ_TRACKING_SINCE
+  //
+  // Armée, un message dépourvu de `readAt` figé cesse d'être déclaré lu au seul
+  // motif que le curseur l'a dépassé. Les tests voisins n'exercent JAMAIS ce
+  // chemin — la bascule étant désarmée par défaut — d'où ce bloc dédié : sans
+  // lui, un câblage incorrect passerait inaperçu.
+  //
+  // `deliveredAt` conserve son repli curseur : un message récupéré est livré.
+  // @see docs/superpowers/specs/2026-07-24-read-exactness-design.md
+  // ───────────────────────────────────────────────────────────────────────────
+  describe('bascule du suivi exact (EXACT_READ_TRACKING_SINCE)', () => {
+    const ENV_KEY = 'EXACT_READ_TRACKING_SINCE';
+    const originalEnv = process.env[ENV_KEY];
+
+    // Tous les messages des montages ci-dessous sont postérieurs à cette date,
+    // donc soumis au suivi exact une fois la bascule armée.
+    const armCutover = () => { process.env[ENV_KEY] = '2024-01-01T00:00:00.000Z'; };
+
+    afterEach(() => {
+      if (originalEnv === undefined) delete process.env[ENV_KEY];
+      else process.env[ENV_KEY] = originalEnv;
+    });
+
+    it('getMessageReadStatus: a cursor-only read no longer counts', async () => {
+      armCutover();
+      mockPrisma.message.findUnique.mockResolvedValue({
+        id: testMessageId,
+        createdAt: new Date('2025-01-01T10:00:00Z'),
+        senderId: testParticipantId,
+        anonymousSenderId: null,
+        conversationId: testConversationId
+      });
+      mockPrisma.participant.findMany.mockResolvedValue([
+        { id: testParticipantId, displayName: 'User1' },
+        { id: testParticipantId2, displayName: 'User2' }
+      ]);
+      mockPrisma.conversationReadCursor.findMany.mockResolvedValue([{
+        participantId: testParticipantId2,
+        lastDeliveredAt: new Date('2025-01-01T10:05:00Z'),
+        lastReadAt: new Date('2025-01-01T10:10:00Z'),
+        participant: { id: testParticipantId2, displayName: 'User2' }
+      }]);
+
+      const result = await service.getMessageReadStatus(testMessageId, testConversationId);
+
+      expect(result.readCount).toBe(0);
+      expect(result.readBy).toHaveLength(0);
+      // La livraison, elle, reste établie par le curseur.
+      expect(result.receivedCount).toBe(1);
+    });
+
+    it('getConversationReadStatuses: a cursor-only read no longer counts', async () => {
+      armCutover();
+      mockPrisma.message.findMany.mockResolvedValue([
+        { id: testMessageId, createdAt: new Date('2025-01-01T10:00:00Z'), senderId: 'sender-1' }
+      ]);
+      mockPrisma.conversationReadCursor.findMany.mockResolvedValue([{
+        participantId: testParticipantId,
+        lastDeliveredAt: new Date('2025-01-01T12:00:00Z'),
+        lastReadAt: new Date('2025-01-01T12:00:00Z')
+      }]);
+
+      const result = await service.getConversationReadStatuses(testConversationId, [testMessageId]);
+
+      expect(result.get(testMessageId)).toEqual(
+        expect.objectContaining({ receivedCount: 1, readCount: 0 })
+      );
+    });
+
+    it('getMessageStatusDetails: readAt falls back to null, deliveredAt survives', async () => {
+      armCutover();
+      mockPrisma.message.findUnique.mockResolvedValue({
+        createdAt: new Date('2024-06-01T10:00:00Z'),
+        conversationId: testConversationId
+      });
+      mockPrisma.conversationReadCursor.findMany.mockResolvedValue([{
+        participantId: 'p1',
+        lastDeliveredAt: new Date('2024-06-01T10:01:00Z'),
+        lastReadAt: new Date('2024-06-01T10:02:00Z')
+      }]);
+      mockPrisma.participant.findMany.mockResolvedValue([
+        { id: 'p1', displayName: 'Alice', avatar: null }
+      ]);
+
+      const result = await service.getMessageStatusDetails(testMessageId);
+
+      expect(result.statuses[0].readAt).toBeNull();
+      expect(result.statuses[0].deliveredAt).not.toBeNull();
+    });
+
+    it('getLatestMessageSummary: a cursor-only read no longer counts', async () => {
+      armCutover();
+      mockPrisma.message.findFirst.mockResolvedValue({
+        createdAt: new Date('2024-06-01T10:00:00Z'),
+        senderId: 'sender-id'
+      });
+      mockPrisma.participant.findMany.mockResolvedValue([{ id: 'p1' }, { id: 'p2' }]);
+      mockPrisma.conversationReadCursor.findMany.mockResolvedValue([
+        { participantId: 'p1', lastDeliveredAt: new Date('2024-06-01T10:01:00Z'), lastReadAt: new Date('2024-06-01T10:02:00Z') },
+        { participantId: 'p2', lastDeliveredAt: new Date('2024-06-01T10:01:00Z'), lastReadAt: null }
+      ]);
+
+      const result = await service.getLatestMessageSummary(testConversationId);
+
+      expect(result.readCount).toBe(0);
+      expect(result.deliveredCount).toBe(2);
+    });
+
+    it('a message PREDATING the cutover keeps the legacy cursor fallback', async () => {
+      armCutover();
+      // Créé avant la bascule : il n'a jamais eu l'occasion d'être gelé, le
+      // priver du repli le ferait basculer à tort en « jamais vu ».
+      mockPrisma.message.findFirst.mockResolvedValue({
+        createdAt: new Date('2023-06-01T10:00:00Z'),
+        senderId: 'sender-id'
+      });
+      mockPrisma.participant.findMany.mockResolvedValue([{ id: 'p1' }]);
+      mockPrisma.conversationReadCursor.findMany.mockResolvedValue([
+        { participantId: 'p1', lastDeliveredAt: new Date('2023-06-01T10:01:00Z'), lastReadAt: new Date('2023-06-01T10:02:00Z') }
+      ]);
+
+      const result = await service.getLatestMessageSummary(testConversationId);
+
+      expect(result.readCount).toBe(1);
+    });
+  });
+
+  // ───────────────────────────────────────────────────────────────────────────
+  // showReadReceipts — le participant opt-out sort du NUMÉRATEUR et du
+  // DÉNOMINATEUR.
+  //
+  // Le retirer du seul numérateur rendrait le total définitivement
+  // inatteignable, ce qui trahirait son existence ; garder le compteur en
+  // masquant son nom laisserait déduire trivialement qu'il a lu. L'exclure des
+  // deux le rend simplement invisible, et « lu par tous » reste atteignable.
+  //
+  // Ce versant-ci protège une donnée personnelle : il est donc autoritaire côté
+  // serveur. Le versant réciproque (« je ne partage pas, je ne vois pas ») est
+  // une règle d'équité — ce qu'elle masquerait est consenti par les autres —
+  // et vit côté client, où il s'applique uniformément au REST et au temps réel.
+  // @see docs/superpowers/specs/2026-07-24-read-exactness-design.md
+  // ───────────────────────────────────────────────────────────────────────────
+  describe('showReadReceipts — exclusion du participant opt-out', () => {
+    const optOutRows = (userId: string) => [{ userId }];
+
+    it('getMessageReadStatus: excluded from readCount AND totalMembers', async () => {
+      mockPrisma.message.findUnique.mockResolvedValue({
+        id: testMessageId,
+        createdAt: new Date('2025-01-01T10:00:00Z'),
+        senderId: 'sender-p',
+        anonymousSenderId: null,
+        conversationId: testConversationId
+      });
+      mockPrisma.participant.findMany.mockResolvedValue([
+        { id: 'sender-p', userId: 'u-sender', displayName: 'Sender' },
+        { id: 'p-optout', userId: 'u-optout', displayName: 'Discret' },
+        { id: 'p-normal', userId: 'u-normal', displayName: 'Normal' }
+      ]);
+      mockPrisma.conversationReadCursor.findMany.mockResolvedValue([
+        { participantId: 'p-optout', lastDeliveredAt: new Date('2025-01-01T10:05:00Z'), lastReadAt: new Date('2025-01-01T10:10:00Z') },
+        { participantId: 'p-normal', lastDeliveredAt: new Date('2025-01-01T10:05:00Z'), lastReadAt: new Date('2025-01-01T10:10:00Z') }
+      ]);
+      mockPrisma.userPreference.findMany.mockResolvedValue(optOutRows('u-optout'));
+
+      const result = await service.getMessageReadStatus(testMessageId, testConversationId);
+
+      // Dénominateur : 3 membres − l'expéditeur − l'opt-out = 1
+      expect(result.totalMembers).toBe(1);
+      expect(result.readCount).toBe(1);
+      expect(result.readBy.map((r: any) => r.participantId)).toEqual(['p-normal']);
+      // « lu par tous » reste atteignable : 1/1.
+      expect(result.readCount).toBe(result.totalMembers);
+    });
+
+    it('getLatestMessageSummary: the opt-out read no longer leaks into the broadcast summary', async () => {
+      mockPrisma.message.findFirst.mockResolvedValue({
+        createdAt: new Date('2024-06-01T10:00:00Z'),
+        senderId: 'sender-p'
+      });
+      mockPrisma.participant.findMany.mockResolvedValue([
+        { id: 'p-optout', userId: 'u-optout' },
+        { id: 'p-normal', userId: 'u-normal' }
+      ]);
+      mockPrisma.conversationReadCursor.findMany.mockResolvedValue([
+        { participantId: 'p-optout', lastDeliveredAt: new Date('2024-06-01T10:01:00Z'), lastReadAt: new Date('2024-06-01T10:02:00Z') },
+        { participantId: 'p-normal', lastDeliveredAt: new Date('2024-06-01T10:01:00Z'), lastReadAt: null }
+      ]);
+      mockPrisma.userPreference.findMany.mockResolvedValue(optOutRows('u-optout'));
+
+      const result = await service.getLatestMessageSummary(testConversationId);
+
+      expect(result.totalMembers).toBe(1);
+      expect(result.readCount).toBe(0);
+    });
+
+    it('getMessageStatusDetails: the opt-out participant is absent from the list', async () => {
+      mockPrisma.message.findUnique.mockResolvedValue({
+        createdAt: new Date('2024-06-01T10:00:00Z'),
+        conversationId: testConversationId
+      });
+      mockPrisma.conversationReadCursor.findMany.mockResolvedValue([
+        { participantId: 'p-optout', lastDeliveredAt: new Date('2024-06-01T10:01:00Z'), lastReadAt: new Date('2024-06-01T10:02:00Z') },
+        { participantId: 'p-normal', lastDeliveredAt: new Date('2024-06-01T10:01:00Z'), lastReadAt: null }
+      ]);
+      mockPrisma.participant.findMany.mockResolvedValue([
+        { id: 'p-optout', userId: 'u-optout', displayName: 'Discret', avatar: null },
+        { id: 'p-normal', userId: 'u-normal', displayName: 'Normal', avatar: null }
+      ]);
+      mockPrisma.userPreference.findMany.mockResolvedValue(optOutRows('u-optout'));
+
+      const result = await service.getMessageStatusDetails(testMessageId);
+
+      expect(result.statuses.map((s: any) => s.participantId)).toEqual(['p-normal']);
+      expect(result.pagination.total).toBe(1);
+    });
+
+    it('getConversationReadStatuses: the opt-out is excluded from the batch counts', async () => {
+      mockPrisma.message.findMany.mockResolvedValue([
+        { id: testMessageId, createdAt: new Date('2025-01-01T10:00:00Z'), senderId: 'sender-p' }
+      ]);
+      mockPrisma.participant.findMany.mockResolvedValue([
+        { id: 'p-optout', userId: 'u-optout' },
+        { id: 'p-normal', userId: 'u-normal' }
+      ]);
+      mockPrisma.conversationReadCursor.findMany.mockResolvedValue([
+        { participantId: 'p-optout', lastDeliveredAt: new Date('2025-01-01T12:00:00Z'), lastReadAt: new Date('2025-01-01T12:00:00Z') },
+        { participantId: 'p-normal', lastDeliveredAt: new Date('2025-01-01T12:00:00Z'), lastReadAt: new Date('2025-01-01T12:00:00Z') }
+      ]);
+      mockPrisma.userPreference.findMany.mockResolvedValue(optOutRows('u-optout'));
+
+      const result = await service.getConversationReadStatuses(testConversationId, [testMessageId]);
+
+      expect(result.get(testMessageId)).toEqual(
+        expect.objectContaining({ receivedCount: 1, readCount: 1 })
+      );
+    });
+
+    it('does not re-query the preference for a user already resolved', async () => {
+      // getLatestMessageSummary est appelée à CHAQUE accusé de lecture (5 sites,
+      // dont des handlers socket) : une requête de plus par appel y serait payée
+      // en permanence. Le résultat est donc mémoïsé par utilisateur.
+      const summaryFixture = () => {
+        mockPrisma.message.findFirst.mockResolvedValue({
+          createdAt: new Date('2024-06-01T10:00:00Z'),
+          senderId: 'sender-p'
+        });
+        mockPrisma.participant.findMany.mockResolvedValue([
+          { id: 'p-cached', userId: 'u-cached' }
+        ]);
+        mockPrisma.conversationReadCursor.findMany.mockResolvedValue([
+          { participantId: 'p-cached', lastDeliveredAt: new Date('2024-06-01T10:01:00Z'), lastReadAt: null }
+        ]);
+      };
+
+      summaryFixture();
+      await service.getLatestMessageSummary(testConversationId);
+      const afterFirst = mockPrisma.userPreference.findMany.mock.calls.length;
+      expect(afterFirst).toBe(1);
+
+      summaryFixture();
+      await service.getLatestMessageSummary(testConversationId);
+
+      expect(mockPrisma.userPreference.findMany.mock.calls.length).toBe(afterFirst);
+    });
+
+    it('an anonymous participant has no stored preference and stays visible', async () => {
+      mockPrisma.message.findFirst.mockResolvedValue({
+        createdAt: new Date('2024-06-01T10:00:00Z'),
+        senderId: 'sender-p'
+      });
+      mockPrisma.participant.findMany.mockResolvedValue([
+        { id: 'p-anon', userId: null },
+        { id: 'p-normal', userId: 'u-normal' }
+      ]);
+      mockPrisma.conversationReadCursor.findMany.mockResolvedValue([
+        { participantId: 'p-anon', lastDeliveredAt: new Date('2024-06-01T10:01:00Z'), lastReadAt: new Date('2024-06-01T10:02:00Z') },
+        { participantId: 'p-normal', lastDeliveredAt: new Date('2024-06-01T10:01:00Z'), lastReadAt: new Date('2024-06-01T10:02:00Z') }
+      ]);
+
+      const result = await service.getLatestMessageSummary(testConversationId);
+
+      expect(result.totalMembers).toBe(2);
+      expect(result.readCount).toBe(2);
+    });
+
+    it('a preference lookup failure keeps everyone visible rather than blanking the feature', async () => {
+      // Repli ouvert, cohérent avec PrivacyPreferencesService.fetchFromDatabase
+      // qui retombe déjà sur les défauts. Échouer fermé masquerait les accusés
+      // de TOUS sur un incident transitoire.
+      mockPrisma.message.findFirst.mockResolvedValue({
+        createdAt: new Date('2024-06-01T10:00:00Z'),
+        senderId: 'sender-p'
+      });
+      mockPrisma.participant.findMany.mockResolvedValue([
+        { id: 'p-normal', userId: 'u-normal' }
+      ]);
+      mockPrisma.conversationReadCursor.findMany.mockResolvedValue([
+        { participantId: 'p-normal', lastDeliveredAt: new Date('2024-06-01T10:01:00Z'), lastReadAt: new Date('2024-06-01T10:02:00Z') }
+      ]);
+      mockPrisma.userPreference.findMany.mockRejectedValue(new Error('DB down'));
+
+      const result = await service.getLatestMessageSummary(testConversationId);
+
+      expect(result.totalMembers).toBe(1);
+      expect(result.readCount).toBe(1);
     });
   });
 

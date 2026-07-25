@@ -2,10 +2,6 @@
  * Unit tests for routes/me/export.ts
  * Tests the GET /export data portability endpoint.
  *
- * Note: The response schema uses `data: { type: 'object' }` without specific properties,
- * so fast-json-stringify strips dynamic data fields. Tests verify status codes and
- * the prisma calls made (behavioral testing) rather than serialized response content.
- *
  * @jest-environment node
  */
 
@@ -112,6 +108,26 @@ describe('GET /export — default JSON (all types)', () => {
     expect(mocks.participantFindMany).toHaveBeenCalled();
     await app.close();
   });
+
+  it('includes profile, messages, and contacts in serialized response', async () => {
+    const { app } = await buildApp();
+    const res = await app.inject({ method: 'GET', url: '/export' });
+    const body = res.json() as any;
+    expect(res.statusCode).toBe(200);
+    expect(body.data).toBeDefined();
+    expect(body.data.exportDate).toBeDefined();
+    expect(body.data.format).toBe('json');
+    expect(body.data.requestedTypes).toEqual(['profile', 'messages', 'contacts']);
+    expect(body.data.profile).toBeDefined();
+    expect(body.data.profile.id).toBe(USER_ID);
+    expect(body.data.messages).toBeDefined();
+    expect(Array.isArray(body.data.messages)).toBe(true);
+    expect(body.data.messagesCount).toBe(1);
+    expect(body.data.contacts).toBeDefined();
+    expect(Array.isArray(body.data.contacts)).toBe(true);
+    expect(body.data.contactsCount).toBe(1);
+    await app.close();
+  });
 });
 
 describe('GET /export — profile only', () => {
@@ -185,6 +201,18 @@ describe('GET /export — CSV format', () => {
     const { app } = await buildApp({ mocks });
     const res = await app.inject({ method: 'GET', url: '/export?format=csv&types=profile,messages' });
     expect(res.statusCode).toBe(200);
+    await app.close();
+  });
+
+  it('includes csv data in serialized response', async () => {
+    const { app } = await buildApp();
+    const res = await app.inject({ method: 'GET', url: '/export?format=csv' });
+    const body = res.json() as any;
+    expect(res.statusCode).toBe(200);
+    expect(body.data).toBeDefined();
+    expect(body.data.format).toBe('csv');
+    expect(body.data.csv).toBeDefined();
+    expect(typeof body.data.csv).toBe('object');
     await app.close();
   });
 });

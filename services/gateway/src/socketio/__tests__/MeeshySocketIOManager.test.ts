@@ -203,6 +203,7 @@ jest.mock('../handlers/AuthHandler', () => ({
       handleTokenAuthentication: jest.fn(),
       handleManualAuthentication: jest.fn().mockResolvedValue(undefined),
       handleHeartbeat: jest.fn().mockResolvedValue(undefined),
+      handleEnginePong: jest.fn(),
       handleDisconnection: jest.fn().mockResolvedValue(undefined),
     };
     return mockAuthHandlerInstance;
@@ -442,15 +443,22 @@ function makePrisma(): any {
 
 function makeSocket(id = 'socket-1', rooms = new Set<string>()) {
   const handlers: Record<string, any> = {};
+  const connHandlers: Record<string, any> = {};
   const socket = {
     id,
     rooms,
     on: jest.fn((event: string, handler: any) => {
       handlers[event] = handler;
     }),
+    conn: {
+      on: jest.fn((event: string, handler: any) => {
+        connHandlers[event] = handler;
+      }),
+    },
     emit: jest.fn(),
     disconnect: jest.fn(),
     _handlers: handlers,
+    _connHandlers: connHandlers,
   };
   return socket;
 }
@@ -924,6 +932,24 @@ describe('MeeshySocketIOManager', () => {
       expect(registeredEvents).toContain(CLIENT_EVENTS.REACTION_REMOVE);
       expect(registeredEvents).toContain(CLIENT_EVENTS.LOCATION_SHARE);
       expect(registeredEvents).toContain('disconnect');
+    });
+
+    it('routes engine-level pongs to authHandler.handleEnginePong (clients with no applicative heartbeat)', () => {
+      const socket = makeSocket();
+      triggerConnection(socket);
+
+      socket._connHandlers['packet']({ type: 'pong' });
+
+      expect(mockAuthHandlerInstance.handleEnginePong).toHaveBeenCalledWith(socket);
+    });
+
+    it('ignores non-pong engine packets', () => {
+      const socket = makeSocket();
+      triggerConnection(socket);
+
+      socket._connHandlers['packet']({ type: 'message' });
+
+      expect(mockAuthHandlerInstance.handleEnginePong).not.toHaveBeenCalled();
     });
 
     it('calls callEventsHandler.setupCallEvents on each connection', () => {

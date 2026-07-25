@@ -43,6 +43,10 @@ enum DiscoveryTab: String, CaseIterable, Hashable {
 
 // MARK: - Filter Enums
 
+/// Filtres de l'annuaire. `online`/`offline` partitionnent sur le flag binaire
+/// backend `isOnline` — contexte LABELLISÉ explicite, distinct de la règle
+/// d'affichage des dots 1/3/5 (`UserPresence.state`) : un contact « Hors
+/// ligne » du filtre peut encore porter un dot orange/gris (< 5 min).
 enum ContactFilter: String, CaseIterable {
     case all = "Tous"
     case online = "En ligne"
@@ -127,5 +131,53 @@ extension View {
             .trackScrollContentOffset { value in
                 if active { onChange(-value) }
             }
+    }
+}
+
+// MARK: - Friend List Aggregation
+
+/// Single source of truth for building the user's friend (contact) list from
+/// their accepted friend requests. The gateway exposes friendships only as
+/// `/friend-requests/received` + `/friend-requests/sent`; a "friend" is any
+/// request with `status == "accepted"`, in either direction. Shared by
+/// `ContactsListViewModel` (the Contacts directory) and
+/// `NewConversationViewModel` (the contact-first conversation picker) so the
+/// definition of "who is a contact" never drifts between the two surfaces.
+enum FriendListAggregator {
+    /// Merges accepted received + sent requests into a deduplicated,
+    /// online-first friend list. `currentUserId` is excluded defensively so a
+    /// self-referencing request can never surface the user as their own
+    /// contact. Pure function — no I/O, trivially testable.
+    static func aggregate(
+        received: [FriendRequest],
+        sent: [FriendRequest],
+        currentUserId: String
+    ) -> [FriendRequestUser] {
+        var friendMap: [String: FriendRequestUser] = [:]
+
+        for request in received where request.status == "accepted" {
+            if let sender = request.sender, sender.id != currentUserId {
+                friendMap[sender.id] = sender
+            } else if let receiver = request.receiver, receiver.id != currentUserId {
+                friendMap[receiver.id] = receiver
+            }
+        }
+
+        for request in sent where request.status == "accepted" {
+            if let receiver = request.receiver, receiver.id != currentUserId {
+                friendMap[receiver.id] = receiver
+            } else if let sender = request.sender, sender.id != currentUserId {
+                friendMap[sender.id] = sender
+            }
+        }
+
+        return friendMap.values.sorted { a, b in
+            let aOnline = a.isOnline ?? false
+            let bOnline = b.isOnline ?? false
+            if aOnline != bOnline { return aOnline }
+            let aDate = a.lastActiveAt ?? .distantPast
+            let bDate = b.lastActiveAt ?? .distantPast
+            return aDate > bDate
+        }
     }
 }

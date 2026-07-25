@@ -158,16 +158,62 @@ struct PrivacySettingsView: View {
         color: String,
         keyPath: WritableKeyPath<PrivacyPreferences, Bool>
     ) -> some View {
-        settingsRow(icon: icon, title: title, color: color) {
-            Toggle("", isOn: Binding(
-                get: { prefs.privacy[keyPath: keyPath] },
-                set: { val in prefs.updatePrivacy { $0[keyPath: keyPath] = val } }
-            ))
-            .labelsHidden()
-            .tint(Color(hex: accentColor))
-            .accessibilityLabel(title)
+        Group {
+            if Self.isComingSoon(keyPath) {
+                settingsRow(icon: icon, title: title, color: color) {
+                    Text(String(localized: "settings.privacy.coming_soon", defaultValue: "Bientôt disponible", bundle: .main))
+                        .font(MeeshyFont.relative(12, weight: .semibold))
+                        .foregroundColor(theme.textSecondary)
+                }
+                .opacity(0.55)
+                .allowsHitTesting(false)
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel("\(title) — \(String(localized: "settings.privacy.coming_soon.a11y", defaultValue: "bientôt disponible, actuellement sans effet", bundle: .main))")
+            } else {
+                settingsRow(icon: icon, title: title, color: color) {
+                    Toggle("", isOn: Binding(
+                        get: { prefs.privacy[keyPath: keyPath] },
+                        set: { val in prefs.updatePrivacy { $0[keyPath: keyPath] = val } }
+                    ))
+                    .labelsHidden()
+                    .tint(Color(hex: accentColor))
+                    .accessibilityLabel(title)
+                }
+            }
         }
     }
+
+    /// Bascules de confidentialité pas encore appliquées — ni côté iOS, ni
+    /// côté gateway (`hideProfileFromSearch` exigerait un filtre serveur sur
+    /// la recherche ; `blockScreenshots` n'a pas d'API publique iOS pour
+    /// réellement bloquer une capture ; `allowCallsFromNonContacts` exigerait
+    /// de toucher `CallManager.swift`, hors-lane ici ; `saveMediaToGallery`
+    /// supposerait un pipeline d'auto-save à la réception, inexistant ;
+    /// `shareUsageData` n'a pas de mécanisme distinct de `allowAnalytics` ;
+    /// `allowContactRequests`/`allowGroupInvites` exigeraient un check côté
+    /// gateway avant la création d'une demande de contact
+    /// (`routes/friends.ts`) ou l'ajout d'un membre à un groupe
+    /// (`routes/conversations/participants.ts`) — `PrivacyPreferencesService`
+    /// ne les expose aujourd'hui qu'à `PresenceVisibilityService`/l'accusé de
+    /// lecture, jamais à ces deux flux).
+    /// Grisées avec "Bientôt disponible" plutôt que persistées sans effet
+    /// (faux sentiment de confidentialité) — cf.
+    /// tasks/audit-backlog-2026-07-20.md LANE Réglages, item P1. Retirer un
+    /// cas dès qu'une application réelle existe pour ce champ.
+    /// `nonisolated`: pure Set membership check, no actor-isolated state.
+    nonisolated static func isComingSoon(_ keyPath: WritableKeyPath<PrivacyPreferences, Bool>) -> Bool {
+        Self.comingSoonPrivacyKeyPaths.contains(keyPath as AnyKeyPath)
+    }
+
+    nonisolated(unsafe) private static let comingSoonPrivacyKeyPaths: Set<AnyKeyPath> = [
+        \PrivacyPreferences.hideProfileFromSearch,
+        \PrivacyPreferences.blockScreenshots,
+        \PrivacyPreferences.allowCallsFromNonContacts,
+        \PrivacyPreferences.saveMediaToGallery,
+        \PrivacyPreferences.shareUsageData,
+        \PrivacyPreferences.allowContactRequests,
+        \PrivacyPreferences.allowGroupInvites,
+    ]
 
     // MARK: - Reusable Components
 
