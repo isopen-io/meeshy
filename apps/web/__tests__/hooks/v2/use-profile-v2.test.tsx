@@ -301,6 +301,63 @@ describe('useProfileV2', () => {
       expect(nativeLanguage?.code).toBe('fr');
     });
 
+    it('should render language names in native script with correct diacritics', () => {
+      // fr/es carried romanized-ASCII names ("Francais"/"Espanol") in the old
+      // local map; they now delegate to the shared SSOT native names.
+      const { result } = renderHook(() => useProfileV2(), {
+        wrapper: createWrapper(),
+      });
+
+      const languages = result.current.profile?.languages;
+      expect(languages?.find(l => l.code === 'fr')?.name).toBe('Français');
+      expect(languages?.find(l => l.code === 'es')?.name).toBe('Español');
+    });
+
+    it('should resolve languages beyond the former 13-entry map to their native name', () => {
+      // "nl"/"pt" were absent from (or romanized in) the old local map, so they
+      // fell back to an uppercased code / stripped diacritics. The SSOT covers them.
+      mockCurrentUserData.mockReturnValue({
+        data: {
+          ...mockCurrentUser,
+          systemLanguage: 'nl',
+          regionalLanguage: 'pt',
+          customDestinationLanguage: undefined,
+        },
+        isLoading: false,
+        error: null,
+        refetch: jest.fn(),
+      });
+
+      const { result } = renderHook(() => useProfileV2(), {
+        wrapper: createWrapper(),
+      });
+
+      const languages = result.current.profile?.languages;
+      expect(languages?.find(l => l.code === 'nl')?.name).toBe('Nederlands');
+      expect(languages?.find(l => l.code === 'pt')?.name).toBe('Português');
+    });
+
+    it('should render the French fallback name in native script', () => {
+      mockCurrentUserData.mockReturnValue({
+        data: {
+          ...mockCurrentUser,
+          systemLanguage: undefined,
+          regionalLanguage: undefined,
+          customDestinationLanguage: undefined,
+        },
+        isLoading: false,
+        error: null,
+        refetch: jest.fn(),
+      });
+
+      const { result } = renderHook(() => useProfileV2(), {
+        wrapper: createWrapper(),
+      });
+
+      const languages = result.current.profile?.languages;
+      expect(languages?.[0].name).toBe('Français');
+    });
+
     it('should set regional language as fluent', () => {
       const { result } = renderHook(() => useProfileV2(), {
         wrapper: createWrapper(),
