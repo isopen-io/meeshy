@@ -1,4 +1,4 @@
-import { getFlag, getLanguageName, FLAG_MAP, LANGUAGE_NAMES } from '@/components/v2/flags';
+import { getFlag, getLanguageName } from '@/components/v2/flags';
 
 const GLOBE = '\u{1F310}';
 const FLAG_NORWAY = '\u{1F1F3}\u{1F1F4}';
@@ -7,7 +7,11 @@ const FLAG_FRANCE = '\u{1F1EB}\u{1F1F7}';
 const FLAG_SWEDEN = '\u{1F1F8}\u{1F1EA}';
 const FLAG_SPAIN = '\u{1F1EA}\u{1F1F8}';
 const FLAG_JAPAN = '\u{1F1EF}\u{1F1F5}';
-const FLAG_PORTUGAL = '\u{1F1E7}\u{1F1F7}';
+// SSOT (packages/shared/utils/languages.ts) maps `pt` to the Portugal flag.
+// The former local v2 FLAG_MAP diverged here, using the Brazil flag (🇧🇷) for
+// Portuguese — converging on the SSOT restores 🇵🇹.
+const FLAG_PORTUGAL = '\u{1F1F5}\u{1F1F9}';
+const FLAG_ETHIOPIA = '\u{1F1EA}\u{1F1F9}';
 
 describe('v2/flags getFlag', () => {
   it('returns the France flag for a known 2-letter code', () => {
@@ -45,9 +49,9 @@ describe('v2/flags getFlag', () => {
   it('resolves 639-2/B (bibliographic) variants that differ from the 639-1 prefix', () => {
     // "ger"->"de", "dut"->"nl", "chi"->"zh": bibliographic codes whose first
     // two letters never form the target ISO 639-1 code.
-    expect(getFlag('ger')).toBe(FLAG_MAP.de);
-    expect(getFlag('dut')).toBe(FLAG_MAP.nl);
-    expect(getFlag('chi')).toBe(FLAG_MAP.zh);
+    expect(getFlag('ger')).toBe(getFlag('de'));
+    expect(getFlag('dut')).toBe(getFlag('nl'));
+    expect(getFlag('chi')).toBe(getFlag('zh'));
   });
 
   it('does not truncate a supported 3-letter code into an unrelated language', () => {
@@ -55,6 +59,15 @@ describe('v2/flags getFlag', () => {
     // exists in the map, but the invariant is enforced regardless.
     expect(getFlag('swe')).not.toBe(GLOBE);
     expect(getFlag('swe')).toBe(FLAG_SWEDEN);
+  });
+
+  it('covers languages beyond the former 21-entry map via the shared SSOT', () => {
+    // Amharic, Hebrew and Persian were absent from the old local FLAG_MAP and
+    // rendered a generic globe on every chat bubble / media card. The shared
+    // getLanguageInfo covers 60+ languages, so they now show their real flag.
+    expect(getFlag('am')).toBe(FLAG_ETHIOPIA);
+    expect(getFlag('he')).not.toBe(GLOBE);
+    expect(getFlag('fa')).not.toBe(GLOBE);
   });
 
   it('falls back to the globe for an unknown code', () => {
@@ -68,31 +81,30 @@ describe('v2/flags getFlag', () => {
   });
 });
 
-describe('v2/flags maps stay in sync', () => {
-  it('exposes the same language keys in FLAG_MAP and LANGUAGE_NAMES', () => {
-    expect(Object.keys(FLAG_MAP).sort()).toEqual(Object.keys(LANGUAGE_NAMES).sort());
-  });
-
-  it('covers both Indonesian and Norwegian (no media-type divergence)', () => {
-    expect(FLAG_MAP).toHaveProperty('id');
-    expect(FLAG_MAP).toHaveProperty('no');
-  });
-});
-
 describe('v2/flags getLanguageName', () => {
-  it('returns a romanized name for a known code', () => {
+  it('returns the native name for a known code', () => {
     expect(getLanguageName('no')).toBe('Norsk');
+  });
+
+  it('restores the native script/diacritics dropped by the old romanized map', () => {
+    // The former local LANGUAGE_NAMES stripped accents and transliterated to
+    // ASCII ("Español" -> "Espanol", "日本語" -> "Nihongo"). The shared SSOT
+    // exposes the real native name.
+    expect(getLanguageName('es')).toBe('Español');
+    expect(getLanguageName('ja')).toBe('日本語');
+    expect(getLanguageName('zh')).toBe('中文');
   });
 
   it('falls back to the uppercased code for an unknown language', () => {
     expect(getLanguageName('xx')).toBe('XX');
   });
 
-  it('resolves an ISO 639-2/639-3 code to its romanized name', () => {
-    // slice(0, 2) turned "swe" into "sw" (absent from LANGUAGE_NAMES) and
-    // returned the raw "SWE"; normalization resolves it to Swedish.
+  it('resolves an ISO 639-2/639-3 code to its native name', () => {
+    // slice(0, 2) turned "swe" into "sw" (absent from the map) and returned the
+    // raw "SWE"; normalization resolves it to Swedish, then the SSOT yields the
+    // native name.
     expect(getLanguageName('swe')).toBe('Svenska');
-    expect(getLanguageName('spa')).toBe('Espanol');
+    expect(getLanguageName('spa')).toBe('Español');
   });
 
   it('keeps the original code (uppercased) when it cannot be normalized', () => {
