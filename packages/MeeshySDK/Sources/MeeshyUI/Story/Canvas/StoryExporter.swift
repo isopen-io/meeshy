@@ -104,6 +104,10 @@ public enum StoryExporter {
         // composer **aussi son audio track** dans la pipeline audio mix
         // (section 1.5 ci-dessous). nil quand la slide est static-only.
         var backgroundVideoAsset: (asset: AVURLAsset, bg: StoryMediaObject)?
+        // `preferredTransform` of the background video track — the custom
+        // compositor receives decoded frames in storage orientation and applies
+        // this itself so camera-captured (rotated) clips render upright.
+        var backgroundVideoTransform: CGAffineTransform = .identity
 
         // 1. If the slide has a background VIDEO (looped or not), drive the
         //    composition timing from it. The previous predicate required
@@ -130,6 +134,7 @@ public enum StoryExporter {
             }
             let assetDuration = try await asset.load(.duration)
             backgroundVideoAsset = (asset, bg)
+            backgroundVideoTransform = (try? await assetVideoTrack.load(.preferredTransform)) ?? .identity
 
             if bg.loop {
                 // Loop the background video to cover effectiveSlideDuration()
@@ -226,7 +231,8 @@ public enum StoryExporter {
                 slide: slide,
                 languages: languages,
                 timeRange: CMTimeRange(start: .zero, duration: totalDuration),
-                watermark: watermark
+                watermark: watermark,
+                backgroundVideoTransform: backgroundVideoTransform
             )
         ]
 

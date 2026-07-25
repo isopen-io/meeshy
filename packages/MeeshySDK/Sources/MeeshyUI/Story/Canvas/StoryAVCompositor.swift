@@ -1,4 +1,5 @@
 import AVFoundation
+import CoreImage
 import CoreMedia
 import QuartzCore
 import UIKit
@@ -124,6 +125,17 @@ public final class StoryAVCompositor: NSObject, nonisolated AVVideoCompositing, 
             return
         }
 
+        // Pull the decoded frame of the (single) source video track. With a
+        // custom compositor NOTHING reaches the output unless we draw it —
+        // `newPixelBuffer()` hands back an EMPTY buffer. When the slide has a
+        // background video this frame carries its footage and `renderFrame`
+        // paints it for the `.video` background case. Without this the exported
+        // MP4 shows a black background while the audio (baked into a separate
+        // track) still plays — the "sound over black" bug. nil for
+        // static-only / image-background slides (their substrate is overpainted).
+        let sourceVideoFrame: CVPixelBuffer? = request.sourceTrackIDs.first
+            .flatMap { request.sourceFrame(byTrackID: $0.int32Value) }
+
         // The pixel buffer is produced and consumed on the main actor (where
         // StoryRenderer.render runs) — finishing the request from inside the
         // bridged main-actor block keeps `buffer` from crossing isolation
@@ -138,6 +150,8 @@ public final class StoryAVCompositor: NSObject, nonisolated AVVideoCompositing, 
                                          at: request.compositionTime,
                                          renderSize: renderContext.size,
                                          into: buffer,
+                                         backgroundVideoFrame: sourceVideoFrame,
+                                         backgroundVideoTransform: instruction.backgroundVideoTransform,
                                          cache: cache,
                                          backdropCapture: backdropCapture,
                                          watermark: instruction.watermark)
@@ -183,6 +197,8 @@ public final class StoryAVCompositor: NSObject, nonisolated AVVideoCompositing, 
                                      at time: CMTime,
                                      renderSize: CGSize,
                                      into buffer: CVPixelBuffer,
+                                     backgroundVideoFrame: CVPixelBuffer? = nil,
+                                     backgroundVideoTransform: CGAffineTransform = .identity,
                                      cache: StoryRendererCache,
                                      backdropCapture: any BackdropCapturing,
                                      watermark: StoryExportWatermark? = nil) throws {
@@ -261,8 +277,18 @@ public final class StoryAVCompositor: NSObject, nonisolated AVVideoCompositing, 
         let bgKind = StoryRenderer.renderBackground(slide: slide, languages: languages)
         switch bgKind {
         case .video:
-            // Substrate already carries video frames — nothing to overpaint.
-            break
+            // Draw the decoded source frame of the background video track. The
+            // custom compositor receives an EMPTY destination buffer, so unless
+            // we paint the frame here the exported MP4 shows a black background
+            // (with the video's audio still baked into a separate track — the
+            // "sound over black" bug). nil during a transparent no-loop tail.
+            if let videoFrame = backgroundVideoFrame {
+                Self.paintVideoFrame(videoFrame,
+                                     transform: backgroundVideoTransform,
+                                     slide: slide,
+                                     in: cg,
+                                     size: CGSize(width: width, height: height))
+            }
         case .solidColor(let color):
             cg.saveGState()
             cg.setFillColor(color.cgColor)
@@ -483,6 +509,47 @@ public final class StoryAVCompositor: NSObject, nonisolated AVVideoCompositing, 
         cg.draw(cgImage, in: CGRect(origin: .zero, size: drawRect.size))
         cg.restoreGState()
     }
+
+    /// Draws the decoded frame of the background video track into `cg`,
+    /// honouring the track's `preferredTransform` (camera clips are commonly
+    /// stored rotated) and the slide's `videoFitMode` — a direct mirror of the
+    /// `.image` background case. `paintAspectFill` / `paintAspectFit` apply the
+    /// same UIKit top-down flip the image path relies on.
+    @MainActor
+    private static func paintVideoFrame(_ pixelBuffer: CVPixelBuffer,
+                                        transform: CGAffineTransform,
+                                        slide: StorySlide,
+                                        in cg: CGContext,
+                                        size: CGSize) {
+        var ciImage = CIImage(cvPixelBuffer: pixelBuffer)
+        if !transform.isIdentity {
+            ciImage = ciImage.transformed(by: transform)
+            // Re-seat the extent at the origin after a rotating/translating
+            // preferredTransform so `createCGImage` captures the whole frame.
+            ciImage = ciImage.transformed(
+                by: CGAffineTransform(translationX: -ciImage.extent.origin.x,
+                                      y: -ciImage.extent.origin.y))
+        }
+        guard let cgImage = StoryRenderingContext.shared.ciContext.createCGImage(
+            ciImage, from: ciImage.extent) else { return }
+
+        let image = UIImage(cgImage: cgImage)
+        let gravity = StoryBackgroundLayer.resolveImageGravity(
+            naturalSize: image.size,
+            canvasSize: size,
+            override: slide.effects.backgroundTransform?.videoFitMode)
+        if gravity == .resizeAspect {
+            if let bgHex = slide.effects.background, let color = parseHex(bgHex) {
+                cg.saveGState()
+                cg.setFillColor(color.cgColor)
+                cg.fill(CGRect(origin: .zero, size: size))
+                cg.restoreGState()
+            }
+            paintAspectFit(image: image, in: cg, size: size)
+        } else {
+            paintAspectFill(image: image, in: cg, size: size)
+        }
+    }
 }
 
 /// Composition instruction carrying the `StorySlide` whose frame at any given
@@ -496,6 +563,10 @@ public final class StoryCompositionInstruction: NSObject,
     public let languages: [String]
     public let timeRange: CMTimeRange
     public let watermark: StoryExportWatermark?
+    /// `preferredTransform` of the background video track (identity when the
+    /// slide has no background video). The custom compositor receives decoded
+    /// source frames in their storage orientation, so it must apply this itself.
+    public let backgroundVideoTransform: CGAffineTransform
     public let enablePostProcessing: Bool = false
     public let containsTweening: Bool = true
     public let requiredSourceTrackIDs: [NSValue]? = nil
@@ -503,11 +574,13 @@ public final class StoryCompositionInstruction: NSObject,
 
     public nonisolated init(slide: StorySlide, languages: [String] = [],
                             timeRange: CMTimeRange,
-                            watermark: StoryExportWatermark? = nil) {
+                            watermark: StoryExportWatermark? = nil,
+                            backgroundVideoTransform: CGAffineTransform = .identity) {
         self.slide = slide
         self.languages = languages
         self.timeRange = timeRange
         self.watermark = watermark
+        self.backgroundVideoTransform = backgroundVideoTransform
         super.init()
     }
 }
