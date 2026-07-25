@@ -812,6 +812,12 @@
     "auth.country.AU" : {
       "extractionState" : "stale",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "أستراليا"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -836,6 +842,12 @@
             "value" : "Australie"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Australia"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -847,6 +859,12 @@
     "auth.country.BE" : {
       "extractionState" : "stale",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "بلجيكا"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -871,6 +889,12 @@
             "value" : "Belgique"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Belgio"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -882,6 +906,12 @@
     "auth.country.BR" : {
       "extractionState" : "stale",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "البرازيل"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -906,6 +936,12 @@
             "value" : "Bresil"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Brasile"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -917,6 +953,12 @@
     "auth.country.CA" : {
       "extractionState" : "stale",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "كندا"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -941,6 +983,12 @@
             "value" : "Canada"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Canada"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -952,6 +1000,12 @@
     "auth.country.CH" : {
       "extractionState" : "stale",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "سويسرا"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -976,6 +1030,12 @@
             "value" : "Suisse"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Svizzera"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -987,6 +1047,12 @@
     "auth.country.CI" : {
       "extractionState" : "stale",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ساحل العاج"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -1011,6 +1077,12 @@
             "value" : "Cote d'Ivoire"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Costa d'Avorio"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -1022,6 +1094,12 @@
     "auth.country.CM" : {
       "extractionState" : "stale",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "الكاميرون"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -1046,6 +1124,12 @@
             "value" : "Cameroun"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Camerun"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -1057,6 +1141,12 @@
     "auth.country.CN" : {
       "extractionState" : "stale",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "الصين"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -1081,6 +1171,12 @@
             "value" : "Chine"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cina"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -1092,6 +1188,12 @@
     "auth.country.DE" : {
       "extractionState" : "stale",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ألمانيا"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -1116,6 +1218,12 @@
             "value" : "Allemagne"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Germania"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -1127,6 +1235,12 @@
     "auth.country.DZ" : {
       "extractionState" : "stale",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "الجزائر"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -1151,6 +1265,12 @@
             "value" : "Algerie"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Algeria"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -1162,6 +1282,12 @@
     "auth.country.ES" : {
       "extractionState" : "stale",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "إسبانيا"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -1186,6 +1312,12 @@
             "value" : "Espagne"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Spagna"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -1197,6 +1329,12 @@
     "auth.country.FR" : {
       "extractionState" : "stale",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "فرنسا"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -1221,6 +1359,12 @@
             "value" : "France"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Francia"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -1232,6 +1376,12 @@
     "auth.country.GB" : {
       "extractionState" : "stale",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "المملكة المتحدة"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -1256,6 +1406,12 @@
             "value" : "Royaume-Uni"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Regno Unito"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -1267,6 +1423,12 @@
     "auth.country.IN" : {
       "extractionState" : "stale",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "الهند"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -1291,6 +1453,12 @@
             "value" : "Inde"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "India"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -1302,6 +1470,12 @@
     "auth.country.IT" : {
       "extractionState" : "stale",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "إيطاليا"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -1326,6 +1500,12 @@
             "value" : "Italie"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Italia"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -1337,6 +1517,12 @@
     "auth.country.JP" : {
       "extractionState" : "stale",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "اليابان"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -1361,6 +1547,12 @@
             "value" : "Japon"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Giappone"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -1372,6 +1564,12 @@
     "auth.country.KR" : {
       "extractionState" : "stale",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "كوريا الجنوبية"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -1396,6 +1594,12 @@
             "value" : "Coree du Sud"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Corea del Sud"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -1407,6 +1611,12 @@
     "auth.country.MA" : {
       "extractionState" : "stale",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "المغرب"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -1431,6 +1641,12 @@
             "value" : "Maroc"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Marocco"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -1442,6 +1658,12 @@
     "auth.country.MX" : {
       "extractionState" : "stale",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "المكسيك"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -1466,6 +1688,12 @@
             "value" : "Mexique"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Messico"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -1477,6 +1705,12 @@
     "auth.country.PT" : {
       "extractionState" : "stale",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "البرتغال"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -1501,6 +1735,12 @@
             "value" : "Portugal"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Portogallo"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -1512,6 +1752,12 @@
     "auth.country.RU" : {
       "extractionState" : "stale",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "روسيا"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -1536,6 +1782,12 @@
             "value" : "Russie"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Russia"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -1547,6 +1799,12 @@
     "auth.country.SN" : {
       "extractionState" : "stale",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "السنغال"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -1571,6 +1829,12 @@
             "value" : "Senegal"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Senegal"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -1582,6 +1846,12 @@
     "auth.country.TN" : {
       "extractionState" : "stale",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "تونس"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -1606,6 +1876,12 @@
             "value" : "Tunisie"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tunisia"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -1617,6 +1893,12 @@
     "auth.country.TR" : {
       "extractionState" : "stale",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "تركيا"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -1641,6 +1923,12 @@
             "value" : "Turquie"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Turchia"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -1652,6 +1940,12 @@
     "auth.country.US" : {
       "extractionState" : "stale",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "الولايات المتحدة"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -1676,6 +1970,12 @@
             "value" : "Etats-Unis"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Stati Uniti"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -1687,6 +1987,12 @@
     "auth.countryPicker.close" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "إغلاق"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -1711,6 +2017,12 @@
             "value" : "Fermer"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Chiudi"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -1722,6 +2034,12 @@
     "auth.countryPicker.phoneNumber" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "رقم الهاتف"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -1746,6 +2064,12 @@
             "value" : "Numero de telephone"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Numero di telefono"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -1757,6 +2081,12 @@
     "auth.countryPicker.searchPrompt" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ابحث عن بلد"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -1781,6 +2111,12 @@
             "value" : "Rechercher un pays"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cerca un paese"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -1792,6 +2128,12 @@
     "auth.countryPicker.selector.hint" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "تغيير البلد"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -1816,6 +2158,12 @@
             "value" : "Changer de pays"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cambia paese"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -1827,6 +2175,12 @@
     "auth.countryPicker.title" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "البلد"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -1851,6 +2205,12 @@
             "value" : "Pays"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Paese"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -1862,6 +2222,12 @@
     "auth.forgotPassword.accountFound" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "تم العثور على الحساب"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -1886,6 +2252,12 @@
             "value" : "Compte trouve"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Account trovato"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -1897,6 +2269,12 @@
     "auth.forgotPassword.close" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "إغلاق"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -1921,6 +2299,12 @@
             "value" : "Fermer"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Chiudi"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -1932,6 +2316,12 @@
     "auth.forgotPassword.confirm" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "تأكيد"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -1956,6 +2346,12 @@
             "value" : "Confirmer"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Conferma"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -1967,6 +2363,12 @@
     "auth.forgotPassword.confirmPassword" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "تأكيد كلمة المرور"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -1991,6 +2393,12 @@
             "value" : "Confirmer le mot de passe"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Conferma la password"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -2002,6 +2410,12 @@
     "auth.forgotPassword.emailField" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "البريد الإلكتروني"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -2026,6 +2440,12 @@
             "value" : "Email"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Email"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -2037,6 +2457,12 @@
     "auth.forgotPassword.emailPrompt" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "أدخل بريدك الإلكتروني لتلقّي رابط إعادة التعيين."
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -2061,6 +2487,12 @@
             "value" : "Entrez votre email pour recevoir un lien de reinitialisation."
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Inserisci la tua email per ricevere un link di reimpostazione."
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -2072,6 +2504,12 @@
     "auth.forgotPassword.emailSent" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "تم إرسال البريد الإلكتروني!"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -2096,6 +2534,12 @@
             "value" : "Email envoye !"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Email inviata!"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -2107,6 +2551,12 @@
     "auth.forgotPassword.fullEmail" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "البريد الإلكتروني الكامل"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -2131,6 +2581,12 @@
             "value" : "Email complet"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Email completa"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -2142,6 +2598,12 @@
     "auth.forgotPassword.fullUsername" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "اسم المستخدم الكامل"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -2166,6 +2628,12 @@
             "value" : "Nom d'utilisateur complet"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nome utente completo"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -2177,6 +2645,12 @@
     "auth.forgotPassword.incorrectInfo" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "معلومات غير صحيحة"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -2201,6 +2675,12 @@
             "value" : "Informations incorrectes"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Informazioni errate"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -2212,6 +2692,12 @@
     "auth.forgotPassword.invalidCode" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "رمز غير صالح"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -2236,6 +2722,12 @@
             "value" : "Code invalide"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Codice non valido"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -2247,6 +2739,12 @@
     "auth.forgotPassword.login" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "تسجيل الدخول"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -2271,6 +2769,12 @@
             "value" : "Se connecter"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Accedi"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -2282,6 +2786,12 @@
     "auth.forgotPassword.modeEmail" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "البريد الإلكتروني"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -2306,6 +2816,12 @@
             "value" : "Email"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Email"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -2317,6 +2833,12 @@
     "auth.forgotPassword.modePhone" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "الهاتف"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -2341,6 +2863,12 @@
             "value" : "Telephone"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Telefono"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -2352,6 +2880,12 @@
     "auth.forgotPassword.modePicker" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "الوضع"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -2376,6 +2910,12 @@
             "value" : "Mode"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Modalità"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -2387,6 +2927,12 @@
     "auth.forgotPassword.newPassword" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "كلمة مرور جديدة"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -2409,6 +2955,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Nouveau mot de passe"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nuova password"
           }
         },
         "pt-BR" : {
@@ -2422,6 +2974,12 @@
     "auth.forgotPassword.newPasswordTitle" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "كلمة مرور جديدة"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -2446,6 +3004,12 @@
             "value" : "Nouveau mot de passe"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nuova password"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -2457,6 +3021,12 @@
     "auth.forgotPassword.noAccountFound" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "لم يُعثر على حساب بهذا الرقم"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -2481,6 +3051,12 @@
             "value" : "Aucun compte trouve avec ce numero"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nessun account trovato con questo numero"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -2492,6 +3068,12 @@
     "auth.forgotPassword.passwordMismatch" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "كلمتا المرور غير متطابقتين"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -2516,6 +3098,12 @@
             "value" : "Les mots de passe ne correspondent pas"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Le password non coincidono"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -2527,6 +3115,12 @@
     "auth.forgotPassword.phonePrompt" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "أدخل رقم هاتفك لاستعادة حسابك."
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -2551,6 +3145,12 @@
             "value" : "Entrez votre numero de telephone pour retrouver votre compte."
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Inserisci il tuo numero di telefono per ritrovare il tuo account."
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -2562,6 +3162,12 @@
     "auth.forgotPassword.reset" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "إعادة تعيين"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -2586,6 +3192,12 @@
             "value" : "Reinitialiser"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reimposta"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -2597,6 +3209,12 @@
     "auth.forgotPassword.resetError" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "خطأ أثناء إعادة التعيين"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -2621,6 +3239,12 @@
             "value" : "Erreur lors de la reinitialisation"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Errore durante la reimpostazione"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -2632,6 +3256,12 @@
     "auth.forgotPassword.resetSuccess" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "تمت إعادة تعيين كلمة المرور!"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -2656,6 +3286,12 @@
             "value" : "Mot de passe reinitialise !"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Password reimpostata!"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -2667,6 +3303,12 @@
     "auth.forgotPassword.search" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "بحث"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -2691,6 +3333,12 @@
             "value" : "Rechercher"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cerca"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -2702,6 +3350,12 @@
     "auth.forgotPassword.send" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "إرسال"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -2726,6 +3380,12 @@
             "value" : "Envoyer"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Invia"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -2737,6 +3397,12 @@
     "auth.forgotPassword.smsCodeSent" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "تم إرسال رمز عبر رسالة نصية إلى هاتفك."
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -2761,6 +3427,12 @@
             "value" : "Un code SMS a ete envoye a votre telephone."
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Un codice SMS è stato inviato al tuo telefono."
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -2772,6 +3444,12 @@
     "auth.forgotPassword.title" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "نسيت كلمة المرور"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -2796,6 +3474,12 @@
             "value" : "Mot de passe oublie"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Password dimenticata"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -2807,6 +3491,12 @@
     "auth.forgotPassword.verificationCode" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "رمز من 6 أرقام"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -2831,6 +3521,12 @@
             "value" : "Code a 6 chiffres"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Codice a 6 cifre"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -2842,6 +3538,12 @@
     "auth.forgotPassword.verify" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "تحقّق"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -2866,6 +3568,12 @@
             "value" : "Verifier"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Verifica"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -2877,6 +3585,12 @@
     "auth.forgotPassword.verifyIdentityPrompt" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "للتحقق من هويتك، أدخل اسم المستخدم والبريد الإلكتروني كاملين."
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -2901,6 +3615,12 @@
             "value" : "Pour verifier votre identite, entrez votre nom d'utilisateur et email complets."
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Per verificare la tua identità, inserisci il tuo nome utente e la tua email completi."
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -2912,6 +3632,12 @@
     "auth.languageSelector.placeholder" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "اختر..."
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -2936,6 +3662,12 @@
             "value" : "Choisir..."
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Scegli..."
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -2947,6 +3679,12 @@
     "auth.registration.emailTaken" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "هذا البريد الإلكتروني مستخدَم بالفعل!"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -2971,6 +3709,12 @@
             "value" : "Cet email est deja utilise!"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Questa email è già in uso!"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -2982,6 +3726,12 @@
     "auth.registration.phoneInvalid" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "يبدو أن هذا الرقم غير صالح"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -3006,6 +3756,12 @@
             "value" : "Ce numero semble invalide"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Questo numero sembra non valido"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -3017,6 +3773,12 @@
     "auth.registration.phoneTaken" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "هذا الرقم مستخدَم بالفعل!"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -3041,6 +3803,12 @@
             "value" : "Ce numero est deja utilise!"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Questo numero è già in uso!"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -3052,6 +3820,12 @@
     "auth.registration.registrationFailed" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "خطأ أثناء التسجيل"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -3076,6 +3850,12 @@
             "value" : "Erreur lors de l'inscription"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Errore durante la registrazione"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -3087,6 +3867,12 @@
     "auth.registration.usernameTaken" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "اسم المستخدم هذا مأخوذ بالفعل!"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -3111,6 +3897,12 @@
             "value" : "Ce pseudo est deja pris!"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Questo nome utente è già preso!"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -3122,6 +3914,12 @@
     "auth.registration.verificationFailed" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "لم يتم التحقق"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -3146,6 +3944,12 @@
             "value" : "Verification non effectuee"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Verifica non effettuata"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -3166,6 +3970,12 @@
     "common.cancel" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "إلغاء"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -3190,6 +4000,12 @@
             "value" : "Annuler"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Annulla"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -3201,6 +4017,12 @@
     "common.close" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "إغلاق"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -3225,6 +4047,12 @@
             "value" : "Fermer"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Chiudi"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -3236,10 +4064,23 @@
     "common.delete" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "حذف"
+          }
+        },
         "fr" : {
           "stringUnit" : {
             "state" : "new",
             "value" : "Supprimer"
+          }
+        }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Elimina"
           }
         }
       }
@@ -3247,6 +4088,12 @@
     "common.done" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "تم"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -3271,6 +4118,12 @@
             "value" : "Done"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fatto"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -3282,10 +4135,23 @@
     "common.duplicate" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "تكرار"
+          }
+        },
         "fr" : {
           "stringUnit" : {
             "state" : "new",
             "value" : "Dupliquer"
+          }
+        }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Duplica"
           }
         }
       }
@@ -3293,10 +4159,23 @@
     "common.edit" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "تعديل"
+          }
+        },
         "fr" : {
           "stringUnit" : {
             "state" : "new",
             "value" : "Éditer"
+          }
+        }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Modifica"
           }
         }
       }
@@ -3304,6 +4183,12 @@
     "common.error" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "خطأ"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -3328,6 +4213,12 @@
             "value" : "Error"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Errore"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -3339,6 +4230,12 @@
     "common.ok" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "حسنًا"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -3363,6 +4260,12 @@
             "value" : "OK"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OK"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -3374,6 +4277,12 @@
     "common.retry" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "إعادة المحاولة"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -3398,6 +4307,12 @@
             "value" : "Retry"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Riprova"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -3409,6 +4324,12 @@
     "common.save" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "حفظ"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -3433,6 +4354,12 @@
             "value" : "Sauvegarder"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Salva"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -3444,6 +4371,12 @@
     "common.uploading" : {
       "extractionState" : "stale",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "جارٍ الرفع"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
@@ -3462,6 +4395,12 @@
             "value" : "Subiendo..."
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Caricamento in corso"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "translated",
@@ -3473,6 +4412,12 @@
     "community.addChannel.conversation.fallbackName" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "محادثة"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -3497,6 +4442,12 @@
             "value" : "Conversation"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Conversazione"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -3508,6 +4459,12 @@
     "community.addChannel.empty.hint" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "أنشئ محادثة أولًا لإضافتها هنا."
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -3532,6 +4489,12 @@
             "value" : "Creez d'abord une conversation pour l'ajouter ici."
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Crea prima una conversazione per aggiungerla qui."
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -3543,6 +4506,12 @@
     "community.addChannel.empty.noConversations" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "لا توجد محادثات متاحة"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -3567,6 +4536,12 @@
             "value" : "Aucune conversation disponible"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nessuna conversazione disponibile"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -3578,6 +4553,12 @@
     "community.addChannel.empty.noResults" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "لا توجد نتائج"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -3602,6 +4583,12 @@
             "value" : "Aucun resultat"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nessun risultato"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -3613,6 +4600,12 @@
     "community.addChannel.move.button" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "نقل"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -3637,6 +4630,12 @@
             "value" : "Deplacer"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sposta"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -3648,6 +4647,12 @@
     "community.addChannel.move.confirm.message" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "هذه المحادثة تنتمي بالفعل إلى مجتمع آخر. سيتم نقلها إلى هذا المجتمع."
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -3672,6 +4677,12 @@
             "value" : "Cette conversation appartient deja a une autre communaute. Elle sera deplacee vers celle-ci."
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Questa conversazione appartiene già a un'altra community. Verrà spostata in questa."
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -3683,6 +4694,12 @@
     "community.addChannel.move.confirm.title" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "نقل هذه المحادثة؟"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -3707,6 +4724,12 @@
             "value" : "Deplacer cette conversation ?"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Spostare questa conversazione?"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -3718,6 +4741,12 @@
     "community.addChannel.otherCommunity" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "مجتمع آخر"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -3742,6 +4771,12 @@
             "value" : "Autre communaute"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Altra community"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -3753,6 +4788,12 @@
     "community.addChannel.search.prompt" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ابحث عن محادثة..."
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -3777,6 +4818,12 @@
             "value" : "Rechercher une conversation..."
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cerca una conversazione..."
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -3788,6 +4835,12 @@
     "community.addChannel.title" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "إضافة قناة"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -3812,6 +4865,12 @@
             "value" : "Ajouter un channel"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aggiungi un canale"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -3823,6 +4882,12 @@
     "community.create.button" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "إنشاء المجتمع"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -3847,6 +4912,12 @@
             "value" : "Creer la communaute"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Crea la community"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -3858,6 +4929,12 @@
     "community.create.error.default" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "حدث خطأ"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -3882,6 +4959,12 @@
             "value" : "Une erreur est survenue"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Si è verificato un errore"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -3893,6 +4976,12 @@
     "community.create.error.title" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "خطأ"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -3917,6 +5006,12 @@
             "value" : "Erreur"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Errore"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -3928,6 +5023,12 @@
     "community.create.field.description" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "الوصف"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -3952,6 +5053,12 @@
             "value" : "Description"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Descrizione"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -3963,6 +5070,12 @@
     "community.create.field.description.placeholder" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "عمّ يتحدّث هذا المجتمع؟"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -3987,6 +5100,12 @@
             "value" : "De quoi parle cette communaute ?"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Di cosa parla questa community?"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -3998,6 +5117,12 @@
     "community.create.field.emoji" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "رمز تعبيري"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -4022,6 +5147,12 @@
             "value" : "Emoji"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Emoji"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -4033,6 +5164,12 @@
     "community.create.field.identifier" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "المعرّف"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -4057,6 +5194,12 @@
             "value" : "Identifiant"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Identificativo"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -4068,6 +5211,12 @@
     "community.create.field.identifier.placeholder" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "مجموعتي"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -4092,6 +5241,12 @@
             "value" : "mon-groupe"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "il-mio-gruppo"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -4103,6 +5258,12 @@
     "community.create.field.name" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "الاسم"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -4127,6 +5288,12 @@
             "value" : "Nom"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nome"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -4138,6 +5305,12 @@
     "community.create.field.name.placeholder" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "اسم المجتمع"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -4162,6 +5335,12 @@
             "value" : "Nom de la communaute"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nome della community"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -4173,6 +5352,12 @@
     "community.create.members.search.placeholder" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ابحث بالاسم أو اسم المستخدم..."
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -4197,6 +5382,12 @@
             "value" : "Rechercher par nom ou username..."
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cerca per nome o nome utente..."
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -4208,6 +5399,12 @@
     "community.create.members.title" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "إضافة أعضاء"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -4232,6 +5429,12 @@
             "value" : "Ajouter des membres"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aggiungi membri"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -4243,6 +5446,12 @@
     "community.create.preview.placeholder" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "مجتمعي"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -4267,6 +5476,12 @@
             "value" : "Ma communaute"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La mia community"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -4278,6 +5493,12 @@
     "community.create.privacy.private.description" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "يمكن للأعضاء المدعوّين فقط الانضمام"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -4302,6 +5523,12 @@
             "value" : "Seuls les membres invites peuvent rejoindre"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Solo i membri invitati possono unirsi"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -4313,6 +5540,12 @@
     "community.create.privacy.public.description" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "يمكن للجميع اكتشافه والانضمام إليه"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -4337,6 +5570,12 @@
             "value" : "Tout le monde peut decouvrir et rejoindre"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tutti possono scoprirla e unirsi"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -4348,6 +5587,12 @@
     "community.create.privacy.title" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "مجتمع خاص"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -4372,6 +5617,12 @@
             "value" : "Communaute privee"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Community privata"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -4383,6 +5634,12 @@
     "community.create.title" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "مجتمع جديد"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -4407,6 +5664,12 @@
             "value" : "Nouvelle communaute"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nuova community"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -4418,6 +5681,12 @@
     "community.detail.action.channel" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "قناة"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -4442,6 +5711,12 @@
             "value" : "Channel"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Canale"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -4453,6 +5728,12 @@
     "community.detail.action.invite" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "دعوة"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -4477,6 +5758,12 @@
             "value" : "Inviter"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Invita"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -4488,6 +5775,12 @@
     "community.detail.action.join" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "انضمام"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -4512,6 +5805,12 @@
             "value" : "Rejoindre"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Unisciti"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -4523,6 +5822,12 @@
     "community.detail.action.members" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "الأعضاء"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -4547,6 +5852,12 @@
             "value" : "Membres"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Membri"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -4558,6 +5869,12 @@
     "community.detail.action.settings" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "الإعدادات"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -4582,6 +5899,12 @@
             "value" : "Reglages"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Impostazioni"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -4593,6 +5916,12 @@
     "community.detail.channel.fallbackName" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "قناة"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -4617,6 +5946,12 @@
             "value" : "Channel"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Canale"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -4628,6 +5963,12 @@
     "community.detail.channels.empty.action" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "إنشاء قناة"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -4652,6 +5993,12 @@
             "value" : "Créer un Channel"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Crea un canale"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -4663,6 +6010,12 @@
     "community.detail.channels.empty.subtitle" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ستظهر المحادثات هنا"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -4687,6 +6040,12 @@
             "value" : "Conversations will appear here"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Le conversazioni appariranno qui"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -4698,6 +6057,12 @@
     "community.detail.channels.empty.title" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "لا توجد قنوات بعد"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -4722,6 +6087,12 @@
             "value" : "No Channels Yet"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ancora nessun canale"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -4733,6 +6104,12 @@
     "community.detail.leave.button" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "مغادرة"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -4757,6 +6134,12 @@
             "value" : "Quitter"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Esci"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -4768,6 +6151,12 @@
     "community.detail.leave.confirm.message" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "لن تتمكّن بعد الآن من الوصول إلى قنوات هذا المجتمع."
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -4792,6 +6181,12 @@
             "value" : "Vous ne pourrez plus acceder aux channels de cette communaute."
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Non potrai più accedere ai canali di questa community."
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -4803,6 +6198,12 @@
     "community.detail.leave.confirm.title" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "مغادرة المجتمع؟"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -4827,6 +6228,12 @@
             "value" : "Quitter la communaute ?"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Uscire dalla community?"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -4838,6 +6245,12 @@
     "community.detail.leave.label" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "مغادرة المجتمع"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -4862,6 +6275,12 @@
             "value" : "Quitter la communaute"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Esci dalla community"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -4873,6 +6292,12 @@
     "community.detail.menu.leave" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "مغادرة"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -4897,6 +6322,12 @@
             "value" : "Quitter"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Esci"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -4908,6 +6339,12 @@
     "community.detail.menu.settings" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "الإعدادات"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -4932,6 +6369,12 @@
             "value" : "Reglages"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Impostazioni"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -4943,6 +6386,12 @@
     "community.detail.posts.empty.action" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "إنشاء منشور"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -4967,6 +6416,12 @@
             "value" : "Créer un post"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Crea un post"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -4978,6 +6433,12 @@
     "community.detail.posts.empty.subtitle" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "سيظهر تدفق المجتمع هنا"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -5002,6 +6463,12 @@
             "value" : "Community feed will appear here"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Il feed della community apparirà qui"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -5013,6 +6480,12 @@
     "community.detail.posts.empty.title" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "لا توجد منشورات بعد"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -5037,6 +6510,12 @@
             "value" : "No Posts Yet"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ancora nessun post"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -5048,6 +6527,12 @@
     "community.detail.stats.channels" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "القنوات"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -5072,6 +6557,12 @@
             "value" : "Channels"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Canali"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -5083,6 +6574,12 @@
     "community.detail.stats.members" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "الأعضاء"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -5107,6 +6604,12 @@
             "value" : "Members"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Membri"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -5118,6 +6621,12 @@
     "community.detail.tab.channels" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "القنوات"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -5142,6 +6651,12 @@
             "value" : "Channels"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Canali"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -5153,6 +6668,12 @@
     "community.detail.tab.feed" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "التدفق"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -5177,6 +6698,12 @@
             "value" : "Feed"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Feed"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -5188,6 +6715,12 @@
     "community.invite.button" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "دعوة"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -5212,6 +6745,12 @@
             "value" : "Invite"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Invita"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -5223,6 +6762,12 @@
     "community.invite.empty.subtitle" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "جرّب مصطلح بحث آخر"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -5247,6 +6792,12 @@
             "value" : "Try a different search term"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Prova con un altro termine di ricerca"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -5258,6 +6809,12 @@
     "community.invite.empty.title" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "لم يُعثر على مستخدمين"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -5282,6 +6839,12 @@
             "value" : "No Users Found"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nessun utente trovato"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -5293,6 +6856,12 @@
     "community.invite.recentlyInvited" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "مدعوّون مؤخرًا"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -5317,6 +6886,12 @@
             "value" : "Recently Invited"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Invitati di recente"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -5328,6 +6903,12 @@
     "community.invite.search.placeholder" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ابحث عن مستخدمين..."
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -5352,6 +6933,12 @@
             "value" : "Search users..."
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cerca utenti..."
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -5363,6 +6950,12 @@
     "community.invite.title" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "دعوة أعضاء"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -5387,6 +6980,12 @@
             "value" : "Invite Members"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Invita membri"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -5398,6 +6997,12 @@
     "community.list.create.accessibilityLabel" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "إنشاء مجتمع"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -5420,6 +7025,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Creer une communaute"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Crea una community"
           }
         },
         "pt-BR" : {
@@ -5433,6 +7044,12 @@
     "community.list.empty.createButton" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "إنشاء مجتمع"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -5457,6 +7074,12 @@
             "value" : "Creer une communaute"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Crea una community"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -5468,6 +7091,12 @@
     "community.list.empty.subtitle" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "انضم إلى مجتمع أو أنشئ واحدًا للتعاون"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -5492,6 +7121,12 @@
             "value" : "Rejoins ou cree une communaute pour collaborer"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Unisciti a una community o creane una per collaborare"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -5503,6 +7138,12 @@
     "community.list.empty.title" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "لا توجد مجتمعات"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -5527,6 +7168,12 @@
             "value" : "Aucune communaute"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nessuna community"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -5538,6 +7185,12 @@
     "community.list.search.placeholder" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "بحث..."
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -5562,6 +7215,12 @@
             "value" : "Rechercher..."
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cerca..."
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -5573,6 +7232,12 @@
     "community.list.title" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "المجتمعات"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -5597,6 +7262,12 @@
             "value" : "Communautes"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Community"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -5608,6 +7279,12 @@
     "community.members.empty.action" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "دعوة"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -5632,6 +7309,12 @@
             "value" : "Invite"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Invita"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -5643,6 +7326,12 @@
     "community.members.empty.subtitle" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ادعُ أشخاصًا للانضمام إلى هذا المجتمع"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -5667,6 +7356,12 @@
             "value" : "Invite people to join this community"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Invita persone a unirsi a questa community"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -5678,6 +7373,12 @@
     "community.members.empty.title" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "لا يوجد أعضاء"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -5702,6 +7403,12 @@
             "value" : "No Members"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nessun membro"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -5713,6 +7420,12 @@
     "community.members.remove" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "إزالة"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -5737,6 +7450,12 @@
             "value" : "Remove"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rimuovi"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -5748,6 +7467,12 @@
     "community.members.title" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "الأعضاء"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -5772,6 +7497,12 @@
             "value" : "Members"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Membri"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -5783,6 +7514,12 @@
     "community.members.unknownUser" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "غير معروف"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -5807,6 +7544,12 @@
             "value" : "Unknown"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sconosciuto"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -5818,6 +7561,12 @@
     "community.privacy.private" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "خاص"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -5842,6 +7591,12 @@
             "value" : "Privee"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Privata"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -5853,6 +7608,12 @@
     "community.privacy.public" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "عام"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -5877,6 +7638,12 @@
             "value" : "Publique"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pubblica"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -5888,6 +7655,12 @@
     "community.settings.avatar" : {
       "extractionState" : "stale",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "الصورة الرمزية"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
@@ -5906,6 +7679,12 @@
             "value" : "Avatar"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Avatar"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "translated",
@@ -5917,6 +7696,12 @@
     "community.settings.avatar.change" : {
       "extractionState" : "stale",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "تغيير الصورة الرمزية"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
@@ -5935,6 +7720,12 @@
             "value" : "Cambiar avatar"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cambia l'avatar"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "translated",
@@ -5946,6 +7737,12 @@
     "community.settings.banner" : {
       "extractionState" : "stale",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "صورة الغلاف"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
@@ -5964,6 +7761,12 @@
             "value" : "Banner"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Banner"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "translated",
@@ -5975,6 +7778,12 @@
     "community.settings.banner.change" : {
       "extractionState" : "stale",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "تغيير صورة الغلاف"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
@@ -5993,6 +7802,12 @@
             "value" : "Cambiar banner"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cambia il banner"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "translated",
@@ -6004,10 +7819,23 @@
     "community.settings.banner.edit" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "تعديل"
+          }
+        },
         "fr" : {
           "stringUnit" : {
             "state" : "new",
             "value" : "Modifier"
+          }
+        }
+      ,
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Modifica"
           }
         }
       }
@@ -6015,6 +7843,12 @@
     "community.settings.color" : {
       "extractionState" : "stale",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "اللون"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
@@ -6033,6 +7867,12 @@
             "value" : "Color"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Colore"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "translated",
@@ -6044,6 +7884,12 @@
     "community.settings.delete.button" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "حذف"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -6068,6 +7914,12 @@
             "value" : "Supprimer"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Elimina"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -6079,6 +7931,12 @@
     "community.settings.delete.confirm.message" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "هذا الإجراء لا رجعة فيه. سيُحذف جميع الأعضاء والقنوات والرسائل نهائيًا."
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -6103,6 +7961,12 @@
             "value" : "Cette action est irréversible. Tous les membres, canaux et messages seront supprimés définitivement."
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Questa azione è irreversibile. Tutti i membri, i canali e i messaggi saranno eliminati definitivamente."
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -6114,6 +7978,12 @@
     "community.settings.delete.confirm.title" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "حذف المجتمع"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -6136,6 +8006,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Supprimer la communauté"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Elimina la community"
           }
         },
         "pt-BR" : {
@@ -6149,6 +8025,12 @@
     "community.settings.delete.label" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "حذف المجتمع"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -6173,6 +8055,12 @@
             "value" : "Supprimer la communauté"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Elimina la community"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -6184,6 +8072,12 @@
     "community.settings.emoji" : {
       "extractionState" : "stale",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "رمز تعبيري"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
@@ -6197,6 +8091,12 @@
           }
         },
         "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Emoji"
+          }
+        },
+        "it" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Emoji"
@@ -6213,6 +8113,12 @@
     "community.settings.error.default" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "حدث خطأ"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -6237,6 +8143,12 @@
             "value" : "Une erreur s'est produite"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Si è verificato un errore"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -6248,6 +8160,12 @@
     "community.settings.error.title" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "خطأ"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -6272,6 +8190,12 @@
             "value" : "Erreur"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Errore"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -6283,6 +8207,12 @@
     "community.settings.field.description" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "الوصف"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -6307,6 +8237,12 @@
             "value" : "Description"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Descrizione"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -6318,6 +8254,12 @@
     "community.settings.field.name" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "الاسم"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -6342,6 +8284,12 @@
             "value" : "Nom"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nome"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -6353,6 +8301,12 @@
     "community.settings.field.name.placeholder" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "اسم المجتمع"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -6377,6 +8331,12 @@
             "value" : "Nom de la communauté"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nome della community"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -6388,6 +8348,12 @@
     "community.settings.leave.button" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "مغادرة"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -6412,6 +8378,12 @@
             "value" : "Quitter"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Esci"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -6423,6 +8395,12 @@
     "community.settings.leave.confirm.message" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "لن يكون لديك بعد الآن وصول إلى قنوات هذا المجتمع ورسائله."
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -6447,6 +8425,12 @@
             "value" : "Vous n'aurez plus accès aux canaux et messages de cette communauté."
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Non avrai più accesso ai canali e ai messaggi di questa community."
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -6458,6 +8442,12 @@
     "community.settings.leave.confirm.title" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "مغادرة المجتمع"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -6480,6 +8470,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Quitter la communauté"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Esci dalla community"
           }
         },
         "pt-BR" : {
@@ -6493,6 +8489,12 @@
     "community.settings.leave.label" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "مغادرة المجتمع"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -6517,6 +8519,12 @@
             "value" : "Quitter la communauté"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Esci dalla community"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -6528,6 +8536,12 @@
     "community.settings.privacy.byInvitation" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "بالدعوة"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -6552,6 +8566,12 @@
             "value" : "Sur invitation"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Su invito"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -6563,6 +8583,12 @@
     "community.settings.privacy.openToAll" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "مفتوح للجميع"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -6587,6 +8613,12 @@
             "value" : "Ouverte à tous"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aperta a tutti"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -6598,6 +8630,12 @@
     "community.settings.privacy.title" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "مجتمع خاص"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -6622,6 +8660,12 @@
             "value" : "Communauté privée"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Community privata"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -6633,6 +8677,12 @@
     "community.settings.section.appearance" : {
       "extractionState" : "stale",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "المظهر"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
@@ -6651,6 +8701,12 @@
             "value" : "Apariencia"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aspetto"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "translated",
@@ -6662,6 +8718,12 @@
     "community.settings.section.danger" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "منطقة الخطر"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -6686,6 +8748,12 @@
             "value" : "Zone dangereuse"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zona pericolosa"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -6697,6 +8765,12 @@
     "community.settings.section.info" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "المعلومات"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -6721,6 +8795,12 @@
             "value" : "Infos"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Info"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -6732,6 +8812,12 @@
     "community.settings.section.privacy" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "الخصوصية"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -6756,6 +8842,12 @@
             "value" : "Confidentialité"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Privacy"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -6767,6 +8859,12 @@
     "community.settings.title" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "الإعدادات"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -6791,6 +8889,12 @@
             "value" : "Réglages"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Impostazioni"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -6802,6 +8906,12 @@
     "community.settings.toast.avatarFailed" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "فشل رفع الصورة الرمزية"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -6826,6 +8936,12 @@
             "value" : "Echec du telechargement de l'avatar"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Caricamento dell'avatar non riuscito"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -6837,6 +8953,12 @@
     "community.settings.toast.avatarUploaded" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "تم رفع الصورة الرمزية"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -6861,6 +8983,12 @@
             "value" : "Avatar televerse"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Avatar caricato"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -6872,6 +9000,12 @@
     "community.settings.toast.bannerFailed" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "فشل رفع صورة الغلاف"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -6896,6 +9030,12 @@
             "value" : "Echec du telechargement de la banniere"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Caricamento del banner non riuscito"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -6907,6 +9047,12 @@
     "community.settings.toast.bannerUploaded" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "تم رفع صورة الغلاف"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -6931,6 +9077,12 @@
             "value" : "Banniere televersee"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Banner caricato"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -6942,6 +9094,12 @@
     "community.settings.toast.updated" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "تم تحديث المجتمع"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -6966,6 +9124,12 @@
             "value" : "Communaute mise a jour"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Community aggiornata"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -6977,6 +9141,12 @@
     "connection.action.accept" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "قبول"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -7001,6 +9171,12 @@
             "value" : "Accepter"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Accetta"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -7012,6 +9188,12 @@
     "connection.action.add" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "إضافة"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -7036,6 +9218,12 @@
             "value" : "Ajouter"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aggiungi"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -7047,6 +9235,12 @@
     "connection.action.cancel" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "إلغاء الطلب"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -7071,6 +9265,12 @@
             "value" : "Annuler la demande"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Annulla la richiesta"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -7082,6 +9282,12 @@
     "connection.action.decline" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "رفض"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -7106,6 +9312,12 @@
             "value" : "Refuser"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rifiuta"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -7117,6 +9329,12 @@
     "connection.badge.blocked" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "محظور"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -7141,6 +9359,12 @@
             "value" : "Bloqué"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bloccato"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -7152,6 +9376,12 @@
     "connection.badge.contact" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "جهة اتصال"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -7176,6 +9406,12 @@
             "value" : "Contact"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Contatto"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -7187,6 +9423,12 @@
     "connection.badge.pendingSent" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "قيد الانتظار"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -7211,6 +9453,12 @@
             "value" : "En attente"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "In attesa"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -7222,6 +9470,12 @@
     "connection.toast.acceptFailed" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "تعذّر القبول"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -7246,6 +9500,12 @@
             "value" : "Impossible d'accepter"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Impossibile accettare"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -7257,6 +9517,12 @@
     "connection.toast.cancelFailed" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "تعذّر الإلغاء"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -7281,6 +9547,12 @@
             "value" : "Impossible d'annuler"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Impossibile annullare"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -7292,6 +9564,12 @@
     "connection.toast.connectionAccepted" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "تم قبول الاتصال"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -7316,6 +9594,12 @@
             "value" : "Connexion acceptée"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Connessione accettata"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -7327,6 +9611,12 @@
     "connection.toast.declineFailed" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "تعذّر الرفض"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -7351,6 +9641,12 @@
             "value" : "Impossible de refuser"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Impossibile rifiutare"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -7362,6 +9658,12 @@
     "connection.toast.requestCancelled" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "تم إلغاء الطلب"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -7386,6 +9688,12 @@
             "value" : "Demande annulée"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Richiesta annullata"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -7397,6 +9705,12 @@
     "connection.toast.requestDeclined" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "تم رفض الطلب"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -7421,6 +9735,12 @@
             "value" : "Demande refusée"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Richiesta rifiutata"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -7432,6 +9752,12 @@
     "connection.toast.requestSendFailed" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "تعذّر إرسال الطلب"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -7456,6 +9782,12 @@
             "value" : "Impossible d'envoyer la demande"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Impossibile inviare la richiesta"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -7467,6 +9799,12 @@
     "connection.toast.requestSent" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "تم إرسال الطلب"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -7489,6 +9827,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Demande envoyée"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Richiesta inviata"
           }
         },
         "pt-BR" : {
@@ -9701,6 +12045,12 @@
     "joinFlow.close.accessibilityLabel" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "إغلاق"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -9723,6 +12073,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Fermer"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Chiudi"
           }
         },
         "pt-BR" : {
@@ -9736,6 +12092,12 @@
     "joinFlow.error.close" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "إغلاق"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -9760,6 +12122,12 @@
             "value" : "Fermer"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Chiudi"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -9771,6 +12139,12 @@
     "joinFlow.error.joinFailed" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "خطأ أثناء الاتصال"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -9795,6 +12169,12 @@
             "value" : "Erreur lors de la connexion"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Errore durante la connessione"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -9806,6 +12186,12 @@
     "joinFlow.error.linkNotFound" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "رابط المحادثة هذا غير موجود"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -9830,6 +12216,12 @@
             "value" : "Ce lien de conversation est introuvable"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Questo link di conversazione non esiste"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -9841,6 +12233,12 @@
     "joinFlow.error.loadFailed" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "تعذّر تحميل معلومات الرابط"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -9865,6 +12263,12 @@
             "value" : "Impossible de charger les informations du lien"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Impossibile caricare le informazioni del link"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -9876,6 +12280,12 @@
     "joinFlow.error.retry" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "إعادة المحاولة"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -9900,6 +12310,12 @@
             "value" : "Reessayer"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Riprova"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -9911,6 +12327,12 @@
     "joinFlow.error.title" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "الرابط غير متاح"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -9935,6 +12357,12 @@
             "value" : "Lien indisponible"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Link non disponibile"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -9946,6 +12374,12 @@
     "joinFlow.error.tooManyUsers" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "عدد المستخدمين المتصلين كبير جدًا"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -9970,6 +12404,12 @@
             "value" : "Trop d'utilisateurs connectes"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Troppi utenti connessi"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -9981,6 +12421,12 @@
     "joinFlow.error.unexpected" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "خطأ غير متوقّع"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -10005,6 +12451,12 @@
             "value" : "Erreur inattendue"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Errore imprevisto"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -10016,6 +12468,12 @@
     "joinFlow.error.unknown" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "خطأ غير معروف"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -10040,6 +12498,12 @@
             "value" : "Erreur inconnue"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Errore sconosciuto"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -10051,6 +12515,12 @@
     "joinFlow.form.back" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "رجوع"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -10075,6 +12545,12 @@
             "value" : "Retour"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Indietro"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -10086,6 +12562,12 @@
     "joinFlow.form.birthday" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "تاريخ الميلاد"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -10110,6 +12592,12 @@
             "value" : "Date de naissance"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Data di nascita"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -10121,6 +12609,12 @@
     "joinFlow.form.email" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "عنوان البريد الإلكتروني"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -10145,6 +12639,12 @@
             "value" : "Adresse email"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Indirizzo email"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -10156,6 +12656,12 @@
     "joinFlow.form.emailOptional" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "البريد الإلكتروني (اختياري)"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -10180,6 +12686,12 @@
             "value" : "Email (optionnel)"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Email (facoltativa)"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -10191,6 +12703,12 @@
     "joinFlow.form.firstName" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "الاسم الأول"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -10215,6 +12733,12 @@
             "value" : "Prenom"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nome"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -10226,6 +12750,12 @@
     "joinFlow.form.language" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "اللغة"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -10250,6 +12780,12 @@
             "value" : "Langue"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lingua"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -10261,6 +12797,12 @@
     "joinFlow.form.lastName" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "اسم العائلة"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -10285,6 +12827,12 @@
             "value" : "Nom"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cognome"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -10296,6 +12844,12 @@
     "joinFlow.form.optionalSection" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "اختياري"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -10320,6 +12874,12 @@
             "value" : "Optionnel"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Facoltativo"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -10331,6 +12891,12 @@
     "joinFlow.form.requiredSection" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "المعلومات المطلوبة"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -10355,6 +12921,12 @@
             "value" : "Informations requises"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Informazioni richieste"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -10366,6 +12938,12 @@
     "joinFlow.form.submit" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "انضمام"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -10390,6 +12968,12 @@
             "value" : "Rejoindre"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Unisciti"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -10401,6 +12985,12 @@
     "joinFlow.form.title" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "الانضمام إلى المحادثة"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -10425,6 +13015,12 @@
             "value" : "Rejoindre la conversation"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Unisciti alla conversazione"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -10436,6 +13032,12 @@
     "joinFlow.form.username" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "اسم المستخدم"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -10460,6 +13062,12 @@
             "value" : "Nom d'utilisateur"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nome utente"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -10471,6 +13079,12 @@
     "joinFlow.form.usernameOptional" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "اسم المستخدم (اختياري)"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -10495,6 +13109,12 @@
             "value" : "Nom d'utilisateur (optionnel)"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nome utente (facoltativo)"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -10506,6 +13126,12 @@
     "joinFlow.header.title" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "انضمام"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -10530,6 +13156,12 @@
             "value" : "Rejoindre"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Unisciti"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -10541,6 +13173,12 @@
     "joinFlow.loading.message" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "جارٍ تحميل الرابط..."
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -10565,6 +13203,12 @@
             "value" : "Chargement du lien..."
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Caricamento del link..."
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -10576,6 +13220,12 @@
     "joinFlow.preview.accountRequired" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "الحساب مطلوب"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -10600,6 +13250,12 @@
             "value" : "Compte requis"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Account richiesto"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -10611,6 +13267,12 @@
     "joinFlow.preview.accountRequiredMessage" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "‏يلزم حساب Meeshy للانضمام إلى هذه المحادثة"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -10635,6 +13297,12 @@
             "value" : "Un compte Meeshy est requis pour rejoindre cette conversation"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Per unirti a questa conversazione è necessario un account Meeshy"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -10646,6 +13314,12 @@
     "joinFlow.preview.birthdayRequired" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "تاريخ الميلاد"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -10670,6 +13344,12 @@
             "value" : "Date de naissance"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Data di nascita"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -10681,6 +13361,12 @@
     "joinFlow.preview.defaultTitle" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "محادثة"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -10705,6 +13391,12 @@
             "value" : "Conversation"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Conversazione"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -10716,6 +13408,12 @@
     "joinFlow.preview.emailRequired" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "عنوان البريد الإلكتروني"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -10740,6 +13438,12 @@
             "value" : "Adresse email"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Indirizzo email"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -10751,6 +13455,12 @@
     "joinFlow.preview.expired" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "منتهٍ"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -10775,6 +13485,12 @@
             "value" : "expire"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "scaduto"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -10786,6 +13502,12 @@
     "joinFlow.preview.joinButton" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "الانضمام إلى المحادثة"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -10810,6 +13532,12 @@
             "value" : "Rejoindre la conversation"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Unisciti alla conversazione"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -10821,6 +13549,12 @@
     "joinFlow.preview.languagePlural" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "اللغات"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -10845,6 +13579,12 @@
             "value" : "Langues"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lingue"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -10856,6 +13596,12 @@
     "joinFlow.preview.languageSingular" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "اللغة"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -10880,6 +13626,12 @@
             "value" : "Langue"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lingua"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -10891,6 +13643,12 @@
     "joinFlow.preview.members" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "الأعضاء"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -10915,6 +13673,12 @@
             "value" : "Membres"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Membri"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -10926,6 +13690,12 @@
     "joinFlow.preview.participants" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "المشاركون"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -10950,6 +13720,12 @@
             "value" : "Participants"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Partecipanti"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -10961,6 +13737,12 @@
     "joinFlow.preview.requiredInfo" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "المعلومات المطلوبة"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -10985,6 +13767,12 @@
             "value" : "Informations requises"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Informazioni richieste"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -10996,6 +13784,12 @@
     "joinFlow.preview.typeChannel" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "قناة"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -11020,6 +13814,12 @@
             "value" : "Canal"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Canale"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -11031,6 +13831,12 @@
     "joinFlow.preview.typeCommunity" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "مجتمع"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -11055,6 +13861,12 @@
             "value" : "Communaute"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Community"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -11066,6 +13878,12 @@
     "joinFlow.preview.typeDirect" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "محادثة خاصة"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -11090,6 +13908,12 @@
             "value" : "Conversation privee"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Conversazione privata"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -11101,6 +13925,12 @@
     "joinFlow.preview.typeGlobal" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "عام"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -11125,6 +13955,12 @@
             "value" : "Global"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Globale"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -11136,6 +13972,12 @@
     "joinFlow.preview.typeGroup" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "مجموعة"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -11160,6 +14002,12 @@
             "value" : "Groupe"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gruppo"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -11171,6 +14019,12 @@
     "joinFlow.preview.typePublic" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "علني"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -11195,6 +14049,12 @@
             "value" : "Public"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pubblica"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -11206,6 +14066,12 @@
     "joinFlow.preview.usernameRequired" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "اسم المستخدم"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -11230,6 +14096,12 @@
             "value" : "Nom d'utilisateur"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nome utente"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -11241,6 +14113,12 @@
     "joinFlow.success.openConversation" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "فتح المحادثة"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -11265,6 +14143,12 @@
             "value" : "Ouvrir la conversation"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Apri la conversazione"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -11276,6 +14160,12 @@
     "joinFlow.success.title" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "مرحبًا بك!"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -11298,6 +14188,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Bienvenue !"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Benvenuto!"
           }
         },
         "pt-BR" : {
@@ -11396,6 +14292,12 @@
     "location.fullscreen.directions" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "المسار"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -11420,6 +14322,12 @@
             "value" : "Itineraire"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Itinerario"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -11431,6 +14339,12 @@
     "location.fullscreen.openInMaps" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "فتح في الخرائط"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -11455,6 +14369,12 @@
             "value" : "Ouvrir dans Plans"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Apri in Mappe"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -11466,6 +14386,12 @@
     "location.fullscreen.sharedPosition" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "موقع مشارَك"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -11490,6 +14416,12 @@
             "value" : "Position partagee"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Posizione condivisa"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -11501,6 +14433,12 @@
     "location.live.shareDuration" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "مدة المشاركة"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -11525,6 +14463,12 @@
             "value" : "Duree du partage"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Durata della condivisione"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -11536,6 +14480,12 @@
     "location.live.stop" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "إيقاف"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -11558,6 +14508,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Arreter"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Interrompi"
           }
         },
         "pt-BR" : {
@@ -13647,6 +16603,12 @@
     "notifications.category.all" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "الكل"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -13671,6 +16633,12 @@
             "value" : "Toutes"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tutte"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -13682,6 +16650,12 @@
     "notifications.category.calls" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "المكالمات"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -13706,6 +16680,12 @@
             "value" : "Appels"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Chiamate"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -13717,6 +16697,12 @@
     "notifications.category.contacts" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "جهات الاتصال"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -13741,6 +16727,12 @@
             "value" : "Contacts"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Contatti"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -13752,6 +16744,12 @@
     "notifications.category.groups" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "المجموعات"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -13776,6 +16774,12 @@
             "value" : "Groupes"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gruppi"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -13787,6 +16791,12 @@
     "notifications.category.mentions" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "الإشارات"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -13811,6 +16821,12 @@
             "value" : "Mentions"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Menzioni"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -13822,6 +16838,12 @@
     "notifications.category.messages" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "الرسائل"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -13846,6 +16868,12 @@
             "value" : "Messages"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Messaggi"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -13857,6 +16885,12 @@
     "notifications.category.reactions" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "التفاعلات"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -13881,6 +16915,12 @@
             "value" : "Reactions"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reazioni"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -13892,6 +16932,12 @@
     "notifications.category.social" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "اجتماعي"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -13916,6 +16962,12 @@
             "value" : "Social"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Social"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -13927,6 +16979,12 @@
     "notifications.category.system" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "النظام"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -13951,6 +17009,12 @@
             "value" : "Systeme"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sistema"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -13962,6 +17026,12 @@
     "notifications.category.translations" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "الترجمات"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -13986,6 +17056,12 @@
             "value" : "Traductions"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Traduzioni"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -13997,6 +17073,12 @@
     "notifications.category.unread" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "غير المقروءة"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -14021,6 +17103,12 @@
             "value" : "Non lues"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Non lette"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -14032,6 +17120,12 @@
     "notifications.empty.all" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "لا توجد إشعارات"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -14056,6 +17150,12 @@
             "value" : "Aucune notification"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nessuna notifica"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -14067,6 +17167,12 @@
     "notifications.empty.calls" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "لا توجد مكالمات فائتة"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -14091,6 +17197,12 @@
             "value" : "Aucun appel manque"
           }
         },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nessuna chiamata persa"
+          }
+        },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -14102,6 +17214,12 @@
     "notifications.empty.contacts" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "لا توجد إشعارات جهات اتصال"
+          }
+        },
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
@@ -14124,6 +17242,12 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Aucune notification de contact"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nessuna notifica di contatto"
           }
         },
         "pt-BR" : {
