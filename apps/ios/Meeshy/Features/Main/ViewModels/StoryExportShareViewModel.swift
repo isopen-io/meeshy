@@ -74,6 +74,27 @@ final class StoryExportShareViewModel: ObservableObject {
         }
     }
 
+    /// Identité peinte sur le préambule de marque de l'export.
+    ///
+    /// C'est l'utilisateur courant : l'export est une action réservée à
+    /// l'auteur (`railPlan.showsExport == isOwnStory`), donc l'auteur de la
+    /// story et celui qui l'exporte sont la même personne. L'avatar et la
+    /// bannière restent `nil` ici — le préambule retombe alors proprement sur
+    /// la couleur d'accent ; les charger demanderait un aller-retour cache
+    /// asynchrone que le bake n'a pas à attendre.
+    private static func brandIntroContent() -> StoryExportIntroContent? {
+        guard let user = AuthManager.shared.currentUser else { return nil }
+        let display = [user.firstName, user.lastName]
+            .compactMap { $0 }
+            .joined(separator: " ")
+            .trimmingCharacters(in: .whitespaces)
+        return StoryExportIntroContent(
+            displayName: display.isEmpty ? user.username : display,
+            username: user.username,
+            accentColorHex: DynamicColorGenerator.colorForName(user.username)
+        )
+    }
+
     /// Bakes an MP4 from `story` honouring `selectedLanguage` (Prisme
     /// Linguistique). The story is reconstructed into a `StorySlide` via
     /// `toRenderableSlide(preferredLanguages:)` so text overlays + content
@@ -105,6 +126,7 @@ final class StoryExportShareViewModel: ObservableObject {
             let url = await exporter.prepareExport(
                 slide: slide,
                 languages: langs,
+                intro: Self.brandIntroContent(),
                 onProgress: { [weak self] fraction in
                     self?.progress = fraction
                 },

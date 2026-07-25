@@ -32,6 +32,21 @@ public struct StoryExportIntroContent: Sendable {
     }
 }
 
+/// Gabarit du préambule — il doit être IDENTIQUE à celui de la story, sinon la
+/// concaténation produit un MP4 qui change de dimensions en cours de route.
+/// Miroir de la taille de rendu choisie par `StoryExporter`.
+public enum StoryExportIntroSizing {
+    public static func renderSize(for slide: StorySlide) -> CGSize {
+        switch slide.effects.canvasAspect {
+        case .portrait:
+            return CanvasGeometry.designSize                       // 1080×1920
+        case .landscape:
+            return CGSize(width: CanvasGeometry.designHeight,
+                          height: CanvasGeometry.designWidth)      // 1920×1080
+        }
+    }
+}
+
 /// Fabrique le préambule d'un export de story : l'interlude d'identité de
 /// l'auteur, tenu pendant la durée de la signature sonore Meeshy.
 ///

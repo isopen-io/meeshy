@@ -82,9 +82,13 @@ protocol StoryVideoExportServiceProviding {
     ///     Invoked on the `@MainActor`.
     /// - Returns: Local file URL to the baked MP4, or `nil` if the
     ///   underlying export threw (caller surfaces a friendly toast).
+    ///   - intro: Identité à peindre sur le préambule de marque. Le MP4 livré
+    ///     commence alors par l'interlude d'identité et la signature sonore
+    ///     Meeshy, puis la story. `nil` exporte la story seule.
     func prepareExport(
         slide: StorySlide,
         languages: [String],
+        intro: StoryExportIntroContent?,
         onProgress: ((Double) -> Void)?,
         onPhaseChange: ((StoryExportPhase) -> Void)?
     ) async -> URL?
@@ -129,6 +133,7 @@ final class StoryVideoExportService: StoryVideoExportServiceProviding {
     func prepareExport(
         slide: StorySlide,
         languages: [String] = [],
+        intro: StoryExportIntroContent? = nil,
         onProgress: ((Double) -> Void)? = nil,
         onPhaseChange: ((StoryExportPhase) -> Void)? = nil
     ) async -> URL? {
@@ -181,7 +186,22 @@ final class StoryVideoExportService: StoryVideoExportServiceProviding {
                 progress: progressTrampoline
             )
             logger.info("StoryVideoExportService : export complete for slide \(slide.id, privacy: .public)")
-            return outputURL
+            guard let intro else { return outputURL }
+            // Préambule de marque : l'interlude d'identité et la signature
+            // sonore Meeshy, puis la story. Un échec ici ne perd PAS l'export —
+            // on livre la story seule plutôt que rien.
+            do {
+                let branded = try await StoryExportIntro.prepend(
+                    to: outputURL,
+                    content: intro,
+                    renderSize: StoryExportIntroSizing.renderSize(for: slide)
+                )
+                cleanupExport(at: outputURL)
+                return branded
+            } catch {
+                logger.warning("StoryVideoExportService : intro de marque ignorée pour \(slide.id, privacy: .public) — \(error.localizedDescription, privacy: .public)")
+                return outputURL
+            }
         } catch {
             logger.error("StoryVideoExportService : export FAILED for slide \(slide.id, privacy: .public) — \(error.localizedDescription, privacy: .public)")
             cleanupExport(at: outputURL)

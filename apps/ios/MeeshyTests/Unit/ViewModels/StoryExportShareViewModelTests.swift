@@ -182,6 +182,8 @@ final class MockShareExporter: StoryVideoExportServiceProviding {
     private(set) var prepareCallCount = 0
     private(set) var cleanupCallCount = 0
     private(set) var lastLanguages: [String] = []
+    /// Identité transmise au préambule de marque — `nil` = export sans intro.
+    private(set) var lastIntro: StoryExportIntroContent?
     private(set) var lastCleanupURL: URL? = nil
     private(set) var lastBakedURL: URL? = nil
     let behavior: Behavior
@@ -191,11 +193,13 @@ final class MockShareExporter: StoryVideoExportServiceProviding {
     func prepareExport(
         slide: StorySlide,
         languages: [String],
+        intro: StoryExportIntroContent?,
         onProgress: ((Double) -> Void)?,
         onPhaseChange: ((StoryExportPhase) -> Void)?
     ) async -> URL? {
         prepareCallCount += 1
         lastLanguages = languages
+        lastIntro = intro
 
         switch behavior {
         case .success:
@@ -213,5 +217,48 @@ final class MockShareExporter: StoryVideoExportServiceProviding {
         cleanupCallCount += 1
         lastCleanupURL = url
         try? FileManager.default.removeItem(at: url)
+    }
+}
+
+// MARK: - Préambule de marque
+
+/// Chaque MP4 partagé à l'extérieur porte l'interlude d'identité et la
+/// signature sonore Meeshy (directive user 2026-07-25) : c'est ce qui rend une
+/// story reconnaissable une fois sortie de l'app.
+@MainActor
+final class StoryExportBrandIntroTests: XCTestCase {
+
+    func test_startExport_alwaysRequestsTheBrandIntro() async {
+        let mock = MockShareExporter(behavior: .success)
+        let sut = StoryExportShareViewModel(exporter: mock)
+
+        await sut.startExport(story: makeStoryItem())
+
+        XCTAssertEqual(mock.prepareCallCount, 1)
+        XCTAssertNotNil(mock.lastIntro,
+                        "l'export doit toujours demander le préambule de marque")
+    }
+
+    /// L'export est réservé à l'auteur : l'identité du préambule est donc celle
+    /// de l'utilisateur courant, jamais une chaine vide.
+    func test_brandIntro_carriesANonEmptyIdentity() async {
+        let mock = MockShareExporter(behavior: .success)
+        let sut = StoryExportShareViewModel(exporter: mock)
+
+        await sut.startExport(story: makeStoryItem())
+
+        guard let intro = mock.lastIntro else {
+            return XCTFail("aucun préambule transmis")
+        }
+        XCTAssertFalse(intro.displayName.isEmpty)
+        XCTAssertFalse(intro.accentColorHex.isEmpty)
+    }
+
+    private func makeStoryItem() -> StoryItem {
+        StoryItem(id: "s1", content: "Bonjour",
+                  storyEffects: StoryEffects(textObjects: [
+                      StoryTextObject(id: "t1", text: "Bonjour")
+                  ]),
+                  createdAt: Date(), expiresAt: Date().addingTimeInterval(3600))
     }
 }
