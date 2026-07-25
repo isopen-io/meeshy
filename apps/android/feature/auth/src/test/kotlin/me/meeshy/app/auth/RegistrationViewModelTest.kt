@@ -13,6 +13,7 @@ import kotlinx.coroutines.test.setMain
 import me.meeshy.sdk.auth.AuthRepository
 import me.meeshy.sdk.model.ApiResponse
 import me.meeshy.sdk.model.AuthSession
+import me.meeshy.sdk.model.AvailabilityResult
 import me.meeshy.sdk.model.LoginRequest
 import me.meeshy.sdk.model.MeEnvelope
 import me.meeshy.sdk.model.MeeshyUser
@@ -35,7 +36,16 @@ class RegistrationViewModelTest {
 
     private class FakeAuthApi(
         var registerResponse: ApiResponse<AuthSession>,
+        var availabilityResponse: ApiResponse<AvailabilityResult> = ApiResponse(
+            success = true,
+            data = AvailabilityResult(
+                usernameAvailable = true,
+                emailAvailable = true,
+                phoneNumberAvailable = true,
+            ),
+        ),
         val captured: MutableList<RegisterRequest> = mutableListOf(),
+        val availabilityCalls: MutableList<Triple<String?, String?, String?>> = mutableListOf(),
     ) : AuthApi {
         override suspend fun login(body: LoginRequest) = ApiResponse<AuthSession>(success = false)
         override suspend fun register(body: RegisterRequest): ApiResponse<AuthSession> {
@@ -44,13 +54,21 @@ class RegistrationViewModelTest {
         }
         override suspend fun refresh(body: RefreshTokenRequest) = ApiResponse<AuthSession>(success = false)
         override suspend fun me() = ApiResponse<MeEnvelope>(success = false)
+        override suspend fun checkAvailability(username: String?, email: String?, phoneNumber: String?): ApiResponse<AvailabilityResult> {
+            availabilityCalls += Triple(username, email, phoneNumber)
+            return availabilityResponse
+        }
     }
 
     private fun scenario(
         registerResponse: ApiResponse<AuthSession> = ApiResponse(success = false),
+        availabilityResponse: ApiResponse<AvailabilityResult> = ApiResponse(
+            success = true,
+            data = AvailabilityResult(usernameAvailable = true, emailAvailable = true, phoneNumberAvailable = true),
+        ),
         coordinator: RealtimeSessionCoordinator = mockk(relaxed = true),
     ): Triple<RegistrationViewModel, FakeAuthApi, RealtimeSessionCoordinator> {
-        val api = FakeAuthApi(registerResponse)
+        val api = FakeAuthApi(registerResponse, availabilityResponse)
         val store = InMemoryTokenStore()
         val vm = RegistrationViewModel(
             AuthRepository(api, store, SessionRepository(api, store)),
@@ -280,7 +298,7 @@ class RegistrationViewModelTest {
     @Test
     fun register_onRecapValid_succeeds_marksRegisteredAndBindsRealtime() = runTest(dispatcher) {
         val coordinator = mockk<RealtimeSessionCoordinator>(relaxed = true)
-        val (vm, api, _) = scenario(ApiResponse(success = true, data = session()), coordinator)
+        val (vm, api, _) = scenario(ApiResponse(success = true, data = session()), coordinator = coordinator)
         vm.fillAllValid()
         repeat(RegistrationStep.total) { vm.skip() } // to RECAP
         vm.register()
@@ -299,7 +317,7 @@ class RegistrationViewModelTest {
     @Test
     fun register_onRecapValid_failure_surfacesErrorAndNoRealtime() = runTest(dispatcher) {
         val coordinator = mockk<RealtimeSessionCoordinator>(relaxed = true)
-        val (vm, _, _) = scenario(ApiResponse(success = false, error = "Username taken"), coordinator)
+        val (vm, _, _) = scenario(ApiResponse(success = false, error = "Username taken"), coordinator = coordinator)
         vm.fillAllValid()
         repeat(RegistrationStep.total) { vm.skip() }
         vm.register()
@@ -339,6 +357,83 @@ class RegistrationViewModelTest {
         val sent = api.captured.single()
         assertThat(sent.firstName).isNull()
         assertThat(sent.lastName).isNull()
+    }
+
+    // ---- debounced availability probe ---------------------------------------
+
+    @Test
+    fun validUsername_afterDebounce_probesAndAppliesVerdict() = runTest(dispatcher) {
+        val (vm, api, _) = scenario()
+        vm.onUsernameChange("atabeth")
+        advanceUntilIdle()
+
+        assertThat(api.availabilityCalls).containsExactly(Triple("atabeth", null, null))
+        assertThat(vm.state.value.fields.usernameAvailable).isTrue()
+    }
+
+    @Test
+    fun invalidUsername_afterDebounce_neverProbesAndStaysUnknown() = runTest(dispatcher) {
+        val (vm, api, _) = scenario()
+        vm.onUsernameChange("a") // below the 2-char local minimum
+        advanceUntilIdle()
+
+        assertThat(api.availabilityCalls).isEmpty()
+        assertThat(vm.state.value.fields.usernameAvailable).isNull()
+    }
+
+    @Test
+    fun rapidUsernameEdits_debounceToASingleProbeOnTheLastValue() = runTest(dispatcher) {
+        val (vm, api, _) = scenario()
+        vm.onUsernameChange("atab")
+        vm.onUsernameChange("atabet")
+        vm.onUsernameChange("atabeth")
+        advanceUntilIdle()
+
+        assertThat(api.availabilityCalls).containsExactly(Triple("atabeth", null, null))
+    }
+
+    @Test
+    fun eachDistinctValidValue_probesAgainAcrossDebounceWindows() = runTest(dispatcher) {
+        val (vm, api, _) = scenario()
+        vm.onUsernameChange("atabeth")
+        advanceUntilIdle() // window #1
+        vm.onUsernameChange("adalove")
+        advanceUntilIdle() // window #2
+
+        assertThat(api.availabilityCalls).containsExactly(
+            Triple("atabeth", null, null),
+            Triple("adalove", null, null),
+        ).inOrder()
+    }
+
+    @Test
+    fun probeFailure_leavesAvailabilityUnknown() = runTest(dispatcher) {
+        val (vm, api, _) = scenario(availabilityResponse = ApiResponse(success = false, error = "network"))
+        vm.onUsernameChange("atabeth")
+        advanceUntilIdle()
+
+        assertThat(api.availabilityCalls).hasSize(1)
+        assertThat(vm.state.value.fields.usernameAvailable).isNull()
+    }
+
+    @Test
+    fun validEmail_afterDebounce_probesAndAppliesVerdict() = runTest(dispatcher) {
+        val (vm, api, _) = scenario()
+        vm.onEmailChange("a@b.co")
+        advanceUntilIdle()
+
+        assertThat(api.availabilityCalls).containsExactly(Triple(null, "a@b.co", null))
+        assertThat(vm.state.value.fields.emailAvailable).isTrue()
+    }
+
+    @Test
+    fun validPhone_afterDebounce_probesWithDigitsOnly() = runTest(dispatcher) {
+        val (vm, api, _) = scenario()
+        vm.onPhoneChange("+33 6 12 34 56 78")
+        advanceUntilIdle()
+
+        assertThat(api.availabilityCalls).containsExactly(Triple(null, null, "33612345678"))
+        assertThat(vm.state.value.fields.phoneAvailable).isTrue()
     }
 
     private fun session() = AuthSession(MeeshyUser(id = "u1", username = "atabeth"), token = "jwt")

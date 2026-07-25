@@ -3,18 +3,24 @@ package me.meeshy.app.auth
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import me.meeshy.sdk.auth.AuthRepository
 import me.meeshy.sdk.model.RegisterRequest
+import me.meeshy.sdk.model.auth.AvailabilityIntent
 import me.meeshy.sdk.model.auth.RegistrationFields
 import me.meeshy.sdk.model.auth.RegistrationProgressBar
 import me.meeshy.sdk.model.auth.RegistrationStep
 import me.meeshy.sdk.model.auth.RegistrationStepGate
 import me.meeshy.sdk.model.auth.RegistrationStepNavigator
+import me.meeshy.sdk.model.auth.SignupAvailabilityPolicy
 import me.meeshy.sdk.model.auth.SignupFieldValidation
 import me.meeshy.sdk.model.auth.StepFill
 import me.meeshy.sdk.net.NetworkResult
@@ -69,6 +75,7 @@ data class RegistrationUiState(
  * [onPhoneAvailability]) is a separate follow-up slice; this ViewModel exposes those
  * setters as the seam and owns everything else.
  */
+@OptIn(FlowPreview::class)
 @HiltViewModel
 class RegistrationViewModel @Inject constructor(
     private val authRepository: AuthRepository,
@@ -78,11 +85,36 @@ class RegistrationViewModel @Inject constructor(
     private val _state = MutableStateFlow(RegistrationUiState())
     val state: StateFlow<RegistrationUiState> = _state.asStateFlow()
 
-    fun onUsernameChange(value: String) = editFields { it.copy(username = value, usernameAvailable = null) }
+    private val usernameInput = MutableStateFlow("")
+    private val emailInput = MutableStateFlow("")
+    private val phoneInput = MutableStateFlow("")
 
-    fun onEmailChange(value: String) = editFields { it.copy(email = value, emailAvailable = null) }
+    init {
+        launchProbe(usernameInput, SignupAvailabilityPolicy::usernameIntent, ::onUsernameAvailability) {
+            authRepository.checkAvailability(username = it).getOrNull()?.usernameAvailable
+        }
+        launchProbe(emailInput, SignupAvailabilityPolicy::emailIntent, ::onEmailAvailability) {
+            authRepository.checkAvailability(email = it).getOrNull()?.emailAvailable
+        }
+        launchProbe(phoneInput, SignupAvailabilityPolicy::phoneIntent, ::onPhoneAvailability) {
+            authRepository.checkAvailability(phoneNumber = it).getOrNull()?.phoneNumberAvailable
+        }
+    }
 
-    fun onPhoneChange(value: String) = editFields { it.copy(phoneNumber = value, phoneAvailable = null) }
+    fun onUsernameChange(value: String) {
+        usernameInput.value = value
+        editFields { it.copy(username = value, usernameAvailable = null) }
+    }
+
+    fun onEmailChange(value: String) {
+        emailInput.value = value
+        editFields { it.copy(email = value, emailAvailable = null) }
+    }
+
+    fun onPhoneChange(value: String) {
+        phoneInput.value = value
+        editFields { it.copy(phoneNumber = value, phoneAvailable = null) }
+    }
 
     fun onFirstNameChange(value: String) = editFields { it.copy(firstName = value) }
 
@@ -96,12 +128,16 @@ class RegistrationViewModel @Inject constructor(
 
     fun onAcceptTermsChange(value: Boolean) = editFields { it.copy(acceptTerms = value) }
 
-    /** Network-probe seam: the availability layer reports the username verdict. */
-    fun onUsernameAvailability(available: Boolean?) = editFields { it.copy(usernameAvailable = available) }
+    /**
+     * Network-probe seam: the availability layer reports the username verdict.
+     * A background verdict must NOT clear a surfaced [RegistrationUiState.errorMessage]
+     * (only a user field edit does), so this goes through [updateFields], not [editFields].
+     */
+    fun onUsernameAvailability(available: Boolean?) = updateFields { it.copy(usernameAvailable = available) }
 
-    fun onEmailAvailability(available: Boolean?) = editFields { it.copy(emailAvailable = available) }
+    fun onEmailAvailability(available: Boolean?) = updateFields { it.copy(emailAvailable = available) }
 
-    fun onPhoneAvailability(available: Boolean?) = editFields { it.copy(phoneAvailable = available) }
+    fun onPhoneAvailability(available: Boolean?) = updateFields { it.copy(phoneAvailable = available) }
 
     /** iOS `nextStep()`: advance one step only when the proceed gate passes. */
     fun next() {
@@ -120,6 +156,7 @@ class RegistrationViewModel @Inject constructor(
     fun skip() {
         val outcome = RegistrationStepNavigator.skip(_state.value.currentStep)
         val target = outcome.target ?: return
+        if (outcome.clearPhone) phoneInput.value = ""
         _state.update {
             val fields = if (outcome.clearPhone) {
                 it.fields.copy(skipPhone = true, phoneNumber = "", phoneAvailable = null)
@@ -154,8 +191,50 @@ class RegistrationViewModel @Inject constructor(
         }
     }
 
+    /** A user field edit — clears any surfaced [RegistrationUiState.errorMessage]. */
     private fun editFields(transform: (RegistrationFields) -> RegistrationFields) {
         _state.update { it.copy(fields = transform(it.fields), errorMessage = null) }
+    }
+
+    /** A background field update (e.g. an availability verdict) — leaves errorMessage intact. */
+    private fun updateFields(transform: (RegistrationFields) -> RegistrationFields) {
+        _state.update { it.copy(fields = transform(it.fields)) }
+    }
+
+    /**
+     * The debounced availability probe for one field — the app-side realisation of
+     * iOS's `.debounce(1s).removeDuplicates().sink { … }` chain. The *decision*
+     * (locally-invalid → clear, locally-valid → probe the normalized query) is
+     * deferred to the pure [SignupAvailabilityPolicy]; this only supplies the
+     * reactive plumbing and the network call.
+     *
+     * The source is a conflated [kotlinx.coroutines.flow.StateFlow], so the
+     * `removeDuplicates` semantics are already provided by the source (it only
+     * re-emits on an actual change); [distinctUntilChanged] after the debounce keeps
+     * that guarantee explicit. The policy is therefore called with `previous = null`
+     * — it never needs its `Unchanged` arm here, which is exercised by its own unit
+     * tests. A failed probe yields `null` → the gate stays blocked on an "unknown"
+     * verdict rather than a stale one.
+     */
+    private fun launchProbe(
+        source: Flow<String>,
+        intent: (current: String, previous: String?) -> AvailabilityIntent,
+        apply: (Boolean?) -> Unit,
+        probe: suspend (query: String) -> Boolean?,
+    ) {
+        viewModelScope.launch {
+            source
+                .debounce(AVAILABILITY_DEBOUNCE_MS)
+                .distinctUntilChanged()
+                .collect { value ->
+                    val decision = intent(value, null)
+                    apply(if (decision is AvailabilityIntent.Check) probe(decision.query) else null)
+                }
+        }
+    }
+
+    private companion object {
+        const val AVAILABILITY_DEBOUNCE_MS = 1_000L
     }
 }
 

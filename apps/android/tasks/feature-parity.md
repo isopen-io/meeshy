@@ -396,9 +396,11 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       and each step gate incl. null/false availability + skipPhone). Mutation (RED proof): the username
       step gate `== true` → `!= false` fails **exactly** `usernameStep_blockedWhenAvailabilityNull`
       (43 run, 1 failed, no collateral). `:core:model:testDebugUnitTest` green + full `:app:assembleDebug`
-      → BUILD SUCCESSFUL. Diff = `apps/android` only. **Follow-up:** the app-side `AuthService.checkAvailability`
-      call + the wizard step composables (username/email/phone fields) driving these cores off the 1 s debounce,
-      and the username-suggestion strip.
+      → BUILD SUCCESSFUL. Diff = `apps/android` only. **Follow-up (network probe now DONE — slice
+      `signup-availability-probe`, 2026-07-25):** `AuthApi.checkAvailability` + `AuthRepository.checkAvailability`
+      + the three debounced probe pipelines in `RegistrationViewModel` now drive these cores off the 1 s
+      debounce, feeding the `on…Availability` seam. Remaining: the wizard step composables (username/email/
+      phone fields) + the username-suggestion strip.
 - [~] Interactive step progress bar with jump-back to completed steps —
       **step-set + progress-bar decision core shipped** (slice `registration-progress-bar-core`,
       2026-07-22). Pure `:core:model` `RegistrationStep` (8-step ordinal enum: `PSEUDO`..`RECAP`
@@ -488,8 +490,32 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       `:feature:auth:testDebugUnitTest` green (23/23 new) + `:app:assembleDebug` → BUILD SUCCESSFUL
       (every module compiled). Diff = `apps/android` only. **Follow-up:** the paged `OnboardingFlowView`
       Compose screen (per-step field composables + `InteractiveProgressBar` bar row + bottom-bar
-      Back/Skip/Next-or-Register) binding this VM, and the availability-debounce network layer feeding
-      the `on…Availability` seam.
+      Back/Skip/Next-or-Register) binding this VM. *(The availability-debounce network layer feeding the
+      `on…Availability` seam is now **DONE** — see the next entry.)*
+- [x] **App-side availability-debounce network probe** — **shipped** (slice `signup-availability-probe`,
+      2026-07-25). Closes the last orphan seam of the registration wizard: the three
+      `onUsernameAvailability`/`onEmailAvailability`/`onPhoneAvailability` setters are now driven by real
+      debounced network probes instead of tests only. New `AvailabilityResult` (`:core:model`, parity with
+      the gateway `GET /auth/check-availability` response: `usernameAvailable`/`suggestions`/
+      `emailAvailable`/`phoneNumberAvailable`/`phoneNumberValid`, all nullable — the gateway echoes only the
+      probed field); `AuthApi.checkAvailability(username?, email?, phoneNumber?)` (`:core:network`, Retrofit
+      omits null `@Query`s so a single-field probe hits `?username=…` alone); `AuthRepository.checkAvailability`
+      (`:sdk-core`, folds transport/HTTP errors into `NetworkResult.Failure`). `RegistrationViewModel` gains
+      three per-field `MutableStateFlow<String>` inputs (fed by the `on…Change` handlers + reset by `skip`'s
+      phone-clear) and three `launchProbe` pipelines: `debounce(1s) → distinctUntilChanged → SignupAvailabilityPolicy.{username,email,phone}Intent → Check ? checkAvailability : clear`.
+      A failed/unknown probe yields `null` (gate stays blocked on "unknown", never a stale answer). **SOTA
+      over iOS:** availability updates go through a background `updateFields` that **preserves** a surfaced
+      `errorMessage` (only a user field-edit clears it), so a late verdict can't wipe a registration error;
+      the debounce/dedup is the conflated StateFlow itself (no hand-rolled `removeDuplicates` state). +9
+      behavioural tests (`AuthRepositoryTest` +2: single-field forwarded + result mapped / failure→Failure;
+      `RegistrationViewModelTest` +7: valid→probe+verdict, invalid→no-probe+unknown, rapid-edits→single
+      probe on last value, distinct values→probe-each, probe-failure→unknown, email probe, phone probe with
+      digits-only normalization). Mutation (RED proof): dropping the `Check` guard (always probe) fails
+      **7** tests incl. `invalidUsername_afterDebounce_neverProbesAndStaysUnknown` (30 run) — the
+      local-validity gate is load-bearing. `:feature:auth:testDebugUnitTest` 30/30 +
+      `:sdk-core:testDebugUnitTest` + `:core:model:testDebugUnitTest` green in isolation +
+      `:app:assembleDebug` → BUILD SUCCESSFUL (whole graph). Diff = `apps/android` only. **Follow-up:** the
+      username-suggestion strip (surface `AvailabilityResult.suggestions`), and the Compose onboarding screen.
 - [~] Phone entry with searchable country-code picker (skippable) — **catalogue core shipped**
       (slice `auth-country-catalog`, 2026-07-20): pure `:core:model` `CountryCatalog` + `Country`
       (faithful port of iOS `CountryPicker`,
