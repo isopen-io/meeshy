@@ -172,7 +172,7 @@ class LanguageCapabilitiesService:
             ("fi", "Finnish", "Suomi", TTSEngine.CHATTERBOX, True, STTEngine.WHISPER),
             ("no", "Norwegian", "Norsk", TTSEngine.CHATTERBOX, True, STTEngine.WHISPER),
             ("lt", "Lithuanian", "Lietuvių", TTSEngine.MMS, False, STTEngine.WHISPER),
-            ("hy", "Armenian", "Հdelays", TTSEngine.MMS, False, STTEngine.WHISPER),
+            ("hy", "Armenian", "Հայերեն", TTSEngine.MMS, False, STTEngine.WHISPER),
         ]
 
         # MMS codes for European languages that use MMS TTS
