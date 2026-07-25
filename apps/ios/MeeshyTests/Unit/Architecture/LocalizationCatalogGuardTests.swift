@@ -161,7 +161,7 @@ final class LocalizationCatalogGuardTests: XCTestCase {
     /// valeur** : la faire descendre pour « faire passer le test » reviendrait à
     /// entériner une régression que ce test existe précisément pour attraper.
     private static let floors: [String: [String: Int]] = [
-        "app": ["en": 1268, "de": 1256, "es": 1256, "pt-BR": 1256, "it": 1122, "ar": 1122],
+        "app": ["en": 1268, "de": 1256, "es": 1256, "pt-BR": 1256, "it": 1342, "ar": 1342],
         "SDK": ["en": 883, "de": 773, "es": 773, "pt-BR": 614, "it": 0, "ar": 0],
     ]
 
