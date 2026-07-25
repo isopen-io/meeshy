@@ -2713,3 +2713,27 @@ iOS `RelativeTimeFormatter` bundles classification, calendar-day framing AND loc
   match" red text on `newPassword != confirm && !confirm.isEmpty` — ungated on length — while the reset
   *gate* additionally requires ≥8. Two distinct predicates, both pinned, because folding them would either
   hide the mismatch hint for short passwords or wrongly enable the button.
+
+## anonymous-session-store (2026-07-25)
+- **ENV RECIPE GAP — Gradle needs a UTF-8 locale or `:sdk-core` test compilation dies.** The fresh
+  container boots with `LANG`/`LC_ALL` unset → `sun.jnu.encoding=ANSI_X3.4-1968`. Existing tests have
+  backtick method names containing an em-dash (e.g. `ActiveCallRepositoryTest` "…— a probe never
+  crashes…"), so the Kotlin backend fails writing the `.class` file with
+  `InvalidPathException: Malformed input or input contains unmappable characters` — an **Internal
+  compiler error**, not a test failure, easy to misread as "my code broke it". Fix: `export
+  LANG=C.utf8 LC_ALL=C.utf8` (verify `java -XshowSettings:properties -version | grep jnu.encoding` →
+  `UTF-8`) **and `./gradlew --stop`** so the daemon restarts under the new locale. Added to the run
+  recipe; a `local.properties`-adjacent `gradle.properties` JVM-arg override won't fix it because
+  `sun.jnu.encoding` is derived from the OS locale at JVM launch, not from `-D`.
+- **Wrapper download is flaky behind the proxy.** `gradle-8.11.1-bin.zip` returned a transient 502 from
+  the release-assets CDN on first fetch; a retry loop with backoff (as the git recipe) got it on the 2nd
+  attempt. Not a persistent outage.
+- **Single-value store, not keyed.** A device holds at most one guest session, so `AnonymousSessionStore`
+  is `load()/save()/clear()` over one JSON blob — unlike the per-conversation `ConversationDraftStore`.
+  Persist the **whole hardened `AnonymousSessionContext`** (token + capabilities), not just the token, so
+  a restored guest keeps its force-denied videos/audios/locations/links without re-hitting the server.
+- **SOTA over iOS, proven by mutation.** `leave()` **always** clears the local session + `X-Session-Token`
+  even when the server `/anonymous/leave` call fails — iOS would strand a half-authenticated guest.
+  Gating the local clear on `NetworkResult.Success` fails exactly `leave_serverFailure_stillClears…`.
+  Likewise `join()` persists **nothing** when `toSessionContext()` returns null (malformed 2xx body), so
+  a bad payload never installs a token.

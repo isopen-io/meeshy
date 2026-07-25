@@ -22,6 +22,7 @@ import me.meeshy.sdk.net.api.PostApi
 import me.meeshy.sdk.net.api.PreferencesApi
 import me.meeshy.sdk.net.api.ReactionApi
 import me.meeshy.sdk.net.api.ReportApi
+import me.meeshy.sdk.net.api.ShareLinkApi
 import me.meeshy.sdk.net.api.StoryApi
 import me.meeshy.sdk.net.api.TranslationApi
 import me.meeshy.sdk.net.api.UserApi
@@ -103,4 +104,7 @@ internal object NetworkModule {
 
     @Provides
     fun providesDataExportApi(api: MeeshyApi): DataExportApi = api.dataExport
+
+    @Provides
+    fun providesShareLinkApi(api: MeeshyApi): ShareLinkApi = api.shareLinks
 }

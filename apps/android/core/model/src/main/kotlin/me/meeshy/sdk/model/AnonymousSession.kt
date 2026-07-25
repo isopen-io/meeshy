@@ -1,5 +1,7 @@
 package me.meeshy.sdk.model
 
+import kotlinx.serialization.Serializable
+
 /**
  * The client-side anonymous (shared-link guest) session — port of iOS
  * `AnonymousSessionContext` (`apps/ios/Meeshy/Features/Main/Models/AnonymousSessionContext.swift`).
@@ -7,7 +9,12 @@ package me.meeshy.sdk.model
  * [sessionToken] authenticates every guest request via the `X-Session-Token`
  * header; [permissions] is the **hardened** capability set (see
  * [ParticipantPermissions.anonymous]) — never the raw server payload.
+ *
+ * `@Serializable` so the durable [me.meeshy.sdk.session.AnonymousSessionStore]
+ * can persist the whole hardened context (token + capabilities) across process
+ * death, not just the raw token.
  */
+@Serializable
 data class AnonymousSessionContext(
     val sessionToken: String,
     val participantId: String,

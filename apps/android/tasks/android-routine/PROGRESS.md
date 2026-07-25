@@ -1,5 +1,55 @@
 # Progress — state & what to do next
 
+> On 2026-07-25 the **anonymous-session join/restore/leave use-case + persistence** landed (slice
+> `anonymous-session-store`, feature-parity §A → the `[~]` "Anonymous sessions" item advances: the
+> permission-hardening core shipped 2026-07-22 is now wired into a real, non-orphan vertical slice).
+> This turns the shipped `AnonymousJoinResponse.toSessionContext()` hardening core from orphan logic
+> into the guest-session lifecycle. **Added (production, all `apps/android`):** `ShareLinkApi`
+> (`:core:network` — the three **no-JWT** anonymous endpoints `GET anonymous/link/{identifier}`,
+> `POST anonymous/join/{linkId}`, `POST anonymous/leave`, port of iOS `ShareLinkService`; wired into
+> `MeeshyApi.shareLinks` + a `NetworkModule` provider); `LeaveAnonymousRequest` (`:core:model`);
+> `AnonymousSessionContext` made `@Serializable` so the **whole hardened context** (token +
+> force-denied capability set) persists, not just the raw token; the single-value
+> `AnonymousSessionStore` (`:sdk-core` — `interface` + `InMemory` + durable `DataStoreAnonymousSessionStore`,
+> JSON blob under one key, corrupt/legacy value decodes to `null` = cache miss, mirrors the proven
+> `ConversationDraftStore` pattern; Hilt provider in `SdkModule` over a `meeshy_anonymous_session`
+> DataStore); and `AnonymousSessionRepository` (`:sdk-core`) with `join(linkId, request)` /
+> `restore()` / `leave()`. **`join`** folds `toSessionContext()` — a 2xx body that can't form a real
+> session (missing participant/conversation, blank token) becomes a `NetworkResult.Failure(code=PARSE)`
+> and **persists nothing**, else installs `tokenStore.sessionToken` + `store.save(ctx)`. **`restore`**
+> re-hydrates a persisted guest on app start, re-installing its `X-Session-Token`, `null` when absent.
+> **`leave`** does a best-effort server call then **always** drops the local session + token.
+> **SOTA over iOS:** iOS force-unwraps the join response (crash on malformed) and its leave leaves the
+> local session intact on a network error — Android degrades gracefully on both. **+21 behavioural
+> tests:** `AnonymousSessionStoreTest` (11 — InMemory + DataStore load/save/replace/clear/seed/reopen/
+> corrupt-decode) + `AnonymousSessionRepositoryTest` (10 — join success persists+hardens+installs token,
+> join malformed/blank-token/network-failure → Failure + no persist, restore with/without stored
+> session, leave server-ok/server-fail/no-token). Expectations are hand-written literals; asserted via
+> the public API + observable side effects (`store.load()`, `tokenStore.sessionToken`), never internals.
+> **Mutation (RED proof):** gating `leave()`'s local clear on `NetworkResult.Success` fails **exactly**
+> `leave_serverFailure_stillClearsLocalStateAndToken` (9 run, 1 failed, no collateral) — the
+> always-clear-locally guarantee is load-bearing. **Gate:** `:app:assembleDebug` (whole module graph
+> incl. the new DI/API wiring) → BUILD SUCCESSFUL; `:core:model` + `:core:network` +
+> `:sdk-core` (targeted slice tests) green; full `:sdk-core:testDebugUnitTest` = **871/872**, the sole
+> failure the **known DataStore-parallel-load flake** (`ThemeStoreTest.dataStore_setThemeMode_…`, green
+> in isolation — confirmed this run), documented standing debt, not this slice. **ENV recipe fix**
+> (new, added to `ROUTINE.md`/`NOTES.md`): Gradle needs `export LANG=C.utf8 LC_ALL=C.utf8` + `./gradlew
+> --stop`, else `:sdk-core` test compilation dies with an *Internal compiler error*
+> (`InvalidPathException` writing a `.class` whose backtick name holds a non-ASCII em-dash). Reviewer
+> **PASS** (diff `apps/android` only — 4 prod files touched in core/sdk-core + 1 new API + 2 new stores/
+> repo + 2 new test files + tracking docs, zero production logic outside android; **SDK purity** — the
+> hardening *decision* stays in pure `:core:model`, the endpoints in `:core:network`, the use-case +
+> stateless persistence in `:sdk-core`, and the "when to join/leave" orchestration is left for the
+> app-side guest-join screen; **SSOT** — no re-implemented hardening, `toSessionContext()` reused as-is;
+> **failure paths** — malformed/offline/no-token all degrade to a coherent state, never a crash).
+> **Next slice:** the guest-join **screen** (`:feature:auth` or a new `:feature:sharelink` —
+> link-preview via `getLinkInfo` → join form → success), driving `AnonymousSessionRepository` (UI-only,
+> JVM-coverage-exempt); OR the composer consuming `ParticipantPermissions` to gate the attachment bar;
+> OR the paged `OnboardingFlowView` Compose screen; OR the tracked Kover 90% coverage-gate infra.
+> **Known standing debt (not this slice):** the `:sdk-core` DataStore-parallel-load timeout flake
+> (`ThemeStoreTest`/`InterfaceLanguageStoreTest`/`PrivacyPreferencesStoreTest`/
+> `NotificationPreferencesStoreTest`) — green in isolation, intermittent in the full run.
+
 > On 2026-07-25 the **app-side availability-debounce network probe** landed (slice
 > `signup-availability-probe`, feature-parity §A → new `[x]` "App-side availability-debounce network
 > probe"; also flips the wizard-VM entry's remaining network-layer follow-up to DONE). This closes the

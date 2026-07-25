@@ -18,6 +18,7 @@ import me.meeshy.sdk.net.api.PostApi
 import me.meeshy.sdk.net.api.PreferencesApi
 import me.meeshy.sdk.net.api.ReactionApi
 import me.meeshy.sdk.net.api.ReportApi
+import me.meeshy.sdk.net.api.ShareLinkApi
 import me.meeshy.sdk.net.api.StoryApi
 import me.meeshy.sdk.net.api.TranslationApi
 import me.meeshy.sdk.net.api.UserApi
@@ -48,6 +49,7 @@ class MeeshyApi private constructor(retrofit: Retrofit) {
     val preferences: PreferencesApi = retrofit.create()
     val reports: ReportApi = retrofit.create()
     val dataExport: DataExportApi = retrofit.create()
+    val shareLinks: ShareLinkApi = retrofit.create()
 
     companion object {
         val json: Json = Json {
