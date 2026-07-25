@@ -4,6 +4,8 @@ import kotlinx.serialization.Serializable
 import me.meeshy.sdk.model.ApiConversation
 import me.meeshy.sdk.model.ApiResponse
 import me.meeshy.sdk.model.CreateConversationRequest
+import me.meeshy.sdk.model.UpdateConversationResponse
+import me.meeshy.sdk.model.UpdateConversationSettingsRequest
 import retrofit2.http.Body
 import retrofit2.http.GET
 import retrofit2.http.POST
@@ -48,4 +50,15 @@ interface ConversationApi {
         @Path("id") id: String,
         @Body body: ConversationPreferencesUpdate,
     ): ApiResponse<Unit>
+
+    /**
+     * Admin conversation-settings patch (write-role / announcement / slow-mode /
+     * auto-translate) sent to `PUT /conversations/{id}`. Null body fields are
+     * omitted so only changed settings are persisted.
+     */
+    @PUT("conversations/{id}")
+    suspend fun updateSettings(
+        @Path("id") id: String,
+        @Body body: UpdateConversationSettingsRequest,
+    ): ApiResponse<UpdateConversationResponse>
 }

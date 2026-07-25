@@ -33,6 +33,37 @@ private class FakeConversationApi(
         id: String,
         body: me.meeshy.sdk.net.api.ConversationPreferencesUpdate,
     ) = ApiResponse(success = true, data = Unit)
+
+    override suspend fun updateSettings(
+        id: String,
+        body: me.meeshy.sdk.model.UpdateConversationSettingsRequest,
+    ) = ApiResponse<me.meeshy.sdk.model.UpdateConversationResponse>(success = false)
+}
+
+private class RecordingSettingsApi(
+    private val response: ApiResponse<me.meeshy.sdk.model.UpdateConversationResponse>,
+) : ConversationApi {
+    var lastId: String? = null
+    var lastBody: me.meeshy.sdk.model.UpdateConversationSettingsRequest? = null
+
+    override suspend fun list(offset: Int?, limit: Int?) =
+        ApiResponse<List<ApiConversation>>(success = false)
+    override suspend fun getById(id: String) = ApiResponse<ApiConversation>(success = false)
+    override suspend fun create(body: CreateConversationRequest) =
+        ApiResponse<ApiConversation>(success = false)
+    override suspend fun markRead(id: String) = ApiResponse(success = true, data = Unit)
+    override suspend fun updatePreferences(
+        id: String,
+        body: me.meeshy.sdk.net.api.ConversationPreferencesUpdate,
+    ) = ApiResponse(success = true, data = Unit)
+    override suspend fun updateSettings(
+        id: String,
+        body: me.meeshy.sdk.model.UpdateConversationSettingsRequest,
+    ): ApiResponse<me.meeshy.sdk.model.UpdateConversationResponse> {
+        lastId = id
+        lastBody = body
+        return response
+    }
 }
 
 @RunWith(RobolectricTestRunner::class)
@@ -239,5 +270,47 @@ class ConversationRepositoryTest {
 
         assertThat(thrown).isInstanceOf(ConversationSyncException::class.java)
         assertThat(thrown).hasMessageThat().isEqualTo("Server down")
+    }
+
+    @Test
+    fun `updateSettings forwards the id and patch and returns the server payload`() = runTest {
+        val api = RecordingSettingsApi(
+            ApiResponse(
+                success = true,
+                data = me.meeshy.sdk.model.UpdateConversationResponse(
+                    id = "c1",
+                    defaultWriteRole = "admin",
+                    slowModeSeconds = 60,
+                ),
+            ),
+        )
+        val repo = repository(api)
+        val request = me.meeshy.sdk.model.UpdateConversationSettingsRequest(
+            defaultWriteRole = "admin",
+            slowModeSeconds = 60,
+        )
+
+        val result = repo.updateSettings("c1", request)
+
+        assertThat(api.lastId).isEqualTo("c1")
+        assertThat(api.lastBody).isEqualTo(request)
+        assertThat(result).isInstanceOf(me.meeshy.sdk.net.NetworkResult.Success::class.java)
+        assertThat(result.getOrNull()?.defaultWriteRole).isEqualTo("admin")
+        assertThat(result.getOrNull()?.slowModeSeconds).isEqualTo(60)
+    }
+
+    @Test
+    fun `updateSettings folds an unsuccessful envelope into a Failure`() = runTest {
+        val repo = repository(
+            RecordingSettingsApi(ApiResponse(success = false, error = "Forbidden")),
+        )
+
+        val result = repo.updateSettings(
+            "c1",
+            me.meeshy.sdk.model.UpdateConversationSettingsRequest(isAnnouncementChannel = true),
+        )
+
+        assertThat(result).isInstanceOf(me.meeshy.sdk.net.NetworkResult.Failure::class.java)
+        assertThat((result as me.meeshy.sdk.net.NetworkResult.Failure).error.message).isEqualTo("Forbidden")
     }
 }

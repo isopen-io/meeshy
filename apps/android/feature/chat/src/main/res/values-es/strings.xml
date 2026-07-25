@@ -141,4 +141,19 @@
     <string name="report_reason_hate_speech">Discurso de odio</string>
     <string name="report_reason_impersonation">Suplantación de identidad</string>
     <string name="report_reason_other">Otro</string>
+    <!-- Conversation settings (admin) -->
+    <string name="conversation_settings_title">Ajustes de la conversación</string>
+    <string name="conversation_settings_saved">Ajustes guardados</string>
+    <string name="conversation_settings_write_role">Quién puede enviar mensajes</string>
+    <string name="conversation_settings_announcement">Modo anuncio</string>
+    <string name="conversation_settings_slow_mode">Modo lento</string>
+    <string name="conversation_settings_auto_translate">Traducción automática</string>
+    <string name="conversation_settings_error">No se pudieron guardar los ajustes. Inténtalo de nuevo.</string>
+    <string name="conversation_settings_save">Guardar</string>
+    <string name="conversation_settings_role_creator">Solo el creador</string>
+    <string name="conversation_settings_role_admin">Administradores y superiores</string>
+    <string name="conversation_settings_role_moderator">Moderadores y superiores</string>
+    <string name="conversation_settings_role_member">Todos</string>
+    <string name="conversation_settings_slow_mode_off">Desactivado</string>
+    <string name="conversation_settings_slow_mode_seconds">%1$d s</string>
 </resources>

@@ -86,6 +86,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Translate
+import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.Button
@@ -266,6 +267,7 @@ fun ChatScreen(
         derivedStateOf { listState.isNearBottom(listItems.lastIndex) }
     }
     var scrollAffordance by remember { mutableStateOf(ScrollAffordanceState()) }
+    var showConversationSettings by remember { mutableStateOf(false) }
     // Window-space frame of each rendered message row, captured during layout for
     // the long-press preview hero (see MessageOverlayPreviewHero). A plain map, not
     // snapshot state: written from onGloballyPositioned without forcing recomposition,
@@ -355,6 +357,16 @@ fun ChatScreen(
                         val peerName = state.conversationTitle.orEmpty()
                         IconButton(onClick = viewModel::openSearch) {
                             Icon(Icons.Filled.Search, contentDescription = stringResource(R.string.chat_search))
+                        }
+                        // Moderator+ viewers get the admin conversation-settings sheet
+                        // (write-role / announcement / slow-mode / auto-translate).
+                        if (state.slowModeExempt) {
+                            IconButton(onClick = { showConversationSettings = true }) {
+                                Icon(
+                                    Icons.Filled.Tune,
+                                    contentDescription = stringResource(R.string.conversation_settings_title),
+                                )
+                            }
                         }
                         val ongoing = state.activeCall
                             ?.takeIf { RejoinPillPolicy.shouldOffer(it, hasLocalLiveCall) }
@@ -662,6 +674,14 @@ fun ChatScreen(
             onExploreLanguages = { viewModel.openLanguageExplorer(actionTarget.messageId) },
             onReport = { viewModel.openReport(actionTarget.messageId) },
             onDismiss = viewModel::dismissMessageActions,
+        )
+    }
+
+    if (showConversationSettings) {
+        ConversationSettingsSheet(
+            conversationId = state.conversationId,
+            accentColor = accentColor,
+            onDismiss = { showConversationSettings = false },
         )
     }
 

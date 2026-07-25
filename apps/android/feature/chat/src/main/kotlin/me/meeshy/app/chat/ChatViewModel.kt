@@ -90,6 +90,9 @@ import me.meeshy.ui.component.bubble.MessageLanguageExplorer
 import javax.inject.Inject
 
 data class ChatUiState(
+    /** This conversation's id — lets header actions (e.g. the admin settings sheet)
+     * bind a sibling ViewModel without re-reading the nav argument. */
+    val conversationId: String = "",
     val messages: List<BubbleContent> = emptyList(),
     /** L'appel encore actif serveur-side pour CETTE conversation (probe REST
      * active-call) — alimente la pill « Rejoindre » du header (parité iOS
@@ -261,7 +264,7 @@ class ChatViewModel @Inject constructor(
         "ChatViewModel requires a '$CONVERSATION_ID_ARG' navigation argument"
     }
 
-    private val _state = MutableStateFlow(ChatUiState())
+    private val _state = MutableStateFlow(ChatUiState(conversationId = conversationId))
     val state: StateFlow<ChatUiState> = _state.asStateFlow()
 
     private val ownReactions = MutableStateFlow<Map<String, Set<String>>>(emptyMap())
