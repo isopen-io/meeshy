@@ -49,8 +49,8 @@ function buildPrisma(overrides: StatsPrismaOverrides = {}): PrismaClient {
 
   const prisma = {
     message: {
-      count: jest.fn((args: { where?: { NOT?: unknown } }) =>
-        Promise.resolve(args?.where?.NOT ? totalTranslations : totalMessages)
+      count: jest.fn((args: { where?: { translations?: unknown } }) =>
+        Promise.resolve(args?.where?.translations ? totalTranslations : totalMessages)
       ),
       groupBy: jest.fn(() =>
         Promise.resolve(languages.map((originalLanguage) => ({ originalLanguage })))
@@ -214,7 +214,7 @@ describe('computeUserStats', () => {
     );
   });
 
-  it('filters translated messages with an object (non-array) NOT filter', async () => {
+  it('filters translated messages with the runtime-safe not:{equals:null} Json filter', async () => {
     const prisma = buildPrisma();
     await computeUserStats(prisma, 'u1');
 
@@ -228,13 +228,13 @@ describe('computeUserStats', () => {
         call[0] &&
         typeof call[0] === 'object' &&
         'where' in call[0] &&
-        'NOT' in (call[0].where as Record<string, unknown>)
+        'translations' in (call[0].where as Record<string, unknown>)
     );
 
     expect(translationCountCall).toBeDefined();
     const where = (translationCountCall?.[0] as { where: Record<string, unknown> }).where;
-    expect(where.NOT).toBeDefined();
-    expect(Array.isArray(where.NOT)).toBe(false);
+    expect(where.translations).toEqual({ not: { equals: null } });
+    expect(where.NOT).toBeUndefined();
   });
 });
 
