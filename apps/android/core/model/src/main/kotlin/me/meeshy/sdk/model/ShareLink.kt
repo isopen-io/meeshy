@@ -78,6 +78,12 @@ data class JoinAuthenticatedResponse(
     val message: String? = null,
 )
 
+/** Body for ending an anonymous session — port of iOS `leaveAnonymousSession`. */
+@Serializable
+data class LeaveAnonymousRequest(
+    val sessionToken: String,
+)
+
 @Serializable
 data class AnonymousParticipant(
     val id: String,

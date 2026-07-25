@@ -770,9 +770,17 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       and `AnonymousJoinResponse.toSessionContext()` → `AnonymousSessionContext?` (port of iOS
       `AnonymousSessionContext.swift`, returning `null` for a malformed response — missing
       participant/conversation or blank session token — instead of iOS's force-unwrap crash).
-      +12 behavioural tests, mutation-proven. Still needs the app-side wiring: an
-      `AnonymousSessionStore` (persist the token), the guest join flow feeding `toSessionContext`,
-      and the composer/`X-Session-Token` header consuming `permissions` to gate the attachment bar.
+      +12 behavioural tests, mutation-proven. The **join/restore/leave use-case + persistence**
+      landed next (slice `anonymous-session-store`, 2026-07-25): `ShareLinkApi`
+      (`anonymous/link/{id}`, `anonymous/join/{linkId}`, `anonymous/leave` — the no-JWT endpoints,
+      port of iOS `ShareLinkService`), the single-value `AnonymousSessionStore`
+      (`InMemory` + durable `DataStore`, persisting the **whole hardened context**, corrupt→null),
+      and `AnonymousSessionRepository.join/restore/leave` feeding `toSessionContext()` and installing
+      the `X-Session-Token` on the `TokenStore`. SOTA over iOS: a malformed 2xx join persists nothing,
+      and `leave()` always clears local state + token even on a server failure (mutation-proven).
+      +21 behavioural tests. `AnonymousSessionContext` is now `@Serializable` for persistence.
+      Still needs: the guest-join **screen** (link-preview → form → success) and the composer
+      consuming `permissions` to gate the attachment bar.
 - [ ] Login/logout teardown wiping E2EE keys and per-user caches
 - [ ] Splash screen with brand animation + minimum display duration
 

@@ -71,6 +71,15 @@ echo "sdk.dir=$HOME/android-sdk" > apps/android/local.properties
 
 `local.properties` is gitignored — never commit it.
 
+**UTF-8 locale is mandatory for Gradle** (else `:sdk-core` test compilation dies with an *Internal
+compiler error* — `InvalidPathException` while writing a `.class` whose backtick test-method name holds a
+non-ASCII em-dash). The fresh container boots with `LANG`/`LC_ALL` unset (`sun.jnu.encoding=ASCII`):
+
+```bash
+export LANG=C.utf8 LC_ALL=C.utf8   # prefix every ./gradlew invocation with this
+./gradlew --stop                    # restart the daemon under the new locale if it was already up
+```
+
 ## CI reality
 
 There is **no Android-specific CI workflow** in this repo. The monorepo `ci.yml`
