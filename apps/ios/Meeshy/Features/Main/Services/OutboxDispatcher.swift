@@ -287,7 +287,10 @@ struct OutboxDispatcher: OutboxDispatching {
                 body: body,
                 queryItems: nil
             )
-            logger.info("markAsRead dispatched for conversation \(payload.conversationId, privacy: .public) cmid=\(payload.clientMutationId, privacy: .public)")
+            // Le nombre d'ids rapportés est le seul moyen de distinguer, en
+            // production, un marquage exact d'un repli par fenêtre : sans lui,
+            // un observateur débranché passerait inaperçu.
+            logger.info("markAsRead dispatched for conversation \(payload.conversationId, privacy: .public) cmid=\(payload.clientMutationId, privacy: .public) reportedIds=\(reported.isEmpty ? "none(window-fallback)" : String(reported.count), privacy: .public)")
         } catch let MeeshyError.server(statusCode, _) where statusCode == 404 {
             logger.warning("markAsRead 404 for conversation \(payload.conversationId, privacy: .public) — conversation gone, accepting as success")
         }
