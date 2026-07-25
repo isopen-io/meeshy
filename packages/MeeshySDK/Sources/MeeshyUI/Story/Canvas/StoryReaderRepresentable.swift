@@ -178,6 +178,12 @@ public struct StoryReaderRepresentable: UIViewRepresentable {
         view.onPlaybackTime = { t in playback?(t) }
         let progressing = onPlaybackProgressing
         view.onPlaybackProgressing = { p in progressing?(p) }
+        // Pause posée AVANT `setReaderContext`, qui déclenche `startAudioPlayback`.
+        // Sans cela, un canvas né pendant un gel (interstitiel d'identité,
+        // overlay commentaires, appel en cours) faisait entendre son audio le
+        // temps que `updateUIView` arrive — on entendait la story suivante
+        // PENDANT l'interlude (bug user 2026-07-25).
+        view.setPaused(isPaused || isOutgoing)
         view.setReaderContext(StoryReaderContext(
             preferredLanguages: preferredLanguages,
             mute: mute,

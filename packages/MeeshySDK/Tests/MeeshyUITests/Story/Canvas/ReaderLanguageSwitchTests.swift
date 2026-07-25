@@ -89,4 +89,18 @@ final class ReaderLanguageSwitchTests: XCTestCase {
         XCTAssertTrue(body.contains("reconfigureAudioForPlayback()"),
                       "la bascule de langue doit re-scheduler l'audio (variantes TTS)")
     }
+
+    /// Le canvas naît en `.play` et `setReaderContext` lance immédiatement
+    /// l'audio. Si la pause n'est posée qu'au premier `updateUIView`, une story
+    /// créée sous un gel (interlude, commentaires, appel) se fait entendre
+    /// d'abord — c'est le « on entend la story suivante pendant l'interlude ».
+    func test_makeUIView_appliesPauseBeforeStartingAudio() throws {
+        let code = try source("Sources/MeeshyUI/Story/Canvas/StoryReaderRepresentable.swift")
+        guard let pause = code.range(of: "view.setPaused(isPaused || isOutgoing)"),
+              let context = code.range(of: "view.setReaderContext(StoryReaderContext(") else {
+            return XCTFail("makeUIView ne pose plus la pause ou n'injecte plus le contexte")
+        }
+        XCTAssertLessThan(pause.lowerBound, context.lowerBound,
+                          "la pause doit être posée AVANT l'injection du contexte, qui démarre l'audio")
+    }
 }
