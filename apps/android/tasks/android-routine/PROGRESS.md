@@ -1,5 +1,64 @@
 # Progress — state & what to do next
 
+> On 2026-07-25 the **admin conversation-settings editor** landed (slice `conversation-settings-form`,
+> feature-parity §Chat → the `[~]` "Conversation moderation: write-role, announcement mode, slow mode,
+> auto-translate" item advances to `[x]`). This completes the moderation item: the two enforcement halves
+> already shipped (`chat-slow-mode-cooldown` throttles the composer, `composer-send-gate` gates
+> attachments), and this slice adds the admin-facing **editor** that sets those settings. **Added
+> (production, all `apps/android`):** the pure, immutable `ConversationSettingsForm` (`:core:model`) —
+> seeded from the loaded `ApiConversation` via `from()`, each control edited through
+> `withWriteRole/withAnnouncement/withSlowMode/withAutoTranslate` (`copy`-based), with a derived
+> `isDirty`/`canSave` dirty-diff and `toUpdate()` that emits a **minimal `UpdateConversationSettingsRequest`
+> of only the fields that differ from the baseline** (null-omit, role encoded via the new
+> `MemberRole.wireValue`), plus `rebaselined()` to re-anchor after a server-accepted save. `SlowModeOptions`
+> (`:core:model`) is the new SSOT for the offered intervals `{0,10,30,60,300}`, with `nearest()` snapping
+> any off-menu server value (e.g. a migrated `45`) onto the closest choice (tie → smaller, above-max →
+> clamp) so the seed is never spuriously dirty and the composer countdown still uses the real interval.
+> New `PUT conversations/{id}` endpoint (`ConversationApi.updateSettings` → the previously-orphaned
+> `UpdateConversationResponse`) + `ConversationRepository.updateSettings` (`apiCall`-wrapped, online-only).
+> **Wiring (`:feature:chat`):** `ConversationSettingsViewModel` seeds the form once from
+> `conversationStream` (later emissions ignored so in-progress edits are never clobbered), threads edits
+> through the reducer (any edit resets the lifecycle to `Idle`, clearing a prior error), and `save()`
+> persists the minimal patch — a clean form or an in-flight save is a no-op (double-submit guard), success
+> re-baselines to a clean form, failure keeps every edit for retry and surfaces `Error`.
+> `ConversationSettingsSheet` is an accent-coherent `ModalBottomSheet` (write-role radios / announcement
+> switch / slow-mode picker / auto-translate switch / Save + toast), reachable from a **moderator+-gated**
+> (`state.slowModeExempt`) `Tune` action added to the `ChatScreen` header; dismissal returns to the chat —
+> no dead-end. `ChatUiState` gains `conversationId` so the header can bind the sibling VM without re-reading
+> the nav arg. **SOTA over iOS**, whose editor mutates three `@State` fields and always PUTs the full
+> object — Android's dirty-diff makes a no-op save impossible and never overwrites an unchanged field.
+> **+37 behavioural tests:** `SlowModeOptionsTest` (7 — ordering, isValid, null/non-positive→off, in-between
+> snap, exact-tie→smaller, above-max clamp, exact passthrough) + `ConversationSettingsFormTest` (10 —
+> clean seed, unknown-role→member + null-auto→off, off-menu snap not-dirty, single-edit dirty, null when
+> unchanged, changed-only patch, all-fields patch, toggle-back clears dirty, withSlowMode snaps,
+> rebaselined) + `MemberRoleTest` (5 — from case-insensitive/unknown-fallback, wireValue round-trip +
+> token, hasMinimumRole) + `ConversationRepositoryTest` (+2 — updateSettings forwards id/patch + returns
+> payload, unsuccessful envelope → Failure) + `ConversationSettingsViewModelTest` (7 — seed, edit
+> saveable, save changed-only + re-baseline, clean save no-op never hits network, failed save preserves
+> edits + error, edit-after-fail clears banner, later stream emissions ignored). Expectations are
+> hand-written literals asserted through the public API / observable `state`, never internals.
+> **Mutation (RED proof):** replacing the form's `if (!isDirty) return null` diff with an always-full patch
+> failed **exactly** the 5 partial-patch/dirty tests (`toUpdate carries only the changed fields`,
+> `toggling a field back to its baseline clears the dirty state`, `rebaselined …`, `from snaps an off-menu
+> …`, `toUpdate is null when nothing changed`) — the dirty-diff is load-bearing. **Gate:**
+> `./apps/android/meeshy.sh check` (whole module graph — `app:assembleDebug` + every JVM unit suite) →
+> **BUILD SUCCESSFUL** (no DataStore flake this run). Reviewer **PASS** (diff `apps/android` only — 2 new
+> pure cores + their tests in `:core:model`, 1 endpoint in `:core:network`, 1 repo method + test in
+> `:sdk-core`, VM + sheet + header wiring + 14×4-locale strings in `:feature:chat`, zero production logic
+> elsewhere; **SDK purity** — the *what-changed* reducer + interval SSOT are stateless `:core:model`
+> building blocks, the *when-to-load/save* orchestration stays app-side in the VM; **SSOT** — reuses
+> `MemberRole`, adds `wireValue`/`SlowModeOptions` as the encoding/interval SSOTs, re-implements nothing;
+> **failure paths** — a failed save degrades to `Error` with edits intact, never a crash; **coherence** —
+> accent-tinted controls, admin-gated `Tune` entry, bottom-sheet dismiss returns to the chat).
+> **Next slice:** enforcement on the **voice** send path once a dedicated `sendVoice` exists (today voice
+> rides `sendFileAttachment`, already gated AUDIO); OR the **conversation-info sheet** (hero/direct
+> headers, members/media/stats/options tabs) that would host this settings entry more richly; OR the
+> guest-join **screen** (`:feature:sharelink`); OR the paged `OnboardingFlowView`; OR the tracked Kover 90%
+> coverage-gate infra.
+> **Known standing debt (not this slice):** the `:sdk-core` DataStore-parallel-load timeout flake
+> (`ThemeStoreTest`/`InterfaceLanguageStoreTest`/`PrivacyPreferencesStoreTest`/`NotificationPreferencesStoreTest`)
+> — green in isolation, intermittent in the full run (did not recur this run).
+
 > On 2026-07-25 the **unified composer send gate** landed (slice `composer-send-gate`,
 > feature-parity §Chat → new `[x]` "All send paths enforce one gate (read-only + per-kind
 > capability + slow-mode)"). This closes a real bypass: `sendFileAttachment` ignored **both** the

@@ -14,6 +14,8 @@ import me.meeshy.sdk.cache.cacheFirstFlow
 import me.meeshy.sdk.model.ApiConversation
 import me.meeshy.sdk.model.ApiConversationPreferences
 import me.meeshy.sdk.model.CreateConversationRequest
+import me.meeshy.sdk.model.UpdateConversationResponse
+import me.meeshy.sdk.model.UpdateConversationSettingsRequest
 import me.meeshy.sdk.net.MeeshyApi
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.net.api.ConversationApi
@@ -79,6 +81,17 @@ class ConversationRepository @Inject constructor(
 
     suspend fun markRead(id: String): NetworkResult<Unit> =
         apiCall { conversationApi.markRead(id) }
+
+    /**
+     * Persist an admin conversation-settings patch (write-role / announcement /
+     * slow-mode / auto-translate). Online-only — the settings screen consumes the
+     * [NetworkResult] directly; transport/HTTP errors fold into a [NetworkResult.Failure].
+     */
+    suspend fun updateSettings(
+        id: String,
+        request: UpdateConversationSettingsRequest,
+    ): NetworkResult<UpdateConversationResponse> =
+        apiCall { conversationApi.updateSettings(id, request) }
 
     /**
      * Optimistic mark-as-read (ARCHITECTURE.md §5): the cached badge drops to

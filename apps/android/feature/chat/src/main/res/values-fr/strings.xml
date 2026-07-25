@@ -141,4 +141,19 @@
     <string name="report_reason_hate_speech">Discours haineux</string>
     <string name="report_reason_impersonation">Usurpation d’identité</string>
     <string name="report_reason_other">Autre</string>
+    <!-- Conversation settings (admin) -->
+    <string name="conversation_settings_title">Paramètres de la conversation</string>
+    <string name="conversation_settings_saved">Paramètres enregistrés</string>
+    <string name="conversation_settings_write_role">Qui peut envoyer des messages</string>
+    <string name="conversation_settings_announcement">Mode annonce</string>
+    <string name="conversation_settings_slow_mode">Mode lent</string>
+    <string name="conversation_settings_auto_translate">Traduction automatique</string>
+    <string name="conversation_settings_error">Échec de l’enregistrement. Réessayez.</string>
+    <string name="conversation_settings_save">Enregistrer</string>
+    <string name="conversation_settings_role_creator">Créateur uniquement</string>
+    <string name="conversation_settings_role_admin">Admins et plus</string>
+    <string name="conversation_settings_role_moderator">Modérateurs et plus</string>
+    <string name="conversation_settings_role_member">Tout le monde</string>
+    <string name="conversation_settings_slow_mode_off">Désactivé</string>
+    <string name="conversation_settings_slow_mode_seconds">%1$d s</string>
 </resources>

@@ -1629,16 +1629,26 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
 - [ ] Conversation info sheet: hero/direct headers; members / media / stats / options tabs
 - [ ] Paginated member list (infinite scroll + search); shared-media grid; pinned-messages list
 - [ ] Member moderation: promote/demote, expel, ban, add member
-- [~] Conversation moderation: write-role, announcement mode, slow mode, auto-translate — **slow-mode
-      composer enforcement** landed (slice `chat-slow-mode-cooldown`): pure `SlowModePolicy`/`SlowModeState`
-      (`:sdk-core` `me.meeshy.sdk.composer`) computes send-eligibility + a ceil'd remaining-seconds
-      countdown from `(slowModeSeconds, lastSelfSentAtMillis, now, isExempt)`, with moderator/admin/creator
-      roles exempt via `isExemptRole`. Wired into `ChatUiState`/`ChatViewModel` (carries the interval +
-      viewer exemption from the loaded conversation, records the send timestamp, gates `send()` — edits
-      exempt) and `ChatScreen` (ticking countdown row + disabled send). **SOTA over iOS**, which surfaces
-      `slowModeSeconds` only in the admin picker and never throttles the composer. Remaining for this
-      item: the admin-facing settings picker (write-role / announcement toggle / slow-mode picker /
-      auto-translate) and enforcement on the attachment/voice send paths.
+- [x] Conversation moderation: write-role, announcement mode, slow mode, auto-translate — **admin
+      settings editor** landed (slice `conversation-settings-form`), completing the item on top of the
+      earlier **slow-mode composer enforcement** (`chat-slow-mode-cooldown`) and **attachment gating**
+      (`composer-send-gate`). Pure `ConversationSettingsForm` (`:core:model`) is an immutable reducer
+      seeded from the loaded `ApiConversation` — `withWriteRole/withAnnouncement/withSlowMode/withAutoTranslate`
+      → derived `isDirty`/`canSave` → `toUpdate()` emitting a **minimal patch of only changed fields**
+      (`UpdateConversationSettingsRequest`, null-omit), then `rebaselined()` after a server-accepted save.
+      New `SlowModeOptions` (`:core:model`) is the SSOT for the offered intervals `{0,10,30,60,300}` with
+      `nearest()` snapping any off-menu server value onto a picker choice; `MemberRole.wireValue` is the new
+      SSOT for encoding a role onto the wire. New `PUT conversations/{id}` endpoint
+      (`ConversationApi.updateSettings` → `UpdateConversationResponse`, the previously-orphaned response
+      model) + `ConversationRepository.updateSettings`. Wired real: `ConversationSettingsViewModel` (load →
+      edit → save lifecycle, `Idle/Saving/Saved/Error`, double-submit guard, edits preserved on failure,
+      editing clears a prior error) + `ConversationSettingsSheet` (accent-coherent bottom sheet: write-role
+      radios / announcement switch / slow-mode picker / auto-translate switch / Save), reachable from the
+      **moderator+-gated** `Tune` action in the `ChatScreen` header. **SOTA over iOS**, whose editor mutates
+      three `@State` fields and always PUTs the full object — Android computes a dirty-diff so a no-op save
+      is impossible and an unchanged field is never overwritten. **+37 tests** (SlowModeOptions 7,
+      ConversationSettingsForm 10, MemberRole 5, ConversationRepository +2, ConversationSettingsViewModel 7);
+      mutation-checked (neutralising the diff killed exactly the 5 partial-patch/dirty tests).
 - [ ] Per-conversation preferences: custom name, reaction emoji, pin, category, tags, mute, mentions-only
 - [ ] Conversation lock: master PIN setup/change/remove + per-conversation 4-digit lock + unlock-all
 - [ ] Leave / archive / delete-for-me / delete-for-all conversation
