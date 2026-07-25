@@ -1553,8 +1553,11 @@ class ConversationViewModel: ObservableObject {
         // subscription setup blocking the first render.
         socketHandler?.armSocketSubscriptions()
 
-        // Mark conversation as read + received (fire-and-forget)
-        markAsRead()
+        // Ouvrir une conversation ne la marque PLUS lue : elle en marquait 200
+        // quand 10 tenaient à l'écran. L'observateur de visibilité
+        // (MessageListViewController) signale ce qui est réellement affiché.
+        // La RÉCEPTION, elle, reste globale : un message récupéré EST livré.
+        // @see docs/superpowers/specs/2026-07-24-read-exactness-design.md
         markAsReceived()
 
         // Prefetch media for visible messages
@@ -3507,12 +3510,25 @@ class ConversationViewModel: ObservableObject {
 
     // MARK: - Mark as Read / Received
 
-    func markAsRead() {
+    /// - Parameter messageIds: identifiants SERVEUR des messages RÉELLEMENT
+    ///   affichés, remontés par l'observateur de visibilité. `nil` signifie
+    ///   « appelant non informé » et laisse le gateway sur son repli
+    ///   historique par fenêtre temporelle, qui sur-déclare.
+    ///
+    ///   Le badge local n'est vidé que pour un appel non informé : rapporter
+    ///   dix messages sur deux cents ne signifie pas que la conversation est
+    ///   lue, et le remettre à zéro afficherait un mensonge que le serveur
+    ///   corrigerait aussitôt — un clignotement pour rien.
+    ///
+    ///   Voir `docs/superpowers/specs/2026-07-24-read-exactness-design.md`.
+    func markAsRead(messageIds: [String]? = nil) {
         let convId = conversationId
-        // 1. Update cache immediately (local-first) — survives reloadFromCache()
-        Task { await ConversationSyncEngine.shared.markConversationReadLocally(convId) }
-        // 2. Notify ConversationListViewModel to clear badge in current @Published state
-        NotificationCenter.default.post(name: .conversationMarkedRead, object: convId)
+        if messageIds == nil {
+            // 1. Update cache immediately (local-first) — survives reloadFromCache()
+            Task { await ConversationSyncEngine.shared.markConversationReadLocally(convId) }
+            // 2. Notify ConversationListViewModel to clear badge in current @Published state
+            NotificationCenter.default.post(name: .conversationMarkedRead, object: convId)
+        }
         // 3. Send to server in background (fire-and-forget, queue on failure)
         guard UserPreferencesManager.shared.privacy.showReadReceipts else { return }
         // Wave 1 Phase C — route through the offline outbox so a read
@@ -3528,7 +3544,8 @@ class ConversationViewModel: ObservableObject {
             let payload = MarkAsReadPayload(
                 clientMutationId: cmid,
                 conversationId: convId,
-                upToMessageId: lastMessageId
+                upToMessageId: lastMessageId,
+                messageIds: messageIds
             )
             do {
                 try await OfflineQueue.shared.enqueue(.markAsRead, payload: payload, conversationId: convId)

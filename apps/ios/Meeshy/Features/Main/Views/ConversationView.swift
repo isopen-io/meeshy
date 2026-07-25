@@ -945,9 +945,9 @@ struct ConversationView: View {
                 // the deferred receipt completes. If scrolled up, the message is
                 // still off-screen and stays unread until they scroll down. The
                 // gateway-level dedup makes a redundant call harmless.
-                if phase == .active && scrollState.isNearBottom {
-                    viewModel.markAsRead()
-                }
+                // Revenir au premier plan ne marque plus la conversation lue :
+                // l'observateur de visibilité reprend et signalera ce qui est
+                // effectivement à l'écran.
                 // Pièces jointes du brouillon : copie durable au passage en
                 // background (les fichiers du tray vivent dans tmp/, purgeable
                 // par iOS) — miroir du D1 story. Rebuild complet : la vérité
@@ -1096,14 +1096,17 @@ struct ConversationView: View {
                         scrollState.isNearBottom = nearBottom
                     }
                     viewModel.isCurrentlyNearBottom = nearBottom
-                    // Read-receipt precision: a message that arrived while the
-                    // user was scrolled up was deliberately NOT auto-marked read
-                    // (it was off-screen). Scrolling back to the bottom means the
-                    // user now sees it — re-emit the read so the deferred receipt
-                    // completes. Idempotent; only on the false→true edge.
-                    if nearBottom && !wasNearBottom {
-                        viewModel.markAsRead()
-                    }
+                    // Revenir au bas ne marque plus rien : la position de la
+                    // barre ne dit pas ce qui a été vu. Les bulles qui
+                    // réapparaissent sont signalées par `onMessagesSeen` une
+                    // fois le seuil de présence franchi.
+                    _ = wasNearBottom
+                },
+                onMessagesSeen: { seenIds in
+                    // Seule source de vérité de la lecture : ces identifiants
+                    // ont été RÉELLEMENT affichés assez longtemps.
+                    // @see docs/superpowers/specs/2026-07-24-read-exactness-design.md
+                    viewModel.markAsRead(messageIds: seenIds)
                 },
                 onStoryReplyTap: { storyId in
                     // Open the story viewer at the slide that originated the

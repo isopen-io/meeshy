@@ -51,12 +51,6 @@ protocol ConversationSocketDelegate: AnyObject {
     /// the same UX.
     func handleSocketAccessRevoked(reason: String?)
 
-    /// Mark the conversation as read. Called from the socket handler when an
-    /// inbound message arrives while this conversation is on screen so the
-    /// sender's checkmark upgrades from `.delivered` to `.read` without
-    /// waiting for a navigation cycle.
-    func markAsRead()
-
     /// Apply a server-pushed attachment delta atomically : injects the
     /// enriched transcription / audio translations into the metadata
     /// dictionaries in a single MainActor slice, then schedules the
@@ -546,12 +540,11 @@ final class ConversationSocketHandler {
                     // bottom (`onNearBottomChanged`), so receipts stay truthful and
                     // eventually complete. markAsRead is idempotent (REST dedups
                     // within 2s, cache update is local-first).
-                    if ReadReceiptGate.shouldEmitAutoRead(
-                        isApplicationActive: self.isApplicationActive(),
-                        isViewportAtBottom: delegate.isViewportAtBottom
-                    ) {
-                        delegate.markAsRead()
-                    }
+                    // Un message entrant n'est plus marqué lu à l'arrivée, même
+                    // app active et viewport en bas : `ReadReceiptGate` disait
+                    // que l'utilisateur POUVAIT le voir, pas qu'il l'a vu. Sa
+                    // bulle passera par l'observateur de visibilité comme les
+                    // autres, une fois le seuil de présence franchi.
 
                     // mark-as-received is handled globally by ConversationListViewModel
                 }

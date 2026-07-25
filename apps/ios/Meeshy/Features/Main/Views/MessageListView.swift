@@ -373,6 +373,10 @@ struct MessageListView: UIViewControllerRepresentable {
     /// Invoked when the scroll position crosses the near-bottom threshold.
     /// Drives the floating "scroll to latest" button in the parent SwiftUI view.
     var onNearBottomChanged: ((Bool) -> Void)?
+    /// Identifiants SERVEUR des messages restés assez longtemps à l'écran pour
+    /// compter comme lus. Voir
+    /// `docs/superpowers/specs/2026-07-24-read-exactness-design.md`.
+    var onMessagesSeen: (([String]) -> Void)?
     /// Tap on a story reply preview inside a bubble. Argument is the story id
     /// (not the message id) — the parent resolves it to a story group + slide.
     var onStoryReplyTap: ((String) -> Void)?
@@ -457,6 +461,7 @@ struct MessageListView: UIViewControllerRepresentable {
         vc.onScrollToMessage = onScrollToMessage
         vc.onLoadOlder = onLoadOlder
         vc.onNearBottomChanged = onNearBottomChanged
+        vc.onMessagesSeen = onMessagesSeen
         vc.onStoryReplyTap = onStoryReplyTap
         vc.onViewSenderStory = onViewSenderStory
         vc.onSwipeReply = onSwipeReply
@@ -512,6 +517,7 @@ struct MessageListView: UIViewControllerRepresentable {
         vc.onScrollToMessage = onScrollToMessage
         vc.onLoadOlder = onLoadOlder
         vc.onNearBottomChanged = onNearBottomChanged
+        vc.onMessagesSeen = onMessagesSeen
         vc.onStoryReplyTap = onStoryReplyTap
         vc.onViewSenderStory = onViewSenderStory
         vc.onSwipeReply = onSwipeReply
@@ -544,5 +550,9 @@ struct MessageListView: UIViewControllerRepresentable {
     // été déclenché par le chemin de dismiss emprunté.
     static func dismantleUIViewController(_ vc: MessageListViewController, coordinator: Coordinator) {
         vc.stopSlowScroll()
+        // Fermer la conversation ne doit pas perdre une lecture déjà acquise :
+        // `deinit` ne peut pas s'en charger, il n'est pas isolé au MainActor.
+        vc.flushSeenMessages()
+        vc.stopSeenTracking()
     }
 }
