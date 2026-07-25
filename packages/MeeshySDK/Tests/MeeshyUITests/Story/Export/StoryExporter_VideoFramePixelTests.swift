@@ -146,6 +146,66 @@ enum ExportPixelProbe {
         return sampleRGB(cg, nx: nx, ny: ny)
     }
 
+    /// Extracts the frame at `seconds` and returns the max luminance (0–255)
+    /// over a normalised `region` of the frame. Used to detect the presence of a
+    /// bright element (the white watermark) in a given corner.
+    static func maxLuminance(ofMP4 url: URL,
+                             atSeconds seconds: Double,
+                             region: CGRect) async throws -> Int {
+        let asset = AVURLAsset(url: url)
+        let generator = AVAssetImageGenerator(asset: asset)
+        generator.appliesPreferredTrackTransform = true
+        generator.requestedTimeToleranceBefore = .zero
+        generator.requestedTimeToleranceAfter = CMTime(seconds: 0.1, preferredTimescale: 600)
+        let cg = try await generator.image(at: CMTime(seconds: seconds, preferredTimescale: 600)).image
+        return maxLuminanceInRegion(cg, region: region)
+    }
+
+    /// Max luminance over a normalised region. The extracted CGImage is drawn
+    /// without a Y flip: an AVAssetImageGenerator frame drawn into a bottom-up
+    /// bitmap context lands with `region.minY` growing toward the visual bottom,
+    /// so a `region` at y≈0.8 maps to the visual BOTTOM of the frame (verified
+    /// empirically — flipping put a bottom-right watermark in the top-right).
+    static func maxLuminanceInRegion(_ image: CGImage, region: CGRect) -> Int {
+        let w = image.width
+        let h = image.height
+        let bytesPerRow = w * 4
+        let count = bytesPerRow * h
+        let buffer = UnsafeMutablePointer<UInt8>.allocate(capacity: count)
+        buffer.initialize(repeating: 0, count: count)
+        defer { buffer.deallocate() }
+
+        let space = CGColorSpaceCreateDeviceRGB()
+        guard let ctx = CGContext(data: buffer,
+                                  width: w,
+                                  height: h,
+                                  bitsPerComponent: 8,
+                                  bytesPerRow: bytesPerRow,
+                                  space: space,
+                                  bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else {
+            return 0
+        }
+        ctx.draw(image, in: CGRect(x: 0, y: 0, width: CGFloat(w), height: CGFloat(h)))
+
+        let x0 = max(0, Int(region.minX * CGFloat(w)))
+        let x1 = min(w, Int(region.maxX * CGFloat(w)))
+        let y0 = max(0, Int(region.minY * CGFloat(h)))
+        let y1 = min(h, Int(region.maxY * CGFloat(h)))
+        var maxLum = 0
+        var y = y0
+        while y < y1 {
+            var x = x0
+            while x < x1 {
+                let o = y * bytesPerRow + x * 4
+                let lum = (Int(buffer[o]) * 299 + Int(buffer[o + 1]) * 587 + Int(buffer[o + 2]) * 114) / 1000
+                if lum > maxLum { maxLum = lum }
+                x += 1
+            }
+            y += 1
+        }
+        return maxLum
+    }
+
     /// Draws `image` into an RGBA byte buffer and reads the pixel at normalised
     /// `(nx, ny)`.
     static func sampleRGB(_ image: CGImage,

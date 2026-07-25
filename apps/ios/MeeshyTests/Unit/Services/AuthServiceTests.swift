@@ -20,6 +20,21 @@ import Combine
 /// token). With both seams stubbed, `login`/`register`/`requestMagicLink`/
 /// `validateMagicLink`/`requestPasswordReset`/`refreshSession`/`logout`/
 /// `handleUnauthorized` all exercise their REAL implementation bodies.
+///
+/// ## Pourquoi les compteurs d'appels sont mesurés en DELTA
+///
+/// Le hôte xctest fait tourner l'app pour de vrai. Ses services d'arrière-plan
+/// (téléversement de bundle E2EE, préchargement des stories) émettent leurs
+/// propres requêtes, prennent des 401 et appellent `handleUnauthorized()` — qui
+/// atterrit sur le stub du test en cours, sans rapport avec ce que ce test
+/// exerce. Un compteur ABSOLU est donc ininterprétable : il mélange l'appel du
+/// test et le bruit de fond, et échoue de façon intermittente sur un test
+/// différent à chaque exécution.
+///
+/// On capture donc la valeur avant l'action et on vérifie l'écart. Ce qui est
+/// affirmé reste exactement le même — « cette action provoque un appel », « cette
+/// action n'en provoque aucun » — mais l'affirmation ne dépend plus de ce que
+/// l'app fait par ailleurs.
 @MainActor
 final class AuthServiceTests: XCTestCase {
 
@@ -46,7 +61,7 @@ final class AuthServiceTests: XCTestCase {
         // test transparently await that unrelated leftover instead of its
         // own scenario (flaky, order-dependent — cf. AuthManager's doc
         // comment on the seam below).
-        AuthManager.shared.cancelPendingTokenRefreshForTesting()
+        await AuthManager.shared.cancelPendingTokenRefreshForTesting()
         await AuthManager.shared.logout()
         AuthManager.shared.requires2FA = false
         AuthManager.shared.twoFactorToken = nil
@@ -54,7 +69,7 @@ final class AuthServiceTests: XCTestCase {
     }
 
     override func tearDown() async throws {
-        AuthManager.shared.cancelPendingTokenRefreshForTesting()
+        await AuthManager.shared.cancelPendingTokenRefreshForTesting()
         await AuthManager.shared.logout()
         AuthManager.shared.authService = originalAuthService
         AuthManager.shared.keychain = originalKeychain
@@ -169,12 +184,16 @@ final class AuthServiceTests: XCTestCase {
         await AuthManager.shared.login(username: "testuser", password: "password123")
         stubAuthService.refreshTokenResult = .success(makeLoginData(token: "refreshed-token"))
 
+        let callsBefore = stubAuthService.refreshTokenCallCount
         let newToken = try await AuthManager.shared.refreshSession(force: true)
 
         XCTAssertEqual(newToken, "refreshed-token")
         XCTAssertEqual(AuthManager.shared.authToken, "refreshed-token")
         XCTAssertTrue(AuthManager.shared.isAuthenticated)
-        XCTAssertEqual(stubAuthService.refreshTokenCallCount, 1)
+        XCTAssertEqual(
+            stubAuthService.refreshTokenCallCount - callsBefore, 1,
+            "refreshSession(force:) doit provoquer exactement un appel au service"
+        )
     }
 
     func test_refreshSession_authFailure_requiresReauthentication() async {
@@ -200,6 +219,7 @@ final class AuthServiceTests: XCTestCase {
     }
 
     func test_refreshSession_withoutActiveSession_throwsSessionExpired_withoutCallingService() async {
+        let callsBefore = stubAuthService.refreshTokenCallCount
         do {
             _ = try await AuthManager.shared.refreshSession(force: false)
             XCTFail("Expected refreshSession to throw")
@@ -212,7 +232,10 @@ final class AuthServiceTests: XCTestCase {
             XCTFail("Expected MeeshyError, got \(error)")
         }
 
-        XCTAssertEqual(stubAuthService.refreshTokenCallCount, 0)
+        XCTAssertEqual(
+            stubAuthService.refreshTokenCallCount - callsBefore, 0,
+            "Sans session active, refreshSession ne doit rien demander au service"
+        )
     }
 
     func test_handleUnauthorized_withActiveSession_triggersRefreshAndAppliesNewToken() async {
@@ -237,10 +260,14 @@ final class AuthServiceTests: XCTestCase {
     }
 
     func test_handleUnauthorized_withoutActiveSession_isNoOp() async {
+        let callsBefore = stubAuthService.refreshTokenCallCount
         AuthManager.shared.handleUnauthorized()
 
         XCTAssertFalse(AuthManager.shared.isAuthenticated)
-        XCTAssertEqual(stubAuthService.refreshTokenCallCount, 0)
+        XCTAssertEqual(
+            stubAuthService.refreshTokenCallCount - callsBefore, 0,
+            "Sans session active, handleUnauthorized ne doit rien déclencher"
+        )
     }
 
     // MARK: - Register

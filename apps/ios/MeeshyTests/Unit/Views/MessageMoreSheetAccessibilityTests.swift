@@ -37,12 +37,23 @@ final class MessageMoreSheetAccessibilityTests: XCTestCase {
         )
     }
 
+    /// Le bouton est repéré par ce qu'il FAIT (`selectedItem = nil`, replier le
+    /// contenu inline) et non par le symbole qu'il affiche.
+    ///
+    /// La version précédente cherchait `xmark.circle.fill`. Le glyphe est passé à
+    /// `xmark` posé dans un cercle de verre — le label d'accessibilité, lui,
+    /// n'avait pas bougé. Le test échouait donc sur un choix graphique, en
+    /// laissant croire à une régression VoiceOver qui n'existait pas.
     func test_inlineCloseButton_hasAccessibilityLabel() throws {
         let source = try messageMoreSheetSource()
-        guard let range = source.range(of: "xmark.circle.fill") else {
+        guard let action = source.range(of: "selectedItem = nil") else {
             XCTFail("MessageMoreSheet.swift must render the inline close button"); return
         }
-        let vicinity = String(source[range.lowerBound...])
+        // La fenêtre couvre le modificateur qui suit le `label:` du bouton ;
+        // 900 caractères englobent le corps du label le plus verbeux.
+        let end = source.index(action.upperBound, offsetBy: 900, limitedBy: source.endIndex)
+            ?? source.endIndex
+        let vicinity = String(source[action.upperBound..<end])
         XCTAssertTrue(
             vicinity.contains(".accessibilityLabel(") && vicinity.contains("common.close"),
             "The icon-only inline close button must carry an accessibility label " +

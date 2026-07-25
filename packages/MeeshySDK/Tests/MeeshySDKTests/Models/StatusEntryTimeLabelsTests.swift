@@ -31,9 +31,20 @@ final class StatusEntryTimeLabelsTests: XCTestCase {
         XCTAssertEqual(status.timeAgo, "il y a 5 min")
     }
 
+    /// Ce test épinglait la chaîne « il y a 2h ». Il échouait entre minuit et
+    /// 2 h du matin : `RelativeTimeFormatter` bascule sur « hier » dès que la
+    /// date tombe la veille CIVILE, ce qu'il documente comme voulu. La valeur
+    /// littérale dépendait donc de l'heure d'exécution, pas du code testé.
+    ///
+    /// Ce que ce test doit prouver — son nom le dit — c'est la DÉLÉGATION au
+    /// formateur partagé, et non une chaîne particulière : c'est vrai à toute
+    /// heure, et cela attrape toujours une régression où `timeAgo` reviendrait
+    /// à fabriquer son propre libellé.
     func test_timeAgo_twoHoursAgo_matchesRelativeTimeFormatterLongForm() {
-        let status = makeStatus(createdAt: Date().addingTimeInterval(-2 * 3_600))
-        XCTAssertEqual(status.timeAgo, "il y a 2h")
+        let created = Date().addingTimeInterval(-2 * 3_600)
+        let status = makeStatus(createdAt: created)
+        XCTAssertEqual(status.timeAgo, RelativeTimeFormatter.longString(for: created))
+        XCTAssertFalse(status.timeAgo.isEmpty)
     }
 
     func test_timeAgo_justNow_isLocalizedNowLabel() {

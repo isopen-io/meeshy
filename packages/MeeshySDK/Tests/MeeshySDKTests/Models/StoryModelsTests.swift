@@ -114,7 +114,9 @@ final class StoryModelsTests: XCTestCase {
         XCTAssertEqual(PostType.post.displayName, "Post")
         XCTAssertEqual(PostType.reel.displayName, "Réel")
         XCTAssertEqual(PostType.story.displayName, "Story")
-        XCTAssertEqual(PostType.status.displayName, "Status")
+        // « Statut » et non « Status » : le libellé est désormais tiré du
+        // catalogue (clé `content.type.status`), en français correct.
+        XCTAssertEqual(PostType.status.displayName, "Statut")
     }
 
     func testPostTypeIcons() {

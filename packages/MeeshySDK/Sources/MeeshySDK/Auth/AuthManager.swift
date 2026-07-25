@@ -130,6 +130,12 @@ public final class AuthManager: ObservableObject, AuthManaging {
     /// Prevents concurrent refresh loops when APIClient fires multiple 401s.
     private var tokenRefreshTask: Task<String, Error>?
 
+    #if DEBUG
+    /// Tâche d'arrière-plan lancée par `handleUnauthorized()`, retenue pour que
+    /// les tests puissent l'attendre. Voir `cancelPendingTokenRefreshForTesting`.
+    private var unauthorizedRefreshTask: Task<Void, Never>?
+    #endif
+
     // Legacy global keys kept only for one-time migration
     private let legacyTokenKey = "meeshy_auth_token"
     private let legacyUserKey = "meeshy_current_user"
@@ -667,13 +673,22 @@ public final class AuthManager: ObservableObject, AuthManaging {
         // D1 — guard against concurrent refreshes by invoking refreshSession(force: true)
         // asynchronously. Since refreshSession uses tokenRefreshTask to serialize,
         // multiple concurrent calls to handleUnauthorized() will safely share the same refresh task.
-        Task { [weak self] in
+        let backgroundRefresh = Task { [weak self] in
             do {
                 _ = try await self?.refreshSession(force: true)
             } catch {
                 Logger.auth.error("Background session refresh after 401 failed: \(error.localizedDescription, privacy: .public)")
             }
         }
+        #if DEBUG
+        // Retenue UNIQUEMENT pour que les tests puissent attendre cette tâche.
+        // Sans référence, elle est inatteignable : au moment où un `tearDown`
+        // veut la neutraliser, elle n'a souvent pas encore atteint
+        // `refreshSession`, donc `tokenRefreshTask` est toujours `nil` et il
+        // n'y a rien à annuler. Elle démarre ensuite, et son appel atterrit sur
+        // le stub du test suivant. Voir `cancelPendingTokenRefreshForTesting`.
+        unauthorizedRefreshTask = backgroundRefresh
+        #endif
     }
 
     // MARK: - Internal session helpers
@@ -1152,9 +1167,30 @@ public final class AuthManager: ObservableObject, AuthManaging {
     /// surfacing as a flaky, order-dependent failure in whichever test
     /// happens to run right after one that triggered a 401. Call from
     /// `setUp()` for hermetic test isolation.
-    func cancelPendingTokenRefreshForTesting() {
-        tokenRefreshTask?.cancel()
+    ///
+    /// **Annuler ne suffit pas, il faut attendre.** `Task.cancel()` est
+    /// coopératif : une tâche déjà entrée dans `authService.refreshToken(…)`
+    /// va jusqu'au bout de son appel. Elle atterrit alors sur le stub du test
+    /// SUIVANT — installé entre-temps par son `setUp()` — et en incrémente le
+    /// compteur d'appels. Le test suivant voit un appel qu'il n'a pas fait.
+    ///
+    /// En attendant la valeur de la tâche, cette fonction garantit qu'aucun
+    /// appel de la tâche annulée ne peut plus survenir après son retour.
+    /// `try?` avale le `CancellationError` attendu, qui est ici le cas normal.
+    func cancelPendingTokenRefreshForTesting() async {
+        // L'ordre compte. La tâche d'arrière-plan de `handleUnauthorized()` est
+        // celle qui APPELLE `refreshSession` : tant qu'elle n'a pas démarré,
+        // `tokenRefreshTask` est encore `nil`. La vider d'abord ne servirait à
+        // rien — c'est l'autre qui la remplirait ensuite, contre le stub du
+        // test suivant.
+        let background = unauthorizedRefreshTask
+        unauthorizedRefreshTask = nil
+        await background?.value
+
+        let pending = tokenRefreshTask
         tokenRefreshTask = nil
+        pending?.cancel()
+        _ = try? await pending?.value
     }
     #endif
 }
