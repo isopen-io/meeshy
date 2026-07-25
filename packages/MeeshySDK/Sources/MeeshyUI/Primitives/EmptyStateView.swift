@@ -74,8 +74,6 @@ public struct EmptyStateView: View {
                 appeared = true
             }
         }
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(title). \(subtitle)")
     }
 
     private func actionButton(label: String, action: @escaping () -> Void) -> some View {

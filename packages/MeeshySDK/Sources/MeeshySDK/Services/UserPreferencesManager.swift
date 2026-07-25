@@ -27,11 +27,31 @@ public final class UserPreferencesManager: ObservableObject {
 
     // MARK: - Internals
 
-    private let service = PreferenceService.shared
+    /// Var (not `let`) so `@testable` test targets can substitute a mock
+    /// conforming to `PreferenceServiceProviding` — mirrors the
+    /// `AuthManager.authService` injection seam. Needed for integration
+    /// tests that drive `fetchFromBackend()`/`applyRemote` end-to-end
+    /// without hitting the real network.
+    internal var service: PreferenceServiceProviding = PreferenceService.shared
     private let encoder = JSONEncoder()
     private let decoder = JSONDecoder()
     private var syncTasks: [PreferenceCategory: Task<Void, Never>] = [:]
     private var cancellables = Set<AnyCancellable>()
+
+    /// Test-only override for the authentication gate used by
+    /// `fetchFromBackend`/`syncCategoryToBackend`/`resetCategory`.
+    /// Production always resolves through the live
+    /// `AuthManager.shared.isAuthenticated`. `internal` (not `private`) so
+    /// `@testable` targets can drive these flows deterministically WITHOUT
+    /// touching the real `AuthManager.shared` singleton — flipping that
+    /// shared instance's `$isAuthenticated` would also fire
+    /// `observeAuth()`'s own `fetchFromBackend()` sink, racing the test's
+    /// explicit call and leaking authenticated state across test files.
+    internal var isAuthenticatedOverride: (() -> Bool)?
+
+    private var isUserAuthenticated: Bool {
+        isAuthenticatedOverride?() ?? AuthManager.shared.isAuthenticated
+    }
 
     /// Catégories avec une modification locale pas encore confirmée par le
     /// backend — depuis `scheduleSyncToBackend` (synchrone, avant le
@@ -179,7 +199,7 @@ public final class UserPreferencesManager: ObservableObject {
     // MARK: - Backend Sync
 
     public func fetchFromBackend() async {
-        guard AuthManager.shared.isAuthenticated else { return }
+        guard isUserAuthenticated else { return }
         isSyncing = true
         defer { isSyncing = false }
 
@@ -253,7 +273,7 @@ public final class UserPreferencesManager: ObservableObject {
         case .application: application = .defaults; persist(application, category: .application)
         }
 
-        guard AuthManager.shared.isAuthenticated else { return }
+        guard isUserAuthenticated else { return }
         try? await service.resetPreferences(category: category)
     }
 
@@ -282,7 +302,11 @@ public final class UserPreferencesManager: ObservableObject {
         UserDefaults.standard.set(rawValues, forKey: Self.pendingCategoriesKey)
     }
 
-    private static func loadPendingCategories() -> Set<PreferenceCategory>? {
+    /// `internal` (not `private`) — same rationale as `pendingCategories`:
+    /// tests need to re-run the EXACT reload logic `init()` uses to
+    /// faithfully simulate a relaunch (a private-init singleton cannot be
+    /// re-instantiated from a test target).
+    static func loadPendingCategories() -> Set<PreferenceCategory>? {
         guard let rawValues = UserDefaults.standard.stringArray(forKey: pendingCategoriesKey) else { return nil }
         return Set(rawValues.compactMap { PreferenceCategory(rawValue: $0) })
     }
@@ -316,7 +340,7 @@ public final class UserPreferencesManager: ObservableObject {
             pendingCategories.remove(category)
             persistPendingCategories()
         }
-        guard AuthManager.shared.isAuthenticated else { return }
+        guard isUserAuthenticated else { return }
         let cmid = ClientMutationId.generate()
         let body: Data?
         do {
@@ -446,6 +470,35 @@ public final class UserPreferencesManager: ObservableObject {
         var merged = remote; merged.extras = localExtras ?? [:]; return merged
     }
 
+    // MARK: - Orphaned Pending Sync Resume (cold boot / gateway delivery)
+
+    /// Re-attempts delivery, WITHOUT the 1s debounce, for every category
+    /// still marked pending from a PREVIOUS process. `scheduleSyncToBackend`'s
+    /// debounce `Task` may never have had the chance to fire before the app
+    /// was killed (the user toggles a preference then immediately
+    /// backgrounds/kills the app) — in that window the new value AND the
+    /// pending flag are already durably persisted synchronously
+    /// (`persist`/`persistPendingCategories`), but NOTHING was ever written
+    /// to the outbox. Without this, such a category would sit "pending"
+    /// forever: permanently blocking `applyRemote` for it (never letting a
+    /// legitimate future remote change apply) while the mutation itself
+    /// never actually reaches the gateway — the originally reported
+    /// symptom ("le PATCH n'a jamais atteint le gateway").
+    ///
+    /// Wired from `observeAuth()`'s became-authenticated transition, which
+    /// is guaranteed-authenticated — unlike calling this from `init()`
+    /// directly, where session restoration may still be in flight and the
+    /// `isUserAuthenticated` guard inside `syncCategoryToBackend` would
+    /// silently clear the pending flag without ever attempting delivery.
+    /// `internal` (not `private`) so tests can invoke it directly to
+    /// simulate a relaunch without re-instantiating the singleton.
+    func resumeOrphanedPendingSyncs(_ categories: Set<PreferenceCategory>) async {
+        for category in categories {
+            syncTasks[category]?.cancel()
+            await syncCategoryToBackend(category)
+        }
+    }
+
     // MARK: - Private: Observers
 
     private func observeAuth() {
@@ -454,7 +507,11 @@ public final class UserPreferencesManager: ObservableObject {
             .removeDuplicates()
             .filter { $0 }
             .sink { [weak self] _ in
-                Task { [weak self] in await self?.fetchFromBackend() }
+                Task { [weak self] in
+                    guard let self else { return }
+                    await self.resumeOrphanedPendingSyncs(self.pendingCategories)
+                    await self.fetchFromBackend()
+                }
             }
             .store(in: &cancellables)
     }

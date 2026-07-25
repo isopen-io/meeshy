@@ -644,7 +644,7 @@ struct ProfileView: View {
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
         .accessibilityElement(children: .combine)
-        .accessibilityLabel(Text(verbatim: "\(title): \(value)"))
+        .accessibilityLabel(Text(verbatim: "\(title): \(value.wrappedValue)"))
     }
 
     private func profileInfoRow(icon: String, title: String, value: String) -> some View {

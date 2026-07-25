@@ -1,4 +1,5 @@
 import XCTest
+import GRDB
 @testable import MeeshySDK
 
 @MainActor
@@ -20,6 +21,20 @@ final class UserPreferencesManagerTests: XCTestCase {
         // this, `pendingCategories` from a prior test leaks into this one's
         // `shouldApplyRemote`/`applyRemote`-adjacent assertions.
         manager.pendingCategories.removeAll()
+    }
+
+    override func tearDown() {
+        // `service`/`isAuthenticatedOverride` are test-only injection seams
+        // on the shared singleton — restore the production defaults so a
+        // leaked stub never leaks into an unrelated test in this bundle.
+        // Any `scheduleSyncToBackend` debounce `Task` still alive from this
+        // test will find `isAuthenticatedOverride == nil` and fall back to
+        // the real (false, in this test process) `AuthManager.shared
+        // .isAuthenticated`, so it safely no-ops instead of mutating
+        // whichever `OfflineQueue` pool is configured by the time it fires.
+        manager.isAuthenticatedOverride = nil
+        manager.service = PreferenceService.shared
+        super.tearDown()
     }
 
     // MARK: - resetToDefaults
@@ -280,4 +295,141 @@ final class UserPreferencesManagerTests: XCTestCase {
         let savedArray = UserDefaults.standard.stringArray(forKey: "meeshy_prefs_pending_categories")
         XCTAssertNil(savedArray, "pendingCategories key should be wiped on logout")
     }
+
+    // MARK: - fetchFromBackend / applyRemote integration (cold-boot reconciliation)
+    //
+    // `UserPreferencesManager` is a singleton with a private `init()`, so a
+    // real relaunch cannot be simulated by constructing a fresh instance.
+    // Instead we drive the EXACT reload path `init()` uses
+    // (`UserPreferencesManager.loadPendingCategories()`) after manually
+    // dropping the in-memory `pendingCategories`, which is what a process
+    // kill does for real. `service` is swapped for a mock so
+    // `fetchFromBackend()` never touches the network, and
+    // `isAuthenticatedOverride` bypasses the real `AuthManager.shared`
+    // singleton (see `tearDown` for why).
+
+    func test_fetchFromBackend_afterSimulatedRelaunch_preservesNotYetConfirmedLocalChange() async {
+        let mock = MockPreferenceService()
+        manager.service = mock
+        manager.isAuthenticatedOverride = { true }
+
+        manager.updatePrivacy { $0.showOnlineStatus = false }
+        XCTAssertTrue(manager.pendingCategories.contains(.privacy), "precondition: local change marked pending")
+
+        // Simulate process kill + relaunch: in-memory state is dropped,
+        // then re-hydrated from UserDefaults via the same path `init()` uses.
+        manager.pendingCategories.removeAll()
+        manager.pendingCategories = UserPreferencesManager.loadPendingCategories() ?? []
+        XCTAssertTrue(manager.pendingCategories.contains(.privacy), "precondition: pending flag survives relaunch via persisted UserDefaults")
+
+        // Stale server value predating the local change (defaults: true).
+        mock.allPreferencesResult = .defaults
+
+        await manager.fetchFromBackend()
+
+        XCTAssertFalse(manager.privacy.showOnlineStatus, "cold-boot reconciliation must not clobber a not-yet-confirmed local change with a stale server value")
+        XCTAssertEqual(mock.getAllPreferencesCallCount, 1, "precondition: fetchFromBackend actually called the (mocked) network")
+    }
+
+    func test_fetchFromBackend_categoryNotPending_appliesRemoteValue() async {
+        let mock = MockPreferenceService()
+        manager.service = mock
+        manager.isAuthenticatedOverride = { true }
+
+        var remote = UserPreferences.defaults
+        remote.privacy.showOnlineStatus = false
+        mock.allPreferencesResult = remote
+
+        await manager.fetchFromBackend()
+
+        XCTAssertFalse(manager.privacy.showOnlineStatus, "no local pending edit for .privacy — remote value applies normally")
+    }
+
+    // MARK: - resumeOrphanedPendingSyncs (gateway-delivery guarantee)
+    //
+    // Reproduces the reported symptom precisely: `scheduleSyncToBackend`'s
+    // 1s debounce `Task` never had time to fire before the app was killed,
+    // so the local value + the pending flag are durably persisted but
+    // NOTHING has reached the outbox yet. `resumeOrphanedPendingSyncs` is
+    // what `observeAuth()` calls on the next authenticated boot.
+
+    func test_resumeOrphanedPendingSyncs_deliversMutation_forCategoryNeverEnqueued() async throws {
+        let pool = try DatabaseQueue()
+        try MessageDatabaseMigrations.runAll(on: pool)
+        await OfflineQueue.shared.configure(pool: pool)
+        await OfflineQueue.shared.clearAll()
+
+        manager.isAuthenticatedOverride = { true }
+
+        // `updatePrivacy` marks `.privacy` pending synchronously and starts
+        // the 1s debounce — deliberately NOT awaited here, simulating a kill
+        // that happens before it fires.
+        manager.updatePrivacy { $0.showOnlineStatus = false }
+        let countBeforeResume = try await pool.read { db in try OutboxRecord.fetchCount(db) }
+        XCTAssertEqual(countBeforeResume, 0, "precondition: debounce hasn't fired yet, nothing enqueued")
+
+        await manager.resumeOrphanedPendingSyncs([.privacy])
+
+        let countAfterResume = try await pool.read { db in try OutboxRecord.fetchCount(db) }
+        XCTAssertGreaterThanOrEqual(countAfterResume, 1, "an orphaned pending category must reach the outbox without waiting for the 1s debounce — this is the reported symptom: the PATCH never reaching the gateway")
+        XCTAssertFalse(manager.pendingCategories.contains(.privacy), "a successfully-resumed sync clears the pending flag")
+    }
+
+    func test_resumeOrphanedPendingSyncs_notAuthenticated_leavesCategoryPending() async throws {
+        let pool = try DatabaseQueue()
+        try MessageDatabaseMigrations.runAll(on: pool)
+        await OfflineQueue.shared.configure(pool: pool)
+        await OfflineQueue.shared.clearAll()
+
+        manager.isAuthenticatedOverride = { false }
+        manager.pendingCategories = [.privacy]
+
+        await manager.resumeOrphanedPendingSyncs([.privacy])
+
+        let count = try await pool.read { db in try OutboxRecord.fetchCount(db) }
+        XCTAssertEqual(count, 0, "not authenticated yet — must not attempt delivery")
+    }
+}
+
+// MARK: - Test Doubles
+
+/// Minimal `PreferenceServiceProviding` conformer for
+/// `UserPreferencesManagerTests`' `fetchFromBackend()` integration tests.
+/// Only `getAllPreferences` is exercised by those tests; every other
+/// requirement is stubbed to a harmless default since the protocol has no
+/// default implementation for them (see the cache-first accessors, which
+/// DO have one, in `PreferenceService.swift`).
+private final class MockPreferenceService: PreferenceServiceProviding, @unchecked Sendable {
+    var allPreferencesResult: UserPreferences?
+    private(set) var getAllPreferencesCallCount = 0
+
+    func getCategories() async throws -> [ConversationCategory] { [] }
+
+    func getConversationPreferences(conversationId: String) async throws -> APIConversationPreferences {
+        throw MockPreferenceServiceError.notStubbed
+    }
+
+    func updateConversationPreferences(conversationId: String, request: UpdateConversationPreferencesRequest) async throws {}
+
+    func patchCategory(id: String, isExpanded: Bool) async throws {}
+
+    func getAllPreferences() async throws -> UserPreferences {
+        getAllPreferencesCallCount += 1
+        guard let allPreferencesResult else { throw MockPreferenceServiceError.notStubbed }
+        return allPreferencesResult
+    }
+
+    func patchPreferences<T: Encodable>(category: PreferenceCategory, body: T) async throws {}
+
+    func resetPreferences(category: PreferenceCategory) async throws {}
+
+    func createCategory(name: String, color: String?, icon: String?) async throws -> ConversationCategory {
+        throw MockPreferenceServiceError.notStubbed
+    }
+
+    func getMyConversationTags() async throws -> [String] { [] }
+}
+
+private enum MockPreferenceServiceError: Error {
+    case notStubbed
 }
