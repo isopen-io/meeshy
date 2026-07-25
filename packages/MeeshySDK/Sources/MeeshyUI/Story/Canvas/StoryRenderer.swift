@@ -230,6 +230,28 @@ public enum StoryRenderer {
                 }
             }
 
+            // C2 (2026-07-25) — MÊME post-passe pour les textes et stickers.
+            // `ItemSignature` ne retient que l'opacité des KEYFRAMES
+            // (`overrides.opacity ?? 1.0`), jamais l'enveloppe fadeIn/fadeOut :
+            // une fois la layer construite au premier tick où sa fenêtre
+            // s'ouvre, la signature ne bouge plus, le cache resert la même
+            // layer, et l'opacité du tick de CONSTRUCTION reste figée.
+            //
+            // Bug observé en production (2026-07-25) : un texte à
+            // `startTime = 20.006` avec `fadeIn = 0.5` était construit à
+            // t ≈ 20.01, donc à (20.01 − 20.006) / 0.5 ≈ 0.02, et restait à
+            // 2 % d'opacité pour toute la story — invisible. Le composer n'en
+            // souffrait pas : il rend en `.edit`, où la fenêtre temporelle est
+            // ignorée et où `contentHash` invalide la layer à chaque mutation.
+            //
+            // Ordre d'application aligné sur `renderItem` pour ces types :
+            // une opacité de keyframe est authored explicitement, elle gagne
+            // sur l'enveloppe fade qui n'est qu'un défaut.
+            if mode == .play, !(item is StoryMediaObject),
+               let resolved = resolvedNonMediaOpacity(item: item, at: time.seconds) {
+                layer.opacity = Float(resolved)
+            }
+
             // A cached layer might still be attached to the previous frame's
             // root layer. addSublayer auto-detaches before re-attaching, so
             // this is safe and cheap (CALayer parenting is O(1) bookkeeping).
@@ -872,6 +894,35 @@ extension StoryRenderer {
 // MARK: - fadeOpacity
 
 extension StoryRenderer {
+
+    /// Opacité absolue à re-poser sur la layer d'un item NON-média à chaque
+    /// tick de `.play`, ou `nil` si l'item n'a ni enveloppe fade ni keyframe
+    /// d'opacité (la layer garde alors son opacité par défaut).
+    ///
+    /// Pourquoi une post-passe plutôt qu'un calcul au build : `ItemSignature`
+    /// (clé du `StoryRendererCache`) ne retient que l'opacité des KEYFRAMES
+    /// (`overrides.opacity ?? 1.0`), jamais l'enveloppe fadeIn/fadeOut. Une
+    /// layer construite au premier tick où sa fenêtre s'ouvre est ensuite
+    /// resservie telle quelle par le cache : sans re-pose, elle conserverait
+    /// à jamais l'opacité de son tick de construction.
+    ///
+    /// Bug corrigé (2026-07-25) : un texte à `startTime = 20.006` avec
+    /// `fadeIn = 0.5`, construit à t ≈ 20.01, restait figé à
+    /// (20.01 − 20.006) / 0.5 ≈ 2 % d'opacité — invisible pour toute la story.
+    /// Les médias avaient déjà leur post-passe (R14/C1) ; textes et stickers
+    /// non.
+    ///
+    /// Ordre : une opacité de keyframe est authored explicitement, elle prime
+    /// sur l'enveloppe fade qui n'est qu'un défaut — identique à `renderItem`.
+    public static func resolvedNonMediaOpacity(item: any RenderableItem,
+                                               at seconds: Double) -> Double? {
+        let keyframeOpacity = applyKeyframes(
+            keyframes: (item as? StoryTextObject)?.keyframes ?? [],
+            at: seconds,
+            startTime: item.startTime ?? 0
+        ).opacity
+        return keyframeOpacity ?? fadeOpacity(item: item, at: seconds)
+    }
 
     /// Returns the snapshot opacity in `[0, 1]` produced by the item's `fadeIn` /
     /// `fadeOut` envelope at the given absolute playback time.
