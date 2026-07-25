@@ -1,5 +1,46 @@
 # Progress — state & what to do next
 
+> On 2026-07-25 the **composer gated by participant permissions** landed (slice
+> `composer-attachment-affordances`, feature-parity §Chat → new `[x]` "Composer affordances gated by
+> the viewer's send permissions"). This is a **SOTA improvement over iOS**, whose `UniversalComposerBar`
+> never consults `ParticipantPermissions` — a denied guest still sees affordances the server later
+> rejects. Android gates them at the source of truth instead, consuming the hardened permission set the
+> `anonymous-session-store` slice just made durable. **Added (production, all `apps/android`):** the
+> pure, stateless `ComposerAttachmentPolicy` (`:sdk-core` `me.meeshy.sdk.composer`) mapping a
+> `ParticipantPermissions?` → an immutable `ComposerAffordances` (per-kind booleans + two derived
+> getters: `showsAttachmentLadder` = images/files/videos/audios/locations OR'd — **links excluded**, they
+> ride inline in text; `isReadOnly` = `!canSendText`). A **null** permission set is the registered-user
+> posture — everything granted — so a normal member is never gated by a missing/anonymous record.
+> **Wiring (`:feature:chat`):** `ChatUiState` gains `composerPermissions: ParticipantPermissions?` + a
+> derived `composerAffordances` getter; `ChatViewModel` injects the (already Hilt-provided)
+> `AnonymousSessionStore` and folds `store.load()?.permissions` into the state at init via
+> `loadComposerPermissions()` (a store failure degrades to the full posture, never a crash). `ChatScreen`
+> consumes `state.composerAffordances`: the attach-file button hides unless `showsAttachmentLadder`, the
+> mic hides unless `canSendAudios`, and an `isReadOnly` guest gets a muted lock-row `ComposerReadOnlyNotice`
+> (new i18n key `chat_composer_read_only` in EN/FR/ES/PT) replacing the input entirely. **+11 behavioural
+> tests:** `ComposerAttachmentPolicyTest` (8 — null→full, defaultUser→full, defaultAnonymous→text+images
+> only w/ ladder open, all-denied→read-only+no-ladder, asymmetric field-for-field map, locations-alone→ladder,
+> links-alone→no-ladder, text-only→usable+no-ladder) + `ChatViewModelTest` +3 (registered member keeps full
+> composer, share-link guest gated to `defaultAnonymous`, muted guest → read-only). Expectations are
+> hand-written literals asserted through the public API / observable `state`, never internals.
+> **Mutation (RED proof):** flipping the policy's null branch to `defaultAnonymous` fails **exactly**
+> `null permissions grant the full registered-user posture`; dropping the VM's `_state.update` fold fails
+> **exactly** the 3 new VM tests — both the pure map and the wiring are load-bearing. **Gate:**
+> `./apps/android/meeshy.sh check` (whole module graph, `assembleDebug` + every JVM unit suite) →
+> **BUILD SUCCESSFUL** (no flake this run). Reviewer **PASS** (diff `apps/android` only — 1 new pure core +
+> its test in `:sdk-core`, VM/state/screen wiring + 4 locale strings + VM test harness in `:feature:chat`,
+> zero production logic elsewhere; **SDK purity** — the *what-may-the-composer-offer* rule is a stateless
+> `:sdk-core` building block, the *when-to-load-permissions* orchestration stays app-side in the VM;
+> **SSOT** — reuses `ParticipantPermissions.defaultUser`/`defaultAnonymous`, re-implements no capability
+> logic; **failure paths** — store failure → full posture, never a crash). **Next slice:** the guest-join
+> **screen** (`:feature:sharelink`: link-preview → join form → success, driving `AnonymousSessionRepository`,
+> UI-only); OR the composer wiring the *per-conversation* `ApiConversationParticipant.permissions` (needs
+> the rich participant shape surfaced through `Conversation.participants`, today lightweight `ApiParticipant`);
+> OR the paged `OnboardingFlowView` Compose screen; OR the tracked Kover 90% coverage-gate infra.
+> **Known standing debt (not this slice):** the `:sdk-core` DataStore-parallel-load timeout flake
+> (`ThemeStoreTest`/`InterfaceLanguageStoreTest`/`PrivacyPreferencesStoreTest`/`NotificationPreferencesStoreTest`)
+> — green in isolation, intermittent in the full run (did not recur this run).
+
 > On 2026-07-25 the **anonymous-session join/restore/leave use-case + persistence** landed (slice
 > `anonymous-session-store`, feature-parity §A → the `[~]` "Anonymous sessions" item advances: the
 > permission-hardening core shipped 2026-07-22 is now wired into a real, non-orphan vertical slice).

@@ -2737,3 +2737,20 @@ iOS `RelativeTimeFormatter` bundles classification, calendar-day framing AND loc
   Gating the local clear on `NetworkResult.Success` fails exactly `leave_serverFailure_stillClears…`.
   Likewise `join()` persists **nothing** when `toSessionContext()` returns null (malformed 2xx body), so
   a bad payload never installs a token.
+
+## Slice `composer-attachment-affordances` (2026-07-25)
+- **iOS's composer never consults `ParticipantPermissions`** — `UniversalComposerBar.swift` gates the
+  attachment ladder on `mode`/`forceHide`/`forceShow`, not on the participant's send capabilities. So a
+  denied guest sees affordances the server later rejects. Android's `ComposerAttachmentPolicy` (`:sdk-core`)
+  closes that gap: it's the SOTA improvement, not a straight port. When an iOS surface has *no* equivalent,
+  the parity note is "SOTA over iOS", and the audit still counts it as covering the capability.
+- **Links are NOT an attachment-ladder affordance.** `canSendLinks` gates inline URLs in the text body, so
+  it's deliberately excluded from `showsAttachmentLadder` (images/files/videos/audios/locations only). A
+  links-only permission set keeps the ladder hidden — a boundary worth its own test.
+- **Null permissions = full posture, by design.** The policy treats `null` as the registered-user default
+  (`ParticipantPermissions.defaultUser`), so a normal member is never accidentally gated by a missing
+  record. Only a persisted anonymous session supplies a non-null (hardened) set. Test both arms.
+- **Injecting into a large existing ViewModel:** adding one constructor param to `ChatViewModel` only
+  touched the single `harness()` factory in `ChatViewModelTest` (all VMs are built there). Seed the new
+  `InMemoryAnonymousSessionStore(initial)` via a defaulted harness param so existing call-sites are
+  untouched — the store already had an `initial`-arg in-memory fake from the `anonymous-session-store` slice.
