@@ -874,6 +874,106 @@ class ChatViewModelTest {
         coVerify(exactly = 0) { h.repo.sendOptimistic(any(), any(), any(), any(), any()) }
     }
 
+    // MARK: - unified send gate across every send path
+
+    @Test
+    fun a_picked_file_under_slow_mode_records_the_cooldown_and_blocks_an_immediate_second_file() =
+        runTest(dispatcher) {
+            val h = harness(flowOf(CacheResult.Empty), currentUser = me, conversation = slowConversation(seconds = 30))
+            advanceUntilIdle()
+
+            h.vm.sendFileAttachment("PDF".toByteArray(), "one.pdf", declaredMimeType = "application/pdf")
+            advanceUntilIdle()
+
+            // The delivered attachment starts the cooldown, exactly like a text send.
+            assertThat(h.vm.state.value.lastSelfSentAtMillis).isEqualTo(FIXED_NOW)
+            assertThat(h.vm.state.value.slowModeState(FIXED_NOW).canSend).isFalse()
+
+            // A second pick while the cooldown runs never leaves the composer.
+            h.vm.sendFileAttachment("PDF2".toByteArray(), "two.pdf", declaredMimeType = "application/pdf")
+            advanceUntilIdle()
+
+            coVerify(exactly = 1) { h.mediaQueue.enqueue(any()) }
+        }
+
+    @Test
+    fun a_text_send_starts_a_cooldown_that_also_throttles_a_picked_file() = runTest(dispatcher) {
+        val h = harness(flowOf(CacheResult.Empty), currentUser = me, conversation = slowConversation(seconds = 30))
+        coEvery { h.repo.sendOptimistic(any(), any(), any(), any(), any()) } returns "cmid_1"
+        advanceUntilIdle()
+
+        h.vm.onDraftChange("hello")
+        h.vm.send()
+        advanceUntilIdle()
+        assertThat(h.vm.state.value.lastSelfSentAtMillis).isEqualTo(FIXED_NOW)
+
+        // The cooldown a text send opened is shared by the attachment path.
+        h.vm.sendFileAttachment("PDF".toByteArray(), "report.pdf", declaredMimeType = "application/pdf")
+        advanceUntilIdle()
+
+        coVerify(exactly = 0) { h.mediaQueue.enqueue(any()) }
+    }
+
+    @Test
+    fun a_guest_denied_the_file_capability_cannot_send_a_picked_file() = runTest(dispatcher) {
+        // defaultAnonymous grants text + images only; a PDF resolves to the file kind.
+        val h = harness(
+            syncedConversation(),
+            currentUser = me,
+            anonymousSession = anonymousGuestSession(ParticipantPermissions.defaultAnonymous),
+        )
+        advanceUntilIdle()
+
+        h.vm.sendFileAttachment("PDF".toByteArray(), "report.pdf", declaredMimeType = "application/pdf")
+        advanceUntilIdle()
+
+        coVerify(exactly = 0) { h.mediaQueue.enqueue(any()) }
+        assertThat(h.vm.state.value.lastSelfSentAtMillis).isNull()
+    }
+
+    @Test
+    fun a_guest_who_may_send_images_can_still_send_a_picked_image() = runTest(dispatcher) {
+        // Per-kind gating, not a blanket guest block: images stay open for defaultAnonymous.
+        val h = harness(
+            syncedConversation(),
+            currentUser = me,
+            anonymousSession = anonymousGuestSession(ParticipantPermissions.defaultAnonymous),
+        )
+        advanceUntilIdle()
+
+        h.vm.sendFileAttachment("PNG".toByteArray(), "avatar.png", declaredMimeType = "image/png")
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) { h.mediaQueue.enqueue(any()) }
+    }
+
+    @Test
+    fun a_read_only_guest_cannot_send_text() = runTest(dispatcher) {
+        val muted = ParticipantPermissions(
+            canSendMessages = false,
+            canSendFiles = false,
+            canSendImages = false,
+            canSendVideos = false,
+            canSendAudios = false,
+            canSendLocations = false,
+            canSendLinks = false,
+        )
+        val h = harness(
+            syncedConversation(),
+            currentUser = me,
+            anonymousSession = anonymousGuestSession(muted),
+        )
+        advanceUntilIdle()
+
+        h.vm.onDraftChange("let me in")
+        h.vm.send()
+        advanceUntilIdle()
+
+        coVerify(exactly = 0) { h.repo.sendOptimistic(any(), any(), any(), any(), any()) }
+        // The refused text is kept in the draft, never silently dropped.
+        assertThat(h.vm.state.value.draft).isEqualTo("let me in")
+    }
+
     @Test
     fun send_with_an_empty_draft_and_no_clipboard_is_a_no_op() = runTest(dispatcher) {
         val user = MeeshyUser(id = "me", username = "atabeth", systemLanguage = "fr")
