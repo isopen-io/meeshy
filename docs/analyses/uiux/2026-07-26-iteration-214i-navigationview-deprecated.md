@@ -126,9 +126,13 @@ un **invariant** (toute réintroduction du conteneur déprécié échoue au test
 `MeeshyShareExtension/ShareViewController` (214i) et `StatusComposerView` (220i)
 pour leur conteneur de navigation — la migration de l'application est terminée.
 
+Le point n° 3 (catalogue de chaînes de `MeeshyShareExtension`) est **soldé en
+221i** : la cible a désormais son `Localizable.xcstrings` (8 clés × 7 locales) et
+son `InfoPlist.xcstrings`, les 3 littéraux crus sont localisés et
+`CFBundleLocalizations` est aligné sur les 7 locales de l'app.
+
 Restent ouverts, inchangés : le n° 2 (5 `NavigationView` dans
 `packages/MeeshySDK/Sources/MeeshyUI/` — **hors périmètre** de la routine iOS
-app), le n° 3 (catalogue de chaînes de `MeeshyShareExtension`, verrou #2319 levé)
-et le n° 4 (`navigationTitle` de `VoiceProfileManageView.addSamplesSheet`).
+app) et le n° 4 (`navigationTitle` de `VoiceProfileManageView.addSamplesSheet`).
 
 Détail : `docs/analyses/uiux/2026-07-26-iteration-220i-statuscomposer-navigationstack.md`
