@@ -48,76 +48,17 @@ final class ShareExtensionAccessibilityTests: XCTestCase {
     }
 
     // MARK: - Contact row
+    //
+    // The row's VoiceOver contract (`children: .combine`, `.isButton` + `.isSelected`,
+    // decorative checkmark hidden) landed via #2346 and is guarded by
+    // `ShareExtensionLocalizationTests.test_contactRow_exposesButtonAndSelectionTraits`.
+    // Deliberately not duplicated here — one owner per invariant, and that design is
+    // the merged one.
 
-    func test_contactRow_exposesSingleAccessibilityElementNamedAfterTheContact() throws {
-        // The row is built from an avatar, a name, a status and a checkmark.
-        // Without an explicit element VoiceOver stops on each fragment and never
-        // conveys that the row as a whole is the thing you activate.
-        let source = try shareSource()
-        let nearRow = try declaration(of: "ContactRow", in: source)
-        XCTAssertTrue(
-            nearRow.contains(".accessibilityElement(children: .ignore)"),
-            "ContactRow must collapse its avatar/name/status/checkmark fragments into one " +
-            "accessibility element so VoiceOver offers a single actionable stop."
-        )
-        XCTAssertTrue(
-            nearRow.contains(".accessibilityLabel(contact.name)"),
-            "ContactRow's accessible name must be the contact's name."
-        )
-        XCTAssertTrue(
-            nearRow.contains(".accessibilityValue(contact.status ?? \"\")"),
-            "The contact's presence status must be exposed as the element's value, not lost " +
-            "when the fragments are collapsed."
-        )
-    }
-
-    func test_contactRow_announcesSelectionBeyondColour() throws {
-        // Selection was signalled by a blue tint plus a checkmark glyph only —
-        // colour/shape alone (WCAG 1.4.1). The `.isSelected` trait lets iOS
-        // announce the state in the user's own language, with no new i18n key.
-        let source = try shareSource()
-        let nearRow = try declaration(of: "ContactRow", in: source)
-        XCTAssertTrue(
-            nearRow.contains(".accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : [.isButton])"),
-            "The selected contact must carry the .isSelected trait so VoiceOver announces the " +
-            "current choice instead of leaving it to the blue tint and checkmark."
-        )
-    }
-
-    func test_contactRow_isActivatedByARealButton() throws {
-        // `.onTapGesture` on a plain container gives no `.isButton` trait, no
-        // press feedback and no Full Keyboard Access focus. A real Button does.
-        let source = try shareSource()
-        XCTAssertFalse(
-            source.contains(".onTapGesture"),
-            "Contact selection must go through a Button, not a bare .onTapGesture container."
-        )
-        let nearList = try vicinity(after: "ForEach(filteredContacts)", in: source, span: 400)
-        XCTAssertTrue(
-            nearList.contains("selectedContactId = contact.id") && nearList.contains(".buttonStyle(.plain)"),
-            "The contact row must be wrapped in a Button with .buttonStyle(.plain) so the native " +
-            "control behaviour is gained without altering the row's appearance."
-        )
-    }
-
-    // MARK: - Action buttons
-
-    func test_actionButtons_areLocalized() throws {
-        // "Cancel" / "Send" / the navigation title were raw literals while the
-        // rest of the file already used the String(localized:defaultValue:) form.
-        let source = try shareSource()
-        XCTAssertFalse(
-            source.contains("Button(\"Cancel\")") || source.contains("Button(\"Send\")"),
-            "The sheet's action buttons must not carry raw string literals."
-        )
-        for key in ["share.cancel", "share.send", "share.title"] {
-            XCTAssertTrue(
-                source.contains("String(localized: \"\(key)\""),
-                "\(key) must be declared with String(localized:defaultValue:), matching the " +
-                "share.* convention already used by this file."
-            )
-        }
-    }
+    // MARK: - Action-button labels
+    //
+    // Their localization is owned by `ShareExtensionLocalizationTests`
+    // (`test_actionButtonsAndTitleAreLocalized` + the catalogue-coverage tests).
 
     // MARK: - Shared-item preview tiles
 

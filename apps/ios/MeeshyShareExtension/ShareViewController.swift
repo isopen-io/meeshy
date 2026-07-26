@@ -318,6 +318,7 @@ struct ShareContentView: View {
                         .font(.headline)
                         .padding(.horizontal)
                         .padding(.top)
+                        .accessibilityAddTraits(.isHeader)
 
                     // Search
                     HStack {
@@ -347,24 +348,33 @@ struct ShareContentView: View {
 
                 // Action buttons
                 HStack(spacing: 16) {
-                    Button(String(localized: "share.cancel", defaultValue: "Cancel")) {
+                    // .frame/.padding belong INSIDE the label: a Button's hit region is
+                    // its label's content shape, so applying them outside draws a
+                    // full-width pill whose text glyph alone responds to touch.
+                    Button {
                         onCancel()
+                    } label: {
+                        Text(String(localized: "share.cancel", defaultValue: "Cancel"))
+                            .frame(maxWidth: .infinity)
+                            .padding()
                     }
-                    .frame(maxWidth: .infinity)
-                    .padding()
                     .background(Color.secondary.opacity(0.2))
                     .foregroundColor(.primary)
                     .cornerRadius(12)
 
-                    Button(String(localized: "share.send", defaultValue: "Send")) {
+                    Button {
                         if let contactId = selectedContactId {
                             onSend(contactId)
                         }
+                    } label: {
+                        Text(String(localized: "share.send", defaultValue: "Send"))
+                            .frame(maxWidth: .infinity)
+                            .padding()
                     }
-                    .frame(maxWidth: .infinity)
-                    .padding()
                     .background(selectedContactId != nil ? Color.blue : Color.secondary.opacity(0.2))
-                    .foregroundColor(.white)
+                    // White over the disabled grey fill is ~1.2:1 — the primary button
+                    // of the screen read as blank until a contact was picked.
+                    .foregroundColor(selectedContactId != nil ? .white : .secondary)
                     .cornerRadius(12)
                     .disabled(selectedContactId == nil)
                 }
@@ -399,6 +409,27 @@ struct ShareContentView: View {
 
 struct SharedItemPreview: View {
     let item: SharedItem
+
+    /// Spoken name of the tile. The three kinds that already print a caption
+    /// reuse that caption's key, so the collapsed element says exactly what the
+    /// tile shows; the `.image` kind prints nothing and would otherwise be
+    /// announced as a nameless image.
+    private var typeName: String {
+        switch item.type {
+        case .text: return String(localized: "share.type.text", defaultValue: "Text")
+        case .url: return String(localized: "share.type.url", defaultValue: "Link")
+        case .image: return String(localized: "share.type.image", defaultValue: "Image")
+        case .video: return String(localized: "share.type.video", defaultValue: "Video")
+        case .file: return String(localized: "share.type.file", defaultValue: "File")
+        case .location: return String(localized: "share.type.location", defaultValue: "Location")
+        }
+    }
+
+    /// The shared payload itself, for the kinds that carry text worth hearing —
+    /// collapsing the tile would otherwise drop the preview string entirely.
+    private var spokenContent: String {
+        (item.content as? String) ?? ""
+    }
 
     var body: some View {
         VStack(spacing: 8) {
@@ -469,6 +500,9 @@ struct SharedItemPreview: View {
         .frame(width: 120, height: 120)
         .background(Color.secondary.opacity(0.1))
         .cornerRadius(12)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(typeName)
+        .accessibilityValue(spokenContent)
     }
 }
 
