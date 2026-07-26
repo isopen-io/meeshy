@@ -243,6 +243,17 @@ private struct QuickReactionStripChrome: ViewModifier {
     }
 }
 
+public extension View {
+    /// Applique le chrome flottant de la barre de quick-réaction (la capsule
+    /// Liquid Glass sur iOS 26, voile de matière avant) — pour qu'une autre bande
+    /// horizontale compacte (p. ex. la barre rapide de langues de la story) ait
+    /// EXACTEMENT la même pilule que la barre de réaction. Un seul point de vérité
+    /// pour ce chrome, partagé au lieu d'être dupliqué.
+    func quickReactionStripChrome(style: EmojiReactionPicker.Style) -> some View {
+        modifier(QuickReactionStripChrome(style: style))
+    }
+}
+
 // MARK: - Sinusoidal wave entrance
 
 /// Entree en vague sinusoidale d'une tuile d'emoji de la quick-reaction bar.

@@ -8,14 +8,23 @@ import MeeshySDK
 /// « + » en fin de rangée ouvre la liste complète (toutes les langues, avec
 /// demande de traduction).
 ///
-/// Reprise du geste « accès rapide + (+) » demandé après le retrait du strip de
-/// drapeaux du 2026-07-25 : le strip d'avant ne montrait que les langues déjà
-/// traduites et imposait un second tap pour en demander une autre ; ici le (+)
-/// fait ce second chemin explicitement, à droite de la rangée qui défile.
+/// Taille et style STRICTEMENT ALIGNÉS SUR LA BARRE DE RÉACTION de la story
+/// (directive user 2026-07-26 : « la même taille que la barre de réaction !!! ») :
+/// mêmes chips glyphe 22pt, même « + » (cercle 32pt), même pilule flottante
+/// partagée (`quickReactionStripChrome`), et — comme la barre de réaction — la
+/// pilule ÉPOUSE son contenu (présentée en `.fixedSize()`), jamais une largeur
+/// fixe vide. Deux modes :
+/// - liste courte (≤ `inlineCap`) : rangée simple qui hug son contenu, exactement
+///   comme la barre de réaction (cas quasi-toujours vrai — peu de langues prêtes) ;
+/// - liste longue : la rangée défile derrière un masque en fondu, le « + » épinglé
+///   hors du défilement reste visible (directive Part A du 2026-07-26).
 ///
-/// App-side : c'est de l'orchestration UX produit (câble les langues prêtes de
-/// la story + décide « le + ouvre la liste complète »). Le SDK fournit l'atome
-/// `LanguagePickerSheet` pour la liste complète.
+/// Le seul écart sémantique avec la barre de réaction : la langue lue est mise en
+/// avant (pleine opacité + souligné indigo), là où la réaction n'a pas d'état actif.
+///
+/// App-side : orchestration UX produit (câble les langues prêtes + décide « le +
+/// ouvre la liste complète »). Le SDK fournit `LanguagePickerSheet` (liste complète)
+/// et `quickReactionStripChrome` (le chrome partagé de la pilule).
 struct StoryLanguageQuickBar: View {
     let languages: [TranslationLanguage]
     /// Langue effectivement affichée (override d'exploration ou tête de chaine
@@ -24,37 +33,81 @@ struct StoryLanguageQuickBar: View {
     let onSelect: (String) -> Void
     let onOpenFullPicker: () -> Void
 
+    /// Au-delà de ce nombre, la rangée défile (avec « + » épinglé) au lieu de
+    /// s'étaler ; en-deçà, elle épouse son contenu comme la barre de réaction.
+    private let inlineCap = 5
+    /// Largeur du défilement quand la liste est longue : ~5 drapeaux 22pt visibles
+    /// (aligné sur la largeur de la barre de réaction).
+    private let scrollWidth: CGFloat = 180
+
     var body: some View {
-        HStack(spacing: 6) {
-            // Drapeaux DÉFILANTS — les ~5 premières langues sont visibles à
-            // l'ouverture, le reste se révèle au scroll horizontal.
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 8) {
-                    ForEach(languages) { language in
-                        chip(language)
-                    }
-                }
-                .padding(.leading, 12)
-                .padding(.vertical, 8)
+        Group {
+            if languages.count > inlineCap {
+                scrollingRow
+            } else {
+                inlineRow
             }
-            // Le « + » NE défile PAS : épinglé à droite, hors du ScrollView, il
-            // reste toujours visible (directive user 2026-07-26).
-            plusChip
-                .padding(.trailing, 10)
         }
-        .background(
-            Capsule()
-                .fill(.ultraThinMaterial)
-                .overlay(Capsule().fill(Color.black.opacity(0.35)))
-        )
+        // Pilule IDENTIQUE à la barre de réaction (Liquid Glass iOS 26 / voile de
+        // matière avant) — un seul point de vérité, partagé depuis le SDK.
+        .quickReactionStripChrome(style: .dark)
         .accessibilityElement(children: .contain)
         .accessibilityLabel(Text(String(localized: "story.viewer.language.bar",
                                          defaultValue: "Langues disponibles", bundle: .main)))
     }
 
-    /// Chip DRAPEAU SEUL — compact, pour que ~5 langues tiennent à l'ouverture.
-    /// L'actif (langue lue) est cerclé d'indigo. Le code lisible reste sur le
-    /// badge accolé au bouton « Abc ».
+    /// Rangée simple — épouse son contenu (comme la barre de réaction non-défilante).
+    private var inlineRow: some View {
+        HStack(spacing: 6) {
+            flagStrip
+                .padding(.vertical, 6)
+                .padding(.leading, 10)
+            plusChip
+                .padding(.trailing, 10)
+        }
+    }
+
+    /// Rangée défilante — les ~5 premières langues visibles, le reste au scroll
+    /// derrière un masque en fondu ; le « + » NE défile PAS (épinglé à droite,
+    /// hors du ScrollView).
+    private var scrollingRow: some View {
+        HStack(spacing: 6) {
+            ScrollView(.horizontal, showsIndicators: false) {
+                flagStrip
+                    .padding(.vertical, 6)
+                    .padding(.leading, 10)
+                    .padding(.trailing, 4)
+            }
+            .frame(width: scrollWidth)
+            .mask(
+                LinearGradient(
+                    stops: [
+                        .init(color: .black, location: 0),
+                        .init(color: .black, location: 0.92),
+                        .init(color: .black.opacity(0.0), location: 1.0)
+                    ],
+                    startPoint: .leading,
+                    endPoint: .trailing
+                )
+            )
+            plusChip
+                .padding(.trailing, 10)
+        }
+    }
+
+    private var flagStrip: some View {
+        HStack(spacing: 6) {
+            ForEach(languages) { language in
+                chip(language)
+            }
+        }
+    }
+
+    /// Chip DRAPEAU SEUL, à la TAILLE des emojis de la barre de réaction (22pt).
+    /// L'actif (langue lue) est à pleine opacité et souligné d'indigo ; les autres
+    /// sont légèrement estompés — AUCUNE variation de taille, pour que la bande
+    /// garde exactement la hauteur de la barre de réaction. Le code lisible reste
+    /// sur le badge accolé au bouton « Abc ».
     private func chip(_ language: TranslationLanguage) -> some View {
         let isActive = StoryLanguageQuickBar.isActive(language.id, active: activeLanguageCode)
         return Button {
@@ -63,30 +116,35 @@ struct StoryLanguageQuickBar: View {
         } label: {
             Text(language.flag)
                 .font(.system(size: 22))
-                .frame(width: 34, height: 34)
-                .background(
-                    Circle().fill(isActive ? MeeshyColors.indigo500.opacity(0.9)
-                                           : Color.white.opacity(0.10))
-                )
-                .overlay(
-                    Circle().stroke(isActive ? Color.white.opacity(0.75) : Color.clear, lineWidth: 2)
-                )
+                .opacity(isActive ? 1 : 0.55)
+                .overlay(alignment: .bottom) {
+                    Capsule()
+                        .fill(MeeshyColors.indigo400)
+                        .frame(width: 14, height: 2)
+                        .opacity(isActive ? 1 : 0)
+                        .offset(y: 3)
+                }
         }
         .buttonStyle(.plain)
         .accessibilityLabel(Text(language.name))
         .accessibilityAddTraits(isActive ? [.isSelected] : [])
     }
 
+    /// « + » IDENTIQUE au bouton d'expansion de la barre de réaction : cercle 32pt
+    /// (blanc 15 %) + glyphe 14pt gras.
     private var plusChip: some View {
         Button {
             HapticFeedback.light()
             onOpenFullPicker()
         } label: {
-            Image(systemName: "plus")
-                .font(MeeshyFont.relative(13, weight: .bold))
-                .foregroundColor(.white.opacity(0.9))
-                .padding(10)
-                .background(Circle().fill(Color.white.opacity(0.14)))
+            ZStack {
+                Circle()
+                    .fill(Color.white.opacity(0.15))
+                    .frame(width: 32, height: 32)
+                Image(systemName: "plus")
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundColor(.white.opacity(0.8))
+            }
         }
         .buttonStyle(.plain)
         .accessibilityLabel(Text(String(localized: "story.viewer.language.more",
