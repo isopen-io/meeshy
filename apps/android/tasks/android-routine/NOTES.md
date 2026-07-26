@@ -2,6 +2,27 @@
 
 Append-only log of gotchas and decisions that save time next run.
 
+## Lesson (2026-07-26, `conversation-category-sections`) — evolve the one SSOT with a defaulted arg; fold orphans in the bucket key
+- **Extend a grouping SSOT, don't fork it.** `ConversationSections.of` gained a second
+  `categories: List<CategoryOption> = emptyList()` arg rather than a parallel `ofWithCategories`. The
+  **default empty list must reduce to the exact prior behaviour** so every pre-existing test passes
+  untouched — here an empty catalogue means no `categoryId` can match, so all non-pinned rows land in
+  `ALL` just like before. Verify that by running the OLD tests unchanged (8/8 green) *before* adding the
+  new category cases; if an old test needs editing you've changed behaviour, not extended it.
+- **Fold orphaned buckets into the catch-all inside the `groupBy` key, not after.** iOS concatenates
+  `bySection["__other__"] + filtered.filter { orphaned }` post-hoc, which reorders. A single key function —
+  `if (pinned && catId==null) PINNED else if (catId in catalogue) catId else OTHER` — sends uncategorized
+  *and* orphaned rows to the same `OTHER` bucket in one pass, preserving encounter order (`groupBy` is
+  order-stable in Kotlin) and dropping nothing. Cleaner and more correct than the port's source.
+- **A pinned row with a category belongs in its category, not Épingles** (iOS `isPinned && sectionId==nil`
+  is the *pinned-bucket* guard, not "pinned always floats"). This is the subtle branch — mutation-proof it
+  by dropping the `&& categoryId==null` guard and confirming exactly the one "stays-in-category" test fails.
+- **An exhaustive `when(kind)` in the Composable forces edits when you add an enum constant.** Adding
+  `CATEGORY` to `ConversationSectionKind` broke the screen's `titleRes()/icon()/containerColor()` `when`s at
+  compile time — expected. Give `CATEGORY` real branches (folder glyph, accent) and render the header from
+  `section.title ?: stringResource(kind.titleRes())` so category sections show their own name; the
+  `titleRes()` arm for `CATEGORY` is a never-shown fallback (documented).
+
 ## Lesson (2026-07-26, `conversation-category-picker`) — model a select-or-create outcome as a sealed type, not a closure
 - iOS UI fields (`CategoryPickerField`, `TagInputField`) express "commit the field" as a `submit()` method
   that **mutates view state in place** (`selectedId = …; editing = ""; focused = false` or fires an async
