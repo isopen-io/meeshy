@@ -429,35 +429,48 @@ extension StoryViewerView {
 
         switch incomingEffect {
         case .zoom:
-            openingScale = 0.88
-            textSlideOffset = 0
+            // `1.08 → 1.0` : le SDK DÉZOOME. L'app partait de 0.88, donc
+            // zoomait — le même effet nommé jouait à l'envers selon qu'on
+            // regardait l'aperçu du composer (chemin SDK) ou le lecteur
+            // (cette ré-implémentation SwiftUI).
+            openingScale = StoryRenderer.zoomTransitionScale
+            openingSlideFraction = 0
             isRevealActive = false
         case .slide:
-            textSlideOffset = 30
+            // Le SDK glisse HORIZONTALEMENT de 8 % de la largeur du canvas ;
+            // l'app glissait verticalement de 30 pt.
+            openingSlideFraction = StoryRenderer.slideTransitionTravelFraction
             openingScale = 1.0
             isRevealActive = false
         case .reveal:
             openingScale = 1.0
-            textSlideOffset = 0
+            openingSlideFraction = 0
             isRevealActive = false
         default:
             textSlideOffset = 14
             openingScale = 1.0
+            openingSlideFraction = 0
             isRevealActive = false
         }
 
         let animDuration: Double
         let animation: Animation
         switch incomingEffect {
+        // Les trois effets NOMMÉS partagent la durée du SDK
+        // (`slideTransitionDuration`). L'app en avait trois différentes —
+        // 0,4 / 0,38 / 0,4 — désalignées de la seule valeur que l'aperçu du
+        // composer et l'export respectent.
         case .zoom:
-            animDuration = 0.4
-            animation = .spring(response: 0.4, dampingFraction: 0.75)
+            animDuration = StoryRenderer.slideTransitionDuration
+            animation = .spring(response: StoryRenderer.slideTransitionDuration,
+                                dampingFraction: 0.75)
         case .slide:
-            animDuration = 0.38
-            animation = .spring(response: 0.38, dampingFraction: 0.82)
+            animDuration = StoryRenderer.slideTransitionDuration
+            animation = .spring(response: StoryRenderer.slideTransitionDuration,
+                                dampingFraction: 0.82)
         case .reveal:
-            animDuration = 0.4
-            animation = .easeOut(duration: 0.4)
+            animDuration = StoryRenderer.slideTransitionDuration
+            animation = .easeOut(duration: StoryRenderer.slideTransitionDuration)
         default:
             animDuration = 0.35
             animation = .easeOut(duration: 0.35)
@@ -469,8 +482,9 @@ extension StoryViewerView {
             contentOpacity = 1
             openingScale = 1.0
             textSlideOffset = 0
+            openingSlideFraction = 0
             if incomingEffect == .reveal { isRevealActive = true }
-            if closingEffect == .zoom { closingScale = 1.08 }
+            if closingEffect == .zoom { closingScale = StoryRenderer.zoomTransitionScale }
         }
 
         restartTimer()

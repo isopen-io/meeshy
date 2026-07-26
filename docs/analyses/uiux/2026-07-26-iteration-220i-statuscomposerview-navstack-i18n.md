@@ -184,6 +184,46 @@ récursif, aucun fichier créé).
 **Portées non touchées :** 0 logique, 0 réseau, 0 layout, 0 changement visuel,
 0 modification du SDK, 0 fichier Android / Web / backend.
 
+## Suite — resynchronisation sur `main` (2026-07-26, après ouverture de #2352)
+
+Trois faits sont apparus après l'ouverture de la PR.
+
+**1. La CI `iOS Tests` a échoué pour une cause étrangère à cette itération.**
+`StoryRepostFlowTests.swift` (jamais touché ici) ne compilait pas :
+`missing argument for parameter 'visibility'` ×2 et une fermeture
+`onPublishRepost` à 2 arguments là où le type en attend 3. Cause : le commit
+`d94500a` a ajouté `visibility: String?` à l'API `repost` **et est déjà contenu
+dans `ffef133`**, la base de cette branche, sans mettre à jour ce fichier de
+test — autrement dit **la base était rouge**, le bundle de tests iOS ne
+compilait pas sur `ffef133`. `main` l'a corrigé depuis (`f8e45ea`). Le
+correctif est donc une **resynchronisation**, pas un patch : `main` est
+fusionnée dans la branche.
+
+**2. Collision d'essaim — la migration `NavigationStack` a été livrée par
+ailleurs.** Entre 15:57 et 16:08, ~12 PR ont été ouvertes, dont au moins 9
+portant la même migration (le pointeur partagé la désignait nommément, et le
+test épinglé portait l'instruction en commentaire). `fdc6b42` a été mergée dans
+`main` pendant ce temps. Les deux conflits sont résolus **en faveur de `main`** :
+`NavigationContainerMigrationTests` prend sa version telle quelle (identique en
+substance à la nôtre, jusqu'au nom `test_noNavigationViewRemains`), et
+`StatusComposerView` garde sa migration ainsi que sa suppression de l'`isDark`
+mort. Ne subsiste ici de la partie (A) que **rien** : elle est livrée. Les
+parties (B), (C) et (D) restent propres à cette PR.
+
+**3. Le ratchet a attrapé sa première régression — sur la première occasion.**
+Après fusion de `main`, le balayage passait de 1 669 à **1 673** : l'écran
+`StoryLanguageDetailView`, mergé entre-temps, arrive avec 4 clés
+(`story.language.detail.{title,translate,retranslate,original}`) posées en
+`defaultValue` français seul — donc affichées en français sur les 6 autres
+locales. **Le plafond n'a pas été relevé** : c'est exactement ce que le message
+d'échec du test interdit. Les 4 clés ont été traduites dans les 7 locales, en
+réutilisant les valeurs déjà présentes au catalogue pour « Traduire »
+(`action.translate`). Le balayage revient à **1 669**.
+
+Ce point vaut d'être noté : la régression n'était pas hypothétique, elle est
+arrivée dans l'heure, depuis une PR sœur, sur un écran neuf. C'est la
+justification empirique du ratchet.
+
 ## Reste à faire (piste 221i+)
 
 1. **Résorber le backlog i18n de 1 669 clés**, écran par écran, en descendant le

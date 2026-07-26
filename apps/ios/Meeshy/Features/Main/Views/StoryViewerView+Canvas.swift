@@ -804,6 +804,10 @@ struct StoryCardView: View {
     let contentOpacity: Double
     let textSlideOffset: CGFloat
     let openingScale: CGFloat
+    /// Fraction de la LARGEUR du canvas dont l'ouverture `.slide` décale
+    /// horizontalement — même unité et même sens que
+    /// `StoryRenderer.slideTransitionTravelFraction`.
+    let openingSlideFraction: CGFloat
     let isRevealActive: Bool
     let bigReactionEmoji: String?
     let bigReactionPhase: Int
@@ -1217,7 +1221,8 @@ struct StoryCardView: View {
                            height: canvasFitSize.height)
                     .clipped()
                     .opacity(contentOpacity)
-                    .offset(y: textSlideOffset)
+                    .offset(x: openingSlideFraction * canvasFitSize.width,
+                            y: textSlideOffset)
                     .scaleEffect(openingScale)
                     .clipShape(
                         RevealCircleShape(progress: isRevealActive ? 1.0 : (currentStory?.storyEffects?.opening == .reveal ? 0.001 : 1.0))
@@ -1732,30 +1737,36 @@ struct StoryCardView: View {
                 .zIndex(100)
             }
 
-            // === Layer 10: Full Language Picker overlay (transparent — story stays visible) ===
-            if showFullLanguagePicker {
-                LanguagePickerSheet(
-                    style: .dark,
-                    availableLanguageIds: Set(availableTranslationLanguages.map(\.id)),
-                    activeLanguageId: activeLanguageCode
-                ) { lang in
-                    LanguageUsageTracker.recordUsage(languageId: lang.id)
-                    // Prisme « Exploration » : affiche immédiatement dans la langue choisie
-                    // (override prépendu à la chaine) ; la traduction est demandée si absente
-                    // et le reader se re-rend dès son arrivée.
-                    onSelectLanguageOverride(lang.id)
-                    guard let story = currentStory else { return }
-                    Task {
-                        await StoryInteractionService().requestTranslation(
-                            storyId: story.id,
-                            targetLanguage: lang.id
-                        )
+            // === Layer 10: Explorateur de langues complet (Prisme) — remplace
+            // l'ancien `LanguagePickerSheet` mal intégré au liquid glass et sans
+            // dark/light (directive user 2026-07-26). Reprend le visuel de la
+            // liste extraite de la vue de conversation : contenu de la langue
+            // COURANTE en tête + liste avec aperçu, retraduire et « Traduire »
+            // on-demand. La story reste visible derrière. ===
+            if showFullLanguagePicker, let story = currentStory {
+                StoryLanguageDetailView(
+                    story: story,
+                    activeLanguageCode: activeLanguageCode,
+                    onSelectLanguage: { code in
+                        LanguageUsageTracker.recordUsage(languageId: code)
+                        // Prisme « Exploration » : override prépendu à la chaine ;
+                        // le reader se re-rend dès l'arrivée de la traduction.
+                        onSelectLanguageOverride(code)
+                    },
+                    onTranslate: { code in
+                        Task {
+                            await StoryInteractionService().requestTranslation(
+                                storyId: story.id,
+                                targetLanguage: code
+                            )
+                        }
+                    },
+                    onDismiss: {
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                            showFullLanguagePicker = false
+                        }
                     }
-                } onDismiss: {
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                        showFullLanguagePicker = false
-                    }
-                }
+                )
                 .transition(.move(edge: .bottom).combined(with: .opacity))
                 .zIndex(150)
             }
