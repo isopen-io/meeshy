@@ -20,6 +20,7 @@ import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.model.RefreshTokenRequest
 import me.meeshy.sdk.model.RegisterRequest
 import me.meeshy.sdk.model.auth.RegistrationStep
+import me.meeshy.sdk.model.auth.SummaryField
 import me.meeshy.sdk.model.auth.StepFill
 import me.meeshy.sdk.net.InMemoryTokenStore
 import me.meeshy.sdk.net.api.AuthApi
@@ -434,6 +435,36 @@ class RegistrationViewModelTest {
 
         assertThat(api.availabilityCalls).containsExactly(Triple(null, null, "33612345678"))
         assertThat(vm.state.value.fields.phoneAvailable).isTrue()
+    }
+
+    // ---- recap summary wiring ------------------------------------------------
+
+    @Test
+    fun summary_reflectsCollectedFields_inRecapOrder() {
+        val (vm, _, _) = scenario()
+        vm.fillAllValid()
+
+        val fields = vm.state.value.summary
+        assertThat(fields.map { it.field }).containsExactly(
+            SummaryField.USERNAME,
+            SummaryField.EMAIL,
+            SummaryField.NAME,
+            SummaryField.PHONE,
+            SummaryField.LANGUAGES,
+        ).inOrder()
+        assertThat(fields.first { it.field == SummaryField.NAME }.value).isEqualTo("Ada Lovelace")
+        assertThat(fields.first { it.field == SummaryField.EMAIL }.value).isEqualTo("a@b.co")
+    }
+
+    @Test
+    fun summary_omitsPhone_whenPhoneStepSkipped() {
+        val (vm, _, _) = scenario()
+        vm.fillAllValid()
+        // Land on the phone step and skip it — the number must not resurface in the recap.
+        vm.next() // PSEUDO -> PHONE
+        vm.skip() // PHONE -> EMAIL, clears the number + marks skipped
+
+        assertThat(vm.state.value.summary.map { it.field }).doesNotContain(SummaryField.PHONE)
     }
 
     private fun session() = AuthSession(MeeshyUser(id = "u1", username = "atabeth"), token = "jwt")

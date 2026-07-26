@@ -20,6 +20,9 @@ import me.meeshy.sdk.model.auth.RegistrationProgressBar
 import me.meeshy.sdk.model.auth.RegistrationStep
 import me.meeshy.sdk.model.auth.RegistrationStepGate
 import me.meeshy.sdk.model.auth.RegistrationStepNavigator
+import me.meeshy.sdk.model.auth.RegistrationSummary
+import me.meeshy.sdk.model.auth.RegistrationSummaryInput
+import me.meeshy.sdk.model.auth.RegistrationSummaryRow
 import me.meeshy.sdk.model.auth.SignupAvailabilityPolicy
 import me.meeshy.sdk.model.auth.SignupFieldValidation
 import me.meeshy.sdk.model.auth.StepFill
@@ -51,6 +54,25 @@ data class RegistrationUiState(
 
     /** Progress-bar role of [step] relative to [currentStep] — [RegistrationProgressBar]. */
     fun fill(step: RegistrationStep): StepFill = RegistrationProgressBar.fill(step, currentStep)
+
+    /**
+     * The recap card's rows for the RECAP step — [RegistrationSummary] over the
+     * fields already collected. Country dial code / regional language / bio are not
+     * yet gathered by the wizard, so their optional rows stay collapsed until those
+     * steps are wired; the pure core supports them the moment they are.
+     */
+    val summary: List<RegistrationSummaryRow>
+        get() = RegistrationSummary.rows(
+            RegistrationSummaryInput(
+                username = fields.username,
+                email = fields.email,
+                firstName = fields.firstName,
+                lastName = fields.lastName,
+                phoneNumber = fields.phoneNumber,
+                skipPhone = fields.skipPhone,
+                systemLanguage = fields.systemLanguage,
+            ),
+        )
 }
 
 /**

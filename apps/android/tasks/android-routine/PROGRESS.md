@@ -1,5 +1,37 @@
 # Progress — state & what to do next
 
+> On 2026-07-26 the **registration RECAP summary core** landed (slice `registration-recap-summary`,
+> feature-parity §A Auth — closes the pure-logic gap of the wizard's final RECAP step). The recap card's
+> rows are now an SSOT: pure `:core:model/auth/RegistrationSummary.kt` — a faithful port of iOS
+> `RegistrationViewModel.summaryItems` (`packages/MeeshySDK/Sources/MeeshyUI/Auth/RegistrationViewModel.swift`).
+> **Added (production, all `apps/android`):** `RegistrationSummary.rows(RegistrationSummaryInput)` returns an
+> ordered `List<RegistrationSummaryRow>` keyed by a semantic `SummaryField`
+> (USERNAME/EMAIL/NAME/PHONE/LANGUAGES/BIO): USERNAME/EMAIL/NAME/LANGUAGES always present, PHONE and BIO
+> appended only when populated (mirror of iOS's `if !phoneNumber.isEmpty` / `if !bio.isEmpty`). **SOTA over
+> iOS:** iOS returns UI tuples with the SF Symbol name + untranslated French label baked in — Android surfaces
+> only *which rows appear + each resolved value*, leaving icon/localized label to the recap composable, and
+> hardens three edges iOS's raw interpolation lacks: values trimmed (username/email via the
+> `SignupFieldValidation` normalizers), a **skipped** phone never resurfaces a stale number, and the language
+> value **collapses to the system label alone** when no distinct regional language was chosen (vs iOS's always
+> `"system / regional"`). Reuses `LanguageStepSelection.summaryLabel` for the flag+native-name labels — no
+> drift from the `LanguageData` catalogue. **Wiring:** `RegistrationUiState.summary` derives the rows from the
+> fields already collected (dial code / regional language / bio not yet gathered by the wizard stay collapsed
+> until those steps land — the core supports them the moment they are), exposed the same way as `canProceed` /
+> `fill`. **+20 behavioural tests** (18 `RegistrationSummaryTest` + 2 `RegistrationViewModelTest` — summary
+> reflects collected fields in recap order, phone omitted after skip). **Mutation (RED proof):** dropping the
+> `skipPhone` guard fails **exactly** `phone_skipped_isOmittedEvenWhenNumberLingers` (18 run, 1 failed, no
+> collateral). **Gate:** `./apps/android/meeshy.sh check` → **BUILD SUCCESSFUL in 9m38s** (every module;
+> `RegistrationViewModelTest` 32/32, `RegistrationSummaryTest` 18/18). Reviewer **PASS** (diff `apps/android`
+> only — 1 new source + 1 new test + wizard VM/test edits + tracking docs; SDK purity — the summary is a
+> stateless `:core:model` block, the when-to-show orchestration is the VM's derived state; SSOT — reuses the
+> `SignupFieldValidation` normalizers + `LanguageStepSelection.summaryLabel`, re-implements nothing; UDF —
+> `summary` is derived, not stored; no tautological tests).
+> **Next slice:** the paged **`OnboardingFlowView` Compose scaffold** (the wizard's screen — pager over the
+> shipped `RegistrationStep`/`RegistrationProgressBar`/`RegistrationStepGate`/`RegistrationSummary` cores,
+> `@Composable` glue mostly coverage-exempt), OR the still-`[ ]` **System+regional language selection step**
+> composable (over the shipped `LanguageStepSelection`), OR the tracked **Kover 90% coverage-gate infra**, OR
+> an `https://meeshy.me/join/{id}` **App-Links intent-filter** (`AndroidManifest` only).
+
 > On 2026-07-26 the **per-link DETAIL screen** landed (slice `sharelink-detail`, feature-parity §O Links
 > — **completes the share-link management vertical**, the last remaining share-link slice). Tapping a row
 > in `MyShareLinksScreen` now opens a full detail surface — a faithful port of iOS `ShareLinkDetailView`.

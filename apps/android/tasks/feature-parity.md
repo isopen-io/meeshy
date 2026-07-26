@@ -624,6 +624,34 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       app-side profile photo/banner/bio step composables + the recap screen (terms checkbox → `acceptTerms`)
       + the `RegistrationViewModel` wiring `RegistrationStepGate.canProceed(currentStep, fields)` into
       `RegistrationStepNavigator.advance`, and the still-`[ ]` System+regional language selection step above.
+      **Recap summary core shipped** (slice `registration-recap-summary`, 2026-07-26). Pure
+      `:core:model/auth/RegistrationSummary.kt` — the SSOT for the recap card's rows, a faithful port of
+      iOS `RegistrationViewModel.summaryItems`
+      (`packages/MeeshySDK/Sources/MeeshyUI/Auth/RegistrationViewModel.swift`, the computed
+      `[(icon, label, value)]` the recap renders). `RegistrationSummary.rows(RegistrationSummaryInput)` →
+      an ordered `List<RegistrationSummaryRow>` keyed by a semantic `SummaryField`
+      (USERNAME/EMAIL/NAME/PHONE/LANGUAGES/BIO): USERNAME/EMAIL/NAME/LANGUAGES always present, PHONE and
+      BIO appended only when populated — mirroring iOS's `if !phoneNumber.isEmpty` / `if !bio.isEmpty`
+      appends. **SOTA over iOS:** iOS returns UI tuples with the SF Symbol name + the untranslated French
+      label baked in; Android surfaces only *which rows appear and each resolved value* keyed by the
+      semantic field, leaving icon + localized label to the recap composable, and hardens three edges iOS's
+      raw interpolation lacks — values trimmed (username/email via the `SignupFieldValidation` normalizers),
+      a **skipped** phone never resurfaces a stale number, and the language value **collapses to the system
+      label alone** when no distinct regional language was chosen (vs iOS's always `"system / regional"`).
+      Reuses `LanguageStepSelection.summaryLabel` for the flag+native-name labels (no drift from the
+      `LanguageData` catalogue). **Wiring:** `RegistrationUiState.summary` derives the rows from the fields
+      already collected (dial code / regional language / bio not yet gathered by the wizard stay collapsed
+      until those steps land — the core supports them the moment they are), exposed the same way as
+      `canProceed` / `fill`. **+20 behavioural tests** (18 `RegistrationSummaryTest` — order full/minimal,
+      username/email trimming, name both/first-only/last-only/both-blank/inner-whitespace, phone
+      present/blank/skipped/no-dial-code, languages distinct/equal/blank-regional, bio non-blank/whitespace;
+      +2 `RegistrationViewModelTest` — summary reflects collected fields in recap order, phone omitted after
+      the phone step is skipped). Expectations are hand-written literals / SSOT-referenced (not tautological).
+      **Mutation check (RED proof):** dropping the `skipPhone` guard fails **exactly**
+      `phone_skipped_isOmittedEvenWhenNumberLingers` (18 run, 1 failed, no collateral). **Gate:**
+      `./apps/android/meeshy.sh check` (`assembleDebug testDebugUnitTest`) → **BUILD SUCCESSFUL in 9m38s**
+      (every module; `RegistrationViewModelTest` 32/32, `RegistrationSummaryTest` 18/18). Diff =
+      `apps/android` only (1 new source + 1 new test + edits to the wizard VM/its test + tracking docs).
 - [~] Email verification by 6-digit code (OTP autofill, resend, success animation) —
       **field sanitiser + completeness gate + verify/resend/edit gates core shipped** (slice
       `auth-otp-verification-core`, 2026-07-21). Pure `:core:model` `OtpCodeField` +
