@@ -98,11 +98,7 @@ struct ShareLinkDetailView: View {
                     withAnimation { copiedFeedback = false }
                 }
             }
-            actionButton(String(localized: "common.share", defaultValue: "Share", bundle: .main), icon: "square.and.arrow.up", color: MeeshyColors.shareAccent) {
-                guard let url = URL(string: link.joinUrl) else { return }
-                let av = UIActivityViewController(activityItems: [url], applicationActivities: nil)
-                presentSheet(av)
-            }
+            shareActionButton
             actionButton(isActive ? String(localized: "shareLink.disable", defaultValue: "Disable", bundle: .main) : String(localized: "shareLink.activate", defaultValue: "Activate", bundle: .main),
                          icon: isActive ? "pause.circle" : "play.circle",
                          color: isActive ? MeeshyColors.warning : MeeshyColors.success) {
@@ -116,21 +112,46 @@ struct ShareLinkDetailView: View {
 
     private func actionButton(_ label: String, icon: String, color: Color, action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            VStack(spacing: 6) {
-                ZStack {
-                    RoundedRectangle(cornerRadius: 12).fill(color.opacity(0.15))
-                        .frame(width: 48, height: 48)
-                    Image(systemName: icon).font(.title3)
-                        .foregroundColor(color)
-                        .accessibilityHidden(true)
-                }
-                Text(label).font(.caption2.weight(.medium))
-                    .foregroundColor(theme.textSecondary)
-            }
+            actionButtonLabel(label, icon: icon, color: color)
         }
         .frame(maxWidth: .infinity)
         .accessibilityLabel(label)
         .accessibilityAddTraits(.isButton)
+    }
+
+    // Native ShareLink for the join URL — the system owns the activity sheet:
+    // it anchors the iPad popover and presents against the view's own scene.
+    // Replaces a hand-rolled UIActivityViewController + top-VC walk that read
+    // `connectedScenes.first` (an unordered Set). Sibling: TrackingLinkDetailView.
+    private var shareActionButton: some View {
+        let label = String(localized: "common.share", defaultValue: "Share", bundle: .main)
+        return Group {
+            if let url = URL(string: link.joinUrl) {
+                ShareLink(item: url) {
+                    actionButtonLabel(label, icon: "square.and.arrow.up", color: MeeshyColors.shareAccent)
+                }
+            } else {
+                ShareLink(item: link.joinUrl) {
+                    actionButtonLabel(label, icon: "square.and.arrow.up", color: MeeshyColors.shareAccent)
+                }
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .accessibilityLabel(label)
+    }
+
+    private func actionButtonLabel(_ label: String, icon: String, color: Color) -> some View {
+        VStack(spacing: 6) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 12).fill(color.opacity(0.15))
+                    .frame(width: 48, height: 48)
+                Image(systemName: icon).font(.title3)
+                    .foregroundColor(color)
+                    .accessibilityHidden(true)
+            }
+            Text(label).font(.caption2.weight(.medium))
+                .foregroundColor(theme.textSecondary)
+        }
     }
 
     // MARK: - Stats
@@ -226,21 +247,5 @@ struct ShareLinkDetailView: View {
                 await MainActor.run { HapticFeedback.error() }
             }
         }
-    }
-
-    private func presentSheet(_ vc: UIViewController) {
-        guard let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
-              let window = scene.windows.first,
-              let root = window.rootViewController else { return }
-        var topVC = root
-        while let presented = topVC.presentedViewController { topVC = presented }
-        // iPad requires a popover anchor for UIActivityViewController or
-        // -present crashes. Anchor to the presenter's view, centered, no arrow.
-        if let popover = vc.popoverPresentationController {
-            popover.sourceView = topVC.view
-            popover.sourceRect = CGRect(x: topVC.view.bounds.midX, y: topVC.view.bounds.midY, width: 0, height: 0)
-            popover.permittedArrowDirections = []
-        }
-        topVC.present(vc, animated: true)
     }
 }

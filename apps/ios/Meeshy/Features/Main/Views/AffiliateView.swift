@@ -243,30 +243,9 @@ struct AffiliateView: View {
                     .foregroundColor(Color(hex: accentColor))
             }
             .accessibilityLabel(String(localized: "affiliate.action.copy", defaultValue: "Copier le lien de parrainage", bundle: .main))
+            .disabled(token.affiliateLink == nil)
 
-            // Partager
-            Button {
-                guard let link = token.affiliateLink, let url = URL(string: link) else { return }
-                let av = UIActivityViewController(activityItems: [url], applicationActivities: nil)
-                if let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
-                   let window = scene.windows.first,
-                   let root = window.rootViewController {
-                    var topVC = root
-                    while let presented = topVC.presentedViewController { topVC = presented }
-                    // iPad: UIActivityViewController needs a popover anchor or -present crashes.
-                    if let popover = av.popoverPresentationController {
-                        popover.sourceView = topVC.view
-                        popover.sourceRect = CGRect(x: topVC.view.bounds.midX, y: topVC.view.bounds.midY, width: 0, height: 0)
-                        popover.permittedArrowDirections = []
-                    }
-                    topVC.present(av, animated: true)
-                }
-            } label: {
-                Image(systemName: "square.and.arrow.up")
-                    .font(MeeshyFont.relative(16))
-                    .foregroundColor(Color(hex: accentColor))
-            }
-            .accessibilityLabel(String(localized: "affiliate.action.share", defaultValue: "Partager le lien de parrainage", bundle: .main))
+            shareTokenButton(token)
 
             Button {
                 Task { await viewModel.deleteToken(token) }
@@ -279,6 +258,35 @@ struct AffiliateView: View {
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
+    }
+
+    // Native ShareLink for the referral URL — the system owns the activity
+    // sheet: it anchors the iPad popover and presents against the row's own
+    // scene. Replaces a hand-rolled UIActivityViewController pushed onto the
+    // top view controller of `connectedScenes.first` (an unordered Set, so it
+    // could resolve to a background scene under Stage Manager / multitasking).
+    // A token whose link the backend hasn't minted yet renders the control
+    // disabled instead of inert: the affordance stays in place and VoiceOver
+    // announces it as dimmed rather than offering an action that does nothing.
+    private func shareTokenButton(_ token: AffiliateToken) -> some View {
+        let label = String(localized: "affiliate.action.share", defaultValue: "Partager le lien de parrainage", bundle: .main)
+        let affiliateLink = token.affiliateLink
+        return Group {
+            if let affiliateLink, let url = URL(string: affiliateLink) {
+                ShareLink(item: url) { shareGlyph }
+            } else if let affiliateLink {
+                ShareLink(item: affiliateLink) { shareGlyph }
+            } else {
+                Button(action: {}) { shareGlyph }.disabled(true)
+            }
+        }
+        .accessibilityLabel(label)
+    }
+
+    private var shareGlyph: some View {
+        Image(systemName: "square.and.arrow.up")
+            .font(MeeshyFont.relative(16))
+            .foregroundColor(Color(hex: accentColor))
     }
 }
 

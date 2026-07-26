@@ -42,6 +42,20 @@ final class NativeSharePresentationTests: XCTestCase {
     private static let conversationInfoSheet = "Meeshy/Features/Main/Components/ConversationInfoSheet.swift"
     private static let inviteFriendsSheet = "Meeshy/Features/Main/Components/InviteFriendsSheet.swift"
     private static let conversationListView = "Meeshy/Features/Main/Views/ConversationListView.swift"
+    private static let shareLinkDetailView = "Meeshy/Features/Main/Views/ShareLinkDetailView.swift"
+    private static let affiliateView = "Meeshy/Features/Main/Views/AffiliateView.swift"
+    private static let trackingLinkDetailView = "Meeshy/Features/Main/Views/TrackingLinkDetailView.swift"
+
+    /// Every file this doctrine has been applied to. Growing the list is how an
+    /// iteration records that a surface is converged and locked.
+    private static let convergedFiles = [
+        conversationInfoSheet,
+        inviteFriendsSheet,
+        conversationListView,
+        shareLinkDetailView,
+        affiliateView,
+        trackingLinkDetailView
+    ]
 
     // MARK: - Converged sites present through SwiftUI
 
@@ -116,15 +130,83 @@ final class NativeSharePresentationTests: XCTestCase {
         )
     }
 
+    // MARK: - Iteration 216i — synchronous items go through ShareLink
+
+    /// When the shared item is known at view-construction time, the first-party
+    /// answer is `ShareLink` — no state, no representable, no presentation code
+    /// at all. `CommunityLinkDetailView` and `TrackingLinkDetailView.shareActionButton`
+    /// already used it; the two sites below still hand-rolled the presentation.
+    func test_shareLinkDetailView_sharesJoinURLThroughShareLink() throws {
+        let source = try source(Self.shareLinkDetailView)
+
+        XCTAssertTrue(
+            source.contains("ShareLink(item: url)"),
+            "ShareLinkDetailView must share the join URL through a native ShareLink."
+        )
+        XCTAssertTrue(
+            source.contains("ShareLink(item: link.joinUrl)"),
+            "A join URL that fails to parse must still be shareable as text rather than " +
+            "leaving a button that silently does nothing (the previous `guard … else { return }`)."
+        )
+        XCTAssertFalse(
+            source.contains("func presentSheet"),
+            "The hand-rolled presentSheet(_:) helper must be gone — ShareLink replaces it entirely."
+        )
+    }
+
+    func test_affiliateView_sharesReferralLinkThroughShareLink() throws {
+        let source = try source(Self.affiliateView)
+
+        XCTAssertTrue(
+            source.contains("ShareLink(item: url)"),
+            "AffiliateView must share the referral link through a native ShareLink."
+        )
+        XCTAssertTrue(
+            source.contains("Button(action: {}) { shareGlyph }.disabled(true)"),
+            "A token whose affiliate link the backend has not minted yet must render the share " +
+            "control disabled — VoiceOver then announces it as dimmed instead of offering an " +
+            "action that does nothing."
+        )
+        XCTAssertTrue(
+            source.contains(".disabled(token.affiliateLink == nil)"),
+            "Same for the copy control, which was equally inert without a link."
+        )
+    }
+
+    /// The QR bitmap is rendered on tap, so `ShareLink` (item required up front)
+    /// cannot serve it — `.sheet(item:)` is the repo's answer for deferred items,
+    /// and it fixes the same two failure modes as the 215i sites.
+    func test_trackingLinkDetailView_presentsQRCodeThroughSwiftUI() throws {
+        let source = try source(Self.trackingLinkDetailView)
+
+        XCTAssertTrue(
+            source.contains("@State private var qrShareImage: QRShareImage?"),
+            "TrackingLinkDetailView must hold the rendered QR bitmap in Identifiable state."
+        )
+        XCTAssertTrue(
+            source.contains(".sheet(item: $qrShareImage)"),
+            "The QR share sheet must be presented via .sheet(item:) so SwiftUI anchors the " +
+            "iPad popover and presents against the view's own scene."
+        )
+        XCTAssertTrue(
+            source.contains("ShareSheet(activityItems: [qr.image])"),
+            "It must reuse the shared ShareSheet representable."
+        )
+        XCTAssertFalse(
+            source.contains("func presentVC"),
+            "The hand-rolled presentVC(_:) helper must be gone."
+        )
+    }
+
     // MARK: - Single-source-of-truth lock
 
-    /// Locks the convergence: no file among the three may reintroduce a manual
-    /// share presentation. The remaining `UIActivityViewController` uses in the
-    /// app are all `UIViewControllerRepresentable` wrappers presented inside a
+    /// Locks the convergence: no converged file may reintroduce a manual share
+    /// presentation. The remaining `UIActivityViewController` uses in the app
+    /// are all `UIViewControllerRepresentable` wrappers presented inside a
     /// SwiftUI `.sheet` (`ShareSheet`, `ActivityView`, `MediaShareSheet`),
-    /// which is exactly the pattern this iteration converges on.
+    /// which is exactly the pattern these iterations converge on.
     func test_convergedFiles_containNoManualActivityPresentation() throws {
-        for path in [Self.conversationInfoSheet, Self.inviteFriendsSheet, Self.conversationListView] {
+        for path in Self.convergedFiles {
             let source = try source(path)
             let code = source
                 .split(separator: "\n", omittingEmptySubsequences: false)
