@@ -511,14 +511,16 @@ struct MessageOverlayMenu: View {
 
             previewContent
         }
-        // Match the in-conversation bubble cap (BubbleStandardLayout
-        // uses 0.70 of the screen) so the preview reads as the SAME
-        // bubble the user just long-pressed — not a wider clone. The
+        // Match the in-conversation bubble cap (BubbleStandardLayout calls
+        // the same DeviceLayout helper, a share of the app's WINDOW — not of
+        // the physical display, which Split View / Slide Over / Stage Manager
+        // make far larger) so the preview reads as the SAME bubble the user
+        // just long-pressed — not a wider clone. The
         // `alignment` parameter pins the (now-compact) content to the
         // bubble's native edge inside the frame, working in tandem
         // with the parent HStack's Spacer(minLength: 44).
         .frame(
-            maxWidth: DeviceLayout.bubbleMaxWidth(containerWidth: UIScreen.main.bounds.width, sizeClass: horizontalSizeClass),
+            maxWidth: DeviceLayout.bubbleMaxWidth(sizeClass: horizontalSizeClass),
             alignment: message.isMe ? .trailing : .leading
         )
         .padding(.horizontal, 8)

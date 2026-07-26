@@ -301,15 +301,20 @@ struct MessageMenuPreviewContainer<Content: View>: View {
     @ViewBuilder let content: () -> Content
     @State private var naturalSize: CGSize = .zero
 
-    /// Plafond de hauteur de l'aperçu — 62 % de l'écran, comme l'overlay custom
-    /// (`MessageOverlayMenu.maxPreviewHeight`), pour laisser respirer la rangée
-    /// d'emojis + le menu au-dessus/dessous.
-    private var maxHeight: CGFloat { UIScreen.main.bounds.height * 0.62 }
+    /// Plafond de hauteur de l'aperçu — 62 % de la **fenêtre** de l'app, pour
+    /// laisser respirer la rangée d'emojis + le menu au-dessus/dessous. Mesuré
+    /// sur la fenêtre et non sur l'écran physique : en Split View, Slide Over
+    /// ou Stage Manager, l'app n'occupe qu'une fraction de l'écran, et un
+    /// plafond dérivé de l'écran cesse alors de plafonner quoi que ce soit.
+    /// (L'overlay custom `MessageOverlayMenu` poursuit le même but avec un
+    /// plafond FIXE de 320 pt : il met à l'échelle une frame déjà capturée,
+    /// pas une taille naturelle — mécanisme distinct, pas une valeur jumelle.)
+    private var maxHeight: CGFloat { DeviceLayout.windowSize.height * 0.62 }
 
     private var fitScale: CGFloat {
         guard naturalSize.height > maxHeight, naturalSize.height > 0 else { return 1 }
         // Plancher 0.5 : au-delà, un média très haut resterait lisible plutôt
-        // que de rétrécir à l'infini (même garde-fou que l'overlay custom).
+        // que de rétrécir à l'infini (l'overlay custom pose le sien à 0.55).
         return max(0.5, maxHeight / naturalSize.height)
     }
 
