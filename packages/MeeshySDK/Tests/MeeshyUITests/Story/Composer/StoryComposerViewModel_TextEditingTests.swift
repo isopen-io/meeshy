@@ -94,8 +94,17 @@ final class StoryComposerViewModel_TextEditingTests: XCTestCase {
         XCTAssertEqual(vm.textEditingMode, .inactive)
     }
 
+    /// L'ordre est celui de la barre d'outils : le verrouiller documente la
+    /// disposition et fait échouer le test avec le nom de l'outil ajouté ou
+    /// déplacé, là où un simple compte disait seulement « 9 au lieu de 8 ».
+    ///
+    /// `language` a rejoint la liste le 2026-07-25 : la langue d'écriture se
+    /// règle à côté des attributs visuels parce qu'une langue source fausse ne
+    /// se voit pas à l'écriture — elle ne se paie qu'à la traduction.
     func test_textEditTool_hasAllCases() {
-        // style, weight, color, size, align, background, frame, border
-        XCTAssertEqual(TextEditTool.allCases.count, 8)
+        XCTAssertEqual(
+            TextEditTool.allCases,
+            [.style, .weight, .color, .size, .align, .background, .frame, .border, .language]
+        )
     }
 }
