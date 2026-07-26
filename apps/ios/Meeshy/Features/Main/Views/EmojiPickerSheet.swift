@@ -349,7 +349,7 @@ struct EmojiPickerSheet: View {
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
-        NavigationView {
+        NavigationStack {
             EmojiPickerView(recentEmojis: quickReactions, onSelect: onSelect)
                 .navigationTitle(String(localized: "emoji.title", defaultValue: "Reactions"))
                 .navigationBarTitleDisplayMode(.inline)

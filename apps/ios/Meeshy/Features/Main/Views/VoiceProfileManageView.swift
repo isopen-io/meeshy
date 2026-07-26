@@ -337,7 +337,7 @@ struct VoiceProfileManageView: View {
     // MARK: - Add Samples Sheet
 
     private var addSamplesSheet: some View {
-        NavigationView {
+        NavigationStack {
             ZStack {
                 theme.backgroundGradient.ignoresSafeArea()
 
