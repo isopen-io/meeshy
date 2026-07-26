@@ -129,12 +129,27 @@ final class TimelineExportController: ObservableObject {
 
     private var exportTask: Task<Void, Never>?
     private let exporter: TimelineStoryExporting
+    /// Pseudo gravé dans le filigrane. Injectable — revue round 2 (Finding 2) :
+    /// lire `AuthManager.shared` directement au site d'appel rendait cette
+    /// valeur INcontrôlable en test, contrairement à `introProvider`. Par
+    /// défaut : la même lecture qu'avant (`AuthManager.shared.currentUser?.
+    /// username`), juste indirectée pour rester testable.
+    private let usernameProvider: @MainActor @Sendable () -> String?
     /// Identité gravée sur le préambule de marque. Injectable — même patron
     /// que `StoryPhotoSaveService.intro` — pour que les tests contrôlent
     /// l'identité résolue sans dépendre de `AuthManager.shared` ambiant.
     /// Par défaut : LA MÊME fabrique que les 3 autres chemins d'export
     /// (`StoryExportIntroFactory.currentUser`) — pas de décision dupliquée.
     private let introProvider: @MainActor @Sendable () async -> StoryExportIntroContent?
+    /// Borne dure sur la résolution de `introProvider` — voir
+    /// `BoundedAsyncResolution.resolve` pour le pourquoi. Revue round 2
+    /// (Finding 4) : avant ce fix, `introProvider()` était attendu SANS
+    /// limite, alors qu'une identité non cachée (avatar/fond réseau) peut
+    /// prendre jusqu'à ~60 s (timeout `URLSession` par défaut) — la barre de
+    /// progression serait restée à 0 % tout ce temps au premier export après
+    /// installation. Même mécanisme que `StoryPhotoSaveService.introTimeout`,
+    /// pas un nouveau inventé.
+    private let introTimeout: Duration
 
     var isExporting: Bool {
         if case .exporting = phase { return true }
@@ -142,9 +157,13 @@ final class TimelineExportController: ObservableObject {
     }
 
     init(exporter: TimelineStoryExporting = SystemTimelineStoryExporter(),
-         introProvider: (@MainActor @Sendable () async -> StoryExportIntroContent?)? = nil) {
+         usernameProvider: (@MainActor @Sendable () -> String?)? = nil,
+         introProvider: (@MainActor @Sendable () async -> StoryExportIntroContent?)? = nil,
+         introTimeout: Duration = .seconds(4)) {
         self.exporter = exporter
+        self.usernameProvider = usernameProvider ?? { AuthManager.shared.currentUser?.username }
         self.introProvider = introProvider ?? StoryExportIntroFactory.currentUser
+        self.introTimeout = introTimeout
     }
 
     func start(composer: StoryComposerViewModel) {
@@ -158,20 +177,21 @@ final class TimelineExportController: ObservableObject {
         // MÊME appel que les 3 autres chemins d'export (Task 9 : avant ce
         // fix, ce chemin appelait `.make()` SANS `username:`, filigrane
         // amputé du pseudo).
-        let watermark = MeeshyExportWatermark.make(username: AuthManager.shared.currentUser?.username)
+        let watermark = MeeshyExportWatermark.make(username: usernameProvider())
         let outputURL = FileManager.default.temporaryDirectory
             .appendingPathComponent("meeshy-timeline-\(UUID().uuidString).mp4")
 
         phase = .exporting(0)
         let exporter = self.exporter
         let introProvider = self.introProvider
+        let introTimeout = self.introTimeout
         exportTask = Task { [weak self] in
-            // Résolue DANS le Task (async) : l'identité (avatar / fond / mood)
-            // se charge depuis le cache, réseau si absent — voir
-            // `StoryExportIntroFactory.currentUser`. `introProvider` est la
-            // closure injectée à l'init, pas le singleton — l'injection en
-            // test reste honorée (même patron que `StoryPhotoSaveService`).
-            let introContent = await introProvider()
+            // Résolue DANS le Task (async), BORNÉE dans le temps — voir
+            // `BoundedAsyncResolution.resolve` et la doc de `introTimeout`.
+            // `introProvider` est la closure injectée à l'init, pas le
+            // singleton — l'injection en test reste honorée (même patron que
+            // `StoryPhotoSaveService`).
+            let introContent = await BoundedAsyncResolution.resolve(introProvider, timeout: introTimeout)
             do {
                 let finalURL = try await exporter.export(
                     slide: slide,

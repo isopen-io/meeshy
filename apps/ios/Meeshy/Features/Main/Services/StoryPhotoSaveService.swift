@@ -52,7 +52,7 @@ final class StoryPhotoSaveService: ObservableObject {
     private let toasts: FeedbackToastSurfacing
     private let preferredLanguages: @MainActor () -> [String]
     private let intro: @MainActor @Sendable () async -> StoryExportIntroContent?
-    /// Borne dure sur `resolveIntro(_:timeout:)` — voir sa doc pour le pourquoi.
+    /// Borne dure sur `BoundedAsyncResolution.resolve(_:timeout:)` — voir sa doc pour le pourquoi.
     private let introTimeout: Duration
 
     /// Tentative courante par story : incrémentée à chaque `save()` ET à
@@ -118,10 +118,10 @@ final class StoryPhotoSaveService: ObservableObject {
             guard let self else { return }
             // Résolu DANS le Task (async), BORNÉ dans le temps : l'identité
             // (avatar / fond / mood) se charge depuis le cache, réseau si
-            // absent — voir `resolveIntro(_:timeout:)`. `intro` est la
+            // absent — voir `BoundedAsyncResolution.resolve`. `intro` est la
             // closure injectée à l'init, pas le singleton — l'injection en
             // test reste honorée.
-            let introContent = await Self.resolveIntro(self.intro, timeout: self.introTimeout)
+            let introContent = await BoundedAsyncResolution.resolve(self.intro, timeout: self.introTimeout)
             let url = await self.exporter.prepareExport(
                 slide: slide,
                 languages: languages,
@@ -239,69 +239,5 @@ final class StoryPhotoSaveService: ObservableObject {
     /// de `jobs`/`tasks` entre-temps.
     private func isCurrent(_ generation: Int, for storyId: String) -> Bool {
         generations[storyId] == generation
-    }
-
-    /// Course entre `intro()` et une borne de temps : la première à finir
-    /// gagne, l'autre continue en arrière-plan mais son résultat est ignoré.
-    ///
-    /// Sans cette borne, une résolution d'identité non cachée (avatar / fond
-    /// réseau via `DiskCacheStore`, jusqu'à ~60 s de timeout `URLSession` par
-    /// défaut) laisserait l'anneau figé à 0 % pendant toute l'attente — AVANT
-    /// même que le bake ne démarre et ne publie sa première fraction,
-    /// l'utilisateur croirait l'app plantée. Passé le délai, le bake démarre
-    /// SANS interlude de marque plutôt que de bloquer : dégradation
-    /// gracieuse, la résolution d'identité (avatar/fond/mood) n'est ni
-    /// supprimée ni contournée, juste bornée dans le temps.
-    ///
-    /// Implémentée en `withCheckedContinuation` + boîte de résolution unique
-    /// plutôt qu'en `withTaskGroup` : un `addTask { @MainActor in await
-    /// intro() }` capturant une closure `@Sendable` fait buter le vérificateur
-    /// d'isolation par régions sur une limitation réelle du compilateur
-    /// (« pattern that the region based isolation checker does not
-    /// understand how to check », reproductible avec Swift 6.0 / Xcode 26.1
-    /// sur ce fichier). Ce patron évite `withTaskGroup` et reprend celui déjà
-    /// en usage pour `ProgressSinkBox` (`StoryVideoExportService.swift`).
-    private static func resolveIntro(
-        _ intro: @escaping @MainActor @Sendable () async -> StoryExportIntroContent?,
-        timeout: Duration
-    ) async -> StoryExportIntroContent? {
-        await withCheckedContinuation { (continuation: CheckedContinuation<StoryExportIntroContent?, Never>) in
-            let box = IntroRaceBox(continuation)
-            Task { @MainActor in
-                let content = await intro()
-                box.finish(with: content)
-            }
-            Task { @MainActor in
-                try? await Task.sleep(for: timeout)
-                box.finish(with: nil)
-            }
-        }
-    }
-}
-
-// MARK: - IntroRaceBox
-
-/// Résout une continuation partagée exactement une fois : la première des
-/// deux tentatives (intro ou timeout, voir `resolveIntro`) à finir gagne,
-/// l'autre est ignorée sans crasher (`CheckedContinuation` interdit une
-/// double reprise). Même patron que `ProgressSinkBox`
-/// (`StoryVideoExportService.swift`) : les deux `Task` qui appellent
-/// `finish(with:)` sont créées depuis le MÊME contexte `@MainActor` et
-/// héritent donc du MainActor par défaut (SE-0461) — `didFinish` est donc
-/// sérialisé en pratique malgré l'annotation `@unchecked Sendable`, requise
-/// pour franchir la frontière non-Sendable du closure de
-/// `withCheckedContinuation`.
-private final class IntroRaceBox: @unchecked Sendable {
-    private let continuation: CheckedContinuation<StoryExportIntroContent?, Never>
-    private var didFinish = false
-
-    init(_ continuation: CheckedContinuation<StoryExportIntroContent?, Never>) {
-        self.continuation = continuation
-    }
-
-    func finish(with content: StoryExportIntroContent?) {
-        guard !didFinish else { return }
-        didFinish = true
-        continuation.resume(returning: content)
     }
 }
