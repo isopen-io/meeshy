@@ -167,25 +167,56 @@ le fichier fautif. **0 clé i18n neuve, 0 logique, 0 réseau, 0 layout.**
 
 Migration `NavigationView` → `NavigationStack` : **entamée 214i, close 220i.**
 
+## Reconnaissance complémentaire (menée pendant l'attente CI)
+
+Les deux pistes que 219i classait en tête ont été **balayées ici même**, et
+toutes deux se révèlent **déjà soldées**. Ce sont des résultats négatifs, mais
+ils ont de la valeur : ils évitent à 221i de brûler un cycle à les redécouvrir.
+
+### A — Dark Mode : la famille nominée par 219i est déjà propre
+
+| Sonde | Résultat |
+|---|---|
+| `MeeshyColors.indigo{50,100,200}` posés inconditionnellement | **0**. Les 2 hits isolés par grep (`AudioPostComposerView.swift:104`, `MeeshyApp.swift:1050`) sont la **branche claire d'un ternaire `isDark ? … : …`** dont le grep ne voyait qu'une ligne. |
+| Fichiers utilisant ces tokens **sans** `colorScheme` | 3 (`StarredMessagesView`, `LinkPreviewCard`, `ConversationListView+Overlays`) — tous **corrects** : ils gèrent le sombre via un paramètre `isDark` ou `theme.mode.isDark`. |
+| `Color.white` opaque ou inconditionnel | 28 hits, **0 défaut**. Les faibles opacités (0.05 → 0.3) sont des **voiles intentionnels sur média ou canvas sombre** (`StoryViewer*`, `AudioFullscreenView`, `ReelAudioBackdrop`, `LinksHubView`, bulles). |
+| Le seul blanc **opaque** (`TwoFactorSetupView.swift:100`) | **Faux positif permanent** : c'est la *zone de silence* du QR code, où le blanc est **requis** pour la scannabilité. |
+
+### B — Recensement des API dépréciées : l'axe entier est à zéro
+
+Le recensement censé désigner la prochaine API à « cliqueter » revient vide :
+
+| API dépréciée | Occurrences | Remplaçant moderne présent |
+|---|---|---|
+| `NavigationView` | **0** (clos par cette itération) | `NavigationStack` — **50** |
+| `NavigationLink(isActive:)` | **0** | `navigationDestination` — 3 |
+| `.alert(isPresented:)` (forme dépréciée, `isPresented` en 1<sup>er</sup> arg) | **0** | `.alert(titre, isPresented:)` — **17** |
+| `.actionSheet(…)` | **0** | `.confirmationDialog` — **10** |
+| `.onChange(of:perform:)` 1-arg | **0** | — |
+
+Les 81 occurrences de `onChange` du dépôt sont des `.onChanged` de gestures, des
+labels de paramètre (`reportsContactsScroll(onChange:)`) ou des commentaires :
+**aucun** modifier `.onChange(of:)` réel. Les colonnes « remplaçant moderne »
+servent de contre-épreuve — elles prouvent que les zéros viennent d'une
+migration réellement faite, et non d'un grep qui manquerait sa cible.
+
+**Conséquence** : clore `NavigationView` ne ferme pas seulement un fichier, cela
+**solde tout l'axe conteneurs / présentation dépréciés** de l'app iOS.
+
 ## Piste 221i+
 
-1. **Balayage Dark Mode généralisé** (hérité 219i, toujours la piste la plus
-   riche) : la famille « couleur de marque claire posée sans lecture du
-   `colorScheme` ». Deux pièges déjà identifiés en 219i à respecter : (a)
-   beaucoup de `MeeshyColors.indigoNNN` sont posés sur des fonds eux-mêmes
-   thématisés et sont **corrects** ; (b) toute surface descendant de
-   `StoryViewerView` doit se brancher sur `colorScheme`, **jamais** sur
-   `ThemeManager.mode`.
-2. **`MeeshyShareExtension` i18n** (hérité 219i, désormais débloqué — #2319
-   retombée) : câbler un `Localizable.xcstrings` à la cible, 3 chaînes crues.
-   Ce sont les **seules** chaînes crues restantes de toute l'app iOS d'après
-   l'audit 219i — donc une clôture d'axe, comme celle-ci.
-3. **`StoryViewerView+Content.shareStory()`** (hérité 219i) : suppression de code
+Les deux pistes héritées de 219i étant épuisées (§ A et § B ci-dessus) :
+
+1. **`MeeshyShareExtension` i18n** — désormais **la** piste, et de loin. Débloqué
+   (#2319 retombée) : câbler un `Localizable.xcstrings` à la cible, 3 chaînes
+   crues. Ce sont les **seules** chaînes crues restantes de toute l'app iOS
+   d'après l'audit 219i — donc une **clôture d'axe**, de même nature et de même
+   valeur que la clôture `NavigationView` réalisée ici.
+2. **`StoryViewerView+Content.shareStory()`** (hérité 219i) : suppression de code
    mort (0 caller), la surface story a refroidi.
-4. **`TrackingLinkDetailView`** (hérité 219i) : vérifier que la dette est
+3. **`TrackingLinkDetailView`** (hérité 219i) : vérifier que la dette est
    retombée et resserrer l'ensemble de test correspondant.
-5. **Autres conteneurs dépréciés** : maintenant que `NavigationView` est à zéro,
-   le même cliquet « balayage + attendu épinglé » est transposable à d'autres API
-   dépréciées (ex. `onChange(of:perform:)` à un argument, `NavigationLink(isActive:)`,
-   `.alert(isPresented:)` à contenu impératif). Un balayage de recensement dirait
-   laquelle porte le plus de valeur.
+4. **Revue produit à défaut de piste héritée** : les deux familles nominées par
+   219i étant closes, 221i+ devra probablement **générer** sa cible plutôt que
+   l'hériter — méthode 219i : classer les surfaces par churn 7 jours
+   (`git log --since`), puis audit ligne à ligne de la tête de classement.
