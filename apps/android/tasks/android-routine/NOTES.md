@@ -2,6 +2,22 @@
 
 Append-only log of gotchas and decisions that save time next run.
 
+## Lesson (2026-07-26, `sharelink-created-sheet`) — material3 1.3.0 `ModalBottomSheet` API + derive, don't store
+Compose BOM `2024.10.01` resolves **material3 1.3.0**. Its `ModalBottomSheet` exposes a `windowInsets:
+WindowInsets` parameter — **NOT** the `contentWindowInsets: @Composable () -> WindowInsets` lambda that
+arrives in later material3. Reaching for the newer signature compiles nowhere; either pass `windowInsets`
+or omit it and take the default. `rememberModalBottomSheetState(skipPartiallyExpanded = true)` and the
+`@OptIn(ExperimentalMaterial3Api::class)` requirement both hold in 1.3.0. When adding a new Compose API,
+check the resolved material3 version behind the BOM before assuming a signature.
+
+Also: when a screen needs a value derived from injected config (here the created link's public join URL =
+`webOrigin` + `linkId`), put the **constant** (`webOrigin`) in the immutable `UiState` and expose the
+result as a **computed** property (`val createdJoinUrl get() = created?.joinUrl(webOrigin)`) rather than
+storing the URL on each transition — keeps UDF pure, avoids a redundant field, and the VM test asserts the
+derivation through the observable `state`. Adding a constructor-injected `MeeshyConfig` to an existing VM
+means every test factory must thread a `config: MeeshyConfig = MeeshyConfig()` default (STAGING for the
+non-default-origin case).
+
 ## Lesson (2026-07-25, `sharelink-my-links`) — verify gateway routes, don't trust the iOS SDK's endpoint strings
 `iOS ShareLinkService` calls `GET /links?offset=&limit=`, `GET /links/stats`, `PATCH /links/{linkId}`
 (plain), `DELETE /links/{linkId}`. Reading the **gateway** (`services/gateway/src/routes/links/{user,admin}.ts`)

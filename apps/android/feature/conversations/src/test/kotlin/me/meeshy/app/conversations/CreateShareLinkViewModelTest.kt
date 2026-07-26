@@ -14,6 +14,7 @@ import me.meeshy.sdk.model.CreateShareLinkDetail
 import me.meeshy.sdk.model.CreateShareLinkRequest
 import me.meeshy.sdk.model.CreateShareLinkResponse
 import me.meeshy.sdk.model.ShareLinkExpiration
+import me.meeshy.sdk.net.MeeshyConfig
 import me.meeshy.sdk.net.api.LinkApi
 import me.meeshy.sdk.sharelink.ShareLinkRepository
 import org.junit.After
@@ -76,11 +77,12 @@ class CreateShareLinkViewModelTest {
     private fun viewModel(
         api: FakeLinkApi,
         conversationId: String = "conv-1",
+        config: MeeshyConfig = MeeshyConfig(),
     ): CreateShareLinkViewModel {
         val handle = SavedStateHandle(
             mapOf(CreateShareLinkViewModel.CONVERSATION_ID_ARG to conversationId),
         )
-        return CreateShareLinkViewModel(ShareLinkRepository(api), handle)
+        return CreateShareLinkViewModel(ShareLinkRepository(api), handle, config)
             .apply { now = { this@CreateShareLinkViewModelTest.now.toEpochMilli() } }
     }
 
@@ -137,6 +139,33 @@ class CreateShareLinkViewModelTest {
         assertThat(state.isCreated).isTrue()
         assertThat(state.created?.linkId).isEqualTo("link-1")
         assertThat(state.errorMessage).isNull()
+    }
+
+    @Test
+    fun beforeCreate_theCreatedJoinUrlIsNull() {
+        val vm = viewModel(FakeLinkApi(response = okResponse()))
+
+        assertThat(vm.state.value.createdJoinUrl).isNull()
+    }
+
+    @Test
+    fun submit_success_derivesTheCreatedJoinUrlFromTheResolvedWebOrigin() = runTest {
+        val vm = viewModel(FakeLinkApi(response = okResponse()))
+
+        vm.submit()
+        advanceUntilIdle()
+
+        assertThat(vm.state.value.createdJoinUrl).isEqualTo("https://meeshy.me/join/link-1")
+    }
+
+    @Test
+    fun submit_success_joinUrlHonoursANonDefaultServerEnvironment() = runTest {
+        val vm = viewModel(FakeLinkApi(response = okResponse()), config = MeeshyConfig.STAGING)
+
+        vm.submit()
+        advanceUntilIdle()
+
+        assertThat(vm.state.value.createdJoinUrl).isEqualTo("https://staging.meeshy.me/join/link-1")
     }
 
     @Test
