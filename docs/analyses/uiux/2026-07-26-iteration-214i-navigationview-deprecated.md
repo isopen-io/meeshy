@@ -110,3 +110,22 @@ chaînes hors Xcode, puis la CI `iOS Tests` sert de portail (compile Xcode
    `navigationTitle` : candidat à `.navigationTitle(...)` +
    `.navigationBarTitleDisplayMode(.inline)` (change le visuel → itération
    dédiée, pas un glissement de celle-ci).
+
+---
+
+## Clôture (215i, 2026-07-26)
+
+Le point 1 du « Reste à faire » est **soldé**. `StatusComposerView.swift` — le
+dernier `NavigationView` des cibles app, laissé de côté en 214i parce qu'il était
+détenu par la PR en vol #2275 — a été migré vers `NavigationStack` en **215i**,
+une fois #2275 mergée dans `main`.
+
+Le balayage de `NavigationContainerMigrationTests` est passé de
+`{StatusComposerView.swift}` à l'**ensemble vide** : le test cesse d'épingler une
+dette et devient une garde anti-régression permanente. Le mécanisme a fonctionné
+comme prévu — l'attendu épinglé a forcé la clôture explicite plutôt que l'oubli.
+
+**Statut : dette `NavigationView` close sur les cibles app iOS.** Les points 2 à 4
+restent ouverts (SDK hors périmètre routine, i18n de `MeeshyShareExtension`,
+`navigationTitle` de `addSamplesSheet`) et sont repris dans le « Reste à faire »
+de `2026-07-26-iteration-215i-statuscomposerview.md`.

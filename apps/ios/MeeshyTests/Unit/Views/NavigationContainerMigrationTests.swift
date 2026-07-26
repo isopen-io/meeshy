@@ -10,9 +10,9 @@ import XCTest
 /// The app's deployment floor is iOS 16.0 (`project.yml`), so `NavigationStack` is
 /// available unconditionally — no availability guard, no compatibility shim.
 ///
-/// This suite sweeps every SwiftUI source of the iOS app targets and pins the exact
-/// set of files still using the deprecated container, so that (a) the migrated files
-/// cannot regress and (b) no new `NavigationView` can be introduced unnoticed.
+/// This suite sweeps every SwiftUI source of the iOS app targets. Since 215i the
+/// migration is complete, so the sweep asserts the empty set: the app targets carry
+/// no `NavigationView` at all, and any reintroduction fails here.
 @MainActor
 final class NavigationContainerMigrationTests: XCTestCase {
 
@@ -59,6 +59,12 @@ final class NavigationContainerMigrationTests: XCTestCase {
         try assertMigrated("MeeshyShareExtension/ShareViewController.swift")
     }
 
+    // MARK: - Migrated in 215i (last holdout)
+
+    func test_statusComposer_usesNavigationStack() throws {
+        try assertMigrated("Meeshy/Features/Main/Views/StatusComposerView.swift")
+    }
+
     private func assertMigrated(_ path: String, file: StaticString = #filePath, line: UInt = #line) throws {
         let source = try String(contentsOf: iosRoot.appendingPathComponent(path), encoding: .utf8)
         XCTAssertFalse(
@@ -75,19 +81,17 @@ final class NavigationContainerMigrationTests: XCTestCase {
         )
     }
 
-    // MARK: - Remaining debt is pinned, not merely tolerated
+    // MARK: - The debt is closed, and stays closed
 
-    func test_noUnexpectedNavigationViewRemains() throws {
-        // StatusComposerView is the last holdout. It is deliberately untouched here
-        // because it is held by an in-flight pull request; migrating it is the
-        // follow-up iteration. When that lands, this expectation drops to the empty
-        // set and the test fails until it is updated — which is the intent.
-        let expected: Set<String> = ["StatusComposerView.swift"]
+    func test_noNavigationViewRemainsInAppTargets() throws {
+        // 214i migrated three files and pinned StatusComposerView as the last
+        // holdout (it was held by an in-flight pull request). 215i migrated it, so
+        // the expectation is now the empty set — this is a plain regression guard.
         XCTAssertEqual(
-            try filesUsingDeprecatedContainer(), expected,
-            "The set of files using the deprecated NavigationView container changed. Either a new " +
-            "NavigationView was introduced (use NavigationStack instead) or the last holdout was " +
-            "migrated (then shrink this expectation)."
+            try filesUsingDeprecatedContainer(), [],
+            "A NavigationView was reintroduced in an app target. Use NavigationStack: it is " +
+            "available unconditionally at the iOS 16.0 deployment floor, and NavigationView's " +
+            "default double-column style collapses to an empty detail pane at regular width."
         )
     }
 }

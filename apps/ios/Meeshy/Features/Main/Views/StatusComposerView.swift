@@ -34,7 +34,7 @@ struct StatusComposerView: View {
     private let columns = Array(repeating: GridItem(.flexible(), spacing: 16), count: 5)
 
     var body: some View {
-        NavigationView {
+        NavigationStack {
             ZStack {
                 theme.backgroundGradient.ignoresSafeArea()
 

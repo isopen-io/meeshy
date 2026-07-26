@@ -761,11 +761,17 @@ struct ConversationListView: View {
                 repostOfId: entry.id,
                 repostAudioUrl: entry.audioUrl
             )
-            .presentationDetents([.medium])
+            // `.large` is an escape hatch, not a new default: the composer's
+            // fixed VStack (2×5 emoji grid + visibility rail + field) has no
+            // ScrollView, so at accessibility text sizes it outgrows a medium
+            // detent and the Publish affordance becomes unreachable.
+            .presentationDetents([.medium, .large])
+            .presentationDragIndicator(.visible)
         }
         .sheet(isPresented: $showStatusComposer) {
             StatusComposerView(viewModel: statusViewModel)
-                .presentationDetents([.medium])
+                .presentationDetents([.medium, .large])
+                .presentationDragIndicator(.visible)
         }
     }
 
