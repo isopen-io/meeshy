@@ -231,12 +231,49 @@ final class StoryPhotoSaveServiceTests: XCTestCase {
 
     /// Draine la file du MainActor jusqu'à ce que le job disparaisse, avec une
     /// borne dure : sans borne, un test rouge tournerait jusqu'au timeout xctest.
+    ///
+    /// Convient à TOUS les tests dont les doubles résolvent sans timer réel
+    /// (`ScriptedStoryExporter`/`StubPhotoSaver` immédiats, ou continuations
+    /// manuelles résolues depuis le test) : `Task.yield()` suffit à dérouler
+    /// la chaîne d'`await` jusqu'au bout, quel que soit le temps réel écoulé.
+    /// NE convient PAS à un test qui fait courir un VRAI `Task.sleep` (le
+    /// timeout d'intro) — voir `waitUntilIdleRealTime`.
     private func waitUntilIdle(_ sut: StoryPhotoSaveService, storyId: String) async {
         for _ in 0..<200 {
             if sut.progress(for: storyId) == nil { return }
             await Task.yield()
         }
         XCTFail("le job n'a jamais été retiré pour \(storyId)")
+    }
+
+    /// Variante temps réel de `waitUntilIdle`, pour un test dont la
+    /// progression dépend d'un VRAI timer (`Task.sleep`).
+    ///
+    /// `Task.yield()` ne garantit AUCUN temps réel écoulé — il rend juste la
+    /// main à l'ordonnanceur. Sous faible contention (rien d'autre à
+    /// exécuter), 200 itérations peuvent s'épuiser en quelques microsecondes,
+    /// bien avant qu'un timer de 100ms n'ait eu la moindre chance de se
+    /// déclencher — diagnostiqué round 3 : `test_save_introSlowerThanTimeout_…`
+    /// échouait avec `waitUntilIdle` par « le job n'a jamais été retiré »
+    /// quand la suite tournait sans contention externe (0,1s de bruit
+    /// insuffisant pour épuiser 200 yields), alors qu'il passait la même
+    /// assertion de contenu en isolation sous forte contention (où 200 yields
+    /// prenaient naturellement plus d'une seconde). Cette variante dort
+    /// RÉELLEMENT entre les vérifications (`Task.sleep`, pas `Task.yield()`)
+    /// et borne sur le temps réel écoulé (`ContinuousClock`), pas sur un
+    /// nombre d'itérations — fiable quelle que soit la contention du host.
+    private func waitUntilIdleRealTime(
+        _ sut: StoryPhotoSaveService, storyId: String,
+        pollInterval: Duration = .milliseconds(10),
+        maxWait: Duration = .seconds(5)
+    ) async {
+        let clock = ContinuousClock()
+        let deadline = clock.now.advanced(by: maxWait)
+        while clock.now < deadline {
+            if sut.progress(for: storyId) == nil { return }
+            try? await Task.sleep(for: pollInterval)
+        }
+        XCTFail("le job n'a jamais été retiré pour \(storyId) après \(maxWait)")
     }
 
     /// Draine la file du MainActor jusqu'à ce que `condition` soit vraie —
@@ -424,7 +461,9 @@ final class StoryPhotoSaveServiceTests: XCTestCase {
         let start = Date()
 
         sut.save(story: story)
-        await waitUntilIdle(sut, storyId: story.id)
+        // `waitUntilIdleRealTime`, PAS `waitUntilIdle` : ce test fait courir
+        // un VRAI `Task.sleep` (le timeout de 0.1s) — voir la doc du helper.
+        await waitUntilIdleRealTime(sut, storyId: story.id)
 
         let elapsed = Date().timeIntervalSince(start)
         XCTAssertLessThan(elapsed, 1.5, "doit revenir près de la borne de 0.1s, jamais attendre les 3s de l'intro")
