@@ -273,14 +273,15 @@ final class StoryVideoExportServiceTests: XCTestCase {
         let exporter = RealMP4StubExporter(duration: Self.stubStoryDuration)
         let sut = StoryVideoExportService(exporter: exporter)
 
-        let url = try XCTUnwrap(await sut.prepareExport(
+        let produced = await sut.prepareExport(
             slide: makeStaticSlide(),
             languages: [],
             watermark: nil,
             intro: nil,
             onProgress: nil,
             onPhaseChange: nil
-        ))
+        )
+        let url = try XCTUnwrap(produced)
         defer { sut.cleanupExport(at: url) }
 
         let duration = CMTimeGetSeconds(try await AVURLAsset(url: url).load(.duration))
@@ -306,7 +307,7 @@ final class StoryVideoExportServiceTests: XCTestCase {
         let exporter = RealMP4StubExporter(duration: Self.stubStoryDuration)
         let sut = StoryVideoExportService(exporter: exporter)
 
-        let url = try XCTUnwrap(await sut.prepareExport(
+        let produced = await sut.prepareExport(
             slide: makeStaticSlide(),
             languages: [],
             watermark: nil,
@@ -314,7 +315,8 @@ final class StoryVideoExportServiceTests: XCTestCase {
                                            accentColorHex: "4ECDC4"),
             onProgress: nil,
             onPhaseChange: nil
-        ))
+        )
+        let url = try XCTUnwrap(produced)
         defer { sut.cleanupExport(at: url) }
 
         let duration = CMTimeGetSeconds(try await AVURLAsset(url: url).load(.duration))
