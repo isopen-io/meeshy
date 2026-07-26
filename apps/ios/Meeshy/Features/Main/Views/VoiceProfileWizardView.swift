@@ -318,10 +318,10 @@ struct VoiceProfileWizardView: View {
 
             if let profile = viewModel.profile {
                 VStack(spacing: 8) {
-                    profileInfoRow(label: String(localized: "voice.profile.samples", defaultValue: "Echantillons", bundle: .main), value: "\(profile.sampleCount)")
-                    profileInfoRow(label: String(localized: "voice.profile.totalDuration", defaultValue: "Duree totale", bundle: .main), value: "\(profile.totalDurationSeconds)s")
+                    profileInfoRow(label: String(localized: "voice.profile.samples", defaultValue: "Échantillons", bundle: .main), value: "\(profile.sampleCount)")
+                    profileInfoRow(label: String(localized: "voice.profile.totalDuration", defaultValue: "Durée totale", bundle: .main), value: "\(profile.totalDurationSeconds)s")
                     if let quality = profile.quality {
-                        profileInfoRow(label: String(localized: "voice.profile.quality", defaultValue: "Qualite", bundle: .main), value: "\(Int(quality * 100))%")
+                        profileInfoRow(label: String(localized: "voice.profile.quality", defaultValue: "Qualité", bundle: .main), value: "\(Int(quality * 100))%")
                     }
                     profileInfoRow(label: String(localized: "voice.profile.status", defaultValue: "Statut", bundle: .main), value: profile.status.rawValue.capitalized)
                 }
