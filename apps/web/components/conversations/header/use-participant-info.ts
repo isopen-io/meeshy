@@ -2,6 +2,7 @@ import { useCallback } from 'react';
 import type { Conversation, SocketIOUser as User } from '@meeshy/shared/types';
 import type { Participant } from '@meeshy/shared/types/participant';
 import { UserRoleEnum } from '@meeshy/shared/types';
+import { getUserDisplayNameOrNull } from '@/utils/user-display-name';
 import type { ParticipantInfo } from './types';
 
 /** Type-safe accessor for participant.user which is typed as `unknown` in the shared schema */
@@ -24,8 +25,7 @@ export function useParticipantInfo(
     const otherParticipant = conversationParticipants.find(p => p.userId !== currentUser?.id);
     if (otherParticipant?.user) {
       const user = otherParticipant.user as ParticipantUser;
-      const name = user.displayName || user.username ||
-             (user.firstName || user.lastName ? `${user.firstName || ''} ${user.lastName || ''}`.trim() : null);
+      const name = getUserDisplayNameOrNull(user);
       if (name) return name;
     }
 
@@ -34,8 +34,7 @@ export function useParticipantInfo(
       const otherConvParticipant = convParticipants.find((p: unknown) => p.userId !== currentUser?.id);
       if (otherConvParticipant?.user) {
         const user = otherConvParticipant.user;
-        const name = user.displayName || user.username ||
-               (user.firstName || user.lastName ? `${user.firstName || ''} ${user.lastName || ''}`.trim() : null);
+        const name = getUserDisplayNameOrNull(user);
         if (name) return name;
       }
     }
@@ -45,8 +44,7 @@ export function useParticipantInfo(
       const otherMember = members.find((m: unknown) => m.userId !== currentUser?.id);
       if (otherMember?.user) {
         const user = otherMember.user;
-        const name = user.displayName || user.username ||
-               (user.firstName || user.lastName ? `${user.firstName || ''} ${user.lastName || ''}`.trim() : null);
+        const name = getUserDisplayNameOrNull(user);
         if (name) return name;
       }
     }
