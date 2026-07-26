@@ -249,10 +249,20 @@ final class StoryVideoExportServiceTests: XCTestCase {
     /// Durée du MP4 factice produit par `RealMP4StubExporter`.
     private static let stubStoryDuration: TimeInterval = 2.0
 
-    /// Allongement net apporté par la carte de fin : 2 s de carte dont 1,5 s en
-    /// crossfade par-dessus la fin de la story (cf.
+    /// Allongement net apporté par la carte de fin **sans identité d'auteur** :
+    /// 2 s de carte dont 1,5 s en crossfade par-dessus la fin de la story (cf.
     /// `StoryExportOutroTests.test_append_extendsStoryByHalfSecond`).
     private static let outroTail: TimeInterval = 0.5
+
+    /// Allongement net quand une identité d'auteur EST fournie. Depuis la
+    /// fermeture en 2 temps (`StoryExportOutro.logoPhase` 1,5 s puis
+    /// `identityPhase` 2 s), le clip dure `authorClipDuration` = 3,5 s mais la
+    /// phase logo chevauche la fin de la story — seule la phase d'identité
+    /// dépasse. D'où une queue de 2 s, pas 0,5 s.
+    ///
+    /// Miroir local : ces constantes sont `internal` à `MeeshyUI`, donc
+    /// inaccessibles depuis ce bundle (comme `outroTail` juste au-dessus).
+    private static let authorOutroTail: TimeInterval = 2.0
 
     /// **Régression amplifiée par ce lot.** L'appel à `StoryExportOutro.append`
     /// vivait IMBRIQUÉ dans `guard let intro else { return outputURL }` : une
@@ -320,9 +330,9 @@ final class StoryVideoExportServiceTests: XCTestCase {
         defer { sut.cleanupExport(at: url) }
 
         let duration = CMTimeGetSeconds(try await AVURLAsset(url: url).load(.duration))
-        let expected = StoryExportIntro.duration + Self.stubStoryDuration + Self.outroTail
+        let expected = StoryExportIntro.duration + Self.stubStoryDuration + Self.authorOutroTail
         XCTAssertEqual(duration, expected, accuracy: 0.35,
-                       "l'export doit porter l'interlude ET la carte de fin")
+                       "l'export doit porter l'interlude ET la carte de fin d'auteur en 2 temps")
     }
 }
 
