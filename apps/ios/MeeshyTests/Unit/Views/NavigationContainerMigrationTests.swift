@@ -75,19 +75,33 @@ final class NavigationContainerMigrationTests: XCTestCase {
         )
     }
 
-    // MARK: - Remaining debt is pinned, not merely tolerated
+    // MARK: - Migrated in 220i — the last holdout
 
-    func test_noUnexpectedNavigationViewRemains() throws {
-        // StatusComposerView is the last holdout. It is deliberately untouched here
-        // because it is held by an in-flight pull request; migrating it is the
-        // follow-up iteration. When that lands, this expectation drops to the empty
-        // set and the test fails until it is updated — which is the intent.
-        let expected: Set<String> = ["StatusComposerView.swift"]
+    /// `StatusComposerView` was the final `NavigationView` in the app targets. It
+    /// was held by an in-flight pull request when 214i swept the other three; that
+    /// PR has since merged, so the debt is now paid.
+    ///
+    /// Its toolbar is exactly the shape the deprecated container mis-renders: a
+    /// `.navigationBarLeading` dismiss button and a `.navigationBarTrailing`
+    /// publish button. Under the default double-column style at regular width,
+    /// both land in the wrong column's bar.
+    func test_statusComposer_usesNavigationStack() throws {
+        try assertMigrated("Meeshy/Features/Main/Views/StatusComposerView.swift")
+    }
+
+    // MARK: - The debt is closed, not merely pinned
+
+    func test_noNavigationViewRemains() throws {
+        // This expectation is now EMPTY, and that is the point: 214i wrote it as a
+        // pinned set precisely so it would fail the day the last holdout migrated,
+        // forcing the debt to be closed explicitly rather than quietly forgotten.
+        // From here it is a pure guard — any `NavigationView` reintroduced into the
+        // app targets fails this test by name.
         XCTAssertEqual(
-            try filesUsingDeprecatedContainer(), expected,
-            "The set of files using the deprecated NavigationView container changed. Either a new " +
-            "NavigationView was introduced (use NavigationStack instead) or the last holdout was " +
-            "migrated (then shrink this expectation)."
+            try filesUsingDeprecatedContainer(), [],
+            "A NavigationView was reintroduced. Use NavigationStack: the deprecated container " +
+            "defaults to the double-column style, which collapses to an empty detail pane at " +
+            "regular width (iPad) and misplaces navigation-bar toolbar items."
         )
     }
 }

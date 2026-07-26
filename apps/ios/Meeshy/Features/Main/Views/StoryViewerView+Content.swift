@@ -959,18 +959,15 @@ extension StoryViewerView {
         return (priorReactions, priorCount)
     }
 
-    func shareStory() {
-        guard let story = currentStory else { return }
-        let shareURL = "https://meeshy.me/story/\(story.id)"
-        let activityVC = UIActivityViewController(activityItems: [shareURL], applicationActivities: nil)
-        if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
-           let rootVC = windowScene.windows.first?.rootViewController {
-            var topVC = rootVC
-            while let presented = topVC.presentedViewController { topVC = presented }
-            activityVC.popoverPresentationController?.sourceView = topVC.view
-            topVC.present(activityVC, animated: true)
-        }
-    }
+    // `shareStory()` a été supprimé : il n'avait aucun site d'appel. Le partage
+    // d'une story vit dans le rail d'actions du reader, qui passe par
+    // `SharePickerView` et `StoryExportShareSheet`. La fonction portait la
+    // dernière présentation impérative de l'app — URL forgée en dur,
+    // `connectedScenes.first` (un `Set` NON ORDONNÉ, donc une scène en
+    // arrière-plan est un résultat possible), remontée manuelle jusqu'au
+    // contrôleur présenté, et une ancre de popover posée sur la vue entière.
+    // Doctrine 215i/216i : le seul pont vers `UIActivityViewController` est
+    // `ShareSheet`, présenté dans une `.sheet` SwiftUI.
 
     // MARK: - Story Time Remaining
 

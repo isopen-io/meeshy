@@ -152,14 +152,14 @@ final class StoryExportShareSheetPaletteTests: XCTestCase {
     /// portait sa propre copie (`ActivityView`), `MediaSaveFlowHost` la sienne
     /// (`MediaShareSheet`) : trois wrappers pour un seul comportement.
     ///
-    /// Les deux fichiers convergés ici sont vérifiés **positivement** ; le
-    /// balayage du reste de l'arbre est une inclusion, pas une égalité, pour
-    /// une raison précise : `TrackingLinkDetailView` est détenu par une PR en
-    /// vol qui le converge, et `StoryViewerView+Content.shareStory()` est du
-    /// code mort sans site d'appel dont la suppression est un nettoyage à part.
-    /// Une égalité virerait au rouge le jour où l'un des deux disparaît —
-    /// c'est-à-dire au moment même où la dette est payée. L'inclusion attrape
-    /// ce qui compte : l'apparition d'un NOUVEAU pont dupliqué.
+    /// **Resserré en 220i : égalité, plus inclusion.** 219i avait délibérément
+    /// écrit une inclusion parce que les deux derniers sites — `TrackingLinkDetailView`
+    /// (détenu par une PR en vol) et `StoryViewerView+Content.shareStory()`
+    /// (code mort) — allaient disparaître, et qu'une égalité serait passée au
+    /// rouge au moment même où la dette était payée, sur le dos d'une autre PR.
+    /// Les deux ont depuis été traités. L'assertion peut donc dire ce qu'elle
+    /// voulait dire depuis le début : **un seul** fichier de l'app construit un
+    /// `UIActivityViewController`, celui qui définit `ShareSheet`.
     func test_shareSheetIsTheSoleBridgeToUIActivityViewController() throws {
         for converged in ["Features/Main/Views/StoryExportShareSheet.swift",
                           "Features/Main/Components/MediaSaveFlowHost.swift"] {
@@ -171,12 +171,6 @@ final class StoryExportShareSheetPaletteTests: XCTestCase {
                 "\(converged) doit passer par ShareSheet, pas construire son propre pont UIKit."
             )
         }
-
-        let knownRemaining: Set<String> = [
-            "ConversationMediaViews.swift",   // définit ShareSheet — le pont légitime
-            "TrackingLinkDetailView.swift",   // convergence détenue par une PR en vol
-            "StoryViewerView+Content.swift"   // shareStory() : code mort, 0 site d'appel
-        ]
 
         var offenders: Set<String> = []
         let root = appRoot
@@ -191,10 +185,36 @@ final class StoryExportShareSheetPaletteTests: XCTestCase {
             }
         }
 
-        XCTAssertTrue(
-            offenders.isSubset(of: knownRemaining),
-            "Nouveau pont UIKit vers UIActivityViewController : \(offenders.subtracting(knownRemaining).sorted()). " +
-            "Utiliser ShareSheet dans une .sheet plutôt que d'en dupliquer un."
+        XCTAssertEqual(
+            offenders, ["ConversationMediaViews.swift"],
+            "Un seul fichier de l'app doit construire un UIActivityViewController : celui qui " +
+            "définit ShareSheet. Tout autre site duplique le pont au lieu de le réutiliser — " +
+            "utiliser ShareSheet dans une .sheet SwiftUI, qui ancre le popover et résout la " +
+            "scène présentatrice elle-même."
+        )
+    }
+
+    /// `shareStory()` portait la dernière présentation impérative de l'app —
+    /// URL forgée en dur, `connectedScenes.first` sur un `Set` non ordonné,
+    /// remontée manuelle jusqu'au contrôleur présenté — et **aucun site
+    /// d'appel**. Supprimé en 220i ; il ne doit pas revenir, ni lui ni sa forme.
+    func test_storyViewerDropsUncalledImperativeShare() throws {
+        let code = strippingComments(
+            try String(
+                contentsOf: appRoot.appendingPathComponent("Features/Main/Views/StoryViewerView+Content.swift"),
+                encoding: .utf8
+            )
+        )
+
+        XCTAssertFalse(
+            code.contains("func shareStory"),
+            "shareStory() n'avait aucun appelant et portait le dernier parcours de fenêtres " +
+            "de l'app. Le partage d'une story passe par SharePickerView / StoryExportShareSheet."
+        )
+        XCTAssertFalse(
+            code.contains("connectedScenes"),
+            "Aucune vue ne doit résoudre son présentateur via connectedScenes : c'est un Set " +
+            "NON ORDONNÉ, donc .first peut rendre une scène en arrière-plan."
         )
     }
 
