@@ -45,10 +45,17 @@ struct StoryTextEditTopBar: View {
                 StoryTextAttributeCycle.advance(tool, on: &textObject)
                 HapticFeedback.light()
             }
-            .onLongPressGesture(minimumDuration: 0.4) {
-                HapticFeedback.medium()
-                onOpenPanel(tool)
-            }
+            // `highPriorityGesture` et non `.onLongPressGesture` : chaîné après
+            // le tap, ce dernier reste plus proche de la vue et capte l'appui
+            // sans jamais le résoudre — vérifié au simulateur, le maintien ne
+            // déclenchait alors NI le cran suivant NI le panneau.
+            .highPriorityGesture(
+                LongPressGesture(minimumDuration: 0.4, maximumDistance: 24)
+                    .onEnded { _ in
+                        HapticFeedback.medium()
+                        onOpenPanel(tool)
+                    }
+            )
             .modifier(CycleButtonAccessibility(
                 label: tool.accessibilityLabel,
                 value: Self.spokenValue(tool, of: textObject),
