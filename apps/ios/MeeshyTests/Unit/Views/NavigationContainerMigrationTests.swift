@@ -59,9 +59,9 @@ final class NavigationContainerMigrationTests: XCTestCase {
         try assertMigrated("MeeshyShareExtension/ShareViewController.swift")
     }
 
-    // MARK: - Migrated in 220i
+    // MARK: - Migrated in 220i — the last holdout
 
-    func test_statusComposer_usesNavigationStack() throws {
+    func test_statusComposerView_usesNavigationStack() throws {
         try assertMigrated("Meeshy/Features/Main/Views/StatusComposerView.swift")
     }
 
@@ -81,17 +81,18 @@ final class NavigationContainerMigrationTests: XCTestCase {
         )
     }
 
-    // MARK: - The migration is complete; this now guards against regression
+    // MARK: - The debt is paid — this is now a regression guard
 
+    /// 220i migrated `StatusComposerView`, the last holdout, so the expectation
+    /// is now the empty set. From here this test has changed character: it no
+    /// longer pins tolerated debt, it forbids the container outright. Any new
+    /// `NavigationView` anywhere in the shipping targets turns it red.
     func test_noNavigationViewRemains() throws {
-        // 220i migrated StatusComposerView, the last holdout. The expectation is now
-        // the empty set and must stay there: this is no longer a debt ledger but a
-        // ratchet — any reintroduced `NavigationView` fails here immediately.
         XCTAssertEqual(
-            try filesUsingDeprecatedContainer(), Set<String>(),
-            "A deprecated NavigationView container was reintroduced. Use NavigationStack: at " +
-            "regular width NavigationView defaults to the double-column style and collapses to " +
-            "an empty detail pane, hiding the view's content and its toolbar actions."
+            try filesUsingDeprecatedContainer(), [],
+            "NavigationView is deprecated since iOS 16 and defaults to the double-column style, " +
+            "which collapses to an empty detail pane at regular width (iPad). Use NavigationStack — " +
+            "it is available unconditionally at the iOS 16.0 deployment floor."
         )
     }
 }

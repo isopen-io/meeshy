@@ -254,6 +254,16 @@ final class StoryVideoExportServiceTests: XCTestCase {
     /// `StoryExportOutroTests.test_append_extendsStoryByHalfSecond`).
     private static let outroTail: TimeInterval = 0.5
 
+    /// Allongement net quand une identité d'auteur est résolue. Depuis la carte
+    /// de fin en 2 temps, le clip vaut `logoPhase` (1,5 s — le logo termine la
+    /// vidéo, muet) + `identityPhase` (2 s — l'interlude d'auteur qui porte le
+    /// jingle) = 3,5 s, dont seuls les 1,5 s de crossfade mordent sur la story :
+    /// 3,5 − 1,5 = 2 s, soit `logoPhase` de plus que la carte logo-seule.
+    /// Constante locale car `logoPhase`/`authorClipDuration` sont internes à
+    /// `MeeshyUI` — seuls `StoryExportOutro.duration` et `StoryExportIntro.duration`
+    /// sont publics.
+    private static let authorOutroTail: TimeInterval = 2.0
+
     /// **Régression amplifiée par ce lot.** L'appel à `StoryExportOutro.append`
     /// vivait IMBRIQUÉ dans `guard let intro else { return outputURL }` : une
     /// identité non résolue faisait donc perdre l'interlude ET la carte de fin.
@@ -320,9 +330,12 @@ final class StoryVideoExportServiceTests: XCTestCase {
         defer { sut.cleanupExport(at: url) }
 
         let duration = CMTimeGetSeconds(try await AVURLAsset(url: url).load(.duration))
-        let expected = StoryExportIntro.duration + Self.stubStoryDuration + Self.outroTail
+        // Ce cas résout une identité (`intro:` non nil), donc la carte de fin est
+        // la variante AUTEUR en 2 temps — sa queue est `authorOutroTail`, pas
+        // `outroTail` qui ne vaut que pour la carte logo-seule.
+        let expected = StoryExportIntro.duration + Self.stubStoryDuration + Self.authorOutroTail
         XCTAssertEqual(duration, expected, accuracy: 0.35,
-                       "l'export doit porter l'interlude ET la carte de fin")
+                       "l'export doit porter l'interlude ET la carte de fin d'auteur")
     }
 }
 

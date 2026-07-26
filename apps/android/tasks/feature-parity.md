@@ -863,8 +863,22 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       (Pinned first → All), each `ConversationSection` preserving the incoming (draft/filter) order.
       An **empty section is omitted**, so an all-pinned account no longer shows a phantom empty
       "Mes conversations" header. Rendered via the existing `CollapsibleSection` (collapse state is
-      its own saved UI state). +9 tests. **Reste**: collapsible *user categories* (needs category
-      metadata) + drag-to-category.
+      its own saved UI state). +9 tests.
+      **User-category grouping done** (slice `conversation-category-sections`, 2026-07-26):
+      `ConversationSections.of(conversations, categories)` now emits **Pinned → each user category
+      (catalogue order) → Autres** — a faithful port of iOS
+      `ConversationListViewModel.groupConversations`. A pinned-*uncategorized* row floats to Épingles
+      (`isPinned && categoryId == null`); a pinned row **with** a category stays inside its category
+      section (iOS parity); uncategorized rows and rows whose category is orphaned (absent from the
+      catalogue, e.g. a deleted category) fall into the `ALL` catch-all. Empty sections omitted;
+      incoming order preserved per section (no second sort — SOTA over iOS, which re-sorts). Each
+      `CATEGORY` `ConversationSection` carries `categoryId` + `title`; `ConversationListScreen` renders
+      them via `CollapsibleSection` (folder glyph, per-category key, category-name header). The catalogue
+      reaches the screen through `ConversationListUiState.categories` (iOS `userCategories`), the seam
+      the corpus-hydration slice fills next. +9 tests (17 total in `ConversationSectionsTest`), the
+      pinned-with-category guard mutation-proven (drop `&& categoryId == null` → exactly 1 failure).
+      **Reste**: category-catalogue hydration (cache-first + revalidate into `state.categories`) +
+      drag-to-category.
 - [x] Filtering (all/unread/personal/private/open/global/channels/favorites/archived) + search overlay
       — `ConversationFilter` enum (couleurs iOS) + `ConversationFilters.apply` pur
       (port fidèle de `filterConversations` : soft-delete masqué partout, archivés

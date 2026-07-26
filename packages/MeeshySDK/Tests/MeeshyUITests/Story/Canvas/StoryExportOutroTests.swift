@@ -103,4 +103,78 @@ final class StoryExportOutroTests: XCTestCase {
         let video = try await AVURLAsset(url: output).loadTracks(withMediaType: .video)
         XCTAssertEqual(video.count, 1)
     }
+
+    // MARK: - Carte de fin d'AUTEUR (Part D — identité fournie)
+
+    private func makeContent() -> StoryExportIntroContent {
+        StoryExportIntroContent(displayName: "Meeshy Sama", username: "meeshy", accentColorHex: "6366F1")
+    }
+
+    /// Somme RGB d'un pixel (repère haut-gauche) — sonde de luminosité.
+    private func brightness(of image: CGImage, x: Int, y: Int) -> Int {
+        var data = [UInt8](repeating: 0, count: 4)
+        guard let ctx = CGContext(data: &data, width: 1, height: 1,
+                                  bitsPerComponent: 8, bytesPerRow: 4,
+                                  space: CGColorSpaceCreateDeviceRGB(),
+                                  bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)
+        else { return 0 }
+        ctx.draw(image, in: CGRect(x: -x, y: -(image.height - 1 - y),
+                                   width: image.width, height: image.height))
+        return Int(data[0]) + Int(data[1]) + Int(data[2])
+    }
+
+    func test_renderFrame_withContent_producesImageAtRequestedSize() throws {
+        let t = StoryExportOutro.logoPhase + StoryExportOutro.identityFadeIn + 0.2   // 2ᵉ phase
+        let image = try XCTUnwrap(StoryExportOutro.renderFrame(at: t, size: renderSize, content: makeContent()))
+        XCTAssertEqual(image.width, Int(renderSize.width))
+        XCTAssertEqual(image.height, Int(renderSize.height))
+    }
+
+    /// La 2ᵉ phase applique le voile de lisibilité (comme l'intro) : le haut de
+    /// l'écran devient PLUS SOMBRE que la 1ʳᵉ phase logo-seule, preuve que la
+    /// carte a bien basculé sur l'identité et n'est pas restée le logo nu.
+    func test_renderFrame_withContent_secondPhaseAppliesScrim() throws {
+        let content = makeContent()
+        let logoFrame = try XCTUnwrap(StoryExportOutro.renderFrame(at: 0.5, size: renderSize, content: content))     // 1ʳᵉ phase
+        let idFrame = try XCTUnwrap(StoryExportOutro.renderFrame(
+            at: StoryExportOutro.logoPhase + StoryExportOutro.identityFadeIn + 0.3, size: renderSize, content: content)) // 2ᵉ phase
+
+        XCTAssertLessThan(brightness(of: idFrame, x: 18, y: 14),
+                          brightness(of: logoFrame, x: 18, y: 14),
+                          "le voile de la carte d'auteur doit assombrir le haut vs la phase logo")
+    }
+
+    func test_makeClip_withContent_lastsTheAuthorDurationAndIsMuted() async throws {
+        let url = try await StoryExportOutro.makeClip(size: renderSize, content: makeContent())
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        let asset = AVURLAsset(url: url)
+        let audioTracks = try await asset.loadTracks(withMediaType: .audio)
+        XCTAssertTrue(audioTracks.isEmpty,
+                      "le clip de la carte est muet — le jingle est composé à part")
+        let duration = try await asset.load(.duration)
+        XCTAssertEqual(CMTimeGetSeconds(duration), StoryExportOutro.authorClipDuration, accuracy: 0.2)
+    }
+
+    /// Fermeture d'auteur : logo (chevauche l'overlap) PUIS identité tenue sur le
+    /// jingle ⇒ la vidéo dépasse la story de `identityPhase - overlap` (= 0,5 s,
+    /// mais la carte totale est plus longue). Total = story + (authorClip - overlap).
+    func test_append_withContent_extendsStoryAndCarriesJingle() async throws {
+        let storyDuration: TimeInterval = 3.0
+        let story = try await makeStoryStub(duration: storyDuration)
+        defer { try? FileManager.default.removeItem(at: story) }
+
+        let output = try await StoryExportOutro.append(to: story, renderSize: renderSize, content: makeContent())
+        defer { try? FileManager.default.removeItem(at: output) }
+
+        let asset = AVURLAsset(url: output)
+        let total = CMTimeGetSeconds(try await asset.load(.duration))
+        // outroStart = D - overlap(1,5) ; total = outroStart + authorClipDuration.
+        XCTAssertEqual(total, storyDuration - 1.5 + StoryExportOutro.authorClipDuration, accuracy: 0.35)
+        let audioTracks = try await asset.loadTracks(withMediaType: .audio)
+        XCTAssertGreaterThanOrEqual(audioTracks.count, 1,
+                                    "la carte d'auteur doit porter le jingle de fermeture")
+        let videoTracks = try await asset.loadTracks(withMediaType: .video)
+        XCTAssertEqual(videoTracks.count, 1)
+    }
 }

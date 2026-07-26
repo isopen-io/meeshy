@@ -15,6 +15,7 @@ import me.meeshy.sdk.chat.ConversationDraftStore
 import me.meeshy.sdk.chat.StarredMessagesStore
 import me.meeshy.sdk.conversation.ConversationRepository
 import me.meeshy.sdk.model.ApiConversation
+import me.meeshy.sdk.model.CategoryOption
 import me.meeshy.sdk.model.ConversationDraft
 import me.meeshy.sdk.model.ConversationFilter
 import me.meeshy.sdk.model.ConversationFilters
@@ -37,6 +38,13 @@ data class ConversationListUiState(
     val searchText: String = "",
     val isSearchActive: Boolean = false,
     val drafts: Map<String, ConversationDraft> = emptyMap(),
+    /**
+     * The user's conversation-category catalogue (parity iOS `userCategories`), the
+     * section source consumed by [ConversationSections.of]. Empty until the tracked
+     * corpus-hydration slice populates it (cache-first + revalidate); an empty
+     * catalogue keeps the list on the pinned/all split, so this is a safe default.
+     */
+    val categories: List<CategoryOption> = emptyList(),
 ) {
     val banner: ConnectionBanner get() = bannerFor(connection, isSyncing)
 
