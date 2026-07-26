@@ -367,9 +367,9 @@ struct FeedView: View {
             if success {
                 if wasBookmarked {
                     await pruneBookmarkFromCache(postId: postId)
-                    FeedbackToastManager.shared.showSuccess(String(localized: "Retire des favoris", defaultValue: "Retire des favoris"))
+                    FeedbackToastManager.shared.showSuccess(String(localized: "post.bookmark.removed", defaultValue: "Retiré des favoris", bundle: .main))
                 } else {
-                    FeedbackToastManager.shared.showSuccess(String(localized: "Ajoute aux favoris", defaultValue: "Ajoute aux favoris"))
+                    FeedbackToastManager.shared.showSuccess(String(localized: "post.bookmark.added", defaultValue: "Ajouté aux favoris", bundle: .main))
                 }
             } else {
                 // Rollback both the UI flip and the cache pre-population.
@@ -383,7 +383,7 @@ struct FeedView: View {
                         try? await CacheCoordinator.shared.feed.save(snap, for: "bookmarks")
                     }
                 }
-                FeedbackToastManager.shared.showError(String(localized: "Erreur lors de l'enregistrement", defaultValue: "Erreur lors de l'enregistrement"))
+                FeedbackToastManager.shared.showError(String(localized: "post.bookmark.error", defaultValue: "Erreur lors de l'enregistrement", bundle: .main))
             }
         }
     }
