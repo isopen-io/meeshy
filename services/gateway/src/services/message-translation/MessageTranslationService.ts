@@ -398,6 +398,37 @@ export class MessageTranslationService extends EventEmitter {
 
   // ==========================================================
 
+  /**
+   * Résout les langues cibles effectives d'un message : chaque code est ramené à
+   * sa forme canonique via le SSOT `normalizeLanguageCode` (le chemin client passe
+   * le code brut — `'EN'`, `'en-US'`), puis la langue source est retirée pour
+   * éviter une auto-traduction NLLB (`fr → fr`) qui altère le texte et stocke une
+   * fausse traduction du message de l'utilisateur.
+   *
+   * La comparaison se fait sur les formes normalisées : `originalLanguage` est
+   * persisté verbatim (les clients envoient `Locale.current`, ex. `'fr-FR'`, `'FR'`)
+   * tandis que les cibles issues de `_extractConversationLanguages` sont déjà
+   * normalisées lowercase — un `===` brut manquait `fr-FR`/`FR` vs `fr`. `'auto'`
+   * (détection de langue) n'est jamais traité comme une source à filtrer.
+   */
+  private _resolveTargetLanguages(
+    originalLanguage: string | null | undefined,
+    targetLanguages: readonly string[]
+  ): string[] {
+    const source =
+      originalLanguage && originalLanguage !== 'auto'
+        ? normalizeLanguageCode(originalLanguage) ?? originalLanguage.toLowerCase()
+        : undefined;
+
+    const result: string[] = [];
+    for (const raw of targetLanguages) {
+      const code = normalizeLanguageCode(raw) ?? raw.toLowerCase();
+      if (code === source) continue;
+      result.push(code);
+    }
+    return result;
+  }
+
   private async _processTranslationsAsync(message: any, targetLanguage?: string, modelType?: string) {
     try {
       const startTime = Date.now();
@@ -427,14 +458,12 @@ export class MessageTranslationService extends EventEmitter {
         }
       }
 
-      // OPTIMISATION: Filtrer les langues cibles pour éviter les traductions inutiles
-      const filteredTargetLanguages = targetLanguages.filter(targetLang => {
-        const sourceLang = message.originalLanguage;
-        if (sourceLang && sourceLang !== 'auto' && sourceLang === targetLang) {
-          return false;
-        }
-        return true;
-      });
+      // OPTIMISATION: Normaliser + filtrer les langues cibles (SSOT
+      // normalizeLanguageCode) pour éviter les auto-traductions inutiles.
+      const filteredTargetLanguages = this._resolveTargetLanguages(
+        message.originalLanguage,
+        targetLanguages
+      );
 
       // Si aucune langue cible après filtrage, ne pas envoyer de requête
       if (filteredTargetLanguages.length === 0) {
@@ -572,16 +601,14 @@ export class MessageTranslationService extends EventEmitter {
         }
       }
       
-      // OPTIMISATION: Filtrer les langues cibles pour éviter les traductions inutiles
-      const filteredTargetLanguages = targetLanguages.filter(targetLang => {
-        const sourceLang = existingMessage.originalLanguage;
-        if (sourceLang && sourceLang !== 'auto' && sourceLang === targetLang) {
-          return false;
-        }
-        return true;
-      });
-      
-      
+      // OPTIMISATION: Normaliser + filtrer les langues cibles (SSOT
+      // normalizeLanguageCode) pour éviter les auto-traductions inutiles.
+      const filteredTargetLanguages = this._resolveTargetLanguages(
+        existingMessage.originalLanguage,
+        targetLanguages
+      );
+
+
       // Si aucune langue cible après filtrage, ne pas envoyer de requête
       if (filteredTargetLanguages.length === 0) {
         return;
