@@ -103,6 +103,10 @@ struct StoryActionSidebarView: View {
     /// s'applique, aucun override). Marque le drapeau correspondant dans le strip
     /// pour que « quelle langue je lis » soit lisible d'un coup d'œil.
     let activeLanguageCode: String?
+    /// Langue effectivement affichée (résolue) — alimente le badge accolé au
+    /// bouton « Abc ». Remplace l'ancien badge (EN) du coin bas-gauche
+    /// (directive user 2026-07-26).
+    let displayedLanguageCode: String?
     /// Prisme « Exploration » : affiche la story dans la langue choisie (override éphémère).
     let onSelectLanguageOverride: (String) -> Void
 
@@ -433,26 +437,38 @@ struct StoryActionSidebarView: View {
                 }
             }
 
-            // 6. Traductions — ouvre DIRECTEMENT la feuille de langues.
-            //
-            // Le strip de drapeaux qui sortait à côté du bouton est supprimé
-            // (directive user 2026-07-25) : il chevauchait le libellé du rail,
-            // n'offrait que les langues déjà traduites, et obligeait à un
-            // second tap (« + ») pour en demander une autre. La feuille fait
-            // les deux — langues prêtes en tête et pastillées, les autres
-            // déclenchant la traduction de TOUT le texte de la story — sans
-            // dupliquer le chemin.
+            // 6. Traductions — ouvre la BARRE RAPIDE horizontale des langues
+            //    prêtes (directive user 2026-07-26). Le tap toggle
+            //    `showLanguageOptions` ; la barre (rendue au-dessus du composer)
+            //    porte les langues prêtes + un « + » à droite qui ouvre la
+            //    liste complète (`showFullLanguagePicker`). Un badge accolé
+            //    montre la langue courante — il remplace le badge (EN) qui était
+            //    ancré en bas-gauche du canvas.
             if railPlan.showsTranslations {
                 StoryActionButton(
                     icon: "textformat.abc",
                     label: String(localized: "story.viewer.action.translations", defaultValue: "Traductions", bundle: .main),
-                    isActive: showFullLanguagePicker,
+                    isActive: showLanguageOptions || showFullLanguagePicker,
                     activeColor: MeeshyColors.indigo400,
                     activeGlow: MeeshyColors.indigo400
                 ) {
                     HapticFeedback.light()
                     withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                        showFullLanguagePicker = true
+                        showLanguageOptions.toggle()
+                    }
+                }
+                .overlay(alignment: .topLeading) {
+                    if let code = displayedLanguageCode, !code.isEmpty {
+                        Text(code.uppercased())
+                            .font(MeeshyFont.relative(9, weight: .bold, design: .monospaced))
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 5)
+                            .padding(.vertical, 2)
+                            .background(Capsule().fill(MeeshyColors.indigo500))
+                            .overlay(Capsule().stroke(Color.white.opacity(0.5), lineWidth: 0.5))
+                            .offset(x: -12, y: -2)
+                            .allowsHitTesting(false)
+                            .accessibilityHidden(true)
                     }
                 }
                 .zIndex(10)

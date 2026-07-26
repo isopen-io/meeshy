@@ -1326,18 +1326,10 @@ struct StoryCardView: View {
             }
 
             // === Translation indicator (Prisme Linguistique — discret) ===
-            if isContentTranslated {
-                // Ancré à GAUCHE (2026-07-25) : en bottomTrailing le badge
-                // tombait pile sur le libellé « Traductions » du rail d'actions,
-                // qui occupe toute la colonne droite. Il partage désormais la
-                // bande des badges avec l'indicateur audio (centré), côté libre.
-                translationBadge
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
-                    .padding(.leading, 16)
-                    .padding(.bottom, topInset + 175)
-                    .allowsHitTesting(false)
-                    .accessibilityHidden(true)
-            }
+            // Le badge de langue courante a QUITTÉ le coin bas-gauche (directive
+            // user 2026-07-26) : il est désormais accolé au bouton « Abc » du
+            // rail (`StoryActionSidebarView`, via `displayedLanguageCode`), au
+            // point d'entrée des traductions. Plus de badge flottant ici.
 
             // === Layer 5: Gradient scrims for readability over photos ===
             VStack {
@@ -1535,6 +1527,7 @@ struct StoryCardView: View {
                     isGlobalMuted: isGlobalMuted,
                     availableTranslationLanguages: availableTranslationLanguages,
                     activeLanguageCode: activeLanguageCode,
+                    displayedLanguageCode: resolvedViewerLanguage,
                     onSelectLanguageOverride: onSelectLanguageOverride,
                     showEmojiStrip: $showEmojiStrip,
                     showFullEmojiPicker: $showFullEmojiPicker,
@@ -1750,6 +1743,38 @@ struct StoryCardView: View {
                 .transition(.move(edge: .bottom).combined(with: .opacity))
                 .zIndex(150)
             }
+
+            // === Layer 11: Barre rapide des langues (langues prêtes + « + ») ===
+            // Ouverte par le bouton « Abc » du rail (`showLanguageOptions`).
+            // Rangée horizontale défilante des langues déjà traduites : tap =
+            // bascule instantanée (Prisme « Exploration ») ; le « + » à droite
+            // ouvre la liste complète. Ancrée juste au-dessus du composer.
+            if showLanguageOptions {
+                VStack(spacing: 0) {
+                    Spacer(minLength: 0)
+                    StoryLanguageQuickBar(
+                        languages: availableTranslationLanguages,
+                        activeLanguageCode: activeLanguageCode ?? resolvedViewerLanguage,
+                        onSelect: { lang in
+                            onSelectLanguageOverride(lang)
+                            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                                showLanguageOptions = false
+                            }
+                        },
+                        onOpenFullPicker: {
+                            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                                showLanguageOptions = false
+                                showFullLanguagePicker = true
+                            }
+                        }
+                    )
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, composerBottomPadding(geometry) + 64)
+                }
+                .frame(maxWidth: geometry.size.width, maxHeight: .infinity, alignment: .bottom)
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+                .zIndex(145)
+            }
         }
         // Lock the entire story canvas (background + reader + overlays +
         // sidebar + composer) to EXACTLY the viewport size we were handed
@@ -1957,26 +1982,8 @@ struct StoryCardView: View {
         )
     }
 
-    // MARK: - Translation Badge
-
-    private var translationBadge: some View {
-        HStack(spacing: 4) {
-            Image(systemName: "translate")
-                .font(MeeshyFont.relative(10, weight: .semibold))
-            if let lang = resolvedViewerLanguage {
-                Text(lang.uppercased())
-                    .font(MeeshyFont.relative(9, weight: .bold, design: .monospaced))
-            }
-        }
-        .foregroundColor(.white.opacity(0.8))
-        .padding(.horizontal, 8)
-        .padding(.vertical, 4)
-        .background(
-            Capsule()
-                .fill(.ultraThinMaterial)
-                .overlay(Capsule().fill(Color.black.opacity(0.3)))
-        )
-    }
+    // Le badge de langue courante vit désormais dans le rail (accolé à « Abc »),
+    // plus dans le canvas — voir `StoryActionSidebarView.displayedLanguageCode`.
 }
 
 // MARK: - Story Viewer Content
