@@ -1001,6 +1001,54 @@ describe('MessageReadStatusService', () => {
       expect(mockPrisma.messageStatusEntry.createMany).toHaveBeenCalled();
     });
 
+    it('exact mode: read still implies delivered when no cursor exists yet and the read cursor stays put', async () => {
+      // Régression « lu mais pas livré » (état impossible) : un participant sans
+      // aucun ConversationReadCursor (jamais livré — hors ligne à l'arrivée)
+      // saute au bas de la conversation et ne rapporte QUE msgB. msgA reste non
+      // lu, donc le curseur de lecture ne bouge pas (cursorTarget === null) et
+      // n'est jamais créé. Le gel « lu implique livré » DOIT malgré tout créer le
+      // curseur de livraison — sinon msgB porte un readAt figé sans deliveredAt,
+      // et l'auteur voit la coche « lu » devant la coche « livré ».
+      const msgA = '507f1f77bcf86cd799439021';
+      const msgB = '507f1f77bcf86cd799439022';
+      mockPrisma.conversationReadCursor.findUnique.mockResolvedValue(null);
+      // Aucun curseur → l'avance gardée ne matche rien.
+      mockPrisma.conversationReadCursor.updateMany.mockResolvedValue({ count: 0 });
+      mockPrisma.conversationReadCursor.create.mockResolvedValue({});
+
+      mockPrisma.message.findMany
+        .mockResolvedValueOnce([{ id: msgB }])                  // gel readAt borné à msgB
+        .mockResolvedValueOnce([{ id: msgA }, { id: msgB }])    // balayage du préfixe : A précède B
+        .mockResolvedValueOnce([{ id: msgB }])                  // gel deliveredAt (fenêtre)
+        .mockResolvedValue([]);
+      mockPrisma.messageStatusEntry.findMany
+        .mockResolvedValueOnce([])                              // gel readAt : rien de figé
+        .mockResolvedValueOnce([{ messageId: msgB }])           // A jamais affiché → préfixe vide → cursorTarget null
+        .mockResolvedValueOnce([])                              // gel deliveredAt : rien de figé
+        .mockResolvedValue([]);
+
+      await service.markMessagesAsRead(testParticipantId, testConversationId, msgB, {
+        messageIds: [msgB]
+      });
+
+      // Le curseur de lecture ne bouge pas (A reste non lu)…
+      const readAdvance = mockPrisma.conversationReadCursor.updateMany.mock.calls.find(
+        (c: any) => c[0].data?.lastReadMessageId !== undefined
+      );
+      expect(readAdvance).toBeUndefined();
+      // …mais le curseur de livraison est bel et bien CRÉÉ, sinon « lu > livré ».
+      expect(mockPrisma.conversationReadCursor.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ lastDeliveredMessageId: msgB })
+        })
+      );
+      // Et le deliveredAt est figé par message pour msgB.
+      const deliveredFreeze = mockPrisma.messageStatusEntry.createMany.mock.calls.find(
+        (c: any) => Array.isArray(c[0]?.data) && c[0].data.some((d: any) => d.deliveredAt)
+      );
+      expect(deliveredFreeze).toBeDefined();
+    });
+
     it('exact mode: two successive batches are both applied (dedup must not swallow the second)', async () => {
       const msgA = '507f1f77bcf86cd799439021';
       const msgB = '507f1f77bcf86cd799439022';
