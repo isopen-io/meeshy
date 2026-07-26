@@ -32,6 +32,21 @@ final class ShareExtensionAccessibilityTests: XCTestCase {
         return String(source[range.upperBound ..< end])
     }
 
+    /// A whole top-level type declaration, bounded by the next one. Preferred over
+    /// `vicinity(after:span:)` when the region is a type body: a fixed span silently
+    /// stops covering the tail as the type grows, and can bleed into its neighbour —
+    /// both of which would make an assertion pass or fail for the wrong reason.
+    private func declaration(of typeName: String, in source: String) throws -> String {
+        let anchor = "struct \(typeName): View"
+        guard let range = source.range(of: anchor) else {
+            XCTFail("ShareViewController must declare \(typeName)")
+            return ""
+        }
+        let rest = source[range.upperBound...]
+        let end = rest.range(of: "\nstruct ")?.lowerBound ?? source.endIndex
+        return String(rest[..<end])
+    }
+
     // MARK: - Contact row
 
     func test_contactRow_exposesSingleAccessibilityElementNamedAfterTheContact() throws {
@@ -39,7 +54,7 @@ final class ShareExtensionAccessibilityTests: XCTestCase {
         // Without an explicit element VoiceOver stops on each fragment and never
         // conveys that the row as a whole is the thing you activate.
         let source = try shareSource()
-        let nearRow = try vicinity(after: "struct ContactRow: View", in: source, span: 2200)
+        let nearRow = try declaration(of: "ContactRow", in: source)
         XCTAssertTrue(
             nearRow.contains(".accessibilityElement(children: .ignore)"),
             "ContactRow must collapse its avatar/name/status/checkmark fragments into one " +
@@ -61,7 +76,7 @@ final class ShareExtensionAccessibilityTests: XCTestCase {
         // colour/shape alone (WCAG 1.4.1). The `.isSelected` trait lets iOS
         // announce the state in the user's own language, with no new i18n key.
         let source = try shareSource()
-        let nearRow = try vicinity(after: "struct ContactRow: View", in: source, span: 2200)
+        let nearRow = try declaration(of: "ContactRow", in: source)
         XCTAssertTrue(
             nearRow.contains(".accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : [.isButton])"),
             "The selected contact must carry the .isSelected trait so VoiceOver announces the " +
@@ -103,6 +118,69 @@ final class ShareExtensionAccessibilityTests: XCTestCase {
             )
         }
     }
+
+    // MARK: - Shared-item preview tiles
+
+    func test_sharedItemPreview_exposesOneNamedElementPerTile() throws {
+        // Each tile is a decorative SF Symbol plus an optional caption. Un-collapsed,
+        // VoiceOver read the glyph ("Doc Text Fill") as content; the .image case
+        // carried no text at all and was announced as a bare, nameless image.
+        let source = try shareSource()
+        let nearPreview = try declaration(of: "SharedItemPreview", in: source)
+        XCTAssertTrue(
+            nearPreview.contains(".accessibilityElement(children: .ignore)"),
+            "SharedItemPreview must collapse its glyph and caption into a single element so the " +
+            "decorative SF Symbol stops being announced as content."
+        )
+        XCTAssertTrue(
+            nearPreview.contains(".accessibilityLabel(typeName)"),
+            "Every tile — including the .image case, which prints no caption — must be named " +
+            "after the kind of content being shared."
+        )
+        XCTAssertTrue(
+            nearPreview.contains(".accessibilityValue(spokenContent)"),
+            "Collapsing the tile must not drop the shared text/URL preview; it belongs in the value."
+        )
+    }
+
+    func test_sharedItemPreview_namesEveryContentKind() throws {
+        // typeName must be total over SharedItemType: a missing case would leave a
+        // tile unnamed, which is precisely the .image defect this fixes.
+        let source = try shareSource()
+        let nearTypeName = try vicinity(after: "private var typeName: String", in: source, span: 800)
+        for key in [
+            "share.type.text", "share.type.url", "share.type.image",
+            "share.type.video", "share.type.file", "share.type.location"
+        ] {
+            XCTAssertTrue(
+                nearTypeName.contains("\"\(key)\""),
+                "\(key) must be part of the spoken tile name so no SharedItemType is left unnamed."
+            )
+        }
+        // The three kinds that already print a caption must speak that same caption's
+        // key, so the collapsed element cannot drift from what is on screen.
+        for reusedKey in ["share.type.video", "share.type.file", "share.type.location"] {
+            XCTAssertEqual(
+                source.components(separatedBy: "\"\(reusedKey)\"").count - 1, 2,
+                "\(reusedKey) must appear exactly twice — once as the visible caption, once as the " +
+                "spoken name — rather than being duplicated under a new a11y-only key."
+            )
+        }
+    }
+
+    // MARK: - Section heading
+
+    func test_sendToHeading_isExposedToTheRotor() throws {
+        let source = try shareSource()
+        let nearHeading = try vicinity(after: "share.sendTo", in: source, span: 300)
+        XCTAssertTrue(
+            nearHeading.contains(".accessibilityAddTraits(.isHeader)"),
+            "The 'Send to' section title must carry .isHeader so VoiceOver's Headings rotor can " +
+            "jump straight to the contact list."
+        )
+    }
+
+    // MARK: - Action buttons
 
     func test_sendButton_labelStaysLegibleWhileDisabled() throws {
         // The label was hard-coded to .white over a Color.secondary.opacity(0.2)

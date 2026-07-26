@@ -103,9 +103,10 @@ trait `.isSelected` soldés) ni les boutons d'action de `ShareContentView`
 
 ## Reste à faire sur cette surface (215i+)
 
-- `SharedItemPreview` (l.420-470) : six branches `case` dont chaque tuile est un
-  `VStack` icône + légende, sans `.accessibilityElement` — VoiceOver lit l'icône
-  décorative puis la légende. Candidat direct au même traitement que A.
+- ~~`SharedItemPreview` (l.420-470)~~ — **traité en 215i**
+  (`2026-07-26-iteration-215i-shareextension-itempreview.md`) : tuiles repliées en
+  un élément nommé, tuile `.image` enfin nommée, en-tête « Send to » passé en
+  `.isHeader`.
 - Le champ de recherche de contacts n'a pas de `.accessibilityLabel` (le
   placeholder tient lieu de nom — acceptable, à confirmer à l'Inspector).
 - Ajouter un `Localizable.xcstrings` à la cible `MeeshyShareExtension` : sans

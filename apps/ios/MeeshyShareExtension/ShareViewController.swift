@@ -318,6 +318,7 @@ struct ShareContentView: View {
                         .font(.headline)
                         .padding(.horizontal)
                         .padding(.top)
+                        .accessibilityAddTraits(.isHeader)
 
                     // Search
                     HStack {
@@ -406,6 +407,26 @@ struct ShareContentView: View {
 struct SharedItemPreview: View {
     let item: SharedItem
 
+    /// Spoken name of the tile. For the three cases that already print a caption
+    /// this reuses that caption's key, so the collapsed element says exactly what
+    /// the tile shows.
+    private var typeName: String {
+        switch item.type {
+        case .text: return String(localized: "share.type.text", defaultValue: "Text")
+        case .url: return String(localized: "share.type.url", defaultValue: "Link")
+        case .image: return String(localized: "share.type.image", defaultValue: "Image")
+        case .video: return String(localized: "share.type.video", defaultValue: "Video")
+        case .file: return String(localized: "share.type.file", defaultValue: "File")
+        case .location: return String(localized: "share.type.location", defaultValue: "Location")
+        }
+    }
+
+    /// The shared payload itself, for the cases that carry text worth hearing —
+    /// collapsing the tile would otherwise drop the preview string entirely.
+    private var spokenContent: String {
+        (item.content as? String) ?? ""
+    }
+
     var body: some View {
         VStack(spacing: 8) {
             switch item.type {
@@ -475,6 +496,9 @@ struct SharedItemPreview: View {
         .frame(width: 120, height: 120)
         .background(Color.secondary.opacity(0.1))
         .cornerRadius(12)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(typeName)
+        .accessibilityValue(spokenContent)
     }
 }
 
