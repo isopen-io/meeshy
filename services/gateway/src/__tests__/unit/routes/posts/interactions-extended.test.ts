@@ -399,6 +399,22 @@ describe('GET /posts/:postId/views', () => {
     const res = await app.inject({ method: 'GET', url: `/posts/${POST_ID}/views` });
     expect(res.statusCode).toBe(403);
   });
+
+  it('caps an oversized client limit at 100 before hitting the service', async () => {
+    mockGetPostViews.mockReset();
+    mockGetPostViews.mockResolvedValueOnce({ items: [], total: 0, hasMore: false });
+    await app.inject({ method: 'GET', url: `/posts/${POST_ID}/views?limit=9999&offset=5` });
+    // getPostViews(postId, userId, limit, offset)
+    expect(mockGetPostViews.mock.calls[0][2]).toBe(100);
+    expect(mockGetPostViews.mock.calls[0][3]).toBe(5);
+  });
+
+  it('floors an explicit limit=0 to 1 (no full-page leak)', async () => {
+    mockGetPostViews.mockReset();
+    mockGetPostViews.mockResolvedValueOnce({ items: [], total: 0, hasMore: false });
+    await app.inject({ method: 'GET', url: `/posts/${POST_ID}/views?limit=0` });
+    expect(mockGetPostViews.mock.calls[0][2]).toBe(1);
+  });
 });
 
 // ─── GET /posts/:postId/interactions ─────────────────────────────────────────

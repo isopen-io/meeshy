@@ -8,6 +8,26 @@ import { ErrorCode } from '../types/errors.js';
 import { createError } from './errors.js';
 import { isSupportedLanguage } from './languages.js';
 
+const DEFAULT_PAGE_LIMIT = 20;
+const MAX_PAGE_LIMIT = 100;
+
+/**
+ * Clamp a query-string `limit` to `[1, MAX_PAGE_LIMIT]`, falling back to the
+ * default ONLY when the input is missing or unparsable (`NaN`). An explicit
+ * `'0'`/`'-5'` is a real number and floors to 1 — it is never falsy-coerced to
+ * the default. Single source shared by both pagination schemas.
+ */
+function clampLimit(val: string | undefined): number {
+  const parsed = parseInt(val ?? '', 10);
+  const requested = Number.isNaN(parsed) ? DEFAULT_PAGE_LIMIT : parsed;
+  return Math.min(Math.max(1, requested), MAX_PAGE_LIMIT);
+}
+
+function clampOffset(val: string | undefined): number {
+  const parsed = parseInt(val ?? '', 10);
+  return Math.max(0, Number.isNaN(parsed) ? 0 : parsed);
+}
+
 /**
  * Code de langue in-app supporté, **validé ET normalisé** (lowercase).
  *
@@ -63,19 +83,21 @@ export function validateSchema<T>(
  * Schémas de validation réutilisables
  */
 export const CommonSchemas = {
-  // Pagination — coerce defensively: the `|| default` must be applied AFTER
-  // parseInt so non-numeric ('abc' → NaN) and negative ('-5') query strings fall
-  // back to safe bounds instead of leaking into Prisma `take`/`skip`. Mirrors the
-  // gateway's validatePagination (services/gateway/src/utils/pagination.ts).
+  // Pagination — the default is the fallback for MISSING/unparsable input only
+  // (`NaN`). An explicit but below-minimum value (`'0'`, `'-5'`) is a real parsed
+  // number and must clamp to the floor of 1 — never be falsy-coerced to the
+  // default. The former `parseInt(...) || 20` conflated `0` with "absent", so
+  // `limit=0` leaked a full page (20) while `limit=-5` clamped to 1. Truly
+  // mirrors the gateway's validatePagination (services/gateway/src/utils/pagination.ts).
   pagination: z.object({
-    limit: z.string().optional().transform((val) => Math.min(Math.max(1, parseInt(val ?? '', 10) || 20), 100)),
-    offset: z.string().optional().transform((val) => Math.max(0, parseInt(val ?? '', 10) || 0)),
+    limit: z.string().optional().transform((val) => clampLimit(val)),
+    offset: z.string().optional().transform((val) => clampOffset(val)),
   }),
 
   // Message pagination
   messagePagination: z.object({
-    limit: z.string().optional().transform((val) => Math.min(Math.max(1, parseInt(val ?? '', 10) || 20), 100)),
-    offset: z.string().optional().transform((val) => Math.max(0, parseInt(val ?? '', 10) || 0)),
+    limit: z.string().optional().transform((val) => clampLimit(val)),
+    offset: z.string().optional().transform((val) => clampOffset(val)),
     before: z.string().optional(),
   }),
   
