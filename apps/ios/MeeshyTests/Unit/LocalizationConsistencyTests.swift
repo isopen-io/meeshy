@@ -7,6 +7,13 @@ import XCTest
 /// development language (`en`): the app's `developmentRegion` is `en`, so a key
 /// missing its `en` entry falls back to the key string itself, never to `fr`.
 ///
+/// A second axis, added in 220i: a key carrying an inline `defaultValue:` can
+/// never render raw, so the check above deliberately skips it — but that
+/// `defaultValue` is written in the catalog's source language (`fr`). A key that
+/// exists ONLY as a `defaultValue` therefore renders **French** on the six other
+/// locales the app ships. Those calls look localized and are not, which is why
+/// the backlog below is pinned and only ever allowed to shrink.
+///
 /// Scope: IDENTIFIER keys only (dot/underscore, no spaces — e.g.
 /// `call.ended.missed`). Natural-text / format keys (`"Annuler"`, `"%@ membres"`)
 /// are excluded on purpose — they never render as a raw identifier, and Xcode
@@ -87,14 +94,78 @@ final class LocalizationConsistencyTests: XCTestCase {
         )
     }
 
+    // MARK: - Translation completeness (added 220i)
+
+    /// Screens whose every app-bundle identifier key is translated in all shipped
+    /// locales. Additive list: an iteration that finishes localizing a screen adds
+    /// its path here so the screen can never silently regress to French-only.
+    private static let fullyLocalizedScreens = [
+        "apps/ios/Meeshy/Features/Main/Views/StatusComposerView.swift",
+    ]
+
+    func test_fullyLocalizedScreensStayTranslatedInEveryShippedLocale() throws {
+        let env = try makeEnvironment()
+
+        var violations: [String] = []
+        for path in Self.fullyLocalizedScreens {
+            let url = env.repoRoot.appendingPathComponent(path)
+            let text = try String(contentsOf: url, encoding: .utf8)
+            for call in localizedCalls(in: text) {
+                guard isIdentifier(call.key), !call.isModuleBundle else { continue }
+                let missing = env.requiredLocales.subtracting(env.appTranslations[call.key] ?? [])
+                guard !missing.isEmpty else { continue }
+                violations.append("\(call.key)  (\(url.lastPathComponent) → missing \(missing.sorted().joined(separator: ", ")))")
+            }
+        }
+        violations = Array(Set(violations)).sorted()
+        XCTAssertTrue(
+            violations.isEmpty,
+            "These keys belong to a screen pinned as fully localized but lack a translation. "
+            + "Their defaultValue is source-language only, so those locales render French:\n"
+            + violations.joined(separator: "\n")
+        )
+    }
+
+    func test_untranslatedKeyBacklogDoesNotGrow() throws {
+        let env = try makeEnvironment()
+
+        var untranslated: Set<String> = []
+        for file in env.sourceFiles {
+            let text = (try? String(contentsOf: file, encoding: .utf8)) ?? ""
+            for call in localizedCalls(in: text) {
+                guard isIdentifier(call.key), !call.isModuleBundle else { continue }
+                if !env.requiredLocales.isSubset(of: env.appTranslations[call.key] ?? []) {
+                    untranslated.insert(call.key)
+                }
+            }
+        }
+
+        // Pinned at the 220i measurement. This number must only ever go DOWN: a
+        // failure means a new key was introduced with a `defaultValue` alone, which
+        // ships French to the six other locales. Add the catalog entry — with its
+        // translations — instead of raising the ceiling.
+        let backlogCeiling = 1669
+        XCTAssertLessThanOrEqual(
+            untranslated.count, backlogCeiling,
+            "\(untranslated.count) app-bundle identifier keys are untranslated in at least one "
+            + "shipped locale (ceiling \(backlogCeiling)). Add the missing entries to "
+            + Self.appCatalogPath
+        )
+    }
+
     // MARK: - Environment
 
     private struct Environment {
+        let repoRoot: URL
         let sourceFiles: [URL]
         let combinedSource: String
         let appIdentifierKeys: [String]
         let appKeysWithEn: Set<String>
         let sdkKeysWithEn: Set<String>
+        /// Key → locales whose app-catalog string unit is in the `translated` state.
+        let appTranslations: [String: Set<String>]
+        /// Shipped locales minus the catalog's source language.
+        let requiredLocales: Set<String>
     }
 
     private func makeEnvironment() throws -> Environment {
@@ -127,13 +198,51 @@ final class LocalizationConsistencyTests: XCTestCase {
             .compactMap { try? String(contentsOf: $0, encoding: .utf8) }
             .joined(separator: "\n")
 
+        let appTranslations = try loadTranslations(appCatalog)
+        let appSourceLanguage = try sourceLanguage(appCatalog)
+        let requiredLocales = try shippedLocales(repoRoot: repoRoot).subtracting([appSourceLanguage])
+
         return Environment(
+            repoRoot: repoRoot,
             sourceFiles: files,
             combinedSource: combined,
             appIdentifierKeys: appKeys.keys.filter(isIdentifier),
             appKeysWithEn: Set(appKeys.filter { $0.value }.keys),
-            sdkKeysWithEn: Set(sdkKeys.filter { $0.value }.keys)
+            sdkKeysWithEn: Set(sdkKeys.filter { $0.value }.keys),
+            appTranslations: appTranslations,
+            requiredLocales: requiredLocales
         )
+    }
+
+    /// Locales the app actually ships — read from `Info.plist`, not hard-coded.
+    private func shippedLocales(repoRoot: URL) throws -> Set<String> {
+        let url = repoRoot.appendingPathComponent("apps/ios/Meeshy/Info.plist")
+        let plist = try PropertyListSerialization.propertyList(from: try Data(contentsOf: url), format: nil)
+        let locales = (plist as? [String: Any])?["CFBundleLocalizations"] as? [String]
+        return Set(locales ?? [])
+    }
+
+    private func sourceLanguage(_ url: URL) throws -> String {
+        let json = try JSONSerialization.jsonObject(with: try Data(contentsOf: url)) as? [String: Any]
+        return json?["sourceLanguage"] as? String ?? "fr"
+    }
+
+    /// Key → locales whose string unit is explicitly `translated` (a stale or
+    /// needs-review unit is not a shipped translation).
+    private func loadTranslations(_ url: URL) throws -> [String: Set<String>] {
+        let json = try JSONSerialization.jsonObject(with: try Data(contentsOf: url)) as? [String: Any]
+        let strings = json?["strings"] as? [String: Any] ?? [:]
+        var result: [String: Set<String>] = [:]
+        for (key, value) in strings {
+            let localizations = (value as? [String: Any])?["localizations"] as? [String: Any] ?? [:]
+            var translated: Set<String> = []
+            for (locale, payload) in localizations {
+                let unit = (payload as? [String: Any])?["stringUnit"] as? [String: Any]
+                if unit?["state"] as? String == "translated" { translated.insert(locale) }
+            }
+            result[key] = translated
+        }
+        return result
     }
 
     /// Returns every key in a `.xcstrings` catalog mapped to whether it has an

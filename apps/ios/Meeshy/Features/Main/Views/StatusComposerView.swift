@@ -34,7 +34,11 @@ struct StatusComposerView: View {
     private let columns = Array(repeating: GridItem(.flexible(), spacing: 16), count: 5)
 
     var body: some View {
-        NavigationView {
+        // NavigationStack, not NavigationView: the deprecated container defaults to
+        // the double-column style, so at regular width (iPad) this sheet collapsed
+        // to an empty detail pane — hiding the composer and its only publish/close
+        // affordances. iOS 16.0 deployment floor ⇒ available unconditionally.
+        NavigationStack {
             ZStack {
                 theme.backgroundGradient.ignoresSafeArea()
 
@@ -239,6 +243,18 @@ struct StatusComposerView: View {
             }
         }
         .disabled(selectedEmoji == nil || isPublishing)
+        // While publishing, the label is a bare `ProgressView` — without an explicit
+        // label the button loses its accessible NAME mid-action and VoiceOver
+        // announces only "in progress, dimmed". Same shape as the feed composer's
+        // publish button (`FeedView`): stable name + state carried as the value.
+        .accessibilityLabel(String(localized: "status.composer.publish", defaultValue: "Publier", bundle: .main))
+        .accessibilityValue(
+            isPublishing
+                ? String(localized: "a11y.status.composer.publish.publishing", defaultValue: "Publication en cours", bundle: .main)
+                : (selectedEmoji == nil
+                    ? String(localized: "a11y.status.composer.publish.disabled", defaultValue: "Indisponible, choisissez une émotion", bundle: .main)
+                    : "")
+        )
     }
 
     // MARK: - Visibility Picker
