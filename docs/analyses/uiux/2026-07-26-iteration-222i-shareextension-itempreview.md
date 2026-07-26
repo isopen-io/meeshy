@@ -1,19 +1,25 @@
-# iOS UI/UX — Iteration 215i
+# iOS UI/UX — Iteration 222i
 
 **Date** : 2026-07-26
 **Surface** : `apps/ios/MeeshyShareExtension/ShareViewController.swift`
 (`SharedItemPreview` + en-tête « Send to » de `ShareContentView`)
 **Axe** : Accessibilité — VoiceOver (nommage des tuiles, rotor Titres)
-**Base** : `main` HEAD `ffef1339e` — suite directe de 214i, même branche
+**Base** : `main` HEAD `ffef1339e` — suite directe de 221i, même branche
 
 ## Contexte
 
-214i a soldé `ContactRow` et la barre d'action de la feuille de partage, et
-laissait `SharedItemPreview` en tête de la piste 215i. C'est fait ici.
+221i a soldé `ContactRow` et la barre d'action de la feuille de partage, et
+laissait `SharedItemPreview` en tête de la piste 222i. C'est fait ici.
 
-`SharedItemPreview` rend la bande horizontale de tuiles 120×120 qui montre à
-l'utilisateur **ce qu'il s'apprête à partager** — la seule confirmation visuelle
-du contenu avant envoi.
+`SharedItemPreview` rend la bande horizontale de tuiles 120×120 qui montre
+**ce que l'on s'apprête à partager** — la seule confirmation visuelle du contenu
+avant envoi.
+
+> **⚠️ Même réserve de portée qu'en 221i** : `MeeshyShareExtension` est
+> **délibérément hors des `dependencies` de l'app** (bundle id non enregistré
+> pour la signature) et son chemin d'envoi ne mène nulle part (constat 220i).
+> Travail **préparatoire sur du code non livré** — correct et sans risque, mais
+> sans gain utilisateur tant que l'extension n'est pas embarquée.
 
 ## Écarts constatés
 
@@ -38,7 +44,7 @@ qui impriment une légende. Les trois autres n'avaient aucun nom déclaré.
 uniquement, sans trait `.isHeader`. Le rotor « Titres » de VoiceOver ne
 proposait aucun point de saut vers la liste de contacts.
 
-## Correctifs (215i)
+## Correctifs (222i)
 
 1. **A + B** → la tuile devient un élément unique :
    `.accessibilityElement(children: .ignore)` + `.accessibilityLabel(typeName)`
@@ -87,7 +93,7 @@ Aucun changement de logique, de réseau, ni de rendu visuel.
 Écarts A–D **résolus**. Ne plus re-flagger `SharedItemPreview` (nommage VoiceOver
 des tuiles soldé) ni l'en-tête « Send to » (trait `.isHeader` soldé).
 
-Avec 214i, la surface `MeeshyShareExtension/ShareViewController.swift` est
+Avec 221i, la surface `MeeshyShareExtension/ShareViewController.swift` est
 désormais couverte pour l'accessibilité VoiceOver, le contraste, les cibles
 tactiles et la convention i18n.
 
@@ -95,7 +101,7 @@ tactiles et la convention i18n.
 
 - **Ajouter un `Localizable.xcstrings` à la cible `MeeshyShareExtension`.** Reste
   le plus fort reliquat de la surface : sans catalogue, les **11** clés `share.*`
-  (5 préexistantes + 3 de 214i + 3 de 215i) retombent toutes sur leur
+  (5 préexistantes + 3 de 221i + 3 de 222i) retombent toutes sur leur
   `defaultValue` anglais dans **toutes** les locales. Chantier distinct — il
   touche `project.yml` et les ressources de la cible, et n'est pas vérifiable
   sans toolchain Swift ; à mener dans sa propre itération, idéalement dans un

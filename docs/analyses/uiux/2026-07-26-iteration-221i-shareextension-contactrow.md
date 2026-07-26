@@ -1,4 +1,4 @@
-# iOS UI/UX — Iteration 214i
+# iOS UI/UX — Iteration 221i
 
 **Date** : 2026-07-26
 **Surface** : `apps/ios/MeeshyShareExtension/ShareViewController.swift`
@@ -14,10 +14,27 @@ en piste depuis 208i (« sélection contact état couleur-seule, manque trait
 `.isSelected` »), jamais traitée. La surface a été auditée intégralement plutôt
 que sur ce seul point.
 
-L'extension a été recâblée dans `project.yml` le 2026-06-24 (`app-extension`,
-`deploymentTarget: 16.0`) — c'est du code embarqué et atteignable par
-l'utilisateur (feuille de partage système → Meeshy), mais elle n'avait encore
-reçu aucune passe UI/UX. Cinq écarts réels, tous dans la même vue.
+L'extension est déclarée dans `project.yml` (`app-extension`,
+`deploymentTarget: 16.0`) et n'avait encore reçu aucune passe UI/UX. Cinq écarts
+réels, tous dans la même vue.
+
+> **⚠️ CORRECTION (portée réelle).** Cette analyse affirmait initialement que la
+> surface était « atteignable par l'utilisateur (feuille de partage système →
+> Meeshy) ». **C'est faux, et l'affirmation n'avait pas été vérifiée.**
+> `MeeshyShareExtension` est **délibérément absent des `dependencies` de l'app**
+> (`project.yml`, commentaire explicite) : l'embarquer fait échouer l'archive de
+> distribution, le bundle id `me.meeshy.app.share-extension` n'étant pas
+> enregistré pour la signature. Le target reste compilable isolément, **mais il
+> n'est jamais livré**. L'itération 220i a par ailleurs relevé que le chemin
+> d'envoi ne mène nulle part (`saveSharedContent` écrit `pending_shared_content`,
+> que personne ne lit) et a **abandonné sur constat** la piste i18n de cette même
+> extension.
+>
+> Ce lot est donc du **travail préparatoire sur du code non livré**, pas une
+> amélioration de l'expérience utilisateur courante. Il reste correct, additif et
+> sans risque — il vaudra le jour où le dossier de signature sera complété — mais
+> il ne doit pas être compté comme un gain utilisateur, et la piste ne doit pas
+> être poursuivie tant que l'extension n'est pas embarquée.
 
 ## Écarts constatés
 
@@ -53,7 +70,7 @@ bouton principal de l'écran apparaît vide jusqu'à la sélection.
 étaient des littéraux, alors que le fichier utilise déjà `String(localized:
 defaultValue:)` (5 occurrences, namespace `share.*`).
 
-## Correctifs (214i)
+## Correctifs (221i)
 
 1. **A** → sur `ContactRow` : `.contentShape(Rectangle())`,
    `.accessibilityElement(children: .ignore)` (4 fragments → 1 arrêt, décor
@@ -101,10 +118,10 @@ Aucun changement de logique métier, de réseau, ni de layout rendu.
 trait `.isSelected` soldés) ni les boutons d'action de `ShareContentView`
 (cible tactile, contraste désactivé, i18n soldés).
 
-## Reste à faire sur cette surface (215i+)
+## Reste à faire sur cette surface (222i+)
 
-- ~~`SharedItemPreview` (l.420-470)~~ — **traité en 215i**
-  (`2026-07-26-iteration-215i-shareextension-itempreview.md`) : tuiles repliées en
+- ~~`SharedItemPreview` (l.420-470)~~ — **traité en 222i**
+  (`2026-07-26-iteration-222i-shareextension-itempreview.md`) : tuiles repliées en
   un élément nommé, tuile `.image` enfin nommée, en-tête « Send to » passé en
   `.isHeader`.
 - Le champ de recherche de contacts n'a pas de `.accessibilityLabel` (le
