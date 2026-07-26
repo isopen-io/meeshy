@@ -226,8 +226,14 @@ final class StoryVideoExportService: StoryVideoExportServiceProviding {
             // sans interlude ET sans carte de fin, donc au branding non
             // déterministe d'un export à l'autre. La carte de fin ne dépend
             // d'aucune identité : elle est désormais appliquée séparément.
+            //
+            // Part D (2026-07-26) : quand l'identité de l'auteur a été résolue
+            // (`intro != nil`), la carte de fin devient la fermeture EN 2 TEMPS —
+            // le logo termine la vidéo en silence, PUIS la carte d'auteur (identité
+            // sur fond-logo) porte le jingle. Sans identité (course/timeout), c'est
+            // la carte logo-seule inchangée : `content: nil` retombe dessus.
             do {
-                let finalURL = try await StoryExportOutro.append(to: current, renderSize: renderSize)
+                let finalURL = try await StoryExportOutro.append(to: current, renderSize: renderSize, content: intro)
                 cleanupExport(at: current)
                 return finalURL
             } catch {
