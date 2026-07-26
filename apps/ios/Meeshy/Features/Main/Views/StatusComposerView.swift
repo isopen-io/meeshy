@@ -34,7 +34,12 @@ struct StatusComposerView: View {
     private let columns = Array(repeating: GridItem(.flexible(), spacing: 16), count: 5)
 
     var body: some View {
-        NavigationView {
+        // NavigationStack, never NavigationView: the composer is presented as a
+        // sheet, and a sheet is a form sheet at regular width (iPad). The
+        // deprecated container defaults to the double-column style, which folded
+        // the whole composer into a sidebar and left the detail pane empty, with
+        // its only two bar affordances ("Fermer", "Publier") misplaced.
+        NavigationStack {
             ZStack {
                 theme.backgroundGradient.ignoresSafeArea()
 
@@ -239,6 +244,21 @@ struct StatusComposerView: View {
             }
         }
         .disabled(selectedEmoji == nil || isPublishing)
+        // The label swaps to a bare ProgressView while publishing, so the accessible
+        // name has to be pinned to the visible wording — it is the key of the Text
+        // above, so the name contains the displayed label (WCAG 2.5.3) and survives
+        // the swap. The transient states ride on the value: "en cours" while in
+        // flight, and the reason for unavailability otherwise, which is signalled
+        // visually by colour alone (brandGradient → textMuted, WCAG 1.4.1).
+        .accessibilityLabel(String(localized: "status.composer.publish", defaultValue: "Publier", bundle: .main))
+        .accessibilityHint(String(localized: "status.composer.a11y.publish.hint", defaultValue: "Publie votre humeur", bundle: .main))
+        .accessibilityValue(
+            isPublishing
+                ? String(localized: "status.composer.a11y.publish.publishing", defaultValue: "Publication en cours", bundle: .main)
+                : (selectedEmoji == nil
+                    ? String(localized: "status.composer.a11y.publish.disabled", defaultValue: "Indisponible, choisissez une humeur", bundle: .main)
+                    : "")
+        )
     }
 
     // MARK: - Visibility Picker
