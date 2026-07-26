@@ -707,6 +707,63 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
         }
     }
 
+    /// Change le mode de visibilité d'une story (menu « Modifier la
+    /// visibilité » de « Mes stories »).
+    ///
+    /// Écriture locale D'ABORD pour que le checkmark du menu bouge tout de
+    /// suite, appel serveur ensuite, restauration de l'état exact d'avant si
+    /// l'appel échoue — sinon l'UI affirmerait un changement que le serveur
+    /// n'a jamais enregistré.
+    ///
+    /// Mutation EN PLACE (`visibility` et `visibilityUserIds` sont des `var`),
+    /// jamais une reconstruction via init partielle : celle-ci droppait ~13
+    /// champs à leur défaut et le cache gravait l'état corrompu (cf. le
+    /// commentaire de `markViewed`).
+    ///
+    /// - Returns: `true` si le serveur a accepté le changement.
+    func applyVisibility(storyId: String, visibility: String, userIds: [String]?) async -> Bool {
+        guard let groupIndex = storyGroups.firstIndex(where: { $0.stories.contains { $0.id == storyId } }),
+              let storyIndex = storyGroups[groupIndex].stories.firstIndex(where: { $0.id == storyId })
+        else { return false }
+
+        let previousVisibility = storyGroups[groupIndex].stories[storyIndex].visibility
+        let previousUserIds = storyGroups[groupIndex].stories[storyIndex].visibilityUserIds
+
+        write(visibility: visibility, userIds: userIds, groupIndex: groupIndex, storyIndex: storyIndex)
+
+        do {
+            _ = try await postService.update(
+                postId: storyId,
+                content: nil,
+                visibility: visibility,
+                visibilityUserIds: userIds,
+                moodEmoji: nil,
+                originalLanguage: nil,
+                type: nil,
+                removeMediaIds: nil
+            )
+            return true
+        } catch {
+            Logger.stories.error(
+                "applyVisibility failed for \(storyId, privacy: .public): \(error.localizedDescription, privacy: .public)")
+            // La story a pu disparaître (suppression temps réel) pendant l'appel :
+            // relocaliser avant de restaurer plutôt que réutiliser des index périmés.
+            if let g = storyGroups.firstIndex(where: { $0.stories.contains { $0.id == storyId } }),
+               let s = storyGroups[g].stories.firstIndex(where: { $0.id == storyId }) {
+                write(visibility: previousVisibility, userIds: previousUserIds, groupIndex: g, storyIndex: s)
+            }
+            return false
+        }
+    }
+
+    private func write(visibility: String?, userIds: [String]?, groupIndex: Int, storyIndex: Int) {
+        var stories = storyGroups[groupIndex].stories
+        stories[storyIndex].visibility = visibility
+        stories[storyIndex].visibilityUserIds = userIds
+        storyGroups[groupIndex] = storyGroups[groupIndex].with(stories: stories)
+        persistStoryCache()
+    }
+
     // MARK: - Lookup Methods
 
     func storyGroupForUser(userId: String) -> StoryGroup? {
