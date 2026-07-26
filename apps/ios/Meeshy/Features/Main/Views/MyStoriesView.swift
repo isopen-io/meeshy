@@ -647,7 +647,6 @@ private struct MyStoryRow<MenuContent: View>: View {
                         HStack(spacing: 12) {
                             metric(icon: "eye.fill", value: story.viewCount ?? 0)
                             metric(icon: "heart.fill", value: story.reactionCount)
-                            metric(icon: "bubble.left.fill", value: story.commentCount)
                         }
                     }
                     Spacer()

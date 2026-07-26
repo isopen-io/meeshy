@@ -208,4 +208,64 @@ final class MyStoriesCommentsButtonTests: XCTestCase {
             "Le libellé de l'action commentaires doit être À L'INTÉRIEUR du if !isSelecting. Bloc lu: \(actionsBlock)"
         )
     }
+
+    // MARK: - Task 11 : compteur de commentaires affiché deux fois
+
+    /// La rangée de métriques affichait le nombre de commentaires une SECONDE
+    /// fois via `metric(icon: "bubble.left.fill", value: story.commentCount)`
+    /// — purement décoratif, non tappable, à côté du bouton actionnable
+    /// ci-dessus qui affiche déjà le même chiffre. Task 11 retire cette
+    /// métrique ; le bouton (icône `bubble.left`, sans `.fill`) reste seul
+    /// affichage du compteur.
+    ///
+    /// Piège du préfixe : `"bubble.left"` est un préfixe de
+    /// `"bubble.left.fill"` — un test naïf du type
+    /// `XCTAssertTrue(bodyBlock.contains("bubble.left"))` resterait VRAI même
+    /// si la métrique décorative n'avait jamais été retirée, puisque cette
+    /// sous-chaîne existe aussi à l'intérieur de `"bubble.left.fill"`. Pour
+    /// distinguer réellement les deux : (1) l'absence est vérifiée sur la
+    /// chaîne complète `bubble.left.fill`, qui ne peut apparaître QUE dans
+    /// l'appel `metric(icon:)` retiré ; (2) la présence est vérifiée sur le
+    /// littéral exact du bouton `Image(systemName: "bubble.left")` — le
+    /// guillemet fermant suit immédiatement `left`, ce qui ne matche jamais à
+    /// l'intérieur de `"bubble.left.fill"` (où le caractère suivant est `.`,
+    /// pas `"`). Les deux assertions ensemble ne peuvent pas passer
+    /// simultanément si la métrique décorative est encore présente.
+    func test_bubbleLeftFillMetric_removed_bubbleLeftButton_stillPresent() throws {
+        let bodyBlock = try rowBody()
+
+        XCTAssertFalse(
+            bodyBlock.contains("bubble.left.fill"),
+            """
+            La métrique décorative bubble.left.fill (doublon non tappable du \
+            compteur de commentaires, cf. bouton bubble.left ci-dessous) doit \
+            être retirée de la rangée de métriques. Bloc lu: \(bodyBlock)
+            """
+        )
+
+        XCTAssertTrue(
+            bodyBlock.contains("Image(systemName: \"bubble.left\")"),
+            """
+            Le bouton commentaire actionnable (icône bubble.left, sans .fill) \
+            doit rester — seul affichage restant du compteur de commentaires. \
+            Bloc lu: \(bodyBlock)
+            """
+        )
+    }
+
+    /// Les deux autres métriques de la rangée (vues, réactions) ne sont pas
+    /// concernées par le retrait de bubble.left.fill — elles doivent rester
+    /// strictement inchangées.
+    func test_otherMetrics_untouchedByBubbleLeftFillRemoval() throws {
+        let bodyBlock = try rowBody()
+
+        XCTAssertTrue(
+            bodyBlock.contains("metric(icon: \"eye.fill\", value: story.viewCount ?? 0)"),
+            "La métrique vues doit rester inchangée. Bloc lu: \(bodyBlock)"
+        )
+        XCTAssertTrue(
+            bodyBlock.contains("metric(icon: \"heart.fill\", value: story.reactionCount)"),
+            "La métrique réactions doit rester inchangée. Bloc lu: \(bodyBlock)"
+        )
+    }
 }
