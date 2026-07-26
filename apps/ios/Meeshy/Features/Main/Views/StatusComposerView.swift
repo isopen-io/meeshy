@@ -34,7 +34,7 @@ struct StatusComposerView: View {
     private let columns = Array(repeating: GridItem(.flexible(), spacing: 16), count: 5)
 
     var body: some View {
-        NavigationView {
+        NavigationStack {
             ZStack {
                 theme.backgroundGradient.ignoresSafeArea()
 
@@ -239,6 +239,18 @@ struct StatusComposerView: View {
             }
         }
         .disabled(selectedEmoji == nil || isPublishing)
+        // While publishing, the label collapses to a bare ProgressView, which
+        // carries no text — VoiceOver would announce an unlabelled "button,
+        // dimmed". Pin the label to both states and expose *why* the control is
+        // dimmed as a value, mirroring the feed composer's publish button.
+        .accessibilityLabel(String(localized: "status.composer.publish", defaultValue: "Publier", bundle: .main))
+        .accessibilityValue(
+            isPublishing
+                ? String(localized: "status.composer.publish.a11y.publishing", defaultValue: "Envoi en cours", bundle: .main)
+                : (selectedEmoji == nil
+                    ? String(localized: "status.composer.publish.a11y.disabled", defaultValue: "Indisponible, choisissez une humeur", bundle: .main)
+                    : "")
+        )
     }
 
     // MARK: - Visibility Picker

@@ -59,6 +59,12 @@ final class NavigationContainerMigrationTests: XCTestCase {
         try assertMigrated("MeeshyShareExtension/ShareViewController.swift")
     }
 
+    // MARK: - Migrated in 220i (last holdout)
+
+    func test_statusComposerView_usesNavigationStack() throws {
+        try assertMigrated("Meeshy/Features/Main/Views/StatusComposerView.swift")
+    }
+
     private func assertMigrated(_ path: String, file: StaticString = #filePath, line: UInt = #line) throws {
         let source = try String(contentsOf: iosRoot.appendingPathComponent(path), encoding: .utf8)
         XCTAssertFalse(
@@ -75,19 +81,17 @@ final class NavigationContainerMigrationTests: XCTestCase {
         )
     }
 
-    // MARK: - Remaining debt is pinned, not merely tolerated
+    // MARK: - The debt is now zero, and stays zero
 
-    func test_noUnexpectedNavigationViewRemains() throws {
-        // StatusComposerView is the last holdout. It is deliberately untouched here
-        // because it is held by an in-flight pull request; migrating it is the
-        // follow-up iteration. When that lands, this expectation drops to the empty
-        // set and the test fails until it is updated — which is the intent.
-        let expected: Set<String> = ["StatusComposerView.swift"]
+    func test_noNavigationViewRemains() throws {
+        // StatusComposerView was the last holdout; 220i migrated it. The expectation
+        // is now the empty set, so this is no longer a pinned-debt ratchet but a
+        // plain regression guard: any newly introduced NavigationView fails here.
         XCTAssertEqual(
-            try filesUsingDeprecatedContainer(), expected,
-            "The set of files using the deprecated NavigationView container changed. Either a new " +
-            "NavigationView was introduced (use NavigationStack instead) or the last holdout was " +
-            "migrated (then shrink this expectation)."
+            try filesUsingDeprecatedContainer(), [],
+            "A NavigationView was introduced. Use NavigationStack: at regular width (iPad, iPad " +
+            "share sheet) NavigationView's default double-column style renders a single child as " +
+            "a split view with an empty detail pane, hiding the content and its dismiss affordance."
         )
     }
 }
