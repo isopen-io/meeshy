@@ -1,5 +1,47 @@
 # Progress — state & what to do next
 
+> On 2026-07-26 the **wizard navigation-chrome projection core** landed (slice `registration-nav-chrome`,
+> feature-parity §A Auth — the pure decision layer the future `OnboardingFlowView` composable renders,
+> the explicit follow-up of the bottom-bar step-navigation item). iOS spreads the wizard's top-bar +
+> bottom-bar decisions across three computed SwiftUI `View` properties (`topBar`, `bottomBar`,
+> `buttonTitle`/`buttonIcon` in `apps/ios/Meeshy/Features/Auth/Onboarding/OnboardingFlowView.swift`),
+> none of it unit-testable without a UI host. **Added (production, all `apps/android`):** pure
+> `:core:model/auth/RegistrationNav.kt` — `RegistrationNav.model(current, canProceed, isSubmitting)`
+> returns a `RegistrationNavModel` value: `leading` (`CLOSE` on the first `PSEUDO` step, `BACK`
+> elsewhere — iOS `currentStep != .pseudo`), `primaryLabel` (`CREATE_ACCOUNT` on RECAP / `CONTINUE` on
+> the optional PROFILE / `NEXT` otherwise — iOS `buttonTitle`), `primaryIcon` (`SPARKLES` on RECAP /
+> `FORWARD` otherwise — iOS `buttonIcon`), `primaryAction` (`REGISTER` on RECAP / `ADVANCE` otherwise —
+> iOS action `register()` vs `nextStep()`), `primaryEnabled` (`canProceed && !isSubmitting` — iOS
+> `canProceed && !isLoading`), `showSkip` (PROFILE only — the PHONE step carries its own in-content skip,
+> mirroring iOS's profile-only bottom-bar skip), and the 1-based `positionLabel` (`"n/8"` — iOS
+> `"\(rawValue + 1)/\(totalSteps)"`). **SOTA over iOS:** the label/icon are surfaced as **semantic enums**
+> (`RegistrationPrimaryLabel` / `RegistrationPrimaryIcon` / `RegistrationLeadingAction` /
+> `RegistrationPrimaryAction`), not baked SF-Symbol names + untranslated French copy like iOS — the UI
+> resolves i18n string + Compose glyph, keeping `:core:model` framework-free, and every branch becomes
+> JVM-testable so the Compose wizard stays a dumb renderer. **Wiring:** a derived
+> `RegistrationUiState.nav` on the shipped `RegistrationViewModel` (same derive-on-demand seam as
+> `summary` / `canProceed` / `fill` / `languageSelection` — no stored duplicate). **+22 behavioural tests**
+> (16 `RegistrationNavTest` — full 8-step sweeps of every arm incl. leading, label, icon, action, enabled
+> gate, profile-only skip, 1-based position; 6 `RegistrationViewModelTest` — nav derives from live state:
+> first-step CLOSE+NEXT+disabled@1/8, enabled tracks the proceed gate, leading→BACK after advancing,
+> PROFILE shows skip+CONTINUE, RECAP flips to REGISTER+CREATE_ACCOUNT@8/8, and the submitting flight
+> disables the primary button). **Mutation (RED proof):** replacing `showSkip = current ==
+> RegistrationStep.PROFILE` with `showSkip = false` fails **exactly** `showSkip_isTrueOnlyOnTheProfileStep`
+> (16 run, 1 failed, no collateral), restored after. **Gate:** `./apps/android/meeshy.sh check`
+> (= `./gradlew assembleDebug testDebugUnitTest`) → **BUILD SUCCESSFUL in 5m36s** (161 tasks; full
+> `assembleDebug` + all module JVM unit tests; `RegistrationNavTest` 16/16, `RegistrationViewModelTest`
+> 45/45). Reviewer **PASS** (diff `apps/android` only — 1 new core + 1 new test + VM `nav` derive + 6 VM
+> tests + tracking docs; SDK purity — the chrome projection is a stateless `:core:model` block, the
+> when-to-dispatch orchestration stays in the VM/composable; SSOT — reuses `RegistrationStep` ordinals +
+> the existing `canProceed`/`isSubmitting` state, re-implements nothing; UDF — `nav` is derived, not
+> stored; no tautological tests — expectations are hand-written literals and the mutation proof is real).
+> **Next slice:** the paged **`OnboardingFlowView` Compose scaffold** now has its full decision layer
+> shipped (`RegistrationProgressBar` + `RegistrationStepGate` + `RegistrationStepNavigator` +
+> `RegistrationSummary` + `LanguageStepSelection` + `RegistrationNav`) — the remaining work is
+> `@Composable` glue (pager + per-step content) rendering these models, mostly coverage-exempt; OR the
+> still-`[ ]` **`StepLanguageView`** composable; OR the tracked **Kover 90% coverage-gate infra**; OR an
+> `https://meeshy.me/join/{id}` **App-Links intent-filter** (`AndroidManifest` only).
+
 > On 2026-07-26 the **wizard's regional (secondary) language collection** landed (slice
 > `registration-regional-language`, feature-parity §A Auth — closes the "regional language not yet gathered
 > by the wizard" gap flagged since the RECAP-summary and language-step-selection cores shipped). Every seam

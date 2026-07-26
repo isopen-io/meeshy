@@ -2,6 +2,22 @@
 
 Append-only log of gotchas and decisions that save time next run.
 
+## Lesson (2026-07-26, `registration-nav-chrome`) — first Gradle run: empty stdout ≠ stalled; read the XMLs
+- On a **fresh container** the first `./gradlew` invocation streams **nothing** to its captured stdout for
+  ~4–5 min while it downloads the dependency graph + warms the daemon — the redirected output file stays
+  `0 bytes` the whole time even though the build is progressing. Don't kill it or assume a hang. Confirm
+  progress two ways: `ps aux | grep java` shows the daemon at high CPU, and per-module results appear at
+  `<module>/build/test-results/testDebugUnitTest/TEST-*.xml` **as each module finishes** (grep the XML's
+  `tests="…" failures="…"` attrs for a fast pass/fail read before the top-level `BUILD SUCCESSFUL` line
+  ever lands). The `.output` file fills in one burst near the end.
+- **Model the UI-chrome decision layer as a pure `:core:model` object returning a value model, with
+  semantic enums instead of baked strings/glyphs.** iOS `OnboardingFlowView` computes button
+  title/icon/action/enabled + top-bar leading + position counter inside SwiftUI `View` bodies (untestable
+  off a UI host). Porting them to `RegistrationNav.model(...) → RegistrationNavModel` (labels/icons as
+  `enum`, not i18n copy) makes every branch JVM-testable and keeps the Compose wizard a dumb renderer —
+  the TDD-COVERAGE doctrine "push all testable decisions out of the Composable" applied to *chrome*, not
+  just data. Wire it as a **derived** `UiState.nav` (no stored duplicate), same seam as `summary`/`fill`.
+
 ## Lesson (2026-07-26, `sharelink-detail`) — no per-link owner endpoint; revert untracked mutations by hand
 - **There is no per-link owner GET.** The owner counters (`currentUses` / `maxUses`) live only in the
   `GET /links` list payload; `GET /links/:identifier` (retrieval.ts) is the *public* preview and its
