@@ -13,6 +13,9 @@ import kotlinx.coroutines.launch
 import me.meeshy.sdk.model.CreatedShareLink
 import me.meeshy.sdk.model.CreateShareLinkForm
 import me.meeshy.sdk.model.ShareLinkExpiration
+import me.meeshy.sdk.model.joinUrl
+import me.meeshy.sdk.model.auth.ServerEnvironmentResolver
+import me.meeshy.sdk.net.MeeshyConfig
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.sharelink.ShareLinkRepository
 import javax.inject.Inject
@@ -20,16 +23,22 @@ import javax.inject.Inject
 /**
  * UDF state for the share-link creation flow: an editable [CreateShareLinkForm]
  * seeded from the conversation, the in-flight create, and the terminal created link.
+ * The resolved [webOrigin] lets the success sheet derive a shareable [createdJoinUrl]
+ * without storing it redundantly.
  */
 data class CreateShareLinkUiState(
     val form: CreateShareLinkForm,
     val isSubmitting: Boolean = false,
     val errorMessage: String? = null,
     val created: CreatedShareLink? = null,
+    val webOrigin: String = "",
 ) {
     val canSubmit: Boolean get() = form.canSubmit && !isSubmitting
 
     val isCreated: Boolean get() = created != null
+
+    /** The public, shareable join URL for the created link, or `null` before create. */
+    val createdJoinUrl: String? get() = created?.joinUrl(webOrigin)
 }
 
 /**
@@ -41,14 +50,24 @@ data class CreateShareLinkUiState(
 class CreateShareLinkViewModel @Inject constructor(
     private val repository: ShareLinkRepository,
     savedStateHandle: SavedStateHandle,
+    config: MeeshyConfig,
 ) : ViewModel() {
 
     private val conversationId: String = checkNotNull(savedStateHandle[CONVERSATION_ID_ARG]) {
         "CreateShareLinkViewModel requires a '$CONVERSATION_ID_ARG' navigation argument"
     }
 
+    /** Public web origin (e.g. `https://meeshy.me`) for the created link's join URL. */
+    private val webOrigin: String =
+        ServerEnvironmentResolver.webOrigin(
+            ServerEnvironmentResolver.serverOrigin(config.apiBaseUrl),
+        )
+
     private val _state = MutableStateFlow(
-        CreateShareLinkUiState(form = CreateShareLinkForm.from(conversationId)),
+        CreateShareLinkUiState(
+            form = CreateShareLinkForm.from(conversationId),
+            webOrigin = webOrigin,
+        ),
     )
     val state: StateFlow<CreateShareLinkUiState> = _state.asStateFlow()
 

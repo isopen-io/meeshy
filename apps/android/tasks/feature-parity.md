@@ -3661,8 +3661,15 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       (`:core:network`, real route `PATCH /links/{linkId}/extend`) + `ShareLinkRepository.extend`
       (`:sdk-core`) + `MyShareLinksViewModel.extendExpiry` (`:feature:conversations`, snapshot-rollback
       on failure, `Never` inert) + a per-row **Schedule** menu (4 horizons) + an **Expired** badge in
-      `MyShareLinksScreen`. +21 tests. **Remaining (later slice):** the created-link success/share sheet
-      + a per-link detail screen (full stats).
+      `MyShareLinksScreen`. +21 tests.
+      **created-link success sheet** slice `sharelink-created-sheet` (2026-07-26): pure
+      `CreatedShareLink.joinUrl(webOrigin)` + `displayName` presentation helpers (`:core:model`, mirror
+      `MyShareLink.joinUrl` trailing-slash handling) + `CreateShareLinkViewModel` now injects
+      `MeeshyConfig`, resolves `webOrigin` via `ServerEnvironmentResolver`, and exposes a derived
+      `createdJoinUrl` on `CreateShareLinkUiState` (no redundant storage) + `CreateShareLinkScreen`
+      replaces the bare pop on success with a `ModalBottomSheet` surfacing the join URL + Copy / Share
+      intents + Done (`:feature:conversations`). +10 tests. **Remaining (later slice):** a per-link
+      detail screen (full stats).
 - [x] Anonymous join-via-share-link (preview → form → success); share-link preview screen —
       slice `sharelink-guest-join-form` (2026-07-25): pure `GuestJoinForm` (`:core:model`) +
       `AnonymousSessionRepository.preview()` (`:sdk-core`) + `GuestJoinViewModel`/`GuestJoinScreen`

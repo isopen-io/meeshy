@@ -1,5 +1,40 @@
 # Progress — state & what to do next
 
+> On 2026-07-26 the **share-link CREATED-SUCCESS SHEET** landed (slice `sharelink-created-sheet`,
+> feature-parity §O Links — closes the last create-side gap of the share-link vertical). Until now
+> `CreateShareLinkScreen` fired `onCreated()` the instant the create succeeded — a **bare pop** that
+> discarded the freshly minted link, forcing the owner to hunt for it in the my-links list before they
+> could share it. Now, on success, a **`ModalBottomSheet`** surfaces the public join URL with **Copy**
+> and **Share** actions and a **Done** button that returns the caller. **Added (production, all
+> `apps/android`):** pure `CreatedShareLink.joinUrl(webOrigin)` + `CreatedShareLink.displayName`
+> presentation helpers (`:core:model`, `CreatedShareLinkPresentation.kt`) — faithful mirrors of the
+> existing `MyShareLink.joinUrl` (trailing slash on the origin dropped so the `/join/` path never
+> doubles; `linkId` is the slug — the gateway sets it to the custom identifier when one was requested).
+> **Wiring:** `CreateShareLinkViewModel` now injects `MeeshyConfig` and resolves the public `webOrigin`
+> once via `ServerEnvironmentResolver.serverOrigin`→`webOrigin` (same derivation as
+> `MyShareLinksViewModel`); `CreateShareLinkUiState` gains an immutable `webOrigin` and a **derived**
+> `createdJoinUrl: String?` (= `created?.joinUrl(webOrigin)`) — no redundant stored URL, and it is
+> `null` until the create returns. `CreateShareLinkScreen` swaps the old `LaunchedEffect(isCreated)`
+> bare pop for `state.createdJoinUrl?.let { CreatedShareLinkSheet(joinUrl = it, onDone = onCreated) }`;
+> the sheet's Copy (clipboard + toast) and Share (`ACTION_SEND` chooser) are Composable glue (coverage-
+> exempt). EN/FR/ES/PT strings (8 keys ×4). **+10 behavioural tests:** `CreatedShareLinkPresentationTest`
+> (5 — displayName prefers name / falls back to linkId on null + blank; joinUrl from origin+linkId +
+> trailing-slash drop), `CreateShareLinkViewModelTest` (+3 — `createdJoinUrl` null before create, derived
+> from default `https://meeshy.me` origin after success, honours the STAGING environment origin; +2
+> existing tests re-green through the new `config` factory param). All asserted through the observable
+> `state` / public API. **Gate:** `./apps/android/meeshy.sh check` → **BUILD SUCCESSFUL in 5m42s** (full
+> `assembleDebug` + all module JVM unit tests; 943 tasks). Reviewer **PASS** (diff `apps/android` only;
+> SDK purity — the two pure helpers are stateless `:core:model` blocks, the when-to-show / clipboard /
+> share-intent orchestration stays app-side; SSOT — reuses `CreatedShareLink` + `ServerEnvironmentResolver`,
+> mirrors `MyShareLink.joinUrl`, re-implements nothing; UDF — `createdJoinUrl` is derived, not stored;
+> coherence — accent `Indigo400` link text, `MeeshyCard` surface, Done returns to a coherent place, no
+> dead end). **Gotcha logged in NOTES.md:** Compose BOM 2024.10.01 = material3 1.3.0, where
+> `ModalBottomSheet` exposes `windowInsets`, NOT the later `contentWindowInsets` lambda — don't reach
+> for the newer signature.
+> **Next slice:** the **per-link detail** screen (full stats for one link — the last remaining
+> share-link slice), OR the paged `OnboardingFlowView`, OR the tracked Kover 90% coverage-gate infra,
+> OR an `https://meeshy.me/join/{id}` App-Links intent-filter (`AndroidManifest` only).
+
 > On 2026-07-25 the **share-link EXTEND-EXPIRY side** landed (slice `sharelink-extend-expiry`,
 > feature-parity §O Links — the "expiration" management verb of the share-link item is now a live,
 > owner-facing action). This is a genuinely new capability (not a UX-polish slice): a link owner can
