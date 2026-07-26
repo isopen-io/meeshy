@@ -244,29 +244,7 @@ struct AffiliateView: View {
             }
             .accessibilityLabel(String(localized: "affiliate.action.copy", defaultValue: "Copier le lien de parrainage", bundle: .main))
 
-            // Partager
-            Button {
-                guard let link = token.affiliateLink, let url = URL(string: link) else { return }
-                let av = UIActivityViewController(activityItems: [url], applicationActivities: nil)
-                if let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
-                   let window = scene.windows.first,
-                   let root = window.rootViewController {
-                    var topVC = root
-                    while let presented = topVC.presentedViewController { topVC = presented }
-                    // iPad: UIActivityViewController needs a popover anchor or -present crashes.
-                    if let popover = av.popoverPresentationController {
-                        popover.sourceView = topVC.view
-                        popover.sourceRect = CGRect(x: topVC.view.bounds.midX, y: topVC.view.bounds.midY, width: 0, height: 0)
-                        popover.permittedArrowDirections = []
-                    }
-                    topVC.present(av, animated: true)
-                }
-            } label: {
-                Image(systemName: "square.and.arrow.up")
-                    .font(MeeshyFont.relative(16))
-                    .foregroundColor(Color(hex: accentColor))
-            }
-            .accessibilityLabel(String(localized: "affiliate.action.share", defaultValue: "Partager le lien de parrainage", bundle: .main))
+            shareTokenButton(token)
 
             Button {
                 Task { await viewModel.deleteToken(token) }
@@ -279,6 +257,38 @@ struct AffiliateView: View {
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
+    }
+
+    /// Native share: `ShareLink` gives the activity sheet, the iPad popover
+    /// anchor and top-VC presentation for free — no manual
+    /// `UIActivityViewController` / window-hierarchy traversal (doctrine:
+    /// prefer first-party SwiftUI over UIKit, cf. `CommunityLinkDetailView`).
+    /// The hand-rolled path it replaces resolved its presenter from
+    /// `connectedScenes.first`; `connectedScenes` is an *unordered* `Set`, so
+    /// under iPad multitasking / Stage Manager it could target a background
+    /// scene and present the sheet on a window nobody can see.
+    @ViewBuilder
+    private func shareTokenButton(_ token: AffiliateToken) -> some View {
+        let shareLabel = String(localized: "affiliate.action.share", defaultValue: "Partager le lien de parrainage", bundle: .main)
+        if let link = token.affiliateLink, let url = URL(string: link) {
+            ShareLink(item: url) {
+                shareTokenGlyph
+            }
+            .accessibilityLabel(shareLabel)
+        } else {
+            // No usable link: the old Button stayed tappable and silently did
+            // nothing. Dim it and hide it from VoiceOver instead of offering a
+            // dead control.
+            shareTokenGlyph
+                .opacity(0.4)
+                .accessibilityHidden(true)
+        }
+    }
+
+    private var shareTokenGlyph: some View {
+        Image(systemName: "square.and.arrow.up")
+            .font(MeeshyFont.relative(16))
+            .foregroundColor(Color(hex: accentColor))
     }
 }
 
