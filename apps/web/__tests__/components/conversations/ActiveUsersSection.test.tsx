@@ -119,3 +119,67 @@ describe('ActiveUsersSection presence', () => {
     expect(screen.getByText('conversationDetails.noActiveUsers')).toBeInTheDocument();
   });
 });
+
+/**
+ * Le nom et les initiales convergent sur le SSOT `getUserDisplayName` /
+ * `getUserInitials` (priorité displayName > firstName+lastName > username),
+ * au lieu d'une résolution inline qui ignorait `displayName` et exigeait
+ * firstName ET lastName.
+ */
+describe('ActiveUsersSection name & initials resolution', () => {
+  beforeEach(() => {
+    act(() => {
+      useUserStore.getState().clearStore();
+    });
+  });
+
+  it('prefers displayName over username when firstName/lastName are absent', () => {
+    render(
+      <ActiveUsersSection
+        activeUsers={[buildUser({
+          id: 'user-1',
+          displayName: 'Alice Wonderland',
+          firstName: undefined,
+          lastName: undefined,
+          username: 'awonder',
+        })]}
+      />
+    );
+
+    expect(screen.getByText('Alice Wonderland')).toBeInTheDocument();
+    expect(screen.queryByText('awonder')).not.toBeInTheDocument();
+  });
+
+  it('renders a first-name-only user partial name instead of the username', () => {
+    render(
+      <ActiveUsersSection
+        activeUsers={[buildUser({
+          id: 'user-1',
+          displayName: undefined,
+          firstName: 'Bob',
+          lastName: undefined,
+          username: 'bob99',
+        })]}
+      />
+    );
+
+    expect(screen.getByText('Bob')).toBeInTheDocument();
+    expect(screen.queryByText('bob99')).not.toBeInTheDocument();
+  });
+
+  it('derives the avatar initials from the resolved display name', () => {
+    render(
+      <ActiveUsersSection
+        activeUsers={[buildUser({
+          id: 'user-1',
+          displayName: 'Alice Wonderland',
+          firstName: undefined,
+          lastName: undefined,
+          username: 'awonder',
+        })]}
+      />
+    );
+
+    expect(screen.getByText('AW')).toBeInTheDocument();
+  });
+});

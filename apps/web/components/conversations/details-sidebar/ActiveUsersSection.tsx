@@ -4,6 +4,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { ParticipantPresenceIndicator } from '../conversation-item/ParticipantPresenceIndicator';
 import { Users } from 'lucide-react';
 import { getLanguageDisplayName, getLanguageFlag } from '@/utils/language-utils';
+import { getUserDisplayName, getUserInitials } from '@/lib/avatar-utils';
 import type { User } from '@meeshy/shared/types';
 import { useI18n } from '@/hooks/use-i18n';
 
@@ -31,22 +32,22 @@ export function ActiveUsersSection({ activeUsers }: ActiveUsersSectionProps) {
 
   return (
     <div className="space-y-3">
-      {displayUsers.map((user) => (
+      {displayUsers.map((user) => {
+        const displayName = getUserDisplayName(user);
+        return (
         <div
           key={user.id}
           className="flex items-center space-x-3 p-2 rounded hover:bg-accent cursor-pointer transition-colors"
         >
           <Avatar className="h-8 w-8">
-            <AvatarImage src={user.avatar} alt={user.firstName} />
+            <AvatarImage src={user.avatar} alt={displayName} />
             <AvatarFallback className="bg-primary/10 text-primary text-xs font-medium">
-              {(user.firstName || user.username || 'U').charAt(0).toUpperCase()}
+              {getUserInitials(user)}
             </AvatarFallback>
           </Avatar>
           <div className="flex-1 min-w-0">
             <p className="text-sm font-medium truncate">
-              {user.firstName && user.lastName
-                ? `${user.firstName} ${user.lastName}`
-                : user.username}
+              {displayName}
             </p>
             <p className="text-xs text-gray-500 truncate">
               {getLanguageDisplayName(user.systemLanguage)} {getLanguageFlag(user.systemLanguage)}
@@ -58,7 +59,8 @@ export function ActiveUsersSection({ activeUsers }: ActiveUsersSectionProps) {
             size="sm"
           />
         </div>
-      ))}
+        );
+      })}
 
       {remainingCount > 0 && (
         <div className="text-center pt-2">
