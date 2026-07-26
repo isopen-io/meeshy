@@ -19,7 +19,7 @@ public struct ClipInspector: View {
     // MARK: - Snapshot
 
     public struct ClipSnapshot: Equatable, Sendable {
-        public enum Kind: String, Sendable, Equatable { case video, audio, text, image }
+        public enum Kind: String, Sendable, Equatable { case video, audio, text, image, sticker }
         public let id: String
         public let displayName: String
         public let kind: Kind
@@ -73,7 +73,12 @@ public struct ClipInspector: View {
         if !isBackground { sections.append(.timing) }
         if isDetailsExpanded { sections.append(.details) }
         if hasAudioAffordances(kind: kind) { sections.append(.volume) }
-        sections.append(.toggles)
+        // La rangée d'interrupteurs ne s'affiche que si l'un d'eux agit
+        // vraiment. Texte et sticker n'ont NI boucle NI bascule de fond :
+        // `setClipLoop` / `setClipBackground` les ignorent silencieusement.
+        if supportsLoop(kind: kind, isBackground: isBackground) || supportsBackgroundToggle(kind: kind) {
+            sections.append(.toggles)
+        }
         sections.append(.actions)
         if isAnimationExpanded { sections.append(.animation) }
         return sections
@@ -237,9 +242,26 @@ public struct ClipInspector: View {
     /// without driving the SwiftUI view body.
     public static func hasAudioAffordances(kind: ClipSnapshot.Kind) -> Bool {
         switch kind {
-        case .video, .audio: return true
-        case .image, .text:  return false
+        case .video, .audio:          return true
+        case .image, .text, .sticker: return false
         }
+    }
+
+    /// True quand basculer le clip en FOND a un effet. `setClipBackground`
+    /// ignore silencieusement texte et sticker : leur afficher l'interrupteur
+    /// revenait à proposer un contrôle mort.
+    public static func supportsBackgroundToggle(kind: ClipSnapshot.Kind) -> Bool {
+        switch kind {
+        case .video, .audio, .image: return true
+        case .text, .sticker:        return false
+        }
+    }
+
+    /// True quand la corbeille de l'inspecteur détruit réellement le clip. Un
+    /// sticker se retire depuis le CANVAS (`deleteClip` le refuse
+    /// explicitement) — le bouton n'aurait rien supprimé.
+    public static func supportsDeletion(kind: ClipSnapshot.Kind) -> Bool {
+        kind != .sticker
     }
 
     /// True when looping a clip makes sense. RÈGLE PRODUIT : la boucle est
@@ -249,8 +271,8 @@ public struct ClipInspector: View {
     public static func supportsLoop(kind: ClipSnapshot.Kind, isBackground: Bool) -> Bool {
         guard isBackground else { return false }
         switch kind {
-        case .video, .audio: return true
-        case .image, .text:  return false
+        case .video, .audio:          return true
+        case .image, .text, .sticker: return false
         }
     }
 
@@ -265,6 +287,9 @@ public struct ClipInspector: View {
         case .audio: return String(localized: "story.timeline.a11y.clip.audio", bundle: .module)
         case .image: return String(localized: "story.timeline.a11y.clip.image", bundle: .module)
         case .text:  return String(localized: "story.timeline.a11y.clip.text",  bundle: .module)
+        case .sticker:
+            return String(localized: "story.timeline.a11y.clip.sticker",
+                          defaultValue: "Clip autocollant", bundle: .module)
         }
     }
 
@@ -284,7 +309,9 @@ public struct ClipInspector: View {
             if sections.contains(.volume) {
                 volumeSlider
             }
-            togglesRow
+            if sections.contains(.toggles) {
+                togglesRow
+            }
             actionsRow
             if sections.contains(.animation) {
                 animationConfig
@@ -608,6 +635,7 @@ public struct ClipInspector: View {
                     .tint(MeeshyColors.indigo500)
                 }
 
+                if Self.supportsBackgroundToggle(kind: clip.kind) {
                 Toggle(isOn: Binding(
                     get: { background },
                     set: { newValue in
@@ -626,6 +654,7 @@ public struct ClipInspector: View {
                 }
                 .toggleStyle(.switch)
                 .tint(MeeshyColors.indigo500)
+                }
             }
             // Le hint « fond couvre toute la slide » vit désormais dans le
             // panneau (i) — la modale par défaut reste légère.
@@ -665,6 +694,7 @@ public struct ClipInspector: View {
 
                 Spacer(minLength: 0)
 
+                if Self.supportsDeletion(kind: clip.kind) {
                 Button {
                     deleteConfirmation.request()
                 } label: {
@@ -682,6 +712,7 @@ public struct ClipInspector: View {
                 .accessibilityHint(String(localized: "story.timeline.inspector.delete.hint",
                                           defaultValue: "Demande une confirmation avant la suppression",
                                           bundle: .module))
+                }
             }
         }
     }
@@ -715,6 +746,7 @@ public struct ClipInspector: View {
         case .audio: return "waveform"
         case .text:  return "textformat"
         case .image: return "photo"
+        case .sticker: return "face.smiling"
         }
     }
 }

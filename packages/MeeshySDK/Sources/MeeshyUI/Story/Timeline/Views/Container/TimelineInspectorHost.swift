@@ -146,6 +146,26 @@ public struct TimelineInspectorHost: View {
                 name: text.name
             )
         }
+        // Le sticker a une lane TAPABLE dans la timeline mais aucune branche
+        // ici : la sélection résolvait `nil`, la sheet ne s'ouvrait jamais, et
+        // le début / la durée / les keyframes du sticker restaient
+        // inatteignables alors que le view model les gère tous.
+        // Pas de nom persisté sur `StorySticker` — l'emoji EST son identité.
+        if let sticker = viewModel.project.stickerObjects.first(where: { $0.id == id }) {
+            return ClipInspector.ClipSnapshot(
+                id: sticker.id,
+                displayName: sticker.emoji,
+                kind: .sticker,
+                startTime: Float(sticker.startTime ?? 0),
+                duration: Float(sticker.duration ?? 0),
+                volume: 1.0,
+                fadeInDuration: Float(sticker.fadeIn ?? 0),
+                fadeOutDuration: Float(sticker.fadeOut ?? 0),
+                isLooping: false,
+                isBackground: false,
+                name: nil
+            )
+        }
         return nil
     }
 

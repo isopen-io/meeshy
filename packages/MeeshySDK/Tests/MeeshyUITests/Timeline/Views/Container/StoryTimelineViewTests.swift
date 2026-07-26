@@ -161,4 +161,79 @@ final class StoryTimelineViewTests: XCTestCase {
                           "Le strip compact liste aussi la section FOND avant l'AVANT-PLAN")
         XCTAssertTrue(tracks.contains(where: { $0.kind.isBackgroundSection }))
     }
+
+    // MARK: - « + N pistes » : le compte doit être celui du déploiement RÉEL
+
+    /// Le compteur du bouton se calculait sur QUATRE seaux fourre-tout
+    /// (médias non-audio, audios, textes, stickers) alors que le déploiement
+    /// affiche UNE LANE PAR CLIP. Sur une slide à cinq vidéos, les quatre
+    /// seaux donnaient `1 - 3 = 0` : le bouton disparaissait, et les quatre
+    /// pistes que le déploiement aurait révélées devenaient inatteignables.
+    private func fiveVideosAndOneTextProject() -> TimelineProject {
+        let videos = (1...5).map { index -> StoryMediaObject in
+            var media = StoryMediaObject(id: "v\(index)", postMediaId: "v\(index)",
+                                         kind: .video, aspectRatio: 1.0)
+            media.isBackground = false
+            media.startTime = 0
+            media.duration = 3
+            return media
+        }
+        return TimelineProject(slideId: "s", slideDuration: 10,
+                               mediaObjects: videos,
+                               audioPlayerObjects: [],
+                               textObjects: [StoryTextObject(id: "t1", text: "Salut")],
+                               clipTransitions: [])
+    }
+
+    func test_hiddenTrackCount_countsTheLanesTheDeployWouldReveal() {
+        let project = fiveVideosAndOneTextProject()
+        let all = StoryTimelineView.resolveAllTracks(project: project).count
+        let compact = StoryTimelineView.resolveCompactTracks(
+            project: project, selectedClipId: nil,
+            maxCount: StoryTimelineView.compactMaxTracks).count
+        XCTAssertEqual(all, 6, "Pré-condition : le déploiement montre bien une lane par clip.")
+        XCTAssertEqual(compact, 2, "Pré-condition : le strip compact groupe en deux lanes.")
+
+        XCTAssertEqual(
+            StoryTimelineView.hiddenTrackCount(project: project, selectedClipId: nil), 4,
+            "Le bouton doit annoncer les 4 lanes réellement cachées, pas 0."
+        )
+    }
+
+    func test_hiddenTrackCount_isZero_whenCompactAlreadyShowsEverything() {
+        var media = StoryMediaObject(id: "v1", postMediaId: "v1", kind: .video, aspectRatio: 1.0)
+        media.isBackground = false
+        let project = TimelineProject(slideId: "s", slideDuration: 10,
+                                      mediaObjects: [media], audioPlayerObjects: [],
+                                      textObjects: [], clipTransitions: [])
+        XCTAssertEqual(StoryTimelineView.hiddenTrackCount(project: project, selectedClipId: nil), 0,
+                       "Rien à révéler ⇒ pas de bouton (« + 0 piste » serait du bruit).")
+    }
+
+    func test_hiddenTrackCount_isZero_onAnEmptyProject() {
+        XCTAssertEqual(
+            StoryTimelineView.hiddenTrackCount(project: TimelineProjectFactory.emptyProject(),
+                                               selectedClipId: nil), 0)
+    }
+
+    /// Sélectionner un clip force sa lane dans le strip compact, ce qui peut
+    /// en évincer une autre — le compte des cachées ne bouge pas pour autant.
+    func test_hiddenTrackCount_staysConsistent_whenSelectionReordersTheCompactStrip() {
+        let project = fiveVideosAndOneTextProject()
+        XCTAssertEqual(StoryTimelineView.hiddenTrackCount(project: project, selectedClipId: "t1"),
+                       StoryTimelineView.hiddenTrackCount(project: project, selectedClipId: nil))
+    }
+
+    /// Toute lane comptée comme cachée doit exister dans le déploiement —
+    /// sinon le bouton promet des pistes que l'utilisateur ne verra jamais.
+    func test_hiddenTrackCount_neverPromisesMoreThanTheDeployShows() {
+        for project in [fiveVideosAndOneTextProject(),
+                        mixedSectionsProject(),
+                        TimelineProjectFactory.emptyProject()] {
+            let hidden = StoryTimelineView.hiddenTrackCount(project: project, selectedClipId: nil)
+            let all = StoryTimelineView.resolveAllTracks(project: project).count
+            XCTAssertLessThanOrEqual(hidden, all)
+            XCTAssertGreaterThanOrEqual(hidden, 0)
+        }
+    }
 }

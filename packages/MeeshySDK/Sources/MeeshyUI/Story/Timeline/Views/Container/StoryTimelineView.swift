@@ -291,6 +291,23 @@ public struct StoryTimelineView: View {
         return nil
     }
 
+    /// Nombre de lanes que « déployer » RÉVÉLERAIT réellement : ce que le
+    /// déploiement affiche (une lane par clip) moins ce que le strip compact
+    /// montre déjà (une lane par catégorie, plafonnée).
+    ///
+    /// L'ancien compte partait de quatre seaux fourre-tout — médias non-audio,
+    /// audios, textes, stickers — sans rapport ni avec les huit catégories du
+    /// strip compact ni avec le une-lane-par-clip du déploiement. Sur une
+    /// slide à cinq vidéos il rendait `1 - 3 = 0` : le bouton disparaissait,
+    /// et avec lui l'accès aux quatre pistes cachées.
+    public static func hiddenTrackCount(project: TimelineProject, selectedClipId: String?) -> Int {
+        let deployed = resolveAllTracks(project: project).count
+        let visible = resolveCompactTracks(project: project,
+                                           selectedClipId: selectedClipId,
+                                           maxCount: compactMaxTracks).count
+        return max(0, deployed - visible)
+    }
+
     public static func footerLabelKey(isExpanded: Bool) -> String {
         isExpanded ? "story.timeline.toolbar.collapseTracks" : "story.timeline.toolbar.deployTracks"
     }
@@ -530,7 +547,7 @@ public struct StoryTimelineView: View {
 
     @ViewBuilder
     private var footerTrigger: some View {
-        let hidden = max(0, allTrackCount - Self.compactMaxTracks)
+        let hidden = hiddenTrackCount
         // Hide the deploy button when there are no extra tracks to reveal —
         // showing "+ 0 track(s)" is noise that distracts from the empty state.
         if hidden > 0 || isExpanded {
@@ -840,12 +857,8 @@ public struct StoryTimelineView: View {
         }
     }
 
-    private var allTrackCount: Int {
-        var c = 0
-        if !viewModel.project.mediaObjects.filter({ !($0.mediaType == "audio") }).isEmpty { c += 1 }
-        if !viewModel.project.audioPlayerObjects.isEmpty { c += 1 }
-        if !viewModel.project.textObjects.isEmpty { c += 1 }
-        if !viewModel.project.stickerObjects.isEmpty { c += 1 }
-        return c
+    private var hiddenTrackCount: Int {
+        Self.hiddenTrackCount(project: viewModel.project,
+                              selectedClipId: viewModel.selection.selectedClipId)
     }
 }

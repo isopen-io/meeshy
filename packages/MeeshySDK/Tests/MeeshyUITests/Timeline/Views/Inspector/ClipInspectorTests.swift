@@ -129,9 +129,26 @@ final class ClipInspectorTests: XCTestCase {
         for kind in [ClipInspector.ClipSnapshot.Kind.text, .image] {
             let sections = ClipInspector.visibleSections(
                 kind: kind, isBackground: false, isDetailsExpanded: false, isAnimationExpanded: false)
-            XCTAssertEqual(sections, [.header, .timing, .toggles, .actions],
+            XCTAssertFalse(sections.contains(.volume),
                            "\(kind) n'a pas de piste audio — pas de section volume")
         }
+    }
+
+    /// L'IMAGE garde sa rangée d'interrupteurs : la bascule « Fond » agit
+    /// réellement sur elle (`setClipBackground` la traite).
+    func test_visibleSections_imageKeepsItsBackgroundToggle() {
+        let sections = ClipInspector.visibleSections(
+            kind: .image, isBackground: false, isDetailsExpanded: false, isAnimationExpanded: false)
+        XCTAssertEqual(sections, [.header, .timing, .toggles, .actions])
+    }
+
+    /// Le TEXTE, lui, la perd : `setClipLoop` ET `setClipBackground` l'ignorent
+    /// silencieusement depuis toujours. La rangée n'affichait que des
+    /// interrupteurs morts — on ne montre plus un contrôle qui ne fait rien.
+    func test_visibleSections_textDropsItsDeadTogglesRow() {
+        let sections = ClipInspector.visibleSections(
+            kind: .text, isBackground: false, isDetailsExpanded: false, isAnimationExpanded: false)
+        XCTAssertEqual(sections, [.header, .timing, .actions])
     }
 
     func test_visibleSections_bothExpanded_showsEverythingInOrder() {
