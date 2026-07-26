@@ -46,17 +46,16 @@ enum StoryExportIntroFactory {
     @MainActor
     static func currentUser() async -> StoryExportIntroContent? {
         guard let user = AuthManager.shared.currentUser else { return nil }
-        let display = [user.firstName, user.lastName]
-            .compactMap { $0 }
-            .joined(separator: " ")
-            .trimmingCharacters(in: .whitespaces)
 
         let avatarImage = await resolveImage(user.avatar)
         let backgroundImage = await resolveBackground(user: user)
         let status = await resolveMood(userId: user.id)
 
         return StoryExportIntroContent(
-            displayName: display.isEmpty ? user.username : display,
+            displayName: resolveDisplayName(displayName: user.displayName,
+                                            firstName: user.firstName,
+                                            lastName: user.lastName,
+                                            username: user.username),
             username: user.username,
             avatar: avatarImage,
             banner: backgroundImage,
@@ -64,6 +63,26 @@ enum StoryExportIntroFactory {
             moodMessage: status?.content,
             accentColorHex: DynamicColorGenerator.colorForName(user.username)
         )
+    }
+
+    /// Nom à graver sur l'interlude. Priorité au `displayName` explicite de
+    /// l'utilisateur (ce que le reste de l'app affiche) ; à défaut « prénom nom »,
+    /// puis le username. Pur — testé sans le singleton d'auth.
+    ///
+    /// Bug user 2026-07-26 : l'ancienne version gravait TOUJOURS « prénom nom »
+    /// et ignorait le `displayName`.
+    nonisolated static func resolveDisplayName(displayName: String?,
+                                               firstName: String?,
+                                               lastName: String?,
+                                               username: String) -> String {
+        if let name = displayName?.trimmingCharacters(in: .whitespaces), !name.isEmpty {
+            return name
+        }
+        let full = [firstName, lastName]
+            .compactMap { $0 }
+            .joined(separator: " ")
+            .trimmingCharacters(in: .whitespaces)
+        return full.isEmpty ? username : full
     }
 
     /// URL (relative ou absolue) → `CGImage` via le cache image (réseau si

@@ -39,6 +39,47 @@ final class StoryExportPreflightTests: XCTestCase {
         XCTAssertEqual(StoryExportLanguageResolver.availableLanguages(story: story), ["fr", "en"])
     }
 
+    // MARK: resolveDisplayName (nom gravé sur l'interlude)
+    //
+    // Bug user 2026-07-26 : l'interlude gravait « prénom nom » au lieu du
+    // `displayName` explicite de l'utilisateur (ce que le reste de l'app
+    // affiche). La priorité doit être displayName → « prénom nom » → username.
+
+    func test_resolveDisplayName_prefersExplicitDisplayName() {
+        XCTAssertEqual(
+            StoryExportIntroFactory.resolveDisplayName(
+                displayName: "meeshy sama", firstName: "Jean", lastName: "Dupont", username: "jdupont"),
+            "meeshy sama")
+    }
+
+    func test_resolveDisplayName_blankDisplayName_fallsBackToFullName() {
+        XCTAssertEqual(
+            StoryExportIntroFactory.resolveDisplayName(
+                displayName: "   ", firstName: "Jean", lastName: "Dupont", username: "jdupont"),
+            "Jean Dupont")
+    }
+
+    func test_resolveDisplayName_nilDisplayName_fallsBackToFullName() {
+        XCTAssertEqual(
+            StoryExportIntroFactory.resolveDisplayName(
+                displayName: nil, firstName: "Jean", lastName: "Dupont", username: "jdupont"),
+            "Jean Dupont")
+    }
+
+    func test_resolveDisplayName_onlyFirstName_usesIt() {
+        XCTAssertEqual(
+            StoryExportIntroFactory.resolveDisplayName(
+                displayName: nil, firstName: "Jean", lastName: nil, username: "jdupont"),
+            "Jean")
+    }
+
+    func test_resolveDisplayName_noNameParts_fallsBackToUsername() {
+        XCTAssertEqual(
+            StoryExportIntroFactory.resolveDisplayName(
+                displayName: nil, firstName: nil, lastName: nil, username: "jdupont"),
+            "jdupont")
+    }
+
     func test_availableLanguages_nilTranslations_isEmpty() {
         XCTAssertEqual(StoryExportLanguageResolver.availableLanguages(story: makeStory(translations: nil)), [])
     }

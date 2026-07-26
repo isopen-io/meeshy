@@ -471,6 +471,37 @@ struct StoryActionSidebarView: View {
                             .accessibilityHidden(true)
                     }
                 }
+                // Barre rapide des langues — surgit À GAUCHE du bouton, EXACTEMENT
+                // comme le strip de réactions au-dessus (même overlay trailing,
+                // même transition scale-depuis-trailing, même offset -56). Défile
+                // horizontalement si la liste dépasse ; le « + » ouvre la liste
+                // complète (directive user 2026-07-26).
+                .overlay(alignment: .trailing) {
+                    if showLanguageOptions {
+                        StoryLanguageQuickBar(
+                            languages: availableTranslationLanguages,
+                            activeLanguageCode: activeLanguageCode ?? displayedLanguageCode,
+                            onSelect: { lang in
+                                onSelectLanguageOverride(lang)
+                                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                                    showLanguageOptions = false
+                                }
+                            },
+                            onOpenFullPicker: {
+                                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                                    showLanguageOptions = false
+                                    showFullLanguagePicker = true
+                                }
+                            }
+                        )
+                        .frame(maxWidth: 260)
+                        .transition(.asymmetric(
+                            insertion: .scale(scale: 0.8, anchor: .trailing).combined(with: .opacity),
+                            removal: .opacity
+                        ))
+                        .offset(x: -56)
+                    }
+                }
                 .zIndex(10)
             }
         }

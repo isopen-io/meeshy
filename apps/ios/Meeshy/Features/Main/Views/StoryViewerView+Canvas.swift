@@ -1743,38 +1743,9 @@ struct StoryCardView: View {
                 .transition(.move(edge: .bottom).combined(with: .opacity))
                 .zIndex(150)
             }
-
-            // === Layer 11: Barre rapide des langues (langues prêtes + « + ») ===
-            // Ouverte par le bouton « Abc » du rail (`showLanguageOptions`).
-            // Rangée horizontale défilante des langues déjà traduites : tap =
-            // bascule instantanée (Prisme « Exploration ») ; le « + » à droite
-            // ouvre la liste complète. Ancrée juste au-dessus du composer.
-            if showLanguageOptions {
-                VStack(spacing: 0) {
-                    Spacer(minLength: 0)
-                    StoryLanguageQuickBar(
-                        languages: availableTranslationLanguages,
-                        activeLanguageCode: activeLanguageCode ?? resolvedViewerLanguage,
-                        onSelect: { lang in
-                            onSelectLanguageOverride(lang)
-                            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                                showLanguageOptions = false
-                            }
-                        },
-                        onOpenFullPicker: {
-                            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                                showLanguageOptions = false
-                                showFullLanguagePicker = true
-                            }
-                        }
-                    )
-                    .padding(.horizontal, 16)
-                    .padding(.bottom, composerBottomPadding(geometry) + 64)
-                }
-                .frame(maxWidth: geometry.size.width, maxHeight: .infinity, alignment: .bottom)
-                .transition(.move(edge: .bottom).combined(with: .opacity))
-                .zIndex(145)
-            }
+            // La barre rapide des langues (`showLanguageOptions`) est rendue dans
+            // le rail, À GAUCHE du bouton « Abc » (comme le strip de réactions) —
+            // voir `StoryViewerView+Sidebar`. Plus d'overlay bas-de-composer ici.
         }
         // Lock the entire story canvas (background + reader + overlays +
         // sidebar + composer) to EXACTLY the viewport size we were handed
