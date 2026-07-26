@@ -115,7 +115,16 @@ public final class AppDatabase: @unchecked Sendable {
     private static func removeDatabaseFiles(at databaseURL: URL) {
         let fileManager = FileManager.default
         for suffix in ["", "-wal", "-shm"] {
-            try? fileManager.removeItem(at: URL(fileURLWithPath: databaseURL.path + suffix))
+            let url = URL(fileURLWithPath: databaseURL.path + suffix)
+            do {
+                try fileManager.removeItem(at: url)
+            } catch CocoaError.fileNoSuchFile {
+                // `-wal`/`-shm` n'existent pas toujours — cas nominal.
+            } catch {
+                // La base corrompue survit : la réouverture échouera à nouveau.
+                Logger(subsystem: "com.meeshy.sdk", category: "grdb")
+                    .fault("Corrupt database file '\(suffix, privacy: .public)' could not be removed, recovery will fail again: \(error.localizedDescription, privacy: .public)")
+            }
         }
     }
 

@@ -381,7 +381,7 @@ extension VoIPPushManager: PKPushRegistryDelegate {
     nonisolated static func parseIceServers(_ rawJSON: Any?) -> [IceServer]? {
         guard let str = rawJSON as? String, !str.isEmpty,
               let data = str.data(using: .utf8) else { return nil }
-        guard let decoded = try? JSONDecoder().decode([SocketIceServer].self, from: data) else {
+        guard let decoded = JSONDecoder().decodeOrLog([SocketIceServer].self, from: data, field: "VoIP ICE servers", logger: Logger.voipPush) else {
             return nil
         }
         // Credential length guard: TURN credentials from a malformed or hostile
@@ -533,3 +533,9 @@ extension VoIPPushManager {
     }
 }
 #endif
+
+// MARK: - Logger Extension
+
+private extension Logger {
+    nonisolated static let voipPush = Logger(subsystem: "me.meeshy.app", category: "voip-push")
+}

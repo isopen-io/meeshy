@@ -265,4 +265,26 @@ describe('GET /anonymous/link/:identifier', () => {
     expect(res.statusCode).toBe(200);
     expect(res.json().success).toBe(true);
   });
+
+  it('dedupes BCP-47/region-tagged languages into a single canonical spokenLanguages entry', async () => {
+    // A user carrying a region-tagged pref ('en-US') and another with the bare
+    // canonical code ('en') describe the SAME spoken language. A raw .toLowerCase()
+    // would leave 'en-us' ≠ 'en' → the public stat reports 2 languages and leaks a
+    // malformed 'en-us' code.
+    (app as any).prisma.participant.findMany.mockResolvedValueOnce([
+      { type: 'user', language: null, user: { systemLanguage: 'en-US', regionalLanguage: 'fr_FR', customDestinationLanguage: null } },
+      { type: 'user', language: null, user: { systemLanguage: 'EN', regionalLanguage: null, customDestinationLanguage: null } },
+      { type: 'anonymous', language: 'fr', user: null },
+    ]);
+    (app as any).prisma.conversationShareLink.findFirst.mockResolvedValueOnce(null);
+    (app as any).prisma.conversationShareLink.findUnique.mockResolvedValueOnce({
+      ...mockShareLink,
+      conversation: { id: CONV_ID, title: 'Conv', description: null, type: 'group', createdAt: new Date() },
+    });
+    const res = await app.inject({ method: 'GET', url: '/anonymous/link/' + LINK_ID });
+    expect(res.statusCode).toBe(200);
+    const stats = res.json().data.stats;
+    expect(stats.spokenLanguages).toEqual(['en', 'fr']);
+    expect(stats.languageCount).toBe(2);
+  });
 });

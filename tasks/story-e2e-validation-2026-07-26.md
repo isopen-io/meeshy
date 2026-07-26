@@ -38,13 +38,12 @@ par ces trois lots ; celles suffixées `[CORRIGÉ 2026-07-26]` viennent d'eux. L
 lignes 🟡 « non arbitré » n'ont PAS été traitées : ce sont des trous de
 couverture, pas des défauts prouvés.
 
-### État au soir du 2026-07-26 — 9 défauts 🔴 restants
+### État au soir du 2026-07-26 — 8 défauts 🔴 restants
 
 Aucun n'est un « fil manquant » réparable seul :
 
 | défaut | pourquoi il n'est pas traité |
 |---|---|
-| Plafond de durée de l'enregistrement vocal | `AudioRecordingSettings.story` promet 60 s que personne n'applique. Plafonner ou retirer la config est une DÉCISION PRODUIT, pas un correctif. |
 | Ratio du canvas piloté par le fond · choix manuel du format | FONCTIONNALITÉ à concevoir (9:16 / 1:1 / 4:5), pas un défaut de câblage. |
 | Picker de langue de l'export · annulation d'un export en cours | Territoire de la session parallèle, active sur l'export toute la journée. |
 | `banner` de l'auteur dans l'interlude | Task 9, reprise par la session parallèle. |
@@ -93,7 +92,7 @@ Aucun n'est un « fil manquant » réparable seul :
 - ⚪️ ~~Langues audio proposées à l'exploration multilingue (StoryAudioTranscript.availableLanguages)~~ — faux positif de l'audit, statut réel : absent
 - ⚪️ ~~Repli différencié de la variante audio traduite (retour `nil`)~~ — faux positif de l'audit, statut réel : ok
 - 🟡 Résolution multilingue de la transcription (repli sur la langue parlée) — partiel, non arbitré. packages/MeeshySDK/Sources/MeeshySDK/Models/StoryAudioTranscript.swift:40-50 — la règle demandée est bien implémentée : boucle sur la chaîne
-- 🔴 **Plafond de durée de l'enregistrement vocal** — CONFIRMÉ casse. packages/MeeshySDK/Sources/MeeshyUI/Story/StoryVoiceRecorder.swift:27-29,35,156-160,267,308-317 ; packages/MeeshySDK/Sources/MeeshySDK/Audio/AudioRecordingProviding.swift:102-108 ; packages/MeeshySDK/
+- ✅ **Plafond de durée de l'enregistrement vocal** — TRANCHÉ 2026-07-26 : AUCUN plafond, sur aucune surface (story, message, post, réel). Le champ `maxDuration` est retiré du type, pas mis à `nil` — deux mécanismes parallèles coexistaient, dont un que le composer story n'appliquait pas. `minimumDuration` conservé (plancher anti-appui accidentel).
 - ⚪️ ~~Ducking automatique du fond quand une voix foreground joue~~ — faux positif de l'audit, statut réel : absent
 - 🟡 Chargement effectif des fichiers audio dans le mixer reader (configure / configureBackground) — non-teste, non arbitré. packages/MeeshySDK/Sources/MeeshyUI/Story/ReaderAudioMixer.swift:110-152 et :571-608. Les seuls tests qui exercent ces chemins (ReaderAudioM
 - 🟡 Mixage timeline du composer (AudioMixer) — partiel, non arbitré. packages/MeeshySDK/Sources/MeeshyUI/Story/Timeline/Engine/AudioMixer.swift:60-84 ; appelé par StoryTimelineEngine.swift:185, :255, :273, :33

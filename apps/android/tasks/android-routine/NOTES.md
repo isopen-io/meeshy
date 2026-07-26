@@ -2,6 +2,27 @@
 
 Append-only log of gotchas and decisions that save time next run.
 
+## Lesson (2026-07-26, `conversation-category-hydration`) — thread the clock into `cacheFirstFlow`, and give the snapshot store a cold-vs-empty contract
+- **`cacheFirstFlow(policy, source)` uses its OWN default `SystemCacheClock` for age classification —
+  NOT the source's clock.** `ConversationRepository` gets away with this because production uses the
+  system clock everywhere. But if you seed a snapshot's `syncedAt` relative to a `FixedClock` in a test
+  and expect `Fresh` (no revalidation), the flow will still classify against real wall-clock time (age ≈
+  1.7e12 ms) → `Syncing` → it revalidates and your `api.calls == 0` assertion fails. Fix: pass
+  `clock = clock` into `cacheFirstFlow` so the repository's injected clock drives both the source's sync
+  stamp AND the SWR age. Deterministic in tests, unchanged in production (`SystemCacheClock` is the
+  injected default). Prefer this for every new SWR repository.
+- **A snapshot store must distinguish COLD (never synced → `observe()` = `null`) from SYNCED-BUT-EMPTY
+  (`[]`).** Gate `observe()` on a separate `SYNCED_AT` key, not on "is the blob present": `if
+  (prefs[SYNCED_AT] == null) null else decode(blob)`. `classifyCache` maps `null` → `Empty` (cold
+  skeleton) and `[]` → `Fresh/Stale` (a real "you have no categories"). A corrupt blob **with** a stamp
+  decodes to `[]` (empty-not-cold) so a decode failure never traps the UI in a perpetual skeleton.
+- **A repository stream that flattens `CacheResult<T>` to `T` wants `valueOrNull ?: emptyList()`** — the
+  existing `CacheResult.valueOrNull` extension already yields `null` for `Empty`/`Syncing(null)`, so the
+  VM never handles cache states it doesn't care about (the sectioning only needs the list).
+- **Deterministic background-failure test:** don't `.test { awaitItem(); cancel }` then assert an
+  `onSyncError` side effect — the revalidate may be cancelled before it runs. `launch { …collect… }` +
+  `advanceUntilIdle()` + `job.cancel()` runs the background revalidate to completion first.
+
 ## Lesson (2026-07-26, `conversation-category-catalog`) — lift an actor's mutation+ordering into a pure immutable reducer; annotate a private-ctor data class
 - **An iOS actor whose methods each couple a state mutation to a `publish()` is a reducer waiting to be
   extracted.** `UserCategoryStore.applyRemote`/`create`/`delete`/`reorder` all mutate `categoriesById`

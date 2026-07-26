@@ -1712,8 +1712,10 @@ export class CallService {
   }
 
   /**
-   * End call (force end by moderator or system)
-   * CVE-004: Added authorization check - only initiator or moderators can end calls
+   * End call (force end)
+   * CVE-004: Anonymous users cannot end calls for everyone (must leave instead).
+   * P2P: any active participant may end the call for everyone (spec C4 fix).
+   * SFU (Phase 2): TODO restrict to initiator/moderator once group calls exist.
    *
    * @param callId - Call session ID
    * @param endedBy - User ID attempting to end the call

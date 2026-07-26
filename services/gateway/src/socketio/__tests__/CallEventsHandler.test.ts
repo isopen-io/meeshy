@@ -4346,22 +4346,54 @@ describe('CallEventsHandler', () => {
     // sur les appels réels. Persistée par PARTICIPANT (une row CallParticipant
     // chacun — deux emitters simultanés en fin d'appel n'écrasent rien,
     // contrairement à un champ unique sur CallSession).
-    it('persists the validated payload on the emitter CallParticipant row', async () => {
-      const { socket, prisma } = setupWithSocket();
+    it('persists the validated payload on the emitter\'s most-recently-joined CallParticipant row', async () => {
+      const { socket, prisma } = setupWithSocket({
+        callParticipant: {
+          findFirst: jest.fn<any>().mockResolvedValue({ id: PARTICIPANT_ID }),
+          update: jest.fn<any>().mockResolvedValue({}),
+        },
+      });
 
       await socket._trigger('call:analytics', validAnalyticsData);
 
-      expect((prisma as any).callParticipant.updateMany).toHaveBeenCalledWith({
+      expect((prisma as any).callParticipant.findFirst).toHaveBeenCalledWith({
         where: { callSessionId: CALL_ID, participantId: PARTICIPANT_ID },
+        orderBy: { joinedAt: 'desc' },
+        select: { id: true },
+      });
+      expect((prisma as any).callParticipant.update).toHaveBeenCalledWith({
+        where: { id: PARTICIPANT_ID },
         data: { analytics: expect.objectContaining({ setupTimeMs: 1250, platform: 'ios' }) },
       });
+    });
+
+    it('does not stamp analytics onto a stale pre-churn row when the participant rejoined', async () => {
+      const latestRowId = 'call-participant-row-latest';
+      const { socket, prisma } = setupWithSocket({
+        callParticipant: {
+          findFirst: jest.fn<any>().mockResolvedValue({ id: latestRowId }),
+          update: jest.fn<any>().mockResolvedValue({}),
+          updateMany: jest.fn<any>(),
+        },
+      });
+
+      await socket._trigger('call:analytics', validAnalyticsData);
+
+      // Scoped by id to the row findFirst (ordered by joinedAt desc) resolved
+      // to — never a blanket updateMany matching every historical row for
+      // this participantId.
+      expect((prisma as any).callParticipant.update).toHaveBeenCalledWith({
+        where: { id: latestRowId },
+        data: expect.anything(),
+      });
+      expect((prisma as any).callParticipant.updateMany).not.toHaveBeenCalled();
     });
 
     it('a persistence failure stays silent (fire-and-forget, no emit, no throw)', async () => {
       const { socket } = setupWithSocket({
         callParticipant: {
-          findMany: jest.fn<any>().mockResolvedValue([]),
-          updateMany: jest.fn<any>().mockRejectedValue(new Error('DB down')),
+          findFirst: jest.fn<any>().mockResolvedValue({ id: PARTICIPANT_ID }),
+          update: jest.fn<any>().mockRejectedValue(new Error('DB down')),
         },
       });
 
