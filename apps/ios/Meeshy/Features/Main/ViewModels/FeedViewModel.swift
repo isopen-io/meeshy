@@ -756,7 +756,9 @@ class FeedViewModel: ObservableObject {
                 postId: resolveRepostTargetId(postId),
                 targetType: nil,           // nil = server defaults to original post type
                 content: isQuote ? content : nil,
-                isQuote: isQuote ? (content != nil) : false
+                isQuote: isQuote ? (content != nil) : false,
+                // Le feed ne propose pas de sélecteur d'audience : on hérite de l'original.
+                visibility: nil
             )
         } catch {
             FeedbackToastManager.shared.showError(String(localized: "feed.repost.error", defaultValue: "Error reposting", bundle: .main))

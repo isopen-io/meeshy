@@ -30,6 +30,8 @@ public final class StoryTimelineEngine {
     public var onTimeUpdate: ((Float) -> Void)?
     public var onPlaybackEnd: (() -> Void)?
     public var onElementBecameActive: ((String) -> Void)?
+    /// Dernier clip signalé — sert à n'émettre que les CHANGEMENTS.
+    private var lastActiveClipId: String?
     public var onError: ((Error) -> Void)?
 
     public var currentProjectSnapshot: TimelineProject? { currentProject }
@@ -292,6 +294,24 @@ public final class StoryTimelineEngine {
         driveTimer = nil
     }
 
+    /// Point de sortie UNIQUE de l'horloge : les trois sources de temps
+    /// (horloge interne, seek, observateur AVPlayer) passent ici.
+    ///
+    /// `onElementBecameActive` n'était émis de NULLE PART — `TimelineViewModel`
+    /// s'y abonnait pour faire suivre l'inspecteur au clip franchi, et
+    /// n'entendait jamais rien. Le signal part d'ici, et UNIQUEMENT sur
+    /// changement : le republier à chaque frame réécrirait la sélection 60
+    /// fois par seconde et empêcherait l'utilisateur d'en choisir une autre
+    /// pendant la lecture.
+    private func publishTime(_ seconds: Float) {
+        onTimeUpdate?(seconds)
+        guard let project = currentProject else { return }
+        let active = ActiveClipResolver.activeClipId(at: seconds, in: project)
+        guard active != lastActiveClipId else { return }
+        lastActiveClipId = active
+        if let active { onElementBecameActive?(active) }
+    }
+
     private func driveClockTick() {
         guard let project = currentProject else { stopDriveClock(); return }
         let now = CACurrentMediaTime()
@@ -299,7 +319,7 @@ public final class StoryTimelineEngine {
         driveLastTimestamp = now
         let next = min(project.slideDuration, currentTime + max(0, dt))
         currentTime = next
-        onTimeUpdate?(next)
+        publishTime(next)
         if next >= project.slideDuration {
             stopDriveClock()
             audioMixer.pause()
@@ -334,7 +354,7 @@ public final class StoryTimelineEngine {
                 player.seek(to: cmtime, toleranceBefore: tolerance, toleranceAfter: tolerance)
             }
             audioMixer.seek(to: clamped)
-            onTimeUpdate?(clamped)
+            publishTime(clamped)
         }
     }
 
@@ -367,7 +387,7 @@ public final class StoryTimelineEngine {
             let seconds = Float(CMTimeGetSeconds(cmtime))
             MainActor.assumeIsolated {
                 self.currentTime = seconds
-                self.onTimeUpdate?(seconds)
+                self.publishTime(seconds)
             }
         }
     }
