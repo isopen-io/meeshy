@@ -113,4 +113,20 @@
     <string name="my_share_links_expiry_7d">7 days</string>
     <string name="my_share_links_expiry_30d">30 days</string>
     <string name="my_share_links_expiry_3m">3 months</string>
+    <string name="share_link_detail_open">Open link details</string>
+    <string name="share_link_detail_activate">Activate</string>
+    <string name="share_link_detail_disable">Disable</string>
+    <string name="share_link_detail_stats_title">Statistics</string>
+    <string name="share_link_detail_stats_uses">Uses</string>
+    <string name="share_link_detail_stats_max">Maximum</string>
+    <string name="share_link_detail_info_title">Information</string>
+    <string name="share_link_detail_identifier">Identifier</string>
+    <string name="share_link_detail_created">Created</string>
+    <string name="share_link_detail_expires">Expires</string>
+    <string name="share_link_detail_delete_title">Delete this link?</string>
+    <string name="share_link_detail_delete_message">This action is irreversible. The link will no longer be accessible.</string>
+    <string name="share_link_detail_delete_confirm">Delete</string>
+    <string name="share_link_detail_cancel">Cancel</string>
+    <string name="share_link_detail_not_found">This link is no longer available.</string>
+    <string name="share_link_detail_dismiss">Dismiss</string>
 </resources>

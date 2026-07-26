@@ -70,6 +70,7 @@ import me.meeshy.ui.theme.MeeshyTheme
 @Composable
 fun MyShareLinksScreen(
     onBack: () -> Unit,
+    onOpenLink: (MyShareLink) -> Unit,
     viewModel: MyShareLinksViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -115,6 +116,7 @@ fun MyShareLinksScreen(
                         links = state.links,
                         stats = state.stats,
                         joinUrlFor = viewModel::joinUrlFor,
+                        onOpen = onOpenLink,
                         onCopy = { link ->
                             copyToClipboard(context, viewModel.joinUrlFor(link))
                         },
@@ -160,6 +162,7 @@ private fun LinksList(
     links: List<MyShareLink>,
     stats: MyShareLinkStats?,
     joinUrlFor: (MyShareLink) -> String,
+    onOpen: (MyShareLink) -> Unit,
     onCopy: (MyShareLink) -> Unit,
     onShare: (MyShareLink) -> Unit,
     onToggle: (MyShareLink) -> Unit,
@@ -189,6 +192,7 @@ private fun LinksList(
                 link = link,
                 joinUrl = joinUrlFor(link),
                 isExpired = link.isExpired(nowMillis),
+                onOpen = { onOpen(link) },
                 onCopy = { onCopy(link) },
                 onShare = { onShare(link) },
                 onToggle = { onToggle(link) },
@@ -244,6 +248,7 @@ private fun ShareLinkRow(
     link: MyShareLink,
     joinUrl: String,
     isExpired: Boolean,
+    onOpen: () -> Unit,
     onCopy: () -> Unit,
     onShare: () -> Unit,
     onToggle: () -> Unit,
@@ -260,7 +265,7 @@ private fun ShareLinkRow(
         link.isActive -> MeeshyPalette.Indigo400
         else -> MeeshyTheme.tokens.textMuted
     }
-    MeeshyCard {
+    MeeshyCard(onClick = onOpen) {
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
             Column(modifier = Modifier.weight(1f)) {
                 Text(
