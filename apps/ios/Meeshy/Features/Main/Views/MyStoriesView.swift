@@ -343,7 +343,7 @@ struct MyStoriesView: View {
                 }
             }
         } label: {
-            Label(String(localized: "story.mine.visibility", defaultValue: "Modifier la visibilité"),
+            Label(String(localized: "story.mine.visibility", defaultValue: "Visibilité"),
                   systemImage: "lock.rotation")
         }
         Button {

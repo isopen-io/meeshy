@@ -54009,43 +54009,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "تغيير مدى الظهور"
+            "value": "مدى الظهور"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Sichtbarkeit ändern"
+            "value": "Sichtbarkeit"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Change visibility"
+            "value": "Visibility"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Cambiar la visibilidad"
+            "value": "Visibilidad"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Modifier la visibilité"
+            "value": "Visibilité"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Modifica la visibilità"
+            "value": "Visibilità"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Alterar a visibilidade"
+            "value": "Visibilidade"
           }
         }
       }
