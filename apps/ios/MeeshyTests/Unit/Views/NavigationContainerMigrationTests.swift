@@ -10,10 +10,9 @@ import XCTest
 /// The app's deployment floor is iOS 16.0 (`project.yml`), so `NavigationStack` is
 /// available unconditionally — no availability guard, no compatibility shim.
 ///
-/// The migration completed in 220i: no shipping source uses `NavigationView` any more.
-/// This suite sweeps every SwiftUI source of the iOS app targets so that (a) each
-/// migrated file cannot regress individually and (b) no new `NavigationView` can be
-/// introduced unnoticed anywhere — the sweep's expectation is now the empty set.
+/// This suite sweeps every SwiftUI source of the iOS app targets and pins the exact
+/// set of files still using the deprecated container, so that (a) the migrated files
+/// cannot regress and (b) no new `NavigationView` can be introduced unnoticed.
 @MainActor
 final class NavigationContainerMigrationTests: XCTestCase {
 
@@ -60,7 +59,7 @@ final class NavigationContainerMigrationTests: XCTestCase {
         try assertMigrated("MeeshyShareExtension/ShareViewController.swift")
     }
 
-    // MARK: - Migrated in 220i
+    // MARK: - Migrated in 220i — the last holdout
 
     func test_statusComposerView_usesNavigationStack() throws {
         try assertMigrated("Meeshy/Features/Main/Views/StatusComposerView.swift")
@@ -82,19 +81,18 @@ final class NavigationContainerMigrationTests: XCTestCase {
         )
     }
 
-    // MARK: - The migration is complete; the sweep now guards against regression
+    // MARK: - The debt is paid — this is now a regression guard
 
+    /// 220i migrated `StatusComposerView`, the last holdout, so the expectation
+    /// is now the empty set. From here this test has changed character: it no
+    /// longer pins tolerated debt, it forbids the container outright. Any new
+    /// `NavigationView` anywhere in the shipping targets turns it red.
     func test_noNavigationViewRemains() throws {
-        // 220i migrated the last holdout (StatusComposerView). The deprecated
-        // container is now fully eradicated from the shipping targets, so this
-        // expectation is the empty set and stays there: any reintroduction of
-        // `NavigationView` fails here, naming the offending file.
-        let expected: Set<String> = []
         XCTAssertEqual(
-            try filesUsingDeprecatedContainer(), expected,
-            "A deprecated NavigationView container was reintroduced. Use NavigationStack: at the " +
-            "iOS 16.0 deployment floor it is available unconditionally, and NavigationView's default " +
-            "double-column style collapses to an empty detail pane at regular width (iPad)."
+            try filesUsingDeprecatedContainer(), [],
+            "NavigationView is deprecated since iOS 16 and defaults to the double-column style, " +
+            "which collapses to an empty detail pane at regular width (iPad). Use NavigationStack — " +
+            "it is available unconditionally at the iOS 16.0 deployment floor."
         )
     }
 }
