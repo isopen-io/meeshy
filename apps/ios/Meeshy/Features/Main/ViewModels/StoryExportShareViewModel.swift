@@ -47,10 +47,20 @@ final class StoryExportShareViewModel: ObservableObject {
     private let logger = Logger(subsystem: "me.meeshy.app", category: "story-export-share")
     private var exportTask: Task<Void, Never>?
 
-    init(exporter: StoryVideoExportServiceProviding? = nil) {
+    /// Identité gravée dans le préambule de marque. Injectable : la lire
+    /// directement dans `AuthManager.shared` rendait l'export dépendant d'une
+    /// session ambiante — sans session, `currentUserBrandIntro()` renvoyait `nil`
+    /// et le MP4 partait SANS interlude, silencieusement. C'est aussi ce qui
+    /// rendait les tests verts en local (session résiduelle du simulateur) et
+    /// rouges en CI (simulateur vierge).
+    private let brandIntro: @MainActor () -> StoryExportIntroContent?
+
+    init(exporter: StoryVideoExportServiceProviding? = nil,
+         brandIntro: (@MainActor () -> StoryExportIntroContent?)? = nil) {
         // `StoryVideoExportService.shared` is `@MainActor`-isolated so it
         // can't be a default arg expression; resolve inside the body.
         self.exporter = exporter ?? StoryVideoExportService.shared
+        self.brandIntro = brandIntro ?? Self.currentUserBrandIntro
     }
 
     // MARK: - Public API
@@ -82,7 +92,8 @@ final class StoryExportShareViewModel: ObservableObject {
     /// bannière restent `nil` ici — le préambule retombe alors proprement sur
     /// la couleur d'accent ; les charger demanderait un aller-retour cache
     /// asynchrone que le bake n'a pas à attendre.
-    private static func brandIntroContent() -> StoryExportIntroContent? {
+    @MainActor
+    private static func currentUserBrandIntro() -> StoryExportIntroContent? {
         guard let user = AuthManager.shared.currentUser else { return nil }
         let display = [user.firstName, user.lastName]
             .compactMap { $0 }
@@ -126,12 +137,16 @@ final class StoryExportShareViewModel: ObservableObject {
         // chaque frame et alternant les coins toutes les 5 s. L'export est
         // auteur-only, donc `currentUser` EST l'auteur de la story.
         let watermark = MeeshyExportWatermark.make(username: AuthManager.shared.currentUser?.username)
+        // Résolu ICI, sur le MainActor, avant d'entrer dans le Task : c'est la
+        // seule façon d'honorer un `brandIntro` injecté et d'éviter que la
+        // closure ne recapture le singleton d'authentification.
+        let intro = brandIntro()
         let task = Task { [weak self] in
             let url = await exporter.prepareExport(
                 slide: slide,
                 languages: langs,
                 watermark: watermark,
-                intro: Self.brandIntroContent(),
+                intro: intro,
                 onProgress: { [weak self] fraction in
                     self?.progress = fraction
                 },

@@ -229,9 +229,19 @@ final class MockShareExporter: StoryVideoExportServiceProviding {
 @MainActor
 final class StoryExportBrandIntroTests: XCTestCase {
 
+    /// L'identité est INJECTÉE et non lue dans `AuthManager.shared` : sinon le
+    /// test juge la session résiduelle du simulateur — vert sur une machine de
+    /// dev connectée, rouge sur un simulateur CI vierge.
+    private func makeAuthor() -> StoryExportIntroContent {
+        StoryExportIntroContent(displayName: "Ada Lovelace",
+                                username: "ada",
+                                accentColorHex: "#6366F1")
+    }
+
     func test_startExport_alwaysRequestsTheBrandIntro() async {
         let mock = MockShareExporter(behavior: .success)
-        let sut = StoryExportShareViewModel(exporter: mock)
+        let author = makeAuthor()
+        let sut = StoryExportShareViewModel(exporter: mock, brandIntro: { author })
 
         await sut.startExport(story: makeStoryItem())
 
@@ -240,18 +250,34 @@ final class StoryExportBrandIntroTests: XCTestCase {
                         "l'export doit toujours demander le préambule de marque")
     }
 
+    /// Le pendant du test précédent : sans identité d'auteur résolue, le MP4
+    /// partait SANS interlude, en silence. Ce test fige le fait que ce chemin
+    /// est bien celui du « pas d'intro » — pour qu'une régression qui rendrait
+    /// l'identité indisponible se voie ici, et non chez l'utilisateur.
+    func test_startExport_withoutAuthorIdentity_shipsWithoutIntro() async {
+        let mock = MockShareExporter(behavior: .success)
+        let sut = StoryExportShareViewModel(exporter: mock, brandIntro: { nil })
+
+        await sut.startExport(story: makeStoryItem())
+
+        XCTAssertEqual(mock.prepareCallCount, 1)
+        XCTAssertNil(mock.lastIntro)
+    }
+
     /// L'export est réservé à l'auteur : l'identité du préambule est donc celle
     /// de l'utilisateur courant, jamais une chaine vide.
     func test_brandIntro_carriesANonEmptyIdentity() async {
         let mock = MockShareExporter(behavior: .success)
-        let sut = StoryExportShareViewModel(exporter: mock)
+        let author = makeAuthor()
+        let sut = StoryExportShareViewModel(exporter: mock, brandIntro: { author })
 
         await sut.startExport(story: makeStoryItem())
 
         guard let intro = mock.lastIntro else {
             return XCTFail("aucun préambule transmis")
         }
-        XCTAssertFalse(intro.displayName.isEmpty)
+        XCTAssertEqual(intro.displayName, "Ada Lovelace")
+        XCTAssertEqual(intro.username, "ada")
         XCTAssertFalse(intro.accentColorHex.isEmpty)
     }
 
