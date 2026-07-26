@@ -6,11 +6,29 @@ import MeeshySDK
 import MeeshyUI
 
 // MARK: - Share Sheet
+
+/// LE seul pont vers `UIActivityViewController` de l'app, toujours présenté
+/// DANS une `.sheet` SwiftUI (jamais en popover nu — le crash iPad historique
+/// du chemin audio venait d'un `UIActivityViewController` sans ancre popover,
+/// et SwiftUI résout la scène présentatrice lui-même : pas de parcours de
+/// `connectedScenes`, doctrine 215i/216i).
+///
+/// `onCompletion` est optionnel et n'installe un `completionWithItemsHandler`
+/// que s'il est fourni : les appelants qui n'ont rien à faire de l'issue du
+/// partage restent strictement inchangés.
 struct ShareSheet: UIViewControllerRepresentable {
     let activityItems: [Any]
+    /// `true` quand l'utilisateur a effectivement mené le partage à son terme.
+    var onCompletion: ((Bool) -> Void)? = nil
 
     func makeUIViewController(context: Context) -> UIActivityViewController {
-        UIActivityViewController(activityItems: activityItems, applicationActivities: nil)
+        let controller = UIActivityViewController(activityItems: activityItems, applicationActivities: nil)
+        if let onCompletion {
+            controller.completionWithItemsHandler = { _, completed, _, _ in
+                onCompletion(completed)
+            }
+        }
+        return controller
     }
 
     func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
