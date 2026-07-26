@@ -148,4 +148,74 @@ final class MiniAudioPlayerBarTests: XCTestCase {
         let bar = MiniAudioPlayerBar(coordinatorForTesting: coord)
         XCTAssertTrue(bar.shouldDisplayForTesting)
     }
+
+    // MARK: - Touch targets (HIG 44×44)
+
+    /// `apps/ios/` — four levels up from `MeeshyTests/Unit/Components/<this file>`.
+    private func source(_ relativePath: String) throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent(relativePath)
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    private func barSource() throws -> String {
+        try source("Meeshy/Features/Main/Components/MiniAudioPlayerBar.swift")
+    }
+
+    /// Apple HIG (and this repo's own iOS rule) put the floor for a tappable
+    /// control at 44×44 pt. These three carry `.buttonStyle(.plain)`, which adds
+    /// no padding of its own: the hit region is *exactly* the label's frame, so
+    /// the frame is the touch target. At 32/28/24 pt they were all under the
+    /// floor, the close button — which kills playback — worst of the three, and
+    /// they sit shoulder to shoulder, where a miss lands on a neighbour.
+    func test_transportControls_meetTheMinimumTouchTarget() throws {
+        let code = try barSource()
+
+        XCTAssertEqual(
+            code.components(separatedBy: ".frame(width: 44, height: 44)").count - 1, 3,
+            "Play/pause, next and close must each carry a 44×44 pt hit area."
+        )
+        for undersized in [
+            ".frame(width: 32, height: 32)",
+            ".frame(width: 28, height: 28)",
+            ".frame(width: 24, height: 24)"
+        ] {
+            XCTAssertFalse(
+                code.contains(undersized),
+                "No transport control may keep a sub-44 pt frame (\(undersized)): with " +
+                ".buttonStyle(.plain) that frame *is* the tappable region."
+            )
+        }
+    }
+
+    /// The 44 pt boxes supply their own visual rhythm — a ~14 pt glyph centred in
+    /// 44 pt already leaves ~15 pt of breathing room on each side. Keeping the
+    /// outer 10 pt spacing on top would push the cluster 48 pt wider and steal
+    /// that width from the (single-line, truncating) track title; at spacing 0
+    /// the growth is 28 pt and the gap between glyphs is visually unchanged.
+    func test_transportCluster_letsTheHitAreasProvideTheSpacing() throws {
+        let code = try barSource()
+
+        XCTAssertTrue(
+            code.contains("HStack(spacing: 0)"),
+            "The three transport controls must sit in a zero-spacing HStack so their " +
+            "44 pt hit areas are what separates the glyphs."
+        )
+    }
+
+    /// `MiniAudioPlayerBar` documents itself as the "same atom + pattern as the
+    /// floating call pill". The pill already sizes all three of its controls at
+    /// 44×44; this pins the two to the same floor so the claim stays true.
+    func test_transportControls_matchTheFloatingCallPillPrecedent() throws {
+        let pill = try source("Meeshy/Features/Main/Views/FloatingCallPillView.swift")
+
+        XCTAssertGreaterThanOrEqual(
+            pill.components(separatedBy: ".frame(width: 44, height: 44)").count - 1, 3,
+            "The precedent this bar mirrors must itself stay at the 44 pt floor."
+        )
+    }
 }
