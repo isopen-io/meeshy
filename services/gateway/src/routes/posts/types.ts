@@ -195,7 +195,59 @@ export const CreatePostSchema = z.object({
     return false;
   }
   return true;
-}, { message: 'EXCEPT and ONLY visibility require at least one userId in visibilityUserIds' });
+}, { message: 'EXCEPT and ONLY visibility require at least one userId in visibilityUserIds' })
+  .refine(hasAnyContentCarrier, {
+    message: 'A post must carry something: content, media, audio, a mood, a repost, or story effects',
+  });
+
+/**
+ * Vrai des qu'un post porte quoi que ce soit a restituer.
+ *
+ * Tous les champs de contenu etaient optionnels sans qu'aucune regle n'exige
+ * qu'au moins un soit present : `POST /posts { type: 'STORY' }` creait un objet
+ * definitivement vide. Constate le 2026-07-26 en production — huit stories d'un
+ * meme auteur avec `media: []`, `storyEffects: { textObjects: [] }` et
+ * `content: null`, que le lecteur iOS rendait en ecran noir pendant toute la
+ * duree de slide.
+ *
+ * Le predicat est deliberement PERMISSIF : un seul porteur suffit, et un fond
+ * de couleur seul est une story legitime. Un faux rejet empecherait une
+ * publication reelle — bien plus grave qu'un objet vide de plus en base.
+ * Miroir cote lecture : `StoryContentPresence` (iOS).
+ */
+function hasAnyContentCarrier(data: {
+  content?: string;
+  mediaIds?: string[];
+  audioUrl?: string;
+  moodEmoji?: string;
+  repostOfId?: string;
+  storyEffects?: Record<string, unknown>;
+}): boolean {
+  if (data.content?.trim()) return true;
+  if (data.mediaIds?.length) return true;
+  if (data.audioUrl?.trim()) return true;
+  if (data.moodEmoji?.trim()) return true;
+  if (data.repostOfId?.trim()) return true;
+
+  const effects = data.storyEffects;
+  if (!effects) return false;
+
+  // Un `storyEffects` present ne suffit pas : `{ textObjects: [] }` est
+  // exactement la forme des stories vides observees. On regarde ce qu'il y a
+  // DEDANS, en acceptant toute cle non vide autre que la coquille par defaut.
+  return Object.entries(effects).some(([key, value]) => {
+    if (value === null || value === undefined) return false;
+    if (key === 'textObjects') {
+      return Array.isArray(value) && value.some(
+        (t) => typeof (t as { text?: unknown }).text === 'string'
+          && (t as { text: string }).text.trim().length > 0,
+      );
+    }
+    if (Array.isArray(value)) return value.length > 0;
+    if (typeof value === 'string') return value.trim().length > 0;
+    return true;
+  });
+}
 
 export const UpdatePostSchema = z.object({
   content: z.string().max(5000).optional(),

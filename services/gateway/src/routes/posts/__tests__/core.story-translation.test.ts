@@ -180,7 +180,10 @@ describe('POST /posts — story content translation (Prisme Linguistique)', () =
     const res = await app.inject({
       method: 'POST',
       url: '/posts',
-      payload: { type: 'STORY' },
+      // Un media porte la story : le contenu TEXTE reste vide, ce que ce
+      // test verifie, mais la story n'est plus un objet vide (rejete depuis
+      // que CreatePostSchema exige un porteur).
+      payload: { type: 'STORY', mediaIds: ['media-1'] },
     });
 
     expect(res.statusCode).toBe(201);
@@ -196,7 +199,9 @@ describe('POST /posts — story content translation (Prisme Linguistique)', () =
     const res = await app.inject({
       method: 'POST',
       url: '/posts',
-      payload: { type: 'STORY', content: '   ' },
+      // Media porteur + contenu blanc : le texte reste non traduisible (ce
+      // que ce test verifie) sans que la story soit un objet vide.
+      payload: { type: 'STORY', content: '   ', mediaIds: ['media-1'] },
     });
 
     expect(res.statusCode).toBe(201);

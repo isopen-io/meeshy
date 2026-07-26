@@ -100,9 +100,12 @@ describe('CreatePostSchema', () => {
     expect(result.success).toBe(false);
   });
 
+  // `content` present depuis que le schema exige un porteur de contenu : ce
+  // test porte sur la regle de VISIBILITE, pas sur la vacuite du post.
   it('accepts EXCEPT visibility with non-empty visibilityUserIds', () => {
     const result = CreatePostSchema.safeParse({
       type: 'POST',
+      content: 'Hello',
       visibility: 'EXCEPT',
       visibilityUserIds: ['user-001'],
     });
@@ -117,6 +120,7 @@ describe('CreatePostSchema', () => {
   it('accepts ONLY visibility with non-empty visibilityUserIds', () => {
     const result = CreatePostSchema.safeParse({
       type: 'POST',
+      content: 'Hello',
       visibility: 'ONLY',
       visibilityUserIds: ['user-001'],
     });
@@ -134,14 +138,62 @@ describe('CreatePostSchema', () => {
     expect(result.success).toBe(true);
   });
 
+  // Le payload porte un moodEmoji : depuis que le schéma exige au moins un
+  // porteur de contenu, un `{ type: 'STATUS' }` nu est rejeté. Ce test vérifie
+  // que STATUS est un type accepté — pas qu'un statut vide soit légitime.
   it('accepts STATUS type', () => {
-    const result = CreatePostSchema.safeParse({ type: 'STATUS' });
+    const result = CreatePostSchema.safeParse({ type: 'STATUS', moodEmoji: '😀' });
     expect(result.success).toBe(true);
   });
 
   it('accepts EXCEPT visibility with empty visibilityUserIds array (fails refine)', () => {
     const result = CreatePostSchema.safeParse({ type: 'POST', visibility: 'EXCEPT', visibilityUserIds: [] });
     expect(result.success).toBe(false);
+  });
+
+  // ── Aucun porteur de contenu ────────────────────────────────────────────
+  //
+  // Constaté le 2026-07-26 en production : huit stories d'un même auteur avec
+  // `media: []`, `storyEffects: {"textObjects": []}` et `content: null`. Le
+  // lecteur iOS les rendait en écran NOIR pendant toute la durée de slide.
+  // Le schéma déclarait TOUS les porteurs optionnels sans jamais exiger qu'au
+  // moins un soit présent : `POST /posts { type: 'STORY' }` créait un objet
+  // vide, définitivement.
+
+  it('rejects a story with no content carrier at all', () => {
+    const result = CreatePostSchema.safeParse({ type: 'STORY' });
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects a story whose storyEffects carry nothing renderable', () => {
+    const result = CreatePostSchema.safeParse({ type: 'STORY', storyEffects: { textObjects: [] } });
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects a post whose content is only whitespace', () => {
+    const result = CreatePostSchema.safeParse({ type: 'POST', content: '   \n ' });
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects an empty mediaIds array as the sole carrier', () => {
+    const result = CreatePostSchema.safeParse({ type: 'POST', mediaIds: [] });
+    expect(result.success).toBe(false);
+  });
+
+  // Le garde doit être PERMISSIF : un seul porteur suffit. Un faux rejet
+  // empêcherait la publication de contenu légitime — bien pire qu'un objet
+  // vide de plus en base.
+  it.each([
+    ['content', { content: 'Bonjour' }],
+    ['mediaIds', { mediaIds: ['media-1'] }],
+    ['audioUrl', { audioUrl: 'https://example.com/voice.m4a' }],
+    ['moodEmoji', { moodEmoji: '🔥' }],
+    ['repostOfId', { repostOfId: 'post-1' }],
+    ['un texte sur le canvas', { storyEffects: { textObjects: [{ id: 't', text: 'Salut', x: 0.5, y: 0.5 }] } }],
+    ['un fond de couleur seul', { storyEffects: { textObjects: [], background: '#6366F1' } }],
+  ])('accepts a story carried by %s alone', (_label, payload) => {
+    const result = CreatePostSchema.safeParse({ type: 'STORY', ...payload });
+    expect(result.success).toBe(true);
   });
 });
 

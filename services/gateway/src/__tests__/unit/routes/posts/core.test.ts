@@ -729,7 +729,10 @@ describe('POST /posts — STATUS type does not trigger translation', () => {
     const app = await buildApp();
     const res = await app.inject({
       method: 'POST', url: '/posts',
-      payload: { type: 'STATUS' },
+      // `moodEmoji` : depuis que CreatePostSchema exige un porteur de
+      // contenu, un STATUS nu est rejete. Le test porte sur l'absence de
+      // traduction, pas sur la vacuite du post.
+      payload: { type: 'STATUS', moodEmoji: '😀' },
     });
     expect(res.statusCode).toBe(201);
     await app.close();
@@ -995,7 +998,10 @@ describe('POST /posts — post without content skips translation and mention res
     const app = await buildApp();
     const res = await app.inject({
       method: 'POST', url: '/posts',
-      payload: { type: 'POST', attachmentIds: ['media-001'] }, // no content
+      // `mediaIds`, pas `attachmentIds` : cette derniere n'appartient pas a
+      // CreatePostSchema (elle sert aux messages et aux commentaires), donc
+      // Zod la supprimait — le payload ne portait AUCUN media malgre son nom.
+      payload: { type: 'POST', mediaIds: ['media-001'] }, // no content
     });
     expect(res.statusCode).toBe(201);
     await app.close();
