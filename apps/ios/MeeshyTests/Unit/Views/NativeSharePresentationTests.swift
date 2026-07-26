@@ -198,10 +198,11 @@ final class NativeSharePresentationTests: XCTestCase {
     // MARK: - Single-source-of-truth lock
 
     /// Locks the convergence: no converged file may reintroduce a manual share
-    /// presentation. The remaining `UIActivityViewController` uses in the app
-    /// are all `UIViewControllerRepresentable` wrappers presented inside a
-    /// SwiftUI `.sheet` (`ShareSheet`, `ActivityView`, `MediaShareSheet`),
-    /// which is exactly the pattern these iterations converge on.
+    /// presentation. Since 219i folded `ActivityView` and `MediaShareSheet` back
+    /// into it, the single remaining `UIActivityViewController` use in the app is
+    /// `ShareSheet` — one `UIViewControllerRepresentable` presented inside a
+    /// SwiftUI `.sheet`, which is exactly the pattern these iterations converge
+    /// on. `StoryExportShareSheetPaletteTests` pins that uniqueness repo-wide.
     func test_convergedFiles_containNoManualActivityPresentation() throws {
         for path in Self.convergedFiles {
             let source = try source(path)

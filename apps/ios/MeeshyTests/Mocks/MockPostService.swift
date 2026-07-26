@@ -84,6 +84,9 @@ final class MockPostService: PostServiceProviding, @unchecked Sendable {
     var lastRepostTargetType: PostType?
     var lastRepostContent: String?
     var lastRepostIsQuote: Bool?
+    /// Audience choisie au moment du repost. `nil` = « hériter de la visibilité
+    /// de l'original », le contrat dont dépendent le feed et le repost direct.
+    var lastRepostVisibility: String?
 
     var shareCallCount = 0
     var lastSharePostId: String?
@@ -260,6 +263,7 @@ final class MockPostService: PostServiceProviding, @unchecked Sendable {
         lastRepostTargetType = targetType
         lastRepostContent = content
         lastRepostIsQuote = isQuote
+        lastRepostVisibility = visibility
         return try repostResult.get()
     }
 
@@ -457,6 +461,7 @@ final class MockPostService: PostServiceProviding, @unchecked Sendable {
         lastRepostTargetType = nil
         lastRepostContent = nil
         lastRepostIsQuote = nil
+        lastRepostVisibility = nil
 
         shareResult = .success(())
         shareCallCount = 0

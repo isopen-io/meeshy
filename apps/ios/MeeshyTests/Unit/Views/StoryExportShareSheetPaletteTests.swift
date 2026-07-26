@@ -152,14 +152,14 @@ final class StoryExportShareSheetPaletteTests: XCTestCase {
     /// portait sa propre copie (`ActivityView`), `MediaSaveFlowHost` la sienne
     /// (`MediaShareSheet`) : trois wrappers pour un seul comportement.
     ///
-    /// Les deux fichiers convergés ici sont vérifiés **positivement** ; le
-    /// balayage du reste de l'arbre est une inclusion, pas une égalité, pour
-    /// une raison précise : `TrackingLinkDetailView` est détenu par une PR en
-    /// vol qui le converge, et `StoryViewerView+Content.shareStory()` est du
-    /// code mort sans site d'appel dont la suppression est un nettoyage à part.
-    /// Une égalité virerait au rouge le jour où l'un des deux disparaît —
-    /// c'est-à-dire au moment même où la dette est payée. L'inclusion attrape
-    /// ce qui compte : l'apparition d'un NOUVEAU pont dupliqué.
+    /// Les deux fichiers convergés ici sont vérifiés **positivement**, et le
+    /// balayage du reste de l'arbre est désormais une **égalité** : les deux
+    /// raisons qui imposaient une simple inclusion en 219i sont soldées —
+    /// `TrackingLinkDetailView` a convergé sur `ShareLink` (#2325, mergée) et
+    /// `StoryViewerView+Content.shareStory()` est supprimé en 221i (code mort,
+    /// 0 site d'appel). Il ne reste que la définition du pont légitime, donc
+    /// l'égalité attrape strictement plus que l'inclusion : un nouveau pont
+    /// dupliqué **comme** la résurrection d'un des deux sites soldés.
     func test_shareSheetIsTheSoleBridgeToUIActivityViewController() throws {
         for converged in ["Features/Main/Views/StoryExportShareSheet.swift",
                           "Features/Main/Components/MediaSaveFlowHost.swift"] {
@@ -173,9 +173,7 @@ final class StoryExportShareSheetPaletteTests: XCTestCase {
         }
 
         let knownRemaining: Set<String> = [
-            "ConversationMediaViews.swift",   // définit ShareSheet — le pont légitime
-            "TrackingLinkDetailView.swift",   // convergence détenue par une PR en vol
-            "StoryViewerView+Content.swift"   // shareStory() : code mort, 0 site d'appel
+            "ConversationMediaViews.swift"    // définit ShareSheet — le seul pont légitime
         ]
 
         var offenders: Set<String> = []
@@ -191,10 +189,12 @@ final class StoryExportShareSheetPaletteTests: XCTestCase {
             }
         }
 
-        XCTAssertTrue(
-            offenders.isSubset(of: knownRemaining),
-            "Nouveau pont UIKit vers UIActivityViewController : \(offenders.subtracting(knownRemaining).sorted()). " +
-            "Utiliser ShareSheet dans une .sheet plutôt que d'en dupliquer un."
+        XCTAssertEqual(
+            offenders, knownRemaining,
+            "L'ensemble des fichiers construisant un UIActivityViewController a changé : " +
+            "en trop \(offenders.subtracting(knownRemaining).sorted()), manquant " +
+            "\(knownRemaining.subtracting(offenders).sorted()). Utiliser ShareSheet dans une " +
+            ".sheet plutôt que d'en dupliquer un pont."
         )
     }
 

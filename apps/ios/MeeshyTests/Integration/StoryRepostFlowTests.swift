@@ -173,6 +173,8 @@ final class StoryRepostFlowTests: XCTestCase {
                      "Direct repost has no commentary — content must be nil")
         XCTAssertEqual(mockService.lastRepostIsQuote, false,
                        "Without commentary the repost is a plain re-share, not a quote")
+        XCTAssertNil(mockService.lastRepostVisibility,
+                     "No audience picker on this path — the repost inherits the original's visibility")
     }
 
     // MARK: - Flow 3: Kebab "Editer et republier" → UnifiedPostComposer
@@ -242,6 +244,9 @@ final class StoryRepostFlowTests: XCTestCase {
                        "Non-empty commentary is forwarded as-is")
         XCTAssertEqual(mockService.lastRepostIsQuote, true,
                        "Non-empty commentary makes the repost a quote")
+        XCTAssertEqual(mockService.lastRepostVisibility, "PUBLIC",
+                       "The audience picked in the composer must reach the service — dropping it " +
+                       "is what used to publish every repost publicly")
     }
 
     // MARK: - Flow 4: Feed cell renders STORY repost embed

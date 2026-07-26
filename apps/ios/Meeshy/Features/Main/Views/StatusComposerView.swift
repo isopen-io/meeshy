@@ -242,6 +242,7 @@ struct StatusComposerView: View {
             }
         }
         .disabled(selectedEmoji == nil || isPublishing)
+        .accessibilityLabel(StatusComposerAccessibility.publishActionLabel(isPublishing: isPublishing))
     }
 
     // MARK: - Visibility Picker
@@ -298,5 +299,23 @@ struct StatusComposerView: View {
                 selectedVisibility = .public
             }
         }
+    }
+}
+
+// MARK: - Accessibility
+
+/// Pure accessibility resolution for the composer's primary action, extracted so
+/// the name VoiceOver reads is testable without instantiating the view.
+///
+/// `publishToolbarButton` swaps its `Text("Publier")` for a bare `ProgressView`
+/// while the mood is being sent. A `ProgressView` exposes no text, so the button
+/// would lose its name at the exact moment it also becomes `.disabled` —
+/// VoiceOver would announce an anonymous dimmed control instead of the progress.
+enum StatusComposerAccessibility {
+
+    static func publishActionLabel(isPublishing: Bool) -> String {
+        isPublishing
+            ? String(localized: "status.composer.publishing", defaultValue: "Publication en cours…", bundle: .main)
+            : String(localized: "status.composer.publish", defaultValue: "Publier", bundle: .main)
     }
 }

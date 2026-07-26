@@ -249,10 +249,28 @@ final class StoryVideoExportServiceTests: XCTestCase {
     /// Durée du MP4 factice produit par `RealMP4StubExporter`.
     private static let stubStoryDuration: TimeInterval = 2.0
 
-    /// Allongement net apporté par la carte de fin : 2 s de carte dont 1,5 s en
-    /// crossfade par-dessus la fin de la story (cf.
+    /// Allongement net apporté par la carte de fin LOGO-SEULE (`content == nil`) :
+    /// 2 s de carte (`StoryExportOutro.duration`) dont 1,5 s en crossfade
+    /// par-dessus la fin de la story (cf.
     /// `StoryExportOutroTests.test_append_extendsStoryByHalfSecond`).
     private static let outroTail: TimeInterval = 0.5
+
+    /// Allongement net apporté par la carte de fin AUTEUR, la fermeture en deux
+    /// temps introduite par `16f819783` : `StoryExportOutro.append` reçoit une
+    /// identité dès que l'interlude en a résolu une, et le clip dure alors
+    /// `logoPhase + identityPhase` = 1,5 + 2,0 = **3,5 s** pour le même
+    /// chevauchement de 1,5 s → **2,0 s** au-delà de la story, contre 0,5 s pour
+    /// la carte logo-seule.
+    ///
+    /// Deux constantes plutôt qu'une : depuis ce lot, la queue dépend du chemin
+    /// pris. Les garder distinctes est ce qui rend le test capable de distinguer
+    /// une carte auteur d'une carte logo — une constante unique ne pouvait que
+    /// décrire l'une des deux, et décrivait la mauvaise pour ce test-ci.
+    ///
+    /// Valeurs recopiées, pas dérivées : `logoPhase` / `identityPhase` /
+    /// `authorClipDuration` sont internes à `MeeshyUI`, donc invisibles depuis ce
+    /// bundle. Toute évolution de ces phases doit rejouer l'addition ici.
+    private static let authorOutroTail: TimeInterval = 2.0
 
     /// **Régression amplifiée par ce lot.** L'appel à `StoryExportOutro.append`
     /// vivait IMBRIQUÉ dans `guard let intro else { return outputURL }` : une
@@ -320,9 +338,12 @@ final class StoryVideoExportServiceTests: XCTestCase {
         defer { sut.cleanupExport(at: url) }
 
         let duration = CMTimeGetSeconds(try await AVURLAsset(url: url).load(.duration))
-        let expected = StoryExportIntro.duration + Self.stubStoryDuration + Self.outroTail
+        // Ce test PASSE une identité (`intro != nil`), donc le service la
+        // transmet à `append` et la fermeture est la carte AUTEUR en deux temps
+        // — d'où `authorOutroTail` et non `outroTail`.
+        let expected = StoryExportIntro.duration + Self.stubStoryDuration + Self.authorOutroTail
         XCTAssertEqual(duration, expected, accuracy: 0.35,
-                       "l'export doit porter l'interlude ET la carte de fin")
+                       "l'export doit porter l'interlude ET la carte de fin auteur")
     }
 }
 
