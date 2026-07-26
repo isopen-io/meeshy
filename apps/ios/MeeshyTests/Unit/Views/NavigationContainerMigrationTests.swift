@@ -59,6 +59,19 @@ final class NavigationContainerMigrationTests: XCTestCase {
         try assertMigrated("MeeshyShareExtension/ShareViewController.swift")
     }
 
+    // MARK: - Migrated in 219i
+
+    /// The last holdout. It is presented as a `.sheet` from all three of its call
+    /// sites (`RootViewComponents`, and twice from `ConversationListView`), which
+    /// on iPad is a form sheet — regular width, the exact environment where
+    /// `NavigationView`'s default double-column style collapses to an empty
+    /// detail pane. Both of the composer's actions (Cancel, leading; Publish,
+    /// trailing) live in that toolbar, so the misplacement hit every way out of
+    /// the screen.
+    func test_statusComposer_usesNavigationStack() throws {
+        try assertMigrated("Meeshy/Features/Main/Views/StatusComposerView.swift")
+    }
+
     private func assertMigrated(_ path: String, file: StaticString = #filePath, line: UInt = #line) throws {
         let source = try String(contentsOf: iosRoot.appendingPathComponent(path), encoding: .utf8)
         XCTAssertFalse(
@@ -75,19 +88,21 @@ final class NavigationContainerMigrationTests: XCTestCase {
         )
     }
 
-    // MARK: - Remaining debt is pinned, not merely tolerated
+    // MARK: - The debt is closed, and stays closed
 
-    func test_noUnexpectedNavigationViewRemains() throws {
-        // StatusComposerView is the last holdout. It is deliberately untouched here
-        // because it is held by an in-flight pull request; migrating it is the
-        // follow-up iteration. When that lands, this expectation drops to the empty
-        // set and the test fails until it is updated — which is the intent.
-        let expected: Set<String> = ["StatusComposerView.swift"]
+    /// 214i pinned the remaining debt to `{StatusComposerView.swift}` and wrote
+    /// that the expectation "drops to the empty set and the test fails until it is
+    /// updated — which is the intent". 219i migrated that last holdout, so the set
+    /// is now empty and this assertion changes role: it stops tracking a shrinking
+    /// backlog and becomes a plain ratchet against reintroducing the deprecated
+    /// container anywhere in the app targets.
+    func test_noNavigationViewRemains() throws {
         XCTAssertEqual(
-            try filesUsingDeprecatedContainer(), expected,
-            "The set of files using the deprecated NavigationView container changed. Either a new " +
-            "NavigationView was introduced (use NavigationStack instead) or the last holdout was " +
-            "migrated (then shrink this expectation)."
+            try filesUsingDeprecatedContainer(), [],
+            "NavigationView is deprecated since iOS 16 and its default double-column style " +
+            "collapses to an empty detail pane at regular width. The app targets are fully " +
+            "migrated — use NavigationStack, which is available unconditionally at the iOS 16.0 " +
+            "deployment floor."
         )
     }
 }
