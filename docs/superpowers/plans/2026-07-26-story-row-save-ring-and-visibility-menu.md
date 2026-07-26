@@ -2323,17 +2323,31 @@ répétition de code.
 - Modify: `apps/ios/Meeshy/Features/Main/Views/StoryViewerView+Sidebar.swift`
 - Test: `packages/MeeshySDK/Tests/MeeshyUITests/Story/Export/TimelineExportParityTests.swift`
 
-**Contrainte d'architecture à respecter.** `StoryPhotoSaveService` vit dans l'app
-(`apps/ios/Meeshy/.../Services/`) et `TimelineExportFlow` dans le SDK (`MeeshyUI`). Le SDK
-ne doit pas dépendre de l'app (doctrine « SDK purity » : pas d'orchestration produit dans le
-SDK). L'unification passe donc par les **entrées** du bake, pas par un appel croisé :
+**Correction de conception (2026-07-26, après vérification).** Une première version de cette
+tâche prévoyait d'injecter `watermark:` et `intro:` en paramètres de
+`TimelineExportController.start(...)`, au motif que le SDK ne peut pas dépendre de l'app.
+**Ce motif est faux** : `StoryExportIntroFactory` n'a AUCUNE dépendance applicative — toutes
+les siennes sont SDK (`AuthManager` et `CacheCoordinator` dans MeeshySDK, `MeeshyConfig`,
+`ThumbHashDecoder`, `StoryExportIntroContent` et `MeeshyExportWatermark` dans MeeshyUI,
+`DynamicColorGenerator` dans MeeshySDK). Elle ne vit côté app que par accident de la Task 1.
 
-1. `TimelineExportController.start(composer:)` gagne deux paramètres injectés par l'appelant —
-   `watermark: StoryExportWatermark?` et `intro: StoryExportIntroContent?` — au lieu de
-   fabriquer un filigrane anonyme en interne.
-2. L'appelant côté app fournit les mêmes valeurs que `StoryPhotoSaveService` :
-   `MeeshyExportWatermark.make(username:)` et `StoryExportIntroFactory.currentUser()`.
-3. `StoryExporter.export` reçoit enfin `intro:` sur ce chemin.
+**Ce qu'on fait donc — réutiliser, pas recréer :**
+
+1. **Déplacer** `StoryExportIntroFactory` de
+   `apps/ios/Meeshy/Features/Main/Services/StoryExportPreflight.swift`
+   vers le SDK, à côté de son modèle :
+   `packages/MeeshySDK/Sources/MeeshyUI/Story/Canvas/StoryExportIntroFactory.swift`.
+   API publique inchangée (`public enum StoryExportIntroFactory { public static func currentUser() async -> StoryExportIntroContent? }`).
+   `StoryExportLanguageResolver` **reste côté app** — il dépend de `StoryItem`, un modèle de liste, pas du bake.
+2. `TimelineExportController.start(composer:)` appelle **la même** fabrique et
+   `MeeshyExportWatermark.make(username: AuthManager.shared.currentUser?.username)`,
+   puis transmet `intro:` à `StoryExporter.export(...)` — paramètre qu'il n'utilisait pas.
+3. `StoryPhotoSaveService` et `StoryExportShareViewModel` continuent d'appeler la même fabrique,
+   désormais importée du SDK. **Aucun changement de comportement de leur côté** — c'est le test
+   de non-régression le plus important de la tâche.
+
+Aucun nouveau paramètre, aucune décision dupliquée, un seul endroit qui sait ce qu'est
+l'interlude d'un export Meeshy.
 
 **Test de parité** — c'est le cœur de la tâche : un test qui échoue si un chemin d'export
 oublie le filigrane ou l'interlude. Il ne compare pas des pixels, il vérifie que les
