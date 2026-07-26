@@ -213,7 +213,12 @@ struct MyStoriesView: View {
                 onOpenProfile: { _ in }
             )
         }
-        .sheet(item: $exportStory) { story in
+        // `onDismiss` aligné sur le lecteur (`StoryViewerView`, sheet
+        // « Partager ») : sans lui, swiper la sheet depuis la liste laissait le
+        // bake tourner jusqu'au bout et orphelinait le MP4 temporaire. Pas de
+        // `resumeTimer()` ici — il n'y a pas de lecture à reprendre dans la
+        // liste, c'est la seule différence assumée avec le lecteur.
+        .sheet(item: $exportStory, onDismiss: { exportViewModel.cancel() }) { story in
             StoryExportShareSheet(story: story, viewModel: exportViewModel)
         }
         .sheet(item: $commentTarget) { target in

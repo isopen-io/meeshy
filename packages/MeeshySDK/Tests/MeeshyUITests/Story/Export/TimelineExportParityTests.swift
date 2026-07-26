@@ -89,20 +89,26 @@ final class TimelineExportParityTests: XCTestCase {
     /// `XCTAssertNotNil(lastWatermark)` seul passe que `username:` soit
     /// transmis ou non — `StoryExportWatermark` est non-nil dans les deux cas,
     /// seul le texte gravé (bloc « meeshy » + « @handle ») diffère. Ce test
-    /// compare le filigrane PRODUIT à deux références indépendantes calculées
-    /// dans le test lui-même : `blockAspect` change selon la présence de la
-    /// ligne « @handle » (bloc plus haut avec pseudo ⇒ aspect plus PETIT,
-    /// cf. `MeeshyExportWatermark.make`). Si `TimelineExportFlow.swift`
-    /// revient à `.make()` sans pseudo — le bug d'origine — ce test rougit :
-    /// la première assertion échoue (aspect ≠ référence AVEC pseudo) et la
-    /// seconde échouerait aussi si elle n'était pas là pour le prouver
-    /// explicitement (aspect == référence SANS pseudo).
+    /// compare le filigrane PRODUIT à des références indépendantes calculées
+    /// dans le test lui-même.
+    ///
+    /// Revue finale (item 6) : avec un pseudo COURT, l'assertion sur-promettait.
+    /// `MeeshyExportWatermark.make` mesure `textWidth = max(largeur(« meeshy »
+    /// en 76 pt), largeur(« @pseudo » en 46 pt))` : pour « alice », « bob » ou
+    /// « zzz », c'est toujours « meeshy » qui l'emporte, donc `blockAspect` est
+    /// rigoureusement identique — le test prouvait « un pseudo non vide a été
+    /// transmis », pas « CE pseudo ». Les pseudos utilisés ici sont assez longs
+    /// pour que leur propre largeur domine : la mesure dépend alors réellement
+    /// de leurs glyphes, ce que verrouille la dernière assertion.
     @MainActor
     func test_timelineExport_watermarkReflectsTheAuthorUsername() async throws {
+        let handle = "marie-antoinette-de-habsbourg"
+        let otherHandle = "bob-le-bricoleur-international-de-la-republique"
+
         let exporter = SpyTimelineStoryExporter()
         let controller = TimelineExportController(
             exporter: exporter,
-            usernameProvider: { "alice" },
+            usernameProvider: { handle },
             introProvider: { nil }
         )
 
@@ -111,13 +117,21 @@ final class TimelineExportParityTests: XCTestCase {
 
         let produced = try XCTUnwrap(exporter.lastWatermark,
                                      "l'export timeline doit graver le filigrane")
-        let withUsername = try XCTUnwrap(MeeshyExportWatermark.make(username: "alice"))
+        let withUsername = try XCTUnwrap(MeeshyExportWatermark.make(username: handle))
         let withoutUsername = try XCTUnwrap(MeeshyExportWatermark.make(username: nil))
+        let withOtherUsername = try XCTUnwrap(MeeshyExportWatermark.make(username: otherHandle))
+
+        // Garde-fou de conception : si ces deux références se mettaient un jour
+        // à mesurer pareil, l'assertion finale ne prouverait plus rien.
+        XCTAssertNotEqual(withUsername.blockAspect, withOtherUsername.blockAspect,
+                          "les deux pseudos de référence doivent être mesurablement différents")
 
         XCTAssertEqual(produced.blockAspect, withUsername.blockAspect, accuracy: 0.0001,
-                       "le filigrane produit doit refléter le pseudo « alice », pas un filigrane générique")
+                       "le filigrane produit doit refléter le pseudo « \(handle) », pas un filigrane générique")
         XCTAssertNotEqual(produced.blockAspect, withoutUsername.blockAspect,
                           "un filigrane SANS pseudo (le bug d'origine) ne doit jamais être produit ici")
+        XCTAssertNotEqual(produced.blockAspect, withOtherUsername.blockAspect,
+                          "la mesure doit dépendre des glyphes de CE pseudo, pas seulement de sa présence")
     }
 
     // MARK: - Finding 4 : la résolution de l'interlude est bornée dans le temps
