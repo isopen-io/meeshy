@@ -34,7 +34,11 @@ struct StatusComposerView: View {
     private let columns = Array(repeating: GridItem(.flexible(), spacing: 16), count: 5)
 
     var body: some View {
-        NavigationView {
+        // NavigationStack, not NavigationView: this composer is always presented as a
+        // sheet, and NavigationView's default double-column style collapses at regular
+        // width (iPad) into a split view whose detail pane is empty — hiding the emoji
+        // grid and stranding the toolbar's only dismiss affordance.
+        NavigationStack {
             ZStack {
                 theme.backgroundGradient.ignoresSafeArea()
 
@@ -239,6 +243,10 @@ struct StatusComposerView: View {
             }
         }
         .disabled(selectedEmoji == nil || isPublishing)
+        // While publishing, the label is a bare ProgressView, which carries no
+        // accessible name — the toolbar item would read as an unlabelled "dimmed
+        // button". Pin the name to the action so it stays stable across both states.
+        .accessibilityLabel(String(localized: "status.composer.publish", defaultValue: "Publier", bundle: .main))
     }
 
     // MARK: - Visibility Picker
