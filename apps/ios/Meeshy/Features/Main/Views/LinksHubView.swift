@@ -3,6 +3,23 @@ import Combine
 import MeeshySDK
 import MeeshyUI
 
+// MARK: - Palette
+
+/// Surface neutre des cartes du hub.
+///
+/// Le dépôt pose partout le même couple pour ce rôle — blanc 5 % en sombre,
+/// noir 3 % en clair — et notamment sur `TrackingLinkDetailView`,
+/// `ShareLinkDetailView` et `CommunityLinkDetailView`, c'est-à-dire les écrans
+/// mêmes vers lesquels ces cartes naviguent. Ce hub n'en posait que la moitié
+/// sombre, en dur : en mode clair un blanc à 5 % sur un fond déjà quasi blanc
+/// (`#FFFFFF → #F8F7FF`) ne peint **rien**, et les cartes perdaient leur
+/// surface. La fonction rend la décision explicite et mesurable.
+enum LinksHubPalette {
+    static func cardFill(isDark: Bool) -> Color {
+        isDark ? Color.white.opacity(0.05) : Color.black.opacity(0.03)
+    }
+}
+
 // MARK: - LinksHubView
 
 /// Vue hub synthétisant toutes les formes de liens de la plateforme.
@@ -100,7 +117,7 @@ struct LinksHubView: View {
         .padding(MeeshySpacing.lg)
         .background(
             RoundedRectangle(cornerRadius: MeeshyRadius.lg)
-                .fill(Color.white.opacity(0.05))
+                .fill(LinksHubPalette.cardFill(isDark: isDark))
                 .overlay(
                     RoundedRectangle(cornerRadius: MeeshyRadius.lg)
                         .stroke(MeeshyColors.communityAccent.opacity(0.3), lineWidth: 1)
@@ -223,7 +240,7 @@ struct LinksHubView: View {
             .padding(MeeshySpacing.md + 2)
             .background(
                 RoundedRectangle(cornerRadius: MeeshyRadius.md)
-                    .fill(Color.white.opacity(0.05))
+                    .fill(LinksHubPalette.cardFill(isDark: isDark))
                     .overlay(
                         RoundedRectangle(cornerRadius: MeeshyRadius.md)
                             .stroke(accent.opacity(0.2), lineWidth: 1)
