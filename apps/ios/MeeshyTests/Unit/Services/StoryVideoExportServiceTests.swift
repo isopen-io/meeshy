@@ -249,10 +249,21 @@ final class StoryVideoExportServiceTests: XCTestCase {
     /// Durée du MP4 factice produit par `RealMP4StubExporter`.
     private static let stubStoryDuration: TimeInterval = 2.0
 
-    /// Allongement net apporté par la carte de fin : 2 s de carte dont 1,5 s en
-    /// crossfade par-dessus la fin de la story (cf.
+    /// Allongement net apporté par la carte de fin **logo seule** (aucune
+    /// identité d'auteur résolue) : 2 s de carte dont 1,5 s en crossfade
+    /// par-dessus la fin de la story (cf.
     /// `StoryExportOutroTests.test_append_extendsStoryByHalfSecond`).
     private static let outroTail: TimeInterval = 0.5
+
+    /// Allongement net quand une identité d'auteur EST résolue. La fermeture
+    /// passe alors en 2 temps (`StoryExportOutro` Part D, 2026-07-26) : le logo
+    /// muet (`logoPhase`, 1,5 s) chevauche exactement la fin de la story, puis
+    /// la carte d'identité tient le jingle par-dessus la story terminée. Seule
+    /// cette 2ᵉ phase rallonge le film — d'où `StoryExportOutro.duration`, calée
+    /// sur `MeeshyBrandJingle.outroDuration`, et non `outroTail`.
+    /// `StoryExportOutro.swift:320` documente le même invariant :
+    /// « logo-seule : D+0,5 · auteur : D+2,0 ».
+    private static var authorOutroTail: TimeInterval { StoryExportOutro.duration }
 
     /// **Régression amplifiée par ce lot.** L'appel à `StoryExportOutro.append`
     /// vivait IMBRIQUÉ dans `guard let intro else { return outputURL }` : une
@@ -320,9 +331,9 @@ final class StoryVideoExportServiceTests: XCTestCase {
         defer { sut.cleanupExport(at: url) }
 
         let duration = CMTimeGetSeconds(try await AVURLAsset(url: url).load(.duration))
-        let expected = StoryExportIntro.duration + Self.stubStoryDuration + Self.outroTail
+        let expected = StoryExportIntro.duration + Self.stubStoryDuration + Self.authorOutroTail
         XCTAssertEqual(duration, expected, accuracy: 0.35,
-                       "l'export doit porter l'interlude ET la carte de fin")
+                       "l'export doit porter l'interlude ET la carte de fin d'auteur (2 temps)")
     }
 }
 
