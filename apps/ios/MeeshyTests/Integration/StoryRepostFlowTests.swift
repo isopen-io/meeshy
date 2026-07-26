@@ -161,7 +161,8 @@ final class StoryRepostFlowTests: XCTestCase {
             postId: "story-1",
             targetType: .post,
             content: nil,
-            isQuote: false
+            isQuote: false,
+            visibility: nil
         )
 
         XCTAssertEqual(mockService.repostCallCount, 1)

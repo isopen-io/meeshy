@@ -26,8 +26,11 @@ public final class StoryStickerLayer: CALayer {
                           mode: RenderMode) {
         self.sticker = sticker
 
-        let designSize = CGFloat(sticker.baseSize * sticker.scale)
-        let renderedSide = geometry.render(designSize)
+        // Règle partagée avec le composite et l'export — voir
+        // `CanvasGeometry.stickerFontSize`, qui les faisait diverger.
+        let renderedSide = CanvasGeometry.stickerFontSize(baseSize: sticker.baseSize,
+                                                          scale: sticker.scale,
+                                                          canvasWidth: geometry.renderSize.width)
 
         if let cg = StoryStickerRasterizer.shared.cgImage(for: sticker.emoji,
                                                            size: renderedSide) {

@@ -58,6 +58,7 @@ final class TimelineLocalizationTests: XCTestCase {
         // Keyframe
         "story.timeline.keyframe.add",
         "story.timeline.keyframe.delete",
+        "story.timeline.keyframe.time",
         "story.timeline.keyframe.position",
         "story.timeline.keyframe.scale",
         "story.timeline.keyframe.opacity",

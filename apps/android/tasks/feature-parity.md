@@ -863,8 +863,32 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       (Pinned first → All), each `ConversationSection` preserving the incoming (draft/filter) order.
       An **empty section is omitted**, so an all-pinned account no longer shows a phantom empty
       "Mes conversations" header. Rendered via the existing `CollapsibleSection` (collapse state is
-      its own saved UI state). +9 tests. **Reste**: collapsible *user categories* (needs category
-      metadata) + drag-to-category.
+      its own saved UI state). +9 tests.
+      **User-category grouping done** (slice `conversation-category-sections`, 2026-07-26):
+      `ConversationSections.of(conversations, categories)` now emits **Pinned → each user category
+      (catalogue order) → Autres** — a faithful port of iOS
+      `ConversationListViewModel.groupConversations`. A pinned-*uncategorized* row floats to Épingles
+      (`isPinned && categoryId == null`); a pinned row **with** a category stays inside its category
+      section (iOS parity); uncategorized rows and rows whose category is orphaned (absent from the
+      catalogue, e.g. a deleted category) fall into the `ALL` catch-all. Empty sections omitted;
+      incoming order preserved per section (no second sort — SOTA over iOS, which re-sorts). Each
+      `CATEGORY` `ConversationSection` carries `categoryId` + `title`; `ConversationListScreen` renders
+      them via `CollapsibleSection` (folder glyph, per-category key, category-name header). The catalogue
+      reaches the screen through `ConversationListUiState.categories` (iOS `userCategories`), the seam
+      the corpus-hydration slice fills next. +9 tests (17 total in `ConversationSectionsTest`), the
+      pinned-with-category guard mutation-proven (drop `&& categoryId == null` → exactly 1 failure).
+      **Category-catalogue reducer done** (slice `conversation-category-catalog`, 2026-07-26): pure
+      `:core:model/UserCategoryCatalog` — the framework-free lift of iOS `UserCategoryStore`'s
+      `sortedSnapshot()` ordering (order asc, `null` last, case-insensitive name tie-break) and its
+      `create`/`update`/`delete`/`reorder`/`applyRemote` mutations into one immutable value type. `of` /
+      `EMPTY` / `upsert` / `remove` / `reorder(id→order)` / `apply(CategoryEvent)`; its `sorted` snapshot
+      is exactly the `categories` list `ConversationSections.of` consumes, so it is the building block the
+      hydration slice and the category socket handler both drive. SOTA over iOS: `.created`/`.updated`
+      collapse into one `Upserted` event; every branch JVM-covered vs iOS's actor coupling mutation to a
+      Combine publish. +20 tests (`UserCategoryCatalogTest`), null-last ordering mutation-proven
+      (`Int.MAX_VALUE`→`Int.MIN_VALUE` → exactly 1 failure).
+      **Reste**: category-catalogue hydration (cache-first + revalidate into `state.categories`, driving
+      `UserCategoryCatalog` from cache then network) + drag-to-category.
 - [x] Filtering (all/unread/personal/private/open/global/channels/favorites/archived) + search overlay
       — `ConversationFilter` enum (couleurs iOS) + `ConversationFilters.apply` pur
       (port fidèle de `filterConversations` : soft-delete masqué partout, archivés

@@ -15,8 +15,11 @@ struct StatusComposerView: View {
 
     @Environment(\.dismiss) private var dismiss
     private var theme: ThemeManager { ThemeManager.shared }
+    /// Load-bearing malgré l'absence d'usage direct : `theme` est lu sans
+    /// `@ObservedObject`, donc cette dépendance d'environnement est la SEULE
+    /// chose qui ré-évalue la vue quand le mode rendu bascule — sans elle, les
+    /// jetons `theme.*` resteraient figés sur leur valeur d'ouverture.
     @Environment(\.colorScheme) private var colorScheme
-    private var isDark: Bool { colorScheme == .dark }
 
     @State private var selectedEmoji: String?
     @State private var statusText = ""
@@ -34,7 +37,7 @@ struct StatusComposerView: View {
     private let columns = Array(repeating: GridItem(.flexible(), spacing: 16), count: 5)
 
     var body: some View {
-        NavigationView {
+        NavigationStack {
             ZStack {
                 theme.backgroundGradient.ignoresSafeArea()
 
