@@ -57152,49 +57152,96 @@
         }
       }
     },
-    "story.viewer.action.export": {
+    "story.viewer.action.share": {
       "extractionState": "manual",
       "localizations": {
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "تصدير"
+            "value": "مشاركة"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Exportieren"
+            "value": "Teilen"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Export"
+            "value": "Share"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Exportar"
+            "value": "Compartir"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Exporter"
+            "value": "Partager"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Esporta"
+            "value": "Condividi"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Exportar"
+            "value": "Compartilhar"
+          }
+        }
+      }
+    },
+    "story.viewer.action.save": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "حفظ"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Speichern"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Save"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Guardar"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enregistrer"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Salva"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Salvar"
           }
         }
       }

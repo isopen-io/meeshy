@@ -66,6 +66,34 @@ nonisolated struct StoryActionRailPlan: Equatable {
     }
 }
 
+// MARK: - Export Rail Buttons (Partager / Enregistrer)
+
+/// Résolution PURE de la paire Partager/Enregistrer du rail — extraite pour
+/// être testée sans instancier de vue (Task 10, revue « le reader a perdu
+/// tout accès au partage externe »).
+///
+/// Membership des DEUX boutons = `showsExport` (== `isOwnStory`, voir
+/// `StoryActionRailPlan.resolve`) : Partager et Enregistrer apparaissent ou
+/// disparaissent TOUJOURS ensemble. Seul Enregistrer bascule vers l'anneau de
+/// progression pendant un job de sauvegarde — Partager reste au premier plan
+/// tout du long : il doit rester atteignable jusqu'à la présentation de la
+/// share sheet système, jamais relégué derrière une tâche de fond, sinon
+/// cette sheet surgirait après coup alors que l'utilisateur a déjà navigué
+/// ailleurs.
+nonisolated struct StoryExportRailButtons: Equatable {
+    let showsShareButton: Bool
+    let showsSaveButton: Bool
+    let showsSaveProgressRing: Bool
+
+    static func resolve(showsExport: Bool, saveProgress: Double?) -> StoryExportRailButtons {
+        StoryExportRailButtons(
+            showsShareButton: showsExport,
+            showsSaveButton: showsExport && saveProgress == nil,
+            showsSaveProgressRing: showsExport && saveProgress != nil
+        )
+    }
+}
+
 // MARK: - Story Action Sidebar
 
 /// Right-side action sidebar of the story viewer. Hosts the heart / reply /
@@ -368,63 +396,96 @@ struct StoryActionSidebarView: View {
                 }
             }
 
-            // Author-only export — bakes a fidèle-au-preview MP4 the user
-            // can share to Photos / Messages / WhatsApp. Available pour
-            // TOUTES les stories de l'auteur (static OU animée — le
-            // compositor synthétise un substrat pour les statiques).
-            // NEVER uploads to the Meeshy backend (stories publish RAW,
-            // see CLAUDE.md "Story Architecture").
+            // Author-only Partager + Enregistrer — deux actions DISTINCTES
+            // (Task 10, revue Task 7 : le rail avait perdu tout accès au
+            // partage externe en passant l'ancien bouton « Exporter » par
+            // `StoryPhotoSaveService`, silencieusement, sous une icône et un
+            // libellé de partage). Alignées sur la ligne « Mes stories » :
             //
-            // Passe par StoryPhotoSaveService.shared.save(story:), EXACTEMENT
-            // comme « Enregistrer » sur la ligne « Mes stories » (Task 7) :
-            // les deux surfaces partagent la même source de vérité, donc un
-            // export lancé ici apparaît aussi dans la liste et réciproquement.
-            // Tant qu'un job est en vol pour cette story, le bouton devient
-            // l'anneau de progression et son tap annule.
+            //   Partager    → sheet `StoryExportShareSheet` (choix de langue)
+            //                 → `UIActivityViewController` (WhatsApp, Messages,
+            //                 AirDrop, Photos…). Reste au PREMIER PLAN — une
+            //                 sheet modale, jamais une tâche de fond, sinon
+            //                 elle surgirait après coup alors que l'utilisateur
+            //                 a déjà navigué ailleurs.
+            //   Enregistrer → `StoryPhotoSaveService.shared.save(story:)`,
+            //                 EXACTEMENT comme sur la ligne « Mes stories »
+            //                 (Task 7) : même source de vérité, donc un export
+            //                 lancé ici apparaît aussi dans la liste et
+            //                 réciproquement. Tant qu'un job est en vol pour
+            //                 cette story, ce bouton (lui seul) devient
+            //                 l'anneau de progression et son tap annule.
             //
-            // Membership du bouton = `railPlan.showsExport` SEUL, jamais
-            // `currentStory` — même patron que Reply (L276) et Repost (L322) :
-            // `currentStory` n'est déballé que DANS les closures, pas pour
-            // décider si le bouton existe. Conditionner l'existence sur
+            // NEVER uploads to the Meeshy backend (stories publish RAW, see
+            // CLAUDE.md "Story Architecture").
+            //
+            // Membership des DEUX boutons = `railPlan.showsExport` SEUL,
+            // jamais `currentStory` — même patron que Reply (L276) et Repost
+            // (L322) : `currentStory` n'est déballé que DANS les closures, pas
+            // pour décider si un bouton existe. Conditionner l'existence sur
             // `let story = currentStory` romprait l'invariant documenté plus
             // haut (L160-164) : un bouton ne doit jamais apparaître/disparaître
             // en cours de lecture — seul le rail figé à l'entrée du slide en
             // décide. `currentStory` n'a aucune raison structurelle de
             // s'aligner sur ce figement (revue Task 7, finding Important).
-            if railPlan.showsExport {
-                let exportProgress = currentStory.flatMap { saveService.progress(for: $0.id) }
-                if let progress = exportProgress {
-                    // Même job, même source de vérité que la ligne « Mes
-                    // stories » : un export lancé depuis l'une des deux
-                    // surfaces progresse sur les deux.
-                    Button {
-                        HapticFeedback.light()
-                        guard let story = currentStory else { return }
-                        saveService.cancel(storyId: story.id)
-                    } label: {
-                        StorySaveProgressRing(progress: progress, tint: MeeshyColors.indigo400, diameter: 32)
-                    }
-                    .buttonStyle(.plain)
-                    // Contrairement à la ligne « Mes stories »
-                    // (`.accessibilityElement(children: .ignore)`, libellé
-                    // composé au niveau de la LIGNE), ce bouton n'est enfant
-                    // d'AUCUN élément fusionné ici : il doit porter lui-même
-                    // son libellé et sa valeur, sinon VoiceOver n'annoncerait
-                    // que son contenu visuel brut (un nombre nu).
-                    .accessibilityLabel(String(localized: "story.mine.save.cancel.a11y",
-                                               defaultValue: "Annuler l'enregistrement", bundle: .main))
-                    .accessibilityValue(Text(String(
-                        localized: "story.mine.save.progress.a11y",
-                        defaultValue: "Enregistrement \(StorySaveProgressRing.percent(progress)) %", bundle: .main)))
-                } else {
-                    StoryActionButton(
-                        icon: "square.and.arrow.up.fill",
-                        label: String(localized: "story.viewer.action.export", defaultValue: "Exporter", bundle: .main)
-                    ) {
-                        HapticFeedback.light()
-                        guard let story = currentStory else { return }
-                        saveService.save(story: story)
-                    }
+            //
+            // Résolution PURE extraite dans `StoryExportRailButtons` (testée
+            // par `StoryViewerExportRailTests`) : Partager reste vrai que la
+            // sauvegarde soit ou non en vol, seul Enregistrer bascule vers
+            // l'anneau.
+            let exportSaveProgress = railPlan.showsExport
+                ? currentStory.flatMap { saveService.progress(for: $0.id) }
+                : nil
+            let exportRailButtons = StoryExportRailButtons.resolve(
+                showsExport: railPlan.showsExport,
+                saveProgress: exportSaveProgress
+            )
+
+            if exportRailButtons.showsShareButton {
+                StoryActionButton(
+                    icon: "square.and.arrow.up.fill",
+                    label: String(localized: "story.viewer.action.share", defaultValue: "Partager", bundle: .main)
+                ) {
+                    HapticFeedback.light()
+                    // Sheet MODALE : on pause tout de suite (comme Envoyer /
+                    // Vues / Éditer-et-republier) — `resumeTimer()` est déjà
+                    // câblé sur `onDismiss` de cette sheet (StoryViewerView).
+                    pauseTimer()
+                    showExportShareSheet = true
+                }
+            }
+
+            if exportRailButtons.showsSaveProgressRing, let progress = exportSaveProgress {
+                // Même job, même source de vérité que la ligne « Mes
+                // stories » : un export lancé depuis l'une des deux
+                // surfaces progresse sur les deux.
+                Button {
+                    HapticFeedback.light()
+                    guard let story = currentStory else { return }
+                    saveService.cancel(storyId: story.id)
+                } label: {
+                    StorySaveProgressRing(progress: progress, tint: MeeshyColors.indigo400, diameter: 32)
+                }
+                .buttonStyle(.plain)
+                // Contrairement à la ligne « Mes stories »
+                // (`.accessibilityElement(children: .ignore)`, libellé
+                // composé au niveau de la LIGNE), ce bouton n'est enfant
+                // d'AUCUN élément fusionné ici : il doit porter lui-même
+                // son libellé et sa valeur, sinon VoiceOver n'annoncerait
+                // que son contenu visuel brut (un nombre nu).
+                .accessibilityLabel(String(localized: "story.mine.save.cancel.a11y",
+                                           defaultValue: "Annuler l'enregistrement", bundle: .main))
+                .accessibilityValue(Text(String(
+                    localized: "story.mine.save.progress.a11y",
+                    defaultValue: "Enregistrement \(StorySaveProgressRing.percent(progress)) %", bundle: .main)))
+            } else if exportRailButtons.showsSaveButton {
+                StoryActionButton(
+                    icon: "square.and.arrow.down.fill",
+                    label: String(localized: "story.viewer.action.save", defaultValue: "Enregistrer", bundle: .main)
+                ) {
+                    HapticFeedback.light()
+                    guard let story = currentStory else { return }
+                    saveService.save(story: story)
                 }
             }
 
@@ -546,7 +607,7 @@ struct StoryActionSidebarView: View {
                                 }
                             }
                         )
-                        .frame(maxWidth: 260)
+                        .frame(maxWidth: 300)     // ~5 drapeaux visibles + le « + » épinglé
                         .transition(.asymmetric(
                             insertion: .scale(scale: 0.8, anchor: .trailing).combined(with: .opacity),
                             removal: .opacity
