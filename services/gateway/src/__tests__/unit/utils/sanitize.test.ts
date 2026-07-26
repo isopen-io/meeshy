@@ -755,6 +755,30 @@ describe('SecuritySanitizer', () => {
     it('should accept emails with underscores in local part', () => {
       expect(SecuritySanitizer.sanitizeEmail('user_name@example.com')).toBe('user_name@example.com');
     });
+
+    it('should return null for consecutive dots in local part', () => {
+      expect(SecuritySanitizer.sanitizeEmail('a..b@example.com')).toBeNull();
+    });
+
+    it('should return null for a leading dot in local part', () => {
+      expect(SecuritySanitizer.sanitizeEmail('.user@example.com')).toBeNull();
+    });
+
+    it('should return null for a trailing dot in local part', () => {
+      expect(SecuritySanitizer.sanitizeEmail('user.@example.com')).toBeNull();
+    });
+
+    it('should return null for a domain starting with a hyphen', () => {
+      expect(SecuritySanitizer.sanitizeEmail('user@-example.com')).toBeNull();
+    });
+
+    it('should return null for a domain ending with a hyphen', () => {
+      expect(SecuritySanitizer.sanitizeEmail('user@example-.com')).toBeNull();
+    });
+
+    it('should return null for consecutive dots in domain', () => {
+      expect(SecuritySanitizer.sanitizeEmail('user@example..com')).toBeNull();
+    });
   });
 
   describe('truncate', () => {
