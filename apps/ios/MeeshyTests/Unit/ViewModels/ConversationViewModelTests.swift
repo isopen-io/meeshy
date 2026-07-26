@@ -591,12 +591,22 @@ final class ConversationViewModelTests: XCTestCase {
         XCTAssertEqual(ConversationViewModel.optimisticListPreview(text: "Regarde", messageType: .image), "Regarde")
     }
 
-    func test_optimisticListPreview_captionlessMedia_returnsMediaLabel() {
-        XCTAssertEqual(ConversationViewModel.optimisticListPreview(text: "", messageType: .image), "📷 Photo")
-        XCTAssertEqual(ConversationViewModel.optimisticListPreview(text: "", messageType: .video), "🎥 Vidéo")
-        XCTAssertEqual(ConversationViewModel.optimisticListPreview(text: "", messageType: .audio), "🎙️ Message vocal")
-        XCTAssertEqual(ConversationViewModel.optimisticListPreview(text: "", messageType: .file), "📎 Fichier")
-        XCTAssertEqual(ConversationViewModel.optimisticListPreview(text: "", messageType: .location), "📍 Position")
+    func test_optimisticListPreview_captionlessMedia_returnsMediaLabel() throws {
+        // `optimisticListPreview` résout ses libellés via `String(localized:)`,
+        // donc depuis la langue du simulateur : on fixe la table française pour
+        // juger le code, pas la machine (sinon vert en local fr, rouge en CI en).
+        let path = try XCTUnwrap(Bundle.main.path(forResource: "fr", ofType: "lproj"),
+                                 "localisation « fr » absente du bundle — régression de packaging")
+        let fr = try XCTUnwrap(Bundle(path: path))
+        let loc = Locale(identifier: "fr")
+        func preview(_ type: Message.MessageType) -> String {
+            ConversationViewModel.optimisticListPreview(text: "", messageType: type, bundle: fr, locale: loc)
+        }
+        XCTAssertEqual(preview(.image), "📷 Photo")
+        XCTAssertEqual(preview(.video), "🎥 Vidéo")
+        XCTAssertEqual(preview(.audio), "🎙️ Message vocal")
+        XCTAssertEqual(preview(.file), "📎 Fichier")
+        XCTAssertEqual(preview(.location), "📍 Position")
     }
 
     func test_sendMessage_restAndSocketBothFail_returnsFalse() async {

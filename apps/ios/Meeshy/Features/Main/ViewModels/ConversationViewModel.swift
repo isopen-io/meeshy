@@ -2220,14 +2220,17 @@ class ConversationViewModel: ObservableObject {
     /// last-message preview wording). Used to surface a just-sent message in the
     /// list before any server ACK. `nonisolated static` so the media path can
     /// compute it for a `Task.detached`.
-    nonisolated static func optimisticListPreview(text: String, messageType: Message.MessageType) -> String {
+    nonisolated static func optimisticListPreview(text: String,
+                                                  messageType: Message.MessageType,
+                                                  bundle: Bundle = .main,
+                                                  locale: Locale = .current) -> String {
         if !text.isEmpty { return text }
         switch messageType {
-        case .image: return String(localized: "media.summary.photo", defaultValue: "📷 Photo", bundle: .main)
-        case .video: return String(localized: "media.summary.video", defaultValue: "🎥 Vidéo", bundle: .main)
-        case .audio: return String(localized: "media.summary.voice", defaultValue: "🎙️ Message vocal", bundle: .main)
-        case .file: return String(localized: "media.summary.file", defaultValue: "📎 Fichier", bundle: .main)
-        case .location: return String(localized: "media.summary.location", defaultValue: "📍 Position", bundle: .main)
+        case .image: return String(localized: "media.summary.photo", defaultValue: "📷 Photo", bundle: bundle, locale: locale)
+        case .video: return String(localized: "media.summary.video", defaultValue: "🎥 Vidéo", bundle: bundle, locale: locale)
+        case .audio: return String(localized: "media.summary.voice", defaultValue: "🎙️ Message vocal", bundle: bundle, locale: locale)
+        case .file: return String(localized: "media.summary.file", defaultValue: "📎 Fichier", bundle: bundle, locale: locale)
+        case .location: return String(localized: "media.summary.location", defaultValue: "📍 Position", bundle: bundle, locale: locale)
         default: return ""
         }
     }
