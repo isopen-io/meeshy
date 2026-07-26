@@ -57,6 +57,10 @@ final class ScriptedStoryExporter: StoryVideoExportServiceProviding {
     private(set) var lastLanguages: [String] = []
     private(set) var lastCleanupURL: URL?
     private(set) var lastBakedURL: URL?
+    /// Identité de marque effectivement reçue par le bake — `nil` si le bake
+    /// est parti sans interlude (résolution absente ou passée la borne de
+    /// `StoryPhotoSaveService.introTimeout`).
+    private(set) var lastIntro: StoryExportIntroContent?
 
     func prepareExport(
         slide: StorySlide,
@@ -68,6 +72,7 @@ final class ScriptedStoryExporter: StoryVideoExportServiceProviding {
     ) async -> URL? {
         prepareCallCount += 1
         lastLanguages = languages
+        lastIntro = intro
         for fraction in progressScript { onProgress?(fraction) }
 
         switch outcome {
@@ -103,6 +108,59 @@ final class StubPhotoSaver: PhotoLibrarySaving, @unchecked Sendable {
     func saveVideo(at url: URL) async throws {
         savedVideoURLs.append(url)
         if shouldFail { throw Failure.denied }
+    }
+}
+
+/// Exporteur manuel : suspend `prepareExport` jusqu'à ce que le test appelle
+/// `resolve(attempt:)`, et garde les callbacks `onProgress` de CHAQUE
+/// tentative individuellement adressables par index. `ScriptedStoryExporter`
+/// ne peut pas rejouer un « annuler puis relancer » : ses fractions sont
+/// publiées synchrones et son résultat immédiat, donc les deux tentatives ne
+/// peuvent jamais coexister en vol. Ce double le permet.
+@MainActor
+final class ManualStoryExporter: StoryVideoExportServiceProviding {
+
+    private struct PendingCall {
+        let onProgress: ((Double) -> Void)?
+        let continuation: CheckedContinuation<URL?, Never>
+    }
+
+    private var pendingCalls: [PendingCall] = []
+    private(set) var cleanupCallCount = 0
+
+    var pendingCount: Int { pendingCalls.count }
+
+    func prepareExport(
+        slide: StorySlide,
+        languages: [String],
+        watermark: StoryExportWatermark?,
+        intro: StoryExportIntroContent?,
+        onProgress: ((Double) -> Void)?,
+        onPhaseChange: ((StoryExportPhase) -> Void)?
+    ) async -> URL? {
+        await withCheckedContinuation { continuation in
+            pendingCalls.append(PendingCall(onProgress: onProgress, continuation: continuation))
+        }
+    }
+
+    func cleanupExport(at url: URL) {
+        cleanupCallCount += 1
+    }
+
+    /// Publie une fraction sur la tentative à l'index `attempt` (0 = la
+    /// première à avoir appelé `prepareExport`).
+    func publishProgress(attempt: Int, _ fraction: Double) {
+        pendingCalls[attempt].onProgress?(fraction)
+    }
+
+    /// Termine la tentative à l'index `attempt` avec une URL bakée factice.
+    @discardableResult
+    func resolve(attempt: Int) -> URL {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("manual-save-\(UUID().uuidString).mp4")
+        do { try Data().write(to: url) } catch { XCTFail("temp write failed: \(error)") }
+        pendingCalls[attempt].continuation.resume(returning: url)
+        return url
     }
 }
 
@@ -145,6 +203,17 @@ final class StoryPhotoSaveServiceTests: XCTestCase {
             await Task.yield()
         }
         XCTFail("le job n'a jamais été retiré pour \(storyId)")
+    }
+
+    /// Draine la file du MainActor jusqu'à ce que `condition` soit vraie —
+    /// même borne dure que `waitUntilIdle`, pour synchroniser sur un état
+    /// arbitraire observé sur un double plutôt que sur `jobs`.
+    private func waitUntil(_ condition: () -> Bool) async {
+        for _ in 0..<200 {
+            if condition() { return }
+            await Task.yield()
+        }
+        XCTFail("condition jamais vraie après 200 itérations")
     }
 
     // MARK: Succès
@@ -273,5 +342,135 @@ final class StoryPhotoSaveServiceTests: XCTestCase {
         sut.cancel(storyId: "inexistante")
         XCTAssertTrue(toasts.successMessages.isEmpty)
         XCTAssertTrue(toasts.errorMessages.isEmpty)
+    }
+
+    // MARK: Résolution d'identité bornée (Finding 1)
+
+    /// Sans borne, une résolution d'identité lente (avatar/fond non caché,
+    /// réseau jusqu'à ~60 s) laisserait l'anneau figé à 0 % pendant toute
+    /// cette attente — AVANT même que le bake ne démarre. `introTimeout`
+    /// borne cette attente : le bake démarre SANS interlude de marque plutôt
+    /// que de bloquer.
+    func test_save_introSlowerThanTimeout_bakesWithoutIntroWithoutBlocking() async {
+        let exporter = ScriptedStoryExporter()
+        let photos = StubPhotoSaver()
+        let toasts = MockFeedbackToast()
+        let sut = StoryPhotoSaveService(
+            exporter: exporter,
+            photoSaver: photos,
+            toasts: toasts,
+            preferredLanguages: { [] },
+            introTimeout: .milliseconds(100),
+            intro: {
+                try? await Task.sleep(for: .seconds(2))
+                return StoryExportIntroContent(displayName: "Late", username: "late", accentColorHex: "FFFFFF")
+            }
+        )
+        let story = makeStory()
+        let start = Date()
+
+        sut.save(story: story)
+        await waitUntilIdle(sut, storyId: story.id)
+
+        XCTAssertLessThan(Date().timeIntervalSince(start), 1.5,
+                           "le bake ne doit pas attendre la résolution d'identité complète (2s)")
+        XCTAssertNil(exporter.lastIntro, "passé le délai, le bake démarre sans interlude de marque")
+        XCTAssertEqual(exporter.prepareCallCount, 1)
+    }
+
+    /// L'inverse : une résolution d'identité rapide doit toujours être
+    /// utilisée — la borne ne doit jamais faire perdre une résolution qui
+    /// arrive à temps.
+    func test_save_introFasterThanTimeout_isUsedForBrandedIntro() async {
+        let exporter = ScriptedStoryExporter()
+        let photos = StubPhotoSaver()
+        let toasts = MockFeedbackToast()
+        let expected = StoryExportIntroContent(displayName: "Fast", username: "fast", accentColorHex: "112233")
+        let sut = StoryPhotoSaveService(
+            exporter: exporter,
+            photoSaver: photos,
+            toasts: toasts,
+            preferredLanguages: { [] },
+            introTimeout: .seconds(2),
+            intro: { expected }
+        )
+        let story = makeStory()
+
+        sut.save(story: story)
+        await waitUntilIdle(sut, storyId: story.id)
+
+        XCTAssertEqual(exporter.lastIntro?.username, "fast")
+    }
+
+    // MARK: Nettoyage après annulation (Finding 2)
+
+    /// `test_cancel_clearsJobImmediately` ne peut pas vérifier le nettoyage
+    /// du MP4 : il ne draine jamais le `Task` du bake abandonné. Celui-ci
+    /// continue de tourner après `cancel()` (`AVAssetWriter` ignore
+    /// `Task.isCancelled`) et doit nettoyer son MP4 une fois qu'il ressort du
+    /// bake — sur les 4 sorties possibles (succès, échec bake, échec Photos,
+    /// annulation), seule celle-ci n'était couverte par aucun test.
+    func test_cancel_duringBake_cleansUpMP4OnceTheAbandonedTaskUnwinds() async {
+        let (sut, exporter, _, toasts) = makeSUT()
+        let story = makeStory()
+
+        sut.save(story: story)
+        sut.cancel(storyId: story.id)
+        XCTAssertNil(sut.progress(for: story.id), "le job doit disparaître dès l'appel à cancel")
+
+        await waitUntil { exporter.cleanupCallCount > 0 }
+
+        XCTAssertEqual(exporter.cleanupCallCount, 1,
+                       "le MP4 baké après l'annulation doit être nettoyé, pas laissé sur disque")
+        XCTAssertEqual(exporter.lastCleanupURL, exporter.lastBakedURL)
+        XCTAssertEqual(toasts.successMessages.count, 1, "un seul toast : celui de l'annulation")
+        XCTAssertTrue(toasts.errorMessages.isEmpty)
+    }
+
+    // MARK: Annuler puis relancer (Finding 3)
+
+    /// Reproduit « annuler puis relancer immédiatement » sur la même story :
+    /// la tentative annulée (A) continue de baker en tâche de fond pendant
+    /// que la tentative relancée (B) progresse. Une fraction périmée de A ne
+    /// doit JAMAIS écraser la progression réelle de B, et les deux MP4
+    /// (le périmé de A, celui de B) doivent être nettoyés — un seul écrit
+    /// dans Photos.
+    func test_cancelThenRelaunch_staleProgressFromAbandonedAttemptIsIgnored() async {
+        let manual = ManualStoryExporter()
+        let photos = StubPhotoSaver()
+        let toasts = MockFeedbackToast()
+        let sut = StoryPhotoSaveService(
+            exporter: manual,
+            photoSaver: photos,
+            toasts: toasts,
+            preferredLanguages: { [] },
+            intro: { nil }
+        )
+        let story = makeStory()
+
+        sut.save(story: story)
+        await waitUntil { manual.pendingCount >= 1 }
+
+        sut.cancel(storyId: story.id)
+        sut.save(story: story)
+        await waitUntil { manual.pendingCount >= 2 }
+
+        manual.publishProgress(attempt: 0, 0.9)
+        await Task.yield()
+        XCTAssertEqual(sut.progress(for: story.id) ?? -1, 0, accuracy: 0.0001,
+                       "la fraction périmée de la tentative annulée ne doit pas s'appliquer")
+
+        manual.publishProgress(attempt: 1, 0.5)
+        await Task.yield()
+        XCTAssertEqual(sut.progress(for: story.id) ?? -1, StorySaveProgressMapper.bake(0.5), accuracy: 0.0001,
+                       "la fraction réelle de la tentative courante doit s'appliquer")
+
+        manual.resolve(attempt: 0)
+        manual.resolve(attempt: 1)
+        await waitUntilIdle(sut, storyId: story.id)
+
+        XCTAssertEqual(photos.savedVideoURLs.count, 1, "une seule écriture Photos : celle de la tentative courante")
+        XCTAssertEqual(manual.cleanupCallCount, 2, "le MP4 périmé ET celui de la tentative courante doivent être nettoyés")
+        XCTAssertEqual(toasts.successMessages.count, 2, "un toast d'annulation + un toast de succès")
     }
 }
