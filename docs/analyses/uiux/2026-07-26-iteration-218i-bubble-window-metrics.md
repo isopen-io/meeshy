@@ -112,11 +112,17 @@ tous les ratios de l'app :
 ```swift
 /// Size of the window the app is actually rendered in.
 static var windowSize: CGSize {
-    let scene = UIApplication.shared.connectedScenes
-        .compactMap { $0 as? UIWindowScene }
-        .first(where: { $0.activationState == .foregroundActive })
-    let window = scene?.windows.first(where: { $0.isKeyWindow }) ?? scene?.windows.first
-    return window?.bounds.size ?? UIScreen.main.bounds.size
+    for scene in UIApplication.shared.connectedScenes {
+        guard let windowScene = scene as? UIWindowScene,
+              windowScene.activationState == .foregroundActive else { continue }
+        for window in windowScene.windows where window.isKeyWindow {
+            return window.bounds.size
+        }
+        if let anyWindow = windowScene.windows.first {
+            return anyWindow.bounds.size
+        }
+    }
+    return UIScreen.main.bounds.size
 }
 
 /// Bubble cap for the conversation surfaces, which span the whole window.
@@ -137,6 +143,14 @@ en place de la scène) connaît quand même la place dont l'app dispose, et
 retomber sur `UIScreen` à cet endroit réintroduirait exactement le bug corrigé
 ici. Le display n'intervient que si **aucune scène de premier plan n'existe**,
 c'est-à-dire quand aucun layout n'a lieu.
+
+Écrit en **boucle avec sortie anticipée** plutôt qu'en
+`compactMap { … }.first { … }` : cette chaîne alloue un tableau intermédiaire à
+**chaque appel**, et l'appel a lieu dans le `body` d'une cellule de la liste de
+messages — la liste la plus chaude de l'app. La règle du dépôt (« keep body pure
+and fast », `apps/ios/CLAUDE.md`) impose de rester sans allocation sur le chemin
+nominal. La première version de ce correctif ne respectait pas cette règle ;
+c'est la seule voie par laquelle il pouvait peser sur les temps du MainActor.
 
 **La surcharge est le cœur du correctif, pas du sucre** : elle rend la mesure
 correcte plus courte à écrire que la mauvaise. La forme explicite

@@ -31,12 +31,24 @@ enum DeviceLayout {
     ///
     /// Prefer a `GeometryReader`'s own `size` wherever one is already in scope:
     /// this is the answer for views that have no container measurement to read.
+    ///
+    /// Written as a plain loop with early exit rather than
+    /// `compactMap { … }.first { … }`, which would allocate an intermediate
+    /// array on every call. This runs inside the `body` of a message-list cell
+    /// — the hottest list in the app — so it must stay allocation-free on the
+    /// nominal path, per the repo's "keep body pure and fast" rule.
     static var windowSize: CGSize {
-        let scene = UIApplication.shared.connectedScenes
-            .compactMap { $0 as? UIWindowScene }
-            .first(where: { $0.activationState == .foregroundActive })
-        let window = scene?.windows.first(where: { $0.isKeyWindow }) ?? scene?.windows.first
-        return window?.bounds.size ?? UIScreen.main.bounds.size
+        for scene in UIApplication.shared.connectedScenes {
+            guard let windowScene = scene as? UIWindowScene,
+                  windowScene.activationState == .foregroundActive else { continue }
+            for window in windowScene.windows where window.isKeyWindow {
+                return window.bounds.size
+            }
+            if let anyWindow = windowScene.windows.first {
+                return anyWindow.bounds.size
+            }
+        }
+        return UIScreen.main.bounds.size
     }
 
     static func bubbleMaxWidth(containerWidth: CGFloat, sizeClass: UserInterfaceSizeClass?) -> CGFloat {
