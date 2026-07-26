@@ -210,9 +210,10 @@ final class StoryExportBrandedEndToEndTests: XCTestCase {
         // Fenêtre intérieure à l'interlude : on évite l'attaque et l'extinction
         // du jingle, dont l'enveloppe est volontairement douce.
         let introRMS = rms(window(samples, from: 0.2, to: min(StoryExportIntro.duration, 1.8), rate: rate))
-        // Fenêtre intérieure à la story, qui est muette. Vide si la piste
-        // s'arrête avec le jingle — c'est alors du silence, donc conforme.
-        let storyRMS = rms(window(samples, from: StoryExportIntro.duration + 0.4,
+        // Fenêtre intérieure à la story, qui est muette — placée APRÈS la queue
+        // de fondu du jingle (`duration + crossfadeDuration`), sinon elle
+        // capterait l'extinction du jingle et croirait mesurer un débordement.
+        let storyRMS = rms(window(samples, from: StoryExportIntro.duration + StoryExportIntro.crossfadeDuration + 0.2,
                                   to: totalSeconds, rate: rate))
 
         XCTAssertGreaterThan(introRMS, 0.01,

@@ -66,9 +66,22 @@ public enum StoryExportIntroSizing {
 /// commence après lui.
 public enum StoryExportIntro {
 
-    /// Durée du préambule — calée sur la signature sonore pour que l'image se
-    /// retire exactement quand le jingle s'éteint.
-    public static var duration: TimeInterval { MeeshyBrandJingle.duration }
+    /// L'interlude tient à PLEINE opacité pendant `holdDuration`, puis se fond
+    /// vers la story sur `crossfadeDuration` — la story se RÉVÈLE, jamais une
+    /// coupure brutale (directive user 2026-07-26). La story démarre donc à
+    /// `holdDuration`, et le fondu chevauche ses `crossfadeDuration` premières
+    /// secondes sans jamais la rallonger.
+    public static let holdDuration: TimeInterval = 1.2
+    public static let crossfadeDuration: TimeInterval = 0.5
+
+    /// Décalage de départ de la story dans la composition finale (= `holdDuration`).
+    /// Conservé sous le nom `duration` : l'invariant `total = duration + storyDuration`
+    /// (assertions d'export bout-en-bout) reste vrai, seule sa valeur change.
+    public static var duration: TimeInterval { holdDuration }
+
+    /// Longueur du CLIP d'interlude encodé : la tenue PLUS la queue de fondu — il
+    /// faut des frames à faire disparaître pendant le crossfade.
+    static var clipDuration: TimeInterval { holdDuration + crossfadeDuration }
 
     /// Peint la carte d'identité : bannière (ou aplat de la couleur d'accent)
     /// assombrie, avatar rond centré, nom et @username dessous.
@@ -371,16 +384,16 @@ public enum StoryExportIntro {
     }
 
     /// Assemble le MP4 final : l'interlude d'identité et sa signature sonore,
-    /// puis la story.
+    /// PUIS la story — reliés par un FONDU CROISÉ de `crossfadeDuration`, jamais
+    /// une coupure sèche (directive user 2026-07-26 : la story se révèle).
     ///
-    /// Assemblage par CONCATÉNATION plutôt qu'en insérant l'intro dans la
-    /// composition de `StoryExporter`. Cette composition est pilotée par un
-    /// `AVVideoComposition` dont les instructions sont datées : y glisser 2,2 s
-    /// en tête obligerait à décaler chaque instruction, chaque keyframe et
-    /// chaque piste audio, pour un export qui fonctionne aujourd'hui. La
-    /// concaténation laisse ce pipeline strictement intact — au prix d'une
-    /// seconde passe d'encodage, acceptable pour un export ponctuel déclenché
-    /// par l'auteur.
+    /// La story n'est PAS insérée dans la composition datée de `StoryExporter`
+    /// (y glisser l'intro obligerait à décaler chaque instruction, keyframe et
+    /// piste audio) : on part de son MP4 déjà baké et on le pose à `holdDuration`
+    /// dans une composition neuve. Le fondu est un crossfade SYMÉTRIQUE (intro
+    /// 1→0 + story 0→1) — même approche que `VideoCompositor`/`StoryExportOutro`,
+    /// dont le résultat aux bornes ne dépend pas de l'ordre des couches. Coût :
+    /// une seconde passe d'encodage, acceptable pour un export ponctuel auteur.
     ///
     /// - Parameters:
     ///   - storyURL: le MP4 de la story, tel que produit par `StoryExporter`.
@@ -393,51 +406,78 @@ public enum StoryExportIntro {
         guard let image = render(content, size: renderSize) else {
             throw IntroError.pixelBufferCreationFailed
         }
-        let introURL = try await makeClip(image: image, duration: duration, size: renderSize)
+        // Le clip d'interlude dure la tenue PLUS la queue de fondu : il lui faut
+        // des frames à faire disparaître pendant le crossfade.
+        let introURL = try await makeClip(image: image, duration: clipDuration, size: renderSize)
         let jingleURL = try MeeshyBrandJingle.renderToTemporaryFile()
         defer {
             try? FileManager.default.removeItem(at: introURL)
             try? FileManager.default.removeItem(at: jingleURL)
         }
 
+        let storyAsset = AVURLAsset(url: storyURL)
+        let storyDuration = try await storyAsset.load(.duration)
+
+        let storyStart = CMTime(seconds: holdDuration, preferredTimescale: 600)
+        // Fenêtre du fondu : les `crossfadeDuration` premières secondes de la
+        // story, pendant lesquelles l'interlude s'efface et la story se lève.
+        let fadeRange = CMTimeRange(start: storyStart,
+                                    duration: CMTime(seconds: crossfadeDuration, preferredTimescale: 600))
+
         let composition = AVMutableComposition()
-        guard let video = composition.addMutableTrack(withMediaType: .video,
-                                                      preferredTrackID: kCMPersistentTrackID_Invalid),
-              let audio = composition.addMutableTrack(withMediaType: .audio,
-                                                      preferredTrackID: kCMPersistentTrackID_Invalid)
+        guard let introVideo = composition.addMutableTrack(withMediaType: .video, preferredTrackID: kCMPersistentTrackID_Invalid),
+              let storyVideo = composition.addMutableTrack(withMediaType: .video, preferredTrackID: kCMPersistentTrackID_Invalid),
+              let jingleAudio = composition.addMutableTrack(withMediaType: .audio, preferredTrackID: kCMPersistentTrackID_Invalid),
+              let storyAudio = composition.addMutableTrack(withMediaType: .audio, preferredTrackID: kCMPersistentTrackID_Invalid)
         else { throw IntroError.writerRejectedInput }
 
         let introAsset = AVURLAsset(url: introURL)
         let introDuration = try await introAsset.load(.duration)
-        if let introVideo = try await introAsset.loadTracks(withMediaType: .video).first {
-            try video.insertTimeRange(CMTimeRange(start: .zero, duration: introDuration),
-                                      of: introVideo, at: .zero)
+        if let iv = try await introAsset.loadTracks(withMediaType: .video).first {
+            try introVideo.insertTimeRange(CMTimeRange(start: .zero, duration: introDuration), of: iv, at: .zero)
         }
-
-        // Le jingle occupe l'intro et RIEN d'autre : la story garde son propre
-        // son intact derrière.
         let jingleAsset = AVURLAsset(url: jingleURL)
-        if let jingleTrack = try await jingleAsset.loadTracks(withMediaType: .audio).first {
-            let jingleDuration = try await jingleAsset.load(.duration)
-            try audio.insertTimeRange(
-                CMTimeRange(start: .zero, duration: min(jingleDuration, introDuration)),
-                of: jingleTrack, at: .zero)
+        let jingleDuration = try await jingleAsset.load(.duration)
+        if let ja = try await jingleAsset.loadTracks(withMediaType: .audio).first {
+            try jingleAudio.insertTimeRange(CMTimeRange(start: .zero, duration: jingleDuration), of: ja, at: .zero)
         }
 
-        let storyAsset = AVURLAsset(url: storyURL)
-        let storyDuration = try await storyAsset.load(.duration)
         let storyRange = CMTimeRange(start: .zero, duration: storyDuration)
-        if let storyVideo = try await storyAsset.loadTracks(withMediaType: .video).first {
-            try video.insertTimeRange(storyRange, of: storyVideo, at: introDuration)
+        if let sv = try await storyAsset.loadTracks(withMediaType: .video).first {
+            try storyVideo.insertTimeRange(storyRange, of: sv, at: storyStart)
         }
-        if let storyAudio = try await storyAsset.loadTracks(withMediaType: .audio).first {
-            try audio.insertTimeRange(storyRange, of: storyAudio, at: introDuration)
+        if let sa = try await storyAsset.loadTracks(withMediaType: .audio).first {
+            try storyAudio.insertTimeRange(storyRange, of: sa, at: storyStart)
         } else {
             // Story muette : sans ce silence explicite, la piste audio s'arrête
-            // à la fin du jingle et certains lecteurs tronquent la vidéo à cette
-            // durée-là.
-            audio.insertEmptyTimeRange(CMTimeRange(start: introDuration, duration: storyDuration))
+            // avec le jingle et certains lecteurs tronquent la vidéo à cette durée.
+            storyAudio.insertEmptyTimeRange(CMTimeRange(start: storyStart, duration: storyDuration))
         }
+
+        let totalDuration = CMTimeAdd(storyStart, storyDuration)   // holdDuration + storyDuration
+
+        // Vidéo — crossfade symétrique sur `fadeRange` : l'interlude s'efface
+        // tandis que la story se révèle ; la story reste ensuite opaque.
+        let instruction = AVMutableVideoCompositionInstruction()
+        instruction.timeRange = CMTimeRange(start: .zero, duration: totalDuration)
+        let introLayer = AVMutableVideoCompositionLayerInstruction(assetTrack: introVideo)
+        introLayer.setOpacityRamp(fromStartOpacity: 1, toEndOpacity: 0, timeRange: fadeRange)
+        let storyLayer = AVMutableVideoCompositionLayerInstruction(assetTrack: storyVideo)
+        storyLayer.setOpacityRamp(fromStartOpacity: 0, toEndOpacity: 1, timeRange: fadeRange)
+        instruction.layerInstructions = [storyLayer, introLayer]
+
+        let videoComposition = AVMutableVideoComposition()
+        videoComposition.instructions = [instruction]
+        videoComposition.frameDuration = CMTime(value: 1, timescale: 30)
+        videoComposition.renderSize = renderSize
+
+        // Audio — la signature sonore s'estompe sur le fondu (pas de bascule
+        // sonore brutale) ; le son PROPRE de la story démarre plein à `holdDuration`
+        // (jamais atténué — c'est le contenu de l'auteur).
+        let audioMix = AVMutableAudioMix()
+        let jingleParams = AVMutableAudioMixInputParameters(track: jingleAudio)
+        jingleParams.setVolumeRamp(fromStartVolume: 1, toEndVolume: 0, timeRange: fadeRange)
+        audioMix.inputParameters = [jingleParams]
 
         let outputURL = FileManager.default.temporaryDirectory
             .appendingPathComponent("meeshy-story-\(UUID().uuidString).mp4")
@@ -446,6 +486,8 @@ public enum StoryExportIntro {
         else { throw IntroError.writerRejectedInput }
         session.outputURL = outputURL
         session.outputFileType = .mp4
+        session.videoComposition = videoComposition
+        session.audioMix = audioMix
 
         // MÊME appel que `StoryExporter` : `export()` sans argument, qui lit
         // `outputURL`/`outputFileType` posés ci-dessus. Le `export(to:as:)`

@@ -42,10 +42,14 @@ final class StoryExportIntroTests: XCTestCase {
 
     // MARK: - Durée
 
-    /// L'image doit se retirer exactement quand le jingle s'éteint : deux
-    /// constantes séparées dériveraient au premier ajustement.
-    func test_duration_matchesTheBrandJingle() {
-        XCTAssertEqual(StoryExportIntro.duration, MeeshyBrandJingle.duration)
+    /// L'interlude tient 1,2 s à pleine opacité puis se fond vers la story sur
+    /// 500 ms (directive user 2026-07-26 : révéler le contenu vidéo, pas une
+    /// coupure brutale). `duration` — le décalage de départ de la story dans la
+    /// composition — vaut donc la seule tenue, indépendamment du jingle.
+    func test_holdAndCrossfadeDurations() {
+        XCTAssertEqual(StoryExportIntro.holdDuration, 1.2, accuracy: 0.001)
+        XCTAssertEqual(StoryExportIntro.crossfadeDuration, 0.5, accuracy: 0.001)
+        XCTAssertEqual(StoryExportIntro.duration, StoryExportIntro.holdDuration, accuracy: 0.001)
     }
 
     // MARK: - Rendu
@@ -287,5 +291,66 @@ final class StoryExportIntroPrependTests: XCTestCase {
         XCTAssertGreaterThan(CMTimeGetSeconds(range.duration),
                              StoryExportIntro.duration,
                              "la piste doit dépasser l'intro, donc contenir la story")
+    }
+
+    /// La story se RÉVÈLE par fondu, pas par coupure sèche (directive user
+    /// 2026-07-26). Avec une story unie verte : au milieu du fondu le vert doit
+    /// déjà transparaître SANS être plein ; une coupure brutale ferait sauter le
+    /// vert au plein dès `holdDuration`. On échantillonne la couleur MOYENNE de la
+    /// frame (dessin dans un contexte 1×1 = moyenne).
+    func test_prepend_revealsStoryByCrossfade_notAHardCut() async throws {
+        let story = try await makeColouredStoryStub(.green, duration: 3.0)
+        defer { try? FileManager.default.removeItem(at: story) }
+
+        let output = try await StoryExportIntro.prepend(to: story,
+                                                        content: makeContent(),
+                                                        renderSize: size)
+        defer { try? FileManager.default.removeItem(at: output) }
+        let asset = AVURLAsset(url: output)
+
+        let hold = StoryExportIntro.holdDuration
+        let cross = StoryExportIntro.crossfadeDuration
+        let introGreen = try await averageGreen(of: asset, at: hold * 0.5)          // interlude pur
+        let midGreen   = try await averageGreen(of: asset, at: hold + cross * 0.5)  // plein fondu
+        let storyGreen = try await averageGreen(of: asset, at: hold + cross + 0.6)  // story pleine
+
+        XCTAssertGreaterThan(midGreen, introGreen + 20,
+                             "au milieu du fondu la story doit déjà transparaître (intro \(introGreen), mid \(midGreen))")
+        XCTAssertGreaterThan(storyGreen, midGreen + 20,
+                             "coupure brutale détectée : le vert saute au plein sans fondu (mid \(midGreen), story \(storyGreen))")
+    }
+
+    private func makeColouredStoryStub(_ color: UIColor, duration: TimeInterval) async throws -> URL {
+        let image = UIGraphicsImageRenderer(size: size, format: {
+            let f = UIGraphicsImageRendererFormat.default(); f.scale = 1; return f
+        }()).image { ctx in
+            color.setFill()
+            ctx.fill(CGRect(origin: .zero, size: size))
+        }.cgImage!
+        return try await StoryExportIntro.makeClip(image: image, duration: duration, size: size)
+    }
+
+    /// Canal vert MOYEN de la frame à `t` : dessiner l'image entière dans un
+    /// contexte 1×1 la réduit à sa moyenne, plus robuste qu'un pixel isolé.
+    /// Structure calquée sur `averageColour` de `StoryExportBrandedEndToEndTests`
+    /// (paramètre `AVURLAsset`, `UnsafeMutablePointer`) pour rester dans les clous
+    /// de l'isolation Swift 6 — `AVAssetImageGenerator` n'est pas `Sendable`.
+    private func averageGreen(of asset: AVURLAsset, at t: TimeInterval) async throws -> Int {
+        let generator = AVAssetImageGenerator(asset: asset)
+        generator.appliesPreferredTrackTransform = true
+        generator.requestedTimeToleranceBefore = .zero
+        generator.requestedTimeToleranceAfter = CMTime(seconds: 0.05, preferredTimescale: 600)
+        let (image, _) = try await generator.image(at: CMTime(seconds: t, preferredTimescale: 600))
+
+        let buffer = UnsafeMutablePointer<UInt8>.allocate(capacity: 4)
+        buffer.initialize(repeating: 0, count: 4)
+        defer { buffer.deallocate() }
+        let context = try XCTUnwrap(CGContext(data: buffer, width: 1, height: 1,
+                                              bitsPerComponent: 8, bytesPerRow: 4,
+                                              space: CGColorSpaceCreateDeviceRGB(),
+                                              bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue))
+        context.interpolationQuality = .medium
+        context.draw(image, in: CGRect(x: 0, y: 0, width: 1, height: 1))
+        return Int(buffer[1])
     }
 }
