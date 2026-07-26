@@ -1,5 +1,47 @@
 # Progress — state & what to do next
 
+> On 2026-07-26 the **conversation-list user-category grouping** landed (slice
+> `conversation-category-sections`, feature-parity §B Conversations — advances the "Sectioned list with
+> collapsible user categories" box past the pinned-only split shipped in `conversations-section-model`).
+> The `:feature:conversations` `ConversationSections.of` SSOT now takes a second `categories:
+> List<CategoryOption>` argument and emits **Pinned → each user category (catalogue order) → Autres**, a
+> faithful port of iOS `ConversationListViewModel.groupConversations`
+> (`apps/ios/Meeshy/Features/Main/ViewModels/ConversationListViewModel.swift`). **Bucketing:** a pinned row
+> *without* a category floats to `PINNED` (iOS `isPinned && sectionId == nil`); a row whose
+> `resolvedPreferences.categoryId` names a catalogue category lands in that category's section **even when
+> pinned** (iOS keeps a pinned-with-category row inside its category, not floated); everything else —
+> uncategorized rows and rows whose category is orphaned (absent from the catalogue) — falls into the `ALL`
+> catch-all ("Mes conversations", iOS `.other`). Empty sections omitted; incoming (`DraftAwareOrdering`)
+> order preserved per section. **SOTA over iOS:** no second per-section sort (Android orders once upstream,
+> sections stay stable); the orphaned-category rows fold cleanly into `ALL` via one bucketing pass instead
+> of iOS's two-part concat. **Backward compatible:** the default empty `categories` reduces to exactly the
+> prior pinned/all split (no `categoryId` matches an empty catalogue), so all 8 pre-existing tests pass
+> unchanged. **Wiring:** `ConversationSection` gains `categoryId` + `title` for `CATEGORY` sections;
+> `ConversationListScreen` renders them via the existing `CollapsibleSection` (folder glyph, per-category
+> `section-cat-<id>` key, category-name header via `section.title ?: stringResource(kind.titleRes())`); the
+> catalogue reaches the screen through a new `ConversationListUiState.categories` (iOS `userCategories`) —
+> the seam the tracked corpus-hydration slice fills next (cache-first + revalidate). **+9 behavioural tests**
+> (`ConversationSectionsTest`, now 17 total): categories-in-catalogue-order / section-order
+> Pinned→category→All / pinned-with-category-stays-in-category / pinned-without-category-still-floats /
+> orphaned-category→All / empty-category-omitted / empty-catalogue-orphans-all / category-preserves-incoming
+> -order. **Mutation (RED proof):** dropping the `&& categoryId == null` guard from the pinned bucket rule
+> (so a pinned-with-category row floats to Pinned) fails **exactly** `a pinned conversation with a category
+> stays inside its category section` (17 run, 1 failed, no collateral; `BUILD FAILED in 55s`), restored
+> after. **Gate:** `./apps/android/meeshy.sh check` (= `assembleDebug testDebugUnitTest`) —
+> `ConversationSectionsTest` 17/17 green (`BUILD SUCCESSFUL in 5m 36s`, full assemble + all-module JVM unit
+> tests). Reviewer **PASS** (diff `apps/android` only — 1 evolved core + 1 test + screen/UiState render
+> wiring + tracking docs; SDK purity — the grouping is a `:feature:conversations` pure SSOT, not the SDK,
+> since it composes app-side `ApiConversation`; SSOT — one section splitter, re-implements nothing; UDF —
+> immutable `UiState`, pure derivation; the `CATEGORY` render path is Compose glue, coverage-exempt; no
+> tautological tests — expectations are literals and the mutation proof is real).
+> **Next slice:** the **category-catalogue hydration** (a cache-first + revalidate load of the user's
+> `CategoryOption` corpus into `ConversationListUiState.categories`, so the category sections actually
+> render — needs a small category read seam mirroring iOS `PreferenceService.loadCachedCategories` /
+> `revalidateCategories`, `GET /me/preferences/categories`), OR the app-side **`CategoryPickerField` /
+> `TagInputField` composables** driving the shipped `ConversationCategoryPicker` / `ConversationTagAutocomplete`
+> cores, OR **drag-to-category** reassignment, OR the paged **`OnboardingFlowView` Compose scaffold** (Auth),
+> OR the tracked **Kover 90% coverage-gate infra**.
+
 > On 2026-07-26 the **conversation category-picker decision core** landed (slice
 > `conversation-category-picker`, feature-parity §B Conversations — the sibling of the tag-autocomplete
 > core, this time for the single-select *category* field, moving the "category create + expand/collapse"
