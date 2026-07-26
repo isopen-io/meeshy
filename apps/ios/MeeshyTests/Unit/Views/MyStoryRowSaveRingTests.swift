@@ -51,25 +51,35 @@ final class MyStoryRowSaveRingTests: XCTestCase {
 
 // MARK: - MyStoryRowCancelActionPresenceGuardTests
 //
-// Revue Task 3, finding « Important » : `.accessibilityAction` (annulation)
-// ne doit être ATTACHÉ à la ligne que lorsqu'un job est réellement en vol —
-// pas seulement son EFFET gardé par un `guard` interne à la closure. Sinon
-// un utilisateur VoiceOver tourne le rotor « Actions » sur N'IMPORTE QUELLE
-// ligne « Mes stories », sans aucune sauvegarde en cours, y voit « Annuler
-// l'enregistrement », l'active — et rien ne se passe (action fantôme).
+// Revue Task 3, finding « Important » (round 1) : l'action d'annulation ne
+// doit être PROPOSÉE au rotor VoiceOver que lorsqu'un job est réellement en
+// vol — pas seulement son EFFET gardé par un `guard` interne à une closure
+// toujours attachée. Sinon le rotor « Actions » propose « Annuler
+// l'enregistrement » sur N'IMPORTE QUELLE ligne « Mes stories », sans aucune
+// sauvegarde en cours, sans rien y activer (action fantôme).
+//
+// Round 1 avait résolu ce point avec un `if/else` posé AUTOUR de toute la
+// ligne dans `body` — mais les deux branches produisent des types de vue
+// concrets différents (`ModifiedContent<…, AccessibilityActionModifier>`
+// contre le type nu de la ligne) : SwiftUI démonte et remonte TOUTE la ligne
+// (vignette, bouton d'ouverture, élément d'accessibilité) à chaque
+// démarrage/fin de sauvegarde, avec un risque de perte de focus VoiceOver.
+// Round 2 (ce fichier) : la ligne garde une identité de vue stable —
+// `.accessibilityActions { … }` (le conteneur `@ViewBuilder`, pas la
+// convenience `.accessibilityAction(named:)` à un seul cas) reste TOUJOURS
+// attaché ; seule sa CONTENU varie selon `saveService.progress(for:) != nil`,
+// exactement comme un `Menu { if … { Button(...) } }` ne matérialise
+// l'entrée que si la condition est vraie, sans jamais changer le type de
+// `Menu` lui-même.
 //
 // Pas de ViewInspector ni de target UI-testing dans ce bundle (`MeeshyTests`
 // est hébergé dans `Meeshy.app` sans XCUIApplication — cf. commentaire
 // `project.yml` sur `BubbleExpandableTextUITests.swift`) : impossible
 // d'observer à l'exécution la présence réelle d'un accessibilityCustomAction
-// sur l'arbre d'accessibilité depuis un test XCTest unitaire ici. Cette garde
-// vérifie donc la STRUCTURE SOURCE — que `.accessibilityAction` n'existe que
-// dans la branche `if` (job en vol) de `body`, jamais dans `rowContent`
-// (partagée, sans condition, par les deux branches) — même patron que
-// `MyStoriesBulkDeleteGuardTests.test_myStoryRow_selection_conveyedViaRowTrait_notGlyphLabel`,
-// ancré sur des marqueurs de structure réels plutôt qu'une fenêtre de
-// caractères arbitraire (cf. piège documenté : une fenêtre à décompte fixe
-// peut sortir de la déclaration visée dès qu'un commentaire bouge).
+// sur l'arbre d'accessibilité, ou l'identité de vue réellement matérialisée,
+// depuis un test XCTest unitaire ici. Cette garde vérifie donc la STRUCTURE
+// SOURCE, ancrée sur des marqueurs de déclaration réels — même patron que
+// `MyStoriesBulkDeleteGuardTests.test_myStoryRow_selection_conveyedViaRowTrait_notGlyphLabel`.
 @MainActor
 final class MyStoryRowCancelActionPresenceGuardTests: XCTestCase {
 
@@ -83,8 +93,44 @@ final class MyStoryRowCancelActionPresenceGuardTests: XCTestCase {
         return try String(contentsOf: url, encoding: .utf8)
     }
 
-    func test_cancelAccessibilityAction_attachedOnlyInJobInFlightBranch_neverInSharedRowContent() throws {
-        let viewSource = try source()
+    /// Copié verbatim depuis `RightToLeftLayoutGuardTests.strippingComments`
+    /// (même target `MeeshyTests`) : cette méthode y est `private`, donc
+    /// inaccessible depuis ce fichier — Swift n'offre pas de portée
+    /// intermédiaire entre `private` et `internal` ici. Dupliquer le MÊME
+    /// algorithme éprouvé plutôt que d'en écrire un différent qui pourrait
+    /// diverger silencieusement. Revue Task 3, round 2, point Minor : sans
+    /// ce filtrage, une assertion négative sur le texte brut du modifier
+    /// (`.accessibilityAction(named:` par ex.) se déclenche par chance de
+    /// formulation, pas par construction — un futur commentaire citant ce
+    /// texte la ferait échouer à tort.
+    private func strippingComments(_ source: String) -> String {
+        var out = ""
+        var inBlock = false
+        for rawLine in source.split(separator: "\n", omittingEmptySubsequences: false) {
+            var line = String(rawLine)
+            if inBlock {
+                guard let end = line.range(of: "*/") else { continue }
+                line = String(line[end.upperBound...])
+                inBlock = false
+            }
+            while let start = line.range(of: "/*") {
+                if let end = line.range(of: "*/", range: start.upperBound..<line.endIndex) {
+                    line = String(line[..<start.lowerBound]) + String(line[end.upperBound...])
+                } else {
+                    line = String(line[..<start.lowerBound])
+                    inBlock = true
+                }
+            }
+            if let slashes = line.range(of: "//") {
+                line = String(line[..<slashes.lowerBound])
+            }
+            out += line + "\n"
+        }
+        return out
+    }
+
+    func test_body_neverForksViewIdentity_cancelActionLivesInsideUnconditionalAccessibilityActionsBuilder() throws {
+        let viewSource = strippingComments(try source())
 
         // Ancré à l'intérieur de `MyStoryRow` : `MyStoriesView` (le parent)
         // déclare AUSSI un `var body: some View {` — une recherche non
@@ -96,50 +142,73 @@ final class MyStoryRowCancelActionPresenceGuardTests: XCTestCase {
             return
         }
         guard let bodyStart = viewSource.range(
-                of: "var body: some View {",
-                range: rowStructStart.upperBound..<viewSource.endIndex
-              ),
-              let rowContentStart = viewSource.range(
-                of: "private var rowContent: some View {",
-                range: bodyStart.upperBound..<viewSource.endIndex
-              ) else {
-            XCTFail("MyStoryRow doit définir body puis rowContent, dans cet ordre")
+            of: "var body: some View {",
+            range: rowStructStart.upperBound..<viewSource.endIndex
+        ) else {
+            XCTFail("MyStoryRow doit définir body")
             return
         }
-        let bodyBlock = String(viewSource[bodyStart.lowerBound..<rowContentStart.lowerBound])
 
-        guard let presenceCheckRange = bodyBlock.range(of: "if saveService.progress(for: story.id) != nil"),
-              let actionRange = bodyBlock.range(of: ".accessibilityAction(named:"),
-              let elseRange = bodyBlock.range(of: "} else {") else {
+        // (1) body ne doit JAMAIS forker en deux branches de type concret
+        // différent selon l'état du job — c'était le bug round 1. Preuve
+        // structurelle : le tout premier contenu de body doit être le
+        // HStack lui-même, pas un `if`/`else` qui l'engloberait.
+        let afterBody = viewSource[bodyStart.upperBound...].drop { $0 == "\n" || $0 == " " || $0 == "\t" }
+        XCTAssertTrue(
+            afterBody.hasPrefix("HStack(spacing: 12) {"),
+            """
+            body doit démarrer directement par le HStack de la ligne, sans if/else qui \
+            forkerait son type concret (régression d'identité de vue, round 2). Début lu: \
+            \(afterBody.prefix(160))
+            """
+        )
+
+        guard let bodyEnd = viewSource.range(
+            of: "private var rowAccessibilityLabel: String {",
+            range: bodyStart.upperBound..<viewSource.endIndex
+        ) else {
+            XCTFail("body doit être suivi de rowAccessibilityLabel")
+            return
+        }
+        let bodyBlock = String(viewSource[bodyStart.lowerBound..<bodyEnd.lowerBound])
+
+        // (2) L'action d'annulation passe par .accessibilityActions (le
+        // conteneur ViewBuilder, toujours attaché), jamais par la
+        // convenience .accessibilityAction(named:) à un seul cas — cette
+        // dernière forme est ce qui avait motivé le if/else de body en
+        // round 1.
+        XCTAssertFalse(
+            bodyBlock.contains(".accessibilityAction(named:"),
+            """
+            L'action d'annulation doit passer par .accessibilityActions { … }, pas par \
+            .accessibilityAction(named:) — cette forme a motivé le if/else de body en round 1 \
+            (régression d'identité de vue). Bloc lu: \(bodyBlock)
+            """
+        )
+
+        guard let actionsRange = bodyBlock.range(of: ".accessibilityActions {") else {
+            XCTFail(".accessibilityActions introuvable dans body. Bloc lu: \(bodyBlock)")
+            return
+        }
+        let actionsBlock = String(bodyBlock[actionsRange.lowerBound...])
+
+        // (3) Dans .accessibilityActions, le Button d'annulation doit rester
+        // conditionné à un job en vol — sinon il redevient permanent
+        // (régression du bug d'origine, cette fois à l'intérieur du nouveau
+        // conteneur).
+        guard let presenceCheckRange = actionsBlock.range(of: "if saveService.progress(for: story.id) != nil"),
+              let buttonRange = actionsBlock.range(of: "Button(") else {
             XCTFail("""
-                body doit conditionner .accessibilityAction par \
-                `if saveService.progress(for: story.id) != nil { … } else { … }`. Bloc lu: \(bodyBlock)
+                .accessibilityActions doit conditionner son Button par \
+                `if saveService.progress(for: story.id) != nil`. Bloc lu: \(actionsBlock)
                 """)
             return
         }
         XCTAssertTrue(
-            presenceCheckRange.lowerBound < actionRange.lowerBound,
-            ".accessibilityAction doit apparaître APRÈS le if de présence du job, pas avant. Bloc lu: \(bodyBlock)"
-        )
-        XCTAssertTrue(
-            actionRange.lowerBound < elseRange.lowerBound,
-            ".accessibilityAction doit être dans la branche `if` (job en vol), avant le `else`. Bloc lu: \(bodyBlock)"
-        )
-
-        guard let rowContentEnd = viewSource.range(
-            of: "/// Libellé VoiceOver composé",
-            range: rowContentStart.upperBound..<viewSource.endIndex
-        ) else {
-            XCTFail("rowContent doit être suivi de la doc de rowAccessibilityLabel")
-            return
-        }
-        let rowContentBlock = String(viewSource[rowContentStart.lowerBound..<rowContentEnd.lowerBound])
-        XCTAssertFalse(
-            rowContentBlock.contains(".accessibilityAction(named:"),
+            presenceCheckRange.lowerBound < buttonRange.lowerBound,
             """
-            rowContent est partagé SANS CONDITION par les deux branches de body : s'il porte \
-            .accessibilityAction, l'action redevient permanente indépendamment du if/else vérifié \
-            ci-dessus. Bloc lu: \(rowContentBlock)
+            Le Button d'annulation doit être À L'INTÉRIEUR du if de présence du job — sinon il \
+            resterait proposé en permanence (bug d'origine). Bloc lu: \(actionsBlock)
             """
         )
     }

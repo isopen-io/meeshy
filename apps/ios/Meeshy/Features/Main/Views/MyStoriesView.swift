@@ -466,28 +466,6 @@ private struct MyStoryRow<MenuContent: View>: View {
     }
 
     var body: some View {
-        // La présence même du modifier `.accessibilityAction` (pas seulement
-        // son effet) est conditionnée à un job en vol : un `guard` DANS la
-        // closure la laisserait attachée en permanence — le rotor VoiceOver
-        // proposerait alors « Annuler l'enregistrement » sur CHAQUE ligne,
-        // même sans aucune sauvegarde en cours, sans rien y activer (action
-        // fantôme). Finding revue Task 3.
-        if saveService.progress(for: story.id) != nil {
-            rowContent
-                .accessibilityAction(named: Text(String(
-                    localized: "story.mine.save.cancel.a11y",
-                    defaultValue: "Annuler l'enregistrement"
-                ))) {
-                    saveService.cancel(storyId: story.id)
-                }
-        } else {
-            rowContent
-        }
-    }
-
-    /// Contenu et modifiers partagés par les deux branches de `body` — tout
-    /// ce qui NE dépend PAS de la présence d'une sauvegarde en vol.
-    private var rowContent: some View {
         HStack(spacing: 12) {
             // Zone principale = Button « ouvrir » (ou toggle en sélection).
             // Un `.onTapGesture` posé sur toute la ligne interceptait AUSSI le
@@ -548,6 +526,26 @@ private struct MyStoryRow<MenuContent: View>: View {
         .accessibilityLabel(rowAccessibilityLabel)
         .accessibilityAddTraits(.isButton)
         .accessibilityAddTraits(isSelected ? .isSelected : [])
+        // `.accessibilityActions` est TOUJOURS attaché (jamais posé derrière
+        // un `if/else` au niveau de la vue) : SwiftUI ne démonte donc jamais
+        // la ligne entière (vignette, bouton d'ouverture, élément
+        // d'accessibilité) quand un job démarre ou se termine — seul le
+        // contenu du ViewBuilder varie, exactement comme un `Menu { if … }`
+        // qui n'ajoute pas d'entrée quand sa condition est fausse. Round 1
+        // conditionnait `body` lui-même (if/else autour de toute la ligne) :
+        // deux types de vue concrets différents selon la branche, donc
+        // démontage/remontage complet à chaque bascule — régression
+        // d'identité de vue relevée en revue. Finding Task 3, round 2.
+        .accessibilityActions {
+            if saveService.progress(for: story.id) != nil {
+                Button(String(
+                    localized: "story.mine.save.cancel.a11y",
+                    defaultValue: "Annuler l'enregistrement"
+                )) {
+                    saveService.cancel(storyId: story.id)
+                }
+            }
+        }
     }
 
     /// Libellé VoiceOver composé : tampon temporel + les trois compteurs
