@@ -2,6 +2,21 @@
 
 Append-only log of gotchas and decisions that save time next run.
 
+## Lesson (2026-07-26, `conversation-category-picker`) — model a select-or-create outcome as a sealed type, not a closure
+- iOS UI fields (`CategoryPickerField`, `TagInputField`) express "commit the field" as a `submit()` method
+  that **mutates view state in place** (`selectedId = …; editing = ""; focused = false` or fires an async
+  `create()`). Porting that to Android, don't reproduce the side effects in the core — return a **semantic
+  sealed result** (`CategorySubmit.Select(id)` / `Create(name)` / `None`) that the composable/VM interprets.
+  The decision stays a pure `:core:model` function (every arm JVM-covered) and the "what to actually do"
+  orchestration lives app-side. Same doctrine as the `RegistrationNav` chrome enums.
+- **`sortedBy { it.order ?: 0 }` is stable in Kotlin** (equal keys keep input order) — Swift's `sorted(by:)`
+  is *not* guaranteed stable, so when porting an iOS `sorted { $0.order ?? 0 < … }` the Android result is a
+  faithful superset with a defined tie-break. Assert the tie order explicitly in a test and document it.
+- **Fast per-slice loop:** `./gradlew :core:model:testDebugUnitTest --tests "…Test" --rerun-tasks` reruns a
+  single suite in ~30 s once the daemon is warm — ideal for the mutation-proof RED check before the full
+  `assembleDebug testDebugUnitTest` gate (~3–5 min). Prefix every invocation with `LANG=C.utf8 LC_ALL=C.utf8`
+  (non-ASCII backtick test names crash `:sdk-core` compile under the container's default ASCII locale).
+
 ## Lesson (2026-07-26, `registration-nav-chrome`) — first Gradle run: empty stdout ≠ stalled; read the XMLs
 - On a **fresh container** the first `./gradlew` invocation streams **nothing** to its captured stdout for
   ~4–5 min while it downloads the dependency graph + warms the daemon — the redirected output file stays
