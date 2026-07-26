@@ -536,6 +536,7 @@ struct GlowingButton: View {
         }
         .buttonStyle(PlainButtonStyle())
         .disabled(!isEnabled || isLoading)
+        .inFlightActionAccessibility(title, isInFlight: isLoading)
         .simultaneousGesture(
             DragGesture(minimumDistance: 0)
                 .onChanged { _ in isPressed = true }

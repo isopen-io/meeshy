@@ -201,6 +201,12 @@ struct ConversationEncryptionDetailSheet: View {
             .listRowBackground(Color(hex: accentColor))
             .foregroundColor(.white)
             .disabled(isEnabling)
+            .inFlightActionAccessibility(
+                String(localized: "conversation.encryption.detail.activate",
+                       defaultValue: "Enable encryption",
+                       bundle: .main),
+                isInFlight: isEnabling
+            )
         }
     }
 

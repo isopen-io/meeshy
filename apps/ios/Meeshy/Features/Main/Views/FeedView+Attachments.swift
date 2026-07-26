@@ -646,6 +646,10 @@ struct FeedComposerSheet: View {
                         }
                     }
                     .disabled(!hasContent || isUploading)
+                    .inFlightActionAccessibility(
+                        String(localized: "feed.post.composer.publish", defaultValue: "Publier", bundle: .main),
+                        isInFlight: isUploading
+                    )
                 }
                 .padding(16)
                 .background(theme.backgroundSecondary)

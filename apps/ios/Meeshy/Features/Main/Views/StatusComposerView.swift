@@ -245,20 +245,20 @@ struct StatusComposerView: View {
         }
         .disabled(selectedEmoji == nil || isPublishing)
         // The label swaps to a bare ProgressView while publishing, so the accessible
-        // name has to be pinned to the visible wording — it is the key of the Text
-        // above, so the name contains the displayed label (WCAG 2.5.3) and survives
-        // the swap. The transient states ride on the value: "en cours" while in
-        // flight, and the reason for unavailability otherwise, which is signalled
-        // visually by colour alone (brandGradient → textMuted, WCAG 1.4.1).
-        .accessibilityLabel(String(localized: "status.composer.publish", defaultValue: "Publier", bundle: .main))
-        .accessibilityHint(String(localized: "status.composer.a11y.publish.hint", defaultValue: "Publie votre humeur", bundle: .main))
-        .accessibilityValue(
-            isPublishing
-                ? String(localized: "status.composer.a11y.publish.publishing", defaultValue: "Publication en cours", bundle: .main)
-                : (selectedEmoji == nil
-                    ? String(localized: "status.composer.a11y.publish.disabled", defaultValue: "Indisponible, choisissez une humeur", bundle: .main)
-                    : "")
+        // name is pinned to the visible wording — it is the key of the Text above, so
+        // the name contains the displayed label (WCAG 2.5.3) and survives the swap.
+        // This surface has better words than the shared default for both transient
+        // states, so it passes its own; unavailability is otherwise signalled by
+        // colour alone (brandGradient → textMuted, WCAG 1.4.1).
+        .inFlightActionAccessibility(
+            String(localized: "status.composer.publish", defaultValue: "Publier", bundle: .main),
+            isInFlight: isPublishing,
+            inFlightValue: String(localized: "status.composer.a11y.publish.publishing", defaultValue: "Publication en cours", bundle: .main),
+            unavailableReason: selectedEmoji == nil
+                ? String(localized: "status.composer.a11y.publish.disabled", defaultValue: "Indisponible, choisissez une humeur", bundle: .main)
+                : nil
         )
+        .accessibilityHint(String(localized: "status.composer.a11y.publish.hint", defaultValue: "Publie votre humeur", bundle: .main))
     }
 
     // MARK: - Visibility Picker

@@ -171,6 +171,10 @@ struct EditPostSheet: View {
                         }
                     }
                     .disabled(!isValid || !hasChanges || isSaving)
+                    .inFlightActionAccessibility(
+                        String(localized: "feed.post.edit.publish", defaultValue: "Publier", bundle: .main),
+                        isInFlight: isSaving
+                    )
                 }
             }
             .sheet(isPresented: $showLanguagePicker) {

@@ -76,6 +76,10 @@ struct MessageReportDetailView: View {
                         .fill(MeeshyColors.error)
                 )
                 .disabled(isSubmittingReport)
+                .inFlightActionAccessibility(
+                    String(localized: "message-detail.report.send", defaultValue: "Envoyer le signalement", bundle: .main),
+                    isInFlight: isSubmittingReport
+                )
                 .transition(.opacity.combined(with: .move(edge: .bottom)))
             }
         }

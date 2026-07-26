@@ -150,6 +150,10 @@ struct NewConversationView: View {
                     }
                 }
                 .disabled(viewModel.isCreating || (isGroupMode && groupTitle.trimmingCharacters(in: .whitespaces).isEmpty))
+                .inFlightActionAccessibility(
+                    String(localized: "Creer", defaultValue: "Cr\u{00E9}er"),
+                    isInFlight: viewModel.isCreating
+                )
             } else {
                 Color.clear.frame(width: 40, height: 24)
             }

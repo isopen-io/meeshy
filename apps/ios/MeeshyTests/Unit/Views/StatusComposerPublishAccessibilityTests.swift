@@ -72,13 +72,14 @@ final class StatusComposerPublishAccessibilityTests: XCTestCase {
         let slice = try publishButtonSlice()
 
         XCTAssertTrue(
-            slice.contains(".accessibilityLabel("),
-            "The publish button must carry an explicit accessibility label: while isPublishing its " +
-            "own label is a bare ProgressView, so without one the only primary action of the screen " +
-            "has no accessible name."
+            slice.contains(".inFlightActionAccessibility("),
+            "The publish button must carry an explicit accessible name: while isPublishing its own " +
+            "label is a bare ProgressView, so without one the only primary action of the screen has " +
+            "no accessible name. 221i moved the rule into a shared modifier — this surface must go " +
+            "through it rather than re-stating it inline."
         )
         XCTAssertTrue(
-            slice.contains(#".accessibilityLabel(String(localized: "status.composer.publish""#),
+            slice.contains(#"String(localized: "status.composer.publish""#),
             "The accessible name must reuse the key of the visible text (status.composer.publish) so " +
             "it contains the displayed label — WCAG 2.5.3 Label in Name — instead of introducing a " +
             "second wording VoiceOver would speak but the screen never shows."
@@ -89,7 +90,7 @@ final class StatusComposerPublishAccessibilityTests: XCTestCase {
         let slice = try publishButtonSlice()
 
         XCTAssertTrue(
-            slice.contains(".accessibilityValue("),
+            slice.contains("isInFlight:"),
             "The publish button must expose a value: the label stays constant, so the transient " +
             "states have to be carried by the value (mirrors FeedView's publish button)."
         )

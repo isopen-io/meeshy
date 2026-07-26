@@ -175,6 +175,10 @@ struct MagicLinkView: View {
             }
             .disabled(isLoading || !isValidEmail)
             .opacity(!isValidEmail ? 0.6 : 1)
+            .inFlightActionAccessibility(
+                String(localized: "auth.magiclink.send", defaultValue: "Envoyer le lien magique", bundle: .main),
+                isInFlight: isLoading
+            )
 
             Spacer()
             Spacer()

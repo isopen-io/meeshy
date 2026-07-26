@@ -74,6 +74,10 @@ struct ReportMessageSheet: View {
                         }
                     }
                     .disabled(selectedType == nil || isSubmitting)
+                    .inFlightActionAccessibility(
+                        String(localized: "report.message.send", defaultValue: "Send", bundle: .main),
+                        isInFlight: isSubmitting
+                    )
                 }
             }
             .animation(.spring(response: 0.3, dampingFraction: 0.8), value: selectedType)
