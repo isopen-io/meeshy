@@ -34,45 +34,58 @@ struct StatusComposerView: View {
     private let columns = Array(repeating: GridItem(.flexible(), spacing: 16), count: 5)
 
     var body: some View {
-        NavigationView {
+        NavigationStack {
             ZStack {
                 theme.backgroundGradient.ignoresSafeArea()
 
-                VStack(spacing: MeeshySpacing.xxl) {
-                    // Republication header
-                    if let via = viaUsername {
-                        HStack(spacing: MeeshySpacing.xs) {
-                            Image(systemName: "arrow.2.squarepath")
-                                .font(MeeshyFont.relative(12))
-                                .foregroundColor(MeeshyColors.indigo400)
-                                // Decorative repost glyph — the adjacent "Status de @…"
-                                // text already conveys the repost, so hide the symbol
-                                // from VoiceOver instead of reading its SF Symbol name.
-                                .accessibilityHidden(true)
-                            Text(String(localized: "status.composer.repost.via", defaultValue: "Status de @\(via)", bundle: .main))
-                                .font(MeeshyFont.relative(13, weight: .medium))
-                                .foregroundColor(theme.textSecondary)
+                // Scrollable: the sheet opens at the `.medium` detent, and the
+                // emoji grid uses fixed 56pt cells while every label around it
+                // scales with Dynamic Type. Past the largest accessibility sizes
+                // the stack outgrows that detent — without a scroll container the
+                // text field and the mood question are simply clipped away, with
+                // no gesture left to reach them. Scrolling also lets the sheet
+                // grow to `.large` on a downward drag, which is the native
+                // behaviour users expect from a detented sheet.
+                ScrollView {
+                    VStack(spacing: MeeshySpacing.xxl) {
+                        // Republication header
+                        if let via = viaUsername {
+                            HStack(spacing: MeeshySpacing.xs) {
+                                Image(systemName: "arrow.2.squarepath")
+                                    .font(MeeshyFont.relative(12))
+                                    .foregroundColor(MeeshyColors.indigo400)
+                                    // Decorative repost glyph — the adjacent "Status de @…"
+                                    // text already conveys the repost, so hide the symbol
+                                    // from VoiceOver instead of reading its SF Symbol name.
+                                    .accessibilityHidden(true)
+                                Text(String(localized: "status.composer.repost.via", defaultValue: "Status de @\(via)", bundle: .main))
+                                    .font(MeeshyFont.relative(13, weight: .medium))
+                                    .foregroundColor(theme.textSecondary)
+                            }
+                            .padding(.horizontal, MeeshySpacing.md)
+                            .padding(.vertical, MeeshySpacing.sm)
+                            .background(
+                                Capsule()
+                                    .fill(MeeshyColors.indigo500.opacity(0.1))
+                            )
                         }
-                        .padding(.horizontal, MeeshySpacing.md)
-                        .padding(.vertical, MeeshySpacing.sm)
-                        .background(
-                            Capsule()
-                                .fill(MeeshyColors.indigo500.opacity(0.1))
-                        )
+
+                        // Emoji Grid
+                        emojiGrid
+
+                        // Visibility picker
+                        visibilityPicker
+
+                        // Text Field
+                        textInput
                     }
-
-                    // Emoji Grid
-                    emojiGrid
-
-                    // Visibility picker
-                    visibilityPicker
-
-                    // Text Field
-                    textInput
-
-                    Spacer()
+                    // The stack no longer ends on a `Spacer()`: inside a scroll
+                    // container it resolves to zero height, and a vertical scroll
+                    // view already top-aligns content shorter than the sheet — so
+                    // the layout is unchanged at default Dynamic Type sizes.
+                    .padding(MeeshySpacing.xl)
                 }
-                .padding(MeeshySpacing.xl)
+                .scrollDismissesKeyboard(.interactively)
             }
             .navigationTitle(viaUsername != nil ? String(localized: "status.composer.title.repost", defaultValue: "Republier un status", bundle: .main) : String(localized: "status.composer.title", defaultValue: "Status", bundle: .main))
             .navigationBarTitleDisplayMode(.inline)
