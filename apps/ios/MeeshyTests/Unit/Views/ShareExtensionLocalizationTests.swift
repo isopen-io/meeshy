@@ -125,19 +125,39 @@ final class ShareExtensionLocalizationTests: XCTestCase {
     // MARK: - Contact rows are reachable by VoiceOver
 
     func test_contactRow_exposesButtonAndSelectionTraits() throws {
-        // The row is picked with an .onTapGesture, so without an explicit element it
-        // reaches VoiceOver as loose text with no way to activate it, and its selected
-        // state is carried by a checkmark glyph and a tint alone.
+        // Sans élément explicite, la rangée atteint VoiceOver comme du texte
+        // épars, et son état sélectionné ne tient qu'à une coche et une teinte.
         let source = try extensionSource()
         XCTAssertTrue(
             source.contains(".accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : [.isButton])"),
             "The contact row must expose both the button trait (it is tappable) and the selected " +
             "trait (its state must not be conveyed by colour alone)."
         )
+        // Deux mécanismes SwiftUI replient la rangée en un seul élément, et la
+        // garde doit accepter les deux — sinon elle fige une implémentation au
+        // lieu de protéger un comportement.
+        //
+        // `.combine` concatène automatiquement les fragments enfants : nom,
+        // statut ET coche décorative partent dans une seule chaîne.
+        // `.ignore` + `.accessibilityLabel`/`.accessibilityValue` explicites
+        // donnent un couple nom/valeur propre — VoiceOver annonce « Alice »
+        // puis « en ligne » au lieu d'une bouillie. C'est la forme retenue par
+        // 214i+215i, strictement supérieure.
+        //
+        // Cette garde exigeait `.combine` seul et son commentaire décrivait une
+        // sélection par `.onTapGesture` — révolue depuis que la rangée est un
+        // vrai Button. Elle contredisait frontalement
+        // `ShareExtensionAccessibilityTests`, qui exige `.ignore` : les deux
+        // itérations ont atterri sur `main` et se sont mutuellement bloquées.
+        let collapsesIntoOneElement =
+            source.contains(".accessibilityElement(children: .combine)")
+            || (source.contains(".accessibilityElement(children: .ignore)")
+                && source.contains(".accessibilityLabel(contact.name)"))
         XCTAssertTrue(
-            source.contains(".accessibilityElement(children: .combine)"),
+            collapsesIntoOneElement,
             "The contact row must be a single accessibility element so its name, status and state " +
-            "are announced together rather than as separate stops."
+            "are announced together rather than as separate stops — either via .combine, or via " +
+            ".ignore paired with an explicit .accessibilityLabel(contact.name)."
         )
     }
 }
