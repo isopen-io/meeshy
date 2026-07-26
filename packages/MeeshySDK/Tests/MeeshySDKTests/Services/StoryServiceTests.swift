@@ -22,7 +22,7 @@ final class StoryServiceTests: XCTestCase {
 
     private func makePost(id: String = "story123") -> APIPost {
         APIPost(
-            id: id, type: "STORY", visibility: "PUBLIC", content: "My story",
+            id: id, type: "STORY", visibility: "PUBLIC", visibilityUserIds: nil, content: "My story",
             originalLanguage: "en", createdAt: Date(), updatedAt: nil, expiresAt: nil,
             author: APIAuthor(id: "author1", username: "bob", displayName: "Bob", avatar: nil),
             likeCount: 5, commentCount: 0, repostCount: 0, viewCount: 10, postOpenCount: nil, qualifiedViewCount: nil, playCount: nil,

@@ -458,7 +458,7 @@ final class StoryModelsTests: XCTestCase {
             )
         }
         return APIPost(
-            id: id, type: type, visibility: visibility, content: "Hello",
+            id: id, type: type, visibility: visibility, visibilityUserIds: nil, content: "Hello",
             originalLanguage: "en", createdAt: Date(), updatedAt: nil, expiresAt: nil,
             author: author, likeCount: 0, commentCount: 0, repostCount: 0,
             viewCount: 0, postOpenCount: nil, qualifiedViewCount: nil, playCount: nil, bookmarkCount: 0, shareCount: 0, reactionSummary: nil,

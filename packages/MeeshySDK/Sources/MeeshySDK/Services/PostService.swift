@@ -30,7 +30,7 @@ public protocol PostServiceProviding: Sendable {
     /// `isBookmarkedByMe` (cf. `enrichReelsForViewer`).
     func getReels(seedReelId: String?, cursor: String?, limit: Int) async throws -> PaginatedAPIResponse<[APIPost]>
     func create(content: String?, type: String, visibility: String, moodEmoji: String?, mediaIds: [String]?, audioUrl: String?, audioDuration: Int?, originalLanguage: String?, mobileTranscription: MobileTranscriptionPayload?, repostOfId: String?) async throws -> APIPost
-    func update(postId: String, content: String?, visibility: String?, moodEmoji: String?, originalLanguage: String?, type: String?, removeMediaIds: [String]?) async throws -> APIPost
+    func update(postId: String, content: String?, visibility: String?, visibilityUserIds: [String]?, moodEmoji: String?, originalLanguage: String?, type: String?, removeMediaIds: [String]?) async throws -> APIPost
     func delete(postId: String) async throws
     func like(postId: String) async throws
     func unlike(postId: String) async throws
@@ -290,8 +290,11 @@ public final class PostService: PostServiceProviding, @unchecked Sendable {
 
     // MARK: - Update Post
 
-    public func update(postId: String, content: String? = nil, visibility: String? = nil, moodEmoji: String? = nil, originalLanguage: String? = nil, type: String? = nil, removeMediaIds: [String]? = nil) async throws -> APIPost {
-        let body = UpdatePostRequest(content: content, visibility: visibility, moodEmoji: moodEmoji, originalLanguage: originalLanguage, type: type, removeMediaIds: removeMediaIds)
+    public func update(postId: String, content: String? = nil, visibility: String? = nil, visibilityUserIds: [String]? = nil, moodEmoji: String? = nil, originalLanguage: String? = nil, type: String? = nil, removeMediaIds: [String]? = nil) async throws -> APIPost {
+        // `visibilityUserIds` était déclaré dans `UpdatePostRequest` mais JAMAIS
+        // renseigné ici : il partait toujours à `nil`, et le `refine` Zod du
+        // gateway rejetait donc systématiquement EXCEPT/ONLY.
+        let body = UpdatePostRequest(content: content, visibility: visibility, visibilityUserIds: visibilityUserIds, moodEmoji: moodEmoji, originalLanguage: originalLanguage, type: type, removeMediaIds: removeMediaIds)
         let response: APIResponse<APIPost> = try await api.put(endpoint: "/posts/\(postId)", body: body)
         return response.data
     }

@@ -1722,7 +1722,13 @@ public struct StoryItem: Identifiable, Codable, Sendable {
     /// les payloads/rows antérieurs décodent en nil et l'UI retombe sur
     /// `repostAuthorName`.
     public let repostAuthorUsername: String?
-    public let visibility: String?
+    /// `var` (et non `let`) pour la mise à jour optimiste du menu « Modifier
+    /// la visibilité » : muter en place, comme `isViewed`, plutôt que
+    /// reconstruire via une init partielle qui droppait ~13 champs.
+    public var visibility: String?
+    /// Ids ciblés (`ONLY`) ou exclus (`EXCEPT`). Optionnel → les rows GRDB et
+    /// payloads antérieurs décodent en `nil` sans migration.
+    public var visibilityUserIds: [String]?
     public let audioUrl: String?
     public var isViewed: Bool
     /// R11 — horodatage du « vu » local (règle CLAUDE.md : DateTime nullable
@@ -1817,7 +1823,7 @@ public struct StoryItem: Identifiable, Codable, Sendable {
                 createdAt: Date = Date(), expiresAt: Date? = nil, repostOfId: String? = nil,
                 originalRepostOfId: String? = nil, repostAuthorName: String? = nil,
                 repostAuthorUsername: String? = nil,
-                visibility: String? = nil, audioUrl: String? = nil,
+                visibility: String? = nil, visibilityUserIds: [String]? = nil, audioUrl: String? = nil,
                 isViewed: Bool = false, viewedAt: Date? = nil, updatedAt: Date? = nil, translations: [StoryTranslation]? = nil, backgroundAudio: StoryBackgroundAudioEntry? = nil,
                 reactionCount: Int = 0, commentCount: Int = 0,
                 shareCount: Int? = nil, viewCount: Int? = nil, impressionCount: Int? = nil, repostCount: Int? = nil,
@@ -1827,7 +1833,7 @@ public struct StoryItem: Identifiable, Codable, Sendable {
         self.originalRepostOfId = originalRepostOfId
         self.repostAuthorName = repostAuthorName
         self.repostAuthorUsername = repostAuthorUsername
-        self.visibility = visibility; self.audioUrl = audioUrl
+        self.visibility = visibility; self.visibilityUserIds = visibilityUserIds; self.audioUrl = audioUrl
         self.isViewed = isViewed; self.viewedAt = viewedAt; self.updatedAt = updatedAt
         self.translations = translations; self.backgroundAudio = backgroundAudio
         self.reactionCount = reactionCount; self.commentCount = commentCount
@@ -1881,7 +1887,7 @@ public struct StoryItem: Identifiable, Codable, Sendable {
             createdAt: createdAt, expiresAt: expiresAt, repostOfId: repostOfId,
             originalRepostOfId: originalRepostOfId, repostAuthorName: repostAuthorName,
             repostAuthorUsername: repostAuthorUsername,
-            visibility: visibility, audioUrl: audioUrl, isViewed: isViewed,
+            visibility: visibility, visibilityUserIds: visibilityUserIds, audioUrl: audioUrl, isViewed: isViewed,
             viewedAt: viewedAt, updatedAt: updatedAt,
             translations: self.translations,
             backgroundAudio: backgroundAudio,
@@ -2058,6 +2064,7 @@ extension Array where Element == APIPost {
                                  repostAuthorName: post.repostOf?.author.name,
                                  repostAuthorUsername: post.repostOf?.author.username,
                                  visibility: post.visibility,
+                                 visibilityUserIds: post.visibilityUserIds,
                                  audioUrl: post.audioUrl ?? repostSource?.audioUrl,
                                  isViewed: post.isViewedByMe ?? false,
                                  updatedAt: post.updatedAt,

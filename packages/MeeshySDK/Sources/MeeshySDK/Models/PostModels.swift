@@ -123,6 +123,11 @@ public struct APIPost: Sendable {
     public let id: String
     public let type: String?
     public let visibility: String?
+    /// Ids ciblés (`ONLY`) ou exclus (`EXCEPT`). Renvoyé par le gateway pour
+    /// tous les posts (`include: postInclude` ne filtre aucun scalaire).
+    /// `nil` sur les payloads antérieurs au champ — le picker d'audience
+    /// s'ouvre alors vierge plutôt que de casser le décodage.
+    public let visibilityUserIds: [String]?
     public let content: String?
     public let originalLanguage: String?
     public let createdAt: Date
@@ -175,7 +180,7 @@ public struct APIPost: Sendable {
 
 extension APIPost: Decodable {
     private enum CodingKeys: String, CodingKey {
-        case id, type, visibility, content, originalLanguage, createdAt, updatedAt, expiresAt
+        case id, type, visibility, visibilityUserIds, content, originalLanguage, createdAt, updatedAt, expiresAt
         case author, likeCount, commentCount, repostCount, viewCount
         case postOpenCount, qualifiedViewCount, playCount, impressionCount
         case bookmarkCount, shareCount, reactionSummary, isPinned, isEdited
@@ -197,6 +202,7 @@ extension APIPost: Decodable {
         id = try c.decode(String.self, forKey: .id)
         type = try c.decodeIfPresent(String.self, forKey: .type)
         visibility = try c.decodeIfPresent(String.self, forKey: .visibility)
+        visibilityUserIds = try c.decodeIfPresent([String].self, forKey: .visibilityUserIds)
         content = try c.decodeIfPresent(String.self, forKey: .content)
         originalLanguage = try c.decodeIfPresent(String.self, forKey: .originalLanguage)
         createdAt = try c.decode(Date.self, forKey: .createdAt)
