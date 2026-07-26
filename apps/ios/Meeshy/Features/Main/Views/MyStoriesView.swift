@@ -417,6 +417,26 @@ struct MyStoriesView: View {
     }
 }
 
+// MARK: - Row accessibility
+
+/// Composition du libellé VoiceOver de la ligne.
+///
+/// La ligne est `.accessibilityElement(children: .ignore)` : l'anneau de
+/// progression, posé en enfant, serait invisible au rotor. Sa valeur remonte
+/// donc ici, en suffixe du libellé de la ligne.
+enum MyStoryRowAccessibility {
+
+    static func label(base: String, saveProgress: Double?) -> String {
+        guard let saveProgress else { return base }
+        let percent = Int((min(max(saveProgress, 0), 1) * 100).rounded())
+        let suffix = String(
+            localized: "story.mine.save.progress.a11y",
+            defaultValue: "Enregistrement \(percent) %"
+        )
+        return "\(base) \(suffix)"
+    }
+}
+
 // MARK: - Row
 
 private struct MyStoryRow<MenuContent: View>: View {
