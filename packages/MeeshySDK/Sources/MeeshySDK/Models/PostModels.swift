@@ -126,8 +126,13 @@ public struct APIPost: Sendable {
     /// Ids ciblés (`ONLY`) ou exclus (`EXCEPT`). Renvoyé par le gateway pour
     /// tous les posts (`include: postInclude` ne filtre aucun scalaire).
     /// `nil` sur les payloads antérieurs au champ — le picker d'audience
-    /// s'ouvre alors vierge plutôt que de casser le décodage.
-    public let visibilityUserIds: [String]?
+    /// s'ouvre alors vierge plutôt que de casser le décodage. Défaut
+    /// memberwise `= nil`, même patron que `postOpenCount` et les compteurs
+    /// juste en dessous : permet la construction runtime/test sans le
+    /// fournir explicitement. Décodage INCHANGÉ — `init(from:)` ci-dessous
+    /// lit toujours la clé via `decodeIfPresent` (le défaut ne sert qu'à
+    /// l'init memberwise, pas au décodage).
+    public var visibilityUserIds: [String]? = nil
     public let content: String?
     public let originalLanguage: String?
     public let createdAt: Date
