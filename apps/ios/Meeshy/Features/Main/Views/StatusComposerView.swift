@@ -255,6 +255,17 @@ struct StatusComposerView: View {
             }
         }
         .disabled(selectedEmoji == nil || isPublishing)
+        // The label swaps to a bare ProgressView while publishing, which leaves the
+        // button with no accessible name at the exact moment it is busy. Pin the name
+        // to the action and carry the transient/blocked states as value + hint, as the
+        // create-tracking-link button does.
+        .accessibilityLabel(String(localized: "status.composer.publish", defaultValue: "Publier", bundle: .main))
+        .accessibilityValue(isPublishing
+            ? String(localized: "a11y.status.publish.in-progress", defaultValue: "Publication en cours", bundle: .main)
+            : "")
+        .accessibilityHint(selectedEmoji == nil
+            ? String(localized: "a11y.status.publish.disabled.hint", defaultValue: "Choisissez un emoji pour publier votre status", bundle: .main)
+            : "")
     }
 
     // MARK: - Visibility Picker
