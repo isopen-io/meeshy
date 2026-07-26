@@ -254,6 +254,16 @@ final class StoryVideoExportServiceTests: XCTestCase {
     /// `StoryExportOutroTests.test_append_extendsStoryByHalfSecond`).
     private static let outroTail: TimeInterval = 0.5
 
+    /// Allongement net de la fermeture en 2 temps (Part D) — le chemin AVEC
+    /// identité résolue. Le clip de fin dure alors `logoPhase` (1,5 s, muet) +
+    /// `identityPhase` (2 s, porteuse du jingle) = 3,5 s, dont 1,5 s d'`overlap`
+    /// en crossfade par-dessus la fin de la story : 3,5 − 1,5 = 2 s.
+    ///
+    /// Distinct d'`outroTail`, qui ne vaut que pour la carte logo-seule
+    /// (chemin `content == nil`, 2 s − 1,5 s = 0,5 s). Confondre les deux, c'est
+    /// mesurer le chemin sans identité en croyant tester celui avec.
+    private static let authorOutroTail: TimeInterval = 2.0
+
     /// **Régression amplifiée par ce lot.** L'appel à `StoryExportOutro.append`
     /// vivait IMBRIQUÉ dans `guard let intro else { return outputURL }` : une
     /// identité non résolue faisait donc perdre l'interlude ET la carte de fin.
@@ -320,9 +330,9 @@ final class StoryVideoExportServiceTests: XCTestCase {
         defer { sut.cleanupExport(at: url) }
 
         let duration = CMTimeGetSeconds(try await AVURLAsset(url: url).load(.duration))
-        let expected = StoryExportIntro.duration + Self.stubStoryDuration + Self.outroTail
+        let expected = StoryExportIntro.duration + Self.stubStoryDuration + Self.authorOutroTail
         XCTAssertEqual(duration, expected, accuracy: 0.35,
-                       "l'export doit porter l'interlude ET la carte de fin")
+                       "l'export doit porter l'interlude ET la carte de fin d'auteur en 2 temps")
     }
 }
 
