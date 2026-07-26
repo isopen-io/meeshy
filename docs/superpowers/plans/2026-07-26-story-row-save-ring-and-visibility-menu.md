@@ -2292,3 +2292,110 @@ private struct MyStoriesCommentTarget: Identifiable {
 
 Vérification manuelle exigée : ouvrir la sheet depuis une story ayant des commentaires, en
 publier un, constater que le compteur de la ligne suit.
+
+---
+
+# Extension 2 — pipeline d'enregistrement unique (demande utilisateur, 2026-07-26)
+
+## Le constat qui motive ces tâches
+
+Quatre chemins produisent aujourd'hui un MP4 de story. Trois convergent, un diverge :
+
+| Chemin | Filigrane | Interlude de marque | Orchestrateur |
+| --- | --- | --- | --- |
+| Liste → « Enregistrer » | ✅ avec pseudo | ✅ | `StoryPhotoSaveService` |
+| Reader → « Exporter » (Task 7) | ✅ avec pseudo | ✅ | `StoryPhotoSaveService` |
+| Liste → « Partager » | ✅ avec pseudo | ✅ | `StoryExportShareViewModel` |
+| **Composer timeline → « Enregistrer »** | ⚠️ **sans pseudo** | ❌ **absent** | `TimelineExportController` → `StoryExporter` direct |
+
+`TimelineExportFlow.swift:45` appelle `MeeshyExportWatermark.make()` sans `username:`, et
+`:60-72` invoque `StoryExporter.export` **sans paramètre `intro:`**. Une story enregistrée
+depuis l'outil timeline sort donc sans interlude et avec un filigrane amputé.
+
+## Task 9 : une seule pipeline d'enregistrement de story
+
+**Objectif.** Tout chemin qui écrit une story dans la photothèque passe par le même
+orchestrateur, pour que filigrane et interlude soient garantis par construction et non par
+répétition de code.
+
+**Files:**
+- Modify: `packages/MeeshySDK/Sources/MeeshyUI/Story/TimelineExportFlow.swift`
+- Modify: `apps/ios/Meeshy/Features/Main/Views/StoryViewerView+Sidebar.swift`
+- Test: `packages/MeeshySDK/Tests/MeeshyUITests/Story/Export/TimelineExportParityTests.swift`
+
+**Contrainte d'architecture à respecter.** `StoryPhotoSaveService` vit dans l'app
+(`apps/ios/Meeshy/.../Services/`) et `TimelineExportFlow` dans le SDK (`MeeshyUI`). Le SDK
+ne doit pas dépendre de l'app (doctrine « SDK purity » : pas d'orchestration produit dans le
+SDK). L'unification passe donc par les **entrées** du bake, pas par un appel croisé :
+
+1. `TimelineExportController.start(composer:)` gagne deux paramètres injectés par l'appelant —
+   `watermark: StoryExportWatermark?` et `intro: StoryExportIntroContent?` — au lieu de
+   fabriquer un filigrane anonyme en interne.
+2. L'appelant côté app fournit les mêmes valeurs que `StoryPhotoSaveService` :
+   `MeeshyExportWatermark.make(username:)` et `StoryExportIntroFactory.currentUser()`.
+3. `StoryExporter.export` reçoit enfin `intro:` sur ce chemin.
+
+**Test de parité** — c'est le cœur de la tâche : un test qui échoue si un chemin d'export
+oublie le filigrane ou l'interlude. Il ne compare pas des pixels, il vérifie que les
+**entrées** passées à l'exporteur sont identiques entre les chemins :
+
+```swift
+/// Garde de parité : tout chemin d'export de story doit fournir filigrane ET interlude.
+/// Sans ce test, un quatrième chemin réintroduirait silencieusement la divergence
+/// (constatée le 2026-07-26 : l'export timeline sortait sans interlude et avec un
+/// filigrane sans pseudo, alors que les trois autres chemins les portaient).
+func test_timelineExport_passesWatermarkAndIntroToExporter() async {
+    let exporter = SpyStoryExporter()
+    let controller = TimelineExportController(exporter: exporter)
+    let watermark = MeeshyExportWatermark.make(username: "alice")
+    let intro = StoryExportIntroContent(displayName: "Alice", username: "alice", accentColorHex: "4ECDC4")
+
+    controller.start(composer: makeComposer(), watermark: watermark, intro: intro)
+    await exporter.waitForCall()
+
+    XCTAssertNotNil(exporter.lastWatermark, "l'export timeline doit graver le filigrane")
+    XCTAssertNotNil(exporter.lastIntro, "l'export timeline doit graver l'interlude de marque")
+    XCTAssertEqual(exporter.lastIntro?.username, "alice")
+}
+```
+
+**Vérification manuelle exigée** : enregistrer la MÊME story depuis l'outil timeline puis
+depuis la liste, et comparer les deux MP4 — l'interlude et le filigrane (pseudo inclus)
+doivent être présents dans les deux.
+
+## Task 10 : le reader retrouve « Partager », la liste garde la sienne
+
+**Files:**
+- Modify: `apps/ios/Meeshy/Features/Main/Views/StoryViewerView+Sidebar.swift`
+- Modify: `apps/ios/Meeshy/Features/Main/Views/StoryViewerView.swift` (réactive `showExportShareSheet`)
+- Test: `apps/ios/MeeshyTests/Unit/Views/StoryViewerExportRailTests.swift`
+
+**Le problème que ça corrige.** La Task 7 a fait passer le bouton « Exporter » du reader par
+`StoryPhotoSaveService`. Conséquence non anticipée, relevée en revue : le reader a perdu
+**tout** accès au partage externe (WhatsApp, AirDrop, Messages) — pas seulement le choix de
+la langue gravée. Le bouton gardait pourtant le libellé « Exporter » et l'icône de partage
+`square.and.arrow.up.fill`, donc il mentait sur son comportement.
+
+**Ce qu'on livre.** Le rail du reader porte désormais **deux** actions distinctes, alignées
+sur celles de la liste :
+
+| Action | Icône | Comportement |
+| --- | --- | --- |
+| Partager | `square.and.arrow.up.fill` | sheet d'export (choix de langue) → `UIActivityViewController` |
+| Enregistrer | `square.and.arrow.down.fill` | `StoryPhotoSaveService.save(story:)` → anneau de progression, annulable |
+
+Le code aujourd'hui mort dans `StoryViewerView.swift` (`showExportShareSheet`,
+`exportShareViewModel`, la `.sheet` associée) redevient le support de « Partager » — il n'y a
+donc rien à supprimer, seulement à rebrancher.
+
+L'anneau de progression ne concerne que « Enregistrer » : « Partager » doit rester au premier
+plan jusqu'à la présentation de la share sheet système, sinon celle-ci surgirait après coup
+alors que l'utilisateur a navigué ailleurs.
+
+**Accessibilité** : les deux boutons portent leur propre libellé (le rail n'est pas un élément
+fusionné). L'anneau porte libellé + valeur, comme livré en Task 7.
+
+**Tests** (purs, sur un résolveur extrait) :
+- le rail d'une story de l'auteur expose « Partager » ET « Enregistrer » ;
+- une story qui n'est pas de l'auteur n'expose aucune des deux ;
+- pendant un job de sauvegarde, « Enregistrer » est remplacé par l'anneau et « Partager » reste présent.
