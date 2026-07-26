@@ -96,6 +96,24 @@ public struct StoryExportWatermark: @unchecked Sendable {
     ]
     private static let dashLineWidth: CGFloat = 112
 
+    /// Colour of the animated logo dashes — Meeshy primary (indigo500 #6366F1).
+    static let logoColor = UIColor(red: 99.0 / 255.0, green: 102.0 / 255.0,
+                                   blue: 241.0 / 255.0, alpha: 1)
+    /// Stagger between successive dashes tracing in.
+    static let logoTraceStagger: Double = 0.6
+    /// Duration of a single dash's draw-on. With 3 dashes staggered by 0.6 s,
+    /// the whole logo is fully traced at 0.6*2 + 1.8 = 3 s.
+    static let logoTraceBarDuration: Double = 1.8
+
+    /// Draw-on progress (easeOut, 0…1) of dash `barIndex` at `elapsed` seconds
+    /// into the current corner window. The whole logo is fully traced at
+    /// `logoTraceStagger * (dashes.count - 1) + logoTraceBarDuration`.
+    static func logoTraceProgress(elapsed: Double, barIndex: Int) -> CGFloat {
+        let delay = Double(barIndex) * logoTraceStagger
+        let raw = max(0, min(1, (elapsed - delay) / logoTraceBarDuration))
+        return CGFloat(1 - pow(1 - raw, 2))   // easeOut
+    }
+
     @MainActor
     private static func drawAnimatedLogo(in cg: CGContext, rect: CGRect,
                                          localTime: Double, globalTime: Double) {
@@ -126,12 +144,10 @@ public struct StoryExportWatermark: @unchecked Sendable {
         cg.setLineCap(.round)
         cg.setLineWidth(dashLineWidth)
         for (index, dash) in dashes.enumerated() {
-            let delay = Double(index) * 0.1
-            let raw = max(0, min(1, (localTime - delay) / 0.25))
-            let progress = 1 - pow(1 - raw, 2)   // easeOut
+            let progress = logoTraceProgress(elapsed: localTime, barIndex: index)
             guard progress > 0.001 else { continue }
-            cg.setStrokeColor(UIColor.white.withAlphaComponent(opacities[index]).cgColor)
-            let xEnd = dash.from.x + (dash.to.x - dash.from.x) * CGFloat(progress)
+            cg.setStrokeColor(logoColor.withAlphaComponent(opacities[index]).cgColor)
+            let xEnd = dash.from.x + (dash.to.x - dash.from.x) * progress
             cg.move(to: dash.from)
             cg.addLine(to: CGPoint(x: xEnd, y: dash.from.y))
             cg.strokePath()

@@ -36,6 +36,25 @@ final class StoryExportWatermarkTests: XCTestCase {
                              "Le pseudo ajoute une seconde ligne au bloc texte")
     }
 
+    // MARK: - Animation du logo
+
+    func test_logoColor_isMeeshyPrimaryIndigo() {
+        var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+        StoryExportWatermark.logoColor.getRed(&r, green: &g, blue: &b, alpha: &a)
+        XCTAssertEqual(r, 99.0 / 255.0, accuracy: 0.02, "Rouge de l'indigo primaire #63")
+        XCTAssertEqual(g, 102.0 / 255.0, accuracy: 0.02, "Vert de l'indigo primaire #66")
+        XCTAssertEqual(b, 241.0 / 255.0, accuracy: 0.02, "Bleu de l'indigo primaire #F1")
+    }
+
+    func test_logoTrace_completesInThreeSeconds() {
+        // La dernière barre est pleinement tracée à 3 s…
+        XCTAssertEqual(StoryExportWatermark.logoTraceProgress(elapsed: 3.0, barIndex: 2),
+                       1.0, accuracy: 0.05, "Le logo doit être complet à t=3s")
+        // …mais PAS encore à mi-parcours (1.5 s) — l'animation doit être lente.
+        XCTAssertLessThan(StoryExportWatermark.logoTraceProgress(elapsed: 1.5, barIndex: 2),
+                          0.9, "À 1.5s la 3e barre ne doit pas encore être complète (tracé sur 3s)")
+    }
+
     // MARK: - Rendu sans watermark
 
     func test_renderFrame_withoutWatermark_cornerStaysBackground() throws {
