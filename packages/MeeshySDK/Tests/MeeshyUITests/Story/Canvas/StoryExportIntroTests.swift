@@ -75,6 +75,39 @@ final class StoryExportIntroTests: XCTestCase {
         XCTAssertLessThan(corner.green, 200, "la bannière doit être assombrie")
     }
 
+    // MARK: - Avatar fallback (initiales) + mood
+
+    func test_makeInitials_firstLettersUppercased() {
+        XCTAssertEqual(StoryExportIntro.makeInitials("Jean Dupont"), "JD")
+        XCTAssertEqual(StoryExportIntro.makeInitials("Alice"), "A")
+        XCTAssertEqual(StoryExportIntro.makeInitials("J. Charles N. M."), "JC")
+        XCTAssertEqual(StoryExportIntro.makeInitials(""), "")
+    }
+
+    /// Sans avatar, le disque de couleur d'accent porte les initiales blanches
+    /// (auparavant : disque uni sans texte).
+    func test_render_avatarNil_drawsInitialsInDisc() throws {
+        let image = try XCTUnwrap(StoryExportIntro.render(makeContent(), size: renderSize))
+        // Cercle avatar centré (visuel y≈0.44). `maxLuminanceInRegion` dessine
+        // sans flip Y → un point visuel haut mappe vers un buffer-y bas ; on vise
+        // donc le buffer-y complémentaire (≈0.56).
+        let discRegion = CGRect(x: 0.40, y: 0.50, width: 0.20, height: 0.12)
+        let lum = ExportPixelProbe.maxLuminanceInRegion(image, region: discRegion)
+        XCTAssertGreaterThan(lum, 200,
+                             "Les initiales blanches doivent apparaître dans le cercle avatar (got \(lum))")
+    }
+
+    /// Un mood fourni ne casse pas le rendu (la capsule est peinte sous le handle).
+    func test_render_withMood_producesImage() throws {
+        let content = StoryExportIntroContent(displayName: "Jean Dupont",
+                                              username: "jean",
+                                              moodEmoji: "🎉",
+                                              moodMessage: "En feu",
+                                              accentColorHex: "6366F1")
+        let image = try XCTUnwrap(StoryExportIntro.render(content, size: renderSize))
+        XCTAssertEqual(image.width, Int(renderSize.width))
+    }
+
     // MARK: - Encodage
 
     func test_makeClip_writesAVideoOfTheIntroDuration() async throws {

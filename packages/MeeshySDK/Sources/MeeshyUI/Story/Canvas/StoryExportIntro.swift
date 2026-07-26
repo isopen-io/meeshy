@@ -15,7 +15,14 @@ public struct StoryExportIntroContent: Sendable {
     public let displayName: String
     public let username: String
     public let avatar: CGImage?
+    /// Background image (author banner, or the avatar's decoded thumbHash) —
+    /// drawn aspectFill. `nil` falls back to a vibrant accent gradient.
     public let banner: CGImage?
+    /// Mood emoji (from the author's ephemeral status), drawn in a capsule under
+    /// the @username. `nil` hides the mood row entirely.
+    public let moodEmoji: String?
+    /// Optional mood message shown next to the emoji.
+    public let moodMessage: String?
     /// Hex "RRGGBB" — teinte de repli quand aucune bannière n'est fournie.
     public let accentColorHex: String
 
@@ -23,11 +30,15 @@ public struct StoryExportIntroContent: Sendable {
                 username: String,
                 avatar: CGImage? = nil,
                 banner: CGImage? = nil,
+                moodEmoji: String? = nil,
+                moodMessage: String? = nil,
                 accentColorHex: String) {
         self.displayName = displayName
         self.username = username
         self.avatar = avatar
         self.banner = banner
+        self.moodEmoji = moodEmoji
+        self.moodMessage = moodMessage
         self.accentColorHex = accentColorHex
     }
 }
@@ -96,15 +107,29 @@ public enum StoryExportIntro {
                                        width: drawn.width,
                                        height: drawn.height))
         } else {
-            cg.setFillColor(UIColor(Color(hex: content.accentColorHex)).cgColor)
-            cg.fill(rect)
+            // Vibrant fallback mirroring the viewer's StoryAuthorIdentityCard:
+            // accent colour → black, top-leading to bottom-trailing.
+            let accent = UIColor(Color(hex: content.accentColorHex))
+            drawLinearGradient(in: cg, rect: rect,
+                               colors: [accent, .black],
+                               start: CGPoint(x: rect.minX, y: rect.minY),
+                               end: CGPoint(x: rect.maxX, y: rect.maxY))
         }
     }
 
-    /// Voile sombre : le nom doit rester lisible quelle que soit la bannière.
+    /// Readability scrim — a 3-stop vertical gradient matching
+    /// `StoryAuthorIdentityCard` (top 0.62, mid 0.28, bottom 0.72) so the name
+    /// stays legible over any banner.
     private static func drawScrim(in cg: CGContext, size: CGSize) {
-        cg.setFillColor(UIColor.black.withAlphaComponent(0.45).cgColor)
-        cg.fill(CGRect(origin: .zero, size: size))
+        let rect = CGRect(origin: .zero, size: size)
+        drawLinearGradient(
+            in: cg, rect: rect,
+            colors: [UIColor.black.withAlphaComponent(0.62),
+                     UIColor.black.withAlphaComponent(0.28),
+                     UIColor.black.withAlphaComponent(0.72)],
+            locations: [0, 0.5, 1],
+            start: CGPoint(x: rect.midX, y: rect.minY),
+            end: CGPoint(x: rect.midX, y: rect.maxY))
     }
 
     private static func drawIdentity(_ content: StoryExportIntroContent,
@@ -126,16 +151,126 @@ public enum StoryExportIntro {
         }
         cg.restoreGState()
 
+        // Fallback initials, centred in the vibrant disc when no avatar image.
+        if content.avatar == nil {
+            drawCentredInRect(makeInitials(content.displayName),
+                              fontSize: avatarSide * 0.38, weight: .bold,
+                              color: .white, in: avatarRect)
+        }
+
         let nameSize = size.width * 0.058
         let handleSize = size.width * 0.036
         drawCentred(content.displayName,
                     fontSize: nameSize, weight: .bold,
                     color: .white, alpha: 1,
                     y: avatarRect.maxY + nameSize * 0.9, in: size)
+        let handleY = avatarRect.maxY + nameSize * 0.9 + nameSize * 1.4
         drawCentred("@\(content.username)",
                     fontSize: handleSize, weight: .regular,
                     color: .white, alpha: 0.75,
-                    y: avatarRect.maxY + nameSize * 0.9 + nameSize * 1.4, in: size)
+                    y: handleY, in: size)
+
+        if let emoji = content.moodEmoji, !emoji.isEmpty {
+            drawMoodCapsule(emoji: emoji, message: content.moodMessage,
+                            centreY: handleY + handleSize * 2.6, in: cg, size: size)
+        }
+    }
+
+    /// First letter of up to two words, uppercased — mirrors `MeeshyAvatar`.
+    static func makeInitials(_ name: String) -> String {
+        let words = name.split(separator: " ").prefix(2)
+        let letters = words.compactMap { $0.first }.map(String.init)
+        return letters.joined().uppercased()
+    }
+
+    private static func drawCentredInRect(_ text: String,
+                                          fontSize: CGFloat,
+                                          weight: UIFont.Weight,
+                                          color: UIColor,
+                                          in rect: CGRect) {
+        guard !text.isEmpty else { return }
+        let attributes: [NSAttributedString.Key: Any] = [
+            .font: UIFont.systemFont(ofSize: fontSize, weight: weight),
+            .foregroundColor: color
+        ]
+        let string = NSAttributedString(string: text, attributes: attributes)
+        let bounds = string.size()
+        string.draw(at: CGPoint(x: rect.midX - bounds.width / 2,
+                                y: rect.midY - bounds.height / 2))
+    }
+
+    private static func drawLinearGradient(in cg: CGContext,
+                                           rect: CGRect,
+                                           colors: [UIColor],
+                                           locations: [CGFloat]? = nil,
+                                           start: CGPoint,
+                                           end: CGPoint) {
+        let space = CGColorSpaceCreateDeviceRGB()
+        let cgColors = colors.map { $0.cgColor } as CFArray
+        guard let gradient = CGGradient(colorsSpace: space,
+                                        colors: cgColors,
+                                        locations: locations) else {
+            if let first = colors.first {
+                cg.setFillColor(first.cgColor)
+                cg.fill(rect)
+            }
+            return
+        }
+        cg.saveGState()
+        cg.addRect(rect)
+        cg.clip()
+        cg.drawLinearGradient(gradient, start: start, end: end, options: [])
+        cg.restoreGState()
+    }
+
+    /// Mood row — emoji (+ optional message) inside a translucent capsule,
+    /// mirroring the `.ultraThinMaterial` capsule of `StoryAuthorIdentityCard`.
+    private static func drawMoodCapsule(emoji: String,
+                                        message: String?,
+                                        centreY: CGFloat,
+                                        in cg: CGContext,
+                                        size: CGSize) {
+        let emojiFont = UIFont.systemFont(ofSize: size.width * 0.040)
+        let emojiString = NSAttributedString(string: emoji, attributes: [.font: emojiFont])
+        let emojiBounds = emojiString.size()
+
+        var messageString: NSAttributedString?
+        var messageBounds = CGSize.zero
+        if let message, !message.isEmpty {
+            let attrs: [NSAttributedString.Key: Any] = [
+                .font: UIFont.systemFont(ofSize: size.width * 0.032, weight: .regular),
+                .foregroundColor: UIColor.white.withAlphaComponent(0.9)
+            ]
+            messageString = NSAttributedString(string: message, attributes: attrs)
+            messageBounds = messageString!.size()
+        }
+
+        let spacing: CGFloat = messageString != nil ? size.width * 0.02 : 0
+        let contentWidth = emojiBounds.width + spacing + messageBounds.width
+        let contentHeight = max(emojiBounds.height, messageBounds.height)
+        let padH = size.width * 0.03
+        let padV = size.width * 0.016
+        let capsuleWidth = contentWidth + padH * 2
+        let capsuleHeight = contentHeight + padV * 2
+        let capsuleRect = CGRect(x: (size.width - capsuleWidth) / 2,
+                                 y: centreY - capsuleHeight / 2,
+                                 width: capsuleWidth,
+                                 height: capsuleHeight)
+
+        cg.saveGState()
+        let path = UIBezierPath(roundedRect: capsuleRect, cornerRadius: capsuleHeight / 2)
+        cg.addPath(path.cgPath)
+        cg.setFillColor(UIColor.white.withAlphaComponent(0.16).cgColor)
+        cg.fillPath()
+        cg.restoreGState()
+
+        let contentX = capsuleRect.minX + padH
+        emojiString.draw(at: CGPoint(x: contentX,
+                                     y: capsuleRect.midY - emojiBounds.height / 2))
+        if let messageString {
+            messageString.draw(at: CGPoint(x: contentX + emojiBounds.width + spacing,
+                                           y: capsuleRect.midY - messageBounds.height / 2))
+        }
     }
 
     private static func drawCentred(_ text: String,
