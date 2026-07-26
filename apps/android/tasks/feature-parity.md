@@ -950,7 +950,28 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       blank-user-inert / self-left-blank-conv-inert; 5 VM: deleted-sheds-stars+refresh /
       blank-delete-touches-nothing / self-left-sheds+refresh / other-left-untouched /
       cleanup-survives-failing-refresh-silently).
-- [ ] Conversation category create + expand/collapse; client-side tag aggregation for autocomplete
+- [~] Conversation category create + expand/collapse; client-side tag aggregation for autocomplete —
+      **tag-autocomplete decision core shipped** (slice `conversation-tag-autocomplete`, 2026-07-26).
+      Pure `:core:model/ConversationTagAutocomplete.kt` (`TagAutocompleteState` + object), a faithful
+      port of the logic embedded in iOS `TagInputField`
+      (`packages/MeeshySDK/Sources/MeeshyUI/Primitives/TagInputField.swift`): `resolve(knownTags,
+      selectedTags, query)` returns the panel state — `suggestions` (the corpus minus already-selected,
+      case-insensitive substring filter on the trimmed query, `prefix(8)` via `MAX_SUGGESTIONS`),
+      `canCreate` (trimmed non-blank ∧ matches neither a selected nor a known tag case-insensitively),
+      `submitTag` (Enter's resolution — first suggestion else the creatable query else `null`); plus
+      `append(selectedTags, name)` (iOS `addTag`'s trim + exact-dedup immutable append, `null` = no-op).
+      **SOTA over iOS:** iOS recomputes each as a computed property inside a SwiftUI `View`, untestable
+      without a UI host; Android folds the whole panel into one framework-free SSOT so the Compose field
+      is a dumb renderer and every branch is JVM-covered. **+25 behavioural tests**
+      (`ConversationTagAutocompleteTest`): empty-query pool / selected-exclusion / whitespace / cap;
+      filtered substring / no-match / selected-exclusion / cap / trim; canCreate new / known-match /
+      selected-match / blank; submit first-suggestion / create-query / inert / empty-pool /
+      non-empty-pool; append trim / blank / exact-dup / order / case-distinct. **Mutation (RED proof):**
+      dropping the suggestion-first arm from `submitTag` fails **exactly** the two "submit picks the
+      first suggestion" tests (23 run, 2 failed, no collateral), restored after. **Follow-up:** the
+      app-side `TagInputField` composable rendering chips + the panel driven by these cores, the corpus
+      hydration (`allTags` cache-first + revalidate) in a conversation-options ViewModel, and the
+      category create + expand/collapse UI.
 - [x] Create direct/group conversation via user search; add participants —
       FAB sur la liste → `NewConversationScreen` : recherche debouncée (300 ms,
       `UserRepository.searchUsers`), multi-sélection avec chips persistants
