@@ -2173,8 +2173,18 @@ l'anneau sur la ligne ; puis l'inverse.
   `fetchPost(id:)`, `StoryPhotoSaveService.shared`.
 - Produces: `MyStoriesCommentTarget` (type `Identifiable` portant le `FeedPost` résolu).
 
-**Ce qu'on ajoute.** Dans chaque ligne de « Mes stories », une icône de commentaire est posée
-**immédiatement à gauche du `⋯`**. Elle ouvre une sheet listant les commentaires de la story.
+**Ce qu'on ajoute.** Dans chaque ligne de « Mes stories », une icône de commentaire **avec son
+compteur** est posée **immédiatement à gauche du `⋯`**. Elle ouvre `CommentsSheetView` sur les
+commentaires de la story, avec la possibilité d'y répondre (le composeur de la sheet est déjà
+fonctionnel : `FeedView` et `FeedPostCard` l'utilisent sans passer `onSendComment`, le chemin
+d'envoi par défaut suffit).
+
+**⚠️ NE PAS TOUCHER à la vue de commentaires incrustée du reader.** `StoryViewerView` possède
+son propre overlay (`showCommentsOverlay`, `StoryViewerView+Canvas.swift`), volontairement
+distinct : c'est le socle prévu pour les commentaires en direct, il doit continuer d'exister et
+d'évoluer séparément. Aucune « unification » des deux surfaces — l'incrustation du reader et la
+sheet du listing sont deux composants différents servant deux usages différents. Cette tâche
+n'ajoute la sheet QUE dans `MyStoriesView`.
 
 **Réutilisation.** La sheet est `CommentsSheetView`, celle des posts — on ne réécrit rien. Elle
 attend un `FeedPost` alors que la ligne porte un `StoryItem` : la conversion passe par
