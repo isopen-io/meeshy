@@ -39,7 +39,6 @@ struct MyStoriesView: View {
 
     @State private var viewersStory: StoryItem?
     @State private var exportStory: StoryItem?
-    @State private var saveStory: StoryItem?
     @State private var forwardStory: StoryItem?
     @State private var deleteCandidate: StoryItem?
     @State private var isReposting = false
@@ -204,9 +203,6 @@ struct MyStoriesView: View {
         .sheet(item: $exportStory) { story in
             StoryExportShareSheet(story: story, viewModel: exportViewModel)
         }
-        .sheet(item: $saveStory) { story in
-            StoryExportShareSheet(story: story, viewModel: exportViewModel, mode: .saveToPhotos)
-        }
         .sheet(item: $forwardStory) { story in
             SharePickerView(
                 sharedContent: .story(
@@ -308,7 +304,7 @@ struct MyStoriesView: View {
             Label(String(localized: "story.mine.share", defaultValue: "Partager"), systemImage: "square.and.arrow.up")
         }
         Button {
-            saveStory = story
+            StoryPhotoSaveService.shared.save(story: story)
         } label: {
             Label(String(localized: "story.mine.save", defaultValue: "Enregistrer"), systemImage: "square.and.arrow.down")
         }
@@ -445,11 +441,13 @@ private struct MyStoryRow<MenuContent: View>: View {
     let isDark: Bool
     let isSelecting: Bool
     let isSelected: Bool
+    @ObservedObject var saveService: StoryPhotoSaveService
     let menuContent: () -> MenuContent
     let onTap: () -> Void
 
     init(story: StoryItem, accentColor: Color, isDark: Bool,
          isSelecting: Bool = false, isSelected: Bool = false,
+         saveService: StoryPhotoSaveService = .shared,
          @ViewBuilder menuContent: @escaping () -> MenuContent,
          onTap: @escaping () -> Void) {
         self.story = story
@@ -457,6 +455,7 @@ private struct MyStoryRow<MenuContent: View>: View {
         self.isDark = isDark
         self.isSelecting = isSelecting
         self.isSelected = isSelected
+        self.saveService = saveService
         self.menuContent = menuContent
         self.onTap = onTap
     }
@@ -495,22 +494,26 @@ private struct MyStoryRow<MenuContent: View>: View {
             }
             .buttonStyle(.plain)
             if !isSelecting {
-                // « … » ouvre le MÊME menu d'actions que le long-press
-                // (Partager, Enregistrer, Transférer, Republier, Supprimer) —
-                // un tap suffit (bug : l'affordance était décorative). VoiceOver
-                // garde ses chemins existants (`.contextMenu` + `.swipeActions`
-                // de la ligne) : le glyphe reste masqué du rotor, la ligne
-                // compose déjà son propre libellé (children: .ignore).
-                Menu {
-                    menuContent()
-                } label: {
-                    Image(systemName: "ellipsis")
-                        .font(.system(size: 16, weight: .semibold))
-                        .foregroundColor(.secondary)
-                        .padding(8)
-                        .contentShape(Rectangle())
+                if let progress = saveService.progress(for: story.id) {
+                    saveRing(progress: progress)
+                } else {
+                    // « … » ouvre le MÊME menu d'actions que le long-press
+                    // (Partager, Enregistrer, Transférer, Republier, Supprimer) —
+                    // un tap suffit (bug : l'affordance était décorative). VoiceOver
+                    // garde ses chemins existants (`.contextMenu` + `.swipeActions`
+                    // de la ligne) : le glyphe reste masqué du rotor, la ligne
+                    // compose déjà son propre libellé (children: .ignore).
+                    Menu {
+                        menuContent()
+                    } label: {
+                        Image(systemName: "ellipsis")
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundColor(.secondary)
+                            .padding(8)
+                            .contentShape(Rectangle())
+                    }
+                    .accessibilityHidden(true)
                 }
-                .accessibilityHidden(true)
             }
         }
         .padding(.vertical, 4)
@@ -523,15 +526,24 @@ private struct MyStoryRow<MenuContent: View>: View {
         .accessibilityLabel(rowAccessibilityLabel)
         .accessibilityAddTraits(.isButton)
         .accessibilityAddTraits(isSelected ? .isSelected : [])
+        .accessibilityAction(named: Text(String(
+            localized: "story.mine.save.cancel.a11y",
+            defaultValue: "Annuler l'enregistrement"
+        ))) {
+            guard saveService.progress(for: story.id) != nil else { return }
+            saveService.cancel(storyId: story.id)
+        }
     }
 
     /// Libellé VoiceOver composé : tampon temporel + les trois compteurs
-    /// d'engagement rendus visuellement par des icônes muettes.
+    /// d'engagement rendus visuellement par des icônes muettes, plus la
+    /// progression de sauvegarde quand un export est en vol.
     private var rowAccessibilityLabel: String {
-        String(
+        let base = String(
             localized: "story.mine.row.a11y",
             defaultValue: "\(story.timeAgo). \(story.viewCount ?? 0) vues, \(story.reactionCount) réactions, \(story.commentCount) commentaires"
         )
+        return MyStoryRowAccessibility.label(base: base, saveProgress: saveService.progress(for: story.id))
     }
 
     private var selectionCircle: some View {
@@ -539,6 +551,38 @@ private struct MyStoryRow<MenuContent: View>: View {
             .font(MeeshyFont.relative(22))
             .foregroundColor(isSelected ? accentColor : Color.secondary.opacity(0.4))
             .accessibilityHidden(true)
+    }
+
+    /// Anneau de progression de la sauvegarde photothèque, à la place du « … ».
+    /// Tap = annulation. Masqué du rotor : la valeur et l'action d'annulation
+    /// remontent sur la LIGNE (children: .ignore l'avalerait sinon).
+    private func saveRing(progress: Double) -> some View {
+        Button {
+            HapticFeedback.medium()
+            saveService.cancel(storyId: story.id)
+        } label: {
+            ZStack {
+                Circle()
+                    .stroke(Color.secondary.opacity(0.25), lineWidth: 2.5)
+                Circle()
+                    .trim(from: 0, to: max(0, min(progress, 1)))
+                    .stroke(accentColor, style: StrokeStyle(lineWidth: 2.5, lineCap: .round))
+                    .rotationEffect(.degrees(-90))
+                    // Anime la VALEUR uniquement — jamais l'apparition/disparition
+                    // du contrôle, qui ferait sauter la hauteur de ligne dans la List.
+                    .animation(.linear(duration: 0.2), value: progress)
+                Text("\(Int((progress * 100).rounded()))")
+                    .font(MeeshyFont.relative(9, weight: .semibold))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.6)
+                    .foregroundColor(.secondary)
+            }
+            .frame(width: 28, height: 28)
+            .padding(8)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityHidden(true)
     }
 
     /// Cascade : composite ThumbHash (inclut texte/dessin/stickers, seule

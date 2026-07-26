@@ -10,21 +10,9 @@ import MeeshyUI
 // Photos / Messages / WhatsApp / AirDrop. NEVER touches the Meeshy backend.
 
 struct StoryExportShareSheet: View {
-    /// `.share` : MP4 → share sheet système (comportement historique).
-    /// `.saveToPhotos` : même export, mais la vidéo part dans l'album Meeshy
-    /// de Photos (`PhotoLibraryManager`) sans passer par la share sheet.
-    enum Mode { case share, saveToPhotos }
-
     let story: StoryItem
     @ObservedObject var viewModel: StoryExportShareViewModel
-    var mode: Mode = .share
     @Environment(\.dismiss) private var dismiss
-
-    /// Pure : la share sheet système ne se présente qu'en mode `.share` —
-    /// en `.saveToPhotos` l'URL exportée est consommée par la sauvegarde Photos.
-    static func resolveActivityURL(mode: Mode, sharedURL: URL?) -> URL? {
-        mode == .share ? sharedURL : nil
-    }
 
     var body: some View {
         NavigationStack {
@@ -40,9 +28,7 @@ struct StoryExportShareSheet: View {
             .padding(.horizontal, 20)
             .padding(.vertical, 24)
             .background(MeeshyColors.indigo950.opacity(0.04).ignoresSafeArea())
-            .navigationTitle(mode == .share
-                ? String(localized: "story.export.share.title", defaultValue: "Exporter en vidéo")
-                : String(localized: "story.export.save.title", defaultValue: "Enregistrer la vidéo"))
+            .navigationTitle(String(localized: "story.export.share.title", defaultValue: "Exporter en vidéo"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -55,25 +41,8 @@ struct StoryExportShareSheet: View {
             .onAppear {
                 viewModel.prepare(story: story)
             }
-
-            .adaptiveOnChange(of: viewModel.sharedURL) { _, url in
-                guard mode == .saveToPhotos, let url else { return }
-                Task {
-                    let saved = await PhotoLibraryManager.shared.saveVideo(at: url)
-                    viewModel.finishSharing(success: saved)
-                    if saved {
-                        HapticFeedback.medium()
-                        dismiss()
-                    } else {
-                        viewModel.errorMessage = String(
-                            localized: "story.export.save.failed",
-                            defaultValue: "Impossible d'enregistrer dans Photos. Vérifie l'autorisation Photos de Meeshy dans Réglages."
-                        )
-                    }
-                }
-            }
             .sheet(item: Binding<ShareWrapper?>(
-                get: { Self.resolveActivityURL(mode: mode, sharedURL: viewModel.sharedURL).map(ShareWrapper.init) },
+                get: { viewModel.sharedURL.map(ShareWrapper.init) },
                 set: { _ in }
             )) { wrapper in
                 ActivityView(url: wrapper.url) { completed in
@@ -112,11 +81,8 @@ struct StoryExportShareSheet: View {
                 .font(.system(size: 36, weight: .semibold))
                 .foregroundStyle(MeeshyColors.brandGradient)
                 .accessibilityHidden(true)
-            Text(mode == .share
-                ? String(localized: "story.export.share.subtitle",
-                         defaultValue: "Génère un MP4 fidèle à la prévisualisation pour le partager hors Meeshy.")
-                : String(localized: "story.export.save.subtitle",
-                         defaultValue: "Génère un MP4 fidèle à la prévisualisation et l'enregistre dans Photos."))
+            Text(String(localized: "story.export.share.subtitle",
+                        defaultValue: "Génère un MP4 fidèle à la prévisualisation pour le partager hors Meeshy."))
             .font(MeeshyFont.relative(14))
             .multilineTextAlignment(.center)
             .foregroundColor(.secondary)
@@ -197,9 +163,7 @@ struct StoryExportShareSheet: View {
                 HapticFeedback.medium()
                 Task { await viewModel.startExport(story: story) }
             } label: {
-                Text(mode == .share
-                    ? String(localized: "story.export.share.cta", defaultValue: "Exporter en vidéo")
-                    : String(localized: "story.export.save.cta", defaultValue: "Enregistrer dans Photos"))
+                Text(String(localized: "story.export.share.cta", defaultValue: "Exporter en vidéo"))
                     .font(MeeshyFont.relative(16, weight: .semibold))
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 14)
