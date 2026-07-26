@@ -48,3 +48,99 @@ final class MyStoryRowSaveRingTests: XCTestCase {
         XCTAssertTrue(label.contains("100"), "libellé obtenu : \(label)")
     }
 }
+
+// MARK: - MyStoryRowCancelActionPresenceGuardTests
+//
+// Revue Task 3, finding « Important » : `.accessibilityAction` (annulation)
+// ne doit être ATTACHÉ à la ligne que lorsqu'un job est réellement en vol —
+// pas seulement son EFFET gardé par un `guard` interne à la closure. Sinon
+// un utilisateur VoiceOver tourne le rotor « Actions » sur N'IMPORTE QUELLE
+// ligne « Mes stories », sans aucune sauvegarde en cours, y voit « Annuler
+// l'enregistrement », l'active — et rien ne se passe (action fantôme).
+//
+// Pas de ViewInspector ni de target UI-testing dans ce bundle (`MeeshyTests`
+// est hébergé dans `Meeshy.app` sans XCUIApplication — cf. commentaire
+// `project.yml` sur `BubbleExpandableTextUITests.swift`) : impossible
+// d'observer à l'exécution la présence réelle d'un accessibilityCustomAction
+// sur l'arbre d'accessibilité depuis un test XCTest unitaire ici. Cette garde
+// vérifie donc la STRUCTURE SOURCE — que `.accessibilityAction` n'existe que
+// dans la branche `if` (job en vol) de `body`, jamais dans `rowContent`
+// (partagée, sans condition, par les deux branches) — même patron que
+// `MyStoriesBulkDeleteGuardTests.test_myStoryRow_selection_conveyedViaRowTrait_notGlyphLabel`,
+// ancré sur des marqueurs de structure réels plutôt qu'une fenêtre de
+// caractères arbitraire (cf. piège documenté : une fenêtre à décompte fixe
+// peut sortir de la déclaration visée dès qu'un commentaire bouge).
+@MainActor
+final class MyStoryRowCancelActionPresenceGuardTests: XCTestCase {
+
+    private func source() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Views/MyStoriesView.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    func test_cancelAccessibilityAction_attachedOnlyInJobInFlightBranch_neverInSharedRowContent() throws {
+        let viewSource = try source()
+
+        // Ancré à l'intérieur de `MyStoryRow` : `MyStoriesView` (le parent)
+        // déclare AUSSI un `var body: some View {` — une recherche non
+        // scopée matcherait le sien en premier, pas celui de la ligne.
+        guard let rowStructStart = viewSource.range(
+            of: "private struct MyStoryRow<MenuContent: View>: View {"
+        ) else {
+            XCTFail("MyStoryRow introuvable dans le fichier")
+            return
+        }
+        guard let bodyStart = viewSource.range(
+                of: "var body: some View {",
+                range: rowStructStart.upperBound..<viewSource.endIndex
+              ),
+              let rowContentStart = viewSource.range(
+                of: "private var rowContent: some View {",
+                range: bodyStart.upperBound..<viewSource.endIndex
+              ) else {
+            XCTFail("MyStoryRow doit définir body puis rowContent, dans cet ordre")
+            return
+        }
+        let bodyBlock = String(viewSource[bodyStart.lowerBound..<rowContentStart.lowerBound])
+
+        guard let presenceCheckRange = bodyBlock.range(of: "if saveService.progress(for: story.id) != nil"),
+              let actionRange = bodyBlock.range(of: ".accessibilityAction(named:"),
+              let elseRange = bodyBlock.range(of: "} else {") else {
+            XCTFail("""
+                body doit conditionner .accessibilityAction par \
+                `if saveService.progress(for: story.id) != nil { … } else { … }`. Bloc lu: \(bodyBlock)
+                """)
+            return
+        }
+        XCTAssertTrue(
+            presenceCheckRange.lowerBound < actionRange.lowerBound,
+            ".accessibilityAction doit apparaître APRÈS le if de présence du job, pas avant. Bloc lu: \(bodyBlock)"
+        )
+        XCTAssertTrue(
+            actionRange.lowerBound < elseRange.lowerBound,
+            ".accessibilityAction doit être dans la branche `if` (job en vol), avant le `else`. Bloc lu: \(bodyBlock)"
+        )
+
+        guard let rowContentEnd = viewSource.range(
+            of: "/// Libellé VoiceOver composé",
+            range: rowContentStart.upperBound..<viewSource.endIndex
+        ) else {
+            XCTFail("rowContent doit être suivi de la doc de rowAccessibilityLabel")
+            return
+        }
+        let rowContentBlock = String(viewSource[rowContentStart.lowerBound..<rowContentEnd.lowerBound])
+        XCTAssertFalse(
+            rowContentBlock.contains(".accessibilityAction(named:"),
+            """
+            rowContent est partagé SANS CONDITION par les deux branches de body : s'il porte \
+            .accessibilityAction, l'action redevient permanente indépendamment du if/else vérifié \
+            ci-dessus. Bloc lu: \(rowContentBlock)
+            """
+        )
+    }
+}
