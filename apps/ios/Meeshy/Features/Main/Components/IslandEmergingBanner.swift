@@ -55,16 +55,15 @@ struct IslandEmergingBanner<Content: View>: View {
     fileprivate static var estimatedFinalSize: CGSize { CGSize(width: 240, height: 36) }
     fileprivate static var estimatedFinalHalfHeight: CGFloat { estimatedFinalSize.height / 2 }
 
-    /// Inset top réel de la fenêtre clé — l'île est présente à partir de 59 pt
+    /// Inset top réel de la fenêtre active — l'île est présente à partir de 59 pt
     /// (iPhone 14 Pro → 16 Pro : 59–62 ; notch classique : 44–50).
+    ///
+    /// `DeviceLayout.safeAreaTop` filtre sur `activationState` : l'ancien
+    /// `flatMap(\.windows).first(where: \.isKeyWindow)` aplatissait TOUTES les
+    /// scènes, arrière-plan compris, et pouvait donc trancher « île / pas d'île »
+    /// sur une autre fenêtre que celle qu'on regarde.
     @MainActor
-    private static var windowTopInset: CGFloat {
-        UIApplication.shared.connectedScenes
-            .compactMap { $0 as? UIWindowScene }
-            .flatMap(\.windows)
-            .first(where: \.isKeyWindow)?
-            .safeAreaInsets.top ?? 0
-    }
+    private static var windowTopInset: CGFloat { DeviceLayout.safeAreaTop }
 
     var body: some View {
         let topInset = Self.windowTopInset
