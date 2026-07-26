@@ -59,6 +59,12 @@ final class NavigationContainerMigrationTests: XCTestCase {
         try assertMigrated("MeeshyShareExtension/ShareViewController.swift")
     }
 
+    // MARK: - Migrated in 220i (last holdout)
+
+    func test_statusComposer_usesNavigationStack() throws {
+        try assertMigrated("Meeshy/Features/Main/Views/StatusComposerView.swift")
+    }
+
     private func assertMigrated(_ path: String, file: StaticString = #filePath, line: UInt = #line) throws {
         let source = try String(contentsOf: iosRoot.appendingPathComponent(path), encoding: .utf8)
         XCTAssertFalse(
@@ -75,19 +81,17 @@ final class NavigationContainerMigrationTests: XCTestCase {
         )
     }
 
-    // MARK: - Remaining debt is pinned, not merely tolerated
+    // MARK: - The migration is complete: the floor is now zero
 
-    func test_noUnexpectedNavigationViewRemains() throws {
-        // StatusComposerView is the last holdout. It is deliberately untouched here
-        // because it is held by an in-flight pull request; migrating it is the
-        // follow-up iteration. When that lands, this expectation drops to the empty
-        // set and the test fails until it is updated — which is the intent.
-        let expected: Set<String> = ["StatusComposerView.swift"]
+    func test_noNavigationViewRemains() throws {
+        // 220i migrated StatusComposerView, the last holdout, so the expectation is
+        // now the empty set: any reintroduction of the deprecated container in a
+        // shipping target fails this test.
         XCTAssertEqual(
-            try filesUsingDeprecatedContainer(), expected,
-            "The set of files using the deprecated NavigationView container changed. Either a new " +
-            "NavigationView was introduced (use NavigationStack instead) or the last holdout was " +
-            "migrated (then shrink this expectation)."
+            try filesUsingDeprecatedContainer(), Set<String>(),
+            "A deprecated NavigationView container was reintroduced. Use NavigationStack: at " +
+            "regular width NavigationView defaults to the double-column style and collapses to " +
+            "an empty detail pane, hiding the screen's content and misplacing its toolbar."
         )
     }
 }
