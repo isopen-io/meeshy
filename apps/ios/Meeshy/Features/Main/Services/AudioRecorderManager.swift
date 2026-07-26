@@ -55,12 +55,12 @@ final class AudioRecorderManager: ObservableObject, AudioRecordingProviding {
         self.onMaxDurationReached = onMaxDurationReached
     }
 
-    /// `AudioRecordingProviding` requires `configure(with:)` (commit 2a9188974,
-    /// security/maxDuration caps). On garde la surface étendue
-    /// `configure(settings:onMaxDurationReached:)` pour les callers app qui
-    /// branchent un callback ; cette méthode-shim sert simplement la conformité
-    /// au protocole côté SDK (callers SDK qui veulent juste configurer les
-    /// paramètres d'enregistrement sans observer la duration max).
+    /// Shim de conformité à `AudioRecordingProviding`.
+    ///
+    /// La surface étendue `configure(settings:onMaxDurationReached:)` survit
+    /// pour les appelants app qui branchent encore un callback, mais celui-ci
+    /// n'est plus jamais déclenché : l'enregistrement n'a plus de plafond de
+    /// durée (directive produit 2026-07-26).
     func configure(with settings: AudioRecordingSettings) {
         configure(settings: settings, onMaxDurationReached: nil)
     }
@@ -209,17 +209,6 @@ final class AudioRecorderManager: ObservableObject, AudioRecordingProviding {
 
         duration = recorder.currentTime
         recorder.updateMeters()
-
-        if let maxDuration = settings.maxDuration, duration >= maxDuration {
-            // Sans callback, personne ne stoppe l'enregistrement au cap —
-            // aligné sur `DefaultSDKAudioRecorder` qui se stoppe lui-même.
-            if let onMaxDurationReached {
-                onMaxDurationReached()
-            } else {
-                stopRecording()
-            }
-            return
-        }
 
         let power = recorder.averagePower(forChannel: 0)
         let normalized = normalizeLevel(power)

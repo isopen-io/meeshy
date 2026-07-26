@@ -163,11 +163,6 @@ public final class DefaultSDKAudioRecorder: ObservableObject, AudioRecordingProv
         let current = recorder.currentTime
         duration = current
 
-        if let maxDuration = settings.maxDuration, current >= maxDuration {
-            stopRecording()
-            return
-        }
-
         recorder.updateMeters()
 
         let power = recorder.averagePower(forChannel: 0)
