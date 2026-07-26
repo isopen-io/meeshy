@@ -25,15 +25,22 @@ struct StoryLanguageQuickBar: View {
     let onOpenFullPicker: () -> Void
 
     var body: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
-                ForEach(languages) { language in
-                    chip(language)
+        HStack(spacing: 6) {
+            // Drapeaux DÉFILANTS — les ~5 premières langues sont visibles à
+            // l'ouverture, le reste se révèle au scroll horizontal.
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    ForEach(languages) { language in
+                        chip(language)
+                    }
                 }
-                plusChip
+                .padding(.leading, 12)
+                .padding(.vertical, 8)
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
+            // Le « + » NE défile PAS : épinglé à droite, hors du ScrollView, il
+            // reste toujours visible (directive user 2026-07-26).
+            plusChip
+                .padding(.trailing, 10)
         }
         .background(
             Capsule()
@@ -45,27 +52,25 @@ struct StoryLanguageQuickBar: View {
                                          defaultValue: "Langues disponibles", bundle: .main)))
     }
 
+    /// Chip DRAPEAU SEUL — compact, pour que ~5 langues tiennent à l'ouverture.
+    /// L'actif (langue lue) est cerclé d'indigo. Le code lisible reste sur le
+    /// badge accolé au bouton « Abc ».
     private func chip(_ language: TranslationLanguage) -> some View {
         let isActive = StoryLanguageQuickBar.isActive(language.id, active: activeLanguageCode)
         return Button {
             HapticFeedback.light()
             onSelect(language.id)
         } label: {
-            HStack(spacing: 4) {
-                Text(language.flag)
-                Text(language.id.uppercased())
-                    .font(MeeshyFont.relative(11, weight: .bold, design: .monospaced))
-            }
-            .foregroundColor(.white.opacity(isActive ? 1 : 0.75))
-            .padding(.horizontal, 10)
-            .padding(.vertical, 6)
-            .background(
-                Capsule().fill(isActive ? MeeshyColors.indigo500.opacity(0.9)
-                                        : Color.white.opacity(0.10))
-            )
-            .overlay(
-                Capsule().stroke(isActive ? Color.white.opacity(0.6) : Color.clear, lineWidth: 1)
-            )
+            Text(language.flag)
+                .font(.system(size: 22))
+                .frame(width: 34, height: 34)
+                .background(
+                    Circle().fill(isActive ? MeeshyColors.indigo500.opacity(0.9)
+                                           : Color.white.opacity(0.10))
+                )
+                .overlay(
+                    Circle().stroke(isActive ? Color.white.opacity(0.75) : Color.clear, lineWidth: 2)
+                )
         }
         .buttonStyle(.plain)
         .accessibilityLabel(Text(language.name))
