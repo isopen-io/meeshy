@@ -39,7 +39,7 @@ public struct StoryExportWatermark: @unchecked Sendable {
     // MARK: - Animation constants
 
     /// Seconds spent in each corner before switching.
-    public static let segmentDuration: Double = 5.0
+    public static let segmentDuration: Double = 12.0
     /// Fade-in / fade-out duration at each corner switch.
     static let fadeDuration: Double = 0.4
     /// Breathing cycle (full down-up), matching `AnimatedLogoView`'s 1.5 s
