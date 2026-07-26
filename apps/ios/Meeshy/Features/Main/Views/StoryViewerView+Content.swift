@@ -1149,19 +1149,6 @@ extension StoryViewerView {
         return (priorReactions, priorCount)
     }
 
-    func shareStory() {
-        guard let story = currentStory else { return }
-        let shareURL = "https://meeshy.me/story/\(story.id)"
-        let activityVC = UIActivityViewController(activityItems: [shareURL], applicationActivities: nil)
-        if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
-           let rootVC = windowScene.windows.first?.rootViewController {
-            var topVC = rootVC
-            while let presented = topVC.presentedViewController { topVC = presented }
-            activityVC.popoverPresentationController?.sourceView = topVC.view
-            topVC.present(activityVC, animated: true)
-        }
-    }
-
     // MARK: - Story Time Remaining
 
     func storyTimeRemaining(_ expiresAt: Date) -> String {
@@ -1734,8 +1721,12 @@ struct StoryCommentsOverlayView: View {
     /// When the keyboard rises the list can grow into the space the keyboard
     /// uncovered.
     private var listMaxHeight: CGFloat {
-        let screen = UIScreen.main.bounds.height
-        return keyboard.isVisible ? screen * 0.62 : screen * 0.42
+        // `DeviceLayout.windowSize`, pas `UIScreen.main.bounds` : en Split View
+        // la fraction était prise sur le DISPLAY, donc plus haute que la fenêtre
+        // entière — le plafond ne plafonnait plus rien et la liste recouvrait la
+        // story qu'elle est censée laisser visible.
+        let window = DeviceLayout.windowSize.height
+        return keyboard.isVisible ? window * 0.62 : window * 0.42
     }
 
     /// Instagram-style overlay: comments float above the composer with a top
