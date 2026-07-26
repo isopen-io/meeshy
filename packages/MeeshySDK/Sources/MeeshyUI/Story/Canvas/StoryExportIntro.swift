@@ -102,10 +102,14 @@ public enum StoryExportIntro {
                             size.height / CGFloat(banner.height))
             let drawn = CGSize(width: CGFloat(banner.width) * scale,
                                height: CGFloat(banner.height) * scale)
-            cg.draw(banner, in: CGRect(x: (size.width - drawn.width) / 2,
-                                       y: (size.height - drawn.height) / 2,
-                                       width: drawn.width,
-                                       height: drawn.height))
+            // `UIImage.draw` et NON `cg.draw` : le contexte du renderer est en
+            // repère UIKit (origine haut-gauche). L'API Core Graphics bas-niveau
+            // suppose l'origine bas-gauche et sortirait la bannière retournée
+            // verticalement (le texte, lui, resterait droit) — le bug d'export.
+            UIImage(cgImage: banner).draw(in: CGRect(x: (size.width - drawn.width) / 2,
+                                                     y: (size.height - drawn.height) / 2,
+                                                     width: drawn.width,
+                                                     height: drawn.height))
         } else {
             // Vibrant fallback mirroring the viewer's StoryAuthorIdentityCard:
             // accent colour → black, top-leading to bottom-trailing.
@@ -144,7 +148,10 @@ public enum StoryExportIntro {
         cg.addEllipse(in: avatarRect)
         cg.clip()
         if let avatar = content.avatar {
-            cg.draw(avatar, in: avatarRect)
+            // Même raison que la bannière : passer par UIKit pour respecter le
+            // repère haut-gauche du renderer. Le clip circulaire posé sur `cg`
+            // reste actif — `UIImage.draw` peint dans le contexte courant.
+            UIImage(cgImage: avatar).draw(in: avatarRect)
         } else {
             cg.setFillColor(UIColor(Color(hex: content.accentColorHex)).cgColor)
             cg.fill(avatarRect)

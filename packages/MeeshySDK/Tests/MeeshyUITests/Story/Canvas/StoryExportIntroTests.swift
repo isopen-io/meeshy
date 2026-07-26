@@ -27,6 +27,19 @@ final class StoryExportIntroTests: XCTestCase {
         }.cgImage!
     }
 
+    /// Image dont la moitié HAUTE est `top` et la moitié BASSE est `bottom`.
+    /// `UIGraphicsImageRenderer` peint en repère UIKit (origine haut-gauche), donc
+    /// `top` est bien visuellement en haut du CGImage produit. Sert à révéler un
+    /// éventuel retournement vertical (une image unie le masquerait).
+    private func verticalSplitImage(top: UIColor, bottom: UIColor, size: CGSize) -> CGImage {
+        UIGraphicsImageRenderer(size: size).image { ctx in
+            top.setFill()
+            ctx.fill(CGRect(x: 0, y: 0, width: size.width, height: size.height / 2))
+            bottom.setFill()
+            ctx.fill(CGRect(x: 0, y: size.height / 2, width: size.width, height: size.height / 2))
+        }.cgImage!
+    }
+
     // MARK: - Durée
 
     /// L'image doit se retirer exactement quand le jingle s'éteint : deux
@@ -73,6 +86,44 @@ final class StoryExportIntroTests: XCTestCase {
                                                           size: renderSize))
         let corner = try XCTUnwrap(pixel(of: image, x: 4, y: 4))
         XCTAssertLessThan(corner.green, 200, "la bannière doit être assombrie")
+    }
+
+    // MARK: - Orientation verticale (régression : bannière/avatar à l'envers)
+
+    /// La bannière doit garder son sens : un `CGImage` dessiné avec l'API
+    /// Core Graphics bas-niveau (`cg.draw`) DANS le contexte UIKit-flippé du
+    /// renderer sort retourné verticalement, alors que le texte (UIKit) reste
+    /// droit. On peint une bannière rouge-en-haut / bleu-en-bas et on exige que
+    /// le rouge reste en haut de l'export.
+    func test_render_banner_preservesVerticalOrientation() throws {
+        let banner = verticalSplitImage(top: .red, bottom: .blue,
+                                        size: CGSize(width: 200, height: 200))
+        let image = try XCTUnwrap(StoryExportIntro.render(makeContent(banner: banner),
+                                                          size: renderSize))
+        // Hors avatar (centré ~y=0.44) et hors texte : bande haute et bande basse.
+        let top = try XCTUnwrap(pixel(of: image, x: 40, y: 58))
+        let bottom = try XCTUnwrap(pixel(of: image, x: 40, y: 422))
+        XCTAssertGreaterThan(top.red, top.blue,
+                             "le haut de la bannière (rouge) doit rester en haut (got r=\(top.red) b=\(top.blue))")
+        XCTAssertGreaterThan(bottom.blue, bottom.red,
+                             "le bas de la bannière (bleu) doit rester en bas (got r=\(bottom.red) b=\(bottom.blue))")
+    }
+
+    /// L'avatar aussi : même piège de retournement. Avatar rouge-en-haut /
+    /// bleu-en-bas, échantillonné au centre du disque au-dessus puis au-dessous
+    /// de son centre.
+    func test_render_avatar_preservesVerticalOrientation() throws {
+        let avatar = verticalSplitImage(top: .red, bottom: .blue,
+                                        size: CGSize(width: 200, height: 200))
+        let image = try XCTUnwrap(StoryExportIntro.render(makeContent(avatar: avatar),
+                                                          size: renderSize))
+        // Disque avatar : centre visuel ≈ y=210 (renderSize 270×480), rayon ≈ 38.
+        let discTop = try XCTUnwrap(pixel(of: image, x: 135, y: 195))
+        let discBottom = try XCTUnwrap(pixel(of: image, x: 135, y: 225))
+        XCTAssertGreaterThan(discTop.red, discTop.blue,
+                             "le haut de l'avatar (rouge) doit rester en haut (got r=\(discTop.red) b=\(discTop.blue))")
+        XCTAssertGreaterThan(discBottom.blue, discBottom.red,
+                             "le bas de l'avatar (bleu) doit rester en bas (got r=\(discBottom.red) b=\(discBottom.blue))")
     }
 
     // MARK: - Avatar fallback (initiales) + mood
