@@ -592,6 +592,20 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       tab, searchable grid driven by `filter`, summary cards via `summaryLabel`, the live-preview
       example card via `translationPreview`/`selectedLanguageName`) wired into the `RegistrationViewModel`
       + the `RegistrationStepGate` LANGUAGE arm (`systemLanguage.isNotEmpty()`).
+      **Wizard now collects the regional slot** (slice `registration-regional-language`, 2026-07-26):
+      `RegistrationFields` gains `regionalLanguage: String = ""`; `RegistrationViewModel` exposes
+      `onRegionalLanguageChange(value)` and a derived `RegistrationUiState.languageSelection:
+      LanguageSelectionState` (= `system`/`regional` fields, the read-model the picker's
+      `LanguageStepSelection.isSelected`/`select` consume for slot highlighting). The regional code now
+      flows into the RECAP summary (`RegistrationSummary` input's `regionalLanguage`, so the LANGUAGES row
+      renders `system / regional` when distinct, collapses to `system` alone when blank/equal) and into
+      `RegisterRequest.regionalLanguage` (**trimmed → null when blank**, matching iOS's optional secondary
+      language). **+7 behavioural VM tests** (setter updates field; `languageSelection` mirrors both slots;
+      register sends the chosen code / null when blank / null when whitespace / trimmed value; summary
+      shows the distinct regional label). **Mutation (RED proof):** replacing the `toRegisterRequest`
+      regional line with `null` fails **exactly** `register_sendsChosenRegionalLanguage` +
+      `register_trimsRegionalLanguageValue`, no collateral. Only the app-side `StepLanguageView` composable
+      remains before this box flips to `[x]`.
 - [~] Profile photo / banner / bio optional step; registration recap + terms acceptance —
       **unified per-step proceed-gate core shipped** (slice `registration-step-gate-core`, 2026-07-22).
       Pure `:core:model/auth/RegistrationStepGate.kt` — the SSOT capstone that answers the wizard's

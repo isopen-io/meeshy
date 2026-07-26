@@ -24,6 +24,7 @@ data class RegistrationFields(
     val password: String = "",
     val confirmPassword: String = "",
     val systemLanguage: String = "",
+    val regionalLanguage: String = "",
     val acceptTerms: Boolean = false,
 )
 

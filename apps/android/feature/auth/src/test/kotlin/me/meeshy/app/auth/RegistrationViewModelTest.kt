@@ -19,6 +19,8 @@ import me.meeshy.sdk.model.MeEnvelope
 import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.model.RefreshTokenRequest
 import me.meeshy.sdk.model.RegisterRequest
+import me.meeshy.sdk.model.auth.LanguageSelectionState
+import me.meeshy.sdk.model.auth.LanguageStepSelection
 import me.meeshy.sdk.model.auth.RegistrationStep
 import me.meeshy.sdk.model.auth.SummaryField
 import me.meeshy.sdk.model.auth.StepFill
@@ -465,6 +467,83 @@ class RegistrationViewModelTest {
         vm.skip() // PHONE -> EMAIL, clears the number + marks skipped
 
         assertThat(vm.state.value.summary.map { it.field }).doesNotContain(SummaryField.PHONE)
+    }
+
+    // ---- regional (secondary) language wiring --------------------------------
+
+    @Test
+    fun onRegionalLanguageChange_updatesRegionalLanguageField() {
+        val (vm, _, _) = scenario()
+        vm.onRegionalLanguageChange("es")
+        assertThat(vm.state.value.fields.regionalLanguage).isEqualTo("es")
+    }
+
+    @Test
+    fun languageSelection_mirrorsSystemAndRegionalFields() {
+        val (vm, _, _) = scenario()
+        vm.onSystemLanguageChange("fr")
+        vm.onRegionalLanguageChange("es")
+        assertThat(vm.state.value.languageSelection)
+            .isEqualTo(LanguageSelectionState(systemLanguage = "fr", regionalLanguage = "es"))
+    }
+
+    @Test
+    fun register_sendsChosenRegionalLanguage() = runTest(dispatcher) {
+        val (vm, api, _) = scenario(ApiResponse(success = true, data = session()))
+        vm.fillAllValid()
+        vm.onRegionalLanguageChange("es")
+        repeat(RegistrationStep.total) { vm.skip() }
+        vm.register()
+        advanceUntilIdle()
+
+        assertThat(api.captured.single().regionalLanguage).isEqualTo("es")
+    }
+
+    @Test
+    fun register_blankRegionalLanguage_sendsNullNotBlank() = runTest(dispatcher) {
+        val (vm, api, _) = scenario(ApiResponse(success = true, data = session()))
+        vm.fillAllValid() // never chooses a regional language
+        repeat(RegistrationStep.total) { vm.skip() }
+        vm.register()
+        advanceUntilIdle()
+
+        assertThat(api.captured.single().regionalLanguage).isNull()
+    }
+
+    @Test
+    fun register_whitespaceRegionalLanguage_isTrimmedToNull() = runTest(dispatcher) {
+        val (vm, api, _) = scenario(ApiResponse(success = true, data = session()))
+        vm.fillAllValid()
+        vm.onRegionalLanguageChange("   ")
+        repeat(RegistrationStep.total) { vm.skip() }
+        vm.register()
+        advanceUntilIdle()
+
+        assertThat(api.captured.single().regionalLanguage).isNull()
+    }
+
+    @Test
+    fun register_trimsRegionalLanguageValue() = runTest(dispatcher) {
+        val (vm, api, _) = scenario(ApiResponse(success = true, data = session()))
+        vm.fillAllValid()
+        vm.onRegionalLanguageChange("  es  ")
+        repeat(RegistrationStep.total) { vm.skip() }
+        vm.register()
+        advanceUntilIdle()
+
+        assertThat(api.captured.single().regionalLanguage).isEqualTo("es")
+    }
+
+    @Test
+    fun summary_includesDistinctRegionalLanguage() {
+        val (vm, _, _) = scenario()
+        vm.fillAllValid() // systemLanguage = "fr"
+        vm.onRegionalLanguageChange("es")
+
+        val languages = vm.state.value.summary.first { it.field == SummaryField.LANGUAGES }.value
+        val expected =
+            "${LanguageStepSelection.summaryLabel("fr")} / ${LanguageStepSelection.summaryLabel("es")}"
+        assertThat(languages).isEqualTo(expected)
     }
 
     private fun session() = AuthSession(MeeshyUser(id = "u1", username = "atabeth"), token = "jwt")
