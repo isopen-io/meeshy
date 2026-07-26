@@ -768,13 +768,14 @@ struct StoryViewerView: View {
             UnifiedPostComposer(
                 repostingStory: wrapper.story,
                 authorHandle: wrapper.authorHandle,
-                onPublishRepost: { content, sourceStory in
+                onPublishRepost: { content, sourceStory, visibility in
                     do {
                         _ = try await PostService.shared.repost(
                             postId: sourceStory.id,
                             targetType: .post,
                             content: content.isEmpty ? nil : content,
-                            isQuote: !content.isEmpty
+                            isQuote: !content.isEmpty,
+                            visibility: visibility
                         )
                         editAndRepostAsPostSource = nil
                         FeedbackToastManager.shared.show("Publié")

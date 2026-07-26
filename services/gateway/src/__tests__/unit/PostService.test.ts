@@ -677,6 +677,45 @@ describe('PostService', () => {
       expect(result).toEqual(repost);
     });
 
+    // ─── Audience choisie au repost ─────────────────────────────────────────
+    //
+    // Le composer de repost affiche un sélecteur d'audience (Public / Amis /
+    // Privé) — mais `visibility` n'atteignait AUCUNE couche : ni le handler du
+    // composer, ni le SDK, ni cette méthode, qui recopiait `original.visibility`.
+    // Comme un repost n'est autorisé que sur un original PUBLIC, TOUT repost
+    // sortait en PUBLIC. L'utilisateur qui choisissait « Privé » publiait en
+    // grand public sans le savoir.
+
+    it('honours the visibility chosen by the reposter', async () => {
+      const original = makePost({ id: 'original-1', visibility: 'PUBLIC' });
+      prisma.post.findFirst.mockResolvedValue(original);
+      prisma.post.create.mockResolvedValue(makePost({ id: 'repost-1' }));
+      prisma.post.update.mockResolvedValue(original);
+
+      await service.repostPost('original-1', 'user-reposter', { visibility: 'PRIVATE' as never });
+
+      expect(prisma.post.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ visibility: 'PRIVATE' }),
+        }),
+      );
+    });
+
+    it('falls back to the original visibility when the reposter picks nothing', async () => {
+      const original = makePost({ id: 'original-1', visibility: 'PUBLIC' });
+      prisma.post.findFirst.mockResolvedValue(original);
+      prisma.post.create.mockResolvedValue(makePost({ id: 'repost-1' }));
+      prisma.post.update.mockResolvedValue(original);
+
+      await service.repostPost('original-1', 'user-reposter');
+
+      expect(prisma.post.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ visibility: 'PUBLIC' }),
+        }),
+      );
+    });
+
     it('creates a quote repost with content', async () => {
       const original = makePost({ id: 'original-1', visibility: 'PUBLIC' });
       prisma.post.findFirst.mockResolvedValue(original);

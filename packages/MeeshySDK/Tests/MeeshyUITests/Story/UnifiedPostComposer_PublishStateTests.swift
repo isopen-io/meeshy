@@ -175,10 +175,10 @@ final class UnifiedPostComposer_PublishStateTests: XCTestCase {
         let composer = UnifiedPostComposer(
             repostingStory: story,
             authorHandle: "alice",
-            onPublishRepost: { _, _ in
+            onPublishRepost: { _, _, _ in
                 attempts += 1
                 if attempts == 1 { throw StubError(tag: "repost-flaky") }
-            } as (String, StoryItem) async throws -> Void,
+            } as (String, StoryItem, String) async throws -> Void,
             onDismiss: {}
         )
 

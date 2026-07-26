@@ -26,7 +26,7 @@ final class UnifiedPostComposerRepostTests: XCTestCase {
         let composer = UnifiedPostComposer(
             repostingStory: story,
             authorHandle: "alice",
-            onPublishRepost: { _, _ in },
+            onPublishRepost: { _, _, _ in },
             onDismiss: {}
         )
 
@@ -44,7 +44,7 @@ final class UnifiedPostComposerRepostTests: XCTestCase {
         let composer = UnifiedPostComposer(
             repostingStory: story,
             authorHandle: "alice",
-            onPublishRepost: { _, _ in },
+            onPublishRepost: { _, _, _ in },
             onDismiss: {}
         )
 
@@ -57,14 +57,16 @@ final class UnifiedPostComposerRepostTests: XCTestCase {
     func test_publish_invokesOnPublishRepostWithContentAndStory() async {
         var publishedContent: String?
         var publishedStory: StoryItem?
+        var publishedVisibility: String?
         let story = Self.makeStoryItem(id: "src-1")
 
         let composer = UnifiedPostComposer(
             repostingStory: story,
             authorHandle: "alice",
-            onPublishRepost: { content, sourceStory in
+            onPublishRepost: { content, sourceStory, visibility in
                 publishedContent = content
                 publishedStory = sourceStory
+                publishedVisibility = visibility
             },
             onDismiss: {}
         )
@@ -81,6 +83,8 @@ final class UnifiedPostComposerRepostTests: XCTestCase {
                        "Publish action must forward the typed content to onPublishRepost")
         XCTAssertEqual(publishedStory?.id, "src-1",
                        "Publish action must forward the source story to onPublishRepost")
+        XCTAssertEqual(publishedVisibility, "PUBLIC",
+                       "L'audience affichée par le sélecteur doit atteindre le handler — c'est elle qui décide qui verra le repost")
     }
 
     // MARK: - Fixtures

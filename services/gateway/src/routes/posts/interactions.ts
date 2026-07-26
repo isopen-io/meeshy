@@ -1,6 +1,7 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { PostType } from '@meeshy/shared/prisma/client';
+import type { PostVisibility } from '@meeshy/shared/prisma/client';
 import type { Post } from '@meeshy/shared/types/post';
 import { UnifiedAuthRequest } from '../../middleware/auth';
 import { PostService } from '../../services/PostService';
@@ -694,6 +695,7 @@ export function registerInteractionRoutes(
           targetType: data.targetType as PostType | undefined,
           content: data.content,
           isQuote: data.isQuote,
+          visibility: ('visibility' in data ? data.visibility : undefined) as PostVisibility | undefined,
         },
       );
 

@@ -2162,11 +2162,18 @@ public struct RepostRequest: Encodable {
     public let content: String?
     public let isQuote: Bool
     public let targetType: String?
+    /// Audience choisie par le REPOSTEUR. `nil` ⇒ la gateway hérite de la
+    /// visibilité de l'original. Sans ce champ, le sélecteur d'audience du
+    /// composer de repost n'atteignait aucune couche : tout repost sortait
+    /// PUBLIC, seule visibilité qu'un original repostable puisse avoir.
+    public let visibility: String?
 
-    public init(content: String? = nil, isQuote: Bool = false, targetType: String? = nil) {
+    public init(content: String? = nil, isQuote: Bool = false,
+                targetType: String? = nil, visibility: String? = nil) {
         self.content = content
         self.isQuote = isQuote
         self.targetType = targetType
+        self.visibility = visibility
     }
 }
 

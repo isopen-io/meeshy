@@ -49,7 +49,10 @@ public struct UnifiedPostComposer: View {
 
     /// Async-throwing repost-mode publish handler. Nil when not in repost mode.
     /// When set, takes precedence over `publishHandler` in the Publish button.
-    private let repostPublishHandler: ((String, StoryItem) async throws -> Void)?
+    /// `(contenu, story source, audience choisie)`. L'audience était le
+    /// paramètre manquant : le sélecteur s'affichait mais sa valeur n'allait
+    /// nulle part — tout repost sortait avec la visibilité de l'original.
+    private let repostPublishHandler: ((String, StoryItem, String) async throws -> Void)?
 
     public var onDismiss: () -> Void
 
@@ -107,7 +110,7 @@ public struct UnifiedPostComposer: View {
     public init(
         repostingStory story: StoryItem,
         authorHandle: String,
-        onPublishRepost: @escaping (_ content: String, _ sourceStory: StoryItem) -> Void,
+        onPublishRepost: @escaping (_ content: String, _ sourceStory: StoryItem, _ visibility: String) -> Void,
         onStoryImported: ((RepostImportResult) -> Void)? = nil,
         onDismiss: @escaping () -> Void
     ) {
@@ -115,8 +118,8 @@ public struct UnifiedPostComposer: View {
         self.lockedType = .post
         self._repostSourceStory = State(initialValue: story)
         self.repostSourceForTests = story
-        self.repostPublishHandler = { content, source in
-            onPublishRepost(content, source)
+        self.repostPublishHandler = { content, source, visibility in
+            onPublishRepost(content, source, visibility)
         }
         self.onStoryImported = onStoryImported
         self.onDismiss = onDismiss
@@ -131,7 +134,7 @@ public struct UnifiedPostComposer: View {
     public init(
         repostingStory story: StoryItem,
         authorHandle: String,
-        onPublishRepost: @escaping (_ content: String, _ sourceStory: StoryItem) async throws -> Void,
+        onPublishRepost: @escaping (_ content: String, _ sourceStory: StoryItem, _ visibility: String) async throws -> Void,
         onStoryImported: ((RepostImportResult) -> Void)? = nil,
         onDismiss: @escaping () -> Void
     ) {
@@ -153,7 +156,7 @@ public struct UnifiedPostComposer: View {
     internal func triggerPublishForTests(content: String) {
         if let story = repostSourceForTests, let repostPublishHandler {
             Task {
-                try? await repostPublishHandler(content, story)
+                try? await repostPublishHandler(content, story, visibility)
             }
         } else {
             Task {
@@ -168,7 +171,7 @@ public struct UnifiedPostComposer: View {
     internal func triggerPublishForTestsAwaiting(content: String) async -> Bool {
         do {
             if let story = repostSourceForTests, let repostPublishHandler {
-                try await repostPublishHandler(content, story)
+                try await repostPublishHandler(content, story, visibility)
             } else {
                 try await publishHandler(selectedType, content, moodEmoji, nil, selectedImage)
             }
@@ -538,13 +541,14 @@ public struct UnifiedPostComposer: View {
             isPublishing = true
             HapticFeedback.success()
             let typedContent = content
+            let typedVisibility = visibility
             let typedType = selectedType
             let typedMood = moodEmoji
             let typedImage = selectedImage
             Task { @MainActor in
                 do {
                     if let story = repostSourceStory, let repostPublishHandler {
-                        try await repostPublishHandler(typedContent, story)
+                        try await repostPublishHandler(typedContent, story, typedVisibility)
                     } else {
                         try await publishHandler(typedType, typedContent, typedMood, nil, typedImage)
                     }

@@ -14,6 +14,24 @@ de la première passe ne doit être repris sans son verdict de réfutation.
 | dont atteignables par un utilisateur | 34 |
 | Trous de COUVERTURE non arbitrés (statut « partiel ») | 87 |
 
+## Journal des correctifs
+
+**2026-07-26 — lot 1 (8 commits, `353ac4397` → `a0806f197`)** : pause effacée par
+le ré-armement du timer · groupe expiré fermant le lecteur · bouton Son
+inactionnable par VoiceOver · contenu jamais énoncé · marquage « vue » pendant
+l'interlude · parsing du dégradé de fond · stories vides publiables et rendues
+en noir · bouton « Répondre » perdu en mono-auteur · file hors-ligne des
+commentaires · garde de geste vertical sur surface ouverte.
+
+**2026-07-26 — lot 2** : durée de slide restaurée par undo/redo · bandeau des
+deux signaux orphelins (durée recalculée, story mise en file) · inspecteur du
+clip sticker · compteur « +N pistes » · traduction à la demande des textes de
+canvas (gateway) · audience du repost câblée de bout en bout.
+
+Les lignes marquées ✅ **en gras** dans ce rapport le sont soit d'origine, soit
+par ces deux lots. Les lignes 🟡 « non arbitré » n'ont PAS été traitées : ce sont
+des trous de couverture, pas des défauts prouvés.
+
 
 ## Restitution story iOS — réactions, commentaires, réponses, notifications
 
@@ -74,7 +92,7 @@ de la première passe ne doit être repris sans son verdict de réfutation.
 - ✅ **Survie de l'historique d'édition timeline à un crash (blob opaque)** — MeeshySDKTests/Store/StoryDraftStoreTests.swift:27/31/40/48 (nil, round-trip, écrasement, purge par clear) + MeeshyUITests/Timeline/ViewModel/Timeline
 - 🟡 File d'attente offline de publication + drain à la reconnexion — partiel, non arbitré. Chemin vivant : StoryViewModel.swift:966 `StoryPublishQueue.shared.enqueue(item)` via persistPublishIntentToQueue ; drain StoryPublishQueue.
 - 🔴 **Copie des médias vers le dossier de la file offline** — CONFIRMÉ partiel. apps/ios/Meeshy/Features/Main/ViewModels/StoryViewModel.swift:915-941 ; packages/MeeshySDK/Sources/MeeshySDK/Persistence/StoryPublishQueue.swift:407-417 ; packages/MeeshySDK/Sources/MeeshyUI/Story/Sto
-- 🟠 **Publication offline depuis la timeline (handlePublishTap + snackbar de confirmation)** — CONFIRMÉ absent. packages/MeeshySDK/Sources/MeeshyUI/Story/Timeline/ViewModel/TimelineViewModel+OfflinePublish.swift:79-113 (0 appelant hors tests) ; apps/ios/Meeshy/Features/Main/ViewModels/StoryViewModel.swift:762-7
+- 🟠 **Publication offline depuis la timeline (handlePublishTap + snackbar de confirmation)** — snackbar LIVRÉE 2026-07-26 (TimelineBannerOverlay) ; l'appelant de handlePublishTap reste absent. — CONFIRMÉ absent. packages/MeeshySDK/Sources/MeeshyUI/Story/Timeline/ViewModel/TimelineViewModel+OfflinePublish.swift:79-113 (0 appelant hors tests) ; apps/ios/Meeshy/Features/Main/ViewModels/StoryViewModel.swift:762-7
 - 🟡 Enregistrement du handler de publication (StoryOfflineQueueBootstrap vs StoryPublishService) — casse, non arbitré. Deux écrivains concurrents non gardés sur le MÊME `StoryPublishQueue.shared.onPublish` : apps/ios/Meeshy/MeeshyApp.swift:224 → StoryOfflineQ
 - ✅ **Migration des anciennes files offline (StoryQueueMigrator)** — MeeshySDKTests/Persistence/StoryQueueUnificationTests.swift:177 (draine le fichier legacy réel), :199 (idempotence, 2e passage no-op), :218 (JSON corr
 - 🟠 **Reprise d'un item bloqué en file comme brouillon (recoverLastStuckItem)** — CONFIRMÉ absent. packages/MeeshySDK/Sources/MeeshySDK/Persistence/StoryPublishQueue.swift:335-343 ; apps/ios/Meeshy/Features/Main/Views/RootView.swift:2107-2120 ; apps/ios/Meeshy/Features/Main/Views/MyStoriesView.swif
@@ -171,10 +189,10 @@ de la première passe ne doit être repris sans son verdict de réfutation.
 - ✅ **Résolution de la légende du post sur la chaîne complète** — MeeshySDKTests/Models/StoryItemPrismeContentTests.swift:12-35 — chaîne, ordre, et `noMatch_returnsOriginal_neverTranslationsFirst`
 - ✅ **Chaîne de résolution systemLanguage > regionalLanguage > customDestinationLanguage > locale appareil > fr** — MeeshySDKTests/Auth/MeeshyUserPreferredContentLanguagesTests.swift
 - ✅ **Override de langue par le lecteur (Prisme « Exploration ») — prépendu à la chaîne, éphémère** — apps/ios/MeeshyTests/Features/Stories/StoryViewerLanguageOverrideTests.swift (helper, 6 cas) + MeeshyUITests/Story/Canvas/ReaderLanguageSwitchTests.sw
-- 🔴 **Traduction à la demande d'une langue non encore disponible (feuille « Traductions »)** — CONFIRMÉ casse. apps/ios/Meeshy/Features/Main/Views/StoryViewerView+Canvas.swift:1718-1735 ; StoryInteractionService.swift:35-50 ; services/gateway/src/routes/posts/core.ts:357-381 ; PostTranslationService.ts:105-153
+- ✅ **Traduction à la demande d'une langue non encore disponible (feuille « Traductions »)** — CONFIRMÉ casse. apps/ios/Meeshy/Features/Main/Views/StoryViewerView+Canvas.swift:1718-1735 ; StoryInteractionService.swift:35-50 ; services/gateway/src/routes/posts/core.ts:357-381 ; PostTranslationService.ts:105-153
 - ✅ **Langues proposées à l'exploration (union texte canvas + légende)** — MeeshySDKTests/Models/StoryTextLanguageAvailabilityTests.swift — 10 cas comportementaux (union multi-textes, texte vide ignoré, normalisation fr-FR/FR
 - ✅ **Apparition du bouton « Traductions » conditionnée à la présence de texte** — StoryTextLanguageAvailabilityTests.swift:118-136 (moteur) + apps/ios/MeeshyTests/Features/Stories/StoryActionRailPlanTests.swift:40-51 (rail)
-- 🔴 **Bascule « Afficher la transcription » dans le menu « … »** — CONFIRMÉ casse. apps/ios/Meeshy/Features/Main/Views/StoryViewerView.swift:1659-1662 (garde) ; StoryViewerView+Sidebar.swift:727 (entrée de menu) ; packages/MeeshySDK/Sources/MeeshyUI/Story/StoryComposerView+Media.swi
+- ✅ **Bascule « Afficher la transcription » dans le menu « … »** — CONFIRMÉ casse. apps/ios/Meeshy/Features/Main/Views/StoryViewerView.swift:1659-1662 (garde) ; StoryViewerView+Sidebar.swift:727 (entrée de menu) ; packages/MeeshySDK/Sources/MeeshyUI/Story/StoryComposerView+Media.swi
 - 🟡 Résolution de la transcription (chaîne préférée, puis langue parlée d'origine) — partiel, non arbitré. packages/MeeshySDK/Sources/MeeshySDK/Models/StoryAudioTranscript.swift:40-50 ; appelé par StoryViewerView.swift:1653-1654 — mais toujours su
 - ✅ **Variante audio TTS jouée dans la langue du lecteur** — MeeshySDKTests/Models/Story/Resolution/StoryAudioPlayerObjectResolutionTests.swift:9-31 — comportemental (ordre de chaîne, repli sur la piste d'origin
 - ⚪️ ~~`StoryAudioTranscript.variant(effects:preferredLanguages:)` et `.availableLanguages(effects:)`~~ — faux positif de l'audit, statut réel : ok
@@ -318,7 +336,7 @@ de la première passe ne doit être repris sans son verdict de réfutation.
 - 🔴 **Règle d'activation du bouton Publier (contenu minimal requis)** — CONFIRMÉ absent. packages/MeeshySDK/Sources/MeeshyUI/Story/StoryComposerView+TopBar.swift:136 ; StoryComposerView+Publication.swift:50-77 ; apps/ios/.../StoryViewModel.swift:755 ; services/gateway/src/routes/posts/typ
 - 🟡 Sélecteur d'audience du composer story (PUBLIC / COMMUNITY / FRIENDS / EXCEPT / ONLY / PRIVATE) — partiel, non arbitré. packages/MeeshySDK/Sources/MeeshyUI/Story/StoryComposerView+TopBar.swift:140-170 (visibilityMenu, monté ligne 65) ; valeur propagée Publicat
 - 🟡 Picker d'utilisateurs pour EXCEPT / ONLY (« Sauf… » / « Seulement… ») — partiel, non arbitré. packages/MeeshySDK/Sources/MeeshyUI/Story/StoryComposerView+TopBar.swift:145 (audiencePickerMode) et :165-169 (sheet AudienceUserPickerView)
-- 🔴 **Sélecteur d'audience de UnifiedPostComposer (repost story → post)** — CONFIRMÉ casse. packages/MeeshySDK/Sources/MeeshyUI/Story/UnifiedPostComposer.swift:340+498-515+546-550 ; apps/ios/.../StoryViewerView.swift:759-766 ; services/gateway/src/services/PostService.ts:1375-1379,1495
+- ✅ **Sélecteur d'audience de UnifiedPostComposer (repost story → post)** — CONFIRMÉ casse. packages/MeeshySDK/Sources/MeeshyUI/Story/UnifiedPostComposer.swift:340+498-515+546-550 ; apps/ios/.../StoryViewerView.swift:759-766 ; services/gateway/src/services/PostService.ts:1375-1379,1495
 - ✅ **Assainissement des effets avant envoi (strip des file:// locaux)** — packages/MeeshySDK/Tests/MeeshySDKTests/Models/Story/StoryEffectsSanitizationTests.swift:19-130 — 8 tests comportementaux (file:// nullifié, https/fix
 - 🟡 Upload des médias du publish (TUS : fond, images/vidéos foreground, audio) — partiel, non arbitré. apps/ios/Meeshy/Features/Main/ViewModels/StoryViewModel.swift:1189-1298 (uploadFile pour bg, mediaObjects, audioPlayerObjects, flip mediaURL
 - 🟡 Expiration des stories (règle produit « 24 h ») — partiel, non arbitré. services/gateway/src/services/PostService.ts:33 `STORY_EXPIRY_HOURS = 21` (appliqué :112 et :37) ; miroir client packages/MeeshySDK/Sources/
@@ -335,15 +353,15 @@ de la première passe ne doit être repris sans son verdict de réfutation.
 ## Story — Création : timeline, clips, keyframes, transitions, durées (iOS / MeeshySDK-MeeshyUI)
 
 - 🟡 Pose d'un keyframe au playhead (bouton « Animer au playhead ») — casse, non arbitré. packages/MeeshySDK/Sources/MeeshyUI/Story/Timeline/Views/Container/TimelineInspectorHost.swift:292 — `onAddKeyframe: { viewModel.addKeyframe
-- 🔴 **Bouton « déployer les pistes (+N) »** — CONFIRMÉ casse. packages/MeeshySDK/Sources/MeeshyUI/Story/Timeline/Views/Container/StoryTimelineView.swift:533 + :843-850 (allTrackCount ≤ 4 seaux) vs :102-152 (8 groupes, maxCount=3) et :158-199 (1 lane/clip) ; uniq
-- 🔴 **Toast « la durée a été recalculée automatiquement »** — CONFIRMÉ absent. packages/MeeshySDK/Sources/MeeshyUI/Story/Timeline/ViewModel/TimelineViewModel.swift:92, :435 (émission) ; 0 lecteur en source (grep dépôt entier) ; StoryTimelineHost.swift:29-47 sans overlay
+- ✅ **Bouton « déployer les pistes (+N) »** — CONFIRMÉ casse. packages/MeeshySDK/Sources/MeeshyUI/Story/Timeline/Views/Container/StoryTimelineView.swift:533 + :843-850 (allTrackCount ≤ 4 seaux) vs :102-152 (8 groupes, maxCount=3) et :158-199 (1 lane/clip) ; uniq
+- ✅ **Toast « la durée a été recalculée automatiquement »** — CONFIRMÉ absent. packages/MeeshySDK/Sources/MeeshyUI/Story/Timeline/ViewModel/TimelineViewModel.swift:92, :435 (émission) ; 0 lecteur en source (grep dépôt entier) ; StoryTimelineHost.swift:29-47 sans overlay
 - 🟡 Pin manuel de la durée de slide (poignée losange + « +10 s ») — partiel, non arbitré. packages/MeeshySDK/Sources/MeeshyUI/Story/Timeline/ViewModel/TimelineViewModel+Plan4Helpers.swift:138-155 (`setSlideDuration` / `extendSlide
-- 🔴 **Undo / Redo — restauration de la durée de slide** — CONFIRMÉ casse. packages/MeeshySDK/Sources/MeeshyUI/Story/Timeline/ViewModel/TimelineViewModel.swift:452-470 (undo/redo sans recomputeSlideDuration) vs :333, :552 et TimelineViewModel+Plan4Helpers.swift:53, :84, :102
+- ✅ **Undo / Redo — restauration de la durée de slide** — CONFIRMÉ casse. packages/MeeshySDK/Sources/MeeshyUI/Story/Timeline/ViewModel/TimelineViewModel.swift:452-470 (undo/redo sans recomputeSlideDuration) vs :333, :552 et TimelineViewModel+Plan4Helpers.swift:53, :84, :102
 - 🔴 **Déplacement TEMPOREL d'un keyframe** — CONFIRMÉ absent. packages/MeeshySDK/Sources/MeeshyUI/Story/Timeline/ViewModel/TimelineViewModel+Plan4Helpers.swift:340-347 (aucun appelant) vs :357-384 (newTime = snapshot.time) ; LaneKeyframeOverlays.swift:26 ; Keyfr
 - 🔴 **Steppers ±0,1 s « Début » de l'inspecteur clip** — CONFIRMÉ partiel. packages/MeeshySDK/Sources/MeeshyUI/Story/Timeline/ViewModel/TimelineViewModel.swift:261-265 et :284-288 (tolérance 0,16 s + candidat slideStart 0) ; :314-319 (garde no-op) ; ViewModel/TimelineViewMod
 - 🟡 Aimantation magnétique aux bords des autres objets — partiel, non arbitré. packages/MeeshySDK/Sources/MeeshyUI/Story/Timeline/ViewModel/TimelineViewModel.swift:283-307 (`magneticSnapCandidates`) — implémentée et app
 - 🔴 **Sélection auto du clip actif pendant la lecture** — CONFIRMÉ absent. packages/MeeshySDK/Sources/MeeshyUI/Story/Timeline/Engine/StoryTimelineEngine.swift:32 (déclaration) vs :302,308,337,370,385 (seuls callbacks émis) ; Engine/StoryTimelineEngine+Providing.swift:18 (con
-- 🔴 **Inspecteur d'un clip STICKER** — CONFIRMÉ absent. packages/MeeshySDK/Sources/MeeshyUI/Story/Timeline/Views/Container/TimelineInspectorHost.swift:87-150 et :237-250 (aucun sticker) ; Views/Container/StoryTimelineView.swift:795-815 (lane sticker tapabl
+- ✅ **Inspecteur d'un clip STICKER** — CONFIRMÉ absent. packages/MeeshySDK/Sources/MeeshyUI/Story/Timeline/Views/Container/TimelineInspectorHost.swift:87-150 et :237-250 (aucun sticker) ; Views/Container/StoryTimelineView.swift:795-815 (lane sticker tapabl
 - 🟡 Dérivation automatique de la durée de slide (« la donnée la plus longue gagne ») — partiel, non arbitré. packages/MeeshySDK/Sources/MeeshySDK/Models/StoryModels.swift:1039-1078 (`StoryEffects.contentDerivedDuration`) ne prend que `mediaObjects`,
 - 🟡 Easing d'un keyframe (courbe d'interpolation) — partiel, non arbitré. packages/MeeshySDK/Sources/MeeshyUI/Story/Timeline/Views/Container/TimelineInspectorHost.swift:324 fige `isAdvancedEnabled: false` ⇒ Keyfram
 - 🟡 Inspecteur de transition — normalisation dissolve→crossfade à l'ouverture — partiel, non arbitré. packages/MeeshySDK/Sources/MeeshyUI/Story/Timeline/Views/Inspector/TransitionInspector.swift:130-135 — `kindPicker.onAppear` appelle `onKind

@@ -214,6 +214,32 @@ final class PostServiceTests: XCTestCase {
         XCTAssertEqual(mock.lastRequest?.bodyJSON?["content"] as? String, "Mon commentaire")
     }
 
+    /// Le composer de repost affiche un sélecteur d'audience. Sa valeur ne
+    /// traversait AUCUNE couche — ni le handler, ni cette requête, ni la
+    /// gateway, qui recopiait la visibilité de l'original. Un repost n'étant
+    /// permis que sur un original PUBLIC, tout repost sortait PUBLIC : choisir
+    /// « Privé » publiait en grand public, sans le moindre signal.
+    func test_PostService_repost_sends_theChosenVisibility() async throws {
+        let response = APIResponse(success: true, data: makePost(id: "story-1"), error: nil)
+        mock.stub("/posts/story-1/repost", result: response)
+
+        _ = try await service.repost(postId: "story-1", targetType: .post,
+                                     content: nil, isQuote: false, visibility: "PRIVATE")
+
+        XCTAssertEqual(mock.lastRequest?.bodyJSON?["visibility"] as? String, "PRIVATE")
+    }
+
+    /// Sans choix explicite, la gateway garde l'héritage historique — le
+    /// champ ne doit donc PAS être envoyé.
+    func test_PostService_repost_omitsVisibility_whenNoneChosen() async throws {
+        let response = APIResponse(success: true, data: makePost(id: "story-1"), error: nil)
+        mock.stub("/posts/story-1/repost", result: response)
+
+        _ = try await service.repost(postId: "story-1")
+
+        XCTAssertNil(mock.lastRequest?.bodyJSON?["visibility"] ?? nil)
+    }
+
     // MARK: - share
 
     func testShareCallsCorrectEndpoint() async throws {

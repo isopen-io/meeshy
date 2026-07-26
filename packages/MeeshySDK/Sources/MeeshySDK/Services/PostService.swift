@@ -50,7 +50,7 @@ public protocol PostServiceProviding: Sendable {
     func likeComment(postId: String, commentId: String) async throws
     func unlikeComment(postId: String, commentId: String) async throws
     func deleteComment(postId: String, commentId: String) async throws
-    func repost(postId: String, targetType: PostType?, content: String?, isQuote: Bool) async throws -> APIPost
+    func repost(postId: String, targetType: PostType?, content: String?, isQuote: Bool, visibility: String?) async throws -> APIPost
     func share(postId: String) async throws
     func share(postId: String, platform: String?, generateLink: Bool) async throws -> PostShareResult
     func createStory(content: String?, storyEffects: StoryEffects?, visibility: String, visibilityUserIds: [String]?, originalLanguage: String?, mediaIds: [String]?, repostOfId: String?) async throws -> APIPost
@@ -182,12 +182,14 @@ public final class PostService: PostServiceProviding, @unchecked Sendable {
         postId: String,
         targetType: PostType? = nil,
         content: String? = nil,
-        isQuote: Bool = false
+        isQuote: Bool = false,
+        visibility: String? = nil
     ) async throws -> APIPost {
         let body = RepostRequest(
             content: content,
             isQuote: isQuote,
-            targetType: targetType?.rawValue
+            targetType: targetType?.rawValue,
+            visibility: visibility
         )
         let response: APIResponse<APIPost> = try await api.post(endpoint: "/posts/\(postId)/repost", body: body)
         return response.data

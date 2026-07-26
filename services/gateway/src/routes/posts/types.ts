@@ -297,6 +297,10 @@ export const RepostSchema = z.object({
   targetType: z.enum(['POST', 'REEL', 'STORY', 'STATUS']).optional(),
   content: z.string().max(5000).optional(),
   isQuote: z.boolean().default(false),
+  // Audience choisie par le REPOSTEUR. Le composer l'affiche depuis toujours ;
+  // sans ce champ elle n'atteignait aucune couche et tout repost sortait avec
+  // la visibilité de l'original (donc PUBLIC, seule valeur repostable).
+  visibility: z.enum(['PUBLIC', 'FRIENDS', 'COMMUNITY', 'PRIVATE', 'EXCEPT', 'ONLY']).optional(),
 });
 
 export const TranslatePostSchema = z.object({

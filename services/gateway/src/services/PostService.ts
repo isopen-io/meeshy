@@ -1360,6 +1360,10 @@ export class PostService {
       targetType?: PostType;
       content?: string;
       isQuote?: boolean;
+      /** Audience choisie par le reposteur. Absente ⇒ on hérite de l'original
+       *  (comportement historique). Un repost n'étant permis que sur un
+       *  original PUBLIC, toute valeur ne fait que RESTREINDRE la portée. */
+      visibility?: PostVisibility;
     } = {},
   ) {
     const original = await this.prisma.post.findFirst({
@@ -1494,7 +1498,7 @@ export class PostService {
           data: {
             authorId: userId,
             type: targetType,
-            visibility: original.visibility,
+            visibility: opts.visibility ?? original.visibility,
             content: snapshotContent ?? undefined,
             originalLanguage: snapshotOriginalLanguage,
             repostOfId: postId,
@@ -1588,7 +1592,7 @@ export class PostService {
       data: {
         authorId: userId,
         type: targetType,
-        visibility: original.visibility,
+        visibility: opts.visibility ?? original.visibility,
         content: content ?? undefined,
         originalLanguage,
         repostOfId: postId,
