@@ -365,7 +365,11 @@ public enum StorySlideRenderer {
     }
 
     private static func drawSticker(_ sticker: StorySticker, in size: CGSize, ctx: CGContext) {
-        let fontSize = max(8, size.width * sticker.scale * 0.15)
+        // `0.15` codé en dur ET `baseSize` ignoré : la miniature ne
+        // correspondait ni au canvas ni à l'export. Règle partagée désormais.
+        let fontSize = CanvasGeometry.stickerFontSize(baseSize: sticker.baseSize,
+                                                      scale: sticker.scale,
+                                                      canvasWidth: size.width)
         let attrs: [NSAttributedString.Key: Any] = [
             .font: UIFont.systemFont(ofSize: fontSize),
         ]
