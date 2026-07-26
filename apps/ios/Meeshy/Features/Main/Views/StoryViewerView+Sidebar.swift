@@ -607,7 +607,7 @@ struct StoryActionSidebarView: View {
                                 }
                             }
                         )
-                        .frame(maxWidth: 300)     // ~5 drapeaux visibles + le « + » épinglé
+                        .frame(maxWidth: 260)
                         .transition(.asymmetric(
                             insertion: .scale(scale: 0.8, anchor: .trailing).combined(with: .opacity),
                             removal: .opacity
