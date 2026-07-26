@@ -213,7 +213,7 @@ struct StepPseudoView: View {
                 ForEach(viewModel.usernameSuggestions, id: \.self) { suggestion in
                     Button(action: {
                         viewModel.selectSuggestion(suggestion)
-                        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                        HapticFeedback.light()
                     }) {
                         Text("@\(suggestion)")
                             .font(.footnote.weight(.medium))
@@ -889,7 +889,7 @@ struct StepLanguageView: View {
         let color: Color = target == .system ? viewModel.currentStep.accentColor : MeeshyColors.warning
         return Button(action: {
             withAnimation(.spring(response: 0.3)) { editingTarget = target }
-            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            HapticFeedback.light()
         }) {
             HStack(spacing: 6) {
                 Image(systemName: icon).font(.caption.weight(.medium))
@@ -922,7 +922,7 @@ struct StepLanguageView: View {
                     viewModel.regionalLanguage = lang.id
                 }
             }
-            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            HapticFeedback.light()
         }) {
             HStack(spacing: 10) {
                 Text(lang.flag).font(MeeshyFont.relative(26))
@@ -1274,7 +1274,7 @@ struct StepRecapView: View {
     private var termsCheckbox: some View {
         Button(action: {
             withAnimation(.spring(response: 0.3)) { viewModel.acceptTerms.toggle() }
-            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            HapticFeedback.light()
         }) {
             HStack(alignment: .top, spacing: 12) {
                 ZStack {
