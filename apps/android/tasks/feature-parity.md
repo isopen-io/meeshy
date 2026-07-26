@@ -968,10 +968,26 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       selected-match / blank; submit first-suggestion / create-query / inert / empty-pool /
       non-empty-pool; append trim / blank / exact-dup / order / case-distinct. **Mutation (RED proof):**
       dropping the suggestion-first arm from `submitTag` fails **exactly** the two "submit picks the
-      first suggestion" tests (23 run, 2 failed, no collateral), restored after. **Follow-up:** the
-      app-side `TagInputField` composable rendering chips + the panel driven by these cores, the corpus
-      hydration (`allTags` cache-first + revalidate) in a conversation-options ViewModel, and the
-      category create + expand/collapse UI.
+      first suggestion" tests (23 run, 2 failed, no collateral), restored after.
+      **Category-picker decision core shipped** (slice `conversation-category-picker`, 2026-07-26). Pure
+      `:core:model/ConversationCategoryPicker.kt` (`CategoryOption` + `CategoryPickerState` +
+      `CategorySubmit`), a faithful port of the single-select logic embedded in iOS `CategoryPickerField`
+      (`packages/MeeshySDK/Sources/MeeshyUI/Primitives/CategoryPickerField.swift`): `resolve(categories,
+      selectedId, query)` returns `displayed` (catalogue minus the selected id, sorted by `order ?? 0`,
+      CI-substring-filtered on a non-blank trimmed query — iOS `displayedCategories`), `canCreate` (trimmed
+      non-blank ∧ no CI catalogue-name match — iOS `canCreate`), and `submit` (a `CategorySubmit` sealed
+      result: `Select(id)` on the first CI exact name match / `Create(trimmedName)` when none / `None` on
+      blank — iOS `submit()`). **SOTA over iOS:** the select-vs-create outcome is a semantic sealed type,
+      not a `View`-mutating closure, so the Compose field is a dumb renderer and every branch is JVM-covered.
+      **+22 behavioural tests** (`ConversationCategoryPickerTest`): empty-query order-sort / selected-exclusion
+      / null-order-as-zero / equal-order-stable / unknown-selected-id / empty-catalogue / whitespace; filtered
+      substring-CI / no-match / selected-exclusion / trim; canCreate new / known / selected / blank; submit
+      exact-select / first-of-colliding / create-trimmed / blank-None / re-select-selected / create-no-match.
+      **Mutation (RED proof):** forcing the exact-match lookup to `null` fails **exactly** the 3 `Select`
+      tests (21 run, 3 failed, no collateral), restored after. **Follow-up:** the app-side `TagInputField` +
+      `CategoryPickerField` composables rendering these cores, the corpus hydration (`allTags` /
+      `allCategories` cache-first + revalidate) in a conversation-options ViewModel dispatching the
+      `Create`/`append` results to the repository, and the category expand/collapse list UI.
 - [x] Create direct/group conversation via user search; add participants —
       FAB sur la liste → `NewConversationScreen` : recherche debouncée (300 ms,
       `UserRepository.searchUsers`), multi-sélection avec chips persistants

@@ -1,5 +1,43 @@
 # Progress — state & what to do next
 
+> On 2026-07-26 the **conversation category-picker decision core** landed (slice
+> `conversation-category-picker`, feature-parity §B Conversations — the sibling of the tag-autocomplete
+> core, this time for the single-select *category* field, moving the "category create + expand/collapse"
+> line further). iOS spreads the category field's decisions across three computed SwiftUI `View`
+> properties (`displayedCategories`, `canCreate`, `submit()` in
+> `packages/MeeshySDK/Sources/MeeshyUI/Primitives/CategoryPickerField.swift`), none unit-testable without a
+> UI host (the field has no test at all). **Added (production, all `apps/android`):** pure
+> `:core:model/ConversationCategoryPicker.kt` — `resolve(categories, selectedId, query)` returns a
+> `CategoryPickerState`: `displayed` (the catalogue minus the selected id, sorted by `order ?? 0`, and —
+> when the trimmed query is non-blank — filtered to a case-insensitive substring; iOS `displayedCategories`),
+> `canCreate` (trimmed non-blank ∧ no catalogue name matches case-insensitively; iOS `canCreate`, whose
+> selected-category guard is subsumed because the selected category is always a catalogue member), and
+> `submit` — a `CategorySubmit` sealed result (`Select(id)` on the first case-insensitive exact name match /
+> `Create(trimmedName)` when none matches / `None` on a blank query; iOS `submit()`'s select-or-create).
+> `CategoryOption(id, name, order?)` is the framework-free input (colour and other render-only attributes
+> stay out). **SOTA over iOS:** the select-vs-create outcome is a **semantic sealed type**, not a
+> side-effecting closure mutating `selectedId`/`editing`/`focused` mid-`body`, so the Compose field is a
+> dumb renderer and every branch is JVM-covered; equal `order` values keep input order (stable sort) vs
+> Swift's unspecified sort stability. **+22 behavioural tests** (`ConversationCategoryPickerTest`, all
+> hand-written literal expectations): 7 empty-query (order sort / selected-exclusion / null-order-as-zero /
+> equal-order-stable / unknown-selected-id / empty-catalogue / whitespace-blank), 4 filtered (substring-CI
+> still-sorted / no-match / selected-exclusion / trim), 4 canCreate (new / known-CI / selected-CI / blank),
+> 6 submit (exact-CI-select / first-of-colliding-names / create-trimmed / blank-None / re-select-selected /
+> create-on-non-empty-catalogue-no-match). **Mutation (RED proof):** forcing `resolveSubmit`'s exact match
+> to `null` (always Create) fails **exactly** the 3 `Select` tests (`submit selects an existing category…`,
+> `submit selects the first exact match when names collide`, `submit re-selects the already-selected…`; 21
+> run, 3 failed, no collateral), restored after. **Gate:** `./apps/android/meeshy.sh check`
+> (= `assembleDebug testDebugUnitTest`) — `:core:model` `ConversationCategoryPickerTest` 22/22, full
+> assemble + all-module JVM unit tests green. Reviewer **PASS** (diff `apps/android` only — 1 new core + 1
+> new test + tracking docs; SDK purity — a stateless `:core:model` block, the render/select orchestration
+> stays in the future composable/VM; SSOT — one picker resolver, re-implements nothing; no tautological
+> tests — expectations are literals + the mutation proof is real).
+> **Next slice:** the app-side **`CategoryPickerField` composable** (chip + suggestion list driven by
+> `resolve`, `@Composable` glue mostly coverage-exempt), OR the **conversation-options ViewModel** hydrating
+> the `allCategories` + `allTags` corpus cache-first + revalidate and dispatching `submit`'s `Create` to the
+> repository (real testable derivation), OR the **category expand/collapse** list-section decision core, OR
+> the paged **`OnboardingFlowView` Compose scaffold** (Auth), OR the tracked **Kover 90% coverage-gate infra**.
+
 > On 2026-07-26 the **conversation tag-autocomplete decision core** landed (slice
 > `conversation-tag-autocomplete`, feature-parity §B Conversations — the first pure-logic bite of the
 > "category create + expand/collapse; client-side tag aggregation for autocomplete" box, moved `[ ]`→`[~]`).
@@ -7872,6 +7910,31 @@ After Stories richness is sufficient, advance to the **Calls** area
 (`feature-parity.md` §"Calls").
 
 ## Run log
+
+### 2026-07-26 — slice `conversation-category-picker` ✅ impl + local gate green + reviewer PASS → PR → merge
+- **Rule #0:** no open android-track PR at start (last android slice #2327 `conversation-tag-autocomplete`
+  already merged to main). Synced local `main` to `origin/main` (`a0806f19`), branched
+  `claude/apps/android/conversation-category-picker`.
+- **Slice:** the pure decision core behind iOS `CategoryPickerField` (the single-select *category* sibling
+  of the multi-select tag field). Build-order §B Conversations. Advances feature-parity "category create +
+  expand/collapse; client-side tag aggregation" (already `[~]`).
+- **Added (production, all `apps/android`):** `:core:model/ConversationCategoryPicker.kt` —
+  `CategoryOption(id, name, order?)` input; `resolve(categories, selectedId, query) → CategoryPickerState`
+  (`displayed` = catalogue minus selected id, sorted by `order ?? 0`, CI-substring-filtered on a non-blank
+  trimmed query; `canCreate` = trimmed non-blank ∧ no CI catalogue-name match; `submit` = `CategorySubmit`
+  `Select(id)`/`Create(name)`/`None`). Faithful port of iOS `displayedCategories`/`canCreate`/`submit()`.
+- **Tests:** +22 `ConversationCategoryPickerTest` (7 empty-query, 4 filtered, 4 canCreate, 6 submit — all
+  hand-written literals). Edge cases: empty catalogue, single element, unknown/null selected id, null &
+  equal `order` (stable sort), whitespace query, trim, colliding CI names (first wins), re-select selected.
+- **Mutation check (RED proof):** forcing `resolveSubmit`'s exact match to `null` (always `Create`) fails
+  **exactly** the 3 `Select` tests (21 run, 3 failed, no collateral); restored after. RED also proven by
+  the suite failing to compile against the absent symbols first.
+- **Verify (`LANG=C.utf8`, `$HOME/android-sdk`, JDK 21):** `:core:model:testDebugUnitTest --tests
+  ConversationCategoryPickerTest` 22/22 green; full `assembleDebug testDebugUnitTest` (all modules) →
+  BUILD SUCCESSFUL.
+- **Reviewer:** PASS — diff `apps/android` only (1 new core + 1 new test + tracking docs); SDK purity
+  (stateless `:core:model` block, render/select orchestration deferred to the composable/VM); SSOT (one
+  resolver, re-implements nothing); UDF; no tautological tests.
 
 ### 2026-07-22 — slice `anonymous-session-permissions-core` ✅ impl + local gate green + reviewer PASS → PR → merge
 - **Rule #0:** one open android-track PR at start — #2283 `claude/apps/android/auth-token-refresh-policy-core`
