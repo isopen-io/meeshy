@@ -1,5 +1,47 @@
 # Progress — state & what to do next
 
+> On 2026-07-26 the **wizard's regional (secondary) language collection** landed (slice
+> `registration-regional-language`, feature-parity §A Auth — closes the "regional language not yet gathered
+> by the wizard" gap flagged since the RECAP-summary and language-step-selection cores shipped). Every seam
+> already supported a secondary language (`RegistrationSummaryInput.regionalLanguage`,
+> `RegisterRequest.regionalLanguage`, `LanguageStepSelection`'s `REGIONAL` slot) — only the wizard's field
+> state and ViewModel never collected it. **Added (production, all `apps/android`):** `RegistrationFields`
+> gains `regionalLanguage: String = ""` (`:core:model`, +1 line). `RegistrationViewModel` (`:feature:auth`)
+> exposes `onRegionalLanguageChange(value)` (an `editFields` setter, mirror of `onSystemLanguageChange`) and
+> a derived `RegistrationUiState.languageSelection: LanguageSelectionState` (= the `system`/`regional`
+> fields, the read-model the future `StepLanguageView` picker consumes for `LanguageStepSelection.isSelected`
+> / `select` slot highlighting — pre-wired exactly as `summary`/`canProceed`/`fill` were before their
+> composables). The regional code now flows **into the RECAP summary** (added to the `RegistrationSummary`
+> input, so the LANGUAGES row renders `system / regional` when distinct and collapses to `system` alone when
+> blank/equal — the collapse logic already lived in the core) and **into `toRegisterRequest`**
+> (`regionalLanguage.trim().ifBlank { null }` — trimmed → null when blank, matching iOS's optional secondary
+> language). **SOTA over iOS:** iOS keeps `systemLanguage`/`regionalLanguage` as raw `@Published` vars read
+> directly by the view + register payload; Android derives the picker read-model and normalizes the payload
+> (trim → null) at the one seam, so a whitespace-only regional never ships a blank secondary language. **+7
+> behavioural tests** (`RegistrationViewModelTest`, all through the observable `state` / captured
+> `RegisterRequest`): setter updates the field; `languageSelection` mirrors both slots; register sends the
+> chosen code / null when never chosen / null when whitespace-only / trimmed value; RECAP summary shows the
+> distinct `system / regional` label. **Mutation (RED proof):** replacing the `toRegisterRequest` regional
+> line with `regionalLanguage = null` fails **exactly** `register_sendsChosenRegionalLanguage` +
+> `register_trimsRegionalLanguageValue` (2 failed, no collateral), restored after. **Gate:**
+> `./apps/android/meeshy.sh check` (= `./gradlew assembleDebug testDebugUnitTest`) → **BUILD SUCCESSFUL**
+> (943 tasks; full `assembleDebug` + all module JVM unit tests; the one intermittent
+> `:sdk-core ThemeStoreTest` DataStore `TimeoutCancellationException` is the documented parallel-load flake —
+> green on isolated re-run and cached green thereafter, untouched by this diff). Reviewer **PASS** (diff
+> `apps/android` only — 3 source files: `RegistrationStepGate.kt` field, `RegistrationViewModel.kt`
+> setter/derived/summary/request, `RegistrationViewModelTest.kt` +7 tests + tracking docs; SDK purity — the
+> field is a `:core:model` data holder, the collect/normalize orchestration is the VM; SSOT — reuses
+> `RegistrationSummary` + `LanguageSelectionState` + `RegisterRequest`, re-implements nothing; UDF —
+> `languageSelection` is derived, not stored; no tautological tests — expected labels are composed via the
+> `LanguageStepSelection` core and the mutation proof is real).
+> **Next slice:** the app-side **`StepLanguageView` composable** (system/regional tab, searchable grid via
+> `LanguageStepSelection.filter`, summary cards via `summaryLabel`, live-preview card via
+> `translationPreview`/`selectedLanguageName`, driven by `languageSelection` + `onSystemLanguageChange` /
+> `onRegionalLanguageChange`) — this flips feature-parity §A's language box to `[x]`, OR the paged
+> **`OnboardingFlowView` Compose scaffold** (pager over the shipped step cores), OR the tracked **Kover 90%
+> coverage-gate infra**, OR an `https://meeshy.me/join/{id}` **App-Links intent-filter** (`AndroidManifest`
+> only).
+
 > On 2026-07-26 the **registration RECAP summary core** landed (slice `registration-recap-summary`,
 > feature-parity §A Auth — closes the pure-logic gap of the wizard's final RECAP step). The recap card's
 > rows are now an SSOT: pure `:core:model/auth/RegistrationSummary.kt` — a faithful port of iOS

@@ -15,6 +15,7 @@ import kotlinx.coroutines.launch
 import me.meeshy.sdk.auth.AuthRepository
 import me.meeshy.sdk.model.RegisterRequest
 import me.meeshy.sdk.model.auth.AvailabilityIntent
+import me.meeshy.sdk.model.auth.LanguageSelectionState
 import me.meeshy.sdk.model.auth.RegistrationFields
 import me.meeshy.sdk.model.auth.RegistrationProgressBar
 import me.meeshy.sdk.model.auth.RegistrationStep
@@ -56,6 +57,17 @@ data class RegistrationUiState(
     fun fill(step: RegistrationStep): StepFill = RegistrationProgressBar.fill(step, currentStep)
 
     /**
+     * The two content-language choices the LANGUAGE step edits, as the read-model the
+     * step's picker consumes (highlighting via [me.meeshy.sdk.model.auth.LanguageStepSelection.isSelected]).
+     * Derived from [fields] — the pair iOS exposes as `systemLanguage` / `regionalLanguage`.
+     */
+    val languageSelection: LanguageSelectionState
+        get() = LanguageSelectionState(
+            systemLanguage = fields.systemLanguage,
+            regionalLanguage = fields.regionalLanguage,
+        )
+
+    /**
      * The recap card's rows for the RECAP step — [RegistrationSummary] over the
      * fields already collected. Country dial code / regional language / bio are not
      * yet gathered by the wizard, so their optional rows stay collapsed until those
@@ -71,6 +83,7 @@ data class RegistrationUiState(
                 phoneNumber = fields.phoneNumber,
                 skipPhone = fields.skipPhone,
                 systemLanguage = fields.systemLanguage,
+                regionalLanguage = fields.regionalLanguage,
             ),
         )
 }
@@ -147,6 +160,9 @@ class RegistrationViewModel @Inject constructor(
     fun onConfirmPasswordChange(value: String) = editFields { it.copy(confirmPassword = value) }
 
     fun onSystemLanguageChange(value: String) = editFields { it.copy(systemLanguage = value) }
+
+    /** iOS `regionalLanguage` picker: the optional secondary content language. */
+    fun onRegionalLanguageChange(value: String) = editFields { it.copy(regionalLanguage = value) }
 
     fun onAcceptTermsChange(value: Boolean) = editFields { it.copy(acceptTerms = value) }
 
@@ -267,4 +283,5 @@ private fun RegistrationFields.toRegisterRequest(): RegisterRequest = RegisterRe
     firstName = firstName.trim().ifBlank { null },
     lastName = lastName.trim().ifBlank { null },
     systemLanguage = systemLanguage.ifBlank { null },
+    regionalLanguage = regionalLanguage.trim().ifBlank { null },
 )
