@@ -53,10 +53,10 @@ final class StoryExportShareViewModel: ObservableObject {
     /// et le MP4 partait SANS interlude, silencieusement. C'est aussi ce qui
     /// rendait les tests verts en local (session résiduelle du simulateur) et
     /// rouges en CI (simulateur vierge).
-    private let brandIntro: @MainActor () -> StoryExportIntroContent?
+    private let brandIntro: @MainActor () async -> StoryExportIntroContent?
 
     init(exporter: StoryVideoExportServiceProviding? = nil,
-         brandIntro: (@MainActor () -> StoryExportIntroContent?)? = nil) {
+         brandIntro: (@MainActor () async -> StoryExportIntroContent?)? = nil) {
         // `StoryVideoExportService.shared` is `@MainActor`-isolated so it
         // can't be a default arg expression; resolve inside the body.
         self.exporter = exporter ?? StoryVideoExportService.shared
@@ -110,8 +110,9 @@ final class StoryExportShareViewModel: ObservableObject {
         let watermark = MeeshyExportWatermark.make(username: AuthManager.shared.currentUser?.username)
         // Résolu ICI, sur le MainActor, avant d'entrer dans le Task : c'est la
         // seule façon d'honorer un `brandIntro` injecté et d'éviter que la
-        // closure ne recapture le singleton d'authentification.
-        let intro = brandIntro()
+        // closure ne recapture le singleton d'authentification. `await` : la
+        // résolution de l'avatar / du fond / du mood est asynchrone (cache).
+        let intro = await brandIntro()
         let task = Task { [weak self] in
             let url = await exporter.prepareExport(
                 slide: slide,

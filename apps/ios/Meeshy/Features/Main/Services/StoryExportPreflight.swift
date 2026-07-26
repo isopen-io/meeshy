@@ -37,22 +37,69 @@ enum StoryExportLanguageResolver {
 ///
 /// L'export est réservé à l'auteur (`railPlan.showsExport == isOwnStory`) :
 /// l'auteur de la story et celui qui l'exporte sont la même personne, donc
-/// l'utilisateur courant EST l'identité à graver. Avatar et bannière restent
-/// `nil` — le préambule retombe alors sur la couleur d'accent, et les charger
-/// demanderait un aller-retour cache asynchrone que le bake n'a pas à attendre.
+/// l'utilisateur courant EST l'identité à graver. Résolution `async` : l'avatar
+/// et le fond (bannière ou thumbHash) sont chargés depuis le cache image ; le
+/// bake attend cette résolution (rapide, cache-first) pour un interlude complet.
 enum StoryExportIntroFactory {
 
     @MainActor
-    static func currentUser() -> StoryExportIntroContent? {
+    static func currentUser() async -> StoryExportIntroContent? {
         guard let user = AuthManager.shared.currentUser else { return nil }
         let display = [user.firstName, user.lastName]
             .compactMap { $0 }
             .joined(separator: " ")
             .trimmingCharacters(in: .whitespaces)
+
+        let avatarImage = await resolveImage(user.avatar)
+        let backgroundImage = await resolveBackground(user: user)
+        let status = await resolveMood(userId: user.id)
+
         return StoryExportIntroContent(
             displayName: display.isEmpty ? user.username : display,
             username: user.username,
+            avatar: avatarImage,
+            banner: backgroundImage,
+            moodEmoji: status?.moodEmoji,
+            moodMessage: status?.content,
             accentColorHex: DynamicColorGenerator.colorForName(user.username)
         )
+    }
+
+    /// URL (relative ou absolue) → `CGImage` via le cache image (réseau si
+    /// absent). `nil` sur URL vide ou échec.
+    private static func resolveImage(_ urlString: String?) async -> CGImage? {
+        guard let urlString, !urlString.isEmpty,
+              let url = MeeshyConfig.resolveMediaURL(urlString) else { return nil }
+        return await CacheCoordinator.shared.images.image(for: url.absoluteString)?.cgImage
+    }
+
+    /// Fond de l'interlude, dans l'ordre demandé : bannière de l'auteur → sinon
+    /// le thumbHash de son avatar (flou une fois agrandi en aspectFill) → sinon
+    /// `nil`, ce qui laisse le SDK peindre un gradient d'accent vibrant.
+    private static func resolveBackground(user: MeeshyUser) async -> CGImage? {
+        if let banner = await resolveImage(user.banner) {
+            return banner
+        }
+        if let hash = user.avatarThumbHash, !hash.isEmpty,
+           let thumb = ThumbHashDecoder.decodeIfAvailable(hash)?.cgImage {
+            return thumb
+        }
+        return nil
+    }
+
+    /// Mood de l'auteur, best-effort depuis le cache des statuts « amis » (le
+    /// backend y place le status de l'utilisateur courant en tête). Non-expiré.
+    private static func resolveMood(userId: String) async -> StatusEntry? {
+        let cached = await CacheCoordinator.shared.statuses.load(for: "statuses_friends")
+        let entries: [StatusEntry]
+        switch cached {
+        case .fresh(let data, _), .stale(let data, _):
+            entries = data
+        default:
+            return nil
+        }
+        return entries.first { entry in
+            entry.userId == userId && (entry.expiresAt.map { $0 > Date() } ?? true)
+        }
     }
 }
