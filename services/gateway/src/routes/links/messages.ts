@@ -9,6 +9,7 @@ import {
   isRegisteredUser
 } from '../../middleware/auth';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
+import { normalizeLanguageCode } from '@meeshy/shared/utils/language-normalize';
 import { SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
 import {
   sendMessageSchema,
@@ -193,7 +194,12 @@ export async function registerMessageRoutes(fastify: FastifyInstance) {
           conversationId: participantShareLink.conversationId,
           senderId: anonymousParticipant.id,
           content: processedContent,
-          originalLanguage: body.originalLanguage,
+          // Canonicalisation au write boundary (SSOT `normalizeLanguageCode`), parité
+          // avec le funnel `MessagingService.handleMessage` (218i). `sendMessageSchema`
+          // (`z.string().default('fr')`) laisse passer un locale brut (`'fr-FR'`) verbatim ;
+          // le normaliser garde `Message.originalLanguage` canonique en base. Repli verbatim
+          // pour un code irréductible.
+          originalLanguage: normalizeLanguageCode(body.originalLanguage) ?? body.originalLanguage,
           messageType: body.messageType,
           clientMessageId: body.clientMessageId,
           deletedAt: null
@@ -442,7 +448,10 @@ export async function registerMessageRoutes(fastify: FastifyInstance) {
           conversationId: shareLink.conversationId,
           senderId: participant.id,
           content: processedContent,
-          originalLanguage: body.originalLanguage,
+          // Canonicalisation au write boundary (SSOT `normalizeLanguageCode`), parité
+          // avec le funnel `MessagingService.handleMessage` (218i). Repli verbatim pour
+          // un code irréductible.
+          originalLanguage: normalizeLanguageCode(body.originalLanguage) ?? body.originalLanguage,
           messageType: body.messageType,
           clientMessageId: body.clientMessageId,
           deletedAt: null

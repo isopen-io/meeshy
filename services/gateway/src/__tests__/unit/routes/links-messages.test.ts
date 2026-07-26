@@ -371,6 +371,35 @@ describe('POST /links/:id/messages — anonymous: with tracking links', () => {
   });
 });
 
+describe('POST /links/:id/messages — anonymous: originalLanguage canonicalization', () => {
+  let app: FastifyInstance;
+  let prisma: any;
+  beforeAll(async () => { prisma = makePrisma(); app = await buildApp({ prisma }); });
+  afterAll(async () => { await app.close(); });
+
+  it('canonicalizes a region-tagged claim at the write boundary', async () => {
+    const res = await app.inject({
+      method: 'POST', url: `/links/${MSHY_ID}/messages`,
+      headers: ANON_HEADERS, payload: { ...VALID_BODY, originalLanguage: 'en-US' },
+    });
+    expect(res.statusCode).toBe(201);
+    expect(prisma.message.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ originalLanguage: 'en' }) })
+    );
+  });
+
+  it('keeps an irreducible claim verbatim', async () => {
+    const res = await app.inject({
+      method: 'POST', url: `/links/${MSHY_ID}/messages`,
+      headers: ANON_HEADERS, payload: { ...VALID_BODY, originalLanguage: 'bas' },
+    });
+    expect(res.statusCode).toBe(201);
+    expect(prisma.message.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ originalLanguage: 'bas' }) })
+    );
+  });
+});
+
 describe('POST /links/:id/messages — anonymous: socketIO emit', () => {
   let app: FastifyInstance;
   beforeAll(async () => { app = await buildApp({ socketIOHandler: makeSocketIOHandler(true) }); });
@@ -594,6 +623,29 @@ describe('POST /links/:id/messages/auth — success', () => {
     expect(res.statusCode).toBe(201);
     expect(res.json().success).toBe(true);
     expect(res.json().data.messageId).toBe(MSG_ID);
+  });
+});
+
+describe('POST /links/:id/messages/auth — originalLanguage canonicalization', () => {
+  let app: FastifyInstance;
+  let prisma: any;
+  beforeAll(async () => {
+    prisma = makePrisma();
+    prisma.conversationShareLink.findUnique = jest.fn<any>().mockResolvedValue(mockShareLink);
+    prisma.participant.findFirst = jest.fn<any>().mockResolvedValue({ id: PART_ID, conversationId: CONV_ID });
+    app = await buildApp({ prisma });
+  });
+  afterAll(async () => { await app.close(); });
+
+  it('canonicalizes a region-tagged claim at the write boundary', async () => {
+    const res = await app.inject({
+      method: 'POST', url: `/links/${MSHY_ID}/messages/auth`,
+      payload: { ...VALID_BODY, originalLanguage: 'pt-BR' },
+    });
+    expect(res.statusCode).toBe(201);
+    expect(prisma.message.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ originalLanguage: 'pt' }) })
+    );
   });
 });
 

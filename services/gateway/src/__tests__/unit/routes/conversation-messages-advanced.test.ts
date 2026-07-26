@@ -587,6 +587,54 @@ describe('registerMessagesAdvancedRoutes', () => {
       );
     });
 
+    it('canonicalizes a region-tagged originalLanguage claim at the write boundary', async () => {
+      prisma.message.findFirst.mockResolvedValue(makeExistingMessage());
+      prisma.message.update.mockResolvedValue({
+        id: MSG_ID,
+        content: 'hello',
+        validatedMentions: [],
+        translations: null,
+      });
+
+      const req = makeRequest({
+        params: { id: CONV_ID, messageId: MSG_ID },
+        body: { content: 'hello', originalLanguage: 'fr-FR' },
+      });
+      const reply = makeReply();
+
+      await getEditHandler(fastify)(req, reply);
+
+      expect(prisma.message.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ originalLanguage: 'fr' }),
+        })
+      );
+    });
+
+    it('keeps an irreducible originalLanguage claim verbatim on edit', async () => {
+      prisma.message.findFirst.mockResolvedValue(makeExistingMessage());
+      prisma.message.update.mockResolvedValue({
+        id: MSG_ID,
+        content: 'hello',
+        validatedMentions: [],
+        translations: null,
+      });
+
+      const req = makeRequest({
+        params: { id: CONV_ID, messageId: MSG_ID },
+        body: { content: 'hello', originalLanguage: 'bas' },
+      });
+      const reply = makeReply();
+
+      await getEditHandler(fastify)(req, reply);
+
+      expect(prisma.message.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ originalLanguage: 'bas' }),
+        })
+      );
+    });
+
     it('continues when retranslation fails', async () => {
       prisma.message.findFirst.mockResolvedValue(makeExistingMessage());
       fastify.translationService = {

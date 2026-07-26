@@ -8,6 +8,7 @@ import { conversationStatsService } from '../../services/ConversationStatsServic
 import { conversationMessageStatsService } from '../../services/ConversationMessageStatsService';
 import { ErrorCode } from '@meeshy/shared/types';
 import { createError, sendErrorResponse } from '@meeshy/shared/utils/errors';
+import { normalizeLanguageCode } from '@meeshy/shared/utils/language-normalize';
 import { UnifiedAuthRequest } from '../../middleware/auth';
 import { messageValidationHook } from '../../middleware/rate-limiter';
 import {
@@ -211,12 +212,19 @@ export function registerMessagesAdvancedRoutes(
         // Continue with unprocessed content if tracking links fail
       }
 
+      // Canonicaliser la langue au write boundary (SSOT `normalizeLanguageCode`),
+      // parité avec le funnel `MessagingService.handleMessage` (218i). Un client
+      // qui édite peut envoyer un locale brut (`'fr-FR'`, `'en-US'`) ; le persister
+      // verbatim fragmenterait la source NLLB, la clé de cache et les stats de langue.
+      // Repli verbatim pour un code irréductible (ISO 639-3 supporté / 2-lettres inconnu).
+      const canonicalOriginalLanguage = normalizeLanguageCode(originalLanguage) ?? originalLanguage;
+
       // Mettre à jour le message avec le contenu traité
       const updatedMessage = await prisma.message.update({
         where: { id: messageId },
         data: {
           content: processedContent,
-          originalLanguage,
+          originalLanguage: canonicalOriginalLanguage,
           isEdited: true,
           editedAt: new Date()
         },
