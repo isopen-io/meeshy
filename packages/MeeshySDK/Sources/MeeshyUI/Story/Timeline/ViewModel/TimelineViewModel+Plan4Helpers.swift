@@ -23,6 +23,38 @@ extension TimelineViewModel {
         if isCommitted { endClipDrag() }
     }
 
+    /// Déplacement EXACT du début d'un clip — les steppers ±0,1 s de
+    /// l'inspecteur.
+    ///
+    /// Ne passe volontairement PAS par `dragClip`. Celui-ci emprunte le chemin
+    /// du GESTE, qui applique l'aimantation magnétique : sa tolérance vaut
+    /// `8 pt / (50 × zoom)`, soit **0,16 s** au zoom par défaut — plus que le
+    /// pas de 0,1 s. Un clip posé à 0 (`slideStart` est un candidat d'aimant)
+    /// ou collé au bord d'un voisin revenait donc systématiquement à sa place :
+    /// le contrôle de précision était avalé par un aimant taillé pour un doigt.
+    ///
+    /// Les deux chemins ont des exigences opposées — le doigt VEUT accrocher,
+    /// le stepper veut la valeur qu'il annonce — d'où deux méthodes distinctes.
+    public func nudgeClipStart(id: String, by deltaTimeSeconds: Float) {
+        guard deltaTimeSeconds.isFinite,
+              let kind = clipKind(forId: id),
+              let currentStart = clipStartTime(id: id) else { return }
+        let newStart = max(0, currentStart + deltaTimeSeconds)
+        // Même seuil de no-op que `endClipDrag` : une pression sans effet ne
+        // doit pas empiler une commande d'annulation vide.
+        guard abs(newStart - currentStart) > 0.0005 else { return }
+        let cmd = MoveClipCommand(clipId: id, kind: kind,
+                                  oldStartTime: currentStart, newStartTime: newStart)
+        do {
+            try cmd.apply(to: &project)
+            commandStack.push(.moveClip(cmd))
+            scheduleEngineReconfigure()
+            recomputeSlideDuration()
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
     // MARK: - Trim helpers
 
     /// Trim the start handle of a clip by `deltaTimeSeconds` (positive = shrink from left).
@@ -344,6 +376,32 @@ extension TimelineViewModel {
                                       keyframeId: keyframeId,
                                       oldTime: snapshot.time, newTime: newTime)
         applyMoveKeyframeCommand(cmd)
+    }
+
+    /// Déplace un keyframe DANS LE TEMPS, d'un pas exact.
+    ///
+    /// `moveKeyframe(clipId:keyframeId:newTime:)` existait déjà mais n'avait
+    /// aucun appelant : toutes les surfaces d'édition passaient par la
+    /// surcharge « propriétés », qui code en dur `newTime: snapshot.time`.
+    /// Position, échelle, opacité et easing étaient réglables — l'INSTANT du
+    /// keyframe, lui, restait figé à celui de sa pose, et un keyframe mal
+    /// placé ne pouvait que se supprimer et se reposer.
+    ///
+    /// Le résultat est borné à la fenêtre du clip : hors d'elle, le keyframe
+    /// ne serait jamais interpolé — il disparaîtrait de la lecture tout en
+    /// restant listé.
+    public func nudgeKeyframeTime(clipId: String, keyframeId: String, by deltaTimeSeconds: Float) {
+        guard deltaTimeSeconds.isFinite,
+              let kind = clipKind(forId: clipId),
+              let snapshot = currentKeyframeSnapshot(clipId: clipId, keyframeId: keyframeId, kind: kind)
+        else { return }
+        let upperBound = clipDuration(id: clipId)
+            ?? TimelineGeometry.effectiveClipDuration(startTime: clipStartTime(id: clipId) ?? 0,
+                                                      duration: nil,
+                                                      slideDuration: project.slideDuration)
+        let newTime = min(max(0, snapshot.time + deltaTimeSeconds), upperBound)
+        guard abs(newTime - snapshot.time) > 0.0005 else { return }
+        moveKeyframe(clipId: clipId, keyframeId: keyframeId, newTime: newTime)
     }
 
     /// Push a transform / easing edit captured by `KeyframeInspector`.
