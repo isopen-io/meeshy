@@ -130,6 +130,13 @@ public struct LikeRequest: Encodable {
 public struct UpdatePostRequest: Encodable, Sendable {
     public let content: String?
     public let visibility: String?
+    /// `nil` = « ne touche pas au champ », PAS « vide-le ». L'`Encodable`
+    /// synthétisé omet les optionnels `nil` du JSON, et le gateway ne réécrit
+    /// le champ que s'il est présent (`PostService.updatePost` :
+    /// `if (data.visibilityUserIds !== undefined)`). Pour NETTOYER une liste
+    /// d'audience devenue orpheline, envoyer `[]` — accepté par
+    /// `UpdatePostSchema` sauf pour `EXCEPT`/`ONLY`, que son `refine` exige
+    /// non vides.
     public let visibilityUserIds: [String]?
     public let moodEmoji: String?
     /// Source language. Changing it re-runs the Prisme translation pipeline.

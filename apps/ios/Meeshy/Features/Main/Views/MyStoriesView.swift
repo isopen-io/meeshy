@@ -386,12 +386,16 @@ struct MyStoriesView: View {
             return
         case .openAudiencePicker:
             audienceTarget = AudienceTarget(story: story, mode: mode)
-        case .applyDirectly:
-            applyVisibility(mode, for: story, userIds: nil)
+        case .applyDirectly(let userIds):
+            applyVisibility(mode, for: story, userIds: userIds)
         }
     }
 
-    private func applyVisibility(_ mode: PostVisibility, for story: StoryItem, userIds: [String]?) {
+    /// `userIds` n'est PAS optionnel : ce chemin envoie toujours une liste, y
+    /// compris vide, pour que le serveur nettoie une audience orpheline plutôt
+    /// que de conserver l'ancienne (`nil` serait omis du JSON — voir
+    /// `StoryVisibilityMenuResolver.Route.applyDirectly`).
+    private func applyVisibility(_ mode: PostVisibility, for story: StoryItem, userIds: [String]) {
         HapticFeedback.medium()
         Task {
             let ok = await viewModel.applyVisibility(
@@ -572,7 +576,22 @@ enum StoryVisibilityMenuResolver {
         /// Mode déjà actif : ne rien faire (ni réseau, ni picker).
         case ignored
         /// Écriture directe — aucune sélection d'utilisateurs requise.
-        case applyDirectly
+        ///
+        /// `userIds` vaut `[]`, **jamais `nil`**, et c'est le cœur de la
+        /// correction : `UpdatePostRequest` encode ses optionnels via
+        /// l'`Encodable` synthétisé, donc un `nil` est simplement OMIS du JSON
+        /// — et le gateway ne touche le champ que s'il est présent
+        /// (`PostService.updatePost` : `if (data.visibilityUserIds !==
+        /// undefined)`). Passer de `EXCEPT[a,b,c]` à Public en envoyant `nil`
+        /// vidait donc la liste LOCALEMENT pendant que la base gardait
+        /// `[a,b,c]` : au refresh suivant, rouvrir « Sauf… » repré-cochait
+        /// a/b/c. `[]` est accepté par le schéma Zod du gateway pour toutes
+        /// les visibilités sans sélection (le `refine` ne rejette une liste
+        /// vide que pour `EXCEPT`/`ONLY`) et nettoie réellement le champ.
+        ///
+        /// Le payload est porté par le cas plutôt que décidé au site d'appel :
+        /// un retour à `nil` ne compile plus.
+        case applyDirectly(userIds: [String])
         /// `EXCEPT` / `ONLY` : le gateway rejette un envoi sans `visibilityUserIds`.
         case openAudiencePicker
     }
@@ -588,7 +607,9 @@ enum StoryVisibilityMenuResolver {
 
     static func route(to candidate: PostVisibility, current rawValue: String?) -> Route {
         if isCurrent(candidate, rawValue: rawValue) { return .ignored }
-        return candidate.requiresUserSelection ? .openAudiencePicker : .applyDirectly
+        // `[]` et non `nil` — voir la doc de `Route.applyDirectly` : c'est ce
+        // qui nettoie RÉELLEMENT une liste d'audience orpheline côté serveur.
+        return candidate.requiresUserSelection ? .openAudiencePicker : .applyDirectly(userIds: [])
     }
 }
 

@@ -72,7 +72,38 @@ final class StoryVisibilityMenuResolverTests: XCTestCase {
     }
 
     func test_route_simpleMode_appliesDirectly() {
-        XCTAssertEqual(StoryVisibilityMenuResolver.route(to: .private, current: "PUBLIC"), .applyDirectly)
+        XCTAssertEqual(StoryVisibilityMenuResolver.route(to: .private, current: "PUBLIC"),
+                       .applyDirectly(userIds: []))
+    }
+
+    /// Le passage vers une visibilité SANS sélection doit envoyer une liste
+    /// d'audience VIDE, jamais `nil`.
+    ///
+    /// `UpdatePostRequest` encode ses optionnels via l'`Encodable` synthétisé :
+    /// un `nil` est OMIS du JSON, et `PostService.updatePost` ne touche le
+    /// champ que s'il est présent (`if (data.visibilityUserIds !== undefined)`).
+    /// Passer de `EXCEPT[a,b,c]` à Public en envoyant `nil` vidait donc la
+    /// liste LOCALEMENT pendant que la base gardait `[a,b,c]` : après refresh,
+    /// rouvrir « Sauf… » repré-cochait a/b/c.
+    ///
+    /// `[]` est accepté par `UpdatePostSchema` pour ces visibilités — le
+    /// `refine` ne rejette une liste vide que pour `EXCEPT`/`ONLY` (vérifié
+    /// contre le schéma du gateway).
+    func test_route_modesWithoutSelection_sendAnEmptyAudienceList_neverNil() {
+        let withoutSelection = PostVisibility.composerSelectableCases
+            .filter { !$0.requiresUserSelection }
+        XCTAssertFalse(withoutSelection.isEmpty, "garde-fou : la liste des modes sans sélection ne doit pas être vide")
+
+        for mode in withoutSelection {
+            // `current` volontairement différent du mode visé, sinon `.ignored`.
+            guard case .applyDirectly(let userIds) =
+                    StoryVisibilityMenuResolver.route(to: mode, current: "EXCEPT") else {
+                XCTFail("\(mode) devrait s'appliquer directement")
+                continue
+            }
+            XCTAssertEqual(userIds, [],
+                           "\(mode) doit envoyer une liste vide pour nettoyer l'audience orpheline côté serveur")
+        }
     }
 
     /// EXCEPT / ONLY ne partent JAMAIS au serveur sans sélection : le gateway
