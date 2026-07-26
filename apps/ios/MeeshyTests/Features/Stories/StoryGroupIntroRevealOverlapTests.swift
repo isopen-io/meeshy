@@ -119,8 +119,11 @@ final class StoryGroupIntroRevealOverlapTests: XCTestCase {
     func test_armedEntrance_geometricOpeningsArmAGeometry() {
         XCTAssertNotEqual(StoryOpeningEntrance.armed(for: .zoom).openingScale, 1.0,
                           "Le zoom doit partir d'une échelle différente de 1.")
-        XCTAssertNotEqual(StoryOpeningEntrance.armed(for: .slide).textSlideOffset, 0,
-                          "Le slide doit partir d'un décalage non nul.")
+        // Le slide arme un débattement HORIZONTAL (fraction de la largeur du
+        // canvas, aligné sur le SDK) et non plus un décalage vertical en
+        // points : c'est ce que rendent l'aperçu du composer et l'export.
+        XCTAssertNotEqual(StoryOpeningEntrance.armed(for: .slide).openingSlideFraction, 0,
+                          "Le slide doit partir d'un débattement non nul.")
     }
 
     // MARK: - (e) Le recouvrement tient dans la fenêtre de swap de groupe
