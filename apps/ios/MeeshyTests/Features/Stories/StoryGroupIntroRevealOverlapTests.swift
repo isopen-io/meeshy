@@ -94,6 +94,7 @@ final class StoryGroupIntroRevealOverlapTests: XCTestCase {
             // plein écran.
             let rest = StoryOpeningEntrance(contentOpacity: 1,
                                             openingScale: 1.0,
+                                            openingSlideFraction: 0,
                                             textSlideOffset: 0,
                                             isRevealActive: opening == .reveal)
 
