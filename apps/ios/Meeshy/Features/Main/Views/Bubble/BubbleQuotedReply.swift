@@ -125,6 +125,10 @@ struct BubbleQuotedReply: View, Equatable {
                                 Image(systemName: kind.sfSymbolName)
                                     .font(.caption2.weight(.medium))
                                     .foregroundColor(previewColor)
+                                    // Decorative attachment glyph — the adjacent
+                                    // short label ("Photo", "Vidéo", …) conveys
+                                    // the kind, so hide the symbol from VoiceOver.
+                                    .accessibilityHidden(true)
                             }
 
                             // Empty preview text + attachment → use the kind's
@@ -287,6 +291,9 @@ struct BubbleStoryReplyPreview: View, Equatable {
             Image(systemName: "camera.fill")
                 .font(.caption2.weight(.medium))
                 .foregroundColor(previewColor)
+                // Decorative glyph — the adjacent "Story" label conveys the
+                // reply kind, so hide the symbol from VoiceOver.
+                .accessibilityHidden(true)
             Text(String(localized: "bubble.reply.story", defaultValue: "Story", bundle: .main))
                 .font(.caption.weight(.medium))
                 .foregroundColor(previewColor)
