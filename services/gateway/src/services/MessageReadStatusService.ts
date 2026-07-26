@@ -808,7 +808,17 @@ export class MessageReadStatusService {
         conversationId,
         messageId,
         now,
-        cursorExists: true,
+        // Le vrai `cursorExists`, pas un `true` codé en dur : en mode exact où le
+        // curseur de lecture n'a pas avancé (message suivant non lu) ET où aucun
+        // curseur n'existait, l'avance de lecture n'a rien créé — coder `true`
+        // fait alors interpréter le miss de l'`updateMany` comme « déjà en
+        // avance », donc SANS création : le curseur de livraison reste inexistant
+        // et le gel `deliveredAt` est sauté, laissant l'état impossible
+        // « lu > livré ». Le vrai flag crée le curseur de livraison quand il
+        // manque ; la course concurrente reste couverte par le catch P2002 de
+        // `_advanceCursor`. Sur le chemin sain (curseur déjà là), l'`updateMany`
+        // matche et le flag n'est jamais consulté.
+        cursorExists,
         idField: "lastDeliveredMessageId",
         atField: "lastDeliveredAt",
         resetUnreadCount: false,
