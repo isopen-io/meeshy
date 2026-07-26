@@ -193,7 +193,7 @@ final class TimelineExportController: ObservableObject {
     init(exporter: TimelineStoryExporting = SystemTimelineStoryExporter(),
          usernameProvider: (@MainActor @Sendable () -> String?)? = nil,
          introProvider: (@MainActor @Sendable () async -> StoryExportIntroContent?)? = nil,
-         introTimeout: Duration = .seconds(4)) {
+         introTimeout: Duration = BoundedAsyncResolution.defaultTimeout) {
         self.exporter = exporter
         self.usernameProvider = usernameProvider ?? { AuthManager.shared.currentUser?.username }
         self.introProvider = introProvider ?? StoryExportIntroFactory.currentUser

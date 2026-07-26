@@ -76,7 +76,7 @@ final class StoryPhotoSaveService: ObservableObject {
         photoSaver: PhotoLibrarySaving = PhotoLibraryManagerAdapter(),
         toasts: FeedbackToastSurfacing? = nil,
         preferredLanguages: (@MainActor () -> [String])? = nil,
-        introTimeout: Duration = .seconds(4),
+        introTimeout: Duration = BoundedAsyncResolution.defaultTimeout,
         intro: (@MainActor @Sendable () async -> StoryExportIntroContent?)? = nil
     ) {
         // `StoryVideoExportService.shared` et `FeedbackToastManager.shared`

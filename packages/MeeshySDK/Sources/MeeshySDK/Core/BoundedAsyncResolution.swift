@@ -24,6 +24,22 @@ import Foundation
 /// évite `withTaskGroup`.
 public enum BoundedAsyncResolution {
 
+    /// Borne partagée par TOUS les chemins d'export de story qui résolvent
+    /// l'identité de marque (`StoryPhotoSaveService`,
+    /// `StoryExportShareViewModel`, `TimelineExportController`).
+    ///
+    /// Elle vit ici, à côté de `resolve`, plutôt que dupliquée en littéral
+    /// `.seconds(4)` sur chaque appelant : la revue finale a trouvé deux
+    /// chemins bornés et un troisième — « Partager » — qui ne l'était pas,
+    /// précisément parce que la valeur n'avait pas de domicile commun. Un
+    /// quatrième chemin qui l'oublierait se verrait tout de suite.
+    ///
+    /// 4 s : au-delà, l'avatar/la bannière ne sont manifestement pas en cache
+    /// et l'appel réseau peut courir jusqu'au timeout `URLSession` par défaut
+    /// (~60 s). Mieux vaut un export sans interlude qu'une barre figée à 0 %
+    /// pendant une minute.
+    public static let defaultTimeout: Duration = .seconds(4)
+
     /// - Parameters:
     ///   - operation: résolution asynchrone à borner. `@MainActor` : les deux
     ///     appelants actuels (`StoryPhotoSaveService.intro`,
