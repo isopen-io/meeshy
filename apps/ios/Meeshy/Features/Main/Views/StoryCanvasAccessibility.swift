@@ -12,7 +12,7 @@ import MeeshySDK
 /// le groupe et, depuis peu, de la transcription du vocal.
 ///
 /// Fonction pure pour rester testable sans instancier SwiftUI (même patron que
-/// `StoryIndexResolver` / `StoryExpirySkipResolver`). La résolution de langue
+/// `StoryIndexResolver` / `StoryPlaybackSkipResolver`). La résolution de langue
 /// passe par `StoryTextObject.resolvedText(preferredLanguages:)` : l'annonce
 /// suit le Prisme, donc dit exactement ce que l'écran montre — un oral qui
 /// contredirait le visuel serait pire que pas d'oral du tout.

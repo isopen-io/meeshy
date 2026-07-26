@@ -389,7 +389,7 @@ private struct MyStoryButton: View {
         let userId = currentUser?.id ?? ""
         // Un groupe entièrement expiré est traité comme « pas de story » : on
         // affiche le bouton d'ajout, jamais un anneau dont le viewer se fermerait
-        // aussitôt (`skipExpiredStoriesIfNeeded`). Cohérent avec le filtre du tray.
+        // aussitôt (`skipUnplayableStoriesIfNeeded`). Cohérent avec le filtre du tray.
         let myGroup = viewModel.storyGroupForUser(userId: userId).flatMap { $0.isFullyExpired() ? nil : $0 }
         let hasMyStory = myGroup != nil
         let userName = currentUser?.displayName ?? currentUser?.username ?? "Moi"

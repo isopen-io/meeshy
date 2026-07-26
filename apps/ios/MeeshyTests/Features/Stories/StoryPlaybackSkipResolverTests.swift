@@ -15,7 +15,7 @@ import XCTest
 ///
 /// Règle retenue : on saute vers le prochain groupe qui a réellement quelque
 /// chose à montrer, et on ne ferme qu'en dernier recours.
-final class StoryExpirySkipResolverTests: XCTestCase {
+final class StoryPlaybackSkipResolverTests: XCTestCase {
 
     // MARK: - Fixtures
 
@@ -48,7 +48,7 @@ final class StoryExpirySkipResolverTests: XCTestCase {
     func test_currentStoryNotExpired_staysPut() {
         let group = makeGroup("a", [makeStory(id: "s0"), makeStory(id: "s1")])
 
-        let outcome = StoryExpirySkipResolver.resolve(
+        let outcome = StoryPlaybackSkipResolver.resolve(
             groups: [group], groupIndex: 0, storyIndex: 0,
             currentUserId: "me", now: now
         )
@@ -63,7 +63,7 @@ final class StoryExpirySkipResolverTests: XCTestCase {
             makeStory(id: "s2")
         ])
 
-        let outcome = StoryExpirySkipResolver.resolve(
+        let outcome = StoryPlaybackSkipResolver.resolve(
             groups: [group], groupIndex: 0, storyIndex: 0,
             currentUserId: "me", now: now
         )
@@ -80,7 +80,7 @@ final class StoryExpirySkipResolverTests: XCTestCase {
         ])
         let liveGroup = makeGroup("b", [makeStory(id: "s2")])
 
-        let outcome = StoryExpirySkipResolver.resolve(
+        let outcome = StoryPlaybackSkipResolver.resolve(
             groups: [expiredGroup, liveGroup], groupIndex: 0, storyIndex: 0,
             currentUserId: "me", now: now
         )
@@ -100,7 +100,7 @@ final class StoryExpirySkipResolverTests: XCTestCase {
             makeGroup("c", [makeStory(id: "s2", expired: true), makeStory(id: "s3")])
         ]
 
-        let outcome = StoryExpirySkipResolver.resolve(
+        let outcome = StoryPlaybackSkipResolver.resolve(
             groups: groups, groupIndex: 0, storyIndex: 0,
             currentUserId: "me", now: now
         )
@@ -119,7 +119,7 @@ final class StoryExpirySkipResolverTests: XCTestCase {
             ])
         ]
 
-        let outcome = StoryExpirySkipResolver.resolve(
+        let outcome = StoryPlaybackSkipResolver.resolve(
             groups: groups, groupIndex: 0, storyIndex: 0,
             currentUserId: "me", now: now
         )
@@ -135,13 +135,93 @@ final class StoryExpirySkipResolverTests: XCTestCase {
             makeGroup("b", [makeStory(id: "s1", expired: true)])
         ]
 
-        let outcome = StoryExpirySkipResolver.resolve(
+        let outcome = StoryPlaybackSkipResolver.resolve(
             groups: groups, groupIndex: 1, storyIndex: 0,
             currentUserId: "me", now: now
         )
 
         XCTAssertEqual(outcome, .close,
                        "Plus rien à montrer nulle part ⇒ fermer reste correct")
+    }
+
+    // MARK: - Stories vides (mêmes conséquences qu'une expirée)
+
+    /// Une story sans le moindre contenu ne rendait qu'un écran noir pendant
+    /// toute la durée de slide. Elle se saute comme une expirée.
+    private func makeEmptyStory(id: String) -> StoryItem {
+        StoryItem(id: id,
+                  content: nil,
+                  media: [],
+                  storyEffects: StoryEffects(textObjects: []),
+                  createdAt: now.addingTimeInterval(-3600),
+                  expiresAt: now.addingTimeInterval(3600),
+                  isViewed: false)
+    }
+
+    func test_emptyStoryAhead_isSkippedLikeAnExpiredOne() {
+        let group = makeGroup("a", [
+            makeEmptyStory(id: "vide-0"),
+            makeEmptyStory(id: "vide-1"),
+            makeStory(id: "s2")
+        ])
+
+        let outcome = StoryPlaybackSkipResolver.resolve(
+            groups: [group], groupIndex: 0, storyIndex: 0,
+            currentUserId: "me", now: now
+        )
+
+        XCTAssertEqual(outcome, .advanceStory(index: 2),
+                       "deux écrans noirs d'affilée ne sont pas une lecture")
+    }
+
+    func test_wholeGroupEmpty_advancesToNextGroup() {
+        let groups = [
+            makeGroup("a", [makeEmptyStory(id: "vide-0")]),
+            makeGroup("b", [makeStory(id: "s1")])
+        ]
+
+        let outcome = StoryPlaybackSkipResolver.resolve(
+            groups: groups, groupIndex: 0, storyIndex: 0,
+            currentUserId: "me", now: now
+        )
+
+        XCTAssertEqual(outcome, .advanceGroup(groupIndex: 1, storyIndex: 0))
+    }
+
+    /// Le groupe d'entrée applique le MÊME prédicat : atterrir sur une story
+    /// vide en changeant de groupe reproduirait le défaut ailleurs.
+    func test_nextGroupEntry_skipsEmptyStories() {
+        let groups = [
+            makeGroup("a", [makeStory(id: "s0", expired: true)]),
+            makeGroup("b", [makeEmptyStory(id: "vide"), makeStory(id: "s1")])
+        ]
+
+        let outcome = StoryPlaybackSkipResolver.resolve(
+            groups: groups, groupIndex: 0, storyIndex: 0,
+            currentUserId: "me", now: now
+        )
+
+        XCTAssertEqual(outcome, .advanceGroup(groupIndex: 1, storyIndex: 1))
+    }
+
+    /// Garde anti-régression : une story de couleur unie n'a ni média ni
+    /// texte, et doit rester lisible. C'est le faux positif qui coûterait le
+    /// plus cher — du contenu réel escamoté.
+    func test_solidColourStory_isNeverSkipped() {
+        var effects = StoryEffects(textObjects: [])
+        effects.background = "#6366F1"
+        let story = StoryItem(id: "uni", content: nil, media: [],
+                              storyEffects: effects,
+                              createdAt: now.addingTimeInterval(-3600),
+                              expiresAt: now.addingTimeInterval(3600),
+                              isViewed: false)
+
+        let outcome = StoryPlaybackSkipResolver.resolve(
+            groups: [makeGroup("a", [story])], groupIndex: 0, storyIndex: 0,
+            currentUserId: "me", now: now
+        )
+
+        XCTAssertEqual(outcome, .stay)
     }
 
     // MARK: - L'auteur garde ses propres stories expirées
@@ -151,7 +231,7 @@ final class StoryExpirySkipResolverTests: XCTestCase {
     func test_ownExpiredGroup_neverSkipped() {
         let mine = makeGroup("me", [makeStory(id: "s0", expired: true)])
 
-        let outcome = StoryExpirySkipResolver.resolve(
+        let outcome = StoryPlaybackSkipResolver.resolve(
             groups: [mine], groupIndex: 0, storyIndex: 0,
             currentUserId: "me", now: now
         )
@@ -162,7 +242,7 @@ final class StoryExpirySkipResolverTests: XCTestCase {
     // MARK: - Bornes
 
     func test_emptyGroup_staysPut() {
-        let outcome = StoryExpirySkipResolver.resolve(
+        let outcome = StoryPlaybackSkipResolver.resolve(
             groups: [makeGroup("a", [])], groupIndex: 0, storyIndex: 0,
             currentUserId: "me", now: now
         )
@@ -171,7 +251,7 @@ final class StoryExpirySkipResolverTests: XCTestCase {
     }
 
     func test_groupIndexOutOfRange_staysPut() {
-        let outcome = StoryExpirySkipResolver.resolve(
+        let outcome = StoryPlaybackSkipResolver.resolve(
             groups: [], groupIndex: 3, storyIndex: 0,
             currentUserId: "me", now: now
         )

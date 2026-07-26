@@ -466,7 +466,7 @@ struct StoryViewerView: View {
             // Cache TTL > 24h is intentional (avoid redownloading avatars)
             // but the *content* must not be rendered once expired. If no
             // non-expired story remains in the current group, dismiss.
-            skipExpiredStoriesIfNeeded()
+            skipUnplayableStoriesIfNeeded()
             StoryMediaCoordinator.shared.activate {
                 // No-op : ne PAS forcer `isGlobalMuted = true` ici. Cette
                 // closure est invoquée par `PlaybackCoordinator` chaque fois
@@ -597,7 +597,7 @@ struct StoryViewerView: View {
                     )
                 )
             }
-            skipExpiredStoriesIfNeeded()
+            skipUnplayableStoriesIfNeeded()
             isContentReady = false
             refreshPrefetchWindowAndTimer()
             let previousStory = currentGroup.flatMap { group in
@@ -637,7 +637,7 @@ struct StoryViewerView: View {
             }
         }
         .adaptiveOnChange(of: currentGroupIndex) { oldValue, _ in
-            skipExpiredStoriesIfNeeded()
+            skipUnplayableStoriesIfNeeded()
             isContentReady = false
             refreshPrefetchWindowAndTimer()
             let previousStory: StoryItem? = (oldValue >= 0 && oldValue < groups.count &&
@@ -1029,24 +1029,24 @@ struct StoryViewerView: View {
         }
     }
 
-    /// Direct repost-as-post action wired to the kebab menu's "Republier en
-    /// post" item. Mirrors the share-button repost UX (C.1) but skips the
-    /// A5 — advance past stories whose 24h visibility window has elapsed.
+    /// Avance la lecture au-delà des slides qu'on ne peut pas donner à voir.
     ///
-    /// The cache TTL is intentionally longer than 24h (avoids redownloading
-    /// avatars + metadata on cold start), so the viewer may receive expired
-    /// stories from the local store. We skip them here rather than filter
-    /// at the tray level — the tray must keep showing the user's ring for
-    /// UX continuity, but rendering an expired story (deleted server-side
-    /// by the GC job) would 404 on reactions and confuse the user.
+    /// Deux cas, arbitrés par `StoryPlaybackSkipResolver` :
+    /// - **expirée** — le TTL du cache dépasse volontairement la fenêtre de
+    ///   24 h (pour ne pas re-télécharger avatars et métadonnées à froid), donc
+    ///   le lecteur reçoit des stories que le GC serveur a déjà supprimées. On
+    ///   filtre ICI et non au niveau du tray : l'anneau de l'auteur doit rester
+    ///   visible pour la continuité, mais afficher une story expirée renverrait
+    ///   404 sur les réactions ;
+    /// - **vide** — sans média, sans texte, sans audio : un écran noir pendant
+    ///   toute la durée de slide (cf. `StoryContentPresence`).
     ///
-    /// Behavior:
-    /// - advance `currentStoryIndex` to the first non-expired story in the
-    ///   current group (forward only — never go back to an unexpired one);
-    /// - if every remaining story in the group is expired, dismiss the
-    ///   viewer (the user is opening an empty ring).
-    private func skipExpiredStoriesIfNeeded() {
-        let outcome = StoryExpirySkipResolver.resolve(
+    /// Le saut est FORWARD only, et un groupe entièrement illisible fait passer
+    /// au groupe suivant qui a du contenu — la fermeture du lecteur n'arrive
+    /// qu'une fois la liste épuisée. L'auteur, lui, garde l'accès à ses propres
+    /// stories pour y lire réactions et commentaires.
+    private func skipUnplayableStoriesIfNeeded() {
+        let outcome = StoryPlaybackSkipResolver.resolve(
             groups: groups,
             groupIndex: currentGroupIndex,
             storyIndex: currentStoryIndex,
@@ -1062,7 +1062,7 @@ struct StoryViewerView: View {
             // Saut correctif, pas une navigation utilisateur : on pose les
             // index directement plutôt que de passer par `groupTransition`.
             // L'`adaptiveOnChange(of: currentGroupIndex)` qui suit rejoue
-            // `skipExpiredStoriesIfNeeded` — le résolveur ne renvoie que des
+            // `skipUnplayableStoriesIfNeeded` — le résolveur ne renvoie que des
             // groupes ayant du contenu, donc il répondra `.stay` et la
             // récursion s'arrête au premier tour. L'interlude d'identité du
             // nouvel auteur s'affiche normalement via ce même onChange.
