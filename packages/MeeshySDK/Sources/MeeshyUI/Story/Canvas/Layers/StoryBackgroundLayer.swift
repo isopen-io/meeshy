@@ -983,8 +983,8 @@ extension StoryBackgroundLayer {
 /// happens implicitly when the layer assigns `contents` and respects
 /// `contentsGravity`. Pre-scaling here would waste CPU and degrade quality on
 /// retina displays.
-enum ThumbHashDecoder {
-    nonisolated static func decodeIfAvailable(_ hash: String) -> UIImage? {
+public enum ThumbHashDecoder {
+    public nonisolated static func decodeIfAvailable(_ hash: String) -> UIImage? {
         guard !hash.isEmpty else { return nil }
         return UIImage.fromThumbHash(hash)
     }
