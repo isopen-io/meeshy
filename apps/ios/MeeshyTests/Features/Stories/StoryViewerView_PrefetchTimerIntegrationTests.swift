@@ -214,17 +214,12 @@ final class StoryViewerView_PrefetchTimerIntegrationTests: XCTestCase {
     /// new index and points the timer at the new slide id, dropping the
     /// canvas for slides that fell outside the window.
     func test_storyIndexChange_updatesPrefetcherWindow() throws {
-        // TODO(test-seam): this exercises a mid-test index change via
-        // `sut.currentStoryIndex = 2`, but `currentStoryIndex` is a SwiftUI
-        // @State on a View struct — @State does NOT propagate outside a live
-        // view hierarchy, so the write is dropped and refreshPrefetchWindowAndTimer
-        // reads the default (0), leaving the window at {0,1,2} instead of
-        // {1,2,3}. Re-enable once refreshPrefetchWindowAndTimer takes the current
-        // index as an explicit parameter (currentIndex:) instead of reading
-        // @State, making the index change deterministic in tests. The index-0
-        // window is already covered by test_viewerOnAppear_attachesPrefetcher_setsCurrentSlide.
-        try XCTSkipIf(true, "Needs a currentIndex: parameter on refreshPrefetchWindowAndTimer; @State index changes don't propagate outside a SwiftUI hierarchy.")
-
+        // Réactivé le 2026-07-26 : `refreshPrefetchWindowAndTimer` accepte
+        // désormais `currentIndex:`, exactement ce que réclamait le
+        // TODO(test-seam) qui maintenait ce test en veille. Écrire dans le
+        // `@State currentStoryIndex` d'une View hors graphe SwiftUI est un
+        // no-op silencieux — la fenêtre restait à {0,1,2} et le test aurait été
+        // vert pour la mauvaise raison.
         let (sut, stories, _) = makeSUT(storyCount: 4, currentIndex: 0)
         let prefetcher = StoryReaderPrefetcher()
         let timer = StoryReaderTimerController(useDisplayLink: false)
@@ -238,8 +233,7 @@ final class StoryViewerView_PrefetchTimerIntegrationTests: XCTestCase {
         XCTAssertEqual(timer.currentSlideId, stories[0].id)
 
         // Advance to slide 2 (centre of a 4-slide group).
-        sut.currentStoryIndex = 2
-        sut.refreshPrefetchWindowAndTimer(prefetcher: prefetcher, timer: timer)
+        sut.refreshPrefetchWindowAndTimer(prefetcher: prefetcher, timer: timer, currentIndex: 2)
 
         XCTAssertEqual(Set(prefetcher.bootstrapped.keys),
                        Set([stories[1].id, stories[2].id, stories[3].id]),

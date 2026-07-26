@@ -898,16 +898,22 @@ struct StoryViewerView: View {
     ///   écritures faites depuis un test — même raison que les paramètres
     ///   `prefetcher`/`timer` ci-dessus. Sans cette entrée, la préservation de
     ///   la pause n'est pas vérifiable. Production : `nil`.
+    /// - Parameter currentIndex: surcharge de `currentStoryIndex`, même raison.
+    ///   Réclamée de longue date par le `TODO(test-seam)` de
+    ///   `test_storyIndexChange_updatesPrefetcherWindow`, resté désactivé faute
+    ///   de ce point d'entrée. Production : `nil`.
     func refreshPrefetchWindowAndTimer(
         prefetcher: StoryReaderPrefetcher? = nil,
         timer: StoryReaderTimerController? = nil,
-        paused: Bool? = nil
+        paused: Bool? = nil,
+        currentIndex: Int? = nil
     ) {
         let p = prefetcher ?? self.prefetcher
         let t = timer ?? self.slideTimer
         let stories = currentGroupStories
+        let index = currentIndex ?? currentStoryIndex
         guard !stories.isEmpty,
-              stories.indices.contains(currentStoryIndex) else {
+              stories.indices.contains(index) else {
             t.reset()
             return
         }
@@ -961,12 +967,12 @@ struct StoryViewerView: View {
             imageCache: nil
         )
         p.updateWindow(items: stories,
-                       currentIndex: currentStoryIndex,
+                       currentIndex: index,
                        context: context,
                        preferredLanguages: chain,
                        extraWarmItems: extraWarmItems)
 
-        let current = stories[currentStoryIndex]
+        let current = stories[index]
         // PREFETCHER CANVASES RESTENT EN `.edit` (jamais promus en `.play`).
         //
         // Le promote-au-`.play` du canvas prefetcher du slide courant a été
