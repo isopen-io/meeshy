@@ -175,10 +175,21 @@ la carte **logo-seule**. Arithmétique :
 
 Écart 2,0 − 0,5 = **1,5 s** = exactement `logoPhase`, et exactement l'écart
 mesuré par la CI (5,2 s observés contre 3,7 s attendus). Le test gagne une
-constante `authorOutroTail` distincte. Elle est locale parce que `logoPhase` et
-`authorClipDuration` sont **internes** à `MeeshyUI` : seuls
-`StoryExportOutro.duration` et `StoryExportIntro.duration` sont publics — c'est
-déjà la raison d'être de `outroTail`.
+constante distincte, locale parce que `logoPhase` et `authorClipDuration` sont
+**internes** à `MeeshyUI` : seuls `StoryExportOutro.duration` et
+`StoryExportIntro.duration` sont publics — c'est déjà la raison d'être de
+`outroTail`.
+
+> **Superseded — 2ᵉ collision d'essaim.** `576817a` *(« expect the author
+> end-card's two-phase tail in the export duration »)* a été mergé dans `main`
+> pendant l'exécution de la CI iOS de cette PR, avec **la même valeur (2,0 s)**
+> sous un autre nom (`outroAuthorTail`). Le conflit est résolu **en faveur de
+> `main`** : leur dérivation est même plus directe que la mienne — `overlap`
+> vaut *exactement* `logoPhase`, donc la phase logo se superpose entièrement au
+> crossfade et **seule `identityPhase` (2 s) rallonge la vidéo**. Ma réparation
+> n° 2 ne subsiste donc pas dans le diff final ; elle est conservée dans ce
+> document parce que le raisonnement a servi à valider le nombre de façon
+> indépendante, et parce que la CI a bien tourné dessus (verte).
 
 ## Vérification
 
@@ -206,8 +217,13 @@ Gate réel = CI `iOS Tests`.
 donc son champ de saisie reste atteignable à toute taille de Dynamic Type ; ses
 trois points d'entrée partagent enfin un contrat de présentation unique.
 **0 clé i18n neuve, 0 logique métier, 0 réseau, 0 changement visuel aux tailles
-par défaut.** 1 suite neuve (6 tests) + 2 réparations de branche de base qui
-débloquent la CI iOS pour tout le dépôt.
+par défaut.** 1 suite neuve (6 tests).
+
+Sur les 2 réparations de branche de base embarquées, **seule la n° 1
+(`StoryRepostFlowTests`) subsiste dans le diff final** — la n° 2 a été livrée en
+parallèle par `576817a` et le conflit a été résolu en faveur de `main`. Les deux
+ont néanmoins débloqué la CI iOS le temps de leur existence : sans la n° 1, le
+bundle `MeeshyTests` ne compilait pas du tout.
 
 ## Piste 222i+
 

@@ -877,8 +877,18 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       reaches the screen through `ConversationListUiState.categories` (iOS `userCategories`), the seam
       the corpus-hydration slice fills next. +9 tests (17 total in `ConversationSectionsTest`), the
       pinned-with-category guard mutation-proven (drop `&& categoryId == null` → exactly 1 failure).
-      **Reste**: category-catalogue hydration (cache-first + revalidate into `state.categories`) +
-      drag-to-category.
+      **Category-catalogue reducer done** (slice `conversation-category-catalog`, 2026-07-26): pure
+      `:core:model/UserCategoryCatalog` — the framework-free lift of iOS `UserCategoryStore`'s
+      `sortedSnapshot()` ordering (order asc, `null` last, case-insensitive name tie-break) and its
+      `create`/`update`/`delete`/`reorder`/`applyRemote` mutations into one immutable value type. `of` /
+      `EMPTY` / `upsert` / `remove` / `reorder(id→order)` / `apply(CategoryEvent)`; its `sorted` snapshot
+      is exactly the `categories` list `ConversationSections.of` consumes, so it is the building block the
+      hydration slice and the category socket handler both drive. SOTA over iOS: `.created`/`.updated`
+      collapse into one `Upserted` event; every branch JVM-covered vs iOS's actor coupling mutation to a
+      Combine publish. +20 tests (`UserCategoryCatalogTest`), null-last ordering mutation-proven
+      (`Int.MAX_VALUE`→`Int.MIN_VALUE` → exactly 1 failure).
+      **Reste**: category-catalogue hydration (cache-first + revalidate into `state.categories`, driving
+      `UserCategoryCatalog` from cache then network) + drag-to-category.
 - [x] Filtering (all/unread/personal/private/open/global/channels/favorites/archived) + search overlay
       — `ConversationFilter` enum (couleurs iOS) + `ConversationFilters.apply` pur
       (port fidèle de `filterConversations` : soft-delete masqué partout, archivés

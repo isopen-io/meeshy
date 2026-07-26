@@ -271,6 +271,9 @@ struct StoryViewerView: View {
 
     // Text parallax offset (slides up during cross-dissolve for depth)
     @State var textSlideOffset: CGFloat = 0 // internal for cross-file extension access
+    /// Glissement HORIZONTAL de l'ouverture `.slide`, en fraction de la largeur
+    /// du canvas — même unité que `StoryRenderer.slideTransitionTravelFraction`.
+    @State var openingSlideFraction: CGFloat = 0 // internal for cross-file extension access
 
     // Opening effect animation states
     @State var openingScale: CGFloat = 1.0        // internal for cross-file extension access
@@ -1268,6 +1271,7 @@ struct StoryViewerView: View {
             contentOpacity: contentOpacity,
             textSlideOffset: textSlideOffset,
             openingScale: openingScale,
+            openingSlideFraction: openingSlideFraction,
             isRevealActive: isRevealActive,
             bigReactionEmoji: bigReactionEmoji,
             bigReactionPhase: bigReactionPhase,

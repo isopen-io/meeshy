@@ -804,6 +804,10 @@ struct StoryCardView: View {
     let contentOpacity: Double
     let textSlideOffset: CGFloat
     let openingScale: CGFloat
+    /// Fraction de la LARGEUR du canvas dont l'ouverture `.slide` décale
+    /// horizontalement — même unité et même sens que
+    /// `StoryRenderer.slideTransitionTravelFraction`.
+    let openingSlideFraction: CGFloat
     let isRevealActive: Bool
     let bigReactionEmoji: String?
     let bigReactionPhase: Int
@@ -1217,7 +1221,8 @@ struct StoryCardView: View {
                            height: canvasFitSize.height)
                     .clipped()
                     .opacity(contentOpacity)
-                    .offset(y: textSlideOffset)
+                    .offset(x: openingSlideFraction * canvasFitSize.width,
+                            y: textSlideOffset)
                     .scaleEffect(openingScale)
                     .clipShape(
                         RevealCircleShape(progress: isRevealActive ? 1.0 : (currentStory?.storyEffects?.opening == .reveal ? 0.001 : 1.0))
