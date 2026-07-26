@@ -172,15 +172,24 @@ final class StoryRepostFlowTests: XCTestCase {
                      "Direct repost has no commentary — content must be nil")
         XCTAssertEqual(mockService.lastRepostIsQuote, false,
                        "Without commentary the repost is a plain re-share, not a quote")
+        XCTAssertNil(mockService.lastRepostVisibility,
+                     "The direct kebab repost opens no composer, so it picks no audience: " +
+                     "visibility stays unset and the backend applies its own default. " +
+                     "Mirrors repostAsPostDirect(), which omits the argument entirely.")
     }
 
     // MARK: - Flow 3: Kebab "Editer et republier" → UnifiedPostComposer
 
     /// The kebab item "Editer et republier en post" presents a
     /// `UnifiedPostComposer(repostingStory:authorHandle:onPublishRepost:onDismiss:)`
-    /// (B.7). The publish callback receives `(content, sourceStory)`; the
-    /// caller in `StoryViewerView` then forwards to
-    /// `PostService.repost(postId:targetType:.post, content:isQuote: !content.isEmpty)`.
+    /// (B.7). The publish callback receives `(content, sourceStory, visibility)`;
+    /// the caller in `StoryViewerView` then forwards to
+    /// `PostService.repost(postId:targetType:.post, content:isQuote: !content.isEmpty,
+    /// visibility:)`.
+    ///
+    /// The third argument is the audience picked in the composer — it must reach
+    /// the service call, otherwise the picker is decorative and the repost is
+    /// published to the wrong people.
     ///
     /// We test the full path: the composer wires the callback correctly, AND
     /// the production callback shape (mirrored here against `MockPostService`)
@@ -192,13 +201,15 @@ final class StoryRepostFlowTests: XCTestCase {
         // Capture args delivered to the publish callback.
         var capturedContent: String?
         var capturedSourceId: String?
+        var capturedVisibility: String?
 
         let composer = UnifiedPostComposer(
             repostingStory: story,
             authorHandle: "alice",
-            onPublishRepost: { content, sourceStory in
+            onPublishRepost: { content, sourceStory, visibility in
                 capturedContent = content
                 capturedSourceId = sourceStory.id
+                capturedVisibility = visibility
             },
             onDismiss: {}
         )
@@ -219,6 +230,9 @@ final class StoryRepostFlowTests: XCTestCase {
                        "onPublishRepost receives the typed commentary verbatim")
         XCTAssertEqual(capturedSourceId, "story-1",
                        "onPublishRepost receives the original source story (not the clone)")
+        XCTAssertEqual(capturedVisibility, "PUBLIC",
+                       "onPublishRepost receives the composer's current audience — PUBLIC is its " +
+                       "initial value, and it must be reported rather than assumed by the caller")
 
         // 3.c — Replay the production-side callback contract: the caller
         // (StoryViewerView.swift:297-316) forwards captured args to
@@ -228,7 +242,8 @@ final class StoryRepostFlowTests: XCTestCase {
             postId: capturedSourceId ?? "",
             targetType: .post,
             content: content.isEmpty ? nil : content,
-            isQuote: !content.isEmpty
+            isQuote: !content.isEmpty,
+            visibility: capturedVisibility
         )
 
         XCTAssertEqual(mockService.lastRepostPostId, "story-1")
@@ -238,6 +253,9 @@ final class StoryRepostFlowTests: XCTestCase {
                        "Non-empty commentary is forwarded as-is")
         XCTAssertEqual(mockService.lastRepostIsQuote, true,
                        "Non-empty commentary makes the repost a quote")
+        XCTAssertEqual(mockService.lastRepostVisibility, "PUBLIC",
+                       "The audience picked in the composer reaches the service call — this is " +
+                       "the whole point of threading visibility through onPublishRepost")
     }
 
     // MARK: - Flow 4: Feed cell renders STORY repost embed

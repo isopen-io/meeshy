@@ -84,6 +84,7 @@ final class MockPostService: PostServiceProviding, @unchecked Sendable {
     var lastRepostTargetType: PostType?
     var lastRepostContent: String?
     var lastRepostIsQuote: Bool?
+    var lastRepostVisibility: String?
 
     var shareCallCount = 0
     var lastSharePostId: String?
@@ -254,12 +255,18 @@ final class MockPostService: PostServiceProviding, @unchecked Sendable {
         try deleteCommentResult.get()
     }
 
-    func repost(postId: String, targetType: PostType?, content: String?, isQuote: Bool, visibility: String?) async throws -> APIPost {
+    /// `visibility` carries the default the real `PostService.repost` declares.
+    /// Without it the mock diverged from the API it mocks: production can call
+    /// `repost(postId:targetType:content:isQuote:)` (see `repostAsPostDirect()`)
+    /// but a test could not, so the mock rejected the very call shape it exists
+    /// to stand in for.
+    func repost(postId: String, targetType: PostType?, content: String?, isQuote: Bool, visibility: String? = nil) async throws -> APIPost {
         repostCallCount += 1
         lastRepostPostId = postId
         lastRepostTargetType = targetType
         lastRepostContent = content
         lastRepostIsQuote = isQuote
+        lastRepostVisibility = visibility
         return try repostResult.get()
     }
 
@@ -457,6 +464,7 @@ final class MockPostService: PostServiceProviding, @unchecked Sendable {
         lastRepostTargetType = nil
         lastRepostContent = nil
         lastRepostIsQuote = nil
+        lastRepostVisibility = nil
 
         shareResult = .success(())
         shareCallCount = 0
