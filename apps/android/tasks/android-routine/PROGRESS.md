@@ -1,5 +1,47 @@
 # Progress — state & what to do next
 
+> On 2026-07-26 the **conversation tag-autocomplete decision core** landed (slice
+> `conversation-tag-autocomplete`, feature-parity §B Conversations — the first pure-logic bite of the
+> "category create + expand/collapse; client-side tag aggregation for autocomplete" box, moved `[ ]`→`[~]`).
+> The tag field's suggestion/create/submit logic is scattered across iOS `TagInputField`'s computed
+> properties (`suggestions`, `canCreate`, `submit()`, `addTag()` in
+> `packages/MeeshySDK/Sources/MeeshyUI/Primitives/TagInputField.swift`), none unit-testable without a UI
+> host (its only test asserts `body != nil`). **Added (production, all `apps/android`):** pure
+> `:core:model/ConversationTagAutocomplete.kt` — `resolve(knownTags, selectedTags, query)` returns a
+> `TagAutocompleteState`: `suggestions` (pool = `knownTags` minus exact-selected, empty query → `take(8)`
+> of the pool in order, else case-insensitive `contains` on the trimmed query → `take(8)` — iOS
+> `pool.prefix(8)` on both arms), `canCreate` (trimmed non-blank ∧ no selected ∧ no known match, all
+> case-insensitive — iOS `.lowercased() ==`), `submitTag` (`suggestions.firstOrNull() ?: trimmed.takeIf {
+> canCreate }` — iOS `submit()`); plus `append(selectedTags, name)` (trim + exact-`in`-dedup guard →
+> new list or `null` no-op — iOS `addTag`). **SOTA over iOS:** every decision is lifted out of the SwiftUI
+> `View` into one framework-free `:core:model` SSOT returning a value model, so the future Compose field is
+> a dumb renderer and each branch is JVM-covered — vs iOS recomputing them mid-`body`. **Case-fidelity
+> preserved deliberately:** the pool exclusion + `append` guard use exact equality (iOS `contains`) while
+> `canCreate` uses case-insensitive (iOS `.lowercased()`), so a known "Urgent" with a selected "urgent"
+> stays offered — faithful, documented in the KDoc. **+25 behavioural tests**
+> (`ConversationTagAutocompleteTest`, all hand-written literal expectations): 4 empty-query
+> (pool-order / selected-exclusion / whitespace-blank / 8-cap), 5 filtered (substring-CI / no-match /
+> selected-exclusion / 8-cap / trim), 4 canCreate (new / known-CI / selected-CI / blank), 5 submit
+> (first-suggestion / create-trimmed / inert / empty-pool-noop / non-empty-pool-first), 5 append
+> (trim / blank-null / exact-dup-null / order / case-distinct). **Mutation (RED proof):** replacing
+> `submitTag = suggestions.firstOrNull() ?: trimmed.takeIf { canCreate }` with `= trimmed.takeIf {
+> canCreate }` fails **exactly** `submit picks the first suggestion when the panel has matches` +
+> `submit on an empty query with a non-empty pool picks the first suggestion` (23 run, 2 failed, no
+> collateral), restored after. **Gate:** `./apps/android/meeshy.sh check` (= `assembleDebug
+> testDebugUnitTest`) — `assembleDebug` green, `:core:model` `ConversationTagAutocompleteTest` 25/25; the
+> one full-run red was the documented `:sdk-core` DataStore parallel-load flake
+> (`PrivacyPreferencesStoreTest.dataStore_setPreferences_isReflectedInTheFlow` →
+> `TimeoutCancellationException`), **green on isolated `--rerun-tasks` (BUILD SUCCESSFUL in 44s)**,
+> untouched by this `:core:model`-only diff. Reviewer **PASS** (diff `apps/android` only — 1 new core +
+> 1 new test + tracking docs; SDK purity — a stateless `:core:model` block, the render/mutate
+> orchestration stays in the future composable/VM; SSOT — one panel resolver, re-implements nothing; no
+> tautological tests — expectations are literals + the mutation proof is real).
+> **Next slice:** the app-side **`TagInputField` composable** (chips + suggestion panel driven by
+> `resolve`/`append`, `@Composable` glue mostly coverage-exempt), OR the **conversation-options ViewModel
+> hydrating the `allTags` corpus** cache-first + revalidate (real testable derivation), OR the **category
+> create + expand/collapse** decision core, OR the paged **`OnboardingFlowView` Compose scaffold** (Auth),
+> OR the tracked **Kover 90% coverage-gate infra**.
+
 > On 2026-07-26 the **wizard navigation-chrome projection core** landed (slice `registration-nav-chrome`,
 > feature-parity §A Auth — the pure decision layer the future `OnboardingFlowView` composable renders,
 > the explicit follow-up of the bottom-bar step-navigation item). iOS spreads the wizard's top-bar +
