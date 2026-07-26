@@ -14,6 +14,8 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.serialization.json.Json
 import me.meeshy.sdk.cache.CacheClock
 import me.meeshy.sdk.cache.SystemCacheClock
+import me.meeshy.sdk.category.CategorySnapshotStore
+import me.meeshy.sdk.category.DataStoreCategorySnapshotStore
 import me.meeshy.sdk.chat.ConversationDraftStore
 import me.meeshy.sdk.chat.DataStoreConversationDraftStore
 import me.meeshy.sdk.chat.LocallyHiddenMessagesStore
@@ -127,6 +129,19 @@ object SdkModule {
             context.preferencesDataStoreFile("meeshy_privacy")
         }
         return DataStorePrivacyPreferencesStore(dataStore, scope)
+    }
+
+    @Provides
+    @Singleton
+    fun providesCategorySnapshotStore(
+        @ApplicationContext context: Context,
+        json: Json,
+    ): CategorySnapshotStore {
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+        val dataStore = PreferenceDataStoreFactory.create(scope = scope) {
+            context.preferencesDataStoreFile("meeshy_categories")
+        }
+        return DataStoreCategorySnapshotStore(dataStore, json)
     }
 
     @Provides
