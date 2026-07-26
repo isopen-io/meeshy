@@ -176,6 +176,17 @@ interface LeaveCallData {
   callId: string;
   userId: string;
   participantId: string;
+  // Vague 41 — an explicit override for the terminal endReason of a
+  // post-answer leave. Defaults to CallEndReason.completed (a deliberate
+  // hangup) when omitted, matching every existing call:leave/call:end
+  // caller. Callers that know the leave was NOT deliberate (e.g. the
+  // disconnect-grace window expiring without the participant reconnecting —
+  // a genuine involuntary network cutoff) pass CallEndReason.connectionLost
+  // so retry-on-failure and the callFailureRate analytics KPI see it as a
+  // failure, not a normal call end. Ignored for a pre-answer leave, which
+  // always resolves `missed` regardless (an unanswered ring that drops is
+  // still a missed call, never a "connection lost" call).
+  reason?: CallEndReason;
 }
 
 export class CallService {
@@ -1438,7 +1449,9 @@ export class CallService {
           where: { id: callId, version: existing.version },
           data: {
             status: idemPreAnswered ? CallStatus.missed : CallStatus.ended,
-            endReason: idemPreAnswered ? CallEndReason.missed : CallEndReason.completed,
+            // Vague 41 — same `reason` override as the main branch below,
+            // for the idempotent-leave race path (see LeaveCallData doc).
+            endReason: idemPreAnswered ? CallEndReason.missed : (data.reason ?? CallEndReason.completed),
             endedAt: idemNow,
             duration: idemDuration,
             // Mirror endCall(): record WHO ended the call in the metadata
@@ -1545,7 +1558,9 @@ export class CallService {
     // stale client's ring-time watchdog (see endCall's doc comment).
     const wasPreAnswered = !call.answeredAt;
     const targetEndedStatus = wasPreAnswered ? CallStatus.missed : CallStatus.ended;
-    const targetEndReason = wasPreAnswered ? CallEndReason.missed : CallEndReason.completed;
+    const targetEndReason = wasPreAnswered
+      ? CallEndReason.missed
+      : (data.reason ?? CallEndReason.completed);
 
     // Update in transaction. Version-guarded on the terminal write (see
     // endCall()'s doc comment): a racing terminal writer for this same call

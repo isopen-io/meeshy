@@ -731,3 +731,92 @@ Fichiers-clés : `services/gateway/src/socketio/CallEventsHandler.ts` (3730 l),
 > image 1a60816, BUILD_20260712_142040), health=healthy, https://meeshy.me → 200.
 > Busy-path (3fa6f1bfb) + call-waiting sont LIVE. Le web occupé ne casse plus sur
 > un 2e appel et peut désormais swapper — parité fonctionnelle 3 plateformes.
+
+## Vague 41 — `leaveCall()` mal-classait un vrai décrochage réseau en `completed` (2026-07-26)
+
+Point d'entrée : routine calling-feature (agent Cowork non interactif). Reprise du candidat
+« reste ouvert » signalé Vague 40 par l'agent d'exploration mais non creusé : `CallService.leaveCall`
+résout TOUT leave post-décroché en `completed`, y compris une vraie coupure réseau détectée
+uniquement par l'expiry de la grâce de déconnexion. Vérifié réel sur `HEAD` avant de toucher au
+code (branche `claude/modest-cori-bosv4t`) — rien dans les 40 vagues précédentes ni dans le
+code ne traitait ce cas comme intentionnel, juste « non creusé ».
+
+- **[MOYEN-HAUT, gateway, CONFIRMÉ + CORRIGÉ, TDD]** `CallService.leaveCall`
+  (`CallService.ts:1547-1548` avant fix) calcule `targetEndReason = wasPreAnswered ?
+  CallEndReason.missed : CallEndReason.completed` — un seul et même calcul pour DEUX
+  origines complètement différentes : (a) un `call:leave`/`call:end` explicite de
+  l'utilisateur (vrai raccroché), et (b) `onDisconnectGraceExpired` →
+  `leaveParticipationAndBroadcast` (`CallEventsHandler.ts:598-688,697-750`) — le socket de
+  signaling est mort et le participant n'est jamais revenu dans la fenêtre de grâce
+  (`DISCONNECT_GRACE_MS` = 30s post-décroché). Les DEUX chemins appellent la même
+  `leaveCall()` avec la même forme de données (`{callId, userId, participantId}`), sans
+  aucun moyen de distinguer « l'utilisateur a raccroché » de « son réseau est mort et il
+  n'est jamais revenu ».
+  **Scénario concret** : A et B en appel actif (P2P établi) ; le téléphone de B perd le
+  réseau (tunnel, ascenseur, app tuée en fond) — son socket de signaling meurt, mais le
+  media P2P peut survivre un instant. La grâce de 30s expire sans que B ne revienne
+  → `leaveCall()` classe l'appel `status=ended, endReason=completed`, EXACTEMENT comme
+  si B avait appuyé sur "Raccrocher". Deux conséquences concrètes :
+    1. **Retry-on-failure cassé pour son propre cas d'usage principal** :
+       `isRetryableCallFailure` (web `call-retry-policy.ts:13-16`, mêmes règles iOS/Android,
+       cf Vague "Parité retry APPROFONDIE Android") n'offre "Réessayer" que sur
+       `failed`/`connectionLost`. A (toujours connecté) reçoit `call:ended
+       {reason:'completed'}` et n'a JAMAIS l'option de rappeler — alors que c'est
+       PRÉCISÉMENT le scénario "~16-20% des appels finissent en échec transitoire" qui a
+       motivé la feature (audit "Recommandation forward" du 2026-07-12).
+    2. **`callFailureRate` (KPI de fiabilité n°1, `eb08aa377`) sous-compte les vraies
+       pannes** : un décrochage réseau authentique compte comme `completed` (normal),
+       jamais comme échec système — la métrique que l'audit a construite pour surfacer
+       exactement ce signal le rate silencieusement sur ce chemin.
+- **Fix** (`CallService.ts`, `CallEventsHandler.ts`) : `LeaveCallData` gagne un champ
+  `reason?: CallEndReason` optionnel (doc inline sur le champ). `leaveCall()` l'utilise pour
+  le leave post-décroché — branche principale (`targetEndReason`, ligne ~1547) ET branche
+  idempotente-leave (course participant déjà parti, ligne ~1452) — via `data.reason ??
+  CallEndReason.completed`, donc **tout appelant existant est inchangé par défaut**
+  (`call:leave`, `call:end`, `call:force-leave` ne passent pas `reason` → `completed` comme
+  avant). Le leave pré-décroché reste TOUJOURS `missed` quel que soit `reason` passé (une
+  sonnerie qui tombe reste manquée, jamais "connexion perdue"). Seul
+  `leaveParticipationAndBroadcast` (l'unique appelant de la grâce de déconnexion expirée)
+  passe désormais `reason: CallEndReason.connectionLost` explicitement. Zéro changement
+  client (web/iOS/Android) requis : le `reason` corrigé traverse déjà
+  `leftSession.endReason` → `CallEndedEvent.reason` (`CallEventsHandler.ts:726`) →
+  `call:ended` broadcast, et `isRetryableCallFailure`/`callFailureRate` consomment déjà
+  `connectionLost` — les 3 plateformes bénéficient immédiatement de la classification
+  correcte sans redéploiement client.
+- **Tests TDD** : RED confirmé AVANT le fix, via `bunx jest` (le bun-native `bun test` de ce
+  sandbox n'implémente pas `jest.advanceTimersByTimeAsync`, gap déjà documenté CLAUDE.md
+  bun-vs-node — vérifié en isolant les 2 fichiers, mêmes échecs pré-existants avec/sans mon
+  diff sur ce point précis) :
+    - `CallService.test.ts` (describe `leaveCall wasPreAnswered=false branch`) : échec de
+      COMPILATION TypeScript (`TS2353: Object literal may only specify known properties,
+      and 'reason' does not exist in type 'LeaveCallData'`) — preuve que le type n'exposait
+      pas encore le champ. 2 tests neufs : (1) un `reason: connectionLost` explicite doit
+      se retrouver dans `endReason` écrit en DB (au lieu de `completed`) ; (2) un `reason`
+      passé sur un leave PRÉ-décroché est ignoré, `missed` gagne toujours.
+    - `CallEventsHandler.test.ts` (describe `disconnect`) : 1 test neuf,
+      `toHaveBeenCalledWith(expect.objectContaining({callId, reason:'connectionLost'}))` —
+      échec `Received: {callId, participantId, userId}` (pas de `reason`) avant le fix.
+  GREEN après fix : `CallService.test.ts` 201/201 (199 préexistants + 2 neufs),
+  `CallEventsHandler.test.ts` inclus dans la suite complète 42 fichiers / 1041 tests
+  call-related tous verts (`--testPathPatterns='[Cc]all'`). Effet de bord découvert au
+  premier GREEN : 2 tests préexistants dans
+  `CallEventsHandler-restart-resilience.test.ts` (`ends the call when the grace window
+  expires...` et `resolves the ringing call missed once the short grace expires...`)
+  faisaient un `toHaveBeenCalledWith({callId, userId, participantId})` en boîte blanche
+  STRICT (pas `objectContaining`) — cassés par le nouveau champ `reason` ajouté à TOUS les
+  appels de `leaveParticipationAndBroadcast`, y compris le chemin pré-décroché (où
+  `leaveCall()` l'ignore mais le reçoit quand même). Mis à jour en miroir du comportement
+  réel (`reason: 'connectionLost'` ajouté aux deux attentes), pas de comportement changé,
+  juste des guards obsolètes après l'ajout du champ.
+  Suite complète gateway (`bunx jest --config=jest.config.json`, équivalent
+  `test:coverage` sans le flag coverage) : **542/542 suites, 14679/14680 tests verts (1
+  skip préexistant documenté, sans rapport)**. `tsc --noEmit` gateway : 0 erreur.
+- **iOS/Android (lecture seule, aucun changement)** : hors périmètre cette vague (aucune
+  toolchain Swift dans ce sandbox ; gradle disponible mais non nécessaire — le fix est
+  gateway-only et se propage aux 3 clients sans changement côté client, `reason` étant déjà
+  lu identiquement par les 3 policies retry). Vérifié que `isRetryableCallFailure` web
+  (`apps/web/lib/calls/call-retry-policy.ts:13-16`) traite déjà `connectionLost` comme
+  retryable — aucun câblage supplémentaire à faire.
+- **Reste ouvert (inchangé + additions)** : tout ce qui précède ; parité iOS/Android déjà
+  CLÔTURÉE (retry-on-failure, vérifié à jour sur ce tip — rien à refaire) ; device-test 2
+  appareils réels (hors périmètre sandbox) ; PR d'autres sessions à suivre séparément.

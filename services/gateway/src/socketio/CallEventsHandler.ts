@@ -701,10 +701,21 @@ export class CallEventsHandler {
   }): Promise<void> {
     const { io, participation, userId } = opts;
     try {
+      // Vague 41 — this leave is a reconnect-grace timeout, not a deliberate
+      // hangup: the participant's signaling socket dropped and they never
+      // came back to the call room within the grace window. Tagging it
+      // `connectionLost` (vs. leaveCall()'s default `completed`) lets the
+      // OTHER party's client offer retry-on-failure (isRetryableCallFailure
+      // gates on failed/connectionLost) and lets the callFailureRate
+      // analytics KPI count it as a real failure instead of a normal end.
+      // A genuine pre-answer disconnect still resolves `missed` regardless
+      // (leaveCall ignores `reason` when wasPreAnswered — see its doc
+      // comment on LeaveCallData).
       const leftSession = await this.callService.leaveCall({
         callId: participation.callSessionId,
         userId,
-        participantId: participation.participantId
+        participantId: participation.participantId,
+        reason: CallEndReason.connectionLost
       });
       this.invalidateSignalSession(participation.callSessionId);
 

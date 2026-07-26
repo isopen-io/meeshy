@@ -4381,6 +4381,66 @@ describe('CallService - leaveCall wasPreAnswered=false branch (active call)', ()
     expect(capturedReason).toBe(CallEndReason.completed);
   });
 
+  it('honors an explicit reason override (e.g. connectionLost from disconnect-grace expiry) instead of defaulting to completed', async () => {
+    // Vague 41 — a genuine involuntary network cutoff (signaling socket dies,
+    // reconnect grace window expires without the participant coming back) was
+    // indistinguishable from a normal hangup: leaveCall() always defaulted a
+    // post-answer leave to endReason=completed, regardless of WHY the
+    // participant left. This starved both the retry-on-failure feature
+    // (isRetryableCallFailure only offers retry on failed/connectionLost) and
+    // the callFailureRate analytics KPI of the one signal that would let them
+    // treat a dropped call differently from a deliberate hangup.
+    const participant = createMockParticipant({ userId: 'user-123', participantId: 'participant-123' });
+    const activeCall = createMockCallSession({
+      status: CallStatus.active,
+      answeredAt: new Date(Date.now() - 30_000),
+      participants: [participant]
+    });
+    const endedCall = {
+      ...activeCall,
+      status: CallStatus.ended,
+      endedAt: new Date(),
+      participants: [{ ...participant, leftAt: new Date(), user: createMockUser() }],
+      initiator: createMockUser(),
+      conversation: createMockConversation()
+    };
+
+    mockPrisma.callParticipant.findFirst.mockResolvedValue(participant);
+    mockPrisma.callSession.findUnique
+      .mockResolvedValueOnce(activeCall)
+      .mockResolvedValueOnce(endedCall);
+    mockPrisma.conversation.findUnique.mockResolvedValue({ type: 'direct' });
+
+    let capturedStatus: string | undefined;
+    let capturedReason: string | undefined;
+    mockPrisma.$transaction.mockImplementation(async (cb: (tx: any) => Promise<any>) => {
+      const tx = {
+        callParticipant: {
+          update: jest.fn().mockResolvedValue({}),
+          updateMany: jest.fn().mockResolvedValue({ count: 0 })
+        },
+        callSession: {
+          updateMany: jest.fn().mockImplementation(({ data }: any) => {
+            capturedStatus = data.status;
+            capturedReason = data.endReason;
+            return { count: 1 };
+          })
+        }
+      };
+      return cb(tx);
+    });
+
+    await callService.leaveCall({
+      callId: 'call-123',
+      userId: 'user-123',
+      participantId: 'participant-123',
+      reason: CallEndReason.connectionLost
+    });
+
+    expect(capturedStatus).toBe(CallStatus.ended);
+    expect(capturedReason).toBe(CallEndReason.connectionLost);
+  });
+
   it('computes duration from answeredAt (talk time), not startedAt (ring+talk time), when an active call ends via leave (Vague 27)', async () => {
     const participant = createMockParticipant({ userId: 'user-123', participantId: 'participant-123' });
     const activeCall = createMockCallSession({
@@ -4476,6 +4536,61 @@ describe('CallService - leaveCall wasPreAnswered=false branch (active call)', ()
     // Audit Vague 27 — a never-answered call must report duration=0
     // (mirrors endCall()'s `call.answeredAt ? … : 0`), not ring time.
     expect(capturedDuration).toBe(0);
+  });
+
+  it('ignores a reason override for a pre-answer leave — still resolves missed (Vague 41)', async () => {
+    // A disconnect-grace timer can also expire on a call that was never
+    // answered (PRE_ANSWER_GRACE_MS). The `missed` classification must win
+    // over any reason override — an unanswered ring that drops is still a
+    // missed call for history/notifications, never a "connectionLost" call.
+    const participant = createMockParticipant({ userId: 'user-123', participantId: 'participant-123' });
+    const ringingCall = createMockCallSession({
+      status: CallStatus.ringing,
+      participants: [participant]
+    });
+    const missedCall = {
+      ...ringingCall,
+      status: CallStatus.missed,
+      endedAt: new Date(),
+      participants: [{ ...participant, leftAt: new Date(), user: createMockUser() }],
+      initiator: createMockUser(),
+      conversation: createMockConversation()
+    };
+
+    mockPrisma.callParticipant.findFirst.mockResolvedValue(participant);
+    mockPrisma.callSession.findUnique
+      .mockResolvedValueOnce(ringingCall)
+      .mockResolvedValueOnce(missedCall);
+    mockPrisma.conversation.findUnique.mockResolvedValue({ type: 'direct' });
+
+    let capturedStatus: string | undefined;
+    let capturedReason: string | undefined;
+    mockPrisma.$transaction.mockImplementation(async (cb: (tx: any) => Promise<any>) => {
+      const tx = {
+        callParticipant: {
+          update: jest.fn().mockResolvedValue({}),
+          updateMany: jest.fn().mockResolvedValue({ count: 0 })
+        },
+        callSession: {
+          updateMany: jest.fn().mockImplementation(({ data }: any) => {
+            capturedStatus = data.status;
+            capturedReason = data.endReason;
+            return { count: 1 };
+          })
+        }
+      };
+      return cb(tx);
+    });
+
+    await callService.leaveCall({
+      callId: 'call-123',
+      userId: 'user-123',
+      participantId: 'participant-123',
+      reason: CallEndReason.connectionLost
+    });
+
+    expect(capturedStatus).toBe(CallStatus.missed);
+    expect(capturedReason).toBe(CallEndReason.missed);
   });
 });
 

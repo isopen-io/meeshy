@@ -2274,6 +2274,43 @@ describe('CallEventsHandler', () => {
       jest.useRealTimers();
     });
 
+    // Vague 41 — a grace-expiry auto-leave is a genuine involuntary network
+    // cutoff (the participant's socket died and they never came back), not a
+    // deliberate hangup. leaveCall() must be told so via `reason:
+    // connectionLost` — otherwise it defaults the post-answer leave to
+    // endReason=completed, indistinguishable from a normal "End Call" tap.
+    // That starves retry-on-failure (isRetryableCallFailure only offers
+    // retry on failed/connectionLost) and the callFailureRate KPI of the
+    // one signal that would let them treat a dropped call as a failure.
+    it('tags the grace-expiry auto-leave with reason=connectionLost, not a plain hangup', async () => {
+      jest.useFakeTimers();
+      const leftSession = makeCallSession({ status: 'active' });
+      mockCallServiceLeaveCall.mockResolvedValue(leftSession);
+
+      const activeParticipation = {
+        id: PARTICIPANT_ID,
+        callSessionId: CALL_ID,
+        participantId: PARTICIPANT_ID,
+        callSession: { status: 'active', mode: 'p2p', conversationId: CONV_ID },
+      };
+
+      const { socket, io } = setupWithSocket({
+        callParticipant: {
+          findMany: jest.fn<any>().mockResolvedValue([activeParticipation]),
+          findUnique: jest.fn<any>().mockResolvedValue({ leftAt: null, callSession: { status: 'active' } }),
+        },
+      });
+      io.in.mockReturnValue({ fetchSockets: jest.fn<any>().mockResolvedValue([]) });
+
+      await socket._trigger('disconnect');
+      await jest.advanceTimersByTimeAsync(31_000);
+
+      expect(mockCallServiceLeaveCall).toHaveBeenCalledWith(
+        expect.objectContaining({ callId: CALL_ID, reason: 'connectionLost' })
+      );
+      jest.useRealTimers();
+    });
+
     it('broadcasts call:ended on grace expiry when status becomes ended', async () => {
       jest.useFakeTimers();
       const leftSession = makeCallSession({ status: 'ended', duration: 45 });
