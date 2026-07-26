@@ -10,6 +10,7 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { MessageSquare, ArrowLeft, Search, Filter, Calendar, User, Globe, FileText, Image, Video, Music, MapPin } from 'lucide-react';
 import { adminService } from '@/services/admin.service';
+import { formatFileSize } from '@meeshy/shared/types/attachment';
 import { toast } from 'sonner';
 import { useI18n } from '@/hooks/use-i18n';
 
@@ -385,7 +386,7 @@ export default function AdminMessagesPage() {
                                     <p className="font-medium text-gray-900">{att.originalName}</p>
                                     <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-gray-600">
                                       <span>{att.mimeType}</span>
-                                      <span>{(att.fileSize / 1024).toFixed(2)} KB</span>
+                                      <span>{formatFileSize(att.fileSize)}</span>
                                       {att.duration && (
                                         <span>⏱️ {Math.floor(att.duration / 60)}:{(att.duration % 60).toString().padStart(2, '0')}</span>
                                       )}
