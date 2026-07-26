@@ -172,7 +172,10 @@ final class StoryGroupIntroDismissAnimationTests: XCTestCase {
                 .appendingPathComponent("Meeshy/Features/Main/Views/StoryViewerView.swift"),
             encoding: .utf8
         )
-        guard let range = source.range(of: "private func dismissGroupIntro() {") else {
+        // Ancre sur le nom seul, pas sur la signature complète : `dismissGroupIntro`
+        // a gagné un paramètre par défaut (`revealing:`) en 353ac43 et cette garde
+        // est tombée en « introuvable » sans que la règle qu'elle protège ne bouge.
+        guard let range = source.range(of: "private func dismissGroupIntro(") else {
             return XCTFail("dismissGroupIntro introuvable")
         }
         let body = String(source[range.lowerBound...].prefix(400))
