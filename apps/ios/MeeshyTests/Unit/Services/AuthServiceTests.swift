@@ -248,6 +248,15 @@ final class AuthServiceTests: XCTestCase {
         // user re-authenticating is a token *rotation*, which fires
         // `tokenDidRotate` — await that instead of polling/sleeping.
         let rotated = expectation(description: "tokenDidRotate fires after handleUnauthorized's background refresh")
+        // Même bruit de fond que celui qui impose les compteurs en DELTA plus
+        // haut : les services de l'hôte xctest (téléversement E2EE, préchargement
+        // stories) prennent leurs propres 401 et appellent `handleUnauthorized()`
+        // contre le stub du test courant. Chaque rotation supplémentaire refulfil
+        // cette attente — et une attente sur-remplie est une violation d'API
+        // XCTest : elle LÈVE, donc le test crashe (signal abrt) au lieu
+        // d'échouer. Ce qui est affirmé ici est « une rotation a eu lieu », pas
+        // « exactement une » : la sur-satisfaction est sans conséquence.
+        rotated.assertForOverFulfill = false
         let cancellable = AuthManager.shared.tokenDidRotate.sink { rotated.fulfill() }
         defer { cancellable.cancel() }
 
