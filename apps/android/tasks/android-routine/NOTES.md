@@ -2,6 +2,24 @@
 
 Append-only log of gotchas and decisions that save time next run.
 
+## Lesson (2026-07-26, `conversation-category-catalog`) — lift an actor's mutation+ordering into a pure immutable reducer; annotate a private-ctor data class
+- **An iOS actor whose methods each couple a state mutation to a `publish()` is a reducer waiting to be
+  extracted.** `UserCategoryStore.applyRemote`/`create`/`delete`/`reorder` all mutate `categoriesById`
+  then `publish()`. The pure lift is a stateless value type (`UserCategoryCatalog` over `Map<id,option>`)
+  whose every mutator *returns a new catalog* and does no side effect — the live copy + publish stay in the
+  future store/VM. This is the same SOTA pattern the picker/autocomplete slices used, now for a corpus.
+- **A private-ctor Kotlin `data class` warns "copy() exposes the private constructor" (error in Kotlin 2.1).**
+  If `copy()` is never called externally (you build via factories only), silence it cleanly with
+  `@ConsistentCopyVisibility` on the class — it makes the generated `copy()` private too. Do NOT reach for
+  `@ExposedCopyVisibility` (the discouraged binary-compat escape hatch).
+- **Match each port to its own iOS source, not a sibling's.** The store's `sortedSnapshot` uses
+  `order ?? Int.max` (null **last**); the picker's `displayedCategories` uses `order ?? 0` (null **first**).
+  They are different surfaces — do not "unify" them. Document the deliberate divergence in the KDoc so a
+  future reader doesn't `sed` them together.
+- **Return `this` for inert mutations so callers get `isSameInstanceAs` idempotence.** `remove(unknownId)`
+  and `reorder(emptyMap)` return the receiver unchanged; the test asserts `isSameInstanceAs(original)`,
+  which is a stronger, non-tautological proof of the no-op branch than value equality.
+
 ## Lesson (2026-07-26, `conversation-category-sections`) — evolve the one SSOT with a defaulted arg; fold orphans in the bucket key
 - **Extend a grouping SSOT, don't fork it.** `ConversationSections.of` gained a second
   `categories: List<CategoryOption> = emptyList()` arg rather than a parallel `ofWithCategories`. The
