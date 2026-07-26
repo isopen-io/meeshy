@@ -1843,15 +1843,22 @@ struct StoryCardView: View {
                 // sous le backdrop flou dérivé du média (pas de bleed couleur/gradient).
                 Color.black
             } else if let bg = currentStory?.storyEffects?.background {
-                if bg.hasPrefix("gradient:") {
-                    let colors = bg.replacingOccurrences(of: "gradient:", with: "").split(separator: ",").map { String($0) }
+                // Source de vérité unique : `StoryBackgroundValue` (forme
+                // « gradient:RRGGBB:RRGGBB », séparateur deux-points, partagée
+                // avec le composer). Le parsing maison splittait sur la
+                // VIRGULE : la chaîne restait entière, `Color(hex:)` recevait
+                // « FF0000:0000FF » et le dégradé de l'auteur se rendait en
+                // aplat. Le parse tolérant retombe en `.hex` sur une valeur
+                // abîmée, ce qui préserve le fallback couleur historique.
+                switch StoryBackgroundValue.parse(bg) {
+                case .gradient(let start, let end):
                     LinearGradient(
-                        colors: colors.map { Color(hex: $0) },
+                        colors: [Color(hex: start), Color(hex: end)],
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing
                     )
-                } else {
-                    Color(hex: bg)
+                case .hex(let hex):
+                    Color(hex: hex)
                 }
             } else {
                 LinearGradient(
