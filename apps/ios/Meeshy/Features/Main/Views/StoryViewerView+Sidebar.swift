@@ -381,13 +381,25 @@ struct StoryActionSidebarView: View {
             // export lancé ici apparaît aussi dans la liste et réciproquement.
             // Tant qu'un job est en vol pour cette story, le bouton devient
             // l'anneau de progression et son tap annule.
-            if railPlan.showsExport, let story = currentStory {
-                if let progress = saveService.progress(for: story.id) {
+            //
+            // Membership du bouton = `railPlan.showsExport` SEUL, jamais
+            // `currentStory` — même patron que Reply (L276) et Repost (L322) :
+            // `currentStory` n'est déballé que DANS les closures, pas pour
+            // décider si le bouton existe. Conditionner l'existence sur
+            // `let story = currentStory` romprait l'invariant documenté plus
+            // haut (L160-164) : un bouton ne doit jamais apparaître/disparaître
+            // en cours de lecture — seul le rail figé à l'entrée du slide en
+            // décide. `currentStory` n'a aucune raison structurelle de
+            // s'aligner sur ce figement (revue Task 7, finding Important).
+            if railPlan.showsExport {
+                let exportProgress = currentStory.flatMap { saveService.progress(for: $0.id) }
+                if let progress = exportProgress {
                     // Même job, même source de vérité que la ligne « Mes
                     // stories » : un export lancé depuis l'une des deux
                     // surfaces progresse sur les deux.
                     Button {
                         HapticFeedback.light()
+                        guard let story = currentStory else { return }
                         saveService.cancel(storyId: story.id)
                     } label: {
                         StorySaveProgressRing(progress: progress, tint: MeeshyColors.indigo400, diameter: 32)
@@ -410,6 +422,7 @@ struct StoryActionSidebarView: View {
                         label: String(localized: "story.viewer.action.export", defaultValue: "Exporter", bundle: .main)
                     ) {
                         HapticFeedback.light()
+                        guard let story = currentStory else { return }
                         saveService.save(story: story)
                     }
                 }

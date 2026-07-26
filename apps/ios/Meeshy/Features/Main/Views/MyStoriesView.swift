@@ -482,7 +482,11 @@ enum MyStoryRowAccessibility {
 
     static func label(base: String, saveProgress: Double?) -> String {
         guard let saveProgress else { return base }
-        let percent = Int((min(max(saveProgress, 0), 1) * 100).rounded())
+        // Même fonction pure que celle qui alimente le chiffre affiché dans
+        // l'anneau (`StorySaveProgressRing.percent(_:)`) — pas une seconde
+        // formule de clamp/arrondi qui pourrait diverger silencieusement
+        // (revue Task 7, finding Minor).
+        let percent = StorySaveProgressRing.percent(saveProgress)
         let suffix = String(
             localized: "story.mine.save.progress.a11y",
             defaultValue: "Enregistrement \(percent) %"
