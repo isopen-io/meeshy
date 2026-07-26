@@ -111,17 +111,22 @@ final class StoryExportShareSheetPaletteTests: XCTestCase {
     /// Le vrai marqueur du défaut : les trois jetons rendaient la MÊME valeur
     /// dans les deux modes. Aucun ne doit plus le faire.
     func test_everyToken_actuallyDivergesBetweenModes() {
-        for (name, light, dark) in [
-            ("voile de fond",
-             StoryExportSheetPalette.wash(isDark: false),
-             StoryExportSheetPalette.wash(isDark: true)),
-            ("fond du sélecteur",
-             StoryExportSheetPalette.pickerFill(isDark: false),
-             StoryExportSheetPalette.pickerFill(isDark: true)),
-            ("bordure du sélecteur",
-             StoryExportSheetPalette.pickerStroke(isDark: false),
-             StoryExportSheetPalette.pickerStroke(isDark: true))
-        ] {
+        // Type annoté explicitement : un littéral de tableau de tuples dont les
+        // membres sont des appels de fonction met le vérificateur de types
+        // Swift à rude épreuve pour rien.
+        let tokens: [(name: String, light: Color, dark: Color)] = [
+            (name: "voile de fond",
+             light: StoryExportSheetPalette.wash(isDark: false),
+             dark: StoryExportSheetPalette.wash(isDark: true)),
+            (name: "fond du sélecteur",
+             light: StoryExportSheetPalette.pickerFill(isDark: false),
+             dark: StoryExportSheetPalette.pickerFill(isDark: true)),
+            (name: "bordure du sélecteur",
+             light: StoryExportSheetPalette.pickerStroke(isDark: false),
+             dark: StoryExportSheetPalette.pickerStroke(isDark: true))
+        ]
+
+        for (name, light, dark) in tokens {
             XCTAssertFalse(
                 rendersIdentically(light, dark),
                 "Le \(name) doit dépendre du colorScheme — c'est précisément ce qui manquait."
@@ -237,7 +242,7 @@ final class StoryExportShareSheetPaletteTests: XCTestCase {
 
     private func rgba(_ color: Color) -> (r: Double, g: Double, b: Double, a: Double) {
         var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
-        UIColor(color).getRed(&r, green: &g, blue: &b, alpha: &a)
+        _ = UIColor(color).getRed(&r, green: &g, blue: &b, alpha: &a)
         return (Double(r), Double(g), Double(b), Double(a))
     }
 
