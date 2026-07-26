@@ -84,6 +84,7 @@ final class MockPostService: PostServiceProviding, @unchecked Sendable {
     var lastRepostTargetType: PostType?
     var lastRepostContent: String?
     var lastRepostIsQuote: Bool?
+    var lastRepostVisibility: String?
 
     var shareCallCount = 0
     var lastSharePostId: String?
@@ -254,12 +255,23 @@ final class MockPostService: PostServiceProviding, @unchecked Sendable {
         try deleteCommentResult.get()
     }
 
-    func repost(postId: String, targetType: PostType?, content: String?, isQuote: Bool, visibility: String?) async throws -> APIPost {
+    /// Defaults mirror the concrete `PostService.repost` so call sites that omit
+    /// the optional arguments — as `StoryViewerView.repostAsPostDirect()` and the
+    /// sidebar repost do — compile against the mock exactly as they do against
+    /// the real service.
+    func repost(
+        postId: String,
+        targetType: PostType? = nil,
+        content: String? = nil,
+        isQuote: Bool = false,
+        visibility: String? = nil
+    ) async throws -> APIPost {
         repostCallCount += 1
         lastRepostPostId = postId
         lastRepostTargetType = targetType
         lastRepostContent = content
         lastRepostIsQuote = isQuote
+        lastRepostVisibility = visibility
         return try repostResult.get()
     }
 
@@ -457,6 +469,7 @@ final class MockPostService: PostServiceProviding, @unchecked Sendable {
         lastRepostTargetType = nil
         lastRepostContent = nil
         lastRepostIsQuote = nil
+        lastRepostVisibility = nil
 
         shareResult = .success(())
         shareCallCount = 0
