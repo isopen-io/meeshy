@@ -2037,3 +2037,248 @@ git status --short
 ```
 
 Attendu : seules les modifications préexistantes d'autres sessions (`StoryViewerView.swift`, `StoryComposerViewModel+Voice.swift`, …) — **aucun** fichier de ce plan non committé, **aucun** churn de `project.pbxproj` / `Package.resolved`.
+
+---
+
+# Extension du périmètre (demande utilisateur, 2026-07-26)
+
+Trois ajouts décidés après la tâche 4. Ils ne remplacent rien de ce qui précède.
+
+## Politique de fusion
+
+À la fin de **chaque** tâche validée, le travail est fusionné dans `main` et donc visible
+depuis le worktree principal. Concrètement, la branche de travail a été fusionnée dans `main`
+(`6598ea418`) et les tâches suivantes committent directement sur `main`, par pathspec strict.
+Aucune tâche ne reste isolée sur une branche après validation.
+
+---
+
+## Task 7 : progression d'export partagée entre le reader et la liste
+
+**Files:**
+- Create: `apps/ios/Meeshy/Features/Main/Views/StorySaveProgressRing.swift`
+- Modify: `apps/ios/Meeshy/Features/Main/Views/MyStoriesView.swift` (`saveRing(progress:)` dans `MyStoryRow`)
+- Modify: `apps/ios/Meeshy/Features/Main/Views/StoryViewerView+Sidebar.swift` (bouton export, ~L368-377)
+- Test: `apps/ios/MeeshyTests/Unit/Views/StorySaveProgressRingTests.swift`
+
+**Interfaces:**
+- Consumes: `StoryPhotoSaveService.shared` (`progress(for:)`, `save(story:)`, `cancel(storyId:)`), `StoryActionButton`.
+- Produces: `StorySaveProgressRing(progress:tint:diameter:)` — vue réutilisable.
+
+**Le problème.** L'anneau de progression est aujourd'hui dessiné inline dans `MyStoryRow`, et
+le reader ouvre une sheet d'export séparée. Un export lancé depuis le reader n'apparaît donc
+nulle part dans la liste, et l'icône du reader reste statique. Or l'état des exports en vol vit
+déjà dans un singleton (`StoryPhotoSaveService.shared`) : les deux surfaces peuvent l'observer.
+
+**Décision.** Le bouton « Exporter » du reader passe par `StoryPhotoSaveService.shared.save(story:)`,
+exactement comme « Enregistrer » de la liste. Les deux surfaces partagent donc une seule source de
+vérité, et un export lancé depuis l'une est visible depuis l'autre. Tant qu'un job est en vol pour
+cette story, l'icône du reader devient l'anneau de progression et son tap annule.
+
+**Réutilisation.** L'anneau est extrait de `MyStoryRow` en vue autonome plutôt que dupliqué —
+deux dessins divergeraient (épaisseur, arrondi, sens de rotation) dès la première retouche.
+
+```swift
+/// Anneau de progression d'une sauvegarde de story vers la photothèque.
+/// Partagé par la ligne « Mes stories » et le rail d'actions du reader :
+/// une seule définition, sinon les deux rendus divergent à la première retouche.
+struct StorySaveProgressRing: View {
+    let progress: Double
+    var tint: Color
+    var diameter: CGFloat = 28
+
+    private var clamped: Double { min(max(progress, 0), 1) }
+
+    var body: some View {
+        ZStack {
+            Circle().stroke(Color.secondary.opacity(0.25), lineWidth: 2.5)
+            Circle()
+                .trim(from: 0, to: clamped)
+                .stroke(tint, style: StrokeStyle(lineWidth: 2.5, lineCap: .round))
+                .rotationEffect(.degrees(-90))
+                .animation(.linear(duration: 0.2), value: clamped)
+            Text("\(Int((clamped * 100).rounded()))")
+                .font(MeeshyFont.relative(9, weight: .semibold))
+                .lineLimit(1)
+                .minimumScaleFactor(0.6)
+                .foregroundColor(.secondary)
+        }
+        .frame(width: diameter, height: diameter)
+    }
+}
+```
+
+`MyStoryRow.saveRing(progress:)` conserve son `Button`, son `.padding(8)`, son
+`.contentShape(Rectangle())` et son `.accessibilityHidden(true)`, mais délègue le dessin à
+`StorySaveProgressRing(progress: progress, tint: accentColor)`.
+
+Dans `StoryViewerView+Sidebar.swift`, la branche `if railPlan.showsExport` devient :
+
+```swift
+            if railPlan.showsExport {
+                if let progress = StoryPhotoSaveService.shared.progress(for: story.id) {
+                    // Même job, même source de vérité que la ligne « Mes stories » :
+                    // un export lancé depuis l'une des deux surfaces progresse sur les deux.
+                    Button {
+                        HapticFeedback.light()
+                        StoryPhotoSaveService.shared.cancel(storyId: story.id)
+                    } label: {
+                        StorySaveProgressRing(progress: progress, tint: MeeshyColors.indigo400, diameter: 32)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(String(localized: "story.mine.save.cancel.a11y",
+                                               defaultValue: "Annuler l'enregistrement", bundle: .main))
+                    .accessibilityValue(Text(String(
+                        localized: "story.mine.save.progress.a11y",
+                        defaultValue: "Enregistrement \(Int((progress * 100).rounded())) %", bundle: .main)))
+                } else {
+                    StoryActionButton(
+                        icon: "square.and.arrow.up.fill",
+                        label: String(localized: "story.viewer.action.export", defaultValue: "Exporter", bundle: .main)
+                    ) {
+                        HapticFeedback.light()
+                        StoryPhotoSaveService.shared.save(story: story)
+                    }
+                }
+            }
+```
+
+La vue hôte doit observer le service pour se redessiner : ajouter
+`@ObservedObject private var saveService = StoryPhotoSaveService.shared` à la vue qui porte
+le rail, et lire `saveService.progress(for:)` plutôt que `StoryPhotoSaveService.shared.progress(for:)`.
+
+> Contrairement à la ligne de liste, le bouton du reader **n'est pas** masqué du rotor : il n'est
+> pas enfant d'un élément `children: .ignore`, donc il porte lui-même son libellé et sa valeur.
+
+**Tests** (`StorySaveProgressRingTests`, purs) :
+- le clamp ramène une progression négative à 0 et une progression > 1 à 1 ;
+- le pourcentage affiché est arrondi au plus proche (0,435 → 44) ;
+- `clamped` de 0 et de 1 donnent bien 0 et 1.
+
+Vérification manuelle exigée : lancer un export depuis le reader, revenir à la liste, constater
+l'anneau sur la ligne ; puis l'inverse.
+
+---
+
+## Task 8 : commentaires d'une story depuis le listing
+
+**Files:**
+- Modify: `apps/ios/Meeshy/Features/Main/Views/MyStoriesView.swift`
+- Modify: `apps/ios/Meeshy/Localizable.xcstrings`
+- Test: `apps/ios/MeeshyTests/Unit/Views/MyStoriesCommentsButtonTests.swift`
+
+**Interfaces:**
+- Consumes: `CommentsSheetView(post:accentColor:)` (`FeedCommentsSheet.swift:184`),
+  `APIPost.toFeedPost(preferredLanguages:)`, `StoryService.shared.cachedPost(id:)` et
+  `fetchPost(id:)`, `StoryPhotoSaveService.shared`.
+- Produces: `MyStoriesCommentTarget` (type `Identifiable` portant le `FeedPost` résolu).
+
+**Ce qu'on ajoute.** Dans chaque ligne de « Mes stories », une icône de commentaire est posée
+**immédiatement à gauche du `⋯`**. Elle ouvre une sheet listant les commentaires de la story.
+
+**Réutilisation.** La sheet est `CommentsSheetView`, celle des posts — on ne réécrit rien. Elle
+attend un `FeedPost` alors que la ligne porte un `StoryItem` : la conversion passe par
+`APIPost.toFeedPost(preferredLanguages:)`, cache d'abord (`StoryService.shared.cachedPost(id:)`),
+réseau ensuite (`fetchPost(id:)`) si le cache est froid.
+
+`CommentsSheetView` exige `statusViewModel` et `storyViewModel` en `@EnvironmentObject` :
+`MyStoriesView` possède les deux (`statusViewModel` en paramètre, `viewModel` comme
+`StoryViewModel`) et doit les réinjecter sur la sheet — sans quoi la présentation crashe à la
+traversée de frontière de sheet.
+
+Bouton, placé dans `MyStoryRow` juste avant la branche anneau/`⋯` :
+
+```swift
+            if !isSelecting {
+                Button {
+                    onOpenComments()
+                } label: {
+                    HStack(spacing: 3) {
+                        Image(systemName: "bubble.left")
+                            .font(.system(size: 15, weight: .semibold))
+                        if story.commentCount > 0 {
+                            Text("\(story.commentCount)")
+                                .font(MeeshyFont.relative(12, weight: .medium))
+                        }
+                    }
+                    .foregroundColor(.secondary)
+                    .padding(8)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityHidden(true)
+            }
+```
+
+Comme pour l'anneau, le bouton est masqué du rotor (la ligne est `children: .ignore`) et l'accès
+VoiceOver passe par une action de ligne :
+
+```swift
+        .accessibilityAction(named: Text(String(
+            localized: "story.mine.comments.a11y",
+            defaultValue: "Afficher les commentaires"
+        ))) { onOpenComments() }
+```
+
+Résolution et présentation, côté `MyStoriesView` :
+
+```swift
+    @State private var commentTarget: MyStoriesCommentTarget?
+    @State private var isResolvingComments = false
+
+    /// Résout le `FeedPost` derrière une story pour alimenter la sheet de
+    /// commentaires des posts. Cache d'abord — une story fraîchement listée est
+    /// déjà en cache, inutile de payer un aller-retour réseau pour l'ouvrir.
+    private func openComments(for story: StoryItem) {
+        guard !isResolvingComments else { return }
+        let preferred = AuthManager.shared.currentUser?.preferredContentLanguages ?? []
+        if let cached = StoryService.shared.cachedPost(id: story.id) {
+            commentTarget = MyStoriesCommentTarget(post: cached.toFeedPost(preferredLanguages: preferred))
+            return
+        }
+        isResolvingComments = true
+        Task {
+            do {
+                let post = try await StoryService.shared.fetchPost(id: story.id)
+                commentTarget = MyStoriesCommentTarget(post: post.toFeedPost(preferredLanguages: preferred))
+            } catch {
+                Logger.stories.error(
+                    "openComments failed for \(story.id, privacy: .public): \(error.localizedDescription, privacy: .public)")
+                FeedbackToastManager.shared.showError(
+                    String(localized: "story.mine.comments.error", defaultValue: "Commentaires indisponibles"))
+            }
+            isResolvingComments = false
+        }
+    }
+```
+
+```swift
+        .sheet(item: $commentTarget) { target in
+            CommentsSheetView(post: target.post, accentColor: target.post.authorColor)
+                .environmentObject(statusViewModel)
+                .environmentObject(viewModel)
+        }
+```
+
+```swift
+/// `FeedPost` résolu pour la sheet de commentaires d'une story.
+private struct MyStoriesCommentTarget: Identifiable {
+    let post: FeedPost
+    var id: String { post.id }
+}
+```
+
+**Clés de localisation** (7 langues, `extractionState: "manual"`, `state: "translated"`) :
+
+| Clé | fr | en | es | de | it | pt-BR | ar |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `story.mine.comments.a11y` | Afficher les commentaires | Show comments | Mostrar los comentarios | Kommentare anzeigen | Mostra i commenti | Mostrar os comentários | عرض التعليقات |
+| `story.mine.comments.error` | Commentaires indisponibles | Comments unavailable | Comentarios no disponibles | Kommentare nicht verfügbar | Commenti non disponibili | Comentários indisponíveis | التعليقات غير متاحة |
+
+**Tests** (`MyStoriesCommentsButtonTests`) :
+- une garde pure `MyStoriesCommentsResolver.shouldUseCache(cachedPost:) -> Bool` : cache présent → pas d'appel réseau ; cache absent → appel réseau ;
+- le libellé a11y de la ligne reste inchangé par l'ajout du bouton (le bouton est masqué du rotor) ;
+- l'ordre visuel : le bouton commentaire précède l'anneau/`⋯` — vérifié par une garde de source sur `MyStoriesView.swift` ancrée sur le comportement (l'index de `"bubble.left"` est inférieur à celui de `"ellipsis"`), pas sur une fenêtre de caractères.
+
+Vérification manuelle exigée : ouvrir la sheet depuis une story ayant des commentaires, en
+publier un, constater que le compteur de la ligne suit.
