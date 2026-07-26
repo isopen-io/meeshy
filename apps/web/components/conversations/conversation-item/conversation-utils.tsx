@@ -1,6 +1,9 @@
 import { Globe, Megaphone, Users } from 'lucide-react';
 import type { Conversation } from '@meeshy/shared/types';
 import { formatRelativeDate } from '@/utils/date-format';
+import { getUserDisplayNameOrNull } from '@/utils/user-display-name';
+
+type NameSource = Parameters<typeof getUserDisplayNameOrNull>[0];
 
 /**
  * Obtenir seulement le nom de la conversation (sans date)
@@ -15,16 +18,26 @@ export function getConversationNameOnly(
 
   const participantUser = getOtherParticipantUser();
   if (participantUser) {
-    const userName = participantUser.displayName ||
-                    participantUser.username ||
-                    (participantUser.firstName && participantUser.lastName
-                      ? `${participantUser.firstName} ${participantUser.lastName}`.trim()
-                      : participantUser.firstName || participantUser.lastName) ||
-                    'Utilisateur';
-    return userName;
+    // Résolution canonique du nom (displayName > firstName+lastName > username)
+    // via le SSOT `getUserDisplayNameOrNull`. La chaîne inline précédente
+    // préférait `username` au vrai nom → handles cryptiques pour un compte
+    // ayant un prénom/nom mais aussi un username.
+    return getUserDisplayNameOrNull(participantUser as NameSource) ?? 'Utilisateur';
   }
 
   return conversation.title || 'Conversation privée';
+}
+
+/**
+ * Résout le nom d'affichage de l'expéditeur d'un message via le SSOT
+ * (displayName > firstName+lastName > username). Retourne `null` si le message
+ * n'a pas d'expéditeur ou qu'aucun nom n'est disponible — l'appelant décide du
+ * fallback (i18n) à appliquer.
+ */
+export function getMessageSenderName(message: unknown): string | null {
+  const sender = (message as { sender?: unknown } | null | undefined)?.sender;
+  if (!sender) return null;
+  return getUserDisplayNameOrNull(sender as NameSource);
 }
 
 /**

@@ -20,7 +20,8 @@ import {
   getConversationAvatarUrl,
   getConversationIcon,
   getConversationNameOnly,
-  getConversationCreatedDate
+  getConversationCreatedDate,
+  getMessageSenderName
 } from './conversation-utils';
 import { formatLastMessage } from './message-formatting';
 
@@ -188,23 +189,13 @@ export const ConversationItem = memo(function ConversationItem({
   }, [t]);
 
   const getSenderName = useCallback((message: unknown) => {
-    const sender = message?.sender;
-    const isAnonymous = false;
-
+    const sender = (message as { sender?: unknown } | null | undefined)?.sender;
     if (!sender) return null;
 
-    let senderName = sender.displayName ||
-                     sender.username ||
-                     (sender.firstName || sender.lastName
-                       ? `${sender.firstName || ''} ${sender.lastName || ''}`.trim()
-                       : null);
-
-    if (!senderName) {
-      senderName = isAnonymous ? tCommon('anonymous') : tCommon('user');
-    }
-
-    return isAnonymous ? `${senderName} (anonyme)` : senderName;
-  }, []);
+    // Nom canonique via le SSOT (displayName > firstName+lastName > username) ;
+    // fallback i18n uniquement si l'expéditeur existe mais n'a aucun nom.
+    return getMessageSenderName(message) ?? tCommon('user');
+  }, [tCommon]);
 
   return (
     <div
