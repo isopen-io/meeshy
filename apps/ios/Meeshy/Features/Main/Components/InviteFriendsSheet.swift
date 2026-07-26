@@ -21,7 +21,7 @@ struct InviteFriendsSheet: View {
     // MARK: - Phase toggle
     @State private var showOptions = false
 
-    // MARK: - Editable fields (defaults match shareConversationLink)
+    // MARK: - Editable fields
     @State private var inviteMessage = ""
     @State private var linkName = ""
 
@@ -46,6 +46,13 @@ struct InviteFriendsSheet: View {
 
     // Clipboard feedback
     @State private var showCopiedFeedback = false
+
+    /// Freshly minted invite link awaiting the system share sheet. Presenting it
+    /// through `.sheet(item:)` lets SwiftUI own the presentation — the previous
+    /// hand-rolled `UIActivityViewController` + window-hierarchy walk anchored
+    /// the iPad popover at `CGRect.zero` (top-left corner) and picked a scene
+    /// out of the *unordered* `connectedScenes` set.
+    @State private var shareableLink: ShareableLink?
 
     private var shareURL: String? {
         guard let link = createdLink else { return nil }
@@ -113,6 +120,9 @@ struct InviteFriendsSheet: View {
             }
             .task {
                 await createLinkInBackground()
+            }
+            .sheet(item: $shareableLink) { link in
+                ShareSheet(activityItems: [link.url])
             }
         }
     }
@@ -620,8 +630,8 @@ struct InviteFriendsSheet: View {
             isCreating = false
         }
 
-        guard let url = shareURL else { return }
-        presentShareSheet(url: url)
+        guard let urlString = shareURL, let url = URL(string: urlString) else { return }
+        shareableLink = ShareableLink(url: url)
     }
 
     private func createLink() async throws -> CreatedShareLink {
@@ -671,18 +681,6 @@ struct InviteFriendsSheet: View {
                     showCopiedFeedback = false
                 }
             }
-        }
-    }
-
-    @MainActor
-    private func presentShareSheet(url: String) {
-        let activityVC = UIActivityViewController(activityItems: [url], applicationActivities: nil)
-        if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
-           let rootVC = windowScene.windows.first?.rootViewController {
-            var topVC = rootVC
-            while let presented = topVC.presentedViewController { topVC = presented }
-            activityVC.popoverPresentationController?.sourceView = topVC.view
-            topVC.present(activityVC, animated: true)
         }
     }
 }

@@ -32,8 +32,15 @@ struct ConversationInfoSheet: View {
     @State private var showBlockConfirm = false
     @State private var isBlocking = false
     @State private var isCreatingShareLink = false
-    @State private var createdShareLinkId: String?
-    @State private var showShareSheet = false
+
+    /// Freshly minted join link awaiting the system share sheet. Presenting it
+    /// through `.sheet(item:)` lets SwiftUI own the presentation — the previous
+    /// hand-rolled `UIActivityViewController` + window-hierarchy walk anchored
+    /// the iPad popover at `CGRect.zero` (top-left corner) and picked a scene
+    /// out of the *unordered* `connectedScenes` set. Replaces the former
+    /// `createdShareLinkId` / `showShareSheet` pair, which was written but
+    /// never read.
+    @State private var shareableLink: ShareableLink?
     @State private var showLeaveConfirmation = false
     @State private var showSecurityVerification = false
     @State private var showEncryptionDetail = false
@@ -143,6 +150,9 @@ struct ConversationInfoSheet: View {
         }
         .sheet(isPresented: $showAllPinnedMessages) {
             allPinnedMessagesSheet
+        }
+        .sheet(item: $shareableLink) { link in
+            ShareSheet(activityItems: [link.url])
         }
         .withStatusBubble()
     }
@@ -1067,22 +1077,10 @@ struct ConversationInfoSheet: View {
                 allowAnonymousMessages: true
             )
             let result = try await ShareLinkService.shared.createShareLink(request: request)
-            createdShareLinkId = result.linkId
-
-            let shareURL = "https://meeshy.me/join/\(result.linkId)"
-            await MainActor.run {
-                let activityVC = UIActivityViewController(
-                    activityItems: [shareURL],
-                    applicationActivities: nil
-                )
-                if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
-                   let rootVC = windowScene.windows.first?.rootViewController {
-                    var topVC = rootVC
-                    while let presented = topVC.presentedViewController { topVC = presented }
-                    activityVC.popoverPresentationController?.sourceView = topVC.view
-                    topVC.present(activityVC, animated: true)
-                }
+            guard let shareURL = URL(string: "https://meeshy.me/join/\(result.linkId)") else {
+                throw URLError(.badURL)
             }
+            await MainActor.run { shareableLink = ShareableLink(url: shareURL) }
         } catch {
             FeedbackToastManager.shared.showError(String(localized: "conversation.info.share.error", defaultValue: "Erreur lors de la creation du lien", bundle: .main))
         }

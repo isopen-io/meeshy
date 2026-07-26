@@ -564,40 +564,12 @@ struct ConversationListView: View {
         return true
     }
 
-    func shareConversationLink(for conversation: Conversation) async {
-        do {
-            let linkName = "Rejoins la conversation \"\(conversation.name)\""
-            let welcome = "Rejoins moi pour échanger sans filtre ni barrière..."
-            let request = CreateShareLinkRequest(
-                conversationId: conversation.id,
-                name: linkName,
-                description: welcome,
-                allowAnonymousMessages: true,
-                allowAnonymousFiles: false,
-                allowAnonymousImages: true,
-                allowViewHistory: true,
-                requireAccount: false,
-                requireNickname: true,
-                requireEmail: false,
-                requireBirthday: false
-            )
-            let result = try await ShareLinkService.shared.createShareLink(request: request)
-            let shareURL = "https://meeshy.me/join/\(result.linkId)"
-            await MainActor.run {
-                let activityVC = UIActivityViewController(activityItems: [shareURL], applicationActivities: nil)
-                if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
-                   let rootVC = windowScene.windows.first?.rootViewController {
-                    var topVC = rootVC
-                    while let presented = topVC.presentedViewController { topVC = presented }
-                    activityVC.popoverPresentationController?.sourceView = topVC.view
-                    topVC.present(activityVC, animated: true)
-                }
-            }
-            HapticFeedback.success()
-        } catch {
-            HapticFeedback.error()
-        }
-    }
+    // `shareConversationLink(for:)` used to live here: it minted a join link and
+    // pushed a `UIActivityViewController` onto the top-most view controller. It
+    // had no caller left — the live affordance is `onCreateShareLink`, which
+    // routes to `InviteFriendsSheet` (a real sheet, with editable link options).
+    // Removed with the rest of the hand-rolled share presentations, along with
+    // the two hardcoded French strings it carried.
 
     // MARK: - Swipe Actions
 
