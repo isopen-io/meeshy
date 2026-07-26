@@ -21,6 +21,9 @@ import me.meeshy.sdk.model.RefreshTokenRequest
 import me.meeshy.sdk.model.RegisterRequest
 import me.meeshy.sdk.model.auth.LanguageSelectionState
 import me.meeshy.sdk.model.auth.LanguageStepSelection
+import me.meeshy.sdk.model.auth.RegistrationLeadingAction
+import me.meeshy.sdk.model.auth.RegistrationPrimaryAction
+import me.meeshy.sdk.model.auth.RegistrationPrimaryLabel
 import me.meeshy.sdk.model.auth.RegistrationStep
 import me.meeshy.sdk.model.auth.SummaryField
 import me.meeshy.sdk.model.auth.StepFill
@@ -544,6 +547,77 @@ class RegistrationViewModelTest {
         val expected =
             "${LanguageStepSelection.summaryLabel("fr")} / ${LanguageStepSelection.summaryLabel("es")}"
         assertThat(languages).isEqualTo(expected)
+    }
+
+    // ---- nav chrome derivation (RegistrationNav wiring) ---------------------
+
+    @Test
+    fun nav_onFirstStepBlocked_isCloseLeadingNextLabelDisabledAtPositionOne() {
+        val (vm, _, _) = scenario()
+        val nav = vm.state.value.nav
+        assertThat(nav.leading).isEqualTo(RegistrationLeadingAction.CLOSE)
+        assertThat(nav.primaryLabel).isEqualTo(RegistrationPrimaryLabel.NEXT)
+        assertThat(nav.primaryAction).isEqualTo(RegistrationPrimaryAction.ADVANCE)
+        assertThat(nav.primaryEnabled).isFalse()
+        assertThat(nav.showSkip).isFalse()
+        assertThat(nav.positionLabel).isEqualTo("1/8")
+    }
+
+    @Test
+    fun nav_primaryEnabled_tracksTheProceedGate() {
+        val (vm, _, _) = scenario()
+        assertThat(vm.state.value.nav.primaryEnabled).isFalse()
+        vm.onUsernameChange("atabeth")
+        vm.onUsernameAvailability(true)
+        assertThat(vm.state.value.nav.primaryEnabled).isTrue()
+    }
+
+    @Test
+    fun nav_afterAdvancing_leadingBecomesBack() {
+        val (vm, _, _) = scenario()
+        vm.onUsernameChange("atabeth")
+        vm.onUsernameAvailability(true)
+        vm.next()
+        assertThat(vm.state.value.currentStep).isEqualTo(RegistrationStep.PHONE)
+        assertThat(vm.state.value.nav.leading).isEqualTo(RegistrationLeadingAction.BACK)
+        assertThat(vm.state.value.nav.positionLabel).isEqualTo("2/8")
+    }
+
+    @Test
+    fun nav_onProfileStep_showsSkipAndContinueLabel() {
+        val (vm, _, _) = scenario()
+        vm.fillAllValid()
+        repeat(RegistrationStep.PROFILE.index) { vm.skip() }
+        assertThat(vm.state.value.currentStep).isEqualTo(RegistrationStep.PROFILE)
+        val nav = vm.state.value.nav
+        assertThat(nav.showSkip).isTrue()
+        assertThat(nav.primaryLabel).isEqualTo(RegistrationPrimaryLabel.CONTINUE)
+        assertThat(nav.primaryAction).isEqualTo(RegistrationPrimaryAction.ADVANCE)
+    }
+
+    @Test
+    fun nav_onRecapStep_primaryActionBecomesRegister() {
+        val (vm, _, _) = scenario()
+        vm.fillAllValid()
+        repeat(RegistrationStep.total) { vm.skip() }
+        assertThat(vm.state.value.currentStep).isEqualTo(RegistrationStep.RECAP)
+        val nav = vm.state.value.nav
+        assertThat(nav.primaryAction).isEqualTo(RegistrationPrimaryAction.REGISTER)
+        assertThat(nav.primaryLabel).isEqualTo(RegistrationPrimaryLabel.CREATE_ACCOUNT)
+        assertThat(nav.primaryEnabled).isTrue()
+        assertThat(nav.positionLabel).isEqualTo("8/8")
+    }
+
+    @Test
+    fun nav_whileSubmitting_disablesThePrimaryButton() = runTest(dispatcher) {
+        val (vm, _, _) = scenario(ApiResponse(success = true, data = session()))
+        vm.fillAllValid()
+        repeat(RegistrationStep.total) { vm.skip() }
+        vm.register()
+        // register() flips isSubmitting synchronously; the launched flight is still pending.
+        assertThat(vm.state.value.isSubmitting).isTrue()
+        assertThat(vm.state.value.nav.primaryEnabled).isFalse()
+        advanceUntilIdle()
     }
 
     private fun session() = AuthSession(MeeshyUser(id = "u1", username = "atabeth"), token = "jwt")

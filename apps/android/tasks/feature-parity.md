@@ -460,7 +460,22 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       BUILD SUCCESSFUL (every module compiled). Diff = `apps/android` only. **Follow-up:** the app-side
       bottom-bar composable (Back / Skip / Next-or-Register buttons) + the `RegistrationViewModel`
       wiring `advance`/`previous`/`skip` to `currentStep`, computing `canProceed` from the shipped
-      field-validation cores.
+      field-validation cores. **Chrome-projection core shipped** (slice `registration-nav-chrome`,
+      2026-07-26): pure `:core:model` `RegistrationNav.model(current, canProceed, isSubmitting)` →
+      `RegistrationNavModel` — the whole top-bar + bottom-bar decision layer the Compose wizard renders,
+      a faithful port of iOS `OnboardingFlowView`'s `topBar` / `bottomBar` / `buttonTitle` / `buttonIcon`:
+      leading control (`CLOSE` on the first step, `BACK` otherwise), primary `primaryLabel`
+      (`CREATE_ACCOUNT` on RECAP, `CONTINUE` on PROFILE, `NEXT` otherwise) / `primaryIcon` (`SPARKLES` on
+      RECAP, `FORWARD` otherwise) / `primaryAction` (`REGISTER` on RECAP, `ADVANCE` otherwise) /
+      `primaryEnabled` (`canProceed && !isSubmitting`, iOS `canProceed && !isLoading`), profile-only
+      `showSkip`, and the 1-based `positionLabel` (`"n/8"`). Labels/icons are **semantic enums** — the UI
+      resolves i18n copy + glyph, keeping `:core:model` framework-free. Wired as a derived
+      `RegistrationUiState.nav` (same seam as `summary` / `canProceed` / `fill`). **+22 behavioural tests**
+      (16 `RegistrationNavTest` full step sweeps + 6 `RegistrationViewModelTest` derivation checks incl.
+      the submitting-disables-primary path). Mutation (RED proof): `showSkip = false` fails **exactly**
+      `showSkip_isTrueOnlyOnTheProfileStep` (1 failed, no collateral). `./apps/android/meeshy.sh check` →
+      BUILD SUCCESSFUL (full `assembleDebug` + all module tests; `RegistrationNavTest` 16/16,
+      `RegistrationViewModelTest` 45/45). Diff = `apps/android` only.
 - [~] **App-side registration wizard ViewModel wiring** — **UDF `RegistrationViewModel` shipped**
       (slice `registration-wizard-viewmodel`, 2026-07-25). The first app-side wiring that turns the
       shipped registration cores from orphan logic into a real observable wizard. New

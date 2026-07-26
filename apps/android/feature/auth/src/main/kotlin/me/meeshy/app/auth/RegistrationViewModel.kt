@@ -17,6 +17,8 @@ import me.meeshy.sdk.model.RegisterRequest
 import me.meeshy.sdk.model.auth.AvailabilityIntent
 import me.meeshy.sdk.model.auth.LanguageSelectionState
 import me.meeshy.sdk.model.auth.RegistrationFields
+import me.meeshy.sdk.model.auth.RegistrationNav
+import me.meeshy.sdk.model.auth.RegistrationNavModel
 import me.meeshy.sdk.model.auth.RegistrationProgressBar
 import me.meeshy.sdk.model.auth.RegistrationStep
 import me.meeshy.sdk.model.auth.RegistrationStepGate
@@ -52,6 +54,21 @@ data class RegistrationUiState(
     val isFirstStep: Boolean get() = RegistrationStepNavigator.isFirst(currentStep)
 
     val isLastStep: Boolean get() = RegistrationStepNavigator.isLast(currentStep)
+
+    /**
+     * The wizard's navigation chrome (top-bar leading control, primary button
+     * label/icon/action/enabled, skip visibility, position counter) for [currentStep]
+     * — [RegistrationNav]. The Compose wizard renders this model and dispatches its
+     * [RegistrationNavModel.primaryAction] to [RegistrationViewModel.next] /
+     * [RegistrationViewModel.register] and its leading control to
+     * [RegistrationViewModel.previous] / dismiss.
+     */
+    val nav: RegistrationNavModel
+        get() = RegistrationNav.model(
+            current = currentStep,
+            canProceed = canProceed,
+            isSubmitting = isSubmitting,
+        )
 
     /** Progress-bar role of [step] relative to [currentStep] — [RegistrationProgressBar]. */
     fun fill(step: RegistrationStep): StepFill = RegistrationProgressBar.fill(step, currentStep)
