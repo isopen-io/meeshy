@@ -7,7 +7,13 @@ import XCTest
 // Le sous-menu marque le mode courant d'un `checkmark` à la place de son icône.
 // Choix conservateur assumé face aux cases à cocher natives d'un Picker inline :
 // sous iOS 26, un `.tint(.clear)` fait disparaître TOUTES les icônes d'un menu.
-
+//
+// `@MainActor` : `StoryVisibilityMenuResolver` vit dans le target `Meeshy`, dont
+// `SWIFT_DEFAULT_ACTOR_ISOLATION` est `MainActor` (SE-0466) — un type non annoté
+// y est donc main-actor-isolé par défaut, y compris la conformance `Equatable`
+// de son `Route` imbriqué. Même patron que `MyStoryRowSaveRingTests` (Task 2/3)
+// pour la même raison.
+@MainActor
 final class StoryVisibilityMenuResolverTests: XCTestCase {
 
     func test_isCurrent_matchingRawValue_isTrue() {
