@@ -84,7 +84,9 @@ protocol StoryVideoExportServiceProviding {
     ///   underlying export threw (caller surfaces a friendly toast).
     ///   - intro: Identité à peindre sur le préambule de marque. Le MP4 livré
     ///     commence alors par l'interlude d'identité et la signature sonore
-    ///     Meeshy, puis la story. `nil` exporte la story seule.
+    ///     Meeshy, puis la story. `nil` exporte la story sans interlude — mais
+    ///     la CARTE DE FIN de marque, elle, est ajoutée dans tous les cas :
+    ///     elle ne dépend d'aucune identité résolue.
     func prepareExport(
         slide: StorySlide,
         languages: [String],
@@ -189,33 +191,48 @@ final class StoryVideoExportService: StoryVideoExportServiceProviding {
                 progress: progressTrampoline
             )
             logger.info("StoryVideoExportService : export complete for slide \(slide.id, privacy: .public)")
-            guard let intro else { return outputURL }
+
+            let renderSize = StoryExportIntroSizing.renderSize(for: slide)
+            var current = outputURL
+
             // Préambule de marque : l'interlude d'identité et la signature
             // sonore Meeshy, puis la story. Un échec ici ne perd PAS l'export —
             // on livre la story seule plutôt que rien.
-            do {
-                let renderSize = StoryExportIntroSizing.renderSize(for: slide)
-                let branded = try await StoryExportIntro.prepend(
-                    to: outputURL,
-                    content: intro,
-                    renderSize: renderSize
-                )
-                cleanupExport(at: outputURL)
-                // Carte de fin de marque : le logo Meeshy plein écran entre en
-                // fondu par-dessus la fin de la story et tient sur sa signature
-                // sonore de fermeture. Échec non fatal — on livre au moins
-                // l'intro + la story.
+            if let intro {
                 do {
-                    let finalURL = try await StoryExportOutro.append(to: branded, renderSize: renderSize)
-                    cleanupExport(at: branded)
-                    return finalURL
+                    let branded = try await StoryExportIntro.prepend(
+                        to: current,
+                        content: intro,
+                        renderSize: renderSize
+                    )
+                    cleanupExport(at: current)
+                    current = branded
                 } catch {
-                    logger.warning("StoryVideoExportService : carte de fin ignorée pour \(slide.id, privacy: .public) — \(error.localizedDescription, privacy: .public)")
-                    return branded
+                    logger.warning("StoryVideoExportService : intro de marque ignorée pour \(slide.id, privacy: .public) — \(error.localizedDescription, privacy: .public)")
                 }
+            }
+
+            // Carte de fin de marque : le logo Meeshy plein écran entre en
+            // fondu par-dessus la fin de la story et tient sur sa signature
+            // sonore de fermeture. Échec non fatal — on livre au moins ce qui
+            // a déjà été composé.
+            //
+            // Revue finale (item 2) : cet appel était IMBRIQUÉ dans le
+            // `guard let intro`. Tant que `intro == nil` signifiait « pas de
+            // session » (cas de bord), la conséquence restait théorique ;
+            // depuis que ce lot a posé `introTimeout = .seconds(4)`,
+            // `intro == nil` est devenu un résultat de COURSE routinier
+            // (première installation, réseau lent) — et l'export sortait alors
+            // sans interlude ET sans carte de fin, donc au branding non
+            // déterministe d'un export à l'autre. La carte de fin ne dépend
+            // d'aucune identité : elle est désormais appliquée séparément.
+            do {
+                let finalURL = try await StoryExportOutro.append(to: current, renderSize: renderSize)
+                cleanupExport(at: current)
+                return finalURL
             } catch {
-                logger.warning("StoryVideoExportService : intro de marque ignorée pour \(slide.id, privacy: .public) — \(error.localizedDescription, privacy: .public)")
-                return outputURL
+                logger.warning("StoryVideoExportService : carte de fin ignorée pour \(slide.id, privacy: .public) — \(error.localizedDescription, privacy: .public)")
+                return current
             }
         } catch {
             logger.error("StoryVideoExportService : export FAILED for slide \(slide.id, privacy: .public) — \(error.localizedDescription, privacy: .public)")
