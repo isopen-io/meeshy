@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { normalizeLanguageCode } from '@meeshy/shared/utils/language-normalize';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // ZOD VALIDATION SCHEMAS
@@ -61,7 +62,18 @@ export const sendMessageSchema = z.object({
   clientMessageId: z
     .string()
     .regex(CLIENT_MESSAGE_ID_REGEX, 'Invalid clientMessageId format (expected cid_<uuid v4 lowercase>)'),
-  originalLanguage: z.string().default('fr'),
+  // Canonicalize at the write boundary — clients emit the raw platform locale
+  // (iOS `fr_FR`, web `fr-FR`, `en-US`), and both share-link `message.create`
+  // sites persist this value verbatim. Mirrors iteration 218's MessagingService
+  // fix via the same `normalizeLanguageCode` SSOT: reducible locales collapse to
+  // their canonical code (`fr-FR` → `fr`), while irreducible codes (`bas`, or an
+  // unknown 2-letter code) are preserved via `?? v` — zero data loss, no round
+  // trip. Idempotent on already-canonical codes, so existing `'fr'` rows and
+  // callers are unaffected.
+  originalLanguage: z
+    .string()
+    .default('fr')
+    .transform((v) => normalizeLanguageCode(v) ?? v),
   messageType: z.string().default('text'),
   attachments: z.array(z.string()).optional()
 }).refine((data) => {
