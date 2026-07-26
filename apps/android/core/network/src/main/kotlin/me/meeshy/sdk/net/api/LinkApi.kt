@@ -3,6 +3,7 @@ package me.meeshy.sdk.net.api
 import me.meeshy.sdk.model.ApiResponse
 import me.meeshy.sdk.model.CreateShareLinkRequest
 import me.meeshy.sdk.model.CreateShareLinkResponse
+import me.meeshy.sdk.model.ExtendShareLinkRequest
 import me.meeshy.sdk.model.MyShareLink
 import me.meeshy.sdk.model.MyShareLinkStats
 import me.meeshy.sdk.model.ToggleShareLinkRequest
@@ -45,4 +46,11 @@ interface LinkApi {
     /** Delete a link by its public `linkId`. Port of iOS `deleteLink`. */
     @DELETE("links/{linkId}")
     suspend fun delete(@Path("linkId") linkId: String): ApiResponse<Unit>
+
+    /** Extend a link's expiration to a new ISO-8601 `expiresAt`. */
+    @PATCH("links/{linkId}/extend")
+    suspend fun extend(
+        @Path("linkId") linkId: String,
+        @Body body: ExtendShareLinkRequest,
+    ): ApiResponse<Unit>
 }

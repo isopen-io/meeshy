@@ -6,6 +6,7 @@ import me.meeshy.sdk.model.ApiResponse
 import me.meeshy.sdk.model.CreateShareLinkDetail
 import me.meeshy.sdk.model.CreateShareLinkRequest
 import me.meeshy.sdk.model.CreateShareLinkResponse
+import me.meeshy.sdk.model.ExtendShareLinkRequest
 import me.meeshy.sdk.model.MyShareLink
 import me.meeshy.sdk.model.MyShareLinkStats
 import me.meeshy.sdk.model.ToggleShareLinkRequest
@@ -28,11 +29,13 @@ class ShareLinkRepositoryTest {
         var statsResponse: ApiResponse<MyShareLinkStats> = ApiResponse(success = false),
         var toggleResponse: ApiResponse<Unit> = ApiResponse(success = false),
         var deleteResponse: ApiResponse<Unit> = ApiResponse(success = false),
+        var extendResponse: ApiResponse<Unit> = ApiResponse(success = false),
     ) : LinkApi {
         var lastListOffset: Int? = null
         var lastListLimit: Int? = null
         var lastToggle: Pair<String, ToggleShareLinkRequest>? = null
         var lastDeletedLinkId: String? = null
+        var lastExtend: Pair<String, ExtendShareLinkRequest>? = null
 
         override suspend fun create(body: CreateShareLinkRequest): ApiResponse<CreateShareLinkResponse> {
             requests += body
@@ -58,6 +61,14 @@ class ShareLinkRepositoryTest {
         override suspend fun delete(linkId: String): ApiResponse<Unit> {
             lastDeletedLinkId = linkId
             return deleteResponse
+        }
+
+        override suspend fun extend(
+            linkId: String,
+            body: ExtendShareLinkRequest,
+        ): ApiResponse<Unit> {
+            lastExtend = linkId to body
+            return extendResponse
         }
     }
 
@@ -192,5 +203,25 @@ class ShareLinkRepositoryTest {
         val result = ShareLinkRepository(api).delete("link-7")
 
         assertThat((result as NetworkResult.Failure).error.message).isEqualTo("nope")
+    }
+
+    @Test
+    fun extend_forwardsTheLinkIdAndExpiryInTheBody() = runTest {
+        val api = FakeLinkApi(extendResponse = ApiResponse(success = true, data = Unit))
+
+        val result = ShareLinkRepository(api).extend("link-7", "2026-10-23T12:00:00Z")
+
+        assertThat(result).isInstanceOf(NetworkResult.Success::class.java)
+        assertThat(api.lastExtend)
+            .isEqualTo("link-7" to ExtendShareLinkRequest("2026-10-23T12:00:00Z"))
+    }
+
+    @Test
+    fun extend_failure_propagatesTheError() = runTest {
+        val api = FakeLinkApi(extendResponse = ApiResponse(success = false, error = "expired"))
+
+        val result = ShareLinkRepository(api).extend("link-7", "2026-10-23T12:00:00Z")
+
+        assertThat((result as NetworkResult.Failure).error.message).isEqualTo("expired")
     }
 }

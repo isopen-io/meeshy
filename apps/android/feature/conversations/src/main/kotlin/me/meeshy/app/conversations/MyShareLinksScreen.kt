@@ -19,8 +19,11 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -32,6 +35,9 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -42,9 +48,12 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import me.meeshy.feature.conversations.R
+import me.meeshy.sdk.model.ExtendShareLinkForm
 import me.meeshy.sdk.model.MyShareLink
 import me.meeshy.sdk.model.MyShareLinkStats
+import me.meeshy.sdk.model.ShareLinkExpiration
 import me.meeshy.sdk.model.displayName
+import me.meeshy.sdk.model.isExpired
 import me.meeshy.ui.component.chrome.MeeshyBackground
 import me.meeshy.ui.component.chrome.MeeshyCard
 import me.meeshy.ui.theme.MeeshyPalette
@@ -114,6 +123,7 @@ fun MyShareLinksScreen(
                         },
                         onToggle = viewModel::toggleActive,
                         onDelete = viewModel::delete,
+                        onExtend = viewModel::extendExpiry,
                     )
                 }
             }
@@ -154,7 +164,9 @@ private fun LinksList(
     onShare: (MyShareLink) -> Unit,
     onToggle: (MyShareLink) -> Unit,
     onDelete: (MyShareLink) -> Unit,
+    onExtend: (MyShareLink, ShareLinkExpiration) -> Unit,
 ) {
+    val nowMillis = remember { System.currentTimeMillis() }
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = androidx.compose.foundation.layout.PaddingValues(MeeshySpacing.lg),
@@ -176,10 +188,12 @@ private fun LinksList(
             ShareLinkRow(
                 link = link,
                 joinUrl = joinUrlFor(link),
+                isExpired = link.isExpired(nowMillis),
                 onCopy = { onCopy(link) },
                 onShare = { onShare(link) },
                 onToggle = { onToggle(link) },
                 onDelete = { onDelete(link) },
+                onExtend = { expiration -> onExtend(link, expiration) },
             )
         }
     }
@@ -229,15 +243,22 @@ private fun StatCard(value: Int, label: String, modifier: Modifier = Modifier) {
 private fun ShareLinkRow(
     link: MyShareLink,
     joinUrl: String,
+    isExpired: Boolean,
     onCopy: () -> Unit,
     onShare: () -> Unit,
     onToggle: () -> Unit,
     onDelete: () -> Unit,
+    onExtend: (ShareLinkExpiration) -> Unit,
 ) {
-    val statusText = if (link.isActive) {
-        stringResource(R.string.my_share_links_status_active)
-    } else {
-        stringResource(R.string.my_share_links_status_inactive)
+    val statusText = when {
+        isExpired -> stringResource(R.string.my_share_links_expired)
+        link.isActive -> stringResource(R.string.my_share_links_status_active)
+        else -> stringResource(R.string.my_share_links_status_inactive)
+    }
+    val statusColor = when {
+        isExpired -> MeeshyTheme.tokens.error
+        link.isActive -> MeeshyPalette.Indigo400
+        else -> MeeshyTheme.tokens.textMuted
     }
     MeeshyCard {
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
@@ -255,7 +276,7 @@ private fun ShareLinkRow(
                         link.currentUses,
                     ),
                     style = MaterialTheme.typography.labelMedium,
-                    color = if (link.isActive) MeeshyPalette.Indigo400 else MeeshyTheme.tokens.textMuted,
+                    color = statusColor,
                     maxLines = 1,
                 )
                 link.conversationTitle?.let { title ->
@@ -277,6 +298,7 @@ private fun ShareLinkRow(
             horizontalArrangement = Arrangement.End,
             verticalAlignment = Alignment.CenterVertically,
         ) {
+            ExtendMenuButton(onExtend = onExtend)
             IconButton(onClick = onCopy) {
                 Icon(
                     Icons.Filled.ContentCopy,
@@ -304,6 +326,41 @@ private fun ShareLinkRow(
         }
     }
 }
+
+@Composable
+private fun ExtendMenuButton(onExtend: (ShareLinkExpiration) -> Unit) {
+    var expanded by remember { mutableStateOf(false) }
+    IconButton(onClick = { expanded = true }) {
+        Icon(
+            Icons.Filled.Schedule,
+            contentDescription = stringResource(R.string.my_share_links_extend),
+            tint = MeeshyPalette.Indigo400,
+            modifier = Modifier.size(20.dp),
+        )
+    }
+    DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+        ExtendShareLinkForm.options.forEach { option ->
+            DropdownMenuItem(
+                text = { Text(expiryOptionLabel(option)) },
+                onClick = {
+                    expanded = false
+                    onExtend(option)
+                },
+            )
+        }
+    }
+}
+
+@Composable
+private fun expiryOptionLabel(option: ShareLinkExpiration): String = stringResource(
+    when (option) {
+        ShareLinkExpiration.Hours24 -> R.string.my_share_links_expiry_24h
+        ShareLinkExpiration.Days7 -> R.string.my_share_links_expiry_7d
+        ShareLinkExpiration.Days30 -> R.string.my_share_links_expiry_30d
+        ShareLinkExpiration.Months3 -> R.string.my_share_links_expiry_3m
+        ShareLinkExpiration.Never -> R.string.my_share_links_expiry_7d
+    },
+)
 
 private fun copyToClipboard(context: Context, text: String) {
     val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager

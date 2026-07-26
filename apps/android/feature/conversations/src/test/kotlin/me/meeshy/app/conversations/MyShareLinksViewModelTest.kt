@@ -8,12 +8,15 @@ import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
+import java.time.Instant
 import me.meeshy.sdk.model.ApiResponse
 import me.meeshy.sdk.model.CreateShareLinkRequest
 import me.meeshy.sdk.model.CreateShareLinkResponse
+import me.meeshy.sdk.model.ExtendShareLinkRequest
 import me.meeshy.sdk.model.MyShareLink
 import me.meeshy.sdk.model.MyShareLinkStats
 import me.meeshy.sdk.model.MyShareLinksPhase
+import me.meeshy.sdk.model.ShareLinkExpiration
 import me.meeshy.sdk.model.ToggleShareLinkRequest
 import me.meeshy.sdk.net.MeeshyConfig
 import me.meeshy.sdk.net.api.LinkApi
@@ -39,9 +42,11 @@ class MyShareLinksViewModelTest {
             ApiResponse(success = true, data = MyShareLinkStats()),
         var toggleResponse: ApiResponse<Unit> = ApiResponse(success = true, data = Unit),
         var deleteResponse: ApiResponse<Unit> = ApiResponse(success = true, data = Unit),
+        var extendResponse: ApiResponse<Unit> = ApiResponse(success = true, data = Unit),
     ) : LinkApi {
         var lastToggle: Pair<String, ToggleShareLinkRequest>? = null
         var lastDeletedLinkId: String? = null
+        var lastExtend: Pair<String, ExtendShareLinkRequest>? = null
 
         override suspend fun create(body: CreateShareLinkRequest): ApiResponse<CreateShareLinkResponse> =
             ApiResponse(success = false)
@@ -60,10 +65,28 @@ class MyShareLinksViewModelTest {
             lastDeletedLinkId = linkId
             return deleteResponse
         }
+
+        override suspend fun extend(
+            linkId: String,
+            body: ExtendShareLinkRequest,
+        ): ApiResponse<Unit> {
+            lastExtend = linkId to body
+            return extendResponse
+        }
     }
 
-    private fun link(linkId: String, isActive: Boolean = true, identifier: String? = null) =
-        MyShareLink(id = linkId, linkId = linkId, identifier = identifier, isActive = isActive)
+    private fun link(
+        linkId: String,
+        isActive: Boolean = true,
+        identifier: String? = null,
+        expiresAt: String? = null,
+    ) = MyShareLink(
+        id = linkId,
+        linkId = linkId,
+        identifier = identifier,
+        isActive = isActive,
+        expiresAt = expiresAt,
+    )
 
     private fun viewModel(
         api: FakeLinkApi,
@@ -199,6 +222,67 @@ class MyShareLinksViewModelTest {
 
         assertThat(vm.state.value.links.map { it.linkId }).containsExactly("link-1", "link-2")
         assertThat(vm.state.value.errorMessage).isEqualTo("boom")
+    }
+
+    @Test
+    fun extendExpiry_optimisticallySetsTheNewExpiryAndSendsTheRequest() = runTest {
+        val fixedNow = Instant.parse("2026-07-25T12:00:00Z").toEpochMilli()
+        val expected = ShareLinkExpiration.Days30.expiresAtIso(fixedNow)!!
+        val api = FakeLinkApi(
+            listResponse = ApiResponse(
+                success = true,
+                data = listOf(link("link-1", expiresAt = "2026-07-26T12:00:00Z")),
+            ),
+        )
+        val vm = viewModel(api).apply { now = { fixedNow } }
+        advanceUntilIdle()
+
+        vm.extendExpiry(vm.state.value.links.first(), ShareLinkExpiration.Days30) // optimistic
+
+        assertThat(vm.state.value.links.first().expiresAt).isEqualTo(expected)
+
+        advanceUntilIdle()
+
+        assertThat(api.lastExtend).isEqualTo("link-1" to ExtendShareLinkRequest(expected))
+        assertThat(vm.state.value.errorMessage).isNull()
+    }
+
+    @Test
+    fun extendExpiry_failure_rollsBackAndSurfacesTheError() = runTest {
+        val fixedNow = Instant.parse("2026-07-25T12:00:00Z").toEpochMilli()
+        val api = FakeLinkApi(
+            listResponse = ApiResponse(
+                success = true,
+                data = listOf(link("link-1", expiresAt = "2026-07-26T12:00:00Z")),
+            ),
+            extendResponse = ApiResponse(success = false, error = "already expired"),
+        )
+        val vm = viewModel(api).apply { now = { fixedNow } }
+        advanceUntilIdle()
+
+        vm.extendExpiry(vm.state.value.links.first(), ShareLinkExpiration.Days7)
+        advanceUntilIdle()
+
+        assertThat(vm.state.value.links.first().expiresAt).isEqualTo("2026-07-26T12:00:00Z")
+        assertThat(vm.state.value.errorMessage).isEqualTo("already expired")
+    }
+
+    @Test
+    fun extendExpiry_neverHorizon_isInertAndNeverTouchesTheNetwork() = runTest {
+        val api = FakeLinkApi(
+            listResponse = ApiResponse(
+                success = true,
+                data = listOf(link("link-1", expiresAt = "2026-07-26T12:00:00Z")),
+            ),
+        )
+        val vm = viewModel(api)
+        advanceUntilIdle()
+
+        vm.extendExpiry(vm.state.value.links.first(), ShareLinkExpiration.Never)
+        advanceUntilIdle()
+
+        assertThat(api.lastExtend).isNull()
+        assertThat(vm.state.value.links.first().expiresAt).isEqualTo("2026-07-26T12:00:00Z")
     }
 
     @Test

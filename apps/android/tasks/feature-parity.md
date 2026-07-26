@@ -3652,8 +3652,17 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       `GET /links`, `GET /links/stats`, `PATCH /links/{linkId}/toggle`, `DELETE /links/{linkId}`) +
       repository methods (`:sdk-core`) + `MyShareLinksViewModel`/`MyShareLinksScreen`
       (`:feature:conversations`, snapshot-rollback on failure, copy/share intents, web-origin-derived
-      join URL) reached from **Settings → Share links**. +26 tests. **Remaining (later slice):** the
-      created-link success/share sheet + a per-link detail screen.
+      join URL) reached from **Settings → Share links**. +26 tests.
+      **extend-expiry half** slice `sharelink-extend-expiry` (2026-07-25): pure `ExtendShareLinkForm`
+      (`:core:model`, reuses `ShareLinkExpiration` but excludes `Never` since the extend route requires
+      a concrete `expiresAt`; deterministic ISO via injected clock) + `MyShareLink.isExpired(now)`
+      predicate (mirrors the gateway `now > expiresAt` guard, blank/unparseable = never-expiry) +
+      `MyShareLinksState.extended(linkId, iso)` optimistic reducer (stats untouched) + `LinkApi.extend`
+      (`:core:network`, real route `PATCH /links/{linkId}/extend`) + `ShareLinkRepository.extend`
+      (`:sdk-core`) + `MyShareLinksViewModel.extendExpiry` (`:feature:conversations`, snapshot-rollback
+      on failure, `Never` inert) + a per-row **Schedule** menu (4 horizons) + an **Expired** badge in
+      `MyShareLinksScreen`. +21 tests. **Remaining (later slice):** the created-link success/share sheet
+      + a per-link detail screen (full stats).
 - [x] Anonymous join-via-share-link (preview → form → success); share-link preview screen —
       slice `sharelink-guest-join-form` (2026-07-25): pure `GuestJoinForm` (`:core:model`) +
       `AnonymousSessionRepository.preview()` (`:sdk-core`) + `GuestJoinViewModel`/`GuestJoinScreen`

@@ -99,5 +99,11 @@
     <string name="my_share_links_delete">Eliminar ligação</string>
     <string name="my_share_links_copied">Ligação copiada</string>
     <string name="my_share_links_share_subject">Junta-te a mim no Meeshy</string>
+    <string name="my_share_links_extend">Prolongar validade</string>
+    <string name="my_share_links_expired">Expirado</string>
+    <string name="my_share_links_expiry_24h">24 horas</string>
+    <string name="my_share_links_expiry_7d">7 dias</string>
+    <string name="my_share_links_expiry_30d">30 dias</string>
+    <string name="my_share_links_expiry_3m">3 meses</string>
     <string name="my_share_links_retry">Tentar novamente</string>
 </resources>

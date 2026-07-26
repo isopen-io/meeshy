@@ -89,4 +89,17 @@ public data class MyShareLinksState(
         }
         return copy(links = updated, stats = nextStats)
     }
+
+    /**
+     * Optimistically set a new [expiresAtIso] on one link (matched by
+     * [MyShareLink.linkId]). Extending changes no aggregate counter, so [stats] is
+     * left untouched. An unknown [linkId] is inert.
+     */
+    public fun extended(linkId: String, expiresAtIso: String): MyShareLinksState {
+        if (links.none { it.linkId == linkId }) return this
+        val updated = links.map {
+            if (it.linkId == linkId) it.copy(expiresAt = expiresAtIso) else it
+        }
+        return copy(links = updated)
+    }
 }

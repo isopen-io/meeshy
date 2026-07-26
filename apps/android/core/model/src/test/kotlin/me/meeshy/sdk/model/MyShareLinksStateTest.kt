@@ -13,7 +13,14 @@ class MyShareLinksStateTest {
         linkId: String,
         isActive: Boolean = true,
         currentUses: Int = 0,
-    ) = MyShareLink(id = linkId, linkId = linkId, isActive = isActive, currentUses = currentUses)
+        expiresAt: String? = null,
+    ) = MyShareLink(
+        id = linkId,
+        linkId = linkId,
+        isActive = isActive,
+        currentUses = currentUses,
+        expiresAt = expiresAt,
+    )
 
     private fun stats(total: Int, active: Int, uses: Int) =
         MyShareLinkStats(totalLinks = total, activeLinks = active, totalUses = uses)
@@ -149,5 +156,36 @@ class MyShareLinksStateTest {
         )
         val next = start.removed("a")
         assertThat(next.stats).isEqualTo(stats(total = 0, active = 0, uses = 0))
+    }
+
+    // --- extended ----------------------------------------------------------
+
+    @Test
+    fun extended_setsTheNewExpiryOnTheMatchedLinkOnly() {
+        val start = MyShareLinksState(
+            links = listOf(
+                link("a", expiresAt = "2026-07-26T12:00:00Z"),
+                link("b", expiresAt = null),
+            ),
+        )
+        val next = start.extended("a", "2026-10-23T12:00:00Z")
+        assertThat(next.links.first { it.linkId == "a" }.expiresAt).isEqualTo("2026-10-23T12:00:00Z")
+        assertThat(next.links.first { it.linkId == "b" }.expiresAt).isNull()
+    }
+
+    @Test
+    fun extended_leavesTheAggregateStatsUntouched() {
+        val start = MyShareLinksState(
+            links = listOf(link("a")),
+            stats = stats(total = 1, active = 1, uses = 7),
+        )
+        val next = start.extended("a", "2026-10-23T12:00:00Z")
+        assertThat(next.stats).isEqualTo(stats(total = 1, active = 1, uses = 7))
+    }
+
+    @Test
+    fun extended_unknownLinkId_isInert() {
+        val start = MyShareLinksState(links = listOf(link("a", expiresAt = "2026-07-26T12:00:00Z")))
+        assertThat(start.extended("nope", "2026-10-23T12:00:00Z")).isEqualTo(start)
     }
 }

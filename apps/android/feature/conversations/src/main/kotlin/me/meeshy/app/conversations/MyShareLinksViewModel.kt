@@ -1,5 +1,6 @@
 package me.meeshy.app.conversations
 
+import androidx.annotation.VisibleForTesting
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -12,6 +13,7 @@ import kotlinx.coroutines.launch
 import me.meeshy.sdk.model.MyShareLink
 import me.meeshy.sdk.model.MyShareLinksPhase
 import me.meeshy.sdk.model.MyShareLinksState
+import me.meeshy.sdk.model.ShareLinkExpiration
 import me.meeshy.sdk.model.joinUrl
 import me.meeshy.sdk.model.auth.ServerEnvironmentResolver
 import me.meeshy.sdk.net.MeeshyConfig
@@ -40,6 +42,10 @@ class MyShareLinksViewModel @Inject constructor(
         ServerEnvironmentResolver.webOrigin(
             ServerEnvironmentResolver.serverOrigin(config.apiBaseUrl),
         )
+
+    /** Injectable at the edge so the extended `expiresAt` stays deterministic in tests. */
+    @VisibleForTesting
+    internal var now: () -> Long = { System.currentTimeMillis() }
 
     init {
         load()
@@ -87,6 +93,28 @@ class MyShareLinksViewModel @Inject constructor(
         viewModelScope.launch {
             try {
                 val result = repository.delete(link.linkId)
+                if (result is NetworkResult.Failure) {
+                    _state.value = snapshot.failed(result.error.message)
+                }
+            } catch (e: CancellationException) {
+                throw e
+            }
+        }
+    }
+
+    /**
+     * Extend [link]'s expiry to a new horizon. Applies optimistically and rolls back
+     * to the snapshot on network failure (Instant-App). A non-submittable horizon
+     * (e.g. [ShareLinkExpiration.Never]) yields no request and is inert — an
+     * extend that can't produce a concrete `expiresAt` never touches the network.
+     */
+    fun extendExpiry(link: MyShareLink, expiration: ShareLinkExpiration) {
+        val expiresAtIso = expiration.expiresAtIso(now()) ?: return
+        val snapshot = _state.value
+        _state.update { it.extended(link.linkId, expiresAtIso) }
+        viewModelScope.launch {
+            try {
+                val result = repository.extend(link.linkId, expiresAtIso)
                 if (result is NetworkResult.Failure) {
                     _state.value = snapshot.failed(result.error.message)
                 }

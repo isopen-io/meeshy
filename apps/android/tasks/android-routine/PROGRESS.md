@@ -1,5 +1,50 @@
 # Progress — state & what to do next
 
+> On 2026-07-25 the **share-link EXTEND-EXPIRY side** landed (slice `sharelink-extend-expiry`,
+> feature-parity §O Links — the "expiration" management verb of the share-link item is now a live,
+> owner-facing action). This is a genuinely new capability (not a UX-polish slice): a link owner can
+> push a link's expiry forward from the my-links screen, backed by the real gateway route
+> `PATCH /links/{linkId}/extend` (verified against `services/gateway/src/routes/links/admin.ts:319`,
+> body `{ expiresAt: ISO }`, creator/mod-gated). **Added (production, all `apps/android`):** the pure,
+> immutable `ExtendShareLinkForm` (`:core:model`) — the SSOT for what a valid `ExtendShareLinkRequest`
+> looks like. It **reuses** the `ShareLinkExpiration` horizon vocabulary from creation but encodes the
+> route's own invariant: extend **cannot** be perpetual, so `ShareLinkExpiration.Never` is not
+> submittable (`canSubmit == false`, `toRequest → null`) and is absent from `options`; the new expiry
+> resolves through the existing `expiresAtIso(nowMillis)` against an injected clock (deterministic,
+> testable). A pure `MyShareLink.isExpired(nowMillis)` predicate mirrors the gateway guard exactly
+> (`now > expiresAt`, strictly-after so the boundary instant is not yet expired; null / blank /
+> unparseable `expiresAt` = never-expiry `false`, never falsely "expired"). `MyShareLinksState.extended(
+> linkId, iso)` optimistically sets the new expiry on the matched link and — since extending changes no
+> aggregate counter — leaves `stats` untouched; an unknown linkId is inert. A `ExtendShareLinkRequest`
+> wire body (non-null `expiresAt` by construction). **Wiring:** `LinkApi.extend(linkId, body)`
+> (`@PATCH("links/{linkId}/extend")`, `:core:network`) + `ShareLinkRepository.extend(linkId, iso)`
+> (`:sdk-core`, thin `apiCall` mapper). `MyShareLinksViewModel.extendExpiry(link, expiration)`
+> (`:feature:conversations`, UDF) builds the ISO from the injected `now`, applies `extended`
+> **optimistically**, then **snapshot-rolls-back** to the prior state on network failure (Instant-App);
+> a non-submittable horizon (`Never`) yields no request and is fully inert (never touches the network);
+> `viewModelScope` work rethrows `CancellationException`. `MyShareLinksScreen` gains a per-row
+> **Schedule** `IconButton` opening a `DropdownMenu` of the four horizons (`ExtendShareLinkForm.options`)
+> and surfaces an **Expired** badge (accent `error` colour) via `isExpired`. EN/FR/ES/PT strings (6 keys
+> ×4). **+21 behavioural tests:** `ExtendShareLinkFormTest` (8 — default submittable + future,
+> Never→not-submittable+null, each of 24h/7d/30d/90d exact ISO, `withExpiration` immutable, `options`
+> excludes Never in order), `MyShareLinkPresentationTest` (+6 — `isExpired` null/blank/future/past/
+> boundary/unparseable), `MyShareLinksStateTest` (+3 — `extended` sets matched-only expiry, stats
+> untouched, unknown inert), `ShareLinkRepositoryTest` (+2 — extend forwards linkId+body, failure
+> propagates), `MyShareLinksViewModelTest` (+3 — optimistic set + request, failure rollback + error,
+> `Never` inert no-network). All asserted through the public API / observable `state`. **Mutation (RED
+> proof):** flipping `isExpired`'s `>` to `>=` failed exactly `isExpired_isFalseExactlyAtTheExpiryInstant`.
+> **Gate:** `./apps/android/meeshy.sh check` → **BUILD SUCCESSFUL in 5m09s** (full `assembleDebug` + all
+> module JVM unit tests; 943 tasks). Reviewer **PASS** (diff `apps/android` only; SDK purity — form /
+> predicate / reducer / wire body are stateless `:core:model` blocks, the when-to-extend / optimistic /
+> rollback orchestration stays app-side, repo is a thin mapper; SSOT — reuses `ShareLinkExpiration` +
+> `MyShareLink`, mirrors the gateway expiry guard, re-implements nothing; failure paths — extend failure
+> degrades to a retryable rolled-back state; coherence — accent visuals, expired badge, every arm leads
+> somewhere).
+> **Next slice:** the **created-link success/share sheet** (surface the freshly created link from
+> `CreateShareLinkScreen` with copy/share instead of a bare pop), OR a **per-link detail** screen (full
+> stats), OR the paged `OnboardingFlowView`, OR the tracked Kover 90% coverage-gate infra, OR an
+> `https://meeshy.me/join/{id}` App-Links intent-filter (`AndroidManifest` only).
+
 > On 2026-07-25 the **share-link MANAGEMENT side** landed (slice `sharelink-my-links`, feature-parity
 > §O Links → the "Share/invite links: … list + stats, manage (copy/share/activate/delete)" item advances
 > to `[x]` — this completes the share-link management vertical begun by `sharelink-create`). This is the
