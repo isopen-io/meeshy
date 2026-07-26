@@ -5,8 +5,9 @@ import MeeshyUI
 // MARK: - MyStoriesView
 //
 // Liste des stories ENVOYÉES par l'utilisateur courant, avec un menu « ... »
-// par story : Ouvrir (= toucher, ouvre le viewer), Éditer les vues (stats
-// « vu par »), Partager (export MP4 auteur), Republier, Supprimer.
+// par story : Ouvrir (= toucher, ouvre le viewer), Listing des vues (stats
+// « vu par »), Modifier la visibilité, Partager (export MP4 auteur),
+// Enregistrer, Transférer, Republier, Supprimer.
 // Directive user 2026-07-14. Présentée en sheet depuis le tray « Moi ».
 //
 // L'ouverture du viewer est déléguée au parent (`onOpen`) : le tray possède le
@@ -43,6 +44,10 @@ struct MyStoriesView: View {
     @State private var deleteCandidate: StoryItem?
     @State private var isReposting = false
     @StateObject private var exportViewModel = StoryExportShareViewModel()
+
+    /// Cible du picker d'audience — un SEUL état porte la story et le mode,
+    /// pour qu'ils ne puissent pas se désynchroniser.
+    @State private var audienceTarget: AudienceTarget?
 
     @State private var isSelecting = false
     @State private var selectedIDs: Set<String> = []
@@ -218,6 +223,16 @@ struct MyStoriesView: View {
             .environmentObject(statusViewModel)
             .presentationDetents([.medium, .large])
         }
+        .sheet(item: $audienceTarget) { target in
+            AudienceUserPickerView(
+                mode: target.mode,
+                initialSelection: target.story.visibilityUserIds ?? []
+            ) { ids in
+                audienceTarget = nil
+                guard !ids.isEmpty else { return }
+                applyVisibility(target.mode, for: target.story, userIds: ids)
+            }
+        }
         .alert(
             String(localized: "story.mine.delete.title", defaultValue: "Supprimer la story ?"),
             isPresented: Binding(get: { deleteCandidate != nil }, set: { if !$0 { deleteCandidate = nil } })
@@ -296,7 +311,21 @@ struct MyStoriesView: View {
         Button {
             viewersStory = story
         } label: {
-            Label(String(localized: "story.mine.viewers", defaultValue: "Éditer les vues"), systemImage: "eye")
+            Label(String(localized: "story.mine.viewers", defaultValue: "Listing des vues"), systemImage: "eye")
+        }
+        Menu {
+            ForEach(PostVisibility.composerSelectableCases) { mode in
+                Button {
+                    selectVisibility(mode, for: story)
+                } label: {
+                    Label(mode.label,
+                          systemImage: StoryVisibilityMenuResolver.symbol(
+                            for: mode, currentRawValue: story.visibility))
+                }
+            }
+        } label: {
+            Label(String(localized: "story.mine.visibility", defaultValue: "Modifier la visibilité"),
+                  systemImage: "lock.rotation")
         }
         Button {
             exportStory = story
@@ -328,6 +357,35 @@ struct MyStoriesView: View {
     }
 
     // MARK: Actions
+
+    /// `EXCEPT` / `ONLY` demandent une sélection d'utilisateurs — le picker
+    /// s'ouvre pré-coché sur la sélection actuelle. Les autres modes partent
+    /// directement au serveur.
+    private func selectVisibility(_ mode: PostVisibility, for story: StoryItem) {
+        switch StoryVisibilityMenuResolver.route(to: mode, current: story.visibility) {
+        case .ignored:
+            return
+        case .openAudiencePicker:
+            audienceTarget = AudienceTarget(story: story, mode: mode)
+        case .applyDirectly:
+            applyVisibility(mode, for: story, userIds: nil)
+        }
+    }
+
+    private func applyVisibility(_ mode: PostVisibility, for story: StoryItem, userIds: [String]?) {
+        HapticFeedback.medium()
+        Task {
+            let ok = await viewModel.applyVisibility(
+                storyId: story.id, visibility: mode.rawValue, userIds: userIds)
+            if ok {
+                FeedbackToastManager.shared.showSuccess(
+                    String(localized: "story.mine.visibility.success", defaultValue: "Visibilité mise à jour"))
+            } else {
+                FeedbackToastManager.shared.showError(
+                    String(localized: "story.mine.visibility.error", defaultValue: "Échec de la mise à jour"))
+            }
+        }
+    }
 
     private func delete(_ story: StoryItem) {
         Task {
@@ -430,6 +488,41 @@ enum MyStoryRowAccessibility {
             defaultValue: "Enregistrement \(percent) %"
         )
         return "\(base) \(suffix)"
+    }
+}
+
+// MARK: - Visibility menu
+
+/// Marquage du mode de visibilité courant dans le sous-menu « Modifier la
+/// visibilité ». Le mode actif porte un `checkmark` à la place de son icône.
+///
+/// Pourquoi pas un `Picker` inline (qui coche nativement) : sous iOS 26, un
+/// `.tint(.clear)` fait disparaître toutes les icônes d'un menu — on garde donc
+/// la main sur le symbole rendu.
+enum StoryVisibilityMenuResolver {
+
+    /// Ce que déclenche le tap sur une entrée du sous-menu.
+    enum Route: Equatable {
+        /// Mode déjà actif : ne rien faire (ni réseau, ni picker).
+        case ignored
+        /// Écriture directe — aucune sélection d'utilisateurs requise.
+        case applyDirectly
+        /// `EXCEPT` / `ONLY` : le gateway rejette un envoi sans `visibilityUserIds`.
+        case openAudiencePicker
+    }
+
+    static func isCurrent(_ candidate: PostVisibility, rawValue: String?) -> Bool {
+        guard let rawValue else { return false }
+        return rawValue.uppercased() == candidate.rawValue
+    }
+
+    static func symbol(for candidate: PostVisibility, currentRawValue: String?) -> String {
+        isCurrent(candidate, rawValue: currentRawValue) ? "checkmark" : candidate.icon
+    }
+
+    static func route(to candidate: PostVisibility, current rawValue: String?) -> Route {
+        if isCurrent(candidate, rawValue: rawValue) { return .ignored }
+        return candidate.requiresUserSelection ? .openAudiencePicker : .applyDirectly
     }
 }
 
@@ -796,4 +889,13 @@ private struct FailedStoryRow: View {
             )
         )
     }
+}
+
+// MARK: - Audience target
+
+/// Story + mode en attente d'une sélection d'utilisateurs (`EXCEPT` / `ONLY`).
+private struct AudienceTarget: Identifiable {
+    let story: StoryItem
+    let mode: PostVisibility
+    var id: String { "\(story.id)-\(mode.rawValue)" }
 }

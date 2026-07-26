@@ -53962,43 +53962,184 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "تعديل المشاهدات"
+            "value": "قائمة المشاهدات"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Aufrufe bearbeiten"
+            "value": "Aufrufliste"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Edit views"
+            "value": "Views list"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Editar vistas"
+            "value": "Lista de vistas"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Éditer les vues"
+            "value": "Listing des vues"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Modifica le visualizzazioni"
+            "value": "Elenco delle visualizzazioni"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Editar visualizações"
+            "value": "Lista de visualizações"
+          }
+        }
+      }
+    },
+    "story.mine.visibility": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تغيير مدى الظهور"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sichtbarkeit ändern"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Change visibility"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cambiar la visibilidad"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Modifier la visibilité"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Modifica la visibilità"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Alterar a visibilidade"
+          }
+        }
+      }
+    },
+    "story.mine.visibility.error": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "فشل التحديث"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aktualisierung fehlgeschlagen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Update failed"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Error al actualizar"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Échec de la mise à jour"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aggiornamento non riuscito"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Falha na atualização"
+          }
+        }
+      }
+    },
+    "story.mine.visibility.success": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تم تحديث مدى الظهور"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sichtbarkeit aktualisiert"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Visibility updated"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Visibilidad actualizada"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Visibilité mise à jour"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Visibilità aggiornata"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Visibilidade atualizada"
           }
         }
       }
