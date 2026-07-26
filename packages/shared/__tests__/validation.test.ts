@@ -46,11 +46,12 @@ describe('CommonSchemas', () => {
     expect(CommonSchemas.pagination.parse({ offset: 'xyz' })).toEqual({ limit: 20, offset: 0 });
   });
 
-  it('pagination clamps negative and zero to safe bounds', () => {
-    const result = CommonSchemas.pagination.parse({ limit: '-5', offset: '-10' });
-    expect(result.limit).toBeGreaterThanOrEqual(1);
-    expect(result.offset).toBeGreaterThanOrEqual(0);
-    expect(CommonSchemas.pagination.parse({ limit: '0' }).limit).toBeGreaterThanOrEqual(1);
+  it('pagination floors an explicit below-minimum limit to exactly 1', () => {
+    // Regression: `limit=0` must clamp to the floor of 1, NOT leak a full page
+    // of 20. The former `parseInt(...) || 20` conflated `0` (falsy) with
+    // "absent" — `limit=-5` floored to 1 but `limit=0` returned 20.
+    expect(CommonSchemas.pagination.parse({ limit: '0' }).limit).toBe(1);
+    expect(CommonSchemas.pagination.parse({ limit: '-5', offset: '-10' })).toEqual({ limit: 1, offset: 0 });
   });
 
   it('pagination caps limit at the maximum', () => {
@@ -60,7 +61,8 @@ describe('CommonSchemas', () => {
   it('messagePagination coerces garbage/negative like pagination', () => {
     const result = CommonSchemas.messagePagination.parse({ limit: 'abc', offset: '-3' });
     expect(result.limit).toBe(20);
-    expect(result.offset).toBeGreaterThanOrEqual(0);
+    expect(result.offset).toBe(0);
+    expect(CommonSchemas.messagePagination.parse({ limit: '0' }).limit).toBe(1);
   });
 
   it('mongoId should validate format', () => {

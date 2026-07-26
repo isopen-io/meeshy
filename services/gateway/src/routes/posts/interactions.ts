@@ -13,6 +13,7 @@ import { resolveMentionedUsers } from '../../services/MentionService';
 import { createPostRouteRateLimitConfig } from '../../middleware/rate-limiter';
 import { withMutationLog } from '../../utils/withMutationLog';
 import { resolveFrontendBaseUrl } from '../../services/TrackingLinkService';
+import { validatePagination } from '../../utils/pagination';
 
 export function registerInteractionRoutes(
   fastify: FastifyInstance,
@@ -621,8 +622,9 @@ export function registerInteractionRoutes(
 
       const { postId } = request.params;
       const query = request.query as any;
-      const limit = parseInt(query.limit) || 50;
-      const offset = parseInt(query.offset) || 0;
+      // Clamp via the shared helper: floors to 1, caps at 100 (never leaks an
+      // unbounded client `limit` into Prisma `take`), and treats `limit=0` as 1.
+      const { limit, offset } = validatePagination(query.offset, query.limit, { defaultLimit: 50, maxLimit: 100 });
 
       const result = await postService.getPostViews(postId, authContext.registeredUser.id, limit, offset);
       if (!result) {
@@ -653,8 +655,9 @@ export function registerInteractionRoutes(
 
       const { postId } = request.params;
       const query = request.query as any;
-      const limit = parseInt(query.limit) || 50;
-      const offset = parseInt(query.offset) || 0;
+      // Clamp via the shared helper: floors to 1, caps at 100 (never leaks an
+      // unbounded client `limit` into Prisma `take`), and treats `limit=0` as 1.
+      const { limit, offset } = validatePagination(query.offset, query.limit, { defaultLimit: 50, maxLimit: 100 });
 
       const result = await postService.getPostInteractions(postId, authContext.registeredUser.id, limit, offset);
       if (!result) {
