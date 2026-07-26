@@ -961,6 +961,62 @@ describe('MessagingService', () => {
         })
       );
     });
+
+    // Root-cause guard (iteration 218): clients send the raw platform locale as
+    // their `originalLanguage` claim — iOS `Locale.current` ('fr_FR'), web
+    // `navigator.language` ('fr-FR'), or a bare-uppercase 'FR'. Persisting that
+    // verbatim (as the old trust-the-claim branch did) fragments EVERY downstream
+    // consumer keyed on `Message.originalLanguage`: the NLLB source code, the
+    // translation cache key (MessageTranslationService.generateKey), per-language
+    // stats and admin analytics aggregates. The claim MUST be canonicalised via
+    // the SSOT `normalizeLanguageCode` at the write boundary so the DB is the
+    // single source of truth — 'fr-FR'/'fr_FR'/'FR' all persist as 'fr' without
+    // a detector round-trip.
+    it('should canonicalize a BCP-47 / region-tagged originalLanguage claim before persisting', async () => {
+      // Detector must NOT be consulted — a non-empty claim is still trusted,
+      // only normalised. Fail loudly if this triggers a detection round-trip.
+      global.fetch = jest.fn().mockRejectedValue(new Error('detector must not be called')) as any;
+
+      const request: MessageRequest = {
+        ...validRequest,
+        originalLanguage: 'fr-FR'
+      };
+
+      const response = await service.handleMessage(request, testParticipantId);
+
+      expect(response.success).toBe(true);
+      expect(mockPrisma.message.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ originalLanguage: 'fr' })
+        })
+      );
+      expect(mockPrisma.message.create).not.toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ originalLanguage: 'fr-FR' })
+        })
+      );
+    });
+
+    it('should keep an irreducible claim verbatim rather than dropping it to the detector', async () => {
+      // A supported ISO 639-3 code without a 639-1 reduction ('bas' = Basaa) is
+      // already canonical: normalizeLanguageCode returns it unchanged, and the
+      // claim is trusted (no detector call, no data loss).
+      global.fetch = jest.fn().mockRejectedValue(new Error('detector must not be called')) as any;
+
+      const request: MessageRequest = {
+        ...validRequest,
+        originalLanguage: 'bas'
+      };
+
+      const response = await service.handleMessage(request, testParticipantId);
+
+      expect(response.success).toBe(true);
+      expect(mockPrisma.message.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ originalLanguage: 'bas' })
+        })
+      );
+    });
   });
 
   describe('getReadStatusService', () => {

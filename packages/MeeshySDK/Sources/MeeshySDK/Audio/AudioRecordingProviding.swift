@@ -83,8 +83,19 @@ public struct AudioRecordingResult: Sendable {
 
 // MARK: - Recording Settings
 
+/// Réglages d'un enregistrement audio.
+///
+/// **Aucun plafond de durée** (directive produit 2026-07-26) : story, message,
+/// post et réel enregistrent aussi longtemps que l'utilisateur le souhaite. Le
+/// champ `maxDuration` a été RETIRÉ plutôt que mis à `nil` — seul `.story` le
+/// portait (60 s), sans même que le composer l'applique, si bien que la
+/// configuration annonçait une limite que le produit n'imposait pas. Une
+/// config morte qui promet une limite redeviendrait invisible si on la
+/// remettait par inadvertance.
+///
+/// `minimumDuration` reste : c'est un PLANCHER, qui écarte un appui
+/// accidentel — il ne limite pas l'expression de l'utilisateur.
 public struct AudioRecordingSettings: Sendable {
-    public let maxDuration: TimeInterval?
     public let minimumDuration: TimeInterval
     public let sampleRate: Double
     public let numberOfChannels: Int
@@ -92,7 +103,6 @@ public struct AudioRecordingSettings: Sendable {
     public let codec: AudioCodec
 
     public static let standard = AudioRecordingSettings(
-        maxDuration: nil,
         minimumDuration: 0.5,
         sampleRate: 44100,
         numberOfChannels: 1,
@@ -100,7 +110,6 @@ public struct AudioRecordingSettings: Sendable {
     )
 
     public static let story = AudioRecordingSettings(
-        maxDuration: 60,
         minimumDuration: 0.5,
         sampleRate: 44100,
         numberOfChannels: 1,
@@ -108,7 +117,6 @@ public struct AudioRecordingSettings: Sendable {
     )
 
     public static let voiceSample = AudioRecordingSettings(
-        maxDuration: nil,
         minimumDuration: 10,
         sampleRate: 44100,
         numberOfChannels: 1,
@@ -120,7 +128,6 @@ public struct AudioRecordingSettings: Sendable {
     /// a call site opts in and the cross-client playback path is validated
     /// (see ``AudioCodec``).
     public static let opusVoiceMessage = AudioRecordingSettings(
-        maxDuration: nil,
         minimumDuration: 0.5,
         sampleRate: 48000,
         numberOfChannels: 1,
@@ -128,10 +135,9 @@ public struct AudioRecordingSettings: Sendable {
         codec: .opus
     )
 
-    public init(maxDuration: TimeInterval?, minimumDuration: TimeInterval,
+    public init(minimumDuration: TimeInterval,
                 sampleRate: Double = 44100, numberOfChannels: Int = 1,
                 bitRate: Int = 64000, codec: AudioCodec = .aac) {
-        self.maxDuration = maxDuration
         self.minimumDuration = minimumDuration
         self.sampleRate = sampleRate
         self.numberOfChannels = numberOfChannels

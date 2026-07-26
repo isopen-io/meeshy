@@ -830,7 +830,14 @@ public final class AuthManager: ObservableObject, AuthManaging {
     private func loadPendingProfileFromKeychain(userId: String) -> ProfileSnapshot? {
         guard let jsonString = keychain.load(forKey: pendingProfileKey(for: userId), account: nil),
               let data = jsonString.data(using: .utf8) else { return nil }
-        return try? JSONDecoder().decode(ProfileSnapshot.self, from: data)
+        do {
+            return try JSONDecoder().decode(ProfileSnapshot.self, from: data)
+        } catch {
+            // Snapshot écrit par une version antérieure de `ProfileSnapshot` :
+            // traité comme « aucun profil en attente ».
+            Logger.auth.error("Failed to decode pending profile guard for userId \(userId, privacy: .public): \(error.localizedDescription, privacy: .public)")
+            return nil
+        }
     }
 
     private func clearPendingProfileFromKeychain(userId: String) {

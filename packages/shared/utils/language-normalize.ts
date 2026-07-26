@@ -115,3 +115,27 @@ export function normalizeLanguageCode(
   // caller applique son fallback). Préserve le comportement historique.
   return primary;
 }
+
+/**
+ * Canonicalise un code de langue **verbatim** (BCP-47, casse mixte, tags de
+ * région/script) vers une clé stable de **déduplication / affichage**, sans
+ * jamais perdre les codes que {@link normalizeLanguageCode} ne sait pas réduire.
+ *
+ * Contrat : `normalizeLanguageCode(code) ?? code.toLowerCase()`
+ * - `'en-US'`, `'EN'`, `'en'` → `'en'` (une seule entrée dans un `Set`)
+ * - `'pt-BR'` → `'pt'`, `'zh-Hant-HK'` → `'zh'`, `'fr_FR'` → `'fr'`
+ * - ISO 639-3 irréductible inconnu (`'xyz'`) → `'xyz'` conservé lowercased plutôt
+ *   que supprimé (le repli `undefined` ferait disparaître la donnée, changement
+ *   de comportement non désiré pour une liste/un compteur).
+ *
+ * SSOT unique du couple normalisation-avec-repli employé partout où des codes
+ * verbatim (préférences in-app persistées sans normalisation, `participant.language`
+ * de lignes héritées) sont agrégés en une liste ou dédupliqués — un `.toLowerCase()`
+ * brut compterait `'en'` et `'en-US'` comme deux langues distinctes.
+ *
+ * @see conversation-helpers.ts — resolver de langue préférée (in-app prefs)
+ * @see services/gateway/src/routes/anonymous.ts — agrégat `spokenLanguages`
+ */
+export function normalizeLanguageForDedup(code: string): string {
+  return normalizeLanguageCode(code) ?? code.toLowerCase();
+}

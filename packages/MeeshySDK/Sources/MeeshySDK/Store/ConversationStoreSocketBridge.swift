@@ -1,4 +1,5 @@
 import Foundation
+import os
 import Combine
 
 /// Bridges real-time socket broadcasts to the conversation/category stores.
@@ -146,7 +147,14 @@ public final class ConversationStoreSocketBridge {
 
         didReconnect.sink {
             Task { await store.flushOutbox() }
-            Task { try? await categoryStore.hydrate() }
+            Task {
+                do {
+                    try await categoryStore.hydrate()
+                } catch {
+                    // Les catégories restent celles du dernier chargement.
+                    Logger.socket.error("Category store hydration failed after socket event: \(error.localizedDescription, privacy: .public)")
+                }
+            }
         }.store(in: &cancellables)
     }
 

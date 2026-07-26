@@ -1,5 +1,92 @@
 # Progress — state & what to do next
 
+> On 2026-07-26 the **category-catalogue hydration** landed (slice
+> `conversation-category-hydration`, feature-parity §B Conversations — the non-orphan completion of the
+> two prior slices: the `UserCategoryCatalog` reducer + `ConversationSections` grouping laid a
+> `ConversationListUiState.categories` seam that was **always empty**, so the category sections never
+> rendered; this slice fills it cache-first). **Added (production, all `apps/android`):**
+> (1) `:core:model/ApiCategory` — the `@Serializable` wire DTO for the gateway `GET /me/preferences/categories`
+> row (`id`, `name`, `color?`, `icon?`, `order?`, `isExpanded?`, mirroring iOS `ConversationCategory` +
+> the gateway `conversationCategorySchema`) plus `toOption()`/`toOptions()`: it narrows each row to the
+> framework-free `CategoryOption` the section splitter consumes — keeps `id`/`name`/`order`, drops the
+> render-only `color`/`icon`/`isExpanded`, and **preserves a `null` order** (never coerces to 0) so the
+> catalogue's null-last snapshot ordering stays faithful. `CategoryOption` gains `@Serializable` so the
+> cache persists it verbatim. (2) `PreferencesApi.getCategories(limit)` → `GET me/preferences/categories`
+> (paginated envelope, one wide page). (3) `:sdk-core/category/CategorySnapshotStore` — a durable
+> DataStore-blob store (`meeshy_categories`) + `InMemoryCategorySnapshotStore`, distinguishing a **cold**
+> cache (`observe()` → `null`, never synced) from a **synced-but-empty** catalogue (`[]`), so the SWR
+> classifier tells a first-run skeleton from a user who genuinely has no categories; a corrupt blob with a
+> sync stamp degrades to empty-not-cold. (4) `CategoryCacheSource` (`SwrCacheSource<List<CategoryOption>>`,
+> revalidate = `getCategories` → `toOptions` → `save`, failure → `CategorySyncException`) +
+> `CategoryRepository.categoriesStream()` cache-first over the generic `cacheFirstFlow`, **clock threaded
+> through** (unlike `ConversationRepository`) so the SWR age classification is deterministic under a
+> `FixedClock` in tests and still `SystemCacheClock` in production. (5) `ConversationListViewModel` now
+> injects `CategoryRepository` and collects `categoriesStream()` into `state.categories` (failures silent —
+> an empty catalogue keeps the pinned/all split, never a dead end). **SOTA over iOS:** the cold-vs-empty
+> distinction is a first-class store contract (iOS conflates "no cache" with "empty" in `loadCachedCategories`);
+> the repository flattens the whole SWR verdict to the plain list the splitter wants, so the VM stays a thin
+> shell. **+21 behavioural tests:** `ApiCategoryTest` (5: keep id/name/order, drop render-only, preserve
+> null order, list-order preserved, empty), `CategoryRepositoryTest` (8: cache-source revalidate/mapping/
+> cold-null/synced-empty/failure-throws, stream warm-fresh-no-network / cold→revalidated / background-
+> failure-surfaced-yet-empty / refresh-persists), `CategorySnapshotStoreTest` (6: in-memory cold/seed/save,
+> DataStore cold/round-trip/synced-empty/corrupt→empty-synced), plus 2 VM wiring tests (catalogue hydrates
+> `state.categories`; cold → empty). **Mutation (RED proof):** flipping `toOption`'s `order = order` to
+> `order = null` fails **exactly** 3 `ApiCategoryTest` cases (keeps-order, drops-render-only, list-order),
+> no collateral (`5 tests completed, 3 failed`, `BUILD FAILED in 28s`), restored after. **Gate:**
+> `./apps/android/meeshy.sh check` (= `assembleDebug testDebugUnitTest`) — targeted `:core:model` +
+> `:sdk-core` + `:feature:conversations` green (`BUILD SUCCESSFUL in 6m 30s`), full-app check green (see
+> run log). Reviewer **PASS** (diff `apps/android` only; SDK purity — `CategorySnapshotStore`/`CategoryCacheSource`/
+> `CategoryRepository` are stateless SWR building blocks in `:sdk-core`, the "when to render" stays in the VM;
+> SSOT — one category read path, reuses `cacheFirstFlow`/`SwrCacheSource`, feeds the existing splitter;
+> instant-app — durable snapshot served cache-first, revalidated in background, no blocking spinner; UDF —
+> immutable `UiState`, pure derivation; no tautological tests — literals + the mutation proof).
+> **Next slice:** **drag-to-category** reassignment (a pure move-decision core driving `UserCategoryCatalog.reorder`
+> + an optimistic `PATCH`), OR the **category socket handler** feeding `CategoryEvent`s into the catalogue
+> (real-time create/rename/delete/reorder), OR the app-side **`CategoryPickerField` / `TagInputField`**
+> composables driving the shipped picker/autocomplete cores, OR the paged **`OnboardingFlowView`** Compose
+> scaffold (Auth), OR the tracked **Kover 90% coverage-gate infra**.
+
+> On 2026-07-26 the **user-category catalogue reducer** landed (slice
+> `conversation-category-catalog`, feature-parity §B Conversations — the building block the tracked
+> corpus-hydration seam needs). It lifts iOS `UserCategoryStore`'s ordering + mutation logic
+> (`packages/MeeshySDK/Sources/MeeshySDK/Store/UserCategoryStore.swift`) — an actor whose every method
+> couples a `categoriesById` mutation to a Combine `publish()`, so none of the reducer/ordering logic is
+> unit-testable without the actor — into a pure, immutable `:core:model/UserCategoryCatalog`.
+> **Added (production, all `apps/android`):** `UserCategoryCatalog` (private-ctor `@ConsistentCopyVisibility`
+> data class over a `Map<String, CategoryOption>`) with `EMPTY`, `of(list)` (dedup last-wins — the safe port
+> of iOS `Dictionary(uniqueKeysWithValues:)` which traps on dup keys), `sorted` (the port of iOS
+> `sortedSnapshot()`: ascending `order`, `null` **last** via `order ?: Int.MAX_VALUE`, then a
+> `String.CASE_INSENSITIVE_ORDER` name tie-break), `isEmpty`, `upsert`, `remove` (silent no-op on unknown
+> id, returning `this`), `reorder(id→order)` (patch known ids, ignore unknown, empty-map no-op), and
+> `apply(CategoryEvent)`; plus the `CategoryEvent` sealed interface (`Upserted` / `Deleted` / `Reordered`).
+> **SOTA over iOS:** iOS keeps `.created` and `.updated` as two `applyRemote` variants doing the same
+> upsert — Android collapses them into one `Upserted` event; the reducer is a stateless value type so every
+> branch is JVM-covered and the future store/ViewModel stays a thin shell over pure transitions. Its
+> `sorted` snapshot is exactly the `categories` argument the shipped `ConversationSections.of` consumes, so
+> this is a real, non-orphan building block (the hydration slice drives it cache-first→network; the category
+> socket handler feeds it `CategoryEvent`s). **Faithfulness note:** the null-last ordering is deliberately
+> distinct from the category *picker*'s `order ?: 0` (null-first) — store snapshot vs suggestion list are
+> different iOS surfaces, each port matches its own source (documented in KDoc). **+20 behavioural tests**
+> (`UserCategoryCatalogTest`, all literal expectations): 3 of/EMPTY (empty / non-empty / dup-id-last-wins),
+> 4 ordering (order-asc / null-last / equal-order-name-tiebreak / equal-null-name-tiebreak), 3 upsert
+> (add / replace-in-place / receiver-unchanged-immutability), 2 remove (drop / unknown-same-instance), 4
+> reorder (patch+resort / ignore-unknown / mixed-batch / empty-map-same-instance), 3 apply (Upserted /
+> Deleted / Reordered). **Mutation (RED proof):** flipping `sorted`'s `order ?: Int.MAX_VALUE` to
+> `Int.MIN_VALUE` (null rows first) fails **exactly** `sorted places a null-order row last` (19 run, 1
+> failed, no collateral; `BUILD FAILED in 7s`), restored after. **Gate:** `./apps/android/meeshy.sh check`
+> (= `assembleDebug testDebugUnitTest`) — full assemble + all-module JVM unit tests green,
+> `UserCategoryCatalogTest` 20/20. Reviewer **PASS** (diff `apps/android` only — 1 new `:core:model` core +
+> 1 new test + tracking docs; SDK/`:core` purity — a stateless value type, the live-copy/publish
+> orchestration stays in the future store/VM; SSOT — one catalogue reducer, re-implements nothing, feeds the
+> existing section splitter; no tautological tests — expectations are literals + the mutation proof is real).
+> **Next slice:** the **category-catalogue hydration** (a cache-first + revalidate load seeding
+> `UserCategoryCatalog` from a cached snapshot then a background `GET /me/preferences/categories`, exposing
+> `sorted` into `ConversationListUiState.categories` so the category sections actually render — mirrors iOS
+> `PreferenceService.getCategories` + `UserCategoryStore.hydrate`/`hydrateFromSnapshot`), OR **drag-to-category**
+> reassignment (a pure move-decision core driving `reorder`), OR the app-side **`CategoryPickerField` /
+> `TagInputField` composables** driving the shipped picker/autocomplete cores, OR the paged
+> **`OnboardingFlowView` Compose scaffold** (Auth), OR the tracked **Kover 90% coverage-gate infra**.
+
 > On 2026-07-26 the **conversation-list user-category grouping** landed (slice
 > `conversation-category-sections`, feature-parity §B Conversations — advances the "Sectioned list with
 > collapsible user categories" box past the pinned-only split shipped in `conversations-section-model`).

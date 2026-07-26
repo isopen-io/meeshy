@@ -664,10 +664,17 @@ struct OutboxDispatcher: OutboxDispatching {
         conversationId: String
     ) async {
         let persistence = await DependencyContainer.shared.messagePersistence
-        _ = try? await persistence.applyEvent(
-            localId: clientMessageId,
-            event: .serverAck(serverId: serverId, at: Date())
-        )
+        do {
+            _ = try await persistence.applyEvent(
+                localId: clientMessageId,
+                event: .serverAck(serverId: serverId, at: Date())
+            )
+        } catch {
+            // Le serveur a accepté le message mais la ligne locale n'est pas
+            // passée `.sent` : la bulle reste « en cours d'envoi » jusqu'au
+            // prochain resync.
+            logger.error("Server ACK not applied for \(clientMessageId, privacy: .public), bubble stays 'sending': \(error.localizedDescription, privacy: .public)")
+        }
         await CacheCoordinator.shared.messages.mergeUpdate(for: conversationId) { cached in
             cached.filter { $0.id != clientMessageId }
         }
@@ -681,9 +688,12 @@ struct OutboxDispatcher: OutboxDispatching {
 
     private func dispatchSendMessage(_ record: OutboxRecord) async throws {
         if record.id.hasPrefix("ofq_") {
-            guard let item = try? decoder.decode(OfflineQueueItem.self, from: record.payload) else {
+            let item: OfflineQueueItem
+            do {
+                item = try decoder.decode(OfflineQueueItem.self, from: record.payload)
+            } catch {
                 // Corrupt payload — accept to let the flusher remove the row.
-                logger.error("Corrupt OfflineQueueItem payload for record \(record.id, privacy: .public), dropping")
+                logger.error("Corrupt OfflineQueueItem payload for record \(record.id, privacy: .public), dropping: \(error.localizedDescription, privacy: .public)")
                 return
             }
 
@@ -898,9 +908,15 @@ struct OutboxDispatcher: OutboxDispatching {
                 let attachmentIds: [String]?
                 let clientMessageId: String?
             }
-            guard let item = try? decoder.decode(LegacyMrqPayload.self, from: record.payload),
-                  let clientMessageId = item.clientMessageId else {
-                logger.error("Corrupt legacy mrq_* payload for record \(record.id, privacy: .public), dropping")
+            let item: LegacyMrqPayload
+            do {
+                item = try decoder.decode(LegacyMrqPayload.self, from: record.payload)
+            } catch {
+                logger.error("Corrupt legacy mrq_* payload for record \(record.id, privacy: .public), dropping: \(error.localizedDescription, privacy: .public)")
+                return
+            }
+            guard let clientMessageId = item.clientMessageId else {
+                logger.error("Legacy mrq_* payload without clientMessageId for record \(record.id, privacy: .public), dropping")
                 return
             }
             let request = SendMessageRequest(
@@ -925,8 +941,11 @@ struct OutboxDispatcher: OutboxDispatching {
     // MARK: - Edit Message
 
     private func dispatchEditMessage(_ record: OutboxRecord) async throws {
-        guard let payload = try? decoder.decode(OfflineEditPayload.self, from: record.payload) else {
-            logger.error("Corrupt OfflineEditPayload for record \(record.id, privacy: .public), dropping")
+        let payload: OfflineEditPayload
+        do {
+            payload = try decoder.decode(OfflineEditPayload.self, from: record.payload)
+        } catch {
+            logger.error("Corrupt OfflineEditPayload for record \(record.id, privacy: .public), dropping: \(error.localizedDescription, privacy: .public)")
             return
         }
         _ = try await MessageService.shared.edit(
@@ -939,8 +958,11 @@ struct OutboxDispatcher: OutboxDispatching {
     // MARK: - Delete Message
 
     private func dispatchDeleteMessage(_ record: OutboxRecord) async throws {
-        guard let payload = try? decoder.decode(OfflineDeletePayload.self, from: record.payload) else {
-            logger.error("Corrupt OfflineDeletePayload for record \(record.id, privacy: .public), dropping")
+        let payload: OfflineDeletePayload
+        do {
+            payload = try decoder.decode(OfflineDeletePayload.self, from: record.payload)
+        } catch {
+            logger.error("Corrupt OfflineDeletePayload for record \(record.id, privacy: .public), dropping: \(error.localizedDescription, privacy: .public)")
             return
         }
         try await MessageService.shared.delete(
@@ -953,8 +975,11 @@ struct OutboxDispatcher: OutboxDispatching {
     // MARK: - Send Reaction
 
     private func dispatchSendReaction(_ record: OutboxRecord) async throws {
-        guard let payload = try? decoder.decode(ReactionOutboxPayload.self, from: record.payload) else {
-            logger.error("Corrupt ReactionOutboxPayload for record \(record.id, privacy: .public), dropping")
+        let payload: ReactionOutboxPayload
+        do {
+            payload = try decoder.decode(ReactionOutboxPayload.self, from: record.payload)
+        } catch {
+            logger.error("Corrupt ReactionOutboxPayload for record \(record.id, privacy: .public), dropping: \(error.localizedDescription, privacy: .public)")
             return
         }
         do {

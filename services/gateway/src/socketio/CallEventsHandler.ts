@@ -2017,9 +2017,9 @@ export class CallEventsHandler {
         // callback (atomic updateMany scoped to ringing/initiated only)
         // the leaked timer is now harmless to the call state, but it would
         // still spuriously emit call:ended/call:missed once the timeout
-        // window expires. Guarantee cleanup via try/finally below — the
-        // explicit call here is redundant once the finally block runs, so
-        // it's removed in favour of the single canonical cleanup site.
+        // window expires. Item F follow-up below explains why join no
+        // longer clears the ringing timer at all — see that note past the
+        // catch block for the current (and final) ownership of the clear.
         const joinResult = await this.callService.joinCall({
           callId: data.callId,
           userId,
@@ -3838,11 +3838,25 @@ export class CallEventsHandler {
         // invisible to dashboards. Per-participant row: both ends emit at
         // hangup within the same second and must never clobber each other.
         // Best-effort — telemetry loss must stay invisible to the client.
+        //
+        // Scoped to the most-recently-joined row for this participantId, not
+        // a blanket updateMany: a participant who left and rejoined mid-call
+        // (churn) has MULTIPLE CallParticipant rows sharing the same
+        // participantId, and a broad updateMany stamped this same final
+        // analytics blob onto every prior row too — corrupting per-session
+        // telemetry for any dashboard built off this field.
         try {
-          await this.prisma.callParticipant.updateMany({
+          const targetParticipant = await this.prisma.callParticipant.findFirst({
             where: { callSessionId: data.callId, participantId: analyticsParticipantId },
-            data: { analytics: validation.data }
+            orderBy: { joinedAt: 'desc' },
+            select: { id: true }
           });
+          if (targetParticipant) {
+            await this.prisma.callParticipant.update({
+              where: { id: targetParticipant.id },
+              data: { analytics: validation.data }
+            });
+          }
         } catch (persistError) {
           logger.error('call:analytics persistence failed (telemetry lost, client unaffected)', {
             callId: data.callId, participantId: analyticsParticipantId, error: persistError

@@ -11,6 +11,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import me.meeshy.sdk.cache.CacheResult
+import me.meeshy.sdk.category.CategoryRepository
 import me.meeshy.sdk.chat.ConversationDraftStore
 import me.meeshy.sdk.chat.StarredMessagesStore
 import me.meeshy.sdk.conversation.ConversationRepository
@@ -64,6 +65,7 @@ class ConversationListViewModel @Inject constructor(
     private val workManager: WorkManager,
     private val draftStore: ConversationDraftStore,
     private val starredStore: StarredMessagesStore,
+    categoryRepository: CategoryRepository,
     socketManager: SocketManager,
     sessionRepository: SessionRepository,
 ) : ViewModel() {
@@ -103,6 +105,15 @@ class ConversationListViewModel @Inject constructor(
         viewModelScope.launch {
             draftStore.observeAll().collect { drafts ->
                 _state.update { it.copy(drafts = drafts).withVisible(rawConversations) }
+            }
+        }
+
+        viewModelScope.launch {
+            // Cache-first catalogue hydration: the section splitter renders user
+            // categories once the snapshot (then the background revalidation) lands.
+            // Failures stay silent — an empty catalogue keeps the pinned/all split.
+            categoryRepository.categoriesStream().collect { categories ->
+                _state.update { it.copy(categories = categories) }
             }
         }
 

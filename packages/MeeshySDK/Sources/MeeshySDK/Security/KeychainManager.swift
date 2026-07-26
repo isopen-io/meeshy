@@ -1,5 +1,6 @@
 import Foundation
 import Security
+import os
 
 public enum KeychainError: LocalizedError {
     case saveFailed(OSStatus)
@@ -22,6 +23,7 @@ public final class KeychainManager: KeychainStoring, @unchecked Sendable {
     public static let shared = KeychainManager()
 
     private let service = "me.meeshy.app"
+    private let logger = Logger(subsystem: "com.meeshy.sdk", category: "keychain")
 
     private init() {}
 
@@ -196,13 +198,25 @@ public final class KeychainManager: KeychainStoring, @unchecked Sendable {
             guard load(forKey: key) == nil else { continue }
 
             if let stringValue = defaults.string(forKey: key) {
-                try? save(stringValue, forKey: key)
-                defaults.removeObject(forKey: key)
+                migrate(stringValue, forKey: key, from: defaults)
             } else if let dataValue = defaults.data(forKey: key),
                       let stringValue = String(data: dataValue, encoding: .utf8) {
-                try? save(stringValue, forKey: key)
-                defaults.removeObject(forKey: key)
+                migrate(stringValue, forKey: key, from: defaults)
             }
+        }
+    }
+
+    /// Moves one value into the Keychain, clearing the UserDefaults source **only**
+    /// once the write succeeded. A failed write used to still wipe the origin,
+    /// destroying the value with no trace.
+    private func migrate(_ value: String, forKey key: String, from defaults: UserDefaults) {
+        do {
+            try save(value, forKey: key)
+            defaults.removeObject(forKey: key)
+        } catch {
+            logger.error(
+                "UserDefaults→Keychain migration failed for '\(key, privacy: .public)' — value kept in UserDefaults for the next attempt: \(error.localizedDescription, privacy: .public)"
+            )
         }
     }
 
@@ -226,7 +240,16 @@ public final class KeychainManager: KeychainStoring, @unchecked Sendable {
             // Copy to namespaced slot if it doesn't already have a value
             if let legacy = load(forKey: key, account: nil),
                load(forKey: key, account: userId) == nil {
-                try? save(legacy, forKey: key, account: userId)
+                do {
+                    try save(legacy, forKey: key, account: userId)
+                } catch {
+                    // Le `delete` ci-dessous reste inconditionnel par choix de
+                    // sécurité (anti-fuite cross-user) : la valeur est donc
+                    // perdue, ce qui doit laisser une trace exploitable.
+                    logger.error(
+                        "Namespacing migration failed for '\(key, privacy: .public)' — legacy value dropped to prevent cross-user leakage: \(error.localizedDescription, privacy: .public)"
+                    )
+                }
             }
             // Always remove the un-namespaced original
             delete(forKey: key, account: nil)

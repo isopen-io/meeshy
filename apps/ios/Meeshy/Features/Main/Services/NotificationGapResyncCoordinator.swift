@@ -1,6 +1,7 @@
 import Foundation
 import Combine
 import MeeshySDK
+import os
 
 /// SyncEngine unifié (spec §7.5, sous-tâche A5.3) — orchestration UX APP-SIDE
 /// (SDK purity : le SDK expose le hook `SyncSeqTracker.gapDetected` ; la
@@ -70,10 +71,26 @@ final class NotificationGapResyncCoordinator {
     }
 
     /// Resync par défaut : refetch `/notifications` → remplace le cache `"all"`.
-    /// Best-effort (`try?`) — un échec réseau laisse le cache tel quel, le
-    /// prochain gap ou le reconnect réessaiera.
+    /// Best-effort — un échec laisse le cache tel quel, le prochain gap ou le
+    /// reconnect réessaiera ; l'échec est journalisé pour rester diagnosticable.
     static let defaultResync: @Sendable () async -> Void = {
-        guard let response = try? await NotificationService.shared.list(limit: 30) else { return }
-        try? await CacheCoordinator.shared.notifications.save(response.data, for: "all")
+        let response: NotificationListResponse
+        do {
+            response = try await NotificationService.shared.list(limit: 30)
+        } catch {
+            Logger.notifResync.error("Notification gap resync fetch failed, cache left stale: \(error.localizedDescription, privacy: .public)")
+            return
+        }
+        do {
+            try await CacheCoordinator.shared.notifications.save(response.data, for: "all")
+        } catch {
+            Logger.notifResync.error("Notification cache not replaced after resync: \(error.localizedDescription, privacy: .public)")
+        }
     }
+}
+
+// MARK: - Logger Extension
+
+private extension Logger {
+    nonisolated static let notifResync = Logger(subsystem: "me.meeshy.app", category: "notif-resync")
 }
