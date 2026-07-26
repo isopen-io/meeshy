@@ -19,6 +19,7 @@ const makeMockZmqClient = () => {
   const emitter = new EventEmitter();
   return Object.assign(emitter, {
     translateToMultipleLanguages: jest.fn(async () => {}),
+    translateTextObject: jest.fn((_params: Record<string, unknown>) => {}),
   });
 };
 
@@ -28,7 +29,7 @@ type MakePrismaOpts = {
 };
 
 const makeMockPrisma = ({
-  post = { content: 'Hello world', originalLanguage: 'en', translations: null, authorId: 'author-1' },
+  post = { content: 'Hello world', originalLanguage: 'en', translations: null, authorId: 'author-1', storyEffects: null },
   postComment = { postId: 'post-1' },
 }: MakePrismaOpts = {}) => ({
   post: {
@@ -215,6 +216,122 @@ describe('PostTranslationService', () => {
       expect(zmqClient.translateToMultipleLanguages).toHaveBeenCalledTimes(1);
       const [, , targets] = (zmqClient.translateToMultipleLanguages as jest.Mock).mock.calls[0] as [string, string, string[], string, string];
       expect(targets).toEqual(['fr']);
+    });
+
+    // ─── Textes du CANVAS (feuille « Traductions » du lecteur story) ────────
+    //
+    // Une story est très souvent faite ENTIÈREMENT de texte posé sur le
+    // canvas, sans la moindre légende. Choisir une langue dans la feuille
+    // « Traductions » appelait bien cette méthode, mais elle ne regardait
+    // que `post.content` : sur une story canvas-only elle sortait dès la
+    // première ligne. Aucun job n'était émis, aucune traduction n'arrivait,
+    // et le lecteur restait sur l'original sans le moindre signal.
+
+    const storyWithCanvasText = (overrides: Record<string, unknown> = {}) => ({
+      content: '',
+      originalLanguage: 'en',
+      translations: {},
+      storyEffects: {
+        textObjects: [
+          { text: 'Good morning', sourceLanguage: 'en' },
+          { text: 'See you soon', sourceLanguage: 'en' },
+        ],
+      },
+      ...overrides,
+    });
+
+    it('translates the canvas text objects of a caption-less story', async () => {
+      const { service, zmqClient } = makeService({ post: storyWithCanvasText() });
+
+      await service.translateOnDemand('post-1', 'fr');
+
+      expect(zmqClient.translateTextObject).toHaveBeenCalledTimes(2);
+      expect(zmqClient.translateTextObject).toHaveBeenCalledWith(
+        expect.objectContaining({
+          postId: 'post-1', textObjectIndex: 0, text: 'Good morning',
+          sourceLanguage: 'en', targetLanguages: ['fr'],
+        }),
+      );
+      expect(zmqClient.translateTextObject).toHaveBeenCalledWith(
+        expect.objectContaining({ textObjectIndex: 1, text: 'See you soon' }),
+      );
+    });
+
+    it('asks only for the language the reader picked, not the whole audience', async () => {
+      const { service, zmqClient } = makeService({ post: storyWithCanvasText() });
+      await service.translateOnDemand('post-1', 'de');
+      const calls = (zmqClient.translateTextObject as jest.Mock).mock.calls as Array<[{ targetLanguages: string[] }]>;
+      expect(calls.every(([params]) => params.targetLanguages.length === 1)).toBe(true);
+      expect(calls.every(([params]) => params.targetLanguages[0] === 'de')).toBe(true);
+    });
+
+    it('translates BOTH the caption and the canvas texts when a story has both', async () => {
+      const { service, zmqClient } = makeService({
+        post: storyWithCanvasText({ content: 'Hello world' }),
+      });
+      await service.translateOnDemand('post-1', 'fr');
+      expect(zmqClient.translateToMultipleLanguages).toHaveBeenCalledTimes(1);
+      expect(zmqClient.translateTextObject).toHaveBeenCalledTimes(2);
+    });
+
+    it('skips a text object already translated into the target language', async () => {
+      const { service, zmqClient } = makeService({
+        post: storyWithCanvasText({
+          storyEffects: {
+            textObjects: [
+              { text: 'Good morning', sourceLanguage: 'en', translations: { fr: 'Bonjour' } },
+              { text: 'See you soon', sourceLanguage: 'en' },
+            ],
+          },
+        }),
+      });
+      await service.translateOnDemand('post-1', 'fr');
+      expect(zmqClient.translateTextObject).toHaveBeenCalledTimes(1);
+      expect(zmqClient.translateTextObject).toHaveBeenCalledWith(
+        expect.objectContaining({ textObjectIndex: 1 }),
+      );
+    });
+
+    it('skips a text object already written in the target language', async () => {
+      const { service, zmqClient } = makeService({
+        post: storyWithCanvasText({
+          storyEffects: { textObjects: [{ text: 'Bonjour', sourceLanguage: 'fr' }] },
+        }),
+      });
+      await service.translateOnDemand('post-1', 'fr');
+      expect(zmqClient.translateTextObject).not.toHaveBeenCalled();
+    });
+
+    it('ignores blank text objects', async () => {
+      const { service, zmqClient } = makeService({
+        post: storyWithCanvasText({
+          storyEffects: { textObjects: [{ text: '   ', sourceLanguage: 'en' }, { text: '', sourceLanguage: 'en' }] },
+        }),
+      });
+      await service.translateOnDemand('post-1', 'fr');
+      expect(zmqClient.translateTextObject).not.toHaveBeenCalled();
+    });
+
+    /// Le composer iOS encode le texte sous `text` ; `content` est l'alias legacy.
+    it('reads the legacy content key of a text object', async () => {
+      const { service, zmqClient } = makeService({
+        post: storyWithCanvasText({
+          storyEffects: { textObjects: [{ content: 'Legacy overlay', sourceLanguage: 'en' }] },
+        }),
+      });
+      await service.translateOnDemand('post-1', 'fr');
+      expect(zmqClient.translateTextObject).toHaveBeenCalledWith(
+        expect.objectContaining({ text: 'Legacy overlay' }),
+      );
+    });
+
+    it('still returns quietly on a post with neither caption nor canvas text', async () => {
+      const { service, zmqClient } = makeService({
+        post: { content: '', originalLanguage: 'en', translations: {}, storyEffects: { textObjects: [] } },
+      });
+      await service.translateOnDemand('post-1', 'fr');
+      expect(zmqClient.translateToMultipleLanguages).not.toHaveBeenCalled();
+      expect(zmqClient.translateTextObject).not.toHaveBeenCalled();
     });
 
     it('detects language from post content when originalLanguage is null', async () => {

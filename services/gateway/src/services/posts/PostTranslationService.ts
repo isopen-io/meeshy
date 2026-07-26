@@ -105,13 +105,21 @@ export class PostTranslationService {
   async translateOnDemand(postId: string, targetLanguage: string): Promise<void> {
     const post = await this.prisma.post.findUnique({
       where: { id: postId },
-      select: { content: true, originalLanguage: true, translations: true },
+      select: { content: true, originalLanguage: true, translations: true, storyEffects: true },
     });
 
-    if (!post?.content) {
-      log.warn('PostTranslation: post not found or has no content', { postId });
+    if (!post) {
+      log.warn('PostTranslation: post not found', { postId });
       return;
     }
+
+    // Une story est très souvent faite ENTIÈREMENT de texte posé sur le
+    // canvas, sans la moindre légende. Sortir ici sur `!post.content` rendait
+    // la feuille « Traductions » du lecteur totalement inerte sur ce cas :
+    // aucun job émis, aucune traduction, et l'original servi sans un signal.
+    await this.translateStoryTextObjectsOnDemand(postId, post.storyEffects, targetLanguage);
+
+    if (!post.content) return;
 
     // Skip URL-only posts on the on-demand path too: links carry no translatable
     // text and must be preserved verbatim (NLLB would corrupt them). Mirrors the
@@ -150,6 +158,59 @@ export class PostTranslationService {
     } catch (err) {
       log.error('PostTranslation: on-demand ZMQ send failed', err, { postId });
     }
+  }
+
+  /**
+   * Demande la traduction des textes du CANVAS d'une story vers la SEULE
+   * langue que le lecteur vient de choisir.
+   *
+   * Le pipeline de publication (`PostService.translateStoryTextObjects`)
+   * diffuse déjà vers toute l'audience ; ici on est sur le chemin « à la
+   * demande » — un viewer a ouvert la feuille « Traductions » et demandé une
+   * langue que personne n'avait encore. Une seule cible, donc, et on saute
+   * tout ce qui est déjà couvert.
+   *
+   * L'index passé au traducteur est la position dans `textObjects` : c'est la
+   * clé que `StoryTextObjectTranslationService` utilise pour reposer le
+   * résultat au bon endroit.
+   */
+  private async translateStoryTextObjectsOnDemand(
+    postId: string,
+    storyEffects: unknown,
+    targetLanguage: string,
+  ): Promise<void> {
+    const effects = storyEffects as { textObjects?: unknown } | null | undefined;
+    const textObjects = Array.isArray(effects?.textObjects) ? effects.textObjects : [];
+    if (textObjects.length === 0) return;
+
+    textObjects.forEach((raw, index) => {
+      const obj = raw as {
+        text?: unknown; content?: unknown;
+        sourceLanguage?: unknown; translations?: unknown;
+      };
+      // `text` est la clé canonique du composer iOS ; `content` l'alias legacy
+      // pré-renommage, encore présent en base et accepté par le décodeur SDK.
+      const text = (typeof obj.text === 'string' ? obj.text
+                  : typeof obj.content === 'string' ? obj.content
+                  : '').trim();
+      if (!text) return;
+
+      const sourceLanguage = typeof obj.sourceLanguage === 'string'
+        ? obj.sourceLanguage
+        : detectLanguage(text);
+      if (sourceLanguage === targetLanguage) return;
+
+      const existing = (obj.translations ?? null) as Record<string, unknown> | null;
+      if (existing?.[targetLanguage]) return;
+
+      this.zmqClient.translateTextObject({
+        postId,
+        textObjectIndex: index,
+        text,
+        sourceLanguage,
+        targetLanguages: [targetLanguage],
+      });
+    });
   }
 
   /**
