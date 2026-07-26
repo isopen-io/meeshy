@@ -178,9 +178,11 @@ final class StoryRepostFlowTests: XCTestCase {
 
     /// The kebab item "Editer et republier en post" presents a
     /// `UnifiedPostComposer(repostingStory:authorHandle:onPublishRepost:onDismiss:)`
-    /// (B.7). The publish callback receives `(content, sourceStory)`; the
-    /// caller in `StoryViewerView` then forwards to
-    /// `PostService.repost(postId:targetType:.post, content:isQuote: !content.isEmpty)`.
+    /// (B.7). The publish callback receives `(content, sourceStory, visibility)`;
+    /// the caller in `StoryViewerView` then forwards to
+    /// `PostService.repost(postId:targetType:.post, content:isQuote: !content.isEmpty,
+    /// visibility:)` — the composer owns the audience of the new post, so the
+    /// visibility it hands back must reach the service unchanged.
     ///
     /// We test the full path: the composer wires the callback correctly, AND
     /// the production callback shape (mirrored here against `MockPostService`)
@@ -192,13 +194,15 @@ final class StoryRepostFlowTests: XCTestCase {
         // Capture args delivered to the publish callback.
         var capturedContent: String?
         var capturedSourceId: String?
+        var capturedVisibility: String?
 
         let composer = UnifiedPostComposer(
             repostingStory: story,
             authorHandle: "alice",
-            onPublishRepost: { content, sourceStory in
+            onPublishRepost: { content, sourceStory, visibility in
                 capturedContent = content
                 capturedSourceId = sourceStory.id
+                capturedVisibility = visibility
             },
             onDismiss: {}
         )
@@ -228,7 +232,8 @@ final class StoryRepostFlowTests: XCTestCase {
             postId: capturedSourceId ?? "",
             targetType: .post,
             content: content.isEmpty ? nil : content,
-            isQuote: !content.isEmpty
+            isQuote: !content.isEmpty,
+            visibility: capturedVisibility
         )
 
         XCTAssertEqual(mockService.lastRepostPostId, "story-1")
@@ -238,6 +243,9 @@ final class StoryRepostFlowTests: XCTestCase {
                        "Non-empty commentary is forwarded as-is")
         XCTAssertEqual(mockService.lastRepostIsQuote, true,
                        "Non-empty commentary makes the repost a quote")
+        XCTAssertEqual(mockService.lastRepostVisibility, capturedVisibility,
+                       "The visibility chosen in the composer reaches the service unchanged — " +
+                       "dropping it would silently republish at the default audience")
     }
 
     // MARK: - Flow 4: Feed cell renders STORY repost embed
