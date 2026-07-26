@@ -35,6 +35,14 @@ public struct StoryTimelineHost: View {
         // chip du tool switcher). Il vit désormais dans le transport, juste
         // après la lecture (`TransportBar.onSave`, user 2026-07-20).
         container
+            // Les deux signaux one-shot du view model (durée recalculée, story
+            // mise en file faute de réseau) n'avaient AUCUN lecteur : ils
+            // s'allumaient et s'éteignaient sans jamais atteindre l'écran.
+            .overlay(alignment: .top) {
+                TimelineBannerOverlay(viewModel: viewModel)
+            }
+            .animation(.snappy(duration: 0.25), value: viewModel.durationDidAutoAdjust?.to)
+            .animation(.snappy(duration: 0.25), value: viewModel.showOfflineQueuedConfirmation)
     }
 
     @ViewBuilder

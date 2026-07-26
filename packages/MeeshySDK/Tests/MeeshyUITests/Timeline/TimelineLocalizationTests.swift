@@ -97,6 +97,9 @@ final class TimelineLocalizationTests: XCTestCase {
         // Clip a11y time ranges
         "story.timeline.a11y.clip.timeRange",
         "story.timeline.a11y.clip.displayedRange",
+        // Bandeaux éphémères
+        "story.timeline.toast.durationAdjusted",
+        "story.timeline.toast.queuedOffline",
         // Track section uppercase labels
         "story.timeline.track.section.video",
         "story.timeline.track.section.audio",

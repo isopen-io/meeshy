@@ -207,4 +207,114 @@ final class TimelineViewModelSlideDurationTests: XCTestCase {
                        "Toast must use the ACTUAL prior value (20), not the stale pre-drag baseline (10).")
         XCTAssertEqual(sut.durationDidAutoAdjust?.to ?? -1, 10, accuracy: 0.01)
     }
+
+    // MARK: - Undo / redo must restore the duration too
+
+    /// Chaque chemin d'édition recalcule la durée de slide — SAUF `undo()` et
+    /// `redo()`, qui rejouaient la commande sur le projet sans jamais toucher
+    /// à `project.slideDuration`. Résultat : annuler un trim restaure bien le
+    /// clip, mais la règle graduée et la longueur des pistes restent figées
+    /// sur la valeur d'APRÈS l'édition annulée. La timeline ment sur ce qui
+    /// va réellement jouer, et le seul moyen de la resynchroniser était de
+    /// provoquer une autre édition.
+    func test_undo_afterTrim_restoresSlideDuration() async {
+        let media = StoryMediaObject(id: "m1", kind: .video, aspectRatio: 1.78, startTime: 0, duration: 10)
+        let sut = await makeSUT(mediaObjects: [media])
+        XCTAssertEqual(sut.project.slideDuration, 10, accuracy: 0.01)
+
+        sut.trimClipEnd(id: "m1", deltaTimeSeconds: -6)
+        XCTAssertEqual(sut.project.slideDuration, 6, accuracy: 0.01, "Pré-condition : le trim a bien rétréci la slide.")
+
+        sut.undo()
+
+        XCTAssertEqual(sut.project.slideDuration, 10, accuracy: 0.01,
+                       "Annuler le trim doit rendre à la slide la durée que le contenu restauré impose.")
+    }
+
+    func test_redo_afterUndoneTrim_reappliesSlideDuration() async {
+        let media = StoryMediaObject(id: "m1", kind: .video, aspectRatio: 1.78, startTime: 0, duration: 10)
+        let sut = await makeSUT(mediaObjects: [media])
+
+        sut.trimClipEnd(id: "m1", deltaTimeSeconds: -6)
+        sut.undo()
+        sut.redo()
+
+        XCTAssertEqual(sut.project.slideDuration, 6, accuracy: 0.01,
+                       "Rétablir le trim doit re-rétrécir la slide, exactement comme le trim d'origine.")
+    }
+
+    func test_undo_afterDelete_restoresSlideDuration() async {
+        let long = StoryMediaObject(id: "m1", kind: .video, aspectRatio: 1.78, startTime: 0, duration: 10)
+        let short = StoryMediaObject(id: "m2", kind: .video, aspectRatio: 1.78, startTime: 0, duration: 3)
+        let sut = await makeSUT(mediaObjects: [long, short])
+
+        sut.deleteClip(id: "m1")
+        XCTAssertEqual(sut.project.slideDuration, 6, accuracy: 0.01)
+
+        sut.undo()
+
+        XCTAssertEqual(sut.project.slideDuration, 10, accuracy: 0.01,
+                       "Le clip de 10 s est de retour : la slide doit redevenir aussi longue que lui.")
+    }
+
+    /// Le playhead ne doit jamais rester hors de la fenêtre après un undo qui
+    /// RACCOURCIT la slide — même invariant que `setSlideDuration`.
+    func test_undo_shrinkingTheSlide_pullsPlayheadBackInside() async {
+        let sut = await makeSUT(mediaObjects: [])
+        sut.addMedia(id: "m1", postMediaId: "pm1", kind: .video, startTime: 0, duration: 20)
+        XCTAssertEqual(sut.project.slideDuration, 20, accuracy: 0.01)
+        sut.scrub(to: 18, precise: true)
+
+        sut.undo()
+
+        XCTAssertEqual(sut.project.slideDuration, 6, accuracy: 0.01, "Plus aucun contenu : plancher 6 s.")
+        XCTAssertLessThanOrEqual(sut.currentTime, 6,
+                                 "Le playhead ne peut pas rester à 18 s dans une slide de 6 s.")
+    }
+
+    /// Le toast « la durée a été recalculée automatiquement » explique un
+    /// EFFET DE BORD que l'utilisateur n'a pas demandé. Un undo/redo est au
+    /// contraire une demande explicite de revenir à un état connu : annoncer
+    /// le changement de durée y serait du bruit.
+    func test_undo_doesNotAnnounceTheDurationChange() async {
+        let media = StoryMediaObject(id: "m1", kind: .video, aspectRatio: 1.78, startTime: 0, duration: 10)
+        let sut = await makeSUT(mediaObjects: [media])
+        sut.trimClipEnd(id: "m1", deltaTimeSeconds: -6)
+        sut.durationDidAutoAdjust = nil
+
+        sut.undo()
+
+        XCTAssertNil(sut.durationDidAutoAdjust,
+                     "Undo restaure un état que l'utilisateur a explicitement demandé — pas de toast.")
+    }
+
+    func test_redo_doesNotAnnounceTheDurationChange() async {
+        let media = StoryMediaObject(id: "m1", kind: .video, aspectRatio: 1.78, startTime: 0, duration: 10)
+        let sut = await makeSUT(mediaObjects: [media])
+        sut.trimClipEnd(id: "m1", deltaTimeSeconds: -6)
+        sut.undo()
+        sut.durationDidAutoAdjust = nil
+
+        sut.redo()
+
+        XCTAssertNil(sut.durationDidAutoAdjust)
+    }
+
+    /// Non-régression : le toast d'une édition ORDINAIRE qui suit un undo doit
+    /// partir de la valeur réellement à l'écran. Si `undo()` recalculait la
+    /// durée sans mettre à jour la baseline, le toast suivant annoncerait un
+    /// « from » périmé.
+    func test_editAfterUndo_announcesFromTheValueOnScreen() async {
+        let media = StoryMediaObject(id: "m1", kind: .video, aspectRatio: 1.78, startTime: 0, duration: 10)
+        let sut = await makeSUT(mediaObjects: [media])
+        sut.trimClipEnd(id: "m1", deltaTimeSeconds: -6)   // 10 → 6
+        sut.undo()                                        // 6 → 10, sans toast
+        sut.durationDidAutoAdjust = nil
+
+        sut.addMedia(id: "m2", postMediaId: "pm2", kind: .video, startTime: 0, duration: 25)
+
+        XCTAssertEqual(sut.durationDidAutoAdjust?.from ?? -1, 10, accuracy: 0.01,
+                       "Le « from » doit être la durée restaurée par l'undo (10 s), pas la valeur d'avant.")
+        XCTAssertEqual(sut.durationDidAutoAdjust?.to ?? -1, 25, accuracy: 0.01)
+    }
 }

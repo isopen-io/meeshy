@@ -407,7 +407,12 @@ public final class TimelineViewModel: ObservableObject {
     /// toast is suppressed while `selection.activeDrag` is non-nil so it
     /// doesn't fire 60 times/sec mid-gesture; `endClipDrag()` calls this
     /// again once the drag ends so the final value still gets its toast.
-    func recomputeSlideDuration() {
+    ///
+    /// - Parameter announcing: `false` quand le recalcul accompagne une action
+    ///   dont l'utilisateur connaît DÉJÀ l'effet — `undo()` / `redo()`. Le
+    ///   toast est là pour expliquer un effet de bord subi ; le faire sonner
+    ///   sur une restauration explicitement demandée n'apprendrait rien.
+    func recomputeSlideDuration(announcing: Bool = true) {
         let auto = Float(StoryEffects.contentDerivedDuration(
             mediaObjects: project.mediaObjects,
             audioPlayerObjects: project.audioPlayerObjects,
@@ -431,6 +436,7 @@ public final class TimelineViewModel: ObservableObject {
 
         let toastBaseline = slideDurationBeforeDrag ?? liveValueBeforeThisCall
         slideDurationBeforeDrag = nil
+        guard announcing else { return }
         if abs(auto - toastBaseline) > 0.05 {
             durationDidAutoAdjust = (from: toastBaseline, to: auto)
         }
@@ -449,11 +455,17 @@ public final class TimelineViewModel: ObservableObject {
 
     // MARK: - Undo / Redo
 
+    /// Annuler restaure le CONTENU — la durée de slide doit suivre, sinon la
+    /// règle graduée et la longueur des pistes restent figées sur la valeur
+    /// d'après l'édition annulée : la timeline ment alors sur ce qui va
+    /// réellement jouer, jusqu'à ce qu'une édition sans rapport la
+    /// resynchronise par accident.
     public func undo() {
         guard let command = commandStack.undo() else { return }
         do {
             try command.underlying.revert(from: &project)
             scheduleEngineReconfigure()
+            recomputeSlideDuration(announcing: false)
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -464,6 +476,7 @@ public final class TimelineViewModel: ObservableObject {
         do {
             try command.underlying.apply(to: &project)
             scheduleEngineReconfigure()
+            recomputeSlideDuration(announcing: false)
         } catch {
             errorMessage = error.localizedDescription
         }
