@@ -385,17 +385,22 @@ struct StoryActionSidebarView: View {
                     activeColor: MeeshyColors.indigo400,
                     activeGlow: isGlobalMuted ? nil : MeeshyColors.indigo400
                 ) {
-                    // Action handled by .highPriorityGesture below
+                    // VoiceOver active un Button par son ACTION d'accessibilité,
+                    // il ne synthétise pas de `TapGesture` — laisser ce closure
+                    // vide rendait le mute inatteignable au lecteur d'écran :
+                    // le bouton était annoncé, focalisable, et le double-tap ne
+                    // faisait rien. Les deux chemins appellent donc le même
+                    // toggle. Pas de double déclenchement : un tap réel est
+                    // capté par le `highPriorityGesture` (qui gagne sur le tap
+                    // interne du Button), et une activation VoiceOver ne passe
+                    // que par ce closure.
+                    toggleGlobalMute()
                 }
                 .highPriorityGesture(
-                    TapGesture().onEnded {
-                        HapticFeedback.light()
-                        isGlobalMutedBinding.toggle()
-                        NotificationCenter.default.post(
-                            name: isGlobalMutedBinding ? .storyComposerMuteCanvas : .storyComposerUnmuteCanvas,
-                            object: nil
-                        )
-                    }
+                    // Le geste haute priorité reste nécessaire : sans lui, les
+                    // gestes parents du reader avalent le tap (cf. régression
+                    // « drags lents mangés par les Buttons »).
+                    TapGesture().onEnded { toggleGlobalMute() }
                 )
             }
 
@@ -453,6 +458,21 @@ struct StoryActionSidebarView: View {
                 .zIndex(10)
             }
         }
+    }
+
+    /// Bascule le mute global du reader et prévient le canvas.
+    ///
+    /// Extrait pour que l'action du `Button` (chemin VoiceOver) et le
+    /// `highPriorityGesture` (chemin tactile) partagent exactement le même
+    /// comportement — la divergence entre les deux était la cause du mute
+    /// inatteignable au lecteur d'écran.
+    private func toggleGlobalMute() {
+        HapticFeedback.light()
+        isGlobalMutedBinding.toggle()
+        NotificationCenter.default.post(
+            name: isGlobalMutedBinding ? .storyComposerMuteCanvas : .storyComposerUnmuteCanvas,
+            object: nil
+        )
     }
 
 }

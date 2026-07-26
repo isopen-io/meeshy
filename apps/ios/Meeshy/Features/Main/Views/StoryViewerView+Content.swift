@@ -501,7 +501,11 @@ extension StoryViewerView {
         // la face entrante est alors à ~quelques points de l'identité.
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.38) {
             update()
-            markCurrentViewed()
+            // Pas de `markCurrentViewed()` ici : l'interlude du nouvel auteur
+            // n'est décidé qu'ensuite, par l'`adaptiveOnChange(of:
+            // currentGroupIndex)`. Marquer maintenant comptait la story avant
+            // même que l'écran d'identité ne la recouvre. Le marquage se fait
+            // dans ce onChange, APRÈS `presentGroupIntroIfNeeded()`.
             prefetchCurrentGroup()
 
             // Sans animation : la carte réelle prend la place exacte de la
@@ -967,7 +971,18 @@ extension StoryViewerView {
 
     // MARK: - Mark Viewed
 
-    func markCurrentViewed() {
+    /// - Parameter isIntroVisible: surcharge de `showGroupIntro`. Les `@State`
+    ///   d'une `View` hors graphe SwiftUI ne retiennent pas les écritures d'un
+    ///   test ; sans cette entrée la garde n'est pas vérifiable. Production :
+    ///   `nil`, sauf `dismissGroupIntro` qui passe `false` — à cet instant
+    ///   l'interlude vient d'être retiré et la story est révélée.
+    func markCurrentViewed(isIntroVisible: Bool? = nil) {
+        // L'interlude d'identité est OPAQUE et occupe tout l'écran : tant qu'il
+        // est affiché, la story n'a rien montré. Marquer ici gonflait le
+        // compteur de vues de l'auteur et faisait passer l'anneau en « vu »
+        // alors que le lecteur n'avait vu qu'un écran d'identité. Le marquage
+        // suit la RÉVÉLATION (`dismissGroupIntro`), pas l'indexation.
+        guard !(isIntroVisible ?? showGroupIntro) else { return }
         if let story = currentStory {
             viewModel.markViewed(storyId: story.id)
             // C3 : ce slide vient d'être affiché → 1 impression (source "story") pour CE

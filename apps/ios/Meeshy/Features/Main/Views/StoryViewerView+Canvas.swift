@@ -1155,9 +1155,18 @@ struct StoryCardView: View {
                     // rotor. Le label donne une identité au canvas (le contenu
                     // visuel est du CALayer, invisible d'UIAccessibility).
                     .accessibilityElement(children: .ignore)
-                    .accessibilityLabel(String(
-                        localized: "story.viewer.a11y.canvas",
-                        defaultValue: "Story en cours de lecture"
+                    // Le label PORTE le contenu, il ne se contente pas de
+                    // nommer le contenant : le canvas étant du CALayer, c'est
+                    // la seule voie par laquelle un utilisateur VoiceOver peut
+                    // savoir ce que la story dit. Résolu via le Prisme pour que
+                    // l'oral et le visuel racontent la même chose.
+                    .accessibilityLabel(StoryCanvasAccessibility.label(
+                        index: currentStoryIndex,
+                        total: currentGroup?.stories.count ?? 0,
+                        authorName: currentGroup?.username,
+                        textObjects: story.storyEffects?.textObjects ?? [],
+                        preferredLanguages: resolvedViewerLanguageChain,
+                        voiceTranscript: currentVoiceCaption
                     ))
                     .accessibilityAction(named: String(
                         localized: "story.viewer.a11y.next",

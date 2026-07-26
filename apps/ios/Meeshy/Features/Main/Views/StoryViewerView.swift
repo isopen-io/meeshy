@@ -488,13 +488,19 @@ struct StoryViewerView: View {
             }
             installPrefetchPipelineIfNeeded()
             startTimer()
-            markCurrentViewed()
             prefetchCurrentGroup()
             // L'interlude ouvre AUSSI la première story de la session, pas
             // seulement les changements de groupe (directive user 2026-07-25 :
             // « maintenir les interludes partout »). L'appel vient après
             // `startTimer()`, qui gèle la lecture tant que `showGroupIntro`.
             presentGroupIntroIfNeeded()
+            // APRÈS l'interlude, jamais avant : `markCurrentViewed` se garde sur
+            // `showGroupIntro`, donc l'appeler plus haut (ordre historique) le
+            // laissait passer alors que l'écran d'identité allait recouvrir la
+            // story. Quand un interlude s'affiche, c'est `dismissGroupIntro`
+            // qui marquera au moment de la révélation ; sans interlude, cet
+            // appel marque tout de suite.
+            markCurrentViewed()
             // Pré-résolution des identités voisines dès l'ouverture : le
             // premier switch de groupe présente un interstitiel déjà complet.
             prefetchNeighborGroupIntros()
@@ -641,6 +647,12 @@ struct StoryViewerView: View {
             transitionPostRoom(from: previousStory, to: currentStory)
             transitionEngagement(to: currentStory)
             presentGroupIntroIfNeeded()
+            // APRÈS la décision d'interlude : si un interlude s'affiche, la
+            // garde de `markCurrentViewed` bloque et c'est `dismissGroupIntro`
+            // qui marquera à la révélation ; sinon (mode preview, groupe sans
+            // story affichable) le nouveau groupe est visible tout de suite et
+            // se marque ici. Point unique pour les switches de groupe.
+            markCurrentViewed()
         }
         .onReceive(SocialSocketManager.shared.commentReactionAdded.receive(on: DispatchQueue.main)) { event in
             applyCommentReactionEvent(event)
@@ -881,9 +893,15 @@ struct StoryViewerView: View {
     /// instances. The integration tests pass in dedicated instances so
     /// the assertions can read window state and slide id without going
     /// through SwiftUI's `@State` storage.
+    /// - Parameter paused: surcharge de `shouldPauseTimer`. Les `@State` d'une
+    ///   `View` non installée dans le graphe SwiftUI ne retiennent pas les
+    ///   écritures faites depuis un test — même raison que les paramètres
+    ///   `prefetcher`/`timer` ci-dessus. Sans cette entrée, la préservation de
+    ///   la pause n'est pas vérifiable. Production : `nil`.
     func refreshPrefetchWindowAndTimer(
         prefetcher: StoryReaderPrefetcher? = nil,
-        timer: StoryReaderTimerController? = nil
+        timer: StoryReaderTimerController? = nil,
+        paused: Bool? = nil
     ) {
         let p = prefetcher ?? self.prefetcher
         let t = timer ?? self.slideTimer
@@ -965,6 +983,21 @@ struct StoryViewerView: View {
         // l'asset AVPlayer, etc. Le canvas visible (StoryReaderRepresentable)
         // est la SEULE source de lecture média.
         t.setCurrentSlide(id: current.id, duration: currentSlideDuration)
+        // `setCurrentSlide` remet `isPaused = false` par contrat (« a new slide
+        // always starts un-paused »). Sans la ligne suivante, tout ré-armement
+        // survenant PENDANT une pause la relâche en silence : `startTimer()` se
+        // protégeait déjà, mais pas les ré-armements déclenchés par les
+        // `adaptiveOnChange` de `currentStoryIndex` / `currentGroupIndex`. Et
+        // `adaptiveOnChange(of: shouldPauseTimer)` ne rattrape rien — la valeur
+        // n'a pas *changé*, donc SwiftUI ne refire pas le closure.
+        //
+        // Symptôme mesuré : 3 s d'horloge intégrées sous l'interlude d'identité
+        // (la moitié d'une slide de 6 s), et un long-press maintenu pendant un
+        // changement de slide qui ne gelait plus rien.
+        //
+        // La garde vit ICI, au seul point d'appel de `setCurrentSlide`, pour
+        // couvrir aussi les appelants futurs.
+        t.setPaused(paused ?? shouldPauseTimer)
 
         // Re-wire `onContentReady` on the prefetched canvas of the
         // CURRENT slide. The prefetcher's canvas reports readiness once
@@ -1007,28 +1040,30 @@ struct StoryViewerView: View {
     /// - if every remaining story in the group is expired, dismiss the
     ///   viewer (the user is opening an empty ring).
     private func skipExpiredStoriesIfNeeded() {
-        let now = Date()
-        guard currentGroupIndex < groups.count else { return }
-        let group = groups[currentGroupIndex]
-        guard !group.stories.isEmpty else { return }
-
-        // The author may revisit their OWN expired stories to review engagement
-        // (reactions / comments). Don't skip or auto-close their own ring — an
-        // expiry banner in the comments overlay marks the state instead
-        // (spec 2026-06-23: comments/reactions on expired stories stay visible).
-        if group.id == AuthManager.shared.currentUser?.id { return }
-
-        var idx = currentStoryIndex
-        while idx < group.stories.count, group.stories[idx].isExpired(at: now) {
-            idx += 1
-        }
-        if idx >= group.stories.count {
-            // Whole tail of the group is expired — close.
-            isPresented = false
+        let outcome = StoryExpirySkipResolver.resolve(
+            groups: groups,
+            groupIndex: currentGroupIndex,
+            storyIndex: currentStoryIndex,
+            currentUserId: AuthManager.shared.currentUser?.id,
+            now: Date()
+        )
+        switch outcome {
+        case .stay:
             return
-        }
-        if idx != currentStoryIndex {
-            currentStoryIndex = idx
+        case .advanceStory(let index):
+            currentStoryIndex = index
+        case .advanceGroup(let groupIndex, let storyIndex):
+            // Saut correctif, pas une navigation utilisateur : on pose les
+            // index directement plutôt que de passer par `groupTransition`.
+            // L'`adaptiveOnChange(of: currentGroupIndex)` qui suit rejoue
+            // `skipExpiredStoriesIfNeeded` — le résolveur ne renvoie que des
+            // groupes ayant du contenu, donc il répondra `.stay` et la
+            // récursion s'arrête au premier tour. L'interlude d'identité du
+            // nouvel auteur s'affiche normalement via ce même onChange.
+            currentGroupIndex = groupIndex
+            currentStoryIndex = storyIndex
+        case .close:
+            isPresented = false
         }
     }
 
@@ -1797,7 +1832,7 @@ extension StoryViewerView {
     func goBackToPreviousGroupFromIntro() {
         groupIntroTask?.cancel()
         groupIntroTask = nil
-        dismissGroupIntro()
+        dismissGroupIntro(revealing: false)
         guard currentGroupIndex > 0 else { return }
         groupTransition(forward: false) {
             currentGroupIndex -= 1
@@ -1806,13 +1841,22 @@ extension StoryViewerView {
         }
     }
 
-    private func dismissGroupIntro() {
+    /// - Parameter revealing: `true` quand le retrait de l'interlude DÉVOILE la
+    ///   story courante (fin du délai, tap skip) — c'est à cet instant qu'elle
+    ///   devient réellement vue. `false` quand l'interlude se retire parce que
+    ///   le switch de groupe est ANNULÉ (tap gauche) : la story quittée n'a
+    ///   jamais été montrée, la compter gonflerait les vues de son auteur.
+    private func dismissGroupIntro(revealing: Bool = true) {
         // La sortie épouse l'ouverture configurée par l'auteur sur le slide qui
         // apparaît : l'interlude et le slide forment un seul geste visuel.
         let opening = currentStory?.storyEffects?.opening
         withAnimation(StoryGroupIntroPolicy.dismissAnimation(for: opening)) {
             showGroupIntro = false
         }
+        // `isIntroVisible: false` explicite : le flip ci-dessus est enveloppé
+        // dans `withAnimation`, on ne dépend donc pas de l'instant où la
+        // lecture de `showGroupIntro` se stabilise.
+        if revealing { markCurrentViewed(isIntroVisible: false) }
     }
 }
 
