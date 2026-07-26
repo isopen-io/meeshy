@@ -24,6 +24,7 @@ import androidx.compose.material.icons.filled.Archive
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.CloudOff
 import androidx.compose.material.icons.filled.DeleteSweep
+import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.MarkChatRead
 import androidx.compose.material.icons.filled.SearchOff
 import androidx.compose.material.icons.filled.Notifications
@@ -181,12 +182,15 @@ fun ConversationListScreen(
                         // header when every row is pinned). Section bodies compose eagerly
                         // (few items on a real account); revisit for lazy paging if a user
                         // has hundreds of threads.
-                        val sections = ConversationSections.of(state.conversations)
+                        val sections = ConversationSections.of(state.conversations, state.categories)
                         LazyColumn(modifier = Modifier.fillMaxSize()) {
                             sections.forEach { section ->
-                                item(key = "section-${section.kind}") {
+                                val key = section.categoryId?.let { "section-cat-$it" }
+                                    ?: "section-${section.kind}"
+                                item(key = key) {
                                     CollapsibleSection(
-                                        title = stringResource(section.kind.titleRes()),
+                                        title = section.title
+                                            ?: stringResource(section.kind.titleRes()),
                                         count = section.items.size,
                                         iconContainerColor = section.kind.containerColor(),
                                         icon = {
@@ -736,16 +740,21 @@ private fun EmptyStateGlyph.icon() = when (this) {
 
 private fun ConversationSectionKind.titleRes(): Int = when (this) {
     ConversationSectionKind.PINNED -> R.string.conversations_section_pinned
+    // CATEGORY headers render the category's own name (section.title); this
+    // resource is only the exhaustive-`when` fallback and is never shown.
+    ConversationSectionKind.CATEGORY -> R.string.conversations_section_all
     ConversationSectionKind.ALL -> R.string.conversations_section_all
 }
 
 private fun ConversationSectionKind.icon() = when (this) {
     ConversationSectionKind.PINNED -> Icons.Filled.PushPin
+    ConversationSectionKind.CATEGORY -> Icons.Filled.Folder
     ConversationSectionKind.ALL -> Icons.AutoMirrored.Filled.Chat
 }
 
 private fun ConversationSectionKind.containerColor(): Color = when (this) {
     ConversationSectionKind.PINNED -> MeeshyPalette.Error
+    ConversationSectionKind.CATEGORY -> MeeshyPalette.Indigo500
     ConversationSectionKind.ALL -> MeeshyPalette.Indigo500
 }
 

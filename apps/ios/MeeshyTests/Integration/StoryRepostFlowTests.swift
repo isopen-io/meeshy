@@ -161,7 +161,8 @@ final class StoryRepostFlowTests: XCTestCase {
             postId: "story-1",
             targetType: .post,
             content: nil,
-            isQuote: false
+            isQuote: false,
+            visibility: nil
         )
 
         XCTAssertEqual(mockService.repostCallCount, 1)
@@ -173,23 +174,17 @@ final class StoryRepostFlowTests: XCTestCase {
         XCTAssertEqual(mockService.lastRepostIsQuote, false,
                        "Without commentary the repost is a plain re-share, not a quote")
         XCTAssertNil(mockService.lastRepostVisibility,
-                     "The direct kebab repost opens no composer, so it picks no audience: " +
-                     "visibility stays unset and the backend applies its own default. " +
-                     "Mirrors repostAsPostDirect(), which omits the argument entirely.")
+                     "The kebab path offers no audience picker, so it passes no visibility — " +
+                     "the gateway then inherits the original's, per PostService.repost's default")
     }
 
     // MARK: - Flow 3: Kebab "Editer et republier" → UnifiedPostComposer
 
     /// The kebab item "Editer et republier en post" presents a
     /// `UnifiedPostComposer(repostingStory:authorHandle:onPublishRepost:onDismiss:)`
-    /// (B.7). The publish callback receives `(content, sourceStory, visibility)`;
-    /// the caller in `StoryViewerView` then forwards to
-    /// `PostService.repost(postId:targetType:.post, content:isQuote: !content.isEmpty,
-    /// visibility:)`.
-    ///
-    /// The third argument is the audience picked in the composer — it must reach
-    /// the service call, otherwise the picker is decorative and the repost is
-    /// published to the wrong people.
+    /// (B.7). The publish callback receives `(content, sourceStory)`; the
+    /// caller in `StoryViewerView` then forwards to
+    /// `PostService.repost(postId:targetType:.post, content:isQuote: !content.isEmpty)`.
     ///
     /// We test the full path: the composer wires the callback correctly, AND
     /// the production callback shape (mirrored here against `MockPostService`)
@@ -231,8 +226,8 @@ final class StoryRepostFlowTests: XCTestCase {
         XCTAssertEqual(capturedSourceId, "story-1",
                        "onPublishRepost receives the original source story (not the clone)")
         XCTAssertEqual(capturedVisibility, "PUBLIC",
-                       "onPublishRepost receives the composer's current audience — PUBLIC is its " +
-                       "initial value, and it must be reported rather than assumed by the caller")
+                       "onPublishRepost receives the composer's audience selection; PUBLIC is " +
+                       "its initial state, so an untouched picker still reports a value")
 
         // 3.c — Replay the production-side callback contract: the caller
         // (StoryViewerView.swift:297-316) forwards captured args to
@@ -255,7 +250,8 @@ final class StoryRepostFlowTests: XCTestCase {
                        "Non-empty commentary makes the repost a quote")
         XCTAssertEqual(mockService.lastRepostVisibility, "PUBLIC",
                        "The audience picked in the composer reaches the service call — this is " +
-                       "the whole point of threading visibility through onPublishRepost")
+                       "the whole point of the repost-visibility path; dropping it here would " +
+                       "publish a repost the author meant to restrict")
     }
 
     // MARK: - Flow 4: Feed cell renders STORY repost embed

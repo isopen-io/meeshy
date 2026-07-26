@@ -768,11 +768,17 @@ struct ConversationListView: View {
                 repostOfId: entry.id,
                 repostAudioUrl: entry.audioUrl
             )
-            .presentationDetents([.medium])
+            // Same presentation contract as the two other entry points into the
+            // composer (see `RootViewComponents`): `.large` keeps the sheet usable
+            // at accessibility text sizes, and the drag indicator advertises that
+            // the sheet is resizable rather than leaving the gesture undiscoverable.
+            .presentationDetents([.medium, .large])
+            .presentationDragIndicator(.visible)
         }
         .sheet(isPresented: $showStatusComposer) {
             StatusComposerView(viewModel: statusViewModel)
-                .presentationDetents([.medium])
+                .presentationDetents([.medium, .large])
+                .presentationDragIndicator(.visible)
         }
     }
 

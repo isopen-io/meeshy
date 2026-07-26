@@ -1,4 +1,5 @@
 import Foundation
+import os
 
 /// Lightweight data sync for the Notification Service Extension.
 ///
@@ -54,7 +55,8 @@ nonisolated enum NSEDataSync {
               let defaults = UserDefaults(suiteName: appGroupId),
               let data = defaults.data(forKey: snapshotsKey) else { return nil }
         let decoder = JSONDecoder()
-        guard let map = try? decoder.decode([String: LocalConversationDetails].self, from: data) else {
+        guard let map = nseDecodeOrLog([String: LocalConversationDetails].self, from: data,
+                                       field: "conversation snapshots", decoder: decoder) else {
             return nil
         }
         return map[conversationId]
@@ -106,9 +108,19 @@ nonisolated enum NSEDataSync {
 
             // Extract the message data from the API response envelope
             // { "success": true, "data": { ...message... } }
-            guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-                  let messageData = json["data"],
-                  let messageJSON = try? JSONSerialization.data(withJSONObject: messageData) else {
+            let messageJSON: Data
+            do {
+                let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+                guard let messageData = json?["data"] else {
+                    Logger.nse.error("Message envelope has no 'data' field, nothing staged for the app")
+                    completion(false)
+                    return
+                }
+                messageJSON = try JSONSerialization.data(withJSONObject: messageData)
+            } catch {
+                // Rien n'est déposé dans l'App Group : au réveil, l'app ne
+                // verra pas ce message avant un refresh réseau complet.
+                Logger.nse.error("Message payload unusable, nothing staged for the app: \(error.localizedDescription, privacy: .public)")
                 completion(false)
                 return
             }
@@ -160,7 +172,7 @@ nonisolated enum NSEDataSync {
             // Envelope: { "success": true, "data": { ...post... } }
             guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
                   let postData = json["data"],
-                  let postJSON = try? JSONSerialization.data(withJSONObject: postData) else {
+                  let postJSON = nseSerializeOrLog(postData, field: "post payload") else {
                 completion(false)
                 return
             }
@@ -180,7 +192,7 @@ nonisolated enum NSEDataSync {
 
         let dir = container.appendingPathComponent(pendingDirName, isDirectory: true)
         if !FileManager.default.fileExists(atPath: dir.path) {
-            try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+            nseCreateDirectory(dir, context: "App Group staging directory")
         }
         return dir
     }
@@ -217,7 +229,7 @@ nonisolated enum NSEDataSync {
             let parts = name.split(separator: "_", maxSplits: 1)
             guard parts.count == 2, let data = try? Data(contentsOf: file) else { continue }
             results.append((String(parts[0]), data))
-            try? fm.removeItem(at: file)
+            nseRemoveFile(file, context: "consumed staged message")
         }
         return results
     }
@@ -229,7 +241,7 @@ nonisolated enum NSEDataSync {
 
         let dir = container.appendingPathComponent(pendingPostsDirName, isDirectory: true)
         if !FileManager.default.fileExists(atPath: dir.path) {
-            try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+            nseCreateDirectory(dir, context: "App Group staging directory")
         }
         return dir
     }
@@ -260,7 +272,7 @@ nonisolated enum NSEDataSync {
         for file in files where file.pathExtension == "json" {
             guard let data = try? Data(contentsOf: file) else { continue }
             results.append(data)
-            try? fm.removeItem(at: file)
+            nseRemoveFile(file, context: "consumed staged post")
         }
         return results
     }
@@ -443,7 +455,7 @@ nonisolated enum NSEDataSync {
 
         let dir = container.appendingPathComponent("nse_bg_uploads", isDirectory: true)
         if !FileManager.default.fileExists(atPath: dir.path) {
-            try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+            nseCreateDirectory(dir, context: "App Group staging directory")
         }
         pruneBackgroundBodyFiles(in: dir)
 
@@ -471,8 +483,58 @@ nonisolated enum NSEDataSync {
                 forKeys: [.contentModificationDateKey]
             ))?.contentModificationDate
             if let modified, modified < cutoff {
-                try? fm.removeItem(at: file)
+                nseRemoveFile(file, context: "stale staged file sweep")
             }
         }
+    }
+}
+
+// MARK: - NSE Logging Helpers
+
+/// The extension cannot import MeeshySDK, so it carries its own minimal
+/// versions of the `*OrLog` helpers. Same contract: a failure degrades the
+/// notification but never disappears silently — the NSE runs for ~30s with no
+/// debugger attached, so the log is the only forensic trail.
+extension Logger {
+    nonisolated static let nse = Logger(subsystem: "me.meeshy.app", category: "nse-datasync")
+}
+
+nonisolated func nseDecodeOrLog<T: Decodable>(
+    _ type: T.Type, from data: Data, field: String, decoder: JSONDecoder = JSONDecoder()
+) -> T? {
+    do {
+        return try decoder.decode(type, from: data)
+    } catch {
+        Logger.nse.error("Decode failed for \(field, privacy: .public), falling back to generic content: \(error.localizedDescription, privacy: .public)")
+        return nil
+    }
+}
+
+nonisolated func nseSerializeOrLog(_ object: Any, field: String) -> Data? {
+    do {
+        return try JSONSerialization.data(withJSONObject: object)
+    } catch {
+        Logger.nse.error("Serialization failed for \(field, privacy: .public), nothing staged for the app: \(error.localizedDescription, privacy: .public)")
+        return nil
+    }
+}
+
+nonisolated func nseCreateDirectory(_ url: URL, context: String) {
+    do {
+        try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+    } catch CocoaError.fileWriteFileExists {
+        // Déjà présent.
+    } catch {
+        Logger.nse.error("\(context, privacy: .public) unavailable, staged writes will fail: \(error.localizedDescription, privacy: .public)")
+    }
+}
+
+nonisolated func nseRemoveFile(_ url: URL, context: String) {
+    do {
+        try FileManager.default.removeItem(at: url)
+    } catch CocoaError.fileNoSuchFile {
+        // Déjà supprimé.
+    } catch {
+        Logger.nse.error("\(context, privacy: .public): file not removed, it will be re-consumed: \(error.localizedDescription, privacy: .public)")
     }
 }

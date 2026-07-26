@@ -1495,6 +1495,8 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
             .replacingOccurrences(of: "-", with: "+")
             .replacingOccurrences(of: "_", with: "/")
         while base64.count % 4 != 0 { base64.append("=") }
+        // Fail-safe : un JWT illisible est traité comme expiré (déclenche un
+        // refresh) plutôt que présumé valide.
         guard let data = Data(base64Encoded: base64),
               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let exp = json["exp"] as? TimeInterval else { return true }
@@ -1862,22 +1864,33 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
 
     // MARK: - Location Emission
 
+    /// Emits `payload` as a Socket.IO dictionary.
+    ///
+    /// A failed conversion used to abort the emission silently: the user shared
+    /// a location and nothing ever left the device, with no error anywhere.
+    private func emitEncodable<P: Encodable>(_ payload: P, event: String) {
+        do {
+            let data = try JSONEncoder().encode(payload)
+            guard let dict = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+                Logger.socket.error("\(event, privacy: .public) not emitted — payload is not a JSON object")
+                return
+            }
+            socket?.emit(event, dict)
+        } catch {
+            Logger.socket.error("\(event, privacy: .public) not emitted — payload encode failed: \(error.localizedDescription, privacy: .public)")
+        }
+    }
+
     public func emitLocationShare(payload: LocationSharePayload) {
-        guard let data = try? JSONEncoder().encode(payload),
-              let dict = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return }
-        socket?.emit("location:share", dict)
+        emitEncodable(payload, event: "location:share")
     }
 
     public func emitLiveLocationStart(payload: LiveLocationStartPayload) {
-        guard let data = try? JSONEncoder().encode(payload),
-              let dict = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return }
-        socket?.emit("location:live-start", dict)
+        emitEncodable(payload, event: "location:live-start")
     }
 
     public func emitLiveLocationUpdate(payload: LiveLocationUpdatePayload) {
-        guard let data = try? JSONEncoder().encode(payload),
-              let dict = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return }
-        socket?.emit("location:live-update", dict)
+        emitEncodable(payload, event: "location:live-update")
     }
 
     public func emitLiveLocationStop(conversationId: String) {
@@ -2187,8 +2200,14 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
                 let mode = data["mode"] as? String
                 let rawServers = data["iceServers"] as? [[String: Any]] ?? []
 
-                guard let serversData = try? JSONSerialization.data(withJSONObject: rawServers),
-                      let servers = try? JSONDecoder().decode([SocketIceServer].self, from: serversData) else {
+                let servers: [SocketIceServer]
+                do {
+                    let serversData = try JSONSerialization.data(withJSONObject: rawServers)
+                    servers = try JSONDecoder().decode([SocketIceServer].self, from: serversData)
+                } catch {
+                    // Sans serveurs ICE, l'appel ne peut pas s'établir : la
+                    // cause exacte doit être exploitable.
+                    Logger.socket.error("call ICE servers undecodable, call cannot be established: \(error.localizedDescription, privacy: .public)")
                     continuation.resume(throwing: CallInitiateError.malformedResponse)
                     return
                 }
@@ -3215,11 +3234,12 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
         // arrival order; the handler still lands on main.
         let jsonData: Data
         if let dict = first as? [String: Any] {
-            guard let serialized = try? JSONSerialization.data(withJSONObject: dict) else {
-                Logger.socket.error("decode DROP type=\(String(describing: type), privacy: .public) reason=reserialize-failed")
+            do {
+                jsonData = try JSONSerialization.data(withJSONObject: dict)
+            } catch {
+                Logger.socket.error("decode DROP type=\(String(describing: type), privacy: .public) reason=reserialize-failed: \(error.localizedDescription, privacy: .public)")
                 return
             }
-            jsonData = serialized
         } else if let str = first as? String {
             jsonData = Data(str.utf8)
         } else {

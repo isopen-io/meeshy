@@ -341,7 +341,7 @@ export default async function callRoutes(fastify: FastifyInstance) {
     preValidation: [requiredAuth, createValidationMiddleware(endCallSchema)],
     ...ROUTE_RATE_LIMITS.callOperations,
     schema: {
-      description: 'Force end an active call session. Only the call initiator or conversation moderators/admins can end a call. This will disconnect all participants and finalize call metrics.',
+      description: 'Force end an active call session. P2P: any active participant can end the call for everyone. SFU (Phase 2): restricted to the initiator or conversation moderators/admins. This will disconnect all participants and finalize call metrics.',
       tags: ['calls'],
       summary: 'End call',
       params: {
@@ -383,7 +383,7 @@ export default async function callRoutes(fastify: FastifyInstance) {
           ...errorResponseSchema
         },
         403: {
-          description: 'Forbidden - Only initiator or moderators can end the call',
+          description: 'Forbidden - Anonymous users cannot end calls, or the requester is not an active participant of this call',
           type: 'object',
           properties: {
             success: { type: 'boolean', example: false },

@@ -2,6 +2,66 @@
 
 Append-only log of gotchas and decisions that save time next run.
 
+## Lesson (2026-07-26, `conversation-category-hydration`) — thread the clock into `cacheFirstFlow`, and give the snapshot store a cold-vs-empty contract
+- **`cacheFirstFlow(policy, source)` uses its OWN default `SystemCacheClock` for age classification —
+  NOT the source's clock.** `ConversationRepository` gets away with this because production uses the
+  system clock everywhere. But if you seed a snapshot's `syncedAt` relative to a `FixedClock` in a test
+  and expect `Fresh` (no revalidation), the flow will still classify against real wall-clock time (age ≈
+  1.7e12 ms) → `Syncing` → it revalidates and your `api.calls == 0` assertion fails. Fix: pass
+  `clock = clock` into `cacheFirstFlow` so the repository's injected clock drives both the source's sync
+  stamp AND the SWR age. Deterministic in tests, unchanged in production (`SystemCacheClock` is the
+  injected default). Prefer this for every new SWR repository.
+- **A snapshot store must distinguish COLD (never synced → `observe()` = `null`) from SYNCED-BUT-EMPTY
+  (`[]`).** Gate `observe()` on a separate `SYNCED_AT` key, not on "is the blob present": `if
+  (prefs[SYNCED_AT] == null) null else decode(blob)`. `classifyCache` maps `null` → `Empty` (cold
+  skeleton) and `[]` → `Fresh/Stale` (a real "you have no categories"). A corrupt blob **with** a stamp
+  decodes to `[]` (empty-not-cold) so a decode failure never traps the UI in a perpetual skeleton.
+- **A repository stream that flattens `CacheResult<T>` to `T` wants `valueOrNull ?: emptyList()`** — the
+  existing `CacheResult.valueOrNull` extension already yields `null` for `Empty`/`Syncing(null)`, so the
+  VM never handles cache states it doesn't care about (the sectioning only needs the list).
+- **Deterministic background-failure test:** don't `.test { awaitItem(); cancel }` then assert an
+  `onSyncError` side effect — the revalidate may be cancelled before it runs. `launch { …collect… }` +
+  `advanceUntilIdle()` + `job.cancel()` runs the background revalidate to completion first.
+
+## Lesson (2026-07-26, `conversation-category-catalog`) — lift an actor's mutation+ordering into a pure immutable reducer; annotate a private-ctor data class
+- **An iOS actor whose methods each couple a state mutation to a `publish()` is a reducer waiting to be
+  extracted.** `UserCategoryStore.applyRemote`/`create`/`delete`/`reorder` all mutate `categoriesById`
+  then `publish()`. The pure lift is a stateless value type (`UserCategoryCatalog` over `Map<id,option>`)
+  whose every mutator *returns a new catalog* and does no side effect — the live copy + publish stay in the
+  future store/VM. This is the same SOTA pattern the picker/autocomplete slices used, now for a corpus.
+- **A private-ctor Kotlin `data class` warns "copy() exposes the private constructor" (error in Kotlin 2.1).**
+  If `copy()` is never called externally (you build via factories only), silence it cleanly with
+  `@ConsistentCopyVisibility` on the class — it makes the generated `copy()` private too. Do NOT reach for
+  `@ExposedCopyVisibility` (the discouraged binary-compat escape hatch).
+- **Match each port to its own iOS source, not a sibling's.** The store's `sortedSnapshot` uses
+  `order ?? Int.max` (null **last**); the picker's `displayedCategories` uses `order ?? 0` (null **first**).
+  They are different surfaces — do not "unify" them. Document the deliberate divergence in the KDoc so a
+  future reader doesn't `sed` them together.
+- **Return `this` for inert mutations so callers get `isSameInstanceAs` idempotence.** `remove(unknownId)`
+  and `reorder(emptyMap)` return the receiver unchanged; the test asserts `isSameInstanceAs(original)`,
+  which is a stronger, non-tautological proof of the no-op branch than value equality.
+
+## Lesson (2026-07-26, `conversation-category-sections`) — evolve the one SSOT with a defaulted arg; fold orphans in the bucket key
+- **Extend a grouping SSOT, don't fork it.** `ConversationSections.of` gained a second
+  `categories: List<CategoryOption> = emptyList()` arg rather than a parallel `ofWithCategories`. The
+  **default empty list must reduce to the exact prior behaviour** so every pre-existing test passes
+  untouched — here an empty catalogue means no `categoryId` can match, so all non-pinned rows land in
+  `ALL` just like before. Verify that by running the OLD tests unchanged (8/8 green) *before* adding the
+  new category cases; if an old test needs editing you've changed behaviour, not extended it.
+- **Fold orphaned buckets into the catch-all inside the `groupBy` key, not after.** iOS concatenates
+  `bySection["__other__"] + filtered.filter { orphaned }` post-hoc, which reorders. A single key function —
+  `if (pinned && catId==null) PINNED else if (catId in catalogue) catId else OTHER` — sends uncategorized
+  *and* orphaned rows to the same `OTHER` bucket in one pass, preserving encounter order (`groupBy` is
+  order-stable in Kotlin) and dropping nothing. Cleaner and more correct than the port's source.
+- **A pinned row with a category belongs in its category, not Épingles** (iOS `isPinned && sectionId==nil`
+  is the *pinned-bucket* guard, not "pinned always floats"). This is the subtle branch — mutation-proof it
+  by dropping the `&& categoryId==null` guard and confirming exactly the one "stays-in-category" test fails.
+- **An exhaustive `when(kind)` in the Composable forces edits when you add an enum constant.** Adding
+  `CATEGORY` to `ConversationSectionKind` broke the screen's `titleRes()/icon()/containerColor()` `when`s at
+  compile time — expected. Give `CATEGORY` real branches (folder glyph, accent) and render the header from
+  `section.title ?: stringResource(kind.titleRes())` so category sections show their own name; the
+  `titleRes()` arm for `CATEGORY` is a never-shown fallback (documented).
+
 ## Lesson (2026-07-26, `conversation-category-picker`) — model a select-or-create outcome as a sealed type, not a closure
 - iOS UI fields (`CategoryPickerField`, `TagInputField`) express "commit the field" as a `submit()` method
   that **mutates view state in place** (`selectedId = …; editing = ""; focused = false` or fires an async

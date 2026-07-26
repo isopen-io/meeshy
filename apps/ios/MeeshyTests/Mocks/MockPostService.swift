@@ -255,12 +255,17 @@ final class MockPostService: PostServiceProviding, @unchecked Sendable {
         try deleteCommentResult.get()
     }
 
-    /// `visibility` carries the default the real `PostService.repost` declares.
-    /// Without it the mock diverged from the API it mocks: production can call
-    /// `repost(postId:targetType:content:isQuote:)` (see `repostAsPostDirect()`)
-    /// but a test could not, so the mock rejected the very call shape it exists
-    /// to stand in for.
-    func repost(postId: String, targetType: PostType?, content: String?, isQuote: Bool, visibility: String? = nil) async throws -> APIPost {
+    /// Defaults mirror `PostService.repost`, which defaults every parameter.
+    /// Without them a caller that omits an argument compiles against the real
+    /// service and fails against this mock — which is exactly how `visibility`
+    /// broke the test target when it was added.
+    func repost(
+        postId: String,
+        targetType: PostType? = nil,
+        content: String? = nil,
+        isQuote: Bool = false,
+        visibility: String? = nil
+    ) async throws -> APIPost {
         repostCallCount += 1
         lastRepostPostId = postId
         lastRepostTargetType = targetType

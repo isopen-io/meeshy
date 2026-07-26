@@ -1,5 +1,8 @@
 import Foundation
 import GRDB
+import os
+
+private let feedPersistenceLog = Logger(subsystem: "com.meeshy.sdk", category: "feed-persistence")
 
 /// Notification posted after FeedPersistenceActor commits a write that may
 /// have changed the feed posts or comments. `FeedStore` and `CommentStore`
@@ -119,10 +122,12 @@ public actor FeedPersistenceActor {
             let existingData = try Data.fetchOne(db, sql: "SELECT reactionSummaryJson FROM feed_posts WHERE id = ?", arguments: [postId])
             var summary: [String: Int] = [:]
             if let existingData {
-                summary = (try? JSONDecoder().decode([String: Int].self, from: existingData)) ?? [:]
+                summary = JSONDecoder().decodeOrLog([String: Int].self, from: existingData,
+                                                    field: "reactionSummaryJson",
+                                                    logger: feedPersistenceLog) ?? [:]
             }
             if count > 0 { summary[emoji] = count } else { summary.removeValue(forKey: emoji) }
-            let updatedData = try? JSONEncoder().encode(summary)
+            let updatedData = try JSONEncoder().encode(summary)
             try db.execute(
                 sql: """
                     UPDATE feed_posts SET reactionSummaryJson = ?,
@@ -145,10 +150,12 @@ public actor FeedPersistenceActor {
             let existingData = try Data.fetchOne(db, sql: "SELECT reactionSummaryJson FROM feed_comments WHERE id = ?", arguments: [commentId])
             var summary: [String: Int] = [:]
             if let existingData {
-                summary = (try? JSONDecoder().decode([String: Int].self, from: existingData)) ?? [:]
+                summary = JSONDecoder().decodeOrLog([String: Int].self, from: existingData,
+                                                    field: "reactionSummaryJson",
+                                                    logger: feedPersistenceLog) ?? [:]
             }
             if count > 0 { summary[emoji] = count } else { summary.removeValue(forKey: emoji) }
-            let updatedData = try? JSONEncoder().encode(summary)
+            let updatedData = try JSONEncoder().encode(summary)
             try db.execute(
                 sql: """
                     UPDATE feed_comments SET reactionSummaryJson = ?,
@@ -166,7 +173,7 @@ public actor FeedPersistenceActor {
     public func replaceCommentReactionSummary(commentId: String, counts: [String: Int]) throws {
         let cleaned = counts.filter { $0.value > 0 }
         try dbWriter.write { db in
-            let updatedData = cleaned.isEmpty ? nil : (try? JSONEncoder().encode(cleaned))
+            let updatedData: Data? = cleaned.isEmpty ? nil : try JSONEncoder().encode(cleaned)
             try db.execute(
                 sql: """
                     UPDATE feed_comments SET reactionSummaryJson = ?,
@@ -183,10 +190,12 @@ public actor FeedPersistenceActor {
             let existingData = try Data.fetchOne(db, sql: "SELECT translationsJson FROM feed_posts WHERE id = ?", arguments: [postId])
             var translations: [String: String] = [:]
             if let existingData {
-                translations = (try? JSONDecoder().decode([String: String].self, from: existingData)) ?? [:]
+                translations = JSONDecoder().decodeOrLog([String: String].self, from: existingData,
+                                                         field: "translationsJson",
+                                                         logger: feedPersistenceLog) ?? [:]
             }
             translations[language] = translatedText
-            let updatedData = try? JSONEncoder().encode(translations)
+            let updatedData = try JSONEncoder().encode(translations)
             try db.execute(
                 sql: """
                     UPDATE feed_posts SET translationsJson = ?,

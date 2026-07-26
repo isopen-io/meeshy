@@ -312,8 +312,11 @@ public struct TimelineInspectorHost: View {
             onAddKeyframe: { viewModel.addKeyframeAtPlayhead() },
             onDelete: { viewModel.deleteClip(id: clipId) },
             onClose: { viewModel.selectClip(id: nil) },
+            // Stepper de PRÉCISION, pas un geste : `dragClip` aurait fait
+            // avaler le pas de 0,1 s par l'aimant magnétique (~0,16 s au zoom
+            // par défaut).
             onStartAdjusted: { [viewModel] delta in
-                viewModel.dragClip(id: clipId, deltaTimeSeconds: delta, isCommitted: true)
+                viewModel.nudgeClipStart(id: clipId, by: delta)
             },
             onDurationAdjusted: { [viewModel] delta in
                 viewModel.trimClipEnd(id: clipId, deltaTimeSeconds: delta)
@@ -363,6 +366,9 @@ public struct TimelineInspectorHost: View {
                 viewModel.moveKeyframe(clipId: clipId,
                                        keyframeId: keyframeId,
                                        easing: Self.mapInspectorEasing(newEasing))
+            },
+            onTimeAdjusted: { [viewModel] delta in
+                viewModel.nudgeKeyframeTime(clipId: clipId, keyframeId: keyframeId, by: delta)
             },
             onDelete: { [viewModel] in
                 viewModel.deleteKeyframe(clipId: clipId, keyframeId: keyframeId)
