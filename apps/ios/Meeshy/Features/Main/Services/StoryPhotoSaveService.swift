@@ -55,11 +55,14 @@ final class StoryPhotoSaveService: ObservableObject {
     /// Borne dure sur `resolveIntro(_:timeout:)` — voir sa doc pour le pourquoi.
     private let introTimeout: Duration
 
-    /// Tentative courante par story : incrémentée à chaque `save()`. Une
+    /// Tentative courante par story : incrémentée à chaque `save()` ET à
+    /// chaque `cancel()` — c'est la SEULE source de vérité sur « quelle
+    /// tentative est la bonne », jamais dérivée de `jobs`/`tasks`. Une
     /// tentative annulée continue de baker en tâche de fond (`AVAssetWriter`
-    /// ignore `Task.isCancelled`) ; sans ce jeton, ses écritures `onProgress`
-    /// périmées pourraient s'appliquer PENDANT qu'une tentative relancée pour
-    /// la même story est en cours — voir `isCurrent(_:for:)`.
+    /// ignore `Task.isCancelled`) ; sans ce jeton intrinsèque, ses écritures
+    /// post-suspension (progression, `jobs`/`tasks`) pourraient s'appliquer
+    /// PENDANT ou APRÈS qu'une tentative relancée pour la même story soit en
+    /// cours — voir `isCurrent(_:for:)`.
     private var generations: [String: Int] = [:]
 
     init(
@@ -131,13 +134,15 @@ final class StoryPhotoSaveService: ObservableObject {
                 onPhaseChange: nil
             )
 
-            // Tentative périmée : annulée (`cancel(storyId:)` a déjà retiré
-            // le job et posé son toast) OU remplacée par un `save()` relancé
-            // pour la même story pendant que CE bake tournait encore
+            // Tentative périmée : annulée (`cancel(storyId:)` a déjà avancé
+            // la génération et posé son toast) OU remplacée par un `save()`
+            // relancé pour la même story pendant que CE bake tournait encore
             // (`AVAssetWriter` n'observe pas `Task.isCancelled`, le MP4 peut
             // arriver bien après). Dans les deux cas on nettoie le MP4 sans
             // toucher à `jobs`/`tasks` — qui appartiennent à la tentative
-            // courante — et sans second toast.
+            // courante — et sans second toast. Aucune suspension entre cette
+            // vérification et le `guard let url else` suivant : la valeur
+            // reste valide pour ce dernier sans nouvelle vérification.
             guard self.isCurrent(generation, for: storyId) else {
                 if let url { self.exporter.cleanupExport(at: url) }
                 return
@@ -156,8 +161,15 @@ final class StoryPhotoSaveService: ObservableObject {
 
             do {
                 try await self.photoSaver.saveVideo(at: url)
-                self.jobs[storyId] = 1
+                // Nouvelle suspension au-dessus (`await saveVideo`) : la
+                // tentative a pu être annulée-puis-relancée PENDANT
+                // l'écriture Photos (la fenêtre que le round précédent de
+                // cette correction laissait passer). Le fichier temporaire
+                // est nettoyé dans tous les cas ; `jobs`/`tasks` et le toast
+                // n'appartiennent qu'à la tentative encore courante.
                 self.exporter.cleanupExport(at: url)
+                guard self.isCurrent(generation, for: storyId) else { return }
+                self.jobs[storyId] = 1
                 self.finish(storyId: storyId)
                 HapticFeedback.medium()
                 self.toasts.showSuccess(String(
@@ -168,6 +180,7 @@ final class StoryPhotoSaveService: ObservableObject {
                 Logger.stories.error(
                     "story save to photos failed for \(storyId, privacy: .public): \(error.localizedDescription, privacy: .public)")
                 self.exporter.cleanupExport(at: url)
+                guard self.isCurrent(generation, for: storyId) else { return }
                 self.finish(storyId: storyId)
                 self.toasts.showError(String(
                     localized: "story.mine.save.photosDenied",
@@ -183,6 +196,12 @@ final class StoryPhotoSaveService: ObservableObject {
     func cancel(storyId: String) {
         guard jobs[storyId] != nil else { return }
         tasks[storyId]?.cancel()
+        // Avance la génération AVANT `finish` : c'est ce qui invalide
+        // intrinsèquement et DÉFINITIVEMENT la tentative annulée — que
+        // l'utilisateur relance ou non ensuite. `jobs[storyId]` seul ne
+        // suffit pas comme marqueur (voir `isCurrent`) : n'importe quelle
+        // tentative peut le repeupler via un `save()` relancé.
+        generations[storyId] = (generations[storyId] ?? 0) + 1
         finish(storyId: storyId)
         toasts.showSuccess(String(
             localized: "story.mine.save.cancelled",
@@ -197,15 +216,29 @@ final class StoryPhotoSaveService: ObservableObject {
         tasks[storyId] = nil
     }
 
-    /// Vrai si `generation` est toujours la tentative courante pour `storyId` :
-    /// un job existe encore ET aucune tentative plus récente n'a démarré
-    /// entre-temps. Une tentative annulée (`finish` a vidé `jobs[storyId]`)
-    /// ou remplacée par un `save()` relancé (`generations[storyId]` a avancé)
-    /// répond `false` — c'est ce qui empêche les fractions `onProgress`
-    /// périmées d'une tentative abandonnée d'écraser la progression réelle
-    /// de la tentative en cours après un « annuler puis relancer » immédiat.
+    /// Vrai si `generation` est toujours la tentative courante pour `storyId`.
+    ///
+    /// Comparaison **intrinsèque**, contre `generations[storyId]` UNIQUEMENT
+    /// — jamais contre `jobs[storyId] != nil`. `jobs`/`tasks` sont un état
+    /// PARTAGÉ que `finish(storyId:)` efface sans discernement ; une
+    /// tentative périmée qui s'en servirait comme marqueur d'identité
+    /// pourrait voir une tentative B, fraîchement relancée, repeupler
+    /// `jobs[storyId]` et se faire passer — à tort — pour périmée dès que A
+    /// appelle `finish` après elle (régression du round précédent : A
+    /// ressort de `saveVideo` après le relancement de B, écrit
+    /// `jobs[storyId] = 1` puis `finish()`, qui efface la RÉFÉRENCE DE B —
+    /// B se croit alors périmé et jette son propre MP4 sans jamais écrire
+    /// dans Photos, en silence).
+    ///
+    /// `generations[storyId]` n'est JAMAIS réinitialisé, seulement avancé —
+    /// par `save()` (nouvelle tentative) ET par `cancel()` (invalide
+    /// intrinsèquement et définitivement la tentative annulée, que
+    /// l'utilisateur relance ou non ensuite). Le token qu'une tentative
+    /// capture à son lancement ne peut donc plus jamais redevenir courant
+    /// une fois dépassé, indépendamment de ce que d'autres tentatives font
+    /// de `jobs`/`tasks` entre-temps.
     private func isCurrent(_ generation: Int, for storyId: String) -> Bool {
-        jobs[storyId] != nil && generations[storyId] == generation
+        generations[storyId] == generation
     }
 
     /// Course entre `intro()` et une borne de temps : la première à finir

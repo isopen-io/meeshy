@@ -164,6 +164,40 @@ final class ManualStoryExporter: StoryVideoExportServiceProviding {
     }
 }
 
+/// Photothèque manuelle : suspend `saveVideo(at:)` jusqu'à ce que le test
+/// appelle `resolve(attempt:)`, tentatives adressables par index. Nécessaire
+/// pour rejouer une tentative périmée AU-DELÀ de `prepareExport`, en pleine
+/// écriture Photos, quand une relance arrive pendant cette attente —
+/// `StubPhotoSaver` résout immédiatement, donc ne peut jamais laisser deux
+/// écritures coexister en vol.
+final class ManualPhotoSaver: PhotoLibrarySaving, @unchecked Sendable {
+
+    private struct PendingCall {
+        let url: URL
+        let continuation: CheckedContinuation<Void, Error>
+    }
+
+    private var pendingCalls: [PendingCall] = []
+    private(set) var savedVideoURLs: [URL] = []
+
+    var pendingCount: Int { pendingCalls.count }
+
+    func saveImage(_ data: Data) async throws {}
+
+    func saveVideo(at url: URL) async throws {
+        try await withCheckedThrowingContinuation { continuation in
+            pendingCalls.append(PendingCall(url: url, continuation: continuation))
+        }
+    }
+
+    /// Termine la tentative à l'index `attempt` avec succès.
+    func resolve(attempt: Int) {
+        let call = pendingCalls[attempt]
+        savedVideoURLs.append(call.url)
+        call.continuation.resume()
+    }
+}
+
 // MARK: - StoryPhotoSaveServiceTests
 
 @MainActor
@@ -360,9 +394,15 @@ final class StoryPhotoSaveServiceTests: XCTestCase {
             photoSaver: photos,
             toasts: toasts,
             preferredLanguages: { [] },
-            introTimeout: .milliseconds(100),
+            introTimeout: .milliseconds(50),
             intro: {
-                try? await Task.sleep(for: .seconds(2))
+                // Volontairement courte (400 ms, pas plusieurs secondes) :
+                // la tâche perdante de la course continue en arrière-plan
+                // après la fin du test — la garder brève limite le bruit
+                // d'isolation entre tests plutôt que de le supprimer (le
+                // `IntroRaceBox` n'a pas de mécanisme d'annulation forcée,
+                // seule la 2ᵉ résolution est ignorée).
+                try? await Task.sleep(for: .milliseconds(400))
                 return StoryExportIntroContent(displayName: "Late", username: "late", accentColorHex: "FFFFFF")
             }
         )
@@ -372,8 +412,8 @@ final class StoryPhotoSaveServiceTests: XCTestCase {
         sut.save(story: story)
         await waitUntilIdle(sut, storyId: story.id)
 
-        XCTAssertLessThan(Date().timeIntervalSince(start), 1.5,
-                           "le bake ne doit pas attendre la résolution d'identité complète (2s)")
+        XCTAssertLessThan(Date().timeIntervalSince(start), 0.3,
+                           "le bake ne doit pas attendre la résolution d'identité complète (400ms)")
         XCTAssertNil(exporter.lastIntro, "passé le délai, le bake démarre sans interlude de marque")
         XCTAssertEqual(exporter.prepareCallCount, 1)
     }
@@ -472,5 +512,86 @@ final class StoryPhotoSaveServiceTests: XCTestCase {
         XCTAssertEqual(photos.savedVideoURLs.count, 1, "une seule écriture Photos : celle de la tentative courante")
         XCTAssertEqual(manual.cleanupCallCount, 2, "le MP4 périmé ET celui de la tentative courante doivent être nettoyés")
         XCTAssertEqual(toasts.successMessages.count, 2, "un toast d'annulation + un toast de succès")
+    }
+
+    /// Fenêtre manquante de la 1ère correction (régression Critical relevée en
+    /// revue) : la tentative périmée n'est PAS bloquée dans `prepareExport`
+    /// mais PLUS LOIN, en pleine écriture Photos, quand la relance arrive.
+    /// `ScriptedStoryExporter` bake instantanément pour que A atteigne
+    /// `photoSaver.saveVideo` avant que le test n'annule ; `ManualPhotoSaver`
+    /// suspend cette écriture jusqu'à résolution manuelle, ce qui laisse le
+    /// temps à B de démarrer ET de terminer AVANT que l'écriture Photos
+    /// périmée de A ne ressorte.
+    ///
+    /// Ce que le fix garantit : quand A ressort, sa `finish()` ne peut plus
+    /// supprimer la RÉFÉRENCE DE B (jobs/tasks), et A ne poste ni toast ni
+    /// résurrection de `jobs[storyId]`. Ce que le fix NE peut PAS garantir :
+    /// empêcher l'écriture Photos physique de A, déjà en vol au moment de
+    /// l'annulation — `PHPhotoLibrary`/`AVAssetWriter` ne s'interrompent pas
+    /// en cours de route (même constat déjà documenté pour le MP4 temporaire
+    /// sur le chemin d'annulation). Si `isCurrent` dépendait encore de
+    /// `jobs[storyId] != nil` (round précédent), A aurait en plus écrasé la
+    /// progression de B puis fait disparaître sa RÉFÉRENCE — B se serait cru
+    /// périmé à tort et aurait jeté son propre MP4 sans jamais écrire dans
+    /// Photos, en silence.
+    func test_cancelThenRelaunch_staleAttemptBeyondPrepareExport_duringPhotosWrite_isIgnored() async {
+        let exporterA = ScriptedStoryExporter()
+        let manualPhotos = ManualPhotoSaver()
+        let toasts = MockFeedbackToast()
+        let sut = StoryPhotoSaveService(
+            exporter: exporterA,
+            photoSaver: manualPhotos,
+            toasts: toasts,
+            preferredLanguages: { [] },
+            intro: { nil }
+        )
+        let story = makeStory()
+
+        // Tentative A : bake instantané (ScriptedStoryExporter), suspendue
+        // dans l'écriture Photos.
+        sut.save(story: story)
+        await waitUntil { manualPhotos.pendingCount >= 1 }
+        XCTAssertEqual(sut.progress(for: story.id) ?? -1, StorySaveProgressMapper.bakeShare, accuracy: 0.0001,
+                       "A doit être au palier de 90% en attendant Photos")
+
+        // Annulation puis relance IMMÉDIATE pendant que A attend encore.
+        sut.cancel(storyId: story.id)
+        sut.save(story: story)
+        await waitUntil { manualPhotos.pendingCount >= 2 }
+
+        // B, elle aussi instantanée jusqu'à Photos, atteint le même palier —
+        // rien de A ne doit avoir laissé de trace dans `jobs[storyId]`.
+        XCTAssertEqual(sut.progress(for: story.id) ?? -1, StorySaveProgressMapper.bakeShare, accuracy: 0.0001,
+                       "B doit être à son propre palier de 90%, non perturbé par A")
+
+        // B se termine EN PREMIER (écriture Photos réelle, plus rapide que
+        // l'attente de A dans ce scénario).
+        manualPhotos.resolve(attempt: 1)
+        await waitUntilIdle(sut, storyId: story.id)
+
+        XCTAssertEqual(manualPhotos.savedVideoURLs.count, 1, "seule B doit avoir écrit dans Photos à ce stade")
+        XCTAssertEqual(toasts.successMessages.count, 2, "toast d'annulation + toast de succès de B")
+        XCTAssertTrue(toasts.errorMessages.isEmpty)
+
+        // A ressort ENSUITE, après que B a déjà terminé et libéré jobs/tasks
+        // pour cette story — c'est exactement la fenêtre que la régression
+        // laissait passer. `resolve(attempt: 0)` simule l'écriture Photos
+        // RÉELLE de A qui aboutit (comme le MP4 d'un bake annulé peut arriver
+        // après coup — `AVAssetWriter`/`PHPhotoLibrary` ne s'interrompent pas
+        // en cours de route, commentaire déjà présent sur le chemin
+        // d'annulation) : `manualPhotos.savedVideoURLs` passe donc bien à 2,
+        // ce n'est PAS ce qui est gardé. Ce qui DOIT rester intact, c'est
+        // l'état APPLICATIF que `save()` expose : aucun toast, aucune
+        // résurrection de `jobs[storyId]` pour une tentative qui n'est plus
+        // la tentative courante.
+        manualPhotos.resolve(attempt: 0)
+        await waitUntil { exporterA.cleanupCallCount >= 2 }
+
+        XCTAssertEqual(manualPhotos.savedVideoURLs.count, 2,
+                       "l'écriture Photos physique de A a bien lieu (irréversible, comme un MP4 baké après annulation) — ce n'est pas ce que le fix garde")
+        XCTAssertEqual(toasts.successMessages.count, 2, "A ne doit poster AUCUN toast supplémentaire malgré son écriture Photos réelle")
+        XCTAssertTrue(toasts.errorMessages.isEmpty)
+        XCTAssertNil(sut.progress(for: story.id),
+                     "A ne doit pas ressusciter jobs[storyId] après que B a déjà fini et nettoyé")
     }
 }
