@@ -10,10 +10,46 @@ enum DeviceLayout {
         sizeClass == .regular
     }
 
+    /// Size of the window the app is actually rendered in.
+    ///
+    /// `UIScreen.main` is deprecated since iOS 16 *and* reports the physical
+    /// display. Under iPad Split View, Slide Over or Stage Manager the app owns
+    /// only a fraction of that display, so a ratio taken against the screen is
+    /// a ratio of space the app does not have: it inflates until it stops
+    /// constraining anything at all.
+    ///
+    /// The scene is resolved by `activationState`, never by `connectedScenes.first`
+    /// — `connectedScenes` is an *unordered* `Set`, so `.first` can hand back a
+    /// background scene in any multi-window configuration.
+    ///
+    /// Falls back to the display only when no foreground scene is attached
+    /// (teardown, background refresh) — contexts where no layout is happening.
+    ///
+    /// Prefer a `GeometryReader`'s own `size` wherever one is already in scope:
+    /// this is the answer for views that have no container measurement to read.
+    static var windowSize: CGSize {
+        UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .first(where: { $0.activationState == .foregroundActive })?
+            .windows.first(where: { $0.isKeyWindow })?
+            .bounds.size ?? UIScreen.main.bounds.size
+    }
+
     static func bubbleMaxWidth(containerWidth: CGFloat, sizeClass: UserInterfaceSizeClass?) -> CGFloat {
         let ratio: CGFloat = sizeClass == .regular ? 0.62 : 0.70
         let cap: CGFloat = sizeClass == .regular ? 560 : .infinity
         return min(containerWidth * ratio, cap)
+    }
+
+    /// Bubble cap for the conversation surfaces, which span the whole window.
+    ///
+    /// The gutter opposite a bubble is what tells sender from recipient at a
+    /// glance; measuring it against the display collapses that gutter to the
+    /// row's `Spacer(minLength:)` as soon as the window is narrower than the
+    /// screen. Callers that can measure their own container should keep using
+    /// `bubbleMaxWidth(containerWidth:sizeClass:)`.
+    static func bubbleMaxWidth(sizeClass: UserInterfaceSizeClass?) -> CGFloat {
+        bubbleMaxWidth(containerWidth: windowSize.width, sizeClass: sizeClass)
     }
 
     static func sheetMaxHeight(screenHeight: CGFloat, sizeClass: UserInterfaceSizeClass?) -> CGFloat {
