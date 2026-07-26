@@ -79,7 +79,7 @@ final class WindowMetricsSSOTTests: XCTestCase {
     func test_composerHeight_withKeyboardDown_addsTheWindowInset() {
         XCTAssertEqual(
             ConversationView.resolvedComposerHeight(contentHeight: 130, keyboardHeight: 0, safeAreaBottom: 34),
-            164
+            164 as CGFloat?
         )
     }
 
@@ -89,7 +89,7 @@ final class WindowMetricsSSOTTests: XCTestCase {
     func test_composerHeight_withoutAnInset_isTheContentHeight() {
         XCTAssertEqual(
             ConversationView.resolvedComposerHeight(contentHeight: 130, keyboardHeight: 0, safeAreaBottom: 0),
-            130
+            130 as CGFloat?
         )
     }
 
