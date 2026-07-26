@@ -723,7 +723,11 @@ private struct MyStoryRow<MenuContent: View>: View {
         // démontage/remontage complet à chaque bascule — régression
         // d'identité de vue relevée en revue. Finding Task 3, round 2.
         .accessibilityActions {
-            if saveService.progress(for: story.id) != nil {
+            // Même condition que le tap de l'anneau : proposer « Annuler
+            // l'enregistrement » quand l'écriture photothèque a déjà commencé
+            // annoncerait une action que le service refuse — voir
+            // `StoryPhotoSaveService.isCancellable(storyId:)`.
+            if saveService.isCancellable(storyId: story.id) {
                 Button(String(
                     localized: "story.mine.save.cancel.a11y",
                     defaultValue: "Annuler l'enregistrement"
@@ -771,6 +775,11 @@ private struct MyStoryRow<MenuContent: View>: View {
     /// avec le rail d'actions du reader (`StoryActionSidebarView`) — pour que
     /// les deux surfaces ne divergent jamais (épaisseur, arrondi, sens de
     /// rotation).
+    ///
+    /// Le tap cesse d'être actif dès que l'écriture photothèque a commencé
+    /// (`isCancellable(storyId:)`) : `PHPhotoLibrary.performChanges` n'est pas
+    /// annulable, et un tap y affichait « Export annulé » sur une vidéo qui
+    /// atterrissait quand même.
     private func saveRing(progress: Double) -> some View {
         Button {
             HapticFeedback.medium()
@@ -781,6 +790,7 @@ private struct MyStoryRow<MenuContent: View>: View {
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .disabled(!saveService.isCancellable(storyId: story.id))
         .accessibilityHidden(true)
     }
 

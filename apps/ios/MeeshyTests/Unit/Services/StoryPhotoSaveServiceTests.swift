@@ -573,32 +573,30 @@ final class StoryPhotoSaveServiceTests: XCTestCase {
         XCTAssertEqual(toasts.successMessages.count, 2, "un toast d'annulation + un toast de succès")
     }
 
-    /// Fenêtre manquante de la 1ère correction (régression Critical relevée en
-    /// revue) : la tentative périmée n'est PAS bloquée dans `prepareExport`
-    /// mais PLUS LOIN, en pleine écriture Photos, quand la relance arrive.
-    /// `ScriptedStoryExporter` bake instantanément pour que A atteigne
-    /// `photoSaver.saveVideo` avant que le test n'annule ; `ManualPhotoSaver`
-    /// suspend cette écriture jusqu'à résolution manuelle, ce qui laisse le
-    /// temps à B de démarrer ET de terminer AVANT que l'écriture Photos
-    /// périmée de A ne ressorte.
+    // MARK: L'écriture Photos n'est pas annulable (revue finale, item 3)
+
+    /// Ce test décrivait auparavant le comportement SUBI : annuler pendant
+    /// l'écriture Photos affichait « Export annulé », l'écriture aboutissait
+    /// quand même, une relance en écrivait une seconde — et il assertait
+    /// `savedVideoURLs.count == 2`, c'est-à-dire le doublon invisible lui-même.
     ///
-    /// Ce que le fix garantit : quand A ressort, sa `finish()` ne peut plus
-    /// supprimer la RÉFÉRENCE DE B (jobs/tasks), et A ne poste ni toast ni
-    /// résurrection de `jobs[storyId]`. Ce que le fix NE peut PAS garantir :
-    /// empêcher l'écriture Photos physique de A, déjà en vol au moment de
-    /// l'annulation — `PHPhotoLibrary`/`AVAssetWriter` ne s'interrompent pas
-    /// en cours de route (même constat déjà documenté pour le MP4 temporaire
-    /// sur le chemin d'annulation). Si `isCurrent` dépendait encore de
-    /// `jobs[storyId] != nil` (round précédent), A aurait en plus écrasé la
-    /// progression de B puis fait disparaître sa RÉFÉRENCE — B se serait cru
-    /// périmé à tort et aurait jeté son propre MP4 sans jamais écrire dans
-    /// Photos, en silence.
-    func test_cancelThenRelaunch_staleAttemptBeyondPrepareExport_duringPhotosWrite_isIgnored() async {
-        let exporterA = ScriptedStoryExporter()
+    /// `PHPhotoLibrary.performChanges` n'est pas annulable : le mot « annulé »
+    /// ne peut PAS être rendu vrai à ce stade. Plutôt que d'inventer un
+    /// troisième message pour un état sur lequel l'utilisateur n'a aucune
+    /// prise, l'annulation devient IMPOSSIBLE dès que cette écriture démarre —
+    /// les deux surfaces désactivent alors l'anneau
+    /// (`StoryPhotoSaveService.isCancellable(storyId:)`).
+    ///
+    /// Le contrat « taper l'anneau annule » reste tenu sur tout le bake
+    /// (`0…bakeShare`), couvert par
+    /// `test_cancel_duringBake_cleansUpMP4OnceTheAbandonedTaskUnwinds` et
+    /// `test_cancelThenRelaunch_staleProgressFromAbandonedAttemptIsIgnored`.
+    func test_cancel_duringPhotosWrite_isRefused_andWritesExactlyOneVideo() async {
+        let exporter = ScriptedStoryExporter()
         let manualPhotos = ManualPhotoSaver()
         let toasts = MockFeedbackToast()
         let sut = StoryPhotoSaveService(
-            exporter: exporterA,
+            exporter: exporter,
             photoSaver: manualPhotos,
             toasts: toasts,
             preferredLanguages: { [] },
@@ -606,51 +604,79 @@ final class StoryPhotoSaveServiceTests: XCTestCase {
         )
         let story = makeStory()
 
-        // Tentative A : bake instantané (ScriptedStoryExporter), suspendue
-        // dans l'écriture Photos.
+        // Bake instantané (`ScriptedStoryExporter`), puis suspension dans
+        // l'écriture Photos (`ManualPhotoSaver`) : exactement l'instant où
+        // l'utilisateur voit 90 % et s'impatiente.
         sut.save(story: story)
         await waitUntil { manualPhotos.pendingCount >= 1 }
         XCTAssertEqual(sut.progress(for: story.id) ?? -1, StorySaveProgressMapper.bakeShare, accuracy: 0.0001,
-                       "A doit être au palier de 90% en attendant Photos")
+                       "le palier de 90 % marque le début de l'écriture Photos")
+        XCTAssertFalse(sut.isCancellable(storyId: story.id),
+                       "l'écriture Photos a commencé : l'anneau ne doit plus être annulable")
 
-        // Annulation puis relance IMMÉDIATE pendant que A attend encore.
+        // Le tap sur l'anneau (et l'action VoiceOver) sont désactivés par
+        // `isCancellable`; on appelle quand même `cancel` pour prouver que le
+        // service lui-même refuse, et ne se contente pas d'une garde d'UI.
         sut.cancel(storyId: story.id)
-        sut.save(story: story)
-        await waitUntil { manualPhotos.pendingCount >= 2 }
 
-        // B, elle aussi instantanée jusqu'à Photos, atteint le même palier —
-        // rien de A ne doit avoir laissé de trace dans `jobs[storyId]`.
+        XCTAssertTrue(toasts.successMessages.isEmpty,
+                      "aucun « Export annulé » ne doit être affiché sur une écriture qui aboutira")
         XCTAssertEqual(sut.progress(for: story.id) ?? -1, StorySaveProgressMapper.bakeShare, accuracy: 0.0001,
-                       "B doit être à son propre palier de 90%, non perturbé par A")
+                       "le job reste en vol : rien n'a été annulé")
 
-        // B se termine EN PREMIER (écriture Photos réelle, plus rapide que
-        // l'attente de A dans ce scénario).
-        manualPhotos.resolve(attempt: 1)
+        // Relance pendant que l'écriture est encore suspendue : ignorée, le
+        // job de la story est toujours en vol (garde d'idempotence de `save`).
+        sut.save(story: story)
+        XCTAssertEqual(manualPhotos.pendingCount, 1,
+                       "aucune seconde écriture Photos ne doit être lancée")
+
+        manualPhotos.resolve(attempt: 0)
         await waitUntilIdle(sut, storyId: story.id)
 
-        XCTAssertEqual(manualPhotos.savedVideoURLs.count, 1, "seule B doit avoir écrit dans Photos à ce stade")
-        XCTAssertEqual(toasts.successMessages.count, 2, "toast d'annulation + toast de succès de B")
+        XCTAssertEqual(manualPhotos.savedVideoURLs.count, 1,
+                       "UNE seule vidéo dans la photothèque — plus de doublon invisible")
+        XCTAssertEqual(toasts.successMessages.count, 1,
+                       "un unique toast, et c'est celui du succès réel")
         XCTAssertTrue(toasts.errorMessages.isEmpty)
+        XCTAssertNil(sut.progress(for: story.id))
+        XCTAssertFalse(sut.isCancellable(storyId: story.id),
+                       "job terminé : plus rien à annuler")
+        XCTAssertEqual(exporter.cleanupCallCount, 1, "le MP4 temporaire doit être nettoyé")
+    }
 
-        // A ressort ENSUITE, après que B a déjà terminé et libéré jobs/tasks
-        // pour cette story — c'est exactement la fenêtre que la régression
-        // laissait passer. `resolve(attempt: 0)` simule l'écriture Photos
-        // RÉELLE de A qui aboutit (comme le MP4 d'un bake annulé peut arriver
-        // après coup — `AVAssetWriter`/`PHPhotoLibrary` ne s'interrompent pas
-        // en cours de route, commentaire déjà présent sur le chemin
-        // d'annulation) : `manualPhotos.savedVideoURLs` passe donc bien à 2,
-        // ce n'est PAS ce qui est gardé. Ce qui DOIT rester intact, c'est
-        // l'état APPLICATIF que `save()` expose : aucun toast, aucune
-        // résurrection de `jobs[storyId]` pour une tentative qui n'est plus
-        // la tentative courante.
-        manualPhotos.resolve(attempt: 0)
-        await waitUntil { exporterA.cleanupCallCount >= 2 }
+    /// Le pendant : pendant le BAKE, l'anneau reste annulable — le contrat
+    /// « taper l'anneau annule » n'est pas cassé, il est juste borné à l'étape
+    /// réversible.
+    func test_isCancellable_isTrueDuringBake_andFalseWithoutJob() async {
+        let manual = ManualStoryExporter()
+        let photos = StubPhotoSaver()
+        let toasts = MockFeedbackToast()
+        let sut = StoryPhotoSaveService(
+            exporter: manual,
+            photoSaver: photos,
+            toasts: toasts,
+            preferredLanguages: { [] },
+            intro: { nil }
+        )
+        let story = makeStory()
 
-        XCTAssertEqual(manualPhotos.savedVideoURLs.count, 2,
-                       "l'écriture Photos physique de A a bien lieu (irréversible, comme un MP4 baké après annulation) — ce n'est pas ce que le fix garde")
-        XCTAssertEqual(toasts.successMessages.count, 2, "A ne doit poster AUCUN toast supplémentaire malgré son écriture Photos réelle")
-        XCTAssertTrue(toasts.errorMessages.isEmpty)
-        XCTAssertNil(sut.progress(for: story.id),
-                     "A ne doit pas ressusciter jobs[storyId] après que B a déjà fini et nettoyé")
+        XCTAssertFalse(sut.isCancellable(storyId: story.id), "aucun job en vol")
+
+        sut.save(story: story)
+        await waitUntil { manual.pendingCount >= 1 }
+        XCTAssertTrue(sut.isCancellable(storyId: story.id),
+                      "pendant le bake, l'anneau doit rester annulable")
+
+        sut.cancel(storyId: story.id)
+        XCTAssertNil(sut.progress(for: story.id), "le job doit disparaître dès l'appel à cancel")
+        XCTAssertEqual(toasts.successMessages.count, 1, "l'annulation pendant le bake dit bien la vérité")
+        XCTAssertFalse(sut.isCancellable(storyId: story.id), "plus de job : plus rien à annuler")
+
+        // Draine le bake abandonné — `ManualStoryExporter` suspend sur une
+        // `CheckedContinuation` : la laisser pendante en fin de test la ferait
+        // fuiter. Le Task ressort périmé et nettoie son MP4 sans rien publier.
+        manual.resolve(attempt: 0)
+        await waitUntil { manual.cleanupCallCount >= 1 }
+        XCTAssertEqual(toasts.successMessages.count, 1, "le bake abandonné ne poste aucun toast supplémentaire")
     }
 }

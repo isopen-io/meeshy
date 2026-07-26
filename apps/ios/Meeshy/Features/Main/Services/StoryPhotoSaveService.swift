@@ -45,6 +45,12 @@ final class StoryPhotoSaveService: ObservableObject {
     /// choisir entre le glyphe `⋯` et l'anneau.
     @Published private(set) var jobs: [String: Double] = [:]
 
+    /// Stories dont l'écriture dans la photothèque a COMMENCÉ — donc plus
+    /// annulables (voir `isCancellable(storyId:)`). `@Published` parce que
+    /// c'est ce qui rend l'anneau non tappable sur les deux surfaces : sans
+    /// republication, la ligne et le rail ne réévalueraient pas leur `.disabled`.
+    @Published private(set) var uncancellableJobs: Set<String> = []
+
     private var tasks: [String: Task<Void, Never>] = [:]
 
     private let exporter: StoryVideoExportServiceProviding
@@ -89,6 +95,27 @@ final class StoryPhotoSaveService: ObservableObject {
 
     /// Progression `0…1` de la sauvegarde en vol, `nil` si aucune.
     func progress(for storyId: String) -> Double? { jobs[storyId] }
+
+    /// Vrai tant que taper l'anneau peut RÉELLEMENT annuler quelque chose.
+    ///
+    /// Faux dès que `PHPhotoLibrary.performChanges` a démarré : cette écriture
+    /// n'est pas annulable. Auparavant l'anneau restait tappable pendant tout
+    /// le palier à 90 %, et taper affichait « Export annulé » alors que la
+    /// vidéo finissait quand même d'atterrir dans la photothèque — puis la
+    /// garde `isCurrent` faisait retourner la méthode en silence, sans toast
+    /// de succès. L'utilisateur croyait avoir annulé et se retrouvait avec un
+    /// doublon invisible.
+    ///
+    /// Choix retenu : rendre l'annulation IMPOSSIBLE sur cette dernière étape
+    /// plutôt que d'inventer un troisième message. On ne peut pas rendre vrai
+    /// le mot « annulé » — l'écriture est irréversible — et un message honnête
+    /// (« trop tard pour annuler ») décrirait un état sur lequel l'utilisateur
+    /// n'a de toute façon aucune prise. Le contrat « taper l'anneau annule »
+    /// reste tenu sur TOUT le bake, c'est-à-dire sur `0…bakeShare` (90 %) de
+    /// l'anneau, là où passe l'essentiel du temps.
+    func isCancellable(storyId: String) -> Bool {
+        jobs[storyId] != nil && !uncancellableJobs.contains(storyId)
+    }
 
     // MARK: - Actions
 
@@ -158,6 +185,10 @@ final class StoryPhotoSaveService: ObservableObject {
             }
 
             self.jobs[storyId] = StorySaveProgressMapper.bakeShare
+            // Point de non-retour : `PHPhotoLibrary.performChanges` n'est pas
+            // annulable — voir `isCancellable(storyId:)`. Posé AVANT le
+            // `await`, sinon la fenêtre qu'on ferme resterait ouverte.
+            self.uncancellableJobs.insert(storyId)
 
             do {
                 try await self.photoSaver.saveVideo(at: url)
@@ -193,8 +224,14 @@ final class StoryPhotoSaveService: ObservableObject {
 
     /// Annule la sauvegarde en vol : la ligne retrouve son `⋯` immédiatement.
     /// Le MP4 déjà baké (s'il arrive après coup) est nettoyé par le `Task`.
+    ///
+    /// Sans effet une fois l'écriture photothèque commencée — voir
+    /// `isCancellable(storyId:)`. Les deux surfaces désactivent alors leur
+    /// anneau, donc ce chemin n'est atteignable que par une course (tap
+    /// exactement au moment du basculement) : il retourne en silence plutôt
+    /// que d'afficher « Export annulé » sur une écriture qui aboutira.
     func cancel(storyId: String) {
-        guard jobs[storyId] != nil else { return }
+        guard isCancellable(storyId: storyId) else { return }
         tasks[storyId]?.cancel()
         // Avance la génération AVANT `finish` : c'est ce qui invalide
         // intrinsèquement et DÉFINITIVEMENT la tentative annulée — que
@@ -214,6 +251,7 @@ final class StoryPhotoSaveService: ObservableObject {
     private func finish(storyId: String) {
         jobs[storyId] = nil
         tasks[storyId] = nil
+        uncancellableJobs.remove(storyId)
     }
 
     /// Vrai si `generation` est toujours la tentative courante pour `storyId`.

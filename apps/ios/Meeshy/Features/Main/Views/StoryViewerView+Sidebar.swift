@@ -467,6 +467,12 @@ struct StoryActionSidebarView: View {
                     StorySaveProgressRing(progress: progress, tint: MeeshyColors.indigo400, diameter: 32)
                 }
                 .buttonStyle(.plain)
+                // Le tap cesse d'être actif dès que l'écriture photothèque a
+                // commencé : `PHPhotoLibrary.performChanges` n'est pas
+                // annulable (cf. `StoryPhotoSaveService.isCancellable`). Le
+                // rail suit la MÊME règle que la ligne « Mes stories », sinon
+                // les deux surfaces divergeraient sur le même job.
+                .disabled(!(currentStory.map { saveService.isCancellable(storyId: $0.id) } ?? false))
                 // Contrairement à la ligne « Mes stories »
                 // (`.accessibilityElement(children: .ignore)`, libellé
                 // composé au niveau de la LIGNE), ce bouton n'est enfant
