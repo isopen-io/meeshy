@@ -20,6 +20,7 @@ import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import me.meeshy.sdk.cache.CacheResult
+import me.meeshy.sdk.category.CategoryRepository
 import me.meeshy.sdk.chat.ConversationDraftStore
 import me.meeshy.sdk.chat.InMemoryConversationDraftStore
 import me.meeshy.sdk.chat.InMemoryStarredMessagesStore
@@ -89,14 +90,23 @@ class ConversationListViewModelTest {
 
     private val workManager: WorkManager = mockk(relaxed = true)
 
+    private fun categoryRepo(
+        categories: List<me.meeshy.sdk.model.CategoryOption> = emptyList(),
+    ): CategoryRepository = mockk<CategoryRepository> {
+        every { categoriesStream(any(), any()) } returns flowOf(categories)
+    }
+
     private fun viewModel(
         repo: ConversationRepository,
         connection: SocketManager = connectionSocket(),
         draftStore: ConversationDraftStore = InMemoryConversationDraftStore(),
         socket: MessageSocketManager = socketManager(),
         starredStore: StarredMessagesStore = InMemoryStarredMessagesStore(),
+        categoryRepository: CategoryRepository = categoryRepo(),
         session: SessionRepository = session(),
-    ) = ConversationListViewModel(repo, socket, workManager, draftStore, starredStore, connection, session)
+    ) = ConversationListViewModel(
+        repo, socket, workManager, draftStore, starredStore, categoryRepository, connection, session,
+    )
 
     @Test
     fun fresh_result_populates_conversations_without_skeleton() = runTest(dispatcher) {
@@ -109,6 +119,32 @@ class ConversationListViewModelTest {
         assertThat(vm.state.value.conversations).hasSize(1)
         assertThat(vm.state.value.showSkeleton).isFalse()
         assertThat(vm.state.value.isSyncing).isFalse()
+    }
+
+    @Test
+    fun category_catalogue_stream_hydrates_the_state_categories() = runTest(dispatcher) {
+        val repo = repositoryReturning(flowOf(CacheResult.Empty))
+        val vm = viewModel(
+            repo,
+            categoryRepository = categoryRepo(
+                listOf(
+                    me.meeshy.sdk.model.CategoryOption(id = "work", name = "Work", order = 0),
+                    me.meeshy.sdk.model.CategoryOption(id = "fam", name = "Family", order = 1),
+                ),
+            ),
+        )
+        advanceUntilIdle()
+
+        assertThat(vm.state.value.categories.map { it.id }).containsExactly("work", "fam").inOrder()
+    }
+
+    @Test
+    fun categories_default_to_empty_when_the_catalogue_is_cold() = runTest(dispatcher) {
+        val repo = repositoryReturning(flowOf(CacheResult.Empty))
+        val vm = viewModel(repo)
+        advanceUntilIdle()
+
+        assertThat(vm.state.value.categories).isEmpty()
     }
 
     @Test

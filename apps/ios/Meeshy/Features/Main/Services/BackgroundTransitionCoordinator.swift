@@ -142,7 +142,13 @@ final class BackgroundTransitionCoordinator: BackgroundTransitioning {
             // `pendingCount` — bannière « Synchronisation… » bloquée — mais
             // jamais repris par `flush()` qui ne SELECT que les `.pending`.
             // On le remet donc `.pending` ici aussi, avant le flush.
-            _ = try? await OfflineQueue.shared.bootRecovery()
+            do {
+                _ = try await OfflineQueue.shared.bootRecovery()
+            } catch {
+                // Les lignes bloquées ne sont pas réarmées : elles le seront au
+                // prochain passage au premier plan.
+                Logger.backgroundTransition.error("Boot recovery failed on background transition: \(error.localizedDescription, privacy: .public)")
+            }
         }
         await withBudget("outbox.flush") {
             let pool = DependencyContainer.shared.dbPool
@@ -253,4 +259,10 @@ final class MediaLifecycleBridge {
         // No-op for now — players re-activate their session on next play().
         // Kept as an extension point if we later want to resume downloads.
     }
+}
+
+// MARK: - Logger Extension
+
+private extension Logger {
+    nonisolated static let backgroundTransition = Logger(subsystem: "me.meeshy.app", category: "background-transition")
 }

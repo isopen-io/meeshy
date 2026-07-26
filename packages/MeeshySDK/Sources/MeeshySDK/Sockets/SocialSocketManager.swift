@@ -404,6 +404,8 @@ public final class SocialSocketManager: ObservableObject, SocialSocketProviding,
             .replacingOccurrences(of: "-", with: "+")
             .replacingOccurrences(of: "_", with: "/")
         while base64.count % 4 != 0 { base64.append("=") }
+        // Fail-safe : un JWT illisible est traité comme expiré (déclenche un
+        // refresh) plutôt que présumé valide.
         guard let data = Data(base64Encoded: base64),
               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let exp = json["exp"] as? TimeInterval else { return true }
@@ -662,8 +664,14 @@ public final class SocialSocketManager: ObservableObject, SocialSocketProviding,
                     continuation.resume(throwing: CommentReactionError.serverError(message))
                     return
                 }
-                guard let jsonData = try? JSONSerialization.data(withJSONObject: data),
-                      let event = try? self.decoder.decode(SocketCommentReactionSyncEvent.self, from: jsonData) else {
+                let event: SocketCommentReactionSyncEvent
+                do {
+                    let jsonData = try JSONSerialization.data(withJSONObject: data)
+                    event = try self.decoder.decode(SocketCommentReactionSyncEvent.self, from: jsonData)
+                } catch {
+                    // L'appelant ne reçoit qu'un `.malformedResponse` : sans
+                    // ce log, la cause réelle du désaccord de schéma est perdue.
+                    Logger.socket.error("comment reaction sync ACK undecodable: \(error.localizedDescription, privacy: .public)")
                     continuation.resume(throwing: CommentReactionError.malformedResponse)
                     return
                 }
@@ -699,9 +707,13 @@ public final class SocialSocketManager: ObservableObject, SocialSocketProviding,
     nonisolated static func decodePostReactionAck(
         _ data: [String: Any], decoder: JSONDecoder, postId: String, emoji: String, action: String
     ) -> SocketPostReactionUpdateEvent {
-        if let jsonData = try? JSONSerialization.data(withJSONObject: data),
-           let event = try? decoder.decode(SocketPostReactionUpdateEvent.self, from: jsonData) {
-            return event
+        do {
+            let jsonData = try JSONSerialization.data(withJSONObject: data)
+            return try decoder.decode(SocketPostReactionUpdateEvent.self, from: jsonData)
+        } catch {
+            // Reconstruction minimale depuis les paramètres : l'UI reste juste
+            // sur l'essentiel mais perd les champs enrichis du serveur.
+            Logger.socket.error("post reaction event undecodable, rebuilding a minimal event: \(error.localizedDescription, privacy: .public)")
         }
         return SocketPostReactionUpdateEvent(
             postId: postId, userId: "", emoji: emoji, action: action,
@@ -712,9 +724,11 @@ public final class SocialSocketManager: ObservableObject, SocialSocketProviding,
     nonisolated static func decodeCommentReactionAck(
         _ data: [String: Any], decoder: JSONDecoder, commentId: String, postId: String, emoji: String, action: String
     ) -> SocketCommentReactionUpdateEvent {
-        if let jsonData = try? JSONSerialization.data(withJSONObject: data),
-           let event = try? decoder.decode(SocketCommentReactionUpdateEvent.self, from: jsonData) {
-            return event
+        do {
+            let jsonData = try JSONSerialization.data(withJSONObject: data)
+            return try decoder.decode(SocketCommentReactionUpdateEvent.self, from: jsonData)
+        } catch {
+            Logger.socket.error("comment reaction event undecodable, rebuilding a minimal event: \(error.localizedDescription, privacy: .public)")
         }
         return SocketCommentReactionUpdateEvent(
             commentId: commentId, postId: postId, userId: "", emoji: emoji, action: action,
@@ -780,8 +794,12 @@ public final class SocialSocketManager: ObservableObject, SocialSocketProviding,
                     continuation.resume(throwing: PostReactionError.serverError(message))
                     return
                 }
-                guard let jsonData = try? JSONSerialization.data(withJSONObject: data),
-                      let event = try? self.decoder.decode(SocketPostReactionSyncEvent.self, from: jsonData) else {
+                let event: SocketPostReactionSyncEvent
+                do {
+                    let jsonData = try JSONSerialization.data(withJSONObject: data)
+                    event = try self.decoder.decode(SocketPostReactionSyncEvent.self, from: jsonData)
+                } catch {
+                    Logger.socket.error("post reaction sync ACK undecodable: \(error.localizedDescription, privacy: .public)")
                     continuation.resume(throwing: PostReactionError.malformedResponse)
                     return
                 }
@@ -1141,8 +1159,14 @@ public final class SocialSocketManager: ObservableObject, SocialSocketProviding,
 
         let jsonData: Data
         if let dict = first as? [String: Any] {
-            guard let serialized = try? JSONSerialization.data(withJSONObject: dict) else { return }
-            jsonData = serialized
+            do {
+                jsonData = try JSONSerialization.data(withJSONObject: dict)
+            } catch {
+                // L'événement temps réel est perdu : l'UI ne se mettra à jour
+                // qu'au prochain refresh REST.
+                Logger.socket.error("Socket event payload not serializable, event dropped: \(error.localizedDescription, privacy: .public)")
+                return
+            }
         } else if let str = first as? String {
             jsonData = Data(str.utf8)
         } else {

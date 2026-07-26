@@ -26,17 +26,14 @@ public struct StoryVoiceRecorder<Recorder: AudioRecordingProviding>: View {
 
     /// `nil` = no cap (the previous hardcoded 1-minute limit is removed). A
     /// caller may still opt into a ceiling.
-    private let maxDuration: TimeInterval?
 
     @Environment(\.colorScheme) private var colorScheme
 
     public init(recorder: @autoclosure @escaping () -> Recorder,
                 preferredLanguage: String = "fr",
-                maxDuration: TimeInterval? = nil,
                 onRecordComplete: @escaping (URL, String) -> Void) {
         self._recorder = StateObject(wrappedValue: recorder())
         self._selectedLanguage = State(initialValue: preferredLanguage)
-        self.maxDuration = maxDuration
         self.onRecordComplete = onRecordComplete
     }
 
@@ -153,10 +150,10 @@ public struct StoryVoiceRecorder<Recorder: AudioRecordingProviding>: View {
 
     // MARK: - Recording time label
 
+    /// Temps écoulé, sans « / plafond » : l'enregistrement n'a plus de limite
+    /// de durée (directive produit 2026-07-26).
     private var recordingTimeLabel: String {
-        let elapsed = formatTime(recorder.duration)
-        guard let maxDuration else { return elapsed }
-        return "\(elapsed) / \(formatTime(maxDuration))"
+        formatTime(recorder.duration)
     }
 
     private func formatTime(_ seconds: TimeInterval) -> String {
@@ -268,13 +265,6 @@ public struct StoryVoiceRecorder<Recorder: AudioRecordingProviding>: View {
             recorder.startRecording()
             HapticFeedback.medium()
 
-            phaseTimer = Timer.scheduledTimer(withTimeInterval: 0.05, repeats: true) { _ in
-                Task { @MainActor in
-                    if let maxDuration, recorder.duration >= maxDuration {
-                        stopRecording()
-                    }
-                }
-            }
         }
     }
 
@@ -307,11 +297,9 @@ public struct StoryVoiceRecorder<Recorder: AudioRecordingProviding>: View {
 
 extension StoryVoiceRecorder where Recorder == DefaultSDKAudioRecorder {
     public init(preferredLanguage: String = "fr",
-                maxDuration: TimeInterval? = nil,
                 onRecordComplete: @escaping (URL, String) -> Void) {
         self.init(recorder: DefaultSDKAudioRecorder(),
                   preferredLanguage: preferredLanguage,
-                  maxDuration: maxDuration,
                   onRecordComplete: onRecordComplete)
     }
 }

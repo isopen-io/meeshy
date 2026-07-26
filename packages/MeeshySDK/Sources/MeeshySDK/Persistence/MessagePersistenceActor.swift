@@ -207,7 +207,13 @@ public actor MessagePersistenceActor {
         // T14 — one-shot GC of stale terminal (`.exhausted`) outbox rows so the
         // table can't grow without bound across sessions. Fire-and-forget: a
         // failure here is non-fatal and retried next boot.
-        Task { [weak self] in try? await self?.purgeExhaustedOlderThan() }
+        Task { [weak self] in
+            do {
+                try await self?.purgeExhaustedOlderThan()
+            } catch {
+                Logger.messages.error("Outbox GC skipped this boot, stale terminal rows kept: \(error.localizedDescription, privacy: .public)")
+            }
+        }
         processorTask = Task { [weak self, writeStream] in
             for await op in writeStream {
                 guard let self else { break }
@@ -222,8 +228,8 @@ public actor MessagePersistenceActor {
                     // the new row. Scoped to the conversations whose rows
                     // actually changed: a re-delivered identical payload must
                     // not trigger the MessageStore → applySnapshot cascade.
-                    if let changed = try? await self.reconcileBatchSync(messages),
-                       !changed.isEmpty {
+                    let changed = await self.reconcileBatchSyncOrLog(messages)
+                    if !changed.isEmpty {
                         postMessageStoreRefresh(conversationIds: changed)
                     }
                 case .upsertAPIMessages(let messages):
@@ -231,10 +237,18 @@ public actor MessagePersistenceActor {
                     // `upsertFromAPIMessages` posts its own refresh, scoped to
                     // the conversations with real row changes — do NOT re-post
                     // here or observers refresh twice.
-                    try? await self.upsertFromAPIMessages(messages)
+                    do {
+                        try await self.upsertFromAPIMessages(messages)
+                    } catch {
+                        Logger.messages.error("upsertFromAPIMessages dropped \(messages.count, privacy: .public) message(s): \(error.localizedDescription, privacy: .public)")
+                    }
                 case .batchDeliveryUpdate(let convId, let event):
-                    if (try? await self.batchDeliverySync(conversationId: convId, event: event)) == true {
-                        postMessageStoreRefresh(conversationIds: [convId])
+                    do {
+                        if try await self.batchDeliverySync(conversationId: convId, event: event) {
+                            postMessageStoreRefresh(conversationIds: [convId])
+                        }
+                    } catch {
+                        Logger.messages.error("batchDeliverySync failed for conv=\(convId, privacy: .public): \(error.localizedDescription, privacy: .public)")
                     }
                 }
             }
@@ -408,7 +422,9 @@ public actor MessagePersistenceActor {
     /// affiché est ainsi toujours juste, indépendamment du cycle de vie des
     /// ViewModels.
     public func reconcileFailedFromOutbox(conversationId: String) {
-        let didChange = (try? dbWriter.write { db -> Bool in
+        let didChange: Bool
+        do {
+            didChange = try dbWriter.write { db -> Bool in
             let exhaustedLocalIds = try OutboxRecord
                 .filter(Column("conversationId") == conversationId)
                 .filter(Column("kind") == OutboxKind.sendMessage.rawValue)
@@ -422,7 +438,11 @@ public actor MessagePersistenceActor {
                 .filter(stuckStates.contains(Column("state")))
                 .updateAll(db, Column("state").set(to: MessageState.failed.rawValue))
             return updated > 0
-        }) ?? false
+            }
+        } catch {
+            Logger.messages.error("reconcileFailedFromOutbox write failed for conv=\(conversationId, privacy: .public), stale states left as-is: \(error.localizedDescription, privacy: .public)")
+            didChange = false
+        }
         if didChange {
             postMessageStoreRefresh(conversationIds: [conversationId])
         }
@@ -445,7 +465,9 @@ public actor MessagePersistenceActor {
         olderThan age: TimeInterval = 120
     ) {
         let cutoff = Date().addingTimeInterval(-age)
-        let didChange = (try? dbWriter.write { db -> Bool in
+        let didChange: Bool
+        do {
+            didChange = try dbWriter.write { db -> Bool in
             let stuckStates = [MessageState.sending.rawValue, MessageState.queued.rawValue]
             let stuckIds = try MessageRecord
                 .filter(Column("conversationId") == conversationId)
@@ -474,7 +496,11 @@ public actor MessagePersistenceActor {
                 .filter(orphanIds.contains(Column("localId")))
                 .updateAll(db, Column("state").set(to: MessageState.failed.rawValue))
             return updated > 0
-        }) ?? false
+            }
+        } catch {
+            Logger.messages.error("reconcileStuckSending write failed for conv=\(conversationId, privacy: .public), stale states left as-is: \(error.localizedDescription, privacy: .public)")
+            didChange = false
+        }
         if didChange {
             postMessageStoreRefresh(conversationIds: [conversationId])
         }
@@ -504,6 +530,59 @@ public actor MessagePersistenceActor {
         // Notification is posted by the worker AFTER the GRDB write completes
         // (see `start()`).
         writeContinuation.yield(.batchDeliveryUpdate(conversationId: conversationId, event: event))
+    }
+
+    /// Message ids carrying a still-pending outbox mutation of `kind`.
+    ///
+    /// Callers use the result to keep a stale REST snapshot from clobbering an
+    /// optimistic local change. Returning `[]` therefore DISABLES that guard —
+    /// the edit reverts, the delete un-deletes, the reaction flickers back — so
+    /// neither the query nor the payload decode may fail silently here.
+    nonisolated private static func pendingOutboxMessageIds<P: Decodable>(
+        _ db: Database,
+        kind: OutboxKind,
+        payload: P.Type,
+        messageId: (P) -> String
+    ) -> Set<String> {
+        let rows: [OutboxRecord]
+        do {
+            rows = try OutboxRecord
+                .filter(Column("kind") == kind.rawValue)
+                .filter(Column("status") == OutboxStatus.pending.rawValue)
+                .fetchAll(db)
+        } catch {
+            Logger.messages.error(
+                "Pending \(kind.rawValue, privacy: .public) lookup failed — anti-clobber guard disabled, optimistic changes may revert: \(error.localizedDescription, privacy: .public)"
+            )
+            return []
+        }
+        let payloadDecoder = JSONDecoder()
+        payloadDecoder.dateDecodingStrategy = .iso8601
+        var ids = Set<String>()
+        for row in rows {
+            guard let decoded = payloadDecoder.decodeOrLog(
+                P.self,
+                from: row.payload,
+                field: "\(kind.rawValue) payload",
+                id: row.id
+            ) else { continue }
+            ids.insert(messageId(decoded))
+        }
+        return ids
+    }
+
+    /// `reconcileBatchSync` for the fire-and-forget stream worker: a write
+    /// failure means the batch is NOT persisted and no observer will ever be
+    /// refreshed for it, so it must leave a trace rather than vanish.
+    private func reconcileBatchSyncOrLog(_ messages: [IncomingMessageData]) -> Set<String> {
+        do {
+            return try reconcileBatchSync(messages)
+        } catch {
+            Logger.messages.error(
+                "reconcileBatchSync dropped \(messages.count, privacy: .public) message(s), no refresh posted: \(error.localizedDescription, privacy: .public)"
+            )
+            return []
+        }
     }
 
     /// Returns the conversations where a row was actually written, so the
@@ -748,8 +827,8 @@ public actor MessagePersistenceActor {
     static func isStaleLiveCallSnapshot(existing: Data?, incoming: Data?) -> Bool {
         guard
             let existing, let incoming,
-            let stored = try? JSONDecoder().decode(CallSummaryMetadata.self, from: existing),
-            let candidate = try? JSONDecoder().decode(CallSummaryMetadata.self, from: incoming)
+            let stored = JSONDecoder().decodeOrLog(CallSummaryMetadata.self, from: existing, field: "callSummaryJson(stored)"),
+            let candidate = JSONDecoder().decodeOrLog(CallSummaryMetadata.self, from: incoming, field: "callSummaryJson(incoming)")
         else { return false }
         return candidate.isLive && !stored.isLive && candidate.callId == stored.callId
     }
@@ -981,8 +1060,8 @@ public actor MessagePersistenceActor {
     /// file into the typed cache when the URL flips `file://` → `https://`.
     private static func adoptChangedAttachments(oldJson: Data, newJson: Data) async {
         let decoder = JSONDecoder()
-        guard let oldAtts = try? decoder.decode([MeeshyMessageAttachment].self, from: oldJson),
-              let newAtts = try? decoder.decode([MeeshyMessageAttachment].self, from: newJson),
+        guard let oldAtts = decoder.decodeOrLog([MeeshyMessageAttachment].self, from: oldJson, field: "attachmentsJson(old)"),
+              let newAtts = decoder.decodeOrLog([MeeshyMessageAttachment].self, from: newJson, field: "attachmentsJson(new)"),
               !newAtts.isEmpty else { return }
 
         for (newIdx, newAtt) in newAtts.enumerated() {
@@ -1068,8 +1147,12 @@ public actor MessagePersistenceActor {
                 .filter(Column("localId") == localId || Column("serverId") == localId)
                 .fetchOne(db) else { return }
             affectedConversationId = record.conversationId
-            var reactions = (try? JSONDecoder().decode([MeeshyReaction].self,
-                                from: record.reactionsJson ?? Data())) ?? []
+            // `reactionsJson == nil` (aucune réaction) est le cas nominal et ne
+            // doit PAS être journalisé : on ne décode que s'il y a des octets.
+            var reactions: [MeeshyReaction] = record.reactionsJson.flatMap {
+                JSONDecoder().decodeOrLog([MeeshyReaction].self, from: $0,
+                                          field: "reactionsJson", id: localId)
+            } ?? []
             let alreadyExists = reactions.contains {
                 $0.emoji == emoji && $0.participantId == participantId
             }
@@ -1103,8 +1186,12 @@ public actor MessagePersistenceActor {
                 .filter(Column("localId") == localId || Column("serverId") == localId)
                 .fetchOne(db) else { return }
             affectedConversationId = record.conversationId
-            var reactions = (try? JSONDecoder().decode([MeeshyReaction].self,
-                                from: record.reactionsJson ?? Data())) ?? []
+            // `reactionsJson == nil` (aucune réaction) est le cas nominal et ne
+            // doit PAS être journalisé : on ne décode que s'il y a des octets.
+            var reactions: [MeeshyReaction] = record.reactionsJson.flatMap {
+                JSONDecoder().decodeOrLog([MeeshyReaction].self, from: $0,
+                                          field: "reactionsJson", id: localId)
+            } ?? []
             let countBefore = reactions.count
             reactions.removeAll { $0.emoji == emoji && $0.participantId == participantId }
             guard reactions.count != countBefore else { return }
@@ -1148,7 +1235,12 @@ public actor MessagePersistenceActor {
             guard let data = record.attachmentsJson else { return }
             let decoder = JSONDecoder()
             let encoder = JSONEncoder()
-            guard var attachments = try? decoder.decode([MeeshyMessageAttachment].self, from: data),
+            guard var attachments = decoder.decodeOrLog(
+                    [MeeshyMessageAttachment].self,
+                    from: data,
+                    field: "attachmentsJson(enrich)",
+                    id: messageId
+                  ),
                   let idx = attachments.firstIndex(where: { $0.id == attachmentId })
             else { return }
 
@@ -1194,7 +1286,15 @@ public actor MessagePersistenceActor {
             if let new = embeddedAudioTranslations { enriched.audioTranslations = new }
             attachments[idx] = enriched
 
-            record.attachmentsJson = try? encoder.encode(attachments)
+            // Un encodage raté écrivait `nil` ici, ce qui EFFAÇAIT tous les
+            // attachments du message — l'inverse exact du merge non destructif
+            // annoncé. On préfère abandonner l'enrichissement.
+            guard let encoded = encoder.encodeOrLog(
+                attachments,
+                field: "attachmentsJson(enrich)",
+                id: messageId
+            ) else { return }
+            record.attachmentsJson = encoded
             record.updatedAt = Date()
             record.changeVersion += 1
             try record.update(db)
@@ -1320,57 +1420,21 @@ public actor MessagePersistenceActor {
             // not yet on the server, so a stale REST snapshot must NOT clobber
             // it on upsert — otherwise the reaction visibly reverts until the
             // next post-sync refresh. One query per batch (a handful of rows).
-            let pendingReactionMessageIds: Set<String> = {
-                guard let rows = try? OutboxRecord
-                    .filter(Column("kind") == OutboxKind.sendReaction.rawValue)
-                    .filter(Column("status") == OutboxStatus.pending.rawValue)
-                    .fetchAll(db) else { return [] }
-                let payloadDecoder = JSONDecoder()
-                payloadDecoder.dateDecodingStrategy = .iso8601
-                var ids = Set<String>()
-                for row in rows {
-                    if let payload = try? payloadDecoder.decode(ReactionOutboxPayload.self, from: row.payload) {
-                        ids.insert(payload.messageId)
-                    }
-                }
-                return ids
-            }()
+            let pendingReactionMessageIds = Self.pendingOutboxMessageIds(
+                db, kind: .sendReaction, payload: ReactionOutboxPayload.self
+            ) { $0.messageId }
             // S2 — message ids whose edit/delete is still pending in the outbox.
             // Their local content/editedAt/deletedAt hold an optimistic mutation
             // not yet on the server, so a stale REST snapshot must NOT clobber
             // them — otherwise the edit reverts to the old text / the delete
             // un-deletes until the outbox drains (or forever if exhausted).
             // Mirrors the reaction guard above (one query each per batch).
-            let pendingEditMessageIds: Set<String> = {
-                guard let rows = try? OutboxRecord
-                    .filter(Column("kind") == OutboxKind.editMessage.rawValue)
-                    .filter(Column("status") == OutboxStatus.pending.rawValue)
-                    .fetchAll(db) else { return [] }
-                let payloadDecoder = JSONDecoder()
-                payloadDecoder.dateDecodingStrategy = .iso8601
-                var ids = Set<String>()
-                for row in rows {
-                    if let payload = try? payloadDecoder.decode(OfflineEditPayload.self, from: row.payload) {
-                        ids.insert(payload.messageId)
-                    }
-                }
-                return ids
-            }()
-            let pendingDeleteMessageIds: Set<String> = {
-                guard let rows = try? OutboxRecord
-                    .filter(Column("kind") == OutboxKind.deleteMessage.rawValue)
-                    .filter(Column("status") == OutboxStatus.pending.rawValue)
-                    .fetchAll(db) else { return [] }
-                let payloadDecoder = JSONDecoder()
-                payloadDecoder.dateDecodingStrategy = .iso8601
-                var ids = Set<String>()
-                for row in rows {
-                    if let payload = try? payloadDecoder.decode(OfflineDeletePayload.self, from: row.payload) {
-                        ids.insert(payload.messageId)
-                    }
-                }
-                return ids
-            }()
+            let pendingEditMessageIds = Self.pendingOutboxMessageIds(
+                db, kind: .editMessage, payload: OfflineEditPayload.self
+            ) { $0.messageId }
+            let pendingDeleteMessageIds = Self.pendingOutboxMessageIds(
+                db, kind: .deleteMessage, payload: OfflineDeletePayload.self
+            ) { $0.messageId }
             for api in apiMessages {
                 let senderName = api.sender?.name
                 let senderUsername = api.sender?.username
@@ -1455,7 +1519,7 @@ public actor MessagePersistenceActor {
                             consumedCount: apiAtt.consumedCount
                         )
                     }
-                    return try? encoder.encode(ui)
+                    return encoder.encodeOrLog(ui, field: "attachmentsJson", id: api.id)
                 }()
 
                 // The current user's own reaction is tagged with `currentUserId`
@@ -1469,7 +1533,7 @@ public actor MessagePersistenceActor {
                     currentUserReactions: api.currentUserReactions,
                     currentUserId: currentUserId
                 )
-                let reactionsJson: Data? = uiReactions.isEmpty ? nil : try? encoder.encode(uiReactions)
+                let reactionsJson: Data? = uiReactions.isEmpty ? nil : encoder.encodeOrLog(uiReactions, field: "reactionsJson", id: api.id)
 
                 let replyToJson: Data? = {
                     // Réponse à un post : snapshot figé `postReplyTo` (survit à
@@ -1488,7 +1552,7 @@ public actor MessagePersistenceActor {
                                 storyPublishedAt: story.createdAt,
                                 moodEmoji: emoji
                             )
-                            return try? encoder.encode(ref)
+                            return encoder.encodeOrLog(ref, field: "replyToJson(mood)", id: api.id)
                         }
                         let ref = ReplyReference(
                             messageId: story.id,
@@ -1502,7 +1566,7 @@ public actor MessagePersistenceActor {
                             storyShareCount: story.shareCount,
                             storyThumbnailUrl: story.thumbnailUrl
                         )
-                        return try? encoder.encode(ref)
+                        return encoder.encodeOrLog(ref, field: "replyToJson(story)", id: api.id)
                     }
                     // Réponse à un message : chemin historique inchangé.
                     return api.replyTo.flatMap { reply in
@@ -1517,7 +1581,7 @@ public actor MessagePersistenceActor {
                             attachmentType: firstAtt?.mimeType,
                             attachmentThumbnailUrl: firstAtt?.thumbnailUrl
                         )
-                        return try? encoder.encode(ref)
+                        return encoder.encodeOrLog(ref, field: "replyToJson", id: api.id)
                     }
                 }()
 
@@ -1534,16 +1598,16 @@ public actor MessagePersistenceActor {
                         attachmentType: firstAtt?.mimeType,
                         attachmentThumbnailUrl: firstAtt?.thumbnailUrl
                     )
-                    return try? encoder.encode(ref)
+                    return encoder.encodeOrLog(ref, field: "forwardedFromJson", id: api.id)
                 }
 
                 let mentionedUsersJson: Data? = api.mentionedUsers.flatMap {
-                    $0.isEmpty ? nil : try? encoder.encode($0)
+                    $0.isEmpty ? nil : encoder.encodeOrLog($0, field: "mentionedUsersJson", id: api.id)
                 }
 
                 // Structured call-summary metadata for system call messages —
                 // persisted so the rich call bubble survives a cache reload.
-                let callSummaryJson: Data? = api.callSummary.flatMap { try? encoder.encode($0) }
+                let callSummaryJson: Data? = api.callSummary.flatMap { encoder.encodeOrLog($0, field: "callSummaryJson", id: api.id) }
 
                 var effectFlags: UInt32 = api.effectFlags ?? 0
                 if effectFlags == 0 {

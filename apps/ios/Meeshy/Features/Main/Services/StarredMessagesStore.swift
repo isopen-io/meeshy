@@ -1,5 +1,6 @@
 import Foundation
 import Combine
+import os
 
 /// Snapshot of a starred message so we can surface it in the dedicated
 /// "Starred Messages" list even after the source bubble is edited, deleted
@@ -107,12 +108,18 @@ final class StarredMessagesStore: ObservableObject {
     // MARK: - Persistence
 
     private func persist() {
-        guard let data = try? encoder.encode(snapshots) else { return }
+        guard let data = encoder.encodeOrLog(snapshots, field: "starred messages", logger: Logger.starred) else { return }
         defaults.set(data, forKey: storageKey)
     }
 
     private static func load(from defaults: UserDefaults, decoder: JSONDecoder) -> [StarredMessageSnapshot] {
         guard let data = defaults.data(forKey: "meeshy_starred_messages") else { return [] }
-        return (try? decoder.decode([StarredMessageSnapshot].self, from: data)) ?? []
+        return decoder.decodeOrLog([StarredMessageSnapshot].self, from: data, field: "starred messages", logger: Logger.starred) ?? []
     }
+}
+
+// MARK: - Logger Extension
+
+private extension Logger {
+    nonisolated static let starred = Logger(subsystem: "me.meeshy.app", category: "starred-store")
 }

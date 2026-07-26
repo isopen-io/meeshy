@@ -736,9 +736,11 @@ public actor OfflineQueue {
             throw OfflineQueueError.poolNotConfigured
         }
 
-        let record = (try? await pool.read { db in
+        // Une panne de lecture est propagée telle quelle : la faire passer
+        // pour `.itemNotFound` mentait à l'appelant sur la cause réelle.
+        let record = try await pool.read { db in
             try OutboxRecord.fetchOne(db, key: outboxId)
-        }) ?? nil
+        }
 
         guard let record else {
             throw OfflineQueueError.itemNotFound
@@ -781,12 +783,12 @@ public actor OfflineQueue {
         guard let pool = outboxPool else {
             throw OfflineQueueError.poolNotConfigured
         }
-        let row: OutboxRecord? = (try? await pool.read { db in
+        let row: OutboxRecord? = try await pool.read { db in
             try OutboxRecord
                 .filter(Column("clientMessageId") == cmid)
                 .order(Column("createdAt").desc)
                 .fetchOne(db)
-        }) ?? nil
+        }
         guard let row else {
             throw OfflineQueueError.itemNotFound
         }
@@ -850,13 +852,19 @@ public actor OfflineQueue {
         // — un fallback divergent affichait la bannière « Synchronisation »
         // générique (pendingCount > 0, pendingUIItems vide) en permanence.
         // Cohérence : pendingCount == 0 ⟺ pendingUIItems == [] en dégradé.
-        let count: Int = (try? await pool.read { db in
-            try OutboxRecord
-                .filter([OutboxStatus.pending.rawValue, OutboxStatus.inflight.rawValue]
-                    .contains(Column("status")))
-                .filter(!excludedKinds.contains(Column("kind")))
-                .fetchCount(db)
-        }) ?? 0
+        let count: Int
+        do {
+            count = try await pool.read { db in
+                try OutboxRecord
+                    .filter([OutboxStatus.pending.rawValue, OutboxStatus.inflight.rawValue]
+                        .contains(Column("status")))
+                    .filter(!excludedKinds.contains(Column("kind")))
+                    .fetchCount(db)
+            }
+        } catch {
+            logger.error("refreshPendingCount read failed — reporting 0 to keep the degraded invariant: \(error.localizedDescription, privacy: .public)")
+            count = 0
+        }
         pendingCountSubject.send(count)
         nearCapacitySubject.send(count >= Self.nearCapacityThreshold)
         await refreshPendingUIItems()
@@ -882,22 +890,28 @@ public actor OfflineQueue {
         }
         let limit = Self.pendingUIItemsLimit
         let excludedKinds = Self.syncIndicatorExcludedKinds
-        let records: [OutboxRecord] = (try? await pool.read { db in
-            try OutboxRecord
-                .filter([
-                    OutboxStatus.pending.rawValue,
-                    OutboxStatus.inflight.rawValue,
-                    OutboxStatus.failed.rawValue,
-                    // T14b — surface permanently-failed (`.exhausted`) rows so the
-                    // SyncPill can show a non-message mutation that gave up; the
-                    // T14 GC bounds how long they linger.
-                    OutboxStatus.exhausted.rawValue
-                ].contains(Column("status")))
-                .filter(!excludedKinds.contains(Column("kind")))
-                .order(Column("createdAt").asc)
-                .limit(limit)
-                .fetchAll(db)
-        }) ?? []
+        let records: [OutboxRecord]
+        do {
+            records = try await pool.read { db in
+                try OutboxRecord
+                    .filter([
+                        OutboxStatus.pending.rawValue,
+                        OutboxStatus.inflight.rawValue,
+                        OutboxStatus.failed.rawValue,
+                        // T14b — surface permanently-failed (`.exhausted`) rows so the
+                        // SyncPill can show a non-message mutation that gave up; the
+                        // T14 GC bounds how long they linger.
+                        OutboxStatus.exhausted.rawValue
+                    ].contains(Column("status")))
+                    .filter(!excludedKinds.contains(Column("kind")))
+                    .order(Column("createdAt").asc)
+                    .limit(limit)
+                    .fetchAll(db)
+            }
+        } catch {
+            logger.error("refreshPendingUIItems read failed — reporting [] to keep the degraded invariant: \(error.localizedDescription, privacy: .public)")
+            records = []
+        }
         let items = records.map(OutboxUIItem.from(record:))
         pendingUIItemsSubject.send(items)
     }
@@ -1377,7 +1391,7 @@ public actor OfflineQueue {
             }
             // Best-effort clean any partially-copied tracks so they don't leak.
             for relativePath in relativePaths {
-                try? FileManager.default.removeItem(atPath: Self.absoluteAudioPath(forStored: relativePath))
+                FileManager.default.removeItemLogging(atPath: Self.absoluteAudioPath(forStored: relativePath), context: "enqueueAudio partial-copy cleanup")
             }
             // Terminal signal so a live ViewModel resolves the optimistic bubble.
             emitRetryExhausted(OfflineRetryExhausted(
@@ -1393,7 +1407,7 @@ public actor OfflineQueue {
         // here is benign: the files live in `tmp/` and the OS reclaims them
         // on its own schedule.
         for source in sourceAudioURLs {
-            try? FileManager.default.removeItem(at: source)
+            FileManager.default.removeItemLogging(at: source, context: "enqueueAudio tmp source cleanup")
         }
 
         // Mirror the new item into the in-memory queue so the hot retry
@@ -1521,7 +1535,7 @@ public actor OfflineQueue {
                 logger.error("Failed to mark media outbox row .exhausted after copy error: \(error.localizedDescription, privacy: .public)")
             }
             for relativePath in relativePaths {
-                try? FileManager.default.removeItem(atPath: Self.absoluteMediaPath(forStored: relativePath))
+                FileManager.default.removeItemLogging(atPath: Self.absoluteMediaPath(forStored: relativePath), context: "enqueueMedia partial-copy cleanup")
             }
             emitRetryExhausted(OfflineRetryExhausted(
                 kind: .sendMessage,
@@ -1534,7 +1548,7 @@ public actor OfflineQueue {
 
         // Phase C — best-effort cleanup of the original tmp sources.
         for source in sourceMediaURLs {
-            try? FileManager.default.removeItem(at: source)
+            FileManager.default.removeItemLogging(at: source, context: "enqueueMedia tmp source cleanup")
         }
 
         if items.count >= Self.maxQueueSize {
@@ -1629,7 +1643,7 @@ public actor OfflineQueue {
                 logger.error("Failed to mark post-media outbox row .exhausted after copy error: \(error.localizedDescription, privacy: .public)")
             }
             for relativePath in relativePaths {
-                try? FileManager.default.removeItem(atPath: Self.absoluteMediaPath(forStored: relativePath))
+                FileManager.default.removeItemLogging(atPath: Self.absoluteMediaPath(forStored: relativePath), context: "enqueuePostMedia partial-copy cleanup")
             }
             emitRetryExhausted(OfflineRetryExhausted(
                 kind: .createPost,
@@ -1642,7 +1656,7 @@ public actor OfflineQueue {
 
         // Phase C — best-effort cleanup of the original tmp sources.
         for source in sourceMediaURLs {
-            try? FileManager.default.removeItem(at: source)
+            FileManager.default.removeItemLogging(at: source, context: "enqueueMedia tmp source cleanup")
         }
 
         logger.info("Enqueued \(sourceMediaURLs.count) media file(s) for offline post, cmid \(cmid, privacy: .public)")
@@ -1691,9 +1705,15 @@ public actor OfflineQueue {
 
                 case .sendMessage:
                     // Merge edit into pending send: rewrite the send's content.
-                    guard let send = existing,
-                          let item = try? dec.decode(OfflineQueueItem.self, from: send.payload) else {
-                        log.error("Cannot merge edit — corrupt sendMessage payload, dropping edit")
+                    guard let send = existing else {
+                        log.error("Cannot merge edit — no pending sendMessage record, dropping edit")
+                        return
+                    }
+                    let item: OfflineQueueItem
+                    do {
+                        item = try dec.decode(OfflineQueueItem.self, from: send.payload)
+                    } catch {
+                        log.error("Cannot merge edit — corrupt sendMessage payload, dropping edit: \(error.localizedDescription, privacy: .public)")
                         return
                     }
                     let merged = OfflineQueueItem(
@@ -1712,7 +1732,17 @@ public actor OfflineQueue {
                         localMediaPaths: item.localMediaPaths,
                         createdAt: item.createdAt
                     )
-                    let mergedPayload = (try? enc.encode(merged)) ?? send.payload
+                    let mergedPayload: Data
+                    do {
+                        mergedPayload = try enc.encode(merged)
+                    } catch {
+                        // Réécrire l'ancien payload en remettant `lastError` à
+                        // NULL ferait passer l'édition pour appliquée alors
+                        // qu'elle ne partira jamais. On laisse le record
+                        // intact : le message original s'envoie normalement.
+                        log.error("Cannot merge edit — merged payload encode failed, keeping original send intact: \(error.localizedDescription, privacy: .public)")
+                        return
+                    }
                     try db.execute(sql: """
                         UPDATE outbox
                         SET payload = ?, updatedAt = ?, lastError = NULL
@@ -1812,9 +1842,19 @@ public actor OfflineQueue {
                     // they can be swept AFTER commit — otherwise the row vanishes
                     // but its files orphan under Documents/pending-*/ forever
                     // (parity with cancelCreatePost).
-                    let sweep = existing
-                        .flatMap { try? dec.decode(OfflineQueueItem.self, from: $0.payload) }
-                        .map { Self.pendingLocalFileAbsolutePaths(for: $0) } ?? []
+                    let sweep: [String]
+                    do {
+                        sweep = try existing
+                            .map { try dec.decode(OfflineQueueItem.self, from: $0.payload) }
+                            .map { Self.pendingLocalFileAbsolutePaths(for: $0) } ?? []
+                    } catch {
+                        // Sans la liste des fichiers, ils orphelinent sous
+                        // Documents/pending-*/ — exactement ce que ce bloc
+                        // existe pour éviter.
+                        Logger(subsystem: "com.meeshy.sdk", category: "offlinequeue")
+                            .error("enqueueDelete: cancelled send payload undecodable, its media files will orphan: \(error.localizedDescription, privacy: .public)")
+                        sweep = []
+                    }
                     _ = try OutboxRecord.deleteOne(db, key: existing!.id)
                     return sweep
 
@@ -1875,9 +1915,8 @@ public actor OfflineQueue {
             }
             // Sweep AFTER the row is durably gone, so a rolled-back write never
             // orphans a still-live send's files.
-            let fm = FileManager.default
             for path in filesToSweep {
-                try? fm.removeItem(atPath: path)
+                FileManager.default.removeItemLogging(atPath: path, context: "post-delete file sweep")
             }
         } catch {
             throw OfflineQueueError.writeFailed(underlying: error)
@@ -1918,25 +1957,39 @@ public actor OfflineQueue {
         guard let pool = outboxPool else { return nil }
         let normalizedTypes = Set(types.map { $0.uppercased() })
         let cutoff = Date().addingTimeInterval(-threshold)
-        let records: [OutboxRecord] = (try? await pool.read { db in
-            try OutboxRecord
-                .filter(Column("kind") == OutboxKind.createPost.rawValue)
-                .filter([
-                    OutboxStatus.pending.rawValue,
-                    OutboxStatus.inflight.rawValue,
-                    OutboxStatus.failed.rawValue,
-                    OutboxStatus.exhausted.rawValue
-                ].contains(Column("status")))
-                .order(Column("createdAt").desc)
-                .fetchAll(db)
-        }) ?? []
+        let records: [OutboxRecord]
+        do {
+            records = try await pool.read { db in
+                try OutboxRecord
+                    .filter(Column("kind") == OutboxKind.createPost.rawValue)
+                    .filter([
+                        OutboxStatus.pending.rawValue,
+                        OutboxStatus.inflight.rawValue,
+                        OutboxStatus.failed.rawValue,
+                        OutboxStatus.exhausted.rawValue
+                    ].contains(Column("status")))
+                    .order(Column("createdAt").desc)
+                    .fetchAll(db)
+            }
+        } catch {
+            // L'utilisateur perd la proposition de restauration de son
+            // brouillon : la panne doit être traçable.
+            logger.error("recoverLastUnsentPost read failed — no draft offered for recovery: \(error.localizedDescription, privacy: .public)")
+            records = []
+        }
 
         let decoder = JSONDecoder()
         for record in records {
             // "Not sent within the minute → offline": only rows stuck longer than
             // the threshold qualify; a just-enqueued row is still actively sending.
             guard record.createdAt <= cutoff else { continue }
-            guard let payload = try? decoder.decode(CreatePostPayload.self, from: record.payload) else { continue }
+            let payload: CreatePostPayload
+            do {
+                payload = try decoder.decode(CreatePostPayload.self, from: record.payload)
+            } catch {
+                logger.error("recoverLastUnsentPost: skipping undecodable draft \(record.id, privacy: .public): \(error.localizedDescription, privacy: .public)")
+                continue
+            }
             let resolvedType = (payload.type ?? "POST").uppercased()
             guard normalizedTypes.contains(resolvedType) else { continue }
 
@@ -1965,11 +2018,17 @@ public actor OfflineQueue {
         let outboxId = "ofqm_\(cmid)"
         guard let pool = outboxPool else { return }
         // Reclaim pending-media files before deleting the row so they don't leak.
-        if let record = try? await pool.read({ db in try OutboxRecord.fetchOne(db, key: outboxId) }),
-           let payload = try? JSONDecoder().decode(CreatePostPayload.self, from: record.payload) {
-            for stored in payload.localMediaPaths ?? [] {
-                try? FileManager.default.removeItem(atPath: Self.absoluteMediaPath(forStored: stored))
+        do {
+            if let record = try await pool.read({ db in try OutboxRecord.fetchOne(db, key: outboxId) }) {
+                let payload = try JSONDecoder().decode(CreatePostPayload.self, from: record.payload)
+                for stored in payload.localMediaPaths ?? [] {
+                    FileManager.default.removeItemLogging(atPath: Self.absoluteMediaPath(forStored: stored), context: "cancelCreatePost media")
+                }
             }
+        } catch {
+            // Non bloquant : la ligne est supprimée juste après. Seuls les
+            // fichiers médias associés restent alors sur disque.
+            logger.error("cancelCreatePost: pending media not reclaimed, files leaked on disk: \(error.localizedDescription, privacy: .public)")
         }
         do {
             try await pool.write { db in
@@ -2065,10 +2124,14 @@ public actor OfflineQueue {
 
                 let match: (record: OutboxRecord, payload: ReactionOutboxPayload)? = candidates.lazy
                     .compactMap { record -> (OutboxRecord, ReactionOutboxPayload)? in
-                        guard let decoded = try? dec.decode(ReactionOutboxPayload.self, from: record.payload),
-                              decoded.messageId == messageId,
-                              decoded.emoji == emoji
-                        else { return nil }
+                        let decoded: ReactionOutboxPayload
+                        do {
+                            decoded = try dec.decode(ReactionOutboxPayload.self, from: record.payload)
+                        } catch {
+                            log.error("enqueueReaction: skipping undecodable reaction row \(record.id, privacy: .public): \(error.localizedDescription, privacy: .public)")
+                            return nil
+                        }
+                        guard decoded.messageId == messageId, decoded.emoji == emoji else { return nil }
                         return (record, decoded)
                     }
                     .first
@@ -2156,6 +2219,7 @@ public actor OfflineQueue {
             guard let pool = outboxPool else { return [] }
             do {
                 let dec = decoder
+                let log = logger
                 return try await pool.read { db in
                     let records = try OutboxRecord
                         .filter(Column("kind") == OutboxKind.sendReaction.rawValue)
@@ -2163,7 +2227,12 @@ public actor OfflineQueue {
                         .order(Column("createdAt").asc)
                         .fetchAll(db)
                     return records.compactMap { record -> ReactionOutboxPayload? in
-                        try? dec.decode(ReactionOutboxPayload.self, from: record.payload)
+                        do {
+                            return try dec.decode(ReactionOutboxPayload.self, from: record.payload)
+                        } catch {
+                            log.error("pendingReactions: skipping undecodable row \(record.id, privacy: .public): \(error.localizedDescription, privacy: .public)")
+                            return nil
+                        }
                     }
                 }
             } catch {
@@ -2242,7 +2311,16 @@ public actor OfflineQueue {
                     .fetchAll(db)
                 let fm = FileManager.default
                 for record in pendingSends {
-                    guard let item = try? dec.decode(OfflineQueueItem.self, from: record.payload) else { continue }
+                    let item: OfflineQueueItem
+                    do {
+                        item = try dec.decode(OfflineQueueItem.self, from: record.payload)
+                    } catch {
+                        // Une ligne jamais décodable ne sera jamais marquée
+                        // `.exhausted` : elle reste `.pending` indéfiniment et
+                        // encombre l'outbox. La tracer permet de la cibler.
+                        log.error("bootRecovery: undecodable pending send \(record.id, privacy: .public) left stuck in the outbox: \(error.localizedDescription, privacy: .public)")
+                        continue
+                    }
                     // Legacy single-track + multi-track audio AND visual media
                     // paths are all checked. S6 — a row with any missing file is
                     // marked `.exhausted` (terminal + GC-eligible via
@@ -2536,7 +2614,18 @@ public actor OfflineQueue {
                 for item in snapshot {
                     let outboxId = "ofq_\(item.id)"
                     guard try OutboxRecord.fetchOne(db, key: outboxId) == nil else { continue }
-                    let payload = (try? enc.encode(item)) ?? Data()
+                    let payload: Data
+                    do {
+                        payload = try enc.encode(item)
+                    } catch {
+                        // Insérer un payload vide créerait un enregistrement
+                        // que le flush ne pourra jamais décoder : le message
+                        // serait définitivement perdu. On saute l'item — il
+                        // reste dans `items` et la migration est idempotente.
+                        Logger(subsystem: "com.meeshy.sdk", category: "offlinequeue")
+                            .error("migrateToOutbox: skipping item \(item.id, privacy: .public) — payload encode failed: \(error.localizedDescription, privacy: .public)")
+                        continue
+                    }
                     try OutboxRecord(
                         id: outboxId,
                         kind: .sendMessage,
@@ -2576,7 +2665,7 @@ public actor OfflineQueue {
             "reaction_queue.json"
         ] {
             let url = documents.appendingPathComponent("meeshy_cache/\(name)")
-            try? FileManager.default.removeItem(at: url)
+            FileManager.default.removeItemLogging(at: url, context: "legacy JSON queue file deletion")
         }
     }
 

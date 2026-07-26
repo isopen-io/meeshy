@@ -741,7 +741,11 @@ struct ThemedFeedOverlay: View {
         // `selectedStoryUserId` séparé est supprimé (capture périmée d'uid → écran noir).
         .sheet(isPresented: $showStatusComposer) {
             StatusComposerView(viewModel: statusViewModel)
-                .presentationDetents([.medium])
+                // `.large` is not decoration: the composer's labels scale with
+                // Dynamic Type while its emoji grid does not, so at accessibility
+                // sizes the content outgrows `.medium`. Offering the larger detent
+                // gives the user somewhere to go instead of a dead end.
+                .presentationDetents([.medium, .large])
                 .presentationDragIndicator(.visible)
         }
         .fullScreenCover(isPresented: $showFullComposer) {
