@@ -347,7 +347,7 @@ struct ShareContentView: View {
 
                 // Action buttons
                 HStack(spacing: 16) {
-                    Button("Cancel") {
+                    Button(String(localized: "share.cancel", defaultValue: "Cancel")) {
                         onCancel()
                     }
                     .frame(maxWidth: .infinity)
@@ -356,7 +356,7 @@ struct ShareContentView: View {
                     .foregroundColor(.primary)
                     .cornerRadius(12)
 
-                    Button("Send") {
+                    Button(String(localized: "share.send", defaultValue: "Send")) {
                         if let contactId = selectedContactId {
                             onSend(contactId)
                         }
@@ -370,7 +370,7 @@ struct ShareContentView: View {
                 }
                 .padding()
             }
-            .navigationTitle("Share to Meeshy")
+            .navigationTitle(String(localized: "share.title", defaultValue: "Share to Meeshy"))
             .navigationBarTitleDisplayMode(.inline)
         }
         .onAppear {
