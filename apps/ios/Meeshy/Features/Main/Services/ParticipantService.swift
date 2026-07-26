@@ -116,7 +116,11 @@ actor ParticipantService {
         let existingItems = existingResult.snapshot() ?? []
         let merged = existingItems + response.data
 
-        try? await CacheCoordinator.shared.participants.save(merged, for: conversationId)
+        do {
+            try await CacheCoordinator.shared.participants.save(merged, for: conversationId)
+        } catch {
+            Logger.participants.error("Participants not cached, next open refetches from network: \(error.localizedDescription, privacy: .public)")
+        }
         UserDisplayNameCache.shared.trackFromParticipants(response.data)
 
         paginationState[conversationId] = PaginationState(
@@ -127,4 +131,10 @@ actor ParticipantService {
 
         return merged
     }
+}
+
+// MARK: - Logger Extension
+
+private extension Logger {
+    nonisolated static let participants = Logger(subsystem: "me.meeshy.app", category: "participants")
 }

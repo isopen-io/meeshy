@@ -191,6 +191,113 @@ final class StoryGestureDecisionsTests: XCTestCase {
         XCTAssertEqual(action, .none)
     }
 
+    // MARK: - decideTouchUp — le doigt a bougé (slop franchi)
+
+    /// Depuis le 2026-07-26, le drag du lecteur est reconnu EN PARALLÈLE de cet
+    /// overlay (`.simultaneousGesture` sur l'ancêtre, pour que les swipes
+    /// cessent d'être morts). Un swipe parti d'une bande latérale relâche donc
+    /// aussi ce recognizer-ci : sans la porte `didExceedSlop`, l'utilisateur
+    /// naviguait d'une story ET changeait de groupe du même geste.
+    ///
+    /// Le défaut du champ est `false` (« toucher immobile ») : c'est le cas
+    /// historique, et c'est pourquoi les contextes des autres tests restent
+    /// valides tels quels.
+    func test_touchUp_afterExceedingSlop_doesNotNavigate() {
+        for touchStartX: CGFloat in [50, 300] {   // bande gauche, puis bande droite
+            let ctx = StoryGestureContext(
+                holdActive: false,
+                isPaused: false,
+                isResumingTap: false,
+                isComposerEngaged: false,
+                didExceedSlop: true
+            )
+            let action = StoryGestureDecisions.decideTouchUp(
+                context: ctx,
+                touchStartX: touchStartX,
+                width: 400,
+                elapsed: 0.05,
+                holdThreshold: 0.2
+            )
+            XCTAssertEqual(action, .none,
+                           "Un toucher qui a dépassé le slop appartient au drag parent, " +
+                           "il ne doit plus naviguer (x = \(touchStartX)).")
+        }
+    }
+
+    /// La porte est placée APRÈS `holdActive` : un long-press confirmé puis
+    /// relâché garde son contrat même si le doigt a dérivé de quelques points
+    /// pendant les 200 ms de maintien — sinon la pause « sauterait » sur le
+    /// moindre tremblement.
+    func test_touchUp_holdConfirmedThenSlop_stillConfirmsThePause() {
+        let ctx = StoryGestureContext(
+            holdActive: true,
+            isPaused: true,
+            isResumingTap: false,
+            isComposerEngaged: false,
+            didExceedSlop: true
+        )
+        let action = StoryGestureDecisions.decideTouchUp(
+            context: ctx,
+            touchStartX: 50,
+            width: 400,
+            elapsed: 0.25,
+            holdThreshold: 0.2
+        )
+        XCTAssertEqual(action, .confirmLongPressPause)
+    }
+
+    /// `decideDoubleTap` ne tranche QUE la bande : au centre, un double tap vaut
+    /// toujours `.togglePause`. C'est l'appelant (`StoryGestureOverlayView`) qui
+    /// décide quels relâchements ALIMENTENT la fenêtre de double tap — verrouillé
+    /// par le test de source juste en dessous.
+    func test_doubleTap_inCenterBand_togglesPause() {
+        let ctx = StoryGestureContext(
+            holdActive: false,
+            isPaused: false,
+            isResumingTap: false,
+            isComposerEngaged: false
+        )
+        XCTAssertEqual(
+            StoryGestureDecisions.decideDoubleTap(context: ctx, touchStartX: 200, width: 400),
+            .togglePause
+        )
+    }
+
+    /// UN TOUCHER QUI A BOUGÉ N'ALIMENTE PAS LA FENÊTRE DE DOUBLE TAP.
+    ///
+    /// Corrigé le 2026-07-26. `isCleanTap` excluait volontairement
+    /// `didExceedSlop`, au motif que « le second tap d'un double tap arrive
+    /// presque toujours à quelques points du premier » — justification fausse :
+    /// ce drapeau mesure le déplacement À L'INTÉRIEUR du toucher courant, jamais
+    /// la distance entre deux taps successifs (seul l'écart de TEMPS l'est). Un
+    /// vrai second tap est immobile ; en revanche deux flicks horizontaux
+    /// enchaînés dans la bande centrale (geste courant pour défiler les groupes)
+    /// remplissaient la fenêtre et déclenchaient `onTogglePause()` : changement de
+    /// groupe ET pause + chrome masqué, sans un seul tap.
+    ///
+    /// `isCleanTap` vit dans la View (`@State` + `GeometryProxy`), non
+    /// instanciable en test : garde par analyse de source, pattern établi du dépôt.
+    func test_movedTouch_doesNotFeedTheDoubleTapWindow() throws {
+        let canvasURL = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Views/StoryViewerView+Canvas.swift")
+        let source = try String(contentsOf: canvasURL, encoding: .utf8)
+
+        guard let start = source.range(of: "let isCleanTap ="),
+              let end = source.range(of: "if isCleanTap,", range: start.upperBound..<source.endIndex) else {
+            return XCTFail("expression `isCleanTap` introuvable dans StoryViewerView+Canvas.swift")
+        }
+        let expression = String(source[start.upperBound..<end.lowerBound])
+        XCTAssertTrue(
+            expression.contains("!ctx.didExceedSlop"),
+            "isCleanTap doit exclure les touchers qui ont franchi le slop — sinon deux " +
+            "flicks au centre mettent la story en pause en plus de changer de groupe."
+        )
+    }
+
     // MARK: - End-to-end flow
 
     /// Scénario complet : story en lecture → long-press → pause confirmée

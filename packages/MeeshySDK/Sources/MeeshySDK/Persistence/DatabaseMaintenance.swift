@@ -1,5 +1,8 @@
 import Foundation
 import GRDB
+import os
+
+private let dbMaintenanceLog = Logger(subsystem: "com.meeshy.sdk", category: "db-maintenance")
 
 /// Tunes SQLite for the Meeshy access pattern (read-heavy with bursty writes
 /// from socket events) and exposes maintenance hooks for periodic compaction.
@@ -11,11 +14,17 @@ public enum DatabaseMaintenance {
     /// `VACUUM` before this on first migration to enable it (handled separately
     /// during database setup if needed).
     public static func applyTuning(on pool: any DatabaseWriter) {
-        try? pool.write { db in
-            try db.execute(sql: "PRAGMA cache_size = 8000")             // ~32 MB
-            try db.execute(sql: "PRAGMA mmap_size = 67108864")           // 64 MB
-            try db.execute(sql: "PRAGMA temp_store = MEMORY")
-            try db.execute(sql: "PRAGMA auto_vacuum = INCREMENTAL")
+        do {
+            try pool.write { db in
+                try db.execute(sql: "PRAGMA cache_size = 8000")             // ~32 MB
+                try db.execute(sql: "PRAGMA mmap_size = 67108864")           // 64 MB
+                try db.execute(sql: "PRAGMA temp_store = MEMORY")
+                try db.execute(sql: "PRAGMA auto_vacuum = INCREMENTAL")
+            }
+        } catch {
+            // La base reste fonctionnelle mais NON tunée : lectures plus
+            // lentes et fichier qui ne se compacte jamais.
+            dbMaintenanceLog.error("SQLite tuning PRAGMAs not applied, database runs untuned: \(error.localizedDescription, privacy: .public)")
         }
     }
 

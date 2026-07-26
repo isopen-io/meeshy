@@ -280,14 +280,14 @@ struct ThemedFeedOverlay: View {
                         try? await CacheCoordinator.shared.feed.save(snap, for: "bookmarks")
                     }
                 }
-                FeedbackToastManager.shared.showError(String(localized: "Erreur lors de l'enregistrement", defaultValue: "Erreur lors de l'enregistrement"))
+                FeedbackToastManager.shared.showError(String(localized: "post.bookmark.error", defaultValue: "Erreur lors de l'enregistrement", bundle: .main))
             } else {
                 if wasBookmarked {
                     await pruneBookmarkFromCache(postId: postId)
                 }
                 FeedbackToastManager.shared.showSuccess(wasBookmarked
-                    ? String(localized: "Retire des favoris", defaultValue: "Retire des favoris")
-                    : String(localized: "Ajoute aux favoris", defaultValue: "Ajoute aux favoris"))
+                    ? String(localized: "post.bookmark.removed", defaultValue: "Retiré des favoris", bundle: .main)
+                    : String(localized: "post.bookmark.added", defaultValue: "Ajouté aux favoris", bundle: .main))
             }
         }
     }
@@ -741,7 +741,11 @@ struct ThemedFeedOverlay: View {
         // `selectedStoryUserId` séparé est supprimé (capture périmée d'uid → écran noir).
         .sheet(isPresented: $showStatusComposer) {
             StatusComposerView(viewModel: statusViewModel)
-                .presentationDetents([.medium])
+                // `.large` is not decoration: the composer's labels scale with
+                // Dynamic Type while its emoji grid does not, so at accessibility
+                // sizes the content outgrows `.medium`. Offering the larger detent
+                // gives the user somewhere to go instead of a dead end.
+                .presentationDetents([.medium, .large])
                 .presentationDragIndicator(.visible)
         }
         .fullScreenCover(isPresented: $showFullComposer) {

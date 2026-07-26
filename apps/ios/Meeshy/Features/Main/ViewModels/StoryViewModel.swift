@@ -969,32 +969,30 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
         let offlineDir = docDir.appendingPathComponent("meeshy_offline_queue").appendingPathComponent(tempStoryId)
         try? fm.createDirectory(at: offlineDir, withIntermediateDirectories: true)
         
-        var mediaReferences: [StoryMediaReference] = []
-
-        for (id, image) in allImages {
-            let fileName = "\(id).jpg"
-            let dest = offlineDir.appendingPathComponent(fileName)
-            if let data = image.jpegData(compressionQuality: 0.85) {
-                try? data.write(to: dest)
-                mediaReferences.append(StoryMediaReference(elementId: id, mediaType: "image", localFilePath: dest.path))
-            }
+        // Chaque écriture passait par un `try?` nu : un échec était avalé ET
+        // la référence ajoutée quand même. La story partait en file, on
+        // promettait « publication au retour en ligne », puis le drain la
+        // faisait échouer DÉFINITIVEMENT en `.missingLocalMedia` — travail
+        // perdu, longtemps après, sans signal au moment où c'était réparable.
+        let mediaOutcome = StoryOfflineMediaWriter.persist(
+            images: allImages,
+            videos: loadedVideoURLs,
+            audios: loadedAudioURLs,
+            into: offlineDir,
+            fileManager: fm
+        )
+        guard mediaOutcome.isComplete else {
+            Logger.stories.error(
+                "offline.publish aborted — médias non persistés: \(mediaOutcome.failedElementIds.joined(separator: ","), privacy: .public)")
+            // Le dossier partiel ne sert à rien et occuperait le disque.
+            try? fm.removeItem(at: offlineDir)
+            FeedbackToastManager.shared.showError(String(
+                localized: "story.publish.queue.mediaError",
+                defaultValue: "Impossible d'enregistrer les médias de la story — réessayez"
+            ))
+            return nil
         }
-
-        for (id, url) in loadedVideoURLs {
-            let ext = url.pathExtension.isEmpty ? "mp4" : url.pathExtension
-            let fileName = "\(id).\(ext)"
-            let dest = offlineDir.appendingPathComponent(fileName)
-            try? fm.copyItem(at: url, to: dest)
-            mediaReferences.append(StoryMediaReference(elementId: id, mediaType: "video", localFilePath: dest.path))
-        }
-
-        for (id, url) in loadedAudioURLs {
-            let ext = url.pathExtension.isEmpty ? "m4a" : url.pathExtension
-            let fileName = "\(id).\(ext)"
-            let dest = offlineDir.appendingPathComponent(fileName)
-            try? fm.copyItem(at: url, to: dest)
-            mediaReferences.append(StoryMediaReference(elementId: id, mediaType: "audio", localFilePath: dest.path))
-        }
+        let mediaReferences = mediaOutcome.references
 
         // 3. Encode the slides payload. The custom encoder excludes
         //    `mediaData`, which is exactly why `mediaReferences` carries

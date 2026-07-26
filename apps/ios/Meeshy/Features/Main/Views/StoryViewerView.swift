@@ -120,12 +120,28 @@ struct StoryViewerView: View {
     /// l'interstitiel du switch s'affiche COMPLET (nom, bannière, mood) dès la
     /// première frame — plus d'enrichissement visible en second temps.
     @State var groupIntroCache: [String: StoryViewModel.StoryGroupIntro] = [:]
-    /// 2,6 s (directive user 2026-07-14) : l'intro présente l'identité sans
-    /// ralentir l'enchaînement — assez pour lire nom + présence. RENDU unique
-    /// désormais : l'interstitiel et la face du cube (`NeighborGroupCubeFace`,
-    /// qui révèle ce même interlude au doigt depuis 2026-07-25) montrent tous
-    /// deux `StoryAuthorIdentityCard` — une seule carte, deux surfaces.
-    static let groupIntroDuration: TimeInterval = 2.6
+    /// 2,2 s (directive user 2026-07-26, resserré depuis 2,6 s) : l'intro
+    /// présente l'identité sans ralentir l'enchaînement — assez pour lire nom
+    /// + présence.
+    ///
+    /// C'est la durée NOMINALE de l'interlude, pas l'instant où le voile a
+    /// physiquement disparu. Deux raisons, toutes deux voulues :
+    /// 1. RECOUVREMENT — l'apparition de la story entrante démarre
+    ///    `StoryGroupIntroPolicy.revealOverlap` (200 ms) AVANT la fin annoncée,
+    ///    donc à t = 2,0 s : le slide monte PENDANT que le voile se retire, un
+    ///    seul geste au lieu de deux temps collés bout à bout.
+    /// 2. TRAÎNÉE ASSUMÉE — les courbes de sortie du voile
+    ///    (`StoryGroupIntroPolicy.dismissAnimation`) sont préservées telles
+    ///    quelles par choix utilisateur : le voile finit donc de s'effacer un
+    ///    peu après 2,2 s (~2,35-2,4 s, et le ressort n'a pas de fin bornée).
+    ///    Arbitrage, pas bug — on ne raccourcit pas ces courbes pour faire
+    ///    coller la constante.
+    ///
+    /// RENDU unique par ailleurs : l'interstitiel et la face du cube
+    /// (`NeighborGroupCubeFace`, qui révèle ce même interlude au doigt depuis
+    /// 2026-07-25) montrent tous deux `StoryAuthorIdentityCard` — une seule
+    /// carte, deux surfaces.
+    static let groupIntroDuration: TimeInterval = 2.2
     /// True once the visible slide's background media is fully usable (real
     /// bitmap / video `.readyToPlay` / solid color). Gates the progress timer
     /// and the centered loading spinner.
@@ -271,6 +287,9 @@ struct StoryViewerView: View {
 
     // Text parallax offset (slides up during cross-dissolve for depth)
     @State var textSlideOffset: CGFloat = 0 // internal for cross-file extension access
+    /// Glissement HORIZONTAL de l'ouverture `.slide`, en fraction de la largeur
+    /// du canvas — même unité que `StoryRenderer.slideTransitionTravelFraction`.
+    @State var openingSlideFraction: CGFloat = 0 // internal for cross-file extension access
 
     // Opening effect animation states
     @State var openingScale: CGFloat = 1.0        // internal for cross-file extension access
@@ -285,6 +304,41 @@ struct StoryViewerView: View {
     /// `groupTransition` (tap/auto-advance), nettoyée au snap-back/commit.
     @State var neighborPreviewDirection: Int = 0 // internal for cross-file extension access
     @State var gestureAxis: Int = 0 // internal for cross-file extension access  // 0=undecided, 1=horizontal, 2=vertical
+    /// Valeur de `hasActiveReaderFeature` FIGÉE à la décision d'axe vertical du
+    /// drag parent. Le relâchement ne peut PAS relire l'état vivant : l'overlay
+    /// gestuel du canvas consomme la surface ouverte dès le touch-down (il appelle
+    /// `dismissActiveReaderFeature()`), donc au touch-up `hasActiveReaderFeature`
+    /// est déjà `false` et le drag concluait `.dismissViewer` — l'utilisateur qui
+    /// glissait vers le bas pour refermer son overlay perdait la story avec.
+    @State var hadActiveFeatureAtDragStart: Bool = false // internal for cross-file extension access
+    /// Jeton de purge de l'état gestuel du canvas (cf. `resetGestureTracking()`).
+    /// Incrémenté sur les chemins NON NOMINAUX — snap-back, transition de groupe,
+    /// sortie du lecteur — parce que SwiftUI n'appelle pas `onEnded` quand un
+    /// recognizer concurrent emporte la séquence : sans purge, `gestureAxis`
+    /// restait collé (la décision d'axe est sautée par `if gestureAxis == 0`) et
+    /// l'overlay de Layer 6 traitait tous les touchers suivants comme un drag en
+    /// cours — plus aucun tap de navigation, plus aucun long-press.
+    @State var gestureResetToken: Int = 0 // internal for cross-file extension access
+    /// Posé par `StoryGestureOverlayView` quand le TOUCH-DOWN du toucher courant
+    /// a servi à refermer une surface du reader.
+    ///
+    /// Complément indispensable de `hadActiveFeatureAtDragStart` : cette
+    /// photographie-là est prise à la décision d'axe du drag, donc APRÈS 15 pt de
+    /// déplacement — l'enfant a déjà refermé la surface au premier contact et la
+    /// photographie vaut `false`. Sans ce drapeau, un glissement bas de plus de
+    /// 120 pt parti du canvas concluait `.dismissViewer` : l'utilisateur perdait
+    /// la story alors qu'il refermait un strip.
+    ///
+    /// Consommé (remis à `false`) par le `onEnded` du drag et par
+    /// `resetGestureTracking()`, et réarmé à chaque touch-down de l'enfant : il ne
+    /// peut donc pas neutraliser le geste SUIVANT.
+    @State var readerFeatureConsumedByTouch: Bool = false // internal for cross-file extension access
+    /// Bord SUPÉRIEUR (coordonnées `.global`) de la surface scrollable ouverte,
+    /// remonté par `StoryReaderScrollableSurfaceTopKey`. `nil` = aucune surface
+    /// ouverte, ou surface dont le cadre n'est pas mesurable ici (cf.
+    /// `effectiveScrollableSurfaceTopY`) — dans ce dernier cas la garde de point
+    /// de départ retombe sur son comportement conservateur.
+    @State var scrollableSurfaceTopY: CGFloat? // internal for cross-file extension access
     @State var showViewersSheet = false
     @State var showExportShareSheet = false
     @StateObject var exportShareViewModel = StoryExportShareViewModel()
@@ -453,7 +507,6 @@ struct StoryViewerView: View {
         .preferredColorScheme(.dark)
         .ignoresSafeArea()
         .statusBarHidden()
-        .gesture(unifiedDragGesture)
         .onAppear {
             if initialStoryIndex > 0, currentGroupIndex < groups.count {
                 currentStoryIndex = min(initialStoryIndex, groups[currentGroupIndex].stories.count - 1)
@@ -523,6 +576,12 @@ struct StoryViewerView: View {
             // pipeline est ré-installé au prochain onAppear
             // (`hasInstalledPrefetchPipeline = false` ci-dessous).
             slideTimer.invalidate()
+            // Purge l'état gestuel transient : le lecteur peut être quitté au
+            // beau milieu d'un drag (dismiss, background, navigation externe) et
+            // le `onEnded` du recognizer ne viendra jamais. Sans ça, `gestureAxis`
+            // survivait à la vue et la réouverture démarrait avec un axe déjà
+            // décidé, court-circuitant tap et long-press.
+            resetGestureTracking()
             groupIntroTask?.cancel()
             groupIntroTask = nil
             prefetchTasks.forEach { $0.cancel() }
@@ -607,7 +666,7 @@ struct StoryViewerView: View {
             transitionEngagement(to: currentStory)
         }
         // Interstitiel d'identité inter-groupes — au-dessus du canvas ET des
-        // contrôles (identité pleine pendant ~2,6 s, tap droite/double-tap =
+        // contrôles (identité pleine pendant ~2,2 s, tap droite/double-tap =
         // skip, tap gauche = retour au groupe précédent).
         .overlay {
             if showGroupIntro, let intro = groupIntroData {
@@ -630,11 +689,48 @@ struct StoryViewerView: View {
                     // dans StoryGroupIntroOverlay).
                     isFriend: FriendshipCache.shared.isFriend(intro.userId),
                     onSkip: { skipGroupIntro() },
-                    onBack: { goBackToPreviousGroupFromIntro() }
+                    onBack: { goBackToPreviousGroupFromIntro() },
+                    // Même jeton que l'overlay gestuel du canvas : il purge le
+                    // mouchard de déplacement de l'interlude sur les chemins où
+                    // SwiftUI n'a pas délivré la fin du geste.
+                    gestureResetToken: gestureResetToken
                 )
                 .transition(.opacity)
                 .zIndex(30)
             }
+        }
+        // POINT D'ATTACHE UNIQUE des swipes du lecteur — volontairement APRÈS
+        // l'overlay d'interlude ci-dessus. Deux raisons, dans cet ordre :
+        //
+        // 1. `simultaneousGesture` et non `gesture` : un `.gesture()` d'ancêtre
+        //    est de priorité INFÉRIEURE aux gestes de son sous-arbre, et le
+        //    `DragGesture(minimumDistance: 0)` de `StoryGestureOverlayView`
+        //    (Layer 6) reconnaît dès le touch-down sans jamais relâcher son
+        //    recognizer — il subordonnait donc définitivement ce drag, swipes
+        //    morts pendant toute la story. En simultané, les deux reconnaissent
+        //    en parallèle. NE JAMAIS passer à `highPriorityGesture` ici : ça
+        //    préempterait ce même DragGesture(0), qui porte le touch-down /
+        //    touch-up — donc plus de navigation par tap NI de long-press.
+        // 2. Monté au-dessus de l'overlay d'interlude, le geste le couvre : les
+        //    swipes restent actifs pendant l'écran d'identité inter-groupes
+        //    (directive user). L'overlay, lui, conditionne ses taps à l'absence
+        //    de mouvement pour ne pas commiter tap ET swipe sur un même geste.
+        .simultaneousGesture(unifiedDragGesture)
+        // Cadre STATIQUE de la surface scrollable ouverte, publié par le
+        // conteneur PARENT de son `ScrollView` (jamais depuis l'intérieur du
+        // défilement : sous iOS 18+, `onPreferenceChange` ne re-tire plus quand
+        // la valeur est pilotée par le scroll — ici elle ne l'est pas, elle ne
+        // bouge qu'au layout).
+        .onPreferenceChange(StoryReaderScrollableSurfaceTopKey.self) { top in
+            scrollableSurfaceTopY = top
+        }
+        // Filet de fermeture : à la disparition de la surface, SwiftUI republie
+        // normalement la valeur par défaut (`nil`), mais la transition peut la
+        // maintenir montée quelques frames. On coupe la mesure dès que l'état
+        // logique dit qu'il n'y a plus rien à scroller — une mesure périmée
+        // ferait passer un geste pour « né dans la surface ».
+        .adaptiveOnChange(of: hasScrollableReaderSurface) { _, isOpen in
+            if !isOpen { scrollableSurfaceTopY = nil }
         }
         .adaptiveOnChange(of: currentGroupIndex) { oldValue, _ in
             skipUnplayableStoriesIfNeeded()
@@ -1268,6 +1364,7 @@ struct StoryViewerView: View {
             contentOpacity: contentOpacity,
             textSlideOffset: textSlideOffset,
             openingScale: openingScale,
+            openingSlideFraction: openingSlideFraction,
             isRevealActive: isRevealActive,
             bigReactionEmoji: bigReactionEmoji,
             bigReactionPhase: bigReactionPhase,
@@ -1329,6 +1426,8 @@ struct StoryViewerView: View {
             isFullscreenStorySession: $isFullscreenStorySession,
             isLongPressPaused: $isLongPressPaused,
             isCanvasPlaybackPaused: shouldPauseTimer,
+            gestureResetToken: gestureResetToken,
+            readerFeatureConsumedByTouch: $readerFeatureConsumedByTouch,
             keyboard: keyboard,
             triggerStoryReaction: { triggerStoryReaction($0) },
             pauseTimer: { pauseTimer() },
@@ -1378,6 +1477,46 @@ struct StoryViewerView: View {
             || showEmojiStrip || showFullEmojiPicker
             || showCommentsOverlay
             || showAudioTranscript
+    }
+
+    /// Sous-ensemble des surfaces du reader qui embarquent leur PROPRE
+    /// `ScrollView` (liste de commentaires, sélecteur d'emojis plein écran,
+    /// explorateur de langues). Le drag du lecteur est monté sur un ancêtre de
+    /// toutes : quand l'`UIScrollView` de la surface emporte la séquence de
+    /// touches, SwiftUI ne délivre JAMAIS le `onEnded` du drag — et la lecture
+    /// restait gelée. Un geste NÉ dans l'une d'elles est donc rendu au scroll
+    /// (cf. la garde de point de départ dans `unifiedDragGesture`), tandis
+    /// qu'un geste né dans la story encore visible AU-DESSUS reste au drag
+    /// parent, qui peut ainsi refermer la surface d'un glissement.
+    ///
+    /// Les surfaces NON scrollables (strip d'emojis, strip de langues,
+    /// transcription) gardent, elles, le swipe de fermeture — c'est un simple
+    /// bandeau, aucun recognizer concurrent ne peut voler le geste.
+    var hasScrollableReaderSurface: Bool { // internal for cross-file extension access
+        showCommentsOverlay || showFullEmojiPicker || showFullLanguagePicker
+    }
+
+    /// Bord supérieur de la surface scrollable à opposer au point de départ du
+    /// drag — `nil` quand il n'est pas connu, ce que la garde interprète comme
+    /// « tout le geste revient à la surface » (fail-safe).
+    ///
+    /// DEUX SURFACES SUR TROIS RESTENT `nil` VOLONTAIREMENT : le sélecteur
+    /// d'emojis plein écran (`EmojiFullPickerSheet`, MeeshyUI) et l'explorateur
+    /// de langues (`StoryLanguageDetailView`) rendent tous deux un panneau
+    /// bas-ancré À L'INTÉRIEUR d'une racine plein écran (scrim + panneau). Depuis
+    /// le point d'insertion, un `GeometryReader` ne mesurerait que cette racine —
+    /// `minY == 0`, soit « la surface commence en haut de l'écran », une valeur
+    /// vraie mais inutile. Leur panneau, lui, est redimensionnable (poignée de
+    /// l'emoji picker) et son cadre n'est publié nulle part. Estimer sa hauteur
+    /// ici dupliquerait des constantes d'un autre module, dont la dérive
+    /// laisserait passer un geste NÉ DANS le `ScrollView` : `onEnded` jamais
+    /// délivré, `gestureAxis` collé à 2, lecture gelée. On préfère le
+    /// conservatisme jusqu'à ce que ces deux vues publient elles-mêmes la clé
+    /// `StoryReaderScrollableSurfaceTopKey` depuis le parent de leur `ScrollView`
+    /// (une ligne dans chacune, hors périmètre de ce lot).
+    var effectiveScrollableSurfaceTopY: CGFloat? { // internal for cross-file extension access
+        if showFullEmojiPicker || showFullLanguagePicker { return nil }
+        return scrollableSurfaceTopY
     }
 
     /// Referme toute surface ouverte. Idempotent : sans surface, ne fait rien.
@@ -1735,6 +1874,25 @@ nonisolated enum StoryGroupIntroPolicy {
         !isPreviewMode && hasEntryStory
     }
 
+    /// Avance de l'apparition de la story sur la fin annoncée de l'interlude
+    /// (directive user 2026-07-26). Le slide ne commence PAS à monter quand le
+    /// voile a fini de partir : les deux se recouvrent sur ces 200 ms, sinon
+    /// l'enchaînement se lit comme deux animations successives — voile qui
+    /// s'en va, puis, après un blanc, contenu qui arrive.
+    static let revealOverlap: TimeInterval = 0.2
+
+    /// Temps d'attente RÉEL avant de déclencher le retrait du voile, pour une
+    /// durée nominale d'interlude donnée.
+    ///
+    /// `max(0, …)` n'est pas défensif par principe : `Task.sleep` sur une durée
+    /// négative lève / se comporte de travers, et une durée totale inférieure au
+    /// recouvrement (interlude volontairement très court) produirait exactement
+    /// ça. On plafonne donc à « pas d'attente », c'est-à-dire révélation
+    /// immédiate — le comportement correct dans ce cas.
+    static func holdDuration(total: TimeInterval) -> TimeInterval {
+        max(0, total - revealOverlap)
+    }
+
     /// Animation de disparition de l'interlude, dictée par la transition
     /// d'OUVERTURE du slide qui va être révélé (directive user 2026-07-25 :
     /// « la manière dont l'interlude disparaît dépend de comment le premier
@@ -1762,19 +1920,37 @@ extension StoryViewerView {
     /// Présente l'interstitiel d'identité au passage au groupe d'une AUTRE
     /// personne : placeholder immédiat (username/avatar du groupe, déjà en
     /// main — cache-first), enrichi async (nom complet, bannière, mood) par
-    /// `resolveGroupIntro` PENDANT l'affichage. Dismiss auto à 1,2 s ; le tap
-    /// skippe. Mes propres stories et le mode preview n'ont pas d'interstitiel.
+    /// `resolveGroupIntro` PENDANT l'affichage. Dismiss auto au bout de
+    /// `groupIntroDuration` (2,2 s nominales — le retrait, et l'apparition du
+    /// slide qui l'accompagne, s'amorcent 200 ms plus tôt) ; le tap skippe.
+    /// Mes propres stories et le mode preview n'ont pas d'interstitiel.
     /// Le gel de lecture passe par `shouldPauseTimer || showGroupIntro`
     /// (timer + canvas + audio gelés en phase, reprise sans saut).
     func presentGroupIntroIfNeeded() {
+        // AVANT la garde : l'interlude du groupe QUITTÉ n'a plus lieu d'être, que
+        // le groupe atteint en mérite un ou non. Annulée seulement après le
+        // `shouldPresent`, la Task précédente survivait à un switch vers un
+        // groupe non qualifiant (mode preview, groupe sans story affichable) —
+        // le voile de l'auteur précédent restait posé sur la story du nouvel
+        // auteur, puis son `dismissGroupIntro()` marquait comme vue une story
+        // qui n'est pas la sienne.
+        groupIntroTask?.cancel()
+        groupIntroTask = nil
         guard let group = currentGroup,
               StoryGroupIntroPolicy.shouldPresent(
                   isPreviewMode: isPreviewMode,
                   // Groupe sans story affichable (tout vu+expiré) → aucun
                   // interstitiel d'identité à montrer.
                   hasEntryStory: Self.entryStory(of: group) != nil
-              ) else { return }
-        groupIntroTask?.cancel()
+              ) else {
+            // Sa Task venant d'être annulée, plus personne ne retirerait le voile
+            // resté affiché : on le retire ici. `revealing: false` — la story du
+            // nouveau groupe est déjà à l'écran (aucune grammaire d'entrée à
+            // rejouer) et c'est l'appelant qui la marquera vue (`markCurrentViewed`
+            // juste après ce chemin), jamais celle de l'auteur qu'on a quitté.
+            if showGroupIntro { dismissGroupIntro(revealing: false) }
+            return
+        }
         // Identité COMPLÈTE dès la première frame quand le groupe a été
         // pré-résolu (`prefetchNeighborGroupIntros`) ; sinon placeholder
         // immédiat (username/avatar du payload) enrichi pendant l'affichage.
@@ -1795,7 +1971,14 @@ extension StoryViewerView {
                 guard !Task.isCancelled, showGroupIntro, groupIntroData?.userId == userId else { return }
                 groupIntroData = intro
             }
-            try? await Task.sleep(for: .seconds(Self.groupIntroDuration))
+            // UN SEUL sommeil, écourté du recouvrement : le retrait du voile ET
+            // l'apparition du slide partent ensemble à 2,0 s. Surtout PAS deux
+            // sommeils enchaînés (« armer, dormir 200 ms, animer ») — une
+            // annulation entre les deux laisserait `contentOpacity` à 0, soit un
+            // slide noir définitif.
+            try? await Task.sleep(for: .seconds(
+                StoryGroupIntroPolicy.holdDuration(total: Self.groupIntroDuration)
+            ))
             enrich.cancel()
             guard !Task.isCancelled else { return }
             dismissGroupIntro()
@@ -1854,11 +2037,43 @@ extension StoryViewerView {
     ///   le switch de groupe est ANNULÉ (tap gauche) : la story quittée n'a
     ///   jamais été montrée, la compter gonflerait les vues de son auteur.
     private func dismissGroupIntro(revealing: Bool = true) {
+        let opening = currentStory?.storyEffects?.opening
         // La sortie épouse l'ouverture configurée par l'auteur sur le slide qui
         // apparaît : l'interlude et le slide forment un seul geste visuel.
-        let opening = currentStory?.storyEffects?.opening
+        //
+        // Jusqu'au 2026-07-26 ce chemin ne faisait QUE retirer le voile : la
+        // story entrante était déjà posée dessous, sans zoom, sans slide, sans
+        // révélation. On arme donc ici sa grammaire d'apparition — la MÊME table
+        // que `crossFadeStory` — avant de la ramener au repos dans la
+        // transaction animée juste en dessous. Armement et animation dans le
+        // même appel, sans le moindre `await` entre les deux : c'est ce qui rend
+        // l'opération sûre à l'annulation (impossible de rester bloqué avec
+        // `contentOpacity = 0`, donc un slide noir permanent).
+        //
+        // Uniquement quand on RÉVÈLE : si le switch de groupe est annulé (tap
+        // gauche), il n'y a rien à faire apparaître — on n'arme rien du tout,
+        // sinon le slide qu'on est en train de quitter jouerait son entrée juste
+        // avant d'être remplacé.
+        if revealing {
+            let entrance = StoryOpeningEntrance.armed(for: opening)
+            contentOpacity = entrance.contentOpacity
+            openingScale = entrance.openingScale
+            openingSlideFraction = entrance.openingSlideFraction
+            textSlideOffset = entrance.textSlideOffset
+            isRevealActive = entrance.isRevealActive
+        }
         withAnimation(StoryGroupIntroPolicy.dismissAnimation(for: opening)) {
             showGroupIntro = false
+            if revealing {
+                contentOpacity = 1
+                openingScale = 1.0
+                openingSlideFraction = 0
+                textSlideOffset = 0
+                // `.reveal` est la seule grammaire dont l'état de repos est
+                // « actif » : le cercle doit finir PLEIN écran. Pour les autres,
+                // `false` est déjà l'état neutre côté `RevealCircleShape`.
+                isRevealActive = (opening == .reveal)
+            }
         }
         // `isIntroVisible: false` explicite : le flip ci-dessus est enveloppé
         // dans `withAnimation`, on ne dépend donc pas de l'instant où la
@@ -1892,6 +2107,48 @@ private struct StoryGroupIntroOverlay: View {
     /// Tap zone gauche — annule ce switch de groupe, retourne au groupe
     /// précédent (directive user 2026-07-14).
     let onBack: () -> Void
+    /// Jeton de purge partagé avec `StoryGestureOverlayView` — bumpé par le
+    /// viewer sur les chemins gestuels non nominaux. Sert ici de FILET au
+    /// mouchard `didMoveDuringTouch`, qui est collant par construction.
+    let gestureResetToken: Int
+
+    /// `true` dès que le doigt a franchi `tapSlopPixels` pendant le toucher en
+    /// cours. Le drag du lecteur (`unifiedDragGesture`) couvre désormais cet
+    /// interlude — swipes actifs pendant l'écran d'identité — et il est monté en
+    /// `simultaneousGesture` sur un ancêtre, donc nos `SpatialTapGesture`, qui se
+    /// valident au touch-up QUEL QUE SOIT le déplacement, tireraient AUSSI sur un
+    /// swipe : l'utilisateur changerait de groupe et sauterait l'interlude d'un
+    /// seul geste. Ce drapeau réserve les taps aux touchers immobiles.
+    ///
+    /// COLLANT pour toute la durée du toucher, comme le `didExceedSlop` du
+    /// lecteur : franchi une fois = franchi pour tout le toucher. Un swipe avorté
+    /// (le doigt part à 100 pt puis revient à son origine avant de lever) ne doit
+    /// pas se requalifier en tap et sauter l'interlude au moment précis où
+    /// l'utilisateur annulait son geste. Il n'est remis à `false` QU'À
+    /// L'OUVERTURE d'un nouveau toucher (cf. `trackedTouchOrigin`) ou par les
+    /// filets de purge ci-dessous — jamais au relâchement, sous peine de
+    /// rouvrir le double-déclenchement (le drag peut conclure AVANT les
+    /// `SpatialTapGesture`, qui trouveraient alors le drapeau déjà nettoyé).
+    @State private var didMoveDuringTouch: Bool = false
+
+    /// Origine (`startLocation`) du toucher auquel `didMoveDuringTouch` se
+    /// rapporte. Elle est FIXE pour toute la durée d'un toucher et distincte
+    /// d'un toucher à l'autre : c'est le seul marqueur d'identité de toucher
+    /// disponible dans un `DragGesture`.
+    ///
+    /// POURQUOI : la remise à zéro reposait sur le premier tick à translation
+    /// STRICTEMENT nulle. Ce tick n'est pas garanti (événements coalescés d'un
+    /// flick très rapide, recognizer reconstruit) ; sans lui, le drapeau restait
+    /// collé à `true` et le toucher SUIVANT était avalé — tap de skip ou de
+    /// retour-groupe silencieusement inerte pendant tout l'interlude. Comparer
+    /// l'origine détecte le nouveau toucher même quand son premier tick porte
+    /// déjà du déplacement.
+    @State private var trackedTouchOrigin: CGPoint? = nil
+
+    /// Tolérance de tap, alignée sur le `dragSlopPixels` de
+    /// `StoryGestureOverlayView` : un même geste doit basculer de « tap » à
+    /// « swipe » au même endroit sur les deux surfaces du lecteur.
+    private let tapSlopPixels: CGFloat = 14
 
     var body: some View {
         GeometryReader { geo in
@@ -1916,11 +2173,32 @@ private struct StoryGroupIntroOverlay: View {
             // simple tirerait toujours en premier et le double-tap ne fire jamais
             // (pattern standard SwiftUI : `.exclusively(before:)` sur deux
             // `SpatialTapGesture` de count différent, résolu via l'énum `Either`).
+            // Les deux branches sont gardées par `didMoveDuringTouch` : le sens
+            // reste identique au pixel près (moitié gauche = onBack, moitié
+            // droite = onSkip, double tap = onSkip), seul le toucher QUI A BOUGÉ
+            // est rendu au drag parent au lieu d'être compté deux fois.
+            //
+            // ORDRE DES DEUX MODIFICATEURS — les taps d'ABORD, le mouchard
+            // ENSUITE : le dernier appliqué est l'ANCÊTRE des précédents, et un
+            // `.gesture()` d'ancêtre est de priorité INFÉRIEURE à tout geste de
+            // son sous-arbre (constat qui a déjà tué les swipes du lecteur, cf.
+            // StoryViewerView+Canvas). Dans l'ordre inverse, le mouchard —
+            // `DragGesture(minimumDistance: 0)` qui reconnaît dès le touch-down —
+            // subordonnait les taps : soit ils devenaient inertes (plus de skip
+            // ni de retour au groupe précédent), soit c'est le mouchard qui était
+            // privé d'événements et `didMoveDuringTouch` restait faux, laissant
+            // un swipe commiter tap ET changement de groupe. On reproduit donc
+            // l'arrangement retenu au niveau du lecteur : recognizer de taps dans
+            // le sous-arbre, `simultaneousGesture` du drag sur l'ancêtre.
             .gesture(
                 SpatialTapGesture(count: 2)
-                    .onEnded { _ in onSkip() }
+                    .onEnded { _ in
+                        guard !didMoveDuringTouch else { return }
+                        onSkip()
+                    }
                     .exclusively(before: SpatialTapGesture(count: 1)
                         .onEnded { value in
+                            guard !didMoveDuringTouch else { return }
                             if value.location.x < geo.size.width / 2 {
                                 onBack()
                             } else {
@@ -1928,8 +2206,57 @@ private struct StoryGroupIntroOverlay: View {
                             }
                         })
             )
+            // Mouchard de déplacement. `SpatialTapGesture.Value` n'expose que
+            // `location` : impossible d'y lire la distance parcourue, il faut la
+            // mesurer soi-même. Ce `DragGesture(minimumDistance: 0)` reconnaît
+            // dès le touch-down : c'est à l'OUVERTURE d'un toucher, et nulle part
+            // ailleurs, qu'on repart d'un état propre — surtout pas au
+            // relâchement, qui peut précéder les `SpatialTapGesture` et rouvrirait
+            // le double-déclenchement (swipe comptant AUSSI comme tap).
+            //
+            // L'ouverture est reconnue à l'ORIGINE du toucher (`startLocation`,
+            // fixe pour un toucher donné) et plus seulement au tick à translation
+            // nulle : ce tick-là peut manquer (événements coalescés, recognizer
+            // reconstruit), et le drapeau restait alors collé d'un toucher au
+            // suivant, avalant un tap de skip ou de retour-groupe.
+            .simultaneousGesture(
+                DragGesture(minimumDistance: 0, coordinateSpace: .local)
+                    .onChanged { value in
+                        if trackedTouchOrigin != value.startLocation {
+                            trackedTouchOrigin = value.startLocation
+                            didMoveDuringTouch = false
+                        }
+                        if value.translation == .zero { return }
+                        let moved = max(abs(value.translation.width),
+                                        abs(value.translation.height))
+                        // COLLANT, comme le `didExceedSlop` du lecteur : un swipe
+                        // avorté (le doigt part à 100 pt puis revient à l'origine
+                        // avant de lever) ne doit PAS redevenir un tap — sinon
+                        // l'utilisateur saute l'interlude ou annule son switch de
+                        // groupe au moment même où il annulait son geste.
+                        if moved > tapSlopPixels { didMoveDuringTouch = true }
+                    }
+            )
         }
         .ignoresSafeArea()
+        // FILETS DE PURGE DU MOUCHARD — deux signaux extérieurs au geste, parce
+        // que le drapeau est collant par conception et que sa remise à zéro ne
+        // peut pas vivre dans un `.onEnded` du mouchard (le drag conclut parfois
+        // AVANT les `SpatialTapGesture` : purger là annulerait la garde et
+        // ferait recommiter tap + swipe sur un même geste).
+        //
+        // 1. Apparition de l'interlude : chaque `showGroupIntro` qui repasse à
+        //    `true` remonte cette vue avec un mouchard neuf, y compris si un
+        //    toucher inachevé traînait sur l'interlude précédent.
+        .onAppear { didMoveDuringTouch = false }
+        // 2. Jeton de purge du viewer, bumpé sur les chemins gestuels non
+        //    nominaux (snap-back d'axe indécis, transition de groupe, sortie du
+        //    lecteur) — exactement les cas où SwiftUI n'a délivré aucune fin de
+        //    geste et où un drapeau collé survivrait au toucher.
+        .adaptiveOnChange(of: gestureResetToken) { _, _ in
+            didMoveDuringTouch = false
+            trackedTouchOrigin = nil
+        }
         .environment(\.colorScheme, .dark)
         .accessibilityElement(children: .combine)
         .accessibilityLabel(accessibilitySummary)

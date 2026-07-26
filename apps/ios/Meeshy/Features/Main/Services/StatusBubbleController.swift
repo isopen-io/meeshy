@@ -2,6 +2,7 @@ import SwiftUI
 import Combine
 import MeeshySDK
 import MeeshyUI
+import os
 
 // MARK: - Status Bubble Controller
 
@@ -38,7 +39,14 @@ final class StatusBubbleController: ObservableObject {
         // et ré-émet `notification:counts`. Fire-and-forget.
         guard entry.userId != AuthManager.shared.currentUser?.id else { return }
         let statusId = entry.id
-        Task { try? await PostService.shared.viewPost(postId: statusId) }
+        Task {
+            do {
+                try await PostService.shared.viewPost(postId: statusId)
+            } catch {
+                // Compteur de vue perdu — sans impact sur l'affichage.
+                Logger.statusBubble.error("Status view not registered: \(error.localizedDescription, privacy: .public)")
+            }
+        }
         EngagementTracker.shared.begin(postId: statusId, contentType: .status, surface: .statusBubble)
     }
 
@@ -221,4 +229,10 @@ extension View {
     func withStatusBubble() -> some View {
         modifier(StatusBubbleOverlayModifier())
     }
+}
+
+// MARK: - Logger Extension
+
+private extension Logger {
+    nonisolated static let statusBubble = Logger(subsystem: "me.meeshy.app", category: "status-bubble")
 }

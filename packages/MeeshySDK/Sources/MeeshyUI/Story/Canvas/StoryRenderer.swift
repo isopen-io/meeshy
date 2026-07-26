@@ -600,11 +600,11 @@ extension StoryRenderer {
 
     /// Peak scale of the `.zoom` transition (opening settles 1.08 → 1.0,
     /// closing ramps 1.0 → 1.08).
-    nonisolated static let zoomTransitionScale: CGFloat = 1.08
+    public nonisolated static let zoomTransitionScale: CGFloat = 1.08
 
     /// Horizontal travel of the `.slide` transition, as a fraction of the
     /// canvas width (opening enters from +travel → 0, closing exits 0 → −travel).
-    nonisolated static let slideTransitionTravelFraction: CGFloat = 0.08
+    public nonisolated static let slideTransitionTravelFraction: CGFloat = 0.08
 
     /// Applies a slide-opening animation to `rootLayer` at playback position `elapsed`.
     ///
