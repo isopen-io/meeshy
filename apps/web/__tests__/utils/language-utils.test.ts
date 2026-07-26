@@ -10,6 +10,8 @@ import {
   getAllSupportedLanguages,
   searchLanguages,
 } from '../../utils/language-utils';
+import { getFlag } from '../../components/v2/flags';
+import { getLanguageFlag as sharedGetLanguageFlag } from '@meeshy/shared/utils/languages';
 
 describe('language-utils', () => {
   describe('getLanguageDisplayName', () => {
@@ -73,10 +75,13 @@ describe('language-utils', () => {
       expect(flag.length).toBeGreaterThan(0);
     });
 
-    it('should return US flag for en code', () => {
-      const flag = getLanguageFlag('en');
-      expect(flag).toBeDefined();
-      expect(flag.length).toBeGreaterThan(0);
+    it('should return the canonical English flag (SSOT, 🇬🇧) for en code', () => {
+      // Regression: the old local map returned the US flag 🇺🇸, diverging from
+      // the shared SSOT (🇬🇧) and from the v2 surface (message bubbles / media
+      // cards via components/v2/flags). All surfaces must render the same flag.
+      expect(getLanguageFlag('en')).toBe('🇬🇧');
+      expect(getLanguageFlag('en')).toBe(sharedGetLanguageFlag('en'));
+      expect(getLanguageFlag('en')).toBe(getFlag('en'));
     });
 
     it('should return Spanish flag for es code', () => {
