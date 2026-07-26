@@ -50,34 +50,30 @@ struct StoryViewerContainer: View {
                     in: viewModel.storyGroups[resolvedIndex],
                     fallback: initialStoryIndex
                 )
-                if singleGroup {
-                    StoryViewerView(
-                        viewModel: viewModel,
-                        groups: [viewModel.storyGroups[resolvedIndex]],
-                        currentGroupIndex: 0,
-                        isPresented: $isPresented,
-                        initialStoryIndex: resolvedStoryIndex,
-                        startAtFirstUnviewed: startAtFirstUnviewed,
-                        initialAction: initialAction,
-                        targetCommentId: targetCommentId,
-                        targetParentCommentId: targetParentCommentId
-                    )
-                    .transition(.identity)
-                } else {
-                    StoryViewerView(
-                        viewModel: viewModel,
-                        groups: viewModel.storyGroups,
-                        currentGroupIndex: resolvedIndex,
-                        isPresented: $isPresented,
-                        onReplyToStory: onReplyToStory,
-                        initialStoryIndex: resolvedStoryIndex,
-                        startAtFirstUnviewed: startAtFirstUnviewed,
-                        initialAction: initialAction,
-                        targetCommentId: targetCommentId,
-                        targetParentCommentId: targetParentCommentId
-                    )
-                    .transition(.identity)
-                }
+                // UN SEUL site de présentation. Les deux branches d'avant
+                // (mono-auteur / inter-auteurs) répétaient dix arguments et
+                // avaient fini par diverger : la mono-auteur avait perdu
+                // `onReplyToStory`, si bien qu'ouvrir une story depuis une
+                // conversation — qui passe pourtant le callback — n'affichait
+                // aucun bouton « Répondre ». Seule la PORTÉE change désormais.
+                let scope = StoryViewerScope.resolve(
+                    all: viewModel.storyGroups,
+                    resolvedIndex: resolvedIndex,
+                    singleGroup: singleGroup
+                )
+                StoryViewerView(
+                    viewModel: viewModel,
+                    groups: scope.groups,
+                    currentGroupIndex: scope.currentIndex,
+                    isPresented: $isPresented,
+                    onReplyToStory: onReplyToStory,
+                    initialStoryIndex: resolvedStoryIndex,
+                    startAtFirstUnviewed: startAtFirstUnviewed,
+                    initialAction: initialAction,
+                    targetCommentId: targetCommentId,
+                    targetParentCommentId: targetParentCommentId
+                )
+                .transition(.identity)
             } else if timedOut {
                 notFoundOverlay
             } else {
