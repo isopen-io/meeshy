@@ -105,8 +105,13 @@ public actor TusUploadCheckpointStore {
     /// Returns the entire table (for tests / debug). Unbounded — do not
     /// call from production paths.
     public func allCheckpoints() async -> [TusUploadCheckpoint] {
-        (try? await pool.read { db in
-            try TusUploadCheckpoint.fetchAll(db)
-        }) ?? []
+        do {
+            return try await pool.read { db in
+                try TusUploadCheckpoint.fetchAll(db)
+            }
+        } catch {
+            logger.error("Checkpoint table read failed: \(error.localizedDescription, privacy: .public)")
+            return []
+        }
     }
 }

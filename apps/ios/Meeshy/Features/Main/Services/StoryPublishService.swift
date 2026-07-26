@@ -117,7 +117,7 @@ final class StoryPublishService: ObservableObject {
                 }
             )
             for dir in orphans {
-                try? fm.removeItem(at: dir)
+                fm.removeItemLogging(at: dir, context: "stale story staging dir")
             }
         }
     }

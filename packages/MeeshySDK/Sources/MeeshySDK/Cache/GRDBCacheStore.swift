@@ -542,7 +542,12 @@ public actor GRDBCacheStore<Key, Value>: MutableCacheStore
                     } else {
                         raw = entry.encodedData
                     }
-                    return try? decoder.decode(Value.self, from: raw)
+                    // Une entrée illisible est ignorée (comme le skip de
+                    // déchiffrement juste au-dessus) mais doit se voir : c'est
+                    // un cache écrit par un schéma antérieur.
+                    return decoder.decodeOrLog(Value.self, from: raw,
+                                               field: "L2 cache entry", id: keyStr,
+                                               logger: logger)
                 }
 
                 return items.isEmpty ? nil : (items, meta.lastFetchedAt)

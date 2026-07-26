@@ -133,8 +133,15 @@ public actor SettingsActionQueue {
             return incoming
         }
         let merged = previousObject.merging(incomingObject) { _, new in new }
-        guard let data = try? JSONSerialization.data(withJSONObject: merged) else { return incoming }
-        return data
+        do {
+            return try JSONSerialization.data(withJSONObject: merged)
+        } catch {
+            // Le merge est perdu : la mutation précédente est écrasée par la
+            // nouvelle au lieu d'être fusionnée.
+            Logger(subsystem: "com.meeshy.sdk", category: "settingsactionqueue")
+                .error("Merged settings payload could not be serialized, previous mutation dropped: \(error.localizedDescription, privacy: .public)")
+            return incoming
+        }
     }
 
     public var count: Int { items.count }
@@ -214,7 +221,12 @@ public actor SettingsActionQueue {
         let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
         let cacheDir = documents.appendingPathComponent("meeshy_cache", isDirectory: true)
         if !FileManager.default.fileExists(atPath: cacheDir.path) {
-            try? FileManager.default.createDirectory(at: cacheDir, withIntermediateDirectories: true)
+            do {
+                try FileManager.default.createDirectory(at: cacheDir, withIntermediateDirectories: true)
+            } catch {
+                Logger(subsystem: "com.meeshy.sdk", category: "settingsactionqueue")
+                    .error("Cache directory unavailable — the queue file cannot be persisted: \(error.localizedDescription, privacy: .public)")
+            }
         }
         return cacheDir.appendingPathComponent(Self.queueFileName)
     }

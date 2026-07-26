@@ -1,4 +1,5 @@
 import Foundation
+import os
 
 public protocol AuthServiceProviding: Sendable {
     func login(username: String, password: String, rememberDevice: Bool) async throws -> LoginResponseData
@@ -50,6 +51,7 @@ public extension AuthServiceProviding {
 public final class AuthService: AuthServiceProviding, @unchecked Sendable {
     public static let shared = AuthService()
     private let api: APIClientProviding
+    private let logger = Logger(subsystem: "com.meeshy.sdk", category: "auth")
 
     init(api: APIClientProviding = APIClient.shared) {
         self.api = api
@@ -272,7 +274,16 @@ public final class AuthService: AuthServiceProviding, @unchecked Sendable {
     // MARK: - Logout
 
     public func logout() async {
-        let _: APIResponse<[String: Bool]>? = try? await api.request(endpoint: "/auth/logout", method: "POST")
+        do {
+            let _: APIResponse<[String: Bool]> = try await api.request(endpoint: "/auth/logout", method: "POST")
+        } catch {
+            // Best-effort assumé : la déconnexion locale doit aboutir même hors
+            // ligne. `logoutThrowing()` est la variante à utiliser quand
+            // l'appelant sait retenter (cf. `performServerLogoutWithRetries`).
+            logger.error(
+                "Server logout failed — local session cleared anyway, gateway session may stay live: \(error.localizedDescription, privacy: .public)"
+            )
+        }
     }
 
     /// D5 — throwing variant used by `AuthManager.performServerLogoutWithRetries`

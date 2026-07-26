@@ -1,4 +1,5 @@
 import Foundation
+import os
 
 // MARK: - Pure model (testable without UserDefaults)
 
@@ -150,15 +151,15 @@ public final class MediaConsumptionStore {
     // MARK: - Persistence
 
     private static func load(from userDefaults: UserDefaults, key: String) -> MediaConsumptions {
-        guard let data = userDefaults.data(forKey: key),
-              let decoded = try? JSONDecoder().decode(MediaConsumptions.self, from: data) else {
-            return MediaConsumptions()
-        }
-        return decoded
+        guard let data = userDefaults.data(forKey: key) else { return MediaConsumptions() }
+        // Un blob présent mais illisible réinitialise l'état : sans trace, la
+        // perte passe pour un premier lancement.
+        return JSONDecoder().decodeOrLog(MediaConsumptions.self, from: data,
+                                         field: "media consumption", logger: Logger.cache) ?? MediaConsumptions()
     }
 
     private func persist() {
-        guard let data = try? JSONEncoder().encode(consumptions) else { return }
+        guard let data = JSONEncoder().encodeOrLog(consumptions, field: "media consumption", logger: Logger.cache) else { return }
         userDefaults.set(data, forKey: key)
     }
 }

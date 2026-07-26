@@ -9,6 +9,28 @@ import MeeshyUI
 @preconcurrency import WebRTC
 import os
 
+/// Applies one best-effort `AVAudioSession` preference.
+///
+/// These calls legitimately throw on platforms that do not support them
+/// (iOS-app-on-Mac) and the OS may ignore the hint anyway, so the failure is
+/// expected rather than exceptional — logged at `.debug` so it stays available
+/// when diagnosing audio routing without polluting `.error`.
+///
+/// File-level (not a method) because call sites include closures that do not
+/// capture the `CallManager` as `self`.
+fileprivate func applyBestEffortAudioSetting(
+    _ name: String,
+    _ apply: () throws -> Void
+) {
+    do {
+        try apply()
+    } catch {
+        Logger.calls.debug("AVAudioSession \(name, privacy: .public) not applied (expected on unsupported platforms): \(error.localizedDescription, privacy: .public)")
+    }
+}
+
+
+
 // MARK: - Call End Reason Mapping
 
 /// Maps the gateway's raw `call:ended` reason string to the CallKit
@@ -1309,7 +1331,8 @@ final class CallManager: ObservableObject {
             }
 
             guard httpResponse.statusCode == 200,
-                  let envelope = try? JSONDecoder().decode(CallFreshnessResponse.self, from: data),
+                  let envelope = JSONDecoder().decodeOrLog(CallFreshnessResponse.self, from: data,
+                                                           field: "call freshness", logger: Logger.calls),
                   envelope.success,
                   let status = envelope.data?.status else {
                 Logger.calls.info("[VOIP_FRESHNESS] response opaque — assuming fresh")
@@ -1551,13 +1574,25 @@ final class CallManager: ObservableObject {
             Logger.calls.warning("Simulator video unsupported — continuing audio-only")
             guard currentCallId == callId else { return }
             isVideoEnabled = false
-            try? await webRTCService.startLocalMedia(isVideo: false)
+            do {
+                try await webRTCService.startLocalMedia(isVideo: false)
+            } catch {
+                // Le repli a échoué à son tour : l'appel n'a PLUS AUCUN média
+                // (ni vidéo ni audio) — état muet invisible sans cette trace.
+                Logger.calls.error("Audio-only fallback failed, call has no local media at all: \(error.localizedDescription, privacy: .public)")
+            }
             guard currentCallId == callId else { return }
         } catch WebRTCError.cameraPermissionDenied {
             Logger.calls.warning("[CALL_SETUP] camera permission denied — degrading to audio-only")
             guard currentCallId == callId else { return }
             isVideoEnabled = false
-            try? await webRTCService.startLocalMedia(isVideo: false)
+            do {
+                try await webRTCService.startLocalMedia(isVideo: false)
+            } catch {
+                // Le repli a échoué à son tour : l'appel n'a PLUS AUCUN média
+                // (ni vidéo ni audio) — état muet invisible sans cette trace.
+                Logger.calls.error("Audio-only fallback failed, call has no local media at all: \(error.localizedDescription, privacy: .public)")
+            }
             guard currentCallId == callId else { return }
             FeedbackToastManager.shared.showError(
                 String(localized: "call.video.permission.denied",
@@ -3250,7 +3285,8 @@ final class CallManager: ObservableObject {
     /// current session, if already torn down). Nil when no call has been made yet.
     static var lastCallSummary: CallQualitySummary? {
         guard let data = UserDefaults.standard.data(forKey: lastCallSummaryDefaultsKey) else { return nil }
-        return try? JSONDecoder().decode(CallQualitySummary.self, from: data)
+        return JSONDecoder().decodeOrLog(CallQualitySummary.self, from: data,
+                                         field: "last call summary", logger: Logger.calls)
     }
 
     private static func persistCallSummary(
@@ -3267,7 +3303,8 @@ final class CallManager: ObservableObject {
             endReason: String(describing: reason),
             stats: stats
         )
-        guard let data = try? JSONEncoder().encode(summary) else { return }
+        guard let data = JSONEncoder().encodeOrLog(summary, field: "call summary",
+                                                   id: callId ?? "-", logger: Logger.calls) else { return }
         UserDefaults.standard.set(data, forKey: lastCallSummaryDefaultsKey)
     }
 
@@ -3616,14 +3653,20 @@ final class CallManager: ObservableObject {
                 // or interrupting the call (iOS 14.5+). This is an AVAudioSession
                 // *instance* preference, NOT a CategoryOptions flag — best-effort
                 // (it throws on iOS-app-on-Mac, where it is unsupported).
-                try? session.session.setPrefersNoInterruptionsFromSystemAlerts(true)
+                applyBestEffortAudioSetting("prefersNoInterruptionsFromSystemAlerts") {
+                    try session.session.setPrefersNoInterruptionsFromSystemAlerts(true)
+                }
                 // Align AVFoundation's I/O with Opus's native codec parameters.
                 // 48 kHz avoids a sample-rate conversion stage inside the driver;
                 // 20 ms buffer matches Opus's default frame duration and reduces
                 // packetization jitter. Both are best-effort hints — the OS may
                 // silently ignore them when the hardware doesn't support the value.
-                try? session.session.setPreferredSampleRate(48_000)
-                try? session.session.setPreferredIOBufferDuration(0.02)
+                applyBestEffortAudioSetting("preferredSampleRate") {
+                    try session.session.setPreferredSampleRate(48_000)
+                }
+                applyBestEffortAudioSetting("preferredIOBufferDuration") {
+                    try session.session.setPreferredIOBufferDuration(0.02)
+                }
                 Logger.calls.info("RTCAudioSession pre-configured — video: \(isVideo), activeNow=\(activateNow)")
             } catch let error as NSError where error.domain == NSCocoaErrorDomain && error.code == 4099 {
                 // "Session deactivation failed" — le call précédent a laissé
@@ -5227,8 +5270,12 @@ private class CallKitDelegateProxy: NSObject, CXProviderDelegate, @unchecked Sen
             // Re-apply Opus-aligned I/O preferences now that CallKit owns
             // the session — setConfiguration earlier set them, but CallKit's
             // own activation may reset hardware-level parameters. Best-effort.
-            try? audioSession.setPreferredSampleRate(48_000)
-            try? audioSession.setPreferredIOBufferDuration(0.02)
+            applyBestEffortAudioSetting("preferredSampleRate") {
+                try audioSession.setPreferredSampleRate(48_000)
+            }
+            applyBestEffortAudioSetting("preferredIOBufferDuration") {
+                try audioSession.setPreferredIOBufferDuration(0.02)
+            }
             rtc.unlockForConfiguration()
         }
 
