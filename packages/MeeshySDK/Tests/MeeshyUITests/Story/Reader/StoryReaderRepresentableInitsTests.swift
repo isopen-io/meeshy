@@ -43,7 +43,7 @@ final class StoryReaderRepresentableInitsTests: XCTestCase {
     func test_initPost_buildsRepresentable() {
         let author = APIAuthor(id: "u1", username: "alice", displayName: "Alice", avatar: nil)
         let post = APIPost(
-            id: "p1", type: "STORY", visibility: "PUBLIC", content: "hi",
+            id: "p1", type: "STORY", visibility: "PUBLIC", visibilityUserIds: nil, content: "hi",
             originalLanguage: "fr", createdAt: Date(), updatedAt: nil, expiresAt: nil,
             author: author, likeCount: 0, commentCount: 0, repostCount: 0,
             viewCount: 0, postOpenCount: nil, qualifiedViewCount: nil, playCount: nil, bookmarkCount: 0, shareCount: 0, reactionSummary: nil,

@@ -51,14 +51,27 @@ final class StoryPhotoSaveService: ObservableObject {
     private let photoSaver: PhotoLibrarySaving
     private let toasts: FeedbackToastSurfacing
     private let preferredLanguages: @MainActor () -> [String]
-    private let intro: @MainActor () async -> StoryExportIntroContent?
+    private let intro: @MainActor @Sendable () async -> StoryExportIntroContent?
+    /// Borne dure sur `resolveIntro(_:timeout:)` — voir sa doc pour le pourquoi.
+    private let introTimeout: Duration
+
+    /// Tentative courante par story : incrémentée à chaque `save()` ET à
+    /// chaque `cancel()` — c'est la SEULE source de vérité sur « quelle
+    /// tentative est la bonne », jamais dérivée de `jobs`/`tasks`. Une
+    /// tentative annulée continue de baker en tâche de fond (`AVAssetWriter`
+    /// ignore `Task.isCancelled`) ; sans ce jeton intrinsèque, ses écritures
+    /// post-suspension (progression, `jobs`/`tasks`) pourraient s'appliquer
+    /// PENDANT ou APRÈS qu'une tentative relancée pour la même story soit en
+    /// cours — voir `isCurrent(_:for:)`.
+    private var generations: [String: Int] = [:]
 
     init(
         exporter: StoryVideoExportServiceProviding? = nil,
         photoSaver: PhotoLibrarySaving = PhotoLibraryManagerAdapter(),
         toasts: FeedbackToastSurfacing? = nil,
         preferredLanguages: (@MainActor () -> [String])? = nil,
-        intro: (@MainActor () async -> StoryExportIntroContent?)? = nil
+        introTimeout: Duration = .seconds(4),
+        intro: (@MainActor @Sendable () async -> StoryExportIntroContent?)? = nil
     ) {
         // `StoryVideoExportService.shared` et `FeedbackToastManager.shared`
         // sont `@MainActor`-isolés : impossible en expression de valeur par
@@ -68,6 +81,7 @@ final class StoryPhotoSaveService: ObservableObject {
         self.toasts = toasts ?? FeedbackToastManager.shared
         self.preferredLanguages = preferredLanguages
             ?? { AuthManager.shared.currentUser?.preferredContentLanguages ?? [] }
+        self.introTimeout = introTimeout
         self.intro = intro ?? StoryExportIntroFactory.currentUser
     }
 
@@ -94,32 +108,42 @@ final class StoryPhotoSaveService: ObservableObject {
         let slide = story.toRenderableSlide(preferredLanguages: languages)
         let watermark = MeeshyExportWatermark.make(username: AuthManager.shared.currentUser?.username)
         let storyId = story.id
+        // Nouvelle tentative pour cette story : voir la doc de `generations`.
+        let generation = (generations[storyId] ?? 0) + 1
+        generations[storyId] = generation
 
         jobs[storyId] = 0
 
         let task = Task { [weak self] in
             guard let self else { return }
-            // Résolu DANS le Task (async) : l'identité (avatar / fond / mood) se
-            // charge depuis le cache. `intro` est la closure injectée à l'init,
-            // pas le singleton — l'injection en test reste honorée.
-            let introContent = await self.intro()
+            // Résolu DANS le Task (async), BORNÉ dans le temps : l'identité
+            // (avatar / fond / mood) se charge depuis le cache, réseau si
+            // absent — voir `resolveIntro(_:timeout:)`. `intro` est la
+            // closure injectée à l'init, pas le singleton — l'injection en
+            // test reste honorée.
+            let introContent = await Self.resolveIntro(self.intro, timeout: self.introTimeout)
             let url = await self.exporter.prepareExport(
                 slide: slide,
                 languages: languages,
                 watermark: watermark,
                 intro: introContent,
                 onProgress: { [weak self] fraction in
-                    guard let self, self.jobs[storyId] != nil else { return }
+                    guard let self, self.isCurrent(generation, for: storyId) else { return }
                     self.jobs[storyId] = StorySaveProgressMapper.bake(fraction)
                 },
                 onPhaseChange: nil
             )
 
-            // Annulation pendant le bake : `AVAssetWriter` n'observe pas
-            // `Task.isCancelled`, donc le MP4 peut arriver APRÈS le cancel.
-            // On le nettoie sans rien afficher — `cancel(storyId:)` a déjà
-            // retiré le job et posé son toast.
-            guard !Task.isCancelled else {
+            // Tentative périmée : annulée (`cancel(storyId:)` a déjà avancé
+            // la génération et posé son toast) OU remplacée par un `save()`
+            // relancé pour la même story pendant que CE bake tournait encore
+            // (`AVAssetWriter` n'observe pas `Task.isCancelled`, le MP4 peut
+            // arriver bien après). Dans les deux cas on nettoie le MP4 sans
+            // toucher à `jobs`/`tasks` — qui appartiennent à la tentative
+            // courante — et sans second toast. Aucune suspension entre cette
+            // vérification et le `guard let url else` suivant : la valeur
+            // reste valide pour ce dernier sans nouvelle vérification.
+            guard self.isCurrent(generation, for: storyId) else {
                 if let url { self.exporter.cleanupExport(at: url) }
                 return
             }
@@ -137,8 +161,15 @@ final class StoryPhotoSaveService: ObservableObject {
 
             do {
                 try await self.photoSaver.saveVideo(at: url)
-                self.jobs[storyId] = 1
+                // Nouvelle suspension au-dessus (`await saveVideo`) : la
+                // tentative a pu être annulée-puis-relancée PENDANT
+                // l'écriture Photos (la fenêtre que le round précédent de
+                // cette correction laissait passer). Le fichier temporaire
+                // est nettoyé dans tous les cas ; `jobs`/`tasks` et le toast
+                // n'appartiennent qu'à la tentative encore courante.
                 self.exporter.cleanupExport(at: url)
+                guard self.isCurrent(generation, for: storyId) else { return }
+                self.jobs[storyId] = 1
                 self.finish(storyId: storyId)
                 HapticFeedback.medium()
                 self.toasts.showSuccess(String(
@@ -149,6 +180,7 @@ final class StoryPhotoSaveService: ObservableObject {
                 Logger.stories.error(
                     "story save to photos failed for \(storyId, privacy: .public): \(error.localizedDescription, privacy: .public)")
                 self.exporter.cleanupExport(at: url)
+                guard self.isCurrent(generation, for: storyId) else { return }
                 self.finish(storyId: storyId)
                 self.toasts.showError(String(
                     localized: "story.mine.save.photosDenied",
@@ -164,6 +196,12 @@ final class StoryPhotoSaveService: ObservableObject {
     func cancel(storyId: String) {
         guard jobs[storyId] != nil else { return }
         tasks[storyId]?.cancel()
+        // Avance la génération AVANT `finish` : c'est ce qui invalide
+        // intrinsèquement et DÉFINITIVEMENT la tentative annulée — que
+        // l'utilisateur relance ou non ensuite. `jobs[storyId]` seul ne
+        // suffit pas comme marqueur (voir `isCurrent`) : n'importe quelle
+        // tentative peut le repeupler via un `save()` relancé.
+        generations[storyId] = (generations[storyId] ?? 0) + 1
         finish(storyId: storyId)
         toasts.showSuccess(String(
             localized: "story.mine.save.cancelled",
@@ -176,5 +214,94 @@ final class StoryPhotoSaveService: ObservableObject {
     private func finish(storyId: String) {
         jobs[storyId] = nil
         tasks[storyId] = nil
+    }
+
+    /// Vrai si `generation` est toujours la tentative courante pour `storyId`.
+    ///
+    /// Comparaison **intrinsèque**, contre `generations[storyId]` UNIQUEMENT
+    /// — jamais contre `jobs[storyId] != nil`. `jobs`/`tasks` sont un état
+    /// PARTAGÉ que `finish(storyId:)` efface sans discernement ; une
+    /// tentative périmée qui s'en servirait comme marqueur d'identité
+    /// pourrait voir une tentative B, fraîchement relancée, repeupler
+    /// `jobs[storyId]` et se faire passer — à tort — pour périmée dès que A
+    /// appelle `finish` après elle (régression du round précédent : A
+    /// ressort de `saveVideo` après le relancement de B, écrit
+    /// `jobs[storyId] = 1` puis `finish()`, qui efface la RÉFÉRENCE DE B —
+    /// B se croit alors périmé et jette son propre MP4 sans jamais écrire
+    /// dans Photos, en silence).
+    ///
+    /// `generations[storyId]` n'est JAMAIS réinitialisé, seulement avancé —
+    /// par `save()` (nouvelle tentative) ET par `cancel()` (invalide
+    /// intrinsèquement et définitivement la tentative annulée, que
+    /// l'utilisateur relance ou non ensuite). Le token qu'une tentative
+    /// capture à son lancement ne peut donc plus jamais redevenir courant
+    /// une fois dépassé, indépendamment de ce que d'autres tentatives font
+    /// de `jobs`/`tasks` entre-temps.
+    private func isCurrent(_ generation: Int, for storyId: String) -> Bool {
+        generations[storyId] == generation
+    }
+
+    /// Course entre `intro()` et une borne de temps : la première à finir
+    /// gagne, l'autre continue en arrière-plan mais son résultat est ignoré.
+    ///
+    /// Sans cette borne, une résolution d'identité non cachée (avatar / fond
+    /// réseau via `DiskCacheStore`, jusqu'à ~60 s de timeout `URLSession` par
+    /// défaut) laisserait l'anneau figé à 0 % pendant toute l'attente — AVANT
+    /// même que le bake ne démarre et ne publie sa première fraction,
+    /// l'utilisateur croirait l'app plantée. Passé le délai, le bake démarre
+    /// SANS interlude de marque plutôt que de bloquer : dégradation
+    /// gracieuse, la résolution d'identité (avatar/fond/mood) n'est ni
+    /// supprimée ni contournée, juste bornée dans le temps.
+    ///
+    /// Implémentée en `withCheckedContinuation` + boîte de résolution unique
+    /// plutôt qu'en `withTaskGroup` : un `addTask { @MainActor in await
+    /// intro() }` capturant une closure `@Sendable` fait buter le vérificateur
+    /// d'isolation par régions sur une limitation réelle du compilateur
+    /// (« pattern that the region based isolation checker does not
+    /// understand how to check », reproductible avec Swift 6.0 / Xcode 26.1
+    /// sur ce fichier). Ce patron évite `withTaskGroup` et reprend celui déjà
+    /// en usage pour `ProgressSinkBox` (`StoryVideoExportService.swift`).
+    private static func resolveIntro(
+        _ intro: @escaping @MainActor @Sendable () async -> StoryExportIntroContent?,
+        timeout: Duration
+    ) async -> StoryExportIntroContent? {
+        await withCheckedContinuation { (continuation: CheckedContinuation<StoryExportIntroContent?, Never>) in
+            let box = IntroRaceBox(continuation)
+            Task { @MainActor in
+                let content = await intro()
+                box.finish(with: content)
+            }
+            Task { @MainActor in
+                try? await Task.sleep(for: timeout)
+                box.finish(with: nil)
+            }
+        }
+    }
+}
+
+// MARK: - IntroRaceBox
+
+/// Résout une continuation partagée exactement une fois : la première des
+/// deux tentatives (intro ou timeout, voir `resolveIntro`) à finir gagne,
+/// l'autre est ignorée sans crasher (`CheckedContinuation` interdit une
+/// double reprise). Même patron que `ProgressSinkBox`
+/// (`StoryVideoExportService.swift`) : les deux `Task` qui appellent
+/// `finish(with:)` sont créées depuis le MÊME contexte `@MainActor` et
+/// héritent donc du MainActor par défaut (SE-0461) — `didFinish` est donc
+/// sérialisé en pratique malgré l'annotation `@unchecked Sendable`, requise
+/// pour franchir la frontière non-Sendable du closure de
+/// `withCheckedContinuation`.
+private final class IntroRaceBox: @unchecked Sendable {
+    private let continuation: CheckedContinuation<StoryExportIntroContent?, Never>
+    private var didFinish = false
+
+    init(_ continuation: CheckedContinuation<StoryExportIntroContent?, Never>) {
+        self.continuation = continuation
+    }
+
+    func finish(with content: StoryExportIntroContent?) {
+        guard !didFinish else { return }
+        didFinish = true
+        continuation.resume(returning: content)
     }
 }

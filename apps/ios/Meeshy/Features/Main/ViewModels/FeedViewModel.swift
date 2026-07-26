@@ -858,7 +858,7 @@ class FeedViewModel: ObservableObject {
         posts[idx] = optimistic
         debouncedCacheSave()
         do {
-            let updated = try await postService.update(postId: postId, content: content, visibility: nil, moodEmoji: nil, originalLanguage: language, type: type, removeMediaIds: removeMediaIds)
+            let updated = try await postService.update(postId: postId, content: content, visibility: nil, visibilityUserIds: nil, moodEmoji: nil, originalLanguage: language, type: type, removeMediaIds: removeMediaIds)
             // Re-hydrate from the server response so the gateway-authoritative
             // fields (updatedAt, isEdited, sanitized content, …) replace the
             // optimistic in-memory copy. Preserves the resolved translation

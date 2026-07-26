@@ -67,7 +67,7 @@ final class StoryRepostFlowTests: XCTestCase {
             )
         }
         return APIPost(
-            id: id, type: type, visibility: "PUBLIC", content: "Mon commentaire",
+            id: id, type: type, visibility: "PUBLIC", visibilityUserIds: nil, content: "Mon commentaire",
             originalLanguage: "fr", createdAt: Date(), updatedAt: nil, expiresAt: nil,
             author: author, likeCount: 0, commentCount: 0, repostCount: 0,
             viewCount: 0, bookmarkCount: 0, shareCount: 0, reactionSummary: nil,

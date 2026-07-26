@@ -22,7 +22,7 @@ final class StatusServiceTests: XCTestCase {
     private func makeAPIPost(id: String = "post1", content: String = "Hello") -> APIPost {
         let author = APIAuthor(id: "a1", username: "testuser", displayName: "Test", avatar: nil)
         return APIPost(
-            id: id, type: "STATUS", visibility: "PUBLIC", content: content,
+            id: id, type: "STATUS", visibility: "PUBLIC", visibilityUserIds: nil, content: content,
             originalLanguage: "fr", createdAt: Date(), updatedAt: nil, expiresAt: nil,
             author: author, likeCount: 0, commentCount: 0, repostCount: 0,
             viewCount: 0, postOpenCount: nil, qualifiedViewCount: nil, playCount: nil, bookmarkCount: 0, shareCount: 0, reactionSummary: nil,

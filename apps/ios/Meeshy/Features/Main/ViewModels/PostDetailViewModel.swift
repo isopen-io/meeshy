@@ -567,7 +567,7 @@ class PostDetailViewModel: ObservableObject {
         optimistic.translations = nil
         self.post = optimistic
         do {
-            let updated = try await postService.update(postId: snapshot.id, content: content, visibility: nil, moodEmoji: nil, originalLanguage: language, type: type, removeMediaIds: removeMediaIds)
+            let updated = try await postService.update(postId: snapshot.id, content: content, visibility: nil, visibilityUserIds: nil, moodEmoji: nil, originalLanguage: language, type: type, removeMediaIds: removeMediaIds)
             self.post = updated.toFeedPost(preferredLanguages: preferredLanguages)
             FeedbackToastManager.shared.showSuccess(String(localized: "Post modifie", defaultValue: "Post modifie"))
         } catch {
