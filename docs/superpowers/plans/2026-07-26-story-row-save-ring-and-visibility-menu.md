@@ -2413,3 +2413,38 @@ fusionné). L'anneau porte libellé + valeur, comme livré en Task 7.
 - le rail d'une story de l'auteur expose « Partager » ET « Enregistrer » ;
 - une story qui n'est pas de l'auteur n'expose aucune des deux ;
 - pendant un job de sauvegarde, « Enregistrer » est remplacé par l'anneau et « Partager » reste présent.
+
+---
+
+## Task 11 : supprimer le compteur de commentaires inerte de la rangée de métriques
+
+**Files:**
+- Modify: `apps/ios/Meeshy/Features/Main/Views/MyStoriesView.swift` (`MyStoryRow`, rangée `metric(...)`)
+- Test: `apps/ios/MeeshyTests/Unit/Views/MyStoriesCommentsButtonTests.swift` (garde de source à étendre)
+
+**Le doublon.** Depuis la Task 8, la ligne affiche le nombre de commentaires **deux fois** :
+1. dans la rangée de métriques, en `metric(icon: "bubble.left.fill", value: story.commentCount)` — purement décoratif, non tappable ;
+2. à côté du `⋯`, en bouton actionnable ouvrant `CommentsSheetView`.
+
+Deux affichages du même chiffre, dont un seul réagit au toucher : l'utilisateur ne peut pas
+deviner lequel est cliquable, et tapoter le décoratif ne fait rien.
+
+**Ce qu'on livre.** La métrique `bubble.left.fill` est **retirée** de la rangée. Les métriques
+« vues » et « réactions » restent inchangées. Le compteur de commentaires ne subsiste que sur le
+bouton actionnable, à gauche du `⋯`.
+
+```swift
+                        HStack(spacing: 12) {
+                            metric(icon: "eye.fill", value: story.viewCount ?? 0)
+                            metric(icon: "heart.fill", value: story.reactionCount)
+                        }
+```
+
+**Le libellé VoiceOver de la ligne ne change PAS.** `story.mine.row.a11y` continue d'annoncer
+« … N vues, N réactions, N commentaires » : le nombre reste une information de la ligne, seule
+sa duplication visuelle disparaît. Retirer le mot du libellé priverait l'utilisateur VoiceOver
+d'une donnée que l'écran affiche toujours (sur le bouton).
+
+**Garde de source à étendre** : après la modification, `bubble.left.fill` ne doit plus apparaître
+dans le corps de `MyStoryRow`, et `"bubble.left"` (le bouton) doit toujours y être. Réutiliser
+`strippingComments(_:)` déjà présent dans le fichier de test.
