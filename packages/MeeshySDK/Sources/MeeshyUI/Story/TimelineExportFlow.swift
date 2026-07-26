@@ -18,6 +18,12 @@ import MeeshySDK
 // dans le SDK) et en threadant `intro:` à travers le même enchaînement
 // « bake, puis prépose l'interlude » que `StoryVideoExportService.
 // prepareExport` — voir `SystemTimelineStoryExporter` ci-dessous.
+//
+// Revue finale (2026-07-26, item 1) : la CARTE DE FIN (`StoryExportOutro`)
+// manquait encore sur ce chemin — la même story se terminait sur le logo
+// Meeshy + signature sonore depuis « Mes stories », et sur sa dernière frame
+// depuis le composer timeline. Elle est désormais appliquée ici, avec le même
+// atome SDK, et INDÉPENDAMMENT de l'interlude.
 
 private let timelineExportLogger = Logger(subsystem: "me.meeshy.app", category: "story-timeline-export")
 
@@ -35,7 +41,8 @@ private let timelineExportLogger = Logger(subsystem: "me.meeshy.app", category: 
 @MainActor
 protocol TimelineStoryExporting {
     /// - Returns: l'URL du MP4 FINAL — l'interlude prépendu quand `intro`
-    ///   n'est pas `nil`, la story seule sinon.
+    ///   n'est pas `nil`, et la carte de fin de marque TOUJOURS ajoutée
+    ///   (elle ne dépend d'aucune identité).
     func export(
         slide: StorySlide,
         to outputURL: URL,
@@ -46,11 +53,12 @@ protocol TimelineStoryExporting {
     ) async throws -> URL
 }
 
-/// Implémentation de production : bake via `StoryExporter.export`, puis
-/// prépose l'interlude via `StoryExportIntro.prepend` quand `intro != nil` —
+/// Implémentation de production : bake via `StoryExporter.export`, prépose
+/// l'interlude via `StoryExportIntro.prepend` quand `intro != nil`, puis
+/// ajoute TOUJOURS la carte de fin via `StoryExportOutro.append` —
 /// EXACTEMENT la séquence de `StoryVideoExportService.prepareExport`. Un
-/// échec du préambule ne perd pas l'export : la story seule reste livrable
-/// (même dégradation gracieuse que les autres chemins).
+/// échec de l'un ou l'autre ne perd pas l'export : ce qui a déjà été composé
+/// reste livrable (même dégradation gracieuse que les autres chemins).
 struct SystemTimelineStoryExporter: TimelineStoryExporting {
 
     @MainActor
@@ -88,22 +96,48 @@ struct SystemTimelineStoryExporter: TimelineStoryExporting {
             progress: progressTrampoline
         )
 
-        guard let intro else { return outputURL }
-        do {
-            let branded = try await StoryExportIntro.prepend(
-                to: outputURL,
-                content: intro,
-                renderSize: StoryExportIntroSizing.renderSize(for: slide)
-            )
+        let renderSize = StoryExportIntroSizing.renderSize(for: slide)
+        var current = outputURL
+
+        // Interlude d'identité — seulement quand une identité a été résolue.
+        if let intro {
             do {
-                try FileManager.default.removeItem(at: outputURL)
+                let branded = try await StoryExportIntro.prepend(
+                    to: current,
+                    content: intro,
+                    renderSize: renderSize
+                )
+                removeTemporaryFile(at: current, reason: "pré-interlude")
+                current = branded
             } catch {
-                timelineExportLogger.warning("cleanup du MP4 pré-interlude échoué à \(outputURL.path, privacy: .public) — \(error.localizedDescription, privacy: .public)")
+                timelineExportLogger.warning("interlude de marque ignoré pour \(slide.id, privacy: .public) — \(error.localizedDescription, privacy: .public)")
             }
-            return branded
+        }
+
+        // Carte de fin de marque — appliquée INDÉPENDAMMENT de l'interlude
+        // (revue finale, item 1 + item 2) : elle ne dépend d'aucune identité,
+        // donc l'absence de session (ou une résolution d'identité trop lente)
+        // ne doit pas la faire disparaître. Même enchaînement, même atome
+        // (`StoryExportOutro`) que `StoryVideoExportService.prepareExport` —
+        // sans quoi la même story se terminait sur le logo Meeshy depuis
+        // « Mes stories » et sur sa dernière frame depuis le composer timeline.
+        do {
+            let finalURL = try await StoryExportOutro.append(to: current, renderSize: renderSize)
+            removeTemporaryFile(at: current, reason: "pré-carte-de-fin")
+            return finalURL
         } catch {
-            timelineExportLogger.warning("interlude de marque ignoré pour \(slide.id, privacy: .public) — \(error.localizedDescription, privacy: .public)")
-            return outputURL
+            timelineExportLogger.warning("carte de fin ignorée pour \(slide.id, privacy: .public) — \(error.localizedDescription, privacy: .public)")
+            return current
+        }
+    }
+
+    /// Purge d'un intermédiaire de composition. Échec non fatal (l'OS purge le
+    /// dossier temporaire) mais journalisé pour que les fuites soient visibles.
+    private func removeTemporaryFile(at url: URL, reason: String) {
+        do {
+            try FileManager.default.removeItem(at: url)
+        } catch {
+            timelineExportLogger.warning("cleanup du MP4 \(reason, privacy: .public) échoué à \(url.path, privacy: .public) — \(error.localizedDescription, privacy: .public)")
         }
     }
 }

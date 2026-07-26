@@ -226,6 +226,12 @@ final class SystemTimelineStoryExporterTests: XCTestCase {
 
     private static let storyDuration: TimeInterval = 2.0
 
+    /// Allongement net apporté par la carte de fin : elle dure
+    /// `StoryExportOutro.duration` (2 s) mais entre en crossfade sur les 1,5
+    /// dernières secondes de la story — même arithmétique que
+    /// `StoryExportOutroTests.test_append_extendsStoryByHalfSecond`.
+    private static let outroTail: TimeInterval = 0.5
+
     private func makeSlide() -> StorySlide {
         let text = StoryTextObject(id: UUID().uuidString,
                                    text: "Timeline export",
@@ -270,14 +276,19 @@ final class SystemTimelineStoryExporterTests: XCTestCase {
         defer { try? FileManager.default.removeItem(at: finalURL) }
 
         let duration = try await AVURLAsset(url: finalURL).load(.duration)
-        let expected = StoryExportIntro.duration + Self.storyDuration
+        let expected = StoryExportIntro.duration + Self.storyDuration + Self.outroTail
         XCTAssertEqual(CMTimeGetSeconds(duration), expected, accuracy: 0.35,
-                       "l'implémentation de PRODUCTION doit préposer l'interlude, pas seulement le contrat du protocole")
+                       "l'implémentation de PRODUCTION doit préposer l'interlude ET ajouter la carte de fin, pas seulement le contrat du protocole")
     }
 
-    /// Sans intro, le VRAI exporteur ne prépose RIEN — la story seule, à sa
-    /// durée propre (pas celle allongée de l'interlude).
-    func test_export_withoutIntro_deliversTheStoryAlone() async throws {
+    /// Sans intro, le VRAI exporteur ne prépose RIEN — mais la CARTE DE FIN,
+    /// elle, ne dépend d'aucune identité et doit rester présente.
+    ///
+    /// Revue finale (item 1 + item 2) : c'est la garde qui rougit si l'appel à
+    /// `StoryExportOutro.append` disparaît du chemin timeline, ou s'il
+    /// retombe sous la dépendance de `intro != nil` comme il l'était côté
+    /// `StoryVideoExportService`.
+    func test_export_withoutIntro_stillAppendsTheBrandOutro() async throws {
         try XCTSkipIf(
             ProcessInfo.processInfo.environment["MEESHY_SKIP_EXPORT_TESTS"] != nil,
             "Export tests skipped via MEESHY_SKIP_EXPORT_TESTS env var"
@@ -297,7 +308,16 @@ final class SystemTimelineStoryExporterTests: XCTestCase {
         defer { try? FileManager.default.removeItem(at: finalURL) }
 
         let duration = try await AVURLAsset(url: finalURL).load(.duration)
-        XCTAssertEqual(CMTimeGetSeconds(duration), Self.storyDuration, accuracy: 0.35,
-                       "sans intro, aucun préambule ne doit être prépose par l'implémentation de production")
+        XCTAssertEqual(CMTimeGetSeconds(duration), Self.storyDuration + Self.outroTail, accuracy: 0.35,
+                       "sans intro, aucun préambule — mais la carte de fin de marque doit tout de même allonger la vidéo")
+        XCTAssertGreaterThan(CMTimeGetSeconds(duration), Self.storyDuration + 0.15,
+                             "une vidéo à la durée EXACTE de la story prouve que la carte de fin a disparu du chemin timeline")
+
+        // La signature sonore de FERMETURE est la preuve la plus directe que
+        // c'est bien `StoryExportOutro` qui a composé (la story de ce test est
+        // muette : sans carte de fin, aucune piste audio n'existerait).
+        let audio = try await AVURLAsset(url: finalURL).loadTracks(withMediaType: .audio)
+        XCTAssertGreaterThanOrEqual(audio.count, 1,
+                                    "la carte de fin apporte la signature sonore de fermeture — absente, elle n'a pas été appliquée")
     }
 }
