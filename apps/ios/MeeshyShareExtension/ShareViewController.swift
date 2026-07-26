@@ -297,7 +297,7 @@ struct ShareContentView: View {
     @State private var recentContacts: [ContactPreview] = []
 
     var body: some View {
-        NavigationView {
+        NavigationStack {
             VStack(spacing: 0) {
                 // Shared content preview
                 ScrollView(.horizontal, showsIndicators: false) {
