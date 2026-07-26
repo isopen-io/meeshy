@@ -17,9 +17,27 @@ struct StatusBubbleOverlay: View {
     @StateObject private var audioPlayer = AudioPlaybackManager()
     @State private var appearAnimation = false
 
-    private var screenHeight: CGFloat { UIScreen.main.bounds.height }
-    private var screenWidth: CGFloat { UIScreen.main.bounds.width }
-    private var showAbove: Bool { anchorPoint.y > screenHeight * 0.45 }
+    /// Décisions de layout pures — extraites pour être directement testables
+    /// (`StatusBubbleOverlayLayoutTests`) sans construire de vue vivante.
+    /// Idiome : `StoryViewerView+Content.reactionRollbackTarget`.
+    ///
+    /// Les deux mesurent le **conteneur** dans lequel la bulle est posée, jamais
+    /// `UIScreen.main.bounds`. `.withStatusBubble()` est appliqué sur ~15 surfaces
+    /// dont plusieurs feuilles (`FeedCommentsSheet`, `ConversationInfoSheet`,
+    /// `ForwardPickerSheet`, `SharePickerView`…) : leurs bornes sont bien plus
+    /// petites que l'écran physique — davantage encore dans une form sheet iPad,
+    /// une colonne de split view, un Slide Over ou une fenêtre Stage Manager.
+    /// La bulle est clippée par ce conteneur, donc c'est lui qui décide.
+    nonisolated static func bubbleWidth(containerWidth: CGFloat) -> CGFloat {
+        min(250, max(0, containerWidth - 48))
+    }
+
+    /// La bulle bascule au-dessus de son ancre dès que celle-ci occupe la moitié
+    /// basse du conteneur : c'est de ce côté-là qu'il reste de la place. Le seuil
+    /// se mesure sur le conteneur — `anchorY` y est déjà exprimé, l'écran non.
+    nonisolated static func flipsAbove(anchorY: CGFloat, containerHeight: CGFloat) -> Bool {
+        anchorY > containerHeight * 0.45
+    }
 
     var body: some View {
         GeometryReader { parentGeo in
@@ -29,7 +47,8 @@ struct StatusBubbleOverlay: View {
                 y: anchorPoint.y - parentOrigin.y
             )
             let bounds = parentGeo.size
-            let bubbleW: CGFloat = min(screenWidth - 48, 250)
+            let bubbleW = Self.bubbleWidth(containerWidth: bounds.width)
+            let showAbove = Self.flipsAbove(anchorY: anchor.y, containerHeight: bounds.height)
             // Décalé à droite de l'avatar : bord gauche de la bulle à anchor.x + 12
             let bubbleX = min(anchor.x + 12 + bubbleW / 2, bounds.width - bubbleW / 2 - 16)
             let dir: CGFloat = showAbove ? -1 : 1
