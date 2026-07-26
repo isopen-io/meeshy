@@ -172,10 +172,16 @@ final class StoryGroupIntroDismissAnimationTests: XCTestCase {
                 .appendingPathComponent("Meeshy/Features/Main/Views/StoryViewerView.swift"),
             encoding: .utf8
         )
-        guard let range = source.range(of: "private func dismissGroupIntro() {") else {
+        // Ancré sur le NOM + la parenthèse ouvrante, pas sur la signature
+        // complète : la garde protège un comportement (« la sortie lit la
+        // transition du slide »), pas une liste de paramètres. Épingler
+        // « dismissGroupIntro() { » la faisait tomber au premier paramètre
+        // ajouté — ce qui s'est produit avec `revealing:` le 2026-07-26, et
+        // l'échec accusait un comportement intact.
+        guard let range = source.range(of: "private func dismissGroupIntro(") else {
             return XCTFail("dismissGroupIntro introuvable")
         }
-        let body = String(source[range.lowerBound...].prefix(400))
+        let body = String(source[range.lowerBound...].prefix(600))
 
         XCTAssertTrue(body.contains("storyEffects?.opening"),
                       "la sortie doit être dérivée de la transition d'ouverture du slide")
