@@ -547,15 +547,22 @@ struct RootView: View {
         // story is on top. Read by `ConnectionBanner` via
         // `@Environment(\.isStoryViewerPresenting)`. Cf. bug 2026-05-27.
         .environment(\.isStoryViewerPresenting, storyViewerCoordinator.pendingRequest != nil)
+        // The title belongs to the scene the user is looking at — the one
+        // labelled in the iPad app switcher and Stage Manager. Resolved through
+        // DeviceLayout: `connectedScenes.first` is the first element of an
+        // unordered Set and could retitle a background window instead.
         .adaptiveOnChange(of: router.sceneTitle) { _, title in
-            UIApplication.shared.connectedScenes
-                .compactMap { $0 as? UIWindowScene }
-                .first?.title = String(format: String(localized: "root.scene_title_format", defaultValue: "Meeshy — %@", bundle: .main), title)
+            DeviceLayout.activeWindowScene?.title = String(
+                format: String(localized: "root.scene_title_format", defaultValue: "Meeshy — %@", bundle: .main),
+                title
+            )
         }
         .onAppear {
-            UIApplication.shared.connectedScenes
-                .compactMap { $0 as? UIWindowScene }
-                .first?.title = String(localized: "root.scene_title_default", defaultValue: "Meeshy — Conversations", bundle: .main)
+            DeviceLayout.activeWindowScene?.title = String(
+                localized: "root.scene_title_default",
+                defaultValue: "Meeshy — Conversations",
+                bundle: .main
+            )
         }
         .task {
             // Connect Socket.IO early so the backend knows we're online

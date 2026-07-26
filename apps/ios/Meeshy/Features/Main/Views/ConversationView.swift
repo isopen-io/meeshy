@@ -335,10 +335,7 @@ struct ConversationView: View {
         // la safe area bottom passe à 0 et le GeometryReader fire à chaque frame d'animation,
         // ce qui provoquerait des mises à jour en boucle de composerHeight.
         guard keyboardHeight == 0 else { return }
-        let safeBottom = UIApplication.shared.connectedScenes
-            .compactMap { $0 as? UIWindowScene }
-            .first?.windows.first(where: { $0.isKeyWindow })?.safeAreaInsets.bottom ?? 0
-        composerHeight = contentHeight + safeBottom
+        composerHeight = contentHeight + DeviceLayout.safeAreaInsets.bottom
     }
 
     // MARK: - Computed Properties

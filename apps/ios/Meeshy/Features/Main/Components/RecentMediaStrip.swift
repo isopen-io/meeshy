@@ -343,12 +343,16 @@ struct RecentMediaStrip: View {
     /// narrower than the screen.
     private var usesGridLayout: Bool { DeviceLayout.isPad }
 
-    /// Compact (iPhone): the composer fills the screen width, so the screen is a
+    /// Compact (iPhone): the composer fills the window width, so the window is a
     /// faithful proxy for the container. Regular (iPad / macOS) MUST size from the
-    /// real container width — the comments sheet is far narrower than the screen,
-    /// and sizing four cells off the full screen is exactly what made the old
+    /// real container width — the comments sheet is far narrower than the window,
+    /// and sizing four cells off the full width is exactly what made the old
     /// strip overflow into the unstructured mess.
-    private var compactCell: CGFloat { cell(forContainerWidth: UIScreen.main.bounds.width) }
+    ///
+    /// The window, not the display: the proxy holds because the composer spans
+    /// whatever the app was given, which stops being the screen the moment the
+    /// app is not full-screen.
+    private var compactCell: CGFloat { cell(forContainerWidth: DeviceLayout.windowSize.width) }
 
     private func cell(forContainerWidth width: CGFloat) -> CGFloat {
         max(40, ((width - hPadding * 2) - spacing * CGFloat(columns - 1)) / CGFloat(columns))

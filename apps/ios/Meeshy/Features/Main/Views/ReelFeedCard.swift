@@ -153,8 +153,10 @@ struct ReelFeedCard: View, Equatable {
     }
 
     // Largeur de contenu du feed (le GeometryReader donne la vraie ; estimation
-    // pour fixer la hauteur du conteneur avant mesure).
-    private var cardWidthEstimate: CGFloat { UIScreen.main.bounds.width - 32 }
+    // pour fixer la hauteur du conteneur avant mesure). Estimée sur la fenêtre
+    // et non sur l'écran physique : en Split View / Stage Manager la carte
+    // serait dimensionnée sur une largeur que l'app n'a pas.
+    private var cardWidthEstimate: CGFloat { DeviceLayout.windowSize.width - 32 }
 
     // MARK: - Background média (aspect-fill)
 

@@ -428,14 +428,17 @@ struct ConversationListView: View {
 
     @ViewBuilder
     private func sectionConversations(_ conversations: [Conversation], orderedConversationIds: [String]) -> some View {
-        // rowWidth derives from the actual containing column width (iPad
-        // left column is much narrower than `UIScreen.main.bounds.width`)
-        // minus innerPadding(32) + avatar(52) + badge(28) + spacing(24).
-        // On iPad the column ratio is roughly 0.38 of the screen, so we
-        // clamp to that floor explicitly to avoid text overflow.
+        // rowWidth derives from the actual containing column width (the iPad
+        // left column is much narrower than the window) minus
+        // innerPadding(32) + avatar(52) + badge(28) + spacing(24).
+        // On iPad the column ratio is roughly 0.38 of the window, so we
+        // clamp to that floor explicitly to avoid text overflow. Measured on
+        // the window, never the display: in Split View the 0.42 ratio of a
+        // 1366 pt screen describes a column the app does not own.
+        let windowWidth = DeviceLayout.windowSize.width
         let baseWidth = horizontalSizeClass == .regular
-            ? min(UIScreen.main.bounds.width * 0.42, 520)
-            : UIScreen.main.bounds.width - 32
+            ? min(windowWidth * 0.42, 520)
+            : windowWidth - 32
         let rowWidth = max(120, baseWidth - 32 - 52 - 28 - 24)
         LazyVStack(spacing: 6) {
             ForEach(conversations, id: \.id) { conversation in

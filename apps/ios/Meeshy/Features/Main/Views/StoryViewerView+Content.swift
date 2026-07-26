@@ -963,7 +963,7 @@ extension StoryViewerView {
         guard let story = currentStory else { return }
         let shareURL = "https://meeshy.me/story/\(story.id)"
         let activityVC = UIActivityViewController(activityItems: [shareURL], applicationActivities: nil)
-        if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+        if let windowScene = DeviceLayout.activeWindowScene,
            let rootVC = windowScene.windows.first?.rootViewController {
             var topVC = rootVC
             while let presented = topVC.presentedViewController { topVC = presented }
@@ -1539,13 +1539,13 @@ struct StoryCommentsOverlayView: View {
         )
     }
 
-    /// Cap the comment list to ~half the screen when the keyboard is hidden
+    /// Cap the comment list to ~half the window when the keyboard is hidden
     /// so the rest of the story (head, mid-frame) stays visible and tappable.
     /// When the keyboard rises the list can grow into the space the keyboard
     /// uncovered.
     private var listMaxHeight: CGFloat {
-        let screen = UIScreen.main.bounds.height
-        return keyboard.isVisible ? screen * 0.62 : screen * 0.42
+        let window = DeviceLayout.windowSize.height
+        return keyboard.isVisible ? window * 0.62 : window * 0.42
     }
 
     /// Instagram-style overlay: comments float above the composer with a top

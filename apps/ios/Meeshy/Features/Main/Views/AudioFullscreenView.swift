@@ -160,7 +160,7 @@ struct AudioFullscreenView: View {
     private func dismissDownward() {
         let currentItem = allAudioItems.indices.contains(currentIndex) ? allAudioItems[currentIndex] : nil
         withAnimation(.easeOut(duration: 0.25)) {
-            dragOffset = UIScreen.main.bounds.height
+            dragOffset = DeviceLayout.windowSize.height
             isDismissing = true
         }
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {

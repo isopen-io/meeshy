@@ -24,8 +24,7 @@ final class OrientationManager: ObservableObject {
     func lockPortrait() {
         orientationLock = .portrait
         if #available(iOS 16.0, *) {
-            guard let windowScene = UIApplication.shared.connectedScenes
-                .compactMap({ $0 as? UIWindowScene }).first else { return }
+            guard let windowScene = DeviceLayout.activeWindowScene else { return }
             windowScene.requestGeometryUpdate(.iOS(interfaceOrientations: .portrait))
         }
     }

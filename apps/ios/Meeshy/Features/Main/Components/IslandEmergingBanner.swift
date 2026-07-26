@@ -59,11 +59,7 @@ struct IslandEmergingBanner<Content: View>: View {
     /// (iPhone 14 Pro → 16 Pro : 59–62 ; notch classique : 44–50).
     @MainActor
     private static var windowTopInset: CGFloat {
-        UIApplication.shared.connectedScenes
-            .compactMap { $0 as? UIWindowScene }
-            .flatMap(\.windows)
-            .first(where: \.isKeyWindow)?
-            .safeAreaInsets.top ?? 0
+        DeviceLayout.safeAreaInsets.top
     }
 
     var body: some View {
