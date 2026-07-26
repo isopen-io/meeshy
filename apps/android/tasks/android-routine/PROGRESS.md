@@ -1,5 +1,48 @@
 # Progress — state & what to do next
 
+> On 2026-07-26 the **category socket real-time sync** landed (slice
+> `conversation-category-socket-sync`, feature-parity §B Conversations — the real-time completion of the
+> hydration + reducer slices: the shipped `UserCategoryCatalog.apply(CategoryEvent)` reducer and the
+> cache-first `categoriesStream()` had no live feed, so a category created/renamed/deleted/reordered on
+> another device never reached the list until a manual refresh; this slice closes that loop). **Added
+> (production, all `apps/android`):** (1) `:core:model/CategorySocketPayloads` — the `@Serializable` wire
+> DTOs mirroring the gateway `category:*` broadcasts (`CategoryUpsertedSocketData` covering both
+> `category:created` and `category:updated`, `CategoryDeletedSocketData`, `CategoriesReorderedSocketData`
+> + `CategoryOrderUpdate`) with pure `toEvent()` mappers → `CategoryEvent`: upsert narrows the wire row
+> via the existing `toOption()` (drops render-only color/icon/isExpanded, preserves null order), reorder
+> folds the update array to an id→order map (last-writer-wins on a repeated id, empty batch → inert
+> event). (2) `:sdk-core/socket/CategorySocketManager` — decodes the four broadcasts (lenient JSON,
+> unknown gateway keys ignored) and fans them into one `SharedFlow<CategoryEvent>`; a malformed payload
+> is logged and dropped, never crashing the callback (same pattern as `SocialSocketManager`). Wired into
+> `RealtimeSessionCoordinator.attachAll()` so it attaches on auth exactly like the message/social/call
+> managers. (3) `ConversationListViewModel` now holds a live `UserCategoryCatalog`: the hydration stream
+> re-seeds it (`of(list)`), socket events fold on top (`apply(event)`), and both publish `catalog.sorted`
+> into `state.categories` (single-writer discipline on the Main dispatcher, same as `rawConversations`).
+> **SOTA over iOS:** iOS `ConversationStoreSocketBridge` keeps four Combine subjects that it re-fans back
+> into one `UserCategoryStore.applyRemote`; Android collapses the fan-in inside the manager and the
+> reducer stays a pure, fully-covered value type. **+18 behavioural tests:** `CategorySocketPayloadsTest`
+> (8: upsert-narrows / null-order-preserved / delete-by-id / reorder-to-map / repeated-id-last-wins /
+> empty-reorder-inert / upsert-wire-decode-ignores-gateway-keys / reorder-wire-decode),
+> `CategorySocketManagerTest` (5: created→Upserted / updated→Upserted / deleted→Deleted /
+> reordered→Reordered / malformed-ignored), 4 VM socket-fold tests (upsert adds / delete removes /
+> reorder re-ranks / upsert seeds a cold catalogue), +1 coordinator attach assertion. **Mutation (RED
+> proof):** neutralising the VM fold (`categoryCatalog = categoryCatalog.apply(event)` →
+> `categoryCatalog = categoryCatalog`) fails **exactly** the 4 new VM socket-fold tests
+> (`31 tests completed, 4 failed`, `BUILD FAILED in 16s`), no collateral; restored after. **Gate:**
+> `./apps/android/meeshy.sh check` (= `assembleDebug testDebugUnitTest`) — full assemble + all-module JVM
+> unit tests green (`BUILD SUCCESSFUL in 7m 6s`, 943 tasks). Reviewer **PASS** (diff `apps/android` only —
+> 2 new cores + 2 new tests + coordinator/VM wiring + tracking docs; SDK purity — the DTOs/mappers are
+> stateless `:core:model` building blocks, the `CategorySocketManager` is thin decode-and-fan glue, the
+> "hold the live copy / when to re-bucket" decision stays in the VM; SSOT — one category read path reused
+> for both hydration and socket, folded through the one `UserCategoryCatalog` reducer, no re-implementation;
+> instant-app — real-time push keeps the list live between hydrations; UDF — immutable catalogue value
+> type, pure `apply`; no tautological tests — literals + the mutation proof). **Next slice:**
+> **drag-to-category** reassignment (a pure move-decision core driving an optimistic
+> `PATCH /me/preferences/categories/reorder` + `UserCategoryCatalog.reorder`), OR the app-side
+> **`CategoryPickerField` / `TagInputField`** composables driving the shipped picker/autocomplete cores,
+> OR the paged **`OnboardingFlowView`** Compose scaffold (Auth), OR the tracked **Kover 90% coverage-gate
+> infra**.
+
 > On 2026-07-26 the **category-catalogue hydration** landed (slice
 > `conversation-category-hydration`, feature-parity §B Conversations — the non-orphan completion of the
 > two prior slices: the `UserCategoryCatalog` reducer + `ConversationSections` grouping laid a

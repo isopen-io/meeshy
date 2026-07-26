@@ -901,7 +901,22 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       +5 (`ApiCategoryTest`) +8 (`CategoryRepositoryTest`) +6 (`CategorySnapshotStoreTest`) +2 (VM
       wiring) tests; `toOption` order-preservation mutation-proven (`order = order`→`null` → exactly 3
       failures).
-      **Reste**: drag-to-category reassignment + the category socket handler feeding `CategoryEvent`s.
+      **Category socket real-time sync done** (slice `conversation-category-socket-sync`, 2026-07-26):
+      the catalogue now re-buckets live when another device edits the corpus. New `:core:model`
+      `CategorySocketPayloads` — `@Serializable` wire DTOs (`CategoryUpsertedSocketData` for
+      `category:created`+`category:updated`, `CategoryDeletedSocketData`, `CategoriesReorderedSocketData`
+      / `CategoryOrderUpdate`) + pure `toEvent()` mappers → `CategoryEvent` (upsert narrows via
+      `toOption()`, reorder folds to an id→order map last-writer-wins). New `:sdk-core/socket`
+      `CategorySocketManager` decodes the four broadcasts and fans them into one
+      `SharedFlow<CategoryEvent>`; wired into `RealtimeSessionCoordinator.attachAll()`.
+      `ConversationListViewModel` now holds a live `UserCategoryCatalog` — hydration re-seeds it
+      (`of`), socket events fold on top (`apply`), both publishing `catalog.sorted` into
+      `state.categories`. Parity: iOS `ConversationStoreSocketBridge` → `UserCategoryStore.applyRemote`.
+      SOTA over iOS: iOS keeps 4 Combine subjects re-fanned into `applyRemote`; Android collapses the
+      fan-in in the manager and the reducer stays a pure value type. +8 (`CategorySocketPayloadsTest`)
+      +5 (`CategorySocketManagerTest`) +4 (VM socket-fold) +1 (coordinator attach) tests; VM socket-fold
+      mutation-proven (`catalog.apply(event)`→`catalog` → exactly 4 failures, no collateral).
+      **Reste**: drag-to-category reassignment (optimistic PATCH driving `reorder`).
 - [x] Filtering (all/unread/personal/private/open/global/channels/favorites/archived) + search overlay
       — `ConversationFilter` enum (couleurs iOS) + `ConversationFilters.apply` pur
       (port fidèle de `filterConversations` : soft-delete masqué partout, archivés
