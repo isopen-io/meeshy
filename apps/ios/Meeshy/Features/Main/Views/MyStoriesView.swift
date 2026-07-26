@@ -662,37 +662,19 @@ private struct MyStoryRow<MenuContent: View>: View {
     /// Anneau de progression de la sauvegarde photothèque, à la place du « … ».
     /// Tap = annulation. Masqué du rotor : la valeur et l'action d'annulation
     /// remontent sur la LIGNE (children: .ignore l'avalerait sinon).
+    ///
+    /// Le dessin lui-même est délégué à `StorySaveProgressRing` — partagé
+    /// avec le rail d'actions du reader (`StoryActionSidebarView`) — pour que
+    /// les deux surfaces ne divergent jamais (épaisseur, arrondi, sens de
+    /// rotation).
     private func saveRing(progress: Double) -> some View {
-        // Clampée UNE fois, réutilisée par le trim ET le pourcentage affiché —
-        // sinon une valeur hors 0...1 (le service ne devrait jamais en
-        // produire, mais rien ne l'impose au niveau du type) ferait diverger
-        // l'anneau (borné par le trim) du chiffre à l'écran (non borné), et du
-        // libellé VoiceOver (`MyStoryRowAccessibility.label` clampe déjà de
-        // son côté) — trois lectures incohérentes du même état.
-        let clampedProgress = max(0, min(progress, 1))
-        return Button {
+        Button {
             HapticFeedback.medium()
             saveService.cancel(storyId: story.id)
         } label: {
-            ZStack {
-                Circle()
-                    .stroke(Color.secondary.opacity(0.25), lineWidth: 2.5)
-                Circle()
-                    .trim(from: 0, to: clampedProgress)
-                    .stroke(accentColor, style: StrokeStyle(lineWidth: 2.5, lineCap: .round))
-                    .rotationEffect(.degrees(-90))
-                    // Anime la VALEUR uniquement — jamais l'apparition/disparition
-                    // du contrôle, qui ferait sauter la hauteur de ligne dans la List.
-                    .animation(.linear(duration: 0.2), value: progress)
-                Text("\(Int((clampedProgress * 100).rounded()))")
-                    .font(MeeshyFont.relative(9, weight: .semibold))
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.6)
-                    .foregroundColor(.secondary)
-            }
-            .frame(width: 28, height: 28)
-            .padding(8)
-            .contentShape(Rectangle())
+            StorySaveProgressRing(progress: progress, tint: accentColor)
+                .padding(8)
+                .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .accessibilityHidden(true)

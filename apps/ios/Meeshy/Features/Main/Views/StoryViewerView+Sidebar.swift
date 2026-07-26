@@ -126,6 +126,15 @@ struct StoryActionSidebarView: View {
     let pauseTimer: () -> Void
     let loadStoryComments: () -> Void
 
+    /// Source de vérité des exports story → photothèque, PARTAGÉE avec la
+    /// ligne « Mes stories » (`MyStoryRow`) : un export lancé depuis l'une des
+    /// deux surfaces progresse sur les deux (Task 7). `@ObservedObject` — pas
+    /// une simple lecture de `StoryPhotoSaveService.shared.progress(for:)`
+    /// dans `body` — est nécessaire pour que cette vue se redessine quand la
+    /// progression change ; `@Published` seul ne déclenche rien sans
+    /// souscription SwiftUI.
+    @ObservedObject private var saveService = StoryPhotoSaveService.shared
+
     /// Transient scale of the heart button — driven only by `bounceHeart()`.
     @State private var heartScale: CGFloat = 1.0
 
@@ -365,14 +374,44 @@ struct StoryActionSidebarView: View {
             // compositor synthétise un substrat pour les statiques).
             // NEVER uploads to the Meeshy backend (stories publish RAW,
             // see CLAUDE.md "Story Architecture").
-            if railPlan.showsExport {
-                StoryActionButton(
-                    icon: "square.and.arrow.up.fill",
-                    label: String(localized: "story.viewer.action.export", defaultValue: "Exporter", bundle: .main)
-                ) {
-                    HapticFeedback.light()
-                    pauseTimer()
-                    showExportShareSheet = true
+            //
+            // Passe par StoryPhotoSaveService.shared.save(story:), EXACTEMENT
+            // comme « Enregistrer » sur la ligne « Mes stories » (Task 7) :
+            // les deux surfaces partagent la même source de vérité, donc un
+            // export lancé ici apparaît aussi dans la liste et réciproquement.
+            // Tant qu'un job est en vol pour cette story, le bouton devient
+            // l'anneau de progression et son tap annule.
+            if railPlan.showsExport, let story = currentStory {
+                if let progress = saveService.progress(for: story.id) {
+                    // Même job, même source de vérité que la ligne « Mes
+                    // stories » : un export lancé depuis l'une des deux
+                    // surfaces progresse sur les deux.
+                    Button {
+                        HapticFeedback.light()
+                        saveService.cancel(storyId: story.id)
+                    } label: {
+                        StorySaveProgressRing(progress: progress, tint: MeeshyColors.indigo400, diameter: 32)
+                    }
+                    .buttonStyle(.plain)
+                    // Contrairement à la ligne « Mes stories »
+                    // (`.accessibilityElement(children: .ignore)`, libellé
+                    // composé au niveau de la LIGNE), ce bouton n'est enfant
+                    // d'AUCUN élément fusionné ici : il doit porter lui-même
+                    // son libellé et sa valeur, sinon VoiceOver n'annoncerait
+                    // que son contenu visuel brut (un nombre nu).
+                    .accessibilityLabel(String(localized: "story.mine.save.cancel.a11y",
+                                               defaultValue: "Annuler l'enregistrement", bundle: .main))
+                    .accessibilityValue(Text(String(
+                        localized: "story.mine.save.progress.a11y",
+                        defaultValue: "Enregistrement \(StorySaveProgressRing.percent(progress)) %", bundle: .main)))
+                } else {
+                    StoryActionButton(
+                        icon: "square.and.arrow.up.fill",
+                        label: String(localized: "story.viewer.action.export", defaultValue: "Exporter", bundle: .main)
+                    ) {
+                        HapticFeedback.light()
+                        saveService.save(story: story)
+                    }
                 }
             }
 
