@@ -188,11 +188,20 @@ extension ConversationAudioCoordinator {
         if let img = await CacheCoordinator.shared.images.image(for: urlString) {
             return img
         }
-        guard let url = URL(string: urlString),
-              let (data, _) = try? await URLSession.shared.data(from: url),
-              let img = UIImage(data: data) else {
+        guard let url = URL(string: urlString) else { return nil }
+        do {
+            let (data, _) = try await URLSession.shared.data(from: url)
+            return UIImage(data: data)
+        } catch {
+            // Artwork absent de l'écran verrouillé — la lecture continue.
+            Logger.nowPlaying.error("Now-playing artwork fetch failed: \(error.localizedDescription, privacy: .public)")
             return nil
         }
-        return img
     }
+}
+
+// MARK: - Logger Extension
+
+private extension Logger {
+    nonisolated static let nowPlaying = Logger(subsystem: "me.meeshy.app", category: "now-playing")
 }

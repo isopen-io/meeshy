@@ -282,7 +282,7 @@ final class AttachmentPreparationService {
         do {
             compressedURL = try await MediaCompressor.shared.compressVideo(sourceURL, context: context)
             if deleteSource, compressedURL != sourceURL {
-                try? FileManager.default.removeItem(at: sourceURL)
+                FileManager.default.removeItemLogging(at: sourceURL, context: "post-compression source cleanup", logger: log)
             }
         } catch {
             log.error("video compression failed: \(error.localizedDescription) — falling back to source")

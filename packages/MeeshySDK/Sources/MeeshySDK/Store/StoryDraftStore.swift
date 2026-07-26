@@ -21,13 +21,23 @@ public final class StoryDraftStore: @unchecked Sendable {
         let path = dir.appendingPathComponent("meeshy_story_draft.db").path
         mediaDir = dir.appendingPathComponent("meeshy_draft_media")
         db = Self.makeQueue(path: path)
-        try? createSchema()
+        createSchemaOrLog()
     }
 
     init(dbPath: String, mediaDirectory: URL) {
         mediaDir = mediaDirectory
         db = Self.makeQueue(path: dbPath)
-        try? createSchema()
+        createSchemaOrLog()
+    }
+
+    /// Schema creation is best-effort at init (no throwing initializer), but a
+    /// failure disables every draft read/write that follows — it must be visible.
+    private func createSchemaOrLog() {
+        do {
+            try createSchema()
+        } catch {
+            Logger.cache.fault("[StoryDraftStore] Schema creation failed — drafts cannot be saved or restored: \(error.localizedDescription, privacy: .public)")
+        }
     }
 
     /// Never-throwing queue builder. Falls back to an in-memory queue if the
@@ -35,14 +45,16 @@ public final class StoryDraftStore: @unchecked Sendable {
     /// but the app is not crashed. An OOM on in-memory creation would be
     /// handled by the OS anyway.
     private static func makeQueue(path: String) -> DatabaseQueue {
-        if let disk = try? DatabaseQueue(path: path) {
-            return disk
+        do {
+            return try DatabaseQueue(path: path)
+        } catch {
+            Logger.cache.warning("[StoryDraftStore] Disk queue unavailable at \(path), falling back to in-memory: \(error.localizedDescription, privacy: .public)")
         }
-        Logger.cache.warning("[StoryDraftStore] Disk queue unavailable at \(path), falling back to in-memory")
-        guard let mem = try? DatabaseQueue() else {
-            fatalError("[StoryDraftStore] Cannot create in-memory GRDB queue — out of memory")
+        do {
+            return try DatabaseQueue()
+        } catch {
+            fatalError("[StoryDraftStore] Cannot create in-memory GRDB queue — out of memory: \(error)")
         }
-        return mem
     }
 
     private func createSchema() throws {
@@ -71,11 +83,23 @@ public final class StoryDraftStore: @unchecked Sendable {
     // MARK: - Media Directory
 
     private func ensureMediaDir() {
-        try? FileManager.default.createDirectory(at: mediaDir, withIntermediateDirectories: true)
+        do {
+            try FileManager.default.createDirectory(at: mediaDir, withIntermediateDirectories: true)
+        } catch {
+            // Les copies de médias qui suivent échoueront : le brouillon
+            // perdra ses images.
+            Logger.cache.error("[StoryDraftStore] Media directory unavailable, draft media will be lost: \(error.localizedDescription, privacy: .public)")
+        }
     }
 
     private func clearMediaDir() {
-        try? FileManager.default.removeItem(at: mediaDir)
+        do {
+            try FileManager.default.removeItem(at: mediaDir)
+        } catch CocoaError.fileNoSuchFile {
+            // Rien à nettoyer.
+        } catch {
+            Logger.cache.error("[StoryDraftStore] Media directory not cleared, files retained on disk: \(error.localizedDescription, privacy: .public)")
+        }
     }
 
     // MARK: - Upsert
@@ -85,7 +109,10 @@ public final class StoryDraftStore: @unchecked Sendable {
             try db.write { db in
                 try db.execute(sql: "DELETE FROM story_draft_slide")
                 for (index, slide) in slides.enumerated() {
-                    guard let effectsData = try? JSONEncoder().encode(slide.effects),
+                    guard let effectsData = JSONEncoder().encodeOrLog(slide.effects,
+                                                                       field: "story slide effects",
+                                                                       id: slide.id,
+                                                                       logger: Logger.cache),
                           let effectsJSON = String(data: effectsData, encoding: .utf8) else { continue }
                     try db.execute(
                         sql: """
@@ -192,7 +219,14 @@ public final class StoryDraftStore: @unchecked Sendable {
         guard fm.fileExists(atPath: source.path) else {
             return fm.fileExists(atPath: dest.path)
         }
-        try? fm.removeItem(at: dest)
+        do {
+            try fm.removeItem(at: dest)
+        } catch CocoaError.fileNoSuchFile {
+            // Destination libre — cas nominal.
+        } catch {
+            // La copie qui suit échouera très probablement.
+            Logger.cache.error("[StoryDraftStore] Stale destination not removed before copy: \(error.localizedDescription, privacy: .public)")
+        }
         do {
             try fm.copyItem(at: source, to: dest)
             return true
@@ -342,7 +376,9 @@ public final class StoryDraftStore: @unchecked Sendable {
                 let duration: TimeInterval = row["duration"] ?? 5
                 let effectsJSONStr: String = row["effects_json"]
                 guard let effectsData = effectsJSONStr.data(using: .utf8),
-                      let effects = try? JSONDecoder().decode(StoryEffects.self, from: effectsData) else {
+                      let effects = JSONDecoder().decodeOrLog(StoryEffects.self, from: effectsData,
+                                                              field: "story slide effects",
+                                                              id: id, logger: Logger.cache) else {
                     return StorySlide(id: id, content: content)
                 }
                 return StorySlide(id: id, mediaURL: mediaURL, content: content,
@@ -408,8 +444,16 @@ public final class StoryDraftStore: @unchecked Sendable {
     }
 
     public func isEmpty() -> Bool {
-        (try? db.read { db in
-            try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM story_draft_slide")
-        } ?? 0) == 0
+        do {
+            let count = try db.read { db in
+                try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM story_draft_slide")
+            }
+            return (count ?? 0) == 0
+        } catch {
+            // Signale « pas de brouillon » : l'utilisateur ne se verra pas
+            // proposer une reprise alors qu'un brouillon existe peut-être.
+            Logger.cache.error("[StoryDraftStore] Draft count read failed, reporting empty: \(error.localizedDescription, privacy: .public)")
+            return true
+        }
     }
 }

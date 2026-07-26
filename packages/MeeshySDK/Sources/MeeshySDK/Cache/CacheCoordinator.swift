@@ -89,7 +89,13 @@ public actor CacheCoordinator {
     nonisolated public static func videoLocalFileURLAwait(for remote: URL) async -> URL? {
         if remote.isFileURL { return remote }
         if let cached = videoLocalFileURL(for: remote.absoluteString) { return cached }
-        _ = try? await shared.video.data(for: remote.absoluteString)
+        do {
+            _ = try await shared.video.data(for: remote.absoluteString)
+        } catch {
+            // Le retour `nil` ci-dessous suffit à l'appelant, mais sans trace
+            // un échec réseau est indiscernable d'un fichier absent.
+            Logger.cache.error("Video prefetch failed before local-URL resolution: \(error.localizedDescription, privacy: .public)")
+        }
         return videoLocalFileURL(for: remote.absoluteString)
     }
 
@@ -98,7 +104,13 @@ public actor CacheCoordinator {
     nonisolated public static func audioLocalFileURLAwait(for remote: URL) async -> URL? {
         if remote.isFileURL { return remote }
         if let cached = audioLocalFileURL(for: remote.absoluteString) { return cached }
-        _ = try? await shared.audio.data(for: remote.absoluteString)
+        do {
+            _ = try await shared.audio.data(for: remote.absoluteString)
+        } catch {
+            // Le retour `nil` ci-dessous suffit à l'appelant, mais sans trace
+            // un échec réseau est indiscernable d'un fichier absent.
+            Logger.cache.error("Audio prefetch failed before local-URL resolution: \(error.localizedDescription, privacy: .public)")
+        }
         return audioLocalFileURL(for: remote.absoluteString)
     }
 

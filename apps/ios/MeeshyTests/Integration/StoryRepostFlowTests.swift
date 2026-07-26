@@ -161,7 +161,8 @@ final class StoryRepostFlowTests: XCTestCase {
             postId: "story-1",
             targetType: .post,
             content: nil,
-            isQuote: false
+            isQuote: false,
+            visibility: nil
         )
 
         XCTAssertEqual(mockService.repostCallCount, 1)
@@ -173,8 +174,13 @@ final class StoryRepostFlowTests: XCTestCase {
         XCTAssertEqual(mockService.lastRepostIsQuote, false,
                        "Without commentary the repost is a plain re-share, not a quote")
         XCTAssertNil(mockService.lastRepostVisibility,
+<<<<<<< HEAD
                      "The direct kebab repost offers no audience picker, so it sends none and the " +
                      "backend keeps its own default — mirrors StoryViewerView.repostAsPostDirect()")
+=======
+                     "The kebab path offers no audience picker, so it passes no visibility — " +
+                     "the gateway then inherits the original's, per PostService.repost's default")
+>>>>>>> origin/main
     }
 
     // MARK: - Flow 3: Kebab "Editer et republier" → UnifiedPostComposer
@@ -225,8 +231,13 @@ final class StoryRepostFlowTests: XCTestCase {
         XCTAssertEqual(capturedSourceId, "story-1",
                        "onPublishRepost receives the original source story (not the clone)")
         XCTAssertEqual(capturedVisibility, "PUBLIC",
+<<<<<<< HEAD
                        "onPublishRepost receives the audience selected in the composer — untouched " +
                        "here, so its PUBLIC default")
+=======
+                       "onPublishRepost receives the composer's audience selection; PUBLIC is " +
+                       "its initial state, so an untouched picker still reports a value")
+>>>>>>> origin/main
 
         // 3.c — Replay the production-side callback contract: the caller
         // (StoryViewerView.swift:297-316) forwards captured args to
@@ -248,8 +259,14 @@ final class StoryRepostFlowTests: XCTestCase {
         XCTAssertEqual(mockService.lastRepostIsQuote, true,
                        "Non-empty commentary makes the repost a quote")
         XCTAssertEqual(mockService.lastRepostVisibility, "PUBLIC",
+<<<<<<< HEAD
                        "The audience chosen in the composer reaches the service call — the whole " +
                        "point of threading visibility through the repost path")
+=======
+                       "The audience picked in the composer reaches the service call — this is " +
+                       "the whole point of the repost-visibility path; dropping it here would " +
+                       "publish a repost the author meant to restrict")
+>>>>>>> origin/main
     }
 
     // MARK: - Flow 4: Feed cell renders STORY repost embed

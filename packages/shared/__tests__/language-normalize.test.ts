@@ -6,7 +6,7 @@
  * - Swift app  : ConversationLanguagePreferences.normalize (apps/ios)
  */
 import { describe, it, expect } from 'vitest';
-import { normalizeLanguageCode } from '../utils/language-normalize';
+import { normalizeLanguageCode, normalizeLanguageForDedup } from '../utils/language-normalize';
 
 describe('normalizeLanguageCode', () => {
   it('returns ISO 639-1 for plain code', () => {
@@ -124,5 +124,23 @@ describe('normalizeLanguageCode', () => {
   it('rejects primary subtag containing digits or punctuation', () => {
     expect(normalizeLanguageCode('fr2')).toBeUndefined();
     expect(normalizeLanguageCode('fr!')).toBeUndefined();
+  });
+});
+
+describe('normalizeLanguageForDedup', () => {
+  it('collapses casing and region tags to one canonical dedup key', () => {
+    // The whole point: 'en', 'EN' and 'en-US' must hash to the same Set entry.
+    expect(normalizeLanguageForDedup('en')).toBe('en');
+    expect(normalizeLanguageForDedup('EN')).toBe('en');
+    expect(normalizeLanguageForDedup('en-US')).toBe('en');
+    expect(normalizeLanguageForDedup('fr_FR')).toBe('fr');
+    expect(normalizeLanguageForDedup('zh-Hant-HK')).toBe('zh');
+  });
+
+  it('keeps irreducible unknown codes lowercased instead of dropping them', () => {
+    // normalizeLanguageCode returns undefined here; the dedup helper must NOT
+    // lose the datum — it lowercases so a list/counter still reflects it.
+    expect(normalizeLanguageForDedup('xyz')).toBe('xyz');
+    expect(normalizeLanguageForDedup('QW')).toBe('qw');
   });
 });

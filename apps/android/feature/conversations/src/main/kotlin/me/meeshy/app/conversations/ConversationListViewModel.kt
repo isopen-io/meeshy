@@ -11,10 +11,12 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import me.meeshy.sdk.cache.CacheResult
+import me.meeshy.sdk.category.CategoryRepository
 import me.meeshy.sdk.chat.ConversationDraftStore
 import me.meeshy.sdk.chat.StarredMessagesStore
 import me.meeshy.sdk.conversation.ConversationRepository
 import me.meeshy.sdk.model.ApiConversation
+import me.meeshy.sdk.model.CategoryOption
 import me.meeshy.sdk.model.ConversationDraft
 import me.meeshy.sdk.model.ConversationFilter
 import me.meeshy.sdk.model.ConversationFilters
@@ -37,6 +39,13 @@ data class ConversationListUiState(
     val searchText: String = "",
     val isSearchActive: Boolean = false,
     val drafts: Map<String, ConversationDraft> = emptyMap(),
+    /**
+     * The user's conversation-category catalogue (parity iOS `userCategories`), the
+     * section source consumed by [ConversationSections.of]. Empty until the tracked
+     * corpus-hydration slice populates it (cache-first + revalidate); an empty
+     * catalogue keeps the list on the pinned/all split, so this is a safe default.
+     */
+    val categories: List<CategoryOption> = emptyList(),
 ) {
     val banner: ConnectionBanner get() = bannerFor(connection, isSyncing)
 
@@ -56,6 +65,7 @@ class ConversationListViewModel @Inject constructor(
     private val workManager: WorkManager,
     private val draftStore: ConversationDraftStore,
     private val starredStore: StarredMessagesStore,
+    categoryRepository: CategoryRepository,
     socketManager: SocketManager,
     sessionRepository: SessionRepository,
 ) : ViewModel() {
@@ -95,6 +105,15 @@ class ConversationListViewModel @Inject constructor(
         viewModelScope.launch {
             draftStore.observeAll().collect { drafts ->
                 _state.update { it.copy(drafts = drafts).withVisible(rawConversations) }
+            }
+        }
+
+        viewModelScope.launch {
+            // Cache-first catalogue hydration: the section splitter renders user
+            // categories once the snapshot (then the background revalidation) lands.
+            // Failures stay silent — an empty catalogue keeps the pinned/all split.
+            categoryRepository.categoriesStream().collect { categories ->
+                _state.update { it.copy(categories = categories) }
             }
         }
 

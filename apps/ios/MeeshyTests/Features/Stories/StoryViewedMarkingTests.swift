@@ -6,7 +6,7 @@ import SwiftUI
 /// Une story ne compte comme « vue » qu'une fois réellement montrée.
 ///
 /// L'interlude d'identité inter-groupes est OPAQUE et prend tout l'écran
-/// pendant ~2,6 s : tant qu'il est là, l'utilisateur ne voit rien de la story.
+/// pendant ~2,2 s : tant qu'il est là, l'utilisateur ne voit rien de la story.
 /// Or `markCurrentViewed()` était appelé au moment du changement d'index —
 /// donc AVANT `presentGroupIntroIfNeeded()` à l'ouverture, et pendant le
 /// switch de groupe. Conséquences pour l'auteur : son compteur de vues montait

@@ -17,6 +17,7 @@ import { MessageValidator } from './MessageValidator';
 import { MessageProcessor } from './MessageProcessor';
 import { enhancedLogger, performanceLogger } from '../../utils/logger-enhanced';
 import { getCachedParticipant, cacheParticipant } from '../../utils/participant-lookup-cache';
+import { normalizeLanguageCode } from '@meeshy/shared/utils/language-normalize';
 
 const logger = enhancedLogger.child({ module: 'MessagingService' });
 
@@ -178,9 +179,20 @@ export class MessagingService {
       //    through and persist `Message.originalLanguage = ''`, which downstream
       //    broadcasts as `'fr'` (Prisme corruption). Trim-then-truthy is what
       //    forces those blank claims back onto the detector.
+      //
+      //    Canonicalise the trusted claim at this WRITE boundary (SSOT
+      //    `normalizeLanguageCode`): clients send the raw platform locale — iOS
+      //    `Locale.current` ('fr_FR'), web `navigator.language` ('fr-FR'), or a
+      //    bare 'FR'. Persisting that verbatim fragments every downstream
+      //    consumer keyed on `Message.originalLanguage` (NLLB source, translation
+      //    cache key, per-language stats, admin analytics) and forced each of
+      //    them to re-normalise defensively on read. Normalising once here makes
+      //    the DB the single source of truth. Codes the SSOT cannot reduce
+      //    (irreducible ISO 639-3 like 'bas', unknown 2-letter) are kept verbatim
+      //    via the fallback — the claim is still trusted, never dropped.
       const claimedLanguage = request.originalLanguage?.trim();
       const originalLanguage = claimedLanguage
-        ? claimedLanguage
+        ? (normalizeLanguageCode(claimedLanguage) ?? claimedLanguage)
         : (request.content
             ? await performanceLogger.withTiming(
                 'messaging.detectLanguage',

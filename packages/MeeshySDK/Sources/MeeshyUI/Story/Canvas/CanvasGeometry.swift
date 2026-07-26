@@ -89,4 +89,25 @@ public nonisolated struct CanvasGeometry: Equatable, Sendable {
         let widthBound = min(available.width, available.height * ratio)
         return CGSize(width: widthBound, height: widthBound / ratio)
     }
+
+    /// Taille du glyphe d'un sticker, en points de la surface cible.
+    ///
+    /// SOURCE UNIQUE des trois pipelines — canvas interactif, composite basse
+    /// résolution (miniature de tray, ThumbHash) et export. Ils divergeaient :
+    /// le composite codait en dur `largeur × scale × 0,15` et IGNORAIT
+    /// `baseSize`. Deux conséquences visibles :
+    ///   - un sticker à `baseSize` par défaut (140) sortait ~16 % trop gros
+    ///     dans la miniature (0,15 contre 140/1080 ≈ 0,1296) ;
+    ///   - un sticker redimensionné via `baseSize` gardait EXACTEMENT la même
+    ///     taille dans la miniature, quel que soit le réglage.
+    ///
+    /// La règle canonique est celle du canvas : la taille design
+    /// (`baseSize × scale`) projetée par le rapport largeur/1080.
+    public static func stickerFontSize(baseSize: Double, scale: Double, canvasWidth: CGFloat) -> CGFloat {
+        guard canvasWidth > 0 else { return 0 }
+        let designSide = CGFloat(max(0, baseSize) * max(0, scale))
+        // Plancher à 8 pt : sous cette taille le glyphe n'est plus qu'un
+        // artefact d'anticrénelage, et la miniature s'en trouve illisible.
+        return max(8, designSide * (canvasWidth / designWidth))
+    }
 }

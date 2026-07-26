@@ -28,17 +28,45 @@ deux signaux orphelins (durée recalculée, story mise en file) · inspecteur du
 clip sticker · compteur « +N pistes » · traduction à la demande des textes de
 canvas (gateway) · audience du repost câblée de bout en bout.
 
+**2026-07-26 — lot 3** : médias de publication différée sans référence fantôme ·
+préchargement du repost rangé sous une clé relue · parité du filtre entre
+miniature et lecteur (4 axes) · parité de taille des stickers · réglages fins
+de temps (steppers ±0,1 s, instant d'un keyframe) · sélection auto du clip actif.
+
 Les lignes marquées ✅ **en gras** dans ce rapport le sont soit d'origine, soit
-par ces deux lots. Les lignes 🟡 « non arbitré » n'ont PAS été traitées : ce sont
-des trous de couverture, pas des défauts prouvés.
+par ces trois lots ; celles suffixées `[CORRIGÉ 2026-07-26]` viennent d'eux. Les
+lignes 🟡 « non arbitré » n'ont PAS été traitées : ce sont des trous de
+couverture, pas des défauts prouvés.
+
+### État au soir du 2026-07-26 — 8 défauts 🔴 restants
+
+Aucun n'est un « fil manquant » réparable seul :
+
+| défaut | pourquoi il n'est pas traité |
+|---|---|
+| Ratio du canvas piloté par le fond · choix manuel du format | FONCTIONNALITÉ à concevoir (9:16 / 1:1 / 4:5), pas un défaut de câblage. |
+| Picker de langue de l'export · annulation d'un export en cours | Territoire de la session parallèle, active sur l'export toute la journée. |
+| `banner` de l'auteur dans l'interlude | Task 9, reprise par la session parallèle. |
+| WS1 · Task 5 · Task 6 (parité des transitions) | Touche la boucle de lecture au cœur ; exige une validation visuelle. Pousser à l'aveugle risquerait de casser l'auto-advance pour tout le monde. |
+
+**Deux items 🟠 requalifiés après enquête** — ce ne sont pas des défauts :
+
+- `TimelineViewModel.handlePublishTap` n'a aucun appelant parce que **la
+  timeline n'a pas de bouton Publier**, seulement Exporter. Le code est sain
+  (il forwarde vers la file unifiée `StoryPublishQueue` via l'adaptateur
+  `StoryOfflineQueue`). Soit on décide que la timeline publie — décision
+  produit —, soit c'est de l'infrastructure spéculative à retirer.
+- `StoryPublishQueue.recoverLastStuckItem` n'a aucun appelant non plus. La
+  reprise d'un item bloqué comme brouillon demande une UX (seuil, invite,
+  que faire au refus) : fonctionnalité, pas correctif.
 
 
 ## Restitution story iOS — réactions, commentaires, réponses, notifications
 
-- 🔴 **Réponse privée à une story (bouton « Répondre » → ouverture/création de la DM)** — CONFIRMÉ partiel. apps/ios/Meeshy/Features/Main/Views/StoryViewerContainer.swift:53-64 (branche singleGroup sans onReplyToStory) vs :66-78 ; StoryViewerView+Sidebar.swift:139 + :53 ; contre-preuve du chemin sain : Stor
+- ✅ **Réponse privée à une story (bouton « Répondre » → ouverture/création de la DM)** — CONFIRMÉ partiel. apps/ios/Meeshy/Features/Main/Views/StoryViewerContainer.swift:53-64 (branche singleGroup sans onReplyToStory) vs :66-78 ; StoryViewerView+Sidebar.swift:139 + :53 ; contre-preuve du chemin sain : Stor  [CORRIGÉ 2026-07-26]
 - 🟠 **Aperçu « a répondu » / « a reposté » dans la feuille des vues** — CONFIRMÉ absent. apps/ios/Meeshy/Features/Main/Views/StoryViewerView+Content.swift:1262-1271 (seul site de construction) ; Services/StoryInteractionService.swift:102-111 et :193-202 (wire sans reply/repost) ; services
 - 🟡 Prisme linguistique sur les commentaires de story (chemin de chargement principal) — partiel, non arbitré. apps/ios/Meeshy/Features/Main/Views/StoryViewerView+Content.swift:2111-2117 réimplémente la résolution (pas de garde `originalLanguage == la
-- 🔴 **File d'attente hors-ligne des écritures story (commentaire, réaction)** — CONFIRMÉ absent. apps/ios/Meeshy/Features/Main/Views/StoryViewerView+Content.swift:813-817 et :887-902 (catch = rollback seul) ; contre-exemple FeedCommentsSheet.swift:1508-1524 ; kinds disponibles packages/MeeshySDK/
+- 🟠 **File d'attente hors-ligne des écritures story** — COMMENTAIRE livré 2026-07-26 ; la RÉACTION reste absente (nouveau OutboxKind requis).
 - 🟡 Rollback du commentaire optimiste sur échec (POST ou upload média) — partiel, non arbitré. apps/ios/Meeshy/Features/Main/Views/StoryViewerView+Content.swift:813-816 (catch) → :856-864 (wrapper) → cœur pur :833-854 ; mais le brouill
 - 🟡 Commentaire optimiste (insertion locale immédiate, racine et réponse) — partiel, non arbitré. apps/ios/Meeshy/Features/Main/Views/StoryViewerView+Content.swift:754-782 (insert `temp_`, bump `replies` du parent, bump `storyCommentCount
 - 🟡 Like d'un commentaire de story (optimiste + rollback) — partiel, non arbitré. apps/ios/Meeshy/Features/Main/Views/StoryViewerView+Content.swift:2010-2046 (garde in-flight, delta optimiste, rollback dans le catch) ; app
@@ -64,7 +92,7 @@ des trous de couverture, pas des défauts prouvés.
 - ⚪️ ~~Langues audio proposées à l'exploration multilingue (StoryAudioTranscript.availableLanguages)~~ — faux positif de l'audit, statut réel : absent
 - ⚪️ ~~Repli différencié de la variante audio traduite (retour `nil`)~~ — faux positif de l'audit, statut réel : ok
 - 🟡 Résolution multilingue de la transcription (repli sur la langue parlée) — partiel, non arbitré. packages/MeeshySDK/Sources/MeeshySDK/Models/StoryAudioTranscript.swift:40-50 — la règle demandée est bien implémentée : boucle sur la chaîne
-- 🔴 **Plafond de durée de l'enregistrement vocal** — CONFIRMÉ casse. packages/MeeshySDK/Sources/MeeshyUI/Story/StoryVoiceRecorder.swift:27-29,35,156-160,267,308-317 ; packages/MeeshySDK/Sources/MeeshySDK/Audio/AudioRecordingProviding.swift:102-108 ; packages/MeeshySDK/
+- ✅ **Plafond de durée de l'enregistrement vocal** — TRANCHÉ 2026-07-26 : AUCUN plafond, sur aucune surface (story, message, post, réel). Le champ `maxDuration` est retiré du type, pas mis à `nil` — deux mécanismes parallèles coexistaient, dont un que le composer story n'appliquait pas. `minimumDuration` conservé (plancher anti-appui accidentel).
 - ⚪️ ~~Ducking automatique du fond quand une voix foreground joue~~ — faux positif de l'audit, statut réel : absent
 - 🟡 Chargement effectif des fichiers audio dans le mixer reader (configure / configureBackground) — non-teste, non arbitré. packages/MeeshySDK/Sources/MeeshyUI/Story/ReaderAudioMixer.swift:110-152 et :571-608. Les seuls tests qui exercent ces chemins (ReaderAudioM
 - 🟡 Mixage timeline du composer (AudioMixer) — partiel, non arbitré. packages/MeeshySDK/Sources/MeeshyUI/Story/Timeline/Engine/AudioMixer.swift:60-84 ; appelé par StoryTimelineEngine.swift:185, :255, :273, :33
@@ -91,13 +119,13 @@ des trous de couverture, pas des défauts prouvés.
 - ✅ **Undo/redo global de la composition** — HistoryStoreTests.swift:7-75 (6 tests : dédup, troncature de branche redo, éviction par cap retournée, trajectoire plancher↔sommet) + StoryComposerHis
 - ✅ **Survie de l'historique d'édition timeline à un crash (blob opaque)** — MeeshySDKTests/Store/StoryDraftStoreTests.swift:27/31/40/48 (nil, round-trip, écrasement, purge par clear) + MeeshyUITests/Timeline/ViewModel/Timeline
 - 🟡 File d'attente offline de publication + drain à la reconnexion — partiel, non arbitré. Chemin vivant : StoryViewModel.swift:966 `StoryPublishQueue.shared.enqueue(item)` via persistPublishIntentToQueue ; drain StoryPublishQueue.
-- 🔴 **Copie des médias vers le dossier de la file offline** — CONFIRMÉ partiel. apps/ios/Meeshy/Features/Main/ViewModels/StoryViewModel.swift:915-941 ; packages/MeeshySDK/Sources/MeeshySDK/Persistence/StoryPublishQueue.swift:407-417 ; packages/MeeshySDK/Sources/MeeshyUI/Story/Sto
+- ✅ **Copie des médias vers le dossier de la file offline** — CONFIRMÉ partiel. apps/ios/Meeshy/Features/Main/ViewModels/StoryViewModel.swift:915-941 ; packages/MeeshySDK/Sources/MeeshySDK/Persistence/StoryPublishQueue.swift:407-417 ; packages/MeeshySDK/Sources/MeeshyUI/Story/Sto  [CORRIGÉ 2026-07-26]
 - 🟠 **Publication offline depuis la timeline (handlePublishTap + snackbar de confirmation)** — snackbar LIVRÉE 2026-07-26 (TimelineBannerOverlay) ; l'appelant de handlePublishTap reste absent. — CONFIRMÉ absent. packages/MeeshySDK/Sources/MeeshyUI/Story/Timeline/ViewModel/TimelineViewModel+OfflinePublish.swift:79-113 (0 appelant hors tests) ; apps/ios/Meeshy/Features/Main/ViewModels/StoryViewModel.swift:762-7
 - 🟡 Enregistrement du handler de publication (StoryOfflineQueueBootstrap vs StoryPublishService) — casse, non arbitré. Deux écrivains concurrents non gardés sur le MÊME `StoryPublishQueue.shared.onPublish` : apps/ios/Meeshy/MeeshyApp.swift:224 → StoryOfflineQ
 - ✅ **Migration des anciennes files offline (StoryQueueMigrator)** — MeeshySDKTests/Persistence/StoryQueueUnificationTests.swift:177 (draine le fichier legacy réel), :199 (idempotence, 2e passage no-op), :218 (JSON corr
 - 🟠 **Reprise d'un item bloqué en file comme brouillon (recoverLastStuckItem)** — CONFIRMÉ absent. packages/MeeshySDK/Sources/MeeshySDK/Persistence/StoryPublishQueue.swift:335-343 ; apps/ios/Meeshy/Features/Main/Views/RootView.swift:2107-2120 ; apps/ios/Meeshy/Features/Main/Views/MyStoriesView.swif
 - 🟡 Republication d'une story en story — propagation de la chaîne de repost — casse, non arbitré. StoryComposerViewModel+Repost.swift:38-41 pose `repostOfId` / `originalRepostOfId`, mais AUCUN chemin de publication ne les lit : StoryViewe
-- 🔴 **Préchargement de la chaîne média du repost** — CONFIRMÉ partiel. packages/MeeshySDK/Sources/MeeshyUI/Story/StoryComposerViewModel+Repost.swift:104-110 ; packages/MeeshySDK/Sources/MeeshyUI/Story/Canvas/StoryCanvasRepresentable.swift:140-144 ; packages/MeeshySDK/Sou
+- ✅ **Préchargement de la chaîne média du repost** — CONFIRMÉ partiel. packages/MeeshySDK/Sources/MeeshyUI/Story/StoryComposerViewModel+Repost.swift:104-110 ; packages/MeeshySDK/Sources/MeeshyUI/Story/Canvas/StoryCanvasRepresentable.swift:140-144 ; packages/MeeshySDK/Sou  [CORRIGÉ 2026-07-26]
 - ⚪️ ~~Republication « éditer et republier en post » (RepostPayload + reprojection canvas)~~ — faux positif de l'audit, statut réel : partiel
 - ✅ **Historique de révisions de message (EditHistoryStore) — hors périmètre Story** — MeeshyTests/Unit/Services/EditHistoryStoreTests.swift:15-120 (12 tests comportementaux : ordre, contenu vide ignoré, isolation par message, plafond de
 
@@ -120,7 +148,7 @@ des trous de couverture, pas des défauts prouvés.
 - ⚪️ ~~Recherche d'emoji dans le picker de stickers~~ — faux positif de l'audit, statut réel : absent
 - 🟡 Redimensionnement et rotation d'un sticker — partiel, non arbitré. packages/MeeshySDK/Sources/MeeshyUI/Story/Canvas/StoryCanvasUIView+Gestures.swift:122 handlePinch (clamp 0.3…4.0 :157) et :176 handleRotatio
 - ✅ **Cache LRU des glyphes sticker rasterisés** — StoryStickerRasterizer_LRUTests.swift (4 tests comportementaux : hit sous la limite, éviction au-delà, flush sur didReceiveMemoryWarning, identité de 
-- 🔴 **Parité de taille des stickers entre canvas, composite et miniature** — CONFIRMÉ partiel. packages/MeeshySDK/Sources/MeeshyUI/Story/Canvas/Layers/StoryStickerLayer.swift:29-37 + Canvas/CanvasGeometry.swift:26 + Canvas/StoryStickerRasterizer.swift:94-101 ; packages/MeeshySDK/Sources/MeeshyU
+- ✅ **Parité de taille des stickers entre canvas, composite et miniature** — CONFIRMÉ partiel. packages/MeeshySDK/Sources/MeeshyUI/Story/Canvas/Layers/StoryStickerLayer.swift:29-37 + Canvas/CanvasGeometry.swift:26 + Canvas/StoryStickerRasterizer.swift:94-101 ; packages/MeeshySDK/Sources/MeeshyU  [CORRIGÉ 2026-07-26]
 - ✅ **Routage du hit-test entre dessin, manipulation d'élément et texte** — StoryCanvasHitTestRoutingTests.swift (3 tests comportementaux montant un vrai StoryCanvasUIView : overlay non nommé n'avale plus le hit, pas de fallba
 
 ## Story iOS — Création : médias, fond, cadrage et filtres
@@ -136,7 +164,7 @@ des trous de couverture, pas des défauts prouvés.
 - ✅ **Cadrage de la carte canvas (carded/free/immersive, insets, alignement vertical)** — MeeshyUITests/Story/StoryCanvasFramingTests.swift — 22 tests comportementaux (monotonie du scale, non-chevauchement sheet/header, alignements top/bott
 - ✅ **Fond couleur unie (pastille + identité de contenu par couleur + thumbHash au-dessus)** — MeeshyUITests/Story/Reader/Background/StoryBackgroundLayerTests.swift:8 + :101 test_configure_sameSolidColorTwice_isNoOp, StoryBackgroundLayerIdentity
 - ✅ **Fond dégradé — sérialisation + rendu canvas / composer / miniatures / export** — MeeshySDKTests/Models/StoryBackgroundValueTests.swift (parse hex/gradient, round-trip, formes malformées, cap 64 car.), StoryBackgroundLayerTests.swif
-- 🔴 **PARSING du dégradé dans le fond plein écran du viewer (défaut D7 du plan)** — CONFIRMÉ casse. apps/ios/Meeshy/Features/Main/Views/StoryViewerView+Canvas.swift:1837-1843 ; packages/MeeshySDK/Sources/MeeshySDK/Models/StoryBackgroundValue.swift:20,38 ; packages/MeeshySDK/Sources/MeeshyUI/Story/Co
+- ✅ **PARSING du dégradé dans le fond plein écran du viewer (défaut D7 du plan)** — CONFIRMÉ casse. apps/ios/Meeshy/Features/Main/Views/StoryViewerView+Canvas.swift:1837-1843 ; packages/MeeshySDK/Sources/MeeshySDK/Models/StoryBackgroundValue.swift:20,38 ; packages/MeeshySDK/Sources/MeeshyUI/Story/Co  [CORRIGÉ 2026-07-26]
 - ✅ **Fond image — cache chaud, thumbHash, resolver distant, ré-estampage après édition in-place** — MeeshyUITests/Story/Reader/Background/StoryBackgroundLayerImageTests.swift (3 tests : cache, resolver sans imageCache, thumbHash immédiat), StoryBackg
 - ✅ **Fond vidéo — attach immédiat, streaming sur cache-miss, gravity fit/fill, lifecycle app** — MeeshyUITests/Story/Reader/Background/StoryBackgroundLayerVideoTests.swift (11 tests : attach, streaming cache-miss, onPlayerAttached, gravity ×4, lif
 - ✅ **Boucle du fond vidéo (règle : loop = background uniquement, jamais foreground)** — MeeshyUITests/Story/Canvas/StoryMediaLayer_ForegroundResolverTests.swift:119 test_configure_foregroundVideoPlayMode_doesNotLoop + :260 EditMode_loops 
@@ -216,14 +244,14 @@ des trous de couverture, pas des défauts prouvés.
 - ✅ **Glissé vertical vers le haut → plein écran ; vers le bas en plein écran → retour fenêtré** — StoryGestureNavigationTests.swift:107, :114, :122
 - 🟡 Glissé horizontal → groupe (auteur) voisin, avec cube suivant le geste — partiel, non arbitré. apps/ios/Meeshy/Features/Main/Views/StoryViewerView+Content.swift:245-283 — seuils 60/150 codés en dur directement dans le .onEnded, aucune 
 - ✅ **Mute / son (bouton du rail → canvas)** — packages/MeeshySDK/Tests/MeeshyUITests/Story/Reader/Audio/CanvasAudioIntegrationTests.swift:7-23 (notification → isAudioMuted) et packages/MeeshySDK/T
-- 🔴 **Bouton Son actionnable par VoiceOver** — CONFIRMÉ casse. apps/ios/Meeshy/Features/Main/Views/StoryViewerView+Sidebar.swift:387-399 (action vide + toggle dans highPriorityGesture) ; apps/ios/Meeshy/Features/Main/Views/StoryViewerView+Content.swift:2562-2643 
+- ✅ **Bouton Son actionnable par VoiceOver** — CONFIRMÉ casse. apps/ios/Meeshy/Features/Main/Views/StoryViewerView+Sidebar.swift:387-399 (action vide + toggle dans highPriorityGesture) ; apps/ios/Meeshy/Features/Main/Views/StoryViewerView+Content.swift:2562-2643   [CORRIGÉ 2026-07-26]
 - ✅ **Rail d'actions — composition figée à l'entrée du slide** — apps/ios/MeeshyTests/Features/Stories/StoryActionRailPlanTests.swift:9-117 (comportemental, tous les cas auteur/lecteur/public/privé) ; le re-gel sur 
 - ⚪️ ~~Strip de langues du rail (`showLanguageOptions`)~~ — faux positif de l'audit, statut réel : ok
 - 🟡 Menu « … » (plein écran, transcription, partage, supprimer, signaler) — partiel, non arbitré. apps/ios/Meeshy/Features/Main/Views/StoryViewerView+Sidebar.swift:697-827 — le menu est complet et câblé, mais son ouverture n'appelle jamai
 - 🟡 Un toucher n'importe où referme la surface ouverte (langues, emojis, commentaires, transcription) — partiel, non arbitré. apps/ios/Meeshy/Features/Main/Views/StoryViewerView+Canvas.swift:137-141 (dismiss dès le touch-down, avant toute autre décision) ; apps/ios/
-- 🔴 **Une bascule ouverte doit se refermer AVANT de fermer le lecteur** — CONFIRMÉ partiel. apps/ios/Meeshy/Features/Main/Views/StoryViewerView+Canvas.swift:137-141 (garde touch-down) et 401-413 (seuil 120/300) ; apps/ios/Meeshy/Features/Main/Views/StoryViewerView+Content.swift:199-200 et 28
+- ✅ **Une bascule ouverte doit se refermer AVANT de fermer le lecteur** — CONFIRMÉ partiel. apps/ios/Meeshy/Features/Main/Views/StoryViewerView+Canvas.swift:137-141 (garde touch-down) et 401-413 (seuil 120/300) ; apps/ios/Meeshy/Features/Main/Views/StoryViewerView+Content.swift:199-200 et 28  [CORRIGÉ 2026-07-26]
 - 🟡 État de chargement du lecteur (ThumbHash → miniature → spinner différé) — partiel, non arbitré. packages/MeeshySDK/Sources/MeeshyUI/Story/StoryReaderLoadingOverlay.swift:63-143 ; monté apps/ios/Meeshy/Features/Main/Views/StoryViewerView
-- 🔴 **Accessibilité — contenu de la story restitué à VoiceOver (textes traduits, stickers, fond)** — CONFIRMÉ casse. apps/ios/Meeshy/Features/Main/Views/StoryViewerView+Canvas.swift:1157-1161 ; packages/MeeshySDK/Sources/MeeshyUI/Story/Canvas/StoryCanvasUIView+Accessibility.swift:14-110 ; packages/MeeshySDK/Sources/
+- ✅ **Accessibilité — contenu de la story restitué à VoiceOver (textes traduits, stickers, fond)** — CONFIRMÉ casse. apps/ios/Meeshy/Features/Main/Views/StoryViewerView+Canvas.swift:1157-1161 ; packages/MeeshySDK/Sources/MeeshyUI/Story/Canvas/StoryCanvasUIView+Accessibility.swift:14-110 ; packages/MeeshySDK/Sources/  [CORRIGÉ 2026-07-26]
 - 🟡 Accessibilité — actions rotor « Story suivante / précédente » — partiel, non arbitré. apps/ios/Meeshy/Features/Main/Views/StoryViewerView+Canvas.swift:1162-1180 (accessibilityAction nommées, avec tick haptique)
 - 🟡 Accessibilité — libellé/indice de l'overlay gestuel — partiel, non arbitré. apps/ios/Meeshy/Features/Main/Views/StoryViewerView+Canvas.swift:106-108 : l'élément plein écran porte un accessibilityHint « Tap left…, hol
 - 🟡 Annonce VoiceOver du changement de slide (« Story 2 sur 5 ») — partiel, non arbitré. apps/ios/Meeshy/Features/Main/Views/StoryViewerView.swift:584-593 (UIAccessibility.post gaté sur isVoiceOverRunning)
@@ -239,7 +267,7 @@ des trous de couverture, pas des défauts prouvés.
 - ✅ **Gating content-ready : le compte ne démarre pas avant le contenu** — StoryReaderTimerGatingTests.swift:81 (`test_timer_doesNotStartBeforeContentReady`), :159 (`test_timer_doesNotStartOnPreviousSlideContentReady`) ; apps
 - ✅ **Failsafe anti-freeze content-ready (6 s)** — StoryReaderTimerGatingTests.swift:532, :553, :564, :582
 - 🟡 Gel en phase de la pause (barre + canvas + audio) depuis un agrégat unique — partiel, non arbitré. Agrégat `shouldPauseTimer` StoryViewerView+Content.swift:556-586 → timer StoryViewerView.swift:563-565 ET canvas StoryViewerView.swift:1289 
-- 🔴 **Ré-armement du timer qui efface la pause en cours (asymétrie startTimer / refreshPrefetchWindowAndTimer)** — CONFIRMÉ casse. packages/MeeshySDK/Sources/MeeshyUI/Story/Canvas/StoryReaderTimerController.swift:202 (`isPaused = false`) ; apps/ios/Meeshy/Features/Main/Views/StoryViewerView+Content.swift:630 (compensation présent
+- ✅ **Ré-armement du timer qui efface la pause en cours (asymétrie startTimer / refreshPrefetchWindowAndTimer)** — CONFIRMÉ casse. packages/MeeshySDK/Sources/MeeshyUI/Story/Canvas/StoryReaderTimerController.swift:202 (`isPaused = false`) ; apps/ios/Meeshy/Features/Main/Views/StoryViewerView+Content.swift:630 (compensation présent  [CORRIGÉ 2026-07-26]
 - 🟡 Reprise sur le playhead exact (aucun saut au resume) — partiel, non arbitré. Timer : re-seed de l'accumulateur `lastTick = nil` (StoryReaderTimerController.swift:243) ; canvas : `displayLink.isPaused = false` + `pushS
 - ✅ **Réinitialisation du playhead à chaque slide** — StoryReaderTimerGatingTests.swift:126 (`test_timer_resetsToZero_onSlideSwitch`) ; AudioForegroundChipTests.swift:75-120 (`StoryReaderPlayheadStateTest
 - ✅ **Gel de la timeline sur stall média (pont `onPlaybackProgressing`)** — StoryPlaybackHealthTests.swift:17-137 (matrice complète incl. deadlock guards) ; StoryCanvasPlaybackHealthTests.swift:50 / :142 (`test_playheadAdvance
@@ -256,12 +284,12 @@ des trous de couverture, pas des défauts prouvés.
 - 🟡 Entrée par voisinage — groupe SUIVANT à sa première non-vue non-expirée (entryIndex) — partiel, non arbitré. apps/ios/Meeshy/Features/Main/Views/StoryViewerView.swift:390-395 (`entryIndex(of:)`), appelé au commit de swipe apps/ios/Meeshy/Features/Ma
 - ✅ **Aperçu du groupe voisin (face du cube) gaté sur « ce groupe a une story à montrer »** — apps/ios/MeeshyTests/Features/Stories/StoryViewerNeighborEntryTests.swift:50-87 — 3 tests comportementaux (tout expiré → nil, première non-vue non-exp
 - 🟡 Entrée par voisinage — groupe PRÉCÉDENT sur sa dernière slide — partiel, non arbitré. apps/ios/Meeshy/Features/Main/Views/StoryViewerView+Content.swift:269 (`currentStoryIndex = max(0, groups[currentGroupIndex].stories.count -
-- 🔴 **Navigation vers un groupe entièrement expiré : le viewer se FERME au lieu de sauter au groupe suivant** — CONFIRMÉ casse. apps/ios/Meeshy/Features/Main/Views/StoryViewerView.swift:1009-1032 + :633-644 ; StoryViewerContainer.swift:69 ; StoryViewerView+Content.swift:362-371
+- ✅ **Navigation vers un groupe entièrement expiré : le viewer se FERME au lieu de sauter au groupe suivant** — CONFIRMÉ casse. apps/ios/Meeshy/Features/Main/Views/StoryViewerView.swift:1009-1032 + :633-644 ; StoryViewerContainer.swift:69 ; StoryViewerView+Content.swift:362-371  [CORRIGÉ 2026-07-26]
 - ✅ **Politique d'affichage de l'interlude (StoryGroupIntroPolicy.shouldPresent)** — apps/ios/MeeshyTests/Features/Stories/StoryGroupIntroPolicyTests.swift:11-28 — 3 tests comportementaux sur la fonction pure (mode preview, groupe sans
 - 🟡 Interlude auteur affiché 2,6 s, lecture (timer + canvas + audio) gelée pendant sa durée — partiel, non arbitré. apps/ios/Meeshy/Features/Main/Views/StoryViewerView.swift:128 (`groupIntroDuration = 2.6`), consommé :1752 (`Task.sleep`) ; gel via `showGro
 - ⚪️ ~~Interlude déclenché UNIQUEMENT entre groupes (jamais à l'ouverture depuis le tray)~~ — faux positif de l'audit, statut réel : ok
 - 🔴 **`banner` de l'auteur porté par le payload et consommé dans l'interlude** — CONFIRMÉ partiel. packages/MeeshySDK/Sources/MeeshySDK/Models/PostModels.swift:5-29 ; apps/ios/Meeshy/Features/Main/ViewModels/StoryViewModel.swift:504-517 ; services/gateway/src/services/posts/postIncludes.ts:55-64
-- 🔴 **Marquage « vue » APRÈS l'interlude, jamais pendant (Task 8 du plan)** — CONFIRMÉ absent. apps/ios/Meeshy/Features/Main/Views/StoryViewerView.swift:491-497 + :1793-1803 ; StoryViewerView+Content.swift:503-505, :970-977 ; StoryViewModel.swift:672-707
+- ✅ **Marquage « vue » APRÈS l'interlude, jamais pendant (Task 8 du plan)** — CONFIRMÉ absent. apps/ios/Meeshy/Features/Main/Views/StoryViewerView.swift:491-497 + :1793-1803 ; StoryViewerView+Content.swift:503-505, :970-977 ; StoryViewModel.swift:672-707  [CORRIGÉ 2026-07-26]
 - ✅ **Mécanique de marquage « vue » d'une slide affichée (local-first + outbox durable)** — apps/ios/MeeshyTests/Unit/ViewModels/StoryViewModelTests.swift:223 (`test_markViewed_updatesLocalStateToViewed`) et :233 (`test_markViewed_enqueuesDur
 - ✅ **Entrée depuis une notification : postId → index de lecture exact** — apps/ios/MeeshyTests/Unit/Views/StoryIndexResolverTests.swift:16-54 (5 cas dont index 0 explicite) ; apps/ios/MeeshyTests/Features/Stories/Notificatio
 - 🟡 Action initiale de notification exécutée dans le viewer (overlay commentaires / sheet des vues) — partiel, non arbitré. apps/ios/Meeshy/Features/Main/Views/StoryViewerView+Content.swift:707-725 (`triggerInitialActionIfNeeded`), appelé apps/ios/Meeshy/Features/
@@ -333,7 +361,7 @@ des trous de couverture, pas des défauts prouvés.
 ## Story — Création : publication, audience, visibilité (iOS + SDK + gateway)
 
 - ✅ **Bouton « Publier » du composer story (déclencheur de publication)** — apps/ios/MeeshyTests/Unit/ViewModels/StoryViewModelTests.swift:1120-1200 (setsActiveUpload, closesComposer, blocksSecondPublish, multiSlides) — compor
-- 🔴 **Règle d'activation du bouton Publier (contenu minimal requis)** — CONFIRMÉ absent. packages/MeeshySDK/Sources/MeeshyUI/Story/StoryComposerView+TopBar.swift:136 ; StoryComposerView+Publication.swift:50-77 ; apps/ios/.../StoryViewModel.swift:755 ; services/gateway/src/routes/posts/typ
+- ✅ **Règle d'activation du bouton Publier (contenu minimal requis)** — CONFIRMÉ absent. packages/MeeshySDK/Sources/MeeshyUI/Story/StoryComposerView+TopBar.swift:136 ; StoryComposerView+Publication.swift:50-77 ; apps/ios/.../StoryViewModel.swift:755 ; services/gateway/src/routes/posts/typ  [CORRIGÉ 2026-07-26]
 - 🟡 Sélecteur d'audience du composer story (PUBLIC / COMMUNITY / FRIENDS / EXCEPT / ONLY / PRIVATE) — partiel, non arbitré. packages/MeeshySDK/Sources/MeeshyUI/Story/StoryComposerView+TopBar.swift:140-170 (visibilityMenu, monté ligne 65) ; valeur propagée Publicat
 - 🟡 Picker d'utilisateurs pour EXCEPT / ONLY (« Sauf… » / « Seulement… ») — partiel, non arbitré. packages/MeeshySDK/Sources/MeeshyUI/Story/StoryComposerView+TopBar.swift:145 (audiencePickerMode) et :165-169 (sheet AudienceUserPickerView)
 - ✅ **Sélecteur d'audience de UnifiedPostComposer (repost story → post)** — CONFIRMÉ casse. packages/MeeshySDK/Sources/MeeshyUI/Story/UnifiedPostComposer.swift:340+498-515+546-550 ; apps/ios/.../StoryViewerView.swift:759-766 ; services/gateway/src/services/PostService.ts:1375-1379,1495
@@ -343,7 +371,7 @@ des trous de couverture, pas des défauts prouvés.
 - 🟡 Retour d'erreur de publication (bandeau + toast + Réessayer / Annuler) — partiel, non arbitré. apps/ios/Meeshy/Features/Main/ViewModels/StoryViewModel.swift:1117-1123 (phase .failed + toast) ; UI appelée apps/ios/Meeshy/Features/Main/V
 - ✅ **Publication différée hors-ligne (mise en file + optimistic UI + drain au retour réseau)** — apps/ios/MeeshyTests/Unit/ViewModels/StoryViewModelTests.swift:1460-1533 (item ajouté à la queue, visibility persistée, activeUpload non muté, origina
 - ⚪️ ~~Reprise d'un publish online interrompu (write-ahead + marquage in-flight)~~ — faux positif de l'audit, statut réel : ok
-- 🔴 **Persistance disque des médias de l'intent de publication (write-ahead)** — CONFIRMÉ partiel. apps/ios/.../StoryViewModel.swift:920-922,930-931,938-939 ; packages/MeeshySDK/.../StoryPublishQueue.swift:406-418
+- ✅ **Persistance disque des médias de l'intent de publication (write-ahead)** — CONFIRMÉ partiel. apps/ios/.../StoryViewModel.swift:920-922,930-931,938-939 ; packages/MeeshySDK/.../StoryPublishQueue.swift:406-418  [CORRIGÉ 2026-07-26]
 - 🟡 Exposition du champ `banner` dans la sélection auteur des stories (Task 1) — partiel, non arbitré. Livré et testé côté gateway : services/gateway/src/services/posts/postIncludes.ts:55-64 (`banner: true`, propagé à trayStorySelect:201 et st
 - ✅ **Langue source de la story publiée (`originalLanguage` du payload)** — packages/MeeshySDK/Tests/MeeshyUITests/Story/Composer/StoryComposerView_LanguageResolutionTests.swift:40-118 (priorités, utilisateur nil, champs vides
 - ⚪️ ~~Langue source des objets de canvas (textes / médias / audios) gravée à la publication~~ — faux positif de l'audit, statut réel : partiel
@@ -357,10 +385,10 @@ des trous de couverture, pas des défauts prouvés.
 - ✅ **Toast « la durée a été recalculée automatiquement »** — CONFIRMÉ absent. packages/MeeshySDK/Sources/MeeshyUI/Story/Timeline/ViewModel/TimelineViewModel.swift:92, :435 (émission) ; 0 lecteur en source (grep dépôt entier) ; StoryTimelineHost.swift:29-47 sans overlay
 - 🟡 Pin manuel de la durée de slide (poignée losange + « +10 s ») — partiel, non arbitré. packages/MeeshySDK/Sources/MeeshyUI/Story/Timeline/ViewModel/TimelineViewModel+Plan4Helpers.swift:138-155 (`setSlideDuration` / `extendSlide
 - ✅ **Undo / Redo — restauration de la durée de slide** — CONFIRMÉ casse. packages/MeeshySDK/Sources/MeeshyUI/Story/Timeline/ViewModel/TimelineViewModel.swift:452-470 (undo/redo sans recomputeSlideDuration) vs :333, :552 et TimelineViewModel+Plan4Helpers.swift:53, :84, :102
-- 🔴 **Déplacement TEMPOREL d'un keyframe** — CONFIRMÉ absent. packages/MeeshySDK/Sources/MeeshyUI/Story/Timeline/ViewModel/TimelineViewModel+Plan4Helpers.swift:340-347 (aucun appelant) vs :357-384 (newTime = snapshot.time) ; LaneKeyframeOverlays.swift:26 ; Keyfr
-- 🔴 **Steppers ±0,1 s « Début » de l'inspecteur clip** — CONFIRMÉ partiel. packages/MeeshySDK/Sources/MeeshyUI/Story/Timeline/ViewModel/TimelineViewModel.swift:261-265 et :284-288 (tolérance 0,16 s + candidat slideStart 0) ; :314-319 (garde no-op) ; ViewModel/TimelineViewMod
+- ✅ **Déplacement TEMPOREL d'un keyframe** — CONFIRMÉ absent. packages/MeeshySDK/Sources/MeeshyUI/Story/Timeline/ViewModel/TimelineViewModel+Plan4Helpers.swift:340-347 (aucun appelant) vs :357-384 (newTime = snapshot.time) ; LaneKeyframeOverlays.swift:26 ; Keyfr  [CORRIGÉ 2026-07-26]
+- ✅ **Steppers ±0,1 s « Début » de l'inspecteur clip** — CONFIRMÉ partiel. packages/MeeshySDK/Sources/MeeshyUI/Story/Timeline/ViewModel/TimelineViewModel.swift:261-265 et :284-288 (tolérance 0,16 s + candidat slideStart 0) ; :314-319 (garde no-op) ; ViewModel/TimelineViewMod  [CORRIGÉ 2026-07-26]
 - 🟡 Aimantation magnétique aux bords des autres objets — partiel, non arbitré. packages/MeeshySDK/Sources/MeeshyUI/Story/Timeline/ViewModel/TimelineViewModel.swift:283-307 (`magneticSnapCandidates`) — implémentée et app
-- 🔴 **Sélection auto du clip actif pendant la lecture** — CONFIRMÉ absent. packages/MeeshySDK/Sources/MeeshyUI/Story/Timeline/Engine/StoryTimelineEngine.swift:32 (déclaration) vs :302,308,337,370,385 (seuls callbacks émis) ; Engine/StoryTimelineEngine+Providing.swift:18 (con
+- ✅ **Sélection auto du clip actif pendant la lecture** — CONFIRMÉ absent. packages/MeeshySDK/Sources/MeeshyUI/Story/Timeline/Engine/StoryTimelineEngine.swift:32 (déclaration) vs :302,308,337,370,385 (seuls callbacks émis) ; Engine/StoryTimelineEngine+Providing.swift:18 (con  [CORRIGÉ 2026-07-26]
 - ✅ **Inspecteur d'un clip STICKER** — CONFIRMÉ absent. packages/MeeshySDK/Sources/MeeshyUI/Story/Timeline/Views/Container/TimelineInspectorHost.swift:87-150 et :237-250 (aucun sticker) ; Views/Container/StoryTimelineView.swift:795-815 (lane sticker tapabl
 - 🟡 Dérivation automatique de la durée de slide (« la donnée la plus longue gagne ») — partiel, non arbitré. packages/MeeshySDK/Sources/MeeshySDK/Models/StoryModels.swift:1039-1078 (`StoryEffects.contentDerivedDuration`) ne prend que `mediaObjects`,
 - 🟡 Easing d'un keyframe (courbe d'interpolation) — partiel, non arbitré. packages/MeeshySDK/Sources/MeeshyUI/Story/Timeline/Views/Container/TimelineInspectorHost.swift:324 fige `isAdvancedEnabled: false` ⇒ Keyfram
@@ -391,7 +419,7 @@ des trous de couverture, pas des défauts prouvés.
 - 🔴 **Task 5 — Défaut D5 : le canvas sortant doit rendre en `.play`** — CONFIRMÉ absent. packages/MeeshySDK/Sources/MeeshyUI/Story/Canvas/StoryReaderRepresentable.swift:127 ; StoryRenderer.swift:374-375 (`guard mode == .play else { return true }`) ; StoryViewerView+Canvas.swift:1059-1088 
 - 🔴 **Task 6 — Défauts D2/D3 : closing unique + constantes alignées** — CONFIRMÉ absent. StoryCanvasUIView+Playback.swift:256-282 (applyClosing gardé `mode == .play`) ; StoryCanvasUIView+Core.swift:149-154 (applyOpening seulement sur edit→play) ; StoryCanvasUIView.swift:530-535 (init sans
 - 🟠 **Task 7 — Défaut D7 : parsing du dégradé de fond** — CONFIRMÉ absent. apps/ios/Meeshy/Features/Main/Views/StoryViewerView+Canvas.swift:1838 (split ",") vs packages/MeeshySDK/Sources/MeeshySDK/Models/StoryBackgroundValue.swift:27 (split ":") ; chemin réel du rendu : pack
-- 🔴 **Task 8 — Marquage « vue » après l'interlude** — CONFIRMÉ absent. apps/ios/Meeshy/Features/Main/Views/StoryViewerView.swift:491 puis :497 (marquage AVANT présentation de l'interlude) ; StoryViewerView+Content.swift:504 (groupTransition) et :970-977 (markCurrentViewe
+- ✅ **Task 8 — Marquage « vue » après l'interlude** — CONFIRMÉ absent. apps/ios/Meeshy/Features/Main/Views/StoryViewerView.swift:491 puis :497 (marquage AVANT présentation de l'interlude) ; StoryViewerView+Content.swift:504 (groupTransition) et :970-977 (markCurrentViewe  [CORRIGÉ 2026-07-26]
 - 🟡 Task 9 — Ordre non-vues verrouillé par tests + `banner` du payload consommé — partiel, non arbitré. Volet ordre : `entryIndex(of:)` vit toujours dans la View (apps/ios/Meeshy/Features/Main/Views/StoryViewerView.swift:390-395, méthode d'inst
 - 🟠 **Task 10 — Primitive `MeeshySheetStyle`** — CONFIRMÉ absent. packages/MeeshySDK/Sources/MeeshyUI/Compatibility/AdaptivePresentationStyle.swift:10 (déclaration, 0 call-site) ; packages/MeeshySDK/Sources/MeeshyUI/Story/Timeline/Views/Container/TimelineInspectorHo
 - ✅ **Task 11 — Inspecteurs timeline en sheet** — packages/MeeshySDK/Tests/MeeshyUITests/Timeline/TimelineInspectorSheetIdentityTests.swift:32-82 — 6 tests comportementaux réels : identité stable pend

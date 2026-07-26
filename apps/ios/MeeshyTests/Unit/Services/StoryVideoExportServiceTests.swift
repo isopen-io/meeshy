@@ -249,6 +249,7 @@ final class StoryVideoExportServiceTests: XCTestCase {
     /// Durée du MP4 factice produit par `RealMP4StubExporter`.
     private static let stubStoryDuration: TimeInterval = 2.0
 
+<<<<<<< HEAD
     /// Allongement net apporté par la carte de fin **logo-seule** (`content: nil`,
     /// identité non résolue) : 2 s de carte dont 1,5 s en crossfade par-dessus la
     /// fin de la story (cf. `StoryExportOutroTests.test_append_extendsStoryByHalfSecond`).
@@ -262,6 +263,23 @@ final class StoryVideoExportServiceTests: XCTestCase {
     /// `content: intro`, donc c'est CE bout de bande que reçoit un export dont
     /// l'identité a été résolue — pas la carte logo-seule.
     private static let authorOutroTail: TimeInterval = 2.0
+=======
+    /// Allongement net apporté par la carte de fin **logo-seule** (aucune
+    /// identité d'auteur) : 2 s de carte dont 1,5 s en crossfade par-dessus la
+    /// fin de la story (cf.
+    /// `StoryExportOutroTests.test_append_extendsStoryByHalfSecond`).
+    private static let outroTail: TimeInterval = 0.5
+
+    /// Allongement net de la carte de fin **d'auteur**, en 2 temps depuis la
+    /// « carte de fin d'auteur » (Part D, 2026-07-26) : `StoryExportOutro`
+    /// insère `logoPhase` (1,5 s) + `identityPhase` (2 s) à `fin − overlap`, et
+    /// `overlap` vaut exactement `logoPhase` — la phase logo se superpose donc
+    /// entièrement au crossfade et seule la phase d'identité rallonge la vidéo.
+    ///
+    /// Miroir local de `StoryExportOutro.identityPhase`, `internal` à MeeshyUI
+    /// donc invisible ici — même parti pris que `outroTail` juste au-dessus.
+    private static let outroAuthorTail: TimeInterval = 2.0
+>>>>>>> origin/main
 
     /// **Régression amplifiée par ce lot.** L'appel à `StoryExportOutro.append`
     /// vivait IMBRIQUÉ dans `guard let intro else { return outputURL }` : une
@@ -329,11 +347,18 @@ final class StoryVideoExportServiceTests: XCTestCase {
         defer { sut.cleanupExport(at: url) }
 
         let duration = CMTimeGetSeconds(try await AVURLAsset(url: url).load(.duration))
+<<<<<<< HEAD
         // L'identité étant résolue ici, le service passe `content: intro` à
         // `StoryExportOutro.append` : la fermeture est celle EN 2 TEMPS, d'où
         // `authorOutroTail` et non `outroTail` (celui de la carte logo-seule,
         // couvert par le test sans interlude ci-dessus).
         let expected = StoryExportIntro.duration + Self.stubStoryDuration + Self.authorOutroTail
+=======
+        // Une identité d'auteur est fournie ci-dessus, donc la fermeture est
+        // celle en 2 temps : c'est `outroAuthorTail` qui s'applique, pas le
+        // `outroTail` de la carte logo-seule.
+        let expected = StoryExportIntro.duration + Self.stubStoryDuration + Self.outroAuthorTail
+>>>>>>> origin/main
         XCTAssertEqual(duration, expected, accuracy: 0.35,
                        "l'export doit porter l'interlude ET la carte de fin d'auteur en 2 temps")
         XCTAssertGreaterThan(duration, StoryExportIntro.duration + Self.stubStoryDuration + Self.outroTail + 0.35,

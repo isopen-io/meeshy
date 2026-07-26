@@ -59,9 +59,15 @@ final class NavigationContainerMigrationTests: XCTestCase {
         try assertMigrated("MeeshyShareExtension/ShareViewController.swift")
     }
 
+<<<<<<< HEAD
     // MARK: - Migrated in 220i (last holdout)
 
     func test_statusComposer_usesNavigationStack() throws {
+=======
+    // MARK: - Migrated in 220i — the last holdout
+
+    func test_statusComposerView_usesNavigationStack() throws {
+>>>>>>> origin/main
         try assertMigrated("Meeshy/Features/Main/Views/StatusComposerView.swift")
     }
 
@@ -81,6 +87,7 @@ final class NavigationContainerMigrationTests: XCTestCase {
         )
     }
 
+<<<<<<< HEAD
     // MARK: - The migration is complete: the floor is now zero
 
     func test_noNavigationViewRemains() throws {
@@ -92,6 +99,20 @@ final class NavigationContainerMigrationTests: XCTestCase {
             "A deprecated NavigationView container was reintroduced. Use NavigationStack: at " +
             "regular width NavigationView defaults to the double-column style and collapses to " +
             "an empty detail pane, hiding the screen's content and misplacing its toolbar."
+=======
+    // MARK: - The debt is paid — this is now a regression guard
+
+    /// 220i migrated `StatusComposerView`, the last holdout, so the expectation
+    /// is now the empty set. From here this test has changed character: it no
+    /// longer pins tolerated debt, it forbids the container outright. Any new
+    /// `NavigationView` anywhere in the shipping targets turns it red.
+    func test_noNavigationViewRemains() throws {
+        XCTAssertEqual(
+            try filesUsingDeprecatedContainer(), [],
+            "NavigationView is deprecated since iOS 16 and defaults to the double-column style, " +
+            "which collapses to an empty detail pane at regular width (iPad). Use NavigationStack — " +
+            "it is available unconditionally at the iOS 16.0 deployment floor."
+>>>>>>> origin/main
         )
     }
 }

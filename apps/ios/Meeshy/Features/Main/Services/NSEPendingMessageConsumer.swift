@@ -79,7 +79,9 @@ final class NSEPendingMessageConsumer {
             // Only drop the prefetch files once the messages are committed to GRDB,
             // so a persist failure leaves them on disk to retry next launch instead
             // of silently dropping the push-prefetched message.
-            for url in consumedFiles { try? fm.removeItem(at: url) }
+            for url in consumedFiles {
+                fm.removeItemLogging(at: url, context: "merged NSE prefetch file", logger: logger)
+            }
             logger.info("Merged \(decodedAPIMessages.count) NSE messages into cache")
         } catch {
             logger.error("NSE message persist failed, keeping \(consumedFiles.count) file(s) for retry: \(error.localizedDescription)")

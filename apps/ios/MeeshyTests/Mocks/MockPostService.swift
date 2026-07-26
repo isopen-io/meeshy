@@ -255,9 +255,23 @@ final class MockPostService: PostServiceProviding, @unchecked Sendable {
         try deleteCommentResult.get()
     }
 
+<<<<<<< HEAD
     // `visibility` mirrors the default carried by the real PostService.repost, so a
     // call site that shares no audience reads the same here as in production.
     func repost(postId: String, targetType: PostType?, content: String?, isQuote: Bool, visibility: String? = nil) async throws -> APIPost {
+=======
+    /// Defaults mirror `PostService.repost`, which defaults every parameter.
+    /// Without them a caller that omits an argument compiles against the real
+    /// service and fails against this mock — which is exactly how `visibility`
+    /// broke the test target when it was added.
+    func repost(
+        postId: String,
+        targetType: PostType? = nil,
+        content: String? = nil,
+        isQuote: Bool = false,
+        visibility: String? = nil
+    ) async throws -> APIPost {
+>>>>>>> origin/main
         repostCallCount += 1
         lastRepostPostId = postId
         lastRepostTargetType = targetType

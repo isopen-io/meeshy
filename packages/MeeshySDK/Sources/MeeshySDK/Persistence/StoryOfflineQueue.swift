@@ -193,8 +193,14 @@ extension StoryQueueItemConverter {
     /// `[{"id":...}]` array — both are accepted. Returns `[]` when the payload
     /// cannot be parsed.
     private static func extractSlideIds(fromPayload payloadString: String) -> [String] {
-        guard let data = payloadString.data(using: .utf8),
-              let root = try? JSONSerialization.jsonObject(with: data) else {
+        guard let data = payloadString.data(using: .utf8) else { return [] }
+        let root: Any
+        do {
+            root = try JSONSerialization.jsonObject(with: data)
+        } catch {
+            // Sans ids de slides, les médias associés ne seront pas réclamés.
+            Logger(subsystem: "com.meeshy.sdk", category: "story-offline-queue")
+                .error("Story payload is not valid JSON, slide ids not extracted: \(error.localizedDescription, privacy: .public)")
             return []
         }
         let slideObjects: [[String: Any]]

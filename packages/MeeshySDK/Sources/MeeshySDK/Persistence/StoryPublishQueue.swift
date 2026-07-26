@@ -514,13 +514,14 @@ public actor StoryPublishQueue {
         var parents: Set<URL> = []
         for ref in item.mediaReferences {
             let url = URL(fileURLWithPath: ref.localFilePath)
-            try? fm.removeItem(at: url)
+            FileManager.default.removeItemLogging(at: url, context: "story media cleanup")
             parents.insert(url.deletingLastPathComponent())
         }
         for parent in parents {
-            if let contents = try? fm.contentsOfDirectory(atPath: parent.path), contents.isEmpty {
-                try? fm.removeItem(at: parent)
-            }
+            // Répertoire déjà disparu = rien à réclamer.
+            guard let contents = try? fm.contentsOfDirectory(atPath: parent.path) else { continue }
+            guard contents.isEmpty else { continue }
+            FileManager.default.removeItemLogging(atPath: parent.path, context: "story empty media dir")
         }
     }
 
@@ -549,7 +550,12 @@ public actor StoryPublishQueue {
         let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
         let cacheDir = documents.appendingPathComponent("meeshy_cache", isDirectory: true)
         if !FileManager.default.fileExists(atPath: cacheDir.path) {
-            try? FileManager.default.createDirectory(at: cacheDir, withIntermediateDirectories: true)
+            do {
+                try FileManager.default.createDirectory(at: cacheDir, withIntermediateDirectories: true)
+            } catch {
+                Logger(subsystem: "com.meeshy.sdk", category: "story-publish-queue")
+                    .error("Cache directory unavailable — the queue file cannot be persisted: \(error.localizedDescription, privacy: .public)")
+            }
         }
         return cacheDir.appendingPathComponent(Self.queueFileName)
     }
@@ -558,7 +564,12 @@ public actor StoryPublishQueue {
         let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
         let cacheDir = documents.appendingPathComponent("meeshy_cache", isDirectory: true)
         if !FileManager.default.fileExists(atPath: cacheDir.path) {
-            try? FileManager.default.createDirectory(at: cacheDir, withIntermediateDirectories: true)
+            do {
+                try FileManager.default.createDirectory(at: cacheDir, withIntermediateDirectories: true)
+            } catch {
+                Logger(subsystem: "com.meeshy.sdk", category: "story-publish-queue")
+                    .error("Cache directory unavailable — the queue file cannot be persisted: \(error.localizedDescription, privacy: .public)")
+            }
         }
         return cacheDir.appendingPathComponent(Self.failedQueueFileName)
     }
