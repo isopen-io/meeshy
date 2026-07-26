@@ -440,6 +440,10 @@ struct StoryActionSidebarView: View {
                 showsExport: railPlan.showsExport,
                 saveProgress: exportSaveProgress
             )
+            // MÊME booléen pour le rendu de l'anneau et pour `.disabled` : sur
+            // des `Shape` à couleur explicite, `.disabled` seul ne change
+            // strictement rien à l'écran (cf. `StorySaveProgressRing.appearance`).
+            let exportIsCancellable = currentStory.map { saveService.isCancellable(storyId: $0.id) } ?? false
 
             if exportRailButtons.showsShareButton {
                 StoryActionButton(
@@ -464,7 +468,8 @@ struct StoryActionSidebarView: View {
                     guard let story = currentStory else { return }
                     saveService.cancel(storyId: story.id)
                 } label: {
-                    StorySaveProgressRing(progress: progress, tint: MeeshyColors.indigo400, diameter: 32)
+                    StorySaveProgressRing(progress: progress, tint: MeeshyColors.indigo400,
+                                          diameter: 32, isCancellable: exportIsCancellable)
                 }
                 .buttonStyle(.plain)
                 // Le tap cesse d'être actif dès que l'écriture photothèque a
@@ -472,7 +477,7 @@ struct StoryActionSidebarView: View {
                 // annulable (cf. `StoryPhotoSaveService.isCancellable`). Le
                 // rail suit la MÊME règle que la ligne « Mes stories », sinon
                 // les deux surfaces divergeraient sur le même job.
-                .disabled(!(currentStory.map { saveService.isCancellable(storyId: $0.id) } ?? false))
+                .disabled(!exportIsCancellable)
                 // Contrairement à la ligne « Mes stories »
                 // (`.accessibilityElement(children: .ignore)`, libellé
                 // composé au niveau de la LIGNE), ce bouton n'est enfant
@@ -613,7 +618,12 @@ struct StoryActionSidebarView: View {
                                 }
                             }
                         )
-                        .frame(maxWidth: 300)
+                        // Présentée comme la barre de réaction (L292) : `.fixedSize()`
+                        // pour que la pilule ÉPOUSE son contenu, jamais une largeur
+                        // fixe vide (directive user 2026-07-26 : même taille que la
+                        // barre de réaction). Le cap/défilement éventuel est géré
+                        // À L'INTÉRIEUR de StoryLanguageQuickBar quand la liste est longue.
+                        .fixedSize()
                         .transition(.asymmetric(
                             insertion: .scale(scale: 0.8, anchor: .trailing).combined(with: .opacity),
                             removal: .opacity

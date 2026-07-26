@@ -806,17 +806,23 @@ private struct MyStoryRow<MenuContent: View>: View {
     /// (`isCancellable(storyId:)`) : `PHPhotoLibrary.performChanges` n'est pas
     /// annulable, et un tap y affichait « Export annulé » sur une vidéo qui
     /// atterrissait quand même.
+    ///
+    /// Le MÊME booléen pilote le rendu de l'anneau (`isCancellable:`) et le
+    /// `.disabled` du bouton : `.buttonStyle(.plain)` + `.disabled` ne changent
+    /// rien visuellement sur des `Shape` à couleur explicite, donc le
+    /// basculement serait autrement totalement muet.
     private func saveRing(progress: Double) -> some View {
-        Button {
+        let canCancel = saveService.isCancellable(storyId: story.id)
+        return Button {
             HapticFeedback.medium()
             saveService.cancel(storyId: story.id)
         } label: {
-            StorySaveProgressRing(progress: progress, tint: accentColor)
+            StorySaveProgressRing(progress: progress, tint: accentColor, isCancellable: canCancel)
                 .padding(8)
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .disabled(!saveService.isCancellable(storyId: story.id))
+        .disabled(!canCancel)
         .accessibilityHidden(true)
     }
 
