@@ -10,8 +10,16 @@ import MeeshyUI
 //   - « Partager »   → StoryExportShareSheet (sélecteur de langue explicite)
 //   - « Enregistrer » → StoryPhotoSaveService (aucune sheet, tout est résolu ici)
 //
-// Extraites en helpers purs parce que deux implémentations divergentes
-// graveraient des langues (ou des identités) différentes selon le bouton pressé.
+// Extraite en helper pur parce que deux implémentations divergentes
+// graveraient des langues différentes selon le bouton pressé.
+//
+// `StoryExportIntroFactory` (identité de l'interlude de marque) a DÉMÉNAGÉ
+// dans le SDK (Task 9, 2026-07-26) :
+// `packages/MeeshySDK/Sources/MeeshyUI/Story/Canvas/StoryExportIntroFactory.swift`.
+// Elle ne vivait ici que par accident — aucune de ses dépendances n'est
+// app-side — et `TimelineExportController` (SDK) a besoin d'appeler la MÊME
+// fabrique que les chemins app-side ci-dessous, pour que l'interlude soit
+// garanti par construction sur TOUS les chemins d'export.
 
 /// Résolution de la langue gravée dans le MP4 (Prisme Linguistique).
 enum StoryExportLanguageResolver {
@@ -31,95 +39,5 @@ enum StoryExportLanguageResolver {
     /// `nil` = graver le texte original (aucune préférence ne correspond).
     static func defaultLanguage(available: [String], preferred: [String]) -> String? {
         preferred.first { available.contains($0) }
-    }
-}
-
-/// Identité peinte sur le préambule de marque de l'export.
-///
-/// L'export est réservé à l'auteur (`railPlan.showsExport == isOwnStory`) :
-/// l'auteur de la story et celui qui l'exporte sont la même personne, donc
-/// l'utilisateur courant EST l'identité à graver. Résolution `async` : l'avatar
-/// et le fond (bannière ou thumbHash) sont chargés depuis le cache image ; le
-/// bake attend cette résolution (rapide, cache-first) pour un interlude complet.
-enum StoryExportIntroFactory {
-
-    @MainActor
-    static func currentUser() async -> StoryExportIntroContent? {
-        guard let user = AuthManager.shared.currentUser else { return nil }
-
-        let avatarImage = await resolveImage(user.avatar)
-        let backgroundImage = await resolveBackground(user: user)
-        let status = await resolveMood(userId: user.id)
-
-        return StoryExportIntroContent(
-            displayName: resolveDisplayName(displayName: user.displayName,
-                                            firstName: user.firstName,
-                                            lastName: user.lastName,
-                                            username: user.username),
-            username: user.username,
-            avatar: avatarImage,
-            banner: backgroundImage,
-            moodEmoji: status?.moodEmoji,
-            moodMessage: status?.content,
-            accentColorHex: DynamicColorGenerator.colorForName(user.username)
-        )
-    }
-
-    /// Nom à graver sur l'interlude. Priorité au `displayName` explicite de
-    /// l'utilisateur (ce que le reste de l'app affiche) ; à défaut « prénom nom »,
-    /// puis le username. Pur — testé sans le singleton d'auth.
-    ///
-    /// Bug user 2026-07-26 : l'ancienne version gravait TOUJOURS « prénom nom »
-    /// et ignorait le `displayName`.
-    nonisolated static func resolveDisplayName(displayName: String?,
-                                               firstName: String?,
-                                               lastName: String?,
-                                               username: String) -> String {
-        if let name = displayName?.trimmingCharacters(in: .whitespaces), !name.isEmpty {
-            return name
-        }
-        let full = [firstName, lastName]
-            .compactMap { $0 }
-            .joined(separator: " ")
-            .trimmingCharacters(in: .whitespaces)
-        return full.isEmpty ? username : full
-    }
-
-    /// URL (relative ou absolue) → `CGImage` via le cache image (réseau si
-    /// absent). `nil` sur URL vide ou échec.
-    private static func resolveImage(_ urlString: String?) async -> CGImage? {
-        guard let urlString, !urlString.isEmpty,
-              let url = MeeshyConfig.resolveMediaURL(urlString) else { return nil }
-        return await CacheCoordinator.shared.images.image(for: url.absoluteString)?.cgImage
-    }
-
-    /// Fond de l'interlude, dans l'ordre demandé : bannière de l'auteur → sinon
-    /// le thumbHash de son avatar (flou une fois agrandi en aspectFill) → sinon
-    /// `nil`, ce qui laisse le SDK peindre un gradient d'accent vibrant.
-    private static func resolveBackground(user: MeeshyUser) async -> CGImage? {
-        if let banner = await resolveImage(user.banner) {
-            return banner
-        }
-        if let hash = user.avatarThumbHash, !hash.isEmpty,
-           let thumb = ThumbHashDecoder.decodeIfAvailable(hash)?.cgImage {
-            return thumb
-        }
-        return nil
-    }
-
-    /// Mood de l'auteur, best-effort depuis le cache des statuts « amis » (le
-    /// backend y place le status de l'utilisateur courant en tête). Non-expiré.
-    private static func resolveMood(userId: String) async -> StatusEntry? {
-        let cached = await CacheCoordinator.shared.statuses.load(for: "statuses_friends")
-        let entries: [StatusEntry]
-        switch cached {
-        case .fresh(let data, _), .stale(let data, _):
-            entries = data
-        default:
-            return nil
-        }
-        return entries.first { entry in
-            entry.userId == userId && (entry.expiresAt.map { $0 > Date() } ?? true)
-        }
     }
 }

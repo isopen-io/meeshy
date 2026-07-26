@@ -1,6 +1,7 @@
 import SwiftUI
 import Combine
 import AVKit
+import os
 import MeeshySDK
 
 // MARK: - Timeline Export Flow
@@ -8,6 +9,104 @@ import MeeshySDK
 // Bouton export du transport timeline → MP4 local (watermark Meeshy + audio
 // des lanes) → aperçu jouable + partage. L'export sert à PRÉVISUALISER le
 // rendu final de la timeline — il ne publie rien.
+//
+// Task 9 (2026-07-26) : cet export bakait le filigrane SANS pseudo et
+// n'ajoutait jamais l'interlude de marque — divergence avec les 3 autres
+// chemins d'export de story (`StoryPhotoSaveService`,
+// `StoryExportShareViewModel`, `StoryVideoExportService`). Fixé en appelant
+// la MÊME fabrique d'identité (`StoryExportIntroFactory`, déplacée ici même
+// dans le SDK) et en threadant `intro:` à travers le même enchaînement
+// « bake, puis prépose l'interlude » que `StoryVideoExportService.
+// prepareExport` — voir `SystemTimelineStoryExporter` ci-dessous.
+
+private let timelineExportLogger = Logger(subsystem: "me.meeshy.app", category: "story-timeline-export")
+
+// MARK: - Timeline story export seam (test injection)
+
+/// Seam de test au-dessus de l'enchaînement « bake via `StoryExporter.export`,
+/// puis prépose l'interlude de marque via `StoryExportIntro.prepend` ».
+///
+/// Miroir SDK-local de `StoryVideoExportServiceProviding`
+/// (`apps/ios/Meeshy/Features/Main/Services/StoryVideoExportService.swift`) :
+/// même FORME (protocole `@MainActor`, pas `Sendable` — les doubles de test
+/// restent de simples classes `@MainActor`), jamais la même DÉPENDANCE — le
+/// SDK ne peut pas importer le target app, donc ce protocole vit ici plutôt
+/// que d'être réutilisé tel quel.
+@MainActor
+protocol TimelineStoryExporting {
+    /// - Returns: l'URL du MP4 FINAL — l'interlude prépendu quand `intro`
+    ///   n'est pas `nil`, la story seule sinon.
+    func export(
+        slide: StorySlide,
+        to outputURL: URL,
+        watermark: StoryExportWatermark?,
+        intro: StoryExportIntroContent?,
+        audioResolver: (@Sendable (StoryAudioPlayerObject) -> URL?)?,
+        progress: ((Double) -> Void)?
+    ) async throws -> URL
+}
+
+/// Implémentation de production : bake via `StoryExporter.export`, puis
+/// prépose l'interlude via `StoryExportIntro.prepend` quand `intro != nil` —
+/// EXACTEMENT la séquence de `StoryVideoExportService.prepareExport`. Un
+/// échec du préambule ne perd pas l'export : la story seule reste livrable
+/// (même dégradation gracieuse que les autres chemins).
+struct SystemTimelineStoryExporter: TimelineStoryExporting {
+
+    @MainActor
+    func export(
+        slide: StorySlide,
+        to outputURL: URL,
+        watermark: StoryExportWatermark?,
+        intro: StoryExportIntroContent?,
+        audioResolver: (@Sendable (StoryAudioPlayerObject) -> URL?)?,
+        progress: ((Double) -> Void)?
+    ) async throws -> URL {
+        // Trampoline @MainActor → @Sendable : `StoryExporter.export` exige un
+        // callback @Sendable, le nôtre capture potentiellement `self`/
+        // `@Published` (non-Sendable). Même pattern que
+        // `StoryVideoExportService.prepareExport`.
+        final class ProgressSinkBox: @unchecked Sendable {
+            let sink: (Double) -> Void
+            init(_ sink: @escaping (Double) -> Void) { self.sink = sink }
+        }
+        let progressTrampoline: (@Sendable (Double) -> Void)?
+        if let progress {
+            let box = ProgressSinkBox(progress)
+            progressTrampoline = { @Sendable fraction in
+                Task { @MainActor in box.sink(fraction) }
+            }
+        } else {
+            progressTrampoline = nil
+        }
+
+        try await StoryExporter.export(
+            slide,
+            to: outputURL,
+            watermark: watermark,
+            audioResolver: audioResolver,
+            progress: progressTrampoline
+        )
+
+        guard let intro else { return outputURL }
+        do {
+            let branded = try await StoryExportIntro.prepend(
+                to: outputURL,
+                content: intro,
+                renderSize: StoryExportIntroSizing.renderSize(for: slide)
+            )
+            do {
+                try FileManager.default.removeItem(at: outputURL)
+            } catch {
+                timelineExportLogger.warning("cleanup du MP4 pré-interlude échoué à \(outputURL.path, privacy: .public) — \(error.localizedDescription, privacy: .public)")
+            }
+            return branded
+        } catch {
+            timelineExportLogger.warning("interlude de marque ignoré pour \(slide.id, privacy: .public) — \(error.localizedDescription, privacy: .public)")
+            return outputURL
+        }
+    }
+}
 
 /// Orchestrateur du flux d'export : committe la timeline dans la slide,
 /// résout les URLs locales, lance `StoryExporter` et publie la progression.
@@ -29,10 +128,23 @@ final class TimelineExportController: ObservableObject {
     @Published var phase: Phase = .idle
 
     private var exportTask: Task<Void, Never>?
+    private let exporter: TimelineStoryExporting
+    /// Identité gravée sur le préambule de marque. Injectable — même patron
+    /// que `StoryPhotoSaveService.intro` — pour que les tests contrôlent
+    /// l'identité résolue sans dépendre de `AuthManager.shared` ambiant.
+    /// Par défaut : LA MÊME fabrique que les 3 autres chemins d'export
+    /// (`StoryExportIntroFactory.currentUser`) — pas de décision dupliquée.
+    private let introProvider: @MainActor @Sendable () async -> StoryExportIntroContent?
 
     var isExporting: Bool {
         if case .exporting = phase { return true }
         return false
+    }
+
+    init(exporter: TimelineStoryExporting = SystemTimelineStoryExporter(),
+         introProvider: (@MainActor @Sendable () async -> StoryExportIntroContent?)? = nil) {
+        self.exporter = exporter
+        self.introProvider = introProvider ?? StoryExportIntroFactory.currentUser
     }
 
     func start(composer: StoryComposerViewModel) {
@@ -42,36 +154,38 @@ final class TimelineExportController: ObservableObject {
         }
         let slide = composer.exportableCurrentSlide()
         let mediaURLs = composer.collectMediaURLs(for: slide)
-        let watermark = MeeshyExportWatermark.make()
+        // Filigrane Meeshy animé (logo + « meeshy » + pseudo de l'auteur) —
+        // MÊME appel que les 3 autres chemins d'export (Task 9 : avant ce
+        // fix, ce chemin appelait `.make()` SANS `username:`, filigrane
+        // amputé du pseudo).
+        let watermark = MeeshyExportWatermark.make(username: AuthManager.shared.currentUser?.username)
         let outputURL = FileManager.default.temporaryDirectory
             .appendingPathComponent("meeshy-timeline-\(UUID().uuidString).mp4")
 
         phase = .exporting(0)
-        // Trampoline @Sendable → @MainActor : le closure progress de
-        // StoryExporter est @Sendable et ne peut pas capturer `self`
-        // (@MainActor, non-Sendable). Le box n'est invoqué QUE via le hop
-        // Task { @MainActor } — même pattern que StoryVideoExportService.
-        final class ProgressSinkBox: @unchecked Sendable {
-            let sink: (Double) -> Void
-            init(_ sink: @escaping (Double) -> Void) { self.sink = sink }
-        }
-        let box = ProgressSinkBox { [weak self] fraction in
-            guard let self, self.isExporting else { return }
-            self.phase = .exporting(fraction)
-        }
+        let exporter = self.exporter
+        let introProvider = self.introProvider
         exportTask = Task { [weak self] in
+            // Résolue DANS le Task (async) : l'identité (avatar / fond / mood)
+            // se charge depuis le cache, réseau si absent — voir
+            // `StoryExportIntroFactory.currentUser`. `introProvider` est la
+            // closure injectée à l'init, pas le singleton — l'injection en
+            // test reste honorée (même patron que `StoryPhotoSaveService`).
+            let introContent = await introProvider()
             do {
-                try await StoryExporter.export(
-                    slide,
+                let finalURL = try await exporter.export(
+                    slide: slide,
                     to: outputURL,
                     watermark: watermark,
+                    intro: introContent,
                     audioResolver: { audio in mediaURLs[audio.id] },
-                    progress: { @Sendable fraction in
-                        Task { @MainActor in box.sink(fraction) }
+                    progress: { [weak self] fraction in
+                        guard let self, self.isExporting else { return }
+                        self.phase = .exporting(fraction)
                     }
                 )
                 guard !Task.isCancelled else { return }
-                self?.phase = .finished(ExportedFile(url: outputURL))
+                self?.phase = .finished(ExportedFile(url: finalURL))
             } catch {
                 guard !Task.isCancelled else { return }
                 self?.phase = .failed(error.localizedDescription)

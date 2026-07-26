@@ -1,6 +1,9 @@
 import XCTest
 @testable import Meeshy
 @testable import MeeshySDK
+// `StoryExportIntroFactory` a déménagé dans le SDK (Task 9, 2026-07-26) — API
+// publique, un `import` simple suffit (pas besoin de `@testable`).
+import MeeshyUI
 
 // MARK: - StoryExportPreflightTests
 //
