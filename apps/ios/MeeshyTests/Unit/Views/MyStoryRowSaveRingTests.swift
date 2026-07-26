@@ -78,8 +78,17 @@ final class MyStoryRowSaveRingTests: XCTestCase {
 // d'observer à l'exécution la présence réelle d'un accessibilityCustomAction
 // sur l'arbre d'accessibilité, ou l'identité de vue réellement matérialisée,
 // depuis un test XCTest unitaire ici. Cette garde vérifie donc la STRUCTURE
-// SOURCE, ancrée sur des marqueurs de déclaration réels — même patron que
+// SOURCE — même patron que
 // `MyStoriesBulkDeleteGuardTests.test_myStoryRow_selection_conveyedViaRowTrait_notGlyphLabel`.
+//
+// Elle s'ancre sur le COMPORTEMENT protégé (l'action est-elle attachée sans
+// condition ? son bouton est-il matérialisé conditionnellement à l'intérieur ?)
+// et non sur le texte du prédicat : ancrée sur le littéral exact
+// `saveService.progress(for: story.id) != nil`, elle est passée au rouge au
+// premier renommage de la condition (22aeacdf7, qui l'a remplacée par
+// `saveService.isCancellable(storyId:)`) sans qu'aucun invariant n'ait bougé —
+// et personne ne l'a vu, `-only-testing` ciblant la CLASSE, pas le fichier.
+// Doctrine déjà appliquée en `b7aeb5020`.
 @MainActor
 final class MyStoryRowCancelActionPresenceGuardTests: XCTestCase {
 
@@ -129,86 +138,246 @@ final class MyStoryRowCancelActionPresenceGuardTests: XCTestCase {
         return out
     }
 
-    func test_body_neverForksViewIdentity_cancelActionLivesInsideUnconditionalAccessibilityActionsBuilder() throws {
+    /// Corps de `MyStoryRow.body`, commentaires retirés.
+    ///
+    /// Ancré à l'intérieur de `MyStoryRow` : `MyStoriesView` (le parent)
+    /// déclare AUSSI un `var body: some View {` — une recherche non scopée
+    /// matcherait le sien en premier, pas celui de la ligne.
+    private func rowBodyBlock() throws -> String? {
         let viewSource = strippingComments(try source())
-
-        // Ancré à l'intérieur de `MyStoryRow` : `MyStoriesView` (le parent)
-        // déclare AUSSI un `var body: some View {` — une recherche non
-        // scopée matcherait le sien en premier, pas celui de la ligne.
         guard let rowStructStart = viewSource.range(
             of: "private struct MyStoryRow<MenuContent: View>: View {"
         ) else {
             XCTFail("MyStoryRow introuvable dans le fichier")
-            return
+            return nil
         }
         guard let bodyStart = viewSource.range(
             of: "var body: some View {",
             range: rowStructStart.upperBound..<viewSource.endIndex
         ) else {
             XCTFail("MyStoryRow doit définir body")
-            return
+            return nil
         }
-
-        // (1) body ne doit JAMAIS forker en deux branches de type concret
-        // différent selon l'état du job — c'était le bug round 1. Preuve
-        // structurelle : le tout premier contenu de body doit être le
-        // HStack lui-même, pas un `if`/`else` qui l'engloberait.
-        let afterBody = viewSource[bodyStart.upperBound...].drop { $0 == "\n" || $0 == " " || $0 == "\t" }
-        XCTAssertTrue(
-            afterBody.hasPrefix("HStack(spacing: 12) {"),
-            """
-            body doit démarrer directement par le HStack de la ligne, sans if/else qui \
-            forkerait son type concret (régression d'identité de vue, round 2). Début lu: \
-            \(afterBody.prefix(160))
-            """
-        )
-
         guard let bodyEnd = viewSource.range(
             of: "private var rowAccessibilityLabel: String {",
             range: bodyStart.upperBound..<viewSource.endIndex
         ) else {
             XCTFail("body doit être suivi de rowAccessibilityLabel")
-            return
+            return nil
         }
-        let bodyBlock = String(viewSource[bodyStart.lowerBound..<bodyEnd.lowerBound])
+        return String(viewSource[bodyStart.lowerBound..<bodyEnd.lowerBound])
+    }
 
-        // (2) L'action d'annulation passe par .accessibilityActions (le
-        // conteneur ViewBuilder, toujours attaché), jamais par la
-        // convenience .accessibilityAction(named:) à un seul cas — cette
-        // dernière forme est ce qui avait motivé le if/else de body en
-        // round 1.
-        XCTAssertFalse(
-            bodyBlock.contains(".accessibilityAction(named:"),
+    /// Conditions `if …` ENGLOBANTES d'une aiguille dans un bloc de code, de
+    /// la plus externe à la plus interne. Tableau vide = l'aiguille est
+    /// déclarée inconditionnellement. `nil` = aiguille absente du bloc.
+    ///
+    /// C'est l'outil qui rend cette garde **comportementale** : ce qu'elle
+    /// protège, c'est « qui est gardé par quoi » — pas le texte du prédicat.
+    /// Round 2 de la revue finale a renommé la condition d'annulation
+    /// (`saveService.progress(for: story.id) != nil` → `saveService
+    /// .isCancellable(storyId: story.id)`, commit 22aeacdf7) : la garde,
+    /// alors ancrée sur le littéral exact, est passée au rouge alors que
+    /// l'invariant qu'elle protège n'avait pas bougé d'un pouce. Même
+    /// doctrine que `b7aeb5020` (« la garde s'ancre sur le comportement, pas
+    /// la signature »).
+    private func enclosingConditions(of needle: String, in block: String) -> [String]? {
+        var conditionAtDepth: [Int: String] = [:]
+        var depth = 0
+        var found: [String]?
+        for rawLine in block.split(separator: "\n", omittingEmptySubsequences: false) {
+            let line = String(rawLine)
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            let opens = line.filter { $0 == "{" }.count
+            let closes = line.filter { $0 == "}" }.count
+            if trimmed.hasPrefix("if "), opens > closes {
+                conditionAtDepth[depth] = trimmed
+                    .dropFirst(3)
+                    .replacingOccurrences(of: "{", with: "")
+                    .trimmingCharacters(in: .whitespaces)
+            }
+            if found == nil, trimmed.contains(needle) {
+                found = (0..<depth).compactMap { conditionAtDepth[$0] }
+            }
+            depth += opens - closes
+            conditionAtDepth = conditionAtDepth.filter { $0.key < depth }
+        }
+        return found
+    }
+
+    /// Auto-test de l'outil : la garde doit rester verte quand la CONDITION
+    /// est renommée, et rouge quand elle DISPARAÎT.
+    ///
+    /// C'est précisément ce qui a échoué : ancrée sur le littéral exact
+    /// `saveService.progress(for: story.id) != nil`, la garde est passée au
+    /// rouge le jour où la condition est devenue
+    /// `saveService.isCancellable(storyId: story.id)` — sans qu'aucun
+    /// invariant n'ait bougé. Ce test verrouille la propriété qui l'évite,
+    /// sur des sources SYNTHÉTIQUES : nul besoin de casser la production
+    /// pour prouver que l'ancrage est comportemental.
+    func test_enclosingConditions_survivesRenaming_butNotRemoval() {
+        let renamedGate = """
+        var body: some View {
+            HStack(spacing: 12) {
+            }
+            .accessibilityActions {
+                if saveService.progress(for: story.id) != nil {
+                    Button("x") {
+                        saveService.cancel(storyId: story.id)
+                    }
+                }
+            }
+        }
+        """
+        XCTAssertEqual(
+            enclosingConditions(of: "saveService.cancel(storyId:", in: renamedGate),
+            ["saveService.progress(for: story.id) != nil"],
+            "un simple renommage du prédicat ne doit pas casser la garde"
+        )
+
+        let noGate = """
+        var body: some View {
+            HStack(spacing: 12) {
+            }
+            .accessibilityActions {
+                Button("x") {
+                    saveService.cancel(storyId: story.id)
+                }
+            }
+        }
+        """
+        XCTAssertEqual(
+            enclosingConditions(of: "saveService.cancel(storyId:", in: noGate), [],
+            "sans condition englobante, la garde doit voir un tableau VIDE et échouer"
+        )
+
+        let wrappedModifier = """
+        var body: some View {
+            HStack(spacing: 12) {
+            }
+            if hasJob {
+                EmptyView()
+                    .accessibilityActions {
+                    }
+            }
+        }
+        """
+        XCTAssertEqual(
+            enclosingConditions(of: ".accessibilityActions {", in: wrappedModifier), ["hasJob"],
+            "un modifier posé derrière une condition doit être vu comme tel"
+        )
+    }
+
+    /// Invariant 1/2 — **l'identité de vue de la ligne ne forke jamais**.
+    ///
+    /// Ni un `if/else` autour du corps (bug round 1 : deux types de vue
+    /// concrets, donc démontage/remontage complet de la ligne — vignette,
+    /// bouton d'ouverture, élément d'accessibilité — à chaque
+    /// démarrage/fin de sauvegarde, avec perte de focus VoiceOver), ni un
+    /// `.accessibilityActions` posé derrière une condition, ce qui
+    /// produirait exactement le même fork une couche plus bas.
+    func test_body_neverForksViewIdentity_accessibilityActionsIsAlwaysAttached() throws {
+        guard let bodyBlock = try rowBodyBlock() else { return }
+
+        let afterBody = bodyBlock
+            .range(of: "var body: some View {")
+            .map { bodyBlock[$0.upperBound...].drop { $0 == "\n" || $0 == " " || $0 == "\t" } }
+        XCTAssertEqual(
+            afterBody?.prefix(6),
+            "HStack",
             """
-            L'action d'annulation doit passer par .accessibilityActions { … }, pas par \
-            .accessibilityAction(named:) — cette forme a motivé le if/else de body en round 1 \
-            (régression d'identité de vue). Bloc lu: \(bodyBlock)
+            Le corps de la ligne doit démarrer directement par sa pile de contenu, sans if/else \
+            qui l'engloberait : les deux branches auraient des types de vue concrets différents, \
+            donc SwiftUI démonterait et remonterait TOUTE la ligne à chaque bascule de \
+            sauvegarde (perte de focus VoiceOver). Début lu: \(afterBody?.prefix(160) ?? "")
             """
         )
 
-        guard let actionsRange = bodyBlock.range(of: ".accessibilityActions {") else {
-            XCTFail(".accessibilityActions introuvable dans body. Bloc lu: \(bodyBlock)")
+        guard let conditions = enclosingConditions(of: ".accessibilityActions {", in: bodyBlock) else {
+            XCTFail("""
+                Les actions VoiceOver de la ligne doivent passer par le conteneur \
+                `.accessibilityActions { … }` — introuvable. Bloc lu: \(bodyBlock)
+                """)
             return
         }
-        let actionsBlock = String(bodyBlock[actionsRange.lowerBound...])
+        XCTAssertEqual(
+            conditions, [],
+            """
+            `.accessibilityActions` doit être attaché INCONDITIONNELLEMENT à la ligne : c'est ce \
+            qui garde son identité de vue stable pendant toute la sauvegarde. Le posant derrière \
+            une condition, le type concret de la ligne redeviendrait dépendant de l'état du job \
+            et SwiftUI la remonterait à chaque bascule. Conditions englobantes trouvées: \
+            \(conditions)
+            """
+        )
 
-        // (3) Dans .accessibilityActions, le Button d'annulation doit rester
-        // conditionné à un job en vol — sinon il redevient permanent
-        // (régression du bug d'origine, cette fois à l'intérieur du nouveau
-        // conteneur).
-        guard let presenceCheckRange = actionsBlock.range(of: "if saveService.progress(for: story.id) != nil"),
-              let buttonRange = actionsBlock.range(of: "Button(") else {
+        // La convenience à un seul cas ne peut PAS accueillir de condition
+        // dans son corps : l'adopter forcerait à reconditionner la vue
+        // elle-même — c'est exactement ce qui avait produit le fork du
+        // round 1. C'est un fait de construction, pas une préférence.
+        XCTAssertFalse(
+            bodyBlock.contains(".accessibilityAction(named:"),
+            """
+            L'action d'annulation doit rester dans le conteneur @ViewBuilder \
+            `.accessibilityActions { … }`, jamais dans la convenience à un seul cas : cette \
+            dernière n'accepte pas de condition dans son corps, donc conditionner sa PRÉSENCE \
+            forkerait à nouveau l'identité de vue de la ligne. Bloc lu: \(bodyBlock)
+            """
+        )
+    }
+
+    /// Invariant 2/2 — **l'annulation reste conditionnelle À L'INTÉRIEUR du
+    /// ViewBuilder**.
+    ///
+    /// Bug d'origine : le rotor « Actions » proposait « Annuler
+    /// l'enregistrement » sur N'IMPORTE QUELLE ligne « Mes stories », sans
+    /// aucune sauvegarde en cours et sans rien y activer (action fantôme —
+    /// son EFFET était gardé par un `guard` interne, sa PRÉSENCE non).
+    ///
+    /// Ancrage sur l'EFFET (`saveService.cancel(storyId:`) et non sur le
+    /// texte du prédicat : la garde doit survivre à un renommage de la
+    /// condition, pas à sa disparition.
+    func test_cancelAction_isGatedInsideTheBuilder_onTheSharedSaveState() throws {
+        guard let bodyBlock = try rowBodyBlock() else { return }
+
+        let cancelEffect = "saveService.cancel(storyId:"
+        guard let actionsRange = bodyBlock.range(of: ".accessibilityActions {"),
+              let effectRange = bodyBlock.range(of: cancelEffect) else {
             XCTFail("""
-                .accessibilityActions doit conditionner son Button par \
-                `if saveService.progress(for: story.id) != nil`. Bloc lu: \(actionsBlock)
+                La ligne doit exposer une action VoiceOver qui appelle `\(cancelEffect)` depuis \
+                `.accessibilityActions { … }`. Bloc lu: \(bodyBlock)
                 """)
             return
         }
         XCTAssertTrue(
-            presenceCheckRange.lowerBound < buttonRange.lowerBound,
+            actionsRange.lowerBound < effectRange.lowerBound,
             """
-            Le Button d'annulation doit être À L'INTÉRIEUR du if de présence du job — sinon il \
-            resterait proposé en permanence (bug d'origine). Bloc lu: \(actionsBlock)
+            L'annulation VoiceOver doit être déclarée DANS `.accessibilityActions`, pas ailleurs \
+            dans le corps de la ligne (elle serait alors avalée par \
+            `.accessibilityElement(children: .ignore)`). Bloc lu: \(bodyBlock)
+            """
+        )
+
+        guard let gates = enclosingConditions(of: cancelEffect, in: bodyBlock) else {
+            XCTFail("Effet d'annulation introuvable. Bloc lu: \(bodyBlock)")
+            return
+        }
+        XCTAssertFalse(
+            gates.isEmpty,
+            """
+            L'action d'annulation doit rester CONDITIONNELLE à l'intérieur du ViewBuilder : \
+            déclarée inconditionnellement, le rotor VoiceOver la proposerait sur toutes les \
+            lignes, sans sauvegarde en cours et sans rien activer (action fantôme — le bug \
+            d'origine). Aucune condition englobante trouvée. Bloc lu: \(bodyBlock)
+            """
+        )
+        XCTAssertTrue(
+            gates.contains { $0.contains("saveService") },
+            """
+            La condition qui matérialise l'action doit interroger le service de sauvegarde \
+            partagé — le MÊME état que celui qui désactive le tap de l'anneau — sinon le rotor \
+            et l'anneau pourraient diverger sur un même job. Conditions englobantes trouvées: \
+            \(gates)
             """
         )
     }
