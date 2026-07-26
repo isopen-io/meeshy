@@ -194,13 +194,25 @@ final class StoryVideoExportService: StoryVideoExportServiceProviding {
             // sonore Meeshy, puis la story. Un échec ici ne perd PAS l'export —
             // on livre la story seule plutôt que rien.
             do {
+                let renderSize = StoryExportIntroSizing.renderSize(for: slide)
                 let branded = try await StoryExportIntro.prepend(
                     to: outputURL,
                     content: intro,
-                    renderSize: StoryExportIntroSizing.renderSize(for: slide)
+                    renderSize: renderSize
                 )
                 cleanupExport(at: outputURL)
-                return branded
+                // Carte de fin de marque : le logo Meeshy plein écran entre en
+                // fondu par-dessus la fin de la story et tient sur sa signature
+                // sonore de fermeture. Échec non fatal — on livre au moins
+                // l'intro + la story.
+                do {
+                    let finalURL = try await StoryExportOutro.append(to: branded, renderSize: renderSize)
+                    cleanupExport(at: branded)
+                    return finalURL
+                } catch {
+                    logger.warning("StoryVideoExportService : carte de fin ignorée pour \(slide.id, privacy: .public) — \(error.localizedDescription, privacy: .public)")
+                    return branded
+                }
             } catch {
                 logger.warning("StoryVideoExportService : intro de marque ignorée pour \(slide.id, privacy: .public) — \(error.localizedDescription, privacy: .public)")
                 return outputURL

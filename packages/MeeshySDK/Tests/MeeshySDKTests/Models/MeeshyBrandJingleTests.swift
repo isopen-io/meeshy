@@ -125,4 +125,66 @@ final class MeeshyBrandJingleTests: XCTestCase {
         XCTAssertLessThan(lowEnergy, peak * 0.25,
                           "l'énergie ne doit pas se concentrer sous 200 Hz")
     }
+
+    // MARK: - Signature de FERMETURE (cadence descendante)
+
+    func test_outroSamples_lastExactlyTheOutroDuration() {
+        let pcm = MeeshyBrandJingle.outroSamples(sampleRate: sampleRate)
+        XCTAssertEqual(Double(pcm.count) / sampleRate,
+                       MeeshyBrandJingle.outroDuration, accuracy: 0.001)
+    }
+
+    func test_outroSamples_neverClipAndStayAudible() {
+        let peak = MeeshyBrandJingle.outroSamples(sampleRate: sampleRate)
+            .reduce(Float(0)) { max($0, abs($1)) }
+        XCTAssertLessThanOrEqual(peak, 1.0)
+        XCTAssertGreaterThan(peak, 0.3, "une fermeture audible, pas un souffle")
+    }
+
+    func test_outroSamples_startAndEndInSilence() {
+        let pcm = MeeshyBrandJingle.outroSamples(sampleRate: sampleRate)
+        XCTAssertEqual(pcm[0], 0, accuracy: 0.001)
+        XCTAssertEqual(pcm[pcm.count - 1], 0, accuracy: 0.0001)
+    }
+
+    func test_outroSamples_areDeterministic() {
+        XCTAssertEqual(MeeshyBrandJingle.outroSamples(sampleRate: sampleRate),
+                       MeeshyBrandJingle.outroSamples(sampleRate: sampleRate))
+    }
+
+    /// Miroir descendant : la fermeture DÉMARRE sur l'octave haute (A5, 880 Hz),
+    /// là où l'ouverture démarre sur la fondamentale (A4, 440 Hz). Mesure par
+    /// passages par zéro sur les 220 ms qui précèdent l'entrée de la 2e note.
+    func test_outroSamples_openOnTheHighOctave() {
+        let pcm = MeeshyBrandJingle.outroSamples(sampleRate: sampleRate)
+        let window = 0.22
+        let slice = Array(pcm[Int(0.01 * sampleRate)..<Int(window * sampleRate)])
+        var crossings = 0
+        for index in 1..<slice.count where slice[index - 1] < 0 && slice[index] >= 0 {
+            crossings += 1
+        }
+        let measured = Double(crossings) / (window - 0.01)
+        XCTAssertEqual(measured, 880, accuracy: 60,
+                       "la fermeture doit ouvrir sur un La aigu (A5), miroir de l'entrée")
+    }
+
+    /// La fermeture doit SONNER autrement que l'ouverture — sinon « différent »
+    /// n'est pas tenu. Les 200 premières ms (A5 vs A4) diffèrent.
+    func test_outroSamples_differFromOpening() {
+        let intro = MeeshyBrandJingle.samples(sampleRate: sampleRate)
+        let outro = MeeshyBrandJingle.outroSamples(sampleRate: sampleRate)
+        let n = Int(0.20 * sampleRate)
+        XCTAssertNotEqual(Array(intro.prefix(n)), Array(outro.prefix(n)))
+    }
+
+    func test_renderOutroToTemporaryFile_producesAPlayableAsset() async throws {
+        let url = try MeeshyBrandJingle.renderOutroToTemporaryFile()
+        defer { try? FileManager.default.removeItem(at: url) }
+        let asset = AVURLAsset(url: url)
+        let tracks = try await asset.loadTracks(withMediaType: .audio)
+        XCTAssertEqual(tracks.count, 1)
+        let duration = try await asset.load(.duration)
+        XCTAssertEqual(CMTimeGetSeconds(duration),
+                       MeeshyBrandJingle.outroDuration, accuracy: 0.15)
+    }
 }

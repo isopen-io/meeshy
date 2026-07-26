@@ -24,6 +24,9 @@ public enum MeeshyBrandJingle {
     /// Durée totale, en secondes. Cadre l'interlude de l'export.
     public static let duration: TimeInterval = 2.2
 
+    /// Durée de la signature de FERMETURE, calée sur la carte de fin (2 s).
+    public static let outroDuration: TimeInterval = 2.0
+
     /// Format de rendu — 48 kHz mono, aligné sur le format canonique du mixer
     /// reader (`ReaderAudioMixer`) pour éviter toute conversion à la volée.
     public static let sampleRate: Double = 48_000
@@ -42,6 +45,17 @@ public enum MeeshyBrandJingle {
         Note(frequency: 880.00, onset: 0.84)
     ]
 
+    /// A5 · E5 · C♯5 · A4 — le MIROIR descendant de l'entrée : l'arpège
+    /// redescend depuis l'octave et se pose sur la tonique. Cadence résolutive
+    /// qui signale une fin, tout en restant la même signature de La majeur —
+    /// reconnaissable comme « Meeshy » mais distincte de l'ouverture.
+    private static let outroMotif: [Note] = [
+        Note(frequency: 880.00, onset: 0.00),
+        Note(frequency: 659.25, onset: 0.26),
+        Note(frequency: 554.37, onset: 0.52),
+        Note(frequency: 440.00, onset: 0.78)
+    ]
+
     private static let attack: TimeInterval = 0.025
     private static let decayHalfLife: TimeInterval = 0.62
     private static let releaseTail: TimeInterval = 0.35
@@ -54,6 +68,16 @@ public enum MeeshyBrandJingle {
     /// teste (durée, absence de clipping, silence aux deux bords). Le rendu
     /// fichier n'en est qu'un emballage.
     public static func samples(sampleRate: Double = MeeshyBrandJingle.sampleRate) -> [Float] {
+        render(motif: motif, duration: duration, sampleRate: sampleRate)
+    }
+
+    /// Échantillons PCM de la signature de FERMETURE (cadence descendante).
+    /// Même synthèse, motif inversé — voir `outroMotif`.
+    public static func outroSamples(sampleRate: Double = MeeshyBrandJingle.sampleRate) -> [Float] {
+        render(motif: outroMotif, duration: outroDuration, sampleRate: sampleRate)
+    }
+
+    private static func render(motif: [Note], duration: TimeInterval, sampleRate: Double) -> [Float] {
         let frameCount = Int(duration * sampleRate)
         guard frameCount > 0 else { return [] }
         var buffer = [Float](repeating: 0, count: frameCount)
@@ -103,13 +127,22 @@ public enum MeeshyBrandJingle {
     /// Écrit le jingle dans un fichier `.m4a` temporaire, prêt à être inséré
     /// dans une composition d'export. L'appelant est responsable du nettoyage.
     public static func renderToTemporaryFile() throws -> URL {
+        try writeM4A(samples())
+    }
+
+    /// Écrit la signature de FERMETURE dans un `.m4a` temporaire, prête à être
+    /// mixée sur la carte de fin de l'export. L'appelant nettoie.
+    public static func renderOutroToTemporaryFile() throws -> URL {
+        try writeM4A(outroSamples())
+    }
+
+    private static func writeM4A(_ pcm: [Float]) throws -> URL {
         let url = FileManager.default.temporaryDirectory
             .appendingPathComponent("meeshy-jingle-\(UUID().uuidString).m4a")
 
         guard let format = AVAudioFormat(standardFormatWithSampleRate: sampleRate, channels: 1) else {
             throw JingleError.unsupportedFormat
         }
-        let pcm = samples()
         guard !pcm.isEmpty,
               let buffer = AVAudioPCMBuffer(pcmFormat: format,
                                             frameCapacity: AVAudioFrameCount(pcm.count)),
