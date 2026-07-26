@@ -385,6 +385,26 @@ final class StoryPhotoSaveServiceTests: XCTestCase {
     /// cette attente — AVANT même que le bake ne démarre. `introTimeout`
     /// borne cette attente : le bake démarre SANS interlude de marque plutôt
     /// que de bloquer.
+    ///
+    /// Constantes et seuil alignés sur `BackgroundTransitionCoordinatorTests.
+    /// test_runBounded_slowOperation_returnsAtBudgetNotOperationDuration`
+    /// (bound 0.1s / opération lente 3s / seuil 1.5s) — même famille de test
+    /// (course borne-vs-opération-lente) sur le même host bruyant, valeurs
+    /// déjà éprouvées plutôt qu'inventées pour ce fichier. Diagnostic qui a
+    /// mené à cet alignement (round 3, suite à un échec déterministe 4/4
+    /// signalé en revue) : avec les constantes précédentes
+    /// (`introTimeout: 50ms`, intro lente `400ms`, seuil `0.3s`), 4 exécutions
+    /// isolées de ce test ont mesuré 0.437s / 1.222s / 1.254s / 1.461s — dans
+    /// LES 4 cas `exporter.lastIntro` restait `nil` (la course était
+    /// correctement coupée par le timeout, prouvé par la seule assertion
+    /// déterministe et non chronométrée) ; seul le seuil absolu de 0.3s,
+    /// beaucoup trop proche du plancher de bruit d'ordonnancement du host
+    /// (jusqu'à ~1,5s même dans le cas correct, dominant largement l'écart de
+    /// 350ms entre `introTimeout` et l'intro lente), échouait. Conclusion :
+    /// le mécanisme est correct (Hypothèse 1 réfutée) ; la mesure était
+    /// fragile parce que la marge entre borne et opération lente (8×) et le
+    /// seuil (6× la borne) étaient trop serrés pour ce host — élargie ici à
+    /// 30×/15× comme le fait déjà `BackgroundTransitionCoordinatorTests`.
     func test_save_introSlowerThanTimeout_bakesWithoutIntroWithoutBlocking() async {
         let exporter = ScriptedStoryExporter()
         let photos = StubPhotoSaver()
@@ -394,15 +414,9 @@ final class StoryPhotoSaveServiceTests: XCTestCase {
             photoSaver: photos,
             toasts: toasts,
             preferredLanguages: { [] },
-            introTimeout: .milliseconds(50),
+            introTimeout: .milliseconds(100),
             intro: {
-                // Volontairement courte (400 ms, pas plusieurs secondes) :
-                // la tâche perdante de la course continue en arrière-plan
-                // après la fin du test — la garder brève limite le bruit
-                // d'isolation entre tests plutôt que de le supprimer (le
-                // `IntroRaceBox` n'a pas de mécanisme d'annulation forcée,
-                // seule la 2ᵉ résolution est ignorée).
-                try? await Task.sleep(for: .milliseconds(400))
+                try? await Task.sleep(for: .seconds(3))
                 return StoryExportIntroContent(displayName: "Late", username: "late", accentColorHex: "FFFFFF")
             }
         )
@@ -412,8 +426,14 @@ final class StoryPhotoSaveServiceTests: XCTestCase {
         sut.save(story: story)
         await waitUntilIdle(sut, storyId: story.id)
 
-        XCTAssertLessThan(Date().timeIntervalSince(start), 0.3,
-                           "le bake ne doit pas attendre la résolution d'identité complète (400ms)")
+        let elapsed = Date().timeIntervalSince(start)
+        XCTAssertLessThan(elapsed, 1.5, "doit revenir près de la borne de 0.1s, jamais attendre les 3s de l'intro")
+        // Assertion déterministe, immune au bruit d'ordonnancement : avec
+        // `introTimeout` (0.1s) très inférieur au sommeil de l'intro (3s), la
+        // seule façon d'observer `lastIntro == nil` est que la course ait été
+        // coupée par le timeout — l'intro, livrée à elle seule, ne renvoie
+        // jamais nil. C'est la preuve primaire ; `elapsed` n'est qu'un signal
+        // de soutien, volontairement peu discriminant sous contention.
         XCTAssertNil(exporter.lastIntro, "passé le délai, le bake démarre sans interlude de marque")
         XCTAssertEqual(exporter.prepareCallCount, 1)
     }
