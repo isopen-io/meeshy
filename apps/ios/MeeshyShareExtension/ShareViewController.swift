@@ -334,10 +334,12 @@ struct ShareContentView: View {
                     ScrollView {
                         LazyVStack(spacing: 0) {
                             ForEach(filteredContacts) { contact in
-                                ContactRow(contact: contact, isSelected: selectedContactId == contact.id)
-                                    .onTapGesture {
-                                        selectedContactId = contact.id
-                                    }
+                                Button {
+                                    selectedContactId = contact.id
+                                } label: {
+                                    ContactRow(contact: contact, isSelected: selectedContactId == contact.id)
+                                }
+                                .buttonStyle(.plain)
                             }
                         }
                     }
@@ -347,30 +349,34 @@ struct ShareContentView: View {
 
                 // Action buttons
                 HStack(spacing: 16) {
-                    Button("Cancel") {
+                    Button {
                         onCancel()
+                    } label: {
+                        Text(String(localized: "share.cancel", defaultValue: "Cancel"))
+                            .frame(maxWidth: .infinity)
+                            .padding()
                     }
-                    .frame(maxWidth: .infinity)
-                    .padding()
                     .background(Color.secondary.opacity(0.2))
                     .foregroundColor(.primary)
                     .cornerRadius(12)
 
-                    Button("Send") {
+                    Button {
                         if let contactId = selectedContactId {
                             onSend(contactId)
                         }
+                    } label: {
+                        Text(String(localized: "share.send", defaultValue: "Send"))
+                            .frame(maxWidth: .infinity)
+                            .padding()
                     }
-                    .frame(maxWidth: .infinity)
-                    .padding()
                     .background(selectedContactId != nil ? Color.blue : Color.secondary.opacity(0.2))
-                    .foregroundColor(.white)
+                    .foregroundColor(selectedContactId != nil ? .white : .secondary)
                     .cornerRadius(12)
                     .disabled(selectedContactId == nil)
                 }
                 .padding()
             }
-            .navigationTitle("Share to Meeshy")
+            .navigationTitle(String(localized: "share.title", defaultValue: "Share to Meeshy"))
             .navigationBarTitleDisplayMode(.inline)
         }
         .onAppear {
@@ -524,6 +530,11 @@ struct ContactRow: View {
         }
         .padding()
         .background(isSelected ? Color.blue.opacity(0.1) : Color.clear)
+        .contentShape(Rectangle())
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(contact.name)
+        .accessibilityValue(contact.status ?? "")
+        .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : [.isButton])
     }
 }
 
