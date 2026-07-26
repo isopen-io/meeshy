@@ -127,6 +127,8 @@ final class ManualStoryExporter: StoryVideoExportServiceProviding {
 
     private var pendingCalls: [PendingCall] = []
     private(set) var cleanupCallCount = 0
+    private(set) var lastCleanupURL: URL?
+    private(set) var lastBakedURL: URL?
 
     var pendingCount: Int { pendingCalls.count }
 
@@ -145,6 +147,7 @@ final class ManualStoryExporter: StoryVideoExportServiceProviding {
 
     func cleanupExport(at url: URL) {
         cleanupCallCount += 1
+        lastCleanupURL = url
     }
 
     /// Publie une fraction sur la tentative à l'index `attempt` (0 = la
@@ -159,6 +162,7 @@ final class ManualStoryExporter: StoryVideoExportServiceProviding {
         let url = FileManager.default.temporaryDirectory
             .appendingPathComponent("manual-save-\(UUID().uuidString).mp4")
         do { try Data().write(to: url) } catch { XCTFail("temp write failed: \(error)") }
+        lastBakedURL = url
         pendingCalls[attempt].continuation.resume(returning: url)
         return url
     }
@@ -195,6 +199,50 @@ final class ManualPhotoSaver: PhotoLibrarySaving, @unchecked Sendable {
         let call = pendingCalls[attempt]
         savedVideoURLs.append(call.url)
         call.continuation.resume()
+    }
+}
+
+/// Résolution d'identité pilotable : `resolve()` suspend jusqu'à ce que le
+/// test appelle `release(_:)`.
+///
+/// `introTimeout` couvre déjà « la résolution ne revient JAMAIS » ; ce double
+/// couvre le cas complémentaire, celui que la revue a exhibé : la résolution
+/// FINIT par arriver (installation fraîche, jusqu'à 4 s) et l'utilisateur tape
+/// l'anneau à 0 % pendant ce temps. Il donne aussi un point de synchronisation
+/// déterministe (`waitUntilSuspended()`) — aucune assertion temporelle,
+/// aucune attente à l'aveugle.
+@MainActor
+final class ManualIntroResolver {
+
+    private var pending: CheckedContinuation<StoryExportIntroContent?, Never>?
+    private var suspensionWaiter: CheckedContinuation<Void, Never>?
+    private var releasedValue: StoryExportIntroContent?
+    private var hasReleased = false
+    private(set) var isSuspended = false
+
+    /// À injecter en `intro:` / `introProvider:`.
+    func resolve() async -> StoryExportIntroContent? {
+        if hasReleased { return releasedValue }
+        return await withCheckedContinuation { continuation in
+            pending = continuation
+            isSuspended = true
+            suspensionWaiter?.resume()
+            suspensionWaiter = nil
+        }
+    }
+
+    /// Suspend le TEST jusqu'à ce que la résolution soit réellement en cours.
+    func waitUntilSuspended() async {
+        if isSuspended { return }
+        await withCheckedContinuation { suspensionWaiter = $0 }
+    }
+
+    func release(_ content: StoryExportIntroContent? = nil) {
+        hasReleased = true
+        releasedValue = content
+        isSuspended = false
+        pending?.resume(returning: content)
+        pending = nil
     }
 }
 
@@ -477,6 +525,94 @@ final class StoryPhotoSaveServiceTests: XCTestCase {
         XCTAssertEqual(exporter.prepareCallCount, 1)
     }
 
+    // MARK: Annulation PENDANT la résolution d'identité (revue finale round 2, item 3)
+
+    /// Draine la file du MainActor un nombre BORNÉ de fois — assez pour
+    /// qu'une tentative déjà reprise atteigne (ou non) son exporteur.
+    /// Pas d'assertion temporelle : que des `Task.yield()`.
+    private func drainMainActorQueue() async {
+        for _ in 0..<200 { await Task.yield() }
+    }
+
+    private func makeManualIntroSUT() -> (
+        sut: StoryPhotoSaveService,
+        exporter: ScriptedStoryExporter,
+        photos: StubPhotoSaver,
+        toasts: MockFeedbackToast,
+        resolver: ManualIntroResolver
+    ) {
+        let exporter = ScriptedStoryExporter()
+        let photos = StubPhotoSaver()
+        let toasts = MockFeedbackToast()
+        let resolver = ManualIntroResolver()
+        let sut = StoryPhotoSaveService(
+            exporter: exporter,
+            photoSaver: photos,
+            toasts: toasts,
+            preferredLanguages: { [] },
+            // Assez large pour que la borne ne gagne JAMAIS la course : ce
+            // test-ci porte sur l'annulation, pas sur le timeout.
+            introTimeout: .seconds(5),
+            intro: { await resolver.resolve() }
+        )
+        return (sut, exporter, photos, toasts, resolver)
+    }
+
+    /// **Contrôle positif du drain** utilisé par le test suivant : sans
+    /// annulation, la MÊME séquence (résolution suspendue puis relâchée, même
+    /// borne de drain) voit le bake partir ET la vidéo atterrir. Sans lui,
+    /// l'assertion négative du test d'après serait décorative — un drain trop
+    /// court la rendrait verte quoi qu'il arrive.
+    func test_save_identityResolvedLate_thenReleased_runsTheWholeSave() async {
+        let (sut, exporter, photos, toasts, resolver) = makeManualIntroSUT()
+        let story = makeStory()
+
+        sut.save(story: story)
+        await resolver.waitUntilSuspended()
+        XCTAssertEqual(exporter.prepareCallCount, 0,
+                       "le bake ne doit pas démarrer tant que l'identité se résout")
+
+        resolver.release()
+        await drainMainActorQueue()
+
+        XCTAssertEqual(exporter.prepareCallCount, 1)
+        XCTAssertEqual(photos.savedVideoURLs.count, 1)
+        XCTAssertEqual(toasts.successMessages.count, 1)
+    }
+
+    /// « Mes stories » → ⋯ → Enregistrer sur une installation fraîche :
+    /// l'identité n'est pas en cache, la résolution court (jusqu'à 4 s),
+    /// l'anneau affiche 0 % et l'utilisateur le tape tout de suite.
+    ///
+    /// `cancel()` avançait bien la génération et rendait la main — mais la
+    /// `Task` restait bloquée dans la résolution (qui n'observe pas
+    /// l'annulation), puis DÉMARRAIT QUAND MÊME un bake complet de 10 à 60 s :
+    /// appareil qui chauffe, et un MP4 que la garde `isCurrent` d'après-bake
+    /// jetait à l'arrivée.
+    func test_save_cancelledDuringIdentityResolution_neverStartsTheBake() async {
+        let (sut, exporter, photos, toasts, resolver) = makeManualIntroSUT()
+        let story = makeStory()
+
+        sut.save(story: story)
+        await resolver.waitUntilSuspended()
+
+        sut.cancel(storyId: story.id)
+        XCTAssertNil(sut.progress(for: story.id), "le job doit disparaître dès l'appel à cancel")
+
+        resolver.release()
+        await drainMainActorQueue()
+
+        XCTAssertEqual(exporter.prepareCallCount, 0,
+                       """
+                       Annulée AVANT le bake, la tentative ne doit jamais en démarrer un : \
+                       10 à 60 s de calcul et de chauffe pour un MP4 que `isCurrent` jettera.
+                       """)
+        XCTAssertTrue(photos.savedVideoURLs.isEmpty, "rien ne doit atterrir dans la photothèque")
+        XCTAssertEqual(exporter.cleanupCallCount, 0, "aucun MP4 produit, donc rien à nettoyer")
+        XCTAssertEqual(toasts.successMessages.count, 1, "un seul toast : celui de l'annulation")
+        XCTAssertTrue(toasts.errorMessages.isEmpty)
+    }
+
     /// L'inverse : une résolution d'identité rapide doit toujours être
     /// utilisée — la borne ne doit jamais faire perdre une résolution qui
     /// arrive à temps.
@@ -509,19 +645,43 @@ final class StoryPhotoSaveServiceTests: XCTestCase {
     /// `Task.isCancelled`) et doit nettoyer son MP4 une fois qu'il ressort du
     /// bake — sur les 4 sorties possibles (succès, échec bake, échec Photos,
     /// annulation), seule celle-ci n'était couverte par aucun test.
+    ///
+    /// Revue finale round 2 (item 3) : ce test annulait AVANT que la `Task`
+    /// n'ait seulement démarré, donc avant le bake — et s'appuyait sur le
+    /// fait qu'un bake partait quand même. C'est exactement le gâchis que la
+    /// garde d'après-résolution supprime désormais (cf.
+    /// `test_save_cancelledDuringIdentityResolution_neverStartsTheBake`). Le
+    /// scénario visé ici — annuler PENDANT le bake — reste entier : il exige
+    /// juste un exporteur suspendu (`ManualStoryExporter`) pour que
+    /// l'annulation tombe réellement au milieu du bake, plutôt qu'avant lui.
     func test_cancel_duringBake_cleansUpMP4OnceTheAbandonedTaskUnwinds() async {
-        let (sut, exporter, _, toasts) = makeSUT()
+        let exporter = ManualStoryExporter()
+        let photos = StubPhotoSaver()
+        let toasts = MockFeedbackToast()
+        let sut = StoryPhotoSaveService(
+            exporter: exporter,
+            photoSaver: photos,
+            toasts: toasts,
+            preferredLanguages: { [] },
+            intro: { nil }
+        )
         let story = makeStory()
 
         sut.save(story: story)
+        // Le bake a RÉELLEMENT démarré : c'est la condition du scénario.
+        await waitUntil { exporter.pendingCount == 1 }
+
         sut.cancel(storyId: story.id)
         XCTAssertNil(sut.progress(for: story.id), "le job doit disparaître dès l'appel à cancel")
 
+        // Le bake abandonné finit par rendre son MP4, bien après l'annulation.
+        exporter.resolve(attempt: 0)
         await waitUntil { exporter.cleanupCallCount > 0 }
 
         XCTAssertEqual(exporter.cleanupCallCount, 1,
                        "le MP4 baké après l'annulation doit être nettoyé, pas laissé sur disque")
         XCTAssertEqual(exporter.lastCleanupURL, exporter.lastBakedURL)
+        XCTAssertTrue(photos.savedVideoURLs.isEmpty, "rien ne doit atterrir dans Photos après une annulation")
         XCTAssertEqual(toasts.successMessages.count, 1, "un seul toast : celui de l'annulation")
         XCTAssertTrue(toasts.errorMessages.isEmpty)
     }

@@ -149,6 +149,28 @@ final class StoryPhotoSaveService: ObservableObject {
             // closure injectée à l'init, pas le singleton — l'injection en
             // test reste honorée.
             let introContent = await BoundedAsyncResolution.resolve(self.intro, timeout: self.introTimeout)
+            // Tentative déjà périmée AVANT même que le bake ne démarre.
+            // Sur une installation fraîche, la résolution d'identité court
+            // jusqu'à `introTimeout` (4 s) : l'anneau affiche 0 %, et
+            // l'utilisateur qui le tape immédiatement obtenait bien
+            // « Export annulé »… puis un bake complet de 10 à 60 s partait
+            // quand même, chauffait l'appareil, et son MP4 finissait jeté par
+            // la garde `isCurrent` d'après-bake. Les trois chemins d'export
+            // coupent désormais au même endroit (cf.
+            // `StoryExportShareViewModel.startExport` et
+            // `TimelineExportController.start`).
+            //
+            // Garde ancrée sur le JETON DE GÉNÉRATION, pas sur
+            // `Task.isCancelled` : c'est le mécanisme d'annulation RÉEL de ce
+            // chemin — `cancel(storyId:)` avance `generations[storyId]`, et
+            // c'est cette valeur que consultent déjà tous les autres points de
+            // contrôle de cette méthode. Elle est aussi strictement plus
+            // forte : elle est fausse dès que la tentative est périmée pour
+            // N'IMPORTE QUELLE raison (annulée OU remplacée par un `save()`
+            // relancé), là où `Task.isCancelled` ne couvre que l'annulation
+            // explicite. Rien à nettoyer ici : aucun MP4 n'existe encore, et
+            // `cancel()` a déjà posé son toast.
+            guard self.isCurrent(generation, for: storyId) else { return }
             let url = await self.exporter.prepareExport(
                 slide: slide,
                 languages: languages,

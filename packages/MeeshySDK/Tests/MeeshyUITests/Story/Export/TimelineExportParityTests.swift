@@ -183,6 +183,113 @@ final class TimelineExportParityTests: XCTestCase {
 
         XCTAssertEqual(exporter.lastIntro?.username, "fast")
     }
+
+    // MARK: - Revue finale round 2, item 3 : annulation PENDANT la résolution
+
+    /// Draine la file du MainActor un nombre BORNÉ de fois — assez pour
+    /// qu'une tentative déjà reprise atteigne (ou non) son exporteur. Pas
+    /// d'assertion temporelle : que des `Task.yield()`.
+    private func drainMainActorQueue() async {
+        for _ in 0..<200 { await Task.yield() }
+    }
+
+    /// **Contrôle positif du drain** du test suivant : sans annulation, la
+    /// MÊME séquence (résolution suspendue puis relâchée, même borne de
+    /// drain) voit l'export partir. Sans lui, l'assertion négative d'après
+    /// serait décorative.
+    func test_timelineExport_identityResolvedLate_thenReleased_startsTheExport() async {
+        let exporter = SpyTimelineStoryExporter()
+        let resolver = ManualIntroResolver()
+        let controller = TimelineExportController(
+            exporter: exporter,
+            usernameProvider: { "alice" },
+            introProvider: { await resolver.resolve() },
+            introTimeout: .seconds(5)
+        )
+
+        controller.start(composer: makeComposer())
+        await resolver.waitUntilSuspended()
+        XCTAssertEqual(exporter.callCount, 0,
+                       "l'export ne doit pas démarrer tant que l'identité se résout")
+
+        resolver.release()
+        await drainMainActorQueue()
+
+        XCTAssertEqual(exporter.callCount, 1)
+    }
+
+    /// « Annuler » tapé pendant que l'identité se résout (jusqu'à 4 s sur une
+    /// installation fraîche). Le chemin « Partager » avait été corrigé
+    /// (`0fb2dc55a`), celui-ci ne l'était pas : l'export partait quand même
+    /// derrière une surface déjà partie, chauffait l'appareil, et son
+    /// résultat était jeté à l'arrivée par le `guard !Task.isCancelled`
+    /// d'après-export. Objectif « une seule pipeline » : les trois chemins
+    /// coupent au même endroit.
+    func test_timelineExport_cancelledDuringIdentityResolution_neverStartsTheExport() async {
+        let exporter = SpyTimelineStoryExporter()
+        let resolver = ManualIntroResolver()
+        let controller = TimelineExportController(
+            exporter: exporter,
+            usernameProvider: { "alice" },
+            introProvider: { await resolver.resolve() },
+            introTimeout: .seconds(5)
+        )
+
+        controller.start(composer: makeComposer())
+        await resolver.waitUntilSuspended()
+
+        controller.cancel()
+        resolver.release()
+        await drainMainActorQueue()
+
+        XCTAssertEqual(exporter.callCount, 0,
+                       """
+                       Annulé AVANT le démarrage, l'export ne doit jamais partir : 10 à 60 s de \
+                       calcul et de chauffe pour un fichier que la garde d'après-export jettera.
+                       """)
+        XCTAssertFalse(controller.isExporting, "l'annulation doit laisser le contrôleur au repos")
+    }
+}
+
+// MARK: - Double : résolution d'identité pilotable
+
+/// Résolution d'identité pilotable : `resolve()` suspend jusqu'à ce que le
+/// test appelle `release(_:)`, et `waitUntilSuspended()` donne au test un
+/// point de synchronisation déterministe. Jumeau de
+/// `StoryPhotoSaveServiceTests.ManualIntroResolver` (autre target, donc
+/// inaccessible d'ici) : `introTimeout` couvre « la résolution ne revient
+/// jamais », ce double couvre « elle revient, mais trop tard ».
+@MainActor
+private final class ManualIntroResolver {
+
+    private var pending: CheckedContinuation<StoryExportIntroContent?, Never>?
+    private var suspensionWaiter: CheckedContinuation<Void, Never>?
+    private var releasedValue: StoryExportIntroContent?
+    private var hasReleased = false
+    private(set) var isSuspended = false
+
+    func resolve() async -> StoryExportIntroContent? {
+        if hasReleased { return releasedValue }
+        return await withCheckedContinuation { continuation in
+            pending = continuation
+            isSuspended = true
+            suspensionWaiter?.resume()
+            suspensionWaiter = nil
+        }
+    }
+
+    func waitUntilSuspended() async {
+        if isSuspended { return }
+        await withCheckedContinuation { suspensionWaiter = $0 }
+    }
+
+    func release(_ content: StoryExportIntroContent? = nil) {
+        hasReleased = true
+        releasedValue = content
+        isSuspended = false
+        pending?.resume(returning: content)
+        pending = nil
+    }
 }
 
 // MARK: - Double

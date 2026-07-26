@@ -226,6 +226,19 @@ final class TimelineExportController: ObservableObject {
             // singleton — l'injection en test reste honorée (même patron que
             // `StoryPhotoSaveService`).
             let introContent = await BoundedAsyncResolution.resolve(introProvider, timeout: introTimeout)
+            // « Annuler » tapé pendant la résolution d'identité (jusqu'à
+            // `introTimeout`, soit 4 s sur une installation fraîche) : ne pas
+            // démarrer un export de 10 à 60 s derrière une surface déjà
+            // partie. `cancel()` a rendu la main et reposé `phase` sur
+            // `.idle` — sans cette garde, l'export partait quand même et son
+            // résultat était jeté à l'arrivée par le `guard !Task.isCancelled`
+            // d'après-export, après avoir chauffé l'appareil pour rien.
+            //
+            // `Task.isCancelled` est ici la BONNE garde (contrairement à
+            // `StoryPhotoSaveService`, qui a un jeton de génération) : la
+            // seule annulation de ce chemin est `exportTask?.cancel()`.
+            // Alignement sur `StoryExportShareViewModel.startExport`.
+            guard !Task.isCancelled else { return }
             do {
                 let finalURL = try await exporter.export(
                     slide: slide,
