@@ -60,7 +60,7 @@ final class StoryExportShareViewModel: ObservableObject {
         // `StoryVideoExportService.shared` is `@MainActor`-isolated so it
         // can't be a default arg expression; resolve inside the body.
         self.exporter = exporter ?? StoryVideoExportService.shared
-        self.brandIntro = brandIntro ?? Self.currentUserBrandIntro
+        self.brandIntro = brandIntro ?? StoryExportIntroFactory.currentUser
     }
 
     // MARK: - Public API
@@ -69,40 +69,11 @@ final class StoryExportShareViewModel: ObservableObject {
     /// `translations` array. The caller picks one (or leaves nil for
     /// "original") before `startExport`.
     func prepare(story: StoryItem) {
-        var langs: [String] = []
-        if let translations = story.translations {
-            for t in translations where !langs.contains(t.language) {
-                langs.append(t.language)
-            }
-        }
+        let langs = StoryExportLanguageResolver.availableLanguages(story: story)
         availableLanguages = langs
-        if let preferred = AuthManager.shared.currentUser?.preferredContentLanguages.first,
-           langs.contains(preferred) {
-            selectedLanguage = preferred
-        } else {
-            selectedLanguage = nil
-        }
-    }
-
-    /// Identité peinte sur le préambule de marque de l'export.
-    ///
-    /// C'est l'utilisateur courant : l'export est une action réservée à
-    /// l'auteur (`railPlan.showsExport == isOwnStory`), donc l'auteur de la
-    /// story et celui qui l'exporte sont la même personne. L'avatar et la
-    /// bannière restent `nil` ici — le préambule retombe alors proprement sur
-    /// la couleur d'accent ; les charger demanderait un aller-retour cache
-    /// asynchrone que le bake n'a pas à attendre.
-    @MainActor
-    private static func currentUserBrandIntro() -> StoryExportIntroContent? {
-        guard let user = AuthManager.shared.currentUser else { return nil }
-        let display = [user.firstName, user.lastName]
-            .compactMap { $0 }
-            .joined(separator: " ")
-            .trimmingCharacters(in: .whitespaces)
-        return StoryExportIntroContent(
-            displayName: display.isEmpty ? user.username : display,
-            username: user.username,
-            accentColorHex: DynamicColorGenerator.colorForName(user.username)
+        selectedLanguage = StoryExportLanguageResolver.defaultLanguage(
+            available: langs,
+            preferred: AuthManager.shared.currentUser?.preferredContentLanguages ?? []
         )
     }
 
