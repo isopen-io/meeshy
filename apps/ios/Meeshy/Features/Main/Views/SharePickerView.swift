@@ -30,6 +30,10 @@ struct SharePickerView: View {
 
     @StateObject private var viewModel = SharePickerViewModel()
     @State private var searchText = ""
+    /// Lien tracké `meeshy.me/l/<token>` d'une story, résolu au montage (cas
+    /// `.story` uniquement). Tant qu'il est `nil`, le partage retombe sur l'URL
+    /// directe de la story — le partage n'attend jamais après le lien tracké.
+    @State private var resolvedStoryLink: String?
     // The view exposes thin computed accessors that read from `viewModel`
     // so the existing body code that referenced `conversations` /
     // `isLoading` / `sentToIds` / `sendingToId` stays compact. These
@@ -83,6 +87,12 @@ struct SharePickerView: View {
         }
         .task {
             await loadConversations()
+            // Story : minte le lien tracké /l/<token> à partager (le picker choisit
+            // « à qui envoyer » ; le lien remplace l'URL directe brute). Résolu APRÈS
+            // la liste pour ne pas retarder son affichage.
+            if case .story(let item, _) = sharedContent {
+                resolvedStoryLink = await viewModel.resolveStoryShareLink(storyId: item.id)
+            }
         }
         .withStatusBubble()
     }
@@ -382,7 +392,10 @@ struct SharePickerView: View {
         case .image: return nil
         case .message(let msg): return msg.content.isEmpty ? nil : msg.content
         case .story(let item, let authorName):
-            return String(format: String(localized: "share.story.shareText", defaultValue: "🔗 Story de %1$@ : %2$@", bundle: .main), authorName, "https://meeshy.me/story/\(item.id)")
+            // Lien tracké /l/<token> s'il est prêt, sinon URL directe de la story
+            // (fallback : le partage ne bloque jamais sur la résolution du lien).
+            let link = resolvedStoryLink ?? "https://meeshy.me/story/\(item.id)"
+            return String(format: String(localized: "share.story.shareText", defaultValue: "🔗 Story de %1$@ : %2$@", bundle: .main), authorName, link)
         }
     }
 

@@ -159,4 +159,33 @@ final class SharePickerViewModel: ObservableObject {
     func markSent(_ conversationId: String) {
         sentToIds.insert(conversationId)
     }
+
+    // MARK: - Story share link
+
+    /// Génère (ou récupère) le lien tracké `meeshy.me/l/<token>` d'une story pour
+    /// le partage — MÊME endpoint que `PostService.share(generateLink:)`, la story
+    /// étant un post (`story.id` == postId). Renvoie le `shortUrl`, ou `nil` en cas
+    /// d'échec / hors-ligne : l'appelant retombe alors sur l'URL directe de la
+    /// story, si bien que le partage n'est JAMAIS bloqué par l'indisponibilité du
+    /// lien tracké. Le `generateLink: true` upsert un seul lien par (post, sharer),
+    /// donc le compteur ne s'incrémente pas à chaque ouverture du picker.
+    func resolveStoryShareLink(storyId: String) async -> String? {
+        guard networkMonitor.isOnline else { return nil }
+        do {
+            let response: APIResponse<PostShareResult> = try await api.post(
+                endpoint: "/posts/\(storyId)/share",
+                body: StoryShareLinkRequest(platform: "system", generateLink: true)
+            )
+            return response.data.shortUrl
+        } catch {
+            Self.logger.error("Failed to resolve story share link: \(error.localizedDescription)")
+            return nil
+        }
+    }
+}
+
+/// Corps du POST `/posts/<id>/share` pour minter le lien tracké d'une story.
+private struct StoryShareLinkRequest: Encodable {
+    let platform: String
+    let generateLink: Bool
 }

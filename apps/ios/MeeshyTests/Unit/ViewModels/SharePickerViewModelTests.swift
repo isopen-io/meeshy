@@ -74,6 +74,50 @@ final class SharePickerViewModelTests: XCTestCase {
         """)
     }
 
+    private static func makeShareResult(shortUrl: String?) -> APIResponse<PostShareResult> {
+        JSONStub.decode("""
+        {
+          "success": true,
+          "data": {"shared": true, "shareCount": 1, "shortUrl": \(shortUrl.map { "\"\($0)\"" } ?? "null"), "token": "tok-1"},
+          "error": null
+        }
+        """)
+    }
+
+    // MARK: - resolveStoryShareLink (lien tracké /l/<token>)
+
+    func test_resolveStoryShareLink_online_returnsTrackedShortUrl() async {
+        let (sut, api, _) = makeSUT()
+        api.stub("/posts/story-1/share", result: Self.makeShareResult(shortUrl: "https://meeshy.me/l/abc123"))
+
+        let link = await sut.resolveStoryShareLink(storyId: "story-1")
+
+        XCTAssertEqual(link, "https://meeshy.me/l/abc123")
+        XCTAssertEqual(api.requestEndpoints.last, "/posts/story-1/share")
+        XCTAssertEqual(api.requestMethods.last, "POST")
+    }
+
+    /// Hors-ligne : aucun appel réseau, `nil` — l'appelant retombe sur l'URL
+    /// directe et le partage n'est jamais bloqué.
+    func test_resolveStoryShareLink_offline_returnsNilWithoutNetwork() async {
+        let (sut, api, _) = makeSUT(isOnline: false)
+
+        let link = await sut.resolveStoryShareLink(storyId: "story-1")
+
+        XCTAssertNil(link)
+        XCTAssertEqual(api.postCount, 0, "hors-ligne : aucun POST ne doit partir")
+    }
+
+    /// Échec réseau : `nil` (jamais throw) pour ne pas casser le partage.
+    func test_resolveStoryShareLink_failure_returnsNil() async {
+        let (sut, api, _) = makeSUT()
+        api.errorToThrow = NSError(domain: "test", code: 1)
+
+        let link = await sut.resolveStoryShareLink(storyId: "story-1")
+
+        XCTAssertNil(link)
+    }
+
     // MARK: - loadConversations / seed
 
     func test_loadConversations_withNonEmptySeed_skipsNetwork() async {
