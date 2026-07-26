@@ -1,6 +1,7 @@
 import SwiftUI
 import MeeshySDK
 import MeeshyUI
+import os
 
 // MARK: - MyStoriesView
 //
@@ -52,6 +53,11 @@ struct MyStoriesView: View {
     @State private var isSelecting = false
     @State private var selectedIDs: Set<String> = []
     @State private var isBulkDeleteConfirming = false
+
+    /// Cible de la sheet de commentaires (celle des posts, réutilisée telle
+    /// quelle — jamais l'overlay incrusté du reader, hors périmètre).
+    @State private var commentTarget: MyStoriesCommentTarget?
+    @State private var isResolvingComments = false
 
     private var isDark: Bool { colorScheme == .dark }
     private var accentColor: Color {
@@ -121,6 +127,8 @@ struct MyStoriesView: View {
                                 actionMenu(for: story)
                             } onTap: {
                                 handleRowTap(story)
+                            } onOpenComments: {
+                                openComments(for: story)
                             }
                             .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                                 if !isSelecting {
@@ -207,6 +215,17 @@ struct MyStoriesView: View {
         }
         .sheet(item: $exportStory) { story in
             StoryExportShareSheet(story: story, viewModel: exportViewModel)
+        }
+        .sheet(item: $commentTarget) { target in
+            // Sheet des posts, réutilisée telle quelle (composeur de réponse
+            // déjà fonctionnel par défaut) — jamais l'overlay incrusté du
+            // reader (`StoryViewerView.showCommentsOverlay`), hors périmètre.
+            // Une sheet crée un environnement neuf : `statusViewModel` et
+            // `storyViewModel` doivent être réinjectés, sinon la présentation
+            // crashe (piège connu du projet, cf. RootView.swift).
+            CommentsSheetView(post: target.post, accentColor: target.post.authorColor)
+                .environmentObject(statusViewModel)
+                .environmentObject(viewModel)
         }
         .sheet(item: $forwardStory) { story in
             SharePickerView(
@@ -451,6 +470,35 @@ struct MyStoriesView: View {
         }
     }
 
+    // MARK: - Comments
+
+    /// Résout le `FeedPost` derrière une story pour alimenter la sheet de
+    /// commentaires des posts. Cache d'abord — une story fraîchement listée
+    /// est déjà dans `StoryService.cachedPost`, inutile de payer un
+    /// aller-retour réseau pour l'ouvrir.
+    private func openComments(for story: StoryItem) {
+        guard !isResolvingComments else { return }
+        let preferred = AuthManager.shared.currentUser?.preferredContentLanguages ?? []
+        let cached = StoryService.shared.cachedPost(id: story.id)
+        if MyStoriesCommentsResolver.shouldUseCache(cachedPost: cached), let cached {
+            commentTarget = MyStoriesCommentTarget(post: cached.toFeedPost(preferredLanguages: preferred))
+            return
+        }
+        isResolvingComments = true
+        Task {
+            do {
+                let post = try await StoryService.shared.fetchPost(id: story.id)
+                commentTarget = MyStoriesCommentTarget(post: post.toFeedPost(preferredLanguages: preferred))
+            } catch {
+                Logger.stories.error(
+                    "openComments failed for \(story.id, privacy: .public): \(error.localizedDescription, privacy: .public)")
+                FeedbackToastManager.shared.showError(
+                    String(localized: "story.mine.comments.error", defaultValue: "Commentaires indisponibles"))
+            }
+            isResolvingComments = false
+        }
+    }
+
     // MARK: - Failed publish history actions
 
     private func retryFailedItem(_ item: StoryPublishQueueItem) {
@@ -492,6 +540,20 @@ enum MyStoryRowAccessibility {
             defaultValue: "Enregistrement \(percent) %"
         )
         return "\(base) \(suffix)"
+    }
+}
+
+// MARK: - Comments sheet resolution
+
+/// Résolution cache-first du `FeedPost` derrière une story pour la sheet de
+/// commentaires (`CommentsSheetView`, celle des posts). Une story fraîchement
+/// listée dans « Mes stories » est déjà dans `StoryService.cachedPost` —
+/// inutile de payer un aller-retour réseau pour ouvrir ses commentaires.
+/// Générique : garde pure, aucune dépendance sur `APIPost` pour rester
+/// testable sans construire le modèle SDK complet.
+enum MyStoriesCommentsResolver {
+    static func shouldUseCache<T>(cachedPost: T?) -> Bool {
+        cachedPost != nil
     }
 }
 
@@ -541,12 +603,14 @@ private struct MyStoryRow<MenuContent: View>: View {
     @ObservedObject var saveService: StoryPhotoSaveService
     let menuContent: () -> MenuContent
     let onTap: () -> Void
+    let onOpenComments: () -> Void
 
     init(story: StoryItem, accentColor: Color, isDark: Bool,
          isSelecting: Bool = false, isSelected: Bool = false,
          saveService: StoryPhotoSaveService = .shared,
          @ViewBuilder menuContent: @escaping () -> MenuContent,
-         onTap: @escaping () -> Void) {
+         onTap: @escaping () -> Void,
+         onOpenComments: @escaping () -> Void) {
         self.story = story
         self.accentColor = accentColor
         self.isDark = isDark
@@ -555,6 +619,7 @@ private struct MyStoryRow<MenuContent: View>: View {
         self.saveService = saveService
         self.menuContent = menuContent
         self.onTap = onTap
+        self.onOpenComments = onOpenComments
     }
 
     /// URL brute (résolue en interne par `CachedAsyncImage` via `MeeshyConfig`).
@@ -590,6 +655,31 @@ private struct MyStoryRow<MenuContent: View>: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            // Icône commentaire + compteur, immédiatement à gauche de
+            // l'anneau/« … » — ouvre `CommentsSheetView` (celle des posts) sur
+            // les commentaires de la story. Masquée du rotor comme le reste de
+            // cette zone : la ligne compose déjà son propre libellé
+            // (children: .ignore), l'accès VoiceOver passe par une action de
+            // ligne (cf. .accessibilityActions ci-dessous).
+            if !isSelecting {
+                Button {
+                    onOpenComments()
+                } label: {
+                    HStack(spacing: 3) {
+                        Image(systemName: "bubble.left")
+                            .font(.system(size: 15, weight: .semibold))
+                        if story.commentCount > 0 {
+                            Text("\(story.commentCount)")
+                                .font(MeeshyFont.relative(12, weight: .medium))
+                        }
+                    }
+                    .foregroundColor(.secondary)
+                    .padding(8)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityHidden(true)
+            }
             if !isSelecting {
                 if let progress = saveService.progress(for: story.id) {
                     saveRing(progress: progress)
@@ -640,6 +730,17 @@ private struct MyStoryRow<MenuContent: View>: View {
                     defaultValue: "Annuler l'enregistrement"
                 )) {
                     saveService.cancel(storyId: story.id)
+                }
+            }
+            // Même visibilité que le bouton (masqué du rotor, `if !isSelecting`
+            // ci-dessus) : le contenu du builder varie, le modifier lui-même
+            // reste TOUJOURS attaché — jamais de if/else autour de body.
+            if !isSelecting {
+                Button(String(
+                    localized: "story.mine.comments.a11y",
+                    defaultValue: "Afficher les commentaires"
+                )) {
+                    onOpenComments()
                 }
             }
         }
@@ -884,4 +985,12 @@ private struct AudienceTarget: Identifiable {
     let story: StoryItem
     let mode: PostVisibility
     var id: String { "\(story.id)-\(mode.rawValue)" }
+}
+
+// MARK: - Comments target
+
+/// `FeedPost` résolu pour la sheet de commentaires d'une story.
+private struct MyStoriesCommentTarget: Identifiable {
+    let post: FeedPost
+    var id: String { post.id }
 }
