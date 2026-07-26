@@ -14,6 +14,7 @@ type ParticipantUser = User & { type?: string; sessionToken?: string; shareLinkI
 import { useI18n } from '@/hooks/useI18n';
 import { cn } from '@/lib/utils';
 import { isAnonymousParticipant, getParticipantDisplayName, getParticipantInitials } from '@/utils/participant-helpers';
+import { getUserDisplayName } from '@/utils/user-display-name';
 
 interface ConversationParticipantsProps {
   conversationId: string;
@@ -108,7 +109,7 @@ export function ConversationParticipants({
         conversationId,
         type: 'user' as const,
         userId: currentUser.id,
-        displayName: currentUser.displayName || `${currentUser.firstName} ${currentUser.lastName}`,
+        displayName: getUserDisplayName(currentUser),
         avatar: currentUser.avatar,
         role: MemberRole.MEMBER as string,
         language: currentUser.systemLanguage || 'fr',

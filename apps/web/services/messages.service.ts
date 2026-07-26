@@ -3,6 +3,7 @@ import { apiService } from './api.service';
 import type { ApiResponse, PaginationMeta, MessagesListResponse } from '@meeshy/shared/types';
 import { hasMentions as hasMentionsShared, extractMentions as extractMentionsShared } from '@meeshy/shared/types/mention';
 import { generateClientMessageId } from '@/utils/client-message-id';
+import { getUserDisplayName } from '@/utils/user-display-name';
 import { getCurrentInterfaceLocale } from '@/stores/language-store';
 
 export interface Message {
@@ -216,10 +217,7 @@ export const messagesService = {
    * Obtient le nom d'affichage de l'auteur du message
    */
   getAuthorDisplayName(message: Message): string {
-    if (message.author.displayName) {
-      return message.author.displayName;
-    }
-    return `${message.author.firstName} ${message.author.lastName}`.trim() || message.author.username;
+    return getUserDisplayName(message.author, message.author.username);
   },
 
   /**

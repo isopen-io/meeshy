@@ -419,6 +419,45 @@ describe('MessagesService', () => {
 
       expect(messagesService.getAuthorDisplayName(message)).toBe('john_doe');
     });
+
+    it('should ignore a whitespace-only displayName and fall through to the name', () => {
+      const message: Message = {
+        id: 'msg-1',
+        content: 'Test',
+        authorId: 'user-1',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        isEdited: false,
+        author: {
+          id: 'user-1',
+          username: 'john_doe',
+          firstName: 'John',
+          lastName: 'Doe',
+          displayName: '   ',
+        },
+      };
+
+      expect(messagesService.getAuthorDisplayName(message)).toBe('John Doe');
+    });
+
+    it('should trim the resolved name', () => {
+      const message: Message = {
+        id: 'msg-1',
+        content: 'Test',
+        authorId: 'user-1',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        isEdited: false,
+        author: {
+          id: 'user-1',
+          username: 'john_doe',
+          firstName: 'John',
+          lastName: '',
+        },
+      };
+
+      expect(messagesService.getAuthorDisplayName(message)).toBe('John');
+    });
   });
 
   describe('canGroupWithPrevious', () => {

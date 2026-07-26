@@ -19,6 +19,7 @@ import { toast } from 'sonner';
 import { apiService } from '@/services/api.service';
 import { getUserInitials } from '@/lib/avatar-utils';
 import { useI18n } from '@/hooks/useI18n';
+import { getUserDisplayName } from '@/utils/user-display-name';
 
 interface InviteUserModalProps {
   isOpen: boolean;
@@ -173,7 +174,7 @@ export function InviteUserModal({
               <h4 className="text-sm font-medium">{t('inviteModal.selectedUsers', { count: selectedUsers.length })}</h4>
               <div className="flex flex-wrap gap-2">
                 {selectedUsers.map(user => {
-                  const userName = user.displayName || `${user.firstName} ${user.lastName}`.trim() || user.username;
+                  const userName = getUserDisplayName(user);
                   return (
                   <Badge key={user.id} variant="secondary" className="flex items-center gap-2">
                     <Avatar className="h-4 w-4">
@@ -214,7 +215,7 @@ export function InviteUserModal({
                 <div className="space-y-2">
                   {searchResults.map(user => {
                     const isSelected = selectedUsers.some(u => u.id === user.id);
-                    const displayName = user.displayName || `${user.firstName} ${user.lastName}`.trim() || user.username;
+                    const displayName = getUserDisplayName(user);
                     return (
                     <div
                       key={user.id}
