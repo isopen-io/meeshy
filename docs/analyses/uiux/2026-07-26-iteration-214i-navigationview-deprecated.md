@@ -110,3 +110,49 @@ chaînes hors Xcode, puis la CI `iOS Tests` sert de portail (compile Xcode
    `navigationTitle` : candidat à `.navigationTitle(...)` +
    `.navigationBarTitleDisplayMode(.inline)` (change le visuel → itération
    dédiée, pas un glissement de celle-ci).
+
+---
+
+## ✅ CLÔTURE — analyse entièrement soldée par 220i (2026-07-26)
+
+**Statut : RÉSOLUE. Ne pas rouvrir d'itération « migration `NavigationView` »
+côté app iOS — il n'y a plus rien à migrer.**
+
+### Correctifs achevés
+
+| Fichier | Itération |
+|---|---|
+| `EmojiPickerSheet.swift` | 214i |
+| `VoiceProfileManageView.swift` | 214i |
+| `MeeshyShareExtension/ShareViewController.swift` | 214i |
+| `StatusComposerView.swift` | **220i** |
+
+Le point 1 du « Reste à faire » ci-dessus est consommé : #2275 ayant été mergée
+(`131f7939e`), 220i a migré le dernier `NavigationView` et **réduit l'attendu du
+balayage à l'ensemble vide**, exactement comme prescrit.
+
+### Rationale
+
+Le balayage épinglant la dette avait été conçu pour **échouer** dès la migration
+du dernier fichier, forçant une clôture explicite plutôt qu'un oubli. Ce
+mécanisme a fonctionné comme prévu : 220i a été déclenchée par ce pointeur, pas
+par une redécouverte du défaut.
+
+### Vérification
+
+- **0 `NavigationView`** dans les 4 cibles iOS livrées (`Meeshy`,
+  `MeeshyShareExtension`, `MeeshyNotificationExtension`, `MeeshyWidgets`) —
+  contre 4 fichiers fautifs à l'ouverture de 214i.
+- `NavigationContainerMigrationTests` : 4 fichiers verrouillés individuellement
+  + balayage attendu à `Set<String>()`, désormais **garde-fou de régression pur**.
+- Le balayage couvre une cible **de plus** qu'à sa création (`MeeshyWidgets`
+  ajoutée en 220i — c'était le seul arbre app-side non gardé).
+
+### Reste à faire — reventilé (n'appartient plus à cette analyse)
+
+- **Point 2 (SDK, 5 `NavigationView` dans `MeeshyUI`)** : confirmé **hors
+  périmètre** de cette routine (app iOS uniquement). Appartient à la piste SDK.
+- **Point 3 (`MeeshyShareExtension` i18n)** : #2319 mergée → débloqué, repris
+  comme piste 221i+ n° 2.
+- **Point 4 (`VoiceProfileManageView.addSamplesSheet` → `navigationTitle`)** :
+  toujours ouvert, change le visuel ⇒ itération dédiée. Reste valable.

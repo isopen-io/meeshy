@@ -13,6 +13,9 @@ import XCTest
 /// This suite sweeps every SwiftUI source of the iOS app targets and pins the exact
 /// set of files still using the deprecated container, so that (a) the migrated files
 /// cannot regress and (b) no new `NavigationView` can be introduced unnoticed.
+///
+/// As of 220i that pinned set is **empty**: the migration started in 214i is complete
+/// across every shipping target. The sweep is now a pure regression guard.
 @MainActor
 final class NavigationContainerMigrationTests: XCTestCase {
 
@@ -25,8 +28,15 @@ final class NavigationContainerMigrationTests: XCTestCase {
             .deletingLastPathComponent()
     }
 
-    /// Source trees compiled into the shipping iOS app targets.
-    private let scannedTargets = ["Meeshy", "MeeshyShareExtension", "MeeshyNotificationExtension"]
+    /// Source trees compiled into the shipping iOS app targets (`project.yml`).
+    /// `MeeshyWidgets` joined the sweep in 220i — it is a shipping app-extension
+    /// target and was the one source tree the guard did not cover.
+    private let scannedTargets = [
+        "Meeshy",
+        "MeeshyShareExtension",
+        "MeeshyNotificationExtension",
+        "MeeshyWidgets",
+    ]
 
     /// Files still declaring a `NavigationView { … }` container, by file name.
     private func filesUsingDeprecatedContainer() throws -> Set<String> {
@@ -59,6 +69,12 @@ final class NavigationContainerMigrationTests: XCTestCase {
         try assertMigrated("MeeshyShareExtension/ShareViewController.swift")
     }
 
+    // MARK: - Migrated in 220i (last holdout)
+
+    func test_statusComposer_usesNavigationStack() throws {
+        try assertMigrated("Meeshy/Features/Main/Views/StatusComposerView.swift")
+    }
+
     private func assertMigrated(_ path: String, file: StaticString = #filePath, line: UInt = #line) throws {
         let source = try String(contentsOf: iosRoot.appendingPathComponent(path), encoding: .utf8)
         XCTAssertFalse(
@@ -75,19 +91,18 @@ final class NavigationContainerMigrationTests: XCTestCase {
         )
     }
 
-    // MARK: - Remaining debt is pinned, not merely tolerated
+    // MARK: - Debt closed: the pinned set is empty
 
-    func test_noUnexpectedNavigationViewRemains() throws {
-        // StatusComposerView is the last holdout. It is deliberately untouched here
-        // because it is held by an in-flight pull request; migrating it is the
-        // follow-up iteration. When that lands, this expectation drops to the empty
-        // set and the test fails until it is updated — which is the intent.
-        let expected: Set<String> = ["StatusComposerView.swift"]
+    func test_noNavigationViewRemains() throws {
+        // 220i migrated StatusComposerView, the last holdout, so the expectation is
+        // now the empty set. Any failure here means a new NavigationView was
+        // introduced — use NavigationStack instead. This expectation must never grow
+        // again; it is a closed debt, not a tolerated one.
         XCTAssertEqual(
-            try filesUsingDeprecatedContainer(), expected,
-            "The set of files using the deprecated NavigationView container changed. Either a new " +
-            "NavigationView was introduced (use NavigationStack instead) or the last holdout was " +
-            "migrated (then shrink this expectation)."
+            try filesUsingDeprecatedContainer(), Set<String>(),
+            "A deprecated NavigationView container was reintroduced. Use NavigationStack: at " +
+            "regular width (iPad) NavigationView collapses to an empty detail pane, hiding the " +
+            "view's content and misplacing its toolbar affordances."
         )
     }
 }
