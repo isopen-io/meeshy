@@ -383,6 +383,10 @@ enum StoryVerticalGestureAction: Equatable {
     case dismissViewer
     /// Rien à faire (swipe haut alors qu'on est déjà en plein écran).
     case none
+    /// Une surface du lecteur est ouverte : le geste lui revient. Elle se
+    /// referme, et RIEN d'autre ne se produit — parité avec la garde du
+    /// toucher (`StoryReaderCanvas`, touch-down sur `hasActiveFeature`).
+    case dismissActiveFeature
 }
 
 /// Décide du sort d'un drag vertical selon l'état plein écran.
@@ -398,14 +402,26 @@ enum StoryVerticalGestureDecisions {
     ///     un flick court mais rapide.
     ///   - isFullscreen: état plein écran au moment du relâchement.
     ///   - threshold: distance de validation en points.
+    ///   - hasActiveFeature: une surface du lecteur est ouverte (strip de
+    ///     langues, barre d'emojis, overlay de commentaires, transcription).
+    ///     Elle CONSOMME alors tout geste vertical franchissant le seuil, dans
+    ///     les deux sens : sans cette garde, un swipe bas fermait le lecteur et
+    ///     l'utilisateur perdait la story EN PLUS de son overlay, alors qu'il
+    ///     voulait seulement refermer ce dernier. Parité avec la garde du
+    ///     toucher, où le premier contact referme la surface et rien d'autre.
     static func decide(translationY: CGFloat,
                        predictedY: CGFloat,
                        isFullscreen: Bool,
-                       threshold: CGFloat) -> StoryVerticalGestureAction {
+                       threshold: CGFloat,
+                       hasActiveFeature: Bool = false) -> StoryVerticalGestureAction {
         let predictionThreshold = threshold * 2.5
 
         let goesDown = translationY > threshold || predictedY > predictionThreshold
         let goesUp = translationY < -threshold || predictedY < -predictionThreshold
+
+        // Sous le seuil, on ne referme rien : un micro-mouvement ne doit pas
+        // escamoter une surface que l'utilisateur est peut-être en train de lire.
+        if hasActiveFeature { return (goesDown || goesUp) ? .dismissActiveFeature : .cancel }
 
         if goesDown { return isFullscreen ? .exitFullscreen : .dismissViewer }
         if goesUp { return isFullscreen ? .none : .enterFullscreen }

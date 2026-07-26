@@ -290,8 +290,14 @@ extension StoryViewerView {
                         translationY: value.translation.height,
                         predictedY: value.predictedEndTranslation.height,
                         isFullscreen: isFullscreenStorySession,
-                        threshold: 120
+                        threshold: 120,
+                        hasActiveFeature: hasActiveReaderFeature
                     ) {
+                    case .dismissActiveFeature:
+                        // La surface ouverte se referme, et RIEN d'autre : ni
+                        // dismiss, ni bascule plein écran.
+                        dismissActiveReaderFeature()
+                        snapDragOffsetBack()
                     case .dismissViewer:
                         dismissViewer()
                     case .enterFullscreen:
@@ -815,8 +821,39 @@ extension StoryViewerView {
                     mobileTranscription: pendingMedia?.mobileTranscription
                 )
             } catch {
-                rollbackOptimisticComment(id: tempCommentId, parentId: parentId)
-                HapticFeedback.error()
+                // Le POST direct a échoué — le plus souvent parce qu'on est
+                // hors-ligne. Perdre un commentaire que l'utilisateur vient de
+                // taper est la pire issue possible : on le confie à l'outbox,
+                // qui le rejouera au retour du réseau. Même chemin que le feed
+                // (`FeedCommentsSheet`), même kind `.createComment` : la ligne
+                // optimiste `temp_` est réconciliée par le handler socket
+                // `comment:added` déjà câblé quand le rejeu aboutit.
+                //
+                // LIMITE ASSUMÉE, identique au feed : `CreateCommentPayload` ne
+                // porte ni `effectFlags` ni `attachmentIds` (lacune du schéma
+                // SDK). Un effet de flou ou un média joint à un commentaire
+                // envoyé hors-ligne est perdu au rejeu ; le TEXTE, lui, survit.
+                do {
+                    let cmid = ClientMutationId.generate()
+                    try await OfflineQueue.shared.enqueue(
+                        .createComment,
+                        payload: CreateCommentPayload(
+                            clientMutationId: cmid,
+                            postId: story.id,
+                            parentCommentId: parentId,
+                            content: text
+                        ),
+                        conversationId: story.id
+                    )
+                    observeStoryCommentOutcome(cmid: cmid,
+                                               tempId: tempCommentId,
+                                               parentId: parentId)
+                } catch {
+                    // L'outbox elle-même a refusé la ligne : là, il n'y a plus
+                    // de recours, on annule l'insert optimiste.
+                    rollbackOptimisticComment(id: tempCommentId, parentId: parentId)
+                    HapticFeedback.error()
+                }
             }
         }
 
@@ -976,6 +1013,30 @@ extension StoryViewerView {
     ///   test ; sans cette entrée la garde n'est pas vérifiable. Production :
     ///   `nil`, sauf `dismissGroupIntro` qui passe `false` — à cet instant
     ///   l'interlude vient d'être retiré et la story est révélée.
+    /// Annule l'insert optimiste si l'outbox finit par abandonner ce
+    /// commentaire (le serveur le refuse durablement). Sans ça, une ligne
+    /// `temp_` resterait à l'écran pour toujours : l'écho `comment:added`
+    /// qu'elle attend n'arrivera jamais pour une mutation abandonnée.
+    /// Miroir de `FeedCommentsSheet.observeCreateCommentOutcome`.
+    private func observeStoryCommentOutcome(cmid: String, tempId: String, parentId: String?) {
+        Task { @MainActor in
+            let stream = await OfflineQueue.shared.outcomeStream(for: cmid)
+            for await event in stream {
+                if case .exhausted = event {
+                    rollbackOptimisticComment(id: tempId, parentId: parentId)
+                    FeedbackToastManager.shared.showError(
+                        // Clé du feed réutilisée : message identique, et le
+                        // catalogue est verrouillé à 100 % de couverture — une
+                        // clé jumelle serait sept traductions redondantes.
+                        String(localized: "feed.comments.send_error",
+                               defaultValue: "Erreur lors de l'envoi du commentaire",
+                               bundle: .main)
+                    )
+                }
+            }
+        }
+    }
+
     func markCurrentViewed(isIntroVisible: Bool? = nil) {
         // L'interlude d'identité est OPAQUE et occupe tout l'écran : tant qu'il
         // est affiché, la story n'a rien montré. Marquer ici gonflait le
