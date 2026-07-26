@@ -55,7 +55,7 @@ extension StoryComposerViewModel {
     /// clavier emoji annonce `emoji`, la dictée `dictation`. Les prendre pour
     /// argent comptant produirait une story dont la langue source est « emoji »
     /// — intraduisible, et absente du sélecteur de langues.
-    nonisolated private static func normalisedWritingLanguage(_ raw: String?) -> String? {
+    nonisolated static func normalisedWritingLanguage(_ raw: String?) -> String? {
         guard let raw else { return nil }
         let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return nil }

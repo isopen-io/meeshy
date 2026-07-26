@@ -21,7 +21,8 @@ extension StoryComposerView {
         .fullScreenCover(item: $audioEditorItem) { item in
             MeeshyAudioEditorView(
                 url: item.url,
-                onConfirm: { url, _, _, _ in
+                onConfirm: { url, transcriptions, _, _ in
+                    viewModel.attachVoiceTranscriptions(transcriptions)
                     addRecordingToBackground(url: url)
                     audioEditorItem = nil
                 },
@@ -32,7 +33,8 @@ extension StoryComposerView {
             MeeshyAudioEditorView(
                 url: item.url,
                 preferredLanguage: item.language ?? "fr",
-                onConfirm: { url, _, _, _ in
+                onConfirm: { url, transcriptions, _, _ in
+                    viewModel.attachVoiceTranscriptions(transcriptions)
                     confirmedMediaAudioURL = url
                     mediaAudioEditorItem = nil
                     addVocalToForeground()

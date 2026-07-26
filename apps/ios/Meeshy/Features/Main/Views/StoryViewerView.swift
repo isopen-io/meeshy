@@ -1644,8 +1644,12 @@ struct StoryViewerView: View {
         // La transcription ne s'affiche QUE sur demande, via le menu « … »
         // (directive user 2026-07-25, item 7a).
         guard showAudioTranscript else { return nil }
-        guard let effects = currentStory?.storyEffects,
-              effects.voiceAttachmentId != nil else { return nil }
+        // Ne PAS gater sur `voiceAttachmentId` : ce champ n'est écrit par aucun
+        // producteur (vérifié sur tout le dépôt le 2026-07-26) — la voix vit
+        // dans `audioPlayerObjects`. S'y adosser rendait la bascule inerte pour
+        // TOUTES les stories. La seule condition qui vaille est l'existence
+        // d'une transcription, ce que tranche le moteur SDK.
+        guard let effects = currentStory?.storyEffects else { return nil }
         // Résolution déléguée au moteur du SDK : la chaîne complète des langues
         // préférées d'abord (systemLanguage > regionalLanguage >
         // customDestination > deviceLocale, override d'exploration en tête),
@@ -1657,7 +1661,7 @@ struct StoryViewerView: View {
     /// La story porte-t-elle une transcription qu'on puisse afficher ?
     /// Pilote l'entrée « Transcription » du menu « … ».
     var storyHasAudioTranscript: Bool { // internal for cross-file extension access
-        guard let effects = currentStory?.storyEffects, effects.voiceAttachmentId != nil else { return false }
+        guard let effects = currentStory?.storyEffects else { return false }
         return StoryAudioTranscript.hasTranscript(effects: effects)
     }
 
