@@ -84,6 +84,7 @@ final class MockPostService: PostServiceProviding, @unchecked Sendable {
     var lastRepostTargetType: PostType?
     var lastRepostContent: String?
     var lastRepostIsQuote: Bool?
+    var lastRepostVisibility: String?
 
     var shareCallCount = 0
     var lastSharePostId: String?
@@ -254,12 +255,16 @@ final class MockPostService: PostServiceProviding, @unchecked Sendable {
         try deleteCommentResult.get()
     }
 
-    func repost(postId: String, targetType: PostType?, content: String?, isQuote: Bool, visibility: String?) async throws -> APIPost {
+    /// `visibility` defaults to `nil` exactly as on the concrete
+    /// `PostService.repost`, so a caller that omits the audience — the direct
+    /// kebab repost does — stands in against this mock unchanged.
+    func repost(postId: String, targetType: PostType?, content: String?, isQuote: Bool, visibility: String? = nil) async throws -> APIPost {
         repostCallCount += 1
         lastRepostPostId = postId
         lastRepostTargetType = targetType
         lastRepostContent = content
         lastRepostIsQuote = isQuote
+        lastRepostVisibility = visibility
         return try repostResult.get()
     }
 
@@ -457,6 +462,7 @@ final class MockPostService: PostServiceProviding, @unchecked Sendable {
         lastRepostTargetType = nil
         lastRepostContent = nil
         lastRepostIsQuote = nil
+        lastRepostVisibility = nil
 
         shareResult = .success(())
         shareCallCount = 0
