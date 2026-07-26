@@ -112,11 +112,11 @@ tous les ratios de l'app :
 ```swift
 /// Size of the window the app is actually rendered in.
 static var windowSize: CGSize {
-    UIApplication.shared.connectedScenes
+    let scene = UIApplication.shared.connectedScenes
         .compactMap { $0 as? UIWindowScene }
-        .first(where: { $0.activationState == .foregroundActive })?
-        .windows.first(where: { $0.isKeyWindow })?
-        .bounds.size ?? UIScreen.main.bounds.size
+        .first(where: { $0.activationState == .foregroundActive })
+    let window = scene?.windows.first(where: { $0.isKeyWindow }) ?? scene?.windows.first
+    return window?.bounds.size ?? UIScreen.main.bounds.size
 }
 
 /// Bubble cap for the conversation surfaces, which span the whole window.
@@ -129,6 +129,14 @@ La scène est résolue par **`activationState`**, jamais par `connectedScenes.fi
 — `connectedScenes` est un **`Set` non ordonné**, `.first` peut renvoyer une
 scène en arrière-plan (c'est le défaut B soldé par 215i/216i sur le partage,
 ici évité d'emblée).
+
+Le repli est **à deux étages, délibérément** : dans la scène de premier plan la
+key window est préférée, mais **n'importe laquelle de ses fenêtres vaut mieux que
+le display** — une scène dont aucune fenêtre n'est key pendant un instant (mise
+en place de la scène) connaît quand même la place dont l'app dispose, et
+retomber sur `UIScreen` à cet endroit réintroduirait exactement le bug corrigé
+ici. Le display n'intervient que si **aucune scène de premier plan n'existe**,
+c'est-à-dire quand aucun layout n'a lieu.
 
 **La surcharge est le cœur du correctif, pas du sucre** : elle rend la mesure
 correcte plus courte à écrire que la mauvaise. La forme explicite

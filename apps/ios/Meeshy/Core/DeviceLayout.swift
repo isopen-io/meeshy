@@ -22,17 +22,21 @@ enum DeviceLayout {
     /// — `connectedScenes` is an *unordered* `Set`, so `.first` can hand back a
     /// background scene in any multi-window configuration.
     ///
-    /// Falls back to the display only when no foreground scene is attached
-    /// (teardown, background refresh) — contexts where no layout is happening.
+    /// Within that scene the key window is preferred, but any of its windows is
+    /// a better answer than the display: a scene whose windows are all non-key
+    /// for an instant (scene setup) still knows how much room the app has, and
+    /// falling through to `UIScreen` there would reintroduce the very bug this
+    /// resolves. The display is the last resort only when no foreground scene
+    /// exists at all (teardown, background refresh) — no layout is happening then.
     ///
     /// Prefer a `GeometryReader`'s own `size` wherever one is already in scope:
     /// this is the answer for views that have no container measurement to read.
     static var windowSize: CGSize {
-        UIApplication.shared.connectedScenes
+        let scene = UIApplication.shared.connectedScenes
             .compactMap { $0 as? UIWindowScene }
-            .first(where: { $0.activationState == .foregroundActive })?
-            .windows.first(where: { $0.isKeyWindow })?
-            .bounds.size ?? UIScreen.main.bounds.size
+            .first(where: { $0.activationState == .foregroundActive })
+        let window = scene?.windows.first(where: { $0.isKeyWindow }) ?? scene?.windows.first
+        return window?.bounds.size ?? UIScreen.main.bounds.size
     }
 
     static func bubbleMaxWidth(containerWidth: CGFloat, sizeClass: UserInterfaceSizeClass?) -> CGFloat {
