@@ -3668,8 +3668,19 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       `MeeshyConfig`, resolves `webOrigin` via `ServerEnvironmentResolver`, and exposes a derived
       `createdJoinUrl` on `CreateShareLinkUiState` (no redundant storage) + `CreateShareLinkScreen`
       replaces the bare pop on success with a `ModalBottomSheet` surfacing the join URL + Copy / Share
-      intents + Done (`:feature:conversations`). +10 tests. **Remaining (later slice):** a per-link
-      detail screen (full stats).
+      intents + Done (`:feature:conversations`). +10 tests.
+      **per-link detail** slice `sharelink-detail` (2026-07-26): pure `ShareLinkDetailPresentation`
+      (`:core:model`, projects a `MyShareLink` → all detail fields: identifier label, uses/max labels
+      with `∞` glyph, `isExhausted`, parsed created/expires millis via the `isoToEpochMillisOrNull`
+      SSOT, reuses `displayName`/`joinUrl`/`isExpired`) + pure `ShareLinkDetailState` reducer (resolve
+      one link out of the owner list by `linkId` → Loaded / NotFound, optimistic `toggled`, delete
+      signal, error dismiss) + `ShareLinkDetailViewModel` (`:feature:conversations`, resolves via
+      `listMyLinks` since there is no per-link owner endpoint, snapshot-rollback on toggle failure,
+      `isDeleted` pops back) + `ShareLinkDetailScreen` (header + status + join URL, copy/share/
+      activate/delete actions bar, uses/max stat cards, identifier/created/expires info) reached by
+      tapping a row in `MyShareLinksScreen` (`share-links/{linkId}` route). Faithful port of iOS
+      `ShareLinkDetailView`. +50 tests (24 presentation, 14 state, 12 ViewModel). **Completes the
+      share-link management vertical.**
 - [x] Anonymous join-via-share-link (preview → form → success); share-link preview screen —
       slice `sharelink-guest-join-form` (2026-07-25): pure `GuestJoinForm` (`:core:model`) +
       `AnonymousSessionRepository.preview()` (`:sdk-core`) + `GuestJoinViewModel`/`GuestJoinScreen`

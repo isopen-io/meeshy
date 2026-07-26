@@ -2,6 +2,21 @@
 
 Append-only log of gotchas and decisions that save time next run.
 
+## Lesson (2026-07-26, `sharelink-detail`) — no per-link owner endpoint; revert untracked mutations by hand
+- **There is no per-link owner GET.** The owner counters (`currentUses` / `maxUses`) live only in the
+  `GET /links` list payload; `GET /links/:identifier` (retrieval.ts) is the *public* preview and its
+  `link` sub-object omits those counters. So the detail screen resolves its `MyShareLink` out of
+  `repository.listMyLinks()` by `linkId` (a linkId absent from the list → `NotFound`, never an endless
+  spinner — same pattern as `PostDetailViewModel`). Follow-up worth doing: a shared owner-list cache so
+  opening a detail doesn't re-fetch the whole list (no repository cache layer exists yet).
+- **A brand-new (untracked) source file can't be reverted with `git checkout -- <path>`** — it errors
+  `pathspec did not match any file(s) known to git` and leaves your mutation in place. After a mutation
+  experiment on a not-yet-committed file, restore the changed line with an explicit edit (or `git add`
+  it first if you want checkout to work). Verify with a re-run before committing.
+- Compose `material-icons-extended` IS a dependency (`libs.versions.toml` `compose-material-icons`), so
+  `Icons.Filled.Link` / `LinkOff` / `PauseCircle` / `PlayCircle` all resolve — no need to fall back to
+  core-only glyphs.
+
 ## Lesson (2026-07-26, `sharelink-created-sheet`) — material3 1.3.0 `ModalBottomSheet` API + derive, don't store
 Compose BOM `2024.10.01` resolves **material3 1.3.0**. Its `ModalBottomSheet` exposes a `windowInsets:
 WindowInsets` parameter — **NOT** the `contentWindowInsets: @Composable () -> WindowInsets` lambda that

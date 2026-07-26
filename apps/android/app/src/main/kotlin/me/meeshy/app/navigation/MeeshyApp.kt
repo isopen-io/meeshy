@@ -64,6 +64,8 @@ import me.meeshy.app.feed.PostDetailViewModel
 import me.meeshy.app.conversations.CreateShareLinkScreen
 import me.meeshy.app.conversations.CreateShareLinkViewModel
 import me.meeshy.app.conversations.MyShareLinksScreen
+import me.meeshy.app.conversations.ShareLinkDetailScreen
+import me.meeshy.app.conversations.ShareLinkDetailViewModel
 import me.meeshy.app.notifications.NotificationsScreen
 import me.meeshy.app.reels.ReelsScreen
 import me.meeshy.app.profile.ProfileScreen
@@ -100,6 +102,8 @@ object Routes {
     fun createShareLink(conversationId: String): String =
         "conversations/$conversationId/share-link/new"
     const val MY_SHARE_LINKS = "share-links"
+    const val SHARE_LINK_DETAIL = "share-links/{${ShareLinkDetailViewModel.LINK_ID_ARG}}"
+    fun shareLinkDetail(linkId: String): String = "share-links/$linkId"
     const val CHAT = "chat/{${ChatViewModel.CONVERSATION_ID_ARG}}"
     const val CHAT_DEEP_LINK = "meeshy://$CHAT"
     const val CONVERSATION_DEEP_LINK = "meeshy://conversations/{${ChatViewModel.CONVERSATION_ID_ARG}}"
@@ -341,7 +345,23 @@ fun MeeshyApp(
                 )
             }
             composable(Routes.MY_SHARE_LINKS) {
-                MyShareLinksScreen(onBack = { navController.popBackStack() })
+                MyShareLinksScreen(
+                    onBack = { navController.popBackStack() },
+                    onOpenLink = { link ->
+                        navController.navigate(Routes.shareLinkDetail(link.linkId))
+                    },
+                )
+            }
+            composable(
+                route = Routes.SHARE_LINK_DETAIL,
+                arguments = listOf(
+                    navArgument(ShareLinkDetailViewModel.LINK_ID_ARG) { type = NavType.StringType },
+                ),
+            ) {
+                ShareLinkDetailScreen(
+                    onBack = { navController.popBackStack() },
+                    onDeleted = { navController.popBackStack() },
+                )
             }
             composable(Routes.NEW_CONVERSATION) {
                 NewConversationScreen(

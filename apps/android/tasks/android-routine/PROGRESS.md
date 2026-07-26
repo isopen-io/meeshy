@@ -1,5 +1,50 @@
 # Progress — state & what to do next
 
+> On 2026-07-26 the **per-link DETAIL screen** landed (slice `sharelink-detail`, feature-parity §O Links
+> — **completes the share-link management vertical**, the last remaining share-link slice). Tapping a row
+> in `MyShareLinksScreen` now opens a full detail surface — a faithful port of iOS `ShareLinkDetailView`.
+> **Added (production, all `apps/android`):** the pure `ShareLinkDetailPresentation` (`:core:model`) —
+> the SSOT projection of a `MyShareLink` into everything the screen renders: `displayName` / `joinUrl` /
+> `isExpired` reused from the existing helpers, plus the detail-only additions — `identifierLabel`
+> (`identifier ?? linkId`, blank-hardened), `usesLabel`, `maxUsesLabel` (`∞` glyph when uncapped),
+> `hasUsageLimit`, `isExhausted` (`maxUses != null && currentUses >= maxUses` — boundary at the limit,
+> mutation-proven), `conversationTitle` (null when blank), and `createdAtMillis` / `expiresAtMillis`
+> parsed through the `isoToEpochMillisOrNull` SSOT. The pure `ShareLinkDetailState` reducer
+> (`:core:model`): since there is **no per-link owner endpoint** (the owner counters `currentUses` /
+> `maxUses` live only in the list payload), it `resolved`s one link out of the fetched owner list by
+> `linkId` → `Loaded` with presentation, else `NotFound` (a linkId absent from the list is surfaced, not
+> an endless spinner — mirror of `PostDetailViewModel`); `toggled()` flips the active flag on link +
+> presentation optimistically; `markDeleted()` raises the `isDeleted` signal; `failed`/`dismissError`
+> surface + clear an error while keeping the resolved link. **Wiring:** `ShareLinkDetailViewModel`
+> (`:feature:conversations`, `SavedStateHandle` `linkId` nav arg, resolves via `repository.listMyLinks()`,
+> `webOrigin` from `ServerEnvironmentResolver`, toggle applies optimistically then **snapshot-rolls-back**
+> on network failure, delete raises `isDeleted` on success / surfaces the error on failure, all
+> `viewModelScope` work rethrows `CancellationException`) + `ShareLinkDetailScreen` (accent-coherent
+> `MeeshyBackground`+`Scaffold`; header card with active/inactive `Link`/`LinkOff` glyph, status +
+> conversation title, monospaced join URL; a copy / share / activate-disable / delete actions bar; two
+> uses/max stat cards; identifier / created / expires info rows via the `DateFormat.MEDIUM` SSOT; delete
+> `AlertDialog` confirm; error `Snackbar`; `LaunchedEffect(isDeleted)` pops back). Reached by a
+> `MeeshyCard(onClick=…)` tap on each row in `MyShareLinksScreen` (new `onOpenLink` callback) →
+> `share-links/{linkId}` route in `:app` (`onBack`/`onDeleted` pop, no dead end). EN/FR/ES/PT strings
+> (16 keys ×4). **+50 behavioural tests** (24 `ShareLinkDetailPresentationTest`, 14
+> `ShareLinkDetailStateTest`, 12 `ShareLinkDetailViewModelTest`), all asserted through the public API /
+> observable `state`. **Mutation (RED proof):** flipping `isExhausted`'s `>=` to `>` failed exactly
+> `isExhausted_isTrueAtTheLimit`. **Gate:** `./apps/android/meeshy.sh check` (= `./gradlew assembleDebug
+> testDebugUnitTest`) → **BUILD SUCCESSFUL in 7m33s** (943 tasks; full `assembleDebug` + all module JVM
+> unit tests). Reviewer **PASS** (diff `apps/android` only; SDK purity — presentation + reducer are
+> stateless `:core:model` blocks, the resolve-from-list / optimistic / rollback / when-to-pop
+> orchestration stays app-side; SSOT — reuses `MyShareLink` helpers + `ServerEnvironmentResolver` +
+> `isoToEpochMillisOrNull` + `DateFormat.MEDIUM`, re-implements nothing; UDF — presentation is derived,
+> not stored; failure paths — toggle failure rolls back, delete failure surfaces + stays, missing link →
+> NotFound not a spinner; coherence — accent `Indigo400` visuals, natural row-tap gesture, every arm
+> leads somewhere). **Gotcha logged in NOTES.md:** an untracked new file can't be reverted with
+> `git checkout --` after a mutation experiment — restore the line by hand.
+> **Next slice:** the paged `OnboardingFlowView` (rich pure page/progression logic — high TDD value), OR
+> the tracked **Kover 90% coverage-gate infra** (wires the discipline into an automated check), OR an
+> `https://meeshy.me/join/{id}` **App-Links intent-filter** (`AndroidManifest` only), OR begin the **UTM
+> tracking-links** vertical (create/list/toggle/delete + per-link click stats).
+
+
 > On 2026-07-26 the **share-link CREATED-SUCCESS SHEET** landed (slice `sharelink-created-sheet`,
 > feature-parity §O Links — closes the last create-side gap of the share-link vertical). Until now
 > `CreateShareLinkScreen` fired `onCreated()` the instant the create succeeded — a **bare pop** that
