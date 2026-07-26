@@ -63,6 +63,31 @@ struct StoryGestureOverlayView: View {
     /// État de session « plein écran » lu depuis le parent. Détermine le
     /// sens du toggle du chrome (voir doc ci-dessus).
     let isFullscreenStorySession: Bool
+    /// Compteur incrémenté par le parent sur les chemins gestuels NON NOMINAUX
+    /// (snap-back, transition de groupe, sortie du lecteur). SwiftUI n'appelle
+    /// PAS `onEnded` quand un recognizer concurrent emporte la séquence : sans
+    /// ce signal, `touchStartTime` resterait non-nil et cette vue traiterait
+    /// tous les touchers suivants comme « drag en cours » (plus aucun tap, plus
+    /// aucun hold). Chaque incrément purge l'état transient du toucher.
+    let gestureResetToken: Int
+    /// Signal MONTANT vers le drag parent : « ce toucher a servi à refermer une
+    /// surface du reader ».
+    ///
+    /// POURQUOI IL EXISTE : cette vue referme la surface active dès le
+    /// TOUCH-DOWN (branche `hasActiveFeature` ci-dessous), alors que
+    /// `unifiedDragGesture` exige 15 pt de déplacement avant son premier
+    /// `onChanged` — donc avant sa photographie `hadActiveFeatureAtDragStart`,
+    /// qui vaut déjà `false`. Un glissement bas de plus de 120 pt parti du
+    /// canvas concluait alors `.dismissViewer` : l'utilisateur voulait refermer
+    /// son strip et PERDAIT la story. Ce drapeau rend au parent l'information
+    /// que lui seul avait perdue.
+    ///
+    /// CYCLE DE VIE : remis à `false` au touch-down de CHAQUE toucher reçu ici
+    /// (jamais hérité du toucher précédent), posé à `true` juste avant
+    /// `onDismissActiveFeature()`. Le parent le consomme et le remet à `false`
+    /// dans le `onEnded` de son drag, et `resetGestureTracking()` le purge sur
+    /// les chemins où ce `onEnded` n'arrive jamais.
+    @Binding var readerFeatureConsumedByTouch: Bool
 
     /// Seuil au-delà duquel un touch sur l'écran cesse d'être un tap de
     /// navigation prev/next et devient un hold (toggle pause + hide chrome).
@@ -87,6 +112,15 @@ struct StoryGestureOverlayView: View {
     /// était `true` au touch-down, on l'a remis à `false`, et le release
     /// doit être consommé (pas de nav, pas de hold).
     @State private var isResumingTap: Bool = false
+    /// `true` dès que le doigt a franchi `dragSlopPixels` pendant CE toucher.
+    /// Le parent reconnaît maintenant `unifiedDragGesture` EN PARALLÈLE de ce
+    /// recognizer : sans ce drapeau, un swipe rapide parti d'une bande latérale
+    /// commiterait à la fois une navigation de story (notre touch-up) et un
+    /// changement de groupe (le drag parent). Le toucher qui a bougé cesse donc
+    /// d'être un tap — pour la navigation comme pour la fenêtre de double tap
+    /// (`isCleanTap`), sans quoi deux flicks enchaînés au centre mettaient la
+    /// story en pause en plus de changer de groupe.
+    @State private var didExceedSlop: Bool = false
     /// Horodatage du dernier tap consommé dans la bande centrale. Sert à
     /// reconnaître un double tap SANS recognizer concurrent : `TapGesture(count: 2)`
     /// aurait imposé au tap simple d'attendre son échec, ajoutant ~250 ms au
@@ -113,11 +147,17 @@ struct StoryGestureOverlayView: View {
             // course contre `onTapGesture` car le tap fire au release tant
             // qu'aucun mouvement significatif n'a eu lieu, et le release
             // arrive bien avant la fin du holdThreshold.
-            // `simultaneousGesture` plutôt que `gesture` pour cohabiter avec
-            // le `unifiedDragGesture` parent (swipe down pour dismiss,
-            // minimumDistance: 15). Sans ça, notre DragGesture(minimumDistance:0)
-            // capturait l'évènement touchDown et le parent ne voyait plus
-            // jamais les swipes verticaux.
+            // ATTENTION — ce `simultaneousGesture` N'ARBITRE PAS avec le parent.
+            // En SwiftUI, `simultaneousGesture` posé sur une vue ne règle la
+            // simultanéité qu'avec les gestes déclarés par CETTE vue-là ; il n'a
+            // aucun effet sur un geste monté par un ANCÊTRE. Et un `.gesture()`
+            // d'ancêtre est de priorité INFÉRIEURE à tout geste de son sous-arbre :
+            // ce `DragGesture(minimumDistance: 0)`, qui reconnaît dès le touch-down
+            // et ne relâche jamais son recognizer, subordonnait donc définitivement
+            // le `unifiedDragGesture` parent — swipes morts pendant la story.
+            // La précédence vraie se décide au POINT D'ATTACHE PARENT, qui monte
+            // désormais `unifiedDragGesture` en `.simultaneousGesture` (cf.
+            // StoryViewerView.viewerContent). Ne pas y repasser à `.gesture`.
             .simultaneousGesture(
                 DragGesture(minimumDistance: 0, coordinateSpace: .local)
                     .onChanged { value in
@@ -128,7 +168,18 @@ struct StoryGestureOverlayView: View {
                             touchStartTime = Date()
                             touchStartLocation = value.startLocation
                             holdActive = false
+                            // Repart d'un toucher « immobile » : le drapeau est
+                            // aussi purgé ici (et pas seulement au relâchement)
+                            // car `onEnded` peut ne jamais arriver si un
+                            // recognizer concurrent emporte la séquence.
+                            didExceedSlop = false
                             holdArmingTask?.cancel()
+                            // Nouveau toucher = photographie neuve pour le drag
+                            // parent. Écrit seulement s'il reste quelque chose à
+                            // purger : une assignation @State invalide la vue
+                            // même à valeur égale, et ce chemin passe à CHAQUE
+                            // touch-down.
+                            if readerFeatureConsumedByTouch { readerFeatureConsumedByTouch = false }
 
                             // Une surface ouverte se ferme au premier toucher, où
                             // qu'il tombe, et rien d'autre ne se produit :
@@ -136,6 +187,13 @@ struct StoryGestureOverlayView: View {
                             // la story n'avance pas par la même occasion.
                             if hasActiveFeature {
                                 isResumingTap = true
+                                // Le drag parent ne saura plus, à son `onEnded`,
+                                // qu'une surface était ouverte au début de CE
+                                // toucher : on la lui signale ici, sinon un
+                                // glissement bas conclut `.dismissViewer` et
+                                // l'utilisateur perd la story en croyant fermer
+                                // son strip.
+                                readerFeatureConsumedByTouch = true
                                 onDismissActiveFeature()
                                 return
                             }
@@ -194,6 +252,12 @@ struct StoryGestureOverlayView: View {
                             let dx = value.location.x - touchStartLocation.x
                             let dy = value.location.y - touchStartLocation.y
                             if abs(dx) > dragSlopPixels || abs(dy) > dragSlopPixels {
+                                // Franchi une fois = franchi pour tout le
+                                // toucher : revenir sous le seuil ne rend pas
+                                // au doigt le droit de naviguer d'une story.
+                                // C'est le drag parent (seuils 60 / 120 pt) qui
+                                // porte l'annulation « je reglisse en arrière ».
+                                didExceedSlop = true
                                 holdArmingTask?.cancel()
                                 if holdActive {
                                     // Hold confirmé puis drag : on **annule
@@ -212,22 +276,55 @@ struct StoryGestureOverlayView: View {
                     .onEnded { value in
                         defer {
                             touchStartTime = nil
+                            didExceedSlop = false
                             holdArmingTask?.cancel()
                             holdArmingTask = nil
                         }
+                        // Toucher déjà purgé (jeton `gestureResetToken`, ou
+                        // `onChanged` sorti avant de l'ouvrir) : il n'y a plus
+                        // rien à conclure, et surtout pas un `elapsed` de 0
+                        // fabriqué par le `?? 0` ci-dessous, qui ferait passer
+                        // le relâchement pour un tap de navigation. Le composer
+                        // est l'exception : il n'ouvre JAMAIS de toucher (garde
+                        // en tête de `onChanged`) et garde son chemin de dismiss.
+                        guard touchStartTime != nil || isComposerEngaged else { return }
                         let elapsed = touchStartTime.map { Date().timeIntervalSince($0) } ?? 0
+                        // Le relâchement porte sa PROPRE translation, et elle fait
+                        // autorité au même titre que l'accumulateur d'`onChanged` :
+                        // sur un flick très court relâché aussitôt (événements
+                        // coalescés, frame sautée), aucun tick n'a franchi le slop
+                        // et `didExceedSlop` vaut encore `false`. L'enfant concluait
+                        // alors navigatePrevious/navigateNext pendant que le drag
+                        // parent commitait un changement de groupe — deux actions
+                        // pour un seul geste. Un toucher immobile a une translation
+                        // nulle : aucun tap ne peut être requalifié par cette lecture.
+                        let movedAtEnd = abs(value.translation.width) > dragSlopPixels
+                            || abs(value.translation.height) > dragSlopPixels
                         let ctx = StoryGestureContext(
                             holdActive: holdActive,
                             isPaused: isLongPressPaused,
                             isResumingTap: isResumingTap,
-                            isComposerEngaged: isComposerEngaged
+                            isComposerEngaged: isComposerEngaged,
+                            didExceedSlop: didExceedSlop || movedAtEnd
                         )
                         // Double tap dans la bande centrale : deux relâchements
                         // rapprochés au même endroit. Évalué AVANT la décision
                         // de tap simple, qui reste `.none` au centre — donc
                         // aucun effet de bord à annuler si le second tap arrive.
+                        //
+                        // `didExceedSlop` gate AUSSI la fenêtre de double tap : il
+                        // mesure le déplacement À L'INTÉRIEUR du toucher courant, pas
+                        // la distance entre deux taps successifs (celle-là n'est
+                        // jamais évaluée — seul l'écart de TEMPS l'est). Un vrai
+                        // second tap est immobile et ne franchit donc jamais le slop,
+                        // tandis que deux flicks horizontaux enchaînés dans la bande
+                        // centrale — le geste courant pour défiler les groupes —
+                        // alimentaient la fenêtre et déclenchaient `onTogglePause()` :
+                        // l'utilisateur changeait de groupe ET mettait la story en
+                        // pause, chrome masqué, sans avoir tapé une seule fois.
                         let isCleanTap = !ctx.holdActive && !ctx.isResumingTap
-                            && !ctx.isComposerEngaged && elapsed < holdThresholdSeconds
+                            && !ctx.isComposerEngaged && !ctx.didExceedSlop
+                            && elapsed < holdThresholdSeconds
                         if isCleanTap,
                            StoryGestureDecisions.decideDoubleTap(
                                context: ctx,
@@ -294,6 +391,20 @@ struct StoryGestureOverlayView: View {
                     }
                 }
             }
+            // Filet anti-état-collant : le parent bump ce jeton quand un chemin
+            // gestuel non nominal s'est produit (snap-back, transition de groupe,
+            // sortie du lecteur). Notre `onEnded` n'ayant PAS été appelé dans ces
+            // cas — SwiftUI le saute quand un recognizer concurrent emporte la
+            // séquence —, `touchStartTime` resterait posé et la branche
+            // « DRAG IN PROGRESS » avalerait tous les touchers suivants.
+            .adaptiveOnChange(of: gestureResetToken) { _, _ in
+                holdArmingTask?.cancel()
+                holdArmingTask = nil
+                touchStartTime = nil
+                didExceedSlop = false
+                holdActive = false
+                isResumingTap = false
+            }
             // Exclude the bottom composer zone from tap targets
             .padding(.bottom, 120 + geometry.safeAreaInsets.bottom)
     }
@@ -319,6 +430,13 @@ struct StoryGestureContext: Equatable {
     /// `true` si le composer est focused / engaged — toutes les actions
     /// gestuelles sont court-circuitées dans ce cas.
     var isComposerEngaged: Bool
+    /// `true` si le doigt a franchi le slop de tap pendant ce toucher. Le drag
+    /// parent (`unifiedDragGesture`) est reconnu EN PARALLÈLE depuis le fix de
+    /// précédence : sans ce drapeau, un swipe rapide parti d'une bande latérale
+    /// validerait à la fois une navigation de story et un changement de groupe.
+    /// Défaut `false` = « toucher immobile », le cas historique — les contextes
+    /// existants (dont ceux des tests) restent valides sans être modifiés.
+    var didExceedSlop: Bool = false
 }
 
 /// Action à appliquer suite à un événement gestuel sur l'overlay story.
@@ -477,6 +595,13 @@ enum StoryGestureDecisions {
         if context.isComposerEngaged { return .dismissComposer }
         if context.isResumingTap { return .none }
         if context.holdActive { return .confirmLongPressPause }
+        // Le doigt a bougé : ce n'était pas un tap. Le geste appartient au drag
+        // parent, qui décidera seul du changement de groupe / du plein écran.
+        // Sans cette porte, un swipe parti d'une bande latérale naviguait d'une
+        // story ET changeait de groupe — les deux recognizers étant désormais
+        // simultanés. Placé APRÈS `holdActive` : un hold confirmé puis relâché
+        // garde son contrat (`confirmLongPressPause`), inchangé.
+        if context.didExceedSlop { return .none }
         // Race rare : seuil franchi mais le tick `onChanged` n'a pas posé
         // `holdActive = true` à temps. On évite la nav surprise.
         if elapsed >= holdThreshold { return .none }
@@ -907,6 +1032,16 @@ struct StoryCardView: View {
     /// `StoryReaderRepresentable.isPaused` pour que la timeline canvas (vidéo,
     /// audio, displayLink) gèle EN PHASE avec la progress bar du viewer.
     let isCanvasPlaybackPaused: Bool
+
+    /// Jeton de purge de l'état gestuel transient, relayé tel quel à
+    /// `StoryGestureOverlayView` (cf. sa doc). Bumpé par le viewer sur les
+    /// chemins où SwiftUI a sauté le `onEnded` du recognizer de l'overlay.
+    let gestureResetToken: Int
+    /// Relayé tel quel à `StoryGestureOverlayView` (cf. sa doc) : l'overlay
+    /// gestuel y signale au viewer qu'il a consommé une surface AU TOUCH-DOWN
+    /// du toucher courant, information que le drag parent ne peut pas observer
+    /// lui-même (il ne s'éveille qu'à 15 pt de déplacement).
+    @Binding var readerFeatureConsumedByTouch: Bool
 
     @ObservedObject var keyboard: KeyboardObserver
 
@@ -1423,7 +1558,9 @@ struct StoryCardView: View {
                 },
                 hasActiveFeature: hasActiveReaderFeature,
                 onDismissActiveFeature: onDismissActiveReaderFeature,
-                isFullscreenStorySession: isFullscreenStorySession
+                isFullscreenStorySession: isFullscreenStorySession,
+                gestureResetToken: gestureResetToken,
+                readerFeatureConsumedByTouch: $readerFeatureConsumedByTouch
             )
 
             // === Layer 6.5: Foreground audio chips ===

@@ -51,7 +51,7 @@ public actor DiskCacheStore: ReadableCacheStore {
         cache.countLimit = 100
         cache.totalCostLimit = 80 * 1024 * 1024
         self.memoryCache = cache
-        try? FileManager.default.createDirectory(at: self.baseDirectory, withIntermediateDirectories: true)
+        FileManager.default.createDirectoryLogging(at: self.baseDirectory, context: "disk cache root", logger: logger)
 
         NotificationCenter.default.addObserver(
             forName: UIApplication.didReceiveMemoryWarningNotification,
@@ -82,11 +82,25 @@ public actor DiskCacheStore: ReadableCacheStore {
             }
         }
         let filePath = diskFilePath(for: fileKey)
-        guard fileManager.fileExists(atPath: filePath.path),
-              let data = try? Data(contentsOf: filePath) else {
+        guard fileManager.fileExists(atPath: filePath.path) else { return .empty }
+        let data: Data
+        do {
+            data = try Data(contentsOf: filePath)
+        } catch {
+            // Le fichier EXISTE mais est illisible : corruption ou I/O — c'est
+            // un vrai incident, pas un cache miss.
+            logger.error("Cached file present but unreadable for \(fileKey, privacy: .public), treated as a miss: \(error.localizedDescription, privacy: .public)")
             return .empty
         }
-        let modDate = (try? fileManager.attributesOfItem(atPath: filePath.path)[.modificationDate] as? Date) ?? Date()
+        // Un attribut illisible ferait passer l'entrée pour « écrite à
+        // l'instant » : elle serait considérée fraîche à tort.
+        let modDate: Date
+        do {
+            modDate = try (fileManager.attributesOfItem(atPath: filePath.path)[.modificationDate] as? Date) ?? Date()
+        } catch {
+            logger.error("Cache mtime unreadable for \(fileKey, privacy: .public), entry treated as fresh: \(error.localizedDescription, privacy: .public)")
+            modDate = Date()
+        }
         let age = Date().timeIntervalSince(modDate)
         let freshness = policy.freshness(age: age)
         switch freshness {
@@ -108,7 +122,7 @@ public actor DiskCacheStore: ReadableCacheStore {
         memoryCache.removeObject(forKey: fileKey as NSString)
         fileTimestamps.removeValue(forKey: fileKey)
         let filePath = diskFilePath(for: fileKey)
-        try? fileManager.removeItem(at: filePath)
+        fileManager.removeItemLogging(at: filePath, context: "cache invalidate", logger: logger)
         // Une invalidation explicite prime sur la protection d'éviction : un
         // pin conservé re-protégerait un futur re-download de la même clé.
         loadPinsIfNeeded()
@@ -123,8 +137,8 @@ public actor DiskCacheStore: ReadableCacheStore {
         // au prochain `pin()` (logout multi-compte).
         pinExpiries.removeAll()
         pinsLoaded = true
-        try? fileManager.removeItem(at: baseDirectory)
-        try? fileManager.createDirectory(at: baseDirectory, withIntermediateDirectories: true)
+        fileManager.removeItemLogging(at: baseDirectory, context: "cache invalidateAll", logger: logger)
+        fileManager.createDirectoryLogging(at: baseDirectory, context: "disk cache root (recreate)", logger: logger)
     }
 
     // MARK: - Write
@@ -134,7 +148,7 @@ public actor DiskCacheStore: ReadableCacheStore {
         let filePath = diskFilePath(for: fileKey)
         do {
             try data.write(to: filePath, options: .atomic)
-            try? fileManager.setAttributes([.modificationDate: Date()], ofItemAtPath: filePath.path)
+            touchModificationDate(atPath: filePath.path)
         } catch {
             logger.error("Failed to write file for key \(fileKey): \(error.localizedDescription)")
             return
@@ -193,7 +207,7 @@ public actor DiskCacheStore: ReadableCacheStore {
             logger.error("seed copy failed for key \(key): \(error.localizedDescription)")
             return
         }
-        try? fileManager.setAttributes([.modificationDate: Date()], ofItemAtPath: destination.path)
+        touchModificationDate(atPath: destination.path)
         fileTimestamps[key] = Date()
     }
 
@@ -217,13 +231,13 @@ public actor DiskCacheStore: ReadableCacheStore {
         } catch {
             do {
                 try fileManager.copyItem(at: localURL, to: destination)
-                try? fileManager.removeItem(at: localURL)
+                fileManager.removeItemLogging(at: localURL, context: "adopt source cleanup", logger: logger)
             } catch {
                 logger.error("adopt failed for key \(key): \(error.localizedDescription)")
                 return
             }
         }
-        try? fileManager.setAttributes([.modificationDate: Date()], ofItemAtPath: destination.path)
+        touchModificationDate(atPath: destination.path)
         fileTimestamps[key] = Date()
     }
 
@@ -335,7 +349,10 @@ public actor DiskCacheStore: ReadableCacheStore {
         let entry = InFlightDownload(task: task)
         inFlightTasks[fileKey] = entry
         Task {
-            _ = try? await task.value
+            // On n'attend ici que la FIN du téléchargement pour libérer le
+            // slot ; le résultat (et son erreur) appartient à l'appelant qui
+            // a créé la tâche.
+            _ = await task.result
             if inFlightTasks[fileKey]?.id == entry.id { inFlightTasks[fileKey] = nil }
         }
         return true
@@ -406,7 +423,7 @@ public actor DiskCacheStore: ReadableCacheStore {
                 if isPinActive(fileKey: fileName, now: now) { continue }
                 memoryCache.removeObject(forKey: fileName as NSString)
                 fileTimestamps.removeValue(forKey: fileName)
-                try? fileManager.removeItem(at: fileURL)
+                fileManager.removeItemLogging(at: fileURL, context: "cache TTL eviction", logger: logger)
                 evictedCount += 1
             }
         }
@@ -441,7 +458,7 @@ public actor DiskCacheStore: ReadableCacheStore {
             if isPinActive(fileKey: fileName, now: now) { continue }
             memoryCache.removeObject(forKey: fileName as NSString)
             fileTimestamps.removeValue(forKey: fileName)
-            try? fileManager.removeItem(at: file.url)
+            fileManager.removeItemLogging(at: file.url, context: "cache budget eviction", logger: logger)
             totalSize -= file.size
         }
         logger.debug("Budget eviction: trimmed to \(totalSize) bytes (max \(maxBytes))")
@@ -602,9 +619,14 @@ public actor DiskCacheStore: ReadableCacheStore {
 
         // Local file:// URLs — load directly from filesystem
         if url.scheme == "file" {
-            if let data = try? Data(contentsOf: url), let image = Self.downsampledImage(data: data, maxPixelSize: maxPixelSize) {
-                Self.cacheIfWithinBudget(image, key: fileKey)
-                return image
+            do {
+                let data = try Data(contentsOf: url)
+                if let image = Self.downsampledImage(data: data, maxPixelSize: maxPixelSize) {
+                    Self.cacheIfWithinBudget(image, key: fileKey)
+                    return image
+                }
+            } catch {
+                Logger.cache.error("Local file:// image unreadable, no thumbnail rendered: \(error.localizedDescription, privacy: .public)")
             }
             return nil
         }
@@ -691,6 +713,17 @@ public actor DiskCacheStore: ReadableCacheStore {
         let key = ext.isEmpty ? hex : "\(hex).\(ext)"
         fileKeyCache.setObject(key as NSString, forKey: cacheKey)
         return key
+    }
+
+    /// Refreshes the mtime used as the LRU key. A failure does not lose data
+    /// but skews eviction order — the entry looks older than it is and gets
+    /// evicted early, so it is worth a trace.
+    private func touchModificationDate(atPath path: String) {
+        do {
+            try fileManager.setAttributes([.modificationDate: Date()], ofItemAtPath: path)
+        } catch {
+            logger.error("LRU touch failed, eviction order skewed for this entry: \(error.localizedDescription, privacy: .public)")
+        }
     }
 
     private func diskFilePath(for fileKey: String) -> URL {

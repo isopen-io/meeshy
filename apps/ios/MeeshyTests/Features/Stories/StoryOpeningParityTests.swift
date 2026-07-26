@@ -57,13 +57,24 @@ final class StoryOpeningParityTests: XCTestCase {
         let body = try XCTUnwrap(Self.openingSection(of: source),
                                  "Section d'ouverture introuvable — le test doit être ré-ancré.")
 
-        XCTAssertFalse(body.contains("openingScale = 0.88"),
+        // La valeur inversée reste interdite dans la fenêtre d'ouverture ET
+        // dans la table d'armement — elle ne doit revenir NULLE PART.
+        XCTAssertFalse(source.contains("openingScale = 0.88"),
                        "Le zoom d'ouverture inversé est de retour.")
-        XCTAssertTrue(body.contains("StoryRenderer.zoomTransitionScale"),
-                      "Le lecteur doit lire l'échelle du SDK, pas la redéclarer.")
+        XCTAssertFalse(source.contains("openingScale: 0.88"),
+                       "Le zoom d'ouverture inversé est de retour dans la table d'armement.")
+
+        // La durée reste résolue dans la fenêtre d'ouverture elle-même.
         XCTAssertTrue(body.contains("StoryRenderer.slideTransitionDuration"),
                       "Le lecteur doit lire la durée du SDK, pas la redéclarer.")
-        XCTAssertTrue(body.contains("StoryRenderer.slideTransitionTravelFraction"),
+
+        // L'échelle et le débattement sont désormais armés par
+        // `StoryOpeningEntrance` (même fichier, partagé avec
+        // `dismissGroupIntro`) : on les cherche donc dans toute la source du
+        // lecteur, pas seulement dans la fenêtre d'ouverture.
+        XCTAssertTrue(source.contains("StoryRenderer.zoomTransitionScale"),
+                      "Le lecteur doit lire l'échelle du SDK, pas la redéclarer.")
+        XCTAssertTrue(source.contains("StoryRenderer.slideTransitionTravelFraction"),
                       "Le lecteur doit lire le débattement du SDK, pas la redéclarer.")
     }
 

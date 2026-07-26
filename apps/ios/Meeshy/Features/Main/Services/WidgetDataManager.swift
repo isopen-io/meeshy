@@ -1,6 +1,7 @@
 import Foundation
 import WidgetKit
 import MeeshySDK
+import os
 
 // MARK: - Widget-compatible Codable models (mirrors MeeshyWidgets target)
 
@@ -105,7 +106,7 @@ final class WidgetDataManager: NotificationWidgetSink {
             }
 
         guard let defaults = sharedDefaults,
-              let data = try? encoder.encode(Array(widgetConversations)) else { return }
+              let data = encoder.encodeOrLog(Array(widgetConversations), field: "widget conversations", logger: Logger.widgetData) else { return }
 
         defaults.set(data, forKey: conversationsKey)
         defaults.set(Date().timeIntervalSince1970, forKey: lastUpdatedKey)
@@ -156,7 +157,7 @@ final class WidgetDataManager: NotificationWidgetSink {
                     unreadCount: conv.userState.unreadCount
                 )
             }
-        guard let data = try? encoder.encode(snapshots) else { return }
+        guard let data = encoder.encodeOrLog(snapshots, field: "widget snapshots", logger: Logger.widgetData) else { return }
         defaults.set(data, forKey: snapshotsKey)
     }
 
@@ -171,8 +172,9 @@ final class WidgetDataManager: NotificationWidgetSink {
     ) -> NotificationToastManager.ConversationPresentation? {
         guard let defaults = sharedDefaults,
               let data = defaults.data(forKey: snapshotsKey),
-              let snapshots = try? JSONDecoder().decode(
-                  [String: ConversationSnapshotPayload].self, from: data
+              let snapshots = JSONDecoder().decodeOrLog(
+                  [String: ConversationSnapshotPayload].self, from: data,
+                  field: "widget snapshots", logger: Logger.widgetData
               ),
               let payload = snapshots[id] else { return nil }
 
@@ -202,7 +204,7 @@ final class WidgetDataManager: NotificationWidgetSink {
             }
 
         guard let defaults = sharedDefaults,
-              let data = try? encoder.encode(Array(favorites)) else { return }
+              let data = encoder.encodeOrLog(Array(favorites), field: "widget favorites", logger: Logger.widgetData) else { return }
 
         defaults.set(data, forKey: favoritesKey)
     }
@@ -248,4 +250,10 @@ final class WidgetDataManager: NotificationWidgetSink {
         }
         return ""
     }
+}
+
+// MARK: - Logger Extension
+
+private extension Logger {
+    nonisolated static let widgetData = Logger(subsystem: "me.meeshy.app", category: "widget-data")
 }

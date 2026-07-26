@@ -140,7 +140,7 @@ public final class MeeshyFocusStore {
     public var current: MeeshyFocusSnapshot {
         guard let defaults,
               let data = defaults.data(forKey: key),
-              let snapshot = try? JSONDecoder().decode(MeeshyFocusSnapshot.self, from: data) else {
+              let snapshot = JSONDecoder().decodeOrLog(MeeshyFocusSnapshot.self, from: data, field: "focus snapshot", logger: Logger.focusFilter) else {
             return .permissive
         }
         return snapshot
@@ -148,11 +148,17 @@ public final class MeeshyFocusStore {
 
     public func save(_ snapshot: MeeshyFocusSnapshot) {
         guard let defaults,
-              let data = try? JSONEncoder().encode(snapshot) else { return }
+              let data = JSONEncoder().encodeOrLog(snapshot, field: "focus snapshot", logger: Logger.focusFilter) else { return }
         defaults.set(data, forKey: key)
     }
 
     public func clear() {
         defaults?.removeObject(forKey: key)
     }
+}
+
+// MARK: - Logger Extension
+
+private extension Logger {
+    nonisolated static let focusFilter = Logger(subsystem: "me.meeshy.app", category: "focus-filter")
 }

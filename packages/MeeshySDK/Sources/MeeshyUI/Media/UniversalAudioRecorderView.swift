@@ -178,12 +178,6 @@ public struct UniversalAudioRecorderView<Recorder: AudioRecordingProviding>: Vie
             } else {
                 idlePrompt
             }
-
-            if let maxDur = settings.maxDuration {
-                Text("\(Int(maxDur))s max")
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundColor(.white.opacity(0.3))
-            }
         }
     }
 

@@ -2,7 +2,7 @@
  * Helpers utilitaires pour les conversations
  * Logique métier réutilisable entre Gateway et Frontend
  */
-import { normalizeLanguageCode } from './language-normalize.js';
+import { normalizeLanguageCode, normalizeLanguageForDedup } from './language-normalize.js';
 
 /**
  * Options de résolution de langue. La locale appareil intervient en 4e priorité
@@ -78,7 +78,7 @@ export function resolveUserLanguage(
  * ferait chuter au niveau suivant, changement de comportement non désiré).
  */
 function normalizeInAppLanguage(code: string): string {
-  return normalizeLanguageCode(code) ?? code.toLowerCase();
+  return normalizeLanguageForDedup(code);
 }
 
 /**

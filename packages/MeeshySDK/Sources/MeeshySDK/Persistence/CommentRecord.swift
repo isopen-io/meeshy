@@ -1,4 +1,5 @@
 import Foundation
+import os
 import GRDB
 
 public struct CommentRecord: Codable, FetchableRecord, PersistableRecord, Sendable {
@@ -61,7 +62,8 @@ public extension CommentRecord {
     /// ignores it — only `reactionSummaryJson` maps to a table column.
     var reactionSummary: [String: Int] {
         guard let reactionSummaryJson,
-              let decoded = try? JSONDecoder().decode([String: Int].self, from: reactionSummaryJson)
+              let decoded = JSONDecoder().decodeOrLog([String: Int].self, from: reactionSummaryJson,
+                                                      field: "comment reactionSummaryJson", id: id)
         else { return [:] }
         return decoded
     }

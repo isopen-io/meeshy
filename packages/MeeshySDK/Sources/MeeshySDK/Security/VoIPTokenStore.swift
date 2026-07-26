@@ -1,4 +1,5 @@
 import Foundation
+import os
 
 /// A record describing the most recent VoIP push token the app has
 /// registered with the backend.
@@ -56,6 +57,7 @@ public final class KeychainVoIPTokenStore: VoIPTokenStoring, @unchecked Sendable
     private let userDefaults: UserDefaults
     private let decoder = JSONDecoder()
     private let encoder = JSONEncoder()
+    private let logger = Logger(subsystem: "com.meeshy.sdk", category: "voip-token")
 
     public init(
         keychain: KeychainManager = .shared,
@@ -72,7 +74,17 @@ public final class KeychainVoIPTokenStore: VoIPTokenStoring, @unchecked Sendable
     public func read() async -> VoIPTokenRecord? {
         guard let raw = await keychain.loadAsync(forKey: storageKey),
               let data = raw.data(using: .utf8) else { return nil }
-        return try? decoder.decode(VoIPTokenRecord.self, from: data)
+        do {
+            return try decoder.decode(VoIPTokenRecord.self, from: data)
+        } catch {
+            // Entrée Keychain illisible (schéma antérieur ou blob corrompu) :
+            // traité comme « aucun token connu », ce qui force une
+            // ré-inscription propre auprès de la gateway.
+            logger.error(
+                "Stored VoIP token record is undecodable — forcing re-registration: \(error.localizedDescription, privacy: .public)"
+            )
+            return nil
+        }
     }
 
     public func save(token: String, at date: Date) async throws {
@@ -118,7 +130,15 @@ public final class KeychainVoIPTokenStore: VoIPTokenStoring, @unchecked Sendable
 
         let legacyDate = (defaults.object(forKey: legacyDateKey) as? Date)
             ?? Date.distantPast
-        try? await save(token: legacyToken, at: legacyDate)
+        do {
+            try await save(token: legacyToken, at: legacyDate)
+        } catch {
+            // Les clés legacy sont purgées quoi qu'il arrive : laisser un token
+            // VoIP en clair dans UserDefaults est pire qu'une ré-inscription.
+            logger.error(
+                "Legacy VoIP token migration to Keychain failed — legacy keys purged, device will re-register: \(error.localizedDescription, privacy: .public)"
+            )
+        }
 
         defaults.removeObject(forKey: legacyTokenKey)
         defaults.removeObject(forKey: legacyDateKey)

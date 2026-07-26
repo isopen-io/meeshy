@@ -18,7 +18,13 @@ internal func reactionContext(for record: OutboxRecord) -> OfflineRetrySuccess.R
     guard record.kind == .sendReaction else { return nil }
     let decoder = JSONDecoder()
     decoder.dateDecodingStrategy = .iso8601
-    guard let payload = try? decoder.decode(ReactionOutboxPayload.self, from: record.payload) else {
+    guard let payload = decoder.decodeOrLog(
+        ReactionOutboxPayload.self,
+        from: record.payload,
+        field: "sendReaction payload",
+        id: record.id,
+        logger: outboxFlusherLog
+    ) else {
         return nil
     }
     return OfflineRetrySuccess.ReactionContext(
@@ -46,7 +52,13 @@ internal func cleanupLocalFiles(for record: OutboxRecord) {
     guard record.kind == .sendMessage else { return }
     let decoder = JSONDecoder()
     decoder.dateDecodingStrategy = .iso8601
-    guard let item = try? decoder.decode(OfflineQueueItem.self, from: record.payload) else { return }
+    guard let item = decoder.decodeOrLog(
+        OfflineQueueItem.self,
+        from: record.payload,
+        field: "sendMessage payload (file sweep)",
+        id: record.id,
+        logger: outboxFlusherLog
+    ) else { return }
     // S7b — sweep audio (pending-audio/) AND visual media (pending-media/)
     // paths; both relocate bytes under Documents/ and would leak if a
     // terminated row didn't clean them. `absoluteAudioPath` is a generic
@@ -60,17 +72,18 @@ internal func cleanupLocalFiles(for record: OutboxRecord) {
     var parentDirs = Set<String>()
     for rel in relativePaths {
         let abs = OfflineQueue.absoluteAudioPath(forStored: rel)
-        // Silent: it's normal for the file to already be gone (cancelled send,
-        // adoption already moved it, another sweep ran first). The whole point
-        // is to plug the leak, not to gate on file existence.
-        try? FileManager.default.removeItem(atPath: abs)
+        // Un fichier déjà absent est nominal (envoi annulé, adoption
+        // antérieure, autre passe de sweep) et reste silencieux ; toute AUTRE
+        // erreur signifie que les octets fuient et doit se voir.
+        FileManager.default.removeItemLogging(atPath: abs, context: "outbox terminal sweep")
         parentDirs.insert((abs as NSString).deletingLastPathComponent)
     }
     // Best-effort: remove the now-empty per-message subdir (pending-audio/<cid>/).
     for dir in parentDirs {
-        if let contents = try? FileManager.default.contentsOfDirectory(atPath: dir), contents.isEmpty {
-            try? FileManager.default.removeItem(atPath: dir)
-        }
+        // Répertoire déjà disparu = rien à réclamer.
+        guard let contents = try? FileManager.default.contentsOfDirectory(atPath: dir) else { continue }
+        guard contents.isEmpty else { continue }
+        FileManager.default.removeItemLogging(atPath: dir, context: "outbox empty per-message dir")
     }
 }
 
@@ -147,37 +160,57 @@ public actor OutboxFlusher {
 
         let now = Date()
         let reclaimCutoff = now.addingTimeInterval(-Self.staleInflightReclaimSeconds)
-        _ = try? await pool.write { db in
-            try OutboxRecord
-                .filter(Column("status") == OutboxStatus.inflight.rawValue)
-                .filter(Column("updatedAt") < reclaimCutoff)
-                .updateAll(
-                    db,
-                    Column("status").set(to: OutboxStatus.pending.rawValue),
-                    Column("updatedAt").set(to: now),
-                    Column("nextAttemptAt").set(to: now)
-                )
+        do {
+            _ = try await pool.write { db in
+                try OutboxRecord
+                    .filter(Column("status") == OutboxStatus.inflight.rawValue)
+                    .filter(Column("updatedAt") < reclaimCutoff)
+                    .updateAll(
+                        db,
+                        Column("status").set(to: OutboxStatus.pending.rawValue),
+                        Column("updatedAt").set(to: now),
+                        Column("nextAttemptAt").set(to: now)
+                    )
+            }
+        } catch {
+            // Sans ce reclaim, une ligne restée `.inflight` (app tuée en plein
+            // envoi) n'est plus jamais rejouée : le message ne part pas.
+            outboxFlusherLog.error("Stale-inflight reclaim failed, rows may stay stuck: \(error.localizedDescription, privacy: .public)")
         }
-        let pending: [OutboxRecord] = (try? await pool.read { db in
-            try OutboxRecord
-                .filter(Column("status") == OutboxStatus.pending.rawValue)
-                .filter(Column("nextAttemptAt") <= now)
-                .order(Column("createdAt").asc)
-                .limit(50)
-                .fetchAll(db)
-        }) ?? []
+        let pending: [OutboxRecord]
+        do {
+            pending = try await pool.read { db in
+                try OutboxRecord
+                    .filter(Column("status") == OutboxStatus.pending.rawValue)
+                    .filter(Column("nextAttemptAt") <= now)
+                    .order(Column("createdAt").asc)
+                    .limit(50)
+                    .fetchAll(db)
+            }
+        } catch {
+            outboxFlusherLog.error("Pending batch read failed — outbox not drained this pass: \(error.localizedDescription, privacy: .public)")
+            pending = []
+        }
 
         for record in pending {
             await processRecord(record)
         }
 
-        let earliestDeferred: OutboxRecord? = (try? await pool.read { db in
-            try OutboxRecord
-                .filter(Column("status") == OutboxStatus.pending.rawValue)
-                .filter(Column("nextAttemptAt") > Date())
-                .order(Column("nextAttemptAt").asc)
-                .fetchOne(db)
-        }) ?? nil
+        let earliestDeferred: OutboxRecord?
+        do {
+            earliestDeferred = try await pool.read { db in
+                try OutboxRecord
+                    .filter(Column("status") == OutboxStatus.pending.rawValue)
+                    .filter(Column("nextAttemptAt") > Date())
+                    .order(Column("nextAttemptAt").asc)
+                    .fetchOne(db)
+            }
+        } catch {
+            // Le scheduler ne sera pas ré-armé sur ce créneau ; les triggers
+            // de cycle de vie (reconnexion, boot) restent le filet.
+            outboxFlusherLog.error("Deferred-head read failed, retry not rescheduled: \(error.localizedDescription, privacy: .public)")
+            earliestDeferred = nil
+        }
         return earliestDeferred?.nextAttemptAt
     }
 
@@ -191,16 +224,24 @@ public actor OutboxFlusher {
     /// alone did not serialize them).
     func claimPending(_ record: OutboxRecord) async -> Bool {
         let now = Date()
-        return (try? await pool.write { db -> Bool in
-            try OutboxRecord
-                .filter(Column("id") == record.id)
-                .filter(Column("status") == OutboxStatus.pending.rawValue)
-                .updateAll(
-                    db,
-                    Column("status").set(to: OutboxStatus.inflight.rawValue),
-                    Column("updatedAt").set(to: now)
-                ) == 1
-        }) ?? false
+        do {
+            return try await pool.write { db -> Bool in
+                try OutboxRecord
+                    .filter(Column("id") == record.id)
+                    .filter(Column("status") == OutboxStatus.pending.rawValue)
+                    .updateAll(
+                        db,
+                        Column("status").set(to: OutboxStatus.inflight.rawValue),
+                        Column("updatedAt").set(to: now)
+                    ) == 1
+            }
+        } catch {
+            // On renonce à dispatcher ce tour-ci : sans claim durable, un
+            // envoi partirait sans que la ligne soit marquée `.inflight`,
+            // ouvrant la porte au double-envoi.
+            outboxFlusherLog.error("Claim failed for \(record.id, privacy: .public), dispatch skipped this pass: \(error.localizedDescription, privacy: .public)")
+            return false
+        }
     }
 
     /// `MeeshyError.auth(...)` (typically a 401 mapped to `.sessionExpired`) is a
@@ -278,15 +319,20 @@ public actor OutboxFlusher {
         guard record.kind == .sendMessage else { return }
         let cmid = record.clientMessageId
         let errorMessage = error.map { String(describing: $0) }
-        try? await pool.write { db in
-            _ = try SendAttemptRecord.log(
-                db,
-                localId: cmid,
-                transport: .outbox,
-                startedAt: startedAt,
-                outcome: outcome,
-                errorMessage: errorMessage
-            )
+        do {
+            try await pool.write { db in
+                _ = try SendAttemptRecord.log(
+                    db,
+                    localId: cmid,
+                    transport: .outbox,
+                    startedAt: startedAt,
+                    outcome: outcome,
+                    errorMessage: errorMessage
+                )
+            }
+        } catch {
+            // Télémétrie seule : l'envoi lui-même n'est pas affecté.
+            outboxFlusherLog.error("Send-attempt telemetry not recorded for \(cmid, privacy: .public): \(error.localizedDescription, privacy: .public)")
         }
     }
 
@@ -335,8 +381,14 @@ public actor OutboxFlusher {
                 current.updatedAt = Date()
                 current.nextAttemptAt = Date().addingTimeInterval(maxBackoff)
                 let deferredSnapshot = current
-                try? await pool.write { db in
-                    try deferredSnapshot.update(db)
+                do {
+                    try await pool.write { db in
+                        try deferredSnapshot.update(db)
+                    }
+                } catch {
+                    // La ligne reste `.inflight` : elle ne sera rejouée qu'au
+                    // prochain reclaim de périmés, pas au prochain flush.
+                    outboxFlusherLog.error("Deferred state not persisted for \(current.id, privacy: .public), row left inflight: \(error.localizedDescription, privacy: .public)")
                 }
                 return
             }
@@ -357,8 +409,14 @@ public actor OutboxFlusher {
             }
 
             let failedSnapshot = current
-            try? await pool.write { db in
-                try failedSnapshot.update(db)
+            do {
+                try await pool.write { db in
+                    try failedSnapshot.update(db)
+                }
+            } catch {
+                // `attempts` n'est pas incrémenté : sans trace, la ligne peut
+                // retenter indéfiniment sans jamais atteindre `.exhausted`.
+                outboxFlusherLog.error("Failure state not persisted for \(failedSnapshot.id, privacy: .public), retry budget not consumed: \(error.localizedDescription, privacy: .public)")
             }
 
             // Wave 1 Task 3.6 + Phase 4 prereq — emit BOTH the outcome

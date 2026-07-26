@@ -466,7 +466,8 @@ final class WebRTCService {
     /// pas ouvert (appel jamais connecté) — le chemin socket reste autoritatif.
     func sendHangupBye(reason: String = "completed") {
         let message = DataChannelControlMessage(type: "bye", reason: reason)
-        guard let data = try? JSONEncoder().encode(message) else { return }
+        guard let data = JSONEncoder().encodeOrLog(message, field: "data-channel message",
+                                                   logger: Logger.webrtc) else { return }
         client.sendDataChannelMessage(data)
     }
 
