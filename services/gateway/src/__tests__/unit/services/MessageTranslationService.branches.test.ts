@@ -1114,6 +1114,40 @@ describe('MessageTranslationService — branch supplement', () => {
 
       expect(mockZmqClient.sendTranslationRequest).not.toHaveBeenCalled();
     });
+
+    it('filters a locale-tagged source (fr-FR) against a normalized target (fr)', async () => {
+      // originalLanguage is persisted verbatim (clients send Locale.current like
+      // 'fr-FR'); target languages are normalized lowercase. A raw `===` misses
+      // fr-FR vs fr and fires a text-corrupting fr→fr NLLB round-trip.
+      await (svc as any)['_processTranslationsAsync'](
+        { id: 'msg-locale-fr', content: 'Bonjour', originalLanguage: 'fr-FR', conversationId: 'conv-1' },
+        'fr'
+      );
+
+      expect(mockZmqClient.sendTranslationRequest).not.toHaveBeenCalled();
+    });
+
+    it('filters an uppercase source (FR) against a normalized target (fr)', async () => {
+      await (svc as any)['_processTranslationsAsync'](
+        { id: 'msg-upper-fr', content: 'Bonjour', originalLanguage: 'FR', conversationId: 'conv-1' },
+        'fr'
+      );
+
+      expect(mockZmqClient.sendTranslationRequest).not.toHaveBeenCalled();
+    });
+
+    it('normalizes a client-supplied target (EN → en) before requesting translation', async () => {
+      // The explicit-client-target path must not inject a non-canonical code
+      // (uppercase/BCP-47) as the ZMQ target and translation storage key.
+      await (svc as any)['_processTranslationsAsync'](
+        { id: 'msg-en-target', content: 'Bonjour', originalLanguage: 'fr', conversationId: 'conv-1' },
+        'EN'
+      );
+
+      expect(mockZmqClient.sendTranslationRequest).toHaveBeenCalledWith(
+        expect.objectContaining({ targetLanguages: ['en'] })
+      );
+    });
   });
 
   // =========================================================================
