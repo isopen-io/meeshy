@@ -157,11 +157,17 @@ final class StoryRepostFlowTests: XCTestCase {
     func test_flux2_kebabRepublierEnPost_callsBackendDirectly() async throws {
         let mockService = MockPostService()
 
+        // `visibility: nil` reproduit exactement ce que la production envoie :
+        // `repostAsPostDirect()` (StoryViewerView:1124) omet l'argument, et le
+        // type concret `PostService.repost` le fait défaillir à `nil`. Le mock
+        // conforme au protocole, lui, n'a pas de valeur par défaut — d'où
+        // l'argument explicite ici.
         _ = try await mockService.repost(
             postId: "story-1",
             targetType: .post,
             content: nil,
-            isQuote: false
+            isQuote: false,
+            visibility: nil
         )
 
         XCTAssertEqual(mockService.repostCallCount, 1)
@@ -192,13 +198,15 @@ final class StoryRepostFlowTests: XCTestCase {
         // Capture args delivered to the publish callback.
         var capturedContent: String?
         var capturedSourceId: String?
+        var capturedVisibility: String?
 
         let composer = UnifiedPostComposer(
             repostingStory: story,
             authorHandle: "alice",
-            onPublishRepost: { content, sourceStory in
+            onPublishRepost: { content, sourceStory, visibility in
                 capturedContent = content
                 capturedSourceId = sourceStory.id
+                capturedVisibility = visibility
             },
             onDismiss: {}
         )
@@ -228,7 +236,12 @@ final class StoryRepostFlowTests: XCTestCase {
             postId: capturedSourceId ?? "",
             targetType: .post,
             content: content.isEmpty ? nil : content,
-            isQuote: !content.isEmpty
+            isQuote: !content.isEmpty,
+            // La production forwarde la visibilité captée telle quelle
+            // (StoryViewerView:771-779). Le rejeu la forwarde donc aussi,
+            // plutôt que de figer une valeur : c'est le contrat qui est
+            // vérifié, pas le réglage par défaut du composeur.
+            visibility: capturedVisibility
         )
 
         XCTAssertEqual(mockService.lastRepostPostId, "story-1")
