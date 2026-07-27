@@ -283,10 +283,20 @@ export class MessageReadStatusService {
 
       // A null floor counts every candidate message (no lower bound). If ANY participant
       // is unbounded we must fetch the full history; otherwise the oldest floor is enough.
+      // Reduce (not `Math.min(...spread)`): this fires on the hottest path
+      // (`_updateUnreadCounts` on EVERY `message:new`) and `floors` has one entry per
+      // participant. A public/global conversation at the platform's 100k+ scale can exceed
+      // V8's argument-spread ceiling (~131k), where `Math.min(...arr)` throws
+      // `RangeError: Maximum call stack size exceeded` — swallowed by the catch below,
+      // silently zeroing unread counts for the whole conversation. `reduce` is O(n) with no
+      // per-argument stack cost, so it holds for any group size.
       const hasUnboundedFloor = floors.some((f) => f.floorMs === null);
       const minFloorMs = hasUnboundedFloor
         ? null
-        : Math.min(...floors.map((f) => f.floorMs as number));
+        : floors.reduce(
+            (min, f) => ((f.floorMs as number) < min ? (f.floorMs as number) : min),
+            Infinity
+          );
 
       // ONE query for all participants. No `senderId` filter here — the "exclude my own
       // messages" cut is per-participant, applied in memory below. `orderBy createdAt asc`
