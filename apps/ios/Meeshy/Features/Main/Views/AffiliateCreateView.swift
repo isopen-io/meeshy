@@ -135,6 +135,15 @@ struct AffiliateCreateView: View {
             )
         }
         .accessibilityLabel(String(localized: "affiliate.create.button", defaultValue: "Creer le lien", bundle: .main))
+        // While the request is in flight the glyph becomes a bare `ProgressView`:
+        // a sighted user sees a spinner, a VoiceOver user hears only "dimmed" and
+        // cannot tell whether the tap registered. Carry the transient state as a
+        // value, exactly as the twin button does (CreateTrackingLinkView:136) and
+        // the mood composer (StatusComposerView:263). The key is shared with the
+        // tracking-link button — same action, same words, already localised.
+        .accessibilityValue(isCreating
+            ? String(localized: "a11y.tracking.create.in-progress", defaultValue: "Création en cours", bundle: .main)
+            : "")
         .disabled(name.trimmingCharacters(in: .whitespaces).isEmpty || isCreating)
     }
 
