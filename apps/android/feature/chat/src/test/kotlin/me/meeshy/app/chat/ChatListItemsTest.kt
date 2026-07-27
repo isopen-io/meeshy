@@ -94,4 +94,62 @@ class ChatListItemsTest {
         assertThat(items).hasSize(1)
         assertThat(items[0]).isInstanceOf(ChatListItem.Message::class.java)
     }
+
+    @Test
+    fun `no unread id inserts no separator`() {
+        val items = buildChatListItems(
+            listOf(bubble("m1", "2026-06-11T08:00:00Z"), bubble("m2", "2026-06-11T09:00:00Z")),
+            zone,
+            firstUnreadId = null,
+        )
+
+        assertThat(items.filterIsInstance<ChatListItem.UnreadSeparator>()).isEmpty()
+    }
+
+    @Test
+    fun `the separator is inserted immediately before the first unread message`() {
+        val items = buildChatListItems(
+            listOf(
+                bubble("m1", "2026-06-11T08:00:00Z"),
+                bubble("m2", "2026-06-11T09:00:00Z"),
+                bubble("m3", "2026-06-11T10:00:00Z"),
+            ),
+            zone,
+            firstUnreadId = "m2",
+        )
+
+        val idx = items.indexOfFirst { it is ChatListItem.UnreadSeparator }
+        assertThat(idx).isAtLeast(0)
+        assertThat((items[idx + 1] as ChatListItem.Message).bubble.messageId).isEqualTo("m2")
+        // Only one separator, ever.
+        assertThat(items.filterIsInstance<ChatListItem.UnreadSeparator>()).hasSize(1)
+    }
+
+    @Test
+    fun `the separator follows the day header when the first unread opens a new day`() {
+        val items = buildChatListItems(
+            listOf(
+                bubble("m1", "2026-06-10T23:50:00Z"),
+                bubble("m2", "2026-06-11T00:10:00Z"),
+            ),
+            zone,
+            firstUnreadId = "m2",
+        )
+
+        // header(day1), m1, header(day2), SEPARATOR, m2
+        assertThat(items[2]).isInstanceOf(ChatListItem.DayHeader::class.java)
+        assertThat(items[3]).isInstanceOf(ChatListItem.UnreadSeparator::class.java)
+        assertThat((items[4] as ChatListItem.Message).bubble.messageId).isEqualTo("m2")
+    }
+
+    @Test
+    fun `an unread id absent from the list inserts no separator`() {
+        val items = buildChatListItems(
+            listOf(bubble("m1", "2026-06-11T08:00:00Z")),
+            zone,
+            firstUnreadId = "ghost",
+        )
+
+        assertThat(items.filterIsInstance<ChatListItem.UnreadSeparator>()).isEmpty()
+    }
 }

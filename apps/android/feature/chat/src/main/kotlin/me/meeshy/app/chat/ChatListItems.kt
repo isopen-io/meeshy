@@ -9,12 +9,17 @@ import java.util.Locale
 import me.meeshy.sdk.util.isoToEpochMillis
 import me.meeshy.ui.component.bubble.BubbleContent
 
-/** One row of the chat list: a day separator or a message bubble. */
+/** One row of the chat list: a day separator, the unread boundary, or a message bubble. */
 sealed class ChatListItem {
     abstract val key: String
 
     data class DayHeader(val dayMillis: Long) : ChatListItem() {
         override val key: String get() = "day-$dayMillis"
+    }
+
+    /** The "new messages" boundary, drawn directly above the first unread message. */
+    data object UnreadSeparator : ChatListItem() {
+        override val key: String get() = "unread-separator"
     }
 
     data class Message(val bubble: BubbleContent) : ChatListItem() {
@@ -26,8 +31,16 @@ sealed class ChatListItem {
  * Interleaves day separators into an ascending message list — port of the
  * iOS `MessageListItem.dayHeader` datasource rows. A message without a
  * parsable timestamp never opens a new day: it rides with the previous group.
+ *
+ * When [firstUnreadId] names a loaded message, a single [ChatListItem.UnreadSeparator]
+ * is inserted directly above it (below that message's day header, if any). An id
+ * absent from [bubbles] inserts nothing.
  */
-fun buildChatListItems(bubbles: List<BubbleContent>, zone: ZoneId): List<ChatListItem> {
+fun buildChatListItems(
+    bubbles: List<BubbleContent>,
+    zone: ZoneId,
+    firstUnreadId: String? = null,
+): List<ChatListItem> {
     val items = mutableListOf<ChatListItem>()
     var currentDay: LocalDate? = null
     bubbles.forEach { bubble ->
@@ -38,6 +51,9 @@ fun buildChatListItems(bubbles: List<BubbleContent>, zone: ZoneId): List<ChatLis
                 currentDay = day
                 items += ChatListItem.DayHeader(millis)
             }
+        }
+        if (firstUnreadId != null && bubble.messageId == firstUnreadId) {
+            items += ChatListItem.UnreadSeparator
         }
         items += ChatListItem.Message(bubble)
     }

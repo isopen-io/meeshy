@@ -1129,8 +1129,21 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
 - [~] Date section headers done — `ChatListItem.DayHeader` interleavé +
       `MessageDayLabel` (port iOS : Aujourd'hui/Hier/Avant-hier, jour de semaine
       ≤6j, date complète + année si différente, label recalculé au rendu pour
-      le passage de minuit) ; inverted list / joined banner / unread separator /
-      E2EE disclaimer pending
+      le passage de minuit) ; **unread separator done** (slice `chat-unread-separator`,
+      2026-07-27) : la barre « Messages non lus » se pose juste au-dessus du premier
+      message non lu — SSOT pur `:feature:chat/UnreadMarker.firstUnreadId(bubbles,
+      unreadCount)` (port du calcul iOS `unreadStartIndex = messages.count -
+      initialUnreadCount`, gardé par `!candidate.isMe` : borne à `size-unreadCount`,
+      `null` si rien de non-lu / fenêtre vide / count > fenêtre / borne sur un
+      message sortant). `buildChatListItems` insère un unique `ChatListItem.UnreadSeparator`
+      juste avant ce message (sous son en-tête de jour) ; `ChatViewModel` capture
+      le `unreadCount` du cache AVANT le mark-read (qui le remet à zéro) puis latch
+      la borne une seule fois (une arrivée de message ne la déplace jamais) ;
+      `ChatScreen` rend un `UnreadSeparatorRow` accent-cohérent (règle accent +
+      pilule centrée, EN/FR/ES/PT). +17 tests, mutation-prouvé. **SOTA over iOS** :
+      la borne est un value type pur entièrement couvert, la capture pré-mark-read
+      supprime la course iOS où l'ouverture peut zéroer le compteur avant la dérivation.
+      Reste : inverted list / joined banner / E2EE disclaimer pending
 - [~] Pagination of older messages — before-cursor done (`MessageRepository.loadOlder`,
       windowed prune keeps paginated history, scroll-top trigger + spinner); around-anchor pending
 - [~] Reactions: quick-strip **usage-ordered** done (`EmojiUsageRanker.topEmojis` port of

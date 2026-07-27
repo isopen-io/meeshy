@@ -4,7 +4,20 @@
 > **`apps/android/tasks/android-routine/PROGRESS.md`**. The loop procedure is in
 > `apps/android/tasks/android-routine/ROUTINE.md`. This file is a short pointer.
 
-## This loop (Phase: Conversations §B) — slice `conversation-drag-to-category` ✅
+## This loop (Phase: Chat §C) — slice `chat-unread-separator` ✅
+The "new messages" boundary above the first unread message on open — completes the "unread separator" pending
+sub-item of the §C date-headers box. Pure `:feature:chat/UnreadMarker.firstUnreadId(bubbles, unreadCount) → String?`
+SSOT (port of iOS `unreadStartIndex = messages.count - initialUnreadCount`, guarded by `!candidate.isMe`: boundary
+at `size-unreadCount`, `null` if nothing unread / empty window / count>window / boundary on an outgoing message).
+`ChatListItem.UnreadSeparator` row + `buildChatListItems(firstUnreadId = null)` inserts one separator directly above
+the matching message (below its day header). `ChatViewModel` captures the cached `unreadCount` BEFORE `markConversationRead`
+zeroes it, then latches the boundary once (a later message never shifts it); `ChatScreen` renders an accent-coherent
+`UnreadSeparatorRow` (EN/FR/ES/PT). +17 tests (8 marker, +5 list-item, +2 VM); mutation-proven (drop the `isOutgoing`
+guard → exactly the own-at-boundary test fails, `8 completed, 1 failed`). Full `assembleDebug testDebugUnitTest` green.
+Diff = `apps/android` only. Reviewer PASS. Next: §C joined banner / unread-scroll-to-first affordance, `CategoryPickerField`,
+`OnboardingFlowView`, or Kover coverage-gate infra.
+
+## Prior loop (Phase: Conversations §B) — slice `conversation-drag-to-category` ✅
 Conversation → user-category (re)assignment — closes the last box on the §B "Sectioned list … +
 drag-to-category" line (reducer/hydration/socket shipped 2026-07-26 had no way to *move* a conversation into a
 category). Pure `:feature:conversations/ConversationCategoryReassignment.resolve(current, target)` SSOT (idempotent:
@@ -15,8 +28,7 @@ threaded through `ConversationPrefsPayload` + `ConversationPreferencesUpdate` �
 "Move to category" (current checked, en/fr/es/pt). +7 tests, idempotency-guard mutation-proven (always-`AssignTo` →
 exactly the 2 no-op tests fail). Full `assembleDebug testDebugUnitTest` green (4m 51s, 943 tasks, APK). Diff =
 `apps/android` only. Reviewer PASS. Uncategorize (`categoryId = null`) deferred: `explicitNulls = false` drops a null
-field so it needs an explicit-null `PUT`. Next: drag-gesture polish, uncategorize seam, `CategoryPickerField`,
-`OnboardingFlowView`, or Kover coverage-gate infra.
+field so it needs an explicit-null `PUT`.
 
 ## Prior loop (Phase: Feed/Statuses) — slice `status-unreacted-socket` ✅
 Realtime `status:unreacted` — the symmetric inverse of the `status:reacted` handler, folding the gateway's canonical

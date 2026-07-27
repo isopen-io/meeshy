@@ -2,6 +2,28 @@
 
 Append-only log of gotchas and decisions that save time next run.
 
+## Lesson (2026-07-27, `chat-unread-separator`) — capture the count BEFORE the optimistic mutation zeroes it; latch a "once" boundary without a guard flag
+- **A value derived from state that an optimistic write mutates must be captured BEFORE that write.** The
+  unread separator needs the conversation's `unreadCount`, but `markConversationRead()` (fired in `init`)
+  zeroes the cached count. Two `init` launches racing (`markRead` vs `conversationStream`) means the stream
+  can emit the already-zeroed row first → no separator. Fix: read `conversationStream(id).first()?.unreadCount`
+  **in the same launch, before** calling `markConversationRead()`. `conversationStream` maps Room's
+  `observeById`, which emits the current cached value immediately (null on cold cache → 0), so `.first()`
+  never blocks beyond that first emission.
+- **"Resolve once, then keep stable" without a mutable guard flag:** a plain `_state.map{}.first{predicate}`
+  in a dedicated `viewModelScope.launch` naturally resolves exactly once and the coroutine completes — no
+  `firstResolved: Boolean` var, no side-effect inside `_state.update{}` (which can loop under CAS
+  contention). Sequence the awaits: `val count = initialUnreadCount.filterNotNull().first(); val bubbles =
+  _state.map{it.messages}.first{it.isNotEmpty()}`. Because `StateFlow.map` replays the latest value on
+  collect, this is order-independent w.r.t. which flow populated first.
+- **Why NOT re-derive reactively:** the boundary is `size - unreadCount`. If you recompute on every message
+  emission, a newly-arrived message grows `size` and the separator slides down. iOS latches it once; so do we.
+  The list interleaver stays tolerant — it only inserts the separator when a message with the latched id is
+  actually present, so a deleted/paged-out boundary message degrades to "no separator", never a crash.
+- **Extend the interleaver with a defaulted arg, run the OLD tests unchanged first.** `buildChatListItems`
+  gained `firstUnreadId: String? = null`; the `null` default reduces to the exact prior day-header behaviour,
+  so all 6 pre-existing `ChatListItemsTest` cases pass untouched (the "extend, don't fork" discipline again).
+
 ## Lesson (2026-07-27, `conversation-drag-to-category`) — `explicitNulls = false` silently drops a null field, so "clear to null" is NOT free
 - **`MeeshyApi.json` sets `explicitNulls = false`** (`core/network/.../MeeshyApi.kt`). A nullable field
   set to `null` **serializes away entirely** — it is NOT sent as `"field": null`. This is exactly what you

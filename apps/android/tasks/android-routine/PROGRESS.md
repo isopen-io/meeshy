@@ -1,5 +1,41 @@
 # Progress — state & what to do next
 
+> On 2026-07-27 the **chat unread separator** landed (slice `chat-unread-separator`, feature-parity §C
+> Chat — completes the "unread separator" pending sub-item of the date-headers box). It draws the
+> "new messages" boundary directly above the first unread message on open, the faithful port of iOS
+> `ConversationViewModel`'s `firstUnreadMessageId` derivation (`unreadStartIndex = messages.count -
+> initialUnreadCount`, guarded by `!candidate.isMe`). **Added (production, all `apps/android`):**
+> (1) `:feature:chat/UnreadMarker.firstUnreadId(bubbles, unreadCount) → String?` — the pure SSOT: the
+> boundary sits at index `size - unreadCount`; returns `null` for a non-positive count (nothing unread),
+> an empty window, a count larger than the loaded window (can't place it), or a boundary landing on the
+> viewer's own outgoing message. (2) `ChatListItem.UnreadSeparator` data-object row + `buildChatListItems`
+> gains an optional `firstUnreadId` arg (default `null` → prior behaviour, all 6 old tests unchanged) that
+> inserts a single separator directly above the matching message (below its day header); an id absent from
+> the window inserts nothing. (3) `ChatUiState.firstUnreadMessageId` + `ChatViewModel` wiring: the init
+> captures `unreadCount` from the cached conversation's first Room emission **before** `markConversationRead`
+> zeroes it, then a second latch coroutine resolves the boundary once, when both the count and a non-empty
+> message window are known — a later message arrival never re-derives it (stable for the session, WhatsApp-
+> style). (4) `ChatScreen` renders an accent-coherent `UnreadSeparatorRow` (accent rule + centered pill,
+> EN/FR/ES/PT `chat_unread_separator`). **SOTA over iOS:** the boundary is a pure, fully-covered value type
+> (iOS derives it inline in the VM); capturing the count pre-mark-read removes the iOS race where opening the
+> conversation can zero the counter before the derivation runs. **+17 behavioural tests:** `UnreadMarkerTest`
+> (8: no-count / negative / empty / count>window / count-from-end / count==window-first / single-incoming /
+> own-at-boundary→null), `ChatListItemsTest` (+5: no-id-no-separator / before-first-unread / follows-day-header
+> / absent-id-no-separator / single-separator), `ChatViewModelTest` (+2: unread-conversation marks first-unread /
+> fully-read marks none). **Mutation (RED proof):** dropping the `isOutgoing` guard in `firstUnreadId` fails
+> **exactly** `an own message at the boundary is never marked unread` (`8 tests completed, 1 failed`,
+> `BUILD FAILED in 7s`), no collateral; restored after. **Gate:** `./apps/android/meeshy.sh check`
+> (= `assembleDebug testDebugUnitTest`) — full assemble + all-module JVM unit tests green (see run log).
+> Reviewer **PASS** (diff `apps/android` only — 1 new core + list-item/VM/screen wiring + 4 locale strings +
+> tracking docs; SDK purity — `UnreadMarker` is a stateless `:feature:chat` value type, the "when to latch /
+> capture-before-mark-read" orchestration stays in the VM; SSOT — one boundary derivation reused by the
+> interleaver and the screen; instant-app — no spinner, the separator rides the cache-first message stream;
+> UDF — immutable `UiState`, pure derivation; no tautological tests — literals + the mutation proof).
+> **Next slice:** the §C date-headers **joined banner** OR **inverted-list / unread-scroll-to-first** affordance
+> (scroll the list to the unread boundary on open), OR the app-side **`CategoryPickerField` / `TagInputField`**
+> composables driving the shipped picker/autocomplete cores, OR the paged **`OnboardingFlowView`** Compose
+> scaffold (Auth), OR the tracked **Kover 90% coverage-gate infra**.
+
 > On 2026-07-27 the **conversation → user-category (re)assignment** landed (slice
 > `conversation-drag-to-category`, feature-parity §B Conversations — the last open box on the "Sectioned
 > list … + drag-to-category" line, whose reducer/hydration/socket building blocks all shipped 2026-07-26
