@@ -1533,8 +1533,12 @@ export const NotificationPreferenceSchemas = {
     contactRequestEnabled: z.boolean().optional(),
     memberJoinedEnabled: z.boolean().optional(),
     dndEnabled: z.boolean().optional(),
-    dndStartTime: z.string().regex(/^([01]?[0-9]|2[0-3]):[0-5][0-9]$/).optional(),
-    dndEndTime: z.string().regex(/^([01]?[0-9]|2[0-3]):[0-5][0-9]$/).optional(),
+    // Canonical zero-padded HH:MM — same form enforced by the gateway
+    // (notification-schemas, isValidDndTime) and the NotificationPreferenceSchema
+    // default schema. A single-digit hour ("9:00") would break the lexicographic
+    // window comparison in isWithinDnd, so it must be rejected at this boundary.
+    dndStartTime: z.string().regex(/^([01]\d|2[0-3]):([0-5]\d)$/).optional(),
+    dndEndTime: z.string().regex(/^([01]\d|2[0-3]):([0-5]\d)$/).optional(),
   }),
 };
 
