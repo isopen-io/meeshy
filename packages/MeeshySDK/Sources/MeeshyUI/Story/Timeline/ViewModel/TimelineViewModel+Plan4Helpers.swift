@@ -23,6 +23,79 @@ extension TimelineViewModel {
         if isCommitted { endClipDrag() }
     }
 
+    // MARK: - Fenêtre d'un clip (début / fin / durée)
+
+    /// Fenêtre courante d'un clip. Un clip « permanent » (`duration == nil` —
+    /// tout texte fraîchement posé) n'a pas de durée stockée : on MATÉRIALISE
+    /// sa fenêtre effective, sinon les poignées restaient inertes sur lui.
+    func currentWindow(id: String) -> ClipWindowResolver.Window? {
+        guard let start = clipStartTime(id: id) else { return nil }
+        let duration = clipDuration(id: id)
+            ?? TimelineGeometry.effectiveClipDuration(startTime: start,
+                                                      duration: nil,
+                                                      slideDuration: project.slideDuration)
+        return ClipWindowResolver.Window(start: start, duration: duration)
+    }
+
+    /// Applique une intention d'édition à la fenêtre d'un clip et l'empile.
+    ///
+    /// Point de passage UNIQUE : c'est ici que les bornes s'appliquent, pour
+    /// que le stepper, le champ saisi et la poignée de piste produisent
+    /// exactement le même état. La commande choisie suit ce qui a changé — un
+    /// déplacement pur reste un `MoveClipCommand`, qui coalesce avec les
+    /// déplacements voisins dans la fenêtre du `CommandStack`.
+    private func applyWindow(id: String, edit: ClipWindowResolver.Edit) {
+        guard let kind = clipKind(forId: id),
+              let current = currentWindow(id: id) else { return }
+        let resolved = ClipWindowResolver.resolve(edit, from: current)
+
+        let startMoved = abs(resolved.start - current.start) > 0.0005
+        let durationChanged = abs(resolved.duration - current.duration) > 0.0005
+        // Un réglage sans effet ne doit pas empiler une entrée d'annulation vide.
+        guard startMoved || durationChanged else { return }
+
+        do {
+            if durationChanged {
+                let cmd = TrimClipCommand(
+                    clipId: id, kind: kind,
+                    oldStartTime: current.start, oldDuration: current.duration,
+                    newStartTime: resolved.start, newDuration: resolved.duration
+                )
+                try cmd.apply(to: &project)
+                commandStack.push(.trimClip(cmd))
+            } else {
+                let cmd = MoveClipCommand(clipId: id, kind: kind,
+                                          oldStartTime: current.start,
+                                          newStartTime: resolved.start)
+                try cmd.apply(to: &project)
+                commandStack.push(.moveClip(cmd))
+            }
+            scheduleEngineReconfigure()
+            recomputeSlideDuration()
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    // MARK: - Réglages ABSOLUS (champs saisissables de la fiche)
+
+    /// Pose le DÉBUT : le clip se déplace, sa durée est préservée.
+    public func setClipStart(id: String, to seconds: Float) {
+        applyWindow(id: id, edit: .move(to: seconds))
+    }
+
+    /// Pose la FIN : le début est préservé, la durée se recalcule.
+    public func setClipEnd(id: String, to seconds: Float) {
+        applyWindow(id: id, edit: .setEnd(seconds))
+    }
+
+    /// Pose la DURÉE : le début est préservé, la fin se déplace.
+    public func setClipDuration(id: String, to seconds: Float) {
+        applyWindow(id: id, edit: .setDuration(seconds))
+    }
+
+    // MARK: - Réglages par PAS (steppers, poignées, actions d'accessibilité)
+
     /// Déplacement EXACT du début d'un clip — les steppers ±0,1 s de
     /// l'inspecteur.
     ///
@@ -36,87 +109,27 @@ extension TimelineViewModel {
     /// Les deux chemins ont des exigences opposées — le doigt VEUT accrocher,
     /// le stepper veut la valeur qu'il annonce — d'où deux méthodes distinctes.
     public func nudgeClipStart(id: String, by deltaTimeSeconds: Float) {
-        guard deltaTimeSeconds.isFinite,
-              let kind = clipKind(forId: id),
-              let currentStart = clipStartTime(id: id) else { return }
-        let newStart = max(0, currentStart + deltaTimeSeconds)
-        // Même seuil de no-op que `endClipDrag` : une pression sans effet ne
-        // doit pas empiler une commande d'annulation vide.
-        guard abs(newStart - currentStart) > 0.0005 else { return }
-        let cmd = MoveClipCommand(clipId: id, kind: kind,
-                                  oldStartTime: currentStart, newStartTime: newStart)
-        do {
-            try cmd.apply(to: &project)
-            commandStack.push(.moveClip(cmd))
-            scheduleEngineReconfigure()
-            recomputeSlideDuration()
-        } catch {
-            errorMessage = error.localizedDescription
-        }
+        guard deltaTimeSeconds.isFinite, let w = currentWindow(id: id) else { return }
+        applyWindow(id: id, edit: .move(to: w.start + deltaTimeSeconds))
     }
 
     // MARK: - Trim helpers
 
-    /// Trim the start handle of a clip by `deltaTimeSeconds` (positive = shrink from left).
-    /// Pushes a `TrimClipCommand` onto the stack.
+    /// Poignée gauche : la FIN reste fixe, la durée absorbe le delta.
     public func trimClipStart(id: String, deltaTimeSeconds: Float) {
-        guard deltaTimeSeconds.isFinite else { return }
-        guard let kind = clipKind(forId: id),
-              let currentStart = clipStartTime(id: id) else { return }
-        // Clip « permanent » (duration nil — tout texte fraîchement posé) :
-        // le trim MATÉRIALISE sa fenêtre effective (start → slideDuration)
-        // puis l'ajuste — sans ça les poignées étaient inertes sur ces clips.
-        let currentDuration = clipDuration(id: id)
-            ?? TimelineGeometry.effectiveClipDuration(startTime: currentStart,
-                                                      duration: nil,
-                                                      slideDuration: project.slideDuration)
-        let newStart = max(0, currentStart + deltaTimeSeconds)
-        let actualDelta = newStart - currentStart
-        let newDuration = max(0.05, currentDuration - actualDelta)
-        let cmd = TrimClipCommand(
-            clipId: id, kind: kind,
-            oldStartTime: currentStart, oldDuration: currentDuration,
-            newStartTime: newStart, newDuration: newDuration
-        )
-        do {
-            try cmd.apply(to: &project)
-            commandStack.push(.trimClip(cmd))
-            scheduleEngineReconfigure()
-            recomputeSlideDuration()
-        } catch {
-            errorMessage = error.localizedDescription
-        }
+        guard deltaTimeSeconds.isFinite, let w = currentWindow(id: id) else { return }
+        applyWindow(id: id, edit: .setStart(w.start + deltaTimeSeconds))
     }
 
-    /// Trim the end handle of a clip by `deltaTimeSeconds` (positive = extend right).
-    /// Clamps to `mediaDurationLimit` when provided (source media length).
+    /// Poignée droite : le DÉBUT reste fixe. `mediaDurationLimit` borne à la
+    /// longueur du média source quand l'appelant la connaît.
     public func trimClipEnd(id: String, deltaTimeSeconds: Float, mediaDurationLimit: Float? = nil) {
-        guard deltaTimeSeconds.isFinite else { return }
-        guard let kind = clipKind(forId: id),
-              let currentStart = clipStartTime(id: id) else { return }
-        // Même matérialisation de fenêtre que trimClipStart pour les clips
-        // permanents (duration nil).
-        let currentDuration = clipDuration(id: id)
-            ?? TimelineGeometry.effectiveClipDuration(startTime: currentStart,
-                                                      duration: nil,
-                                                      slideDuration: project.slideDuration)
-        var newDuration = max(0.05, currentDuration + deltaTimeSeconds)
+        guard deltaTimeSeconds.isFinite, let w = currentWindow(id: id) else { return }
+        var target = w.end + deltaTimeSeconds
         if let limit = mediaDurationLimit {
-            newDuration = min(newDuration, limit)
+            target = min(target, w.start + limit)
         }
-        let cmd = TrimClipCommand(
-            clipId: id, kind: kind,
-            oldStartTime: currentStart, oldDuration: currentDuration,
-            newStartTime: currentStart, newDuration: newDuration
-        )
-        do {
-            try cmd.apply(to: &project)
-            commandStack.push(.trimClip(cmd))
-            scheduleEngineReconfigure()
-            recomputeSlideDuration()
-        } catch {
-            errorMessage = error.localizedDescription
-        }
+        applyWindow(id: id, edit: .setEnd(target))
     }
 
     // MARK: - Add media / audio helpers
