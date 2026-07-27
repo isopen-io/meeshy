@@ -118,7 +118,9 @@ public struct TimelineInspectorHost: View {
                 fadeOutDuration: Float(media.fadeOut ?? 0),
                 isLooping: media.loop,
                 isBackground: media.isBackground,
-                name: media.name
+                name: media.name,
+                transform: ClipTransform(x: media.x, y: media.y, scale: media.scale,
+                                         rotation: media.rotation, zIndex: media.zIndex)
             )
         }
         if let audio = viewModel.project.audioPlayerObjects.first(where: { $0.id == id }) {
@@ -152,7 +154,9 @@ public struct TimelineInspectorHost: View {
                 fadeOutDuration: Float(text.fadeOut ?? 0),
                 isLooping: false,
                 isBackground: false,
-                name: text.name
+                name: text.name,
+                transform: ClipTransform(x: text.x, y: text.y, scale: text.scale,
+                                         rotation: text.rotation, zIndex: text.zIndex)
             )
         }
         // Le sticker a une lane TAPABLE dans la timeline mais aucune branche
@@ -342,7 +346,19 @@ public struct TimelineInspectorHost: View {
             onStartTrimmed: { [viewModel] delta in
                 viewModel.trimClipStart(id: clipId, deltaTimeSeconds: delta)
             },
-            slideDuration: viewModel.project.slideDuration
+            slideDuration: viewModel.project.slideDuration,
+            onStartSet: { [viewModel] seconds in
+                viewModel.setClipStart(id: clipId, to: seconds)
+            },
+            onEndSet: { [viewModel] seconds in
+                viewModel.setClipEnd(id: clipId, to: seconds)
+            },
+            onDurationSet: { [viewModel] seconds in
+                viewModel.setClipDuration(id: clipId, to: seconds)
+            },
+            onTransformChanged: { [viewModel] field in
+                viewModel.setClipTransform(id: clipId, field: field)
+            }
         )
         .padding(presentation == .popover ? 12 : 0)
         .transition(.opacity)

@@ -1,4 +1,5 @@
 import SwiftUI
+import MeeshySDK
 
 /// Per-clip editor surface. Stateless on its own — receives a snapshot, emits
 /// callbacks for every field commit. The owning container (`StoryTimelineView`
@@ -32,18 +33,24 @@ public struct ClipInspector: View {
         public let isBackground: Bool
         /// Nom personnalisé de la piste (nil = utilise `displayName` par défaut).
         public let name: String?
+        /// Place de la piste dans le PLAN. Le snapshot ne la transportait pas,
+        /// si bien que la fiche restituait le temps mais jamais l'espace : on
+        /// ne pouvait ni lire ni corriger une position au chiffre près.
+        public let transform: ClipTransform
 
         public init(id: String, displayName: String, kind: Kind,
                     startTime: Float, duration: Float, volume: Float,
                     fadeInDuration: Float, fadeOutDuration: Float,
                     isLooping: Bool, isBackground: Bool,
-                    name: String? = nil) {
+                    name: String? = nil,
+                    transform: ClipTransform = .identity) {
             self.id = id; self.displayName = displayName; self.kind = kind
             self.startTime = startTime; self.duration = duration
             self.volume = volume
             self.fadeInDuration = fadeInDuration; self.fadeOutDuration = fadeOutDuration
             self.isLooping = isLooping; self.isBackground = isBackground
             self.name = name
+            self.transform = transform
         }
     }
 
@@ -58,21 +65,27 @@ public struct ClipInspector: View {
     /// hints vivent derrière le bouton (i), la configuration d'animation
     /// (fondus + étape au playhead) derrière le bouton Animation.
     public enum Section: String, CaseIterable, Sendable, Equatable {
-        case header, timing, details, volume, toggles, actions, animation
+        case header, timing, transform, volume, animation, toggles, actions
     }
 
-    /// Résout les sections visibles pour un état donné. Un clip FOND couvre
-    /// toute la slide : début/durée sont ignorés par le moteur, la barre de
-    /// timing disparaît (contrôle sans effet). Pure — testée sans monter la
-    /// vue (voir `ClipInspectorTests.test_visibleSections_*`).
+    /// Résout les sections visibles pour un état donné.
+    ///
+    /// TOUT est visible d'emblée (directive user 2026-07-27) : les deux replis
+    /// d'avant — ⓘ pour le timing fin, « Animation » pour les fondus —
+    /// cachaient l'essentiel derrière un tap de plus. La section `details` a
+    /// disparu : ses trois valeurs sont devenues les champs saisissables de
+    /// `timing`.
+    ///
+    /// Un clip FOND couvre toute la slide : début et durée sont ignorés par le
+    /// moteur, la barre de timing disparaît (contrôle sans effet). Pure —
+    /// testée sans monter la vue (voir `ClipInspectorTests.test_visibleSections_*`).
     public static func visibleSections(kind: ClipSnapshot.Kind,
-                                       isBackground: Bool,
-                                       isDetailsExpanded: Bool,
-                                       isAnimationExpanded: Bool) -> [Section] {
+                                       isBackground: Bool) -> [Section] {
         var sections: [Section] = [.header]
         if !isBackground { sections.append(.timing) }
-        if isDetailsExpanded { sections.append(.details) }
+        if supportsTransform(kind: kind, isBackground: isBackground) { sections.append(.transform) }
         if hasAudioAffordances(kind: kind) { sections.append(.volume) }
+        sections.append(.animation)
         // La rangée d'interrupteurs ne s'affiche que si l'un d'eux agit
         // vraiment. Texte et sticker n'ont NI boucle NI bascule de fond :
         // `setClipLoop` / `setClipBackground` les ignorent silencieusement.
@@ -80,8 +93,24 @@ public struct ClipInspector: View {
             sections.append(.toggles)
         }
         sections.append(.actions)
-        if isAnimationExpanded { sections.append(.animation) }
         return sections
+    }
+
+    /// True quand la piste occupe une place dans le PLAN et que la déplacer,
+    /// la redimensionner ou la faire pivoter a un effet visible.
+    ///
+    /// Un clip de FOND remplit tout le cadre : sa position n'a pas de sens. Un
+    /// AUDIO n'a rien à montrer — son `x`/`y` existe dans le modèle mais ne
+    /// pilote aucun rendu.
+    /// Le sticker en est exclu comme il l'est déjà de la suppression :
+    /// `SetClipPropertyCommand` refuse explicitement ses propriétés
+    /// (« sticker properties are edited on the canvas, not the timeline »).
+    public static func supportsTransform(kind: ClipSnapshot.Kind, isBackground: Bool) -> Bool {
+        guard !isBackground else { return false }
+        switch kind {
+        case .video, .image, .text: return true
+        case .audio, .sticker:      return false
+        }
     }
 
     // MARK: - Confirmation de suppression
@@ -130,6 +159,29 @@ public struct ClipInspector: View {
     public let onStartTrimmed: (Float) -> Void
     /// Durée totale de la slide — étendue de la barre de timing tactile.
     public let slideDuration: Float
+    /// Pose le DÉBUT à une valeur absolue (le clip se déplace, durée constante).
+    public let onStartSet: (Float) -> Void
+    /// Pose la FIN à une valeur absolue (le début est préservé).
+    public let onEndSet: (Float) -> Void
+    /// Pose la DURÉE à une valeur absolue (le début est préservé).
+    public let onDurationSet: (Float) -> Void
+    /// Règle un champ de la place dans le plan.
+    public let onTransformChanged: (ClipTransform.Field) -> Void
+
+    /// Secondes saisies au clavier. Accepte les DEUX séparateurs décimaux : un
+    /// champ qui refuse « 3,5 » est inutilisable en français.
+    public nonisolated static func parseSeconds(_ text: String) -> Float? {
+        let normalized = text.replacingOccurrences(of: ",", with: ".")
+        guard let value = Float(normalized), value.isFinite, value >= 0 else { return nil }
+        return value
+    }
+
+    /// Nombre décimal signé — position en pourcentage, échelle, rotation.
+    public nonisolated static func parseDecimal(_ text: String) -> Double? {
+        let normalized = text.replacingOccurrences(of: ",", with: ".")
+        guard let value = Double(normalized), value.isFinite else { return nil }
+        return value
+    }
 
     /// Pas des steppers début/durée.
     public static let timeStep: Float = 0.1
@@ -167,8 +219,9 @@ public struct ClipInspector: View {
     @State private var loop: Bool
     @State private var background: Bool
     @State private var draftName: String
-    @State private var isDetailsExpanded = false
-    @State private var isAnimationExpanded = false
+    /// Brouillons de saisie, un par champ, vidés à la validation pour que la
+    /// valeur affichée redevienne celle du modèle.
+    @State private var drafts: [String: String] = [:]
     @State private var deleteConfirmation = DeleteConfirmation()
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -188,7 +241,11 @@ public struct ClipInspector: View {
                 onNameChanged: @escaping (String?) -> Void = { _ in },
                 onEndAdjusted: @escaping (Float) -> Void = { _ in },
                 onStartTrimmed: @escaping (Float) -> Void = { _ in },
-                slideDuration: Float = 0) {
+                slideDuration: Float = 0,
+                onStartSet: @escaping (Float) -> Void = { _ in },
+                onEndSet: @escaping (Float) -> Void = { _ in },
+                onDurationSet: @escaping (Float) -> Void = { _ in },
+                onTransformChanged: @escaping (ClipTransform.Field) -> Void = { _ in }) {
         self.presentation = presentation
         self.clip = clip
         self.onVolumeChanged = onVolumeChanged
@@ -206,6 +263,10 @@ public struct ClipInspector: View {
         self.onEndAdjusted = onEndAdjusted
         self.onStartTrimmed = onStartTrimmed
         self.slideDuration = slideDuration
+        self.onStartSet = onStartSet
+        self.onEndSet = onEndSet
+        self.onDurationSet = onDurationSet
+        self.onTransformChanged = onTransformChanged
         _volume = State(initialValue: clip.volume)
         _fadeIn = State(initialValue: clip.fadeInDuration)
         _fadeOut = State(initialValue: clip.fadeOutDuration)
@@ -307,28 +368,17 @@ public struct ClipInspector: View {
     }
 
     public var body: some View {
-        let sections = Self.visibleSections(kind: clip.kind,
-                                            isBackground: background,
-                                            isDetailsExpanded: isDetailsExpanded,
-                                            isAnimationExpanded: isAnimationExpanded)
+        let sections = Self.visibleSections(kind: clip.kind, isBackground: background)
         VStack(alignment: .leading, spacing: 12) {
             header
-            if sections.contains(.timing) {
-                timingSection
-            }
-            if sections.contains(.details) {
-                detailsSection
-            }
-            if sections.contains(.volume) {
-                volumeSlider
-            }
-            if sections.contains(.toggles) {
-                togglesRow
-            }
+            // Un fond couvre toute la slide : à la place des contrôles de
+            // timing, qui n'auraient aucun effet, on dit POURQUOI ils manquent.
+            if sections.contains(.timing) { timingSection } else { backgroundHint }
+            if sections.contains(.transform) { transformSection }
+            if sections.contains(.volume) { volumeSlider }
+            if sections.contains(.animation) { animationConfig }
+            if sections.contains(.toggles) { togglesRow }
             actionsRow
-            if sections.contains(.animation) {
-                animationConfig
-            }
         }
         .padding(presentation == .popover ? 14 : 18)
         // Surface volontairement en MATÉRIAU, pas en glassEffect : les
@@ -349,6 +399,9 @@ public struct ClipInspector: View {
             loop = newClip.isLooping
             background = newClip.isBackground
             draftName = newClip.name ?? ""
+            // Un undo ou une poussée externe laisserait sinon à l'écran un
+            // brouillon de saisie périmé, plus à jour que le modèle.
+            drafts.removeAll()
         }
         .alert(
             String(localized: "story.timeline.inspector.delete.confirmTitle",
@@ -392,23 +445,6 @@ public struct ClipInspector: View {
             .onSubmit { onNameChanged(draftName) }
             .lineLimit(1)
             Spacer(minLength: 0)
-            Button {
-                withAnimation(reduceMotion ? .none : .spring(response: 0.35, dampingFraction: 0.85)) {
-                    isDetailsExpanded.toggle()
-                }
-            } label: {
-                Image(systemName: isDetailsExpanded ? "info.circle.fill" : "info.circle")
-                    .font(.title3)
-                    .foregroundStyle(isDetailsExpanded ? MeeshyColors.indigo500 : .secondary)
-                    .contentShape(Rectangle().inset(by: -8))
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel(String(localized: "story.timeline.inspector.details",
-                                       defaultValue: "Détails", bundle: .module))
-            .accessibilityHint(String(localized: "story.timeline.inspector.details.hint",
-                                      defaultValue: "Affiche le début, la durée et les informations du clip",
-                                      bundle: .module))
-            .accessibilityAddTraits(isDetailsExpanded ? [.isSelected] : [])
             Button(action: onClose) {
                 Image(systemName: "xmark.circle.fill")
                     .font(.title3)
@@ -425,32 +461,124 @@ public struct ClipInspector: View {
     /// (capture user 2026-07-20 : steppers « 0:0… » tronqués, « définir
     /// début/durée du bout du doigt »). Les steppers fins ±0,1 s restent
     /// derrière le bouton (i) pour l'ajustement de précision.
+    /// Barre de trim tactile — l'affordance PRINCIPALE de début/durée
+    /// (capture user 2026-07-20 : « définir début/durée du bout du doigt ») —
+    /// SUIVIE des trois valeurs liées, saisissables au clavier.
+    ///
+    /// Ces trois champs vivaient derrière le bouton ⓘ, en lecture avec des
+    /// steppers ±0,1 s pour seule édition : poser un début à 3,5 s demandait
+    /// 35 pressions. Ils sont désormais visibles d'emblée et tapables.
     private var timingSection: some View {
-        ClipTimingBar(
-            start: clip.startTime,
-            duration: clip.duration,
-            slideDuration: slideDuration,
-            onMoveCommitted: onStartAdjusted,
-            onTrimStartCommitted: onStartTrimmed,
-            onTrimEndCommitted: onEndAdjusted
-        )
+        VStack(alignment: .leading, spacing: 10) {
+            ClipTimingBar(
+                start: clip.startTime,
+                duration: clip.duration,
+                slideDuration: slideDuration,
+                onMoveCommitted: onStartAdjusted,
+                onTrimStartCommitted: onStartTrimmed,
+                onTrimEndCommitted: onEndAdjusted
+            )
+            HStack(alignment: .top, spacing: 8) {
+                numericField(key: "start",
+                             title: String(localized: "story.timeline.inspector.start",
+                                           defaultValue: "Début", bundle: .module),
+                             value: String(format: "%.1f", clip.startTime),
+                             unit: "s",
+                             onStep: onStartAdjusted,
+                             onCommit: { if let v = Self.parseSeconds($0) { onStartSet(v) } })
+                numericField(key: "end",
+                             title: String(localized: "story.timeline.inspector.end",
+                                           defaultValue: "Fin", bundle: .module),
+                             value: String(format: "%.1f", clip.startTime + clip.duration),
+                             unit: "s",
+                             onStep: onEndAdjusted,
+                             onCommit: { if let v = Self.parseSeconds($0) { onEndSet(v) } })
+                numericField(key: "duration",
+                             title: String(localized: "story.timeline.inspector.duration",
+                                           defaultValue: "Durée", bundle: .module),
+                             value: String(format: "%.1f", clip.duration),
+                             unit: "s",
+                             onStep: onDurationAdjusted,
+                             onCommit: { if let v = Self.parseSeconds($0) { onDurationSet(v) } })
+            }
+        }
     }
 
-    /// Panneau (i) : steppers fins ±0,1 s + hints contextuels. Sorti du corps
-    /// de la modale — ces informations restent à un tap, sans charger la
-    /// surface par défaut. Pour un clip FOND, début/durée sont ignorés par le
-    /// moteur : on ne montre QUE le hint (pas de contrôles sans effet).
-    private var detailsSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            if background {
-                Text(String(localized: "story.timeline.inspector.background.hint",
-                            defaultValue: "Le fond couvre toute la slide — début/durée ignorés. Désactivez « Fond » pour caler ce média sur la timeline.",
-                            bundle: .module))
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            } else {
-                metadataRow
+    /// Hint affiché à la place du timing pour un clip de FOND.
+    private var backgroundHint: some View {
+        Text(String(localized: "story.timeline.inspector.background.hint",
+                    defaultValue: "Le fond couvre toute la slide — début/durée ignorés. Désactivez « Fond » pour caler ce média sur la timeline.",
+                    bundle: .module))
+            .font(.caption2)
+            .foregroundStyle(.secondary)
+            .fixedSize(horizontal: false, vertical: true)
+    }
+
+    /// Place de la piste dans le PLAN. La fiche restituait le temps et jamais
+    /// l'espace : impossible de lire ou corriger une position au chiffre près,
+    /// alors que les modèles portent x/y/échelle/rotation/plan depuis toujours.
+    private var transformSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text(String(localized: "story.timeline.inspector.transform",
+                        defaultValue: "Position dans le plan", bundle: .module).uppercased())
+                .font(.system(size: 9, weight: .semibold))
+                .foregroundStyle(.secondary)
+            HStack(alignment: .top, spacing: 8) {
+                // x/y sont normalisés 0–1 dans le modèle ; on les présente en
+                // POURCENTAGE, plus lisible qu'un « 0,5 » pour dire « au centre ».
+                numericField(key: "tx", title: "X",
+                             value: String(format: "%.0f", clip.transform.x * 100),
+                             unit: "%",
+                             onStep: { delta in
+                                 onTransformChanged(.x(clip.transform.x + Double(delta) / 10))
+                             },
+                             onCommit: {
+                                 if let v = Self.parseDecimal($0) { onTransformChanged(.x(v / 100)) }
+                             })
+                numericField(key: "ty", title: "Y",
+                             value: String(format: "%.0f", clip.transform.y * 100),
+                             unit: "%",
+                             onStep: { delta in
+                                 onTransformChanged(.y(clip.transform.y + Double(delta) / 10))
+                             },
+                             onCommit: {
+                                 if let v = Self.parseDecimal($0) { onTransformChanged(.y(v / 100)) }
+                             })
+            }
+            HStack(alignment: .top, spacing: 8) {
+                numericField(key: "scale",
+                             title: String(localized: "story.timeline.inspector.scale",
+                                           defaultValue: "Taille", bundle: .module),
+                             value: String(format: "%.2f", clip.transform.scale),
+                             unit: "×",
+                             onStep: { delta in
+                                 onTransformChanged(.scale(clip.transform.scale + Double(delta)))
+                             },
+                             onCommit: {
+                                 if let v = Self.parseDecimal($0) { onTransformChanged(.scale(v)) }
+                             })
+                numericField(key: "rotation",
+                             title: String(localized: "story.timeline.inspector.rotation",
+                                           defaultValue: "Rotation", bundle: .module),
+                             value: String(format: "%.0f", clip.transform.rotation),
+                             unit: "°",
+                             onStep: { delta in
+                                 onTransformChanged(.rotation(clip.transform.rotation + Double(delta) * 50))
+                             },
+                             onCommit: {
+                                 if let v = Self.parseDecimal($0) { onTransformChanged(.rotation(v)) }
+                             })
+                numericField(key: "zIndex",
+                             title: String(localized: "story.timeline.inspector.zIndex",
+                                           defaultValue: "Plan", bundle: .module),
+                             value: "\(clip.transform.zIndex)",
+                             unit: "",
+                             onStep: { delta in
+                                 onTransformChanged(.zIndex(clip.transform.zIndex + (delta > 0 ? 1 : -1)))
+                             },
+                             onCommit: {
+                                 if let v = Self.parseDecimal($0) { onTransformChanged(.zIndex(Int(v))) }
+                             })
             }
         }
         .padding(10)
@@ -458,54 +586,50 @@ public struct ClipInspector: View {
             RoundedRectangle(cornerRadius: 10)
                 .fill(MeeshyColors.indigo500.opacity(0.08))
         )
-        .transition(reduceMotion ? .opacity : .opacity.combined(with: .move(edge: .top)))
     }
 
-    private var metadataRow: some View {
-        let end = clip.startTime + clip.duration
-        return HStack(spacing: 12) {
-            steppableTimeField(
-                title: String(localized: "story.timeline.inspector.start",
-                              defaultValue: "Début", bundle: .module),
-                value: clip.startTime,
-                onAdjust: onStartAdjusted
-            )
-            steppableTimeField(
-                title: String(localized: "story.timeline.inspector.end",
-                              defaultValue: "Fin", bundle: .module),
-                value: end,
-                onAdjust: onEndAdjusted
-            )
-            steppableTimeField(
-                title: String(localized: "story.timeline.inspector.duration",
-                              defaultValue: "Durée", bundle: .module),
-                value: clip.duration,
-                onAdjust: onDurationAdjusted
-            )
-        }
-    }
-
-    /// Champ temps éditable par pas de ±0,1 s — l'affichage seul rendait la
-    /// modale « peu compréhensible » : des valeurs qu'on lit mais qu'on ne
-    /// peut pas toucher (retour user 2026-07-11). Affichage COMPACT
-    /// (`0:03.5`) : le format ms `0:03.500` tronquait en « 0:0… » sur trois
-    /// colonnes en popover (capture user 2026-07-20).
-    private func steppableTimeField(title: String, value: Float,
-                                    onAdjust: @escaping (Float) -> Void) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
+    /// Champ numérique : saisissable au clavier ET grignotable par pas.
+    /// `key` isole le brouillon de saisie d'un champ à l'autre.
+    private func numericField(key: String, title: String, value: String, unit: String,
+                              onStep: @escaping (Float) -> Void,
+                              onCommit: @escaping (String) -> Void) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
             Text(title.uppercased())
                 .font(.system(size: 9, weight: .semibold))
                 .foregroundStyle(.secondary)
-            HStack(spacing: 6) {
-                stepButton(systemName: "minus.circle.fill") { onAdjust(-Self.timeStep) }
-                Text(TransportBar.formatTimeCompact(seconds: value))
-                    .font(.system(.callout, design: .monospaced))
-                    .monospacedDigit()
-                stepButton(systemName: "plus.circle.fill") { onAdjust(Self.timeStep) }
+                .lineLimit(1)
+            HStack(spacing: 2) {
+                TextField("", text: Binding(
+                    get: { drafts[key] ?? value },
+                    set: { drafts[key] = $0 }
+                ))
+                .keyboardType(.numbersAndPunctuation)
+                .multilineTextAlignment(.center)
+                .font(.system(.footnote, design: .monospaced))
+                .monospacedDigit()
+                .submitLabel(.done)
+                .onSubmit {
+                    if let draft = drafts[key] { onCommit(draft) }
+                    drafts[key] = nil
+                }
+                if !unit.isEmpty {
+                    Text(unit)
+                        .font(.system(size: 9))
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .padding(.vertical, 5)
+            .padding(.horizontal, 4)
+            .background(RoundedRectangle(cornerRadius: 7)
+                .fill(MeeshyColors.indigo500.opacity(0.10)))
+            HStack(spacing: 4) {
+                stepButton(systemName: "minus.circle.fill") { onStep(-Self.timeStep) }
+                Spacer(minLength: 0)
+                stepButton(systemName: "plus.circle.fill") { onStep(Self.timeStep) }
             }
         }
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(title) \(Self.formatTime(seconds: value))")
+        .accessibilityLabel("\(title) \(value)\(unit)")
     }
 
     private func stepButton(systemName: String, action: @escaping () -> Void) -> some View {
@@ -700,37 +824,16 @@ public struct ClipInspector: View {
         AdaptiveGlassContainer(spacing: 12) {
             ViewThatFits(in: .horizontal) {
                 HStack(spacing: 10) {
-                    animationButton
                     if Self.supportsSplit(kind: clip.kind) { splitButton }
                     if Self.supportsDeletion(kind: clip.kind) { deleteButton }
                 }
                 VStack(alignment: .leading, spacing: 10) {
-                    HStack(spacing: 10) {
-                        animationButton
-                        if Self.supportsSplit(kind: clip.kind) { splitButton }
-                    }
+                    if Self.supportsSplit(kind: clip.kind) { splitButton }
                     if Self.supportsDeletion(kind: clip.kind) { deleteButton }
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
-    }
-
-    private var animationButton: some View {
-        Button {
-            withAnimation(reduceMotion ? .none : .spring(response: 0.35, dampingFraction: 0.85)) {
-                isAnimationExpanded.toggle()
-            }
-        } label: {
-            animationToggleLabel
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel(String(localized: "story.timeline.inspector.animation",
-                                   defaultValue: "Animation", bundle: .module))
-        .accessibilityHint(String(localized: "story.timeline.inspector.animation.hint",
-                                  defaultValue: "Affiche les réglages d'animation du clip",
-                                  bundle: .module))
-        .accessibilityAddTraits(isAnimationExpanded ? [.isSelected] : [])
     }
 
     private var splitButton: some View {
@@ -773,30 +876,6 @@ public struct ClipInspector: View {
         .accessibilityHint(String(localized: "story.timeline.inspector.delete.hint",
                                   defaultValue: "Demande une confirmation avant la suppression",
                                   bundle: .module))
-    }
-
-    /// État replié = glass régulier teinté, foreground adaptatif au scheme
-    /// (`glassControlForeground` : blanc en sombre, indigo950 en clair) ;
-    /// déplié = glass prominent, blanc sur indigo — le contrôle actif se
-    /// détache, parité avec le fallback.
-    @ViewBuilder
-    private var animationToggleLabel: some View {
-        let label = Label(String(localized: "story.timeline.inspector.animation",
-                                 defaultValue: "Animation", bundle: .module),
-                          systemImage: "diamond.fill")
-            .font(.footnote.weight(.semibold))
-            .fixedSize(horizontal: true, vertical: false)
-            .padding(.horizontal, 12)
-            .frame(height: 36)
-        if isAnimationExpanded {
-            label.foregroundStyle(.white)
-                .adaptiveGlassProminent(in: Capsule(), tint: MeeshyColors.indigo500)
-                .contentShape(Rectangle().inset(by: -4))
-        } else {
-            label.glassControlForeground()
-                .adaptiveGlass(in: Capsule(), tint: MeeshyColors.indigo500, interactive: true)
-                .contentShape(Rectangle().inset(by: -4))
-        }
     }
 
     private var kindSystemImage: String {

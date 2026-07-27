@@ -116,6 +116,37 @@ extension TimelineViewModel {
         applyWindow(id: id, edit: .setDuration(seconds))
     }
 
+    // MARK: - Place dans le plan (position / taille / rotation / superposition)
+
+    /// Transformation courante d'une piste, telle que le projet la porte.
+    /// `nil` quand l'identifiant ne correspond à rien, ou à un audio — qui ne
+    /// se voit pas.
+    public func clipTransform(id: String) -> ClipTransform? {
+        if let m = project.mediaObjects.first(where: { $0.id == id }) {
+            return ClipTransform(x: m.x, y: m.y, scale: m.scale,
+                                 rotation: m.rotation, zIndex: m.zIndex)
+        }
+        if let t = project.textObjects.first(where: { $0.id == id }) {
+            return ClipTransform(x: t.x, y: t.y, scale: t.scale,
+                                 rotation: t.rotation, zIndex: t.zIndex)
+        }
+        return nil
+    }
+
+    /// Règle UN champ de la transformation, en préservant les autres. Le
+    /// bornage vit dans `ClipTransform.applying(_:)`, et l'écriture passe par
+    /// le `CommandStack` comme toute autre édition : une entrée d'annulation
+    /// par réglage, et un réglage sans effet n'en pose aucune.
+    public func setClipTransform(id: String, field: ClipTransform.Field) {
+        guard let kind = clipKind(forId: id),
+              let current = clipTransform(id: id) else { return }
+        let updated = current.applying(field)
+        guard updated != current else { return }
+        let cmd = SetClipPropertyCommand(clipId: id, kind: kind,
+                                         property: .transform(old: current, new: updated))
+        applySetClipProperty(cmd)
+    }
+
     // MARK: - Réglages par PAS (steppers, poignées, actions d'accessibilité)
 
     /// Déplacement EXACT du début d'un clip — les steppers ±0,1 s de

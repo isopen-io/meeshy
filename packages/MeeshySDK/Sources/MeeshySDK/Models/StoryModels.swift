@@ -3278,13 +3278,19 @@ public struct SetClipPropertyCommand: EditCommand {
         case isBackground(old: Bool?, new: Bool?)
         case isLocked(old: Bool?, new: Bool?)
         case name(old: String?, new: String?)
+        /// Place de la piste dans le PLAN — position, taille, rotation, rang de
+        /// superposition. Un seul cas plutôt que cinq : régler un champ produit
+        /// une transformation COMPLÈTE, donc une seule entrée d'annulation par
+        /// réglage, et l'encodage reste à deux clés.
+        case transform(old: ClipTransform, new: ClipTransform)
 
         private enum CodingKeys: String, CodingKey {
             case type, oldFloat, newFloat, oldBool, newBool, oldString, newString
+            case oldTransform, newTransform
         }
 
         private enum Tag: String, Codable {
-            case volume, fadeIn, fadeOut, loop, isBackground, isLocked, name
+            case volume, fadeIn, fadeOut, loop, isBackground, isLocked, name, transform
         }
 
         public init(from decoder: Decoder) throws {
@@ -3319,6 +3325,10 @@ public struct SetClipPropertyCommand: EditCommand {
                 let old = try c.decodeIfPresent(String.self, forKey: .oldString)
                 let new = try c.decodeIfPresent(String.self, forKey: .newString)
                 self = .name(old: old, new: new)
+            case .transform:
+                let old = try c.decode(ClipTransform.self, forKey: .oldTransform)
+                let new = try c.decode(ClipTransform.self, forKey: .newTransform)
+                self = .transform(old: old, new: new)
             }
         }
 
@@ -3353,6 +3363,10 @@ public struct SetClipPropertyCommand: EditCommand {
                 try c.encode(Tag.name, forKey: .type)
                 try c.encodeIfPresent(old, forKey: .oldString)
                 try c.encodeIfPresent(new, forKey: .newString)
+            case .transform(let old, let new):
+                try c.encode(Tag.transform, forKey: .type)
+                try c.encode(old, forKey: .oldTransform)
+                try c.encode(new, forKey: .newTransform)
             }
         }
     }
@@ -3423,6 +3437,11 @@ public struct SetClipPropertyCommand: EditCommand {
             break
         case .name(let old, let new):
             media.name = useNew ? new : old
+        case .transform(let old, let new):
+            let t = useNew ? new : old
+            media.x = t.x; media.y = t.y
+            media.scale = t.scale; media.rotation = t.rotation
+            media.zIndex = t.zIndex
         }
     }
 
@@ -3446,6 +3465,10 @@ public struct SetClipPropertyCommand: EditCommand {
             break
         case .name(let old, let new):
             audio.name = useNew ? new : old
+        case .transform:
+            // Un audio ne se voit pas : ses x/y existent dans le modèle mais ne
+            // pilotent aucun rendu. La fiche ne propose pas la section.
+            break
         }
     }
 
@@ -3463,6 +3486,11 @@ public struct SetClipPropertyCommand: EditCommand {
             text.fadeOut = val
         case .name(let old, let new):
             text.name = useNew ? new : old
+        case .transform(let old, let new):
+            let tr = useNew ? new : old
+            text.x = tr.x; text.y = tr.y
+            text.scale = tr.scale; text.rotation = tr.rotation
+            text.zIndex = tr.zIndex
         case .volume, .loop, .isBackground:
             break
         }
