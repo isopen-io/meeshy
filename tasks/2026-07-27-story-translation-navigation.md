@@ -160,8 +160,17 @@ vide, portée par une sentinelle (`StoryViewerView.originalLanguageOverride`)
 qui ne peut pas entrer en collision avec un code BCP-47 et se ramène au code
 vide côté affichage (sans quoi la feuille montrait « __MEESHY.ORIGINAL__ »).
 
-Reste : **non manipulé à l'écran**. La ligne compile et sa logique est testée
-(9 + 8 tests), mais personne n'a tapé dessus dans le simulateur.
+**Vérifié à l'écran** (simulateur, compte atabeth, story de Windie Nh) : la
+ligne « Original » est bien la PREMIÈRE de la feuille, au-dessus de
+« Français ». Séquence : texte par défaut « Senhor, eu não sei. » (traduction
+portugaise servie par le Prisme) → tap « Français » → « Seigneurrrr 😂🙌🏽❤️. »
+→ tap « Original » → « Seigneurrrr 😂🙌🏽❤️. ».
+
+J'ai d'abord lu ce dernier pas comme un bug ; c'en est l'inverse. L'original de
+cette story EST le français : « Original » a rendu le texte source, et c'est le
+portugais du départ qui était la traduction. Le cas est même idéal — il montre
+que la sentinelle ne se contente pas de « remettre la langue de l'auteur du
+groupe », elle rend à chaque bout SON texte.
 
 ### 4. Cache des traductions — FAIT (précision user : « le cache est à gérer
 ### côté FRONTEND »)
@@ -198,14 +207,34 @@ saut de paragraphe ni emoji — donc quasiment tous les overlays. Or `translate(
 ne consultait ni ne remplissait le cache Redis et codait `from_cache: False` en
 dur : traduire trois fois le même overlay coûtait trois passes modèle.
 
-### 5. Swipe horizontal vers le groupe précédent
-Les **taps** sont réparés et vérifiés. Le **swipe** passe par un autre chemin
-(`unifiedDragGesture`, au niveau de `StoryViewerView`) que je n'ai pas analysé.
-À reprendre si le symptôme persiste après `16252b633`.
+### 5. Swipe horizontal vers le groupe précédent — VÉRIFIÉ, fonctionne
+Le symptôme ne persiste pas après `16252b633`. Vérifié au simulateur avec DEUX
+groupes réels dans la barre (« Ma story » index 0, « Windie Nh » index 1) :
+- swipe DROITE depuis Windie Nh → en-tête « Profil de Andre Tabeth » ;
+- swipe GAUCHE → retour « Profil de Windie Nh ».
 
-### 6. Vérifier la feuille redimensionnable à l'écran
-`7b4bbf973` compile mais n'a pas été manipulé : tirer le grabber vers le haut
-(déploiement à 85 %) et vers le bas (repli puis fermeture).
+**Piège de reproduction** : au premier essai la barre ne contenait qu'UN groupe
+(l'entrée propre ouvrait le composer, pas un lecteur). Un swipe droite y était
+donc un no-op LÉGITIME — `currentGroupIndex > 0` est faux. Vérifié au passage
+qu'il ne ferme pas le lecteur : après le swipe, « Lecteur de stories » est
+toujours monté, progression revenue à 0 %. La fermeture observée avant venait
+de la fin naturelle de la story (1 seule slide, déjà à 28 %).
+
+Le second groupe n'est apparu qu'APRÈS une reconnexion — la barre servait un
+cache où la story propre de l'utilisateur n'était pas encore un groupe.
+
+### 6. Feuille redimensionnable — VÉRIFIÉE à l'écran
+Loi complète manipulée au simulateur, hauteurs mesurées via l'arbre
+d'accessibilité (position du titre « Langues ») :
+- tirage HAUT depuis le grabber → **720 pt**, soit exactement le plafond
+  `min(0.85 × 874, 720)` ;
+- tirage BAS → **320 pt** (`minHeight`) ;
+- second tirage BAS → **fermeture**.
+
+**Piège** : le geste est posé sur tout le panneau, mais le `ScrollView` de la
+liste emporte les drags verticaux qui naissent dans la liste. Un tirage parti
+de 15 pt sous le grabber a replié la feuille au lieu de la déployer — il faut
+partir de la zone du grabber, au-dessus du `ScrollView`.
 
 ## Pièges rencontrés (ne pas refaire)
 
