@@ -172,6 +172,7 @@ extension StoryCanvasUIView: UIContextMenuInteractionDelegate {
     }
 
     func contextDuplicate(id: String) {
+        guard !isLockedItem(id: id) else { return }
         var duplicatedNewId: String?
         var duplicatedKind: CanvasItemKind?
         // Branche media : `guard var` au lieu de `mediaObjects![idx]` — même si
@@ -243,6 +244,7 @@ extension StoryCanvasUIView: UIContextMenuInteractionDelegate {
     }
 
     func contextDelete(id: String) {
+        guard !isLockedItem(id: id) else { return }
         slide.effects.mediaObjects?.removeAll { $0.id == id }
         slide.effects.textObjects.removeAll { $0.id == id }
         slide.effects.stickerObjects?.removeAll { $0.id == id }

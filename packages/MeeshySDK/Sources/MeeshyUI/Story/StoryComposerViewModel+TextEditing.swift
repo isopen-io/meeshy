@@ -106,7 +106,14 @@ extension StoryComposerViewModel {
     /// Idempotent : ré-entrer sur le même texte est un no-op.
     func enterTextEditingMode(textId: String) {
         if case .active(let current, _) = textEditingMode, current == textId { return }
-        guard currentEffects.textObjects.contains(where: { $0.id == textId }) else { return }
+        guard let target = currentEffects.textObjects.first(where: { $0.id == textId }) else { return }
+        // Un texte verrouillé n'ouvre pas l'éditeur. Le seul qui l'est
+        // aujourd'hui est le badge d'attribution d'une republication : pouvoir
+        // le réécrire, le décolorer ou le pousser hors champ reviendrait à
+        // retirer l'attribution que le verrou est censé garantir. La
+        // suppression et la duplication sont gardées côté canvas
+        // (`isLockedItem`) ; l'édition l'est ici, au seul point d'entrée.
+        guard target.isLocked != true else { return }
         selectedElementId = textId
         textEditingMode = .active(textId: textId, expandedTool: nil)
     }

@@ -210,7 +210,24 @@ extension StoryCanvasUIView {
         max(0, min(1, value))
     }
 
+    /// `true` quand l'item porte le verrou d'édition.
+    ///
+    /// Un seul type le porte aujourd'hui : le badge d'attribution d'une
+    /// republication (« Reposté de @X »), posé verrouillé par
+    /// `StoryComposerViewModel(reposting:)`. Le verrou EST la garantie que
+    /// l'attribution ne peut pas être retirée.
+    ///
+    /// Elle n'existait que sur la voie ViewModel (`deleteElement`,
+    /// `duplicateElement`). Les chemins canvas — menu contextuel, manipulation
+    /// directe, action VoiceOver — mutent `slide.effects` sans passer par lui :
+    /// ils ont besoin de leur propre garde, sous peine de laisser effacer d'un
+    /// appui long ce que le panneau refuse.
+    func isLockedItem(id: String) -> Bool {
+        slide.effects.textObjects.first(where: { $0.id == id })?.isLocked == true
+    }
+
     func deleteItem(id: String) {
+        guard !isLockedItem(id: id) else { return }
         var newSlide = slide
         newSlide.effects.textObjects.removeAll { $0.id == id }
         newSlide.effects.mediaObjects?.removeAll { $0.id == id }
@@ -220,6 +237,8 @@ extension StoryCanvasUIView {
     }
 
     func duplicateItem(id: String) {
+        // Dupliquer le badge produirait deux attributions, dont une modifiable.
+        guard !isLockedItem(id: id) else { return }
         var newSlide = slide
         if let original = newSlide.effects.textObjects.first(where: { $0.id == id }) {
             var copy = original
