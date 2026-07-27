@@ -382,7 +382,13 @@ export function registerCoreRoutes(
         return sendBadRequest(reply, 'Invalid request', { code: 'VALIDATION_ERROR' });
       }
 
-      const post = await postService.getPostById(postId);
+      // Le viewer DOIT être transmis : sans lui, `getPostById` retombe sur le
+      // filtre anonyme (`visibility: PUBLIC`) et ne trouve rien d'autre qu'une
+      // publication publique. Une story Meeshy étant réservée aux contacts par
+      // défaut, la route répondait « Post not found » à un lecteur pourtant
+      // légitime — et la feuille « Traductions » du lecteur restait sur un
+      // anneau tournant sans fin (constaté au simulateur le 2026-07-27).
+      const post = await postService.getPostById(postId, authContext.registeredUser.id);
       if (!post) {
         return sendNotFound(reply, 'Post not found', { code: 'POST_NOT_FOUND' });
       }
