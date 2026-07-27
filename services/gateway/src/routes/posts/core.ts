@@ -106,7 +106,10 @@ export function registerCoreRoutes(
           translationService.translatePost(
             (post as any).id,
             parsed.data.content,
-            parsed.data.originalLanguage ?? (post as any).originalLanguage,
+            // Use the canonical language persisted by createPost (SSOT) rather
+            // than the raw client claim — it already incorporates the normalized
+            // claim (or the detected fallback) and matches the NLLB source keys.
+            (post as any).originalLanguage,
             authContext.registeredUser.id,
           ).catch((err) => fastify.log.warn({ err }, '[POST /posts]: translate post failed'));
         } catch {
