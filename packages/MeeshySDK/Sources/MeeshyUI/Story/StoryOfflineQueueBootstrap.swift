@@ -63,14 +63,29 @@ public final class StoryOfflineQueueBootstrap {
         guard !didStart else { return }
         didStart = true
 
-        // Wire publish handler — when the queue flushes, forward each item to
-        // the publish queue (the production retry/upload pipeline).
-        Task {
-            await StoryOfflineQueue.shared.setOnPublish { [weak self] item in
-                guard let self else { return false }
-                return await self.publish(item: item)
-            }
-        }
+        // PAS de `setOnPublish` ici. Ce bootstrap en posait un, et il écrasait
+        // celui de `StoryPublishService` — le seul qui parle vraiment au
+        // serveur. Les deux écrivent la MÊME propriété
+        // (`StoryPublishQueue.shared.onPublish`) : depuis l'unification des
+        // files du 2026-05-12, `StoryOfflineQueue` n'est plus qu'un adaptateur
+        // dont le `publishQueue` EST `StoryPublishQueue.shared`.
+        //
+        // Le handler posé ici ne publiait rien : il ré-enfilait l'item dans la
+        // même file sous un nouveau `tempStoryId`, puis renvoyait « succès ».
+        // La file supprimait alors l'original ET ses médias locaux, l'app
+        // affichait « Story enfin publiée », et le doublon échouait plus tard
+        // en `missingLocalMedia` — sur les fichiers qu'on venait d'effacer. La
+        // story était perdue après avoir été annoncée publiée.
+        //
+        // L'ordre rendait la chose d'autant plus atteignable : ce bootstrap
+        // part du `.task` racine de l'app, avant toute authentification, quand
+        // `StoryPublishService` attend le montage de `RootView`. Avec des items
+        // déjà en attente, `setPublishHandler` déclenche un drain IMMÉDIAT —
+        // donc avec le mauvais handler.
+        //
+        // Une garde « ne pas écraser un handler déjà posé » aggraverait le
+        // problème : elle ferait gagner le premier arrivé, c'est-à-dire
+        // celui-ci.
 
         // Observe network state changes: flush the queue when the device comes
         // back online. `removeDuplicates()` avoids spurious flushes on repeated

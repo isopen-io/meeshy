@@ -56,6 +56,23 @@ que la correction « évidente » aurait introduits :
 Le second confirme la leçon de la section 5 : trois fois sur trois, la ligne
 du rapport était le symptôme, pas la cause. Quatre fois sur quatre à présent.
 
+### Échantillonnage des 🟡 — 5 lignes instrumentées
+
+Méthode : lire les DEUX côtés, suivre la donnée jusqu'au réseau, exiger une
+conséquence utilisateur observable avant de conclure.
+
+| ligne 🟡 | verdict | fait établi |
+|---|---|---|
+| Handler de publication — deux écrivains | 🔴 **livré** | Pire que décrit : le handler du bootstrap ne publiait RIEN. Il ré-enfilait l'item sous un nouveau `tempStoryId` et renvoyait « succès » → la file supprimait l'original **et ses médias locaux**, l'app affichait « Story enfin publiée », le doublon échouait ensuite en `missingLocalMedia` sur les fichiers effacés. **Story perdue après avoir été annoncée publiée.** |
+| Chaîne de repost | 🔴 **ouvert** | `repostOfId: nil` est littéralement écrit en dur (`StoryViewModel.swift:1375`). SDK, gateway et Prisma savent tous le traiter — le client ne l'envoie jamais. Le badge d'attribution ne s'affiche donc jamais sur une story republiée. Fix : propager `viewModel.repostOfId` le long de `onPublishAllInBackground` → `publishStoryInBackground` → `StoryUploadState` → `createStory`. |
+| Transcription — affichage reader | ✅ | Déjà corrigé par `55e90ad2c` (2026-07-26), présent sur cette branche. |
+| Transcription — persistance composer | ✅ | Idem — même commit, les deux bouts de la même chaîne. |
+| Export MP4 — zoom/slide d'ouverture | 🔴 **livré** | `applyStaticOpening` faisait `case .zoom, .slide: break`. Troisième surface du chantier A. |
+
+**Le rapport contient des lignes périmées** : deux des cinq décrivaient un
+état antérieur à un commit du 2026-07-26 déjà sur la branche. Vérifier
+`git log` du fichier visé avant d'instruire une ligne.
+
 ---
 
 ## 1. Où on en est
