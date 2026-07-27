@@ -364,6 +364,23 @@ class ZMQTranslationServer:
                 'transcription'
             )
             logger.debug(f"🚀 [NON-BLOCKING] Transcription task créée ({len(self.active_tasks)} actives)")
+        elif request_type == 'story_text_object_translation':
+            # Traduction d'un texte posé sur le canvas d'une story. Le handler
+            # vit dans ZMQTranslationHandler depuis avril 2026, mais ce
+            # routeur-ci ne l'a jamais aiguillé : chaque requête tombait dans
+            # le `else` final et n'y laissait qu'un « Type de requête inconnu ».
+            #
+            # Le pipeline était donc mort en production sans que rien ne le
+            # signale côté gateway, qui journalisait pourtant chaque envoi.
+            # Constaté le 2026-07-27 sur les logs de prod : trois envois par
+            # demande, trois « Type de requête inconnu » en face, et des
+            # textObjects sans une seule traduction pendant que la légende en
+            # accumulait six.
+            self._create_tracked_task(
+                self.translation_handler._handle_story_text_object_translation(request_data),
+                'story_text_object_translation'
+            )
+            logger.debug(f"🚀 [NON-BLOCKING] StoryTextObject task créée ({len(self.active_tasks)} actives)")
         elif request_type == 'voice_api':
             # ✨ Lancer en tâche asynchrone trackée
             self._create_tracked_task(
