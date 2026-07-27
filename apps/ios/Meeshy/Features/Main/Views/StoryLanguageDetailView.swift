@@ -51,15 +51,67 @@ struct StoryLanguageDetailView: View {
         return story.content
     }
 
-    var body: some View {
-        ZStack(alignment: .bottom) {
-            // Scrim discret — tap pour fermer (la story reste visible derrière).
-            Color.black.opacity(0.35)
-                .ignoresSafeArea()
-                .onTapGesture { onDismiss() }
+    // MARK: - Feuille redimensionnable
 
-            panel
-                .transition(.move(edge: .bottom).combined(with: .opacity))
+    /// Hauteur choisie par l'utilisateur au grabber, comme la feuille des
+    /// réactions (`EmojiFullPickerSheet`) : la liste des langues est longue et
+    /// le contenu original peut l'être aussi, si bien qu'une hauteur figée
+    /// obligeait à scroller dans une lucarne. Tirer vers le haut agrandit,
+    /// vers le bas réduit puis ferme.
+    @State private var sheetHeight: CGFloat = 460
+    @State private var dragOffset: CGFloat = 0
+    /// Dernière hauteur du conteneur : le geste et les bornes vivent hors du
+    /// `GeometryReader`, ils ont besoin de cette valeur pour se cadrer.
+    @State private var containerHeight: CGFloat = 460
+
+    private let minHeight: CGFloat = 320
+
+    private func maxHeight(for containerHeight: CGFloat) -> CGFloat {
+        min(containerHeight * 0.85, 720)
+    }
+
+    private func currentHeight(for containerHeight: CGFloat) -> CGFloat {
+        min(max(sheetHeight - dragOffset, minHeight), maxHeight(for: containerHeight))
+    }
+
+    /// Même loi que la feuille des réactions : un geste franc vers le bas
+    /// replie d'abord à la hauteur minimale, puis ferme ; vers le haut, il
+    /// déploie au maximum.
+    private var sheetDragGesture: some Gesture {
+        DragGesture()
+            .onChanged { value in dragOffset = value.translation.height }
+            .onEnded { value in
+                let dy = value.translation.height
+                let velocity = value.predictedEndTranslation.height
+                withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                    if dy > 100 || velocity > 300 {
+                        if sheetHeight > minHeight + 50 { sheetHeight = minHeight }
+                        else { onDismiss(); return }
+                    } else if dy < -80 || velocity < -300 {
+                        sheetHeight = maxHeight(for: containerHeight)
+                    }
+                    dragOffset = 0
+                }
+            }
+    }
+
+    var body: some View {
+        GeometryReader { geo in
+            ZStack(alignment: .bottom) {
+                // Scrim discret — tap pour fermer (la story reste visible derrière).
+                Color.black.opacity(0.35)
+                    .ignoresSafeArea()
+                    .onTapGesture { onDismiss() }
+
+                panel
+                    .frame(height: currentHeight(for: geo.size.height))
+                    .gesture(sheetDragGesture)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+            .onAppear { containerHeight = geo.size.height }
+            .adaptiveOnChange(of: geo.size.height) { _, newValue in
+                containerHeight = newValue
+            }
         }
     }
 
@@ -81,7 +133,6 @@ struct StoryLanguageDetailView: View {
             }
         }
         .frame(maxWidth: .infinity)
-        .frame(maxHeight: 460)
         .adaptiveGlass(in: RoundedRectangle(cornerRadius: 24, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 24, style: .continuous)
