@@ -127,6 +127,37 @@ describe('TURNCredentialService — production security guard', () => {
       expect(() => new TURNCredentialService()).not.toThrow();
     });
   });
+
+  // Audit finding — the production/staging guard matched NODE_ENV with a
+  // strict `===`, so a deployment env file setting "Production", "STAGING",
+  // or " production" (capitalization/whitespace typo — trivially easy to
+  // introduce when copying a value between shell configs) silently fell
+  // through to the dev branch and armed the public committed default secret
+  // in a real deployment instead of refusing to start. Normalize before
+  // comparing so only the literal string differs, not the guard's behavior.
+  it('throws when NODE_ENV="Production" (mixed case) and TURN_SECRET is unset', () => {
+    withEnv({ NODE_ENV: 'Production', TURN_SECRET: undefined }, () => {
+      expect(() => new TURNCredentialService()).toThrow('[SECURITY]');
+    });
+  });
+
+  it('throws when NODE_ENV="STAGING" (uppercase) and TURN_SECRET is the default insecure value', () => {
+    withEnv({ NODE_ENV: 'STAGING', TURN_SECRET: DEFAULT_INSECURE_SECRET }, () => {
+      expect(() => new TURNCredentialService()).toThrow('[SECURITY]');
+    });
+  });
+
+  it('throws when NODE_ENV=" production " has surrounding whitespace and TURN_SECRET is unset', () => {
+    withEnv({ NODE_ENV: ' production ', TURN_SECRET: undefined }, () => {
+      expect(() => new TURNCredentialService()).toThrow('[SECURITY]');
+    });
+  });
+
+  it('still does NOT throw for an unrelated NODE_ENV value like "ci" even with no TURN_SECRET', () => {
+    withEnv({ NODE_ENV: 'ci', TURN_SECRET: undefined }, () => {
+      expect(() => new TURNCredentialService()).not.toThrow();
+    });
+  });
 });
 
 // ---------------------------------------------------------------------------
