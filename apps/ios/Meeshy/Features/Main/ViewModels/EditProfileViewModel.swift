@@ -147,7 +147,7 @@ final class EditProfileViewModel: ObservableObject {
             try await offlineQueue.enqueue(.updateProfile, payload: payload, conversationId: nil)
         } catch {
             authManager.restoreLocalProfileSnapshot(snapshot)
-            errorMessage = "Echec de la mise a jour"
+            errorMessage = String(localized: "profile.edit.error.update", defaultValue: "Échec de la mise à jour", bundle: .main)
             toast.showError(errorMessage ?? "")
             haptics.error()
             saveState = .failed

@@ -63,7 +63,7 @@ final class ConversationOptionsViewModel: ObservableObject {
             Self.logger.error("Failed to load options metadata: \(error.localizedDescription)")
             if loadState != .loaded {
                 loadState = .error(error.localizedDescription)
-                errorMessage = "Impossible de charger les préférences."
+                errorMessage = String(localized: "conversation.options.error.loadPreferences", defaultValue: "Impossible de charger les préférences.", bundle: .main)
             }
         }
     }
@@ -181,7 +181,7 @@ final class ConversationOptionsViewModel: ObservableObject {
             return created
         } catch {
             Self.logger.error("createCategory failed: \(error.localizedDescription)")
-            errorMessage = "Impossible de créer la catégorie."
+            errorMessage = String(localized: "conversation.options.error.createCategory", defaultValue: "Impossible de créer la catégorie.", bundle: .main)
             return nil
         }
     }
@@ -192,7 +192,7 @@ final class ConversationOptionsViewModel: ObservableObject {
             didDelete = true
         } catch {
             Self.logger.error("deleteForMe failed: \(error.localizedDescription)")
-            errorMessage = "Impossible de supprimer la conversation."
+            errorMessage = String(localized: "conversation.options.error.deleteConversation", defaultValue: "Impossible de supprimer la conversation.", bundle: .main)
         }
     }
 
@@ -202,7 +202,7 @@ final class ConversationOptionsViewModel: ObservableObject {
             didLeave = true
         } catch {
             Self.logger.error("leave failed: \(error.localizedDescription)")
-            errorMessage = "Impossible de quitter la conversation."
+            errorMessage = String(localized: "conversation.options.error.leaveConversation", defaultValue: "Impossible de quitter la conversation.", bundle: .main)
         }
     }
 
@@ -226,7 +226,7 @@ final class ConversationOptionsViewModel: ObservableObject {
                 self.errorMessage = nil
             } catch {
                 rollback()
-                self.errorMessage = "Erreur lors de la sauvegarde."
+                self.errorMessage = String(localized: "conversation.options.error.save", defaultValue: "Erreur lors de la sauvegarde.", bundle: .main)
             }
         }
     }
