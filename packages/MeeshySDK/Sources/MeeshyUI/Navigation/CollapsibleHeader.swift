@@ -139,6 +139,7 @@ public struct CollapsibleHeader<LeadingContent: View, TitleContent: View, Traili
     }
 
     public var body: some View {
+        let _ = NSLog("[FLICKER] header render offset=%.1f progress=%.3f height=%.1f", scrollOffset, progress, headerHeight)
         VStack(spacing: 0) {
             HStack(alignment: .center, spacing: 0) {
                 if showBackButton {
@@ -219,35 +220,26 @@ public struct CollapsibleHeader<LeadingContent: View, TitleContent: View, Traili
     /// from a readable blur at the top to fully transparent at the bottom edge, so
     /// the scroll content (list rows, etc.) passing under the lower edge stays
     /// visible instead of being clipped by an opaque bar.
+    private static var fadeBandCount: Int { 12 }
+
     private var headerBackground: some View {
-        Rectangle()
-            .fill(.ultraThinMaterial)
-            .overlay(
-                LinearGradient(
-                    stops: [
-                        .init(color: backgroundColor.opacity(0.75), location: 0),
-                        .init(color: backgroundColor.opacity(0.45), location: 0.5),
-                        .init(color: backgroundColor.opacity(0.0), location: 1.0),
-                    ],
-                    startPoint: .top,
-                    endPoint: .bottom
-                )
+        VStack(spacing: 0) {
+            Rectangle()
+                .fill(.ultraThinMaterial)
+                .overlay(backgroundColor.opacity(0.6))
+            LinearGradient(
+                stops: [
+                    .init(color: backgroundColor.opacity(0.6), location: 0),
+                    .init(color: backgroundColor.opacity(0.3), location: 0.45),
+                    .init(color: backgroundColor.opacity(0.0), location: 1.0),
+                ],
+                startPoint: .top,
+                endPoint: .bottom
             )
-            .mask(
-                Rectangle().fill(
-                    LinearGradient(
-                        stops: [
-                            .init(color: .black, location: 0),
-                            .init(color: .black, location: 0.5),
-                            .init(color: .clear, location: 1.0),
-                        ],
-                        startPoint: .top,
-                        endPoint: .bottom
-                    )
-                )
-            )
-            .ignoresSafeArea(edges: .top)
-            .allowsHitTesting(false)
+            .frame(height: Self.surfaceFadeHeight)
+        }
+        .ignoresSafeArea(edges: .top)
+        .allowsHitTesting(false)
     }
 
     private var backButton: some View {

@@ -398,10 +398,6 @@ public struct StoryTimelineView: View {
             onUndo: { viewModel.undo() },
             onRedo: { viewModel.redo() },
             onSnapToggle: { viewModel.toggleSnap() },
-            onExtendDuration: {
-                viewModel.extendSlideDuration(
-                    by: TimelineOperationsBar.extendStepSeconds)
-            },
             onSave: onExport
         )
     }
@@ -466,7 +462,6 @@ public struct StoryTimelineView: View {
                     rulerHeight: 22,
                     isPlaying: viewModel.isPlaying,
                     onZoomScaleChanged: { viewModel.zoomScale = $0 },
-                    onSlideDurationChanged: { viewModel.setSlideDuration($0) },
                     snapGuideTime: viewModel.selection.activeDrag.flatMap {
                         $0.snappedTo != nil ? $0.currentStartTime : nil
                     },

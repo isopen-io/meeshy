@@ -89,7 +89,6 @@ final class TimelineLocalizationTests: XCTestCase {
         "story.timeline.a11y.transition",
         "story.timeline.a11y.keyframe",
         "story.timeline.a11y.playhead",
-        "story.timeline.a11y.durationHandle",
         "story.timeline.a11y.snap.on",
         "story.timeline.a11y.snap.off",
         // Transition kind labels

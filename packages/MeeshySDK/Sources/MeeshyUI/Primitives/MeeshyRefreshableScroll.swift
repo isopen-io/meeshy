@@ -94,6 +94,7 @@ public struct MeeshyRefreshableScroll<Content: View>: View {
         // iOS 16–17: the sentinel preference drives both the collapsing header and
         // the pull-to-refresh phase.
         .onPreferenceChange(ScrollOffsetPreferenceKey.self) { offset in
+            NSLog("[FLICKER] src=pref offset=%.1f", offset)
             onScrollOffsetChange?(offset)
             updatePullingPhase(scrollOffset: offset)
         }
@@ -103,6 +104,7 @@ public struct MeeshyRefreshableScroll<Content: View>: View {
         // both the header collapse and the pull indicator keep working.
         .trackScrollContentOffset { contentOffsetY in
             let offset = -contentOffsetY
+            NSLog("[FLICKER] src=geom offset=%.1f", offset)
             onScrollOffsetChange?(offset)
             updatePullingPhase(scrollOffset: offset)
         }

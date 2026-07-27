@@ -173,31 +173,15 @@ extension TimelineViewModel {
         trimClipEnd(id: id, deltaTimeSeconds: overlapWithNextSeconds)
     }
 
-    // MARK: - Slide duration pin (DurationHandle)
-
-    /// Pin direct de la durée de la slide (poignée en fin de ruler). Mutation
-    /// directe du projet, comme `extendSlideDurationIfNeeded` (le set de
-    /// commandes Plan 1 n'a pas de commande slide-duration) — le pin devient
-    /// `effects.timelineDuration` au commit (Option A : peut ÉTENDRE la slide
-    /// au-delà du contenu ou la ROGNER en deçà).
-    public func setSlideDuration(_ duration: Float) {
-        guard duration.isFinite else { return }
-        let clamped = max(1, min(600, duration))
-        guard abs(clamped - project.slideDuration) > 0.001 else { return }
-        project.slideDuration = clamped
-        if currentTime > clamped {
-            scrub(to: clamped, precise: true)
-        }
-        scheduleEngineReconfigure()
-    }
-
-    /// Prolongation « +10 s » de la bande d'opérations (retour user
-    /// 2026-07-20 : « agrandir et prolonger la durée de la timeline ») — même
-    /// clamp que le pin direct (max 600 s). La réduction reste au
-    /// `DurationHandle` du ruler.
-    public func extendSlideDuration(by seconds: Float = 10) {
-        setSlideDuration(project.slideDuration + seconds)
-    }
+    // MARK: - Durée de slide
+    //
+    // Aucun réglage manuel : `project.slideDuration` a un unique écrivain,
+    // `recomputeSlideDuration()`. `setSlideDuration` et `extendSlideDuration`
+    // ont été supprimés (2026-07-27) — ils écrivaient une valeur que le
+    // recalcul depuis le contenu effaçait à l'édition suivante, sans que rien
+    // ne marque qu'elle venait de l'auteur. Le plafond de 600 s qu'ils
+    // portaient vit désormais dans `ClipWindowResolver.maximumEnd`.
+    // Pour allonger une slide, on allonge un clip.
 
     // MARK: - Snap disabled toggle (two-finger drag override)
 

@@ -34760,54 +34760,6 @@
         }
       }
     },
-    "story.timeline.a11y.durationHandle" : {
-      "localizations" : {
-        "ar" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "مقبض مدة الشريحة"
-          }
-        },
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Griff für die Slide-Dauer"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Slide duration handle"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Tirador de duración de la diapositiva"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Poignée durée du slide"
-          }
-        }
-      ,
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Maniglia durata della slide"
-          }
-        }
-      ,
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Alça de duração do slide"
-          }
-        }
-      }
-    },
     "story.timeline.a11y.keyframe" : {
       "localizations" : {
         "ar" : {
@@ -38822,55 +38774,6 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Mídia indisponível"
-          }
-        }
-      }
-    },
-    "story.timeline.ops.extend" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "ar" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "إطالة الخط الزمني 10 ثوانٍ"
-          }
-        },
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Timeline um 10 Sekunden verlängern"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Extend the timeline by 10 seconds"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Prolongar la línea de tiempo 10 segundos"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Prolonger la timeline de 10 secondes"
-          }
-        }
-      ,
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Prolunga la timeline di 10 secondi"
-          }
-        }
-      ,
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Prolongar a linha do tempo em 10 segundos"
           }
         }
       }
