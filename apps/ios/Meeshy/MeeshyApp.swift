@@ -202,7 +202,7 @@ struct MeeshyApp: App {
                     // appelle ce player à l'apparition d'un toast — l'haptique
                     // vit app-side (le SDK core n'importe pas UIKit).
                     NotificationToastManager.shared.hapticPlayer = {
-                        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                        HapticFeedback.light()
                     }
                     await CacheCoordinator.shared.start()
                     // Touch PresenceManager early so it has subscribed to

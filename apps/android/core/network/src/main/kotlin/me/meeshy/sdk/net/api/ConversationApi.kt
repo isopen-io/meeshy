@@ -25,6 +25,7 @@ data class ConversationPreferencesUpdate(
     val isMuted: Boolean? = null,
     val isArchived: Boolean? = null,
     val mentionsOnly: Boolean? = null,
+    val categoryId: String? = null,
     val customName: String? = null,
     val reaction: String? = null,
 )

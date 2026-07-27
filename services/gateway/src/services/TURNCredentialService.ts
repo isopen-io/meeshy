@@ -33,7 +33,13 @@ export class TURNCredentialService {
     // Load TURN secret from environment (CRITICAL: must be set in production)
     const envSecret = process.env.TURN_SECRET;
     const nodeEnv = process.env.NODE_ENV ?? 'development';
-    const isProductionOrStaging = nodeEnv === 'production' || nodeEnv === 'staging';
+    // Normalized (trim + lowercase) so a deployment env value like
+    // "Production", "STAGING", or " production" — trivially easy to
+    // introduce copying between shell configs — still trips the guard
+    // below instead of silently falling through to the dev branch and
+    // arming the public committed default secret in a real deployment.
+    const normalizedNodeEnv = nodeEnv.trim().toLowerCase();
+    const isProductionOrStaging = normalizedNodeEnv === 'production' || normalizedNodeEnv === 'staging';
 
     if (isProductionOrStaging) {
       // In production / staging the default secret is committed to the repo —

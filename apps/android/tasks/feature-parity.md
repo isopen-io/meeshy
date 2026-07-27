@@ -901,7 +901,39 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       +5 (`ApiCategoryTest`) +8 (`CategoryRepositoryTest`) +6 (`CategorySnapshotStoreTest`) +2 (VM
       wiring) tests; `toOption` order-preservation mutation-proven (`order = order`→`null` → exactly 3
       failures).
-      **Reste**: drag-to-category reassignment + the category socket handler feeding `CategoryEvent`s.
+      **Category socket real-time sync done** (slice `conversation-category-socket-sync`, 2026-07-26):
+      the catalogue now re-buckets live when another device edits the corpus. New `:core:model`
+      `CategorySocketPayloads` — `@Serializable` wire DTOs (`CategoryUpsertedSocketData` for
+      `category:created`+`category:updated`, `CategoryDeletedSocketData`, `CategoriesReorderedSocketData`
+      / `CategoryOrderUpdate`) + pure `toEvent()` mappers → `CategoryEvent` (upsert narrows via
+      `toOption()`, reorder folds to an id→order map last-writer-wins). New `:sdk-core/socket`
+      `CategorySocketManager` decodes the four broadcasts and fans them into one
+      `SharedFlow<CategoryEvent>`; wired into `RealtimeSessionCoordinator.attachAll()`.
+      `ConversationListViewModel` now holds a live `UserCategoryCatalog` — hydration re-seeds it
+      (`of`), socket events fold on top (`apply`), both publishing `catalog.sorted` into
+      `state.categories`. Parity: iOS `ConversationStoreSocketBridge` → `UserCategoryStore.applyRemote`.
+      SOTA over iOS: iOS keeps 4 Combine subjects re-fanned into `applyRemote`; Android collapses the
+      fan-in in the manager and the reducer stays a pure value type. +8 (`CategorySocketPayloadsTest`)
+      +5 (`CategorySocketManagerTest`) +4 (VM socket-fold) +1 (coordinator attach) tests; VM socket-fold
+      mutation-proven (`catalog.apply(event)`→`catalog` → exactly 4 failures, no collateral).
+      **Category (re)assignment done** (slice `conversation-drag-to-category`, 2026-07-27): a conversation
+      can now be moved into / between user categories from the long-press context menu (the faithful iOS
+      `ConversationOptionsViewModel.setCategory` path — the options-sheet, not a bespoke drag gesture). New
+      pure `:feature:conversations/ConversationCategoryReassignment.resolve(current, target)` SSOT gates the
+      write: dropping a row on the category it already sits in is inert (no optimistic write, no outbox row,
+      no flush), every other target reassigns. Wired through the existing optimistic-prefs pipeline:
+      `ConversationRepository.setCategoryOptimistic(id, categoryId)` mutates the cached `categoryId`
+      instantly (the row re-buckets into that category's section via `ConversationSections.of`) and enqueues
+      an `UPDATE_CONVERSATION_PREFS` snapshot; `ConversationPrefsPayload` + `ConversationPreferencesUpdate`
+      now carry `categoryId`, so the flush `PUT /user-preferences/conversations/:id` persists it (the gateway
+      already accepts `categoryId`, `null` = uncategorize, and broadcasts `USER_PREFERENCES_UPDATED`). The
+      context menu lists each user category (current one checked). +7 tests (3 core, 2 repo, 2 VM), the
+      idempotency guard mutation-proven (always-`AssignTo` → exactly the 2 no-op tests fail, no collateral).
+      **Reste**: **drag** gesture polish (long-press-drag onto a section header) as a UX enhancement over the
+      menu; and **uncategorize** (drag/menu → "Mes conversations", `categoryId = null`) — deferred because the
+      shared `explicitNulls = false` JSON omits a null field, so persisting an uncategorize needs an
+      explicit-null `PUT` path (tracked follow-up), and the reassignment SSOT deliberately models assignment
+      only to avoid exposing a decision the wiring cannot yet honour.
 - [x] Filtering (all/unread/personal/private/open/global/channels/favorites/archived) + search overlay
       — `ConversationFilter` enum (couleurs iOS) + `ConversationFilters.apply` pur
       (port fidèle de `filterConversations` : soft-delete masqué partout, archivés
@@ -1097,8 +1129,56 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
 - [~] Date section headers done — `ChatListItem.DayHeader` interleavé +
       `MessageDayLabel` (port iOS : Aujourd'hui/Hier/Avant-hier, jour de semaine
       ≤6j, date complète + année si différente, label recalculé au rendu pour
-      le passage de minuit) ; inverted list / joined banner / unread separator /
-      E2EE disclaimer pending
+      le passage de minuit) ; **unread separator done** (slice `chat-unread-separator`,
+      2026-07-27) : la barre « Messages non lus » se pose juste au-dessus du premier
+      message non lu — SSOT pur `:feature:chat/UnreadMarker.firstUnreadId(bubbles,
+      unreadCount)` (port du calcul iOS `unreadStartIndex = messages.count -
+      initialUnreadCount`, gardé par `!candidate.isMe` : borne à `size-unreadCount`,
+      `null` si rien de non-lu / fenêtre vide / count > fenêtre / borne sur un
+      message sortant). `buildChatListItems` insère un unique `ChatListItem.UnreadSeparator`
+      juste avant ce message (sous son en-tête de jour) ; `ChatViewModel` capture
+      le `unreadCount` du cache AVANT le mark-read (qui le remet à zéro) puis latch
+      la borne une seule fois (une arrivée de message ne la déplace jamais) ;
+      `ChatScreen` rend un `UnreadSeparatorRow` accent-cohérent (règle accent +
+      pilule centrée, EN/FR/ES/PT). +17 tests, mutation-prouvé. **SOTA over iOS** :
+      la borne est un value type pur entièrement couvert, la capture pré-mark-read
+      supprime la course iOS où l'ouverture peut zéroer le compteur avant la dérivation.
+      **Open-scroll done** (slice `chat-open-scroll-to-unread`, 2026-07-27) : à l'ouverture la
+      liste se pose sur la barre « Messages non lus » si elle existe, sinon sur le dernier
+      message (bas) — SSOT pur `:feature:chat/InitialScrollTarget.of(items)` (index de la
+      ligne `UnreadSeparator` sinon `lastIndex` sinon `null` fenêtre vide) ; `ChatViewModel`
+      expose `unreadBoundaryResolved` (flip une fois la borne résolue, avec ou sans id) et
+      `ChatScreen` déclenche un scroll one-shot verrouillé qui attend cette résolution (jamais
+      contre une fenêtre vide/non-résolue). +9 tests, 2 mutations prouvées. **SOTA over iOS** :
+      cible pure entièrement couverte + gate sur le flag de résolution qui supprime le double
+      saut bas→séparateur de l'ouverture iOS.
+      **E2EE disclaimer done** (slice `chat-encryption-disclaimer`, 2026-07-27) : la notice
+      « messages chiffrés de bout en bout » se pose en haut de l'historique d'une conversation
+      chiffrée — port fidèle de iOS `ConversationView.encryptionDisclaimer`
+      (`conv.encryptionMode != nil && !hasOlderMessages && !isLoadingInitial`). SSOT pur
+      `:feature:chat/EncryptionDisclaimer.shouldShow(encryptionMode, hasOlderMessages,
+      isLoadingInitial)` (mappé sur `hasMoreOlder`/`showSkeleton` de `ChatUiState`) ;
+      `buildChatListItems(showEncryptionNotice)` prépend un unique `ChatListItem.EncryptionNotice`
+      au-dessus du premier en-tête de jour ; `ChatScreen` rend un `EncryptionNoticeRow`
+      accent-cohérent (disque teinté + cadenas + copie centrée, EN/FR/ES/PT). `ApiConversation`
+      gagne `encryptionMode` (round-trip JSON via le blob de cache, aucun changement Room).
+      +13 tests, mutation-prouvé (dropper les deux gardes casse exactement les 4 tests de garde).
+      **SOTA over iOS** : la décision est un value type pur entièrement couvert (iOS l'inline dans
+      la View) ; un mode vide (artefact de sérialisation) ne déclenche jamais la notice, là où le
+      `!= nil` de iOS l'afficherait.
+      **Floating day label done** (slice `chat-pinned-day-header`, 2026-07-27) : une pastille de
+      date flottante (style WhatsApp) survole le haut de la liste et nomme le jour du contenu le
+      plus haut visible. SSOT pur `:feature:chat/PinnedDayHeader.governingDayMillis(items,
+      firstVisibleIndex) → Long?` : scanne vers le haut jusqu'au `DayHeader` gouvernant ; `null`
+      pour liste vide, index négatif, ligne au-dessus du premier en-tête (ex. la notice E2EE), ou
+      quand la ligne la plus haute **est** l'en-tête de jour (l'en-tête inline est déjà à l'écran →
+      pas de doublon flottant) ; index au-delà de la fin → clamp sur la dernière ligne. `ChatScreen`
+      rend un `PinnedDayHeaderPill` (même label `MessageDayLabel` + traitement pastille que
+      `DaySeparator`, avec une ombre douce), via un `derivedStateOf` sur
+      `listState.firstVisibleItemIndex`. +8 tests, mutation-prouvé (dropper la garde
+      « en-tête en haut → null » casse exactement 1 test). **SOTA over iOS** : la décision est un
+      value type pur entièrement couvert (iOS n'a pas de pastille flottante).
+      Reste : inverted list pending
 - [~] Pagination of older messages — before-cursor done (`MessageRepository.loadOlder`,
       windowed prune keeps paginated history, scroll-top trigger + spinner); around-anchor pending
 - [~] Reactions: quick-strip **usage-ordered** done (`EmojiUsageRanker.topEmojis` port of

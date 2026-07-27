@@ -96,6 +96,12 @@ class ConversationListViewModelTest {
         every { categoriesStream(any(), any()) } returns flowOf(categories)
     }
 
+    private fun categorySocket(
+        events: MutableSharedFlow<me.meeshy.sdk.model.CategoryEvent> = MutableSharedFlow(),
+    ): me.meeshy.sdk.socket.CategorySocketManager = mockk<me.meeshy.sdk.socket.CategorySocketManager> {
+        every { categoryEvents } returns events
+    }
+
     private fun viewModel(
         repo: ConversationRepository,
         connection: SocketManager = connectionSocket(),
@@ -103,9 +109,11 @@ class ConversationListViewModelTest {
         socket: MessageSocketManager = socketManager(),
         starredStore: StarredMessagesStore = InMemoryStarredMessagesStore(),
         categoryRepository: CategoryRepository = categoryRepo(),
+        categorySocketManager: me.meeshy.sdk.socket.CategorySocketManager = categorySocket(),
         session: SessionRepository = session(),
     ) = ConversationListViewModel(
-        repo, socket, workManager, draftStore, starredStore, categoryRepository, connection, session,
+        repo, socket, workManager, draftStore, starredStore,
+        categoryRepository, categorySocketManager, connection, session,
     )
 
     @Test
@@ -145,6 +153,90 @@ class ConversationListViewModelTest {
         advanceUntilIdle()
 
         assertThat(vm.state.value.categories).isEmpty()
+    }
+
+    @Test
+    fun a_category_upsert_socket_event_adds_the_category_to_the_catalogue() = runTest(dispatcher) {
+        val repo = repositoryReturning(flowOf(CacheResult.Empty))
+        val events = MutableSharedFlow<me.meeshy.sdk.model.CategoryEvent>()
+        val vm = viewModel(
+            repo,
+            categoryRepository = categoryRepo(
+                listOf(me.meeshy.sdk.model.CategoryOption(id = "work", name = "Work", order = 0)),
+            ),
+            categorySocketManager = categorySocket(events),
+        )
+        advanceUntilIdle()
+
+        events.emit(
+            me.meeshy.sdk.model.CategoryEvent.Upserted(
+                me.meeshy.sdk.model.CategoryOption(id = "fam", name = "Family", order = 1),
+            ),
+        )
+        advanceUntilIdle()
+
+        assertThat(vm.state.value.categories.map { it.id }).containsExactly("work", "fam").inOrder()
+    }
+
+    @Test
+    fun a_category_delete_socket_event_removes_the_category_from_the_catalogue() = runTest(dispatcher) {
+        val repo = repositoryReturning(flowOf(CacheResult.Empty))
+        val events = MutableSharedFlow<me.meeshy.sdk.model.CategoryEvent>()
+        val vm = viewModel(
+            repo,
+            categoryRepository = categoryRepo(
+                listOf(
+                    me.meeshy.sdk.model.CategoryOption(id = "work", name = "Work", order = 0),
+                    me.meeshy.sdk.model.CategoryOption(id = "fam", name = "Family", order = 1),
+                ),
+            ),
+            categorySocketManager = categorySocket(events),
+        )
+        advanceUntilIdle()
+
+        events.emit(me.meeshy.sdk.model.CategoryEvent.Deleted("fam"))
+        advanceUntilIdle()
+
+        assertThat(vm.state.value.categories.map { it.id }).containsExactly("work")
+    }
+
+    @Test
+    fun a_category_reorder_socket_event_re_ranks_the_catalogue() = runTest(dispatcher) {
+        val repo = repositoryReturning(flowOf(CacheResult.Empty))
+        val events = MutableSharedFlow<me.meeshy.sdk.model.CategoryEvent>()
+        val vm = viewModel(
+            repo,
+            categoryRepository = categoryRepo(
+                listOf(
+                    me.meeshy.sdk.model.CategoryOption(id = "work", name = "Work", order = 0),
+                    me.meeshy.sdk.model.CategoryOption(id = "fam", name = "Family", order = 1),
+                ),
+            ),
+            categorySocketManager = categorySocket(events),
+        )
+        advanceUntilIdle()
+
+        events.emit(me.meeshy.sdk.model.CategoryEvent.Reordered(mapOf("work" to 5)))
+        advanceUntilIdle()
+
+        assertThat(vm.state.value.categories.map { it.id }).containsExactly("fam", "work").inOrder()
+    }
+
+    @Test
+    fun a_category_upsert_socket_event_seeds_a_cold_catalogue() = runTest(dispatcher) {
+        val repo = repositoryReturning(flowOf(CacheResult.Empty))
+        val events = MutableSharedFlow<me.meeshy.sdk.model.CategoryEvent>()
+        val vm = viewModel(repo, categorySocketManager = categorySocket(events))
+        advanceUntilIdle()
+
+        events.emit(
+            me.meeshy.sdk.model.CategoryEvent.Upserted(
+                me.meeshy.sdk.model.CategoryOption(id = "new", name = "New", order = 0),
+            ),
+        )
+        advanceUntilIdle()
+
+        assertThat(vm.state.value.categories.map { it.id }).containsExactly("new")
     }
 
     @Test
@@ -426,6 +518,39 @@ class ConversationListViewModelTest {
 
         coVerify { repo.setPinnedOptimistic("c1", true) }
         verify { workManager.enqueue(any<androidx.work.WorkRequest>()) }
+    }
+
+    @Test
+    fun reassign_category_assigns_the_conversation_and_schedules_a_flush() = runTest(dispatcher) {
+        val repo = repositoryReturning(
+            flowOf(CacheResult.Fresh(listOf(ApiConversation(id = "c1", title = "Team")), ageMillis = 0)),
+        )
+        coEvery { repo.setCategoryOptimistic("c1", "work") } returns true
+        val vm = viewModel(repo)
+        advanceUntilIdle()
+
+        vm.reassignCategory("c1", "work")
+        advanceUntilIdle()
+
+        coVerify { repo.setCategoryOptimistic("c1", "work") }
+        verify { workManager.enqueue(any<androidx.work.WorkRequest>()) }
+    }
+
+    @Test
+    fun reassign_category_is_a_noop_when_already_in_that_category() = runTest(dispatcher) {
+        val categorized = ApiConversation(
+            id = "c1",
+            title = "Team",
+            preferences = ApiConversationPreferences(categoryId = "work"),
+        )
+        val repo = repositoryReturning(flowOf(CacheResult.Fresh(listOf(categorized), ageMillis = 0)))
+        val vm = viewModel(repo)
+        advanceUntilIdle()
+
+        vm.reassignCategory("c1", "work")
+        advanceUntilIdle()
+
+        coVerify(exactly = 0) { repo.setCategoryOptimistic(any(), any()) }
     }
 
     @Test

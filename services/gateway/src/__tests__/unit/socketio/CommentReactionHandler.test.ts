@@ -168,6 +168,7 @@ const sampleReactionData = {
   emoji: EMOJI,
   createdAt: new Date(),
   updatedAt: new Date(),
+  unchanged: false,
 };
 
 // ===== TESTS =====
@@ -250,6 +251,32 @@ describe('CommentReactionHandler', () => {
         success: true,
         data: sampleUpdateEvent,
       });
+    });
+
+    it('test_handleAddReaction_unchanged_noBroadcastNoNotification', async () => {
+      // Idempotent no-op: the user already reacted with exactly this emoji on this
+      // comment (re-fire — optimistic double-fire, socket retry, or a second device).
+      // addReaction returns `unchanged: true`; the handler MUST reply success but MUST
+      // NOT re-broadcast `comment:reaction-added` nor re-notify the author. Mirrors
+      // ReactionHandler.handleReactionAdd's `unchanged` guard.
+      const socket = createMockSocket();
+      const data = { commentId: COMMENT_ID, postId: POST_ID, emoji: EMOJI };
+      const callback = jest.fn();
+
+      mockValidate.mockReturnValue({ success: true, data });
+      mockReactionService.addReaction.mockResolvedValue({ ...sampleReactionData, unchanged: true });
+      mockReactionService.createUpdateEvent.mockResolvedValue(sampleUpdateEvent);
+
+      await handler.handleAddReaction(socket as any, data, callback);
+
+      // ACK success preserved (idempotent add is a success from the client's view).
+      expect(callback).toHaveBeenCalledWith({ success: true, data: sampleUpdateEvent });
+      // No redundant broadcast, no redundant notification.
+      expect(mockIO._toEmit).not.toHaveBeenCalledWith(
+        SERVER_EVENTS.COMMENT_REACTION_ADDED,
+        expect.anything()
+      );
+      expect(mockNotificationService.createCommentReactionNotification).not.toHaveBeenCalled();
     });
 
     it('test_handleAddReaction_invalidEmoji_callbackErrorNoBroadcast', async () => {

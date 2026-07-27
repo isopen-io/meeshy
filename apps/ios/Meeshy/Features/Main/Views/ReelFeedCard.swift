@@ -153,8 +153,11 @@ struct ReelFeedCard: View, Equatable {
     }
 
     // Largeur de contenu du feed (le GeometryReader donne la vraie ; estimation
-    // pour fixer la hauteur du conteneur avant mesure).
-    private var cardWidthEstimate: CGFloat { UIScreen.main.bounds.width - 32 }
+    // pour fixer la hauteur du conteneur avant mesure). Mesurée sur la FENÊTRE
+    // et non sur le display : en Split View l'estimation prise sur `UIScreen`
+    // valait plusieurs fois la largeur réelle, et la hauteur dérivée du ratio
+    // d'aspect sautait à la première mesure du GeometryReader.
+    private var cardWidthEstimate: CGFloat { DeviceLayout.windowSize.width - 32 }
 
     // MARK: - Background média (aspect-fill)
 

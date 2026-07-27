@@ -195,6 +195,47 @@ class ConversationRepositoryTest {
     }
 
     @Test
+    fun `setCategoryOptimistic assigns the cached category and queues a snapshot carrying it`() = runTest {
+        val repo = repository(
+            FakeConversationApi(
+                ApiResponse(success = true, data = listOf(ApiConversation(id = "c1", title = "Team"))),
+            ),
+        )
+        repo.refresh()
+
+        val applied = repo.setCategoryOptimistic("c1", "work")
+
+        assertThat(applied).isTrue()
+        assertThat(repo.conversationStream("c1").first()?.preferences?.categoryId).isEqualTo("work")
+        val row = OutboxRepository(db, db.outboxDao())
+            .deliverable(OutboxLanes.CONVERSATION_PREFS).single()
+        assertThat(row.targetId).isEqualTo("c1")
+        assertThat(row.kindEnum).isEqualTo(OutboxKind.UPDATE_CONVERSATION_PREFS)
+        val payload = me.meeshy.sdk.net.MeeshyApi.json
+            .decodeFromString<me.meeshy.sdk.outbox.ConversationPrefsPayload>(row.payload)
+        assertThat(payload.categoryId).isEqualTo("work")
+    }
+
+    @Test
+    fun `setCategoryOptimistic is a no-op when the conversation is already in that category`() = runTest {
+        val categorized = ApiConversation(
+            id = "c1",
+            title = "Team",
+            preferences = me.meeshy.sdk.model.ApiConversationPreferences(categoryId = "work"),
+        )
+        val repo = repository(
+            FakeConversationApi(ApiResponse(success = true, data = listOf(categorized))),
+        )
+        repo.refresh()
+
+        val applied = repo.setCategoryOptimistic("c1", "work")
+
+        assertThat(applied).isFalse()
+        assertThat(OutboxRepository(db, db.outboxDao()).deliverable(OutboxLanes.CONVERSATION_PREFS))
+            .isEmpty()
+    }
+
+    @Test
     fun `stream first emission is Empty on a cold cache`() = runTest {
         val repo = repository(FakeConversationApi(ApiResponse(success = false, error = "down")))
 

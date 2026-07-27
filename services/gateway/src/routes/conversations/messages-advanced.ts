@@ -8,6 +8,7 @@ import { conversationStatsService } from '../../services/ConversationStatsServic
 import { conversationMessageStatsService } from '../../services/ConversationMessageStatsService';
 import { ErrorCode } from '@meeshy/shared/types';
 import { createError, sendErrorResponse } from '@meeshy/shared/utils/errors';
+import { normalizeLanguageCode } from '@meeshy/shared/utils/language-normalize';
 import { UnifiedAuthRequest } from '../../middleware/auth';
 import { messageValidationHook } from '../../middleware/rate-limiter';
 import {
@@ -107,7 +108,13 @@ export function registerMessagesAdvancedRoutes(
       }
 
       const { id, messageId } = request.params;
-      const { content, originalLanguage = 'fr' } = bodyResult.data;
+      const { content, originalLanguage: claimedLanguage = 'fr' } = bodyResult.data;
+      // Canonicalise the client-claimed locale at the write boundary. This REST
+      // edit path re-persists `originalLanguage` from the request body (unlike
+      // the socket edit path, which reuses the already-canonical stored value),
+      // so a raw platform locale (`fr-FR`, `en_US`) would otherwise fragment the
+      // stored value + the retranslation source. Irreducible codes kept verbatim.
+      const originalLanguage = normalizeLanguageCode(claimedLanguage) ?? claimedLanguage;
       const authRequest = request as UnifiedAuthRequest;
       const userId = authRequest.authContext.userId;
 

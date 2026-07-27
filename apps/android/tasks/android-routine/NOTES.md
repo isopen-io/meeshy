@@ -2,6 +2,62 @@
 
 Append-only log of gotchas and decisions that save time next run.
 
+## Lesson (2026-07-27, `chat-open-scroll-to-unread`) — gate a one-shot open scroll on an explicit "resolved" flag, not on a nullable id
+- A `null` derived value is ambiguous: it can mean "resolved: nothing" or "not resolved yet". The unread
+  boundary latch left `firstUnreadMessageId = null` both before it ran and when there was no unread. Firing
+  the open scroll on that null would race — scroll to bottom before the boundary resolves, then jump again.
+- Fix: add a dedicated `unreadBoundaryResolved: Boolean` that the latch flips **unconditionally** when it
+  settles (found or not), and gate the one-shot `LaunchedEffect` on it. The latch's `?.let { copy(id=…) }`
+  became an unconditional `copy(id = firstUnread, resolved = true)` — behaviour-preserving for the id (null
+  case writes the same null), and now the screen has an unambiguous "safe to scroll" signal.
+- Keep the scroll target itself a pure function over the already-interleaved `ChatListItem` rows
+  (`InitialScrollTarget.of`): returning the separator's **own** row index (not the message index) means day
+  headers can't throw off the viewport placement, and it's fully unit-coverable off the Composable.
+- Mutation discipline that proves the flag matters: remove `unreadBoundaryResolved = true` from the latch →
+  exactly the two resolution tests fail; drop the separator preference → exactly the three separator tests.
+
+## Lesson (2026-07-27, `chat-unread-separator`) — capture the count BEFORE the optimistic mutation zeroes it; latch a "once" boundary without a guard flag
+- **A value derived from state that an optimistic write mutates must be captured BEFORE that write.** The
+  unread separator needs the conversation's `unreadCount`, but `markConversationRead()` (fired in `init`)
+  zeroes the cached count. Two `init` launches racing (`markRead` vs `conversationStream`) means the stream
+  can emit the already-zeroed row first → no separator. Fix: read `conversationStream(id).first()?.unreadCount`
+  **in the same launch, before** calling `markConversationRead()`. `conversationStream` maps Room's
+  `observeById`, which emits the current cached value immediately (null on cold cache → 0), so `.first()`
+  never blocks beyond that first emission.
+- **"Resolve once, then keep stable" without a mutable guard flag:** a plain `_state.map{}.first{predicate}`
+  in a dedicated `viewModelScope.launch` naturally resolves exactly once and the coroutine completes — no
+  `firstResolved: Boolean` var, no side-effect inside `_state.update{}` (which can loop under CAS
+  contention). Sequence the awaits: `val count = initialUnreadCount.filterNotNull().first(); val bubbles =
+  _state.map{it.messages}.first{it.isNotEmpty()}`. Because `StateFlow.map` replays the latest value on
+  collect, this is order-independent w.r.t. which flow populated first.
+- **Why NOT re-derive reactively:** the boundary is `size - unreadCount`. If you recompute on every message
+  emission, a newly-arrived message grows `size` and the separator slides down. iOS latches it once; so do we.
+  The list interleaver stays tolerant — it only inserts the separator when a message with the latched id is
+  actually present, so a deleted/paged-out boundary message degrades to "no separator", never a crash.
+- **Extend the interleaver with a defaulted arg, run the OLD tests unchanged first.** `buildChatListItems`
+  gained `firstUnreadId: String? = null`; the `null` default reduces to the exact prior day-header behaviour,
+  so all 6 pre-existing `ChatListItemsTest` cases pass untouched (the "extend, don't fork" discipline again).
+
+## Lesson (2026-07-27, `conversation-drag-to-category`) — `explicitNulls = false` silently drops a null field, so "clear to null" is NOT free
+- **`MeeshyApi.json` sets `explicitNulls = false`** (`core/network/.../MeeshyApi.kt`). A nullable field
+  set to `null` **serializes away entirely** — it is NOT sent as `"field": null`. This is exactly what you
+  want for a partial-PATCH DTO (`ConversationPreferencesUpdate` — "null = don't touch this field"), and it's
+  why threading `categoryId = snapshot.categoryId` into every prefs snapshot is safe: a pin/mute snapshot of
+  an *uncategorized* row omits `categoryId`, so the gateway (`if (data.categoryId !== undefined)`) never
+  blanks a category as a side effect.
+- **The flip side:** you therefore CANNOT clear a field to null through this DTO. Assigning a conversation
+  to a category (`categoryId = "work"`) persists fine; *uncategorizing* it (`categoryId = null`) would be
+  dropped from the body → the gateway keeps the old category → the optimistic local change snaps back on the
+  next refresh. Persisting an uncategorize needs an explicit-null `PUT` (a dedicated `Json { explicitNulls =
+  true }` for that one body, or a sentinel the route understands). Deferred; do not wire a `setCategoryOptimistic(id, null)`
+  caller until that seam exists, or you ship a snap-back bug.
+- **Pattern:** when a pure decision could produce a "clear to null" outcome the wiring can't yet persist,
+  model ONLY the outcomes you can honour (here `resolve` returns `Unchanged` | `AssignTo(String)`, never an
+  `Uncategorize`). A tested-but-unhonourable branch is a latent bug, not future-proofing.
+- **Reuse win:** conversation→category assignment is just another `updatePreferencesOptimistic { it.copy(...) }`
+  — the whole optimistic-cache + outbox-snapshot + coalescer + WorkManager pipeline came for free. New
+  per-conversation prefs should almost always ride this helper rather than inventing a write path.
+
 ## Lesson (2026-07-26, `conversation-category-hydration`) — thread the clock into `cacheFirstFlow`, and give the snapshot store a cold-vs-empty contract
 - **`cacheFirstFlow(policy, source)` uses its OWN default `SystemCacheClock` for age classification —
   NOT the source's clock.** `ConversationRepository` gets away with this because production uses the
@@ -2966,3 +3022,28 @@ iOS `RelativeTimeFormatter` bundles classification, calendar-day framing AND loc
   Hoist mime/messageType above the gate and reuse them inside the coroutine (no double resolution).
 - **`ComposerSendKind.entries`** (Kotlin 1.9 enum entries) works here — used it to assert the gate permits
   every kind under a full posture without hand-listing them.
+
+## Slice `chat-encryption-disclaimer` (2026-07-27)
+- **The conversation carries `encryptionMode` on the wire, not the message.** The first
+  `encryptionMode` grep hit was on `MessageAttachment` (`Core.kt`), a red herring — the field the
+  E2EE notice needs lives on `ApiConversation` (mirrors iOS SDK `CoreModels.swift` Conversation,
+  shared `message-types.ts` `'e2ee' | 'server' | 'hybrid'`). `ApiConversation` did NOT have it; added
+  it. Lesson: when porting a View-level flag, trace it to the exact model the ViewModel reads
+  (`conversationStream` emits `ApiConversation`), don't trust a same-named field on a sibling type.
+- **JSON-blob cache = free field round-trip.** `conversationStream` decodes an `ApiConversation` from a
+  Room `payload` string blob, so a new `@Serializable` field persists and rehydrates with zero Room
+  schema/DAO change. Contrast with field-mapped entities where a new field silently drops through cache.
+- **Map iOS gate names to the real Android state fields, and test the mapping.** iOS
+  `!hasOlderMessages && !isLoadingInitial` → Android `!hasMoreOlder && !showSkeleton`. `hasMoreOlder`
+  defaults `true` (so the notice stays hidden until pagination reaches the top — correct). Two
+  ui-state derivation tests guard against inverting either field; the mutation proof showed they fail
+  exactly when the guards are dropped.
+- **Inject top-of-list chrome as a `ChatListItem` row, never a separate LazyColumn `item {}`.** All
+  scroll math (`InitialScrollTarget.of`, reply-jump `indexOfFirst`, `isNearBottom(lastIndex)`) reads
+  `listItems` indices; a `ChatListItem.EncryptionNotice` prepended inside `buildChatListItems` keeps
+  every index consistent, whereas an out-of-band header item would shift them by one and desync the
+  open-scroll target.
+- **`MediaDownloadPreferencesStoreTest` is load-flaky.** Under a full parallel `check`, its
+  `dataStore_hydratesAlreadyPersistedChoiceOnConstruction` timed out at 15s (real DataStore on a temp
+  file, `StateFlow.first()`); it passes in ~6s in isolation. Not caused by an `apps/android` diff — if
+  a full `check` reddens only on this test, re-run it isolated before treating the gate as failed.

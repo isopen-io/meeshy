@@ -21,6 +21,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Chat
 import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.filled.Archive
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.CloudOff
 import androidx.compose.material.icons.filled.DeleteSweep
@@ -36,6 +37,7 @@ import androidx.compose.material3.Badge
 import androidx.compose.material3.Button
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -72,6 +74,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import me.meeshy.feature.conversations.R
 import me.meeshy.sdk.model.ApiConversation
+import me.meeshy.sdk.model.CategoryOption
 import me.meeshy.sdk.model.ConversationDraft
 import me.meeshy.sdk.model.isMeaningful
 import me.meeshy.sdk.theme.accentHex
@@ -168,12 +171,14 @@ fun ConversationListScreen(
                                 conversation = conversation,
                                 currentUserId = state.currentUserId,
                                 draft = state.draftFor(conversation.id),
+                                categories = state.categories,
                                 onClick = { onConversationClick(conversation.id) },
                                 onTogglePin = { viewModel.togglePin(conversation.id) },
                                 onToggleMute = { viewModel.toggleMute(conversation.id) },
                                 onToggleArchive = { viewModel.toggleArchive(conversation.id) },
                                 onMarkRead = { viewModel.markRead(conversation.id) },
                                 onDiscardDraft = { viewModel.discardDraft(conversation.id) },
+                                onAssignCategory = { viewModel.reassignCategory(conversation.id, it) },
                             )
                         }
                         // Sections (parity iOS): Épingles first, then Mes conversations.
@@ -300,12 +305,14 @@ private fun ConversationRow(
     conversation: ApiConversation,
     currentUserId: String?,
     draft: ConversationDraft?,
+    categories: List<CategoryOption>,
     onClick: () -> Unit,
     onTogglePin: () -> Unit,
     onToggleMute: () -> Unit,
     onToggleArchive: () -> Unit,
     onMarkRead: () -> Unit,
     onDiscardDraft: () -> Unit,
+    onAssignCategory: (String) -> Unit,
 ) {
     val prefs = conversation.resolvedPreferences
     val isPinned = prefs?.isPinned == true
@@ -342,12 +349,15 @@ private fun ConversationRow(
             isPinned = isPinned,
             isMuted = isMuted,
             isArchived = isArchived,
+            categories = categories,
+            currentCategoryId = prefs?.categoryId,
             onClick = onClick,
             onTogglePin = onTogglePin,
             onToggleMute = onToggleMute,
             onToggleArchive = onToggleArchive,
             onMarkRead = onMarkRead,
             onDiscardDraft = onDiscardDraft,
+            onAssignCategory = onAssignCategory,
         )
     }
 }
@@ -382,12 +392,15 @@ private fun ConversationRowContent(
     isPinned: Boolean,
     isMuted: Boolean,
     isArchived: Boolean,
+    categories: List<CategoryOption>,
+    currentCategoryId: String?,
     onClick: () -> Unit,
     onTogglePin: () -> Unit,
     onToggleMute: () -> Unit,
     onToggleArchive: () -> Unit,
     onMarkRead: () -> Unit,
     onDiscardDraft: () -> Unit,
+    onAssignCategory: (String) -> Unit,
 ) {
     val title = conversation.displayTitle(currentUserId)
     var menuExpanded by remember { mutableStateOf(false) }
@@ -509,11 +522,14 @@ private fun ConversationRowContent(
             isArchived = isArchived,
             hasUnread = conversation.unreadCount > 0,
             hasDraft = draft?.isMeaningful == true,
+            categories = categories,
+            currentCategoryId = currentCategoryId,
             onTogglePin = onTogglePin,
             onToggleMute = onToggleMute,
             onToggleArchive = onToggleArchive,
             onMarkRead = onMarkRead,
             onDiscardDraft = onDiscardDraft,
+            onAssignCategory = onAssignCategory,
         )
     }
 }
@@ -527,11 +543,14 @@ private fun ConversationContextMenu(
     isArchived: Boolean,
     hasUnread: Boolean,
     hasDraft: Boolean,
+    categories: List<CategoryOption>,
+    currentCategoryId: String?,
     onTogglePin: () -> Unit,
     onToggleMute: () -> Unit,
     onToggleArchive: () -> Unit,
     onMarkRead: () -> Unit,
     onDiscardDraft: () -> Unit,
+    onAssignCategory: (String) -> Unit,
 ) {
     DropdownMenu(expanded = expanded, onDismissRequest = onDismiss) {
         DropdownMenuItem(
@@ -589,6 +608,35 @@ private fun ConversationContextMenu(
             leadingIcon = { Icon(Icons.Filled.Archive, contentDescription = null) },
             onClick = { onToggleArchive(); onDismiss() },
         )
+        // Move-to-category (parity iOS `setCategory`): one item per user category,
+        // the row's current category checked. Idempotency is enforced by the
+        // ConversationCategoryReassignment SSOT in the ViewModel, so re-selecting the
+        // current category is a harmless no-op.
+        if (categories.isNotEmpty()) {
+            HorizontalDivider()
+            Text(
+                text = stringResource(R.string.conversations_action_move_to_category),
+                style = MaterialTheme.typography.labelSmall,
+                color = MeeshyTheme.tokens.textSecondary,
+                modifier = Modifier.padding(
+                    horizontal = MeeshySpacing.md,
+                    vertical = MeeshySpacing.xs,
+                ),
+            )
+            categories.forEach { category ->
+                DropdownMenuItem(
+                    text = { Text(category.name) },
+                    leadingIcon = {
+                        Icon(
+                            if (category.id == currentCategoryId) Icons.Filled.Check
+                            else Icons.Filled.Folder,
+                            contentDescription = null,
+                        )
+                    },
+                    onClick = { onAssignCategory(category.id); onDismiss() },
+                )
+            }
+        }
     }
 }
 

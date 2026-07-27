@@ -27,9 +27,9 @@ pydantic==2.13.4
 # 1.76.0 (they cap protobuf<7.0.0). Dependabot's semver-major bump to 7.35.1
 # (PR #2080) broke the Docker build — reject any future protobuf 7.x PR the same way.
 grpcio==1.82.1
-grpcio-tools==1.76.0
+grpcio-tools==1.83.0
 grpcio-reflection==1.76.0
-protobuf==6.33.6
+protobuf==7.35.1
 pyzmq==27.1.0
 
 # Machine Learning et NLP
@@ -47,7 +47,7 @@ numpy>=1.21.0,<1.24.0
 accelerate==1.14.0
 datasets==5.0.0
 # sentencepiece: version gérée par ESPnet (0.1.97 pour espnet 202412)
-huggingface_hub==1.22.0
+huggingface_hub==1.24.0
 safetensors==0.8.0
 peft==0.19.1
 # PIN EXACT — chatterbox-tts 0.1.6 requiert transformers==5.14.1 (cf. uv.lock + pyproject.toml).
@@ -58,7 +58,7 @@ transformers==5.14.1
 
 # Cache et base de données
 redis==8.0.1
-asyncpg==0.30.0
+asyncpg==0.31.0
 aiosqlite==0.20.0
 dnspython==2.8.0
 
@@ -176,7 +176,7 @@ scikit-learn==1.7.2  # Requis pour clustering et nettoyage (DiarizationCleaner)
 
 # Logging et monitoring
 loguru==0.7.3
-prometheus-client==0.25.0
+prometheus-client==0.26.0
 
 # Tests
 # pytest-asyncio MUST stay on 0.25.x while pytest is pinned to 8.3.4: 0.25.x

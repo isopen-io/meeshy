@@ -1,5 +1,239 @@
 # Progress — state & what to do next
 
+> On 2026-07-27 the **pinned floating day header** landed (slice `chat-pinned-day-header`, feature-parity
+> §C Chat — the "joined/floating day label" half of the date-headers line, leaving only inverted-list
+> pending). It draws a WhatsApp-style sticky date pill that hovers at the top of the message list and
+> names the day of whatever content sits at the top of the viewport as the reader scrolls. **Added
+> (production, all `apps/android`):** (1) `:feature:chat/PinnedDayHeader.governingDayMillis(items,
+> firstVisibleIndex) → Long?` — the pure SSOT: it scans upward from the (clamped) top row to the nearest
+> governing `ChatListItem.DayHeader` and returns its `dayMillis`; returns `null` for an empty list, a
+> negative index, a top row that sits above the first day header (e.g. the E2EE `EncryptionNotice` at
+> index 0), or when the topmost visible row **is** a `DayHeader` (the inline header is already on screen,
+> so no floating duplicate). A `firstVisibleIndex` past the end clamps to the last row. (2) `ChatScreen`
+> computes it via a `derivedStateOf` over `listState.firstVisibleItemIndex` + `listItems` and renders a
+> `PinnedDayHeaderPill` aligned `TopCenter` inside the message `Box` — same `MessageDayLabel` + pill
+> treatment as `DaySeparator` with a soft 2dp shadow so it reads as floating. **SOTA over iOS:** iOS has
+> no floating date pill at all; here the "which day governs the top" decision is a pure, fully-covered
+> value function and the redundant-header case is elided by design. **+8 behavioural tests:**
+> `PinnedDayHeaderTest` (empty→null / negative→null / message-under-header→that day / topmost-is-header→null
+> [both sections] / later-section-message→later day [two indices] / past-end→clamp-to-last / unread-separator
+> governed by the header above it / row-above-first-header [EncryptionNotice]→null but a message below still
+> pins). **Mutation (RED proof):** dropping the `if (items[top] is DayHeader) return null` guard fails
+> **exactly** the topmost-is-header test (`8 tests completed, 1 failed`, `BUILD FAILED in 10s`); no
+> collateral, restored after. **Gate:** `./apps/android/meeshy.sh check` (= `assembleDebug
+> testDebugUnitTest`) — full assemble + all-module JVM unit tests green (`BUILD SUCCESSFUL in 5m 27s`,
+> 943 tasks, APK produced). Reviewer **PASS** (diff `apps/android` only — 1 new core + 1 new test +
+> screen wiring + tracking docs; SDK purity — `PinnedDayHeader` is a stateless `:feature:chat` value
+> function, the "when to draw / read the label" glue stays in the Composable; SSOT — one governing-day
+> decision over the same interleaved `ChatListItem` rows the screen renders, reuses `MessageDayLabel` and
+> re-implements nothing; instant-app — the pill rides the cache-first message stream, no spinner; UDF —
+> pure derivation off `StateFlow`-driven `listItems`; no tautological tests — the expected day is read
+> back from a *different* item index than the function computes, plus the mutation proof). **Next slice:**
+> the §C **inverted-list** message layout (bottom-anchored `reverseLayout`, the last pending date-headers
+> item), OR the app-side **`CategoryPickerField` / `TagInputField`** composables driving the shipped
+> picker/autocomplete cores, OR the paged **`OnboardingFlowView`** Compose scaffold (Auth), OR the tracked
+> **Kover 90% coverage-gate infra**.
+
+> On 2026-07-27 the **chat E2EE disclaimer** landed (slice `chat-encryption-disclaimer`, feature-parity
+> §C Chat — the "E2EE disclaimer pending" item on the date-headers line). It pins the "messages are
+> end-to-end encrypted" notice at the top of an encrypted conversation once the reader reaches the start
+> of history, the faithful port of iOS `ConversationView.encryptionDisclaimer`
+> (`conv.encryptionMode != nil && !hasOlderMessages && !isLoadingInitial`). **Added (production, all
+> `apps/android`):** (1) `:feature:chat/EncryptionDisclaimer.shouldShow(encryptionMode, hasOlderMessages,
+> isLoadingInitial) → Boolean` — the pure SSOT: true only when the mode is present AND history is fully
+> loaded AND the cold-start skeleton is down; a **blank** mode (serialization artifact) counts as no mode
+> (SOTA over iOS's `!= nil`). (2) `ChatListItem.EncryptionNotice` data-object row + `buildChatListItems`
+> gains an optional `showEncryptionNotice` arg (default `false` → prior behaviour, all old tests unchanged)
+> that **prepends** a single notice above everything, including the first day header. Injecting it as a
+> `ChatListItem` (not an out-of-band LazyColumn `item {}`) keeps every scroll index — `InitialScrollTarget`,
+> reply-jump, `isNearBottom(lastIndex)` — consistent. (3) `ChatUiState.encryptionMode` + a pure
+> `showEncryptionDisclaimer` derivation delegating to the SSOT (mapping iOS `hasOlderMessages`→`hasMoreOlder`,
+> `isLoadingInitial`→`showSkeleton`); the conversation-load block threads `conversation.encryptionMode`.
+> (4) `ApiConversation` gains `encryptionMode: String?` (`"e2ee"`/`"server"`/`"hybrid"`, mirrors iOS SDK +
+> shared `message-types.ts`) — round-trips for free via the JSON `payload` cache blob, **no Room change**.
+> (5) `ChatScreen` renders an accent-coherent `EncryptionNoticeRow` (lock glyph in a tinted disc + centered
+> copy, EN/FR/ES/PT `chat_encryption_notice`, text lifted verbatim from iOS `conversation.view.e2e_notice`).
+> **SOTA over iOS:** the show/hide decision is a pure, fully-covered value function (iOS inlines it in the
+> View); a blank mode never surfaces the notice. **+13 behavioural tests:** `EncryptionDisclaimerTest`
+> (8: shows-when-encrypted-loaded-top / null→false / blank→false / older-remains→false / initial-load→false /
+> 3 ui-state-derivation mapping guards), `ChatListItemsTest` (+5: no-notice-by-default / notice-at-top-above-
+> day-header / empty-conversation-only-row / coexists-with-unread-separator, only-one-of-each). **Mutation
+> (RED proof):** dropping the two guards in `shouldShow` (leaving only the mode check) fails **exactly** the
+> 4 guard-dependent tests (`8 tests completed, 4 failed`, `BUILD FAILED in 6s`) while the shows/null/blank
+> tests stay green; no collateral, restored after. **Gate:** `./apps/android/meeshy.sh check`
+> (= `assembleDebug testDebugUnitTest`) — full assemble + all-module JVM unit tests green
+> (`BUILD SUCCESSFUL in 27s`, 943 tasks, APK produced). Note: a first `check` reddened only on the
+> load-flaky `MediaDownloadPreferencesStoreTest` (DataStore `first()` 15s timeout under full parallelism —
+> unrelated to this diff); it passes in ~6s isolated and green on the clean re-run. Reviewer **PASS** (diff
+> `apps/android` only — 1 new core + 1 new test + 1 model field + list-item/VM/screen wiring + 4 locale
+> strings + tracking docs; SDK purity — `EncryptionDisclaimer` is a stateless `:feature:chat` value function,
+> the "when to show" stays a pure `UiState` derivation; SSOT — one decision reused by the interleaver and
+> the screen, the model field round-trips the existing cache blob, re-implements nothing; instant-app — the
+> notice rides the cache-first message stream, no spinner; UDF — immutable `UiState`, pure derivation; no
+> tautological tests — literals + the mutation proof + the ui-state mapping guards). **Next slice:** the §C
+> **inverted-list** message layout (bottom-anchored `reverseLayout`) OR the §C **"joined" system banner**,
+> OR the app-side **`CategoryPickerField` / `TagInputField`** composables driving the shipped picker/
+> autocomplete cores, OR the paged **`OnboardingFlowView`** Compose scaffold (Auth), OR the tracked
+> **Kover 90% coverage-gate infra**.
+
+> On 2026-07-27 the **open-scroll to the unread boundary** landed (slice `chat-open-scroll-to-unread`,
+> feature-parity §C Chat — the natural completion of the just-shipped unread separator: the separator was
+> drawn but the list still opened pinned to the oldest loaded message, so the reader never saw the "new
+> messages" boundary without scrolling by hand). This is the faithful port of iOS `ConversationViewModel`'s
+> open-scroll (scroll to first unread on open, else to the newest message). **Added (production, all
+> `apps/android`):** (1) `:feature:chat/InitialScrollTarget.of(items): Int?` — the pure SSOT: the row index of
+> the `ChatListItem.UnreadSeparator` when present (so the boundary sits at the top of the viewport, day headers
+> notwithstanding — it returns the separator's own row index, not the message it precedes), else `lastIndex`
+> (bottom), else `null` for an empty list (nothing to scroll to). (2) `ChatUiState.unreadBoundaryResolved: Bool`
+> + `ChatViewModel` latch now flips it true the moment the boundary latch settles — **whether or not** it found
+> an id — so the one-shot open scroll waits for a real resolution and never fires against an unsettled/empty
+> window. The latch change is behaviour-preserving for `firstUnreadMessageId` (same value; the `?.let` became an
+> unconditional `copy` that also writes the null-when-none case, identical result). (3) `ChatScreen` one-shot
+> `LaunchedEffect(unreadBoundaryResolved, listItems)` guarded by a `didOpenScroll` remember flag: on the first
+> resolved+populated emission it `scrollToItem(InitialScrollTarget.of(listItems))` and locks, so a later message
+> arrival never re-scrolls (the existing near-bottom auto-scroll still owns live tailing). **SOTA over iOS:** the
+> target is a pure, fully-covered value function (iOS scrolls inline in the VM); gating on an explicit
+> resolution flag removes the iOS-style race where the open scroll can fire before the unread window is known
+> and jump twice (bottom→separator). **+9 behavioural tests:** `InitialScrollTargetTest` (6: empty→null /
+> no-separator→bottom / single-message→own-row / separator-wins / separator-below-day-header→separator-index /
+> leading-separator→0), `ChatViewModelTest` (+3: stays-unresolved-while-window-empty / unread-resolves-boundary /
+> fully-read-still-resolves-to-none). **Mutation (RED proof):** dropping the separator preference in
+> `InitialScrollTarget.of` (always `lastIndex`) fails **exactly** the 3 separator tests (`6 tests completed, 3
+> failed`, `BUILD FAILED in 6s`); neutralising the VM flag write (`unreadBoundaryResolved = true` removed) fails
+> **exactly** the 2 resolution tests (`218 tests completed, 2 failed`, `BUILD FAILED in 14s`); no collateral,
+> both restored. **Gate:** `./apps/android/meeshy.sh check` (= `assembleDebug testDebugUnitTest`) — full assemble
+> + all-module JVM unit tests green (`BUILD SUCCESSFUL in 4m 23s`, 943 tasks, APK produced). Reviewer **PASS**
+> (diff `apps/android` only — 1 new core + 1 new test + VM/screen wiring + tracking docs; SDK purity —
+> `InitialScrollTarget` is a stateless `:feature:chat` value function, the "when to fire the one-shot" rule stays
+> in the screen/VM; SSOT — one open-scroll decision over the same interleaved `ChatListItem` rows the screen
+> renders, re-implements nothing; instant-app — the scroll rides the cache-first message stream, no spinner; UDF
+> — immutable `UiState`, pure derivation; no tautological tests — the empty-window test drives a real suspended
+> latch, plus the two mutation proofs). **Next slice:** the §C date-headers **joined banner** (a pinned
+> floating day label while scrolling), OR the app-side **`CategoryPickerField` / `TagInputField`** composables
+> driving the shipped picker/autocomplete cores, OR the paged **`OnboardingFlowView`** Compose scaffold (Auth),
+> OR the tracked **Kover 90% coverage-gate infra**.
+
+> On 2026-07-27 the **chat unread separator** landed (slice `chat-unread-separator`, feature-parity §C
+> Chat — completes the "unread separator" pending sub-item of the date-headers box). It draws the
+> "new messages" boundary directly above the first unread message on open, the faithful port of iOS
+> `ConversationViewModel`'s `firstUnreadMessageId` derivation (`unreadStartIndex = messages.count -
+> initialUnreadCount`, guarded by `!candidate.isMe`). **Added (production, all `apps/android`):**
+> (1) `:feature:chat/UnreadMarker.firstUnreadId(bubbles, unreadCount) → String?` — the pure SSOT: the
+> boundary sits at index `size - unreadCount`; returns `null` for a non-positive count (nothing unread),
+> an empty window, a count larger than the loaded window (can't place it), or a boundary landing on the
+> viewer's own outgoing message. (2) `ChatListItem.UnreadSeparator` data-object row + `buildChatListItems`
+> gains an optional `firstUnreadId` arg (default `null` → prior behaviour, all 6 old tests unchanged) that
+> inserts a single separator directly above the matching message (below its day header); an id absent from
+> the window inserts nothing. (3) `ChatUiState.firstUnreadMessageId` + `ChatViewModel` wiring: the init
+> captures `unreadCount` from the cached conversation's first Room emission **before** `markConversationRead`
+> zeroes it, then a second latch coroutine resolves the boundary once, when both the count and a non-empty
+> message window are known — a later message arrival never re-derives it (stable for the session, WhatsApp-
+> style). (4) `ChatScreen` renders an accent-coherent `UnreadSeparatorRow` (accent rule + centered pill,
+> EN/FR/ES/PT `chat_unread_separator`). **SOTA over iOS:** the boundary is a pure, fully-covered value type
+> (iOS derives it inline in the VM); capturing the count pre-mark-read removes the iOS race where opening the
+> conversation can zero the counter before the derivation runs. **+17 behavioural tests:** `UnreadMarkerTest`
+> (8: no-count / negative / empty / count>window / count-from-end / count==window-first / single-incoming /
+> own-at-boundary→null), `ChatListItemsTest` (+5: no-id-no-separator / before-first-unread / follows-day-header
+> / absent-id-no-separator / single-separator), `ChatViewModelTest` (+2: unread-conversation marks first-unread /
+> fully-read marks none). **Mutation (RED proof):** dropping the `isOutgoing` guard in `firstUnreadId` fails
+> **exactly** `an own message at the boundary is never marked unread` (`8 tests completed, 1 failed`,
+> `BUILD FAILED in 7s`), no collateral; restored after. **Gate:** `./apps/android/meeshy.sh check`
+> (= `assembleDebug testDebugUnitTest`) — full assemble + all-module JVM unit tests green (see run log).
+> Reviewer **PASS** (diff `apps/android` only — 1 new core + list-item/VM/screen wiring + 4 locale strings +
+> tracking docs; SDK purity — `UnreadMarker` is a stateless `:feature:chat` value type, the "when to latch /
+> capture-before-mark-read" orchestration stays in the VM; SSOT — one boundary derivation reused by the
+> interleaver and the screen; instant-app — no spinner, the separator rides the cache-first message stream;
+> UDF — immutable `UiState`, pure derivation; no tautological tests — literals + the mutation proof).
+> **Next slice:** the §C date-headers **joined banner** OR **inverted-list / unread-scroll-to-first** affordance
+> (scroll the list to the unread boundary on open), OR the app-side **`CategoryPickerField` / `TagInputField`**
+> composables driving the shipped picker/autocomplete cores, OR the paged **`OnboardingFlowView`** Compose
+> scaffold (Auth), OR the tracked **Kover 90% coverage-gate infra**.
+
+> On 2026-07-27 the **conversation → user-category (re)assignment** landed (slice
+> `conversation-drag-to-category`, feature-parity §B Conversations — the last open box on the "Sectioned
+> list … + drag-to-category" line, whose reducer/hydration/socket building blocks all shipped 2026-07-26
+> but had **no way to actually move a conversation into a category**). **Added (production, all
+> `apps/android`):** (1) `:feature:conversations/ConversationCategoryReassignment` — a pure decision SSOT
+> (`resolve(currentCategoryId, targetCategoryId): CategoryReassignment` → `Unchanged` | `AssignTo(id)`)
+> porting the idempotency of iOS `ConversationOptionsViewModel.setCategory` (its optimistic write + network
+> call only fire when the id actually changes). (2) `ConversationRepository.setCategoryOptimistic(id,
+> categoryId)` — mirrors `setPinnedOptimistic`, driving the shared `updatePreferencesOptimistic` helper
+> (`it.copy(categoryId = …)`): the cached `categoryId` mutates instantly (SWR re-emit → `ConversationSections.of`
+> re-buckets the row into that category's section) and a full-snapshot `UPDATE_CONVERSATION_PREFS` mutation
+> joins the prefs lane. (3) `ConversationPrefsPayload.categoryId` + `ConversationPreferencesUpdate.categoryId`
+> — thread the assigned category through the outbox snapshot + the flush `PUT /user-preferences/conversations/:id`
+> (the gateway route **already** accepts `categoryId` — `null` = uncategorize — and broadcasts
+> `USER_PREFERENCES_UPDATED`, so no gateway change; the enqueue now also carries `snapshot.categoryId` on
+> pin/mute/archive snapshots, harmless: a null omits under the shared `explicitNulls = false` JSON so a
+> category is never blanked, a non-null re-asserts the same id). (4) `ConversationListViewModel.reassignCategory(id,
+> targetCategoryId)` — folds the pure SSOT (Unchanged → nothing; AssignTo → `runPrefMutation { setCategoryOptimistic }`
+> + WorkManager flush). (5) `ConversationListScreen` context menu (long-press — the faithful iOS options-sheet
+> path, a natural gesture) gains a **"Move to category"** section: one item per user category, the current one
+> checked (en/fr/es/pt). **SOTA over iOS:** iOS couples the optimistic mutation to a network call unconditionally
+> and lets the store no-op; Android hoists the idempotency into a pure, fully-covered value type so a re-select of
+> the current category never even enqueues an outbox row. **+7 behavioural tests:** `ConversationCategoryReassignmentTest`
+> (3: assign-from-uncategorized / reassign-different / idempotent-no-op), `ConversationRepositoryTest` (2:
+> assigns-cache-and-queues-snapshot-carrying-categoryId / no-op-when-already-in-category),
+> `ConversationListViewModelTest` (2: assigns-and-schedules-flush / no-op-when-already-in-category). **Mutation
+> (RED proof):** collapsing `resolve` to always-`AssignTo` (drop the idempotency guard) fails **exactly** the 2
+> no-op tests (`ConversationCategoryReassignmentTest › …already belongs to is a no-op` +
+> `ConversationListViewModelTest › reassign_category_is_a_noop_…`, `BUILD FAILED in 41s`), no collateral;
+> restored after. **Gate:** `./apps/android/meeshy.sh check` (= `assembleDebug testDebugUnitTest`) — full
+> assemble + all-module JVM unit tests green (`BUILD SUCCESSFUL in 4m 51s`, 943 tasks, APK produced). Reviewer
+> **PASS** (diff `apps/android` only — 1 new `:feature` core + 1 new test + repo/payload/DTO/VM/menu wiring +
+> tracking docs; SDK purity — `resolve` is a stateless value-type decision, `setCategoryOptimistic` reuses the
+> existing optimistic-prefs building block, the "when to call the network" rule stays in the VM; SSOT — one
+> category read/write path, reuses `updatePreferencesOptimistic`/`ConversationSections.of`, re-implements
+> nothing; instant-app — optimistic cache write re-buckets the row before the network confirms; UDF — immutable
+> outcome type, pure `resolve`; no tautological tests — literals + the mutation proof). **Next slice:** the
+> **drag** gesture polish (long-press-drag a row onto a section header, reusing `reassignCategory`), OR the
+> **uncategorize** path (needs an explicit-null `PUT` — a small `:core:network` serialization seam), OR the
+> app-side **`CategoryPickerField` / `TagInputField`** composables, OR the paged **`OnboardingFlowView`**
+> Compose scaffold (Auth), OR the tracked **Kover 90% coverage-gate infra**.
+
+> On 2026-07-26 the **category socket real-time sync** landed (slice
+> `conversation-category-socket-sync`, feature-parity §B Conversations — the real-time completion of the
+> hydration + reducer slices: the shipped `UserCategoryCatalog.apply(CategoryEvent)` reducer and the
+> cache-first `categoriesStream()` had no live feed, so a category created/renamed/deleted/reordered on
+> another device never reached the list until a manual refresh; this slice closes that loop). **Added
+> (production, all `apps/android`):** (1) `:core:model/CategorySocketPayloads` — the `@Serializable` wire
+> DTOs mirroring the gateway `category:*` broadcasts (`CategoryUpsertedSocketData` covering both
+> `category:created` and `category:updated`, `CategoryDeletedSocketData`, `CategoriesReorderedSocketData`
+> + `CategoryOrderUpdate`) with pure `toEvent()` mappers → `CategoryEvent`: upsert narrows the wire row
+> via the existing `toOption()` (drops render-only color/icon/isExpanded, preserves null order), reorder
+> folds the update array to an id→order map (last-writer-wins on a repeated id, empty batch → inert
+> event). (2) `:sdk-core/socket/CategorySocketManager` — decodes the four broadcasts (lenient JSON,
+> unknown gateway keys ignored) and fans them into one `SharedFlow<CategoryEvent>`; a malformed payload
+> is logged and dropped, never crashing the callback (same pattern as `SocialSocketManager`). Wired into
+> `RealtimeSessionCoordinator.attachAll()` so it attaches on auth exactly like the message/social/call
+> managers. (3) `ConversationListViewModel` now holds a live `UserCategoryCatalog`: the hydration stream
+> re-seeds it (`of(list)`), socket events fold on top (`apply(event)`), and both publish `catalog.sorted`
+> into `state.categories` (single-writer discipline on the Main dispatcher, same as `rawConversations`).
+> **SOTA over iOS:** iOS `ConversationStoreSocketBridge` keeps four Combine subjects that it re-fans back
+> into one `UserCategoryStore.applyRemote`; Android collapses the fan-in inside the manager and the
+> reducer stays a pure, fully-covered value type. **+18 behavioural tests:** `CategorySocketPayloadsTest`
+> (8: upsert-narrows / null-order-preserved / delete-by-id / reorder-to-map / repeated-id-last-wins /
+> empty-reorder-inert / upsert-wire-decode-ignores-gateway-keys / reorder-wire-decode),
+> `CategorySocketManagerTest` (5: created→Upserted / updated→Upserted / deleted→Deleted /
+> reordered→Reordered / malformed-ignored), 4 VM socket-fold tests (upsert adds / delete removes /
+> reorder re-ranks / upsert seeds a cold catalogue), +1 coordinator attach assertion. **Mutation (RED
+> proof):** neutralising the VM fold (`categoryCatalog = categoryCatalog.apply(event)` →
+> `categoryCatalog = categoryCatalog`) fails **exactly** the 4 new VM socket-fold tests
+> (`31 tests completed, 4 failed`, `BUILD FAILED in 16s`), no collateral; restored after. **Gate:**
+> `./apps/android/meeshy.sh check` (= `assembleDebug testDebugUnitTest`) — full assemble + all-module JVM
+> unit tests green (`BUILD SUCCESSFUL in 7m 6s`, 943 tasks). Reviewer **PASS** (diff `apps/android` only —
+> 2 new cores + 2 new tests + coordinator/VM wiring + tracking docs; SDK purity — the DTOs/mappers are
+> stateless `:core:model` building blocks, the `CategorySocketManager` is thin decode-and-fan glue, the
+> "hold the live copy / when to re-bucket" decision stays in the VM; SSOT — one category read path reused
+> for both hydration and socket, folded through the one `UserCategoryCatalog` reducer, no re-implementation;
+> instant-app — real-time push keeps the list live between hydrations; UDF — immutable catalogue value
+> type, pure `apply`; no tautological tests — literals + the mutation proof). **Next slice:**
+> **drag-to-category** reassignment (a pure move-decision core driving an optimistic
+> `PATCH /me/preferences/categories/reorder` + `UserCategoryCatalog.reorder`), OR the app-side
+> **`CategoryPickerField` / `TagInputField`** composables driving the shipped picker/autocomplete cores,
+> OR the paged **`OnboardingFlowView`** Compose scaffold (Auth), OR the tracked **Kover 90% coverage-gate
+> infra**.
+
 > On 2026-07-26 the **category-catalogue hydration** landed (slice
 > `conversation-category-hydration`, feature-parity §B Conversations — the non-orphan completion of the
 > two prior slices: the `UserCategoryCatalog` reducer + `ConversationSections` grouping laid a

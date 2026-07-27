@@ -187,11 +187,7 @@ class KeyboardObserver: ObservableObject {
                 // Use the keyboard-hosting window's height (not the full
                 // display) so split-screen on iPad produces the correct
                 // visible keyboard portion.
-                let screenHeight = UIApplication.shared.connectedScenes
-                    .compactMap { $0 as? UIWindowScene }
-                    .first(where: { $0.activationState == .foregroundActive })?
-                    .windows.first(where: { $0.isKeyWindow })?.bounds.height
-                    ?? UIScreen.main.bounds.height
+                let screenHeight = DeviceLayout.windowSize.height
                 let newHeight = max(screenHeight - endFrame.origin.y, 0)
 
                 if newHeight > 0 {

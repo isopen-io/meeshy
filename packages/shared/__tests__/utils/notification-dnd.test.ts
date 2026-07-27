@@ -90,4 +90,36 @@ describe('isWithinDnd', () => {
     expect(isWithinDnd(prefs, new Date('2026-07-20T23:30:00.000Z'))).toBe(true);
     expect(isWithinDnd(prefs, new Date('2026-07-20T12:00:00.000Z'))).toBe(false);
   });
+
+  describe('non-zero-padded hour (legacy docs persisted through the lax schema)', () => {
+    // The lexicographic overnight/membership comparison only holds for
+    // zero-padded "HH:MM". A legacy document carrying "9:00" (a single-digit
+    // hour) must NOT be mis-read as an overnight window: '9' > '1' would flip
+    // 09:00-17:00 into a spurious overnight block covering midnight → 17:00.
+    it('single-digit start hour is a daytime window, not overnight', () => {
+      const prefs = makePrefs({ dndStartTime: '9:00', dndEndTime: '17:00' });
+      // 03:00 UTC is BEFORE a 09:00 start → outside the daytime window.
+      expect(isWithinDnd(prefs, new Date('2026-01-01T03:00:00.000Z'))).toBe(false);
+      // 10:00 UTC is INSIDE 09:00-17:00.
+      expect(isWithinDnd(prefs, new Date('2026-01-01T10:00:00.000Z'))).toBe(true);
+      // 18:00 UTC is AFTER the 17:00 end → outside.
+      expect(isWithinDnd(prefs, new Date('2026-01-01T18:00:00.000Z'))).toBe(false);
+    });
+
+    it('single-digit end hour of an overnight window is evaluated correctly', () => {
+      // 22:00-8:00 overnight, unpadded end. 07:59 local is INSIDE the morning
+      // tail; 08:00 is the exclusive end.
+      const prefs = makePrefs({ dndStartTime: '22:00', dndEndTime: '8:00' });
+      expect(isWithinDnd(prefs, new Date('2026-01-01T07:59:00.000Z'))).toBe(true);
+      expect(isWithinDnd(prefs, new Date('2026-01-01T08:00:00.000Z'))).toBe(false);
+    });
+
+    it('both bounds single-digit — daytime window with offset', () => {
+      const prefs = makePrefs({ dndStartTime: '9:00', dndEndTime: '9:30', dndUtcOffsetMinutes: 60 });
+      // 09:15 local = 08:15 UTC → inside 09:00-09:30 local.
+      expect(isWithinDnd(prefs, new Date('2026-01-01T08:15:00.000Z'))).toBe(true);
+      // 09:45 local = 08:45 UTC → outside.
+      expect(isWithinDnd(prefs, new Date('2026-01-01T08:45:00.000Z'))).toBe(false);
+    });
+  });
 });

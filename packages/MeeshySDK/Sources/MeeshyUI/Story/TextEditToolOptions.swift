@@ -18,6 +18,16 @@ enum TextEditLabels {
         }
     }
 
+    /// Libellé parlé d'un alignement — la rangée haute l'annonce à VoiceOver,
+    /// qui n'a aucun équivalent du pictogramme.
+    static func alignTitle(for align: String) -> String {
+        switch align {
+        case "left":  return String(localized: "story.textEdit.align.left", defaultValue: "Gauche", bundle: .module)
+        case "right": return String(localized: "story.textEdit.align.right", defaultValue: "Droite", bundle: .module)
+        default:      return String(localized: "story.textEdit.align.center", defaultValue: "Centré", bundle: .module)
+        }
+    }
+
     static func title(for shape: StoryTextFrameShape) -> String {
         switch shape {
         case .rounded:   return String(localized: "story.textEdit.frame.rounded", defaultValue: "Arrondi", bundle: .module)
@@ -35,6 +45,14 @@ struct TextEditToolOptions: View {
     @Binding var textObject: StoryTextObject
 
     @Environment(\.colorScheme) private var colorScheme
+
+    /// Gabarit commun des pastilles de choix. Compressé de 48 à 38 pt
+    /// (directive user 2026-07-26) pour qu'un maximum de valeurs tienne dans
+    /// la largeur : les panneaux les plus fournis — 14 couleurs, 12 fonds —
+    /// restent scrollables, décision assumée plutôt qu'un passage à la ligne.
+    static let chipHeight: CGFloat = 38
+    static let chipMinWidth: CGFloat = 46
+    static let chipFontSize: CGFloat = 11
 
     var body: some View {
         // Rangée nue : pas de conteneur de panneau propre (fond arrondi,
@@ -78,9 +96,9 @@ struct TextEditToolOptions: View {
                         HapticFeedback.light()
                     } label: {
                         Text("Aa")
-                            .font(storyFont(for: style, size: 18))
+                            .font(storyFont(for: style, size: 17))
                             .foregroundStyle(isSel ? Color.white : Color.primary)
-                            .frame(width: 54, height: 42)
+                            .frame(width: Self.chipMinWidth, height: Self.chipHeight)
                             .background(
                                 RoundedRectangle(cornerRadius: 10)
                                     .fill(isSel ? AnyShapeStyle(MeeshyColors.brandGradient)
@@ -107,11 +125,11 @@ struct TextEditToolOptions: View {
                         HapticFeedback.light()
                     } label: {
                         Text(TextEditLabels.title(for: weight))
-                            .font(.system(size: 14, weight: weight.swiftUIWeight))
+                            .font(.system(size: 12, weight: weight.swiftUIWeight))
                             .foregroundStyle(isSel ? Color.white : Color.primary)
-                            .frame(minWidth: 54)
-                            .padding(.horizontal, 6)
-                            .frame(height: 42)
+                            .frame(minWidth: Self.chipMinWidth)
+                            .padding(.horizontal, 4)
+                            .frame(height: Self.chipHeight)
                             .background(
                                 RoundedRectangle(cornerRadius: 10)
                                     .fill(isSel ? AnyShapeStyle(MeeshyColors.brandGradient)
@@ -266,11 +284,11 @@ struct TextEditToolOptions: View {
             HapticFeedback.light()
         } label: {
             Text(code.uppercased())
-                .font(.system(size: 13, weight: .semibold))
+                .font(.system(size: 12, weight: .semibold))
                 .foregroundStyle(isSel ? Color.white : Color.primary)
-                .frame(minWidth: 44)
-                .frame(height: 38)
-                .padding(.horizontal, 6)
+                .frame(minWidth: 38)
+                .frame(height: Self.chipHeight)
+                .padding(.horizontal, 4)
                 .background(
                     RoundedRectangle(cornerRadius: 10)
                         .fill(isSel ? AnyShapeStyle(MeeshyColors.brandGradient)
@@ -330,10 +348,10 @@ struct TextEditToolOptions: View {
                         HapticFeedback.light()
                     } label: {
                         Text(TextEditLabels.title(for: shape))
-                            .font(.system(size: 12, weight: .semibold))
+                            .font(.system(size: Self.chipFontSize, weight: .semibold))
                             .foregroundStyle(isSel ? Color.white : Color.primary)
-                            .padding(.horizontal, 14)
-                            .frame(height: 38)
+                            .padding(.horizontal, 10)
+                            .frame(height: Self.chipHeight)
                             .background(
                                 RoundedRectangle(cornerRadius: frameChipRadius(shape))
                                     .fill(isSel ? AnyShapeStyle(MeeshyColors.brandGradient)
@@ -379,10 +397,10 @@ struct TextEditToolOptions: View {
             HapticFeedback.light()
         } label: {
             Text(label)
-                .font(.system(size: 12, weight: .semibold))
+                .font(.system(size: Self.chipFontSize, weight: .semibold))
                 .foregroundStyle(isSel ? Color.white : Color.primary)
-                .padding(.horizontal, 14)
-                .frame(height: 38)
+                .padding(.horizontal, 10)
+                .frame(height: Self.chipHeight)
                 .background(
                     RoundedRectangle(cornerRadius: 10)
                         .fill(isSel ? AnyShapeStyle(MeeshyColors.brandGradient)
@@ -404,11 +422,11 @@ struct TextEditToolOptions: View {
                     .fill(Color(hex: hex))
                     .frame(width: 16, height: 16)
                     .overlay(Circle().stroke(.white.opacity(0.4), lineWidth: 0.5))
-                Text(label).font(.system(size: 12, weight: .semibold))
+                Text(label).font(.system(size: Self.chipFontSize, weight: .semibold))
             }
             .foregroundStyle(isSel ? Color.white : Color.primary)
-            .padding(.horizontal, 12)
-            .frame(height: 38)
+            .padding(.horizontal, 9)
+            .frame(height: Self.chipHeight)
             .background(
                 RoundedRectangle(cornerRadius: 10)
                     .fill(isSel ? AnyShapeStyle(MeeshyColors.brandGradient)
@@ -498,14 +516,3 @@ struct TextEditToolOptions: View {
     }
 }
 
-private extension StoryTextWeight {
-    /// SwiftUI weight used to preview the chip label in its own graisse.
-    var swiftUIWeight: Font.Weight {
-        switch self {
-        case .thin: return .thin
-        case .normal: return .regular
-        case .semibold: return .semibold
-        case .bold: return .bold
-        }
-    }
-}

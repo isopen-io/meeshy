@@ -547,15 +547,16 @@ struct RootView: View {
         // story is on top. Read by `ConnectionBanner` via
         // `@Environment(\.isStoryViewerPresenting)`. Cf. bug 2026-05-27.
         .environment(\.isStoryViewerPresenting, storyViewerCoordinator.pendingRequest != nil)
+        // Le titre de scène est ce qu'iPadOS affiche sous la fenêtre en App
+        // Exposé / Stage Manager. `connectedScenes.first` le posait sur une
+        // scène arbitraire : avec deux fenêtres Meeshy, la fenêtre au premier
+        // plan gardait le titre de l'autre. `activeWindowScene` cible celle
+        // que l'utilisateur regarde.
         .adaptiveOnChange(of: router.sceneTitle) { _, title in
-            UIApplication.shared.connectedScenes
-                .compactMap { $0 as? UIWindowScene }
-                .first?.title = String(format: String(localized: "root.scene_title_format", defaultValue: "Meeshy — %@", bundle: .main), title)
+            DeviceLayout.activeWindowScene?.title = String(format: String(localized: "root.scene_title_format", defaultValue: "Meeshy — %@", bundle: .main), title)
         }
         .onAppear {
-            UIApplication.shared.connectedScenes
-                .compactMap { $0 as? UIWindowScene }
-                .first?.title = String(localized: "root.scene_title_default", defaultValue: "Meeshy — Conversations", bundle: .main)
+            DeviceLayout.activeWindowScene?.title = String(localized: "root.scene_title_default", defaultValue: "Meeshy — Conversations", bundle: .main)
         }
         .task {
             // Connect Socket.IO early so the backend knows we're online

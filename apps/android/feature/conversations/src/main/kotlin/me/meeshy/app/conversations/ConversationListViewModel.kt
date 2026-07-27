@@ -20,8 +20,10 @@ import me.meeshy.sdk.model.CategoryOption
 import me.meeshy.sdk.model.ConversationDraft
 import me.meeshy.sdk.model.ConversationFilter
 import me.meeshy.sdk.model.ConversationFilters
+import me.meeshy.sdk.model.UserCategoryCatalog
 import me.meeshy.sdk.outbox.OutboxFlushWorker
 import me.meeshy.sdk.session.SessionRepository
+import me.meeshy.sdk.socket.CategorySocketManager
 import me.meeshy.sdk.socket.MessageSocketManager
 import me.meeshy.sdk.socket.SocketConnectionState
 import me.meeshy.sdk.socket.SocketManager
@@ -66,6 +68,7 @@ class ConversationListViewModel @Inject constructor(
     private val draftStore: ConversationDraftStore,
     private val starredStore: StarredMessagesStore,
     categoryRepository: CategoryRepository,
+    categorySocketManager: CategorySocketManager,
     socketManager: SocketManager,
     sessionRepository: SessionRepository,
 ) : ViewModel() {
@@ -75,6 +78,16 @@ class ConversationListViewModel @Inject constructor(
 
     /** Authoritative, unfiltered cache list; [ConversationListUiState.conversations] is the filtered view. */
     private var rawConversations: List<ApiConversation> = emptyList()
+
+    /**
+     * The live category corpus (parity iOS `UserCategoryStore.categoriesById`). Cache-first
+     * hydration re-seeds it from the server snapshot; real-time socket events fold onto it in
+     * place. Its [UserCategoryCatalog.sorted] view is what the section splitter reads via
+     * [ConversationListUiState.categories]. Both collectors run on the same (Main) dispatcher,
+     * so the read-modify-write is serialized — the same single-writer discipline as
+     * [rawConversations].
+     */
+    private var categoryCatalog: UserCategoryCatalog = UserCategoryCatalog.EMPTY
 
     init {
         viewModelScope.launch {
@@ -111,9 +124,22 @@ class ConversationListViewModel @Inject constructor(
         viewModelScope.launch {
             // Cache-first catalogue hydration: the section splitter renders user
             // categories once the snapshot (then the background revalidation) lands.
-            // Failures stay silent — an empty catalogue keeps the pinned/all split.
+            // Each emission re-seeds the live catalogue with server truth (which already
+            // reflects any socket changes it has persisted). Failures stay silent — an
+            // empty catalogue keeps the pinned/all split.
             categoryRepository.categoriesStream().collect { categories ->
-                _state.update { it.copy(categories = categories) }
+                categoryCatalog = UserCategoryCatalog.of(categories)
+                publishCategories()
+            }
+        }
+
+        viewModelScope.launch {
+            // Real-time category changes (created/updated/deleted/reordered) fold onto the
+            // live catalogue between hydrations, so the list re-buckets the instant another
+            // device edits the corpus (parity iOS `UserCategoryStore.applyRemote`).
+            categorySocketManager.categoryEvents.collect { event ->
+                categoryCatalog = categoryCatalog.apply(event)
+                publishCategories()
             }
         }
 
@@ -144,6 +170,11 @@ class ConversationListViewModel @Inject constructor(
                 }
             }
         }
+    }
+
+    /** Pushes the live catalogue's display-ordered snapshot onto the section source. */
+    private fun publishCategories() {
+        _state.update { it.copy(categories = categoryCatalog.sorted) }
     }
 
     /**
@@ -206,6 +237,22 @@ class ConversationListViewModel @Inject constructor(
     /** Marks a conversation read from the list (swipe action). */
     fun markRead(id: String) {
         runPrefMutation { repository.markReadOptimistic(id) }
+    }
+
+    /**
+     * Reassigns a conversation to the user category [targetCategoryId] (context-menu
+     * "move to category" / drag-to-category, parity iOS `setCategory`). The pure
+     * [ConversationCategoryReassignment] SSOT gates the write: a drop onto the
+     * category the row already sits in is inert (no optimistic write, no outbox row,
+     * no flush), every other target reassigns optimistically and enqueues a snapshot.
+     */
+    fun reassignCategory(id: String, targetCategoryId: String) {
+        when (val outcome =
+            ConversationCategoryReassignment.resolve(prefsOf(id)?.categoryId, targetCategoryId)) {
+            CategoryReassignment.Unchanged -> Unit
+            is CategoryReassignment.AssignTo ->
+                runPrefMutation { repository.setCategoryOptimistic(id, outcome.categoryId) }
+        }
     }
 
     /**

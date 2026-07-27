@@ -891,6 +891,164 @@ describe('useWebRTCP2P', () => {
     });
   });
 
+  // Bug fix (2026-07-27): iOS's CallManager enforces a per-peer negotiationId
+  // high-water mark (packages/shared/types/video-call.ts,
+  // WebRTCSignalBase.negotiationId) and silently drops any SDP/ICE signal
+  // whose negotiationId is older than what it last sent. Web never stamped
+  // this field, so an iOS caller's offer (negotiationId: 1) got an answer
+  // back with no negotiationId — read by iOS as epoch 0, strictly less than
+  // its own high-water mark of 1 — and iOS discarded the (valid) answer,
+  // leaving the iOS caller stuck ringing until its own no-answer timeout.
+  describe('Negotiation epoch (negotiationId)', () => {
+    const getSignalHandler = () => {
+      const call = [...mockOn.mock.calls].reverse().find((c) => c[0] === SERVER_EVENTS.CALL_SIGNAL);
+      return call?.[1] as (event: any) => void;
+    };
+
+    it('stamps negotiationId=1 on the initial outgoing offer', async () => {
+      const { result } = renderHook(() =>
+        useWebRTCP2P({ callId: mockCallId, userId: mockUserId })
+      );
+
+      await act(async () => {
+        await result.current.createOffer(mockTargetUserId);
+      });
+
+      expect(mockEmit).toHaveBeenCalledWith(
+        CLIENT_EVENTS.CALL_SIGNAL,
+        expect.objectContaining({
+          signal: expect.objectContaining({ type: 'offer', negotiationId: 1 }),
+        }),
+        expect.any(Function)
+      );
+    });
+
+    it('echoes the offer negotiationId back on the answer, so the caller does not drop it as stale', async () => {
+      renderHook(() => useWebRTCP2P({ callId: mockCallId, userId: mockUserId }));
+      const signalHandler = getSignalHandler();
+
+      await act(async () => {
+        signalHandler({
+          callId: mockCallId,
+          signal: { type: 'offer', from: mockTargetUserId, to: mockUserId, sdp: 'offer-sdp', negotiationId: 1 },
+        });
+      });
+
+      expect(mockEmit).toHaveBeenCalledWith(
+        CLIENT_EVENTS.CALL_SIGNAL,
+        expect.objectContaining({
+          signal: expect.objectContaining({ type: 'answer', negotiationId: 1 }),
+        }),
+        expect.any(Function)
+      );
+    });
+
+    it('defaults to epoch 0 on the answer when the incoming offer carries no negotiationId (older client)', async () => {
+      renderHook(() => useWebRTCP2P({ callId: mockCallId, userId: mockUserId }));
+      const signalHandler = getSignalHandler();
+
+      await act(async () => {
+        signalHandler({
+          callId: mockCallId,
+          signal: { type: 'offer', from: mockTargetUserId, to: mockUserId, sdp: 'offer-sdp' },
+        });
+      });
+
+      expect(mockEmit).toHaveBeenCalledWith(
+        CLIENT_EVENTS.CALL_SIGNAL,
+        expect.objectContaining({
+          signal: expect.objectContaining({ type: 'answer', negotiationId: 0 }),
+        }),
+        expect.any(Function)
+      );
+    });
+
+    it('stamps the current epoch on outgoing ICE candidates', async () => {
+      const { result } = renderHook(() =>
+        useWebRTCP2P({ callId: mockCallId, userId: mockUserId })
+      );
+
+      await act(async () => {
+        await result.current.createOffer(mockTargetUserId);
+      });
+      mockEmit.mockClear();
+
+      const lastCallOptions = (WebRTCService as unknown as jest.Mock).mock.calls.at(-1)![0];
+      act(() => {
+        lastCallOptions.onIceCandidate({ toJSON: () => ({ candidate: 'candidate:1', sdpMLineIndex: 0, sdpMid: '0' }) });
+      });
+
+      expect(mockEmit).toHaveBeenCalledWith(
+        CLIENT_EVENTS.CALL_SIGNAL,
+        expect.objectContaining({
+          signal: expect.objectContaining({ type: 'ice-candidate', negotiationId: 1 }),
+        }),
+        expect.any(Function)
+      );
+    });
+
+    it('bumps the epoch when web initiates a renegotiation offer', async () => {
+      const { result } = renderHook(() =>
+        useWebRTCP2P({ callId: mockCallId, userId: mockUserId })
+      );
+      await act(async () => {
+        await result.current.createOffer(mockTargetUserId); // epoch -> 1
+      });
+      mockEmit.mockClear();
+
+      const lastCallOptions = (WebRTCService as unknown as jest.Mock).mock.calls.at(-1)![0];
+      act(() => {
+        lastCallOptions.onLocalDescription({ type: 'offer', sdp: 'reoffer-sdp' });
+      });
+
+      expect(mockEmit).toHaveBeenCalledWith(
+        CLIENT_EVENTS.CALL_SIGNAL,
+        expect.objectContaining({
+          signal: expect.objectContaining({ type: 'offer', negotiationId: 2 }),
+        }),
+        expect.any(Function)
+      );
+    });
+
+    it('echoes the tracked epoch on a renegotiation answer produced after receiving a re-offer', async () => {
+      const { result } = renderHook(() =>
+        useWebRTCP2P({ callId: mockCallId, userId: mockUserId })
+      );
+      await act(async () => {
+        await result.current.createOffer(mockTargetUserId); // epoch -> 1
+      });
+      const signalHandler = getSignalHandler();
+      await act(async () => {
+        signalHandler({
+          callId: mockCallId,
+          signal: { type: 'answer', from: mockTargetUserId, to: mockUserId, sdp: 'answer-sdp', negotiationId: 1 },
+        });
+      });
+
+      // Peer re-offers with a bumped epoch (their ICE restart).
+      await act(async () => {
+        signalHandler({
+          callId: mockCallId,
+          signal: { type: 'offer', from: mockTargetUserId, to: mockUserId, sdp: 'reoffer-sdp', negotiationId: 5 },
+        });
+      });
+      mockEmit.mockClear();
+
+      const lastCallOptions = (WebRTCService as unknown as jest.Mock).mock.calls.at(-1)![0];
+      act(() => {
+        lastCallOptions.onLocalDescription({ type: 'answer', sdp: 'reanswer-sdp' });
+      });
+
+      expect(mockEmit).toHaveBeenCalledWith(
+        CLIENT_EVENTS.CALL_SIGNAL,
+        expect.objectContaining({
+          signal: expect.objectContaining({ type: 'answer', negotiationId: 5 }),
+        }),
+        expect.any(Function)
+      );
+    });
+  });
+
   describe('userId Change Handling', () => {
     it('should recreate services when userId changes from empty', async () => {
       const { result, rerender } = renderHook(

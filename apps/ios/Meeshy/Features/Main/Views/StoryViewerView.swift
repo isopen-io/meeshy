@@ -384,13 +384,7 @@ struct StoryViewerView: View {
     // iPad split-screen / Stage Manager / multi-window scenes report the
     // viewer's actual window (UIScreen reports the full display). Used by
     // swipe-to-dismiss thresholds and horizontal-slide normalization.
-    private var windowSize: CGSize {
-        UIApplication.shared.connectedScenes
-            .compactMap { $0 as? UIWindowScene }
-            .first(where: { $0.activationState == .foregroundActive })?
-            .windows.first(where: { $0.isKeyWindow })?
-            .bounds.size ?? UIScreen.main.bounds.size
-    }
+    private var windowSize: CGSize { DeviceLayout.windowSize }
 
     /// Bas du safe area lu directement sur la keyWindow. Necessaire parce que
     /// le `GeometryReader` interne au viewer est rendu dans un contexte
@@ -399,11 +393,7 @@ struct StoryViewerView: View {
     /// commentaires se retrouvaient alors plaques sur le bord physique et
     /// chevauchaient le home indicator + les coins arrondis (bug 2026-05-28).
     var windowBottomInset: CGFloat { // internal for cross-file extension access
-        UIApplication.shared.connectedScenes
-            .compactMap { $0 as? UIWindowScene }
-            .first(where: { $0.activationState == .foregroundActive })?
-            .windows.first(where: { $0.isKeyWindow })?
-            .safeAreaInsets.bottom ?? 0
+        DeviceLayout.safeAreaBottom
     }
 
     private var screenH: CGFloat { windowSize.height }

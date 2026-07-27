@@ -330,15 +330,35 @@ struct ConversationView: View {
         persistDraft(text: composerText.text, attachmentRefs: refs)
     }
 
+    /// Hauteur cible du composer, ou `nil` quand il ne faut PAS toucher à
+    /// `composerHeight`.
+    ///
+    /// La safe area n'est ajoutée que si le clavier est absent : quand le clavier
+    /// est visible la safe area bottom passe à 0 et le `GeometryReader` fire à
+    /// chaque frame d'animation, ce qui bouclerait la hauteur sur elle-même.
+    ///
+    /// `static` + inset injecté : la règle est vérifiable sans instancier la View
+    /// ni une fenêtre (doctrine `StoryViewerView.entryStory(of:now:)`).
+    static func resolvedComposerHeight(
+        contentHeight: CGFloat,
+        keyboardHeight: CGFloat,
+        safeAreaBottom: CGFloat
+    ) -> CGFloat? {
+        guard keyboardHeight == 0 else { return nil }
+        return contentHeight + safeAreaBottom
+    }
+
     private func updateComposerHeight(_ contentHeight: CGFloat) {
-        // N'ajoute la safe area que si le clavier est absent — quand le clavier est visible
-        // la safe area bottom passe à 0 et le GeometryReader fire à chaque frame d'animation,
-        // ce qui provoquerait des mises à jour en boucle de composerHeight.
-        guard keyboardHeight == 0 else { return }
-        let safeBottom = UIApplication.shared.connectedScenes
-            .compactMap { $0 as? UIWindowScene }
-            .first?.windows.first(where: { $0.isKeyWindow })?.safeAreaInsets.bottom ?? 0
-        composerHeight = contentHeight + safeBottom
+        // `DeviceLayout.safeAreaBottom` et non un parcours de `connectedScenes` :
+        // ce dernier est un `Set` NON ORDONNÉ, donc `.first` peut renvoyer une
+        // scène d'arrière-plan. En Split View / Stage Manager le composer était
+        // alors dimensionné contre l'inset d'une AUTRE fenêtre.
+        guard let height = Self.resolvedComposerHeight(
+            contentHeight: contentHeight,
+            keyboardHeight: keyboardHeight,
+            safeAreaBottom: DeviceLayout.safeAreaBottom
+        ) else { return }
+        composerHeight = height
     }
 
     // MARK: - Computed Properties

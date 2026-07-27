@@ -1,5 +1,242 @@
 # @meeshy/web
 
+## 1.17.0
+
+### Minor Changes
+
+- Changements automatiques détectés :
+
+  - traduire aussi les REEL et les STATUS à la publication
+  - l'appui long des boutons rotatifs passe en geste prioritaire
+  - rangée haute à rotation pour l'éditeur de texte
+  - preserve $-sequences in link processing
+  - canonicalize originalLanguage at the posts & comments write boundary (220i)
+  - floating sticky day-header pill (WhatsApp-style) (#2403)
+  - stamp negotiationId on outgoing WebRTC signals
+  - canonicalize originalLanguage on write paths that bypass the funnel (#2401)
+  - E2EE disclaimer at the top of encrypted history (#2400)
+  - reject reactions on soft-deleted messages
+  - canonicalize HH:MM at the write boundary + pad in isWithinDnd
+  - scroll to the unread boundary on open (#2379)
+  - skip re-broadcast + re-notify on idempotent post/comment reaction add (220i)
+  - unread-messages separator above the first unread (#2376)
+  - le parcours d'inscription parle enfin la langue de l'utilisateur (225i)
+  - drag-to-category (re)assignment (#2373)
+  - canonicalize customDestinationLanguage at the write boundary (219i)
+  - les préférences de langue invalides retombent sur le niveau suivant (#2372)
+  - normalize NODE_ENV before TURN secret security guard
+  - restaure l'accessibilité perdue à la resynchronisation
+  - canonicalize originalLanguage at the edit + link write boundaries (219i)
+  - real-time category catalogue socket sync (#2365)
+  - le profil vocal retrouve ses accents et sa barre de titre
+  - hide decorative SF Symbols in ConversationEncryptionDetailSheet (214i) (#2334)
+  - 220i `StatusComposerView` → `NavigationStack` + bouton « Publier » accessible · 221i `MeeshyShareExtension` localisée + rangée de contact accessible (#2346)
+  - retire les marqueurs de conflit laisses par la resynchronisation
+  - localize the bookmark feedback toasts (218i) (#2347)
+  - canonicalize originalLanguage at share-link write boundary (219i)
+  - le mini-lecteur devient atteignable au doigt (221i)
+  - le formulaire de lien de parrainage devient audible (222i)
+  - cache-first user-category catalogue hydration (#2361)
+  - réconcilie la table d'armement avec le zoom d'ouverture corrigé
+  - le test de recouvrement suit le champ openingSlideFraction
+  - gestes verticaux, politique d'intro de groupe et overlay de révélation
+  - remplace 293 try? par do/catch tracés — 7 pertes de données silencieuses corrigées
+  - canonicalize originalLanguage at the write boundary (218i) (#2360)
+  - dédup canonique des langues de l'aperçu de lien partagé (#2357)
+  - scope analytics writes to the active row, fix stale docs (#2356)
+  - plus aucun plafond de durée d'enregistrement, sur aucune surface
+  - la durée attendue de l'export suit la carte de fin en 2 temps
+  - pure UserCategoryCatalog reducer (parity iOS UserCategoryStore) (#2359)
+  - le zoom d'ouverture du lecteur tournait à l'envers
+  - expect the author end-card's two-phase tail in the export duration
+  - la miniature d'une story filtrée montre enfin ce que le lecteur rend
+  - group the list by user categories (Pinned → categories → Autres) (#2355)
+  - le préchargement du repost range enfin sous une clé qu'on relit
+  - unbreak the test bundle — realign MockPostService with PostService
+  - MockPostService rend à repost son défaut de visibilité, et le flux repost teste enfin l'audience
+  - rétablit la compilation du bundle de tests après le repost à audience
+  - les médias de publication différée ne laissent plus de référence fantôme
+  - explorateur de langues du reader — liste de conversation, plus LanguagePickerSheet
+  - le dernier NavigationView passe à NavigationStack (220i)
+  - le formulaire de signalement se lit dans le mode où il est rendu (220i)
+  - un sticker a la même taille au canvas, en miniature et à l'export
+  - les réglages fins de temps agissent enfin
+  - converge window metrics on a single resolution (217i)
+  - StatusComposerView — NavigationStack, écran localisé, bouton Publier nommé
+  - les tuiles d'aperçu disent enfin ce qu'on s'apprête à partager
+  - le composeur d'humeur devient une feuille native (220i)
+  - route hand-rolled haptics through HapticFeedback (217i)
+  - la feuille de partage devient utilisable au doigt, à VoiceOver et hors anglais
+  - carte de fin d'auteur en 2 temps — logo muet PUIS interlude + jingle
+  - « Envoyer » partage un lien tracké /l/<token> de la story, pas l'URL brute
+  - l'inspecteur suit enfin le clip que la lecture traverse
+  - l'audience choisie au repost décide enfin de qui verra le post
+  - la traduction à la demande atteint enfin les textes du canvas
+  - la lane sticker ouvre son inspecteur, le « +N » compte juste
+  - la durée de slide suit l'undo, et ses recalculs s'annoncent
+  - les trois chemins d'export coupent au même endroit après la résolution d'identité
+  - le basculement « plus annulable » de l'anneau devient visible
+  - la barre rapide de langues a EXACTEMENT la taille de la barre de réaction
+  - l'interlude d'ouverture révèle la vidéo par un fondu, plus de coupure sèche
+  - XCTUnwrap prend un autoclosure — sortir l'await du call site
+  - assertion filigrane réellement sensible au pseudo + onDismiss sur la sheet « Partager » de la liste
+  - nettoyer vraiment l'audience orpheline en passant à Public/Privé
+  - borner la résolution d'identité du chemin « Partager »
+  - « Export annulé » ne peut plus mentir pendant l'écriture Photos
+  - une intro expirée ne doit plus faire perdre la carte de fin
+  - barre rapide de langues — « + » épinglé + ~5 drapeaux visibles
+  - la carte de fin de marque manquait sur le chemin d'export timeline
+  - revue Task 9 round 2 — pseudo/interlude vérifiés et bornés dans le temps
+  - retirer un hunk étranger accidentellement inclus dans 1057ed03d
+  - le reader retrouve « Partager », distinct d'« Enregistrer »
+  - l'export timeline partage la fabrique d'interlude+filigrane du SDK
+  - retirer le compteur de commentaires dupliqué de MyStoryRow
+  - la validation d'email converge sur le SSOT RFC 5322 partagé
+  - la feuille d'export d'une story se lit enfin en mode sombre (219i)
+  - pure conversation category-picker decision core (#2331)
+  - windowSize reste sans allocation dans le body des cellules
+  - le repli de windowSize reste dans la scène de premier plan
+  - la bulle se mesure sur la fenêtre, pas sur l'écran (218i)
+  - la pagination converge sur le clamp `limit=0 → 1` du SSOT
+  - le commentaire survit au hors-ligne, et une bascule ouverte se referme d'abord
+  - la bulle d'humeur se mesure sur son conteneur, pas sur l'écran (217i)
+  - pure conversation tag-autocomplete decision core (#2327)
+  - read implies delivered when no cursor exists (exact mode)
+  - « Répondre » réapparaît quand la story s'ouvre depuis une conversation
+  - un post doit porter quelque chose
+  - le lecteur ne s'arrête plus sur des stories sans contenu
+  - carte de fin de marque (fondu logo + jingle de fermeture)
+  - commentaires d'une story depuis « Mes stories »
+  - revue Task 7 — export du rail toujours membre, percent unifié
+  - anneau d'export partagé entre le reader et « Mes stories »
+  - StoryVisibilityMenuResolverTests — annoter @MainActor
+  - « Listing des vues » et sous-menu de modification de la visibilité
+  - adopt native ShareLink for synchronous links (216i) (#2324)
+  - converge synchronous shares on native ShareLink (216i)
+  - present the system share sheet through SwiftUI (215i) (#2322)
+  - le filtre d'auto-traduction converge sur le SSOT normalizeLanguageCode
+  - pure registration nav-chrome projection core (#2321)
+  - interlude grave le displayName + barre langues à gauche de « Abc »
+  - la ligne garde une identité de vue stable pendant la sauvegarde
+  - badge langue au rail + barre rapide de langues avec (+)
+  - applyVisibility — écriture optimiste et rollback exact
+  - l'action VoiceOver d'annulation n'est présente que job en vol
+  - la garde de l'interlude s'ancre sur le comportement, pas la signature
+  - interlude — l'avatar et la bannière ne sont plus retournés
+  - le « … » de la ligne devient un anneau de progression pendant la sauvegarde
+  - réancre la garde dismissGroupIntro sur le nom, pas la signature
+  - libellé VoiceOver de la ligne porte la progression de sauvegarde
+  - defaut memberwise sur APIPost.visibilityUserIds + site manque
+  - rend l'identité de tentative intrinsèque, ferme la fenêtre post-Photos
+  - update transmet enfin visibilityUserIds, et StoryItem le porte
+  - migre les conteneurs NavigationView dépréciés vers NavigationStack (214i)
+  - le dégradé de fond se lisait sur le mauvais séparateur
+  - registration wizard collects the regional (secondary) language (#2318)
+  - le lecteur préserve la pause, enchaîne les groupes expirés et se dit à voix haute
+  - borne la résolution d'identité et isole les tentatives d'export
+  - pastille sync + preview média ne dépendent plus de la locale du simu
+  - registration recap summary core (RegistrationSummary) (#2316)
+  - per-link detail screen (completes share-link vertical) (#2314)
+  - created-link success sheet with copy/share (#2312)
+  - extend a link's expiry (PATCH /links/{id}/extend) (#2310)
+  - interlude compile — import UIKit + ThumbHashDecoder public
+  - l'interlude résout avatar + fond + mood de l'auteur
+  - interlude — initiales, mood, fond gradient/scrim alignés viewer
+  - extrait la résolution de langue et l'identité d'export en helpers purs
+  - la transcription vocale atteint enfin le lecteur
+  - le filigrane change de coin toutes les 12s (au lieu de 5s)
+  - l'identité du préambule d'export est injectée, plus lue dans le singleton
+  - les libellés de stats ne dépendent plus de la langue du simulateur
+  - logo du filigrane — tracé sur 3s + couleur primaire indigo
+  - MeeshyUITests au vert — outil de langue et inspecteur en sheet
+  - câble le filigrane sur le chemin d'export de l'auteur
+  - filigrane animé — logo Meeshy + pseudo, alternant 5s
+  - rend verte la suite iOS — gardes ancrées, compteurs en delta
+  - les libellés de stats sont attendus en français
+  - purge les clés de la bande de langues supprimée
+  - l'export continue en arrière-plan (beginBackgroundTask)
+  - les vidéos overlay apparaissent dans le MP4 exporté
+  - l'auteur choisit la langue de son texte
+  - my-links list + stats + manage (copy/share/activate/delete) (#2308)
+  - freezeMessageStatus converge sur le SSOT mergeViewedLanguages
+  - create-link side — form → LinkApi → screen (moderator-gated) (#2306)
+  - l'inspecteur s'ouvre en sheet, plus en survol translucide
+  - le fond vidéo apparaît dans le MP4 (fini le "son sur fond noir")
+  - la transcription se demande depuis « … », plus imposée
+  - le suivi de lecture suit le SSOT de langue (deviceLocale 4e priorité)
+  - isUserAnonymous cesse de classer tout inscrit comme anonyme
+  - guest-join flow — preview → form → join (#2304)
+  - l'italien et l'arabe deviennent des langues d'interface réelles
+  - les flèches suivent le sens de lecture, pas un côté d'écran
+  - les libellés affichés en dur deviennent traduisibles
+  - chaque export partagé s'ouvre sur l'interlude et le jingle
+  - annote deux suites @MainActor pour rétablir la compilation
+  - une écoute hors-ligne n'est plus perdue
+  - signature sonore Meeshy — 2,2 s, synthétisée
+  - le bouton Traductions ouvre la feuille de langues
+  - le retour d'arrière-plan respecte la pause et recale le playhead
+  - la lecture ne démarre plus sous gel, par aucun des trois chemins
+  - bandeau de stats (postes/réels/stories) en tête des postes du profil
+  - un seul « Voir le profil » dans le menu DM + libellé « Infos conversation »
+  - une surface du reader se referme au toucher, où qu'il tombe
+  - des textes qui captent une prosodie, dans les langues de l'app
+  - SSOT décodage JWT base64url-safe (utils/jwt)
+  - interlude affiché partout, centré, et muet jusqu'à sa sortie
+  - admin conversation-settings editor (write-role/announcement/slow-mode/auto-translate) (#2302)
+  - plus d'audio audible pendant l'interlude d'identité
+  - long-press en bascule et bande centrale rendue au double tap
+  - transmettre la langue réellement lue avec chaque lot
+  - capturer l'interaction média et l'afficher enrichie
+  - déclarer la langue RÉELLEMENT affichée, pas celle préférée
+  - menu longpress premium, langue UI, story reader multilingue
+  - exposer la couverture, la trace et le prisme linguistique
+  - exactitude de lecture + trace écoute/langue consultée
+  - trace motivée persistée, images comptées, langue consultée
+  - trace motivée de l'écoute + langue consultée au schéma
+  - localise date formatting via SSOT formatShortDate (groups/voice/contacts)
+  - capture fidèle de l'interaction média, pilotée par événements
+  - la face du cube révèle l'interlude, et corrections gestuelles
+  - unify composer send gating across all send paths (#2300)
+  - double tap pause et swipe vertical plein écran
+  - fusion des portions réellement écoutées ou regardées
+  - bandes de tap 30/40/30 et décisions verticales
+  - le fade des textes et stickers ne se fige plus au premier tick
+  - réciprocité showReadReceipts à l'affichage
+  - StoryPlaybackClock, arbitrage playhead vs wall-clock
+  - localise tracking-link dates on interface locale via SSOT formatShortDateTime (203i)
+  - banner dans storyAuthorSelect
+  - le log de marquage expose le nombre d'ids rapportés
+  - l'app rapporte les messages réellement affichés
+  - la webapp rapporte les messages réellement affichés
+  - enforce conversation slow mode at the composer (#2298)
+  - converge profile language names on shared SSOT (202i)
+  - markAsRead transporte les ids des messages affichés
+  - stats 500 + clear langue régionale 400 — filtres validés contre le runtime prod
+  - gate composer affordances by participant send permissions (#2296)
+  - markedCount compte ce qui a réellement été figé
+  - profil, état vide et préférences — suite du backlog E2E réglages
+  - SessionService + auth middleware — suite du backlog E2E réglages
+  - restore corrupted Armenian nativeName + translateText in the language SSOT
+  - anonymous-session join/restore/leave use-case + persistence (#2294)
+  - converge agent-dashboard relative-time on shared SSOT
+  - debounced availability network probe wiring the registration wizard's on…Availability seam (#2292)
+  - app-side RegistrationViewModel wiring the shipped registration cores (#2290)
+  - converge language flag/name on shared SSOT — end globe fallback for 40+ langs, restore native names
+  - mark-as-read accepte aussi les ids rapportés
+  - accumulateur de visibilité des messages — miroirs TS et Swift
+  - le participant opt-out sort du numérateur ET du dénominateur
+  - overlay glass vibrant — fond assombri sans flou plein écran
+  - media file-size badge caps at MB — converge on formatFileSize SSOT (#2289)
+  - VoiceOver labels for ConversationInfoSheet icon-only buttons (213i)
+  - hide decorative SF Symbols in StatusComposerView (213i)
+  - VoiceOver selected-state for onboarding terms consent checkbox (199i)
+  - l'en-tête de conversation directe converge sur le SSOT getUserDisplayName
+  - la liste de conversations converge sur le SSOT getUserDisplayName
+  - language-utils drapeaux/noms convergent sur la SSOT partagée
+  - ActiveUsersSection nom + initiales convergent sur les SSOT display-name
+  - la résolution du nom d'affichage converge sur le SSOT getUserDisplayName
+  - affichage des tailles converge sur le SSOT formatFileSize
+
 ## 1.16.0
 
 ### Minor Changes

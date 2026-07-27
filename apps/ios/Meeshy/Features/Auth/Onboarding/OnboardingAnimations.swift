@@ -429,7 +429,7 @@ struct InteractiveProgressBar: View {
             ForEach(RegistrationStep.allCases) { step in
                 Button(action: {
                     onStepTapped(step)
-                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                    HapticFeedback.light()
                 }) {
                     RoundedRectangle(cornerRadius: 3)
                         .fill(stepColor(for: step))
@@ -492,7 +492,7 @@ struct GlowingButton: View {
     var body: some View {
         Button(action: {
             guard isEnabled && !isLoading else { return }
-            UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+            HapticFeedback.medium()
             action()
         }) {
             HStack(spacing: 8) {

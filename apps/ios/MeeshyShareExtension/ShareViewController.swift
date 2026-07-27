@@ -318,6 +318,7 @@ struct ShareContentView: View {
                         .font(.headline)
                         .padding(.horizontal)
                         .padding(.top)
+                        .accessibilityAddTraits(.isHeader)
 
                     // Search
                     HStack {
@@ -334,10 +335,12 @@ struct ShareContentView: View {
                     ScrollView {
                         LazyVStack(spacing: 0) {
                             ForEach(filteredContacts) { contact in
-                                ContactRow(contact: contact, isSelected: selectedContactId == contact.id)
-                                    .onTapGesture {
-                                        selectedContactId = contact.id
-                                    }
+                                Button {
+                                    selectedContactId = contact.id
+                                } label: {
+                                    ContactRow(contact: contact, isSelected: selectedContactId == contact.id)
+                                }
+                                .buttonStyle(.plain)
                             }
                         }
                     }
@@ -347,24 +350,28 @@ struct ShareContentView: View {
 
                 // Action buttons
                 HStack(spacing: 16) {
-                    Button(String(localized: "share.cancel", defaultValue: "Cancel")) {
+                    Button {
                         onCancel()
+                    } label: {
+                        Text(String(localized: "share.cancel", defaultValue: "Cancel"))
+                            .frame(maxWidth: .infinity)
+                            .padding()
                     }
-                    .frame(maxWidth: .infinity)
-                    .padding()
                     .background(Color.secondary.opacity(0.2))
                     .foregroundColor(.primary)
                     .cornerRadius(12)
 
-                    Button(String(localized: "share.send", defaultValue: "Send")) {
+                    Button {
                         if let contactId = selectedContactId {
                             onSend(contactId)
                         }
+                    } label: {
+                        Text(String(localized: "share.send", defaultValue: "Send"))
+                            .frame(maxWidth: .infinity)
+                            .padding()
                     }
-                    .frame(maxWidth: .infinity)
-                    .padding()
                     .background(selectedContactId != nil ? Color.blue : Color.secondary.opacity(0.2))
-                    .foregroundColor(.white)
+                    .foregroundColor(selectedContactId != nil ? .white : .secondary)
                     .cornerRadius(12)
                     .disabled(selectedContactId == nil)
                 }
@@ -399,6 +406,26 @@ struct ShareContentView: View {
 
 struct SharedItemPreview: View {
     let item: SharedItem
+
+    /// Spoken name of the tile. For the three cases that already print a caption
+    /// this reuses that caption's key, so the collapsed element says exactly what
+    /// the tile shows.
+    private var typeName: String {
+        switch item.type {
+        case .text: return String(localized: "share.type.text", defaultValue: "Text")
+        case .url: return String(localized: "share.type.url", defaultValue: "Link")
+        case .image: return String(localized: "share.type.image", defaultValue: "Image")
+        case .video: return String(localized: "share.type.video", defaultValue: "Video")
+        case .file: return String(localized: "share.type.file", defaultValue: "File")
+        case .location: return String(localized: "share.type.location", defaultValue: "Location")
+        }
+    }
+
+    /// The shared payload itself, for the cases that carry text worth hearing —
+    /// collapsing the tile would otherwise drop the preview string entirely.
+    private var spokenContent: String {
+        (item.content as? String) ?? ""
+    }
 
     var body: some View {
         VStack(spacing: 8) {
@@ -469,6 +496,9 @@ struct SharedItemPreview: View {
         .frame(width: 120, height: 120)
         .background(Color.secondary.opacity(0.1))
         .cornerRadius(12)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(typeName)
+        .accessibilityValue(spokenContent)
     }
 }
 
@@ -501,10 +531,6 @@ struct ContactRow: View {
                     Text(contact.initials)
                         .font(.headline)
                         .foregroundColor(.white)
-                        // Decorative fallback for a missing avatar: the row already
-                        // announces the contact's full name, so the initials would
-                        // only add "JD" noise ahead of it.
-                        .accessibilityHidden(true)
                 }
             }
 
@@ -524,17 +550,14 @@ struct ContactRow: View {
                 Image(systemName: "checkmark.circle.fill")
                     .foregroundColor(.blue)
                     .font(.title3)
-                    // The .isSelected trait below carries this state to VoiceOver;
-                    // the glyph would otherwise be read out as its symbol name.
-                    .accessibilityHidden(true)
             }
         }
         .padding()
         .background(isSelected ? Color.blue.opacity(0.1) : Color.clear)
-        // The row is picked by an .onTapGesture, so without this it reaches VoiceOver
-        // as loose text fragments: no button trait to activate, and a selection state
-        // conveyed by the checkmark and tint alone.
-        .accessibilityElement(children: .combine)
+        .contentShape(Rectangle())
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(contact.name)
+        .accessibilityValue(contact.status ?? "")
         .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : [.isButton])
     }
 }
