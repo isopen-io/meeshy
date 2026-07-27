@@ -57,6 +57,12 @@ struct FriendRequestListView: View {
                 Image(systemName: "chevron.backward")
                     .font(.callout.weight(.semibold))
                     .foregroundColor(theme.textPrimary)
+                    // Seule sortie de l'écran, et la plus petite cible : le glyphe
+                    // `.callout` seul fait ~17 pt. `alignment: .leading` étend la
+                    // zone tactile vers la droite SANS déplacer le chevron (un
+                    // frame nu le centrerait, soit ~13 pt vers la droite).
+                    .frame(width: 44, height: 44, alignment: .leading)
+                    .contentShape(Rectangle())
             }
             .accessibilityLabel(String(localized: "a11y.back", bundle: .main))
 
@@ -69,7 +75,9 @@ struct FriendRequestListView: View {
 
             Spacer()
 
-            Color.clear.frame(width: 24)
+            // Contrepoids du contrôle de retour : suit sa largeur pour que le
+            // titre reste centré.
+            Color.clear.frame(width: 44)
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
@@ -174,7 +182,12 @@ struct FriendRequestListView: View {
             // Refuser restent des éléments actionnables distincts.
             .accessibilityElement(children: .combine)
 
-            HStack(spacing: 8) {
+            // `spacing: 0` : une pastille de 36 centrée dans une cible de 44
+            // laisse 4 pt de retrait transparent de chaque côté — ces retraits
+            // REDEVIENNENT l'écart de 8 pt d'origine. La rangée ne gagne que
+            // 8 pt (au lieu de 16 avec `spacing: 8`) et l'écart visible entre
+            // les deux pastilles est inchangé.
+            HStack(spacing: 0) {
                 Button {
                     Task { await viewModel.reject(requestId: request.id) }
                 } label: {
@@ -183,6 +196,8 @@ struct FriendRequestListView: View {
                         .foregroundColor(theme.textMuted)
                         .frame(width: 36, height: 36)
                         .background(Circle().fill(theme.textMuted.opacity(0.12)))
+                        .frame(width: 44, height: 44)
+                        .contentShape(Circle())
                 }
                 .accessibilityLabel(String(localized: "friends.requests.decline", defaultValue: "Refuser la demande", bundle: .main))
 
@@ -203,6 +218,8 @@ struct FriendRequestListView: View {
                                     )
                                 )
                         )
+                        .frame(width: 44, height: 44)
+                        .contentShape(Circle())
                 }
                 .accessibilityLabel(String(localized: "friends.requests.accept", defaultValue: "Accepter la demande", bundle: .main))
             }
