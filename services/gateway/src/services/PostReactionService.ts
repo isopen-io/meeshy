@@ -26,6 +26,17 @@ export interface PostReactionData {
   readonly updatedAt: Date;
 }
 
+/**
+ * Résultat d'`addReaction` : la réaction PLUS un marqueur d'idempotence. `unchanged`
+ * est `true` quand la ligne existait déjà (re-fire d'un like : double-fire optimiste,
+ * retry socket, second appareil) — aucun état n'a changé en base. Le handler s'en
+ * sert pour NE PAS re-diffuser `post:liked`/`post:reaction-added` ni re-notifier
+ * l'auteur sur un no-op. Miroir de `ReactionService.addReaction` (`{ reaction,
+ * replacedEmojis, unchanged }`), forme aplatie ici car `MAX_REACTIONS_PER_USER = 1`
+ * (pas de `replacedEmojis`). Marqueur transitoire — jamais persisté ni diffusé.
+ */
+export type AddPostReactionResult = PostReactionData & { readonly unchanged: boolean };
+
 export interface PostReactionSync {
   readonly postId: string;
   readonly reactions: readonly PostReactionAggregation[];
@@ -70,7 +81,7 @@ export class PostReactionService {
 
   constructor(private readonly prisma: PrismaClient) {}
 
-  async addReaction(options: AddPostReactionOptions): Promise<PostReactionData | null> {
+  async addReaction(options: AddPostReactionOptions): Promise<AddPostReactionResult | null> {
     const { postId, userId, emoji } = options;
 
     this.validatePostId(postId);
@@ -128,7 +139,7 @@ export class PostReactionService {
     });
 
     if (existingReaction) {
-      return this.mapReactionToData(existingReaction);
+      return { ...this.mapReactionToData(existingReaction), unchanged: true };
     }
 
     try {
@@ -142,14 +153,14 @@ export class PostReactionService {
 
       await this.updatePostReactionSummary(postId);
 
-      return this.mapReactionToData(reaction);
+      return { ...this.mapReactionToData(reaction), unchanged: false };
     } catch (err: unknown) {
       if (err && typeof err === 'object' && 'code' in err && err.code === 'P2002') {
         // Concurrent insert race: treat as idempotent success, summary already correct.
         const existing = await this.prisma.postReaction.findFirst({
           where: { postId, userId, emoji: sanitized }
         });
-        if (existing) return this.mapReactionToData(existing);
+        if (existing) return { ...this.mapReactionToData(existing), unchanged: true };
       }
       throw err;
     }
