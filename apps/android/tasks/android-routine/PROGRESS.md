@@ -1,5 +1,39 @@
 # Progress — state & what to do next
 
+> On 2026-07-27 the **pinned floating day header** landed (slice `chat-pinned-day-header`, feature-parity
+> §C Chat — the "joined/floating day label" half of the date-headers line, leaving only inverted-list
+> pending). It draws a WhatsApp-style sticky date pill that hovers at the top of the message list and
+> names the day of whatever content sits at the top of the viewport as the reader scrolls. **Added
+> (production, all `apps/android`):** (1) `:feature:chat/PinnedDayHeader.governingDayMillis(items,
+> firstVisibleIndex) → Long?` — the pure SSOT: it scans upward from the (clamped) top row to the nearest
+> governing `ChatListItem.DayHeader` and returns its `dayMillis`; returns `null` for an empty list, a
+> negative index, a top row that sits above the first day header (e.g. the E2EE `EncryptionNotice` at
+> index 0), or when the topmost visible row **is** a `DayHeader` (the inline header is already on screen,
+> so no floating duplicate). A `firstVisibleIndex` past the end clamps to the last row. (2) `ChatScreen`
+> computes it via a `derivedStateOf` over `listState.firstVisibleItemIndex` + `listItems` and renders a
+> `PinnedDayHeaderPill` aligned `TopCenter` inside the message `Box` — same `MessageDayLabel` + pill
+> treatment as `DaySeparator` with a soft 2dp shadow so it reads as floating. **SOTA over iOS:** iOS has
+> no floating date pill at all; here the "which day governs the top" decision is a pure, fully-covered
+> value function and the redundant-header case is elided by design. **+8 behavioural tests:**
+> `PinnedDayHeaderTest` (empty→null / negative→null / message-under-header→that day / topmost-is-header→null
+> [both sections] / later-section-message→later day [two indices] / past-end→clamp-to-last / unread-separator
+> governed by the header above it / row-above-first-header [EncryptionNotice]→null but a message below still
+> pins). **Mutation (RED proof):** dropping the `if (items[top] is DayHeader) return null` guard fails
+> **exactly** the topmost-is-header test (`8 tests completed, 1 failed`, `BUILD FAILED in 10s`); no
+> collateral, restored after. **Gate:** `./apps/android/meeshy.sh check` (= `assembleDebug
+> testDebugUnitTest`) — full assemble + all-module JVM unit tests green (`BUILD SUCCESSFUL in 5m 27s`,
+> 943 tasks, APK produced). Reviewer **PASS** (diff `apps/android` only — 1 new core + 1 new test +
+> screen wiring + tracking docs; SDK purity — `PinnedDayHeader` is a stateless `:feature:chat` value
+> function, the "when to draw / read the label" glue stays in the Composable; SSOT — one governing-day
+> decision over the same interleaved `ChatListItem` rows the screen renders, reuses `MessageDayLabel` and
+> re-implements nothing; instant-app — the pill rides the cache-first message stream, no spinner; UDF —
+> pure derivation off `StateFlow`-driven `listItems`; no tautological tests — the expected day is read
+> back from a *different* item index than the function computes, plus the mutation proof). **Next slice:**
+> the §C **inverted-list** message layout (bottom-anchored `reverseLayout`, the last pending date-headers
+> item), OR the app-side **`CategoryPickerField` / `TagInputField`** composables driving the shipped
+> picker/autocomplete cores, OR the paged **`OnboardingFlowView`** Compose scaffold (Auth), OR the tracked
+> **Kover 90% coverage-gate infra**.
+
 > On 2026-07-27 the **chat E2EE disclaimer** landed (slice `chat-encryption-disclaimer`, feature-parity
 > §C Chat — the "E2EE disclaimer pending" item on the date-headers line). It pins the "messages are
 > end-to-end encrypted" notice at the top of an encrypted conversation once the reader reaches the start

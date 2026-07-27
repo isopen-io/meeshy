@@ -1166,7 +1166,19 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       **SOTA over iOS** : la décision est un value type pur entièrement couvert (iOS l'inline dans
       la View) ; un mode vide (artefact de sérialisation) ne déclenche jamais la notice, là où le
       `!= nil` de iOS l'afficherait.
-      Reste : inverted list / joined banner pending
+      **Floating day label done** (slice `chat-pinned-day-header`, 2026-07-27) : une pastille de
+      date flottante (style WhatsApp) survole le haut de la liste et nomme le jour du contenu le
+      plus haut visible. SSOT pur `:feature:chat/PinnedDayHeader.governingDayMillis(items,
+      firstVisibleIndex) → Long?` : scanne vers le haut jusqu'au `DayHeader` gouvernant ; `null`
+      pour liste vide, index négatif, ligne au-dessus du premier en-tête (ex. la notice E2EE), ou
+      quand la ligne la plus haute **est** l'en-tête de jour (l'en-tête inline est déjà à l'écran →
+      pas de doublon flottant) ; index au-delà de la fin → clamp sur la dernière ligne. `ChatScreen`
+      rend un `PinnedDayHeaderPill` (même label `MessageDayLabel` + traitement pastille que
+      `DaySeparator`, avec une ombre douce), via un `derivedStateOf` sur
+      `listState.firstVisibleItemIndex`. +8 tests, mutation-prouvé (dropper la garde
+      « en-tête en haut → null » casse exactement 1 test). **SOTA over iOS** : la décision est un
+      value type pur entièrement couvert (iOS n'a pas de pastille flottante).
+      Reste : inverted list pending
 - [~] Pagination of older messages — before-cursor done (`MessageRepository.loadOlder`,
       windowed prune keeps paginated history, scroll-top trigger + spinner); around-anchor pending
 - [~] Reactions: quick-strip **usage-ordered** done (`EmojiUsageRanker.topEmojis` port of
