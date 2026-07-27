@@ -228,8 +228,13 @@ fun ChatScreen(
     // user). Each bubble projects a pure outcome from this collected cache.
     val linkPreviewStore = remember { LinkPreviewStore(scope) }
     val linkPreviewCache by linkPreviewStore.cache.collectAsStateWithLifecycle()
-    val listItems = remember(state.messages, state.firstUnreadMessageId) {
-        buildChatListItems(state.messages, ZoneId.systemDefault(), state.firstUnreadMessageId)
+    val listItems = remember(state.messages, state.firstUnreadMessageId, state.showEncryptionDisclaimer) {
+        buildChatListItems(
+            state.messages,
+            ZoneId.systemDefault(),
+            state.firstUnreadMessageId,
+            showEncryptionNotice = state.showEncryptionDisclaimer,
+        )
     }
 
     val replyThreads = remember(state.messages) {
@@ -500,6 +505,7 @@ fun ChatScreen(
                             when (item) {
                                 is ChatListItem.DayHeader -> DaySeparator(item.dayMillis)
                                 is ChatListItem.UnreadSeparator -> UnreadSeparatorRow(accentColor)
+                                is ChatListItem.EncryptionNotice -> EncryptionNoticeRow(accentColor)
                                 is ChatListItem.Message -> {
                                     val bubble = item.bubble
                                     SwipeToReplyContainer(
@@ -1080,6 +1086,41 @@ private fun UnreadSeparatorRow(accentColor: Color, modifier: Modifier = Modifier
                 .padding(horizontal = MeeshySpacing.md, vertical = MeeshySpacing.xs),
         )
         HorizontalDivider(modifier = Modifier.weight(1f), color = accentColor.copy(alpha = 0.4f))
+    }
+}
+
+/**
+ * The end-to-end-encryption notice pinned at the top of an encrypted conversation's
+ * history — the faithful port of iOS `ConversationView.encryptionDisclaimer` (lock
+ * glyph in an accent-tinted disc + centered reassurance copy). Accent-coherent per
+ * the conversation-context colour rule; "when to show it" is the pure
+ * [EncryptionDisclaimer] decision surfaced by [ChatUiState.showEncryptionDisclaimer].
+ */
+@Composable
+private fun EncryptionNoticeRow(accentColor: Color, modifier: Modifier = Modifier) {
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(horizontal = MeeshySpacing.xxl, vertical = MeeshySpacing.lg),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(MeeshySpacing.sm),
+    ) {
+        Icon(
+            imageVector = Icons.Filled.Lock,
+            contentDescription = null,
+            tint = accentColor,
+            modifier = Modifier
+                .clip(CircleShape)
+                .background(accentColor.copy(alpha = 0.15f))
+                .padding(MeeshySpacing.sm)
+                .size(16.dp),
+        )
+        Text(
+            text = stringResource(R.string.chat_encryption_notice),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center,
+        )
     }
 }
 

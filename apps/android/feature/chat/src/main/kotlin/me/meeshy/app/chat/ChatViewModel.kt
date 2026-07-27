@@ -128,6 +128,9 @@ data class ChatUiState(
      * a boundary or not. The one-shot open scroll waits for this so it never fires
      * against an unresolved (possibly empty) window. */
     val unreadBoundaryResolved: Boolean = false,
+    /** The conversation's encryption posture (e.g. `"e2ee"`), or `null` when the
+     * conversation is not encrypted. Drives the top-of-history E2EE notice. */
+    val encryptionMode: String? = null,
     val search: ChatSearchState = ChatSearchState(),
     val mention: MentionAutocompleteState = MentionAutocompleteState(),
     val mentionDisplayNames: Map<String, String> = emptyMap(),
@@ -188,6 +191,17 @@ data class ChatUiState(
     val composerAffordances: ComposerAffordances
         get() = ComposerAttachmentPolicy.affordances(composerPermissions)
     val isEditing: Boolean get() = editingMessageId != null
+
+    /** Whether the end-to-end-encryption notice sits at the top of the list — the
+     * conversation is encrypted, the reader has reached the start of history
+     * ([hasMoreOlder] false), and the cold-start skeleton ([showSkeleton]) is down.
+     * Pure derivation over [EncryptionDisclaimer]. */
+    val showEncryptionDisclaimer: Boolean
+        get() = EncryptionDisclaimer.shouldShow(
+            encryptionMode = encryptionMode,
+            hasOlderMessages = hasMoreOlder,
+            isLoadingInitial = showSkeleton,
+        )
 
     /** The live-location sessions to render as badges, in registry order. The badge
      * self-terminates on expiry, so the raw session list is safe to surface directly. */
@@ -399,6 +413,7 @@ class ChatViewModel @Inject constructor(
                         mentionDisplayNames = MentionRoster.displayNames(roster),
                         slowModeSeconds = conversation.slowModeSeconds,
                         slowModeExempt = SlowModePolicy.isExemptRole(viewerRole),
+                        encryptionMode = conversation.encryptionMode,
                     )
                 }
             }

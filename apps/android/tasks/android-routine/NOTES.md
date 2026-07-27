@@ -3022,3 +3022,28 @@ iOS `RelativeTimeFormatter` bundles classification, calendar-day framing AND loc
   Hoist mime/messageType above the gate and reuse them inside the coroutine (no double resolution).
 - **`ComposerSendKind.entries`** (Kotlin 1.9 enum entries) works here — used it to assert the gate permits
   every kind under a full posture without hand-listing them.
+
+## Slice `chat-encryption-disclaimer` (2026-07-27)
+- **The conversation carries `encryptionMode` on the wire, not the message.** The first
+  `encryptionMode` grep hit was on `MessageAttachment` (`Core.kt`), a red herring — the field the
+  E2EE notice needs lives on `ApiConversation` (mirrors iOS SDK `CoreModels.swift` Conversation,
+  shared `message-types.ts` `'e2ee' | 'server' | 'hybrid'`). `ApiConversation` did NOT have it; added
+  it. Lesson: when porting a View-level flag, trace it to the exact model the ViewModel reads
+  (`conversationStream` emits `ApiConversation`), don't trust a same-named field on a sibling type.
+- **JSON-blob cache = free field round-trip.** `conversationStream` decodes an `ApiConversation` from a
+  Room `payload` string blob, so a new `@Serializable` field persists and rehydrates with zero Room
+  schema/DAO change. Contrast with field-mapped entities where a new field silently drops through cache.
+- **Map iOS gate names to the real Android state fields, and test the mapping.** iOS
+  `!hasOlderMessages && !isLoadingInitial` → Android `!hasMoreOlder && !showSkeleton`. `hasMoreOlder`
+  defaults `true` (so the notice stays hidden until pagination reaches the top — correct). Two
+  ui-state derivation tests guard against inverting either field; the mutation proof showed they fail
+  exactly when the guards are dropped.
+- **Inject top-of-list chrome as a `ChatListItem` row, never a separate LazyColumn `item {}`.** All
+  scroll math (`InitialScrollTarget.of`, reply-jump `indexOfFirst`, `isNearBottom(lastIndex)`) reads
+  `listItems` indices; a `ChatListItem.EncryptionNotice` prepended inside `buildChatListItems` keeps
+  every index consistent, whereas an out-of-band header item would shift them by one and desync the
+  open-scroll target.
+- **`MediaDownloadPreferencesStoreTest` is load-flaky.** Under a full parallel `check`, its
+  `dataStore_hydratesAlreadyPersistedChoiceOnConstruction` timed out at 15s (real DataStore on a temp
+  file, `StateFlow.first()`); it passes in ~6s in isolation. Not caused by an `apps/android` diff — if
+  a full `check` reddens only on this test, re-run it isolated before treating the gate as failed.

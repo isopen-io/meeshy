@@ -152,4 +152,62 @@ class ChatListItemsTest {
 
         assertThat(items.filterIsInstance<ChatListItem.UnreadSeparator>()).isEmpty()
     }
+
+    @Test
+    fun `no encryption notice is inserted by default`() {
+        val items = buildChatListItems(
+            listOf(bubble("m1", "2026-06-11T08:00:00Z")),
+            zone,
+        )
+
+        assertThat(items.filterIsInstance<ChatListItem.EncryptionNotice>()).isEmpty()
+    }
+
+    @Test
+    fun `the encryption notice sits at the very top above the first day header`() {
+        val items = buildChatListItems(
+            listOf(
+                bubble("m1", "2026-06-11T08:00:00Z"),
+                bubble("m2", "2026-06-11T09:00:00Z"),
+            ),
+            zone,
+            showEncryptionNotice = true,
+        )
+
+        assertThat(items[0]).isInstanceOf(ChatListItem.EncryptionNotice::class.java)
+        assertThat(items[1]).isInstanceOf(ChatListItem.DayHeader::class.java)
+        // Only one notice, ever.
+        assertThat(items.filterIsInstance<ChatListItem.EncryptionNotice>()).hasSize(1)
+    }
+
+    @Test
+    fun `the encryption notice renders on an empty conversation as the only row`() {
+        val items = buildChatListItems(
+            emptyList(),
+            zone,
+            showEncryptionNotice = true,
+        )
+
+        assertThat(items).hasSize(1)
+        assertThat(items[0]).isInstanceOf(ChatListItem.EncryptionNotice::class.java)
+    }
+
+    @Test
+    fun `the notice and the unread separator coexist without disturbing the boundary`() {
+        val items = buildChatListItems(
+            listOf(
+                bubble("m1", "2026-06-11T08:00:00Z"),
+                bubble("m2", "2026-06-11T09:00:00Z"),
+            ),
+            zone,
+            firstUnreadId = "m2",
+            showEncryptionNotice = true,
+        )
+
+        assertThat(items[0]).isInstanceOf(ChatListItem.EncryptionNotice::class.java)
+        val sepIdx = items.indexOfFirst { it is ChatListItem.UnreadSeparator }
+        assertThat((items[sepIdx + 1] as ChatListItem.Message).bubble.messageId).isEqualTo("m2")
+        assertThat(items.filterIsInstance<ChatListItem.EncryptionNotice>()).hasSize(1)
+        assertThat(items.filterIsInstance<ChatListItem.UnreadSeparator>()).hasSize(1)
+    }
 }

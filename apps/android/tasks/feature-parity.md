@@ -1152,7 +1152,21 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       contre une fenêtre vide/non-résolue). +9 tests, 2 mutations prouvées. **SOTA over iOS** :
       cible pure entièrement couverte + gate sur le flag de résolution qui supprime le double
       saut bas→séparateur de l'ouverture iOS.
-      Reste : inverted list / joined banner / E2EE disclaimer pending
+      **E2EE disclaimer done** (slice `chat-encryption-disclaimer`, 2026-07-27) : la notice
+      « messages chiffrés de bout en bout » se pose en haut de l'historique d'une conversation
+      chiffrée — port fidèle de iOS `ConversationView.encryptionDisclaimer`
+      (`conv.encryptionMode != nil && !hasOlderMessages && !isLoadingInitial`). SSOT pur
+      `:feature:chat/EncryptionDisclaimer.shouldShow(encryptionMode, hasOlderMessages,
+      isLoadingInitial)` (mappé sur `hasMoreOlder`/`showSkeleton` de `ChatUiState`) ;
+      `buildChatListItems(showEncryptionNotice)` prépend un unique `ChatListItem.EncryptionNotice`
+      au-dessus du premier en-tête de jour ; `ChatScreen` rend un `EncryptionNoticeRow`
+      accent-cohérent (disque teinté + cadenas + copie centrée, EN/FR/ES/PT). `ApiConversation`
+      gagne `encryptionMode` (round-trip JSON via le blob de cache, aucun changement Room).
+      +13 tests, mutation-prouvé (dropper les deux gardes casse exactement les 4 tests de garde).
+      **SOTA over iOS** : la décision est un value type pur entièrement couvert (iOS l'inline dans
+      la View) ; un mode vide (artefact de sérialisation) ne déclenche jamais la notice, là où le
+      `!= nil` de iOS l'afficherait.
+      Reste : inverted list / joined banner pending
 - [~] Pagination of older messages — before-cursor done (`MessageRepository.loadOlder`,
       windowed prune keeps paginated history, scroll-top trigger + spinner); around-anchor pending
 - [~] Reactions: quick-strip **usage-ordered** done (`EmojiUsageRanker.topEmojis` port of
