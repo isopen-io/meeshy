@@ -42,6 +42,7 @@ import {
   NOTIFICATION_PREFERENCE_DEFAULTS,
   type NotificationPreference as NotifPrefs,
 } from '@meeshy/shared/types/preferences';
+import { normalizeLanguageCode } from '@meeshy/shared/utils/language-normalize';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
 
 const logger = enhancedLogger.child({ module: 'PreferencesService' });
@@ -364,15 +365,23 @@ export class PreferencesService {
     userId: string,
     data: UpdateLanguagePreferencesDTO
   ): Promise<LanguagePreferencesDTO> {
-    // Update user language fields. Lowercase at the write boundary so the DB only
-    // ever holds minuscule codes — the invariant the read-side resolvers
-    // (resolveUserLanguage) rely on. A code stored as 'EN' would never match the
-    // lowercase-keyed MessageTranslation store (Prisme rule #1 miss).
+    // Canonicalize language codes at the write boundary so the DB only ever holds
+    // canonical, lowercase codes — the invariant the read-side resolvers
+    // (resolveUserLanguage) rely on. Platform locales arrive region/script-tagged
+    // (iOS `Locale.current.identifier` = 'fr_FR', web `navigator.language` =
+    // 'fr-FR'); a raw `.toLowerCase()` would persist 'fr-fr', which matches
+    // neither the lowercase-keyed MessageTranslation store nor the NLLB source
+    // mapping (Prisme rule #1 miss + fragmented per-language stats). The SSOT
+    // normalizeLanguageCode reduces 'fr-FR'/'fr_FR' → 'fr' and preserves
+    // supported ISO 639-3 codes ('bas') verbatim; it returns undefined only for
+    // codes it cannot reduce, where we fall back to `.toLowerCase()` — identical
+    // to prior behavior, so unknown codes are never lost.
+    const canonicalize = (code: string): string => normalizeLanguageCode(code) ?? code.toLowerCase();
     const updateData: any = {};
-    if (data.systemLanguage !== undefined) updateData.systemLanguage = data.systemLanguage.toLowerCase();
-    if (data.regionalLanguage !== undefined) updateData.regionalLanguage = data.regionalLanguage.toLowerCase();
+    if (data.systemLanguage !== undefined) updateData.systemLanguage = canonicalize(data.systemLanguage);
+    if (data.regionalLanguage !== undefined) updateData.regionalLanguage = canonicalize(data.regionalLanguage);
     if (data.customDestinationLanguage !== undefined) {
-      updateData.customDestinationLanguage = data.customDestinationLanguage.toLowerCase();
+      updateData.customDestinationLanguage = canonicalize(data.customDestinationLanguage);
     }
 
     if (Object.keys(updateData).length > 0) {
