@@ -146,6 +146,18 @@ export class CommentReactionHandler {
       };
       if (callback) callback(successResponse);
 
+      if (reaction.unchanged) {
+        // Idempotent no-op: the user already had exactly this emoji on this comment
+        // (re-fire — optimistic double-fire, a socket retry after a lost ACK, or a
+        // second device echoing the same tap). Nothing changed in the DB, so the
+        // success ACK above already gives the client its desired end-state. Skip the
+        // broadcast and the author notification — re-emitting them spams every
+        // post-room socket and re-notifies the author for a reaction that never
+        // changed state. Mirrors ReactionHandler.handleReactionAdd's `unchanged`
+        // guard and this handler's own already-absent guard on remove.
+        return;
+      }
+
       this.io.to(ROOMS.post(validated.postId)).emit(SERVER_EVENTS.COMMENT_REACTION_ADDED, updateEvent);
 
       // Fire-and-forget: notification errors must not reach the outer catch after

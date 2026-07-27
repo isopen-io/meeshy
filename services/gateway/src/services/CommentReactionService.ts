@@ -18,6 +18,15 @@ export interface CommentReactionData {
   readonly updatedAt: Date;
 }
 
+/**
+ * Résultat d'`addReaction` : la réaction PLUS un marqueur d'idempotence. `unchanged`
+ * est `true` quand la ligne existait déjà (re-fire idempotent) — aucun changement DB.
+ * Le handler s'en sert pour NE PAS re-diffuser `comment:reaction-added` ni re-notifier
+ * l'auteur sur un no-op. Miroir de `ReactionService.addReaction`, forme aplatie
+ * (`MAX_REACTIONS_PER_USER = 1`). Marqueur transitoire — jamais persisté ni diffusé.
+ */
+export type AddCommentReactionResult = CommentReactionData & { readonly unchanged: boolean };
+
 export interface CommentReactionSync {
   readonly commentId: string;
   readonly postId: string;
@@ -73,7 +82,7 @@ export class CommentReactionService {
 
   constructor(private readonly prisma: PrismaClient) {}
 
-  async addReaction(options: AddCommentReactionOptions): Promise<CommentReactionData | null> {
+  async addReaction(options: AddCommentReactionOptions): Promise<AddCommentReactionResult | null> {
     const { commentId, userId, emoji } = options;
 
     this.validateCommentId(commentId);
@@ -124,7 +133,7 @@ export class CommentReactionService {
     });
 
     if (existingReaction) {
-      return this.mapReactionToData(existingReaction);
+      return { ...this.mapReactionToData(existingReaction), unchanged: true };
     }
 
     try {
@@ -138,14 +147,14 @@ export class CommentReactionService {
 
       await this.updateCommentReactionSummary(commentId);
 
-      return this.mapReactionToData(reaction);
+      return { ...this.mapReactionToData(reaction), unchanged: false };
     } catch (err: unknown) {
       if (err && typeof err === 'object' && 'code' in err && err.code === 'P2002') {
         // Concurrent insert race: treat as idempotent success, summary already correct.
         const existing = await this.prisma.commentReaction.findFirst({
           where: { commentId, userId, emoji: sanitized }
         });
-        if (existing) return this.mapReactionToData(existing);
+        if (existing) return { ...this.mapReactionToData(existing), unchanged: true };
       }
       throw err;
     }

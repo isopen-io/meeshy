@@ -201,6 +201,18 @@ export class PostReactionHandler {
       };
       if (callback) callback(successResponse);
 
+      if (reaction.unchanged) {
+        // Idempotent no-op: the user already had exactly this emoji on this post
+        // (a like re-fire — optimistic double-fire, a socket retry after a lost
+        // ACK, or a second device echoing the same tap). Nothing changed in the DB,
+        // so the success ACK above already gives the client its desired end-state.
+        // Skip the broadcast and the author notification — re-emitting them spams
+        // every feed/post-room socket and re-notifies the author for a reaction
+        // that never changed state. Mirrors ReactionHandler.handleReactionAdd's
+        // `unchanged` guard and this handler's own already-absent guard on remove.
+        return;
+      }
+
       this.broadcastReactionChange(validated.postId, validated.emoji, 'add', userId, updateEvent)
         .catch(err => this.logger.error('post reaction:add broadcast failed', err, { postId: validated.postId }));
       // _createPostReactionNotification handles errors internally; void to be explicit.
