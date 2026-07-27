@@ -122,11 +122,12 @@ final class LocalizationConsistencyTests: XCTestCase {
         var violations: [String] = []
         for path in Self.fullyLocalizedScreens {
             let url = env.repoRoot.appendingPathComponent(path)
+            let catalog = env.catalog(resolvedFor: url)
             let text = try String(contentsOf: url, encoding: .utf8)
             for call in localizedCalls(in: text) {
                 guard isIdentifier(call.key), !call.isModuleBundle,
                       !Self.untranslatableKeys.contains(call.key) else { continue }
-                let missing = env.requiredLocales.subtracting(env.appTranslations[call.key] ?? [])
+                let missing = catalog.requiredLocales.subtracting(catalog.translations[call.key] ?? [])
                 guard !missing.isEmpty else { continue }
                 violations.append("\(call.key)  (\(url.lastPathComponent) → missing \(missing.sorted().joined(separator: ", ")))")
             }
@@ -153,6 +154,7 @@ final class LocalizationConsistencyTests: XCTestCase {
         var violations: [String] = []
         for path in Self.fullyLocalizedScreens {
             let url = env.repoRoot.appendingPathComponent(path)
+            let catalog = env.catalog(resolvedFor: url)
             let text = try String(contentsOf: url, encoding: .utf8)
             for call in localizedCalls(in: text) {
                 guard isIdentifier(call.key), !call.isModuleBundle,
@@ -162,12 +164,12 @@ final class LocalizationConsistencyTests: XCTestCase {
                       // interpolated default legitimately differs from its catalog
                       // entry (cf. the natural-text exclusion in this file's header).
                       !inline.contains("\\(") else { continue }
-                let catalogSource = env.appSourceValues[call.key]
+                let catalogSource = catalog.sourceValues[call.key]
                 guard catalogSource != inline else { continue }
                 violations.append(
                     "\(call.key)  (\(url.lastPathComponent))\n"
                     + "      code: \(inline)\n"
-                    + "   catalog: \(catalogSource ?? "<no \(env.sourceLanguage) entry>")"
+                    + "   catalog: \(catalogSource ?? "<no \(catalog.sourceLanguage) entry>")"
                 )
             }
         }
@@ -175,7 +177,7 @@ final class LocalizationConsistencyTests: XCTestCase {
         XCTAssertTrue(
             violations.isEmpty,
             "On a pinned screen the inline defaultValue and the catalog's "
-            + "\(env.sourceLanguage) entry are the same string rendered by two different "
+            + "\(env.appCatalog.sourceLanguage) entry are the same string rendered by two different "
             + "paths, so they must be identical:\n"
             + violations.joined(separator: "\n")
         )
@@ -186,46 +188,88 @@ final class LocalizationConsistencyTests: XCTestCase {
 
         var untranslated: Set<String> = []
         for file in env.sourceFiles {
+            let catalog = env.catalog(resolvedFor: file)
             let text = (try? String(contentsOf: file, encoding: .utf8)) ?? ""
             for call in localizedCalls(in: text) {
                 guard isIdentifier(call.key), !call.isModuleBundle else { continue }
-                if !env.requiredLocales.isSubset(of: env.appTranslations[call.key] ?? []) {
+                if !catalog.requiredLocales.isSubset(of: catalog.translations[call.key] ?? []) {
                     untranslated.insert(call.key)
                 }
             }
         }
 
         // Pinned at the 225i measurement (1669 at 220i, −63 for the onboarding step
-        // flow). This number must only ever go DOWN: a failure means a new key was
-        // introduced with a `defaultValue` alone, which ships French to the six other
-        // locales. Add the catalog entry — with its translations — instead of raising
-        // the ceiling.
+        // flow). RE-MEASURED at 224i when the scan became per-target: unchanged at
+        // 1606, because the five share-extension keys are currently duplicated into
+        // the app catalog as well, so they were already counted as translated. The
+        // number must only ever go DOWN: a failure means a new key was introduced
+        // with a `defaultValue` alone, which ships the source language to every other
+        // locale. Add the catalog entry — with its translations, to the catalog of
+        // the target that OWNS the key — instead of raising the ceiling.
         let backlogCeiling = 1606
         XCTAssertLessThanOrEqual(
             untranslated.count, backlogCeiling,
-            "\(untranslated.count) app-bundle identifier keys are untranslated in at least one "
-            + "shipped locale (ceiling \(backlogCeiling)). Add the missing entries to "
-            + Self.appCatalogPath
+            "\(untranslated.count) identifier keys are untranslated in at least one shipped "
+            + "locale (ceiling \(backlogCeiling)). Add the missing entries to the catalog of the "
+            + "target that owns them."
         )
     }
 
     // MARK: - Environment
 
+    /// One catalog, indexed. Added 224i, when the single-catalog model started
+    /// reporting correctly-localized extension strings as untranslated.
+    private struct CatalogIndex {
+        /// Key → locales whose string unit is in the `translated` state.
+        let translations: [String: Set<String>]
+        /// Shipped locales minus THIS catalog's source language.
+        let requiredLocales: Set<String>
+        /// This catalog's source language — `fr` for the app, `en` for the share extension.
+        let sourceLanguage: String
+        /// Key → its value in the source language, when it has a flat one.
+        let sourceValues: [String: String]
+    }
+
     private struct Environment {
+        /// An app extension is a SEPARATE BUNDLE: a `String(localized:)` in its sources
+        /// resolves against ITS `Localizable.xcstrings`, never the host app's. Checking
+        /// those sources against the app catalog reports keys as untranslated while they
+        /// are in fact fully translated in the catalog shipping beside them.
+        /// Path fragment → the catalog that target actually resolves against.
+        ///
+        /// Declared HERE rather than on the enclosing suite on purpose: the suite is
+        /// `@MainActor`, so a static of its own would be actor-isolated and unreadable
+        /// from `catalog(resolvedFor:)`, which is nonisolated — a nested type does not
+        /// inherit the enclosing type's global actor.
+        static let catalogByTargetFragment: [String: String] = [
+            "/MeeshyShareExtension/": "apps/ios/MeeshyShareExtension/Localizable.xcstrings",
+            "/MeeshyNotificationExtension/": "apps/ios/MeeshyNotificationExtension/Localizable.xcstrings",
+        ]
+
         let repoRoot: URL
         let sourceFiles: [URL]
         let combinedSource: String
         let appIdentifierKeys: [String]
         let appKeysWithEn: Set<String>
         let sdkKeysWithEn: Set<String>
-        /// Key → locales whose app-catalog string unit is in the `translated` state.
-        let appTranslations: [String: Set<String>]
-        /// Shipped locales minus the catalog's source language.
-        let requiredLocales: Set<String>
-        /// The app catalog's source language, e.g. `fr`.
-        let sourceLanguage: String
-        /// Key → its app-catalog value in the source language, when it has one.
-        let appSourceValues: [String: String]
+        /// Catalog repo-path → its index. Always contains the app catalog.
+        let catalogs: [String: CatalogIndex]
+        let appCatalogPath: String
+
+        /// The catalog the given source file's bundle resolves against.
+        func catalog(resolvedFor file: URL) -> CatalogIndex {
+            for (fragment, catalogPath) in Self.catalogByTargetFragment
+            where file.path.contains(fragment) {
+                if let index = catalogs[catalogPath] { return index }
+            }
+            return appCatalog
+        }
+
+        /// Force-unwrap-free accessor: the app catalog is always loaded.
+        var appCatalog: CatalogIndex {
+            catalogs[appCatalogPath]
+                ?? CatalogIndex(translations: [:], requiredLocales: [], sourceLanguage: "fr", sourceValues: [:])
+        }
     }
 
     private func makeEnvironment() throws -> Environment {
@@ -258,9 +302,22 @@ final class LocalizationConsistencyTests: XCTestCase {
             .compactMap { try? String(contentsOf: $0, encoding: .utf8) }
             .joined(separator: "\n")
 
-        let appTranslations = try loadTranslations(appCatalog)
-        let appSourceLanguage = try sourceLanguage(appCatalog)
-        let requiredLocales = try shippedLocales(repoRoot: repoRoot).subtracting([appSourceLanguage])
+        // Index the app catalog plus every per-target catalog. Each is measured
+        // against the shipped locales minus ITS OWN source language, which differs:
+        // the app catalog is authored in `fr`, the share extension's in `en`.
+        let shipped = try shippedLocales(repoRoot: repoRoot)
+        var catalogs: [String: CatalogIndex] = [:]
+        for path in [Self.appCatalogPath] + Environment.catalogByTargetFragment.values {
+            let url = repoRoot.appendingPathComponent(path)
+            guard FileManager.default.fileExists(atPath: url.path) else { continue }
+            let language = try sourceLanguage(url)
+            catalogs[path] = CatalogIndex(
+                translations: try loadTranslations(url),
+                requiredLocales: shipped.subtracting([language]),
+                sourceLanguage: language,
+                sourceValues: try values(url, locale: language)
+            )
+        }
 
         return Environment(
             repoRoot: repoRoot,
@@ -269,10 +326,8 @@ final class LocalizationConsistencyTests: XCTestCase {
             appIdentifierKeys: appKeys.keys.filter(isIdentifier),
             appKeysWithEn: Set(appKeys.filter { $0.value }.keys),
             sdkKeysWithEn: Set(sdkKeys.filter { $0.value }.keys),
-            appTranslations: appTranslations,
-            requiredLocales: requiredLocales,
-            sourceLanguage: appSourceLanguage,
-            appSourceValues: try values(appCatalog, locale: appSourceLanguage)
+            catalogs: catalogs,
+            appCatalogPath: Self.appCatalogPath
         )
     }
 
