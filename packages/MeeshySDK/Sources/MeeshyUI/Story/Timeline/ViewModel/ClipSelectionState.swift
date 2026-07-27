@@ -22,10 +22,25 @@ public struct ClipSelectionState: Equatable, Sendable {
     }
 
     public nonisolated private(set) var selectedClipId: String?
+
+    /// Clip dont la FICHE d'édition est présentée. Distinct du surlignage :
+    /// toucher une piste la surligne, la fiche ne s'ouvre qu'au double tap
+    /// (directive user 2026-07-27). Auparavant la sheet était pilotée par un
+    /// binding sur `selectedClipId` — sélectionner, c'était présenter, et le
+    /// moindre tap recouvrait la timeline qu'on était en train de lire.
+    ///
+    /// Invariant : `inspectedClipId != nil ⟹ inspectedClipId == selectedClipId`.
+    /// C'est lui qui permet aux `resolve*Snapshot` de continuer à lire
+    /// `selectedClipId` sans être paramétrés par un identifiant.
+    public nonisolated private(set) var inspectedClipId: String?
+
     public nonisolated private(set) var activeDrag: ActiveDrag?
 
-    public nonisolated init(selectedClipId: String? = nil, activeDrag: ActiveDrag? = nil) {
+    public nonisolated init(selectedClipId: String? = nil,
+                            inspectedClipId: String? = nil,
+                            activeDrag: ActiveDrag? = nil) {
         self.selectedClipId = selectedClipId
+        self.inspectedClipId = inspectedClipId
         self.activeDrag = activeDrag
     }
 
@@ -35,12 +50,29 @@ public struct ClipSelectionState: Equatable, Sendable {
 
     // MARK: - Mutations
 
+    /// Surligne un clip. Referme la fiche ouverte : sans ça, elle resterait
+    /// posée sur un clip que l'utilisateur ne regarde plus, et l'invariant
+    /// `inspectedClipId == selectedClipId` tomberait.
     public nonisolated mutating func select(_ clipId: String) {
         selectedClipId = clipId
+        inspectedClipId = nil
+    }
+
+    /// Ouvre la fiche d'édition d'un clip, en le surlignant.
+    public nonisolated mutating func inspect(_ clipId: String) {
+        selectedClipId = clipId
+        inspectedClipId = clipId
+    }
+
+    /// Referme la fiche SANS désélectionner — l'utilisateur retrouve la piste
+    /// qu'il consultait, surlignée.
+    public nonisolated mutating func endInspection() {
+        inspectedClipId = nil
     }
 
     public nonisolated mutating func deselect() {
         selectedClipId = nil
+        inspectedClipId = nil
     }
 
     public nonisolated mutating func beginDrag(clipId: String, originalStartTime: Float) {

@@ -239,6 +239,18 @@ public final class TimelineViewModel: ObservableObject {
         if let id { selection.select(id) } else { selection.deselect() }
     }
 
+    /// Ouvre la fiche d'édition d'un clip — double tap sur une piste, ou tap
+    /// simple sur un marqueur de keyframe / transition : ces cibles font 12 à
+    /// 16 pt, leur demander un double tap serait une régression.
+    public func inspectClip(id: String) {
+        selection.inspect(id)
+    }
+
+    /// Referme la fiche en gardant le clip surligné.
+    public func endInspection() {
+        selection.endInspection()
+    }
+
     // MARK: - Clip drag
 
     public func beginClipDrag(clipId: String) {

@@ -50,6 +50,9 @@ final class TimelineLocalizationTests: XCTestCase {
         "story.timeline.clip.tooltip.duration",
         "story.timeline.clip.tooltip.fadeIn",
         "story.timeline.clip.tooltip.fadeOut",
+        // Fiche d'édition — découpe (ex-double tap sur la barre vidéo)
+        "story.timeline.inspector.split",
+        "story.timeline.inspector.split.hint",
         // Transition
         "story.timeline.transition.crossfade",
         "story.timeline.transition.dissolve",

@@ -109,6 +109,10 @@ public struct ClipInspector: View {
     public let onBackgroundToggled: (Bool) -> Void
     public let onAddKeyframe: () -> Void
     public let onDelete: () -> Void
+    /// Découpe le clip à la tête de lecture. Cette action était le DOUBLE TAP
+    /// sur la barre vidéo : trancher un média n'est pas ce qu'on attend d'un
+    /// geste d'ouverture, et elle n'était même câblée que sur la vidéo.
+    public let onSplit: () -> Void
     /// Ferme l'inspecteur (désélection) — la modale était infermable :
     /// aucune affordance, seul un tap hasardeux hors clip la faisait
     /// disparaître (retour user 2026-07-11).
@@ -177,6 +181,7 @@ public struct ClipInspector: View {
                 onBackgroundToggled: @escaping (Bool) -> Void,
                 onAddKeyframe: @escaping () -> Void,
                 onDelete: @escaping () -> Void,
+                onSplit: @escaping () -> Void = {},
                 onClose: @escaping () -> Void = {},
                 onStartAdjusted: @escaping (Float) -> Void = { _ in },
                 onDurationAdjusted: @escaping (Float) -> Void = { _ in },
@@ -193,6 +198,7 @@ public struct ClipInspector: View {
         self.onBackgroundToggled = onBackgroundToggled
         self.onAddKeyframe = onAddKeyframe
         self.onDelete = onDelete
+        self.onSplit = onSplit
         self.onClose = onClose
         self.onStartAdjusted = onStartAdjusted
         self.onDurationAdjusted = onDurationAdjusted
@@ -261,6 +267,13 @@ public struct ClipInspector: View {
     /// sticker se retire depuis le CANVAS (`deleteClip` le refuse
     /// explicitement) — le bouton n'aurait rien supprimé.
     public static func supportsDeletion(kind: ClipSnapshot.Kind) -> Bool {
+        kind != .sticker
+    }
+
+    /// True quand découper le clip à la tête de lecture a un sens. Un sticker
+    /// est un point d'apparition, pas une matière qu'on tranche — même raison
+    /// que `supportsDeletion`.
+    public static func supportsSplit(kind: ClipSnapshot.Kind) -> Bool {
         kind != .sticker
     }
 
@@ -674,47 +687,92 @@ public struct ClipInspector: View {
     /// glass — groupés dans un `AdaptiveGlassContainer` pour que les formes
     /// adjacentes se fondent correctement. Fallback < 26 : matériau teinté
     /// + liseré, géré par le wrapper.
+    /// Trois actions ne tiennent pas toujours sur une ligne — en français
+    /// « Animation · Diviser · Supprimer » débordait déjà à 360 pt, et les
+    /// langues plus verbeuses (allemand) aggravent le cas. `ViewThatFits`
+    /// bascule sur deux rangées plutôt que de laisser les capsules se
+    /// chevaucher et les libellés se couper en deux (« Anima-tion »).
+    ///
+    /// Le premier candidat n'a PAS de `Spacer` : un `Spacer` se comprimant à
+    /// l'infini, `ViewThatFits` le jugerait toujours suffisant et ne
+    /// basculerait jamais.
     private var actionsRow: some View {
         AdaptiveGlassContainer(spacing: 12) {
-            HStack(spacing: 12) {
-                Button {
-                    withAnimation(reduceMotion ? .none : .spring(response: 0.35, dampingFraction: 0.85)) {
-                        isAnimationExpanded.toggle()
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 10) {
+                    animationButton
+                    if Self.supportsSplit(kind: clip.kind) { splitButton }
+                    if Self.supportsDeletion(kind: clip.kind) { deleteButton }
+                }
+                VStack(alignment: .leading, spacing: 10) {
+                    HStack(spacing: 10) {
+                        animationButton
+                        if Self.supportsSplit(kind: clip.kind) { splitButton }
                     }
-                } label: {
-                    animationToggleLabel
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel(String(localized: "story.timeline.inspector.animation",
-                                           defaultValue: "Animation", bundle: .module))
-                .accessibilityHint(String(localized: "story.timeline.inspector.animation.hint",
-                                          defaultValue: "Affiche les réglages d'animation du clip",
-                                          bundle: .module))
-                .accessibilityAddTraits(isAnimationExpanded ? [.isSelected] : [])
-
-                Spacer(minLength: 0)
-
-                if Self.supportsDeletion(kind: clip.kind) {
-                Button {
-                    deleteConfirmation.request()
-                } label: {
-                    Label(String(localized: "story.timeline.clip.delete", bundle: .module),
-                          systemImage: "trash")
-                        .font(.footnote.weight(.semibold))
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 14)
-                        .frame(height: 36)
-                        .adaptiveGlassProminent(in: Capsule(), tint: MeeshyColors.error)
-                        .contentShape(Rectangle().inset(by: -4))
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel(String(localized: "story.timeline.clip.delete", bundle: .module))
-                .accessibilityHint(String(localized: "story.timeline.inspector.delete.hint",
-                                          defaultValue: "Demande une confirmation avant la suppression",
-                                          bundle: .module))
+                    if Self.supportsDeletion(kind: clip.kind) { deleteButton }
                 }
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
+    }
+
+    private var animationButton: some View {
+        Button {
+            withAnimation(reduceMotion ? .none : .spring(response: 0.35, dampingFraction: 0.85)) {
+                isAnimationExpanded.toggle()
+            }
+        } label: {
+            animationToggleLabel
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(String(localized: "story.timeline.inspector.animation",
+                                   defaultValue: "Animation", bundle: .module))
+        .accessibilityHint(String(localized: "story.timeline.inspector.animation.hint",
+                                  defaultValue: "Affiche les réglages d'animation du clip",
+                                  bundle: .module))
+        .accessibilityAddTraits(isAnimationExpanded ? [.isSelected] : [])
+    }
+
+    private var splitButton: some View {
+        Button(action: onSplit) {
+            Label(String(localized: "story.timeline.inspector.split",
+                         defaultValue: "Diviser", bundle: .module),
+                  systemImage: "scissors")
+                .font(.footnote.weight(.semibold))
+                .fixedSize(horizontal: true, vertical: false)
+                .glassControlForeground()
+                .padding(.horizontal, 12)
+                .frame(height: 36)
+                .adaptiveGlass(in: Capsule(), tint: MeeshyColors.indigo500, interactive: true)
+                .contentShape(Rectangle().inset(by: -4))
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(String(localized: "story.timeline.inspector.split",
+                                   defaultValue: "Diviser", bundle: .module))
+        .accessibilityHint(String(localized: "story.timeline.inspector.split.hint",
+                                  defaultValue: "Coupe le clip à la position de lecture",
+                                  bundle: .module))
+    }
+
+    private var deleteButton: some View {
+        Button {
+            deleteConfirmation.request()
+        } label: {
+            Label(String(localized: "story.timeline.clip.delete", bundle: .module),
+                  systemImage: "trash")
+                .font(.footnote.weight(.semibold))
+                .fixedSize(horizontal: true, vertical: false)
+                .foregroundStyle(.white)
+                .padding(.horizontal, 12)
+                .frame(height: 36)
+                .adaptiveGlassProminent(in: Capsule(), tint: MeeshyColors.error)
+                .contentShape(Rectangle().inset(by: -4))
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(String(localized: "story.timeline.clip.delete", bundle: .module))
+        .accessibilityHint(String(localized: "story.timeline.inspector.delete.hint",
+                                  defaultValue: "Demande une confirmation avant la suppression",
+                                  bundle: .module))
     }
 
     /// État replié = glass régulier teinté, foreground adaptatif au scheme
@@ -727,7 +785,8 @@ public struct ClipInspector: View {
                                  defaultValue: "Animation", bundle: .module),
                           systemImage: "diamond.fill")
             .font(.footnote.weight(.semibold))
-            .padding(.horizontal, 14)
+            .fixedSize(horizontal: true, vertical: false)
+            .padding(.horizontal, 12)
             .frame(height: 36)
         if isAnimationExpanded {
             label.foregroundStyle(.white)

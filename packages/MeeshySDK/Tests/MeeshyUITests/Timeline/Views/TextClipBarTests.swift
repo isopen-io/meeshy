@@ -18,7 +18,6 @@ final class TextClipBarTests: XCTestCase {
             laneHeight: 44,
             onTap: {},
             onDoubleTap: {},
-            onLongPress: {},
             onMoveDelta: { _ in }
         )
     }
