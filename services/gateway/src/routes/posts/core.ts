@@ -395,7 +395,9 @@ export function registerCoreRoutes(
 
       try {
         const translationService = PostTranslationService.shared;
-        await translationService.translateOnDemand(postId, parsed.data.targetLanguage);
+        await translationService.translateOnDemand(postId, parsed.data.targetLanguage, {
+          force: parsed.data.force,
+        });
       } catch {
         return sendError(reply, 503, 'Translation service not available', { code: 'SERVICE_UNAVAILABLE' });
       }

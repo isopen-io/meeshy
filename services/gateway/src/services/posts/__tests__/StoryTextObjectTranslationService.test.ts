@@ -447,4 +447,77 @@ describe('StoryTextObjectTranslationService', () => {
       expect(prisma.$runCommandRaw).not.toHaveBeenCalled();
     });
   });
+
+  // ─── temps réel ────────────────────────────────────────────────────────────
+  //
+  // Écrire l'index recomposé en base ne suffit pas : la feuille des langues du
+  // lecteur lit `story.translations` en mémoire, alimentée par
+  // `post:translation-updated`. Sans cette diffusion, l'aperçu de la langue
+  // demandée restait sur l'ancien texte jusqu'à un rechargement complet —
+  // exactement le symptôme que `95c97ff4b` avait corrigé pour la légende.
+
+  describe('handleTranslationCompleted — diffusion temps réel de l\'index recomposé', () => {
+    const emitsFor = (emitMock: jest.Mock, event: string) =>
+      emitMock.mock.calls.filter(([name]: [string]) => name === event);
+
+    it('diffuse post:translation-updated avec le texte recomposé', async () => {
+      const { service, emitMock } = makeService({ post: derivedPost() });
+
+      await service.handleTranslationCompleted({
+        postId: 'post-1',
+        textObjectIndex: 0,
+        translations: { en: 'Hello' },
+      });
+
+      const emitted = emitsFor(emitMock, SERVER_EVENTS.POST_TRANSLATION_UPDATED);
+      expect(emitted).toHaveLength(1);
+      const [, payload] = emitted[0] as [string, { postId: string; language: string; translation: { text: string } }];
+      expect(payload.postId).toBe('post-1');
+      expect(payload.language).toBe('en');
+      expect(payload.translation.text).toBe('Hello le monde');
+    });
+
+    it('diffuse aussi story:translation-updated — les deux événements sont distincts', async () => {
+      const { service, emitMock } = makeService({ post: derivedPost() });
+
+      await service.handleTranslationCompleted({
+        postId: 'post-1',
+        textObjectIndex: 0,
+        translations: { en: 'Hello' },
+      });
+
+      expect(emitsFor(emitMock, SERVER_EVENTS.STORY_TRANSLATION_UPDATED)).toHaveLength(1);
+    });
+
+    it('ne diffuse rien pour le content quand la légende est une vraie source', async () => {
+      const { service, emitMock } = makeService({
+        post: derivedPost({ content: 'Ma légende à moi' }),
+      });
+
+      await service.handleTranslationCompleted({
+        postId: 'post-1',
+        textObjectIndex: 0,
+        translations: { en: 'Hello' },
+      });
+
+      expect(emitsFor(emitMock, SERVER_EVENTS.POST_TRANSLATION_UPDATED)).toHaveLength(0);
+      expect(emitsFor(emitMock, SERVER_EVENTS.STORY_TRANSLATION_UPDATED)).toHaveLength(1);
+    });
+
+    it('atteint la même audience que l\'événement overlay', async () => {
+      const { service, io } = makeService({
+        post: derivedPost({ visibility: 'ONLY', visibilityUserIds: ['viewer-9'] }),
+      });
+
+      await service.handleTranslationCompleted({
+        postId: 'post-1',
+        textObjectIndex: 0,
+        translations: { en: 'Hello' },
+      });
+
+      const rooms = (io.to as jest.Mock).mock.calls.map(([r]: [string]) => r);
+      expect(rooms).toContain(ROOMS.feed('author-1'));
+      expect(rooms).toContain(ROOMS.feed('viewer-9'));
+    });
+  });
 });

@@ -102,8 +102,21 @@ export class PostTranslationService {
 
   /**
    * Translate a post on-demand for a specific language.
+   *
+   * `force` rejoue une langue DÉJÀ traduite : c'est ce que demande le bouton
+   * « Retraduire » de la feuille des langues du lecteur. Sans lui, ce bouton
+   * appelait la même route que « Traduire » et sortait aussitôt sur les gardes
+   * de cache — il ne faisait strictement rien, sans le moindre signal.
+   *
+   * Forcer rejoue ce qui PEUT l'être : les gardes de cache tombent, les gardes
+   * de sens (langue source identique, index dérivé, URL seule) restent.
    */
-  async translateOnDemand(postId: string, targetLanguage: string): Promise<void> {
+  async translateOnDemand(
+    postId: string,
+    targetLanguage: string,
+    options: { force?: boolean } = {},
+  ): Promise<void> {
+    const force = options.force === true;
     const post = await this.prisma.post.findUnique({
       where: { id: postId },
       select: { content: true, originalLanguage: true, translations: true, storyEffects: true },
@@ -118,7 +131,7 @@ export class PostTranslationService {
     // canvas, sans la moindre légende. Sortir ici sur `!post.content` rendait
     // la feuille « Traductions » du lecteur totalement inerte sur ce cas :
     // aucun job émis, aucune traduction, et l'original servi sans un signal.
-    await this.translateStoryTextObjectsOnDemand(postId, post.storyEffects, targetLanguage);
+    await this.translateStoryTextObjectsOnDemand(postId, post.storyEffects, targetLanguage, force);
 
     if (!post.content) return;
 
@@ -152,7 +165,7 @@ export class PostTranslationService {
 
     // Check if translation already exists
     const translations = (post.translations ?? null) as Record<string, unknown> | null;
-    if (translations?.[targetLanguage]) {
+    if (!force && translations?.[targetLanguage]) {
       log.info('PostTranslation: translation already cached', { postId, targetLanguage });
       return;
     }
@@ -192,6 +205,7 @@ export class PostTranslationService {
     postId: string,
     storyEffects: unknown,
     targetLanguage: string,
+    force = false,
   ): Promise<void> {
     const effects = storyEffects as { textObjects?: unknown } | null | undefined;
     const textObjects = Array.isArray(effects?.textObjects) ? effects.textObjects : [];
@@ -213,7 +227,7 @@ export class PostTranslationService {
       if (sourceLanguage === targetLanguage) return;
 
       const existing = (obj.translations ?? null) as Record<string, unknown> | null;
-      if (existing?.[targetLanguage]) return;
+      if (!force && existing?.[targetLanguage]) return;
 
       this.zmqClient.translateTextObject({
         postId,

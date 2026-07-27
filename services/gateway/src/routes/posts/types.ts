@@ -305,6 +305,11 @@ export const RepostSchema = z.object({
 
 export const TranslatePostSchema = z.object({
   targetLanguage: z.string().min(2).max(5),
+  // Rejouer une langue DÉJÀ traduite — ce que demande le bouton « Retraduire »
+  // de la feuille des langues du lecteur. Sans ce drapeau il appelait la même
+  // route que « Traduire » et sortait aussitôt sur les gardes de cache : le
+  // bouton ne faisait strictement rien, sans le moindre signal.
+  force: z.boolean().optional(),
 });
 
 // ============================================

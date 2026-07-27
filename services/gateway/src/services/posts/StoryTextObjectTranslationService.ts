@@ -11,6 +11,7 @@ import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import type { Prisma } from '@meeshy/shared/prisma/client';
 import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
 import type { StoryTranslationUpdatedEventData } from '@meeshy/shared/types/socketio-events';
+import type { PostTranslationUpdatedEventData } from '@meeshy/shared/types/post';
 import type { Server as SocketIOServer } from 'socket.io';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 import { getCommunityCoMemberIds } from './communityVisibility';
@@ -107,16 +108,14 @@ export class StoryTextObjectTranslationService {
       // 2026-07-27. On le recompose donc à partir des overlays, dans la MÊME
       // écriture que les traductions qui viennent d'arriver : un seul aller en
       // base, et jamais d'état où l'index dérive d'un canvas déjà modifié.
-      Object.assign(
-        setFields,
-        this.derivedContentFields({
-          content: post.content,
-          storyEffects: post.storyEffects,
-          textObjectIndex,
-          translations,
-          languages: acceptedLanguages,
-        }),
-      );
+      const derivedFields = this.derivedContentFields({
+        content: post.content,
+        storyEffects: post.storyEffects,
+        textObjectIndex,
+        translations,
+        languages: acceptedLanguages,
+      });
+      Object.assign(setFields, derivedFields);
 
       await (this.prisma as unknown as { $runCommandRaw: (cmd: Prisma.InputJsonObject) => Promise<unknown> }).$runCommandRaw({
         update: 'Post',
@@ -141,6 +140,22 @@ export class StoryTextObjectTranslationService {
       const recipientIds = await this.resolveBroadcastRecipients(post.authorId, post.visibility, post.visibilityUserIds);
       for (const userId of recipientIds) {
         this.io.to(ROOMS.feed(userId)).emit(SERVER_EVENTS.STORY_TRANSLATION_UPDATED, eventData);
+      }
+
+      // L'index recomposé doit remonter par le MÊME canal que la légende
+      // (`post:translation-updated`) : c'est lui qui alimente `story.translations`
+      // en mémoire, donc l'aperçu de la feuille des langues du lecteur. Sans
+      // cette diffusion, l'écriture atterrissait en base et le lecteur gardait
+      // son ancien texte jusqu'à un rechargement complet — le symptôme que
+      // `95c97ff4b` avait déjà corrigé pour la légende, reproduit à l'identique
+      // sur l'index dérivé.
+      for (const [field, value] of Object.entries(derivedFields)) {
+        const language = field.slice('translations.'.length);
+        const translation = value as { text: string; translationModel: string; confidenceScore: number; createdAt: string };
+        const contentEvent: PostTranslationUpdatedEventData = { postId, language, translation };
+        for (const userId of recipientIds) {
+          this.io.to(ROOMS.feed(userId)).emit(SERVER_EVENTS.POST_TRANSLATION_UPDATED, contentEvent);
+        }
       }
 
     } catch (err: unknown) {
