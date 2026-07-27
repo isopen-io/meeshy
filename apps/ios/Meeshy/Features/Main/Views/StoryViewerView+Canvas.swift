@@ -91,13 +91,26 @@ struct StoryGestureOverlayView: View {
 
     /// Seuil au-delà duquel un touch sur l'écran cesse d'être un tap de
     /// navigation prev/next et devient un hold (toggle pause + hide chrome).
-    private let holdThresholdSeconds: TimeInterval = 0.2
+    ///
+    /// 0,45 s — proche du seuil d'un long-press iOS (0,5 s). À 0,2 s, valeur
+    /// posée le 2026-05-21, la navigation par tap devenait inatteignable : un
+    /// tap humain POSÉ (par opposition à un flick sec) dure couramment 150 à
+    /// 300 ms, donc franchissait le seuil et armait le hold. L'utilisateur
+    /// visait la story suivante et obtenait une pause avec le chrome masqué
+    /// (report user 2026-07-27 : « le tap sur la partie gauche et droite ne
+    /// permet plus d'aller vers l'arrière ni vers la story suivante »).
+    private let holdThresholdSeconds: TimeInterval = 0.45
     /// Fenêtre pendant laquelle deux taps centrés comptent pour un double tap.
     private let doubleTapWindowSeconds: TimeInterval = 0.3
     /// Marge horizontale/verticale autorisée avant qu'un drag soit considéré
     /// comme un swipe (et donc ignoré par cet overlay — laissé au drag
     /// gesture parent qui gère le dismiss).
-    private let dragSlopPixels: CGFloat = 14
+    ///
+    /// 24 px ≈ 8 pt, l'ordre de grandeur de la tolérance d'un tap iOS. À 14 px
+    /// (moins de 5 pt), le tremblement naturel du doigt suffisait à requalifier
+    /// un tap en drag : le geste était rendu au parent et la navigation
+    /// annulée sans que rien ne le signale.
+    private let dragSlopPixels: CGFloat = 24
 
     @State private var touchStartTime: Date? = nil
     @State private var touchStartLocation: CGPoint = .zero
