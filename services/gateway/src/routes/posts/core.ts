@@ -92,14 +92,23 @@ export function registerCoreRoutes(
         }
       }
 
-      // Trigger async translation for plain posts with text content
-      // (fire-and-forget). G2 — les STORY sont EXCLUES : leur `content` est
-      // déjà traduit par le pipeline audience-driven du service
+      // Trigger async translation for text content (fire-and-forget).
+      //
+      // G2 — seules les STORY sont EXCLUES : leur `content` est déjà traduit
+      // par le pipeline audience-driven du service
       // (`PostService.triggerStoryTextTranslation`) ; déclencher AUSSI
       // `translatePost` (5 langues fixes) doublait les jobs ZMQ et créait
       // des écritures concurrentes dans `Post.translations`.
+      //
+      // La condition testait `=== 'POST'`, ce qui laissait REEL et STATUS
+      // sans aucun pipeline — ni ici, ni dans le service. Or le feed de
+      // production est fait presque uniquement de REEL portant du texte :
+      // vérifié le 2026-07-27, 40 REEL consécutifs sans une seule traduction.
+      // Le Prisme ne s'appliquait donc pas au gros du contenu. On exclut
+      // désormais STORY explicitement, pour qu'un futur type soit couvert
+      // par défaut plutôt qu'oublié en silence.
       const postType = parsed.data.type ?? 'POST';
-      const shouldTranslateContent = Boolean(parsed.data.content) && postType === 'POST';
+      const shouldTranslateContent = Boolean(parsed.data.content) && postType !== 'STORY';
       if (shouldTranslateContent) {
         try {
           const translationService = PostTranslationService.shared;
