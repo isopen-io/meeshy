@@ -215,16 +215,73 @@ class TranslationService:
                         text, source_language, target_language, model_type, source_channel
                     )
 
-            # Détecter la langue source si nécessaire
+            # Détecter la langue source si nécessaire. La clé de cache utilise
+            # TOUJOURS la langue résolue : ranger une traduction sous « auto »
+            # la rendrait irrécupérable, puisque la relecture se fait avec une
+            # langue détectée.
             detected_lang = (
                 source_language if source_language != "auto"
                 else self.translator_engine.detect_language(text)
             )
 
+            # Ce chemin sert TOUS les textes courts — `translate_with_structure`
+            # y renvoie dès qu'un texte fait moins de 100 caractères sans saut
+            # de paragraphe ni emoji, c'est-à-dire quasiment tous les textes
+            # posés sur le canvas d'une story. Il ne consultait pourtant pas le
+            # cache et codait `from_cache: False` en dur : seuls les textes
+            # LONGS en profitaient, segment par segment. Traduire trois fois le
+            # même overlay coûtait trois passes modèle.
+            #
+            # Le cache reste une OPTIMISATION : toute panne (Redis absent, clé
+            # illisible) dégrade vers le modèle, jamais vers une erreur.
+            cached_text = None
+            try:
+                cached = await self.translation_cache.get_translation(
+                    text=text,
+                    source_lang=detected_lang,
+                    target_lang=target_language,
+                    model_type=model_type
+                )
+                if cached:
+                    cached_text = cached.get('translated_text')
+            except Exception as e:
+                logger.debug(f"Cache indisponible en lecture, on traduit: {e}")
+
+            if cached_text:
+                processing_time = time.time() - start_time
+                self._update_stats(processing_time, source_channel)
+                logger.info(
+                    f"⚡ [CACHE-{source_channel.upper()}] '{text[:20]}...' → "
+                    f"'{cached_text[:20]}...' ({processing_time:.3f}s)"
+                )
+                return {
+                    'translated_text': cached_text,
+                    'detected_language': detected_lang,
+                    'confidence': 0.95,
+                    'model_used': f"{model_type}_ml",
+                    'from_cache': True,
+                    'processing_time': processing_time,
+                    'source_channel': source_channel
+                }
+
             # Traduire
             translated_text = await self.translator_engine.translate_text(
                 text, detected_lang, target_language, model_type
             )
+
+            # Un résultat vide est un ÉCHEC : le mémoriser le figerait pour
+            # toute la durée du TTL.
+            if translated_text and translated_text.strip():
+                try:
+                    await self.translation_cache.set_translation(
+                        text=text,
+                        source_lang=detected_lang,
+                        target_lang=target_language,
+                        translated_text=translated_text,
+                        model_type=model_type
+                    )
+                except Exception as e:
+                    logger.debug(f"Cache indisponible en écriture: {e}")
 
             processing_time = time.time() - start_time
             self._update_stats(processing_time, source_channel)
