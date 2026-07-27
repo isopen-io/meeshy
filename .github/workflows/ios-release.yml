@@ -229,7 +229,7 @@ jobs:
           python-version: '3.12'
       - name: Install ANDP
         run: python3 -m pip install --quiet "andp @ git+https://github.com/isopen-io/andp@$ANDP_REF"
-      - uses: actions/download-artifact@v7
+      - uses: actions/download-artifact@v8
         with:
           name: meeshy-ipa
           path: ipa
@@ -279,7 +279,7 @@ jobs:
           python-version: '3.12'
       - name: Install ANDP
         run: python3 -m pip install --quiet "andp @ git+https://github.com/isopen-io/andp@$ANDP_REF"
-      - uses: actions/download-artifact@v7
+      - uses: actions/download-artifact@v8
         with:
           name: meeshy-ipa
           path: ipa
@@ -363,7 +363,7 @@ jobs:
           python-version: '3.12'
       - name: Install ANDP
         run: python3 -m pip install --quiet "andp @ git+https://github.com/isopen-io/andp@$ANDP_REF"
-      - uses: actions/download-artifact@v7
+      - uses: actions/download-artifact@v8
         with:
           name: andp-state
           path: .andp
