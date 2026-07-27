@@ -95,6 +95,32 @@ final class AffiliateCreateViewAccessibilityTests: XCTestCase {
         )
     }
 
+    // MARK: - In-flight state (226i)
+
+    /// While creating, the glyph is swapped for a bare `ProgressView`: sighted
+    /// users see a spinner, VoiceOver users hear only "dimmed" and cannot tell
+    /// whether the tap registered. The twin button (`CreateTrackingLinkView:136`)
+    /// and the mood composer (`StatusComposerView:263`) both carry that transient
+    /// state as an `accessibilityValue`; this screen was the last holdout.
+    func test_busyState_isCarriedAsAnAccessibilityValue() throws {
+        let code = try code
+        XCTAssertTrue(
+            code.contains(".accessibilityValue(isCreating"),
+            "The in-flight state must be exposed as a value on the CTA, not left silent."
+        )
+        // Reuses the tracking-link key — same action, same words, already
+        // localised in 7 locales. A screen-specific key would add an untranslated
+        // string for no semantic gain.
+        XCTAssertTrue(
+            code.contains("a11y.tracking.create.in-progress"),
+            "The busy value must reuse the existing localised key rather than mint a new one."
+        )
+        XCTAssertFalse(
+            code.contains("a11y.affiliate.create.in-progress"),
+            "No screen-specific busy key should be introduced."
+        )
+    }
+
     // MARK: - Error feedback
 
     /// The error renders inside the form, well away from the focused CTA, so
