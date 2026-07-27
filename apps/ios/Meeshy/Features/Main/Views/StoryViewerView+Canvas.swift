@@ -1910,11 +1910,12 @@ struct StoryCardView: View {
                         // le reader se re-rend dès l'arrivée de la traduction.
                         onSelectLanguageOverride(code)
                     },
-                    onTranslate: { code in
+                    onTranslate: { code, force in
                         Task {
                             await StoryInteractionService().requestTranslation(
                                 storyId: story.id,
-                                targetLanguage: code
+                                targetLanguage: code,
+                                force: force
                             )
                         }
                     },

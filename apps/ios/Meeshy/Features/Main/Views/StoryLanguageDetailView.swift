@@ -22,7 +22,10 @@ struct StoryLanguageDetailView: View {
     /// Sélection d'une langue à AFFICHER (le reader prépose l'override + trace).
     let onSelectLanguage: (String) -> Void
     /// Demande de (re)traduction on-demand (le reader appelle le service story).
-    let onTranslate: (String) -> Void
+    /// `force` distingue « Traduire » (première demande) de « Retraduire » : sans
+    /// lui, les deux appelaient la même route, qui sortait aussitôt sur ses gardes
+    /// de cache — le bouton « Retraduire » ne faisait strictement rien.
+    let onTranslate: (String, Bool) -> Void
     let onDismiss: () -> Void
 
     @Environment(\.colorScheme) private var colorScheme
@@ -32,6 +35,23 @@ struct StoryLanguageDetailView: View {
     /// Langues pour lesquelles une traduction vient d'être demandée — l'anneau
     /// tourne tant qu'elle n'est pas arrivée dans `story.translations`.
     @State private var translatingLanguages: Set<String> = []
+
+    /// Texte affiché au moment où « Retraduire » a été pressé, par langue.
+    ///
+    /// Une langue déjà traduite garde son aperçu : l'attente ne pouvait donc pas
+    /// se déduire de « pas encore de traduction », et le bouton « Retraduire »
+    /// ne donnait aucun signe de vie. On mémorise le texte de départ et on
+    /// affiche l'anneau tant qu'il n'a pas changé — la nouvelle traduction
+    /// arrive par socket (`post:translation-updated`), donc l'anneau s'éteint de
+    /// lui-même à l'instant où le texte bascule. Aucun drapeau à éteindre à la
+    /// main, aucun anneau orphelin si l'événement se perd (cf. le garde-fou de
+    /// `retranslateExpiry`).
+    @State private var retranslateBaseline: [String: String] = [:]
+
+    /// Une retraduction peut rendre un texte IDENTIQUE — le modèle est
+    /// déterministe. La comparaison seule laisserait alors l'anneau tourner sans
+    /// fin. Ce garde-fou le coupe au bout d'un délai raisonnable.
+    private static let retranslateTimeout: Duration = .seconds(20)
 
     /// Traductions prêtes, dérivées EN DIRECT de la story (le reader re-rend la
     /// feuille quand la story se met à jour par socket) : `code → contenu`.
@@ -124,6 +144,7 @@ struct StoryLanguageDetailView: View {
                     Rectangle()
                         .fill(Color.white.opacity(isDark ? 0.06 : 0.04))
                         .frame(height: 0.5)
+                    originalRow
                     ForEach(LanguageDisplay.translationPickerLanguages, id: \.code) { lang in
                         languageRow(lang)
                     }
@@ -169,7 +190,7 @@ struct StoryLanguageDetailView: View {
     @ViewBuilder
     private var currentContentCard: some View {
         if let content = currentContent, !content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            let code = activeLanguageCode ?? ""
+            let code = Self.displayCode(for: activeLanguageCode)
             let langColor = Color(hex: LanguageDisplay.colorHex(for: code))
             VStack(alignment: .leading, spacing: 8) {
                 HStack(spacing: 6) {
@@ -202,11 +223,67 @@ struct StoryLanguageDetailView: View {
         }
     }
 
+    /// Entrée « Original » — le seul choix qui n'est pas une langue.
+    ///
+    /// Directive user 2026-07-27 : plusieurs bouts d'une même story peuvent être
+    /// écrits dans des langues différentes ; il faut pouvoir revenir à
+    /// l'original QUOI QU'IL ARRIVE. Choisir la langue d'origine de la story ne
+    /// le permet pas — un overlay français dans une story marquée `en` possède
+    /// une traduction `en` qui serait servie à la place de son texte réel.
+    /// Sélectionner « Original » vide la chaîne préférée : chaque overlay
+    /// retombe sur son propre texte, dans sa propre langue.
+    private var originalRow: some View {
+        let isActive = activeLanguageCode == StoryViewerView.originalLanguageOverride
+        let accent = theme.textMuted
+
+        return Button {
+            HapticFeedback.light()
+            onSelectLanguage(StoryViewerView.originalLanguageOverride)
+            onDismiss()
+        } label: {
+            HStack(spacing: 10) {
+                Image(systemName: "text.quote")
+                    .font(.caption.weight(.semibold))
+                    .foregroundColor(isActive ? MeeshyColors.indigo400 : accent)
+                    .frame(width: 8 + 6)
+                Text(String(localized: "story.language.detail.original",
+                            defaultValue: "Original", bundle: .main))
+                    .font(.footnote.weight(.medium))
+                    .foregroundColor(isActive ? MeeshyColors.indigo400 : theme.textPrimary)
+                Spacer()
+                Text(String(localized: "story.language.detail.original.hint",
+                            defaultValue: "Chaque texte dans sa langue", bundle: .main))
+                    .font(.caption2)
+                    .foregroundColor(theme.textMuted)
+                    .lineLimit(1)
+                if isActive {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.caption.weight(.medium))
+                        .foregroundColor(MeeshyColors.indigo400)
+                }
+            }
+            .padding(.vertical, 9)
+            .padding(.horizontal, 8)
+            .background(
+                RoundedRectangle(cornerRadius: 10)
+                    .fill(isActive ? MeeshyColors.indigo400.opacity(isDark ? 0.08 : 0.05) : Color.clear)
+            )
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(Text(String(localized: "story.language.detail.original",
+                                        defaultValue: "Original", bundle: .main)))
+        .accessibilityAddTraits(isActive ? [.isSelected] : [])
+    }
+
     private func languageRow(_ lang: LanguageDisplay) -> some View {
         let langColor = Color(hex: LanguageDisplay.colorHex(for: lang.code))
         let translated = translations[lang.code.lowercased()]
         let hasTranslation = translated != nil
         let isTranslating = translatingLanguages.contains(lang.code) && !hasTranslation
+        let isRetranslating = Self.isRetranslating(
+            baseline: retranslateBaseline[lang.code],
+            currentText: translated
+        )
         let isActive = StoryLanguageQuickBar.isActive(lang.code, active: activeLanguageCode)
 
         return Button {
@@ -216,7 +293,7 @@ struct StoryLanguageDetailView: View {
                 onDismiss()
             } else {
                 translatingLanguages.insert(lang.code)
-                onTranslate(lang.code)
+                onTranslate(lang.code, false)
             }
         } label: {
             HStack(spacing: 10) {
@@ -237,15 +314,28 @@ struct StoryLanguageDetailView: View {
                     // Retraduire
                     Button {
                         HapticFeedback.light()
-                        translatingLanguages.insert(lang.code)
-                        onTranslate(lang.code)
+                        retranslateBaseline[lang.code] = translated
+                        onTranslate(lang.code, true)
+                        let code = lang.code
+                        Task {
+                            try? await Task.sleep(for: Self.retranslateTimeout)
+                            retranslateBaseline[code] = nil
+                        }
                     } label: {
-                        Image(systemName: "arrow.clockwise")
-                            .font(.caption2.weight(.medium))
-                            .foregroundColor(langColor.opacity(0.7))
-                            .frame(width: 26, height: 26)
-                            .contentShape(Circle())
+                        Group {
+                            if isRetranslating {
+                                ProgressView().scaleEffect(0.6)
+                            } else {
+                                Image(systemName: "arrow.clockwise")
+                                    .font(.caption2.weight(.medium))
+                            }
+                        }
+                        .foregroundColor(langColor.opacity(0.7))
+                        .tint(langColor)
+                        .frame(width: 26, height: 26)
+                        .contentShape(Circle())
                     }
+                    .disabled(isRetranslating)
                     .buttonStyle(.plain)
                     .accessibilityLabel(Text(String(localized: "story.language.detail.retranslate",
                                                     defaultValue: "Retraduire", bundle: .main)))
@@ -271,6 +361,26 @@ struct StoryLanguageDetailView: View {
         .buttonStyle(.plain)
         .accessibilityLabel(Text(lang.name))
         .accessibilityAddTraits(isActive ? [.isSelected] : [])
+    }
+
+    /// Code langue AFFICHABLE de la sélection courante.
+    ///
+    /// `activeLanguageCode` porte la sentinelle « Original » quand l'utilisateur
+    /// a choisi ce mode. Passée telle quelle au résolveur de nom, elle retombe
+    /// sur `code.uppercased()` — la feuille aurait affiché
+    /// « __MEESHY.ORIGINAL__ » comme nom de langue et dans la pastille du code.
+    /// La sentinelle se ramène au code vide, qui EST déjà le cas « Original »
+    /// du résolveur.
+    nonisolated static func displayCode(for active: String?) -> String {
+        guard let active, active != StoryViewerView.originalLanguageOverride else { return "" }
+        return active
+    }
+
+    /// Une retraduction est en vol tant que le texte affiché n'a pas bougé
+    /// depuis la demande. Pur, donc testable sans faire tourner la vue.
+    nonisolated static func isRetranslating(baseline: String?, currentText: String?) -> Bool {
+        guard let baseline else { return false }
+        return baseline == currentText
     }
 
     /// Nom lisible d'une langue (repli sur le code brut si inconnu) — même
