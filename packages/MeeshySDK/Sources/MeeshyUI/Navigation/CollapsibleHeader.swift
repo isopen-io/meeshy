@@ -139,7 +139,6 @@ public struct CollapsibleHeader<LeadingContent: View, TitleContent: View, Traili
     }
 
     public var body: some View {
-        let _ = NSLog("[FLICKER] header render offset=%.1f progress=%.3f height=%.1f", scrollOffset, progress, headerHeight)
         VStack(spacing: 0) {
             HStack(alignment: .center, spacing: 0) {
                 if showBackButton {
@@ -215,22 +214,35 @@ public struct CollapsibleHeader<LeadingContent: View, TitleContent: View, Traili
         .background(headerBackground)
     }
 
-    /// Header surface — generalised for ALL screens using this header: an
-    /// `.ultraThinMaterial` blur + a `backgroundColor` tint, both masked to fade
-    /// from a readable blur at the top to fully transparent at the bottom edge, so
-    /// the scroll content (list rows, etc.) passing under the lower edge stays
-    /// visible instead of being clipped by an opaque bar.
-    private static var fadeBandCount: Int { 12 }
+    /// Hauteur du fondu peint sous la surface de verre (pt). Assez long pour
+    /// rendre la coupure du flou invisible et garder un bas de header aussi
+    /// léger que l'ancien fondu alpha.
+    private static var surfaceFadeHeight: CGFloat { 44 }
 
+    /// Header surface — generalised for ALL screens using this header: an
+    /// `.ultraThinMaterial` blur + a `backgroundColor` tint, extended by a painted
+    /// fade to fully transparent at the bottom edge, so the scroll content (list
+    /// rows, etc.) passing under the lower edge stays visible instead of being
+    /// clipped by an opaque bar.
+    ///
+    /// Le fondu est PEINT (dégradé de couleur) et n'est PAS un fondu alpha du
+    /// verre : masquer la surface floutée (`.mask`, ou une opacité de couche par
+    /// bandes) la fait composer hors écran, et cette couche est recomposée de
+    /// façon instable — le header clignotait alors entre gris opaque et
+    /// transparent, ~toutes les 1,5 s, sans le moindre re-render SwiftUI
+    /// (mesuré au simulateur iOS 18.2 : 3 bascules en 5 s, amplitude 1,2 de
+    /// luminance ; 0 bascule avec cette surface). Verre plein et dégradé de
+    /// couleur sont l'un comme l'autre stables : ne pas ré-introduire de `.mask`
+    /// sur cette surface.
     private var headerBackground: some View {
         VStack(spacing: 0) {
             Rectangle()
                 .fill(.ultraThinMaterial)
-                .overlay(backgroundColor.opacity(0.6))
+                .overlay(backgroundColor.opacity(0.45))
             LinearGradient(
                 stops: [
-                    .init(color: backgroundColor.opacity(0.6), location: 0),
-                    .init(color: backgroundColor.opacity(0.3), location: 0.45),
+                    .init(color: backgroundColor.opacity(0.45), location: 0),
+                    .init(color: backgroundColor.opacity(0.2), location: 0.45),
                     .init(color: backgroundColor.opacity(0.0), location: 1.0),
                 ],
                 startPoint: .top,

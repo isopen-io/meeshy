@@ -121,7 +121,7 @@ public enum AvatarContext: Sendable {
     /// pendant le scroll.
     public var animatesMoodBadge: Bool {
         switch self {
-        case .feedComposer, .postAuthor,
+        case .storyTray, .storyTrayCompact, .feedComposer, .postAuthor,
              .profileBanner, .profileSheet,
              .conversationHeaderExpanded, .conversationHeaderCollapsed:
             return true
