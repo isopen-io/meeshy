@@ -282,6 +282,39 @@ class ChatViewModelTest {
         assertThat(h.vm.state.value.firstUnreadMessageId).isNull()
     }
 
+    @Test
+    fun the_unread_boundary_stays_unresolved_while_the_message_window_is_empty() = runTest(dispatcher) {
+        // The unread count is known, but no messages have loaded: the latch must
+        // not settle (an empty window has no boundary to place, and the open
+        // scroll must not fire against an empty list).
+        val h = harness(flowOf(CacheResult.Empty), currentUser = me, conversation = unreadConversation(unread = 2))
+
+        advanceUntilIdle()
+
+        assertThat(h.vm.state.value.unreadBoundaryResolved).isFalse()
+        assertThat(h.vm.state.value.firstUnreadMessageId).isNull()
+    }
+
+    @Test
+    fun an_unread_conversation_resolves_the_boundary_once_the_latch_runs() = runTest(dispatcher) {
+        val h = harness(incomingStream(), currentUser = me, conversation = unreadConversation(unread = 2))
+
+        advanceUntilIdle()
+
+        assertThat(h.vm.state.value.unreadBoundaryResolved).isTrue()
+        assertThat(h.vm.state.value.firstUnreadMessageId).isEqualTo("m2")
+    }
+
+    @Test
+    fun a_fully_read_conversation_still_resolves_the_boundary_to_none() = runTest(dispatcher) {
+        val h = harness(incomingStream(), currentUser = me, conversation = unreadConversation(unread = 0))
+
+        advanceUntilIdle()
+
+        assertThat(h.vm.state.value.unreadBoundaryResolved).isTrue()
+        assertThat(h.vm.state.value.firstUnreadMessageId).isNull()
+    }
+
     private fun unreadConversation(unread: Int) = ApiConversation(
         id = "c1",
         type = "group",

@@ -1,5 +1,42 @@
 # Progress — state & what to do next
 
+> On 2026-07-27 the **open-scroll to the unread boundary** landed (slice `chat-open-scroll-to-unread`,
+> feature-parity §C Chat — the natural completion of the just-shipped unread separator: the separator was
+> drawn but the list still opened pinned to the oldest loaded message, so the reader never saw the "new
+> messages" boundary without scrolling by hand). This is the faithful port of iOS `ConversationViewModel`'s
+> open-scroll (scroll to first unread on open, else to the newest message). **Added (production, all
+> `apps/android`):** (1) `:feature:chat/InitialScrollTarget.of(items): Int?` — the pure SSOT: the row index of
+> the `ChatListItem.UnreadSeparator` when present (so the boundary sits at the top of the viewport, day headers
+> notwithstanding — it returns the separator's own row index, not the message it precedes), else `lastIndex`
+> (bottom), else `null` for an empty list (nothing to scroll to). (2) `ChatUiState.unreadBoundaryResolved: Bool`
+> + `ChatViewModel` latch now flips it true the moment the boundary latch settles — **whether or not** it found
+> an id — so the one-shot open scroll waits for a real resolution and never fires against an unsettled/empty
+> window. The latch change is behaviour-preserving for `firstUnreadMessageId` (same value; the `?.let` became an
+> unconditional `copy` that also writes the null-when-none case, identical result). (3) `ChatScreen` one-shot
+> `LaunchedEffect(unreadBoundaryResolved, listItems)` guarded by a `didOpenScroll` remember flag: on the first
+> resolved+populated emission it `scrollToItem(InitialScrollTarget.of(listItems))` and locks, so a later message
+> arrival never re-scrolls (the existing near-bottom auto-scroll still owns live tailing). **SOTA over iOS:** the
+> target is a pure, fully-covered value function (iOS scrolls inline in the VM); gating on an explicit
+> resolution flag removes the iOS-style race where the open scroll can fire before the unread window is known
+> and jump twice (bottom→separator). **+9 behavioural tests:** `InitialScrollTargetTest` (6: empty→null /
+> no-separator→bottom / single-message→own-row / separator-wins / separator-below-day-header→separator-index /
+> leading-separator→0), `ChatViewModelTest` (+3: stays-unresolved-while-window-empty / unread-resolves-boundary /
+> fully-read-still-resolves-to-none). **Mutation (RED proof):** dropping the separator preference in
+> `InitialScrollTarget.of` (always `lastIndex`) fails **exactly** the 3 separator tests (`6 tests completed, 3
+> failed`, `BUILD FAILED in 6s`); neutralising the VM flag write (`unreadBoundaryResolved = true` removed) fails
+> **exactly** the 2 resolution tests (`218 tests completed, 2 failed`, `BUILD FAILED in 14s`); no collateral,
+> both restored. **Gate:** `./apps/android/meeshy.sh check` (= `assembleDebug testDebugUnitTest`) — full assemble
+> + all-module JVM unit tests green (`BUILD SUCCESSFUL in 4m 23s`, 943 tasks, APK produced). Reviewer **PASS**
+> (diff `apps/android` only — 1 new core + 1 new test + VM/screen wiring + tracking docs; SDK purity —
+> `InitialScrollTarget` is a stateless `:feature:chat` value function, the "when to fire the one-shot" rule stays
+> in the screen/VM; SSOT — one open-scroll decision over the same interleaved `ChatListItem` rows the screen
+> renders, re-implements nothing; instant-app — the scroll rides the cache-first message stream, no spinner; UDF
+> — immutable `UiState`, pure derivation; no tautological tests — the empty-window test drives a real suspended
+> latch, plus the two mutation proofs). **Next slice:** the §C date-headers **joined banner** (a pinned
+> floating day label while scrolling), OR the app-side **`CategoryPickerField` / `TagInputField`** composables
+> driving the shipped picker/autocomplete cores, OR the paged **`OnboardingFlowView`** Compose scaffold (Auth),
+> OR the tracked **Kover 90% coverage-gate infra**.
+
 > On 2026-07-27 the **chat unread separator** landed (slice `chat-unread-separator`, feature-parity §C
 > Chat — completes the "unread separator" pending sub-item of the date-headers box). It draws the
 > "new messages" boundary directly above the first unread message on open, the faithful port of iOS

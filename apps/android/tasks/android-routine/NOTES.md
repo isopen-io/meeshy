@@ -2,6 +2,20 @@
 
 Append-only log of gotchas and decisions that save time next run.
 
+## Lesson (2026-07-27, `chat-open-scroll-to-unread`) — gate a one-shot open scroll on an explicit "resolved" flag, not on a nullable id
+- A `null` derived value is ambiguous: it can mean "resolved: nothing" or "not resolved yet". The unread
+  boundary latch left `firstUnreadMessageId = null` both before it ran and when there was no unread. Firing
+  the open scroll on that null would race — scroll to bottom before the boundary resolves, then jump again.
+- Fix: add a dedicated `unreadBoundaryResolved: Boolean` that the latch flips **unconditionally** when it
+  settles (found or not), and gate the one-shot `LaunchedEffect` on it. The latch's `?.let { copy(id=…) }`
+  became an unconditional `copy(id = firstUnread, resolved = true)` — behaviour-preserving for the id (null
+  case writes the same null), and now the screen has an unambiguous "safe to scroll" signal.
+- Keep the scroll target itself a pure function over the already-interleaved `ChatListItem` rows
+  (`InitialScrollTarget.of`): returning the separator's **own** row index (not the message index) means day
+  headers can't throw off the viewport placement, and it's fully unit-coverable off the Composable.
+- Mutation discipline that proves the flag matters: remove `unreadBoundaryResolved = true` from the latch →
+  exactly the two resolution tests fail; drop the separator preference → exactly the three separator tests.
+
 ## Lesson (2026-07-27, `chat-unread-separator`) — capture the count BEFORE the optimistic mutation zeroes it; latch a "once" boundary without a guard flag
 - **A value derived from state that an optimistic write mutates must be captured BEFORE that write.** The
   unread separator needs the conversation's `unreadCount`, but `markConversationRead()` (fired in `init`)
