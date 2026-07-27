@@ -68,7 +68,7 @@ jobs:
       # so it caches independently of the compiled build products below.
       - name: Restore SPM cache
         id: spm-restore
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v6
         with:
           path: ${{ runner.temp }}/spm
           key: ios-spm-${{ hashFiles('apps/ios/project.yml') }}
@@ -81,7 +81,7 @@ jobs:
       # Xcode bump.
       - name: Restore DerivedData build cache
         id: dd-restore
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v6
         with:
           path: ${{ runner.temp }}/DerivedData
           key: ios-dd-macos15-xc26_1_1-${{ hashFiles('apps/ios/project.yml') }}-${{ github.sha }}
@@ -159,7 +159,7 @@ jobs:
       # likelier to finish the build, which in turn seeds the DerivedData cache.
       - name: Save SPM cache
         if: always() && steps.spm-restore.outputs.cache-hit != 'true'
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v6
         with:
           path: ${{ runner.temp }}/spm
           key: ios-spm-${{ hashFiles('apps/ios/project.yml') }}
@@ -197,7 +197,7 @@ jobs:
       # the budget). Skipped when the restore already hit the exact key.
       - name: Save DerivedData build cache
         if: success() && steps.dd-restore.outputs.cache-hit != 'true'
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v6
         with:
           path: ${{ runner.temp }}/DerivedData
           key: ios-dd-macos15-xc26_1_1-${{ hashFiles('apps/ios/project.yml') }}-${{ github.sha }}
