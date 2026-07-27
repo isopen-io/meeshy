@@ -86,6 +86,34 @@ export function useWebRTCP2P({ callId, userId, onError }: UseWebRTCP2POptions) {
   const connectedPeersRef = useRef<Set<string>>(new Set());
   const stalledPeersRef = useRef<Set<string>>(new Set());
   const reconnectAttemptRef = useRef(0);
+  // Negotiation epoch tracking (glare/stale-signal guard — mirrors iOS
+  // CallManager's per-peer negotiationId high-water mark; see
+  // packages/shared/types/video-call.ts WebRTCSignalBase.negotiationId).
+  // Web never stamped this field: when an iOS caller sent the initial offer
+  // (epoch 1), web's answer carried no negotiationId, which iOS's own
+  // stale-signal guard reads as epoch 0 — strictly less than its own
+  // high-water mark of 1 — and silently drops as stale. The iOS caller then
+  // timed out waiting for an answer the web callee had actually sent.
+  // Keyed per peer since one tab can hold connections to several participants.
+  const negotiationIdsRef = useRef<Map<string, number>>(new Map());
+
+  const bumpOutgoingNegotiationId = useCallback((peerId: string): number => {
+    const next = (negotiationIdsRef.current.get(peerId) ?? 0) + 1;
+    negotiationIdsRef.current.set(peerId, next);
+    return next;
+  }, []);
+
+  const currentNegotiationId = useCallback((peerId: string): number => {
+    return negotiationIdsRef.current.get(peerId) ?? 0;
+  }, []);
+
+  const trackIncomingNegotiationId = useCallback((peerId: string, incoming: number | undefined): void => {
+    const generation = incoming ?? 0;
+    const current = negotiationIdsRef.current.get(peerId) ?? 0;
+    if (generation > current) {
+      negotiationIdsRef.current.set(peerId, generation);
+    }
+  }, []);
 
   /** Emits `call:request-ice-servers`; the response is applied by the
    * `call:ice-servers-refreshed` listener registered below. */
@@ -153,6 +181,7 @@ export function useWebRTCP2P({ callId, userId, onError }: UseWebRTCP2POptions) {
               candidate: candidateInit.candidate || '',
               sdpMLineIndex: candidateInit.sdpMLineIndex ?? undefined,
               sdpMid: candidateInit.sdpMid ?? undefined,
+              negotiationId: currentNegotiationId(participantId),
             };
 
             socket.emit(CLIENT_EVENTS.CALL_SIGNAL, {
@@ -183,10 +212,17 @@ export function useWebRTCP2P({ callId, userId, onError }: UseWebRTCP2POptions) {
               logger.error('[useWebRTCP2P]', 'Cannot relay renegotiation SDP: socket/userId missing', { participantId });
               return;
             }
+            // An answer echoes the epoch it's responding to (already tracked
+            // when the offer that triggered it was received); an offer we
+            // initiate ourselves (renegotiation) bumps to a new epoch.
+            const negotiationId =
+              description.type === 'answer'
+                ? currentNegotiationId(participantId)
+                : bumpOutgoingNegotiationId(participantId);
             const signal: WebRTCSignal =
               description.type === 'answer'
-                ? { type: 'answer', from: userId, to: participantId, sdp: description.sdp ?? '' }
-                : { type: 'offer', from: userId, to: participantId, sdp: description.sdp ?? '' };
+                ? { type: 'answer', from: userId, to: participantId, sdp: description.sdp ?? '', negotiationId }
+                : { type: 'offer', from: userId, to: participantId, sdp: description.sdp ?? '', negotiationId };
             socket.emit(CLIENT_EVENTS.CALL_SIGNAL, { callId, signal } as CallSignalEvent, () => {});
             logger.info('[useWebRTCP2P]', 'Renegotiation SDP relayed', { participantId, type: description.type });
           },
@@ -289,7 +325,7 @@ export function useWebRTCP2P({ callId, userId, onError }: UseWebRTCP2POptions) {
 
       return service;
     },
-    [callId, userId, iceServers, addRemoteStream, setError, setConnecting, onError, requestFreshTurnCredentials]  // CRITICAL: Added userId, iceServers
+    [callId, userId, iceServers, addRemoteStream, setError, setConnecting, onError, requestFreshTurnCredentials, currentNegotiationId, bumpOutgoingNegotiationId]  // CRITICAL: Added userId, iceServers
   );
 
   /**
@@ -371,6 +407,7 @@ export function useWebRTCP2P({ callId, userId, onError }: UseWebRTCP2POptions) {
       iceCandidateQueueRef.current.delete(participantId);
       remoteDescriptionSetRef.current.delete(participantId);
       offerInFlightRef.current.delete(participantId);
+      negotiationIdsRef.current.delete(participantId);
       removePeerConnection(participantId);
     },
     [removePeerConnection]
@@ -434,6 +471,7 @@ export function useWebRTCP2P({ callId, userId, onError }: UseWebRTCP2POptions) {
           from: userId,
           to: targetUserId,
           sdp: offer.sdp || '',
+          negotiationId: bumpOutgoingNegotiationId(targetUserId),
         };
 
         socket.emit(CLIENT_EVENTS.CALL_SIGNAL, {
@@ -458,18 +496,21 @@ export function useWebRTCP2P({ callId, userId, onError }: UseWebRTCP2POptions) {
         onError?.(error instanceof Error ? error : new Error(message));
       }
     },
-    [callId, ensureLocalStream, getWebRTCService, addPeerConnection, setConnecting, setError, onError, userId, removeParticipant]
+    [callId, ensureLocalStream, getWebRTCService, addPeerConnection, setConnecting, setError, onError, userId, removeParticipant, bumpOutgoingNegotiationId]
   );
 
   /**
    * Handle incoming offer
    */
   const handleOffer = useCallback(
-    async (offer: RTCSessionDescriptionInit, fromUserId: string) => {
+    async (offer: RTCSessionDescriptionInit, fromUserId: string, negotiationId?: number) => {
       // Synchronous — runs before the first `await` below, closing the race
       // window a duplicate delivery (live relay + buffered replay) would
       // otherwise slip through. See offerInFlightRef's doc comment.
       offerInFlightRef.current.add(fromUserId);
+      // Track the offer's epoch BEFORE answering, so the answer below echoes
+      // it back exactly — this is the fix for iOS dropping web's answer.
+      trackIncomingNegotiationId(fromUserId, negotiationId);
       try {
         logger.debug('[useWebRTCP2P]', 'Handling offer', { fromUserId, callId });
         setConnecting(true);
@@ -516,6 +557,7 @@ export function useWebRTCP2P({ callId, userId, onError }: UseWebRTCP2POptions) {
           from: userId,
           to: fromUserId,
           sdp: answer.sdp || '',
+          negotiationId: currentNegotiationId(fromUserId),
         };
 
         socket.emit(CLIENT_EVENTS.CALL_SIGNAL, {
@@ -545,14 +587,14 @@ export function useWebRTCP2P({ callId, userId, onError }: UseWebRTCP2POptions) {
         offerInFlightRef.current.delete(fromUserId);
       }
     },
-    [callId, ensureLocalStream, getWebRTCService, addPeerConnection, setConnecting, setError, onError, userId, drainIceCandidateQueue, removeParticipant]
+    [callId, ensureLocalStream, getWebRTCService, addPeerConnection, setConnecting, setError, onError, userId, drainIceCandidateQueue, removeParticipant, trackIncomingNegotiationId, currentNegotiationId]
   );
 
   /**
    * Handle incoming answer
    */
   const handleAnswer = useCallback(
-    async (answer: RTCSessionDescriptionInit, fromUserId: string) => {
+    async (answer: RTCSessionDescriptionInit, fromUserId: string, negotiationId?: number) => {
       try {
         logger.debug('[useWebRTCP2P]', 'Handling answer', { fromUserId, callId });
 
@@ -560,6 +602,8 @@ export function useWebRTCP2P({ callId, userId, onError }: UseWebRTCP2POptions) {
         if (!service) {
           throw new Error('WebRTC service not found for participant');
         }
+
+        trackIncomingNegotiationId(fromUserId, negotiationId);
 
         // Set remote description (the answer)
         await service.setRemoteDescription(answer);
@@ -578,16 +622,17 @@ export function useWebRTCP2P({ callId, userId, onError }: UseWebRTCP2POptions) {
         onError?.(error instanceof Error ? error : new Error(message));
       }
     },
-    [callId, setError, onError, drainIceCandidateQueue]
+    [callId, setError, onError, drainIceCandidateQueue, trackIncomingNegotiationId]
   );
 
   /**
    * Handle incoming ICE candidate
    */
   const handleIceCandidate = useCallback(
-    async (candidate: RTCIceCandidateInit, fromUserId: string) => {
+    async (candidate: RTCIceCandidateInit, fromUserId: string, negotiationId?: number) => {
       try {
         logger.debug('[useWebRTCP2P]', 'Handling ICE candidate', { fromUserId, callId });
+        trackIncomingNegotiationId(fromUserId, negotiationId);
 
         const service = webrtcServicesRef.current.get(fromUserId);
         // Buffer the candidate until BOTH the service exists AND its remote
@@ -612,7 +657,7 @@ export function useWebRTCP2P({ callId, userId, onError }: UseWebRTCP2POptions) {
         // Don't show error to user - ICE candidates can fail individually
       }
     },
-    [callId]
+    [callId, trackIncomingNegotiationId]
   );
 
   /**
@@ -681,6 +726,7 @@ export function useWebRTCP2P({ callId, userId, onError }: UseWebRTCP2POptions) {
     remoteDescriptionSetRef.current.clear();
     connectedPeersRef.current.clear();
     stalledPeersRef.current.clear();
+    negotiationIdsRef.current.clear();
     reconnectAttemptRef.current = 0;
 
     logger.info('[useWebRTCP2P]', 'Cleanup completed', { callId });
@@ -751,6 +797,10 @@ export function useWebRTCP2P({ callId, userId, onError }: UseWebRTCP2POptions) {
           // (A/V switch or ICE restart) — apply it in place (glare-safe)
           // instead of tearing down and rebuilding the peer connection.
           if (existingService && isEstablished) {
+            // Track BEFORE handing off — the resulting answer (emitted via
+            // the service's onLocalDescription callback) echoes whatever
+            // currentNegotiationId(peer) holds at that point.
+            trackIncomingNegotiationId(signal.from, signal.negotiationId);
             existingService.handleRenegotiationOffer({ type: 'offer', sdp: signal.sdp }).catch((error) => {
               logger.error('[useWebRTCP2P]', 'Failed to handle renegotiation offer', { error, from: signal.from });
               const message = error instanceof Error ? error.message : 'Failed to renegotiate call';
@@ -770,13 +820,14 @@ export function useWebRTCP2P({ callId, userId, onError }: UseWebRTCP2POptions) {
               callId,
             });
           } else {
-            handleOffer({ type: 'offer', sdp: signal.sdp }, signal.from);
+            handleOffer({ type: 'offer', sdp: signal.sdp }, signal.from, signal.negotiationId);
           }
           break;
 
         case 'answer':
           // Answer to one of our renegotiation offers vs. the initial answer.
           if (existingService && isEstablished) {
+            trackIncomingNegotiationId(signal.from, signal.negotiationId);
             existingService.setRemoteAnswer({ type: 'answer', sdp: signal.sdp }).catch((error) => {
               logger.error('[useWebRTCP2P]', 'Failed to handle renegotiation answer', { error, from: signal.from });
               const message = error instanceof Error ? error.message : 'Failed to renegotiate call';
@@ -785,7 +836,7 @@ export function useWebRTCP2P({ callId, userId, onError }: UseWebRTCP2POptions) {
               onError?.(error instanceof Error ? error : new Error(message));
             });
           } else {
-            handleAnswer({ type: 'answer', sdp: signal.sdp }, signal.from);
+            handleAnswer({ type: 'answer', sdp: signal.sdp }, signal.from, signal.negotiationId);
           }
           break;
 
@@ -795,7 +846,7 @@ export function useWebRTCP2P({ callId, userId, onError }: UseWebRTCP2POptions) {
             candidate: signal.candidate,
             sdpMLineIndex: signal.sdpMLineIndex,
             sdpMid: signal.sdpMid,
-          }, signal.from);
+          }, signal.from, signal.negotiationId);
           break;
 
         default:
@@ -808,7 +859,7 @@ export function useWebRTCP2P({ callId, userId, onError }: UseWebRTCP2POptions) {
     return () => {
       socket.off(SERVER_EVENTS.CALL_SIGNAL, handleIncomingSignal);
     };
-  }, [callId, handleOffer, handleAnswer, handleIceCandidate]);
+  }, [callId, handleOffer, handleAnswer, handleIceCandidate, trackIncomingNegotiationId]);
 
   /**
    * TURN credential refresh (see DEFAULT_TURN_CREDENTIAL_TTL_SECONDS doc
