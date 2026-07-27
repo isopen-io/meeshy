@@ -12,6 +12,7 @@ import {
   updateUserProfileSchema,
   AuthSchemas,
   SignalProtocolLimits,
+  NotificationPreferenceSchemas,
 } from '../utils/validation.js';
 import { z } from 'zod';
 import { MeeshyError } from '../utils/errors.js';
@@ -291,5 +292,35 @@ describe('SignalValidation.validateMessageNumber — overflow branch', () => {
     const max = SignalProtocolLimits.MAX_MESSAGE_NUMBER;
     const result = SignalValidation.validateMessageNumber(max, max - 1, SignalProtocolLimits.MAX_SKIPPED_KEYS);
     expect(result.valid).toBe(true);
+  });
+});
+
+describe('NotificationPreferenceSchemas.update — DND time format', () => {
+  // The DND window is evaluated with a lexicographic "HH:MM" comparison in
+  // isWithinDnd, which only holds for zero-padded hours. This schema is a write
+  // boundary, so it must reject a single-digit hour ("9:00") rather than let it
+  // reach persistence — converging on the canonical /^([01]\d|2[0-3]):([0-5]\d)$/
+  // already enforced by the gateway (notification-schemas.ts, isValidDndTime) and
+  // the shared NotificationPreferenceSchema default schema.
+  it('rejects a single-digit start hour', () => {
+    const result = NotificationPreferenceSchemas.update.safeParse({ dndStartTime: '9:00' });
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects a single-digit end hour', () => {
+    const result = NotificationPreferenceSchemas.update.safeParse({ dndEndTime: '8:30' });
+    expect(result.success).toBe(false);
+  });
+
+  it('accepts zero-padded 24h times', () => {
+    const result = NotificationPreferenceSchemas.update.safeParse({
+      dndStartTime: '09:00',
+      dndEndTime: '23:59',
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it('rejects an out-of-range hour', () => {
+    expect(NotificationPreferenceSchemas.update.safeParse({ dndStartTime: '24:00' }).success).toBe(false);
   });
 });
