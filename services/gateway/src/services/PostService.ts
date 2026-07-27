@@ -15,6 +15,7 @@ import { enhancedLogger } from '../utils/logger-enhanced';
 import { ZMQSingleton } from './ZmqSingleton';
 import { authorSelect, mediaSelect, mediaInclude, postInclude } from './posts/postIncludes';
 import { remapStoryEffectsMediaIds } from './posts/storyEffectsMediaRemap';
+import { composeStoryContent, storyTextObjectText } from './posts/storyContentComposition';
 import { normalizeLanguageCode } from '@meeshy/shared/utils/language-normalize';
 
 const log = enhancedLogger.child({ module: 'PostService' });
@@ -215,10 +216,7 @@ export class PostService {
     const textObjects = Array.isArray(rawTextObjects) ? (rawTextObjects as StoryTextObjectRaw[]) : undefined;
 
     if (textObjects?.length) {
-      const searchContent = textObjects
-        .map((t) => PostService.storyTextObjectText(t))
-        .filter(Boolean)
-        .join(' ');
+      const searchContent = composeStoryContent(textObjects);
 
       if (searchContent && !data.content) {
         await this.prisma.post.update({
@@ -241,9 +239,7 @@ export class PostService {
     // l'écriture metadata est gardée.
     const trackingContent =
       data.content
-      ?? (textObjects?.length
-        ? textObjects.map((t) => PostService.storyTextObjectText(t)).filter(Boolean).join(' ')
-        : undefined);
+      ?? (textObjects?.length ? composeStoryContent(textObjects) : undefined);
     if (trackingContent) {
       try {
         const trackingLinks = await this.trackingLinkService.collectContentTrackingLinks({
@@ -445,12 +441,12 @@ export class PostService {
    *  canonique d'abord, fallback sur la legacy — sans ça la gateway abandonnait
    *  chaque overlay iOS de l'indexation de recherche, de l'extraction des liens
    *  de tracking ET de la traduction (mêmes symptômes que le bug déjà corrigé
-   *  côté web dans `apps/web/lib/story-transforms.ts`). */
-  static storyTextObjectText(obj: { text?: unknown; content?: unknown }): string | undefined {
-    if (typeof obj.text === 'string') return obj.text;
-    if (typeof obj.content === 'string') return obj.content;
-    return undefined;
-  }
+   *  côté web dans `apps/web/lib/story-transforms.ts`).
+   *
+   *  L'implémentation vit dans `storyContentComposition` avec la composition de
+   *  l'index dérivé : lire le texte d'un overlay et assembler le `content` sont
+   *  la même règle vue de deux endroits, elles ne peuvent pas diverger. */
+  static storyTextObjectText = storyTextObjectText;
 
   /** G3 — cœur PUR de la résolution d'audience (testable) : systemLanguage
    *  des contacts, dédupliqués, hors 'en' (langue pivot), cap 10. */

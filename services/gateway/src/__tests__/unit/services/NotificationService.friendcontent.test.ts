@@ -284,6 +284,27 @@ describe('NotificationService — Phase 4F: friend content fan-out', () => {
       expect(call).toBeDefined();
       expect(call![0].data.type).toBe('friend_new_mood');
     });
+
+    it('test_createFriendContentNotificationsBatch_REEL_createsFriendNewPost', async () => {
+      // REEL borrows the friend_new_post type (variante de post) but keeps its
+      // own entity-aware wording; the type must still map to friend_new_post.
+      (prisma.friendRequest.findMany as jest.Mock).mockResolvedValue([
+        makeFriendRequest(AUTHOR_ID, FRIEND_1),
+      ]);
+
+      await service.createFriendContentNotificationsBatch({
+        postId: POST_ID,
+        authorId: AUTHOR_ID,
+        contentType: 'REEL',
+      });
+
+      const calls = (prisma.notification.create as jest.Mock).mock.calls as Array<
+        [{ data: { type: string; userId: string } }]
+      >;
+      const call = calls.find((c) => c[0].data.userId === FRIEND_1);
+      expect(call).toBeDefined();
+      expect(call![0].data.type).toBe('friend_new_post');
+    });
   });
 
   // =====================================================
@@ -325,6 +346,27 @@ describe('NotificationService — Phase 4F: friend content fan-out', () => {
       >;
       const call = calls.find((c) => c[0].data.userId === FRIEND_1);
       expect(call![0].data.content).toBe('a publié un nouveau post');
+    });
+
+    it('test_createFriendContentNotificationsBatch_noExcerpt_REEL_usesReelFallbackPhrase', async () => {
+      // A friend's new reel must announce itself as a reel, not a post — the
+      // REEL discriminant is kept in metadata precisely for this display.
+      (prisma.friendRequest.findMany as jest.Mock).mockResolvedValue([
+        makeFriendRequest(AUTHOR_ID, FRIEND_1),
+      ]);
+
+      await service.createFriendContentNotificationsBatch({
+        postId: POST_ID,
+        authorId: AUTHOR_ID,
+        contentType: 'REEL',
+      });
+
+      const calls = (prisma.notification.create as jest.Mock).mock.calls as Array<
+        [{ data: { content: string; subtitle: string | null; userId: string } }]
+      >;
+      const call = calls.find((c) => c[0].data.userId === FRIEND_1);
+      expect(call![0].data.content).toBe('a publié un nouveau réel');
+      expect(call![0].data.subtitle).toBe('Nouveau réel');
     });
 
     it('test_createFriendContentNotificationsBatch_noExcerpt_STATUS_usesMoodFallbackPhrase', async () => {

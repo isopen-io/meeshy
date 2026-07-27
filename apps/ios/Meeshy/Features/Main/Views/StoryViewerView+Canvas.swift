@@ -91,13 +91,26 @@ struct StoryGestureOverlayView: View {
 
     /// Seuil au-delà duquel un touch sur l'écran cesse d'être un tap de
     /// navigation prev/next et devient un hold (toggle pause + hide chrome).
-    private let holdThresholdSeconds: TimeInterval = 0.2
+    ///
+    /// 0,45 s — proche du seuil d'un long-press iOS (0,5 s). À 0,2 s, valeur
+    /// posée le 2026-05-21, la navigation par tap devenait inatteignable : un
+    /// tap humain POSÉ (par opposition à un flick sec) dure couramment 150 à
+    /// 300 ms, donc franchissait le seuil et armait le hold. L'utilisateur
+    /// visait la story suivante et obtenait une pause avec le chrome masqué
+    /// (report user 2026-07-27 : « le tap sur la partie gauche et droite ne
+    /// permet plus d'aller vers l'arrière ni vers la story suivante »).
+    private let holdThresholdSeconds: TimeInterval = 0.45
     /// Fenêtre pendant laquelle deux taps centrés comptent pour un double tap.
     private let doubleTapWindowSeconds: TimeInterval = 0.3
     /// Marge horizontale/verticale autorisée avant qu'un drag soit considéré
     /// comme un swipe (et donc ignoré par cet overlay — laissé au drag
     /// gesture parent qui gère le dismiss).
-    private let dragSlopPixels: CGFloat = 14
+    ///
+    /// 24 px ≈ 8 pt, l'ordre de grandeur de la tolérance d'un tap iOS. À 14 px
+    /// (moins de 5 pt), le tremblement naturel du doigt suffisait à requalifier
+    /// un tap en drag : le geste était rendu au parent et la navigation
+    /// annulée sans que rien ne le signale.
+    private let dragSlopPixels: CGFloat = 24
 
     @State private var touchStartTime: Date? = nil
     @State private var touchStartLocation: CGPoint = .zero
@@ -1870,6 +1883,13 @@ struct StoryCardView: View {
                         }
                     }
                 )
+                // Borné au viewport RÉEL, jamais `.infinity` : le canvas gonfle
+                // la largeur intrinsèque du ZStack parent au-delà de l'écran
+                // (~480 pt vs 402 pt sur iPhone 16 Pro), et un calque non borné
+                // s'y étale avant de se faire rogner aux deux bords par le
+                // `.clipped()` final. Même pin que le header, le rail et le
+                // composer.
+                .frame(maxWidth: geometry.size.width)
                 .transition(.move(edge: .bottom).combined(with: .opacity))
                 .zIndex(100)
             }
@@ -1890,11 +1910,12 @@ struct StoryCardView: View {
                         // le reader se re-rend dès l'arrivée de la traduction.
                         onSelectLanguageOverride(code)
                     },
-                    onTranslate: { code in
+                    onTranslate: { code, force in
                         Task {
                             await StoryInteractionService().requestTranslation(
                                 storyId: story.id,
-                                targetLanguage: code
+                                targetLanguage: code,
+                                force: force
                             )
                         }
                     },
@@ -1904,6 +1925,11 @@ struct StoryCardView: View {
                         }
                     }
                 )
+                // Idem : sans ce pin, la feuille remplissait les ~480 pt du
+                // ZStack gonflé par le canvas et perdait ~39 pt de chaque côté
+                // sous le `.clipped()` — titre amputé à gauche, boutons
+                // « Traduire » coupés à droite (bug user 2026-07-27).
+                .frame(maxWidth: geometry.size.width)
                 .transition(.move(edge: .bottom).combined(with: .opacity))
                 .zIndex(150)
             }

@@ -188,6 +188,92 @@ final class StoryViewModelTests: XCTestCase {
         XCTAssertLessThanOrEqual(mockStoryService.listCallCount, 2)
     }
 
+    // MARK: - Purge des stories mortes
+    //
+    // Le merge delta est additif : il ne peut RIEN retirer. Une story supprimée
+    // pendant que l'app était fermée ou hors-ligne (event socket `story:deleted`
+    // manqué, aucun replay) restait donc dans le tray — illisible, puisque le
+    // lecteur la saute ou tombe sur des médias 404, et indéboulonnable jusqu'à
+    // l'expiration du cache 24 h. Deux canaux la font maintenant sortir : les
+    // tombstones du serveur (`meta.deletedStoryIds`) et le filtre d'expiry local.
+
+    private static func makeDeltaResponse(deletedStoryIds: [String] = []) -> PaginatedAPIResponse<[APIPost]> {
+        let ids = deletedStoryIds.map { "\"\($0)\"" }.joined(separator: ",")
+        return JSONStub.decode("""
+        {"success":true,"data":[],"pagination":null,"error":null,"meta":{"deletedStoryIds":[\(ids)]}}
+        """)
+    }
+
+    func test_deltaRefresh_purgesStoryReportedDeletedByServer() async {
+        let kept = makeStoryItem(id: "s1")
+        let deleted = makeStoryItem(id: "s2")
+        sut.storyGroups = [makeStoryGroup(userId: "u1", stories: [kept, deleted])]
+        mockStoryService.listResult = .success(Self.makeDeltaResponse(deletedStoryIds: ["s2"]))
+
+        await sut.fetchStoriesFromNetwork(deltaSince: Date().addingTimeInterval(-300))
+
+        XCTAssertEqual(sut.storyGroups.first?.stories.map(\.id), ["s1"])
+    }
+
+    func test_deltaRefresh_dropsGroupEmptiedByDeletion() async {
+        sut.storyGroups = [
+            makeStoryGroup(userId: "u1", stories: [makeStoryItem(id: "s1")]),
+            makeStoryGroup(userId: "u2", username: "bob", stories: [makeStoryItem(id: "s2")])
+        ]
+        mockStoryService.listResult = .success(Self.makeDeltaResponse(deletedStoryIds: ["s1"]))
+
+        await sut.fetchStoriesFromNetwork(deltaSince: Date().addingTimeInterval(-300))
+
+        XCTAssertEqual(sut.storyGroups.map(\.id), ["u2"])
+    }
+
+    func test_deltaRefresh_purgesExpiredStory() async {
+        // Le serveur balaie les périmées toutes les heures seulement : le client
+        // ne doit pas attendre son passage pour cesser d'afficher une bulle morte.
+        let expired = makeStoryItem(id: "old", createdAt: Date().addingTimeInterval(-90_000))
+        let fresh = makeStoryItem(id: "new")
+        sut.storyGroups = [makeStoryGroup(userId: "u1", stories: [expired, fresh])]
+        mockStoryService.listResult = .success(Self.makeDeltaResponse())
+
+        await sut.fetchStoriesFromNetwork(deltaSince: Date().addingTimeInterval(-300))
+
+        XCTAssertEqual(sut.storyGroups.first?.stories.map(\.id), ["new"])
+    }
+
+    func test_deltaRefresh_healthyTrayIsLeftIntact() async {
+        // Garde-fou : la purge ne doit toucher QUE ce qui est mort.
+        sut.storyGroups = [
+            makeStoryGroup(userId: "u1", stories: [makeStoryItem(id: "s1")]),
+            makeStoryGroup(userId: "u2", username: "bob", stories: [makeStoryItem(id: "s2")])
+        ]
+        mockStoryService.listResult = .success(Self.makeDeltaResponse())
+
+        await sut.fetchStoriesFromNetwork(deltaSince: Date().addingTimeInterval(-300))
+
+        XCTAssertEqual(sut.storyGroups.flatMap { $0.stories.map(\.id) }.sorted(), ["s1", "s2"])
+    }
+
+    func test_deltaRefresh_evictsPurgedStoryFromTheByIdCache() async {
+        // Ce cache sert les deep-links AVANT le réseau : y laisser la story
+        // purgée la ferait réapparaître au premier tap de notification.
+        sut.storyGroups = [makeStoryGroup(userId: "u1", stories: [makeStoryItem(id: "s1"), makeStoryItem(id: "s2")])]
+        mockStoryService.listResult = .success(Self.makeDeltaResponse(deletedStoryIds: ["s1"]))
+
+        await sut.fetchStoriesFromNetwork(deltaSince: Date().addingTimeInterval(-300))
+
+        XCTAssertTrue(mockStoryService.invalidatedPostIds.contains("s1"))
+        XCTAssertFalse(mockStoryService.invalidatedPostIds.contains("s2"))
+    }
+
+    func test_deltaRefresh_ignoresDeletedIdsAbsentFromTray() async {
+        sut.storyGroups = [makeStoryGroup(userId: "u1", stories: [makeStoryItem(id: "s1")])]
+        mockStoryService.listResult = .success(Self.makeDeltaResponse(deletedStoryIds: ["never-had-it"]))
+
+        await sut.fetchStoriesFromNetwork(deltaSince: Date().addingTimeInterval(-300))
+
+        XCTAssertEqual(sut.storyGroups.first?.stories.map(\.id), ["s1"])
+    }
+
     // MARK: - storyRingState(forUserId:) Tests
 
     func test_storyRingState_userWithUnviewedStories_returnsUnread() {
@@ -472,12 +558,25 @@ final class StoryViewModelTests: XCTestCase {
         """)
     }
 
+    /// Horodatage ISO8601 RELATIF à maintenant.
+    ///
+    /// Ces fixtures portaient des dates absolues (`expiresAt: 2026-07-05`). Une
+    /// fois cette date passée, les stories du delta arrivaient déjà expirées et
+    /// la purge du tray les retirait aussitôt — les tests échouaient sur un
+    /// détail de calendrier, pas sur ce qu'ils vérifient (la propagation des
+    /// compteurs, l'insertion d'un nouveau groupe).
+    private static func iso(_ offset: TimeInterval) -> String {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return formatter.string(from: Date().addingTimeInterval(offset))
+    }
+
     func test_deltaRefresh_passesUpdatedSince_andReplacesModifiedStory_preservingLocalViewed() async {
         let local = makeStoryItem(id: "s-mod", isViewed: true)
         sut.storyGroups = [makeStoryGroup(userId: "u-delta", stories: [local])]
         mockStoryService.listResult = .success(Self.makeDeltaResponse(postsJSON: """
-        {"id":"s-mod","type":"STORY","content":"updated","createdAt":"2026-07-04T06:00:00.000Z",
-         "updatedAt":"2026-07-04T07:00:00.000Z","expiresAt":"2026-07-05T06:00:00.000Z",
+        {"id":"s-mod","type":"STORY","content":"updated","createdAt":"\(Self.iso(-7200))",
+         "updatedAt":"\(Self.iso(-3600))","expiresAt":"\(Self.iso(72000))",
          "viewCount":5,"isViewedByMe":false,
          "author":{"id":"u-delta","username":"delta"}}
         """))
@@ -496,8 +595,8 @@ final class StoryViewModelTests: XCTestCase {
     func test_deltaRefresh_insertsBrandNewStoryGroup() async {
         sut.storyGroups = [makeStoryGroup(userId: "u-old", stories: [makeStoryItem(id: "s-old")])]
         mockStoryService.listResult = .success(Self.makeDeltaResponse(postsJSON: """
-        {"id":"s-new","type":"STORY","content":"fresh","createdAt":"2026-07-04T06:30:00.000Z",
-         "updatedAt":"2026-07-04T06:30:00.000Z","expiresAt":"2026-07-05T06:00:00.000Z",
+        {"id":"s-new","type":"STORY","content":"fresh","createdAt":"\(Self.iso(-1800))",
+         "updatedAt":"\(Self.iso(-1800))","expiresAt":"\(Self.iso(72000))",
          "author":{"id":"u-new","username":"newcomer"}}
         """))
 

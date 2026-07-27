@@ -253,16 +253,25 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
         switch cached {
         case .fresh(let data, _):
             storyGroups = data
+            // Le cache survit délibérément à la fenêtre de visibilité d'une
+            // story : sans cette purge, il ressert des stories mortes et le
+            // prefetch ci-dessous irait re-télécharger leurs médias.
+            purgeDeadStories()
             sortStoryGroupsInPlace()
             prefetchAllStoryMedia(storyGroups)
             return
         case .stale(let data, _):
             storyGroups = data
+            purgeDeadStories()
             sortStoryGroupsInPlace()
             prefetchAllStoryMedia(storyGroups)
             // R8 inc.1 — le refresh silencieux passe en DELTA quand le cache
-            // porte un curseur updatedAt (sinon nil → full historique).
-            let since = Self.deltaSince(for: data)
+            // porte un curseur updatedAt (sinon nil → full historique). Curseur
+            // dérivé du tray APRÈS purge : il doit refléter ce qu'on détient
+            // encore. Le dériver d'une story qu'on vient de retirer avancerait
+            // le curseur au-delà de notre état réel — le delta suivant sauterait
+            // alors les tombstones de cet intervalle.
+            let since = Self.deltaSince(for: storyGroups)
             Task { [weak self] in await self?.fetchStoriesFromNetwork(deltaSince: since) }
             return
         case .expired, .empty:
@@ -288,6 +297,15 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
                     let deltaGroups = response.data.toStoryGroups(currentUserId: AuthManager.shared.currentUser?.id)
                     if !deltaGroups.isEmpty {
                         insertOrMergeStoryGroups(deltaGroups, replacingExisting: true)
+                    }
+                    // Le merge ci-dessus est additif — il ne peut RIEN retirer.
+                    // Les disparitions arrivent par les tombstones du serveur
+                    // (`meta.deletedStoryIds`), seul canal capable de rattraper
+                    // une suppression survenue app fermée ou hors-ligne. Appelé
+                    // même sur un delta vide : une réponse sans aucune story
+                    // peut très bien ne porter QUE des disparitions.
+                    purgeDeadStories(deletedIds: Set(response.meta?.deletedStoryIds ?? []))
+                    if !deltaGroups.isEmpty {
                         prefetchAllStoryMedia(storyGroups)
                     }
                     return
@@ -573,6 +591,90 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
             case .video: return (urlString, .video)
             case .audio: return (urlString, .audio)
             default: return (urlString, .images)
+            }
+        }
+    }
+
+    // MARK: - Purge des stories mortes
+    //
+    // Le cache du tray (TTL 24 h) survit délibérément à la fenêtre de visibilité
+    // d'une story (21 h) — on évite ainsi de re-télécharger avatars et
+    // métadonnées à chaque démarrage à froid. La contrepartie : il continue de
+    // porter des stories que le serveur ne renverra plus.
+    //
+    // Jusqu'ici rien ne les effaçait. L'expiry était traitée par masquage (le
+    // tray filtre les groupes entièrement expirés) et par saut (le lecteur
+    // saute les slides mortes) ; les suppressions n'arrivaient que par l'event
+    // socket `story:deleted`, qui ne se rejoue pas — app fermée ou hors-ligne,
+    // l'information était perdue. Une story disparue restait donc dans le
+    // tray : impossible à revoir, jamais nettoyée, jusqu'à l'expiration du
+    // cache 24 h ou un pull-to-refresh.
+
+    /// Retire du tray, du cache disque et des pins média tout ce qui est mort.
+    ///
+    /// `deletedIds` : ids rapportés disparus par le serveur (tombstones du
+    /// delta-sync) ou par l'event socket. L'expiry, elle, est déduite
+    /// localement — le balayeur serveur ne passe qu'une fois par heure et le
+    /// tray ne doit pas attendre son passage.
+    ///
+    /// `includingExpired: false` pour un retrait CIBLÉ (event socket, action de
+    /// l'utilisateur) : un event qui annonce une disparition précise ne doit
+    /// pas emporter avec lui tout ce qui a expiré par ailleurs. Le balayage
+    /// d'expiry a lieu aux chargements du tray, là où il est attendu.
+    ///
+    /// Retourne les stories retirées (vide si rien à faire — aucune écriture de
+    /// cache n'est alors déclenchée).
+    @discardableResult
+    func purgeDeadStories(deletedIds: Set<String> = [], includingExpired: Bool = true) -> [StoryItem] {
+        let currentUserId = AuthManager.shared.currentUser?.id
+        let now: Date? = includingExpired ? Date() : nil
+        let deadIds = Set(storyGroups.deadStoryIds(
+            currentUserId: currentUserId, deletedIds: deletedIds, now: now
+        ))
+        guard !deadIds.isEmpty else { return [] }
+
+        // Capturées AVANT la purge : une fois hors du tray, plus rien ne permet
+        // de retrouver les médias à libérer.
+        let dead = storyGroups.flatMap(\.stories).filter { deadIds.contains($0.id) }
+        storyGroups = storyGroups.purgingDeadStories(
+            currentUserId: currentUserId, deletedIds: deletedIds, now: now
+        )
+        // Retirer une story peut faire basculer `hasUnviewed` d'un groupe, ou
+        // le faire disparaître : l'ordre du tray change.
+        sortStoryGroupsInPlace()
+        persistStoryCache()
+        // Le cache by-id sert les deep-links AVANT tout aller-retour réseau :
+        // sans cette éviction, une notification ferait ressusciter à l'écran la
+        // story qu'on vient de retirer du tray.
+        storyService.invalidate(postIds: deadIds)
+        releaseOfflineMedia(for: dead)
+        Logger.messages.info("[StoryVM] purge de \(deadIds.count, privacy: .public) story(s) morte(s) du tray local")
+        return dead
+    }
+
+    /// Rend évinçables les médias d'une story purgée.
+    ///
+    /// Une story vue voit ses médias ÉPINGLÉS sur disque jusqu'à son expiry
+    /// (relecture hors-ligne) : sans ce dépinnage, ils resteraient protégés de
+    /// l'éviction budget alors que plus rien ne peut les afficher.
+    ///
+    /// On dépingle sans supprimer les fichiers : un même média peut être
+    /// partagé par une story et son repost, et supprimer les octets sous les
+    /// pieds du repost survivant casserait sa lecture. Dépinglés, ils repassent
+    /// sous le régime normal du cache (TTL + budget LRU).
+    private func releaseOfflineMedia(for stories: [StoryItem]) {
+        let targets = stories.flatMap { Self.pinTargets(for: $0) }
+        guard !targets.isEmpty else { return }
+        Task {
+            for target in targets {
+                switch target.store {
+                case .video:
+                    await CacheCoordinator.shared.video.unpin(target.urlString)
+                case .audio:
+                    await CacheCoordinator.shared.audio.unpin(target.urlString)
+                case .images:
+                    await CacheCoordinator.shared.images.unpin(target.urlString)
+                }
             }
         }
     }
@@ -1525,21 +1627,10 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
     func deleteStory(storyId: String) async -> Bool {
         do {
             try await storyService.delete(storyId: storyId)
-
-            // Remove from local state
-            for i in storyGroups.indices {
-                if let j = storyGroups[i].stories.firstIndex(where: { $0.id == storyId }) {
-                    var updated = storyGroups[i].stories
-                    updated.remove(at: j)
-                    if updated.isEmpty {
-                        storyGroups.remove(at: i)
-                    } else {
-                        storyGroups[i] = storyGroups[i].with(stories: updated)
-                    }
-                    break
-                }
-            }
-            persistStoryCache()
+            // Même chemin que les tombstones et l'event socket. Une suppression
+            // explicite l'emporte sur l'exception accordée à l'auteur pour ses
+            // propres stories expirées : c'est une volonté, pas un délai.
+            purgeDeadStories(deletedIds: [storyId], includingExpired: false)
             return true
         } catch {
             return false
@@ -1734,25 +1825,43 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
             }
             .store(in: &socketCancellables)
 
+        // Prisme realtime : traduction du CONTENU de la story (sa légende), que
+        // le gateway diffuse via `post:translation-updated` — un événement
+        // DISTINCT de `story:translation-updated` ci-dessus, qui ne porte que
+        // les textes du canvas.
+        //
+        // Seul le feed s'y abonnait. Le lecteur ignorait donc la traduction
+        // qu'il venait lui-même de demander : elle arrivait en base, mais la
+        // story en mémoire gardait ses anciennes langues et la feuille
+        // « Langues » laissait tourner son anneau indéfiniment sur une langue
+        // pourtant traduite (constaté au simulateur le 2026-07-27, allemand
+        // présent côté serveur et absent côté lecteur).
+        socialSocket.postTranslationUpdated
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] payload in
+                guard let self else { return }
+                for groupIdx in self.storyGroups.indices {
+                    var stories = self.storyGroups[groupIdx].stories
+                    guard let storyIdx = stories.firstIndex(where: { $0.id == payload.postId }) else { continue }
+                    stories[storyIdx] = stories[storyIdx].mergingContentTranslation(
+                        language: payload.language,
+                        content: payload.translation.text
+                    )
+                    self.storyGroups[groupIdx] = self.storyGroups[groupIdx].with(stories: stories)
+                    self.persistStoryCache()
+                    return
+                }
+            }
+            .store(in: &socketCancellables)
+
+        // Même chemin de retrait que les tombstones du delta-sync : re-tri du
+        // tray, réécriture du cache et libération des médias épinglés compris.
+        // (L'ancien retrait en place ne faisait que sortir la story du tableau,
+        // laissant ses médias pinnés sur disque jusqu'à l'échéance du pin.)
         socialSocket.storyDeleted
             .receive(on: DispatchQueue.main)
             .sink { [weak self] event in
-                guard let self else { return }
-                for i in self.storyGroups.indices {
-                    let filtered = self.storyGroups[i].stories.filter { $0.id != event.storyId }
-                    if filtered.count != self.storyGroups[i].stories.count {
-                        if filtered.isEmpty {
-                            self.storyGroups.remove(at: i)
-                        } else {
-                            self.storyGroups[i] = self.storyGroups[i].with(stories: filtered)
-                        }
-                        // Tray order can shift when a group loses its
-                        // last unviewed story or disappears altogether.
-                        self.sortStoryGroupsInPlace()
-                        self.persistStoryCache()
-                        return
-                    }
-                }
+                self?.purgeDeadStories(deletedIds: [event.storyId], includingExpired: false)
             }
             .store(in: &socketCancellables)
 

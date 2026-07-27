@@ -542,6 +542,32 @@ describe('POST /posts/:postId/translate — invalid body', () => {
   });
 });
 
+// ─── POST /posts/:postId/translate — audience du demandeur ───────────────────
+
+describe('POST /posts/:postId/translate — audience du demandeur', () => {
+  let app: FastifyInstance;
+  beforeAll(async () => { ({ app } = await buildApp()); });
+  afterAll(async () => { await app.close(); });
+
+  // Sans le viewer, `getPostById` retombe sur le filtre anonyme
+  // (`visibility: PUBLIC`) et ne trouve RIEN d'autre qu'une publication
+  // publique. Or une story Meeshy est réservée aux contacts par défaut : la
+  // route répondait « Post not found » à un lecteur pourtant légitime, et la
+  // feuille « Traductions » du lecteur restait sur un anneau qui tourne sans
+  // fin (constaté au simulateur le 2026-07-27 sur une story FRIENDS).
+  it('transmet l’identité du demandeur au lookup', async () => {
+    mockGetPostById.mockClear();
+
+    const res = await app.inject({
+      method: 'POST', url: `/posts/${POST_ID}/translate`,
+      payload: { targetLanguage: 'es' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(mockGetPostById).toHaveBeenCalledWith(POST_ID, USER_ID);
+  });
+});
+
 // ─── POST /posts/:postId/translate — translateOnDemand throws (503) ───────────
 
 describe('POST /posts/:postId/translate — translateOnDemand throws', () => {

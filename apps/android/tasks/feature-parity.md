@@ -1382,8 +1382,18 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       the setting re-paints live. +6 resolver tests + 1 VM wiring test, mutation-proven (dropping the
       degrade fails exactly the 3 Read-degrade tests, the Delivered/Sent-untouched + default-true tests
       stay green). **SOTA over iOS**: the degrade is a pure, fully-covered arm on the same SSOT resolver,
-      reactive to a live preference toggle. **Pending:** the finer 8-state
-      send-lifecycle glyphs (clock/slow/invisible), offline hourglass, tap-checks → read-status sheet
+      reactive to a live preference toggle. **Offline-pending hourglass done**
+      (`chat-offline-pending-hourglass` 2026-07-27): port of the iOS `BubbleDeliveryBadge` rule — a still-
+      pending outgoing bubble shows a live **clock** while online (send in flight) but a queue **hourglass**
+      once the device is offline (parked in the outbox until reconnect). New pure `:core:model`
+      `SendLifecycleResolver.resolve(isPending, isFailed, isOffline) → {Failed, QueuedOffline, InFlight,
+      Settled}` (failure-wins precedence; a *settled* message never regresses to the hourglass when the link
+      later drops); `DeliveryStatus.QueuedOffline` + `BubbleContentBuilder.build(isOffline)` routes the
+      outgoing send-side glyph through it; `MessageBubble` renders `Icons.Filled.HourglassEmpty` +
+      `bubble_status_queued` (EN/FR/ES/PT). `ChatViewModel` injects `NetworkConditionMonitor` and folds
+      `condition == OFFLINE` (distinct) into the message-stream combine so going offline re-paints the glyph
+      live. +7 resolver + 5 builder + 1 VM tests, mutation-proven. **Pending:** the finer 8-state
+      send-lifecycle glyphs (slow/invisible pre-200ms debounce), tap-checks → read-status sheet
 - [~] Edited / pinned / forwarded indicators; edit-history viewer
       **Edited ✅** (`bubble_edited` badge), **pinned ✅** (`chat-pinned-banner`), **forwarded ✅**
       (slice `chat-forwarded-indicator`, 2026-07-08, +5 tests): `BubbleContent.isForwarded` derived in
