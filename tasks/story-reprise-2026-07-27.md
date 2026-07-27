@@ -89,6 +89,30 @@ conséquence utilisateur observable avant de conclure.
 | Compteur de commentaires temps réel | ⚠️ | Câblage plausible, mais l'équipe documente elle-même que ce `@State` n'est pas testable en XCTest. Demande une vérification à deux comptes sur simulateur. |
 | Chargement des fichiers audio du mixer | ⚠️ | « Non testé » vérifié : la fixture `test-1s.m4a` est ABSENTE du dépôt, donc les deux tests censés couvrir le chemin **skippent silencieusement**. |
 
+### Troisième vague — 31 lignes 🟡 instruites (composer + lecteur)
+
+**Le lecteur est solide.** Sur les 24 lignes couvrant gestes, accessibilité,
+pause, reprise, auto-advance, teardown et entrée par voisinage : **22 ✅**,
+1 🔴, 1 ⚠️. Ce ne sont pas des défauts mais des trous de TEST — beaucoup de
+mécanismes corrects ne sont couverts que par des assertions de source.
+
+Le composer, lui, concentre les défauts, tous de la même famille : **les
+chemins canvas (`+ContextMenu`, `+Manipulation`) dupliquent le ViewModel sans
+ses gardes.**
+
+| ligne 🟡 | verdict | fait |
+|---|---|---|
+| Ordre d'empilement du menu long-press | 🔴 **livré** | `swapAt` sur le tableau quand le rendu trie par `zIndex` : deux entrées de menu totalement inertes, et qui ignoraient textes et stickers. Les bonnes fonctions existaient, testées, sans appelant. |
+| Duplication d'un texte | 🔴 **ouvert** | Le plafond de 5 textes (`canAddText`) n'est gardé que sur la voie ViewModel : long-press et VoiceOver permettent de le dépasser. |
+| Suppression d'un texte — nettoyage | 🔴 **ouvert** | `deleteItem`/`contextDelete` ne purgent ni `selectedElementId` ni `textEditingMode`, et court-circuitent le staging d'undo : la top-bar d'édition reste affichée sur un élément mort, et les médias supprimés ainsi échappent à l'undo. |
+| Sélection sur le canvas | 🔴 **ouvert** | Aucun indicateur visuel de sélection n'est dessiné (0 occurrence de `selected` dans le renderer), et taper le fond ne désélectionne jamais. |
+| Résolution de la transcription | 🔴 **ouvert** | Le moteur est correct et testé, mais AUCUN service gateway ne traduit `voiceTranscriptions` — contrairement au texte de canvas. La chaîne de langues ne peut matcher que ce que l'auteur a enregistré à la main. C'est une fonctionnalité manquante, pas un bug. |
+| Menu « … » ne gèle pas la lecture | 🔴 **ouvert** | `shouldPauseTimer` liste 12 conditions de gel, aucune pour ce menu. La story continue d'avancer dessous : « Supprimer » ou « Republier » peut viser une AUTRE slide que celle affichée à l'ouverture. Difficulté : SwiftUI n'expose pas de binding d'ouverture pour `Menu` — il faut passer par un conteneur qui en publie l'état. |
+| Entrée sur le groupe précédent | ⚠️ | `currentStoryIndex = count - 1` sans filtre lisibilité, alors que `entryIndex(of:)` filtre. Le résolveur de saut ne va que vers l'AVANT : si la dernière slide est illisible, il pourrait rebondir vers le groupe qu'on vient de quitter. Dépend de l'ordre chronologique garanti de `group.stories`. |
+| 22 autres lignes du lecteur | ✅ | Gestes, VoiceOver, scenePhase, self-heal, teardown, cascade « story introuvable ». Deux valeurs citées par le rapport sont périmées (long-press 200 ms → 450 ms ; interlude 2,6 s → 2,2 s). |
+
+**Décompte des 🟡 : 43 instruites, ~59 restantes.**
+
 ---
 
 ## 1. Où on en est
