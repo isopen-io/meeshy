@@ -94,6 +94,7 @@ class ZMQTranslationServer:
             'translation': 0,
             'audio_process': 0,
             'transcription': 0,
+            'story_text_object_translation': 0,
             'voice_api': 0,
             'voice_profile': 0
         }
@@ -263,7 +264,14 @@ class ZMQTranslationServer:
         """
         task = asyncio.create_task(coro)
         self.active_tasks.add(task)
-        self.task_counters[task_type] += 1
+        # `task_counters` déclare les types connus pour que les métriques les
+        # exposent à zéro avant tout trafic — mais un type absent ne doit JAMAIS
+        # coûter la requête. Avec `+= 1` sur un dict littéral, le premier
+        # `story_text_object_translation` levait un KeyError avalé par le
+        # `except Exception` de la boucle de réception : routage correct,
+        # requête perdue, et le même symptôme visible qu'avant le correctif de
+        # routage. Un compteur d'observabilité n'a pas à être un point de panne.
+        self.task_counters[task_type] = self.task_counters.get(task_type, 0) + 1
 
         # Callback pour nettoyer à la fin
         def task_done_callback(t):
