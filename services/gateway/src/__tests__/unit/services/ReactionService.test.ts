@@ -375,6 +375,26 @@ describe('ReactionService', () => {
       expect(mockPrisma.reaction.upsert).not.toHaveBeenCalled();
     });
 
+    it('should reject reactions on soft-deleted messages', async () => {
+      // A soft-deleted message (deletedAt set) still exists in the DB, so the
+      // !message guard does not catch it. Reacting to it must be rejected —
+      // mirroring the deletedAt guard every sibling write path enforces (edit,
+      // delete). Without the guard, addReaction persists and the handler
+      // broadcasts REACTION_ADDED for a message clients already show as deleted.
+      mockPrisma.message.findUnique.mockResolvedValue(
+        createMockMessage({ deletedAt: new Date('2025-01-06T12:00:00Z') })
+      );
+
+      await expect(
+        service.addReaction({
+          messageId: testMessageId,
+          participantId: testParticipantId,
+          emoji: '👍'
+        })
+      ).rejects.toThrow('Cannot react to a deleted message');
+      expect(mockPrisma.reaction.upsert).not.toHaveBeenCalled();
+    });
+
     it('should allow adding same emoji again (returns existing)', async () => {
       const existingReaction = createMockReaction({ emoji: '👍' });
       mockPrisma.reaction.findFirst
