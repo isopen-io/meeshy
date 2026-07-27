@@ -14,6 +14,7 @@ import {
   UpdatePostSchema,
   StoryEffectsSchema,
   CreateCommentSchema,
+  TranslatePostSchema,
 } from '../../../../routes/posts/types';
 
 // ─── encodeCursor ─────────────────────────────────────────────────────────────
@@ -308,5 +309,39 @@ describe('CreateCommentSchema', () => {
   it('rejects attachmentIds with more than 1 entry', () => {
     const result = CreateCommentSchema.safeParse({ attachmentIds: ['media-001', 'media-002'] });
     expect(result.success).toBe(false);
+  });
+});
+
+// ─── TranslatePostSchema ──────────────────────────────────────────────────────
+//
+// Le bouton « Retraduire » de la feuille des langues du lecteur rejoue une
+// langue DÉJÀ traduite. Sans un drapeau explicite, il appelait la même route
+// que « Traduire » et sortait aussitôt sur les gardes de cache : le bouton ne
+// faisait rien, sans le moindre signal à l'utilisateur.
+
+describe('TranslatePostSchema', () => {
+  it('accepte une simple langue cible', () => {
+    const result = TranslatePostSchema.safeParse({ targetLanguage: 'fr' });
+    expect(result.success).toBe(true);
+  });
+
+  it('accepte le forçage explicite', () => {
+    const result = TranslatePostSchema.safeParse({ targetLanguage: 'fr', force: true });
+    expect(result.success).toBe(true);
+    expect(result.success && result.data.force).toBe(true);
+  });
+
+  it('ne force rien par défaut', () => {
+    const result = TranslatePostSchema.safeParse({ targetLanguage: 'fr' });
+    expect(result.success && result.data.force).toBeUndefined();
+  });
+
+  it('refuse un forçage non booléen', () => {
+    const result = TranslatePostSchema.safeParse({ targetLanguage: 'fr', force: 'oui' });
+    expect(result.success).toBe(false);
+  });
+
+  it('refuse une langue cible absente', () => {
+    expect(TranslatePostSchema.safeParse({ force: true }).success).toBe(false);
   });
 });

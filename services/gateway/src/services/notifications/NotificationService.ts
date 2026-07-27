@@ -2202,7 +2202,14 @@ export class NotificationService {
       friend_new_post: 'friend.post',
       friend_new_mood: 'friend.mood',
     };
-    const contentKey = contentKeyByType[notificationType];
+    // Un réel emprunte le type friend_new_post mais garde son wording propre :
+    // « a publié un nouveau réel », pas « … un nouveau post ». Le discriminant
+    // REEL est conservé dans la metadata pour l'affichage client, donc le titre,
+    // le corps et le sous-titre doivent tous rester conscients de l'entité —
+    // sinon un réel s'annonçait comme un post (titre + corps) tout en affichant
+    // « Nouveau réel » en sous-titre du builder : une contradiction.
+    const contentKey: NotificationStringKey =
+      params.contentType === 'REEL' ? 'friend.reel' : contentKeyByType[notificationType];
 
     const baseFriendIds = friendRequests
       .map(fr => (fr.senderId === params.authorId ? fr.receiverId : fr.senderId))
@@ -2245,7 +2252,7 @@ export class NotificationService {
           priority: 'normal',
           content: excerpt || notificationString(fLang, contentKey),
           subtitle: notificationString(fLang, 'friend.subtitleNew', {
-            postType: params.contentType === 'REEL' ? 'POST' : params.contentType,
+            postType: params.contentType,
           }),
           actor: actorInfo,
           lang: fLang,

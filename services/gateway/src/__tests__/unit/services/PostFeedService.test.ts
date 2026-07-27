@@ -329,6 +329,70 @@ describe('PostFeedService.getStories', () => {
     expect(JSON.stringify(where)).not.toContain('updatedAt');
   });
 
+  // --- Tombstones du delta-sync -------------------------------------------
+  //
+  // Un delta additif ne peut pas exprimer une disparition : il ne renvoie que
+  // ce qui existe encore. Les suppressions ne voyageaient donc que par l'event
+  // socket `story:deleted`, qui ne couvre pas l'app fermée ou hors-ligne (aucun
+  // replay) — la story restait dans le cache du client jusqu'à l'expiration de
+  // ce cache. Le delta porte maintenant les ids disparus.
+  //
+  // Ça couvre AUSSI l'expiration : `ExpiredStoriesCleanupService` soft-delete
+  // les stories périmées toutes les heures, ce qui pose `deletedAt` et remonte
+  // `updatedAt` — elles entrent alors dans la même fenêtre delta.
+
+  it('returns the ids of stories deleted since the delta cursor', async () => {
+    mockPostFindMany
+      .mockResolvedValueOnce([])                            // page de stories vivantes
+      .mockResolvedValueOnce([{ id: 'gone-1' }, { id: 'gone-2' }]); // tombstones
+    const since = new Date('2026-07-03T10:00:00Z');
+
+    const service = new PostFeedService(mockPrisma);
+    const result = await service.getStories('user-1', { updatedSince: since });
+
+    expect(result.deletedIds).toEqual(['gone-1', 'gone-2']);
+  });
+
+  it('scopes the tombstone query to deleted stories updated after the cursor', async () => {
+    mockPostFindMany.mockResolvedValue([]);
+    const since = new Date('2026-07-03T10:00:00Z');
+
+    const service = new PostFeedService(mockPrisma);
+    await service.getStories('user-1', { updatedSince: since });
+
+    const tombstoneArgs = mockPostFindMany.mock.calls[1][0];
+    expect(tombstoneArgs.where.type).toBe('STORY');
+    expect(tombstoneArgs.where.deletedAt).toEqual({ not: null });
+    expect(tombstoneArgs.where.updatedAt).toEqual({ gt: since });
+    expect(tombstoneArgs.select).toEqual({ id: true });
+  });
+
+  it('applies the same visibility filter to tombstones as to the tray itself', async () => {
+    // Sans ça, le delta divulguerait l'existence de stories que l'utilisateur
+    // n'a jamais eu le droit de voir.
+    mockPostFindMany.mockResolvedValue([]);
+    const since = new Date('2026-07-03T10:00:00Z');
+
+    const service = new PostFeedService(mockPrisma);
+    await service.getStories('user-1', { updatedSince: since });
+
+    const trayVisibility = mockPostFindMany.mock.calls[0][0].where.AND[0];
+    const tombstoneArgs = mockPostFindMany.mock.calls[1][0];
+    expect(tombstoneArgs.where.AND).toEqual(expect.arrayContaining([trayVisibility]));
+  });
+
+  it('issues no tombstone query on a full tray fetch', async () => {
+    // Le full fetch écrase le tray côté client : les disparitions y sont déjà
+    // couvertes par construction, une requête de plus serait du gaspillage.
+    mockPostFindMany.mockResolvedValue([]);
+
+    const service = new PostFeedService(mockPrisma);
+    const result = await service.getStories('user-1');
+
+    expect(mockPostFindMany).toHaveBeenCalledTimes(1);
+    expect(result.deletedIds).toEqual([]);
+  });
+
   it('skips the postReaction batch query when the stories list is empty', async () => {
     mockPostFindMany.mockResolvedValue([]);
 

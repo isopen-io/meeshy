@@ -211,8 +211,12 @@ describe('buildNotificationDisplay — titre + sous-titre', () => {
     // Nouveau contenu d'un ami (post / réel / humeur).
     expect(buildNotificationDisplay('fr', { type: 'friend_new_post', actorName: 'G' }))
       .toEqual({ title: 'G a publié un nouveau post', subtitle: 'Nouvelle publication' });
-    expect(buildNotificationDisplay('fr', { type: 'friend_new_post', actorName: 'G', postType: 'REEL' }).subtitle)
-      .toBe('Nouveau réel');
+    // Un réel (variante de post) reste conscient de l'entité sur le titre ET le
+    // sous-titre — pas de « a publié un nouveau post » contredit par « Nouveau réel ».
+    expect(buildNotificationDisplay('fr', { type: 'friend_new_post', actorName: 'G', postType: 'REEL' }))
+      .toEqual({ title: 'G a publié un nouveau réel', subtitle: 'Nouveau réel' });
+    expect(buildNotificationDisplay('en', { type: 'friend_new_post', actorName: 'G', postType: 'REEL' }))
+      .toEqual({ title: 'G shared a new reel', subtitle: 'New reel' });
     expect(buildNotificationDisplay('fr', { type: 'friend_new_mood', actorName: 'G' }).title)
       .toBe('G a publié une nouvelle humeur');
 
