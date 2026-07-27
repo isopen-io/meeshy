@@ -26,6 +26,7 @@ import { enhancedLogger } from '../../utils/logger-enhanced';
 import { sendSuccess, sendBadRequest, sendForbidden, sendNotFound, sendInternalError } from '../../utils/response';
 import { z } from 'zod';
 import { CommonSchemas } from '@meeshy/shared/utils/validation';
+import { normalizeLanguageCode } from '@meeshy/shared/utils/language-normalize';
 
 // Editing allows empty content (unlike sending): the message may carry
 // attachments whose caption is being cleared. The attachment-aware emptiness
@@ -107,7 +108,13 @@ export function registerMessagesAdvancedRoutes(
       }
 
       const { id, messageId } = request.params;
-      const { content, originalLanguage = 'fr' } = bodyResult.data;
+      const { content, originalLanguage: claimedLanguage = 'fr' } = bodyResult.data;
+      // Canonicalise the client-claimed locale at the write boundary. This REST
+      // edit path re-persists `originalLanguage` from the request body (unlike
+      // the socket edit path, which reuses the already-canonical stored value),
+      // so a raw platform locale (`fr-FR`, `en_US`) would otherwise fragment the
+      // stored value + the retranslation source. Irreducible codes kept verbatim.
+      const originalLanguage = normalizeLanguageCode(claimedLanguage) ?? claimedLanguage;
       const authRequest = request as UnifiedAuthRequest;
       const userId = authRequest.authContext.userId;
 
