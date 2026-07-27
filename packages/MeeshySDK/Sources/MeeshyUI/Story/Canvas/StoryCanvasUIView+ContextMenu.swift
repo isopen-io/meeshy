@@ -223,24 +223,24 @@ extension StoryCanvasUIView: UIContextMenuInteractionDelegate {
         }
     }
 
+    // Ces deux actions échangeaient deux positions dans le TABLEAU
+    // `mediaObjects`. Or le rendu trie exclusivement par `zIndex`
+    // (`StoryRenderer` : `allItems.sorted(by: { $0.zIndex < $1.zIndex })`) :
+    // l'échange ne se voyait donc jamais. Elles ignoraient de surcroît textes
+    // et stickers, c'est-à-dire le contenu le plus courant d'une slide.
+    //
+    // `bringForward` / `sendBackward` font le vrai travail — elles raisonnent
+    // sur les `zIndex` de TOUS les types d'éléments et savent casser une
+    // égalité fortuite. Elles existaient déjà, testées, sans aucun appelant.
+
     func contextBringForward(id: String) {
-        if var medias = slide.effects.mediaObjects,
-           let idx = medias.firstIndex(where: { $0.id == id }),
-           idx < medias.count - 1 {
-            medias.swapAt(idx, idx + 1)
-            slide.effects.mediaObjects = medias
-            onItemModified?(slide)
-        }
+        bringForward(id: id)
+        onItemModified?(slide)
     }
 
     func contextSendBackward(id: String) {
-        if var medias = slide.effects.mediaObjects,
-           let idx = medias.firstIndex(where: { $0.id == id }),
-           idx > 0 {
-            medias.swapAt(idx, idx - 1)
-            slide.effects.mediaObjects = medias
-            onItemModified?(slide)
-        }
+        sendBackward(id: id)
+        onItemModified?(slide)
     }
 
     func contextDelete(id: String) {
