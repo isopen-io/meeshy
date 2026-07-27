@@ -21,6 +21,9 @@ data class ApiConversation(
     val defaultWriteRole: String? = null,
     val isAnnouncementChannel: Boolean = false,
     val slowModeSeconds: Int? = null,
+    /** The conversation's encryption posture (`"e2ee"` / `"server"` / `"hybrid"`),
+     * or `null` when it is not encrypted. Drives the top-of-history E2EE notice. */
+    val encryptionMode: String? = null,
     val autoTranslateEnabled: Boolean? = null,
     val isActive: Boolean? = null,
     val preferences: ApiConversationPreferences? = null,

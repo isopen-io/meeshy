@@ -1,5 +1,47 @@
 # Progress — state & what to do next
 
+> On 2026-07-27 the **chat E2EE disclaimer** landed (slice `chat-encryption-disclaimer`, feature-parity
+> §C Chat — the "E2EE disclaimer pending" item on the date-headers line). It pins the "messages are
+> end-to-end encrypted" notice at the top of an encrypted conversation once the reader reaches the start
+> of history, the faithful port of iOS `ConversationView.encryptionDisclaimer`
+> (`conv.encryptionMode != nil && !hasOlderMessages && !isLoadingInitial`). **Added (production, all
+> `apps/android`):** (1) `:feature:chat/EncryptionDisclaimer.shouldShow(encryptionMode, hasOlderMessages,
+> isLoadingInitial) → Boolean` — the pure SSOT: true only when the mode is present AND history is fully
+> loaded AND the cold-start skeleton is down; a **blank** mode (serialization artifact) counts as no mode
+> (SOTA over iOS's `!= nil`). (2) `ChatListItem.EncryptionNotice` data-object row + `buildChatListItems`
+> gains an optional `showEncryptionNotice` arg (default `false` → prior behaviour, all old tests unchanged)
+> that **prepends** a single notice above everything, including the first day header. Injecting it as a
+> `ChatListItem` (not an out-of-band LazyColumn `item {}`) keeps every scroll index — `InitialScrollTarget`,
+> reply-jump, `isNearBottom(lastIndex)` — consistent. (3) `ChatUiState.encryptionMode` + a pure
+> `showEncryptionDisclaimer` derivation delegating to the SSOT (mapping iOS `hasOlderMessages`→`hasMoreOlder`,
+> `isLoadingInitial`→`showSkeleton`); the conversation-load block threads `conversation.encryptionMode`.
+> (4) `ApiConversation` gains `encryptionMode: String?` (`"e2ee"`/`"server"`/`"hybrid"`, mirrors iOS SDK +
+> shared `message-types.ts`) — round-trips for free via the JSON `payload` cache blob, **no Room change**.
+> (5) `ChatScreen` renders an accent-coherent `EncryptionNoticeRow` (lock glyph in a tinted disc + centered
+> copy, EN/FR/ES/PT `chat_encryption_notice`, text lifted verbatim from iOS `conversation.view.e2e_notice`).
+> **SOTA over iOS:** the show/hide decision is a pure, fully-covered value function (iOS inlines it in the
+> View); a blank mode never surfaces the notice. **+13 behavioural tests:** `EncryptionDisclaimerTest`
+> (8: shows-when-encrypted-loaded-top / null→false / blank→false / older-remains→false / initial-load→false /
+> 3 ui-state-derivation mapping guards), `ChatListItemsTest` (+5: no-notice-by-default / notice-at-top-above-
+> day-header / empty-conversation-only-row / coexists-with-unread-separator, only-one-of-each). **Mutation
+> (RED proof):** dropping the two guards in `shouldShow` (leaving only the mode check) fails **exactly** the
+> 4 guard-dependent tests (`8 tests completed, 4 failed`, `BUILD FAILED in 6s`) while the shows/null/blank
+> tests stay green; no collateral, restored after. **Gate:** `./apps/android/meeshy.sh check`
+> (= `assembleDebug testDebugUnitTest`) — full assemble + all-module JVM unit tests green
+> (`BUILD SUCCESSFUL in 27s`, 943 tasks, APK produced). Note: a first `check` reddened only on the
+> load-flaky `MediaDownloadPreferencesStoreTest` (DataStore `first()` 15s timeout under full parallelism —
+> unrelated to this diff); it passes in ~6s isolated and green on the clean re-run. Reviewer **PASS** (diff
+> `apps/android` only — 1 new core + 1 new test + 1 model field + list-item/VM/screen wiring + 4 locale
+> strings + tracking docs; SDK purity — `EncryptionDisclaimer` is a stateless `:feature:chat` value function,
+> the "when to show" stays a pure `UiState` derivation; SSOT — one decision reused by the interleaver and
+> the screen, the model field round-trips the existing cache blob, re-implements nothing; instant-app — the
+> notice rides the cache-first message stream, no spinner; UDF — immutable `UiState`, pure derivation; no
+> tautological tests — literals + the mutation proof + the ui-state mapping guards). **Next slice:** the §C
+> **inverted-list** message layout (bottom-anchored `reverseLayout`) OR the §C **"joined" system banner**,
+> OR the app-side **`CategoryPickerField` / `TagInputField`** composables driving the shipped picker/
+> autocomplete cores, OR the paged **`OnboardingFlowView`** Compose scaffold (Auth), OR the tracked
+> **Kover 90% coverage-gate infra**.
+
 > On 2026-07-27 the **open-scroll to the unread boundary** landed (slice `chat-open-scroll-to-unread`,
 > feature-parity §C Chat — the natural completion of the just-shipped unread separator: the separator was
 > drawn but the list still opened pinned to the oldest loaded message, so the reader never saw the "new

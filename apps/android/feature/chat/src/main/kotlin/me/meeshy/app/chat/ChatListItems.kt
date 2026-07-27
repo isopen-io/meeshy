@@ -22,6 +22,12 @@ sealed class ChatListItem {
         override val key: String get() = "unread-separator"
     }
 
+    /** The end-to-end-encryption notice, pinned at the very top once the reader
+     * has reached the start of an encrypted conversation's history. */
+    data object EncryptionNotice : ChatListItem() {
+        override val key: String get() = "encryption-notice"
+    }
+
     data class Message(val bubble: BubbleContent) : ChatListItem() {
         override val key: String get() = bubble.messageId
     }
@@ -35,13 +41,21 @@ sealed class ChatListItem {
  * When [firstUnreadId] names a loaded message, a single [ChatListItem.UnreadSeparator]
  * is inserted directly above it (below that message's day header, if any). An id
  * absent from [bubbles] inserts nothing.
+ *
+ * When [showEncryptionNotice] is true, a single [ChatListItem.EncryptionNotice]
+ * is prepended above everything (including the first day header) — the reader is at
+ * the start of an encrypted conversation's history.
  */
 fun buildChatListItems(
     bubbles: List<BubbleContent>,
     zone: ZoneId,
     firstUnreadId: String? = null,
+    showEncryptionNotice: Boolean = false,
 ): List<ChatListItem> {
     val items = mutableListOf<ChatListItem>()
+    if (showEncryptionNotice) {
+        items += ChatListItem.EncryptionNotice
+    }
     var currentDay: LocalDate? = null
     bubbles.forEach { bubble ->
         val millis = isoToEpochMillis(bubble.createdAtIso)
