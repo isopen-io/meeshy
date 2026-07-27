@@ -14,8 +14,23 @@ import MeeshyUI
 struct AnimatedStepBackground: View {
     let step: RegistrationStep
 
+    // The whole backdrop is `.repeatForever` ambience — orbs breathing, waves
+    // scrolling, particles drifting — and it is the FIRST screen of the app.
+    // Sustained motion of that kind is what Reduce Motion exists to stop
+    // (vestibular disorders), so nothing here may animate when it is on.
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     @State private var animate = false
     @State private var wavePhase: CGFloat = 0
+
+    /// Every decorative animation in this view passes through here, so the
+    /// setting cannot be honoured in one decoration and missed in the next.
+    /// Returns `nil` — the animation is *removed*, not shortened: a repeating
+    /// animation with a smaller duration still never stops, it only beats
+    /// faster.
+    private func ambient(_ animation: Animation) -> Animation? {
+        reduceMotion ? nil : animation
+    }
 
     var body: some View {
         GeometryReader { geo in
@@ -40,6 +55,9 @@ struct AnimatedStepBackground: View {
         .onAppear { startAnimations() }
         .onDisappear { stopAnimations() }
         .adaptiveOnChange(of: step) { _, _ in restartAnimations() }
+        // Deliberately NOT gated: this is the 0.6 s crossfade between two
+        // onboarding steps — a discrete, self-terminating transition, not the
+        // sustained ambience Reduce Motion targets.
         .animation(.easeInOut(duration: 0.6), value: step)
     }
 
@@ -48,6 +66,7 @@ struct AnimatedStepBackground: View {
     private func startAnimations() {
         animate = false
         wavePhase = 0
+        guard !reduceMotion else { return settleWithoutMotion() }
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
             withAnimation(.easeInOut(duration: 2.5).repeatForever(autoreverses: true)) {
                 animate = true
@@ -61,6 +80,7 @@ struct AnimatedStepBackground: View {
     private func restartAnimations() {
         animate = false
         wavePhase = 0
+        guard !reduceMotion else { return settleWithoutMotion() }
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
             withAnimation(.easeInOut(duration: 2.5).repeatForever(autoreverses: true)) {
                 animate = true
@@ -68,6 +88,21 @@ struct AnimatedStepBackground: View {
             withAnimation(.linear(duration: 5).repeatForever(autoreverses: false)) {
                 wavePhase = .pi * 2
             }
+        }
+    }
+
+    /// Reduce Motion still gets the *composition* the animation converges on,
+    /// just none of the travel: `animate = true` is the settled state every
+    /// decoration is written against (`animate ? 1.1 : 0.9`, `animate ? -20 : 20`).
+    /// Leaving it `false` would freeze the backdrop mid-gesture — smaller,
+    /// dimmer, offset — which is a different design, not a calmer one.
+    /// The transaction is what guarantees the jump is instant.
+    private func settleWithoutMotion() {
+        var t = Transaction()
+        t.disablesAnimations = true
+        withTransaction(t) {
+            animate = true
+            wavePhase = 0
         }
     }
 
@@ -114,7 +149,7 @@ struct AnimatedStepBackground: View {
                     .frame(width: 100 + CGFloat(i) * 80, height: 100 + CGFloat(i) * 80)
                     .scaleEffect(animate ? 1.1 : 0.9)
                     .animation(
-                        .easeInOut(duration: 2.5).repeatForever(autoreverses: true).delay(Double(i) * 0.2),
+                        ambient(.easeInOut(duration: 2.5).repeatForever(autoreverses: true).delay(Double(i) * 0.2)),
                         value: animate
                     )
             }
@@ -122,7 +157,7 @@ struct AnimatedStepBackground: View {
                 .font(.system(size: 60, weight: .ultraLight))
                 .foregroundColor(step.accentColor.opacity(0.08))
                 .offset(y: animate ? -20 : 20)
-                .animation(.easeInOut(duration: 2.5).repeatForever(autoreverses: true), value: animate)
+                .animation(ambient(.easeInOut(duration: 2.5).repeatForever(autoreverses: true)), value: animate)
         }
         .position(x: size.width * 0.7, y: size.height * 0.3)
     }
@@ -139,7 +174,7 @@ struct AnimatedStepBackground: View {
                     .scaleEffect(animate ? 1.2 : 0.8)
                     .opacity(animate ? 0.2 : 0.5)
                     .animation(
-                        .easeOut(duration: 1.8).repeatForever(autoreverses: false).delay(Double(i) * 0.3),
+                        ambient(.easeOut(duration: 1.8).repeatForever(autoreverses: false).delay(Double(i) * 0.3)),
                         value: animate
                     )
             }
@@ -147,7 +182,7 @@ struct AnimatedStepBackground: View {
                 .font(.system(size: 50))
                 .foregroundColor(step.accentColor.opacity(0.1))
                 .rotationEffect(.degrees(animate ? 5 : -5))
-                .animation(.easeInOut(duration: 2).repeatForever(autoreverses: true), value: animate)
+                .animation(ambient(.easeInOut(duration: 2).repeatForever(autoreverses: true)), value: animate)
         }
         .position(x: size.width * 0.75, y: size.height * 0.35)
     }
@@ -166,7 +201,7 @@ struct AnimatedStepBackground: View {
                     )
                     .rotationEffect(.degrees(Double(i) * 15))
                     .animation(
-                        .easeInOut(duration: 3.5).repeatForever(autoreverses: true).delay(Double(i) * 0.2),
+                        ambient(.easeInOut(duration: 3.5).repeatForever(autoreverses: true).delay(Double(i) * 0.2)),
                         value: animate
                     )
             }
@@ -185,7 +220,7 @@ struct AnimatedStepBackground: View {
                     .offset(x: CGFloat(i) * 30 - 30)
                     .scaleEffect(animate ? 1.05 : 0.95)
                     .animation(
-                        .easeInOut(duration: 2.5).repeatForever(autoreverses: true).delay(Double(i) * 0.3),
+                        ambient(.easeInOut(duration: 2.5).repeatForever(autoreverses: true).delay(Double(i) * 0.3)),
                         value: animate
                     )
             }
@@ -194,7 +229,7 @@ struct AnimatedStepBackground: View {
                 .foregroundColor(step.accentColor.opacity(0.1))
                 .offset(y: 80)
                 .rotationEffect(.degrees(animate ? 3 : -3))
-                .animation(.easeInOut(duration: 2).repeatForever(autoreverses: true), value: animate)
+                .animation(ambient(.easeInOut(duration: 2).repeatForever(autoreverses: true)), value: animate)
         }
         .position(x: size.width * 0.7, y: size.height * 0.35)
     }
@@ -207,13 +242,13 @@ struct AnimatedStepBackground: View {
                 .font(.system(size: 120))
                 .foregroundColor(step.accentColor.opacity(0.06))
                 .scaleEffect(animate ? 1.1 : 0.9)
-                .animation(.easeInOut(duration: 2.5).repeatForever(autoreverses: true), value: animate)
+                .animation(ambient(.easeInOut(duration: 2.5).repeatForever(autoreverses: true)), value: animate)
 
             Image(systemName: "lock.fill")
                 .font(.system(size: 40))
                 .foregroundColor(step.accentColor.opacity(0.12))
                 .offset(y: animate ? -5 : 5)
-                .animation(.easeInOut(duration: 2).repeatForever(autoreverses: true), value: animate)
+                .animation(ambient(.easeInOut(duration: 2).repeatForever(autoreverses: true)), value: animate)
 
             ForEach(0..<6, id: \.self) { i in
                 Image(systemName: "star.fill")
@@ -224,7 +259,7 @@ struct AnimatedStepBackground: View {
                         y: sin(CGFloat(i) * .pi / 3) * (animate ? 80 : 60)
                     )
                     .animation(
-                        .easeInOut(duration: 2.5).repeatForever(autoreverses: true).delay(Double(i) * 0.1),
+                        ambient(.easeInOut(duration: 2.5).repeatForever(autoreverses: true).delay(Double(i) * 0.1)),
                         value: animate
                     )
             }
@@ -240,7 +275,7 @@ struct AnimatedStepBackground: View {
                 .font(.system(size: 120))
                 .foregroundColor(step.accentColor.opacity(0.07))
                 .rotationEffect(.degrees(animate ? 10 : -10))
-                .animation(.easeInOut(duration: 3).repeatForever(autoreverses: true), value: animate)
+                .animation(ambient(.easeInOut(duration: 3).repeatForever(autoreverses: true)), value: animate)
 
             ForEach(0..<7, id: \.self) { i in
                 let flags = ["🇫🇷", "🇬🇧", "🇪🇸", "🇯🇵", "🇵🇹", "🇨🇳", "🇮🇳"]
@@ -252,7 +287,7 @@ struct AnimatedStepBackground: View {
                         y: sin(CGFloat(i) * .pi * 2 / 7 + (animate ? 0.5 : 0)) * 85
                     )
                     .animation(
-                        .easeInOut(duration: 4).repeatForever(autoreverses: true),
+                        ambient(.easeInOut(duration: 4).repeatForever(autoreverses: true)),
                         value: animate
                     )
             }
@@ -268,7 +303,7 @@ struct AnimatedStepBackground: View {
                 .stroke(step.accentColor.opacity(0.1), lineWidth: 2)
                 .frame(width: 140, height: 180)
                 .scaleEffect(animate ? 1.05 : 0.95)
-                .animation(.easeInOut(duration: 2.5).repeatForever(autoreverses: true), value: animate)
+                .animation(ambient(.easeInOut(duration: 2.5).repeatForever(autoreverses: true)), value: animate)
 
             Image(systemName: "person.crop.circle.fill")
                 .font(.system(size: 70))
@@ -279,7 +314,7 @@ struct AnimatedStepBackground: View {
                 .foregroundColor(step.accentColor.opacity(0.12))
                 .offset(x: 50, y: 70)
                 .scaleEffect(animate ? 1.2 : 0.8)
-                .animation(.easeInOut(duration: 2).repeatForever(autoreverses: true), value: animate)
+                .animation(ambient(.easeInOut(duration: 2).repeatForever(autoreverses: true)), value: animate)
 
             ForEach(0..<4, id: \.self) { i in
                 let xOffsets: [CGFloat] = [-60, 60, -40, 50]
@@ -289,7 +324,7 @@ struct AnimatedStepBackground: View {
                     .foregroundColor(step.accentColor.opacity(animate ? 0.2 : 0.05))
                     .offset(x: xOffsets[i], y: yOffsets[i])
                     .animation(
-                        .easeInOut(duration: 1.5).repeatForever(autoreverses: true).delay(Double(i) * 0.25),
+                        ambient(.easeInOut(duration: 1.5).repeatForever(autoreverses: true).delay(Double(i) * 0.25)),
                         value: animate
                     )
             }
@@ -305,7 +340,7 @@ struct AnimatedStepBackground: View {
                 .font(.system(size: 100))
                 .foregroundColor(step.accentColor.opacity(0.1))
                 .scaleEffect(animate ? 1.2 : 0.8)
-                .animation(.easeInOut(duration: 2).repeatForever(autoreverses: true), value: animate)
+                .animation(ambient(.easeInOut(duration: 2).repeatForever(autoreverses: true)), value: animate)
 
             ForEach(0..<12, id: \.self) { i in
                 Circle()
@@ -316,7 +351,7 @@ struct AnimatedStepBackground: View {
                         y: animate ? CGFloat(i / 2) * 80 - 50 : -100
                     )
                     .animation(
-                        .easeIn(duration: 3 + Double(i % 3)).repeatForever(autoreverses: false).delay(Double(i) * 0.15),
+                        ambient(.easeIn(duration: 3 + Double(i % 3)).repeatForever(autoreverses: false).delay(Double(i) * 0.15)),
                         value: animate
                     )
             }
@@ -331,7 +366,7 @@ struct AnimatedStepBackground: View {
                     )
                     .scaleEffect(animate ? 1.2 : 0.8)
                     .animation(
-                        .easeInOut(duration: 1.5).repeatForever(autoreverses: true).delay(Double(i) * 0.15),
+                        ambient(.easeInOut(duration: 1.5).repeatForever(autoreverses: true).delay(Double(i) * 0.15)),
                         value: animate
                     )
             }
@@ -360,7 +395,7 @@ struct AnimatedStepBackground: View {
                             : CGFloat(i / 5) * size.height / 3 + 40
                     )
                     .animation(
-                        .easeInOut(duration: 4 + Double(i % 3)).repeatForever(autoreverses: true).delay(Double(i) * 0.15),
+                        ambient(.easeInOut(duration: 4 + Double(i % 3)).repeatForever(autoreverses: true).delay(Double(i) * 0.15)),
                         value: animate
                     )
             }
