@@ -123,6 +123,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
@@ -285,6 +286,9 @@ fun ChatScreen(
     }
     val isNearBottom by remember(listItems) {
         derivedStateOf { listState.isNearBottom(listItems.lastIndex) }
+    }
+    val pinnedDayMillis by remember(listItems) {
+        derivedStateOf { PinnedDayHeader.governingDayMillis(listItems, listState.firstVisibleItemIndex) }
     }
     var scrollAffordance by remember { mutableStateOf(ScrollAffordanceState()) }
     var showConversationSettings by remember { mutableStateOf(false) }
@@ -596,6 +600,14 @@ fun ChatScreen(
                                 }
                             }
                         }
+                    }
+                    pinnedDayMillis?.let { millis ->
+                        PinnedDayHeaderPill(
+                            dayMillis = millis,
+                            modifier = Modifier
+                                .align(Alignment.TopCenter)
+                                .padding(top = MeeshySpacing.sm),
+                        )
                     }
                     ScrollToBottomControl(
                         affordance = scrollAffordance,
@@ -1059,6 +1071,36 @@ private fun DaySeparator(dayMillis: Long, modifier: Modifier = Modifier) {
                 .padding(horizontal = MeeshySpacing.md, vertical = MeeshySpacing.xs),
         )
     }
+}
+
+/**
+ * The floating "sticky" day pill (WhatsApp-style) that hovers at the top of the
+ * message list, naming the day of the topmost visible content. Which day it shows
+ * is decided by [PinnedDayHeader.governingDayMillis]; this only draws it. It reuses
+ * the same label + pill treatment as [DaySeparator] with a soft shadow so it reads
+ * as floating above the scrolling content.
+ */
+@Composable
+private fun PinnedDayHeaderPill(dayMillis: Long, modifier: Modifier = Modifier) {
+    val label = MessageDayLabel.label(
+        dayMillis = dayMillis,
+        nowMillis = System.currentTimeMillis(),
+        zone = ZoneId.systemDefault(),
+        locale = Locale.getDefault(),
+        today = stringResource(R.string.chat_date_today),
+        yesterday = stringResource(R.string.chat_date_yesterday),
+        dayBeforeYesterday = stringResource(R.string.chat_date_day_before_yesterday),
+    )
+    Text(
+        text = label,
+        style = MaterialTheme.typography.labelMedium,
+        color = MeeshyTheme.tokens.textSecondary,
+        modifier = modifier
+            .shadow(elevation = 2.dp, shape = RoundedCornerShape(MeeshyRadius.pill))
+            .clip(RoundedCornerShape(MeeshyRadius.pill))
+            .background(MeeshyTheme.tokens.backgroundTertiary.copy(alpha = 0.95f))
+            .padding(horizontal = MeeshySpacing.md, vertical = MeeshySpacing.xs),
+    )
 }
 
 /**
