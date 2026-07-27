@@ -2535,6 +2535,23 @@ final class ConversationListViewModelTests: XCTestCase {
 
     // MARK: - handleForegroundReturn (P2 — inverted guard)
 
+    /// Waits for the SUT's story prefetch to actually finish, instead of hoping a
+    /// fixed sleep is long enough for it to land.
+    ///
+    /// `handleForegroundReturn()` spawns an unstored `Task` that awaits the stories
+    /// cache before reaching `prefetchRecentStories()`, so the handle only appears
+    /// after that hop — hence the poll. The deadline keeps a genuine regression a
+    /// failed assertion rather than a hung suite, and the poll interval avoids
+    /// spinning the main actor.
+    private func awaitStoryPrefetch(_ sut: ConversationListViewModel,
+                                    timeout: TimeInterval = 5) async {
+        let deadline = Date().addingTimeInterval(timeout)
+        while sut.storyPrefetchTask == nil && Date() < deadline {
+            try? await Task.sleep(nanoseconds: 5_000_000)
+        }
+        await sut.storyPrefetchTask?.value
+    }
+
     /// `isCacheValid` means "we last fetched within the last 30s" — the
     /// USEFUL case for a foreground-return stories refresh is precisely
     /// when it's FALSE (a long background stint just ended). The guard
@@ -2549,7 +2566,10 @@ final class ConversationListViewModelTests: XCTestCase {
         // from a long background stint.
 
         sut.handleForegroundReturn()
-        try await Task.sleep(nanoseconds: 150_000_000)
+        // Was a fixed 150ms sleep: if the cache-load hop plus the detached prefetch
+        // exceeded it under CI load, the count was still 0 and this test failed for
+        // a reason that had nothing to do with the guard it exercises.
+        await awaitStoryPrefetch(sut)
 
         XCTAssertGreaterThan(storyService.listCallCount, 0,
                              "after a long background stint the stale stories cache must be refreshed")
@@ -2559,7 +2579,14 @@ final class ConversationListViewModelTests: XCTestCase {
         let storyService = MockStoryService()
         let (sut, _, _, _, _, _, _) = makeSUT(storyService: storyService)
         await sut.loadConversations() // stamps `lastFetchedAt = Date()` — cache still valid
-        try await Task.sleep(nanoseconds: 150_000_000) // let loadConversations' own prefetch settle
+        // THE flake this iteration fixes. `loadConversations()` calls
+        // `prefetchRecentStories()` synchronously before returning, so its task
+        // handle is already set and awaiting it is deterministic. The fixed 150ms
+        // sleep that stood here was a guess: when the detached prefetch hadn't
+        // landed in time it ran AFTER the `reset()` below, incremented the counter,
+        // and this test failed reporting 1 instead of 0 — with
+        // `handleForegroundReturn` playing no part in it.
+        await sut.storyPrefetchTask?.value
 
         // Empty the stories cache again so, if the OUTER `isCacheValid`
         // guard didn't short-circuit, the INNER freshness check inside
@@ -2569,7 +2596,14 @@ final class ConversationListViewModelTests: XCTestCase {
         storyService.reset()
 
         sut.handleForegroundReturn()
+        // Asserting a NEGATIVE keeps a bounded window: when the guard short-circuits
+        // correctly nothing is spawned, so there is no handle to await. Unlike the
+        // sleep removed above, this one can only ever produce a false GREEN — never
+        // the false RED that made this test flaky. The follow-up await then covers
+        // the regression case, where a task WAS spawned and must be let finish
+        // before the count is read.
         try await Task.sleep(nanoseconds: 150_000_000)
+        await sut.storyPrefetchTask?.value
 
         XCTAssertEqual(storyService.listCallCount, 0,
                        "within the 30s cache-valid window, a foreground return must not force a stories refresh even with an empty stories cache")
