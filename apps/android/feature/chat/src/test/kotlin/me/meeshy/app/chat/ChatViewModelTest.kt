@@ -37,8 +37,10 @@ import me.meeshy.sdk.conversation.ConversationRepository
 import me.meeshy.sdk.conversation.LocalMessage
 import me.meeshy.sdk.conversation.LocalSendState
 import me.meeshy.sdk.conversation.MessageRepository
+import me.meeshy.sdk.media.InMemoryNetworkConditionMonitor
 import me.meeshy.sdk.media.MediaUploadItem
 import me.meeshy.sdk.media.MediaUploadQueue
+import me.meeshy.sdk.model.NetworkCondition
 import me.meeshy.sdk.model.ApiConversation
 import me.meeshy.sdk.model.ApiMessage
 import me.meeshy.sdk.model.ApiMessageAttachment
@@ -190,6 +192,7 @@ class ChatViewModelTest {
         mentionSearch: MentionSearch = FakeMentionSearch(),
         anonymousSession: AnonymousSessionContext? = null,
         showReadReceipts: Boolean = true,
+        offline: Boolean = false,
     ): Harness {
         val repo = mockk<MessageRepository>(relaxed = true)
         every { repo.messagesStream(any(), any(), any()) } returns stream
@@ -211,6 +214,9 @@ class ChatViewModelTest {
         val anonymousStore = InMemoryAnonymousSessionStore(anonymousSession)
         val privacyStore = InMemoryPrivacyPreferencesStore(
             PrivacyPreferences(showReadReceipts = showReadReceipts),
+        )
+        val networkMonitor = InMemoryNetworkConditionMonitor(
+            initial = if (offline) NetworkCondition.OFFLINE else NetworkCondition.WIFI,
         )
         val handle = SavedStateHandle(mapOf(ChatViewModel.CONVERSATION_ID_ARG to "c1"))
         val socket = socketManager()
@@ -242,6 +248,7 @@ class ChatViewModelTest {
                 mentionSearch,
                 anonymousStore,
                 privacyStore,
+                networkMonitor,
                 handle,
             ),
             repo,
@@ -692,6 +699,29 @@ class ChatViewModelTest {
             .isEqualTo(DeliveryStatus.Pending)
         assertThat(bubbles.single { it.messageId == "cmid_b" }.deliveryStatus)
             .isEqualTo(DeliveryStatus.Failed)
+    }
+
+    @Test
+    fun a_pending_bubble_shows_the_offline_hourglass_while_the_device_is_offline() = runTest(dispatcher) {
+        val h = harness(
+            stream = flowOf(
+                CacheResult.Fresh(
+                    listOf(
+                        LocalMessage(
+                            ApiMessage(id = "cmid_a", conversationId = "c1", senderId = "me", content = "pending"),
+                            LocalSendState.SENDING,
+                        ),
+                    ),
+                    ageMillis = 0,
+                ),
+            ),
+            currentUser = MeeshyUser(id = "me", username = "atabeth"),
+            offline = true,
+        )
+        advanceUntilIdle()
+
+        assertThat(h.vm.state.value.messages.single { it.messageId == "cmid_a" }.deliveryStatus)
+            .isEqualTo(DeliveryStatus.QueuedOffline)
     }
 
     @Test
