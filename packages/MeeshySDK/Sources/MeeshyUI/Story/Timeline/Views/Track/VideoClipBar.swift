@@ -125,7 +125,7 @@ public struct VideoClipBar: View, Equatable {
             titleLabel
             if isLocked { lockBadge }
             if isSelected { selectionHalo }
-            if !isLocked {
+            if ClipTrimHandles.shouldShow(isSelected: isSelected, isLocked: isLocked) {
                 ClipTrimHandles(laneHeight: laneHeight,
                                 onTrimStartDelta: onTrimStartDelta,
                                 onTrimEndDelta: onTrimEndDelta)

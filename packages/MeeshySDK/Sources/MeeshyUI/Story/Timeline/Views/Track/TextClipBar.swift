@@ -89,7 +89,7 @@ public struct TextClipBar: View, Equatable {
                 RoundedRectangle(cornerRadius: 6).stroke(MeeshyColors.indigo400, lineWidth: 2)
                     .allowsHitTesting(false)
             }
-            if isSelected, !isLocked {
+            if ClipTrimHandles.shouldShow(isSelected: isSelected, isLocked: isLocked) {
                 ClipTrimHandles(laneHeight: laneHeight,
                                 onTrimStartDelta: onTrimStartDelta,
                                 onTrimEndDelta: onTrimEndDelta)

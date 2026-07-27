@@ -44,10 +44,32 @@ extension TimelineViewModel {
     /// exactement le même état. La commande choisie suit ce qui a changé — un
     /// déplacement pur reste un `MoveClipCommand`, qui coalesce avec les
     /// déplacements voisins dans la fenêtre du `CommandStack`.
+    /// Durée du média SOURCE, quand elle est connue — le composer la fige à
+    /// l'import dans `intrinsicDuration`. Au-delà, il n'y a plus d'image à
+    /// montrer que la dernière, figée : le clip mentirait sur son contenu à la
+    /// lecture comme à l'export.
+    ///
+    /// `nil` pour une story ancienne ou restaurée dont le champ n'a jamais été
+    /// peuplé, et pour l'audio, qui ne porte pas ce champ : aucune limite
+    /// connue, donc aucune limite appliquée.
+    private func nativeDurationLimit(id: String) -> Float? {
+        project.mediaObjects.first { $0.id == id }?.intrinsicDuration.map(Float.init)
+    }
+
     private func applyWindow(id: String, edit: ClipWindowResolver.Edit) {
         guard let kind = clipKind(forId: id),
               let current = currentWindow(id: id) else { return }
-        let resolved = ClipWindowResolver.resolve(edit, from: current)
+        var resolved = ClipWindowResolver.resolve(edit, from: current)
+
+        // Plafond de durée native appliqué ICI, au point de passage unique :
+        // `trimClipEnd` exposait bien un paramètre `mediaDurationLimit`, mais
+        // aucun appelant de production ne le passait — une vidéo de 3 s se
+        // laissait étirer à 30 s. Le poser au chokepoint couvre d'un coup la
+        // poignée de piste, les steppers, les champs saisis et la barre
+        // tactile. Ne s'applique jamais à un déplacement, qui préserve la durée.
+        if let limit = nativeDurationLimit(id: id), resolved.duration > limit {
+            resolved = ClipWindowResolver.Window(start: resolved.start, duration: limit)
+        }
 
         let startMoved = abs(resolved.start - current.start) > 0.0005
         let durationChanged = abs(resolved.duration - current.duration) > 0.0005
