@@ -581,7 +581,7 @@ class PostDetailViewModel: ObservableObject {
     func reportPost(_ postId: String) async {
         do {
             try await ReportService.shared.reportPost(postId: postId, reportType: "inappropriate", reason: nil)
-            FeedbackToastManager.shared.showSuccess(String(localized: "Signalement envoye", defaultValue: "Signalement envoye"))
+            FeedbackToastManager.shared.showSuccess(String(localized: "profile.posts.report.success", defaultValue: "Signalement envoyé", bundle: .main))
         } catch {
             FeedbackToastManager.shared.showError(String(localized: "Erreur lors du signalement", defaultValue: "Erreur lors du signalement"))
         }
