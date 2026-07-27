@@ -236,6 +236,19 @@ fun ChatScreen(
         ReplyThreads.of(state.messages.map { ReplyLink(it.messageId, it.replyToId, it.isDeleted) })
     }
 
+    // One-shot open scroll: the first time the list is populated and the unread
+    // boundary has resolved, land on the "new messages" separator if there is
+    // one, otherwise on the newest message (bottom). Waiting for the resolution
+    // flag keeps the jump from firing against an empty/unsettled window; the
+    // latch guarantees the boundary is stable, so this fires exactly once.
+    var didOpenScroll by remember { mutableStateOf(false) }
+    LaunchedEffect(state.unreadBoundaryResolved, listItems) {
+        if (didOpenScroll || !state.unreadBoundaryResolved) return@LaunchedEffect
+        val target = InitialScrollTarget.of(listItems) ?: return@LaunchedEffect
+        listState.scrollToItem(target)
+        didOpenScroll = true
+    }
+
     // Auto-scroll on a new message only when the user is already at the
     // bottom — or when the message is their own. Reading history must never
     // be yanked down; the scroll-to-bottom control covers that case.

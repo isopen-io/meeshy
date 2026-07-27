@@ -1143,6 +1143,15 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       pilule centrée, EN/FR/ES/PT). +17 tests, mutation-prouvé. **SOTA over iOS** :
       la borne est un value type pur entièrement couvert, la capture pré-mark-read
       supprime la course iOS où l'ouverture peut zéroer le compteur avant la dérivation.
+      **Open-scroll done** (slice `chat-open-scroll-to-unread`, 2026-07-27) : à l'ouverture la
+      liste se pose sur la barre « Messages non lus » si elle existe, sinon sur le dernier
+      message (bas) — SSOT pur `:feature:chat/InitialScrollTarget.of(items)` (index de la
+      ligne `UnreadSeparator` sinon `lastIndex` sinon `null` fenêtre vide) ; `ChatViewModel`
+      expose `unreadBoundaryResolved` (flip une fois la borne résolue, avec ou sans id) et
+      `ChatScreen` déclenche un scroll one-shot verrouillé qui attend cette résolution (jamais
+      contre une fenêtre vide/non-résolue). +9 tests, 2 mutations prouvées. **SOTA over iOS** :
+      cible pure entièrement couverte + gate sur le flag de résolution qui supprime le double
+      saut bas→séparateur de l'ouverture iOS.
       Reste : inverted list / joined banner / E2EE disclaimer pending
 - [~] Pagination of older messages — before-cursor done (`MessageRepository.loadOlder`,
       windowed prune keeps paginated history, scroll-top trigger + spinner); around-anchor pending

@@ -124,6 +124,10 @@ data class ChatUiState(
      * from the initial unread count captured before the conversation is marked
      * read (null = nothing unread on open). */
     val firstUnreadMessageId: String? = null,
+    /** Flips true the moment the unread-boundary latch settles — whether it found
+     * a boundary or not. The one-shot open scroll waits for this so it never fires
+     * against an unresolved (possibly empty) window. */
+    val unreadBoundaryResolved: Boolean = false,
     val search: ChatSearchState = ChatSearchState(),
     val mention: MentionAutocompleteState = MentionAutocompleteState(),
     val mentionDisplayNames: Map<String, String> = emptyMap(),
@@ -333,8 +337,9 @@ class ChatViewModel @Inject constructor(
         viewModelScope.launch {
             val count = initialUnreadCount.filterNotNull().first()
             val bubbles = _state.map { it.messages }.first { it.isNotEmpty() }
-            UnreadMarker.firstUnreadId(bubbles, count)?.let { id ->
-                _state.update { it.copy(firstUnreadMessageId = id) }
+            val firstUnread = UnreadMarker.firstUnreadId(bubbles, count)
+            _state.update {
+                it.copy(firstUnreadMessageId = firstUnread, unreadBoundaryResolved = true)
             }
         }
 
