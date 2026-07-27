@@ -368,7 +368,7 @@ struct TwoFactorSetupView: View {
             if let setup = viewModel.setupData {
                 step = .showSecret(setup)
             } else {
-                step = .error(viewModel.error ?? "Impossible de demarrer la configuration 2FA")
+                step = .error(viewModel.error ?? String(localized: "twofactor.error.setup", defaultValue: "Impossible de démarrer la configuration 2FA", bundle: .main))
             }
         }
     }
@@ -383,7 +383,7 @@ struct TwoFactorSetupView: View {
                 withAnimation { step = .showBackupCodes(viewModel.recoveryCodes) }
             } else {
                 HapticFeedback.error()
-                codeError = viewModel.error ?? "Code invalide. Verifiez et reessayez."
+                codeError = viewModel.error ?? String(localized: "twofactor.error.invalidCode", defaultValue: "Code invalide. Vérifiez et réessayez.", bundle: .main)
                 viewModel.clearError()
             }
             verifying = false
@@ -523,7 +523,7 @@ struct TwoFactorDisableView: View {
                 onComplete()
             } else {
                 HapticFeedback.error()
-                disableError = viewModel.error ?? "Code invalide. Verifiez et reessayez."
+                disableError = viewModel.error ?? String(localized: "twofactor.error.invalidCode", defaultValue: "Code invalide. Vérifiez et réessayez.", bundle: .main)
                 viewModel.clearError()
             }
             disabling = false

@@ -23,7 +23,7 @@ final class TwoFactorViewModel: ObservableObject {
             let status = try await service.getStatus()
             isEnabled = status.enabled
         } catch {
-            self.error = "Impossible de charger le statut 2FA"
+            self.error = String(localized: "twofactor.error.status", defaultValue: "Impossible de charger le statut 2FA", bundle: .main)
         }
         isLoading = false
     }
@@ -35,7 +35,7 @@ final class TwoFactorViewModel: ObservableObject {
             let setup = try await service.setup()
             setupData = setup
         } catch {
-            self.error = "Impossible de demarrer la configuration 2FA"
+            self.error = String(localized: "twofactor.error.setup", defaultValue: "Impossible de démarrer la configuration 2FA", bundle: .main)
         }
         isLoading = false
     }
@@ -48,7 +48,7 @@ final class TwoFactorViewModel: ObservableObject {
             recoveryCodes = result.backupCodes
             isEnabled = true
         } catch {
-            self.error = "Code invalide. Verifiez et reessayez."
+            self.error = String(localized: "twofactor.error.invalidCode", defaultValue: "Code invalide. Vérifiez et réessayez.", bundle: .main)
         }
         isLoading = false
     }
@@ -60,7 +60,7 @@ final class TwoFactorViewModel: ObservableObject {
             try await service.disable(code: code, password: password)
             isEnabled = false
         } catch {
-            self.error = "Impossible de desactiver le 2FA"
+            self.error = String(localized: "twofactor.error.disable", defaultValue: "Impossible de désactiver le 2FA", bundle: .main)
         }
         isLoading = false
     }
@@ -72,7 +72,7 @@ final class TwoFactorViewModel: ObservableObject {
             let result = try await service.getBackupCodes(code: code)
             recoveryCodes = result.backupCodes
         } catch {
-            self.error = "Impossible de charger les codes de secours"
+            self.error = String(localized: "twofactor.error.backupCodes", defaultValue: "Impossible de charger les codes de secours", bundle: .main)
         }
         isLoading = false
     }
