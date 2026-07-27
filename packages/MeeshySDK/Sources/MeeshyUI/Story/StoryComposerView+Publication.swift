@@ -72,7 +72,7 @@ extension StoryComposerView {
             HapticFeedback.success()
             let mode = PostVisibility(rawValue: visibility) ?? .public
             let ids = mode.requiresUserSelection ? visibilityUserIds : []
-            onPublishAllInBackground(snapshot.slides, snapshot.bgImages, viewModel.loadedImages, viewModel.loadedVideoURLs, viewModel.loadedAudioURLs, storyLanguage, visibility, ids)
+            onPublishAllInBackground(snapshot.slides, snapshot.bgImages, viewModel.loadedImages, viewModel.loadedVideoURLs, viewModel.loadedAudioURLs, storyLanguage, visibility, ids, viewModel.repostOfId)
         }
     }
 

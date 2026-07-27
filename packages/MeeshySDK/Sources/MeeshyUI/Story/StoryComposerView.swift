@@ -181,14 +181,19 @@ public struct StoryComposerView: View {
         _ loadedAudioURLs: [String: URL],
         _ originalLanguage: String?,
         _ visibility: String,
-        _ visibilityUserIds: [String]
+        _ visibilityUserIds: [String],
+        /// Story dont celle-ci est une republication, `nil` sinon. Posé par
+        /// `StoryComposerViewModel(reposting:)`, il doit atteindre le réseau :
+        /// c'est lui qui crée la relation `repostOf` côté serveur, dont
+        /// dépendent le badge d'attribution et le lien vers l'auteur d'origine.
+        _ repostOfId: String?
     ) -> Void
     public var onPreview: ([StorySlide], [String: UIImage], [String: UIImage], [String: URL], [String: URL]) -> Void
     public var onDismiss: () -> Void
 
     public init(
         onPublishSlide: @escaping (StorySlide, UIImage?, [String: UIImage], [String: URL], String?) async throws -> Void = { _, _, _, _, _ in },
-        onPublishAllInBackground: @escaping ([StorySlide], [String: UIImage], [String: UIImage], [String: URL], [String: URL], String?, String, [String]) -> Void,
+        onPublishAllInBackground: @escaping ([StorySlide], [String: UIImage], [String: UIImage], [String: URL], [String: URL], String?, String, [String], String?) -> Void,
         onPreview: @escaping ([StorySlide], [String: UIImage], [String: UIImage], [String: URL], [String: URL]) -> Void,
         onDismiss: @escaping () -> Void
     ) {
@@ -208,7 +213,7 @@ public struct StoryComposerView: View {
     public init(
         viewModel: StoryComposerViewModel,
         onPublishSlide: @escaping (StorySlide, UIImage?, [String: UIImage], [String: URL], String?) async throws -> Void = { _, _, _, _, _ in },
-        onPublishAllInBackground: @escaping ([StorySlide], [String: UIImage], [String: UIImage], [String: URL], [String: URL], String?, String, [String]) -> Void,
+        onPublishAllInBackground: @escaping ([StorySlide], [String: UIImage], [String: UIImage], [String: URL], [String: URL], String?, String, [String], String?) -> Void,
         onPreview: @escaping ([StorySlide], [String: UIImage], [String: UIImage], [String: URL], [String: URL]) -> Void = { _, _, _, _, _ in },
         onDismiss: @escaping () -> Void
     ) {

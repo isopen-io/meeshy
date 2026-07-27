@@ -1486,6 +1486,36 @@ final class StoryViewModelTests: XCTestCase {
         await StoryPublishQueue.shared.clearAll()
     }
 
+    /// Une REPUBLICATION doit emporter sa relation d'origine jusque dans la
+    /// file, sinon elle est perdue au premier passage hors ligne.
+    ///
+    /// `repostOfId` était écrit `nil` en dur à deux endroits — la mise en file
+    /// et l'appel réseau — alors que le composer le posait bien sur son
+    /// ViewModel. La chaîne s'arrêtait donc à la frontière du ViewModel : le
+    /// serveur ne créait jamais la relation `repostOf`, et le badge
+    /// d'attribution ne s'affichait sur aucune story republiée.
+    func test_enqueueStoryForOfflinePublish_carriesTheRepostRelation() async {
+        await StoryPublishQueue.shared.clearAll()
+        let slide = Self.makeTextOnlySlide(content: "Reposted story")
+
+        await sut.enqueueStoryForOfflinePublish(
+            slides: [slide],
+            slideImages: [:],
+            loadedImages: [:],
+            loadedVideoURLs: [:],
+            loadedAudioURLs: [:],
+            visibility: "PUBLIC",
+            visibilityUserIds: [],
+            repostOfId: "source-story-1"
+        )
+
+        let items = await StoryPublishQueue.shared.pendingItems
+        XCTAssertEqual(items.first?.repostOfId, "source-story-1",
+                       "La relation de republication n'atteint pas la file.")
+
+        await StoryPublishQueue.shared.clearAll()
+    }
+
     func test_enqueueStoryForOfflinePublish_doesNotMutate_activeUpload() async {
         await StoryPublishQueue.shared.clearAll()
         XCTAssertNil(sut.activeUpload, "Precondition: no active upload")

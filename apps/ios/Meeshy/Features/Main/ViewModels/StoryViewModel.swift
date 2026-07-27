@@ -130,7 +130,10 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
             loadedAudioURLs: media.loadedAudioURLs,
             originalLanguage: item.originalLanguage,
             visibility: item.visibility,
-            visibilityUserIds: item.visibilityUserIds ?? []
+            visibilityUserIds: item.visibilityUserIds ?? [],
+            // Une republication reprise depuis la file (kill de l'app, retour
+            // du réseau) doit garder sa relation d'origine.
+            repostOfId: item.repostOfId
         )
 
         let ids = try await runStoryUpload(
@@ -223,6 +226,10 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
         let originalLanguage: String?
         let visibility: String
         let visibilityUserIds: [String]
+        /// Story republiée, `nil` pour une composition ordinaire. C'est ce
+        /// champ qui crée la relation `repostOf` côté serveur — sans lui, le
+        /// badge d'attribution ne s'affiche jamais sur la story publiée.
+        let repostOfId: String?
         /// IDs of slide-Posts already created server-side. Tracked so that:
         /// (a) `retryUpload()` skips them (otherwise a partial-failure retry creates
         ///     duplicate slides — what was previously committed plus the same again),
@@ -807,7 +814,8 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
         loadedAudioURLs: [String: URL] = [:],
         originalLanguage: String? = nil,
         visibility: String = "FRIENDS",
-        visibilityUserIds: [String] = []
+        visibilityUserIds: [String] = [],
+        repostOfId: String? = nil
     ) {
         guard activeUpload == nil else { return }
 
@@ -852,7 +860,8 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
             loadedAudioURLs: loadedAudioURLs,
             originalLanguage: originalLanguage,
             visibility: visibility,
-            visibilityUserIds: visibilityUserIds
+            visibilityUserIds: visibilityUserIds,
+            repostOfId: repostOfId
         )
         activeUpload = upload
         showStoryComposer = false
@@ -873,7 +882,8 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
                 loadedAudioURLs: loadedAudioURLs,
                 originalLanguage: originalLanguage,
                 visibility: visibility,
-                visibilityUserIds: visibilityUserIds
+                visibilityUserIds: visibilityUserIds,
+                repostOfId: repostOfId
             ) {
                 await StoryPublishQueue.shared.markInFlight(intent.queueId)
                 self.activeUpload?.queueId = intent.queueId
@@ -905,7 +915,8 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
         loadedAudioURLs: [String: URL] = [:],
         originalLanguage: String? = nil,
         visibility: String = "FRIENDS",
-        visibilityUserIds: [String] = []
+        visibilityUserIds: [String] = [],
+        repostOfId: String? = nil
     ) async {
         guard let intent = await persistPublishIntentToQueue(
             slides: slides,
@@ -915,7 +926,8 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
             loadedAudioURLs: loadedAudioURLs,
             originalLanguage: originalLanguage,
             visibility: visibility,
-            visibilityUserIds: visibilityUserIds
+            visibilityUserIds: visibilityUserIds,
+            repostOfId: repostOfId
         ) else { return }
 
         insertOptimisticOfflineStories(
@@ -947,7 +959,8 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
         loadedAudioURLs: [String: URL],
         originalLanguage: String? = nil,
         visibility: String,
-        visibilityUserIds: [String]
+        visibilityUserIds: [String],
+        repostOfId: String? = nil
     ) async -> (queueId: String, tempStoryId: String)? {
         // 1. Re-key slide backgrounds.
         let bgImages = Dictionary(
@@ -1012,7 +1025,7 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
         let item = StoryPublishQueueItem(
             visibility: visibility,
             slidesPayload: payload,
-            repostOfId: nil,
+            repostOfId: repostOfId,
             mediaReferences: mediaReferences,
             tempStoryId: tempStoryId,
             visibilityUserIds: visibilityUserIds,
@@ -1372,7 +1385,11 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
                 visibilityUserIds: upload.visibilityUserIds,
                 originalLanguage: upload.originalLanguage,
                 mediaIds: allMediaIds.isEmpty ? nil : allMediaIds,
-                repostOfId: nil
+                // Seul le PREMIER slide porte la relation : une story
+                // multi-slides republiée ne doit pas créer autant de reposts
+                // qu'elle a de slides. (Le mode repost n'en clone qu'un, mais
+                // la garde survit à une évolution de ce choix.)
+                repostOfId: slideIdx == 0 ? upload.repostOfId : nil
             )
 
             newPostIds.append(post.id)
