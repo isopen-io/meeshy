@@ -103,11 +103,65 @@ qu'à l'arrivée d'une traduction d'overlay. Les stories qui portent déjà des
 personne ne redemande la langue. Backfill à arbitrer (script one-shot qui
 redemande chaque langue existante, ou laisser converger à l'usage).
 
-### 3. Entrée « Original » sélectionnable
+### 2 bis. Temps réel + « Retraduire » — FAIT et vérifié en production
+Directive user : « les traductions réalisées doivent remonter en TEMPS RÉEL et
+la feuille mise à jour », et « pouvoir refaire la traduction à partir des
+langues traduites ».
+
+Deux manques que la recomposition avait rendus visibles :
+- **L'index recomposé n'était écrit qu'en base.** La feuille lit
+  `story.translations` en mémoire, alimenté par `post:translation-updated` :
+  sans diffusion, l'aperçu restait sur l'ancien texte jusqu'à un rechargement.
+  Il part désormais par le même canal, vers la même audience filtrée par
+  visibilité que l'événement overlay (`25ef2fc45`).
+- **« Retraduire » ne faisait rien.** Il appelait la même route que
+  « Traduire », qui sortait sur ses gardes de cache — légende (« translation
+  already cached ») comme overlays (langue déjà couverte). `force` fait tomber
+  les gardes de CACHE ; les gardes de SENS restent (langue source identique,
+  index dérivé, post fait d'une seule URL).
+
+Côté iOS (`6b8ddb689`) : le bouton transmet le forçage, et donne enfin signe de
+vie. L'attente ne pouvait pas se déduire de « pas encore de traduction »
+puisque la langue en a déjà une — elle se dérive du TEXTE : on mémorise celui
+affiché à la demande, l'anneau tourne tant qu'il n'a pas bougé, et s'éteint
+seul à l'arrivée du socket. Un délai coupe le cas où la retraduction rend un
+texte identique.
+
+**Preuve production** (story de test PRIVATE créée puis supprimée, 2 overlays
+en `fr` et `en`, forçage `pt`) — écoute socket réelle :
+```
+OVERLAY   index=0 langues=['pt']
+CONTENT   langue=pt modele=story-text-objects  "Bom dia ao mundo. Good evening everyone"
+OVERLAY   index=1 langues=['pt']
+CONTENT   langue=pt modele=story-text-objects  "Bom dia ao mundo. Boa noite a todos ."
+```
+Le premier overlay traduit recompose l'index IMMÉDIATEMENT en laissant le
+second dans son anglais d'origine ; le second complète. Convergence
+incrémentale, chaque bout dans sa langue tant qu'il n'est pas traduit.
+
+Forçage vérifié séparément : sans `force`, 0 job ZMQ (tout est en cache) ; avec
+`force`, les 3 overlays repartent et l'index reste dérivé.
+
+**Réserve** : un run d'écoute antérieur est resté silencieux alors que la
+gateway journalisait sa diffusion. Le run contrôlé final reçoit bien les 2×2
+événements (compteurs à l'appui). Je n'ai pas pu attribuer ce silence —
+possible course au join de room à la connexion, à surveiller.
+
+### 3. Entrée « Original » sélectionnable — FAIT (`6b8ddb689`)
 Directive user : plusieurs bouts peuvent être dans des langues différentes ; il
 faut pouvoir afficher l'original **quoi qu'il arrive**, sans aligner tous les
-bouts sur une seule langue. Aujourd'hui « Original » n'est qu'un en-tête
-d'aperçu dans `StoryLanguageDetailView`, pas une option choisissable.
+bouts sur une seule langue.
+
+« Original » ne pouvait pas être un code langue : un overlay rédigé en français
+dans une story marquée `en` possède une traduction `en`, qui serait servie à la
+place de son texte réel. `StoryTextObject.resolvedText` rend déjà le texte
+source dès que la chaîne préférée est VIDE — « Original » est donc une chaîne
+vide, portée par une sentinelle (`StoryViewerView.originalLanguageOverride`)
+qui ne peut pas entrer en collision avec un code BCP-47 et se ramène au code
+vide côté affichage (sans quoi la feuille montrait « __MEESHY.ORIGINAL__ »).
+
+Reste : **non manipulé à l'écran**. La ligne compile et sa logique est testée
+(9 + 8 tests), mais personne n'a tapé dessus dans le simulateur.
 
 ### 4. Cache local des traductions (translator + iOS)
 Directive user : sauvegarder les traductions en cache côté translator comme en
