@@ -1,5 +1,6 @@
 import XCTest
 import SwiftUI
+import GRDB
 @testable import MeeshySDK
 @testable import Meeshy
 
@@ -87,6 +88,49 @@ final class StoryViewerReactionRollbackTests: XCTestCase {
         JSONStub.decode("""
         { "success": true, "data": {}, "error": null }
         """)
+    }
+
+    /// Réagir hors ligne ne doit pas perdre la réaction.
+    ///
+    /// Le commentaire de story a sa file depuis longtemps ; la réaction, elle,
+    /// se contentait de rembobiner l'affichage et la mutation disparaissait.
+    /// Elle emprunte désormais le kind `toggleLikePost` — le gateway sert la
+    /// réaction de story sur `POST /posts/:id/like` et la journalise sous ce
+    /// nom, un kind dédié dupliquerait une mutation qu'il traite comme une
+    /// seule.
+    ///
+    /// Le comptage est un DELTA : la file est persistante et survit d'une
+    /// exécution à l'autre, un absolu serait faux au deuxième run.
+    @MainActor
+    func test_sendReaction_whenTheNetworkFails_queuesItInsteadOfLosingIt() async throws {
+        let sut = makeSUT()
+        // Aucun stub : l'appel réseau échoue, comme hors ligne.
+        let api = MockAPIClientForApp()
+
+        let before = try await queuedReactionEmojis(forPostId: "story-0")
+        sut.sendReaction(emoji: "🔥", priorReactions: [], priorCount: 0,
+                         interactionService: StoryInteractionService(api: api))
+        try? await Task.sleep(nanoseconds: 400_000_000)
+        let after = try await queuedReactionEmojis(forPostId: "story-0")
+
+        XCTAssertEqual(after.count, before.count + 1,
+                       "La réaction a été perdue au lieu d'être mise en file.")
+        XCTAssertEqual(after.last, "🔥", "L'emoji doit voyager jusqu'à la file.")
+    }
+
+    /// Emojis des réactions en file pour un post donné, dans l'ordre d'insertion.
+    private func queuedReactionEmojis(forPostId postId: String) async throws -> [String] {
+        guard let pool = await OfflineQueue.shared.outboxPoolForTesting else { return [] }
+        let records = try await pool.read { db in
+            try OutboxRecord
+                .filter(Column("kind") == OutboxKind.toggleLikePost.rawValue)
+                .order(Column("createdAt").asc)
+                .fetchAll(db)
+        }
+        return records
+            .compactMap { try? JSONDecoder().decode(ToggleLikePostPayload.self, from: $0.payload) }
+            .filter { $0.postId == postId }
+            .compactMap(\.emoji)
     }
 
     @MainActor

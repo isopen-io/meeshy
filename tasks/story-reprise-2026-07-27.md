@@ -10,14 +10,62 @@ première passe — d'où l'importance des verdicts de réfutation).
 
 ---
 
+## 0. Session du 2026-07-27 — ce qui a bougé
+
+Branche `fix/story-e2e-batch2`. Trois lots livrés, chacun validé par des
+tests exécutés (SDK + app), aucun commit de `project.pbxproj`.
+
+| | |
+|---|---|
+| 🔴 fermés | **1** (le chantier A, WS1 + Task 6) |
+| 🟠 fermés | **3** (Task 2/3, D9, file hors-ligne des réactions) |
+| Lignes du rapport requalifiées | **5** |
+
+**Le rapport E2E se contredit sur D9** : ligne 265 le donne 🟠 « CONFIRMÉ
+partiel », ligne 418 ⚪️ « faux positif de l'audit, statut réel : ok ». C'est
+la ligne 418 qui a raison — `startTimer()` appelle `updateStoryDuration()`
+(l. 709) avant d'armer le timer (l. 720), et `crossFadeStory` fait
+`update()` puis `restartTimer()`. Le doc de reprise avait retenu le premier
+verdict. **Systématiquement chercher la ligne de réfutation avant de
+travailler une ligne du rapport.**
+
+Quatre autres requalifications, chacune vérifiée dans le code :
+
+| ligne du rapport | ce qu'elle dit | ce qui est vrai |
+|---|---|---|
+| Task 2/3 — `StoryPlaybackClock` | « à câbler » | Code MORT. Le Lot 2 (2026-06-11) a résolu le conflit autrement : le timer gated est l'unique pilote et c'est LUI qu'on asservit au média (`setPlaybackStalled`). Le câbler réintroduirait la seconde source de vérité supprimée. Retiré. |
+| File hors-ligne des réactions | « demande un nouveau `OutboxKind` » | Non : le gateway sert la réaction de story sur `POST /posts/:id/like`, journalisé sous `toggleLikePost` — un kind qui EXISTE déjà, avec son dispatcher. Il manquait l'emoji dans le payload. |
+| B1 — ratio de canvas | « le code n'existe pas » | `StoryEffects.canvasAspectRatio` est déjà persisté et Codable, `StoryCanvasAspect` existe (2 cas). Ce qui manque : le ratio CONTINU et la surface de réglage. |
+| Chantier A | « activer l'ouverture SDK et retirer la version SwiftUI » | Exact, mais incomplet — voir ci-dessous. |
+
+**Le chantier A cachait deux défauts que le rapport ne mentionnait pas**, et
+que la correction « évidente » aurait introduits :
+
+1. `applyOpening` pose ses animations en `fillMode = .forwards` avec
+   `isRemovedOnCompletion = false`, et il n'existait **aucun**
+   `removeAnimation` dans tout le SDK. Elles clampent la propriété présentée
+   indéfiniment : activer l'ouverture aurait rendu la FERMETURE invisible
+   pour `zoom`+`zoom`, `slide`+`slide` et `fade`+`fade` — l'appariement le
+   plus naturel. `applyClosing` les détache en entrant dans sa fenêtre.
+2. L'ouverture est une animation CoreAnimation : elle court en temps réel,
+   pas au playhead. Jouée au premier layout, elle se consumait derrière le
+   placeholder de chargement — donc invisible sur toute story à média
+   distant, le cas courant en production. Elle attend désormais le signal de
+   contenu prêt, le même que celui qui autorise le playhead.
+
+Le second confirme la leçon de la section 5 : trois fois sur trois, la ligne
+du rapport était le symptôme, pas la cause. Quatre fois sur quatre à présent.
+
+---
+
 ## 1. Où on en est
 
 | | |
 |---|---|
 | Défauts confirmés fermés le 2026-07-26 | **17** |
 | Commits livrés | 15, tous sur `origin/main` |
-| 🔴 restants | **8** |
-| 🟠 restants | 14 |
+| 🔴 restants | ~~8~~ → **7** |
+| 🟠 restants | ~~14~~ → **11** |
 | 🟡 « non arbitrés » | 103 |
 
 **Aucun des 8 🔴 restants n'est un simple correctif.** Ce sont deux
@@ -98,7 +146,31 @@ Référence : **542 suites, 14 657 tests, 0 rouge**.
 
 ## 3. Les 8 défauts 🔴 restants
 
-### A. Fusionner les deux renderers de transition — LE chantier
+### A. ~~Fusionner les deux renderers de transition~~ — FAIT le 2026-07-27
+
+> Livré. Ce qui suit reste pour mémoire du raisonnement ; l'état actuel est
+> décrit en section 0.
+>
+> Ce qui a été fait : le canvas arme son ouverture à la naissance et la joue
+> quand il peut la MONTRER — une géométrie (sinon `.slide` ne déplace rien et
+> `.reveal` masque tout) et un contenu prêt (sinon elle brûle derrière le
+> placeholder). `replayOpening()` + le jeton `openingGeneration` couvrent
+> l'interlude inter-groupes, qui masquait la story pendant sa propre
+> ouverture. Côté lecteur, `StoryOpeningEntrance`, `RevealCircleShape` et les
+> quatre pilotes d'animation ont disparu ; il ne garde que le cross-fade.
+>
+> **Ce qui reste ouvert sur ce périmètre :**
+> - `StoryAVCompositor.applyStaticOpening` fait `case .zoom, .slide: break` —
+>   l'export ne rend NI l'un NI l'autre. La parité annoncée entre les trois
+>   surfaces est donc encore fausse côté export.
+> - `applyOpening(.reveal)` fige `mask.frame` à l'installation ; `layoutSubviews`
+>   ne le redimensionne pas. Une rotation en cours de slide laisserait le
+>   contenu clippé à un cercle périmé. Impact réel non mesuré.
+> - La validation GIF sur simulateur (4 effets × 3 surfaces) n'a pas été faite.
+>   Les tests couvrent le déclenchement, les bounds, l'unicité et la remise de
+>   main à la fermeture — pas le rendu perçu.
+
+### A-bis. Le chantier tel qu'il était décrit
 
 > `WS1` · `Task 5` (D5) · `Task 6` (D2/D3) — trois lignes du rapport, un seul
 > problème.

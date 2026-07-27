@@ -539,11 +539,15 @@ struct OutboxDispatcher: OutboxDispatching {
     private func dispatchToggleLikePost(_ record: OutboxRecord) async throws {
         let payload = try decodePayload(record, as: ToggleLikePostPayload.self)
         let method = payload.liked ? "POST" : "DELETE"
+        // Une réaction de story passe par cette même route, avec son emoji dans
+        // le corps ; un like simple n'en a pas et garde un corps vide.
+        struct ReactionBody: Encodable { let emoji: String }
+        let body = try payload.emoji.map { try JSONEncoder().encode(ReactionBody(emoji: $0)) }
         do {
             let _: APIResponse<[String: AnyCodable]> = try await APIClient.shared.requestWithHeaders(
                 endpoint: "/posts/\(payload.postId)/like",
                 method: method,
-                body: nil,
+                body: body,
                 queryItems: nil,
                 headers: ["X-Client-Mutation-Id": payload.clientMutationId]
             )

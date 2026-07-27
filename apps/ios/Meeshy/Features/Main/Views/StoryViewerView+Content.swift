@@ -1021,15 +1021,39 @@ extension StoryViewerView {
             do {
                 try await interactionService.react(storyId: story.id, emoji: emoji)
             } catch {
-                if let target = Self.reactionRollbackTarget(
-                    currentStoryId: currentStory?.id,
-                    originatingStoryId: story.id,
-                    priorReactions: priorReactions,
-                    priorCount: priorCount
-                ) {
-                    storyCurrentUserReactions = target.reactions
-                    storyReactionCount = target.count
-                    HapticFeedback.error()
+                // Le POST direct a échoué — le plus souvent parce qu'on est
+                // hors ligne. La réaction part alors dans la file, comme le
+                // commentaire : elle sera rejouée au retour du réseau et
+                // l'optimisme affiché reste vrai.
+                //
+                // Pas de `kind` dédié : le gateway sert la réaction de story sur
+                // `POST /posts/:id/like`, qu'il journalise sous `toggleLikePost`
+                // — le même chemin qu'un like de post, à l'emoji près.
+                //
+                // Le rollback n'a plus lieu que si la MISE EN FILE elle-même
+                // échoue : là, rien ne rattrapera la réaction.
+                do {
+                    try await OfflineQueue.shared.enqueue(
+                        .toggleLikePost,
+                        payload: ToggleLikePostPayload(
+                            clientMutationId: ClientMutationId.generate(),
+                            postId: story.id,
+                            liked: true,
+                            emoji: emoji
+                        ),
+                        conversationId: story.id
+                    )
+                } catch {
+                    if let target = Self.reactionRollbackTarget(
+                        currentStoryId: currentStory?.id,
+                        originatingStoryId: story.id,
+                        priorReactions: priorReactions,
+                        priorCount: priorCount
+                    ) {
+                        storyCurrentUserReactions = target.reactions
+                        storyReactionCount = target.count
+                        HapticFeedback.error()
+                    }
                 }
             }
         }
