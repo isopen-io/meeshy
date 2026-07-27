@@ -38,24 +38,47 @@ doit être déclarée dans `zmq_server_core.py`, pas seulement dans le handler.
 
 ## Reste à faire
 
-### 1. Déployer le translator — BLOQUANT pour tout le reste
-Le correctif `969d11b8f` est côté Python : sans rebuild de l'image, les
-`textObjects` continuent de n'avoir aucune traduction en production.
-Vérification après déploiement :
-```bash
-ssh root@meeshy.me 'docker logs meeshy-translator --since 10m 2>&1 | grep -i story_text_object'
-# attendu : plus aucun « Type de requête inconnu »
-```
-Puis demander une langue et contrôler que `storyEffects.textObjects[n].translations`
-se remplit (story de test : `6a6673870677d29b325a1a83`, 3 textObjects en `en`,
-`fr`, `fr`).
+### 1. Déployer le translator — FAIT, puis un SECOND bug est tombé
+L'image `isopen/meeshy-translator:latest` portant `969d11b8f` est en production
+depuis 16:21 UTC. Plus aucun « Type de requête inconnu ».
 
-### 2. Recomposer le `content` depuis les textObjects
+Mais la première demande réelle a révélé un bug caché **derrière** le premier :
+`_create_tracked_task` incrémentait `task_counters[task_type]` sur un dict
+littéral qui ne connaissait que cinq types. Chaque
+`story_text_object_translation` levait donc un `KeyError` avalé par le
+`except Exception` de la boucle de réception — **routage correct, requête
+perdue, symptôme visible identique**. Corrigé par `4cb82fce5` (le compteur
+s'auto-enregistre ; un compteur d'observabilité n'est plus un point de panne).
+
+Leçon : les trois tests de routage mockaient `_create_tracked_task`. Ils
+prouvaient l'aiguillage et rien d'autre. Le nouveau test exerce le vrai
+créateur de tâches.
+
+Reste : contrôler après déploiement de `4cb82fce5` que
+`storyEffects.textObjects[n].translations` se remplit (story de test :
+`6a6673870677d29b325a1a83`, 3 textObjects en `en`, `fr`, `fr`).
+
+### 2. Recomposer le `content` depuis les textObjects — FAIT côté gateway
 Directive user : « les textObject doivent avoir leur traduction et le texte
-content est construit dynamiquement à partir des textObject ». Aujourd'hui le
-gateway traduit les deux **séparément** — d'où leur divergence observée
-(6 langues sur le `content`, 0 sur les textObjects). Le `content` doit devenir
-un dérivé, pas une source traduite pour elle-même.
+content est construit dynamiquement à partir des textObject ».
+
+Livré :
+- `services/gateway/src/services/posts/storyContentComposition.ts` — module pur :
+  `storyTextObjectText`, `composeStoryContent`, `composeStoryContentForLanguage`,
+  `isContentDerivedFromTextObjects` (17 tests).
+- `StoryTextObjectTranslationService` recompose `translations.<langue>` du post
+  à partir des overlays, **dans la même écriture** que les traductions qui
+  viennent d'arriver.
+- `PostTranslationService.translateOnDemand` n'envoie plus le `content` au
+  traducteur quand il n'est que l'index des overlays.
+- `PostService` délègue au module : une seule règle de lecture/assemblage.
+
+Distinction structurelle, sans drapeau en base : le `content` dérivé EST, par
+construction, la concaténation des overlays. Une **vraie légende** d'auteur
+garde son pipeline propre.
+
+Un overlay sans traduction dans la langue demandée garde son texte original
+dans l'assemblage — une story est multilingue par nature (cf. §3).
 
 ### 3. Entrée « Original » sélectionnable
 Directive user : plusieurs bouts peuvent être dans des langues différentes ; il

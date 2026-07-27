@@ -346,4 +346,105 @@ describe('StoryTextObjectTranslationService', () => {
       );
     });
   });
+
+  // ─── content dérivé ────────────────────────────────────────────────────────
+  //
+  // Le `content` d'une story sans légende n'est qu'un index : la concaténation
+  // des textes du canvas. Le traduire pour lui-même en faisait une seconde
+  // source qui divergeait de la première — six langues sur le `content`, zéro
+  // sur les overlays (production, story 6a6673870677d29b325a1a83, 2026-07-27).
+  // Il doit désormais se recomposer à partir des traductions des overlays.
+
+  const derivedPost = (overrides: Record<string, unknown> = {}) => ({
+    authorId: 'author-1',
+    visibility: 'ONLY',
+    visibilityUserIds: [],
+    content: 'Bonjour le monde',
+    storyEffects: {
+      textObjects: [{ text: 'Bonjour' }, { text: 'le monde' }],
+    },
+    ...overrides,
+  });
+
+  const setPayloads = (prisma: { $runCommandRaw: jest.Mock }) =>
+    prisma.$runCommandRaw.mock.calls.map(
+      ([cmd]: [{ updates: Array<{ u: { $set: Record<string, unknown> } }> }]) => cmd.updates[0].u.$set,
+    );
+
+  describe('handleTranslationCompleted — recomposition du content dérivé', () => {
+    it('recompose translations.<langue> à partir des overlays', async () => {
+      const { service, prisma } = makeService({ post: derivedPost() });
+
+      await service.handleTranslationCompleted({
+        postId: 'post-1',
+        textObjectIndex: 0,
+        translations: { en: 'Hello' },
+      });
+
+      const derived = setPayloads(prisma).find((set) => 'translations.en' in set);
+      expect(derived).toBeDefined();
+      // Overlay 0 traduit, overlay 1 pas encore : l'original tient sa place.
+      expect((derived!['translations.en'] as { text: string }).text).toBe('Hello le monde');
+    });
+
+    it('assemble les overlays déjà traduits avec celui qui vient d\'arriver', async () => {
+      const { service, prisma } = makeService({
+        post: derivedPost({
+          storyEffects: {
+            textObjects: [
+              { text: 'Bonjour' },
+              { text: 'le monde', translations: { en: 'the world' } },
+            ],
+          },
+        }),
+      });
+
+      await service.handleTranslationCompleted({
+        postId: 'post-1',
+        textObjectIndex: 0,
+        translations: { en: 'Hello' },
+      });
+
+      const derived = setPayloads(prisma).find((set) => 'translations.en' in set);
+      expect((derived!['translations.en'] as { text: string }).text).toBe('Hello the world');
+    });
+
+    it('laisse une vraie légende d\'auteur à son propre pipeline', async () => {
+      const { service, prisma } = makeService({
+        post: derivedPost({ content: 'Ma légende à moi, écrite à la main' }),
+      });
+
+      await service.handleTranslationCompleted({
+        postId: 'post-1',
+        textObjectIndex: 0,
+        translations: { en: 'Hello' },
+      });
+
+      expect(setPayloads(prisma).some((set) => 'translations.en' in set)).toBe(false);
+    });
+
+    it('ne recompose rien quand la story n\'a pas de content', async () => {
+      const { service, prisma } = makeService({ post: derivedPost({ content: null }) });
+
+      await service.handleTranslationCompleted({
+        postId: 'post-1',
+        textObjectIndex: 0,
+        translations: { en: 'Hello' },
+      });
+
+      expect(setPayloads(prisma).some((set) => 'translations.en' in set)).toBe(false);
+    });
+
+    it('ignore les langues rejetées par la validation', async () => {
+      const { service, prisma } = makeService({ post: derivedPost() });
+
+      await service.handleTranslationCompleted({
+        postId: 'post-1',
+        textObjectIndex: 0,
+        translations: { 'not-a-lang': 'Hello' },
+      });
+
+      expect(prisma.$runCommandRaw).not.toHaveBeenCalled();
+    });
+  });
 });

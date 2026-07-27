@@ -274,6 +274,23 @@ describe('PostTranslationService', () => {
       expect(zmqClient.translateTextObject).toHaveBeenCalledTimes(2);
     });
 
+    it('n\'envoie PAS le content à traduire quand il n\'est que l\'index des overlays', async () => {
+      // `PostService.createPost` remplit `content` avec la concaténation des
+      // overlays quand la story n'a pas de légende. Le renvoyer au traducteur
+      // en faisait une seconde source, traduite indépendamment des overlays :
+      // les deux divergeaient dès qu'un pipeline bronchait (six langues sur le
+      // content, zéro sur les overlays — production, 2026-07-27). L'index se
+      // recompose maintenant depuis les traductions des overlays.
+      const { service, zmqClient } = makeService({
+        post: storyWithCanvasText({ content: 'Good morning See you soon' }),
+      });
+
+      await service.translateOnDemand('post-1', 'fr');
+
+      expect(zmqClient.translateToMultipleLanguages).not.toHaveBeenCalled();
+      expect(zmqClient.translateTextObject).toHaveBeenCalledTimes(2);
+    });
+
     it('skips a text object already translated into the target language', async () => {
       const { service, zmqClient } = makeService({
         post: storyWithCanvasText({

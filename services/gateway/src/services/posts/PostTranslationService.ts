@@ -12,6 +12,7 @@ import type { TranslationCompletedEvent } from '../zmq-translation/types';
 import type { SocialEventsHandler } from '../../socketio/handlers/SocialEventsHandler';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 import { isUrlOnly } from '../../utils/url-content';
+import { isContentDerivedFromTextObjects, storyTextObjectText } from './storyContentComposition';
 
 const log = enhancedLogger.child({ module: 'PostTranslationService' });
 
@@ -121,6 +122,19 @@ export class PostTranslationService {
 
     if (!post.content) return;
 
+    // Une story sans légende reçoit à la création un `content` qui n'est que la
+    // concaténation des overlays (`PostService.createPost`). Le renvoyer au
+    // traducteur en faisait une SECONDE source, traduite indépendamment des
+    // overlays : les deux divergeaient dès qu'un pipeline bronchait — six
+    // langues sur le `content`, zéro sur les overlays, constaté en production
+    // le 2026-07-27. L'index se recompose désormais à partir des traductions
+    // des overlays (`StoryTextObjectTranslationService`), il n'a plus rien à
+    // demander pour lui-même. Une VRAIE légende, elle, garde son pipeline.
+    if (isContentDerivedFromTextObjects(post.content, (post.storyEffects as { textObjects?: unknown } | null)?.textObjects)) {
+      log.info('PostTranslation: content is the text-objects index — derived, not translated', { postId, targetLanguage });
+      return;
+    }
+
     // Skip URL-only posts on the on-demand path too: links carry no translatable
     // text and must be preserved verbatim (NLLB would corrupt them). Mirrors the
     // translatePost guard so a shared link is never mangled, whatever the path.
@@ -190,9 +204,7 @@ export class PostTranslationService {
       };
       // `text` est la clé canonique du composer iOS ; `content` l'alias legacy
       // pré-renommage, encore présent en base et accepté par le décodeur SDK.
-      const text = (typeof obj.text === 'string' ? obj.text
-                  : typeof obj.content === 'string' ? obj.content
-                  : '').trim();
+      const text = (storyTextObjectText(obj) ?? '').trim();
       if (!text) return;
 
       const sourceLanguage = typeof obj.sourceLanguage === 'string'
