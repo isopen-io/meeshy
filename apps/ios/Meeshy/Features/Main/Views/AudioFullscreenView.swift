@@ -470,12 +470,16 @@ private struct AudioFullscreenPage: View {
                 onDismiss()
                 HapticFeedback.light()
             } label: {
-                // Glyphe chrome dans un cadre de tap fixe 36×36 : figé (doctrine 82i) ; le libellé porte le sens
+                // Glyphe chrome figé à 36×36 (doctrine 82i) ; le libellé porte le sens.
+                // Le second cadre est la CIBLE : la pastille reste 36, la zone tapable
+                // atteint le plancher HIG de 44 — seule façon de sortir du plein écran.
                 Image(systemName: "xmark")
                     .font(.system(size: 16, weight: .bold))
                     .foregroundColor(.white)
                     .frame(width: 36, height: 36)
                     .background(Circle().fill(Color.white.opacity(0.2)))
+                    .frame(width: 44, height: 44)
+                    .contentShape(Circle())
             }
             .accessibilityLabel(String(localized: "common.close", defaultValue: "Fermer", bundle: .main))
 
@@ -573,11 +577,14 @@ private struct AudioFullscreenPage: View {
                     Image(systemName: "arrow.down.to.line")
                 }
             }
-            // Glyphe chrome dans un cadre de tap fixe 36×36 : figé (doctrine 82i) ; le libellé porte le sens
+            // Glyphe chrome figé à 36×36 (doctrine 82i) ; le libellé porte le sens.
+            // Second cadre = cible tapable au plancher HIG, pastille inchangée.
             .font(.system(size: 16, weight: .semibold))
             .foregroundColor(.white.opacity(0.9))
             .frame(width: 36, height: 36)
             .background(Circle().fill(Color.white.opacity(0.2)))
+            .frame(width: 44, height: 44)
+            .contentShape(Circle())
         }
         .disabled(saveCoordinator.isProcessing)
         .accessibilityLabel(String(localized: "media.download", defaultValue: "Télécharger", bundle: .main))
@@ -1015,12 +1022,16 @@ private struct AudioFullscreenPage: View {
                 showTranslationSheet = true
                 HapticFeedback.light()
             } label: {
-                // Glyphe dans un cercle de dimension fixe 26×26 : figé (déborderait s'il scalait, doctrine 86i) ; le libellé porte le sens
+                // Cercle figé à 26×26 (déborderait s'il scalait, doctrine 86i) ; le
+                // libellé porte le sens. Second cadre = cible tapable au plancher HIG :
+                // la ScrollView de pastilles voisine absorbe les 18 pt, elle défile déjà.
                 Image(systemName: "translate")
                     .font(.system(size: 11, weight: .medium))
                     .foregroundColor(.white.opacity(0.5))
                     .frame(width: 26, height: 26)
                     .background(Circle().fill(Color.white.opacity(0.08)))
+                    .frame(width: 44, height: 44)
+                    .contentShape(Circle())
             }
             .accessibilityLabel(String(localized: "audio.fullscreen.language.choose", defaultValue: "Traduire l'audio", bundle: .main))
         }
