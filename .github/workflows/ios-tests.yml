@@ -15,20 +15,22 @@ name: iOS Tests
 # So we COMPILE with Xcode 26.1.1 (Swift 6.2, required by the package) but RUN the
 # tests on an iOS 18.x simulator: crash-free AND consistent with the baselines.
 # Product code also received `nonisolated deinit` hardening for the affected
-# classes. workflow_dispatch kept for on-demand runs from the Actions tab.
+# classes.
+#
+# TRIGGER SCOPE (2026-07-27, measured on runs #3728-#3741): the job itself takes
+# 29-45 min, but a PR-triggered run took 56 min to 1h34 wall-clock. The extra
+# 24-49 min is pure QUEUE time — the account's macOS concurrency ceiling was
+# saturated by 5-6 simultaneous PR runs (plus sdk-tests.yml, also macos-15), so
+# every new PR run just waited for a runner. Fanning this suite out over every
+# open PR therefore made it slower for everyone, including dev/main.
+# So: automatic runs on `dev` ONLY. Everything else — main, PR branches, an
+# ad-hoc check before merging — runs on demand from the Actions tab
+# ("Run workflow" → pick any branch). No branch protection requires this check,
+# so dropping the pull_request trigger cannot deadlock a merge.
 on:
   push:
     branches:
       - dev
-      - main
-    paths:
-      - 'apps/ios/**'
-      - 'packages/MeeshySDK/**'
-      - '.github/workflows/ios-tests.yml'
-  pull_request:
-    branches:
-      - dev
-      - main
     paths:
       - 'apps/ios/**'
       - 'packages/MeeshySDK/**'
