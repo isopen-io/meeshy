@@ -80,6 +80,29 @@ garde son pipeline propre.
 Un overlay sans traduction dans la langue demandée garde son texte original
 dans l'assemblage — une story est multilingue par nature (cf. §3).
 
+**Vérifié en production** (gateway `d9c579462` déployée, story de test, langue
+neuve `ko`) :
+```
+[GWY] StoryTextObject: sending ZMQ request  index=0,1,2
+[GWY] PostTranslation: content is the text-objects index — derived, not translated
+```
+puis `content.ko` == assemblage exact des 3 traductions d'overlays, et
+`translationModel: "story-text-objects"` (les 7 langues antérieures restent en
+`basic`, l'ancien pipeline).
+
+La démonstration du bug d'origine tient dans la comparaison `ru` : le `content`
+est la concaténation EXACTE des overlays (205 caractères de part et d'autre) et
+pourtant les deux traductions divergent — le blob complet rend « о Меши »
+(translittéré) et laisse une queue française **non traduite**, là où les trois
+overlays, plus courts, sont correctement traduits. L'index dérivé est donc
+meilleur par construction.
+
+**Reste ouvert — les langues antérieures.** La recomposition ne se déclenche
+qu'à l'arrivée d'une traduction d'overlay. Les stories qui portent déjà des
+`translations` issues de l'ancien pipeline gardent leur blob divergent tant que
+personne ne redemande la langue. Backfill à arbitrer (script one-shot qui
+redemande chaque langue existante, ou laisser converger à l'usage).
+
 ### 3. Entrée « Original » sélectionnable
 Directive user : plusieurs bouts peuvent être dans des langues différentes ; il
 faut pouvoir afficher l'original **quoi qu'il arrive**, sans aligner tous les
