@@ -73,6 +73,22 @@ conséquence utilisateur observable avant de conclure.
 état antérieur à un commit du 2026-07-26 déjà sur la branche. Vérifier
 `git log` du fichier visé avant d'instruire une ligne.
 
+### Deuxième vague — 12 lignes 🟡 instruites
+
+| ligne 🟡 | verdict | fait |
+|---|---|---|
+| Verrou du badge d'attribution repost | 🔴 **livré** | Contournable de trois façons : appui long → Supprimer, action VoiceOver, et un simple TAP qui ouvrait l'éditeur complet. `+ContextMenu.swift` / `+Manipulation.swift` dupliquent `deleteElement` sans ses gardes. |
+| Suppression d'un texte | 🔴 **livré** | Même racine que ci-dessus. |
+| Prisme sur les commentaires de story | 🔴 **livré** | Quatre chemins de chargement, trois utilisent le résolveur canonique. Le principal le réimplémentait SANS la garde « la langue préférée est déjà l'original ». Un commentaire anglais s'affichait en français à un lecteur `["en","fr"]`. |
+| Audio de la story dans l'export MP4 (viewer) | 🔴 **ouvert** | `StoryExporting.export` n'a pas de paramètre `audioResolver` — alors que `StoryExporter.export` l'accepte et que le chemin composer/timeline le fournit. L'auteur exporte sa story : le MP4 est MUET sur les pistes voix/musique. Fix : threader `audioResolver` de `StoryExportShareViewModel` → `StoryVideoExportService` → `StoryExporter`, en pré-résolvant les URLs (`resolvedPostMediaId` → resolver → `cachedAudioFileURL`, qui est `async` alors que le resolver est synchrone : pré-télécharger dans un dictionnaire). |
+| Couverture des langues audio du picker d'export | 🔴 **ouvert** | `StoryExportLanguageResolver.availableLanguages` ne lit que `story.translations` (texte) et jamais `StoryAudioTranscript.availableLanguages`. Une narration doublée en FR n'apparaît pas dans le picker. |
+| Like d'un commentaire de story | 🔴 **ouvert** | Seul site de réaction sociale sans `withTaskTimeout` ni repli REST : à l'expiration de l'ack socket (10 s), le like disparaît, là où le même geste sur un commentaire de post persiste via REST. |
+| Story expirée dans le lecteur | ✅ | Lignes périmées — `StoryPlaybackSkipResolver` couvre le cas, 12 tests. |
+| Transcription — reader + composer (2 lignes) | ✅ | Déjà corrigées par `55e90ad2c`. |
+| Mute par piste dans le reader | ✅ | Chaîne tracée de bout en bout, cohérente. |
+| Compteur de commentaires temps réel | ⚠️ | Câblage plausible, mais l'équipe documente elle-même que ce `@State` n'est pas testable en XCTest. Demande une vérification à deux comptes sur simulateur. |
+| Chargement des fichiers audio du mixer | ⚠️ | « Non testé » vérifié : la fixture `test-1s.m4a` est ABSENTE du dépôt, donc les deux tests censés couvrir le chemin **skippent silencieusement**. |
+
 ---
 
 ## 1. Où on en est
