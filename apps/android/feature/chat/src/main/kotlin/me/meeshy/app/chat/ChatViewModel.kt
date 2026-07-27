@@ -41,10 +41,12 @@ import me.meeshy.sdk.lang.LanguageResolver
 import me.meeshy.sdk.model.ApiConversation
 import me.meeshy.sdk.media.MediaUploadItem
 import me.meeshy.sdk.media.MediaUploadQueue
+import me.meeshy.sdk.media.NetworkConditionMonitor
 import me.meeshy.sdk.model.ApiMessage
 import me.meeshy.sdk.model.ApiMessageAttachment
 import me.meeshy.sdk.model.AttachmentMessageType
 import me.meeshy.sdk.model.MimeTypeResolver
+import me.meeshy.sdk.model.NetworkCondition
 import me.meeshy.sdk.model.call.ActiveCallSession
 import me.meeshy.sdk.model.ActiveLiveLocation
 import me.meeshy.sdk.model.ConversationDraft
@@ -283,6 +285,7 @@ class ChatViewModel @Inject constructor(
     private val mentionSearch: MentionSearch,
     private val anonymousSessionStore: AnonymousSessionStore,
     private val privacyPreferencesStore: PrivacyPreferencesStore,
+    private val networkConditionMonitor: NetworkConditionMonitor,
     savedStateHandle: SavedStateHandle,
 ) : ViewModel() {
 
@@ -455,7 +458,13 @@ class ChatViewModel @Inject constructor(
                         .map { it.showReadReceipts }
                         .distinctUntilChanged(),
                 ) { pair, showReadReceipts -> pair to showReadReceipts }
-                .collect { (pair, showReadReceipts) ->
+                .combine(
+                    networkConditionMonitor.condition
+                        .map { it == NetworkCondition.OFFLINE }
+                        .distinctUntilChanged(),
+                ) { data, isOffline -> data to isOffline }
+                .collect { (data, isOffline) ->
+                    val (pair, showReadReceipts) = data
                     val (triple, overrides) = pair
                     val (inputs, hidden, starredIds) = triple
                     val (result, user, own, originals, recipients) = inputs
@@ -464,7 +473,7 @@ class ChatViewModel @Inject constructor(
                     _state.update { current ->
                         val next = current.applyResult(
                             result, user, own, originals, config.socketUrl, recipients, hidden, starredIds,
-                            overrides, showReadReceipts,
+                            overrides, showReadReceipts, isOffline,
                         )
                         next.copy(search = next.search.reconciled(next.messages.toSearchable()))
                     }
@@ -1822,23 +1831,24 @@ private fun ChatUiState.applyResult(
     starredIds: Set<String>,
     activeLanguageOverride: Map<String, String>,
     showReadReceipts: Boolean,
+    isOffline: Boolean,
 ): ChatUiState {
     val updated = when (result) {
         is CacheResult.Fresh -> copy(
-            messages = result.value.toBubbles(currentUser, ownReactions, showingOriginal, mediaBaseUrl, recipientCount, hidden, starredIds, activeLanguageOverride, showReadReceipts),
+            messages = result.value.toBubbles(currentUser, ownReactions, showingOriginal, mediaBaseUrl, recipientCount, hidden, starredIds, activeLanguageOverride, showReadReceipts, isOffline),
             ownReactions = ownReactions,
             isSyncing = false,
             showSkeleton = false,
             errorMessage = null,
         )
         is CacheResult.Stale -> copy(
-            messages = result.value.toBubbles(currentUser, ownReactions, showingOriginal, mediaBaseUrl, recipientCount, hidden, starredIds, activeLanguageOverride, showReadReceipts),
+            messages = result.value.toBubbles(currentUser, ownReactions, showingOriginal, mediaBaseUrl, recipientCount, hidden, starredIds, activeLanguageOverride, showReadReceipts, isOffline),
             ownReactions = ownReactions,
             isSyncing = true,
             showSkeleton = false,
         )
         is CacheResult.Syncing -> copy(
-            messages = result.value?.toBubbles(currentUser, ownReactions, showingOriginal, mediaBaseUrl, recipientCount, hidden, starredIds, activeLanguageOverride, showReadReceipts)
+            messages = result.value?.toBubbles(currentUser, ownReactions, showingOriginal, mediaBaseUrl, recipientCount, hidden, starredIds, activeLanguageOverride, showReadReceipts, isOffline)
                 ?: messages,
             ownReactions = ownReactions,
             isSyncing = true,
@@ -1883,6 +1893,7 @@ private fun List<LocalMessage>.toBubbles(
     starredIds: Set<String>,
     activeLanguageOverride: Map<String, String>,
     showReadReceipts: Boolean,
+    isOffline: Boolean,
 ): List<BubbleContent> {
     val visible = MessageOrdering.order(filterNot { hidden.isHidden(it.message.id) }) { local ->
         MessageOrderInput(createdAtMillis = isoToEpochMillisOrNull(local.message.createdAt))
@@ -1912,6 +1923,7 @@ private fun List<LocalMessage>.toBubbles(
             activeLanguageCode = activeLanguageOverride[local.message.id],
             mediaBaseUrl = mediaBaseUrl,
             showReadReceipts = showReadReceipts,
+            isOffline = isOffline,
         ).copy(
             isStarred = local.message.id in starredIds,
             isFirstInGroup = position.isFirstInGroup,

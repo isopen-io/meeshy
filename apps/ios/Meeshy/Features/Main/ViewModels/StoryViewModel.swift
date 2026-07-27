@@ -1734,6 +1734,35 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
             }
             .store(in: &socketCancellables)
 
+        // Prisme realtime : traduction du CONTENU de la story (sa légende), que
+        // le gateway diffuse via `post:translation-updated` — un événement
+        // DISTINCT de `story:translation-updated` ci-dessus, qui ne porte que
+        // les textes du canvas.
+        //
+        // Seul le feed s'y abonnait. Le lecteur ignorait donc la traduction
+        // qu'il venait lui-même de demander : elle arrivait en base, mais la
+        // story en mémoire gardait ses anciennes langues et la feuille
+        // « Langues » laissait tourner son anneau indéfiniment sur une langue
+        // pourtant traduite (constaté au simulateur le 2026-07-27, allemand
+        // présent côté serveur et absent côté lecteur).
+        socialSocket.postTranslationUpdated
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] payload in
+                guard let self else { return }
+                for groupIdx in self.storyGroups.indices {
+                    var stories = self.storyGroups[groupIdx].stories
+                    guard let storyIdx = stories.firstIndex(where: { $0.id == payload.postId }) else { continue }
+                    stories[storyIdx] = stories[storyIdx].mergingContentTranslation(
+                        language: payload.language,
+                        content: payload.translation.text
+                    )
+                    self.storyGroups[groupIdx] = self.storyGroups[groupIdx].with(stories: stories)
+                    self.persistStoryCache()
+                    return
+                }
+            }
+            .store(in: &socketCancellables)
+
         socialSocket.storyDeleted
             .receive(on: DispatchQueue.main)
             .sink { [weak self] event in
