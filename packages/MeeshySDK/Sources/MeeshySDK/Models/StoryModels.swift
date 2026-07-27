@@ -1867,6 +1867,37 @@ public struct StoryItem: Identifiable, Codable, Sendable {
         return createdAt.addingTimeInterval(Self.defaultExpiryInterval) <= now
     }
 
+    /// Prisme realtime : traduction du CONTENU de la story (sa légende), que le
+    /// gateway diffuse via `post:translation-updated`.
+    ///
+    /// Distinct de `mergingTextObjectTranslations`, qui ne touche QUE les textes
+    /// posés sur le canvas. Sans ce chemin, une traduction demandée depuis la
+    /// feuille « Langues » arrivait bien en base mais n'atteignait jamais la
+    /// story du lecteur : l'anneau de chargement tournait sans fin sur une
+    /// langue pourtant traduite (constaté au simulateur le 2026-07-27).
+    ///
+    /// La langue est normalisée en minuscules — la feuille compare sur cette
+    /// forme. Une langue déjà présente est remplacée, sinon ajoutée.
+    public func mergingContentTranslation(language: String, content: String) -> StoryItem {
+        let code = language.lowercased()
+        guard !code.isEmpty, !content.isEmpty else { return self }
+        var merged = (translations ?? []).filter { $0.language.lowercased() != code }
+        merged.append(StoryTranslation(language: code, content: content))
+        return StoryItem(
+            id: id, content: self.content, media: media, storyEffects: storyEffects,
+            createdAt: createdAt, expiresAt: expiresAt, repostOfId: repostOfId,
+            originalRepostOfId: originalRepostOfId, repostAuthorName: repostAuthorName,
+            repostAuthorUsername: repostAuthorUsername,
+            visibility: visibility, visibilityUserIds: visibilityUserIds, audioUrl: audioUrl, isViewed: isViewed,
+            viewedAt: viewedAt, updatedAt: updatedAt,
+            translations: merged,
+            backgroundAudio: backgroundAudio,
+            reactionCount: reactionCount, commentCount: commentCount,
+            shareCount: shareCount, viewCount: viewCount, impressionCount: impressionCount, repostCount: repostCount,
+            currentUserReactions: currentUserReactions
+        )
+    }
+
     /// Prisme realtime : le gateway diffuse les traductions PAR text-object via
     /// `story:translation-updated` (payload `{ postId, textObjectIndex, translations }`).
     /// Retourne une copie de la story avec ces traductions fusionnées dans le

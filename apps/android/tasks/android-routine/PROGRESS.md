@@ -1,5 +1,44 @@
 # Progress — state & what to do next
 
+> On 2026-07-27 the **offline-pending hourglass** landed (slice `chat-offline-pending-hourglass`,
+> feature-parity §C Chat — the "offline hourglass" half of the Delivery-status line). A still-pending
+> outgoing bubble now shows a live **clock** while the device is online (the send is in flight) but a queue
+> **hourglass** once it goes offline — the message is parked in the outbox until reconnect. Faithful port of
+> the iOS `BubbleDeliveryBadge` rule (`.sending` + `!NetworkMonitor.isOnline` → hourglass). **Added
+> (production, all `apps/android`):** (1) `:core:model/SendLifecycleResolver.resolve(isPending, isFailed,
+> isOffline) → SendLifecycle{Failed, QueuedOffline, InFlight, Settled}` — the pure SSOT for the sender's
+> send-side glyph, distinct from `DeliveryStatusResolver` (which owns the delivered/read tier). Precedence:
+> a failure wins over everything; a still-pending message is `QueuedOffline` when offline else `InFlight`;
+> otherwise `Settled` — **connectivity is irrelevant once the message has reached the server, so a
+> delivered/read bubble never regresses to the outbox hourglass when the link later drops** (the SOTA guard,
+> a pure fully-covered arm). (2) `DeliveryStatus.QueuedOffline` sealed variant + `BubbleContentBuilder.build`
+> gains `isOffline: Boolean = false`; the outgoing branch now routes the whole send-side decision through the
+> resolver (`Failed→Failed`, `QueuedOffline→QueuedOffline`, `InFlight→Pending`, `Settled→` the existing
+> delivered/read tier), the `= false` default keeping every non-display caller unchanged. (3) `MessageBubble`
+> renders `Icons.Filled.HourglassEmpty` (dimmed like the clock) with a new `bubble_status_queued` a11y label
+> (EN/FR/ES/PT). (4) `ChatViewModel` injects `NetworkConditionMonitor` and folds `condition ==
+> NetworkCondition.OFFLINE` (distinct) into the message-stream `combine`, threading `isOffline` through
+> `applyResult`/`toBubbles`, so **dropping/regaining the link re-paints the glyph live** without a refetch.
+> **SOTA over iOS:** the whole send-side lifecycle is a pure, fully-covered value function (iOS inlines the
+> `.sending && !isOnline` check in the badge view) and the settled-never-regresses guard is explicit.
+> **+13 behavioural tests:** `SendLifecycleResolverTest` (7: in-flight / queued-offline / failed-wins-over-
+> in-flight / failed-wins-over-offline / settled-online / **settled-stays-settled-offline** / failed-after-
+> reconnect), `BubbleContentBuilderTest` (+5: pending-offline→QueuedOffline / pending-online→Pending /
+> failed-offline→Failed / delivered-offline→Delivered / incoming-offline→Sent), `ChatViewModelTest` (+1:
+> going-offline turns a SENDING bubble to QueuedOffline end-to-end through the live combine). **Mutation
+> (RED proof):** dropping the `isPending && isOffline → QueuedOffline` arm (fall through to `InFlight`) fails
+> **exactly** the queued-offline resolver test + the builder QueuedOffline test + the VM test; no collateral.
+> **Gate:** `./apps/android/meeshy.sh check` (= `assembleDebug testDebugUnitTest`). Reviewer **PASS** (diff
+> `apps/android` only — 1 new core + 1 new test + `DeliveryStatus` variant + builder param + icon/string +
+> VM combine wiring + VM/test harness + tracking docs; SDK purity — `SendLifecycleResolver` is a stateless
+> `:core:model` value function, the "read the network" glue lives in the VM; SSOT — one send-side resolver,
+> the builder re-implements nothing; UDF — reactive derivation off `NetworkConditionMonitor` `StateFlow`;
+> instant-app — rides the cache-first message stream, no spinner; no tautological tests — literals + the
+> mutation proof + the VM end-to-end test). **Next slice:** the §C **inverted-list** message layout
+> (bottom-anchored `reverseLayout`), OR the app-side **`CategoryPickerField` / `TagInputField`** composables,
+> OR the paged **`OnboardingFlowView`** Compose scaffold (Auth), OR the tracked **Kover 90% coverage-gate
+> infra**, OR the §C **read-status detail sheet** (tap the delivery checks → per-recipient read state).
+
 > On 2026-07-27 the **read-receipt reciprocity** landed (slice `chat-read-receipt-reciprocity`,
 > feature-parity §C Chat — the "Delivery status" line, folding a §L privacy behaviour into the delivery
 > tier). It ports the iOS `DeliveryStatusResolver.degradeRead` reciprocity rule that Android had been

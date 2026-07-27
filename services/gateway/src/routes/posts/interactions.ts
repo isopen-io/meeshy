@@ -718,7 +718,11 @@ export function registerInteractionRoutes(
       // Notify original post author
       const notifService = fastify.notificationService;
       if (notifService && repost.repostOfId) {
-        const original = await postService.getPostById(postId);
+        // Même garde que la route de traduction : sans le viewer, le lookup
+        // applique le filtre anonyme et ne retrouve pas une story réservée aux
+        // contacts — l'auteur d'une story repartagée n'était alors jamais
+        // notifié.
+        const original = await postService.getPostById(postId, authContext.registeredUser.id);
         if (original?.authorId) {
           notifService.createPostRepostNotification({
             actorId: authContext.registeredUser.id,

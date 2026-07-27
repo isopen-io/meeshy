@@ -37,8 +37,11 @@ final class StoryInteractionService {
     /// picker (sidebar + canvas). Fire-and-forget: the actual translated
     /// payload arrives via the social socket, not via the response of
     /// this POST.
-    func requestTranslation(storyId: String, targetLanguage: String) async {
-        let body: [String: String] = ["targetLanguage": targetLanguage]
+    /// `force` rejoue une langue DÉJÀ traduite — ce que demande le bouton
+    /// « Retraduire » de la feuille des langues. Sans lui, la gateway sortait
+    /// aussitôt sur ses gardes de cache et le bouton ne faisait rien.
+    func requestTranslation(storyId: String, targetLanguage: String, force: Bool = false) async {
+        let body = StoryTranslationRequestBody(targetLanguage: targetLanguage, force: force ? true : nil)
         do {
             let _: APIResponse<AnyCodable> = try await api.post(
                 endpoint: "/posts/\(storyId)/translate",
@@ -47,6 +50,13 @@ final class StoryInteractionService {
         } catch {
             Self.logger.error("Failed to request translation for story \(storyId, privacy: .public) → \(targetLanguage, privacy: .public): \(error.localizedDescription)")
         }
+    }
+
+    /// Corps de `POST /posts/:id/translate`. `force` est omis quand il est faux :
+    /// la route le lit comme optionnel, inutile de l'envoyer pour rien.
+    private struct StoryTranslationRequestBody: Encodable {
+        let targetLanguage: String
+        let force: Bool?
     }
 
     /// Posts a comment (or a reply if `parentId` is set). Optimistic UI

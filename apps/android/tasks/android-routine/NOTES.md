@@ -2,6 +2,29 @@
 
 Append-only log of gotchas and decisions that save time next run.
 
+## Lesson (2026-07-27, `chat-offline-pending-hourglass`) — split the send-side glyph into its own pure resolver; guard "settled never regresses"
+- The bubble's status has **two independent axes**: the **send-side lifecycle** (pending clock / offline
+  hourglass / failed) which the SENDER owns, and the **delivered/read tier** (`DeliveryStatusResolver`) which
+  the recipients drive. Keep them as two pure resolvers — `SendLifecycleResolver` decides the pre-ack glyph,
+  `DeliveryStatusResolver` the post-ack tier. `BubbleContentBuilder` composes them: outgoing → run the send
+  resolver first, and only its `Settled` arm falls through to the tier resolver. Clean precedence, each arm
+  independently mutation-testable.
+- **The load-bearing edge case is "settled + offline".** The naive rule "pending && offline → hourglass" is
+  right, but you must also prove a *delivered/read* message stays put when the device later goes offline —
+  otherwise every old bubble sprouts an hourglass the moment you lose signal. Encode it as an explicit arm
+  (`else → Settled`, connectivity ignored) and write the test for it; that test is what fails if someone
+  later "simplifies" the resolver to key off `isOffline` too early.
+- **Wiring `isOffline` is the exact same shape as the read-receipt `showReadReceipts` fold** (see the lesson
+  below): inject `NetworkConditionMonitor`, add one more `.combine(monitor.condition.map { it ==
+  NetworkCondition.OFFLINE }.distinctUntilChanged())` link, expand the `collect` destructuring, thread the
+  bool through `applyResult`/`toBubbles` → `build(isOffline=…)`. The glyph then re-paints live on
+  connectivity changes with no refetch. `NetworkConditionMonitor` is already in the DI graph (SdkModule) and
+  has an `InMemoryNetworkConditionMonitor(initial=…)` for the test harness — no new fake needed.
+- Cold-container Gradle: the **first** `:core:model:testDebugUnitTest` after SDK bootstrap took >3 min
+  (dependency download through the proxy); subsequent runs are warm. `... 2>&1 | tail -N` writes NOTHING to
+  the output file until gradle exits (tail buffers to EOF) — grep the real streamed log, or drop the `| tail`
+  when you want to poll interim progress.
+
 ## Lesson (2026-07-27, `chat-read-receipt-reciprocity`) — a privacy degrade belongs on the DISPLAY path, defaulted off
 - Read-receipt reciprocity ("hide mine → I don't see yours") must degrade `Read → Delivered` **only where the
   bubble is displayed**, never where state is persisted. The clean shape: a new resolver param
