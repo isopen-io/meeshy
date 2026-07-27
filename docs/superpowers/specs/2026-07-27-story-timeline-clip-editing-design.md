@@ -85,7 +85,13 @@ Supprimer les surfaces qui prétendent la piloter :
 | `TimelineScrubArea.onSlideDurationChanged` | paramètre retiré |
 | Bouton « +10 s » de `TimelineOperationsBar` (+ `extendStepSeconds`, `onExtendDuration`) | supprimé |
 | `TimelineViewModel.setSlideDuration` / `extendSlideDuration` | supprimés |
-| `TimelineViewModelSlideDurationTests` (3 tests de pin) + `TimelineOperationsBarTests` (2 tests) | supprimés |
+| `DurationHandleTests` (3 tests) | fichier supprimé |
+| `TimelineViewModelSlideDurationTests` (20 tests) | 3 tests de pin supprimés ; le test du toast, qui appelle `setSlideDuration(20)` pour fabriquer un écart, est réécrit avec un écart obtenu par édition de contenu |
+| `TimelineOperationsBarTests` (5 tests) | 2 tests d'extension supprimés, les 3 autres perdent l'argument `onExtendDuration:` |
+
+Le plafond de 600 s que portait `setSlideDuration` ne disparaît pas : il migre dans
+`ClipWindowResolver` (bloc 4), seul endroit qui borne encore la timeline une fois la
+durée devenue dérivée — `recomputeSlideDuration()` n'a aucun plafond propre.
 
 `recomputeSlideDuration()` devient l'unique écrivain de `project.slideDuration` — ce
 qu'elle était déjà de fait. L'invariant « le playhead ne reste jamais hors fenêtre »
@@ -114,9 +120,18 @@ champ :
 - `selectedClipId` — le surlignage (halo). Posé par le simple tap.
 - `inspectedClipId` — la fiche présentée. Posé par le double tap, effacé à la fermeture.
 
-`TimelineInspectorSheetModifier` bascule son binding sur `inspectedClipId` ;
-`TimelineInspectorHost.presentedSelection` lit `inspectedClipId`. Le surlignage devient
-libre.
+**Invariant retenu : `inspectedClipId != nil ⟹ inspectedClipId == selectedClipId`.**
+`inspect(_:)` pose les deux ; `select(_:)` pose le surlignage et remet
+`inspectedClipId` à `nil`. Ce choix évite d'avoir à paramétrer les trois
+`resolve*Snapshot(viewModel:)` par un id : ils continuent de lire `selectedClipId` et
+restent exacts, puisque les deux coïncident dès qu'une fiche est ouverte. Seule
+`presentedSelection(viewModel:)` gagne une garde `inspectedClipId != nil` — un unique
+point de bascule, et les ~25 tests des resolvers (`TimelineInspectorHost_ClipKindTests`,
+`TimelineInspectorHostRoutingTests`) restent valides tels quels.
+
+`TimelineInspectorSheetModifier` conserve son binding sur `presentedSelection` ; la
+fermeture appelle un `endInspection()` qui efface `inspectedClipId` **sans** désélectionner,
+pour que le clip reste surligné après consultation.
 
 **Recomposer les gestes des trois barres** — `VideoClipBar`, `AudioClipBar`,
 `TextClipBar` (le sticker réutilise `TextClipBar`) — en un ordre qui laisse passer le
@@ -140,7 +155,11 @@ drag :
 
 **Le split quitte le double tap** et devient une action de la fiche d'édition
 (« Diviser au playhead »), aux côtés de Supprimer — cohérent avec « tout est dans la
-fiche ». Aucun geste ne découpe plus un clip par accident.
+fiche ». Aucun geste ne découpe plus un clip par accident. Il n'était câblé que sur
+`VideoClipBar` ; `AudioClipBar` et `TextClipBar` se contentaient de sélectionner au
+double tap, ce qui rendait le geste incohérent d'une piste à l'autre. Le bouton agit sur
+`splitSelectedAtPlayhead()`, correct sans changement puisque le double tap pose aussi
+`selectedClipId`.
 
 Les poignées de trim (`ClipTrimHandles`, `minimumDistance: 2`) restent des enfants du
 ZStack : plus spécifiques, elles gagnent naturellement sur le drag du parent.
@@ -155,16 +174,22 @@ au tap et s'ouvre au double tap ; un marqueur s'ouvre au tap » — leurs call s
 ### Bloc 3 — La fiche montre tout
 
 `ClipInspector.visibleSections` ne prend plus `isDetailsExpanded` ni
-`isAnimationExpanded` :
+`isAnimationExpanded`. L'enum `Section` passe de sept cases à **six** — `details` est
+absorbée par `timing` (bloc 4 : la barre tactile et les trois champs saisissables
+forment un seul ensemble, là où ⓘ dupliquait les mêmes valeurs) :
 
 ```
-header · timing · details · volume · fades · keyframe · toggles · actions
+header · timing · volume · animation · toggles · actions
 ```
 
-Les deux `@State` de repli, le bouton ⓘ et le bouton « Animation » disparaissent. Les
-règles de pertinence par nature de clip demeurent intactes : `timing` masqué pour un
+Les deux `@State` de repli, le bouton ⓘ et le bouton « Animation » disparaissent ;
+`animation` (fondus + « Animer au playhead » + sa légende) est rendue systématiquement.
+
+Les règles de pertinence par nature de clip demeurent intactes : `timing` masqué pour un
 fond, `volume` réservé à vidéo/audio (`hasAudioAffordances`), `toggles` affiché
-seulement si boucle ou fond agit, `Supprimer` masqué pour un sticker.
+seulement si boucle ou fond agit, `Supprimer` masqué pour un sticker. Le hint « le fond
+couvre toute la slide » vivait dans `details` : il migre à la place laissée vacante par
+`timing` pour un clip de fond, sinon il disparaîtrait avec la section qui l'hébergeait.
 
 La sheet passe en `presentationDetents([.large])` — le contenu déplié ne tient pas en
 `.medium`.
@@ -195,10 +220,18 @@ Bornes, identiques partout : `start ≥ 0`, `duration ≥ 0,05 s`, `start + dura
 **Pas de borne `fin ≤ slideDuration`** — c'est elle qui empêchait d'allonger la slide.
 La slide suit le contenu via `recomputeSlideDuration()`.
 
+Le plafond global de 600 s ne disparaît pas avec `setSlideDuration` (bloc 1) : il
+**migre** ici, en `maximumEnd`. C'est désormais le seul rempart, `recomputeSlideDuration()`
+n'en ayant aucun.
+
 Consommateurs :
-- `ClipTimingBar.previewWindow` délègue (l'échelle affichée reste
-  `max(slideDuration, fin du clip)`, donc la piste s'étire visuellement quand on tire
-  au-delà de la slide) ;
+- `ClipTimingBar.previewWindow` délègue. **Son échelle doit gagner une marge** :
+  `displayTotal` vaut aujourd'hui `max(slideDuration, start + duration)`, calculé sur
+  les valeurs d'avant le geste — la poignée droite d'un clip finissant en fin de slide
+  est donc déjà collée au bord droit de la piste et n'a physiquement nulle part où
+  aller. Retirer le clamp ne suffit pas : l'échelle devient
+  `max(slideDuration, start + duration) + marge`, marge = 20 % de cette valeur, au
+  minimum 1 s. La piste garde ainsi une réserve visible dans laquelle tirer ;
 - `TimelineViewModel.nudgeClipStart` / `trimClipStart` / `trimClipEnd` délèguent ;
 - trois méthodes **absolues** nouvelles pour la saisie directe :
   `setClipStart(id:to:)`, `setClipEnd(id:to:)`, `setClipDuration(id:to:)`, chacune
@@ -228,8 +261,9 @@ TDD, un incrément par bloc, suite verte à chaque étape.
   présence de `highPriorityGesture`, absence de `onLongPressGesture`, le double tap ne
   référence pas `split`. Ces gardes ancrent le comportement, pas le glyphe
   (cf. `reference_source_guards_anchor_on_behaviour`).
-- **Bloc 3** : `visibleSections` retourne les 8 sections pour un clip vidéo foreground,
-  et respecte les exclusions par nature (fond, texte, sticker, image).
+- **Bloc 3** : `visibleSections` retourne les 6 sections pour un clip vidéo foreground,
+  et respecte les exclusions par nature (fond, texte, sticker, image) ; le hint « fond »
+  apparaît bien à la place de `timing` pour un clip de fond.
 - **Bloc 4** : table de cas sur `ClipWindowResolver` (chaque `Edit` × chaque borne) ;
   équivalence `ClipTimingBar.previewWindow` ↔ résolveur ; les trois méthodes absolues
   poussent une commande et une seule ; un clip finissant à la fin de la slide peut
