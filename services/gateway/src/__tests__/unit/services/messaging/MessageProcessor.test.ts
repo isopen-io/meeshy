@@ -290,6 +290,38 @@ describe('MessageProcessor.processLinksInContent', () => {
     const result = await processor.processLinksInContent('<https://example.com/err>', CONV_ID);
     expect(result).toBe('https://example.com/err');
   });
+
+  // Content-integrity: ÉTAPE 4 restores protected markdown links via
+  // String.prototype.replace with the raw link as the *replacement* argument.
+  // JS interprets `$$`, `$&`, `` $` ``, `$'` in a replacement string, so any
+  // `$`-sequence the user typed inside the link is mangled before the message
+  // is persisted and broadcast. The restore must reinstate the original text
+  // byte-for-byte.
+  it('preserves $$ inside a markdown link verbatim (no $-collapse)', async () => {
+    const content = '[$$ deal](https://example.com/promo)';
+    const result = await processor.processLinksInContent(content, CONV_ID);
+    expect(result).toBe(content);
+  });
+
+  it('does not leak the internal sentinel when a markdown link contains $&', async () => {
+    const content = '[a$&b](https://example.com)';
+    const result = await processor.processLinksInContent(content, CONV_ID);
+    expect(result).toBe(content);
+    expect(result).not.toContain('__PROTECTED_MD_');
+  });
+
+  it("preserves $' and $` sequences inside a markdown link", async () => {
+    const content = "[x$'y$`z](https://example.com)";
+    const result = await processor.processLinksInContent(content, CONV_ID);
+    expect(result).toBe(content);
+  });
+
+  it('preserves $-bearing URLs on the tracking fallback path (<url>)', async () => {
+    mockFindExistingTrackingLink.mockResolvedValue(null);
+    mockCreateTrackingLink.mockRejectedValue(new Error('DB error'));
+    const result = await processor.processLinksInContent('<https://example.com/pay?amt=$5&ref=$&x>', CONV_ID);
+    expect(result).toBe('https://example.com/pay?amt=$5&ref=$&x');
+  });
 });
 
 // ── getEncryptionContext ────────────────────────────────────────────────────
