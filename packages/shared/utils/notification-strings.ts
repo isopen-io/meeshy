@@ -15,7 +15,7 @@ export const NOTIFICATION_STRING_KEYS = [
   'comment.repliedToYours',
   'comment.subtitleOwner', 'comment.subtitleFrom', 'comment.subtitleBare',
   'mention', 'someone',
-  'friend.story', 'friend.post', 'friend.mood', 'friend.subtitleNew',
+  'friend.story', 'friend.post', 'friend.reel', 'friend.mood', 'friend.subtitleNew',
   'call.missed', 'call.incoming.title', 'call.incoming.body',
   'contact.request', 'contact.accepted',
   'repost',
@@ -66,6 +66,7 @@ const TEMPLATES: Record<NotificationLanguage, Templates> = {
     'mention': 'vous a mentionné',
     'friend.story': 'a publié une nouvelle story',
     'friend.post': 'a publié un nouveau post',
+    'friend.reel': 'a publié un nouveau réel',
     'friend.mood': 'a publié une nouvelle humeur',
     'friend.subtitleNew': '{friendSubtitle}',
     'call.missed': '{callIcon} Appel {callLabel} manqué',
@@ -104,6 +105,7 @@ const TEMPLATES: Record<NotificationLanguage, Templates> = {
     'mention': 'mentioned you',
     'friend.story': 'shared a new story',
     'friend.post': 'shared a new post',
+    'friend.reel': 'shared a new reel',
     'friend.mood': 'shared a new mood',
     'friend.subtitleNew': '{friendSubtitle}',
     'call.missed': '{callIcon} Missed {callLabel} call',
@@ -142,6 +144,7 @@ const TEMPLATES: Record<NotificationLanguage, Templates> = {
     'mention': 'te mencionó',
     'friend.story': 'publicó una nueva historia',
     'friend.post': 'publicó una nueva publicación',
+    'friend.reel': 'publicó un nuevo reel',
     'friend.mood': 'publicó un nuevo estado de ánimo',
     'friend.subtitleNew': '{friendSubtitle}',
     'call.missed': '{callIcon} Llamada {callLabel} perdida',
@@ -180,6 +183,7 @@ const TEMPLATES: Record<NotificationLanguage, Templates> = {
     'mention': 'mencionou você',
     'friend.story': 'publicou uma nova story',
     'friend.post': 'publicou uma nova publicação',
+    'friend.reel': 'publicou um novo reel',
     'friend.mood': 'publicou um novo humor',
     'friend.subtitleNew': '{friendSubtitle}',
     'call.missed': '{callIcon} Chamada {callLabel} perdida',
@@ -218,6 +222,7 @@ const TEMPLATES: Record<NotificationLanguage, Templates> = {
     'mention': 'hat dich erwähnt',
     'friend.story': 'hat eine neue Story geteilt',
     'friend.post': 'hat einen neuen Beitrag geteilt',
+    'friend.reel': 'hat einen neuen Reel geteilt',
     'friend.mood': 'hat eine neue Stimmung geteilt',
     'friend.subtitleNew': '{friendSubtitle}',
     'call.missed': '{callIcon} Verpasster {callLabel}',
@@ -256,6 +261,7 @@ const TEMPLATES: Record<NotificationLanguage, Templates> = {
     'mention': 'ti ha menzionato',
     'friend.story': 'ha pubblicato una nuova storia',
     'friend.post': 'ha pubblicato un nuovo post',
+    'friend.reel': 'ha pubblicato un nuovo reel',
     'friend.mood': 'ha pubblicato un nuovo stato d’animo',
     'friend.subtitleNew': '{friendSubtitle}',
     'call.missed': '{callIcon} Chiamata {callLabel} persa',
@@ -294,6 +300,7 @@ const TEMPLATES: Record<NotificationLanguage, Templates> = {
     'mention': 'أشار إليك',
     'friend.story': 'نشر قصة جديدة',
     'friend.post': 'نشر منشورًا جديدًا',
+    'friend.reel': 'نشر ريلًا جديدًا',
     'friend.mood': 'شارك مزاجًا جديدًا',
     'friend.subtitleNew': '{friendSubtitle}',
     'call.missed': '{callIcon} مكالمة {callLabel} فائتة',
@@ -332,6 +339,7 @@ const TEMPLATES: Record<NotificationLanguage, Templates> = {
     'mention': '提到了你',
     'friend.story': '发布了新快拍',
     'friend.post': '发布了新帖子',
+    'friend.reel': '发布了新短视频',
     'friend.mood': '分享了新心情',
     'friend.subtitleNew': '{friendSubtitle}',
     'call.missed': '{callIcon} 未接{callLabel}',
@@ -660,7 +668,13 @@ export function buildNotificationDisplay(
     case 'friend_new_story':
       return { title: compose(notificationString(L, 'friend.story')), subtitle: notificationString(L, 'friend.subtitleNew', { postType: 'STORY' }) };
     case 'friend_new_post':
-      return { title: compose(notificationString(L, 'friend.post')), subtitle: notificationString(L, 'friend.subtitleNew', { postType: kind === 'REEL' ? 'REEL' : 'POST' }) };
+      // Un réel reste le type de notification `friend_new_post` (variante de post),
+      // mais son titre ET son sous-titre restent conscients de l'entité — le
+      // discriminant `postType: REEL` est justement « conservé pour l'affichage
+      // client ». Sans titre réel-conscient, un nouveau réel s'annonçait « a
+      // publié un nouveau post » alors que le sous-titre disait déjà « Nouveau
+      // réel » : titre et sous-titre se contredisaient sur la même entrée.
+      return { title: compose(notificationString(L, kind === 'REEL' ? 'friend.reel' : 'friend.post')), subtitle: notificationString(L, 'friend.subtitleNew', { postType: kind === 'REEL' ? 'REEL' : 'POST' }) };
     case 'friend_new_mood':
       return { title: compose(notificationString(L, 'friend.mood')), subtitle: notificationString(L, 'friend.subtitleNew', { postType: 'MOOD' }) };
 

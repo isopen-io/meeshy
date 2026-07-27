@@ -106,7 +106,13 @@ export function registerFeedRoutes(
 
       return sendSuccess(reply, result.items, {
         pagination: { limit, hasMore: result.hasMore, nextCursor: result.nextCursor },
-        meta: { mentionedUsers: storyMentionedUsers },
+        // `deletedStoryIds` — tombstones du delta-sync : les stories disparues
+        // (supprimées par leur auteur, ou périmées puis balayées) depuis
+        // `updatedSince`. Le merge delta côté client étant additif, c'est le
+        // SEUL canal qui lui permet de purger son cache quand il a manqué
+        // l'event socket `story:deleted` — app fermée ou hors-ligne. Toujours
+        // présent (tableau vide sur un fetch complet, qui écrase déjà tout).
+        meta: { mentionedUsers: storyMentionedUsers, deletedStoryIds: result.deletedIds },
       });
     } catch (error) {
       fastify.log.error(`[GET /posts/feed/stories] Error: ${error}`);

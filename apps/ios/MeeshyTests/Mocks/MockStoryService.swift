@@ -119,6 +119,12 @@ final class MockStoryService: StoryServiceProviding, @unchecked Sendable {
         lastCachedPost = post
     }
 
+    private(set) var invalidatedPostIds: Set<String> = []
+
+    func invalidate(postIds: Set<String>) {
+        invalidatedPostIds.formUnion(postIds)
+    }
+
     // MARK: - Reset
 
     func reset() {

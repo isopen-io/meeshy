@@ -146,6 +146,56 @@ final class APIResponseTests: XCTestCase {
         XCTAssertNil(response.pagination)
     }
 
+    // MARK: - meta.deletedStoryIds (tombstones du delta-sync)
+    //
+    // `data` ne porte que ce qui existe ENCORE. Les ids disparus voyagent dans
+    // `meta` — c'est par là qu'un client ayant manqué l'event socket
+    // `story:deleted` (app fermée, hors-ligne) apprend qu'il doit purger.
+
+    func testPaginatedResponseDecodesDeletedStoryIds() throws {
+        let json = makeJSON("""
+        {
+            "success": true,
+            "data": [{"id": "1", "name": "First"}],
+            "meta": {"deletedStoryIds": ["gone-1", "gone-2"]}
+        }
+        """)
+
+        let response = try decoder.decode(PaginatedAPIResponse<[TestItem]>.self, from: json)
+
+        XCTAssertEqual(response.meta?.deletedStoryIds, ["gone-1", "gone-2"])
+    }
+
+    func testPaginatedResponseWithoutMetaDecodes() throws {
+        // Rétro-compatibilité : un gateway antérieur aux tombstones (ou toute
+        // autre route paginée) n'envoie pas de `meta` — le décodage doit tenir.
+        let json = makeJSON("""
+        {"success": true, "data": [{"id": "1", "name": "First"}]}
+        """)
+
+        let response = try decoder.decode(PaginatedAPIResponse<[TestItem]>.self, from: json)
+
+        XCTAssertNil(response.meta)
+        XCTAssertEqual(response.data.count, 1)
+    }
+
+    func testPaginatedResponseIgnoresUnknownMetaKeys() throws {
+        // `meta` transporte déjà autre chose (mentionedUsers) : un champ inconnu
+        // ne doit pas faire échouer tout le décodage de la page.
+        let json = makeJSON("""
+        {
+            "success": true,
+            "data": [],
+            "meta": {"mentionedUsers": [], "somethingElse": 42}
+        }
+        """)
+
+        let response = try decoder.decode(PaginatedAPIResponse<[TestItem]>.self, from: json)
+
+        XCTAssertNotNil(response.meta)
+        XCTAssertNil(response.meta?.deletedStoryIds)
+    }
+
     // MARK: - CursorPagination
 
     func testCursorPaginationDecodesAllFields() throws {

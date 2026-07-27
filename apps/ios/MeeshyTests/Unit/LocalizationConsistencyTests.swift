@@ -104,6 +104,8 @@ final class LocalizationConsistencyTests: XCTestCase {
         // 225i — the registration step flow: the first screens a new account ever
         // sees, and the largest single-file gap in the catalog when it was pinned.
         "apps/ios/Meeshy/Features/Auth/Onboarding/OnboardingStepViews.swift",
+        // 226i — share-link creation, the largest remaining gap after 225i (55 keys).
+        "apps/ios/Meeshy/Features/Main/Views/CreateShareLinkView.swift",
     ]
 
     /// Keys exempt from `fullyLocalizedScreens`, each with the reason it is not
@@ -122,11 +124,12 @@ final class LocalizationConsistencyTests: XCTestCase {
         var violations: [String] = []
         for path in Self.fullyLocalizedScreens {
             let url = env.repoRoot.appendingPathComponent(path)
+            let catalog = env.catalog(resolvedFor: url)
             let text = try String(contentsOf: url, encoding: .utf8)
             for call in localizedCalls(in: text) {
                 guard isIdentifier(call.key), !call.isModuleBundle,
                       !Self.untranslatableKeys.contains(call.key) else { continue }
-                let missing = env.requiredLocales.subtracting(env.appTranslations[call.key] ?? [])
+                let missing = catalog.requiredLocales.subtracting(catalog.translations[call.key] ?? [])
                 guard !missing.isEmpty else { continue }
                 violations.append("\(call.key)  (\(url.lastPathComponent) → missing \(missing.sorted().joined(separator: ", ")))")
             }
@@ -153,6 +156,7 @@ final class LocalizationConsistencyTests: XCTestCase {
         var violations: [String] = []
         for path in Self.fullyLocalizedScreens {
             let url = env.repoRoot.appendingPathComponent(path)
+            let catalog = env.catalog(resolvedFor: url)
             let text = try String(contentsOf: url, encoding: .utf8)
             for call in localizedCalls(in: text) {
                 guard isIdentifier(call.key), !call.isModuleBundle,
@@ -162,12 +166,12 @@ final class LocalizationConsistencyTests: XCTestCase {
                       // interpolated default legitimately differs from its catalog
                       // entry (cf. the natural-text exclusion in this file's header).
                       !inline.contains("\\(") else { continue }
-                let catalogSource = env.appSourceValues[call.key]
+                let catalogSource = catalog.sourceValues[call.key]
                 guard catalogSource != inline else { continue }
                 violations.append(
                     "\(call.key)  (\(url.lastPathComponent))\n"
                     + "      code: \(inline)\n"
-                    + "   catalog: \(catalogSource ?? "<no \(env.sourceLanguage) entry>")"
+                    + "   catalog: \(catalogSource ?? "<no \(catalog.sourceLanguage) entry>")"
                 )
             }
         }
@@ -175,10 +179,53 @@ final class LocalizationConsistencyTests: XCTestCase {
         XCTAssertTrue(
             violations.isEmpty,
             "On a pinned screen the inline defaultValue and the catalog's "
-            + "\(env.sourceLanguage) entry are the same string rendered by two different "
+            + "\(env.appCatalog.sourceLanguage) entry are the same string rendered by two different "
             + "paths, so they must be identical:\n"
             + violations.joined(separator: "\n")
         )
+    }
+
+    /// Added 226i. A pluralized entry stores its text under
+    /// `variations.plural.<CLDR category>` and has no flat `stringUnit`, so a reader
+    /// that only looks at the flat unit sees NOTHING translated and reports the key as
+    /// a gap in every locale. That was silently true of all nine plural entries the
+    /// catalog had: fully translated, permanently counted against the backlog, and —
+    /// worse — impossible to clear, so no screen holding a pluralized key could ever
+    /// be pinned as fully localized.
+    func test_pluralizedKeysAreRecognizedAsTranslated() throws {
+        let env = try makeEnvironment()
+
+        let pluralKeys = try pluralizedKeys(
+            env.repoRoot.appendingPathComponent(Self.appCatalogPath)
+        )
+        XCTAssertFalse(
+            pluralKeys.isEmpty,
+            "The catalog is expected to contain pluralized entries; if none remain, this "
+            + "guard has nothing to protect and should be reconsidered rather than deleted."
+        )
+
+        let unseen = pluralKeys
+            .filter { (env.appCatalog.translations[$0] ?? []).isEmpty }
+            .sorted()
+        XCTAssertTrue(
+            unseen.isEmpty,
+            "These pluralized keys are translated in the catalog but the reader reports no "
+            + "locale for them, so they can never leave the backlog:\n"
+            + unseen.joined(separator: "\n")
+        )
+    }
+
+    /// Keys with at least one locale expressed as plural variations.
+    private func pluralizedKeys(_ url: URL) throws -> [String] {
+        let json = try JSONSerialization.jsonObject(with: try Data(contentsOf: url)) as? [String: Any]
+        let strings = json?["strings"] as? [String: Any] ?? [:]
+        return strings.compactMap { key, value in
+            let localizations = (value as? [String: Any])?["localizations"] as? [String: Any] ?? [:]
+            let hasPlural = localizations.values.contains {
+                ($0 as? [String: Any])?["variations"] != nil
+            }
+            return hasPlural ? key : nil
+        }
     }
 
     func test_untranslatedKeyBacklogDoesNotGrow() throws {
@@ -186,46 +233,90 @@ final class LocalizationConsistencyTests: XCTestCase {
 
         var untranslated: Set<String> = []
         for file in env.sourceFiles {
+            let catalog = env.catalog(resolvedFor: file)
             let text = (try? String(contentsOf: file, encoding: .utf8)) ?? ""
             for call in localizedCalls(in: text) {
                 guard isIdentifier(call.key), !call.isModuleBundle else { continue }
-                if !env.requiredLocales.isSubset(of: env.appTranslations[call.key] ?? []) {
+                if !catalog.requiredLocales.isSubset(of: catalog.translations[call.key] ?? []) {
                     untranslated.insert(call.key)
                 }
             }
         }
 
-        // Pinned at the 225i measurement (1669 at 220i, −63 for the onboarding step
-        // flow). This number must only ever go DOWN: a failure means a new key was
-        // introduced with a `defaultValue` alone, which ships French to the six other
-        // locales. Add the catalog entry — with its translations — instead of raising
-        // the ceiling.
-        let backlogCeiling = 1606
+        // Pinned at the 226i measurement: 1669 at 220i, −63 for the onboarding step
+        // flow (225i), then −54 for share-link creation and −7 once pluralized keys
+        // stopped being miscounted (226i). RE-MEASURED at 224i when the scan became
+        // per-target: unchanged, because the five share-extension keys are currently
+        // duplicated into the app catalog as well, so they were already counted as
+        // translated — the per-target scan and the 226i gains therefore compose.
+        // The number must only ever go DOWN: a failure means a new key was introduced
+        // with a `defaultValue` alone, which ships the source language to every other
+        // locale. Add the catalog entry — with its translations, to the catalog of
+        // the target that OWNS the key — instead of raising the ceiling.
+        let backlogCeiling = 1545
         XCTAssertLessThanOrEqual(
             untranslated.count, backlogCeiling,
-            "\(untranslated.count) app-bundle identifier keys are untranslated in at least one "
-            + "shipped locale (ceiling \(backlogCeiling)). Add the missing entries to "
-            + Self.appCatalogPath
+            "\(untranslated.count) identifier keys are untranslated in at least one shipped "
+            + "locale (ceiling \(backlogCeiling)). Add the missing entries to the catalog of the "
+            + "target that owns them."
         )
     }
 
     // MARK: - Environment
 
+    /// One catalog, indexed. Added 224i, when the single-catalog model started
+    /// reporting correctly-localized extension strings as untranslated.
+    private struct CatalogIndex {
+        /// Key → locales whose string unit is in the `translated` state.
+        let translations: [String: Set<String>]
+        /// Shipped locales minus THIS catalog's source language.
+        let requiredLocales: Set<String>
+        /// This catalog's source language — `fr` for the app, `en` for the share extension.
+        let sourceLanguage: String
+        /// Key → its value in the source language, when it has a flat one.
+        let sourceValues: [String: String]
+    }
+
     private struct Environment {
+        /// An app extension is a SEPARATE BUNDLE: a `String(localized:)` in its sources
+        /// resolves against ITS `Localizable.xcstrings`, never the host app's. Checking
+        /// those sources against the app catalog reports keys as untranslated while they
+        /// are in fact fully translated in the catalog shipping beside them.
+        /// Path fragment → the catalog that target actually resolves against.
+        ///
+        /// Declared HERE rather than on the enclosing suite on purpose: the suite is
+        /// `@MainActor`, so a static of its own would be actor-isolated and unreadable
+        /// from `catalog(resolvedFor:)`, which is nonisolated — a nested type does not
+        /// inherit the enclosing type's global actor.
+        static let catalogByTargetFragment: [String: String] = [
+            "/MeeshyShareExtension/": "apps/ios/MeeshyShareExtension/Localizable.xcstrings",
+            "/MeeshyNotificationExtension/": "apps/ios/MeeshyNotificationExtension/Localizable.xcstrings",
+        ]
+
         let repoRoot: URL
         let sourceFiles: [URL]
         let combinedSource: String
         let appIdentifierKeys: [String]
         let appKeysWithEn: Set<String>
         let sdkKeysWithEn: Set<String>
-        /// Key → locales whose app-catalog string unit is in the `translated` state.
-        let appTranslations: [String: Set<String>]
-        /// Shipped locales minus the catalog's source language.
-        let requiredLocales: Set<String>
-        /// The app catalog's source language, e.g. `fr`.
-        let sourceLanguage: String
-        /// Key → its app-catalog value in the source language, when it has one.
-        let appSourceValues: [String: String]
+        /// Catalog repo-path → its index. Always contains the app catalog.
+        let catalogs: [String: CatalogIndex]
+        let appCatalogPath: String
+
+        /// The catalog the given source file's bundle resolves against.
+        func catalog(resolvedFor file: URL) -> CatalogIndex {
+            for (fragment, catalogPath) in Self.catalogByTargetFragment
+            where file.path.contains(fragment) {
+                if let index = catalogs[catalogPath] { return index }
+            }
+            return appCatalog
+        }
+
+        /// Force-unwrap-free accessor: the app catalog is always loaded.
+        var appCatalog: CatalogIndex {
+            catalogs[appCatalogPath]
+                ?? CatalogIndex(translations: [:], requiredLocales: [], sourceLanguage: "fr", sourceValues: [:])
+        }
     }
 
     private func makeEnvironment() throws -> Environment {
@@ -258,9 +349,22 @@ final class LocalizationConsistencyTests: XCTestCase {
             .compactMap { try? String(contentsOf: $0, encoding: .utf8) }
             .joined(separator: "\n")
 
-        let appTranslations = try loadTranslations(appCatalog)
-        let appSourceLanguage = try sourceLanguage(appCatalog)
-        let requiredLocales = try shippedLocales(repoRoot: repoRoot).subtracting([appSourceLanguage])
+        // Index the app catalog plus every per-target catalog. Each is measured
+        // against the shipped locales minus ITS OWN source language, which differs:
+        // the app catalog is authored in `fr`, the share extension's in `en`.
+        let shipped = try shippedLocales(repoRoot: repoRoot)
+        var catalogs: [String: CatalogIndex] = [:]
+        for path in [Self.appCatalogPath] + Environment.catalogByTargetFragment.values {
+            let url = repoRoot.appendingPathComponent(path)
+            guard FileManager.default.fileExists(atPath: url.path) else { continue }
+            let language = try sourceLanguage(url)
+            catalogs[path] = CatalogIndex(
+                translations: try loadTranslations(url),
+                requiredLocales: shipped.subtracting([language]),
+                sourceLanguage: language,
+                sourceValues: try values(url, locale: language)
+            )
+        }
 
         return Environment(
             repoRoot: repoRoot,
@@ -269,10 +373,8 @@ final class LocalizationConsistencyTests: XCTestCase {
             appIdentifierKeys: appKeys.keys.filter(isIdentifier),
             appKeysWithEn: Set(appKeys.filter { $0.value }.keys),
             sdkKeysWithEn: Set(sdkKeys.filter { $0.value }.keys),
-            appTranslations: appTranslations,
-            requiredLocales: requiredLocales,
-            sourceLanguage: appSourceLanguage,
-            appSourceValues: try values(appCatalog, locale: appSourceLanguage)
+            catalogs: catalogs,
+            appCatalogPath: Self.appCatalogPath
         )
     }
 
@@ -305,6 +407,11 @@ final class LocalizationConsistencyTests: XCTestCase {
 
     /// Key → locales whose string unit is explicitly `translated` (a stale or
     /// needs-review unit is not a shipped translation).
+    ///
+    /// A pluralized key carries no flat `stringUnit`: its text lives under
+    /// `variations.plural.<CLDR category>`. Reading only the flat unit reported every
+    /// such key as untranslated in EVERY locale even when fully translated — the nine
+    /// plural entries the catalog already had were all counted as gaps (fixed 226i).
     private func loadTranslations(_ url: URL) throws -> [String: Set<String>] {
         let json = try JSONSerialization.jsonObject(with: try Data(contentsOf: url)) as? [String: Any]
         let strings = json?["strings"] as? [String: Any] ?? [:]
@@ -313,12 +420,27 @@ final class LocalizationConsistencyTests: XCTestCase {
             let localizations = (value as? [String: Any])?["localizations"] as? [String: Any] ?? [:]
             var translated: Set<String> = []
             for (locale, payload) in localizations {
-                let unit = (payload as? [String: Any])?["stringUnit"] as? [String: Any]
-                if unit?["state"] as? String == "translated" { translated.insert(locale) }
+                if isTranslated(payload) { translated.insert(locale) }
             }
             result[key] = translated
         }
         return result
+    }
+
+    /// Whether one locale's payload is a shipped translation: either a flat string
+    /// unit marked `translated`, or a set of plural variations whose EVERY category is
+    /// marked `translated` — one stale category leaves the key partly untranslated for
+    /// the counts that select it, so `allSatisfy` is deliberate rather than `contains`.
+    private func isTranslated(_ payload: Any?) -> Bool {
+        guard let payload = payload as? [String: Any] else { return false }
+        if let unit = payload["stringUnit"] as? [String: Any] {
+            return unit["state"] as? String == "translated"
+        }
+        guard let plural = (payload["variations"] as? [String: Any])?["plural"] as? [String: Any],
+              !plural.isEmpty else { return false }
+        return plural.values.allSatisfy { category in
+            ((category as? [String: Any])?["stringUnit"] as? [String: Any])?["state"] as? String == "translated"
+        }
     }
 
     /// Returns every key in a `.xcstrings` catalog mapped to whether it has an

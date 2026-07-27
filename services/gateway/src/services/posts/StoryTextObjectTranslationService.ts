@@ -11,9 +11,14 @@ import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import type { Prisma } from '@meeshy/shared/prisma/client';
 import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
 import type { StoryTranslationUpdatedEventData } from '@meeshy/shared/types/socketio-events';
+import type { PostTranslationUpdatedEventData } from '@meeshy/shared/types/post';
 import type { Server as SocketIOServer } from 'socket.io';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 import { getCommunityCoMemberIds } from './communityVisibility';
+import {
+  composeStoryContentForLanguage,
+  isContentDerivedFromTextObjects,
+} from './storyContentComposition';
 
 const log = enhancedLogger.child({ module: 'StoryTextObjectTranslationService' });
 
@@ -55,10 +60,17 @@ export class StoryTextObjectTranslationService {
       log.info('StoryTextObject translation completed — persisting', { postId, textObjectIndex });
 
       // Read post + author to know which feed rooms to notify (author + viewers
-      // who can see this post per its visibility).
+      // who can see this post per its visibility). `content` et `storyEffects`
+      // servent à recomposer l'index dérivé (voir plus bas).
       const post = await this.prisma.post.findUnique({
         where: { id: postId },
-        select: { authorId: true, visibility: true, visibilityUserIds: true },
+        select: {
+          authorId: true,
+          visibility: true,
+          visibilityUserIds: true,
+          content: true,
+          storyEffects: true,
+        },
       });
 
       if (!post) {
@@ -76,15 +88,34 @@ export class StoryTextObjectTranslationService {
       // Build $set fields for each translated language using MongoDB dot-notation.
       // Each language code is sanitized before interpolation to prevent field-path
       // injection via a compromised translator returning e.g. `"a.$set.foo"`.
-      const setFields: Record<string, string> = {};
+      const setFields: Record<string, Prisma.InputJsonValue> = {};
+      const acceptedLanguages: string[] = [];
       for (const [lang, text] of Object.entries(translations)) {
         if (!/^[a-z]{2,5}$/.test(lang)) {
           log.warn('rejected malformed language code', { postId, textObjectIndex, lang });
           continue;
         }
         setFields[`storyEffects.textObjects.${textObjectIndex}.translations.${lang}`] = text;
+        acceptedLanguages.push(lang);
       }
       if (Object.keys(setFields).length === 0) return;
+
+      // Le `content` d'une story sans légende n'est qu'un index : la
+      // concaténation des textes du canvas. Le laisser se faire traduire pour
+      // lui-même en faisait une SECONDE source, qui divergeait de la première
+      // dès que l'un des deux pipelines bronchait — six langues sur le
+      // `content` et zéro sur les overlays, constaté en production le
+      // 2026-07-27. On le recompose donc à partir des overlays, dans la MÊME
+      // écriture que les traductions qui viennent d'arriver : un seul aller en
+      // base, et jamais d'état où l'index dérive d'un canvas déjà modifié.
+      const derivedFields = this.derivedContentFields({
+        content: post.content,
+        storyEffects: post.storyEffects,
+        textObjectIndex,
+        translations,
+        languages: acceptedLanguages,
+      });
+      Object.assign(setFields, derivedFields);
 
       await (this.prisma as unknown as { $runCommandRaw: (cmd: Prisma.InputJsonObject) => Promise<unknown> }).$runCommandRaw({
         update: 'Post',
@@ -111,9 +142,70 @@ export class StoryTextObjectTranslationService {
         this.io.to(ROOMS.feed(userId)).emit(SERVER_EVENTS.STORY_TRANSLATION_UPDATED, eventData);
       }
 
+      // L'index recomposé doit remonter par le MÊME canal que la légende
+      // (`post:translation-updated`) : c'est lui qui alimente `story.translations`
+      // en mémoire, donc l'aperçu de la feuille des langues du lecteur. Sans
+      // cette diffusion, l'écriture atterrissait en base et le lecteur gardait
+      // son ancien texte jusqu'à un rechargement complet — le symptôme que
+      // `95c97ff4b` avait déjà corrigé pour la légende, reproduit à l'identique
+      // sur l'index dérivé.
+      for (const [field, value] of Object.entries(derivedFields)) {
+        const language = field.slice('translations.'.length);
+        const translation = value as { text: string; translationModel: string; confidenceScore: number; createdAt: string };
+        const contentEvent: PostTranslationUpdatedEventData = { postId, language, translation };
+        for (const userId of recipientIds) {
+          this.io.to(ROOMS.feed(userId)).emit(SERVER_EVENTS.POST_TRANSLATION_UPDATED, contentEvent);
+        }
+      }
+
     } catch (err: unknown) {
       log.error('handleTranslationCompleted failed', err, { postId, textObjectIndex });
     }
+  }
+
+  /**
+   * Champs `translations.<langue>` du post, recomposés depuis les overlays.
+   *
+   * Rien n'est produit si le `content` est une vraie légende d'auteur : elle
+   * reste une source à part entière avec son propre pipeline. Seul l'index
+   * dérivé — la concaténation des overlays — devient un assemblage.
+   *
+   * L'état des overlays utilisé est celui lu en base PLUS les traductions de
+   * cet événement : exactement ce que l'écriture est en train de produire.
+   */
+  private derivedContentFields(params: {
+    content: string | null;
+    storyEffects: unknown;
+    textObjectIndex: number;
+    translations: Record<string, string>;
+    languages: string[];
+  }): Record<string, Prisma.InputJsonValue> {
+    const { content, storyEffects, textObjectIndex, translations, languages } = params;
+
+    const effects = (storyEffects ?? null) as { textObjects?: unknown } | null;
+    const textObjects = Array.isArray(effects?.textObjects) ? [...effects.textObjects] : [];
+    if (!isContentDerivedFromTextObjects(content, textObjects)) return {};
+
+    const target = textObjects[textObjectIndex] as Record<string, unknown> | undefined;
+    if (!target) return {};
+    textObjects[textObjectIndex] = {
+      ...target,
+      translations: { ...((target.translations ?? {}) as Record<string, unknown>), ...translations },
+    };
+
+    const fields: Record<string, Prisma.InputJsonValue> = {};
+    const createdAt = new Date().toISOString();
+    for (const lang of languages) {
+      const composed = composeStoryContentForLanguage(textObjects, lang);
+      if (!composed) continue;
+      fields[`translations.${lang}`] = {
+        text: composed,
+        translationModel: 'story-text-objects',
+        confidenceScore: 1,
+        createdAt,
+      };
+    }
+    return fields;
   }
 
   /// Returns the set of user IDs whose feed room should receive the translation
