@@ -104,6 +104,8 @@ final class LocalizationConsistencyTests: XCTestCase {
         // 225i — the registration step flow: the first screens a new account ever
         // sees, and the largest single-file gap in the catalog when it was pinned.
         "apps/ios/Meeshy/Features/Auth/Onboarding/OnboardingStepViews.swift",
+        // 226i — share-link creation, the largest remaining gap after 225i (55 keys).
+        "apps/ios/Meeshy/Features/Main/Views/CreateShareLinkView.swift",
     ]
 
     /// Keys exempt from `fullyLocalizedScreens`, each with the reason it is not
@@ -181,6 +183,49 @@ final class LocalizationConsistencyTests: XCTestCase {
         )
     }
 
+    /// Added 226i. A pluralized entry stores its text under
+    /// `variations.plural.<CLDR category>` and has no flat `stringUnit`, so a reader
+    /// that only looks at the flat unit sees NOTHING translated and reports the key as
+    /// a gap in every locale. That was silently true of all nine plural entries the
+    /// catalog had: fully translated, permanently counted against the backlog, and —
+    /// worse — impossible to clear, so no screen holding a pluralized key could ever
+    /// be pinned as fully localized.
+    func test_pluralizedKeysAreRecognizedAsTranslated() throws {
+        let env = try makeEnvironment()
+
+        let pluralKeys = try pluralizedKeys(
+            env.repoRoot.appendingPathComponent(Self.appCatalogPath)
+        )
+        XCTAssertFalse(
+            pluralKeys.isEmpty,
+            "The catalog is expected to contain pluralized entries; if none remain, this "
+            + "guard has nothing to protect and should be reconsidered rather than deleted."
+        )
+
+        let unseen = pluralKeys
+            .filter { (env.appTranslations[$0] ?? []).isEmpty }
+            .sorted()
+        XCTAssertTrue(
+            unseen.isEmpty,
+            "These pluralized keys are translated in the catalog but the reader reports no "
+            + "locale for them, so they can never leave the backlog:\n"
+            + unseen.joined(separator: "\n")
+        )
+    }
+
+    /// Keys with at least one locale expressed as plural variations.
+    private func pluralizedKeys(_ url: URL) throws -> [String] {
+        let json = try JSONSerialization.jsonObject(with: try Data(contentsOf: url)) as? [String: Any]
+        let strings = json?["strings"] as? [String: Any] ?? [:]
+        return strings.compactMap { key, value in
+            let localizations = (value as? [String: Any])?["localizations"] as? [String: Any] ?? [:]
+            let hasPlural = localizations.values.contains {
+                ($0 as? [String: Any])?["variations"] != nil
+            }
+            return hasPlural ? key : nil
+        }
+    }
+
     func test_untranslatedKeyBacklogDoesNotGrow() throws {
         let env = try makeEnvironment()
 
@@ -195,12 +240,13 @@ final class LocalizationConsistencyTests: XCTestCase {
             }
         }
 
-        // Pinned at the 225i measurement (1669 at 220i, −63 for the onboarding step
-        // flow). This number must only ever go DOWN: a failure means a new key was
-        // introduced with a `defaultValue` alone, which ships French to the six other
-        // locales. Add the catalog entry — with its translations — instead of raising
-        // the ceiling.
-        let backlogCeiling = 1606
+        // Pinned at the 226i measurement: 1669 at 220i, −63 for the onboarding step
+        // flow (225i), then −54 for share-link creation and −7 once pluralized keys
+        // stopped being miscounted (226i). This number must only ever go DOWN: a
+        // failure means a new key was introduced with a `defaultValue` alone, which
+        // ships the source language to the six other locales. Add the catalog entry —
+        // with its translations — instead of raising the ceiling.
+        let backlogCeiling = 1545
         XCTAssertLessThanOrEqual(
             untranslated.count, backlogCeiling,
             "\(untranslated.count) app-bundle identifier keys are untranslated in at least one "
@@ -305,6 +351,11 @@ final class LocalizationConsistencyTests: XCTestCase {
 
     /// Key → locales whose string unit is explicitly `translated` (a stale or
     /// needs-review unit is not a shipped translation).
+    ///
+    /// A pluralized key carries no flat `stringUnit`: its text lives under
+    /// `variations.plural.<CLDR category>`. Reading only the flat unit reported every
+    /// such key as untranslated in EVERY locale even when fully translated — the nine
+    /// plural entries the catalog already had were all counted as gaps (fixed 226i).
     private func loadTranslations(_ url: URL) throws -> [String: Set<String>] {
         let json = try JSONSerialization.jsonObject(with: try Data(contentsOf: url)) as? [String: Any]
         let strings = json?["strings"] as? [String: Any] ?? [:]
@@ -313,12 +364,27 @@ final class LocalizationConsistencyTests: XCTestCase {
             let localizations = (value as? [String: Any])?["localizations"] as? [String: Any] ?? [:]
             var translated: Set<String> = []
             for (locale, payload) in localizations {
-                let unit = (payload as? [String: Any])?["stringUnit"] as? [String: Any]
-                if unit?["state"] as? String == "translated" { translated.insert(locale) }
+                if isTranslated(payload) { translated.insert(locale) }
             }
             result[key] = translated
         }
         return result
+    }
+
+    /// Whether one locale's payload is a shipped translation: either a flat string
+    /// unit marked `translated`, or a set of plural variations whose EVERY category is
+    /// marked `translated` — one stale category leaves the key partly untranslated for
+    /// the counts that select it, so `allSatisfy` is deliberate rather than `contains`.
+    private func isTranslated(_ payload: Any?) -> Bool {
+        guard let payload = payload as? [String: Any] else { return false }
+        if let unit = payload["stringUnit"] as? [String: Any] {
+            return unit["state"] as? String == "translated"
+        }
+        guard let plural = (payload["variations"] as? [String: Any])?["plural"] as? [String: Any],
+              !plural.isEmpty else { return false }
+        return plural.values.allSatisfy { category in
+            ((category as? [String: Any])?["stringUnit"] as? [String: Any])?["state"] as? String == "translated"
+        }
     }
 
     /// Returns every key in a `.xcstrings` catalog mapped to whether it has an
