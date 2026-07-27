@@ -48,8 +48,10 @@ import me.meeshy.sdk.model.ApiParticipant
 import me.meeshy.sdk.model.ApiTextTranslation
 import me.meeshy.sdk.model.ParticipantPermissions
 import me.meeshy.sdk.session.InMemoryAnonymousSessionStore
+import me.meeshy.sdk.privacy.InMemoryPrivacyPreferencesStore
 import me.meeshy.sdk.model.ConversationDraft
 import me.meeshy.sdk.model.EphemeralDuration
+import me.meeshy.sdk.model.PrivacyPreferences
 import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.model.MessageEffectFlags
 import me.meeshy.sdk.mention.MentionAutocompleteState
@@ -187,6 +189,7 @@ class ChatViewModelTest {
         activeCall: ActiveCallSession? = null,
         mentionSearch: MentionSearch = FakeMentionSearch(),
         anonymousSession: AnonymousSessionContext? = null,
+        showReadReceipts: Boolean = true,
     ): Harness {
         val repo = mockk<MessageRepository>(relaxed = true)
         every { repo.messagesStream(any(), any(), any()) } returns stream
@@ -206,6 +209,9 @@ class ChatViewModelTest {
         val mediaQueue = mockk<MediaUploadQueue>(relaxed = true)
         coEvery { mediaQueue.enqueue(any()) } returns "upload-cmid"
         val anonymousStore = InMemoryAnonymousSessionStore(anonymousSession)
+        val privacyStore = InMemoryPrivacyPreferencesStore(
+            PrivacyPreferences(showReadReceipts = showReadReceipts),
+        )
         val handle = SavedStateHandle(mapOf(ChatViewModel.CONVERSATION_ID_ARG to "c1"))
         val socket = socketManager()
         val emojiUsage = InMemoryEmojiUsageStore()
@@ -235,6 +241,7 @@ class ChatViewModelTest {
                 mediaQueue,
                 mentionSearch,
                 anonymousStore,
+                privacyStore,
                 handle,
             ),
             repo,
@@ -1466,6 +1473,19 @@ class ChatViewModelTest {
         advanceUntilIdle()
 
         assertThat(h.vm.state.value.messages.single().deliveryStatus).isEqualTo(DeliveryStatus.Read)
+    }
+
+    @Test
+    fun hiding_my_read_receipts_degrades_a_read_message_to_delivered() = runTest(dispatcher) {
+        val h = harness(
+            ownMessageReadByOnePeer(),
+            currentUser = me,
+            conversation = directConversation(),
+            showReadReceipts = false,
+        )
+        advanceUntilIdle()
+
+        assertThat(h.vm.state.value.messages.single().deliveryStatus).isEqualTo(DeliveryStatus.Delivered)
     }
 
     private fun pinnedStream() = flowOf(

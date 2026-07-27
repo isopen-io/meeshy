@@ -26,6 +26,7 @@ public object BubbleContentBuilder {
         activeLanguageCode: String? = null,
         mediaBaseUrl: String? = null,
         recipientCount: Int = 0,
+        showReadReceipts: Boolean = true,
     ): BubbleContent {
         val isDeleted = message.deletedAt != null
         val isOutgoing = currentUserId != null && message.senderId == currentUserId
@@ -53,6 +54,7 @@ public object BubbleContentBuilder {
                     readCount = message.readCount,
                     recipientCount = recipientCount,
                     readByAllAt = message.readByAllAt,
+                    showReadReceipts = showReadReceipts,
                 )
             ) {
                 DeliveryTier.Read -> DeliveryStatus.Read
