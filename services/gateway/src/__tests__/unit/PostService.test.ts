@@ -1527,6 +1527,59 @@ describe('PostService', () => {
       expect(call.data.originalLanguage).toBeUndefined();
       expect(call.data.translations).toBeUndefined();
     });
+
+    // A regional variant of the stored language (fr-FR vs stored fr) must NOT be
+    // treated as a language change — otherwise it wipes valid translations and
+    // relaunches ZMQ jobs for nothing.
+    it('does not re-translate a regional variant of the stored language (fr-FR vs fr)', async () => {
+      prisma.post.findFirst.mockResolvedValue(makePost({ authorId: 'user-1', originalLanguage: 'fr', content: 'bonjour', media: [] }));
+      prisma.post.update.mockResolvedValue(makePost());
+      await service.updatePost('post-1', 'user-1', { originalLanguage: 'fr-FR' });
+      const call = prisma.post.update.mock.calls[0][0];
+      expect(call.data.originalLanguage).toBeUndefined();
+      expect(call.data.translations).toBeUndefined();
+    });
+
+    it('canonicalizes a genuine language change before persisting (en_US -> en)', async () => {
+      prisma.post.findFirst.mockResolvedValue(makePost({ authorId: 'user-1', originalLanguage: 'fr', content: 'hello', media: [] }));
+      prisma.post.update.mockResolvedValue(makePost());
+      await service.updatePost('post-1', 'user-1', { originalLanguage: 'en_US' });
+      const call = prisma.post.update.mock.calls[0][0];
+      expect(call.data.originalLanguage).toBe('en');
+      expect(call.data.translations).toEqual({});
+    });
+  });
+
+  // -----------------------------------------------------------------------
+  // createPost — originalLanguage canonicalization (write boundary)
+  // -----------------------------------------------------------------------
+
+  describe('createPost originalLanguage canonicalization', () => {
+    const base = { type: PostType.POST, visibility: PostVisibility.PUBLIC };
+
+    it('canonicalizes a region-tagged claim before persisting (fr-FR -> fr)', async () => {
+      prisma.post.create.mockResolvedValue(makePost());
+      await service.createPost({ ...base, content: 'Bonjour', originalLanguage: 'fr-FR' }, 'user-1');
+      expect(prisma.post.create).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ originalLanguage: 'fr' }) }),
+      );
+    });
+
+    it('canonicalizes an underscore locale claim (en_US -> en)', async () => {
+      prisma.post.create.mockResolvedValue(makePost());
+      await service.createPost({ ...base, content: 'Hi', originalLanguage: 'en_US' }, 'user-1');
+      expect(prisma.post.create).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ originalLanguage: 'en' }) }),
+      );
+    });
+
+    it('keeps an irreducible ISO 639-3 claim verbatim (bas)', async () => {
+      prisma.post.create.mockResolvedValue(makePost());
+      await service.createPost({ ...base, content: 'mbolo', originalLanguage: 'bas' }, 'user-1');
+      expect(prisma.post.create).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ originalLanguage: 'bas' }) }),
+      );
+    });
   });
 });
 
@@ -1627,6 +1680,45 @@ describe('PostCommentService', () => {
         }),
       );
       expect(result).toEqual({ ...reply, media: [] });
+    });
+
+    // Write-boundary canonicalization: the client sends the raw platform locale
+    // (fr_FR / fr-FR); the stored PostComment.originalLanguage must be canonical
+    // so the NLLB source + Prisme resolver line up with the message pipeline.
+    it('canonicalizes a region-tagged claim before persisting (fr-FR -> fr)', async () => {
+      prisma.post.findFirst.mockResolvedValue(makePost());
+      prisma.postComment.create.mockResolvedValue(makeComment({ id: 'c-fr' }));
+      prisma.post.update.mockResolvedValue(makePost());
+
+      await service.addComment('post-1', 'user-1', 'Bonjour', undefined, undefined, 'fr-FR');
+
+      expect(prisma.postComment.create).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ originalLanguage: 'fr' }) }),
+      );
+    });
+
+    it('keeps an irreducible ISO 639-3 claim verbatim (bas)', async () => {
+      prisma.post.findFirst.mockResolvedValue(makePost());
+      prisma.postComment.create.mockResolvedValue(makeComment({ id: 'c-bas' }));
+      prisma.post.update.mockResolvedValue(makePost());
+
+      await service.addComment('post-1', 'user-1', 'mbolo', undefined, undefined, 'bas');
+
+      expect(prisma.postComment.create).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ originalLanguage: 'bas' }) }),
+      );
+    });
+
+    it('persists null when no language claim is provided', async () => {
+      prisma.post.findFirst.mockResolvedValue(makePost());
+      prisma.postComment.create.mockResolvedValue(makeComment({ id: 'c-null' }));
+      prisma.post.update.mockResolvedValue(makePost());
+
+      await service.addComment('post-1', 'user-1', 'Hello');
+
+      expect(prisma.postComment.create).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ originalLanguage: null }) }),
+      );
     });
   });
 

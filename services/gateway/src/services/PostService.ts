@@ -15,6 +15,7 @@ import { enhancedLogger } from '../utils/logger-enhanced';
 import { ZMQSingleton } from './ZmqSingleton';
 import { authorSelect, mediaSelect, mediaInclude, postInclude } from './posts/postIncludes';
 import { remapStoryEffectsMediaIds } from './posts/storyEffectsMediaRemap';
+import { normalizeLanguageCode } from '@meeshy/shared/utils/language-normalize';
 
 const log = enhancedLogger.child({ module: 'PostService' });
 
@@ -114,7 +115,13 @@ export class PostService {
       expiresAt = new Date(now.getTime() + STATUS_EXPIRY_HOURS * 3600_000);
     }
 
-    const originalLanguage = data.originalLanguage ?? (data.content ? detectLanguage(data.content) : undefined);
+    // Canonicalize the client claim at the write boundary — clients send the raw
+    // platform locale (iOS `fr_FR`, web `fr-FR`). `detectLanguage` already returns
+    // canonical codes, so only the claim path needs normalization. Irreducible
+    // codes (`bas`) fall back verbatim. Mirrors the message funnel (218/219).
+    const originalLanguage = data.originalLanguage
+      ? (normalizeLanguageCode(data.originalLanguage) ?? data.originalLanguage)
+      : (data.content ? detectLanguage(data.content) : undefined);
 
     let repostOfId: string | undefined;
     let originalRepostOfId: string | undefined;
@@ -663,10 +670,17 @@ export class PostService {
     // A language change re-runs the Prisme translation pipeline from the new
     // source language and discards the now-stale translations. Fire-and-forget
     // like the create path; the client re-hydrates as ZMQ results land.
+    // Canonicalize the claim before comparing — a regional variant of the stored
+    // language (`fr-FR` vs stored `fr`) is NOT a language change and must not wipe
+    // valid translations nor relaunch ZMQ jobs. Irreducible codes fall back verbatim.
+    const requestedCanonical =
+      requestedLanguage !== undefined
+        ? (normalizeLanguageCode(requestedLanguage) ?? requestedLanguage)
+        : undefined;
     const languageChanged =
-      requestedLanguage !== undefined && requestedLanguage !== post.originalLanguage;
+      requestedCanonical !== undefined && requestedCanonical !== post.originalLanguage;
     if (languageChanged) {
-      updateData.originalLanguage = requestedLanguage;
+      updateData.originalLanguage = requestedCanonical;
       updateData.translations = {};
     }
 
@@ -684,7 +698,7 @@ export class PostService {
     if (languageChanged) {
       const content = data.content ?? post.content;
       if (content) {
-        this.triggerStoryTextTranslation(postId, content, userId, requestedLanguage).catch((err: unknown) => {
+        this.triggerStoryTextTranslation(postId, content, userId, requestedCanonical).catch((err: unknown) => {
           log.error('triggerStoryTextTranslation failed on update', err instanceof Error ? err : new Error(String(err)));
         });
       }

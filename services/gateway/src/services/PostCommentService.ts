@@ -3,6 +3,7 @@ import { decodeCursor, encodeCursor } from '../routes/posts/types';
 import type { MobileTranscription } from '../routes/posts/types';
 import { authorSelect, commentMediaInclude, NOT_DELETED } from './posts/postIncludes';
 import { TrackingLinkService } from './TrackingLinkService';
+import { normalizeLanguageCode } from '@meeshy/shared/utils/language-normalize';
 
 export class PostCommentService {
   private readonly trackingLinkService: TrackingLinkService;
@@ -62,7 +63,14 @@ export class PostCommentService {
         content,
         parentId: parentId ?? null,
         effectFlags: effectFlags ?? 0,
-        originalLanguage: originalLanguage ?? null,
+        // Canonicalize the client claim at the write boundary (raw platform locale
+        // `fr_FR`/`fr-FR` → `fr`); irreducible codes (`bas`) fall back verbatim.
+        // Mirrors the message + post funnel so the stored source lines up with NLLB
+        // + the Prisme resolver.
+        originalLanguage:
+          originalLanguage != null
+            ? (normalizeLanguageCode(originalLanguage) ?? originalLanguage)
+            : null,
       },
       select: {
         id: true,
