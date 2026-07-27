@@ -4955,7 +4955,10 @@ extension CallManager: WebRTCServiceDelegate {
             requestFreshTurnCredentials(callId: callId)
         }
 
-        let backoffSeconds = reconnectAttempt > 1 ? min(pow(2.0, Double(reconnectAttempt - 1)), 4.0) : 0.0
+        let backoffSeconds = CallReliabilityPolicy.reconnectBackoffSeconds(
+            attempt: reconnectAttempt,
+            unitRandom: Double.random(in: 0..<1)
+        )
         scheduleICERestart(attempt: reconnectAttempt, backoffSeconds: backoffSeconds)
     }
 
