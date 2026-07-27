@@ -2311,13 +2311,20 @@ extension StoryViewerView {
             // different known story (tolerate transient nil reads).
             if let now = currentStory?.id, now != story.id { return }
             let comments = response.data.map { c -> FeedComment in
-                let translated: String? = {
-                    guard let dict = c.translations else { return nil }
-                    for lang in langs {
-                        if let entry = dict[lang] { return entry.text }
-                    }
-                    return nil
-                }()
+                // Résolveur canonique du Prisme, comme les trois autres chemins
+                // de commentaires de ce fichier (réponses, temps réel,
+                // pagination). La fermeture qui vivait ici lui manquait deux
+                // choses : la garde « la langue préférée EST déjà celle de
+                // l'original → afficher l'original », et la comparaison
+                // insensible à la casse. Un commentaire déjà écrit dans la
+                // langue n°1 du lecteur s'affichait donc traduit dans sa langue
+                // n°2, dès lors que le serveur avait produit cette traduction
+                // pour d'autres — l'inverse exact de la règle du Prisme.
+                let translated = PostDetailViewModel.resolveCommentTranslation(
+                    translations: c.translations,
+                    originalLanguage: c.originalLanguage,
+                    preferredLanguages: langs
+                )
                 return FeedComment(
                     id: c.id, author: c.author.name, authorId: c.author.id,
                     authorUsername: c.author.username,
