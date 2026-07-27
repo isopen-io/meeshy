@@ -10,8 +10,17 @@ import {
 } from './posts/reelAffinity';
 import type { CacheStore } from './CacheStore';
 import { getCommunityCoMemberIds, isActiveCommunityMember } from './posts/communityVisibility';
+import { enhancedLogger } from '../utils/logger-enhanced';
+
+const logger = enhancedLogger.child({ module: 'PostFeedService' });
 
 const FEED_SOCIAL_CACHE_TTL = 300; // 5 min — friend lists change infrequently
+
+// Plafond des tombstones renvoyés par un delta-sync de stories. Le filtre de
+// visibilité borne déjà au cercle de l'utilisateur : 500 disparitions sur une
+// même fenêtre delta est très large. Au-delà, la troncature est signalée (voir
+// getStories) et le reliquat attend le prochain fetch complet.
+const STORY_TOMBSTONE_LIMIT = 500;
 
 // Feed payloads share the canonical postInclude — alias kept for callsite clarity.
 const feedPostInclude = postInclude;
@@ -259,8 +268,7 @@ export class PostFeedService {
 
     // G1 delta-sync : `updatedSince` ne renvoie que les stories créées ou
     // modifiées (compteurs, traductions) depuis le timestamp — le client
-    // fusionne avec son cache 24 h. Les disparitions restent couvertes par
-    // les événements socket (story:deleted) et le filtre expiry client.
+    // fusionne avec son cache 24 h.
     // Sans le paramètre, comportement historique complet (rétro-compatible).
     if (options?.updatedSince) {
       where.AND.push({ updatedAt: { gt: options.updatedSince } });
@@ -303,6 +311,39 @@ export class PostFeedService {
       ? encodeCursor(stories[stories.length - 1].createdAt, stories[stories.length - 1].id)
       : null;
 
+    // Tombstones du delta-sync — les DISPARITIONS, que le delta ne peut pas
+    // exprimer autrement (il ne renvoie que ce qui existe encore).
+    //
+    // Sans elles, une story supprimée pendant que le client était hors-ligne ou
+    // fermé n'était jamais réconciliée : l'event socket `story:deleted` ne se
+    // rejoue pas, et le merge delta côté client est purement additif. La story
+    // restait dans son cache — illisible et indéboulonnable — jusqu'au full
+    // fetch (24 h) ou un pull-to-refresh.
+    //
+    // Couvre aussi l'expiration : `ExpiredStoriesCleanupService` soft-delete
+    // les stories périmées toutes les heures, ce qui pose `deletedAt` et
+    // remonte `updatedAt`. Le client garde néanmoins son propre filtre d'expiry
+    // pour ne pas dépendre du passage du balayeur.
+    //
+    // Même `visibilityFilter` que le tray : le delta ne doit pas divulguer
+    // l'existence de stories que l'utilisateur n'a jamais eu le droit de voir.
+    // Lancé ici pour s'exécuter en parallèle des requêtes d'enrichissement.
+    const deletedIdsPromise: Promise<string[]> = options?.updatedSince
+      ? this.prisma.post
+          .findMany({
+            where: {
+              type: PostType.STORY,
+              deletedAt: { not: null },
+              updatedAt: { gt: options.updatedSince },
+              AND: [visibilityFilter],
+            },
+            select: { id: true },
+            orderBy: { updatedAt: 'desc' },
+            take: STORY_TOMBSTONE_LIMIT,
+          })
+          .then((rows) => rows.map((r) => r.id))
+      : Promise.resolve([]);
+
     const storyIds = stories.map((s) => s.id);
     // Le tray ne rend pas les réactions — la requête batch est coupée en
     // projection ; isViewedByMe (anneau vu/non-vu) reste servi dans les deux.
@@ -334,7 +375,18 @@ export class PostFeedService {
       currentUserReactions: userReactionsMap.get(s.id) ?? [],
     }));
 
-    return { items, nextCursor, hasMore };
+    const deletedIds = await deletedIdsPromise;
+    if (deletedIds.length === STORY_TOMBSTONE_LIMIT) {
+      // Troncature : le client gardera quelques fantômes jusqu'à son prochain
+      // full fetch. On le dit plutôt que de le taire — un plafond silencieux se
+      // lit comme une couverture complète.
+      logger.warn(
+        `[getStories] tombstones tronqués à ${STORY_TOMBSTONE_LIMIT} pour user=${userId} — ` +
+        'des suppressions plus anciennes attendront le prochain fetch complet'
+      );
+    }
+
+    return { items, nextCursor, hasMore, deletedIds };
   }
 
   async getStatuses(userId: string, cursor?: string, limit: number = 20) {
