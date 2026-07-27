@@ -228,8 +228,8 @@ fun ChatScreen(
     // user). Each bubble projects a pure outcome from this collected cache.
     val linkPreviewStore = remember { LinkPreviewStore(scope) }
     val linkPreviewCache by linkPreviewStore.cache.collectAsStateWithLifecycle()
-    val listItems = remember(state.messages) {
-        buildChatListItems(state.messages, ZoneId.systemDefault())
+    val listItems = remember(state.messages, state.firstUnreadMessageId) {
+        buildChatListItems(state.messages, ZoneId.systemDefault(), state.firstUnreadMessageId)
     }
 
     val replyThreads = remember(state.messages) {
@@ -486,6 +486,7 @@ fun ChatScreen(
                         items(listItems, key = { it.key }) { item ->
                             when (item) {
                                 is ChatListItem.DayHeader -> DaySeparator(item.dayMillis)
+                                is ChatListItem.UnreadSeparator -> UnreadSeparatorRow(accentColor)
                                 is ChatListItem.Message -> {
                                     val bubble = item.bubble
                                     SwipeToReplyContainer(
@@ -1038,6 +1039,34 @@ private fun DaySeparator(dayMillis: Long, modifier: Modifier = Modifier) {
                 .background(MeeshyTheme.tokens.backgroundTertiary.copy(alpha = 0.7f))
                 .padding(horizontal = MeeshySpacing.md, vertical = MeeshySpacing.xs),
         )
+    }
+}
+
+/**
+ * The "new messages" boundary drawn directly above the first unread message
+ * (port of iOS's unread separator). Accent-coherent: a thin accent rule on each
+ * side of a centered accent-tinted "Nouveaux messages" pill.
+ */
+@Composable
+private fun UnreadSeparatorRow(accentColor: Color, modifier: Modifier = Modifier) {
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(horizontal = MeeshySpacing.lg, vertical = MeeshySpacing.sm),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.sm),
+    ) {
+        HorizontalDivider(modifier = Modifier.weight(1f), color = accentColor.copy(alpha = 0.4f))
+        Text(
+            text = stringResource(R.string.chat_unread_separator),
+            style = MaterialTheme.typography.labelMedium,
+            color = accentColor,
+            modifier = Modifier
+                .clip(RoundedCornerShape(MeeshyRadius.pill))
+                .background(accentColor.copy(alpha = 0.12f))
+                .padding(horizontal = MeeshySpacing.md, vertical = MeeshySpacing.xs),
+        )
+        HorizontalDivider(modifier = Modifier.weight(1f), color = accentColor.copy(alpha = 0.4f))
     }
 }
 

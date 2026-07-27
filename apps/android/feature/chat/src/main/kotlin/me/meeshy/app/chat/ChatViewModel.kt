@@ -13,6 +13,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -118,6 +120,10 @@ data class ChatUiState(
     val hasMoreOlder: Boolean = true,
     val imageViewer: ConversationGallery? = null,
     val scrollToMessageId: String? = null,
+    /** The first unread message's id — the "new messages" boundary, latched once
+     * from the initial unread count captured before the conversation is marked
+     * read (null = nothing unread on open). */
+    val firstUnreadMessageId: String? = null,
     val search: ChatSearchState = ChatSearchState(),
     val mention: MentionAutocompleteState = MentionAutocompleteState(),
     val mentionDisplayNames: Map<String, String> = emptyMap(),
@@ -304,8 +310,33 @@ class ChatViewModel @Inject constructor(
      */
     private val sendingForwards = mutableMapOf<String, String>()
 
+    /**
+     * The conversation's unread count captured from the cache **before** the open
+     * marks it read — the input to the [UnreadMarker] boundary. Null until the
+     * first conversation emission has been read.
+     */
+    private val initialUnreadCount = MutableStateFlow<Int?>(null)
+
     init {
-        viewModelScope.launch { markConversationRead() }
+        // Capture the unread count from the cached conversation BEFORE marking it
+        // read (which zeroes it), then mark read. The first Room emission carries
+        // the current cached value, so this never blocks beyond it.
+        viewModelScope.launch {
+            initialUnreadCount.value =
+                conversationRepository.conversationStream(conversationId).first()?.unreadCount ?: 0
+            markConversationRead()
+        }
+
+        // Latch the "new messages" boundary once, when both the initial unread
+        // count and a non-empty message window are known. A later message arrival
+        // never re-derives it (the boundary is stable for the session).
+        viewModelScope.launch {
+            val count = initialUnreadCount.filterNotNull().first()
+            val bubbles = _state.map { it.messages }.first { it.isNotEmpty() }
+            UnreadMarker.firstUnreadId(bubbles, count)?.let { id ->
+                _state.update { it.copy(firstUnreadMessageId = id) }
+            }
+        }
 
         viewModelScope.launch { loadComposerPermissions() }
 

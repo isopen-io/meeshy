@@ -264,6 +264,47 @@ class ChatViewModelTest {
     }
 
     @Test
+    fun an_unread_conversation_marks_the_first_unread_message() = runTest(dispatcher) {
+        val h = harness(incomingStream(), currentUser = me, conversation = unreadConversation(unread = 2))
+
+        advanceUntilIdle()
+
+        // 3 loaded messages, 2 unread → the boundary is the message at index size-2.
+        assertThat(h.vm.state.value.firstUnreadMessageId).isEqualTo("m2")
+    }
+
+    @Test
+    fun a_fully_read_conversation_marks_no_unread_message() = runTest(dispatcher) {
+        val h = harness(incomingStream(), currentUser = me, conversation = unreadConversation(unread = 0))
+
+        advanceUntilIdle()
+
+        assertThat(h.vm.state.value.firstUnreadMessageId).isNull()
+    }
+
+    private fun unreadConversation(unread: Int) = ApiConversation(
+        id = "c1",
+        type = "group",
+        title = "Squad",
+        unreadCount = unread,
+        participants = listOf(
+            ApiParticipant(id = "p0", userId = "me", username = "atabeth"),
+            ApiParticipant(id = "p1", userId = "other", username = "bob"),
+        ),
+    )
+
+    private fun incomingStream() = flowOf(
+        CacheResult.Fresh(
+            listOf(
+                synced(ApiMessage(id = "m1", conversationId = "c1", senderId = "other", content = "a")),
+                synced(ApiMessage(id = "m2", conversationId = "c1", senderId = "other", content = "b")),
+                synced(ApiMessage(id = "m3", conversationId = "c1", senderId = "other", content = "c")),
+            ),
+            ageMillis = 0,
+        ),
+    )
+
+    @Test
     fun probing_on_open_surfaces_a_server_side_active_call() = runTest(dispatcher) {
         val session = ActiveCallSession(
             id = "call-live-1",
