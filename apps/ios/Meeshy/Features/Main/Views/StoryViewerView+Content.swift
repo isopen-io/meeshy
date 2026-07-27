@@ -6,95 +6,6 @@ import os
 import MeeshySDK
 import MeeshyUI
 
-// MARK: - Reveal Circle Shape
-
-/// Shape animable pour l'effet de révélation circulaire.
-struct RevealCircleShape: Shape {
-    var progress: CGFloat  // 0 = cercle invisible, 1 = plein écran
-
-    var animatableData: CGFloat {
-        get { progress }
-        set { progress = newValue }
-    }
-
-    func path(in rect: CGRect) -> Path {
-        let maxRadius = sqrt(rect.width * rect.width + rect.height * rect.height)
-        let radius = maxRadius * progress
-        let center = CGPoint(x: rect.midX, y: rect.midY)
-        return Path(ellipseIn: CGRect(
-            x: center.x - radius, y: center.y - radius,
-            width: radius * 2, height: radius * 2
-        ))
-    }
-}
-
-// MARK: - Grammaire d'apparition d'une story
-
-/// État de DÉPART des quatre pilotes d'apparition d'une story, dérivé de la
-/// transition d'OUVERTURE choisie par l'auteur.
-///
-/// Pourquoi extraire ça d'un `switch` inline : la même story peut apparaître par
-/// DEUX chemins — le cross-fade intra-groupe (`crossFadeStory`) et le retrait de
-/// l'interlude d'identité inter-groupes (`dismissGroupIntro(revealing:)`). Le
-/// second ne l'animait pas du tout avant le 2026-07-26 : passer d'un groupe à
-/// l'autre posait le slide d'un bloc, alors qu'avancer dans un groupe respectait
-/// le zoom / slide / reveal configuré. Une seule table de valeurs garantit
-/// désormais qu'un zoom reste un zoom, qu'il arrive après un slide ou après le
-/// voile d'identité.
-///
-/// « Armé » = ce qu'on pose HORS animation juste avant la transaction qui ramène
-/// tout au repos (`contentOpacity` 1, `openingScale` 1, `textSlideOffset` 0,
-/// `isRevealActive` vrai pour `.reveal` uniquement).
-///
-/// `nonisolated` porté par le TYPE et non méthode par méthode : `apps/ios`
-/// compile avec `SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor`, et l'annotation au
-/// niveau des membres ne couvre ni la conformance `Equatable` synthétisée ni les
-/// key paths — un helper purement calculatoire doit être neutre en entier.
-nonisolated struct StoryOpeningEntrance: Equatable {
-    /// Toujours 0 : quelle que soit la grammaire, la story entrante part
-    /// invisible et c'est l'animation qui la fait exister.
-    let contentOpacity: Double
-    let openingScale: CGFloat
-    /// Décalage HORIZONTAL en fraction de la largeur du canvas, aligné sur le
-    /// SDK (`StoryRenderer.slideTransitionTravelFraction`). Distinct de
-    /// `textSlideOffset`, qui est un décalage vertical en points.
-    let openingSlideFraction: CGFloat
-    let textSlideOffset: CGFloat
-    let isRevealActive: Bool
-
-    static func armed(for opening: StoryTransitionEffect?) -> StoryOpeningEntrance {
-        switch opening {
-        case .zoom:
-            // `1.08 → 1.0` : le SDK DÉZOOME. Partir de 0.88 zoomait, donc le
-            // même effet nommé jouait à l'envers selon qu'on regardait
-            // l'aperçu du composer (chemin SDK) ou le lecteur.
-            return StoryOpeningEntrance(contentOpacity: 0,
-                                        openingScale: StoryRenderer.zoomTransitionScale,
-                                        openingSlideFraction: 0,
-                                        textSlideOffset: 0, isRevealActive: false)
-        case .slide:
-            // Le SDK glisse HORIZONTALEMENT de 8 % de la largeur du canvas ;
-            // un décalage vertical de 30 pt ne correspondait ni à l'aperçu ni
-            // à l'export.
-            return StoryOpeningEntrance(contentOpacity: 0, openingScale: 1.0,
-                                        openingSlideFraction: StoryRenderer.slideTransitionTravelFraction,
-                                        textSlideOffset: 0, isRevealActive: false)
-        case .reveal:
-            // Rien à armer géométriquement : c'est `RevealCircleShape` qui joue,
-            // piloté par `isRevealActive` qui bascule à vrai DANS l'animation.
-            return StoryOpeningEntrance(contentOpacity: 0, openingScale: 1.0,
-                                        openingSlideFraction: 0,
-                                        textSlideOffset: 0, isRevealActive: false)
-        case .fade, .none:
-            // Fondu + micro-décalage (14 pt) : le fondu seul se lit comme un
-            // saut de luminosité, le décalage lui donne une direction.
-            return StoryOpeningEntrance(contentOpacity: 0, openingScale: 1.0,
-                                        openingSlideFraction: 0,
-                                        textSlideOffset: 14, isRevealActive: false)
-        }
-    }
-}
-
 // MARK: - Extracted from StoryViewerView.swift
 
 extension StoryViewerView {
@@ -592,37 +503,32 @@ extension StoryViewerView {
 
         let incomingEffect = currentStory?.storyEffects?.opening
 
-        // Table d'armement PARTAGÉE avec le retrait de l'interlude inter-groupes
-        // (`dismissGroupIntro(revealing:)`) : une seule grammaire d'apparition,
-        // deux chemins d'entrée. `contentOpacity` n'est PAS réappliqué ici — il
-        // a été mis à 0 avant `update()` plus haut, précisément pour que le swap
-        // de story soit invisible ; le réécrire après coup n'ajouterait rien et
-        // brouillerait cette intention.
-        let entrance = StoryOpeningEntrance.armed(for: incomingEffect)
-        openingScale = entrance.openingScale
-        openingSlideFraction = entrance.openingSlideFraction
-        textSlideOffset = entrance.textSlideOffset
-        isRevealActive = entrance.isRevealActive
-
+        // L'ouverture du slide entrant appartient au SDK. Le canvas est recréé
+        // à chaque story (`.id(story.id)`) : son `init` arme la grammaire de
+        // l'auteur, le premier layout la joue — le même `applyOpening` que
+        // l'aperçu du composer et que l'export MP4. Le lecteur n'a plus aucune
+        // échelle, aucun décalage, aucun masque à armer lui-même.
+        //
+        // `contentOpacity` n'est PAS réappliqué ici — il a été mis à 0 avant
+        // `update()` plus haut, précisément pour que le swap de story soit
+        // invisible ; le réécrire après coup brouillerait cette intention.
+        //
+        // Ne reste donc que le CROSS-FADE : effacer le canvas sortant pendant
+        // que l'entrant joue son ouverture.
         let animDuration: Double
         let animation: Animation
         switch incomingEffect {
-        // Les trois effets NOMMÉS partagent la durée du SDK
-        // (`slideTransitionDuration`). L'app en avait trois différentes —
-        // 0,4 / 0,38 / 0,4 — désalignées de la seule valeur que l'aperçu du
-        // composer et l'export respectent.
-        case .zoom:
-            animDuration = StoryRenderer.slideTransitionDuration
-            animation = .spring(response: StoryRenderer.slideTransitionDuration,
-                                dampingFraction: 0.75)
-        case .slide:
-            animDuration = StoryRenderer.slideTransitionDuration
-            animation = .spring(response: StoryRenderer.slideTransitionDuration,
-                                dampingFraction: 0.82)
-        case .reveal:
+        // Les effets NOMMÉS calent le fondu sur la durée du SDK, pour que le
+        // voile s'efface exactement le temps que l'ouverture dure. `easeOut`
+        // plutôt que les ressorts d'avant : ce qui est animé ici n'est plus une
+        // géométrie mais des opacités (plus l'échelle de SORTIE du canvas
+        // sortant, dont le SDK dérive la sienne linéairement du playhead).
+        case .zoom, .slide, .reveal, .fade:
             animDuration = StoryRenderer.slideTransitionDuration
             animation = .easeOut(duration: StoryRenderer.slideTransitionDuration)
-        default:
+        // Aucune transition déclarée : le fondu du swap n'accompagne rien, il
+        // masque seulement l'échange de surfaces. Il garde sa durée propre.
+        case .none:
             animDuration = 0.35
             animation = .easeOut(duration: 0.35)
         }
@@ -631,10 +537,6 @@ extension StoryViewerView {
         withAnimation(animation) {
             outgoingOpacity = 0
             contentOpacity = 1
-            openingScale = 1.0
-            textSlideOffset = 0
-            openingSlideFraction = 0
-            if incomingEffect == .reveal { isRevealActive = true }
             if closingEffect == .zoom { closingScale = StoryRenderer.zoomTransitionScale }
         }
 

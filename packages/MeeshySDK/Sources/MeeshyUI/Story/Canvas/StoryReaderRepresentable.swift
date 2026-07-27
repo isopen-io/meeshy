@@ -35,6 +35,14 @@ public struct StoryReaderRepresentable: UIViewRepresentable {
     /// suffisant pour un cross-fade d'animation : le canvas sort en opacity 0
     /// avant qu'on perçoive l'absence de mouvement vidéo.
     public internal(set) var isOutgoing: Bool
+    /// Jeton de rejeu de l'ouverture. Toute valeur DIFFÉRENTE de la précédente
+    /// redemande au canvas la grammaire d'ouverture de l'auteur.
+    ///
+    /// Existe parce qu'un canvas peut jouer son ouverture en étant MASQUÉ :
+    /// l'interlude inter-groupes est un overlay posé par-dessus, et la story
+    /// naît dessous. Le viewer incrémente ce jeton au retrait du voile pour
+    /// que l'ouverture soit vue plutôt que ré-implémentée en SwiftUI.
+    public internal(set) var openingGeneration: Int
     /// Stored as `@Sendable` so it can be forwarded into `StoryReaderContext`
     /// which requires `@Sendable () -> Void`. Call-sites supply a plain `() -> Void`
     /// which Swift coerces automatically when the closure itself has no captures
@@ -90,6 +98,7 @@ public struct StoryReaderRepresentable: UIViewRepresentable {
                 mute: Bool = false,
                 isPaused: Bool = false,
                 isOutgoing: Bool = false,
+                openingGeneration: Int = 0,
                 onCompletion: (@Sendable () -> Void)? = nil,
                 onContentReady: (() -> Void)? = nil,
                 onContentProgress: ((Double) -> Void)? = nil,
@@ -106,6 +115,7 @@ public struct StoryReaderRepresentable: UIViewRepresentable {
         self.mute = mute
         self.isPaused = isPaused
         self.isOutgoing = isOutgoing
+        self.openingGeneration = openingGeneration
         self.onCompletion = onCompletion
         self.onContentReady = onContentReady
         self.onContentProgress = onContentProgress
@@ -126,6 +136,11 @@ public struct StoryReaderRepresentable: UIViewRepresentable {
         // l'anim (user 2026-05-28 « les média jouent en double / s'entrevauche »).
         let initialMode: RenderMode = isOutgoing ? .edit : .play
         let view = StoryCanvasUIView(slide: slide, mode: initialMode)
+        // Sème la génération courante SANS rejouer : le canvas qui vient de
+        // naître a déjà son ouverture armée par l'`init`. Sans cette semence,
+        // un canvas créé alors que le compteur est déjà à 3 verrait
+        // `3 != 0` au premier `updateUIView` et rejouerait son ouverture.
+        view.openingGeneration = openingGeneration
         let mediaList = storyItem.media
         let completion = onCompletion
         let contentReady = onContentReady
@@ -247,6 +262,12 @@ public struct StoryReaderRepresentable: UIViewRepresentable {
         // `setPaused` est idempotent côté canvas. Pour outgoing, le canvas est
         // en `.edit` donc `setPaused` est no-op (gate `guard mode == .play`)
         // — mais on l'appelle quand même pour préserver le contrat idempotent.
+        // Rejeu demandé par le viewer (retrait de l'interlude inter-groupes).
+        // Jamais sur le canvas sortant : il est en train de disparaître.
+        if openingGeneration != view.openingGeneration {
+            view.openingGeneration = openingGeneration
+            if !isOutgoing { view.replayOpening() }
+        }
         view.setPaused(isPaused || isOutgoing)
     }
 }

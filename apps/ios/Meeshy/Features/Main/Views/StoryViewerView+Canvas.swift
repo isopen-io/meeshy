@@ -940,13 +940,12 @@ struct StoryCardView: View {
     let outgoingOpacity: Double
     let closingScale: CGFloat
     let contentOpacity: Double
-    let textSlideOffset: CGFloat
-    let openingScale: CGFloat
-    /// Fraction de la LARGEUR du canvas dont l'ouverture `.slide` décale
-    /// horizontalement — même unité et même sens que
-    /// `StoryRenderer.slideTransitionTravelFraction`.
-    let openingSlideFraction: CGFloat
-    let isRevealActive: Bool
+    /// Incrémenté par le viewer quand l'ouverture du slide doit (re)jouer alors
+    /// que le canvas existe déjà — le seul cas étant le retrait de l'interlude
+    /// inter-groupes, qui masquait la story pendant sa propre ouverture.
+    /// Transporté jusqu'à `StoryReaderRepresentable`, qui le compare et
+    /// redemande au SDK. Le lecteur ne rejoue rien lui-même.
+    let openingGeneration: Int
     let bigReactionEmoji: String?
     let bigReactionPhase: Int
     let heartBouncePulse: Int
@@ -1287,6 +1286,7 @@ struct StoryCardView: View {
                                       // chaque story). On sème donc l'état persistant à l'init.
                                       mute: isGlobalMuted,
                                       isPaused: isCanvasPlaybackPaused,
+                                      openingGeneration: openingGeneration,
                                       onContentReady: { isContentReady = true },
                                       onContentProgress: { p in
                                           // Latch monotone : une fois le contenu prêt
@@ -1369,12 +1369,16 @@ struct StoryCardView: View {
                            height: canvasFitSize.height)
                     .clipped()
                     .opacity(contentOpacity)
-                    .offset(x: openingSlideFraction * canvasFitSize.width,
-                            y: textSlideOffset)
-                    .scaleEffect(openingScale)
-                    .clipShape(
-                        RevealCircleShape(progress: isRevealActive ? 1.0 : (currentStory?.storyEffects?.opening == .reveal ? 0.001 : 1.0))
-                    )
+                    // L'ouverture du slide (`zoom` / `slide` / `reveal` /
+                    // `fade`) est rendue par le SDK, À L'INTÉRIEUR du canvas —
+                    // le même `StoryRenderer.applyOpening` que l'aperçu du
+                    // composer et que l'export MP4. Le lecteur n'en garde plus
+                    // de version SwiftUI : elle animait le CADRE entier au lieu
+                    // du contenu, avec ses propres constantes, et le même effet
+                    // nommé se rendait de trois façons selon la surface.
+                    //
+                    // `contentOpacity` reste : c'est le cross-fade ENTRE deux
+                    // stories, pas la grammaire d'ouverture de l'une d'elles.
                     // Carte → plein écran (mutualisé composer). Visuel pur (la frame
                     // reste `canvasFitSize` → projection design→render intacte).
                     // clipShape AVANT scale/offset (cf. canvas sortant ci-dessus :

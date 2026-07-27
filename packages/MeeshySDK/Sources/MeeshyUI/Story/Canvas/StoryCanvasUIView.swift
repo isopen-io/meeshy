@@ -75,6 +75,29 @@ public final class StoryCanvasUIView: UIView {
     public internal(set) var mode: RenderMode
     public internal(set) var currentTime: CMTime = .zero
 
+    /// Ouverture de slide armée, en attente d'une géométrie réelle.
+    ///
+    /// Le canvas du LECTEUR naît directement en `.play`
+    /// (`StoryReaderRepresentable.makeUIView`) : il n'y a pas de transition
+    /// `.edit → .play`, donc pas de passage par `setMode` — et
+    /// `self.mode = mode` dans l'`init` est une assignation stockée, sans
+    /// observateur. L'ouverture du SDK ne jouait donc JAMAIS à la lecture,
+    /// laissant une ré-implémentation SwiftUI seule à l'écran avec ses
+    /// propres constantes.
+    ///
+    /// L'armement est différé plutôt qu'immédiat parce qu'à l'`init` les
+    /// bounds valent encore `.zero` : `.slide` calculerait un débattement nul
+    /// (il est exprimé en fraction de la largeur) et `.reveal` un masque de
+    /// rayon nul. `layoutSubviews` joue dès que la géométrie est connue, puis
+    /// consomme la valeur — un re-layout ne rejoue pas l'ouverture.
+    var pendingOpening: StoryTransitionEffect?
+
+    /// Dernière génération d'ouverture vue par ce canvas. Comparée au jeton du
+    /// `StoryReaderRepresentable` pour ne rejouer QUE sur changement — un
+    /// `updateUIView` est appelé à chaque re-render SwiftUI, ce qui rejouerait
+    /// l'ouverture en continu sur une simple égalité manquante.
+    var openingGeneration: Int = 0
+
     /// Timeline preview (« preview vivante ») : non-nil tant que la sheet
     /// timeline pilote ce canvas comme moniteur de preview. Le canvas reste
     /// en `.edit` pour la plomberie gestes/overlays mais REND en sémantique
@@ -627,6 +650,10 @@ public final class StoryCanvasUIView: UIView {
             // celui passé en argument.
             PlaybackCoordinator.shared.willStartPlaying(external: audioMixer)
             startPlayback()
+            // Le lecteur passe par ici et JAMAIS par `setMode` : c'est le seul
+            // endroit où armer son ouverture. Jouée au premier `layoutSubviews`,
+            // quand les bounds sont réelles.
+            pendingOpening = slide.effects.opening
         }
     }
 

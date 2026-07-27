@@ -727,6 +727,19 @@ extension StoryRenderer {
                                     totalDuration: Double) {
         guard let effect else { return }
         let progress = closingProgress(totalDuration: totalDuration, at: elapsed)
+        // La fermeture reprend la main sur l'ouverture — mais seulement une fois
+        // DANS sa fenêtre : `applyClosing` est appelée à chaque tick, y compris
+        // pendant les 0,5 s d'ouverture, et purger plus tôt l'amputerait.
+        //
+        // Nécessaire parce que `applyOpening` installe ses animations en
+        // `fillMode = .forwards` avec `isRemovedOnCompletion = false` : elles
+        // restent attachées et CLAMPENT la propriété présentée à leur `toValue`.
+        // Les écritures modèle ci-dessous porteraient sur une valeur que rien
+        // n'affiche, et l'auteur qui apparie « zoom à l'entrée, zoom à la
+        // sortie » perdrait sa sortie. Retirer l'animation ne change rien à
+        // l'image : son `toValue` est exactement l'état neutre que
+        // `resetClosing` a déjà posé dans le modèle.
+        if progress > 0 { clearOpeningAnimations(rootLayer: rootLayer) }
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         defer { CATransaction.commit() }
@@ -753,6 +766,18 @@ extension StoryRenderer {
     /// (re)enters a mode so a replay — or the next slide reusing the same canvas
     /// with a different `closing` — never inherits the previous exit frame. Only
     /// the closing-owned mask is removed; an opening `.reveal` mask is preserved.
+    /// Détache les animations d'ouverture posées par `applyOpening`.
+    ///
+    /// `.reveal` n'y figure pas : son animation vit sur le MASQUE, que
+    /// `applyClosingReveal` remplace par le sien (nommé) — et retirer le masque
+    /// d'ouverture rouvrirait le cadrage plutôt que de le libérer.
+    @MainActor
+    static func clearOpeningAnimations(rootLayer: CALayer) {
+        for key in ["opening-zoom", "opening-slide", "opening-fade"] {
+            rootLayer.removeAnimation(forKey: key)
+        }
+    }
+
     @MainActor
     public static func resetClosing(rootLayer: CALayer) {
         CATransaction.begin()

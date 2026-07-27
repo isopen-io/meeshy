@@ -73,58 +73,21 @@ final class StoryGroupIntroRevealOverlapTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(StoryGroupIntroPolicy.holdDuration(total: 0), 0)
     }
 
-    // MARK: - (d) Il y a réellement quelque chose à animer, pour CHAQUE ouverture
-
-    /// Le défaut d'origine de ce chemin n'était pas « une mauvaise animation »
-    /// mais « AUCUNE animation » : la story entrante était déjà à son état de
-    /// repos quand le voile partait. Ce test le rend impossible à réintroduire
-    /// en silence — pour chaque grammaire d'ouverture (transition absente
-    /// comprise), l'état ARMÉ doit différer de l'état de REPOS, et partir d'une
-    /// opacité nulle.
-    func test_armedEntrance_differsFromRest_forEveryOpening() {
-        // `nil` = story sans transition configurée : le chemin le plus fréquent,
-        // et celui qui n'animait rien du tout avant le 2026-07-26.
-        let openings: [StoryTransitionEffect?] = [nil] + StoryTransitionEffect.allCases.map { Optional($0) }
-
-        for opening in openings {
-            let armed = StoryOpeningEntrance.armed(for: opening)
-            // État de repos tel que `dismissGroupIntro` / `crossFadeStory` le
-            // rétablissent DANS la transaction animée. `.reveal` est la seule
-            // grammaire dont le repos est « actif » : son cercle doit finir
-            // plein écran.
-            let rest = StoryOpeningEntrance(contentOpacity: 1,
-                                            openingScale: 1.0,
-                                            openingSlideFraction: 0,
-                                            textSlideOffset: 0,
-                                            isRevealActive: opening == .reveal)
-
-            XCTAssertNotEqual(armed, rest,
-                              "Ouverture \(String(describing: opening)) : l'état armé est déjà " +
-                              "l'état de repos — il n'y aurait rien à animer, le slide serait posé d'un bloc.")
-            XCTAssertEqual(armed.contentOpacity, 0, accuracy: 0.0001,
-                           "Ouverture \(String(describing: opening)) : la story entrante part invisible, " +
-                           "c'est l'animation qui la fait exister.")
-        }
-    }
-
-    /// La révélation circulaire s'ARME fermée : le drapeau ne bascule à vrai que
-    /// DANS la transaction animée, sinon `RevealCircleShape` naîtrait déjà plein
-    /// écran et le cercle ne s'ouvrirait jamais.
-    func test_armedEntrance_revealStartsClosed() {
-        XCTAssertFalse(StoryOpeningEntrance.armed(for: .reveal).isRevealActive)
-    }
-
-    /// Les grammaires géométriques arment bien une géométrie à rattraper — sans
-    /// ça, `.zoom` et `.slide` dégénèreraient en simple fondu.
-    func test_armedEntrance_geometricOpeningsArmAGeometry() {
-        XCTAssertNotEqual(StoryOpeningEntrance.armed(for: .zoom).openingScale, 1.0,
-                          "Le zoom doit partir d'une échelle différente de 1.")
-        // Le slide arme un débattement HORIZONTAL (fraction de la largeur du
-        // canvas, aligné sur le SDK) et non plus un décalage vertical en
-        // points : c'est ce que rendent l'aperçu du composer et l'export.
-        XCTAssertNotEqual(StoryOpeningEntrance.armed(for: .slide).openingSlideFraction, 0,
-                          "Le slide doit partir d'un débattement non nul.")
-    }
+    // MARK: - (d) Il y a réellement quelque chose à animer
+    //
+    // Le défaut d'origine de ce chemin n'était pas « une mauvaise animation »
+    // mais « AUCUNE animation » : la story entrante était déjà à son état de
+    // repos quand le voile partait. La parade a d'abord été une table
+    // d'armement SwiftUI locale au lecteur (`StoryOpeningEntrance`) — c'est
+    // elle qui a été retirée : le même effet nommé se rendait alors de trois
+    // façons selon la surface (aperçu composer, export, lecteur).
+    //
+    // La preuve « il se passe quelque chose » a donc changé de côté. Elle vit
+    // désormais dans le SDK, là où l'ouverture est réellement rendue :
+    // `StoryReaderOpeningPlaybackTests` couvre les quatre grammaires jouées par
+    // un canvas né en `.play`, le rejeu explicite (`replayOpening`, le cas de
+    // CE chemin : l'interlude masque la story pendant son ouverture) et
+    // l'unicité du jeu. Ce qui reste vérifiable ici est structurel — section (f).
 
     // MARK: - (e) Le recouvrement tient dans la fenêtre de swap de groupe
 
@@ -137,20 +100,25 @@ final class StoryGroupIntroRevealOverlapTests: XCTestCase {
                           "Le recouvrement doit rester sous le délai de swap de groupTransition.")
     }
 
-    // MARK: - (f) Garde structurelle : l'armement vit dans dismissGroupIntro
+    // MARK: - (f) Garde structurelle : la demande vit dans dismissGroupIntro
 
-    /// Où l'armement est écrit n'est pas un détail de style. Il est posé HORS
-    /// animation (`contentOpacity = 0`…) et n'est ramené au repos que par la
-    /// transaction qui suit IMMÉDIATEMENT, sans le moindre `await` entre les
-    /// deux. Le déplacer dans le `Task` du timer — « armer, dormir 200 ms,
+    /// Où l'apparition est déclenchée n'est pas un détail de style. Le voile est
+    /// posé HORS animation (`contentOpacity = 0`) et n'est ramené au repos que
+    /// par la transaction qui suit IMMÉDIATEMENT, sans le moindre `await` entre
+    /// les deux. Déplacer ça dans le `Task` du timer — « armer, dormir 200 ms,
     /// animer » — rendrait l'annulation destructrice : la Task annulée entre
     /// les deux temps laisserait `contentOpacity` à 0 pour de bon, c'est-à-dire
     /// un slide NOIR permanent.
     ///
+    /// S'y ajoute la demande de rejeu de l'ouverture. L'interlude est un overlay
+    /// posé PAR-DESSUS le canvas : la story naît dessous et joue son ouverture à
+    /// l'abri du voile, donc invisible. Sans ce rejeu, le passage d'un groupe à
+    /// l'autre reposerait la story d'un bloc — le défaut corrigé le 2026-07-26.
+    ///
     /// La garde lit du code, pas des commentaires : ceux de `presentGroupIntroIfNeeded`
     /// citent justement `contentOpacity` pour expliquer l'interdiction, et les
     /// laisser dans la fenêtre analysée déclencherait un faux positif.
-    func test_openingEntrance_isArmedInDismiss_neverInTheTimerTask() throws {
+    func test_openingReplay_isRequestedInDismiss_neverInTheTimerTask() throws {
         let source = try String(
             contentsOf: URL(fileURLWithPath: #filePath)
                 .deletingLastPathComponent()   // Stories
@@ -168,9 +136,10 @@ final class StoryGroupIntroRevealOverlapTests: XCTestCase {
         }
         let dismissBody = String(source[dismissStart.upperBound..<dismissEnd.lowerBound])
         XCTAssertTrue(
-            dismissBody.contains("StoryOpeningEntrance.armed(for:"),
-            "dismissGroupIntro doit armer la grammaire d'apparition du slide révélé — " +
-            "sans ça, le passage d'un groupe à l'autre repose la story d'un bloc."
+            dismissBody.contains("openingGeneration"),
+            "dismissGroupIntro doit redemander l'ouverture du slide révélé — sans ça, " +
+            "le passage d'un groupe à l'autre repose la story d'un bloc : elle a joué " +
+            "son ouverture sous le voile, personne ne l'a vue."
         )
 
         guard let taskStart = source.range(of: "groupIntroTask = Task { @MainActor in"),
@@ -184,8 +153,8 @@ final class StoryGroupIntroRevealOverlapTests: XCTestCase {
             .joined(separator: "\n")
 
         XCTAssertFalse(
-            taskCode.contains("StoryOpeningEntrance"),
-            "L'armement ne doit JAMAIS vivre dans la Task du timer : une annulation " +
+            taskCode.contains("openingGeneration"),
+            "La demande de rejeu ne doit JAMAIS vivre dans la Task du timer : une annulation " +
             "entre l'armement et l'animation fige la story à opacité 0 (slide noir permanent)."
         )
         XCTAssertFalse(

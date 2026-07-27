@@ -11,8 +11,8 @@ import XCTest
 ///                          `StoryViewerView+Content`, aux constantes propres ;
 ///   - export MP4         → `StoryAVCompositor`, qui reflète le SDK.
 ///
-/// Le lecteur ne joue JAMAIS l'ouverture du SDK : `applyOpening` n'est appelée
-/// que sur une transition `edit → play`, et le canvas du lecteur naît
+/// Le lecteur ne jouait JAMAIS l'ouverture du SDK : `applyOpening` n'était
+/// appelée que sur une transition `edit → play`, et le canvas du lecteur naît
 /// directement en `.play` — or `self.mode = mode` dans l'`init` ne déclenche
 /// pas les observateurs de propriété. La ré-implémentation SwiftUI était donc
 /// seule à l'écran, et ses constantes contredisaient le SDK :
@@ -21,8 +21,11 @@ import XCTest
 ///   `.slide` → SDK 8 % de la LARGEUR, horizontal ; app 30 pt, VERTICAL
 ///   durées   → SDK 0,5 s pour les trois ; app 0,4 / 0,38 / 0,4
 ///
-/// Ces tests verrouillent l'alignement des valeurs. La fusion des DEUX
-/// renderers en un seul (WS1) reste à faire — voir le rapport E2E.
+/// La fusion est faite : le canvas arme son ouverture à la naissance et la joue
+/// au premier layout — `StoryReaderOpeningPlaybackTests`, côté SDK, en couvre le
+/// comportement runtime. Ces tests-ci verrouillent l'ACQUIS côté app : que le
+/// lecteur ne se remette pas à rendre l'ouverture lui-même, et que les
+/// constantes partagées par les trois surfaces gardent leur sens.
 final class StoryOpeningParityTests: XCTestCase {
 
     /// Le zoom d'ouverture part au-DESSUS de 1 et retombe : il dézoome.
@@ -49,52 +52,73 @@ final class StoryOpeningParityTests: XCTestCase {
                                  "Au-delà d'une seconde, l'ouverture retarderait la lecture.")
     }
 
-    /// Garde de non-régression sur la SOURCE du lecteur : les littéraux
-    /// contradictoires ne doivent pas revenir. Ancré sur les VALEURS, pas sur
-    /// une formulation — un renommage de variable ne doit pas casser ce test.
-    func test_readerSourceDoesNotReintroduceItsOwnConstants() throws {
+    // MARK: - Un seul renderer
+
+    /// Garde de non-régression sur la SOURCE du lecteur : la grammaire
+    /// d'ouverture ne doit pas revenir côté app.
+    ///
+    /// Ancrée sur les PILOTES eux-mêmes plutôt que sur une formulation : ce qui
+    /// est interdit, c'est que le lecteur possède une échelle d'ouverture, un
+    /// débattement ou un masque de révélation à lui. Le pendant SDK vérifie de
+    /// son côté que c'est bien `applyOpening` qui joue — les deux gardes se
+    /// tiennent : celle-ci seule laisserait passer « plus rien ne s'affiche ».
+    func test_readerDoesNotRenderTheOpeningItself() throws {
+        for path in [Self.readerContentPath, Self.readerCanvasPath, Self.readerRootPath] {
+            let source = try String(contentsOfFile: path, encoding: .utf8)
+            let code = Self.strippingComments(source)
+            let file = (path as NSString).lastPathComponent
+
+            for banned in ["openingScale", "openingSlideFraction", "isRevealActive", "RevealCircleShape"] {
+                XCTAssertFalse(code.contains(banned),
+                               "\(file) : « \(banned) » est de retour. L'ouverture d'un slide est " +
+                               "rendue par le SDK À L'INTÉRIEUR du canvas, pas par le lecteur autour de lui.")
+            }
+            // La valeur inversée du zoom — le symptôme le plus visible du double
+            // renderer. Ancrée sur l'AFFECTATION, pas sur le littéral nu : 0,88
+            // est une opacité parfaitement ordinaire dans un fichier de vue
+            // (`.white.opacity(0.88)` existe déjà), et bannir le nombre seul
+            // produirait un échec dont le message serait faux.
+            for assignment in ["openingScale = 0.88", "openingScale: 0.88"] {
+                XCTAssertFalse(code.contains(assignment),
+                               "\(file) : le zoom d'ouverture inversé est de retour.")
+            }
+        }
+    }
+
+    /// Ce que le lecteur garde, en revanche : le CROSS-FADE entre deux stories.
+    /// Ce n'est pas une grammaire d'ouverture — il masque le swap de surfaces —
+    /// et le supprimer ferait clignoter le passage d'une story à l'autre.
+    func test_readerStillOwnsTheCrossFade() throws {
         let source = try String(contentsOfFile: Self.readerContentPath, encoding: .utf8)
-        let body = try XCTUnwrap(Self.openingSection(of: source),
-                                 "Section d'ouverture introuvable — le test doit être ré-ancré.")
-
-        // La valeur inversée reste interdite dans la fenêtre d'ouverture ET
-        // dans la table d'armement — elle ne doit revenir NULLE PART.
-        XCTAssertFalse(source.contains("openingScale = 0.88"),
-                       "Le zoom d'ouverture inversé est de retour.")
-        XCTAssertFalse(source.contains("openingScale: 0.88"),
-                       "Le zoom d'ouverture inversé est de retour dans la table d'armement.")
-
-        // La durée reste résolue dans la fenêtre d'ouverture elle-même.
-        XCTAssertTrue(body.contains("StoryRenderer.slideTransitionDuration"),
-                      "Le lecteur doit lire la durée du SDK, pas la redéclarer.")
-
-        // L'échelle et le débattement sont désormais armés par
-        // `StoryOpeningEntrance` (même fichier, partagé avec
-        // `dismissGroupIntro`) : on les cherche donc dans toute la source du
-        // lecteur, pas seulement dans la fenêtre d'ouverture.
-        XCTAssertTrue(source.contains("StoryRenderer.zoomTransitionScale"),
-                      "Le lecteur doit lire l'échelle du SDK, pas la redéclarer.")
-        XCTAssertTrue(source.contains("StoryRenderer.slideTransitionTravelFraction"),
-                      "Le lecteur doit lire le débattement du SDK, pas la redéclarer.")
+        XCTAssertTrue(source.contains("outgoingOpacity"),
+                      "Le cross-fade inter-stories appartient bien au lecteur.")
+        XCTAssertTrue(source.contains("StoryRenderer.slideTransitionDuration"),
+                      "Le lecteur doit caler son fondu sur la durée du SDK, pas en redéclarer une.")
     }
 
     // MARK: - Ancrage
 
-    private static var readerContentPath: String {
+    private static func sourcePath(_ relative: String) -> String {
         // Le fichier de test vit dans apps/ios/MeeshyTests/Features/Stories/ ;
-        // la source visée dans apps/ios/Meeshy/Features/Main/Views/.
+        // les sources visées dans apps/ios/Meeshy/Features/Main/Views/.
         URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent().deletingLastPathComponent()
             .deletingLastPathComponent().deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Views/StoryViewerView+Content.swift")
+            .appendingPathComponent("Meeshy/Features/Main/Views/\(relative)")
             .path
     }
 
-    /// Fenêtre de source couvrant la résolution de l'effet d'ouverture.
-    /// Ancrée sur `let incomingEffect`, présent quel que soit le nommage des
-    /// variables d'animation.
-    private static func openingSection(of source: String) -> String? {
-        guard let range = source.range(of: "let incomingEffect") else { return nil }
-        return String(source[range.lowerBound...].prefix(2600))
+    private static var readerContentPath: String { sourcePath("StoryViewerView+Content.swift") }
+    private static var readerCanvasPath: String { sourcePath("StoryViewerView+Canvas.swift") }
+    private static var readerRootPath: String { sourcePath("StoryViewerView.swift") }
+
+    /// Les commentaires de ces fichiers CITENT les noms bannis pour expliquer
+    /// pourquoi ils ont disparu. Les analyser déclencherait un faux positif —
+    /// et pousserait, pour faire passer le test, à effacer l'explication.
+    private static func strippingComments(_ source: String) -> String {
+        source
+            .split(separator: "\n", omittingEmptySubsequences: false)
+            .filter { !$0.trimmingCharacters(in: .whitespaces).hasPrefix("//") }
+            .joined(separator: "\n")
     }
 }

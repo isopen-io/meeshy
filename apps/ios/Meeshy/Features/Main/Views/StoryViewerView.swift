@@ -285,15 +285,15 @@ struct StoryViewerView: View {
     // Transition lock — prevents overlapping animations
     @State var isTransitioning = false // internal for cross-file extension access
 
-    // Text parallax offset (slides up during cross-dissolve for depth)
-    @State var textSlideOffset: CGFloat = 0 // internal for cross-file extension access
-    /// Glissement HORIZONTAL de l'ouverture `.slide`, en fraction de la largeur
-    /// du canvas — même unité que `StoryRenderer.slideTransitionTravelFraction`.
-    @State var openingSlideFraction: CGFloat = 0 // internal for cross-file extension access
-
-    // Opening effect animation states
-    @State var openingScale: CGFloat = 1.0        // internal for cross-file extension access
-    @State var isRevealActive: Bool = false       // internal for cross-file extension access
+    /// Compteur de rejeu de l'ouverture. L'ouverture elle-même appartient au
+    /// SDK (`StoryRenderer.applyOpening`, joué par le canvas) : le lecteur n'a
+    /// plus ni échelle, ni décalage, ni masque de révélation à lui.
+    ///
+    /// Il reste une chose qu'il est seul à savoir : que l'interlude
+    /// inter-groupes a couvert la story pendant que celle-ci jouait son
+    /// ouverture. Incrémenter ce compteur au retrait du voile redemande la
+    /// grammaire de l'auteur — sans la ré-implémenter.
+    @State var openingGeneration: Int = 0         // internal for cross-file extension access
     @State var closingScale: CGFloat = 1.0        // internal for cross-file extension access
 
     // Horizontal swipe (group ↔ group)
@@ -1352,10 +1352,7 @@ struct StoryViewerView: View {
             outgoingOpacity: outgoingOpacity,
             closingScale: closingScale,
             contentOpacity: contentOpacity,
-            textSlideOffset: textSlideOffset,
-            openingScale: openingScale,
-            openingSlideFraction: openingSlideFraction,
-            isRevealActive: isRevealActive,
+            openingGeneration: openingGeneration,
             bigReactionEmoji: bigReactionEmoji,
             bigReactionPhase: bigReactionPhase,
             heartBouncePulse: heartBouncePulse,
@@ -2033,36 +2030,29 @@ extension StoryViewerView {
         //
         // Jusqu'au 2026-07-26 ce chemin ne faisait QUE retirer le voile : la
         // story entrante était déjà posée dessous, sans zoom, sans slide, sans
-        // révélation. On arme donc ici sa grammaire d'apparition — la MÊME table
-        // que `crossFadeStory` — avant de la ramener au repos dans la
-        // transaction animée juste en dessous. Armement et animation dans le
-        // même appel, sans le moindre `await` entre les deux : c'est ce qui rend
-        // l'opération sûre à l'annulation (impossible de rester bloqué avec
-        // `contentOpacity = 0`, donc un slide noir permanent).
+        // révélation.
+        //
+        // Le canvas a bien joué son ouverture — mais À L'ABRI DU VOILE, puisque
+        // l'interlude est un overlay posé PAR-DESSUS lui : personne ne l'a vue.
+        // On la redemande donc au SDK en incrémentant le jeton, plutôt que de
+        // ré-implémenter la grammaire en SwiftUI comme le lecteur le faisait.
+        // `contentOpacity` reste piloté ici : c'est le fondu du voile, pas
+        // l'ouverture. Aucun `await` entre l'armement et l'animation — c'est ce
+        // qui rend l'opération sûre à l'annulation (impossible de rester bloqué
+        // avec `contentOpacity = 0`, donc un slide noir permanent).
         //
         // Uniquement quand on RÉVÈLE : si le switch de groupe est annulé (tap
-        // gauche), il n'y a rien à faire apparaître — on n'arme rien du tout,
+        // gauche), il n'y a rien à faire apparaître — on ne redemande rien,
         // sinon le slide qu'on est en train de quitter jouerait son entrée juste
         // avant d'être remplacé.
         if revealing {
-            let entrance = StoryOpeningEntrance.armed(for: opening)
-            contentOpacity = entrance.contentOpacity
-            openingScale = entrance.openingScale
-            openingSlideFraction = entrance.openingSlideFraction
-            textSlideOffset = entrance.textSlideOffset
-            isRevealActive = entrance.isRevealActive
+            contentOpacity = 0
+            openingGeneration &+= 1
         }
         withAnimation(StoryGroupIntroPolicy.dismissAnimation(for: opening)) {
             showGroupIntro = false
             if revealing {
                 contentOpacity = 1
-                openingScale = 1.0
-                openingSlideFraction = 0
-                textSlideOffset = 0
-                // `.reveal` est la seule grammaire dont l'état de repos est
-                // « actif » : le cercle doit finir PLEIN écran. Pour les autres,
-                // `false` est déjà l'état neutre côté `RevealCircleShape`.
-                isRevealActive = (opening == .reveal)
             }
         }
         // `isIntroVisible: false` explicite : le flip ci-dessus est enveloppé

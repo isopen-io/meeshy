@@ -257,6 +257,11 @@ extension StoryCanvasUIView {
         }
         storyMediaLog.debug("contentReady FIRED mode=\(String(describing: self.mode), privacy: .public) pendingActivation=\(self.pendingBackgroundActivation, privacy: .public)")
         contentReadyFired = true
+        // L'ouverture accompagne l'APPARITION du contenu, pas la naissance de la
+        // vue. Jusqu'à cet instant le lecteur couvre le canvas d'un placeholder
+        // opaque : jouée plus tôt, l'animation se consumerait sans témoin et le
+        // contenu réel se poserait au repos.
+        playPendingOpeningIfPossible()
         onContentReady?()
         // Consume pending background activation: vidéo bg ET audio bg
         // démarrent ensemble une fois tous les médias chargés. Réutilise les
@@ -423,6 +428,9 @@ extension StoryCanvasUIView {
         // force the signal without staging a real `AVPlayer` status transition.
         guard !contentReadyFired else { return }
         contentReadyFired = true
+        // Même enchaînement que le chemin réel, sinon le seam mentirait sur ce
+        // qu'il simule : l'ouverture attend ce signal.
+        playPendingOpeningIfPossible()
         onContentReady?()
     }
 

@@ -33,6 +33,56 @@ extension StoryCanvasUIView {
         editOverlayLayer.frame = bounds
         CATransaction.commit()
         rebuildLayers()
+        // Après l'assignation du frame : `applyOpening` lit `rootLayer.bounds`
+        // pour dimensionner le débattement de `.slide` et le rayon de `.reveal`.
+        playPendingOpeningIfPossible()
+    }
+
+    /// Redemande l'ouverture du slide courant.
+    ///
+    /// Nécessaire parce qu'un canvas peut jouer son ouverture alors qu'il est
+    /// MASQUÉ : l'interlude inter-groupes du lecteur est un overlay posé
+    /// par-dessus, et la story naît dessous. Au retrait du voile, l'app
+    /// redemande la grammaire de l'auteur plutôt que de la ré-implémenter.
+    ///
+    /// La primitive reste agnostique : elle ne décide pas QUAND rejouer.
+    public func replayOpening() {
+        pendingOpening = slide.effects.opening
+        playPendingOpeningIfPossible()
+    }
+
+    /// Joue l'ouverture armée dès que le canvas est en mesure de la montrer,
+    /// puis la consomme — une ouverture par slide, quel que soit le nombre
+    /// d'appels.
+    ///
+    /// Deux conditions, et ne rien consommer tant qu'elles ne sont pas réunies :
+    ///
+    /// - **une géométrie.** Sur des bounds nulles, `.slide` ne déplacerait rien
+    ///   (son débattement est une fraction de la largeur) et `.reveal` serait
+    ///   masqué par un cercle de rayon nul — slide invisible.
+    /// - **un contenu prêt.** L'ouverture est une animation CoreAnimation : elle
+    ///   court en temps réel, pas au playhead. Or le lecteur couvre le canvas
+    ///   d'un placeholder opaque tant que le média n'a pas atterri. Jouée au
+    ///   premier layout, elle se consumerait entière derrière ce voile et le
+    ///   contenu réel apparaîtrait au repos — exactement le défaut que le rejeu
+    ///   corrige pour l'interlude inter-groupes, mais sur le chemin le plus
+    ///   fréquent : toute story dont les médias sont distants.
+    ///
+    /// Appelée depuis `layoutSubviews` ET depuis `fireContentReadyIfNeeded()` :
+    /// l'ordre des deux signaux n'est pas garanti, le dernier arrivé déclenche.
+    /// En pratique c'est presque toujours le second, parce que `rebuildLayers()`
+    /// reprogramme l'évaluation du contenu (`scheduleContentReadyEvaluation`
+    /// repart de `contentReadyFired = false`) — l'appel depuis le layout ne sert
+    /// que lorsqu'aucune réévaluation n'est en cours.
+    ///
+    /// L'armement n'est consommé qu'en cas de SUCCÈS : un signal arrivé trop tôt
+    /// ne gâche pas l'ouverture, il la laisse repartir au suivant.
+    func playPendingOpeningIfPossible() {
+        guard let effect = pendingOpening, !bounds.isEmpty, contentReadyFired else { return }
+        pendingOpening = nil
+        StoryRenderer.applyOpening(effect,
+                                   rootLayer: rootLayer,
+                                   elapsed: currentTime.seconds)
     }
 
     /// `CanvasGeometry` derived from the current bounds. Tests, `StoryRenderer`,
@@ -149,10 +199,15 @@ extension StoryCanvasUIView {
         StoryRenderer.resetClosing(rootLayer: rootLayer)
         // Apply slide opening animation when transitioning edit→play at t=0.
         // Runs after rebuildLayers() so the layer tree is fresh.
+        //
+        // Même chemin d'armement que le canvas né en `.play` : une seule
+        // grammaire d'ouverture, un seul point de déclenchement. Quand les
+        // bounds sont déjà connues — le cas de l'aperçu du composer, dont la
+        // vue est posée avant qu'on lance la lecture — l'appel joue
+        // immédiatement ; sinon `layoutSubviews` prend le relais.
         if newMode == .play && !wasPlay {
-            StoryRenderer.applyOpening(slide.effects.opening,
-                                       rootLayer: rootLayer,
-                                       elapsed: time.seconds)
+            pendingOpening = slide.effects.opening
+            playPendingOpeningIfPossible()
         }
         if didChange {
             switch newMode {
