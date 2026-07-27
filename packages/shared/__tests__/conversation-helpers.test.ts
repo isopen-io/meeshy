@@ -102,6 +102,46 @@ describe('resolveUserLanguage', () => {
   it('should preserve an unnormalizable in-app pref via lowercase fallback', () => {
     expect(resolveUserLanguage({ systemLanguage: 'ZZZ' })).toBe('zzz');
   });
+
+  // Prisme fall-through: a structurally invalid in-app pref (empty after trim,
+  // whitespace/tab, separators only, sub-2-letter primary subtag) is NOT a
+  // language code and must be treated as UNSET so resolution falls through to
+  // the next priority tier — never returned verbatim. Returning '  ' would
+  // match no MessageTranslation.targetLanguage and force the client onto the
+  // original message even though a valid lower-priority pref exists.
+  it('falls through a whitespace-only systemLanguage to regionalLanguage', () => {
+    expect(resolveUserLanguage({ systemLanguage: '  ', regionalLanguage: 'en' })).toBe('en');
+  });
+
+  it('falls through a tab-only systemLanguage to regionalLanguage', () => {
+    expect(resolveUserLanguage({ systemLanguage: '\t', regionalLanguage: 'en' })).toBe('en');
+  });
+
+  it('falls through a separator-only systemLanguage to regionalLanguage', () => {
+    expect(resolveUserLanguage({ systemLanguage: '-', regionalLanguage: 'en' })).toBe('en');
+  });
+
+  it('falls through a single-letter systemLanguage to regionalLanguage', () => {
+    expect(resolveUserLanguage({ systemLanguage: 'e', regionalLanguage: 'en' })).toBe('en');
+  });
+
+  it('falls through an invalid regionalLanguage to customDestinationLanguage', () => {
+    expect(
+      resolveUserLanguage({ regionalLanguage: '  ', customDestinationLanguage: 'es' })
+    ).toBe('es');
+  });
+
+  it('falls through invalid in-app prefs to deviceLocale', () => {
+    expect(
+      resolveUserLanguage({ systemLanguage: '  ', regionalLanguage: '-' }, { deviceLocale: 'it-IT' })
+    ).toBe('it');
+  });
+
+  it('falls back to fr when every pref and deviceLocale is invalid', () => {
+    expect(
+      resolveUserLanguage({ systemLanguage: '  ', regionalLanguage: '-' }, { deviceLocale: '@@@' })
+    ).toBe('fr');
+  });
 });
 
 describe('generateConversationIdentifier', () => {
@@ -544,6 +584,27 @@ describe('resolveUserLanguagesOrdered', () => {
 
   it('returns empty array when nothing is set (caller decides fallback)', () => {
     expect(resolveUserLanguagesOrdered({})).toEqual([]);
+  });
+
+  // Same Prisme fall-through invariant as resolveUserLanguage: a structurally
+  // invalid in-app pref must be omitted from the ordered list, never emitted as
+  // a bogus entry ahead of valid, lower-priority languages.
+  it('omits a whitespace-only in-app pref from the ordered list', () => {
+    expect(
+      resolveUserLanguagesOrdered({ systemLanguage: '  ', regionalLanguage: 'en' })
+    ).toEqual(['en']);
+  });
+
+  it('omits separator-only and single-letter in-app prefs', () => {
+    expect(
+      resolveUserLanguagesOrdered({ systemLanguage: '-', regionalLanguage: 'e', customDestinationLanguage: 'es' })
+    ).toEqual(['es']);
+  });
+
+  it('still preserves a plausible-but-unknown in-app code (ZZZ)', () => {
+    expect(
+      resolveUserLanguagesOrdered({ systemLanguage: 'ZZZ', regionalLanguage: 'en' })
+    ).toEqual(['zzz', 'en']);
   });
 
   it('handles deviceLocale-only when no in-app prefs set', () => {
