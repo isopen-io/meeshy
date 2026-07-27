@@ -1370,7 +1370,19 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       (port of iOS `DeliveryStatusResolver`) — in a group the delivered/read tier lights up only once
       EVERY recipient has received/read (never on the first peer), trusting `readByAllAt`/`deliveredToAllAt`
       markers ahead of the counters ; `BubbleContentBuilder` consumes it with a reactive `recipientCount`
-      (distinct other members) threaded from `ChatViewModel`. **Pending:** the finer 8-state
+      (distinct other members) threaded from `ChatViewModel`. **Read-receipt reciprocity done**
+      (`chat-read-receipt-reciprocity` 2026-07-27): port of the iOS `DeliveryStatusResolver.degradeRead`
+      rule — a viewer who has turned OFF their own read receipts (`PrivacyPreferences.showReadReceipts`,
+      the §L `SHOW_READ_RECEIPTS` toggle) sees no one else's: a resolved `DeliveryTier.Read` degrades to
+      `Delivered` on their own outgoing bubbles (Delivered/Sent untouched, marker-driven Read degrades too).
+      `DeliveryStatusResolver.resolve` gains `showReadReceipts: Boolean = true` — the default keeps every
+      persistence-path caller (only the DISPLAY site passes the preference, so stored state is never
+      degraded). `BubbleContentBuilder.build` threads it; `ChatViewModel` folds the durable
+      `PrivacyPreferencesStore.preferences.showReadReceipts` into the message-stream combine so toggling
+      the setting re-paints live. +6 resolver tests + 1 VM wiring test, mutation-proven (dropping the
+      degrade fails exactly the 3 Read-degrade tests, the Delivered/Sent-untouched + default-true tests
+      stay green). **SOTA over iOS**: the degrade is a pure, fully-covered arm on the same SSOT resolver,
+      reactive to a live preference toggle. **Pending:** the finer 8-state
       send-lifecycle glyphs (clock/slow/invisible), offline hourglass, tap-checks → read-status sheet
 - [~] Edited / pinned / forwarded indicators; edit-history viewer
       **Edited ✅** (`bubble_edited` badge), **pinned ✅** (`chat-pinned-banner`), **forwarded ✅**

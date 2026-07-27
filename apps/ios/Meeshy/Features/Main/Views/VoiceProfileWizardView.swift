@@ -102,7 +102,7 @@ struct VoiceProfileWizardView: View {
                     .padding(.horizontal, 24)
 
                 VStack(alignment: .leading, spacing: 12) {
-                    consentInfoRow(icon: "mic.fill", text: String(localized: "voice.profile.wizard.consent.samples", defaultValue: "3 echantillons vocaux de 10 secondes minimum", bundle: .main))
+                    consentInfoRow(icon: "mic.fill", text: String(localized: "voice.profile.wizard.consent.samples", defaultValue: "3 échantillons vocaux de 10 secondes minimum", bundle: .main))
                     consentInfoRow(icon: "lock.shield.fill", text: String(localized: "voice.profile.wizard.consent.encrypted", defaultValue: "Donnees chiffrees et stockees de maniere securisee", bundle: .main))
                     consentInfoRow(icon: "trash.fill", text: String(localized: "voice.profile.wizard.consent.rgpd", defaultValue: "Suppression possible a tout moment (RGPD)", bundle: .main))
                     consentInfoRow(icon: "waveform.path", text: String(localized: "voice.profile.wizard.consent.use", defaultValue: "Utilise pour generer des traductions avec votre voix", bundle: .main))
@@ -276,7 +276,7 @@ struct VoiceProfileWizardView: View {
                 .foregroundColor(theme.textPrimary)
 
             if viewModel.totalToUpload > 0 {
-                Text(String(localized: "voice.profile.wizard.uploadProgress", defaultValue: "Envoi \(viewModel.uploadedCount)/\(viewModel.totalToUpload) echantillons", bundle: .main))
+                Text(String(localized: "voice.profile.wizard.uploadProgress", defaultValue: "Envoi \(viewModel.uploadedCount)/\(viewModel.totalToUpload) échantillons", bundle: .main))
                     .font(MeeshyFont.relative(14, weight: .medium, design: .monospaced))
                     .foregroundColor(theme.textSecondary)
 

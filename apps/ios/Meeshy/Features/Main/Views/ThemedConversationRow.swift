@@ -415,6 +415,12 @@ struct ThemedConversationRow: View {
 
     private struct TypingDotsView: View {
         let accentColor: String
+        // These dots pulse with `.repeatForever` — an animation that never ends
+        // on its own — right in the conversation list. Sustained motion of that
+        // kind is what Reduce Motion exists to stop (vestibular disorders), so
+        // the setting has to reach here. `@Environment` and not an observed
+        // singleton: this is a leaf view rendered once per row.
+        @Environment(\.accessibilityReduceMotion) private var reduceMotion
         @State private var isAnimating = false
 
         var body: some View {
@@ -423,12 +429,17 @@ struct ThemedConversationRow: View {
                     Circle()
                         .fill(Color(hex: accentColor))
                         .frame(width: 5, height: 5)
-                        .scaleEffect(isAnimating ? 1.0 : 0.5)
-                        .opacity(isAnimating ? 1.0 : 0.4)
+                        // Motion off rests at the animation's HIGH phase, never
+                        // its low one: frozen at 0.5 scale / 0.4 opacity the
+                        // dots would read as disabled rather than as "typing".
+                        .scaleEffect(reduceMotion ? 1.0 : (isAnimating ? 1.0 : 0.5))
+                        .opacity(reduceMotion ? 1.0 : (isAnimating ? 1.0 : 0.4))
                         .animation(
-                            .easeInOut(duration: 0.5)
-                                .repeatForever(autoreverses: true)
-                                .delay(Double(i) * 0.18),
+                            reduceMotion
+                                ? nil
+                                : Animation.easeInOut(duration: 0.5)
+                                    .repeatForever(autoreverses: true)
+                                    .delay(Double(i) * 0.18),
                             value: isAnimating
                         )
                 }

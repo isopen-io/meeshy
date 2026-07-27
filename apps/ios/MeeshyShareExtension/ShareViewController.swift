@@ -350,6 +350,9 @@ struct ShareContentView: View {
 
                 // Action buttons
                 HStack(spacing: 16) {
+                    // .frame/.padding belong INSIDE the label: a Button's hit region is
+                    // its label's content shape, so applying them outside would draw a
+                    // full-width pill whose text glyph alone responds to touch.
                     Button {
                         onCancel()
                     } label: {
@@ -371,6 +374,9 @@ struct ShareContentView: View {
                             .padding()
                     }
                     .background(selectedContactId != nil ? Color.blue : Color.secondary.opacity(0.2))
+                    // Follows the enabled state: a hard-coded .white over the disabled
+                    // grey fill is ~1.2:1, which reads as a blank primary button until a
+                    // contact is picked.
                     .foregroundColor(selectedContactId != nil ? .white : .secondary)
                     .cornerRadius(12)
                     .disabled(selectedContactId == nil)

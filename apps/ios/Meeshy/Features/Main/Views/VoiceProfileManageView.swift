@@ -282,7 +282,7 @@ struct VoiceProfileManageView: View {
                 Text(String(localized: "voice.profile.voiceSamples", defaultValue: "Échantillons vocaux", bundle: .main))
                     .font(MeeshyFont.relative(15, weight: .semibold))
                     .foregroundColor(theme.textPrimary)
-                Text(String(localized: "voice.profile.addSamples.hint", defaultValue: "Ajoutez des echantillons pour affiner votre voix", bundle: .main))
+                Text(String(localized: "voice.profile.addSamples.hint", defaultValue: "Ajoutez des échantillons pour affiner votre voix", bundle: .main))
                     .font(MeeshyFont.relative(12))
                     .foregroundColor(theme.textSecondary)
             }
