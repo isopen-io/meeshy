@@ -1870,6 +1870,13 @@ struct StoryCardView: View {
                         }
                     }
                 )
+                // Borné au viewport RÉEL, jamais `.infinity` : le canvas gonfle
+                // la largeur intrinsèque du ZStack parent au-delà de l'écran
+                // (~480 pt vs 402 pt sur iPhone 16 Pro), et un calque non borné
+                // s'y étale avant de se faire rogner aux deux bords par le
+                // `.clipped()` final. Même pin que le header, le rail et le
+                // composer.
+                .frame(maxWidth: geometry.size.width)
                 .transition(.move(edge: .bottom).combined(with: .opacity))
                 .zIndex(100)
             }
@@ -1904,6 +1911,11 @@ struct StoryCardView: View {
                         }
                     }
                 )
+                // Idem : sans ce pin, la feuille remplissait les ~480 pt du
+                // ZStack gonflé par le canvas et perdait ~39 pt de chaque côté
+                // sous le `.clipped()` — titre amputé à gauche, boutons
+                // « Traduire » coupés à droite (bug user 2026-07-27).
+                .frame(maxWidth: geometry.size.width)
                 .transition(.move(edge: .bottom).combined(with: .opacity))
                 .zIndex(150)
             }
