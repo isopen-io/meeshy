@@ -163,11 +163,40 @@ vide côté affichage (sans quoi la feuille montrait « __MEESHY.ORIGINAL__ »).
 Reste : **non manipulé à l'écran**. La ligne compile et sa logique est testée
 (9 + 8 tests), mais personne n'a tapé dessus dans le simulateur.
 
-### 4. Cache local des traductions (translator + iOS)
-Directive user : sauvegarder les traductions en cache côté translator comme en
-base côté gateway ; sur iPhone, **préférer le cache tant que le statut est
-actif** et **invalider au bout de 72 heures**. Non commencé — le cache SDK
-(`CacheCoordinator`, `CachePolicy` avec TTL/staleTTL) est le point d'entrée.
+### 4. Cache des traductions — FAIT (précision user : « le cache est à gérer
+### côté FRONTEND »)
+
+**Ce qui existait déjà** et que j'ai vérifié plutôt que réécrit :
+- Le payload `GET /posts/feed/stories` porte les traductions du contenu ET
+  celles de chaque overlay — un rafraîchissement ne les perd pas.
+- `StoryViewModel` fusionne les deux événements socket puis appelle
+  `persistStoryCache()` : les traductions survivent au redémarrage.
+- La feuille des langues n'appelle le réseau que pour une langue ABSENTE ; une
+  langue déjà traduite s'affiche sans aller-retour.
+
+**Le seul défaut réel : le TTL du conteneur.** `CachePolicy.stories` était à
+24 h — au premier cold start du lendemain, `.expired` → spinner et refetch
+complet, alors que le tray aurait pu s'afficher instantanément puis se
+resynchroniser en delta. Passé à **72 h** (`153323a43`), fenêtre fraîche
+inchangée à 5 min.
+
+**Contre-intuition qui rend le changement non trivial** : les stories d'AUTRUI
+sont purgées à l'expiration par `purgeDeadStories`, donc pour elles le TTL
+importe peu. Mais `isDeadStory` garde délibérément les stories de
+l'utilisateur lui-même au-delà de leur expiration (« c'est là que leur auteur
+vient lire les réactions »). Ce sont précisément celles que le TTL de 24 h
+faisait disparaître du cache.
+
+**Ce que je n'ai PAS fait** : `StatusEntry` ne porte aucun champ de traduction —
+le Prisme ne s'applique pas au cache des statuts. Aucun cache de traduction
+dédié par `(postId, langue)` n'a été créé : il ferait doublon avec le payload
+serveur, qui livre déjà les traductions avec la story.
+
+**Côté translator** (fait avant la précision user, `0c7e0dfba`) :
+`translate_with_structure` renvoie vers `translate()` sous 100 caractères sans
+saut de paragraphe ni emoji — donc quasiment tous les overlays. Or `translate()`
+ne consultait ni ne remplissait le cache Redis et codait `from_cache: False` en
+dur : traduire trois fois le même overlay coûtait trois passes modèle.
 
 ### 5. Swipe horizontal vers le groupe précédent
 Les **taps** sont réparés et vérifiés. Le **swipe** passe par un autre chemin
