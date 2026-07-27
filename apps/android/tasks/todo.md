@@ -4,7 +4,21 @@
 > **`apps/android/tasks/android-routine/PROGRESS.md`**. The loop procedure is in
 > `apps/android/tasks/android-routine/ROUTINE.md`. This file is a short pointer.
 
-## This loop (Phase: Feed/Statuses) — slice `status-unreacted-socket` ✅
+## This loop (Phase: Conversations §B) — slice `conversation-drag-to-category` ✅
+Conversation → user-category (re)assignment — closes the last box on the §B "Sectioned list … +
+drag-to-category" line (reducer/hydration/socket shipped 2026-07-26 had no way to *move* a conversation into a
+category). Pure `:feature:conversations/ConversationCategoryReassignment.resolve(current, target)` SSOT (idempotent:
+same → `Unchanged`, else `AssignTo(id)`, port of iOS `setCategory`); `ConversationRepository.setCategoryOptimistic`
+via the shared `updatePreferencesOptimistic` (cache re-buckets instantly, outbox snapshot flushes); `categoryId`
+threaded through `ConversationPrefsPayload` + `ConversationPreferencesUpdate` → `PUT /user-preferences/conversations/:id`
+(gateway already accepts it, `null` = uncategorize, broadcasts back); VM `reassignCategory` + long-press context-menu
+"Move to category" (current checked, en/fr/es/pt). +7 tests, idempotency-guard mutation-proven (always-`AssignTo` →
+exactly the 2 no-op tests fail). Full `assembleDebug testDebugUnitTest` green (4m 51s, 943 tasks, APK). Diff =
+`apps/android` only. Reviewer PASS. Uncategorize (`categoryId = null`) deferred: `explicitNulls = false` drops a null
+field so it needs an explicit-null `PUT`. Next: drag-gesture polish, uncategorize seam, `CategoryPickerField`,
+`OnboardingFlowView`, or Kover coverage-gate infra.
+
+## Prior loop (Phase: Feed/Statuses) — slice `status-unreacted-socket` ✅
 Realtime `status:unreacted` — the symmetric inverse of the `status:reacted` handler, folding the gateway's canonical
 reaction-removal event into the live mood-statuses bar (a SOTA symmetry iOS's `StatusViewModel` bar handlers lack).
 `:core:model` `SocketStatusUnreactedData{statusId,userId,emoji}`; `:sdk-core` `SocialSocketManager.statusUnreacted`

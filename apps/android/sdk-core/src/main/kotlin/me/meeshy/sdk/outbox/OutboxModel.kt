@@ -216,6 +216,14 @@ public data class ConversationPrefsPayload(
     val isMuted: Boolean,
     val isArchived: Boolean,
     val mentionsOnly: Boolean,
+    /**
+     * The conversation's assigned user category (`null` = uncategorized), carried
+     * so a drag-to-category reassignment persists through the same snapshot lane.
+     * A `null` value serializes away (the shared `explicitNulls = false` JSON), so
+     * an unrelated pin/mute snapshot of an uncategorized row never blanks a category
+     * server-side — the gateway leaves an omitted `categoryId` untouched.
+     */
+    val categoryId: String? = null,
 )
 
 /**

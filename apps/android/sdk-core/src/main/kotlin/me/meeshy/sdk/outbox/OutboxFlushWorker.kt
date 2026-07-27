@@ -199,6 +199,7 @@ class OutboxFlushWorker @AssistedInject constructor(
                 isMuted = prefs.isMuted,
                 isArchived = prefs.isArchived,
                 mentionsOnly = prefs.mentionsOnly,
+                categoryId = prefs.categoryId,
             )
             when (apiCall { conversationApi.updatePreferences(row.targetId, body) }) {
                 is NetworkResult.Success -> SendResult.Success

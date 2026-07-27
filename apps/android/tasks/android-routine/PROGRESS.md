@@ -1,5 +1,47 @@
 # Progress — state & what to do next
 
+> On 2026-07-27 the **conversation → user-category (re)assignment** landed (slice
+> `conversation-drag-to-category`, feature-parity §B Conversations — the last open box on the "Sectioned
+> list … + drag-to-category" line, whose reducer/hydration/socket building blocks all shipped 2026-07-26
+> but had **no way to actually move a conversation into a category**). **Added (production, all
+> `apps/android`):** (1) `:feature:conversations/ConversationCategoryReassignment` — a pure decision SSOT
+> (`resolve(currentCategoryId, targetCategoryId): CategoryReassignment` → `Unchanged` | `AssignTo(id)`)
+> porting the idempotency of iOS `ConversationOptionsViewModel.setCategory` (its optimistic write + network
+> call only fire when the id actually changes). (2) `ConversationRepository.setCategoryOptimistic(id,
+> categoryId)` — mirrors `setPinnedOptimistic`, driving the shared `updatePreferencesOptimistic` helper
+> (`it.copy(categoryId = …)`): the cached `categoryId` mutates instantly (SWR re-emit → `ConversationSections.of`
+> re-buckets the row into that category's section) and a full-snapshot `UPDATE_CONVERSATION_PREFS` mutation
+> joins the prefs lane. (3) `ConversationPrefsPayload.categoryId` + `ConversationPreferencesUpdate.categoryId`
+> — thread the assigned category through the outbox snapshot + the flush `PUT /user-preferences/conversations/:id`
+> (the gateway route **already** accepts `categoryId` — `null` = uncategorize — and broadcasts
+> `USER_PREFERENCES_UPDATED`, so no gateway change; the enqueue now also carries `snapshot.categoryId` on
+> pin/mute/archive snapshots, harmless: a null omits under the shared `explicitNulls = false` JSON so a
+> category is never blanked, a non-null re-asserts the same id). (4) `ConversationListViewModel.reassignCategory(id,
+> targetCategoryId)` — folds the pure SSOT (Unchanged → nothing; AssignTo → `runPrefMutation { setCategoryOptimistic }`
+> + WorkManager flush). (5) `ConversationListScreen` context menu (long-press — the faithful iOS options-sheet
+> path, a natural gesture) gains a **"Move to category"** section: one item per user category, the current one
+> checked (en/fr/es/pt). **SOTA over iOS:** iOS couples the optimistic mutation to a network call unconditionally
+> and lets the store no-op; Android hoists the idempotency into a pure, fully-covered value type so a re-select of
+> the current category never even enqueues an outbox row. **+7 behavioural tests:** `ConversationCategoryReassignmentTest`
+> (3: assign-from-uncategorized / reassign-different / idempotent-no-op), `ConversationRepositoryTest` (2:
+> assigns-cache-and-queues-snapshot-carrying-categoryId / no-op-when-already-in-category),
+> `ConversationListViewModelTest` (2: assigns-and-schedules-flush / no-op-when-already-in-category). **Mutation
+> (RED proof):** collapsing `resolve` to always-`AssignTo` (drop the idempotency guard) fails **exactly** the 2
+> no-op tests (`ConversationCategoryReassignmentTest › …already belongs to is a no-op` +
+> `ConversationListViewModelTest › reassign_category_is_a_noop_…`, `BUILD FAILED in 41s`), no collateral;
+> restored after. **Gate:** `./apps/android/meeshy.sh check` (= `assembleDebug testDebugUnitTest`) — full
+> assemble + all-module JVM unit tests green (`BUILD SUCCESSFUL in 4m 51s`, 943 tasks, APK produced). Reviewer
+> **PASS** (diff `apps/android` only — 1 new `:feature` core + 1 new test + repo/payload/DTO/VM/menu wiring +
+> tracking docs; SDK purity — `resolve` is a stateless value-type decision, `setCategoryOptimistic` reuses the
+> existing optimistic-prefs building block, the "when to call the network" rule stays in the VM; SSOT — one
+> category read/write path, reuses `updatePreferencesOptimistic`/`ConversationSections.of`, re-implements
+> nothing; instant-app — optimistic cache write re-buckets the row before the network confirms; UDF — immutable
+> outcome type, pure `resolve`; no tautological tests — literals + the mutation proof). **Next slice:** the
+> **drag** gesture polish (long-press-drag a row onto a section header, reusing `reassignCategory`), OR the
+> **uncategorize** path (needs an explicit-null `PUT` — a small `:core:network` serialization seam), OR the
+> app-side **`CategoryPickerField` / `TagInputField`** composables, OR the paged **`OnboardingFlowView`**
+> Compose scaffold (Auth), OR the tracked **Kover 90% coverage-gate infra**.
+
 > On 2026-07-26 the **category socket real-time sync** landed (slice
 > `conversation-category-socket-sync`, feature-parity §B Conversations — the real-time completion of the
 > hydration + reducer slices: the shipped `UserCategoryCatalog.apply(CategoryEvent)` reducer and the

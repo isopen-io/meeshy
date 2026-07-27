@@ -521,6 +521,39 @@ class ConversationListViewModelTest {
     }
 
     @Test
+    fun reassign_category_assigns_the_conversation_and_schedules_a_flush() = runTest(dispatcher) {
+        val repo = repositoryReturning(
+            flowOf(CacheResult.Fresh(listOf(ApiConversation(id = "c1", title = "Team")), ageMillis = 0)),
+        )
+        coEvery { repo.setCategoryOptimistic("c1", "work") } returns true
+        val vm = viewModel(repo)
+        advanceUntilIdle()
+
+        vm.reassignCategory("c1", "work")
+        advanceUntilIdle()
+
+        coVerify { repo.setCategoryOptimistic("c1", "work") }
+        verify { workManager.enqueue(any<androidx.work.WorkRequest>()) }
+    }
+
+    @Test
+    fun reassign_category_is_a_noop_when_already_in_that_category() = runTest(dispatcher) {
+        val categorized = ApiConversation(
+            id = "c1",
+            title = "Team",
+            preferences = ApiConversationPreferences(categoryId = "work"),
+        )
+        val repo = repositoryReturning(flowOf(CacheResult.Fresh(listOf(categorized), ageMillis = 0)))
+        val vm = viewModel(repo)
+        advanceUntilIdle()
+
+        vm.reassignCategory("c1", "work")
+        advanceUntilIdle()
+
+        coVerify(exactly = 0) { repo.setCategoryOptimistic(any(), any()) }
+    }
+
+    @Test
     fun toggle_pin_unpins_an_already_pinned_conversation() = runTest(dispatcher) {
         val pinned = ApiConversation(
             id = "c1",

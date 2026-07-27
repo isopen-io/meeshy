@@ -916,7 +916,24 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       fan-in in the manager and the reducer stays a pure value type. +8 (`CategorySocketPayloadsTest`)
       +5 (`CategorySocketManagerTest`) +4 (VM socket-fold) +1 (coordinator attach) tests; VM socket-fold
       mutation-proven (`catalog.apply(event)`→`catalog` → exactly 4 failures, no collateral).
-      **Reste**: drag-to-category reassignment (optimistic PATCH driving `reorder`).
+      **Category (re)assignment done** (slice `conversation-drag-to-category`, 2026-07-27): a conversation
+      can now be moved into / between user categories from the long-press context menu (the faithful iOS
+      `ConversationOptionsViewModel.setCategory` path — the options-sheet, not a bespoke drag gesture). New
+      pure `:feature:conversations/ConversationCategoryReassignment.resolve(current, target)` SSOT gates the
+      write: dropping a row on the category it already sits in is inert (no optimistic write, no outbox row,
+      no flush), every other target reassigns. Wired through the existing optimistic-prefs pipeline:
+      `ConversationRepository.setCategoryOptimistic(id, categoryId)` mutates the cached `categoryId`
+      instantly (the row re-buckets into that category's section via `ConversationSections.of`) and enqueues
+      an `UPDATE_CONVERSATION_PREFS` snapshot; `ConversationPrefsPayload` + `ConversationPreferencesUpdate`
+      now carry `categoryId`, so the flush `PUT /user-preferences/conversations/:id` persists it (the gateway
+      already accepts `categoryId`, `null` = uncategorize, and broadcasts `USER_PREFERENCES_UPDATED`). The
+      context menu lists each user category (current one checked). +7 tests (3 core, 2 repo, 2 VM), the
+      idempotency guard mutation-proven (always-`AssignTo` → exactly the 2 no-op tests fail, no collateral).
+      **Reste**: **drag** gesture polish (long-press-drag onto a section header) as a UX enhancement over the
+      menu; and **uncategorize** (drag/menu → "Mes conversations", `categoryId = null`) — deferred because the
+      shared `explicitNulls = false` JSON omits a null field, so persisting an uncategorize needs an
+      explicit-null `PUT` path (tracked follow-up), and the reassignment SSOT deliberately models assignment
+      only to avoid exposing a decision the wiring cannot yet honour.
 - [x] Filtering (all/unread/personal/private/open/global/channels/favorites/archived) + search overlay
       — `ConversationFilter` enum (couleurs iOS) + `ConversationFilters.apply` pur
       (port fidèle de `filterConversations` : soft-delete masqué partout, archivés

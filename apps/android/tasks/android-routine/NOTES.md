@@ -2,6 +2,26 @@
 
 Append-only log of gotchas and decisions that save time next run.
 
+## Lesson (2026-07-27, `conversation-drag-to-category`) — `explicitNulls = false` silently drops a null field, so "clear to null" is NOT free
+- **`MeeshyApi.json` sets `explicitNulls = false`** (`core/network/.../MeeshyApi.kt`). A nullable field
+  set to `null` **serializes away entirely** — it is NOT sent as `"field": null`. This is exactly what you
+  want for a partial-PATCH DTO (`ConversationPreferencesUpdate` — "null = don't touch this field"), and it's
+  why threading `categoryId = snapshot.categoryId` into every prefs snapshot is safe: a pin/mute snapshot of
+  an *uncategorized* row omits `categoryId`, so the gateway (`if (data.categoryId !== undefined)`) never
+  blanks a category as a side effect.
+- **The flip side:** you therefore CANNOT clear a field to null through this DTO. Assigning a conversation
+  to a category (`categoryId = "work"`) persists fine; *uncategorizing* it (`categoryId = null`) would be
+  dropped from the body → the gateway keeps the old category → the optimistic local change snaps back on the
+  next refresh. Persisting an uncategorize needs an explicit-null `PUT` (a dedicated `Json { explicitNulls =
+  true }` for that one body, or a sentinel the route understands). Deferred; do not wire a `setCategoryOptimistic(id, null)`
+  caller until that seam exists, or you ship a snap-back bug.
+- **Pattern:** when a pure decision could produce a "clear to null" outcome the wiring can't yet persist,
+  model ONLY the outcomes you can honour (here `resolve` returns `Unchanged` | `AssignTo(String)`, never an
+  `Uncategorize`). A tested-but-unhonourable branch is a latent bug, not future-proofing.
+- **Reuse win:** conversation→category assignment is just another `updatePreferencesOptimistic { it.copy(...) }`
+  — the whole optimistic-cache + outbox-snapshot + coalescer + WorkManager pipeline came for free. New
+  per-conversation prefs should almost always ride this helper rather than inventing a write path.
+
 ## Lesson (2026-07-26, `conversation-category-hydration`) — thread the clock into `cacheFirstFlow`, and give the snapshot store a cold-vs-empty contract
 - **`cacheFirstFlow(policy, source)` uses its OWN default `SystemCacheClock` for age classification —
   NOT the source's clock.** `ConversationRepository` gets away with this because production uses the
