@@ -254,6 +254,50 @@ describe('CommentReactionService', () => {
       expect(mockPrisma.commentReaction.create).not.toHaveBeenCalled();
     });
 
+    // The handler relies on `unchanged` to decide whether to re-broadcast
+    // `comment:reaction-added` and re-notify the author. A re-fire (existing row)
+    // MUST report unchanged: true so the handler skips both. Mirrors ReactionService.
+    it('should report unchanged: true when the reaction already exists', async () => {
+      const existingReaction = createMockCommentReaction();
+      mockPrisma.commentReaction.findFirst.mockResolvedValue(existingReaction);
+
+      const result = await service.addReaction({
+        commentId: testCommentId,
+        userId: testUserId,
+        emoji: '👍'
+      });
+
+      expect(result?.unchanged).toBe(true);
+      expect(mockPrisma.commentReaction.create).not.toHaveBeenCalled();
+    });
+
+    it('should report unchanged: false on a fresh insert', async () => {
+      const result = await service.addReaction({
+        commentId: testCommentId,
+        userId: testUserId,
+        emoji: '👍'
+      });
+
+      expect(result?.unchanged).toBe(false);
+      expect(mockPrisma.commentReaction.create).toHaveBeenCalledTimes(1);
+    });
+
+    it('should report unchanged: true on a concurrent-insert race (P2002)', async () => {
+      const existingReaction = createMockCommentReaction();
+      mockPrisma.commentReaction.findFirst
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce(existingReaction);
+      mockPrisma.commentReaction.create.mockRejectedValue({ code: 'P2002' });
+
+      const result = await service.addReaction({
+        commentId: testCommentId,
+        userId: testUserId,
+        emoji: '👍'
+      });
+
+      expect(result?.unchanged).toBe(true);
+    });
+
     it('should throw error when max reactions per user reached', async () => {
       // User has already 1 different emoji (MAX_REACTIONS_PER_USER = 1)
       mockPrisma.commentReaction.findMany.mockResolvedValue([

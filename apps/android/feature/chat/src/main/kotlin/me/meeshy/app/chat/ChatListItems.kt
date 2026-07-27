@@ -9,12 +9,23 @@ import java.util.Locale
 import me.meeshy.sdk.util.isoToEpochMillis
 import me.meeshy.ui.component.bubble.BubbleContent
 
-/** One row of the chat list: a day separator or a message bubble. */
+/** One row of the chat list: a day separator, the unread boundary, or a message bubble. */
 sealed class ChatListItem {
     abstract val key: String
 
     data class DayHeader(val dayMillis: Long) : ChatListItem() {
         override val key: String get() = "day-$dayMillis"
+    }
+
+    /** The "new messages" boundary, drawn directly above the first unread message. */
+    data object UnreadSeparator : ChatListItem() {
+        override val key: String get() = "unread-separator"
+    }
+
+    /** The end-to-end-encryption notice, pinned at the very top once the reader
+     * has reached the start of an encrypted conversation's history. */
+    data object EncryptionNotice : ChatListItem() {
+        override val key: String get() = "encryption-notice"
     }
 
     data class Message(val bubble: BubbleContent) : ChatListItem() {
@@ -26,9 +37,25 @@ sealed class ChatListItem {
  * Interleaves day separators into an ascending message list — port of the
  * iOS `MessageListItem.dayHeader` datasource rows. A message without a
  * parsable timestamp never opens a new day: it rides with the previous group.
+ *
+ * When [firstUnreadId] names a loaded message, a single [ChatListItem.UnreadSeparator]
+ * is inserted directly above it (below that message's day header, if any). An id
+ * absent from [bubbles] inserts nothing.
+ *
+ * When [showEncryptionNotice] is true, a single [ChatListItem.EncryptionNotice]
+ * is prepended above everything (including the first day header) — the reader is at
+ * the start of an encrypted conversation's history.
  */
-fun buildChatListItems(bubbles: List<BubbleContent>, zone: ZoneId): List<ChatListItem> {
+fun buildChatListItems(
+    bubbles: List<BubbleContent>,
+    zone: ZoneId,
+    firstUnreadId: String? = null,
+    showEncryptionNotice: Boolean = false,
+): List<ChatListItem> {
     val items = mutableListOf<ChatListItem>()
+    if (showEncryptionNotice) {
+        items += ChatListItem.EncryptionNotice
+    }
     var currentDay: LocalDate? = null
     bubbles.forEach { bubble ->
         val millis = isoToEpochMillis(bubble.createdAtIso)
@@ -38,6 +65,9 @@ fun buildChatListItems(bubbles: List<BubbleContent>, zone: ZoneId): List<ChatLis
                 currentDay = day
                 items += ChatListItem.DayHeader(millis)
             }
+        }
+        if (firstUnreadId != null && bubble.messageId == firstUnreadId) {
+            items += ChatListItem.UnreadSeparator
         }
         items += ChatListItem.Message(bubble)
     }

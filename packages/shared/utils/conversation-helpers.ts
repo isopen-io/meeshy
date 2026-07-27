@@ -2,7 +2,7 @@
  * Helpers utilitaires pour les conversations
  * Logique métier réutilisable entre Gateway et Frontend
  */
-import { normalizeLanguageCode, normalizeLanguageForDedup } from './language-normalize.js';
+import { normalizeLanguageCode } from './language-normalize.js';
 
 /**
  * Options de résolution de langue. La locale appareil intervient en 4e priorité
@@ -53,9 +53,12 @@ export function resolveUserLanguage(
   },
   opts: ResolveUserLanguageOpts = {}
 ): string {
-  if (user.systemLanguage) return normalizeInAppLanguage(user.systemLanguage);
-  if (user.regionalLanguage) return normalizeInAppLanguage(user.regionalLanguage);
-  if (user.customDestinationLanguage) return normalizeInAppLanguage(user.customDestinationLanguage);
+  const system = normalizeInAppLanguage(user.systemLanguage);
+  if (system) return system;
+  const regional = normalizeInAppLanguage(user.regionalLanguage);
+  if (regional) return regional;
+  const custom = normalizeInAppLanguage(user.customDestinationLanguage);
+  if (custom) return custom;
   const normalized = normalizeLanguageCode(opts.deviceLocale);
   if (normalized) return normalized;
   return 'fr';
@@ -72,13 +75,26 @@ export function resolveUserLanguage(
  * exactement le bug que {@link normalizeLanguageCode} corrige déjà côté
  * deviceLocale.
  *
- * Fallback `.toLowerCase()` : zéro régression pour les codes que
- * `normalizeLanguageCode` ne sait pas canoniser (ISO 639-3 inconnu irréductible)
- * — ils restent lowercased comme avant plutôt que d'être perdus (`undefined`
- * ferait chuter au niveau suivant, changement de comportement non désiré).
+ * Retourne `undefined` quand la préférence est absente OU structurellement
+ * invalide (vide/espaces après trim, séparateurs seuls, sous-tag primaire de
+ * moins de 2 lettres alphabétiques) : une telle valeur n'est PAS un code de
+ * langue et doit être traitée comme NON DÉFINIE pour laisser la résolution
+ * tomber sur le niveau suivant du Prisme. La ressusciter verbatim (`'  '`,
+ * `'-'`, `'e'`) renverrait un code qui ne matche aucune traduction et forcerait
+ * le client sur l'original alors qu'une préférence valide de priorité inférieure
+ * existe — violation directe du Prisme.
+ *
+ * Repli `.toLowerCase()` du sous-tag primaire : zéro régression pour les codes
+ * que `normalizeLanguageCode` ne sait pas canoniser mais qui restent des codes
+ * plausibles (ISO 639-3 inconnu irréductible, `'ZZZ'` → `'zzz'`) — ils sont
+ * conservés comme avant, seul le repli des valeurs NON-CODE change.
  */
-function normalizeInAppLanguage(code: string): string {
-  return normalizeLanguageForDedup(code);
+function normalizeInAppLanguage(code: string | null | undefined): string | undefined {
+  if (!code) return undefined;
+  const normalized = normalizeLanguageCode(code);
+  if (normalized) return normalized;
+  const primary = code.split(/[-_]/)[0]?.trim().toLowerCase();
+  return primary && /^[a-z]{2,}$/.test(primary) ? primary : undefined;
 }
 
 /**
@@ -102,9 +118,9 @@ export function resolveUserLanguagesOrdered(
   opts: ResolveUserLanguageOpts = {}
 ): string[] {
   const candidates: Array<string | null | undefined> = [
-    user.systemLanguage ? normalizeInAppLanguage(user.systemLanguage) : undefined,
-    user.regionalLanguage ? normalizeInAppLanguage(user.regionalLanguage) : undefined,
-    user.customDestinationLanguage ? normalizeInAppLanguage(user.customDestinationLanguage) : undefined,
+    normalizeInAppLanguage(user.systemLanguage),
+    normalizeInAppLanguage(user.regionalLanguage),
+    normalizeInAppLanguage(user.customDestinationLanguage),
     normalizeLanguageCode(opts.deviceLocale),
   ];
   const seen = new Set<string>();

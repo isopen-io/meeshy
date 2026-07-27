@@ -163,6 +163,7 @@ const sampleReactionData = {
   emoji: EMOJI,
   createdAt: new Date(),
   updatedAt: new Date(),
+  unchanged: false,
 };
 
 // ===== TESTS =====
@@ -297,6 +298,46 @@ describe('PostReactionHandler', () => {
         SERVER_EVENTS.POST_REACTION_ADDED,
         expect.anything()
       );
+    });
+
+    it('test_handleAddReaction_unchanged_noBroadcastNoNotification', async () => {
+      // Idempotent no-op: the user already reacted with exactly this emoji (a like
+      // re-fire — optimistic double-fire, socket retry after a lost ACK, or a second
+      // device echoing the same tap). addReaction returns `unchanged: true` and the
+      // handler MUST reply success (the desired end-state is already achieved) but
+      // MUST NOT re-broadcast `post:liked` nor re-notify the author — re-emitting
+      // spams every feed/post-room socket and re-notifies the author for a reaction
+      // that never changed state. Mirrors ReactionHandler.handleReactionAdd's
+      // `unchanged` guard.
+      const socket = createMockSocket();
+      const data = { postId: POST_ID, emoji: '❤️' };
+      const callback = jest.fn();
+
+      mockValidate.mockReturnValue({ success: true, data });
+      mockReactionService.addReaction.mockResolvedValue({ ...sampleReactionData, emoji: '❤️', unchanged: true });
+      mockReactionService.createUpdateEvent.mockResolvedValue({ ...sampleUpdateEvent, emoji: '❤️' });
+      mockPrisma.post.findUnique.mockResolvedValue({
+        id: POST_ID,
+        authorId: ANOTHER_USER_ID,
+        type: 'POST',
+        visibility: 'PUBLIC',
+        visibilityUserIds: [],
+        deletedAt: null,
+        likeCount: 7,
+        reactionSummary: { '❤️': 7 },
+      });
+
+      await handler.handleAddReaction(socket as any, data, callback);
+
+      // ACK success preserved (idempotent add is a success from the client's view).
+      expect(callback).toHaveBeenCalledWith({ success: true, data: { ...sampleUpdateEvent, emoji: '❤️' } });
+      // No redundant fan-out, no redundant notification.
+      expect(mockSocialEvents.broadcastPostLiked).not.toHaveBeenCalled();
+      expect(mockIO._toEmit).not.toHaveBeenCalledWith(
+        SERVER_EVENTS.POST_REACTION_ADDED,
+        expect.anything()
+      );
+      expect(mockNotificationService.createPostLikeNotification).not.toHaveBeenCalled();
     });
 
     it('test_handleAddReaction_heartOnStory_keepsReactionAdded_noPostLiked', async () => {

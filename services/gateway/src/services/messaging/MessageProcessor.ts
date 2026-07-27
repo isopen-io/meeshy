@@ -119,10 +119,10 @@ export class MessageProcessor {
           }
 
           const meeshyShortLink = `m+${token}`;
-          processedContent = processedContent.replace(fullMatch, meeshyShortLink);
+          processedContent = processedContent.replace(fullMatch, () => meeshyShortLink);
         } catch (linkError) {
           logger.error(`[MessageProcessor] Error processing [[url]]:`, linkError);
-          processedContent = processedContent.replace(fullMatch, url);
+          processedContent = processedContent.replace(fullMatch, () => url);
         }
       }
 
@@ -160,16 +160,19 @@ export class MessageProcessor {
           }
 
           const meeshyShortLink = `m+${token}`;
-          processedContent = processedContent.replace(fullMatch, meeshyShortLink);
+          processedContent = processedContent.replace(fullMatch, () => meeshyShortLink);
         } catch (linkError) {
           logger.error(`[MessageProcessor] Error processing <url>:`, linkError);
-          processedContent = processedContent.replace(fullMatch, url);
+          processedContent = processedContent.replace(fullMatch, () => url);
         }
       }
 
-      // ÉTAPE 4: Restaurer les liens markdown protégés
+      // ÉTAPE 4: Restaurer les liens markdown protégés.
+      // Function replacer (not a string) so `$`-sequences the user typed inside
+      // the link (`$$`, `$&`, `` $` ``, `$'`) are reinstated verbatim instead of
+      // being interpreted by String.prototype.replace substitution rules.
       for (const { placeholder, original } of protectedItems) {
-        processedContent = processedContent.replace(placeholder, original);
+        processedContent = processedContent.replace(placeholder, () => original);
       }
 
       return processedContent;

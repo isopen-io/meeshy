@@ -46,11 +46,19 @@ struct AffiliateCreateView: View {
     private var formSection: some View {
         VStack(alignment: .leading, spacing: 16) {
             VStack(alignment: .leading, spacing: 6) {
+                // A `Text` sitting above a `TextField` is a separate accessibility
+                // element, not the field's label: VoiceOver would read the field as
+                // its placeholder ("Ex: Invitation Twitter") and never say what it
+                // is for. Hiding the caption and promoting it to the field's own
+                // label is the pattern `CreateTrackingLinkView.formField` already
+                // applies to the twin screen.
                 Text(String(localized: "affiliate.create.name.label", defaultValue: "Nom du lien", bundle: .main))
                     .font(MeeshyFont.relative(13, weight: .semibold))
                     .foregroundColor(theme.textPrimary)
+                    .accessibilityHidden(true)
 
                 TextField(String(localized: "affiliate.create.name.placeholder", defaultValue: "Ex: Invitation Twitter", bundle: .main), text: $name)
+                    .accessibilityLabel(String(localized: "affiliate.create.name.label", defaultValue: "Nom du lien", bundle: .main))
                     .font(MeeshyFont.relative(14))
                     .padding(12)
                     .background(
@@ -67,8 +75,10 @@ struct AffiliateCreateView: View {
                 Text(String(localized: "affiliate.create.maxUses.label", defaultValue: "Utilisations max (optionnel)", bundle: .main))
                     .font(MeeshyFont.relative(13, weight: .semibold))
                     .foregroundColor(theme.textPrimary)
+                    .accessibilityHidden(true)
 
                 TextField(String(localized: "affiliate.create.maxUses.placeholder", defaultValue: "Illimite", bundle: .main), text: $maxUses)
+                    .accessibilityLabel(String(localized: "affiliate.create.maxUses.label", defaultValue: "Utilisations max (optionnel)", bundle: .main))
                     .font(MeeshyFont.relative(14))
                     .keyboardType(.numberPad)
                     .padding(12)
@@ -102,8 +112,12 @@ struct AffiliateCreateView: View {
                         .tint(.white)
                         .scaleEffect(0.8)
                 } else {
+                    // Decorative glyph — the adjacent "Créer le lien" text already
+                    // says what the button does, so hide it rather than let
+                    // VoiceOver read the SF Symbol name in front of the label.
                     Image(systemName: "link.badge.plus")
                         .font(MeeshyFont.relative(16, weight: .semibold))
+                        .accessibilityHidden(true)
                 }
                 Text(String(localized: "affiliate.create.button", defaultValue: "Creer le lien", bundle: .main))
                     .font(MeeshyFont.relative(15, weight: .semibold))
@@ -120,6 +134,7 @@ struct AffiliateCreateView: View {
                     )
             )
         }
+        .accessibilityLabel(String(localized: "affiliate.create.button", defaultValue: "Creer le lien", bundle: .main))
         .disabled(name.trimmingCharacters(in: .whitespaces).isEmpty || isCreating)
     }
 
@@ -141,8 +156,14 @@ struct AffiliateCreateView: View {
             onCreate?(token)
             dismiss()
         } catch {
-            errorMessage = String(localized: "affiliate.create.error", defaultValue: "Erreur lors de la creation", bundle: .main)
+            let message = String(localized: "affiliate.create.error", defaultValue: "Erreur lors de la creation", bundle: .main)
+            errorMessage = message
             HapticFeedback.error()
+            // The error surfaces inside the form, far from the focused button, so
+            // VoiceOver would never reach it on its own: the haptic fires and
+            // nothing is said. Announce it, as the twin screen does on the same
+            // failure path (CreateTrackingLinkView:184).
+            UIAccessibility.post(notification: .announcement, argument: message)
         }
         isCreating = false
     }

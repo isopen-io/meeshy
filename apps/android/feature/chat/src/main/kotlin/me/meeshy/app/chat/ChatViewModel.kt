@@ -13,6 +13,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -118,6 +120,17 @@ data class ChatUiState(
     val hasMoreOlder: Boolean = true,
     val imageViewer: ConversationGallery? = null,
     val scrollToMessageId: String? = null,
+    /** The first unread message's id — the "new messages" boundary, latched once
+     * from the initial unread count captured before the conversation is marked
+     * read (null = nothing unread on open). */
+    val firstUnreadMessageId: String? = null,
+    /** Flips true the moment the unread-boundary latch settles — whether it found
+     * a boundary or not. The one-shot open scroll waits for this so it never fires
+     * against an unresolved (possibly empty) window. */
+    val unreadBoundaryResolved: Boolean = false,
+    /** The conversation's encryption posture (e.g. `"e2ee"`), or `null` when the
+     * conversation is not encrypted. Drives the top-of-history E2EE notice. */
+    val encryptionMode: String? = null,
     val search: ChatSearchState = ChatSearchState(),
     val mention: MentionAutocompleteState = MentionAutocompleteState(),
     val mentionDisplayNames: Map<String, String> = emptyMap(),
@@ -178,6 +191,17 @@ data class ChatUiState(
     val composerAffordances: ComposerAffordances
         get() = ComposerAttachmentPolicy.affordances(composerPermissions)
     val isEditing: Boolean get() = editingMessageId != null
+
+    /** Whether the end-to-end-encryption notice sits at the top of the list — the
+     * conversation is encrypted, the reader has reached the start of history
+     * ([hasMoreOlder] false), and the cold-start skeleton ([showSkeleton]) is down.
+     * Pure derivation over [EncryptionDisclaimer]. */
+    val showEncryptionDisclaimer: Boolean
+        get() = EncryptionDisclaimer.shouldShow(
+            encryptionMode = encryptionMode,
+            hasOlderMessages = hasMoreOlder,
+            isLoadingInitial = showSkeleton,
+        )
 
     /** The live-location sessions to render as badges, in registry order. The badge
      * self-terminates on expiry, so the raw session list is safe to surface directly. */
@@ -304,8 +328,34 @@ class ChatViewModel @Inject constructor(
      */
     private val sendingForwards = mutableMapOf<String, String>()
 
+    /**
+     * The conversation's unread count captured from the cache **before** the open
+     * marks it read — the input to the [UnreadMarker] boundary. Null until the
+     * first conversation emission has been read.
+     */
+    private val initialUnreadCount = MutableStateFlow<Int?>(null)
+
     init {
-        viewModelScope.launch { markConversationRead() }
+        // Capture the unread count from the cached conversation BEFORE marking it
+        // read (which zeroes it), then mark read. The first Room emission carries
+        // the current cached value, so this never blocks beyond it.
+        viewModelScope.launch {
+            initialUnreadCount.value =
+                conversationRepository.conversationStream(conversationId).first()?.unreadCount ?: 0
+            markConversationRead()
+        }
+
+        // Latch the "new messages" boundary once, when both the initial unread
+        // count and a non-empty message window are known. A later message arrival
+        // never re-derives it (the boundary is stable for the session).
+        viewModelScope.launch {
+            val count = initialUnreadCount.filterNotNull().first()
+            val bubbles = _state.map { it.messages }.first { it.isNotEmpty() }
+            val firstUnread = UnreadMarker.firstUnreadId(bubbles, count)
+            _state.update {
+                it.copy(firstUnreadMessageId = firstUnread, unreadBoundaryResolved = true)
+            }
+        }
 
         viewModelScope.launch { loadComposerPermissions() }
 
@@ -363,6 +413,7 @@ class ChatViewModel @Inject constructor(
                         mentionDisplayNames = MentionRoster.displayNames(roster),
                         slowModeSeconds = conversation.slowModeSeconds,
                         slowModeExempt = SlowModePolicy.isExemptRole(viewerRole),
+                        encryptionMode = conversation.encryptionMode,
                     )
                 }
             }
