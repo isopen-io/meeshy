@@ -61,7 +61,7 @@ final class VoiceProfileWizardViewModel: ObservableObject {
             ageVerified = true
             currentStep = .recording
         } catch {
-            self.error = "Erreur lors de l'enregistrement du consentement."
+            self.error = String(localized: "voice.profile.wizard.error.consent", defaultValue: "Erreur lors de l'enregistrement du consentement.", bundle: .main)
         }
     }
 
@@ -96,7 +96,7 @@ final class VoiceProfileWizardViewModel: ObservableObject {
             profile = fetchedProfile
             currentStep = .complete
         } catch {
-            self.error = "Erreur lors de l'envoi des echantillons vocaux."
+            self.error = String(localized: "voice.profile.wizard.error.uploadSamples", defaultValue: "Erreur lors de l'envoi des échantillons vocaux.", bundle: .main)
             currentStep = .recording
         }
 
