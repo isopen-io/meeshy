@@ -7,6 +7,7 @@ import { z } from 'zod';
 import { ErrorCode } from '../types/errors.js';
 import { createError } from './errors.js';
 import { isSupportedLanguage } from './languages.js';
+import { normalizeLanguageCode } from './language-normalize.js';
 
 const DEFAULT_PAGE_LIMIT = 20;
 const MAX_PAGE_LIMIT = 100;
@@ -48,6 +49,26 @@ const supportedLanguageCode = z
   .max(5)
   .refine((code) => isSupportedLanguage(code), { message: 'Unsupported language code' })
   .transform((code) => code.toLowerCase());
+
+/**
+ * Code de langue de destination personnalisée (priorité 3 du Prisme). Contrairement
+ * à {@link supportedLanguageCode}, ce champ n'exige pas que le code figure dans la
+ * liste des langues supportées, mais il DOIT être canonique en base : un locale
+ * région/script-taggé de plateforme (`'fr-FR'`, `'en_US'`) persisté verbatim comme
+ * `'fr-fr'` / `'en-us'` ne matcherait aucune `MessageTranslation.targetLanguage`
+ * (clé lowercase) et forcerait la résolution du Prisme sur le message original.
+ *
+ * Canonicalisation au write boundary via le SSOT {@link normalizeLanguageCode}
+ * (`'fr-FR'`/`'fr_FR'` → `'fr'`, `'en-US'` → `'en'`), avec repli `.toLowerCase()`
+ * pour les codes que le normaliseur ne sait pas réduire (ISO 639-3 supporté comme
+ * `'bas'`, ou code plausible inconnu) : comportement d'acceptation strictement
+ * inchangé, seul le stockage des codes région-taggés est corrigé.
+ */
+const customDestinationLanguageCode = z
+  .string()
+  .min(2)
+  .max(5)
+  .transform((code) => normalizeLanguageCode(code) ?? code.toLowerCase());
 
 /**
  * Valider un schéma Zod et retourner une erreur standardisée
@@ -229,7 +250,7 @@ export const UserSchemas = {
     phoneNumber: z.string().optional(),
     systemLanguage: supportedLanguageCode.optional(),
     regionalLanguage: supportedLanguageCode.optional(),
-    customDestinationLanguage: z.string().min(2).max(5).transform((code) => code.toLowerCase()).nullable().optional(),
+    customDestinationLanguage: customDestinationLanguageCode.nullable().optional(),
     autoTranslateEnabled: z.boolean().optional(),
     timezone: z.string().optional(),
   }),
@@ -283,7 +304,7 @@ export const updateUserProfileSchema = z.object({
   // customDestinationLanguage). resolveUserLanguage traite '' comme absent.
   regionalLanguage: z.union([z.literal(''), supportedLanguageCode]).optional(),
   customDestinationLanguage: z
-    .union([z.literal(''), z.null(), z.string().min(2).max(5).transform((code) => code.toLowerCase())])
+    .union([z.literal(''), z.null(), customDestinationLanguageCode])
     .optional(),
   autoTranslateEnabled: z.boolean().optional(),
   voicePublic: z.boolean().optional(),

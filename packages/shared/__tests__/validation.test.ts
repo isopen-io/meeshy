@@ -225,6 +225,38 @@ describe('language-code normalization at the write boundary', () => {
     expect(updateUserProfileSchema.safeParse({ regionalLanguage: 'zz' }).success).toBe(false);
   });
 
+  // customDestinationLanguage is the one in-app language field NOT guarded by
+  // supportedLanguageCode (which strips region tags and validates support): its
+  // schema only lowercased, so a region/script-tagged platform locale ('fr-FR',
+  // 'en-US') was persisted verbatim as 'fr-fr' / 'en-us'. That matches no
+  // lowercase-keyed MessageTranslation.targetLanguage, forcing the Prisme onto
+  // the original message at resolution priority 3 (customDestinationLanguage).
+  // Canonicalize via the SSOT normalizeLanguageCode at the write boundary.
+  it('updateUserProfileSchema canonicalizes a region-tagged customDestinationLanguage (fr-FR -> fr)', () => {
+    const parsed = updateUserProfileSchema.parse({ customDestinationLanguage: 'fr-FR' });
+    expect(parsed.customDestinationLanguage).toBe('fr');
+  });
+
+  it('updateUserProfileSchema canonicalizes an underscore locale customDestinationLanguage (en_US -> en)', () => {
+    const parsed = updateUserProfileSchema.parse({ customDestinationLanguage: 'en_US' });
+    expect(parsed.customDestinationLanguage).toBe('en');
+  });
+
+  it('updateUserProfileSchema preserves a supported ISO 639-3 customDestinationLanguage (bas)', () => {
+    const parsed = updateUserProfileSchema.parse({ customDestinationLanguage: 'bas' });
+    expect(parsed.customDestinationLanguage).toBe('bas');
+  });
+
+  it('updateUserProfileSchema still clears customDestinationLanguage on empty string / null', () => {
+    expect(updateUserProfileSchema.parse({ customDestinationLanguage: '' }).customDestinationLanguage).toBe('');
+    expect(updateUserProfileSchema.parse({ customDestinationLanguage: null }).customDestinationLanguage).toBeNull();
+  });
+
+  it('UserSchemas.update canonicalizes a region-tagged customDestinationLanguage (en-US -> en)', () => {
+    const parsed = UserSchemas.update.parse({ customDestinationLanguage: 'en-US' });
+    expect(parsed.customDestinationLanguage).toBe('en');
+  });
+
   it('AuthSchemas.register lowercases system/regional language', () => {
     const parsed = AuthSchemas.register.parse({
       username: 'alice',

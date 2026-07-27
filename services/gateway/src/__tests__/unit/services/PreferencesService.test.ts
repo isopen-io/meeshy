@@ -450,6 +450,59 @@ describe('PreferencesService', () => {
         data: { systemLanguage: 'en', regionalLanguage: 'fr', customDestinationLanguage: 'de' }
       });
     });
+
+    // Region/script-tagged platform locales (iOS `Locale.current.identifier` =
+    // 'fr_FR', web `navigator.language` = 'fr-FR') must be REDUCED to their
+    // canonical primary subtag at the write boundary — not merely lowercased.
+    // A raw `.toLowerCase()` persists 'fr-fr', which matches no lowercase-keyed
+    // MessageTranslation.targetLanguage ('fr') and no NLLB source mapping,
+    // fragmenting translation lookups and per-language stats (same class of bug
+    // the Message.originalLanguage write-boundary fix addressed). SSOT:
+    // normalizeLanguageCode from @meeshy/shared.
+    it('canonicalizes region-tagged locales at the write boundary (fr-FR -> fr)', async () => {
+      mockPrisma.user.update.mockResolvedValue({});
+      mockPrisma.user.findUnique.mockResolvedValue({
+        systemLanguage: 'fr',
+        regionalLanguage: 'en',
+        customDestinationLanguage: 'zh'
+      });
+      mockPrisma.userPreference.findUnique.mockResolvedValue({ value: 'false' });
+
+      await service.updateLanguagePreferences('user-123', {
+        systemLanguage: 'fr-FR',
+        regionalLanguage: 'en_US',
+        customDestinationLanguage: 'zh-Hant-HK'
+      });
+
+      expect(mockPrisma.user.update).toHaveBeenCalledWith({
+        where: { id: 'user-123' },
+        data: { systemLanguage: 'fr', regionalLanguage: 'en', customDestinationLanguage: 'zh' }
+      });
+    });
+
+    // A supported ISO 639-3 code with no ISO 639-1 equivalent ('bas', 'ewo')
+    // is already canonical and must be preserved verbatim — never truncated to
+    // a 2-letter prefix (which would silently collide with an unrelated
+    // language). Falls back to `.toLowerCase()` only for codes normalizeLanguageCode
+    // cannot reduce, so behavior for unknown codes is unchanged.
+    it('preserves a supported ISO 639-3 code at the write boundary (bas)', async () => {
+      mockPrisma.user.update.mockResolvedValue({});
+      mockPrisma.user.findUnique.mockResolvedValue({
+        systemLanguage: 'bas',
+        regionalLanguage: null,
+        customDestinationLanguage: null
+      });
+      mockPrisma.userPreference.findUnique.mockResolvedValue({ value: 'false' });
+
+      await service.updateLanguagePreferences('user-123', {
+        systemLanguage: 'bas-CM'
+      });
+
+      expect(mockPrisma.user.update).toHaveBeenCalledWith({
+        where: { id: 'user-123' },
+        data: { systemLanguage: 'bas' }
+      });
+    });
   });
 
   // ============================================================================
