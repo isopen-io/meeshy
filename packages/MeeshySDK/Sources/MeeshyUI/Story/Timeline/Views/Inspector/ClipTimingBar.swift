@@ -13,9 +13,9 @@ public struct ClipTimingBar: View {
 
     public enum DragField: Equatable, Sendable { case move, trimStart, trimEnd }
 
-    /// Durée plancher d'un clip — miroir du clamp `max(0.05, …)` de
-    /// `TimelineViewModel.trimClipStart/End`.
-    public nonisolated static let minimumDuration: Float = 0.05
+    /// Durée plancher d'un clip — délègue au résolveur, seul détenteur de la
+    /// règle. En dupliquer la valeur ici, c'était accepter qu'elle dérive.
+    public nonisolated static var minimumDuration: Float { ClipWindowResolver.minimumDuration }
 
     // MARK: - Géométrie pure (testée sans monter la vue)
 
@@ -35,27 +35,40 @@ public struct ClipTimingBar: View {
         return CGFloat(t / slideDuration) * trackWidth
     }
 
-    /// Fenêtre prévisualisée pendant un drag, clampée aux bornes de la slide
-    /// et à la durée plancher. `move` préserve la durée ; `trimStart` garde la
-    /// fin fixe ; `trimEnd` garde le début fixe.
+    /// Fenêtre prévisualisée pendant un drag. Les bornes viennent du résolveur
+    /// partagé : `move` préserve la durée, `trimStart` garde la fin fixe,
+    /// `trimEnd` garde le début fixe.
+    ///
+    /// AUCUNE borne à la durée de slide, contrairement à ce que cette méthode
+    /// faisait : la slide dérive du contenu, donc c'est en tirant un clip qu'on
+    /// l'allonge. Le clamp d'avant rendait un clip finissant en fin de slide
+    /// définitivement inextensible.
     public nonisolated static func previewWindow(field: DragField,
                                                  start: Float, duration: Float,
-                                                 deltaSeconds: Float,
-                                                 slideDuration: Float,
-                                                 minDuration: Float = ClipTimingBar.minimumDuration
+                                                 deltaSeconds: Float
     ) -> (start: Float, duration: Float) {
-        let end = start + duration
-        switch field {
-        case .move:
-            let s = max(0, min(start + deltaSeconds, max(0, slideDuration - duration)))
-            return (s, duration)
-        case .trimStart:
-            let s = max(0, min(start + deltaSeconds, end - minDuration))
-            return (s, end - s)
-        case .trimEnd:
-            let e = max(start + minDuration, min(end + deltaSeconds, slideDuration))
-            return (start, e - start)
-        }
+        let window = ClipWindowResolver.Window(start: start, duration: duration)
+        let edit: ClipWindowResolver.Edit = {
+            switch field {
+            case .move:      return .move(to: start + deltaSeconds)
+            case .trimStart: return .setStart(start + deltaSeconds)
+            case .trimEnd:   return .setEnd(window.end + deltaSeconds)
+            }
+        }()
+        let resolved = ClipWindowResolver.resolve(edit, from: window)
+        return (resolved.start, resolved.duration)
+    }
+
+    /// Étendue AFFICHÉE de la piste : la slide, jamais moins que la fenêtre du
+    /// clip, plus une réserve à droite.
+    ///
+    /// Sans cette réserve, la poignée droite d'un clip finissant à la fin de la
+    /// slide est déjà au bord de la piste : le geste n'a physiquement aucune
+    /// course, et retirer le clamp ne changeait rien.
+    public nonisolated static func displayTotal(slideDuration: Float,
+                                                start: Float, duration: Float) -> Float {
+        let content = max(slideDuration, start + duration, minimumDuration)
+        return content + max(1, content * 0.2)
     }
 
     // MARK: - Inputs
@@ -84,16 +97,14 @@ public struct ClipTimingBar: View {
 
     // MARK: - Body
 
-    /// Étendue affichée : la slide, jamais moins que la fenêtre du clip (un
-    /// clip qui déborde reste entièrement manipulable).
     private var displayTotal: Float {
-        max(slideDuration, start + duration, Self.minimumDuration)
+        Self.displayTotal(slideDuration: slideDuration, start: start, duration: duration)
     }
 
     private var previewedWindow: (start: Float, duration: Float) {
         guard let drag else { return (start, duration) }
         return Self.previewWindow(field: drag.field, start: start, duration: duration,
-                                  deltaSeconds: drag.deltaSeconds, slideDuration: displayTotal)
+                                  deltaSeconds: drag.deltaSeconds)
     }
 
     private static let trackHeight: CGFloat = 30
@@ -223,7 +234,7 @@ public struct ClipTimingBar: View {
                 let delta = Self.seconds(forTranslation: value.translation.width,
                                          trackWidth: width, slideDuration: displayTotal)
                 let window = Self.previewWindow(field: field, start: start, duration: duration,
-                                                deltaSeconds: delta, slideDuration: displayTotal)
+                                                deltaSeconds: delta)
                 drag = nil
                 commit(field: field, window: window)
             }
