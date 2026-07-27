@@ -10,6 +10,7 @@ import {
 } from '../../middleware/auth';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
+import { normalizeLanguageCode } from '@meeshy/shared/utils/language-normalize';
 import {
   sendMessageSchema,
   sendMessageBodySchema,
@@ -109,6 +110,14 @@ export async function registerMessageRoutes(fastify: FastifyInstance) {
     try {
       const { identifier } = request.params as { identifier: string };
       const body = sendMessageSchema.parse(request.body);
+      // Canonicalise the client-claimed locale at the write boundary — this
+      // anonymous share-link path does NOT go through the MessagingService
+      // funnel (which normalizes since iteration 218), so clients sending the
+      // raw platform locale (`fr-FR`, `en_US`, `FR`) would otherwise persist
+      // `Message.originalLanguage` non-canonically and fragment every
+      // downstream consumer (NLLB source, translation cache key, language
+      // stats). Irreducible codes (`bas`, unknown 2-letter) are kept verbatim.
+      const originalLanguage = normalizeLanguageCode(body.originalLanguage) ?? body.originalLanguage;
 
       const sessionToken = request.headers['x-session-token'] as string;
 
@@ -193,7 +202,7 @@ export async function registerMessageRoutes(fastify: FastifyInstance) {
           conversationId: participantShareLink.conversationId,
           senderId: anonymousParticipant.id,
           content: processedContent,
-          originalLanguage: body.originalLanguage,
+          originalLanguage,
           messageType: body.messageType,
           clientMessageId: body.clientMessageId,
           deletedAt: null
@@ -349,6 +358,10 @@ export async function registerMessageRoutes(fastify: FastifyInstance) {
     try {
       const { identifier } = request.params as { identifier: string };
       const body = sendMessageSchema.parse(request.body);
+      // Canonicalise the client-claimed locale at the write boundary — cf. the
+      // anonymous sibling above; this authenticated share-link path also
+      // bypasses the MessagingService funnel.
+      const originalLanguage = normalizeLanguageCode(body.originalLanguage) ?? body.originalLanguage;
 
       if (!isRegisteredUser(request.authContext)) {
         return sendForbidden(reply, 'Utilisateur enregistré requis');
@@ -442,7 +455,7 @@ export async function registerMessageRoutes(fastify: FastifyInstance) {
           conversationId: shareLink.conversationId,
           senderId: participant.id,
           content: processedContent,
-          originalLanguage: body.originalLanguage,
+          originalLanguage,
           messageType: body.messageType,
           clientMessageId: body.clientMessageId,
           deletedAt: null

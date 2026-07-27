@@ -625,3 +625,60 @@ describe('POST /links/:id/messages/auth — DB error', () => {
     expect(res.statusCode).toBe(500);
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Language canonicalisation at the write boundary (iteration 219)
+// The share-link message-create paths bypass the MessagingService funnel (which
+// normalizes `originalLanguage` since iteration 218), so they must canonicalise
+// the client-claimed locale themselves before persisting — otherwise a raw
+// platform locale (`fr-FR`, `en_US`, `FR`) fragments every downstream consumer
+// keyed on `Message.originalLanguage` (NLLB source, translation cache, stats).
+// ═══════════════════════════════════════════════════════════════════════════════
+
+describe('POST /links/:id/messages — anonymous: originalLanguage canonicalisation', () => {
+  it('normalizes a region-tagged locale (fr-FR) to its canonical code (fr) before persisting', async () => {
+    const prisma = makePrisma();
+    const app = await buildApp({ prisma });
+    const res = await app.inject({
+      method: 'POST', url: `/links/${MSHY_ID}/messages`,
+      headers: ANON_HEADERS, payload: { ...VALID_BODY, originalLanguage: 'fr-FR' },
+    });
+    expect(res.statusCode).toBe(201);
+    expect(prisma.message.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ originalLanguage: 'fr' }) })
+    );
+    await app.close();
+  });
+
+  it('keeps an irreducible code (bas) verbatim — no data loss', async () => {
+    const prisma = makePrisma();
+    const app = await buildApp({ prisma });
+    const res = await app.inject({
+      method: 'POST', url: `/links/${MSHY_ID}/messages`,
+      headers: ANON_HEADERS, payload: { ...VALID_BODY, originalLanguage: 'bas' },
+    });
+    expect(res.statusCode).toBe(201);
+    expect(prisma.message.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ originalLanguage: 'bas' }) })
+    );
+    await app.close();
+  });
+});
+
+describe('POST /links/:id/messages/auth — authenticated: originalLanguage canonicalisation', () => {
+  it('normalizes a region-tagged locale (en_US) to its canonical code (en) before persisting', async () => {
+    const prisma = makePrisma();
+    prisma.conversationShareLink.findUnique = jest.fn<any>().mockResolvedValue(mockShareLink);
+    prisma.participant.findFirst = jest.fn<any>().mockResolvedValue({ id: PART_ID, conversationId: CONV_ID });
+    const app = await buildApp({ prisma });
+    const res = await app.inject({
+      method: 'POST', url: `/links/${MSHY_ID}/messages/auth`,
+      payload: { ...VALID_BODY, originalLanguage: 'en_US' },
+    });
+    expect(res.statusCode).toBe(201);
+    expect(prisma.message.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ originalLanguage: 'en' }) })
+    );
+    await app.close();
+  });
+});
