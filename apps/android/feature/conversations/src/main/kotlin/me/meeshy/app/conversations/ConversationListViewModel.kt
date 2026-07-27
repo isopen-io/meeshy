@@ -240,6 +240,22 @@ class ConversationListViewModel @Inject constructor(
     }
 
     /**
+     * Reassigns a conversation to the user category [targetCategoryId] (context-menu
+     * "move to category" / drag-to-category, parity iOS `setCategory`). The pure
+     * [ConversationCategoryReassignment] SSOT gates the write: a drop onto the
+     * category the row already sits in is inert (no optimistic write, no outbox row,
+     * no flush), every other target reassigns optimistically and enqueues a snapshot.
+     */
+    fun reassignCategory(id: String, targetCategoryId: String) {
+        when (val outcome =
+            ConversationCategoryReassignment.resolve(prefsOf(id)?.categoryId, targetCategoryId)) {
+            CategoryReassignment.Unchanged -> Unit
+            is CategoryReassignment.AssignTo ->
+                runPrefMutation { repository.setCategoryOptimistic(id, outcome.categoryId) }
+        }
+    }
+
+    /**
      * Discards a conversation's unsent draft (context-menu action, offered only on
      * a draft-bearing row). Optimistically drops the draft from state so the row
      * loses its "Brouillon : …" preview and sinks out of the floated group

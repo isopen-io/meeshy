@@ -138,6 +138,16 @@ class ConversationRepository @Inject constructor(
         updatePreferencesOptimistic(id) { it.copy(isArchived = archived) }
 
     /**
+     * Optimistic drag-to-category (re)assignment (parity iOS
+     * `ConversationOptionsViewModel.setCategory`): the cached `categoryId` mutates
+     * instantly — the section splitter re-buckets the row into [categoryId]'s
+     * section — and the full-snapshot mutation joins the shared prefs lane. A no-op
+     * (returns false) when the conversation is already in [categoryId].
+     */
+    suspend fun setCategoryOptimistic(id: String, categoryId: String): Boolean =
+        updatePreferencesOptimistic(id) { it.copy(categoryId = categoryId) }
+
+    /**
      * Optimistic per-conversation preference update (ARCHITECTURE.md §5): the
      * cached preferences mutate instantly (the filter re-derives the visible
      * list) and a full-snapshot `UPDATE_CONVERSATION_PREFS` mutation joins the
@@ -175,6 +185,7 @@ class ConversationRepository @Inject constructor(
                         isMuted = snapshot.isMuted,
                         isArchived = snapshot.isArchived,
                         mentionsOnly = snapshot.mentionsOnly,
+                        categoryId = snapshot.categoryId,
                     ),
                 ),
             ),
