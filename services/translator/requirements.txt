@@ -176,7 +176,7 @@ scikit-learn==1.7.2  # Requis pour clustering et nettoyage (DiarizationCleaner)
 
 # Logging et monitoring
 loguru==0.7.3
-prometheus-client==0.25.0
+prometheus-client==0.26.0
 
 # Tests
 # pytest-asyncio MUST stay on 0.25.x while pytest is pinned to 8.3.4: 0.25.x
