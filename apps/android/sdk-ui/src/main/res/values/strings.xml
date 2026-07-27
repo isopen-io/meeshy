@@ -6,6 +6,7 @@
     <string name="bubble_starred">Starred</string>
     <string name="bubble_translated">Translated</string>
     <string name="bubble_status_pending">Pending</string>
+    <string name="bubble_status_queued">Queued</string>
     <string name="bubble_status_sent">Sent</string>
     <string name="bubble_status_delivered">Delivered</string>
     <string name="bubble_status_read">Read</string>
