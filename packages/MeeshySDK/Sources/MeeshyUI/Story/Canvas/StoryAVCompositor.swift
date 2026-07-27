@@ -392,10 +392,10 @@ public final class StoryAVCompositor: NSObject, nonisolated AVVideoCompositing, 
     /// animation engine, so we compute the model-layer state by hand each
     /// frame. Progress is `elapsed / 0.5` clamped to `[0, 1]`.
     @MainActor
-    private static func applyStaticOpening(_ effect: StoryTransitionEffect,
-                                           rootLayer: CALayer,
-                                           elapsed: Double) {
-        let progress = max(0.0, min(1.0, elapsed / 0.5))
+    static func applyStaticOpening(_ effect: StoryTransitionEffect,
+                                   rootLayer: CALayer,
+                                   elapsed: Double) {
+        let progress = max(0.0, min(1.0, elapsed / StoryRenderer.slideTransitionDuration))
         switch effect {
         case .fade:
             rootLayer.opacity = Float(progress)
@@ -411,8 +411,16 @@ public final class StoryAVCompositor: NSObject, nonisolated AVVideoCompositing, 
                                      endAngle: .pi * 2,
                                      clockwise: true).cgPath
             rootLayer.mask = mask
-        case .zoom, .slide:
-            break
+        // `applyOpening` interpole de `fromValue` vers l'identité ; ici on pose
+        // directement l'état correspondant à `progress`, puisque
+        // `layer.render(in:)` ne fait pas tourner le moteur d'animation.
+        case .zoom:
+            let scale = 1 + (StoryRenderer.zoomTransitionScale - 1) * CGFloat(1 - progress)
+            rootLayer.sublayerTransform = CATransform3DMakeScale(scale, scale, 1)
+        case .slide:
+            let travel = rootLayer.bounds.width * StoryRenderer.slideTransitionTravelFraction
+            rootLayer.sublayerTransform = CATransform3DMakeTranslation(
+                travel * CGFloat(1 - progress), 0, 0)
         }
     }
 
