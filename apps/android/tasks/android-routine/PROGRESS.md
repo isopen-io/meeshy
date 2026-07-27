@@ -1,5 +1,41 @@
 # Progress — state & what to do next
 
+> On 2026-07-27 the **read-receipt reciprocity** landed (slice `chat-read-receipt-reciprocity`,
+> feature-parity §C Chat — the "Delivery status" line, folding a §L privacy behaviour into the delivery
+> tier). It ports the iOS `DeliveryStatusResolver.degradeRead` reciprocity rule that Android had been
+> missing: **a viewer who has turned OFF their own read receipts does not see anyone else's** — a resolved
+> `DeliveryTier.Read` degrades to `Delivered` on their own outgoing bubbles (WhatsApp/Signal privacy
+> symmetry). **Added (production, all `apps/android`):** (1) `:core:model/DeliveryStatusResolver.resolve`
+> gains `showReadReceipts: Boolean = true`; the tier is computed by a new private `resolveTier` (the old
+> body, unchanged) and then a single arm degrades `Read → Delivered` when `!showReadReceipts` (Delivered
+> and Sent are untouched; a marker-driven `readByAllAt` Read degrades too — the degrade wraps the final
+> tier uniformly, mirroring iOS). The `= true` default is deliberate: **only the DISPLAY site threads the
+> preference**, so every persistence-path caller (state machine, repos) is unchanged and stored state is
+> never degraded. (2) `:sdk-ui/BubbleContentBuilder.build` gains `showReadReceipts: Boolean = true`,
+> threaded to the resolver. (3) `ChatViewModel` injects the durable `PrivacyPreferencesStore` and folds
+> `preferences.showReadReceipts` (distinct) into the message-stream `combine`, so **toggling the setting
+> re-paints the checkmarks live** (`applyResult`/`toBubbles` thread it to the builder). **SOTA over iOS:**
+> the degrade is a pure, fully-covered arm on the same SSOT resolver, driven reactively by a live
+> preference flow (iOS reads `UserPreferencesManager` at the call site). **+7 behavioural tests:**
+> `DeliveryStatusResolverTest` (+6: default-shown-stays-read / hide-degrades-direct-read / hide-degrades-
+> group-all-read / hide-degrades-marker-read / hide-leaves-delivered / hide-leaves-sent),
+> `ChatViewModelTest` (+1: hiding-my-receipts-degrades-a-read-message-to-delivered, end-to-end through the
+> live combine + privacy store). **Mutation (RED proof):** replacing the degrade with `return tier` fails
+> **exactly** the 3 Read-degrade tests (`21 tests completed, 3 failed`, `BUILD FAILED in 6s`) while the
+> two "leaves untouched" tests and the default-true test stay green; restored after. **Gate:**
+> `./apps/android/meeshy.sh check` (= `assembleDebug testDebugUnitTest`) — full assemble + all-module JVM
+> unit tests green, APK produced. Reviewer **PASS** (diff `apps/android` only — 1 resolver core + 1
+> resolver test + builder param + VM combine wiring + VM test + tracking docs; SDK purity —
+> `DeliveryStatusResolver` stays a stateless `:core:model` value function, the "read the preference" glue
+> lives in the VM; SSOT — one resolver, the degrade is one arm, re-implements nothing; UDF — reactive
+> derivation off `PrivacyPreferencesStore` `StateFlow`; instant-app — rides the cache-first message stream,
+> no spinner; no tautological tests — literals + the mutation proof + the VM end-to-end test). **Next
+> slice:** the §C **offline-pending hourglass** (a queued-while-offline bubble shows an hourglass, not a
+> clock — pairs `DeliveryStatus.Pending` with `NetworkConditionMonitor`), OR the §C **inverted-list**
+> message layout (bottom-anchored `reverseLayout`), OR the app-side **`CategoryPickerField` /
+> `TagInputField`** composables, OR the paged **`OnboardingFlowView`** Compose scaffold (Auth), OR the
+> tracked **Kover 90% coverage-gate infra**.
+
 > On 2026-07-27 the **pinned floating day header** landed (slice `chat-pinned-day-header`, feature-parity
 > §C Chat — the "joined/floating day label" half of the date-headers line, leaving only inverted-list
 > pending). It draws a WhatsApp-style sticky date pill that hovers at the top of the message list and

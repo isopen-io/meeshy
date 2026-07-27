@@ -2,6 +2,20 @@
 
 Append-only log of gotchas and decisions that save time next run.
 
+## Lesson (2026-07-27, `chat-read-receipt-reciprocity`) — a privacy degrade belongs on the DISPLAY path, defaulted off
+- Read-receipt reciprocity ("hide mine → I don't see yours") must degrade `Read → Delivered` **only where the
+  bubble is displayed**, never where state is persisted. The clean shape: a new resolver param
+  `showReadReceipts: Boolean = true`. The `= true` default is load-bearing — every persistence-path caller
+  (state machine, repos) keeps passing nothing and stays undegraded; only `BubbleContentBuilder` (display)
+  threads the real preference. Mirrors the iOS `degradeRead` default-true rationale verbatim.
+- Wire the preference **reactively**: fold `PrivacyPreferencesStore.preferences.map { it.showReadReceipts }
+  .distinctUntilChanged()` into the existing message-stream `combine`, so toggling the setting re-paints the
+  checkmarks live. `ChatViewModel`'s combine already chains `.combine(...)` past the 5-arg limit — just add
+  one more link and expand the `collect` destructuring; thread the bool through `applyResult`/`toBubbles`.
+- Ephemeral / effects picker are already fully wired on Android (enum + presenter + editor + sheet in
+  `ChatScreen`) — `[◐]` on that parity line is NOT a pure-logic gap; don't re-pick it. The genuine chat gaps
+  are the finer delivery glyphs (offline hourglass, 8-state send lifecycle) and the read-status detail sheet.
+
 ## Lesson (2026-07-27, `chat-open-scroll-to-unread`) — gate a one-shot open scroll on an explicit "resolved" flag, not on a nullable id
 - A `null` derived value is ambiguous: it can mean "resolved: nothing" or "not resolved yet". The unread
   boundary latch left `firstUnreadMessageId = null` both before it ran and when there was no unread. Firing
