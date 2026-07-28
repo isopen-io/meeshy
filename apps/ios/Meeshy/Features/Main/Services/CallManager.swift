@@ -312,6 +312,22 @@ final class CallManager: ObservableObject {
         set { _didActivateLock.withLock { $0 = newValue } }
     }
 
+    /// Guards `RTCAudioSession` reactivation in `handleAudioInterruption`'s `.ended`
+    /// branch against a hangup racing that dispatch. Written `true` at call setup
+    /// (`configureAudioSession`, CallKit `didActivate`) and `false` at teardown
+    /// (`deactivateAudioSession`, CallKit `didDeactivate`/`providerDidReset`) — both
+    /// writers can run from different threads (MainActor vs. CallKit's private
+    /// delegate queue), mirroring `isCallActiveFlag`/`callKitDidActivateFired`. The
+    /// reactivation block reads this from INSIDE `audioSessionQueue`, so the
+    /// check-then-act is serialized against every other writer that also routes
+    /// through `audioSessionQueue` — closing the race regardless of which thread's
+    /// write reaches the queue first.
+    private nonisolated static let _audioSessionExpectedActiveLock = OSAllocatedUnfairLock(initialState: false)
+    nonisolated static var isAudioSessionExpectedActive: Bool {
+        get { _audioSessionExpectedActiveLock.withLock { $0 } }
+        set { _audioSessionExpectedActiveLock.withLock { $0 = newValue } }
+    }
+
     /// Single platform gate for every `callUsesCallKit` assignment — see
     /// `CallReliabilityPolicy.platformUsesCallKit` for why Mac and the
     /// simulator must drive calls in-app.
@@ -408,6 +424,22 @@ final class CallManager: ObservableObject {
         }
         Logger.calls.info("[CALLKIT] answer action \(fulfilled ? "fulfilled" : "failed") (\(reason))")
     }
+
+    /// Called from `CallKitDelegateProxy.provider(_:timedOutPerforming:)` when
+    /// CallKit's OWN internal deadline elapses on a held `CXAnswerCallAction`
+    /// before we settle it. CallKit has already given up on the action by the
+    /// time this fires — `.fulfill()`/`.fail()` must never be called on it
+    /// again. Clear the held reference (and its safety-net task) so a later
+    /// `transitionToConnected` doesn't try to fulfill an action CallKit no
+    /// longer tracks.
+    func discardTimedOutAnswerAction(_ action: CXAnswerCallAction) {
+        guard pendingAnswerAction === action else { return }
+        pendingAnswerSafetyTask?.cancel()
+        pendingAnswerSafetyTask = nil
+        pendingAnswerAction = nil
+        Logger.calls.error("[CALLKIT] discarded answer action after CallKit-side timeout")
+    }
+
     /// Caller-side ringing timeout — ends the call as `.missed` if the recipient
     /// hasn't joined within `outgoingRingTimeoutSeconds`. Cancelled when the
     /// state leaves `.ringing(isOutgoing: true)` (offering / connecting / ended).
@@ -714,6 +746,18 @@ final class CallManager: ObservableObject {
             // fire-and-forget: the call stays active; the next ICE heartbeat
             // will surface any persistent failure to the user.
             audioSessionQueue.async {
+                // Re-check INSIDE the queue, not just via the `callState.isActive`
+                // guard above: a hangup can race this async dispatch from a
+                // different thread (MainActor teardown, or CallKit's own
+                // `didDeactivate` on its private delegate queue) and land on
+                // `audioSessionQueue` either before or after this block. Reading
+                // `isAudioSessionExpectedActive` here — rather than trusting the
+                // stale outer check — serializes the decision against every other
+                // writer that also routes through this queue.
+                guard CallManager.isAudioSessionExpectedActive else {
+                    Logger.calls.info("Skipping interruption-ended reactivation — audio session already torn down")
+                    return
+                }
                 // Re-activate the system AVAudioSession first — the interruption
                 // deactivated it, so RTCAudioSession.audioSessionDidActivate is a
                 // no-op until the OS session is active again.
@@ -3628,6 +3672,7 @@ final class CallManager: ObservableObject {
         let activateNow = !callUsesCallKit
 
         audioSessionQueue.sync {
+            CallManager.isAudioSessionExpectedActive = true
             let session = RTCAudioSession.sharedInstance()
             Logger.calls.info("[AUDIO_SESS] lockForConfiguration")
             session.lockForConfiguration()
@@ -3811,6 +3856,7 @@ final class CallManager: ObservableObject {
         // We only flip RTCAudioSession.isAudioEnabled; setActive(false) is the
         // job of provider:didDeactivate:.
         audioSessionQueue.sync {
+            CallManager.isAudioSessionExpectedActive = false
             let session = RTCAudioSession.sharedInstance()
             session.lockForConfiguration()
             session.isAudioEnabled = false
@@ -5133,6 +5179,7 @@ private class CallKitDelegateProxy: NSObject, CXProviderDelegate, @unchecked Sen
         // below — so this reset can never interleave with a concurrent
         // RTCAudioSession reconfiguration dispatched from the MainActor.
         manager?.audioSessionQueue.sync {
+            CallManager.isAudioSessionExpectedActive = false
             let rtc = RTCAudioSession.sharedInstance()
             rtc.lockForConfiguration()
             rtc.isAudioEnabled = false
@@ -5266,6 +5313,7 @@ private class CallKitDelegateProxy: NSObject, CXProviderDelegate, @unchecked Sen
         // visible as alternating routes (Receiver/Speaker) in logs and silent calls.
         // Reference: docs/superpowers/specs/2026-05-10-calls-sota-redesign-design.md §3.2
         manager?.audioSessionQueue.sync {
+            CallManager.isAudioSessionExpectedActive = true
             let rtc = RTCAudioSession.sharedInstance()
             rtc.lockForConfiguration()
             rtc.audioSessionDidActivate(audioSession)
@@ -5328,6 +5376,7 @@ private class CallKitDelegateProxy: NSObject, CXProviderDelegate, @unchecked Sen
 
     func provider(_ provider: CXProvider, didDeactivate audioSession: AVAudioSession) {
         manager?.audioSessionQueue.sync {
+            CallManager.isAudioSessionExpectedActive = false
             let rtc = RTCAudioSession.sharedInstance()
             rtc.lockForConfiguration()
             rtc.isAudioEnabled = false
@@ -5335,6 +5384,23 @@ private class CallKitDelegateProxy: NSObject, CXProviderDelegate, @unchecked Sen
             rtc.unlockForConfiguration()
         }
         Logger.calls.info("CallKit audio session deactivated; RTCAudioSession disabled")
+    }
+
+    func provider(_ provider: CXProvider, timedOutPerforming action: CXAction) {
+        // CallKit's own internal per-action deadline (undocumented, historically well
+        // under our app-side safety nets) is independent of any hold we place on an
+        // action — e.g. `holdPendingAnswerAction`'s pendingAnswerActionSafetyNetSeconds.
+        // If CallKit's deadline elapses first, it has ALREADY torn down its side of the
+        // transaction: calling `.fulfill()`/`.fail()` on `action` now is undefined
+        // behavior, so this only reconciles our local state, never re-settles the action.
+        Logger.calls.error("CallKit timed out performing \(type(of: action)) — reconciling local call state")
+        Task { @MainActor [weak self] in
+            guard let manager = self?.manager else { return }
+            if let answerAction = action as? CXAnswerCallAction {
+                manager.discardTimedOutAnswerAction(answerAction)
+            }
+            manager.endCall()
+        }
     }
 }
 
