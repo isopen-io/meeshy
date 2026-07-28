@@ -141,8 +141,15 @@ une garde de source empêche sa réintroduction.
 **jamais écrit dans le modèle**. Deux conséquences voulues : l'auteur garde la main, et
 l'atténuation bénéficie aussi aux stories **déjà publiées**. Le ducking ne se déclenche
 que si la slide porte un audio de fond *et* une vidéo dont la piste audio existe
-réellement (le probe `StoryAudioAvailability.videoAudioTracks` répond déjà à cette
-question). Une bascule par clip permet de le désactiver.
+réellement. Une bascule par clip permet de le désactiver.
+
+**Détecter la présence d'une piste audio.** `StoryAudioAvailability.videoAudioTracks`
+ne convient pas comme source de vérité : c'est une table alimentée **uniquement par
+`StoryViewerView`**, absente du composer et de l'export — deux des trois surfaces
+concernées. La présence d'une piste se détermine donc par
+`AVAsset.loadTracks(withMediaType: .audio)`, disponible partout, la table du viewer
+restant au mieux un cache opportuniste. Sonde à faire une fois par clip et à mémoriser,
+pas à chaque tick.
 
 Ordre de composition, du modèle vers le matériel :
 
@@ -200,8 +207,17 @@ nouveau.
 ### Pistes (A3, A4)
 
 `VideoClipBar` gagne une bande de waveform sous son filmstrip, alimentée par
-`AudioWaveform.samples(url:count:)` — même rendu que `AudioClipBar`. Une vidéo sans
-piste audio n'en affiche aucune.
+`AudioWaveform.samples(url:count:)` — même rendu que `AudioClipBar`.
+
+Cette réutilisation a été **vérifiée empiriquement** plutôt que supposée :
+`AudioWaveform` repose sur `AVAudioFile(forReading:)`, dont on pouvait craindre qu'il
+refuse un conteneur vidéo. Mesure faite sur la vidéo de fond d'une story de production
+(MP4/AAC) : lecture réussie, 1 canal, 44,1 kHz, 37,5 s, amplitude crête 0,499. Aucun
+extracteur `AVAssetReader` dédié n'est donc nécessaire.
+
+Le retour vide couvre d'un même geste les deux cas dégradés — vidéo sans piste audio, et
+conteneur qu'`ExtAudioFile` ne sait pas ouvrir : aucune waveform n'est dessinée, sans
+erreur ni bande vide trompeuse.
 
 Par-dessus, sur les pistes vidéo **et** audio, une **courbe de volume en lecture seule**
 tracée à partir des keyframes dont `volume != nil`.
