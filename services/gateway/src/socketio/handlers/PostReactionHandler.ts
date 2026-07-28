@@ -25,6 +25,7 @@ import { validateSocketEvent } from '../../middleware/validation.js';
 import {
   SocketPostReactionAddSchema,
   SocketPostReactionRemoveSchema,
+  SocketPostReactionRequestSyncSchema,
   SocketPostRoomActionSchema,
 } from '../../validation/socket-event-schemas.js';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
@@ -326,6 +327,17 @@ export class PostReactionHandler {
     callback?: (response: SocketIOResponse<unknown>) => void
   ): Promise<void> {
     try {
+      // Validate at the socket boundary like every sibling method — otherwise a
+      // malformed payload reaches `PostReactionService.validatePostId`, whose
+      // error-message template dereferences `postId.substring(...)` and throws an
+      // opaque `TypeError` instead of the intended clean validation error.
+      const schemaValidation = validateSocketEvent(SocketPostReactionRequestSyncSchema, data);
+      if (schemaValidation.success === false) {
+        if (callback) callback({ success: false, error: schemaValidation.error });
+        return;
+      }
+      const validated = schemaValidation.data;
+
       const userIdOrToken = this.socketToUser.get(socket.id);
       if (!userIdOrToken) {
         const errorResponse: SocketIOResponse<unknown> = {
@@ -346,7 +358,7 @@ export class PostReactionHandler {
       }
 
       const reactionSync = await this.postReactionService.getPostReactions({
-        postId: data.postId,
+        postId: validated.postId,
         currentUserId: userId,
       });
 

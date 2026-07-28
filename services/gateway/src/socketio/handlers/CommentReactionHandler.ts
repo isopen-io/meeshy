@@ -23,6 +23,7 @@ import { validateSocketEvent } from '../../middleware/validation.js';
 import {
   SocketCommentReactionAddSchema,
   SocketCommentReactionRemoveSchema,
+  SocketCommentReactionRequestSyncSchema,
 } from '../../validation/socket-event-schemas.js';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
 import { SocketRateLimiter } from '../../utils/socket-rate-limiter.js';
@@ -277,6 +278,17 @@ export class CommentReactionHandler {
     callback?: (response: SocketIOResponse<unknown>) => void
   ): Promise<void> {
     try {
+      // Validate at the socket boundary like every sibling method — otherwise a
+      // malformed payload reaches `CommentReactionService.validateCommentId`, whose
+      // error-message template dereferences `commentId.substring(...)` and throws
+      // an opaque `TypeError` instead of the intended clean validation error.
+      const schemaValidation = validateSocketEvent(SocketCommentReactionRequestSyncSchema, data);
+      if (schemaValidation.success === false) {
+        if (callback) callback({ success: false, error: schemaValidation.error });
+        return;
+      }
+      const validated = schemaValidation.data;
+
       const userIdOrToken = this.socketToUser.get(socket.id);
       if (!userIdOrToken) {
         const errorResponse: SocketIOResponse<unknown> = {
@@ -297,7 +309,7 @@ export class CommentReactionHandler {
       }
 
       const reactionSync = await this.commentReactionService.getCommentReactions({
-        commentId: data.commentId,
+        commentId: validated.commentId,
         currentUserId: userId,
       });
 

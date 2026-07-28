@@ -2961,3 +2961,120 @@ existant, donc jamais revu.
   post-answer en `completed`, y compris une vraie coupure réseau détectée seulement par l'expiry de la
   grâce de déconnexion — semble intentionnel d'après les commentaires du fichier, non creusé cette vague,
   à ré-évaluer) ; PR #1889/#1890 (autres sessions) à suivre séparément.
+
+## Vague 41 — `pendingRetry` (retry-on-failure, web) était un scalaire unique : deux échecs transitoires sur des conversations différentes se clobbaient silencieusement (2026-07-27)
+
+Point d'entrée : routine calling-feature (agent Cowork non interactif, mandat PHASE 1-12). Branche
+`claude/modest-cori-q44x1t` redémarrée depuis `origin/main` à jour (0 commit en retard/avance). Aucune
+PR ouverte au démarrage (`list_pull_requests` state=open → `[]`). 3 commits calling déjà mergés
+aujourd'hui/hier, non revus : `9816c79d` (web, negotiationId), `ba58580f` (iOS, jitter reconnect),
+`f31d4fe3` (gateway, scope analytics writes). Un agent d'exploration dédié, briefé avec les 40 vagues
+précédentes + ces 3 commits pour falsifier tout candidat déjà couvert, a ciblé la feature retry-on-failure
+elle-même (introduite Vague 40, jamais réauditée depuis).
+
+- **[MOYEN, web, CONFIRMÉ + CORRIGÉ, TDD]** `pendingRetry: PendingCallRetry | null` (`call-store.ts:56`)
+  était un scalaire unique écrasé sans condition par `offerCallRetry` (`set({ pendingRetry: retry })`,
+  ligne 507). Deux writers de production existent (`VideoCallInterface.tsx:451`, watchdog local 45s ;
+  `CallManager.tsx:431`, `call:ended` server-authoritative) et un seul consommateur — `useCallRetryToast`
+  — est monté par instance UNIQUE, reparamétrée par `selectedConversation?.id`
+  (`ConversationLayout.tsx:214`), pas « une instance par conversation » comme le suggérait le commentaire
+  du test existant (`use-call-retry-toast.test.tsx:42`, « Left for the other conversation's hook to
+  consume » — ce hook n'existe nulle part ailleurs dans l'arbre).
+- **Scénario concret** : utilisateur sur la conversation Y (ou toute autre page) quand un appel
+  ÉTABLI sur la conversation Z (reçu, décroché plus tôt) tombe réellement (perte réseau, tab en fond) →
+  résolu côté serveur en `call:ended` `reason: 'failed'|'connectionLost'` → `CallManager` (monté
+  globalement à la racine) pose `pendingRetry = {conversationId: Z, type}`. Le hook monté (scope Y ou
+  absent) ne le consomme pas — c'est le comportement voulu, en attendant que l'utilisateur navigue vers
+  Z. Mais si un DEUXIÈME échec transitoire survient sur une conversation W avant que l'utilisateur ne
+  navigue vers Z, `offerCallRetry` écrase le scalaire : l'offre de Z est perdue **silencieusement et
+  définitivement**, même si l'utilisateur ouvre Z des heures plus tard — aucun toast ne se déclenchera
+  jamais pour cet appel, à l'encontre du but même de la feature (« ~16% des appels finissent en échec
+  transitoire », motivation du commit `7e6ea5d49`/Vague 40).
+- **Fix** : `pendingRetry` devient `PendingCallRetryMap` (`Record<conversationId, PendingCallRetry>`,
+  `call-store.ts`). `offerCallRetry` fusionne par clé (`{...state.pendingRetry, [retry.conversationId]:
+  retry}`) au lieu d'écraser. `clearCallRetry(conversationId?)` : avec un id, ne retire que cette entrée ;
+  sans argument (compat des `beforeEach` de test existants), vide tout. `useCallRetryToast` lit
+  `pendingRetryMap[conversationId]` et ne consomme (`clearCallRetry(conversationId)`) que l'entrée de SA
+  conversation — les offres des autres conversations survivent intactes. `reset()` continue de préserver
+  toute la map (logique inchangée, juste le type). Aucun changement de signature pour les 2 sites
+  `offerCallRetry(...)` de production (même shape d'argument) ni pour `CallManager.tsx`/
+  `VideoCallInterface.tsx`.
+- **Tests TDD** : `call-store.test.ts` — nouveau cas « a second offer for a DIFFERENT conversation does
+  not clobber an earlier unconsumed offer » (RED avant fix : la 2e offre écrasait la 1re) + cas
+  `clearCallRetry(id)` scope-only vs `clearCallRetry()` clear-all. `use-call-retry-toast.test.tsx` —
+  cas existant étendu : une 2e offre pour une 3e conversation ne doit pas faire disparaître l'offre déjà
+  en attente pour `conv-OTHER`. `CallManager.callEndedRetry.test.tsx`/`CallManager.callWaiting.test.tsx`
+  adaptés à la forme map (`toEqual({[id]: {...}})` / `toEqual({})` au lieu de `toBeNull()`). Suite
+  `--testPathPatterns=call` complète : 35/35 suites, 372/372 tests verts. `tsc --noEmit` web : 1184
+  erreurs préexistantes identiques avant/après (`git stash` diff, aucune dans les fichiers touchés) ;
+  0 nouvelle erreur. `eslint` cassé dans ce sandbox (config circulaire `@eslint/eslintrc`), même
+  limitation pré-existante que Vagues 38/40, non bloquant.
+- **iOS/Android (lecture seule, aucun changement)** : hors périmètre (aucune toolchain Swift/Kotlin dans
+  ce sandbox) ; la feature retry-on-failure reste web-only.
+- **Reste ouvert (inchangé + addition)** : tout ce qui précède (Vague 40) ; noter que même après ce fix,
+  une offre pour une conversation jamais revisitée par l'utilisateur reste en mémoire indéfiniment (pas de
+  TTL/expiry) — pas une fuite pratique (une entrée = ~2 champs string, bornée par le nombre de
+  conversations distinctes ayant eu un échec transitoire, purgée dès la visite ou un nouvel appel réussi
+  sur cette même conversation via les writers existants) mais un candidat de suivi si une UX de
+  staleness (« cet appel a échoué il y a longtemps ») s'avère nécessaire ; piste `CallService.leaveCall`
+  de la Vague 40 toujours non creusée ; PR #1889/#1890 à suivre séparément.
+
+## Vague 42 — `CallService.leaveCall` résolvait TOUT leave post-answer en `completed`, y compris un vrai crash/déconnexion réseau (2026-07-28)
+
+Point d'entrée : routine calling-feature (agent Cowork non interactif, mandat PHASE 1-12). Branche
+`claude/modest-cori-y6gp0r` : le ref remote avait déjà été mergé et auto-supprimé par une exécution
+précédente (0 commit propre au-delà de l'ancien `main`) — redémarrée depuis `origin/main` à jour, règle
+"PR déjà mergée = travail neuf". 2 PR ouvertes trouvées au démarrage, toutes deux issues d'exécutions
+précédentes de cette même routine, CI verte + `mergeable_state: clean` + 0 review bloquante : **#2424**
+(gateway, shape d'ack `call:initiate`/`call:join`) et **#2422** (web, `pendingRetry` scalaire → Vague 41)
+— mergées avant de commencer ce cycle. Un agent d'exploration dédié (iOS lifecycle/WebRTC/CallKit) n'a
+trouvé qu'une seule piste concrète — du code Swift mort (`CallManager.handleRemoteReject`, 0 call site) —
+laissée en l'état : aucune toolchain Xcode/simulateur dans ce sandbox, donc aucune modification Swift
+n'est vérifiable ici (même contrainte que TOUTES les vagues précédentes).
+
+- **[MOYEN, gateway, CONFIRMÉ + CORRIGÉ, TDD]** La piste "non creusée" laissée ouverte par les Vagues 40
+  et 41 (« `CallService.leaveCall` résout tout leave post-answer en `completed`, y compris une vraie
+  coupure réseau détectée seulement par l'expiry de la grâce de déconnexion — semble intentionnel,
+  à ré-évaluer ») a enfin été creusée. Confirmée réelle : `leaveParticipationAndBroadcast`
+  (`CallEventsHandler.ts`) est appelée **exclusivement** depuis `onDisconnectGraceExpired` — jamais
+  depuis un `call:leave`/`call:end` explicite (grep : un seul call site). Son chemin heureux
+  (`callService.leaveCall()` réussit) laissait `CallService` défaulter l'`endReason` à `completed`,
+  alors que son PROPRE chemin de repli d'erreur, quelques lignes plus bas (`leaveCall()` qui throw →
+  `forceEndOrphanedCallSession(..., CallEndReason.connectionLost)`), stampait déjà `connectionLost` pour
+  ce même scénario exact. Incohérence interne confirmant le bug : le happy-path et le fallback d'erreur
+  du MÊME événement (déconnexion involontaire, jamais raccrochée) disaient deux choses différentes.
+- **Impact concret** : la feature retry-on-failure (Vagues 40/41, `isRetryableCallFailure`) n'offre
+  « Réessayer » que pour `reason: 'failed'|'connectionLost'`. Le scénario le plus courant de coupure
+  réseau réelle en usage — le socket de signaling tombe et n'expire jamais dans la fenêtre de grâce —
+  se résolvait en `completed`, **exactement comme un raccroché volontaire**, et n'offrait donc jamais le
+  retry pour le cas même qui a motivé la feature (« ~16% des appels finissent en échec transitoire »).
+- **Fix** : nouveau champ optionnel `endReasonHint?: CallEndReason` sur `LeaveCallData`
+  (`CallService.ts`). Les deux branches terminales de `leaveCall` (principale et idempotente) l'utilisent
+  désormais : `endReasonHint ?? CallEndReason.completed` au lieu du littéral `completed` en dur — la
+  classification pré-réponse (`missed`) est inchangée, seul le post-réponse est concerné.
+  `leaveParticipationAndBroadcast` passe `endReasonHint: CallEndReason.connectionLost` sur son unique
+  site d'appel. Les 3 AUTRES call sites de `leaveCall()` (`call:leave` explicite, `call:force-leave`,
+  route REST, `AuthHandler`) ne passent aucun hint — comportement `completed` par défaut strictement
+  inchangé, aucune régression sur un hangup délibéré.
+- **Tests TDD** : RED confirmé via `git stash` du diff source seul (2 fichiers) en gardant les tests mis à
+  jour — 3 échecs précis attendus (2 tests pré-existants dans `CallEventsHandler-restart-resilience.test.ts`
+  qui figeaient l'objet exact passé à `leaveCall` sans le hint, TS2353 sur les 3 nouveaux cas de
+  `callService-leaveCall.test.ts` référençant un champ encore inexistant). GREEN après restauration.
+  Nouveau describe `CallService.leaveCall() — endReasonHint` (4 cas : branche principale avec/sans hint,
+  branche pré-réponse ignore le hint, branche idempotente honore le hint) + 1 cas dans
+  `CallEventsHandler-disconnect.test.ts` (le handler transmet bien le hint) + mise à jour des 2 tests
+  pré-existants qui pinnaient l'ancien comportement buggy par construction (même piège que documenté aux
+  Vagues précédentes — `git stash` uniquement les 2 fichiers source, tests déjà mis à jour restent en
+  place pour confirmer le RED précis). Suite gateway complète (`bun run test:coverage`) : 544/544 suites,
+  14780/14781 tests verts (1 skip pré-existant documenté, sans rapport). `tsc --noEmit` gateway : 0
+  erreur avant et après (`packages/shared` généré + buildé au préalable : `npx prisma generate` a
+  nécessité un contournement — `bunx`/`npx` déclenchaient une install `pnpm add prisma@6.19.3` qui restait
+  bloquée indéfiniment dans ce sandbox ; invoquer directement le binaire déjà présent dans le store pnpm
+  hoisté racine a débloqué la génération en <1s).
+- **iOS/Android (lecture seule, aucun changement)** : hors périmètre (aucune toolchain Swift/Kotlin dans
+  ce sandbox) ; dead code Swift `CallManager.handleRemoteReject` noté ci-dessus, non touché.
+- **Reste ouvert (inchangé + addition)** : tout ce qui précède (Vagues 40/41) ; dead code Swift
+  `CallManager.handleRemoteReject(callId:)` (0 call site, à vérifier/supprimer dans une session avec
+  Xcode) ; `CallManager.swift` (5462 lignes) et `CallEventsHandler.ts` (4089 lignes) restent des candidats
+  de découpage God-object, non traités cette vague (refactor risqué sans compilation/tests locaux
+  vérifiables sur la partie iOS) ; parité iOS/Android du retry-on-failure toujours à construire.
