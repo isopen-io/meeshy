@@ -345,3 +345,35 @@ describe('TranslatePostSchema', () => {
     expect(TranslatePostSchema.safeParse({ force: true }).success).toBe(false);
   });
 });
+
+// ─── StoryEffectsSchema — plafond de volume ───────────────────────────────────
+
+describe('StoryEffectsSchema — plafond de volume', () => {
+  it('accepte un volume de 2 sur un audioPlayerObject', () => {
+    const result = StoryEffectsSchema.safeParse({
+      audioPlayerObjects: [{ id: 'a1', postMediaId: 'm1', volume: 2 }],
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it('accepte un volume de 2 sur un mediaObject', () => {
+    const result = StoryEffectsSchema.safeParse({
+      mediaObjects: [{ id: 'm1', postMediaId: 'p1', volume: 2 }],
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it('rejette un volume de 2.1', () => {
+    const result = StoryEffectsSchema.safeParse({
+      audioPlayerObjects: [{ id: 'a1', postMediaId: 'm1', volume: 2.1 }],
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it('rejette un volume négatif', () => {
+    const result = StoryEffectsSchema.safeParse({
+      audioPlayerObjects: [{ id: 'a1', postMediaId: 'm1', volume: -0.1 }],
+    });
+    expect(result.success).toBe(false);
+  });
+});

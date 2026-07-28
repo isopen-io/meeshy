@@ -87,7 +87,10 @@ const StoryMediaObjectSchema = z.object({
   y: z.number().min(-10).max(10).optional(),
   scale: z.number().min(0).max(20).optional(),
   rotation: z.number().min(-720).max(720).optional(),
-  volume: z.number().min(0).max(1).optional(),
+  // Plafond a 2 : l'auteur peut pousser un media au-dela de son niveau nominal
+  // (quitte a saturer, c'est un choix de composition assume). Miroir de
+  // `StoryVolume.maxGain` cote iOS — les deux valeurs doivent rester egales.
+  volume: z.number().min(0).max(2).optional(),
   isBackground: z.boolean().optional(),
   loop: z.boolean().optional(),
   zIndex: z.number().int().min(-1000).max(1000).optional(),
@@ -137,7 +140,8 @@ const StoryAudioObjectSchema = z.object({
   id: z.string().max(STORY_ID_MAX).optional(),
   postMediaId: z.string().max(STORY_ID_MAX).optional(),
   placement: z.string().max(32).optional(),
-  volume: z.number().min(0).max(1).optional(),
+  // Meme plafond que `StoryMediaObjectSchema` ci-dessus : 200 % de gain.
+  volume: z.number().min(0).max(2).optional(),
   isBackground: z.boolean().optional(),
   waveformSamples: z.array(z.number()).max(2048).optional(),
   startTime: z.number().min(0).max(86400).optional(),
