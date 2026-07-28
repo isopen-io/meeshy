@@ -855,12 +855,13 @@ extension StoryComposerView {
 
     /// Hauteur (en points) de la présentation active, telle que le canvas doit la
     /// réserver en bas pour scaler ENTIÈREMENT au-dessus d'elle. Max des sources :
-    /// éditeur texte → `keyboardHeight + 132` (barre bulles) ; band déployée →
-    /// `measuredBottomBandHeight` (hauteur RÉELLE mesurée de `ComposerBottomBand`,
-    /// content-driven — `composerBandHeight` reste un plancher tant que la 1re mesure
-    /// n'a pas atterri) ; sheet système → `fraction × écran`. Le cap garantit qu'il
-    /// reste toujours ≥ ~30 % d'écran pour le canvas (jamais écrasé à zéro → sinon le
-    /// solver retombe en plein écran = bas de nouveau masqué). Hors carding → `0`.
+    /// band déployée → `measuredBottomBandHeight` (hauteur RÉELLE mesurée de
+    /// `ComposerBottomBand`, content-driven — `composerBandHeight` reste un plancher
+    /// tant que la 1re mesure n'a pas atterri) ; sheet système → `fraction × écran`.
+    /// L'éditeur texte n'y figure pas : il ne carde plus le canvas, la garde de tête
+    /// retourne donc `0`. Le cap garantit qu'il reste toujours ≥ ~30 % d'écran pour le
+    /// canvas (jamais écrasé à zéro → sinon le solver retombe en plein écran = bas de
+    /// nouveau masqué). Hors carding → `0`.
     var presentedSheetHeight: CGFloat {
         guard canvasIsCarded else { return 0 }
         var height: CGFloat = 0
