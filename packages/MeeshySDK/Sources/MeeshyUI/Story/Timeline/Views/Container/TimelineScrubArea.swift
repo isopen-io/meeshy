@@ -179,13 +179,25 @@ public struct TimelineScrubArea<TracksContent: View>: View {
             }
             if TimelineScrollMetrics.isNeeded(contentWidth: content,
                                               viewportWidth: viewportWidth) {
-                TimelineScrollBar(
-                    scrollX: scrollX,
-                    contentWidth: content,
-                    viewportWidth: viewportWidth,
-                    isDark: isDark,
-                    onScrollTo: { requestedScrollX = $0 }
-                )
+                // Dernière PISTE de la pile, et non une barre flottante : la
+                // colonne d'étiquettes lui est réservée à gauche comme aux
+                // autres pistes, si bien que la course du curseur se superpose
+                // exactement à la zone des clips au-dessus. Un curseur au tiers
+                // de sa piste désigne alors le tiers de la timeline, sans que
+                // l'œil ait à corriger le décalage des étiquettes.
+                //
+                // HORS du ScrollView à dessein : embarquée dedans, elle
+                // défilerait avec le contenu qu'elle sert à piloter.
+                HStack(spacing: 0) {
+                    Color.clear.frame(width: Self.laneLabelWidth)
+                    TimelineScrollBar(
+                        scrollX: scrollX,
+                        contentWidth: content,
+                        viewportWidth: viewportWidth,
+                        isDark: isDark,
+                        onScrollTo: { requestedScrollX = $0 }
+                    )
+                }
                 .padding(.horizontal, Self.horizontalPadding)
             }
         }
