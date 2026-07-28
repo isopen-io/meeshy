@@ -6,25 +6,43 @@ build. Investigated as part of P4.3 (the XcodeGen migration). Decision
 captured here so a future contributor doesn't either delete useful work
 OR re-introduce broken code by enabling them as XcodeGen targets.
 
-## `MeeshyShareExtension/` — broken, do NOT enable
+## `MeeshyShareExtension/` — RÉSOLU, embarquée depuis 2026-07-28
 
-Files:
-- `Info.plist` — declares `NSExtensionMainStoryboard = "MainInterface"`
-- `ShareViewController.swift` — UIViewController subclass
+> **Cette section décrivait l'état d'avant le 2026-06-24. Elle est
+> conservée corrigée, pas supprimée, parce qu'elle a servi de garde-fou
+> pendant un mois — mais son verdict « do NOT enable » est CADUC.**
 
-The Info.plist references a `MainInterface.storyboard` that does not
-exist in the directory. The pbxproj has no Share Extension target with a
-matching bundle ID (`me.meeshy.app.share` is absent — confirmed via
-`grep PRODUCT_BUNDLE_IDENTIFIER apps/ios/Meeshy.xcodeproj/project.pbxproj`).
+Ce qui était vrai (avant `712bc56e8`, 2026-06-24) : l'`Info.plist`
+déclarait `NSExtensionMainStoryboard = "MainInterface"` en pointant sur
+un storyboard inexistant, et aucun target ne portait le bundle id.
 
-Conclusion: this directory is the start of an iOS Share Extension that
-was never finished. Adding it to `project.yml` as-is would produce a
-build break (missing storyboard) and Xcode Cloud upload rejections.
+Ce qui est vrai aujourd'hui :
+- `Info.plist` est programmatique — `NSExtensionPrincipalClass =
+  $(PRODUCT_MODULE_NAME).ShareViewController`, plus aucune référence à un
+  storyboard. `ShareViewController` héberge du SwiftUI (`ShareContentView`).
+- Le target `MeeshyShareExtension` est déclaré dans `project.yml`, bundle id
+  `me.meeshy.app.share-extension`.
+- L'App ID est enregistré au portail Apple (`QA8KGP7U96`, seed `D72UK7R5RE`)
+  avec la capability `APP_GROUPS` — le blocage de signature invoqué ici est levé.
+- **2026-07-28** : le target est de nouveau dans les `dependencies` de l'app
+  (phase « Embed Foundation Extensions »), et le bundle id est déclaré dans
+  `fastlane/Matchfile` + les lanes `sync_certificates`/`force_sync` du Fastfile.
 
-To revive: finish the storyboard (or migrate the principal class to a
-programmatic SLComposeServiceViewController flow without a storyboard),
-add a `me.meeshy.app.share` provisioning profile via `fastlane match`,
-THEN declare the target in `project.yml`.
+### Réserve restante — câblage produit incomplet
+
+L'extension **compile et se signe**, mais le contenu partagé n'atteint pas
+encore l'app :
+- `saveSharedContent` écrit `pending_shared_content` dans
+  `UserDefaults(suiteName: "group.me.meeshy.apps")` — **aucun lecteur** de
+  cette clé n'existe côté app.
+- `sendToContact` ouvre `meeshy://share?contactId=<id>`, alors que
+  `DeepLinkRouter.parseShareQuery` n'interprète que `?text=` et `?url=`.
+  Résultat : `Router.handleShareDeepLink` journalise « Share deep link
+  received with no content » et se contente d'un `popToRoot()`.
+
+Pour rendre le partage fonctionnel, brancher un lecteur de
+`pending_shared_content` sur le réveil de l'app et alimenter
+`Router.pendingShareContent` (le mécanisme d'accueil existe déjà).
 
 ## `MeeshyIntents/` — partially orphaned, target placement TBD
 
@@ -69,7 +87,7 @@ is needed.
 
 | Directory | Has source files? | Wired into build? | Action in `project.yml` |
 |-----------|------------------:|------------------:|-------------------------|
-| `MeeshyShareExtension/` | yes (incomplete) | no  | do NOT add (would break) |
+| `MeeshyShareExtension/` | yes | **yes — target + embed (2026-07-28)** | déjà déclaré ; reste le câblage produit (cf. réserve ci-dessus) |
 | `MeeshyIntents/`        | yes              | no  | requires decision (move / delete / exclude) |
 | `MeeshyContextMenu/`    | docs only        | no  | leave as-is |
 | `MeeshyTests/`          | yes              | yes (via pbxproj refs) | **added to project.yml in P4.3** |

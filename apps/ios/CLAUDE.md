@@ -441,6 +441,14 @@ Les composants suivants gerent l'**entite** Notification (CRUD, listing, prefere
   est programmatique (héberge SwiftUI), Info.plist via `NSExtensionPrincipalClass` (pas de
   storyboard), auto-contenu (frameworks système + App Group `group.me.meeshy.apps`,
   entitlements `MeeshyShareExtension/MeeshyShareExtension.entitlements`).
+  **Embarquée dans l'app depuis 2026-07-28** : `- target: MeeshyShareExtension` est de retour
+  dans les `dependencies` de Meeshy (phase « Embed Foundation Extensions »), l'App ID
+  `me.meeshy.app.share-extension` (QA8KGP7U96) est enregistré au portail avec APP_GROUPS, et
+  le bundle id figure dans `fastlane/Matchfile` + les lanes `sync_certificates`/`force_sync`.
+  ⚠️ **Le tuyau produit n'est pas branché** : l'extension écrit `pending_shared_content` dans
+  l'App Group et ouvre `meeshy://share?contactId=…`, mais aucun code app ne lit cette clé et
+  `DeepLinkRouter` n'interprète que `?text=`/`?url=` → le contenu partagé est perdu
+  (`popToRoot()` seul). À câbler sur `Router.pendingShareContent` avant de compter dessus.
 - **App Intents (Siri/Shortcuts)** — `Meeshy/Features/Intents/MeeshyAppIntents.swift`,
   compilé **dans le target app** (pas d'extension séparée : les `AppIntent` définis par
   l'app sont exposés à Siri/Shortcuts automatiquement). Recâblé 2026-06-24 depuis l'ancien

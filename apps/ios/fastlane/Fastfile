@@ -93,7 +93,9 @@ platform :ios do
       app_identifier: [
         "me.meeshy.app",
         "me.meeshy.app.notification-service",
-        "me.meeshy.app.widgets"
+        "me.meeshy.app.widgets",
+        # Ajouté 2026-07-28 avec le ré-embarquement de MeeshyShareExtension.
+        "me.meeshy.app.share-extension"
       ],
       api_key: api_key,
       # readonly skips the Dev Portal round-trip and just installs the certs/profiles
@@ -308,7 +310,9 @@ platform :ios do
       app_identifier: [
         "me.meeshy.app",
         "me.meeshy.app.notification-service",
-        "me.meeshy.app.widgets"
+        "me.meeshy.app.widgets",
+        # Ajouté 2026-07-28 avec le ré-embarquement de MeeshyShareExtension.
+        "me.meeshy.app.share-extension"
       ],
       api_key: api_key,
       force: true,

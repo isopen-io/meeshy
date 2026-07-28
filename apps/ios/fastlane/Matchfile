@@ -6,10 +6,13 @@ storage_mode("git")
 
 type("appstore")
 
+# me.meeshy.app.share-extension ajouté 2026-07-28 en même temps que le
+# ré-embarquement du target MeeshyShareExtension dans l'app (project.yml).
 app_identifier([
   "me.meeshy.app",
   "me.meeshy.app.notification-service",
-  "me.meeshy.app.widgets"
+  "me.meeshy.app.widgets",
+  "me.meeshy.app.share-extension"
 ])
 
 # Team ID pinned to D72UK7R5RE since 2026-07-28 — see the header block in
