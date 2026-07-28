@@ -29,7 +29,7 @@ struct TextEditFloatingBubbles: View {
         // séparation en deux rangées.
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: TextEditToolbarMetrics.spacing) {
-                ForEach(TextEditTool.bottomTools, id: \.self) { tool in
+                ForEach(TextEditTool.all, id: \.self) { tool in
                     bubble(tool)
                 }
             }
@@ -60,10 +60,6 @@ struct TextEditFloatingBubbles: View {
     @ViewBuilder
     private func indicatorView(for tool: TextEditTool) -> some View {
         switch StoryTextAttributeCycle.indicator(tool, of: textObject) {
-        case .glyph(let letter, let weight):
-            Text(letter)
-                .font(.system(size: 17, weight: weight.swiftUIWeight))
-                .glassControlForeground()
         case .styledGlyph(let letter, let style):
             Text(letter)
                 .font(storyFont(for: style, size: 15))

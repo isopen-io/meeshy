@@ -63,9 +63,7 @@ struct TextEditToolOptions: View {
         Group {
             switch tool {
             case .style:      styleOptions
-            case .weight:     weightOptions
             case .color:      colorOptions
-            case .size:       sizeOptions
             case .align:      alignOptions
             case .background: backgroundOptions
             case .frame:      frameOptions
@@ -171,38 +169,6 @@ struct TextEditToolOptions: View {
         }
     }
 
-    // MARK: - Weight
-
-    /// Graisse indépendante : fin / normal / semi-gras / gras. Écrit
-    /// `fontWeight` (override) sur le `StoryTextObject`.
-    private var weightOptions: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 10) {
-                ForEach(StoryTextWeight.allCases, id: \.self) { weight in
-                    let isSel = textObject.parsedFontWeight == weight
-                    Button {
-                        textObject.fontWeight = weight.rawValue
-                        HapticFeedback.light()
-                    } label: {
-                        Text(TextEditLabels.title(for: weight))
-                            .font(.system(size: 12, weight: weight.swiftUIWeight))
-                            .foregroundStyle(isSel ? Color.white : Color.primary)
-                            .frame(minWidth: Self.chipMinWidth)
-                            .padding(.horizontal, 4)
-                            .frame(height: Self.chipHeight)
-                            .background(
-                                RoundedRectangle(cornerRadius: 10)
-                                    .fill(isSel ? AnyShapeStyle(MeeshyColors.brandGradient)
-                                                : AnyShapeStyle(Color.gray.opacity(0.18)))
-                            )
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
-            .padding(.horizontal, 2)
-        }
-    }
-
     // MARK: - Color
 
     private var colorOptions: some View {
@@ -224,29 +190,6 @@ struct TextEditToolOptions: View {
     }
 
     // MARK: - Size
-
-    private var sizeOptions: some View {
-        HStack(spacing: 10) {
-            Image(systemName: "textformat.size.smaller")
-                .font(.system(size: 12))
-                .foregroundStyle(.secondary)
-            Slider(
-                value: Binding(
-                    get: { Self.displayedSize(for: textObject) },
-                    set: { Self.applyingSliderValue($0, to: &textObject) }
-                ),
-                in: 14...160, step: 1
-            )
-            .tint(MeeshyColors.brandPrimary)
-            Image(systemName: "textformat.size.larger")
-                .font(.system(size: 16))
-                .foregroundStyle(.secondary)
-            Text("\(Int(Self.displayedSize(for: textObject)))")
-                .font(.system(size: 12, weight: .bold, design: .monospaced))
-                .foregroundStyle(.secondary)
-                .frame(width: 34)
-        }
-    }
 
     /// The value the size slider displays: the object's effective rendered
     /// size (`fontSize × scale`, cf. `StoryTextLayer.configure`). The canvas

@@ -26,13 +26,7 @@ struct StoryTextEditToolbar: View {
         if case .active(let textId, let expandedTool) = viewModel.textEditingMode,
            let binding = textObjectBinding(for: textId) {
             VStack(spacing: 0) {
-                StoryTextEditTopBar(
-                    textObject: binding,
-                    onOpenPanel: { tool in
-                        viewModel.setExpandedTool(expandedTool == tool ? nil : tool)
-                    },
-                    onFinish: { viewModel.exitTextEditingMode() }
-                )
+                StoryTextEditTopBar(onFinish: { viewModel.exitTextEditingMode() })
 
                 Spacer(minLength: 0)
 

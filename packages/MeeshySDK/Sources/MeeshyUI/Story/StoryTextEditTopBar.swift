@@ -1,30 +1,19 @@
 import SwiftUI
 import MeeshySDK
 
-/// Rangée d'attributs posée sous l'encoche pendant l'édition d'un texte.
+/// Rangée posée sous l'encoche pendant l'édition d'un texte : elle ne porte
+/// plus que la sortie.
 ///
-/// Chaque bouton porte un attribut à valeurs discrètes et le fait tourner d'un
-/// cran au tap, en montrant l'état courant plutôt qu'un pictogramme figé. Le
-/// panneau détaillé reste joignable par appui long — rien n'est perdu, seul le
-/// chemin le plus court change.
-///
-/// La rangée existe parce que les neuf outils plus la sortie ne tenaient pas
-/// sur une seule ligne (432 pt demandés pour 361 disponibles) : les bulles des
-/// deux extrémités étaient coupées, dont l'unique chemin de sortie.
+/// Les attributs qui l'occupaient sont redescendus sur la rangée unique
+/// (`TextEditFloatingBubbles`), avec le même geste pour tous — tap pour la
+/// valeur suivante, appui long pour le panneau. La séparation en deux rangées
+/// répondait à un débordement de largeur ; retirer taille et graisse, devenues
+/// des curseurs, l'a rendue inutile.
 struct StoryTextEditTopBar: View {
-    @Binding var textObject: StoryTextObject
-    let onOpenPanel: (TextEditTool) -> Void
     let onFinish: () -> Void
 
     var body: some View {
-        HStack(spacing: TextEditToolbarMetrics.spacing) {
-            AdaptiveGlassContainer(spacing: TextEditToolbarMetrics.spacing) {
-                HStack(spacing: TextEditToolbarMetrics.spacing) {
-                    ForEach(TextEditTool.topTools, id: \.self) { tool in
-                        cycleButton(tool)
-                    }
-                }
-            }
+        HStack {
             Spacer(minLength: TextEditToolbarMetrics.spacing)
             finishButton
         }
@@ -32,73 +21,8 @@ struct StoryTextEditTopBar: View {
         .padding(.top, 6)
     }
 
-    // MARK: - Bouton rotatif
-
-    private func cycleButton(_ tool: TextEditTool) -> some View {
-        let bubble = indicator(for: tool)
-            .frame(width: TextEditToolbarMetrics.bubbleSize,
-                   height: TextEditToolbarMetrics.bubbleSize)
-            .adaptiveGlass(in: Circle())
-            .contentShape(Circle())
-        return bubble
-            .onTapGesture {
-                StoryTextAttributeCycle.advance(tool, on: &textObject)
-                HapticFeedback.light()
-            }
-            .onLongPressGesture(minimumDuration: 0.4) {
-                HapticFeedback.medium()
-                onOpenPanel(tool)
-            }
-            .modifier(CycleButtonAccessibility(
-                label: tool.accessibilityLabel,
-                value: Self.spokenValue(tool, of: textObject),
-                onOpenPanel: { onOpenPanel(tool) }))
-    }
-
-    /// L'état courant, rendu par le bouton lui-même : la lettre témoin porte la
-    /// graisse qu'elle applique, le carré du contour porte son épaisseur.
-    @ViewBuilder
-    private func indicator(for tool: TextEditTool) -> some View {
-        switch StoryTextAttributeCycle.indicator(tool, of: textObject) {
-        case .glyph(let letter, let weight):
-            Text(letter)
-                .font(.system(size: 17, weight: weight.swiftUIWeight))
-                .glassControlForeground()
-        case .symbol(let name, let emphasis):
-            Image(systemName: name)
-                .font(.system(size: 14, weight: Self.strokeWeight(emphasis)))
-                .glassControlForeground()
-        case .styledGlyph(let letter, let style):
-            Text(letter)
-                .font(storyFont(for: style, size: 15))
-                .glassControlForeground()
-        case .colorDot(let hex):
-            Circle()
-                .fill(Color(hex: hex))
-                .frame(width: 18, height: 18)
-                .overlay(Circle().stroke(Color.white.opacity(0.6), lineWidth: 1))
-        case .backgroundSwatch(let hex, let isGlass):
-            if let hex {
-                RoundedRectangle(cornerRadius: 5, style: .continuous)
-                    .fill(Color(hex: hex))
-                    .frame(width: 18, height: 18)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 5, style: .continuous)
-                            .stroke(Color.white.opacity(0.6), lineWidth: 1))
-            } else {
-                Image(systemName: isGlass ? "square.on.square.dashed" : "square.slash")
-                    .font(.system(size: 14, weight: .semibold))
-                    .glassControlForeground()
-            }
-        case .code(let code):
-            Text(code)
-                .font(.system(size: 12, weight: .bold))
-                .glassControlForeground()
-        }
-    }
-
-    /// Rang de contour (0…4) traduit en poids de trait — le bouton montre
-    /// ainsi l'épaisseur qu'il pose.
+    /// Rang de contour (0…4) traduit en poids de trait — la bulle montre
+    /// ainsi l'épaisseur qu'elle pose. Consommé par `TextEditFloatingBubbles`.
     static func strokeWeight(_ emphasis: Int) -> Font.Weight {
         switch emphasis {
         case ...0: return .regular
@@ -142,8 +66,6 @@ struct StoryTextEditTopBar: View {
     /// n'a aucun équivalent parlé sans cela.
     static func spokenValue(_ tool: TextEditTool, of text: StoryTextObject) -> String {
         switch tool {
-        case .weight:
-            return TextEditLabels.title(for: text.parsedFontWeight ?? StoryTextAttributeCycle.defaultWeight)
         case .frame:
             return TextEditLabels.title(for: text.parsedFrameShape)
         case .align:
@@ -154,7 +76,11 @@ struct StoryTextEditTopBar: View {
                 return String(localized: "story.composer.noEffect", defaultValue: "Aucun", bundle: .module)
             }
             return "\(Int(width)) pt"
-        case .style, .color, .size, .background, .language:
+        case .style:
+            return text.parsedTextStyle.displayName
+        case .language:
+            return (TextEditToolOptions.normalisedCode(text.sourceLanguage) ?? "fr").uppercased()
+        case .color, .background:
             return ""
         }
     }
@@ -162,8 +88,8 @@ struct StoryTextEditTopBar: View {
 
 // MARK: - Accessibilité d'un bouton rotatif
 
-/// Extrait de `cycleButton` : empilées en ligne, ces annotations faisaient
-/// dépasser le vérificateur de types de son budget de temps.
+/// Extrait de la construction de bulle : empilées en ligne, ces annotations
+/// faisaient dépasser le vérificateur de types de son budget de temps.
 struct CycleButtonAccessibility: ViewModifier {
     let label: String
     let value: String
@@ -187,9 +113,9 @@ struct CycleButtonAccessibility: ViewModifier {
 
 // MARK: - Graisse SwiftUI
 
-/// Partagé entre la rangée haute (lettre témoin) et le panneau détaillé (chips
-/// rendus dans leur propre graisse) — d'où une extension de module et non une
-/// copie privée par fichier.
+/// Partagé entre le curseur de graisse du panneau Police et les chips rendus
+/// dans leur propre graisse — d'où une extension de module et non une copie
+/// privée par fichier.
 extension StoryTextWeight {
     var swiftUIWeight: Font.Weight {
         switch self {

@@ -20,8 +20,6 @@ nonisolated enum StoryTextAttributeCycle {
         /// Symbole SF reflétant la valeur courante. `emphasis` (0…4) rend une
         /// intensité — seul le contour s'en sert, pour montrer son épaisseur.
         case symbol(name: String, emphasis: Int)
-        /// Lettre témoin rendue dans la graisse courante (bouton Graisse).
-        case glyph(String, weight: StoryTextWeight)
         /// Lettre témoin rendue dans la POLICE courante (bouton Police).
         case styledGlyph(String, style: StoryTextStyle)
         /// Pastille pleine de la couleur courante (bouton Couleur).
@@ -42,10 +40,6 @@ nonisolated enum StoryTextAttributeCycle {
     /// celle lue partout ailleurs (`textAlign ?? "center"`).
     static let defaultAlign = "center"
 
-    /// Graisse de départ quand aucune n'est posée. `nil` signifie « celle du
-    /// style » ; la traiter comme `normal` donne un point de départ prévisible.
-    static let defaultWeight: StoryTextWeight = .normal
-
     /// Couleur posée quand le contour quitte zéro sans couleur choisie.
     static let defaultBorderColor = "FFFFFF"
 
@@ -58,7 +52,6 @@ nonisolated enum StoryTextAttributeCycle {
 
     static func advance(_ tool: TextEditTool, on text: inout StoryTextObject) {
         switch tool {
-        case .weight:     advanceWeight(on: &text)
         case .align:      advanceAlign(on: &text)
         case .border:     advanceBorder(on: &text)
         case .frame:      advanceFrame(on: &text)
@@ -66,7 +59,6 @@ nonisolated enum StoryTextAttributeCycle {
         case .color:      advanceColor(on: &text)
         case .background: advanceBackground(on: &text)
         case .language:   advanceLanguage(on: &text)
-        case .size:       break
         }
     }
 
@@ -98,13 +90,6 @@ nonisolated enum StoryTextAttributeCycle {
         let current = TextEditToolOptions.normalisedCode(text.sourceLanguage) ?? steps[0]
         let index = steps.firstIndex(of: current) ?? 0
         text.sourceLanguage = steps[(index + 1) % steps.count]
-    }
-
-    private static func advanceWeight(on text: inout StoryTextObject) {
-        let steps = StoryTextWeight.allCases
-        let current = text.parsedFontWeight ?? defaultWeight
-        let index = steps.firstIndex(of: current) ?? 0
-        text.fontWeight = steps[(index + 1) % steps.count].rawValue
     }
 
     private static func advanceAlign(on text: inout StoryTextObject) {
@@ -143,8 +128,6 @@ nonisolated enum StoryTextAttributeCycle {
 
     static func indicator(_ tool: TextEditTool, of text: StoryTextObject) -> Indicator {
         switch tool {
-        case .weight:
-            return .glyph("A", weight: text.parsedFontWeight ?? defaultWeight)
         case .style:
             return .styledGlyph("Aa", style: text.parsedTextStyle)
         case .color:
@@ -167,8 +150,6 @@ nonisolated enum StoryTextAttributeCycle {
             let width = text.borderWidth ?? 0
             guard width > 0 else { return .symbol(name: "square.dashed", emphasis: 0) }
             return .symbol(name: "square", emphasis: borderEmphasis(width))
-        case .size:
-            return .symbol(name: tool.sfSymbol, emphasis: 0)
         }
     }
 

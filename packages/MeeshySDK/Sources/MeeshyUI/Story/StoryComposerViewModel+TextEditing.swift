@@ -3,8 +3,12 @@ import MeeshySDK
 
 // MARK: - TextEditTool
 
-/// Les contrôles de texte exposés en mode édition flottante. L'ordre des
-/// `case` fixe l'ordre d'affichage des bulles dans chaque rangée.
+/// Les outils de texte exposés en mode édition flottante, dans leur ordre
+/// d'affichage sur la rangée.
+///
+/// Taille et graisse n'y figurent pas : ce sont des valeurs continues, réglées
+/// par curseur dans le panneau Police. Les loger derrière une bulle chacune
+/// coûtait deux places sur une rangée dont la largeur est comptée.
 ///
 /// `nonisolated` sur le TYPE : le package pose `.defaultIsolation(MainActor
 /// .self)` (SE-0466), qui isolerait cet énuméré sur le main actor et le
@@ -12,9 +16,7 @@ import MeeshySDK
 /// depuis un test non isolé. Une annotation par membre ne suffit pas.
 public nonisolated enum TextEditTool: String, CaseIterable, Sendable, Equatable {
     case style
-    case weight
     case color
-    case size
     case align
     case background
     case frame
@@ -25,32 +27,15 @@ public nonisolated enum TextEditTool: String, CaseIterable, Sendable, Equatable 
     /// 2026-07-25).
     case language
 
-    /// Attributs de la rangée HAUTE, sous l'encoche : un tap les fait tourner
-    /// d'un cran avec rendu immédiat, un appui long ouvre leur panneau.
-    /// Réservée aux valeurs discrètes — une palette de 14 couleurs ou un
-    /// curseur continu ne se parcourent pas au tap.
-    static let topTools: [TextEditTool] = [.weight, .align, .border, .frame]
-
-    /// Attributs de la rangée BASSE, au-dessus du clavier : un tap déplie leur
-    /// panneau d'options.
-    static let bottomTools: [TextEditTool] = [.style, .color, .size, .background, .language]
-
-    /// Vrai quand l'attribut se parcourt cran par cran (cf.
-    /// `StoryTextAttributeCycle`). C'est la condition d'entrée sur la rangée
-    /// haute — `topTools` ne doit contenir que des outils qui la remplissent.
-    var isCyclable: Bool {
-        switch self {
-        case .weight, .align, .border, .frame: return true
-        case .style, .color, .size, .background, .language: return false
-        }
-    }
+    /// L'ordre d'affichage de la rangée. Distinct de `allCases` pour que
+    /// réordonner l'interface ne demande pas de réordonner l'énuméré, dont
+    /// l'ordre des `case` porte aussi la sérialisation.
+    static let all: [TextEditTool] = [.style, .color, .align, .background, .frame, .border, .language]
 
     var sfSymbol: String {
         switch self {
         case .style:      return "textformat"
-        case .weight:     return "bold"
         case .color:      return "paintpalette.fill"
-        case .size:       return "textformat.size"
         case .align:      return "text.alignleft"
         case .background: return "a.square.fill"
         case .frame:      return "rectangle.roundedtop"
@@ -66,9 +51,7 @@ public nonisolated enum TextEditTool: String, CaseIterable, Sendable, Equatable 
     var accessibilityLabel: String {
         switch self {
         case .style:      return String(localized: "story.textEdit.tool.style", defaultValue: "Style de texte", bundle: .module)
-        case .weight:     return String(localized: "story.textEdit.tool.weight", defaultValue: "Graisse du texte", bundle: .module)
         case .color:      return String(localized: "story.textEdit.tool.color", defaultValue: "Couleur du texte", bundle: .module)
-        case .size:       return String(localized: "story.textEdit.tool.size", defaultValue: "Taille du texte", bundle: .module)
         case .align:      return String(localized: "story.textEdit.tool.align", defaultValue: "Alignement du texte", bundle: .module)
         case .background: return String(localized: "story.textEdit.tool.background", defaultValue: "Fond du texte", bundle: .module)
         case .frame:      return String(localized: "story.textEdit.tool.frame", defaultValue: "Cadrage du texte", bundle: .module)

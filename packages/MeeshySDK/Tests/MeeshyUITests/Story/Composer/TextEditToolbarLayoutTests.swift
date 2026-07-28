@@ -5,66 +5,63 @@ import XCTest
 /// La barre d'outils du texte s'est un jour retrouvée à demander 432 pt sur un
 /// écran qui en offre 361 : la première bulle et le bouton de sortie sortaient
 /// de l'écran, sans scroll ni indice — le seul chemin de sortie explicite était
-/// coupé en deux.
+/// coupé en deux. La réponse d'alors fut de séparer en deux rangées ; celle
+/// d'aujourd'hui est de retirer deux outils devenus des curseurs.
 ///
-/// Ces tests tiennent le budget de largeur et la répartition des outils entre
-/// les deux rangées, pour que la régression ne puisse pas revenir en silence.
+/// Ces tests tiennent le budget de largeur, pour que la troncature silencieuse
+/// ne puisse pas revenir.
 final class TextEditToolbarLayoutTests: XCTestCase {
 
-    // MARK: - Répartition des outils
+    // MARK: - Composition
 
-    /// Un outil oublié dans la répartition disparaît de l'interface sans que
-    /// rien ne le signale : ni erreur de compilation, ni test rouge ailleurs.
-    func test_theTwoRowsCoverEveryToolExactlyOnce() {
-        let all = Set(TextEditTool.allCases)
-        let top = Set(TextEditTool.topTools)
-        let bottom = Set(TextEditTool.bottomTools)
-
-        XCTAssertEqual(top.union(bottom), all, "aucun outil ne doit disparaître de l'interface")
-        XCTAssertTrue(top.isDisjoint(with: bottom), "un outil ne doit pas figurer sur les deux rangées")
-        XCTAssertEqual(TextEditTool.topTools.count + TextEditTool.bottomTools.count,
-                       TextEditTool.allCases.count, "aucun doublon dans une rangée")
+    func test_theRowCoversEveryToolExactlyOnce() {
+        XCTAssertEqual(Set(TextEditTool.all), Set(TextEditTool.allCases))
+        XCTAssertEqual(TextEditTool.all.count, TextEditTool.allCases.count,
+                       "aucun doublon dans la rangée")
     }
 
-    /// La rangée haute ne porte que des attributs à valeurs discrètes : eux
-    /// seuls se prêtent à la rotation au tap. Une palette de 14 couleurs ou un
-    /// curseur de taille n'y ont pas leur place.
-    func test_everyToolOnTheTopRowCanBeCycled() {
-        for tool in TextEditTool.topTools {
-            XCTAssertTrue(tool.isCyclable, "\(tool) est sur la rangée haute mais ne sait pas tourner")
-        }
+    func test_theRowCarriesSevenTools() {
+        XCTAssertEqual(TextEditTool.all.count, 7)
+    }
+
+    /// Taille et graisse sont des valeurs continues : elles vivent en curseurs
+    /// dans le panneau Police, pas derrière une bulle. Ce test échoue si
+    /// quelqu'un les réintroduit comme outils.
+    func test_sizeAndWeightAreNotToolsAnyMore() {
+        let names = TextEditTool.allCases.map(\.rawValue)
+        XCTAssertFalse(names.contains("size"))
+        XCTAssertFalse(names.contains("weight"))
     }
 
     // MARK: - Budget de largeur
 
-    func test_theBottomRowFitsOnTheNarrowestSupportedScreen() {
+    func test_theRowFitsOnTheNarrowestSupportedScreen() {
         XCTAssertTrue(
             TextEditToolbarMetrics.fits(
-                bubbleCount: TextEditTool.bottomTools.count,
+                bubbleCount: TextEditTool.all.count,
                 in: TextEditToolbarMetrics.narrowestUsableWidth),
-            "la rangée basse doit tenir sur un iPhone SE")
+            "les sept bulles doivent tenir sur un iPhone SE")
     }
 
-    func test_theTopRowFitsOnTheNarrowestSupportedScreen_finishButtonIncluded() {
+    /// La rangée haute ne porte plus que « Terminé » : elle tient par
+    /// construction, mais la garde reste utile si quelqu'un y remet des outils.
+    func test_theTopRowCarriesOnlyTheFinishButton() {
         XCTAssertTrue(
             TextEditToolbarMetrics.fits(
-                bubbleCount: TextEditTool.topTools.count,
+                bubbleCount: 0,
                 trailing: TextEditToolbarMetrics.finishControlWidth,
-                in: TextEditToolbarMetrics.narrowestUsableWidth),
-            "la rangée haute doit tenir sur un iPhone SE, bouton Terminé compris")
+                in: TextEditToolbarMetrics.narrowestUsableWidth))
     }
 
-    /// La composition d'origine — les neuf outils plus le bouton de sortie sur
-    /// une seule rangée — ne tenait sur AUCUN iPhone. Ce test échoue si
-    /// quelqu'un la reconstitue.
-    func test_theOriginalSingleRowLayoutDoesNotFitAnywhere() {
-        let everythingOnOneRow = TextEditTool.allCases.count + 1
+    /// La garde qui compte : une bulle de plus et la rangée déborde sur le
+    /// plus étroit des écrans supportés. Le `ScrollView` la rend visible au
+    /// lieu de la couper, mais ce test rappelle que le budget est atteint.
+    func test_oneMoreBubbleWouldOverflowTheNarrowestScreen() {
         XCTAssertFalse(
-            TextEditToolbarMetrics.fits(bubbleCount: everythingOnOneRow,
-                                        in: TextEditToolbarMetrics.narrowestUsableWidth))
-        XCTAssertFalse(
-            TextEditToolbarMetrics.fits(bubbleCount: everythingOnOneRow, in: 393 - 32),
-            "c'est exactement le débordement observé sur iPhone 16 Pro")
+            TextEditToolbarMetrics.fits(
+                bubbleCount: TextEditTool.all.count + 1,
+                in: TextEditToolbarMetrics.narrowestUsableWidth),
+            "huit bulles ne tiennent plus sur un iPhone SE")
     }
 
     func test_requiredWidth_countsBubblesAndTheGapsBetweenThem() {

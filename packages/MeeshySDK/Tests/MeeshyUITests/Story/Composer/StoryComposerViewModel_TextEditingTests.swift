@@ -101,10 +101,14 @@ final class StoryComposerViewModel_TextEditingTests: XCTestCase {
     /// `language` a rejoint la liste le 2026-07-25 : la langue d'écriture se
     /// règle à côté des attributs visuels parce qu'une langue source fausse ne
     /// se voit pas à l'écriture — elle ne se paie qu'à la traduction.
+    /// Taille et graisse ont quitté la liste le 2026-07-28 : ce sont des
+    /// valeurs continues, réglées par curseur dans le panneau Police. Les
+    /// loger derrière une bulle chacune coûtait deux places sur une rangée
+    /// dont la largeur est comptée.
     func test_textEditTool_hasAllCases() {
         XCTAssertEqual(
             TextEditTool.allCases,
-            [.style, .weight, .color, .size, .align, .background, .frame, .border, .language]
+            [.style, .color, .align, .background, .frame, .border, .language]
         )
     }
 }

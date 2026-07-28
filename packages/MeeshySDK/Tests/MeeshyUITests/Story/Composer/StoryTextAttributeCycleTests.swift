@@ -43,24 +43,6 @@ final class StoryTextAttributeCycleTests: XCTestCase {
         }
     }
 
-    // MARK: - Graisse
-
-    func test_weight_visitsEveryStepThenWrapsAround() {
-        let seen = trace(.weight, from: text(fontWeight: StoryTextWeight.thin.rawValue),
-                         taps: 5) { $0.parsedFontWeight }
-        XCTAssertEqual(seen, [.normal, .semibold, .bold, .thin, .normal],
-                       "les quatre graisses doivent défiler puis reboucler sur la première")
-    }
-
-    /// Une graisse absente signifie « celle du style » : la traiter comme
-    /// `normal` donne un point de départ prévisible, alors qu'un `nil` propagé
-    /// ferait sauter le premier tap dans le vide.
-    func test_weight_whenUnset_departsFromNormal() {
-        var obj = text(fontWeight: nil)
-        StoryTextAttributeCycle.advance(.weight, on: &obj)
-        XCTAssertEqual(obj.parsedFontWeight, .semibold)
-    }
-
     // MARK: - Alignement
 
     func test_align_visitsEveryStepThenWrapsAround() {
@@ -217,9 +199,6 @@ final class StoryTextAttributeCycleTests: XCTestCase {
         XCTAssertEqual(
             StoryTextAttributeCycle.indicator(.align, of: text(textAlign: "right")),
             .symbol(name: "text.alignright", emphasis: 0))
-        XCTAssertEqual(
-            StoryTextAttributeCycle.indicator(.weight, of: text(fontWeight: "bold")),
-            .glyph("A", weight: .bold))
         XCTAssertEqual(
             StoryTextAttributeCycle.indicator(.frame, of: text(frameShape: "pill")),
             .symbol(name: "capsule", emphasis: 0))
