@@ -429,10 +429,23 @@ apps/ios/remove_target_language_resolver.rb · remove_ml_models.rb · check_grou
 - ⚠️ Socket.IO 16.1.0 (la 17.x est sortie).
 - ⚠️ ONNX Runtime documenté comme « manual integration via CocoaPods » → si ajouté, casse la pureté SPM.
 
-### 6.5. Configurations xcconfig (criticité : 🟠 MOYENNE)
+### 6.5. Configurations xcconfig (criticité : 🟠 MOYENNE) — ✅ RÉSOLU 2026-07-28
 
-- `apps/ios/Configuration/Production.xcconfig` : `API_BASE_URL = https:/$()/gate.meeshy.me` — **syntaxe `$()/` douteuse** (probable workaround xcconfig pour `//`, à valider).
-- `Staging.xcconfig` existe mais non référencé dans `project.yml` ni `meeshy.sh` → probablement orphelin.
+Le soupçon d'orphelinage était fondé, et il valait pour **les trois** fichiers, pas
+seulement `Staging` : aucune clé `configFiles` dans `project.yml`, aucun
+`baseConfigurationReference` dans le pbxproj → XcodeGen ne les lisait jamais.
+Prouvé en générant le projet avec puis sans : `project.pbxproj` au SHA-256
+identique. Les clés `API_BASE_URL` / `WEBSOCKET_URL` / `ENABLE_DEBUG_MENU` ne
+sont d'ailleurs lues par aucun Swift ni Info.plist — la syntaxe `$()/` était donc
+sans objet.
+
+Les câbler aurait été une régression, pas un correctif : `Debug.xcconfig`
+déclarait `me.meeshy.app.dev` (≠ `me.meeshy.app` réel → casse App Groups,
+keychain, push) et `Production.xcconfig` imposait `CODE_SIGN_STYLE = Manual`,
+`PROVISIONING_PROFILE_SPECIFIER` vide et `SWIFT_TREAT_WARNINGS_AS_ERRORS = YES`.
+
+`apps/ios/Configuration/` a donc été supprimé. Source de vérité unique des build
+settings : `apps/ios/project.yml`.
 
 ### 6.6. Targets & extensions (criticité : 🟡 MOYENNE)
 

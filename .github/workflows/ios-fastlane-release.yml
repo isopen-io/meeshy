@@ -126,8 +126,12 @@ jobs:
           ASC_KEY_FILEPATH: /tmp/AuthKey.p8
           MATCH_GIT_URL: ${{ secrets.MATCH_GIT_URL }}
           MATCH_PASSWORD: ${{ secrets.MATCH_PASSWORD }}
-          FASTLANE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-          FASTLANE_ITC_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          # Team ID pinned to D72UK7R5RE since 2026-07-28. The fallback is not
+          # cosmetic: an unset APPLE_TEAM_ID secret expands to "", which Ruby
+          # treats as truthy — fastlane would then sign with a blank team.
+          # See the header block in apps/ios/fastlane/Appfile.
+          FASTLANE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID || 'D72UK7R5RE' }}
+          FASTLANE_ITC_TEAM_ID: ${{ secrets.APPLE_TEAM_ID || 'D72UK7R5RE' }}
           # App Store review demo account — never commit these values.
           # The release lane refuses to run without them.
           # See apps/ios/fastlane/SECRETS.md.

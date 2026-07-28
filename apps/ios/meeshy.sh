@@ -19,6 +19,9 @@ DERIVED_DATA="Build"
 # Mirrors fastlane's source of truth (Appfile/Matchfile default + Fastfile
 # xcargs DEVELOPMENT_TEAM=D72UK7R5RE) and honours the same FASTLANE_TEAM_ID
 # override. Simulator builds don't sign, so this is only consumed by `device`.
+# Pinned to D72UK7R5RE since 2026-07-28 — the header block in
+# fastlane/Appfile lists every site carrying this value.
+# `:-` (not `-`) so an empty FASTLANE_TEAM_ID falls back instead of signing blank.
 DEVELOPMENT_TEAM="${FASTLANE_TEAM_ID:-D72UK7R5RE}"
 
 # Xcode GUI SPM package cache — avoids re-cloning on slow networks
@@ -256,8 +259,8 @@ do_device_deploy_only() {
     # XcodeGen sets PRODUCT_NAME = $(TARGET_NAME) for every configuration
     # (project.yml deliberately leaves PRODUCT_NAME unset), so the product is
     # "Meeshy.app" for both Debug and Release. The legacy "Meeshy Dev" name came
-    # from Configuration/Debug.xcconfig, which is NOT wired into the generated
-    # project (no configFiles: key) and therefore has no effect.
+    # from Configuration/Debug.xcconfig — never wired into the generated project
+    # (no configFiles: key), so it had no effect; deleted 2026-07-28.
     local device_app_path="$DERIVED_DATA/Products/$CONFIGURATION-iphoneos/$APP_NAME.app"
     local build_log="/tmp/meeshy_device_build_$$.log"
 
@@ -423,7 +426,7 @@ app_path() {
     # XcodeGen sets PRODUCT_NAME = $(TARGET_NAME) for every configuration, so
     # both Debug and Release produce "Meeshy.app". The old "Meeshy Dev.app"
     # name lived in Configuration/Debug.xcconfig, which the generated project
-    # never references — see do_device_deploy_only for the same rationale.
+    # never referenced — file deleted 2026-07-28; see do_device_deploy_only.
     if [ "$PLATFORM" = "mac" ]; then
         # "Designed for iPad" (the only valid macOS slice — SUPPORTS_MACCATALYST=0
         # by design) builds an iOS bundle under Debug-iphoneos, NOT a Mac Catalyst
@@ -997,7 +1000,14 @@ do_release_andp() {
         return 1
     fi
 
-    # Write ANDP secrets file
+    # Write ANDP secrets file.
+    # MUST be ./secrets.yml, NOT .andp/secrets.yml : andp/asc/config.py resolves
+    # `"secrets.yml" if os.path.exists("secrets.yml") else "secrets.example.yml"`
+    # relative to the cwd and never looks inside .andp/. Writing it there made
+    # the upload die with "No secrets file found" AFTER the ~15 min build
+    # (fixed 2026-07-28 ; the CI workflow already wrote ./secrets.yml).
+    # .andp/ stays for ANDP's own release-state files (the andp-state artifact).
+    # Both paths are gitignored — this file embeds the ASC .p8 private key.
     mkdir -p .andp
     {
         echo "accounts:"
@@ -1007,8 +1017,8 @@ do_release_andp() {
         echo "      issuer_id: \"${ASC_ISSUER_ID:-69a6de89-ae7a-47e3-e053-5b8c7c11a4d1}\""
         echo "      key_content: |"
         sed 's/^/        /' "$key_file"
-    } > .andp/secrets.yml
-    chmod 600 .andp/secrets.yml
+    } > secrets.yml
+    chmod 600 secrets.yml
 
     # Write compliance policy
     {

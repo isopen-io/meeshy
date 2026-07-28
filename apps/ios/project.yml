@@ -32,8 +32,9 @@ settings:
   # increment_build_number / increment_version_number, qui appellent agvtool).
   # Le projet n'avait AUCUN système de versioning configuré dans le pbxproj →
   # `agvtool what-version -terse` sortait en code 6 ("setup your project
-  # properly") au lancement de la lane `beta`/`release`. Les valeurs miroir
-  # Configuration/*.xcconfig (non câblés au projet). Les lanes prennent
+  # properly") au lancement de la lane `beta`/`release`. Elles miroitaient
+  # Configuration/*.xcconfig, supprimés le 2026-07-28 (jamais câblés au
+  # projet : aucune clé `configFiles`, donc sans effet). Les lanes prennent
   # max(version locale, dernier build TestFlight) + 1, donc le "1" littéral
   # n'est qu'un plancher — le build réel reste strictement croissant.
   VERSIONING_SYSTEM: apple-generic
@@ -46,6 +47,8 @@ settings:
   # ne vivait QUE dans le pbxproj committé (résidu d'un réglage Xcode local) →
   # perdue à chaque `xcodegen generate`. Désormais source de vérité ici.
   # Sans impact CI (build simulateur = pas de signature device requise).
+  # Team ID figée à D72UK7R5RE depuis le 2026-07-28 : voir le bloc d'en-tête de
+  # apps/ios/fastlane/Appfile pour la liste complète des sites porteurs.
   DEVELOPMENT_TEAM: D72UK7R5RE
 
 # Swift package graph. Only two packages are referenced directly by the
