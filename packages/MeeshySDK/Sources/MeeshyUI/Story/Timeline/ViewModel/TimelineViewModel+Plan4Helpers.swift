@@ -547,7 +547,15 @@ extension TimelineViewModel {
             guard let idx = keyframes.firstIndex(where: { $0.id == keyframeId }) else { return }
             snapshot = keyframes[idx]
             insertionIndex = idx
-        case .audio, .sticker:
+        case .audio:
+            // Les clips audio portent désormais des keyframes de volume :
+            // refuser ici rendait leurs points impossibles à retirer.
+            let keyframes = project.audioPlayerObjects.first(where: { $0.id == clipId })?.keyframes ?? []
+            guard let idx = keyframes.firstIndex(where: { $0.id == keyframeId }) else { return }
+            snapshot = keyframes[idx]
+            insertionIndex = idx
+        case .sticker:
+            // Un sticker s'édite sur le canvas, pas dans la timeline.
             return
         }
         let cmd = DeleteKeyframeCommand(clipId: clipId, kind: kind,

@@ -620,14 +620,20 @@ public final class TimelineViewModel: ObservableObject {
 
     // MARK: - Keyframes
 
+    /// Pose un keyframe au playhead sur le clip sélectionné.
+    ///
+    /// `volume` est le 5ᵉ canal : passé seul, il crée un point d'automation
+    /// sonore pur, sans toucher position, échelle ni opacité.
     public func addKeyframeAtPlayhead(x: CGFloat? = nil, y: CGFloat? = nil,
-                                      scale: CGFloat? = nil, opacity: CGFloat? = nil) {
+                                      scale: CGFloat? = nil, opacity: CGFloat? = nil,
+                                      volume: Float? = nil) {
         guard let id = selection.selectedClipId,
               let clipStart = clipStartTime(id: id) else { return }
         let relativeTime = max(0, currentTime - clipStart)
         let kf = StoryKeyframe(
             time: relativeTime,
             x: x, y: y, scale: scale, opacity: opacity,
+            volume: volume.map { min(StoryVolume.maxGain, max(0, $0)) },
             easing: .linear
         )
         guard let kind = clipKind(forId: id) else { return }
