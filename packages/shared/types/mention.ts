@@ -315,6 +315,16 @@ export function detectMentionAtCursor(
 
   if (lastAtIndex === -1) return null;
 
+  // Frontière gauche `NAME_BOUNDARY_LEFT` (SSOT `mention-parser`, même invariant que
+  // `extractMentions`/`hasMentions`/`mentionsToLinks`/`MENTION_REGEX`) : un `@` précédé d'un
+  // caractère de nom appartient à une adresse e-mail (`bob@alice`) et n'ouvre PAS de mention.
+  // Sans ce garde, le composer d'édition (`EditMessageView`) ouvrait l'autocomplete sur un
+  // e-mail là où le composer d'envoi (`useMentions`) le supprimait déjà — divergence observable.
+  // L'ancrage `@$` préserve le contexte gauche pour le lookbehind (flag `u` requis par `\p{…}`).
+  if (!new RegExp(`${NAME_BOUNDARY_LEFT}@$`, 'u').test(beforeCursor.substring(0, lastAtIndex + 1))) {
+    return null;
+  }
+
   // Vérifier qu'il n'y a pas d'espace entre @ et le curseur
   const afterAt = beforeCursor.substring(lastAtIndex + 1);
   if (afterAt.includes(' ') || afterAt.includes('\n')) return null;
