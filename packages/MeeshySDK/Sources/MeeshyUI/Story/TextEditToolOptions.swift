@@ -374,8 +374,6 @@ struct TextEditToolOptions: View {
 
     // MARK: - Frame (cadrage)
 
-    /// Forme de la boîte de cadrage derrière le texte (actif uniquement quand un
-    /// fond est présent). Le padding ≥ 1 'o' est automatique côté rendu.
     /// Forme, marge et liseré de la boîte de cadre. La forme est indépendante
     /// du fond depuis que `hasFrameBox` existe : choisir un cadre ne repeint
     /// plus le texte d'un fond noir non demandé.
