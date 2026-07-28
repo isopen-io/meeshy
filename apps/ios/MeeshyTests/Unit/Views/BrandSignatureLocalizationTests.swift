@@ -50,13 +50,13 @@ final class BrandSignatureLocalizationTests: XCTestCase {
             "The credit must never be a hardcoded literal — it ships in 7 locales.")
     }
 
-    /// The version line reads `Meeshy 1.0.0 (1)` — build number in parentheses,
-    /// never the legacy middle-dot separator.
-    func test_versionLine_wrapsBuildNumberInParentheses() throws {
+    /// The version line reads `Meeshy 1.0.0 · 1` — the build number is separated
+    /// from the version by a middle dot, never wrapped in parentheses.
+    func test_versionLine_separatesBuildNumberWithMiddleDot() throws {
         let source = try brandSignatureSource()
         XCTAssertTrue(
-            source.contains(#"Text("Meeshy \(appVersion) (\(buildNumber))")"#),
-            "The version line must render as `Meeshy <version> (<build>)`.")
+            source.contains(#"Text("Meeshy \(appVersion) · \(buildNumber)")"#),
+            "The version line must render as `Meeshy <version> · <build>`.")
     }
 
     func test_catalog_shipsSameLanguagesForCreditAndAccessibilityLabel() throws {

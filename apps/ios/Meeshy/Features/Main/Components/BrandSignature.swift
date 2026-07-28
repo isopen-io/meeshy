@@ -1,7 +1,7 @@
 import SwiftUI
 
 /// Meeshy brand signature footer — three stacked lines: the prominent version
-/// line (`Meeshy 1.0.0 (1)`), the "Par Services CEO" credit
+/// line (`Meeshy 1.0.0 · 1`), the "Par Services CEO" credit
 /// (`brand.signature.credit`) and the brand logo. Shared by the splash screen
 /// (`MeeshyApp`) and the login screen (`LoginView`): editing the credit string,
 /// the styling or the logo here updates every surface that shows the signature.
@@ -20,7 +20,7 @@ struct BrandSignature: View {
 
     var body: some View {
         VStack(spacing: 4) {
-            Text("Meeshy \(appVersion) (\(buildNumber))")
+            Text("Meeshy \(appVersion) · \(buildNumber)")
                 .font(MeeshyFont.relative(19, weight: .bold, design: .rounded))
                 .foregroundColor(theme.textMuted.opacity(0.9))
                 .lineLimit(1)
