@@ -644,6 +644,14 @@ public struct StoryMediaObject: Codable, Identifiable, Sendable {
     public var name: String?
     // Timeline V2 — animation keyframes (position/scale/opacity)
     public var keyframes: [StoryKeyframe]?
+    /// Coupe l'atténuation automatique de CE clip quand un audio de fond joue
+    /// sur la même slide (cf. `StoryVolume.duckingFactor`).
+    ///
+    /// Optionnel à dessein : aucune story déjà publiée ne porte ce champ, et
+    /// son absence doit se lire « atténuation active », le comportement par
+    /// défaut. Un dialogue filmé est le cas qui justifie de la couper : la
+    /// musique doit alors passer sous la voix, pas l'inverse.
+    public var isDuckingDisabled: Bool?
     /// ThumbHash du contenu (première frame pour vidéo, image décompressée
     /// pour image). Généré au publish (cf. spec § 2.4). Sert de placeholder
     /// pendant le fetch via `applyThumbHashPlaceholder`. `nil` autorisé
@@ -673,6 +681,7 @@ public struct StoryMediaObject: Codable, Identifiable, Sendable {
         case isBackground, loop, zIndex
         case startTime, duration, fadeIn, fadeOut
         case sourceLanguage, keyframes, thumbHash, name
+        case isDuckingDisabled
     }
 
     public init(id: String = UUID().uuidString,
@@ -696,7 +705,8 @@ public struct StoryMediaObject: Codable, Identifiable, Sendable {
                 sourceLanguage: String? = nil,
                 keyframes: [StoryKeyframe]? = nil,
                 thumbHash: String? = nil,
-                name: String? = nil) {
+                name: String? = nil,
+                isDuckingDisabled: Bool? = nil) {
         self.id = id
         self.postMediaId = postMediaId
         self.mediaURL = mediaURL
@@ -717,6 +727,7 @@ public struct StoryMediaObject: Codable, Identifiable, Sendable {
         self.keyframes = keyframes
         self.thumbHash = thumbHash
         self.name = name
+        self.isDuckingDisabled = isDuckingDisabled
     }
 
     // Custom init(from decoder:) for legacy backward compat
@@ -757,6 +768,7 @@ public struct StoryMediaObject: Codable, Identifiable, Sendable {
         let rawThumbHash = try c.decodeIfPresent(String.self, forKey: .thumbHash)
         thumbHash = (rawThumbHash?.count ?? 0) > Self.maxThumbHashLength ? nil : rawThumbHash
         name = try c.decodeIfPresent(String.self, forKey: .name)
+        isDuckingDisabled = try c.decodeIfPresent(Bool.self, forKey: .isDuckingDisabled)
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -785,6 +797,7 @@ public struct StoryMediaObject: Codable, Identifiable, Sendable {
         try c.encodeIfPresent(keyframes, forKey: .keyframes)
         try c.encodeIfPresent(thumbHash, forKey: .thumbHash)
         try c.encodeIfPresent(name, forKey: .name)
+        try c.encodeIfPresent(isDuckingDisabled, forKey: .isDuckingDisabled)
     }
 
     private enum AnchorKeys: String, CodingKey { case x, y }
@@ -817,7 +830,8 @@ extension StoryMediaObject {
                 sourceLanguage: String? = nil,
                 keyframes: [StoryKeyframe]? = nil,
                 thumbHash: String? = nil,
-                name: String? = nil) {
+                name: String? = nil,
+                isDuckingDisabled: Bool? = nil) {
         self.init(id: id,
                   postMediaId: postMediaId,
                   mediaURL: mediaURL,
@@ -837,7 +851,8 @@ extension StoryMediaObject {
                   sourceLanguage: sourceLanguage,
                   keyframes: keyframes,
                   thumbHash: thumbHash,
-                  name: name)
+                  name: name,
+                  isDuckingDisabled: isDuckingDisabled)
     }
 }
 
@@ -3351,6 +3366,9 @@ public struct SetClipPropertyCommand: EditCommand {
         case loop(old: Bool?, new: Bool?)
         case isBackground(old: Bool?, new: Bool?)
         case isLocked(old: Bool?, new: Bool?)
+        /// Coupe l'atténuation automatique du clip. Vidéo uniquement : c'est la
+        /// piste des vidéos que le ducking atténue.
+        case isDuckingDisabled(old: Bool?, new: Bool?)
         case name(old: String?, new: String?)
         /// Place de la piste dans le PLAN — position, taille, rotation, rang de
         /// superposition. Un seul cas plutôt que cinq : régler un champ produit
@@ -3365,6 +3383,7 @@ public struct SetClipPropertyCommand: EditCommand {
 
         private enum Tag: String, Codable {
             case volume, fadeIn, fadeOut, loop, isBackground, isLocked, name, transform
+            case isDuckingDisabled
         }
 
         public init(from decoder: Decoder) throws {
@@ -3395,6 +3414,10 @@ public struct SetClipPropertyCommand: EditCommand {
                 let old = try c.decodeIfPresent(Bool.self, forKey: .oldBool)
                 let new = try c.decodeIfPresent(Bool.self, forKey: .newBool)
                 self = .isLocked(old: old, new: new)
+            case .isDuckingDisabled:
+                let old = try c.decodeIfPresent(Bool.self, forKey: .oldBool)
+                let new = try c.decodeIfPresent(Bool.self, forKey: .newBool)
+                self = .isDuckingDisabled(old: old, new: new)
             case .name:
                 let old = try c.decodeIfPresent(String.self, forKey: .oldString)
                 let new = try c.decodeIfPresent(String.self, forKey: .newString)
@@ -3431,6 +3454,10 @@ public struct SetClipPropertyCommand: EditCommand {
                 try c.encodeIfPresent(new, forKey: .newBool)
             case .isLocked(let old, let new):
                 try c.encode(Tag.isLocked, forKey: .type)
+                try c.encodeIfPresent(old, forKey: .oldBool)
+                try c.encodeIfPresent(new, forKey: .newBool)
+            case .isDuckingDisabled(let old, let new):
+                try c.encode(Tag.isDuckingDisabled, forKey: .type)
                 try c.encodeIfPresent(old, forKey: .oldBool)
                 try c.encodeIfPresent(new, forKey: .newBool)
             case .name(let old, let new):
@@ -3509,6 +3536,8 @@ public struct SetClipPropertyCommand: EditCommand {
             media.isBackground = (useNew ? new : old) ?? false
         case .isLocked:
             break
+        case .isDuckingDisabled(let old, let new):
+            media.isDuckingDisabled = useNew ? new : old
         case .name(let old, let new):
             media.name = useNew ? new : old
         case .transform(let old, let new):
@@ -3536,6 +3565,10 @@ public struct SetClipPropertyCommand: EditCommand {
         case .isBackground(let old, let new):
             audio.isBackground = useNew ? new : old
         case .isLocked:
+            break
+        case .isDuckingDisabled:
+            // Le ducking atténue la piste des VIDÉOS pour dégager la musique :
+            // le couper sur un audio n'aurait rien à atténuer.
             break
         case .name(let old, let new):
             audio.name = useNew ? new : old
@@ -3565,7 +3598,7 @@ public struct SetClipPropertyCommand: EditCommand {
             text.x = tr.x; text.y = tr.y
             text.scale = tr.scale; text.rotation = tr.rotation
             text.zIndex = tr.zIndex
-        case .volume, .loop, .isBackground:
+        case .volume, .loop, .isBackground, .isDuckingDisabled:
             break
         }
     }

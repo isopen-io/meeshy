@@ -108,6 +108,15 @@ public struct TimelineInspectorHost: View {
         }
     }
 
+    /// `true` quand la slide porte un audio de FOND — la seule situation où
+    /// l'atténuation automatique a quelque chose à atténuer.
+    ///
+    /// Sans lui, la fiche proposerait de couper une atténuation qui ne se
+    /// déclenche jamais.
+    public static func hasBackgroundAudio(project: TimelineProject) -> Bool {
+        project.audioPlayerObjects.contains { $0.isBackground == true }
+    }
+
     /// Pure mapping from the current timeline selection to a `ClipSnapshot`.
     /// Returns `nil` when no clip is selected or when the selected id matches
     /// neither a media clip nor an audio player object.
@@ -140,7 +149,9 @@ public struct TimelineInspectorHost: View {
                 transform: ClipTransform(x: media.x, y: media.y, scale: media.scale,
                                          rotation: media.rotation, zIndex: media.zIndex),
                 volumeKeyframes: volumePoints(keyframes: media.keyframes,
-                                              clipStart: Float(media.startTime ?? 0))
+                                              clipStart: Float(media.startTime ?? 0)),
+                isDuckingDisabled: media.isDuckingDisabled ?? false,
+                slideHasBackgroundAudio: hasBackgroundAudio(project: viewModel.project)
             )
         }
         if let audio = viewModel.project.audioPlayerObjects.first(where: { $0.id == id }) {
@@ -387,6 +398,9 @@ public struct TimelineInspectorHost: View {
             },
             onRemoveVolumePoint: { [viewModel] keyframeId in
                 viewModel.deleteKeyframe(clipId: clipId, keyframeId: keyframeId)
+            },
+            onDuckingDisabledChanged: { [viewModel] isDisabled in
+                viewModel.setClipDuckingDisabled(id: clipId, isDisabled: isDisabled)
             }
         )
         .padding(presentation == .popover ? 12 : 0)

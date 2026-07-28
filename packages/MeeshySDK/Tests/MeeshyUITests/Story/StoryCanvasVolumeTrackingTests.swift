@@ -74,6 +74,23 @@ final class StoryCanvasVolumeTrackingTests: XCTestCase {
         XCTAssertFalse(canvas.shouldDuckVideoAudio(effects: canvas.slide.effects))
     }
 
+    /// Le clip qui coupe l'atténuation garde son niveau, alors même que la
+    /// slide remplit toutes les conditions du ducking. Sans cette garde, la
+    /// bascule de la fiche n'aurait aucun effet audible.
+    func test_clipOptOut_keepsFullVolumeDespiteBackgroundAudio() {
+        let canvas = Self.makeCanvas(backgroundVolume: 1.0,
+                                     keyframes: nil,
+                                     withBackgroundAudio: true,
+                                     duckingDisabled: true)
+        canvas.videoHasAudioTrack["bg-media"] = true
+
+        // Le contexte de la slide reste celui d'une atténuation…
+        XCTAssertTrue(canvas.shouldDuckVideoAudio(effects: canvas.slide.effects))
+        // …mais ce clip-ci s'en exclut.
+        canvas.applyVolumeAutomation(at: 1)
+        XCTAssertEqual(canvas.backgroundLayer.volume, 1.0, accuracy: 0.01)
+    }
+
     /// Le sondage doit répondre `false` sur un fichier illisible plutôt que
     /// de lever ou de bloquer.
     func test_assetProbe_returnsFalseForUnreadableAsset() async {
@@ -86,7 +103,8 @@ final class StoryCanvasVolumeTrackingTests: XCTestCase {
 
     private static func makeCanvas(backgroundVolume: Float,
                                    keyframes: [StoryKeyframe]?,
-                                   withBackgroundAudio: Bool = false) -> StoryCanvasUIView {
+                                   withBackgroundAudio: Bool = false,
+                                   duckingDisabled: Bool? = nil) -> StoryCanvasUIView {
         var media = StoryMediaObject(id: "bg-media",
                                      postMediaId: "pm-1",
                                      kind: .video,
@@ -94,6 +112,7 @@ final class StoryCanvasVolumeTrackingTests: XCTestCase {
                                      isBackground: true)
         media.volume = backgroundVolume
         media.keyframes = keyframes
+        media.isDuckingDisabled = duckingDisabled
 
         var effects = StoryEffects()
         effects.mediaObjects = [media]

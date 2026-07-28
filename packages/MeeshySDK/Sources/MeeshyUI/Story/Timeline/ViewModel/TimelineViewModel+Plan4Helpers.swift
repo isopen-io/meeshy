@@ -340,6 +340,21 @@ extension TimelineViewModel {
         applySetClipProperty(cmd)
     }
 
+    /// Coupe (ou rétablit) l'atténuation automatique de ce clip vidéo.
+    ///
+    /// Vidéo uniquement : c'est la piste des vidéos que le ducking atténue.
+    /// Appelée sur un audio, la commande n'écrirait rien — on sort avant de
+    /// pousser une entrée d'annulation qui ne défait rien.
+    public func setClipDuckingDisabled(id: String, isDisabled: Bool) {
+        guard let kind = clipKind(forId: id), kind == .video else { return }
+        let oldValue = project.mediaObjects.first(where: { $0.id == id })?.isDuckingDisabled
+        let cmd = SetClipPropertyCommand(
+            clipId: id, kind: kind,
+            property: .isDuckingDisabled(old: oldValue, new: isDisabled)
+        )
+        applySetClipProperty(cmd)
+    }
+
     /// Renomme un clip (nom persisté sur le modèle, undoable). `nil`/vide
     /// remet le nom à `nil` (retour au tag de type par défaut).
     public func setClipName(id: String, name: String?) {

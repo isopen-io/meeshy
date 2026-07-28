@@ -39,6 +39,11 @@ public struct ClipInspector: View {
         public let transform: ClipTransform
         /// Points d'automation du volume déjà posés sur ce clip.
         public let volumeKeyframes: [VolumePoint]
+        /// L'atténuation automatique est coupée sur ce clip.
+        public let isDuckingDisabled: Bool
+        /// La slide porte un audio de fond. Sans lui, rien n'est atténué : la
+        /// bascule d'atténuation serait un contrôle sans effet.
+        public let slideHasBackgroundAudio: Bool
 
         /// Un point de la courbe de volume, tel que la fiche l'affiche.
         ///
@@ -64,7 +69,9 @@ public struct ClipInspector: View {
                     isLooping: Bool, isBackground: Bool,
                     name: String? = nil,
                     transform: ClipTransform = .identity,
-                    volumeKeyframes: [VolumePoint] = []) {
+                    volumeKeyframes: [VolumePoint] = [],
+                    isDuckingDisabled: Bool = false,
+                    slideHasBackgroundAudio: Bool = false) {
             self.id = id; self.displayName = displayName; self.kind = kind
             self.startTime = startTime; self.duration = duration
             self.volume = volume
@@ -73,6 +80,8 @@ public struct ClipInspector: View {
             self.name = name
             self.transform = transform
             self.volumeKeyframes = volumeKeyframes
+            self.isDuckingDisabled = isDuckingDisabled
+            self.slideHasBackgroundAudio = slideHasBackgroundAudio
         }
     }
 
@@ -196,6 +205,19 @@ public struct ClipInspector: View {
     public let onAddVolumePoint: (Float) -> Void
     /// Retire le point d'automation d'identifiant donné.
     public let onRemoveVolumePoint: (String) -> Void
+    /// Coupe (`true`) ou rétablit (`false`) l'atténuation automatique du clip.
+    public let onDuckingDisabledChanged: (Bool) -> Void
+
+    /// True quand couper l'atténuation automatique a un effet.
+    ///
+    /// Deux conditions : le clip est une VIDÉO — c'est leur piste que le
+    /// ducking atténue, un audio n'est jamais atténué — et la slide porte un
+    /// audio de fond, sans quoi rien n'est atténué et l'interrupteur ne
+    /// changerait rien à ce qu'on entend.
+    public nonisolated static func supportsDucking(kind: ClipSnapshot.Kind,
+                                                   slideHasBackgroundAudio: Bool) -> Bool {
+        kind == .video && slideHasBackgroundAudio
+    }
 
     /// Points triés par instant.
     ///
@@ -267,6 +289,7 @@ public struct ClipInspector: View {
     @State private var fadeOut: Float
     @State private var loop: Bool
     @State private var background: Bool
+    @State private var duckingDisabled: Bool
     @State private var draftName: String
     /// Brouillons de saisie, un par champ, vidés à la validation pour que la
     /// valeur affichée redevienne celle du modèle.
@@ -297,7 +320,8 @@ public struct ClipInspector: View {
                 onTransformChanged: @escaping (ClipTransform.Field) -> Void = { _ in },
                 playheadTime: Float = 0,
                 onAddVolumePoint: @escaping (Float) -> Void = { _ in },
-                onRemoveVolumePoint: @escaping (String) -> Void = { _ in }) {
+                onRemoveVolumePoint: @escaping (String) -> Void = { _ in },
+                onDuckingDisabledChanged: @escaping (Bool) -> Void = { _ in }) {
         self.presentation = presentation
         self.clip = clip
         self.onVolumeChanged = onVolumeChanged
@@ -322,11 +346,13 @@ public struct ClipInspector: View {
         self.playheadTime = playheadTime
         self.onAddVolumePoint = onAddVolumePoint
         self.onRemoveVolumePoint = onRemoveVolumePoint
+        self.onDuckingDisabledChanged = onDuckingDisabledChanged
         _volume = State(initialValue: clip.volume)
         _fadeIn = State(initialValue: clip.fadeInDuration)
         _fadeOut = State(initialValue: clip.fadeOutDuration)
         _loop = State(initialValue: clip.isLooping)
         _background = State(initialValue: clip.isBackground)
+        _duckingDisabled = State(initialValue: clip.isDuckingDisabled)
         _draftName = State(initialValue: clip.name ?? "")
     }
 
@@ -345,10 +371,13 @@ public struct ClipInspector: View {
         public let fadeOut: Float
         public let loop: Bool
         public let background: Bool
+        public let duckingDisabled: Bool
     }
 
     public var _stateSnapshot: _StateProbe {
-        _StateProbe(volume: volume, fadeIn: fadeIn, fadeOut: fadeOut, loop: loop, background: background)
+        _StateProbe(volume: volume, fadeIn: fadeIn, fadeOut: fadeOut,
+                    loop: loop, background: background,
+                    duckingDisabled: duckingDisabled)
     }
 
     /// Full ms-precision time readout. Delegates to `TransportBar.formatTime`
@@ -453,6 +482,7 @@ public struct ClipInspector: View {
             fadeOut = newClip.fadeOutDuration
             loop = newClip.isLooping
             background = newClip.isBackground
+            duckingDisabled = newClip.isDuckingDisabled
             draftName = newClip.name ?? ""
             // Un undo ou une poussée externe laisserait sinon à l'écran un
             // brouillon de saisie périmé, plus à jour que le modèle.
@@ -718,7 +748,42 @@ public struct ClipInspector: View {
             .tint(MeeshyColors.indigo500)
             .accessibilityValue(Self.formatGain(volume))
             volumeAutomation
+            if Self.supportsDucking(kind: clip.kind,
+                                    slideHasBackgroundAudio: clip.slideHasBackgroundAudio) {
+                duckingToggle
+            }
         }
+    }
+
+    /// Atténuation automatique de la piste vidéo tant que l'audio de fond joue.
+    ///
+    /// Formulé à l'ENDROIT — « Atténuer sous la musique » — alors que le modèle
+    /// stocke la négation (`isDuckingDisabled`) : un interrupteur nommé
+    /// « désactiver » se lit à l'envers une fois activé.
+    private var duckingToggle: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Toggle(isOn: Binding(
+                get: { !duckingDisabled },
+                set: { isOn in
+                    duckingDisabled = !isOn
+                    onDuckingDisabledChanged(!isOn)
+                }
+            )) {
+                Text(String(localized: "story.timeline.inspector.ducking",
+                            defaultValue: "Atténuer sous la musique", bundle: .module))
+                    .font(.caption)
+            }
+            .toggleStyle(.switch)
+            .tint(MeeshyColors.indigo500)
+            Text(String(format: String(localized: "story.timeline.inspector.ducking.caption",
+                                       defaultValue: "Le son de cette vidéo descend à %@ tant que l'audio de fond joue.",
+                                       bundle: .module),
+                        Self.formatGain(StoryVolume.duckingFactor)))
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(.top, 6)
     }
 
     /// Automation du volume : pose d'un point au playhead et liste des points
