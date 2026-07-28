@@ -80,6 +80,21 @@ final class StoryComposerViewModel_TextEditingTests: XCTestCase {
         XCTAssertNil(vm.textEditingMode.expandedTool)
     }
 
+    /// Refermer un panneau rend la main aux bulles — il ne quitte PAS l'édition.
+    /// C'est ce que fait le tap hors du panneau ; seul « Terminé » sort. Le test
+    /// voisin ne vérifiait que la remise à zéro de l'outil, si bien qu'un
+    /// `setExpandedTool(nil)` qui aurait fermé l'éditeur entier serait passé vert.
+    func test_setExpandedTool_nil_keepsEditingTheSameText() {
+        let vm = makeSubject()
+        let text = vm.addText()!
+        vm.enterTextEditingMode(textId: text.id)
+        vm.setExpandedTool(.frame)
+
+        vm.setExpandedTool(nil)
+
+        XCTAssertEqual(vm.textEditingMode, .active(textId: text.id, expandedTool: nil))
+    }
+
     func test_setExpandedTool_whileInactive_isNoOp() {
         let vm = makeSubject()
         vm.setExpandedTool(.style)
