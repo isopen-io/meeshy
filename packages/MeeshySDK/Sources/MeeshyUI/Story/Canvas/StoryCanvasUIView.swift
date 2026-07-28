@@ -700,6 +700,16 @@ public final class StoryCanvasUIView: UIView {
     /// résolution d'effets à chaque tick.
     var slideHasSchedulableAudio: Bool = false
 
+    /// Présence d'une piste audio par identifiant de média vidéo, sondée une
+    /// seule fois par clip puis mémorisée.
+    ///
+    /// On ne peut pas s'appuyer sur `StoryAudioAvailability.videoAudioTracks` :
+    /// cette table n'est alimentée que par le lecteur plein écran, alors que
+    /// l'atténuation doit aussi valoir dans le composer et à l'export. Une clé
+    /// absente signifie « pas encore sondé » et n'active aucune atténuation —
+    /// on n'atténue jamais sur une hypothèse.
+    var videoHasAudioTrack: [String: Bool] = [:]
+
     // MARK: - ProMotion edit-mode link
 
     var lastEditBackdropTimestamp: CFTimeInterval = 0

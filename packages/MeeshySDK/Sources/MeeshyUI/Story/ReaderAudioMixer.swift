@@ -255,6 +255,21 @@ public final class ReaderAudioMixer {
         }
     }
 
+    /// Volume courant du clip de fond, indépendant du mute global.
+    ///
+    /// Le mixer n'exposait que `setVolume(_:for:)`, réservé aux clips
+    /// d'avant-plan indexés par id : le slot de fond, unique et sans id
+    /// exposé, restait figé sur la valeur posée à `configureBackground`.
+    /// L'automation de volume a besoin de le piloter à chaque tick.
+    public func setBackgroundVolume(_ volume: Float) {
+        guard var bg = backgroundEntry else { return }
+        let clamped = min(StoryVolume.maxGain, max(0, volume))
+        guard bg.targetVolume != clamped else { return }
+        bg.targetVolume = clamped
+        backgroundEntry = bg
+        bg.player.volume = isMuted ? 0 : clamped
+    }
+
     /// Mute / unmute a single foreground clip without touching the global
     /// `isMuted` flag (used by the per-chip tap action in the reader). The
     /// background slot is not exposed here — the bg has no dedicated chip.
