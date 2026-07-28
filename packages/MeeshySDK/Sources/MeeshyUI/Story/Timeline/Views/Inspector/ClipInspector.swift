@@ -37,13 +37,34 @@ public struct ClipInspector: View {
         /// si bien que la fiche restituait le temps mais jamais l'espace : on
         /// ne pouvait ni lire ni corriger une position au chiffre près.
         public let transform: ClipTransform
+        /// Points d'automation du volume déjà posés sur ce clip.
+        public let volumeKeyframes: [VolumePoint]
+
+        /// Un point de la courbe de volume, tel que la fiche l'affiche.
+        ///
+        /// `absoluteTime` est l'instant sur la TIMELINE, pas l'offset dans le
+        /// clip : le modèle stocke du relatif, et l'afficher tel quel sur un
+        /// clip qui démarre à 5 s annoncerait un instant faux. Même convention
+        /// que `KeyframeInspector.KeyframeSnapshot.absoluteTime`.
+        public struct VolumePoint: Equatable, Sendable, Identifiable {
+            public let id: String
+            public let absoluteTime: Float
+            public let volume: Float
+
+            public init(id: String, absoluteTime: Float, volume: Float) {
+                self.id = id
+                self.absoluteTime = absoluteTime
+                self.volume = volume
+            }
+        }
 
         public init(id: String, displayName: String, kind: Kind,
                     startTime: Float, duration: Float, volume: Float,
                     fadeInDuration: Float, fadeOutDuration: Float,
                     isLooping: Bool, isBackground: Bool,
                     name: String? = nil,
-                    transform: ClipTransform = .identity) {
+                    transform: ClipTransform = .identity,
+                    volumeKeyframes: [VolumePoint] = []) {
             self.id = id; self.displayName = displayName; self.kind = kind
             self.startTime = startTime; self.duration = duration
             self.volume = volume
@@ -51,6 +72,7 @@ public struct ClipInspector: View {
             self.isLooping = isLooping; self.isBackground = isBackground
             self.name = name
             self.transform = transform
+            self.volumeKeyframes = volumeKeyframes
         }
     }
 
@@ -167,6 +189,33 @@ public struct ClipInspector: View {
     public let onDurationSet: (Float) -> Void
     /// Règle un champ de la place dans le plan.
     public let onTransformChanged: (ClipTransform.Field) -> Void
+    /// Position de lecture courante — le point se pose LÀ, et le bouton le dit
+    /// plutôt que de laisser deviner où il atterrira.
+    public let playheadTime: Float
+    /// Pose un point de volume au playhead, au niveau passé.
+    public let onAddVolumePoint: (Float) -> Void
+    /// Retire le point d'automation d'identifiant donné.
+    public let onRemoveVolumePoint: (String) -> Void
+
+    /// Points triés par instant.
+    ///
+    /// Le modèle les garde dans l'ordre d'INSERTION : poser un point avant un
+    /// autre les listerait à l'envers, et la liste ne se lirait plus comme la
+    /// courbe qu'elle décrit.
+    public nonisolated static func sortedVolumePoints(
+        _ points: [ClipSnapshot.VolumePoint]
+    ) -> [ClipSnapshot.VolumePoint] {
+        points.sorted { $0.absoluteTime < $1.absoluteTime }
+    }
+
+    /// Libellé d'un gain, en pourcentage entier.
+    ///
+    /// Volontairement non localisé : comparer un libellé localisé à un littéral
+    /// reviendrait à tester la locale du simulateur. Au-delà de 100 % le son
+    /// sature — c'est un choix de composition assumé, le libellé l'affiche.
+    public nonisolated static func formatGain(_ volume: Float) -> String {
+        "\(Int((volume * 100).rounded())) %"
+    }
 
     /// Secondes saisies au clavier. Accepte les DEUX séparateurs décimaux : un
     /// champ qui refuse « 3,5 » est inutilisable en français.
@@ -245,7 +294,10 @@ public struct ClipInspector: View {
                 onStartSet: @escaping (Float) -> Void = { _ in },
                 onEndSet: @escaping (Float) -> Void = { _ in },
                 onDurationSet: @escaping (Float) -> Void = { _ in },
-                onTransformChanged: @escaping (ClipTransform.Field) -> Void = { _ in }) {
+                onTransformChanged: @escaping (ClipTransform.Field) -> Void = { _ in },
+                playheadTime: Float = 0,
+                onAddVolumePoint: @escaping (Float) -> Void = { _ in },
+                onRemoveVolumePoint: @escaping (String) -> Void = { _ in }) {
         self.presentation = presentation
         self.clip = clip
         self.onVolumeChanged = onVolumeChanged
@@ -267,6 +319,9 @@ public struct ClipInspector: View {
         self.onEndSet = onEndSet
         self.onDurationSet = onDurationSet
         self.onTransformChanged = onTransformChanged
+        self.playheadTime = playheadTime
+        self.onAddVolumePoint = onAddVolumePoint
+        self.onRemoveVolumePoint = onRemoveVolumePoint
         _volume = State(initialValue: clip.volume)
         _fadeIn = State(initialValue: clip.fadeInDuration)
         _fadeOut = State(initialValue: clip.fadeOutDuration)
@@ -644,15 +699,88 @@ public struct ClipInspector: View {
 
     private var volumeSlider: some View {
         VStack(alignment: .leading, spacing: 2) {
-            Text(String(localized: "story.timeline.inspector.volume", bundle: .module).uppercased())
-                .font(.system(size: 9, weight: .semibold))
-                .foregroundStyle(.secondary)
+            HStack(spacing: 6) {
+                Text(String(localized: "story.timeline.inspector.volume", bundle: .module).uppercased())
+                    .font(.system(size: 9, weight: .semibold))
+                    .foregroundStyle(.secondary)
+                Spacer(minLength: 0)
+                // Le chiffre est indispensable depuis que la course va jusqu'à
+                // 200 % : la position du curseur seule ne dit plus si l'on est
+                // au niveau nominal ou en train de saturer.
+                Text(Self.formatGain(volume))
+                    .font(.caption2.weight(.semibold))
+                    .monospacedDigit()
+                    .foregroundStyle(volume > 1 ? MeeshyColors.warning : .secondary)
+            }
             Slider(value: $volume, in: 0...StoryVolume.maxGain, step: 0.01) { editing in
                 if !editing { onVolumeChanged(volume) }
             }
             .tint(MeeshyColors.indigo500)
-            .accessibilityValue("\(Int(volume * 100))%")
+            .accessibilityValue(Self.formatGain(volume))
+            volumeAutomation
         }
+    }
+
+    /// Automation du volume : pose d'un point au playhead et liste des points
+    /// posés. C'est la SEULE surface d'édition de la courbe — la piste ne fait
+    /// que 52 pt et ses gestes servent déjà au déplacement et au rognage.
+    private var volumeAutomation: some View {
+        let points = Self.sortedVolumePoints(clip.volumeKeyframes)
+        return VStack(alignment: .leading, spacing: 6) {
+            Button {
+                onAddVolumePoint(volume)
+            } label: {
+                Label(
+                    String(format: String(localized: "story.timeline.inspector.volume.addPoint",
+                                          defaultValue: "Point de volume à %@",
+                                          bundle: .module),
+                           Self.formatTime(seconds: playheadTime)),
+                    systemImage: "plus.circle"
+                )
+                .font(.caption.weight(.semibold))
+            }
+            .buttonStyle(.bordered)
+            .tint(MeeshyColors.warning)
+            .accessibilityHint(String(localized: "story.timeline.inspector.volume.addPoint.hint",
+                                      defaultValue: "Fige le volume courant à la position de lecture",
+                                      bundle: .module))
+
+            if points.isEmpty {
+                Text(String(localized: "story.timeline.inspector.volume.automation.caption",
+                            defaultValue: "Sans point, le volume reste constant sur toute la durée du clip.",
+                            bundle: .module))
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            } else {
+                ForEach(points) { point in
+                    HStack(spacing: 8) {
+                        Text(Self.formatTime(seconds: point.absoluteTime))
+                            .font(.system(.caption2, design: .monospaced))
+                            .monospacedDigit()
+                        Text(Self.formatGain(point.volume))
+                            .font(.caption2.weight(.semibold))
+                            .monospacedDigit()
+                            .foregroundStyle(MeeshyColors.warning)
+                        Spacer(minLength: 0)
+                        Button {
+                            onRemoveVolumePoint(point.id)
+                        } label: {
+                            Image(systemName: "minus.circle.fill")
+                                .font(.footnote)
+                                .foregroundStyle(.secondary)
+                                .contentShape(Rectangle().inset(by: -8))
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel(String(localized: "story.timeline.inspector.volume.removePoint",
+                                                   defaultValue: "Retirer ce point de volume",
+                                                   bundle: .module))
+                    }
+                    .accessibilityElement(children: .combine)
+                }
+            }
+        }
+        .padding(.top, 4)
     }
 
     /// Durées proposées pour les animations d'entrée/sortie (fondu). `0` = off.

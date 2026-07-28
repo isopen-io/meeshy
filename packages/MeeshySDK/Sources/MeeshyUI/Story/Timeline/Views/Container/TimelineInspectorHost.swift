@@ -90,6 +90,24 @@ public struct TimelineInspectorHost: View {
         return !StoryComposerViewModel.isSyntheticTimelineClipId(id)
     }
 
+    /// Extrait les points d'automation du volume d'un jeu de keyframes, en
+    /// temps ABSOLU.
+    ///
+    /// Les points sans volume — position, échelle, opacité — sont écartés :
+    /// ils ne décrivent pas la courbe et les lister reviendrait à proposer de
+    /// retirer un point qui ne règle aucun son.
+    public static func volumePoints(
+        keyframes: [StoryKeyframe]?,
+        clipStart: Float
+    ) -> [ClipInspector.ClipSnapshot.VolumePoint] {
+        (keyframes ?? []).compactMap { kf in
+            guard let volume = kf.volume else { return nil }
+            return ClipInspector.ClipSnapshot.VolumePoint(
+                id: kf.id, absoluteTime: clipStart + kf.time, volume: volume
+            )
+        }
+    }
+
     /// Pure mapping from the current timeline selection to a `ClipSnapshot`.
     /// Returns `nil` when no clip is selected or when the selected id matches
     /// neither a media clip nor an audio player object.
@@ -120,7 +138,9 @@ public struct TimelineInspectorHost: View {
                 isBackground: media.isBackground,
                 name: media.name,
                 transform: ClipTransform(x: media.x, y: media.y, scale: media.scale,
-                                         rotation: media.rotation, zIndex: media.zIndex)
+                                         rotation: media.rotation, zIndex: media.zIndex),
+                volumeKeyframes: volumePoints(keyframes: media.keyframes,
+                                              clipStart: Float(media.startTime ?? 0))
             )
         }
         if let audio = viewModel.project.audioPlayerObjects.first(where: { $0.id == id }) {
@@ -135,7 +155,9 @@ public struct TimelineInspectorHost: View {
                 fadeOutDuration: audio.fadeOut ?? 0,
                 isLooping: audio.loop ?? false,
                 isBackground: audio.isBackground ?? false,
-                name: audio.name
+                name: audio.name,
+                volumeKeyframes: volumePoints(keyframes: audio.keyframes,
+                                              clipStart: audio.startTime ?? 0)
             )
         }
         // Le texte a aussi un début/durée/fondu (et un nom) éditables — sans
@@ -358,6 +380,13 @@ public struct TimelineInspectorHost: View {
             },
             onTransformChanged: { [viewModel] field in
                 viewModel.setClipTransform(id: clipId, field: field)
+            },
+            playheadTime: viewModel.currentTime,
+            onAddVolumePoint: { [viewModel] volume in
+                viewModel.addKeyframeAtPlayhead(volume: volume)
+            },
+            onRemoveVolumePoint: { [viewModel] keyframeId in
+                viewModel.deleteKeyframe(clipId: clipId, keyframeId: keyframeId)
             }
         )
         .padding(presentation == .popover ? 12 : 0)
