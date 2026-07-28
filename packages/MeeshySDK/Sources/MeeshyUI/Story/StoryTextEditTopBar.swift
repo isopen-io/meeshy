@@ -164,7 +164,7 @@ struct StoryTextEditTopBar: View {
 
 /// Extrait de `cycleButton` : empilées en ligne, ces annotations faisaient
 /// dépasser le vérificateur de types de son budget de temps.
-private struct CycleButtonAccessibility: ViewModifier {
+struct CycleButtonAccessibility: ViewModifier {
     let label: String
     let value: String
     let onOpenPanel: () -> Void

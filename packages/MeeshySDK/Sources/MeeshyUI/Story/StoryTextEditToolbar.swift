@@ -61,10 +61,10 @@ struct StoryTextEditToolbar: View {
                         .transition(.move(edge: .bottom).combined(with: .opacity))
                 }
                 TextEditFloatingBubbles(
+                    textObject: binding,
                     expandedTool: expandedTool,
-                    onSelectTool: { tool in
+                    onOpenPanel: { tool in
                         viewModel.setExpandedTool(expandedTool == tool ? nil : tool)
-                        HapticFeedback.light()
                     }
                 )
             }
