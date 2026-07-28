@@ -649,6 +649,7 @@ public struct StoryTimelineView: View {
                 imageURL: (media.kind == .image && mediaFrames.isEmpty)
                     ? CacheCoordinator.imageLocalFileURL(for: media.postMediaId)
                     : nil,
+                keyframes: media.keyframes ?? [],
                 onTap: { viewModel.selectClip(id: media.id) },
                 onDoubleTap: { viewModel.inspectClip(id: media.id) },
                 onTrimStartDelta: { delta in
@@ -716,6 +717,7 @@ public struct StoryTimelineView: View {
                 laneHeight: laneHeight,
                 waveformSamples: audio.waveformSamples,
                 audioURL: viewModel.loadedURL(for: audio.id),
+                keyframes: audio.keyframes ?? [],
                 onTap: { viewModel.selectClip(id: audio.id) },
                 onDoubleTap: { viewModel.inspectClip(id: audio.id) },
                 onMoveDelta: { delta in

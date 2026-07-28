@@ -37,6 +37,23 @@ struct VolumeCurveOverlay: View {
         .allowsHitTesting(false)
     }
 
+    /// Résumé comparable des points de volume.
+    ///
+    /// `StoryKeyframe` n'est pas `Equatable` et les barres de piste sont
+    /// montées avec `.equatable()` : sans ce résumé dans leur `==`, SwiftUI
+    /// sauterait le corps et la courbe ne réapparaîtrait jamais après l'ajout
+    /// d'un point. Seuls l'instant et le niveau comptent — l'identité du point
+    /// ne change pas le tracé.
+    nonisolated static func volumeSignature(_ keyframes: [StoryKeyframe]) -> [Float] {
+        keyframes
+            .compactMap { kf -> (Float, Float)? in
+                guard let v = kf.volume else { return nil }
+                return (kf.time, v)
+            }
+            .sorted { $0.0 < $1.0 }
+            .flatMap { [$0.0, $0.1] }
+    }
+
     /// Projette les points de volume dans le repère de la piste.
     ///
     /// `x` suit le temps, `y` est INVERSÉ — volume fort en haut, comme dans

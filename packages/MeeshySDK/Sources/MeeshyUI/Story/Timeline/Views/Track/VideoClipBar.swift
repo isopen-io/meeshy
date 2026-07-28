@@ -1,5 +1,6 @@
 import SwiftUI
 import UIKit
+import MeeshySDK
 
 /// Single video clip rendered inside a track lane.
 /// Includes : color tint (success green), frame strip, fade gradients, trim
@@ -21,6 +22,8 @@ public struct VideoClipBar: View, Equatable {
             && lhs.frames.count == rhs.frames.count
             && lhs.videoURL == rhs.videoURL
             && lhs.imageURL == rhs.imageURL
+            && VolumeCurveOverlay.volumeSignature(lhs.keyframes)
+                == VolumeCurveOverlay.volumeSignature(rhs.keyframes)
     }
 
     public let clipId: String
@@ -44,6 +47,9 @@ public struct VideoClipBar: View, Equatable {
     /// (`loadedImages`) n'existe plus (draft restauré, repost) : la barre
     /// charge sa vignette depuis le cache disque (ImageStill, downsamplée).
     public let imageURL: URL?
+    /// Points d'automation du clip — seule leur composante `volume` est
+    /// tracée, en lecture seule. L'édition passe par la fiche.
+    public let keyframes: [StoryKeyframe]
     public let onTap: () -> Void
     public let onDoubleTap: () -> Void
     public let onTrimStartDelta: (CGFloat) -> Void
@@ -65,6 +71,11 @@ public struct VideoClipBar: View, Equatable {
     private var effectiveFrames: [UIImage] {
         frames.isEmpty ? loadedFrames : frames
     }
+
+    /// Forme d'onde de la piste audio de la vidéo. Vide tant qu'elle n'est pas
+    /// extraite, et vide pour toujours si la vidéo est muette : aucune bande
+    /// n'est alors dessinée. Exclue de `==` (état interne).
+    @State private var loadedWaveform: [Float] = []
 
     public var accessibilityComposed: String {
         String(
@@ -88,6 +99,7 @@ public struct VideoClipBar: View, Equatable {
         frames: [UIImage],
         videoURL: URL? = nil,
         imageURL: URL? = nil,
+        keyframes: [StoryKeyframe] = [],
         onTap: @escaping () -> Void,
         onDoubleTap: @escaping () -> Void,
         onTrimStartDelta: @escaping (CGFloat) -> Void,
@@ -109,6 +121,7 @@ public struct VideoClipBar: View, Equatable {
         self.frames = frames
         self.videoURL = videoURL
         self.imageURL = imageURL
+        self.keyframes = keyframes
         self.onTap = onTap
         self.onDoubleTap = onDoubleTap
         self.onTrimStartDelta = onTrimStartDelta
@@ -122,6 +135,8 @@ public struct VideoClipBar: View, Equatable {
             background
             framesStrip
             fadeGradients
+            waveformBand
+            volumeCurve
             titleLabel
             if isLocked { lockBadge }
             if isSelected { selectionHalo }
@@ -165,6 +180,13 @@ public struct VideoClipBar: View, Equatable {
                                                              maxHeight: laneHeight) {
                 loadedFrames = [still]
             }
+        }
+        .task(id: videoURL) {
+            guard let videoURL else { return }
+            // `AVAudioFile` sait lire la piste audio d'un MP4. Un conteneur
+            // sans son — ou qu'ExtAudioFile ne sait pas ouvrir — renvoie un
+            // tableau vide, et la bande ne se dessine tout simplement pas.
+            loadedWaveform = await AudioWaveform.samples(url: videoURL, count: 128)
         }
     }
 
@@ -240,6 +262,35 @@ public struct VideoClipBar: View, Equatable {
         }
         .opacity(0.85)
         .accessibilityHidden(true)
+    }
+
+    /// Bande de forme d'onde plaquée en bas du clip, sous les vignettes.
+    ///
+    /// En bas parce que le haut porte déjà le titre : superposées, les deux
+    /// deviendraient illisibles. Elle reste absente pour une image ou une
+    /// vidéo muette, plutôt que d'afficher une bande vide qui laisserait
+    /// croire à un silence.
+    @ViewBuilder
+    private var waveformBand: some View {
+        if !loadedWaveform.isEmpty {
+            VStack(spacing: 0) {
+                Spacer(minLength: 0)
+                WaveformStrip(samples: loadedWaveform, tint: Color.white.opacity(0.7))
+                    .frame(height: 16)
+            }
+            .allowsHitTesting(false)
+        }
+    }
+
+    /// Courbe d'automation du volume, en lecture seule. Même teinte que sur les
+    /// pistes audio : c'est le même objet, il doit se reconnaître partout.
+    @ViewBuilder
+    private var volumeCurve: some View {
+        if !keyframes.isEmpty {
+            VolumeCurveOverlay(keyframes: keyframes,
+                               duration: duration,
+                               tint: MeeshyColors.warning)
+        }
     }
 
     private var fadeGradients: some View {

@@ -1,4 +1,5 @@
 import SwiftUI
+import MeeshySDK
 
 public struct AudioClipBar: View, Equatable {
 
@@ -17,6 +18,8 @@ public struct AudioClipBar: View, Equatable {
             && lhs.laneHeight == rhs.laneHeight
             && lhs.waveformSamples == rhs.waveformSamples
             && lhs.audioURL == rhs.audioURL
+            && VolumeCurveOverlay.volumeSignature(lhs.keyframes)
+                == VolumeCurveOverlay.volumeSignature(rhs.keyframes)
     }
 
     public let clipId: String
@@ -47,12 +50,27 @@ public struct AudioClipBar: View, Equatable {
     /// restauré, repost), la barre extrait elle-même sa forme d'onde
     /// (AudioWaveform, RMS + cache). Sans ça la lane audio était un aplat.
     public let audioURL: URL?
+    /// Points d'automation du clip — seule leur composante `volume` est
+    /// tracée, en lecture seule. L'édition passe par la fiche.
+    public let keyframes: [StoryKeyframe]
 
     /// Forme d'onde auto-extraite (état interne, hors `==`).
     @State private var loadedSamples: [Float] = []
 
     var effectiveSamples: [Float] {
-        waveformSamples.isEmpty ? loadedSamples : waveformSamples
+        Self.resolveSamples(local: loadedSamples, published: waveformSamples)
+    }
+
+    /// Arbitre entre les deux sources de forme d'onde.
+    ///
+    /// Le calcul local prime dès qu'il a abouti : il est en haute résolution et
+    /// à l'amplitude réelle, alors que `waveformSamples` transporte 80 valeurs
+    /// normalisées au pic — deux pistes de niveaux très différents s'y
+    /// dessinaient à la même hauteur, ce qui rend le réglage d'un volume
+    /// impossible à l'œil. Les valeurs publiées restent le repli des reposts et
+    /// des brouillons restaurés, pour qui aucun fichier local n'existe.
+    nonisolated static func resolveSamples(local: [Float], published: [Float]) -> [Float] {
+        local.isEmpty ? published : local
     }
 
     public init(
@@ -61,6 +79,7 @@ public struct AudioClipBar: View, Equatable {
         isDark: Bool, geometry: TimelineGeometry, laneHeight: CGFloat,
         waveformSamples: [Float],
         audioURL: URL? = nil,
+        keyframes: [StoryKeyframe] = [],
         onTap: @escaping () -> Void,
         onDoubleTap: @escaping () -> Void,
         onMoveDelta: @escaping (CGFloat) -> Void,
@@ -75,6 +94,7 @@ public struct AudioClipBar: View, Equatable {
         self.isDark = isDark; self.geometry = geometry
         self.laneHeight = laneHeight; self.waveformSamples = waveformSamples
         self.audioURL = audioURL
+        self.keyframes = keyframes
         self.onTap = onTap; self.onDoubleTap = onDoubleTap
         self.onMoveDelta = onMoveDelta
         self.onMoveEnded = onMoveEnded
@@ -98,7 +118,8 @@ public struct AudioClipBar: View, Equatable {
         ZStack(alignment: .leading) {
             Rectangle()
                 .fill(MeeshyColors.warning.opacity(isDark ? 0.32 : 0.22))
-            waveform
+            WaveformStrip(samples: effectiveSamples, tint: Color.white.opacity(0.85))
+            volumeCurve
             titleOverlay
             if isMuted { muteBadge }
             if isSelected {
@@ -163,32 +184,15 @@ public struct AudioClipBar: View, Equatable {
         }
     }
 
-    private var waveform: some View {
-        GeometryReader { geo in
-            // Empty waveform → render nothing. Previously this used
-            // `max(samples.count, 1)` + ForEach(0..<count) which then
-            // dereferenced samples[0] and crashed with
-            // 'Index out of range' on any audio clip that hadn't yet
-            // had its waveform extracted. iterating samples.indices
-            // is correct for any count including 0.
-            if !effectiveSamples.isEmpty {
-                let count = effectiveSamples.count
-                let stepX = geo.size.width / CGFloat(count)
-                HStack(alignment: .center, spacing: 1) {
-                    ForEach(effectiveSamples.indices, id: \.self) { i in
-                        let amp = CGFloat(effectiveSamples[i])
-                        Capsule()
-                            .fill(Color.white.opacity(0.85))
-                            .frame(width: max(1, stepX - 1),
-                                   height: max(2, amp * (geo.size.height - 6)))
-                    }
-                }
-                .frame(maxHeight: .infinity, alignment: .center)
-            }
+    /// Courbe d'automation — même teinte que sur les pistes vidéo, pour qu'elle
+    /// se reconnaisse d'un coup d'œil quel que soit le type de piste.
+    @ViewBuilder
+    private var volumeCurve: some View {
+        if !keyframes.isEmpty {
+            VolumeCurveOverlay(keyframes: keyframes,
+                               duration: duration,
+                               tint: MeeshyColors.warning)
         }
-        .padding(.horizontal, 3)
-        .drawingGroup()   // SOTA P7: bake to Metal layer, skip re-stroke when props unchanged
-        .accessibilityHidden(true)
     }
 
     private var muteBadge: some View {
