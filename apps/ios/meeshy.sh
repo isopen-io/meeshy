@@ -1001,13 +1001,18 @@ do_release_andp() {
     fi
 
     # Write ANDP secrets file.
-    # MUST be ./secrets.yml, NOT .andp/secrets.yml : andp/asc/config.py resolves
-    # `"secrets.yml" if os.path.exists("secrets.yml") else "secrets.example.yml"`
-    # relative to the cwd and never looks inside .andp/. Writing it there made
-    # the upload die with "No secrets file found" AFTER the ~15 min build
-    # (fixed 2026-07-28 ; the CI workflow already wrote ./secrets.yml).
-    # .andp/ stays for ANDP's own release-state files (the andp-state artifact).
-    # Both paths are gitignored — this file embeds the ASC .p8 private key.
+    # MUST be .andp/secrets.yml. ANDP resolve la cascade
+    # $ANDP_CONFIG_DIR/ → ./.andp/ → ~/.andp/ (andp/paths.py::_candidates) et
+    # `misplaced_secrets()` ERREUR EXPRÈS quand un secrets.yml traîne à la
+    # racine — pour qu'un fichier au mauvais endroit ne fasse pas basculer un
+    # run en DRY-RUN silencieux.
+    # Historique 2026-07-28 : l'inverse était vrai le matin (ANDP ne lisait que
+    # ./secrets.yml) ; la mise à jour d'ANDP du soir a retourné la règle. Un
+    # ./secrets.yml résiduel fait désormais échouer le run avec
+    # `config_misplaced` — d'où le rm ci-dessous.
+    # .andp/ porte aussi les fichiers d'état de release (artefact andp-state).
+    # Les deux chemins sont gitignorés — ce fichier embarque la clé privée .p8.
+    rm -f secrets.yml
     mkdir -p .andp
     {
         echo "accounts:"
@@ -1017,8 +1022,8 @@ do_release_andp() {
         echo "      issuer_id: \"${ASC_ISSUER_ID:-69a6de89-ae7a-47e3-e053-5b8c7c11a4d1}\""
         echo "      key_content: |"
         sed 's/^/        /' "$key_file"
-    } > secrets.yml
-    chmod 600 secrets.yml
+    } > .andp/secrets.yml
+    chmod 600 .andp/secrets.yml
 
     # Write compliance policy
     {
