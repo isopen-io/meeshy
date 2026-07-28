@@ -126,3 +126,44 @@ Reste vérifié sain ce cycle (balayage, pas de défaut) : StatusHandler typing 
 AuthHandler room-rejoin/retry, LocationHandler, SocialEventsHandler, MessageHandler
 edit/delete/broadcast + `_emitMessageNewByLanguage`, `emitWithSeq`,
 `participant-resolver`, `message-payload-filter`, presence/drain/delivery-receipt.
+
+## Cycle 4 (2026-07-28) — contrat d'erreur cassé sur `reaction:request-sync` (Phase 2/11)
+
+Passage ciblé sur le code le plus frais (handlers réactions post/commentaire
+modifiés le 2026-07-28), NON couvert par les cycles 1–3. Aucun défaut
+wrong-output/data-loss trouvé dans ces surfaces (add/remove/join/leave,
+idempotence `unchanged`, ACK==broadcast, fan-out notif `.catch`, dédup
+HEART→`post:liked` — tous vérifiés corrects). **Un défaut de contrat d'erreur
+réel corrigé** (robustesse boundary, non pinné par test) :
+
+`PostReactionHandler.handleRequestSync` et `CommentReactionHandler.handleRequestSync`
+étaient les SEULES méthodes de chaque handler à NE PAS appeler `validateSocketEvent`
+avant de passer `data.postId` / `data.commentId` au service. Tous les frères
+(`handleAddReaction`, `handleRemoveReaction`, `handleJoinPost`, `handleLeavePost`)
+valident d'abord.
+
+Chemin du bug : un client émettant un payload malformé (`{}` → `postId`/`commentId`
+`undefined`) atteignait `PostReactionService.validatePostId` /
+`CommentReactionService.validateCommentId`, dont le template du message d'erreur
+déréférence `postId.substring(0, 20)` AVANT que le message propre ne se forme.
+Sur `undefined`, le garde `!postId` est vrai mais l'évaluation du template lève
+`TypeError: Cannot read properties of undefined (reading 'substring')` — capturée
+par le `try/catch` de la méthode et renvoyée dans l'ACK comme chaîne d'erreur
+interne opaque au lieu de l'« Invalid ID format » attendu. Déclenché uniquement
+par input INVALIDE (pas de perte de données, pas de crash process), mais le
+contrat d'erreur du socket est cassé.
+
+**Fix** : `validateSocketEvent` ajouté en tête des deux `handleRequestSync`
+(validate-first, comme les frères). Le schéma `SocketPostReactionRequestSyncSchema`
+existait déjà (inutilisé) ; ajout du miroir `SocketCommentReactionRequestSyncSchema`
+(`commentId: mongoId`). Le service ne reçoit plus jamais de payload non validé par
+ce chemin ; comportement byte-identique pour un `postId`/`commentId` valide.
+TDD : 2 tests RED d'abord (`{}` → service NON appelé + erreur de validation propre,
+échouait car le service ÉTAIT appelé avec `postId: undefined`), puis GREEN.
+Suites : PostReactionHandler 31/31, CommentReactionHandler 17/17 ; balayage de
+non-régression socketio+handlers+schemas 37 suites / 592 tests verts.
+
+Non traité (minimal-impact, hors TDD faute de caller atteignable restant) : le
+landmine `postId.substring`/`commentId.substring` dans les deux services reste,
+mais n'est plus atteignable via ces handlers désormais que la validation boundary
+est en place.
