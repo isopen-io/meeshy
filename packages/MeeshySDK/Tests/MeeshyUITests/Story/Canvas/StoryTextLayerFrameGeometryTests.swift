@@ -148,4 +148,121 @@ final class StoryTextLayerFrameGeometryTests: XCTestCase {
         XCTAssertTrue(font.fontName.hasPrefix("."),
                       "un style système doit rester sur la famille système")
     }
+
+    // MARK: - Marge réglable
+
+    /// La marge à 1 doit rendre EXACTEMENT la géométrie historique : c'est ce
+    /// qui garantit qu'aucune story publiée ne bouge.
+    func test_paddingScaleOfOne_reproducesTheHistoricGeometry() {
+        let legacy = StoryTextLayer.frameMetrics(
+            shape: .rounded, isFramed: true, textSize: textSize, oGlyphWidth: 30)
+        let explicit = StoryTextLayer.frameMetrics(
+            shape: .rounded, isFramed: true, textSize: textSize, oGlyphWidth: 30,
+            paddingScale: 1)
+
+        XCTAssertEqual(legacy.bounds, explicit.bounds)
+        XCTAssertEqual(legacy.glyphRect, explicit.glyphRect)
+    }
+
+    func test_paddingScaleOfZero_hugsTheGlyphs() {
+        let metrics = StoryTextLayer.frameMetrics(
+            shape: .rounded, isFramed: true, textSize: textSize, oGlyphWidth: 30,
+            paddingScale: 0)
+
+        XCTAssertEqual(metrics.bounds, textSize, "à marge nulle la boîte épouse le texte")
+        XCTAssertEqual(metrics.glyphRect, CGRect(origin: .zero, size: textSize))
+    }
+
+    func test_paddingScaleGrowsBothAxesSymmetrically() {
+        let single = StoryTextLayer.frameMetrics(
+            shape: .rounded, isFramed: true, textSize: textSize, oGlyphWidth: 30)
+        let double = StoryTextLayer.frameMetrics(
+            shape: .rounded, isFramed: true, textSize: textSize, oGlyphWidth: 30,
+            paddingScale: 2)
+
+        XCTAssertEqual(double.bounds.width - textSize.width,
+                       (single.bounds.width - textSize.width) * 2)
+        XCTAssertEqual(double.bounds.height - textSize.height,
+                       (single.bounds.height - textSize.height) * 2)
+    }
+
+    /// Un texte SANS boîte garde la marge de 8 px historique quelle que soit
+    /// la valeur du curseur : le curseur ne règle que la boîte, et un texte nu
+    /// n'en a pas.
+    func test_unframedTextIgnoresThePaddingScale() {
+        let scaled = StoryTextLayer.frameMetrics(
+            shape: .rounded, isFramed: false, textSize: textSize, oGlyphWidth: 0,
+            paddingScale: 3)
+
+        XCTAssertEqual(scaled.bounds, CGSize(width: textSize.width + 16,
+                                             height: textSize.height + 16))
+    }
+
+    /// La bande réservée à la queue de la bulle BD est une caractéristique de
+    /// la FORME, pas une marge : elle ne doit pas suivre le curseur, sinon la
+    /// queue se détache du corps.
+    func test_speechTailHeightIsNotScaledByThePadding() {
+        let single = StoryTextLayer.frameMetrics(
+            shape: .speech, isFramed: true, textSize: textSize, oGlyphWidth: 30)
+        let double = StoryTextLayer.frameMetrics(
+            shape: .speech, isFramed: true, textSize: textSize, oGlyphWidth: 30,
+            paddingScale: 2)
+
+        XCTAssertEqual(double.bounds.height - single.bounds.height, 16,
+                       "seule la marge double, la queue garde sa hauteur")
+    }
+
+    // MARK: - Liseré de la boîte
+
+    private func layer(configuredWith text: StoryTextObject) -> StoryTextLayer {
+        let layer = StoryTextLayer()
+        layer.configure(with: text,
+                        geometry: CanvasGeometry(renderSize: CGSize(width: 393, height: 699)),
+                        mode: .edit)
+        return layer
+    }
+
+    func test_aFrameBorderPaintsTheLayerBorder() {
+        var text = StoryTextObject(id: "t1", text: "Bonjour")
+        text.backgroundStyle = .solid(hex: "000000")
+        text.frameBorderWidth = 4
+        text.frameBorderColor = "FF2E63"
+
+        let layer = layer(configuredWith: text)
+
+        XCTAssertGreaterThan(layer.borderWidth, 0)
+        XCTAssertNotNil(layer.borderColor)
+    }
+
+    func test_noFrameBorderLeavesTheLayerBorderClear() {
+        var text = StoryTextObject(id: "t1", text: "Bonjour")
+        text.backgroundStyle = .solid(hex: "000000")
+
+        let layer = layer(configuredWith: text)
+
+        XCTAssertEqual(layer.borderWidth, 0)
+    }
+
+    /// Le liseré seul, sans aucun fond : c'est le cas qui prouve que le cadre
+    /// s'est bien détaché du fond.
+    func test_aFrameBorderAloneWithoutAnyBackgroundStillPaints() {
+        var text = StoryTextObject(id: "t1", text: "Bonjour")
+        text.frameBorderWidth = 3
+
+        let layer = layer(configuredWith: text)
+
+        XCTAssertTrue(text.hasFrameBox)
+        XCTAssertGreaterThan(layer.borderWidth, 0)
+    }
+
+    func test_shapeNoneSuppressesTheBorderEvenWhenAWidthIsSet() {
+        var text = StoryTextObject(id: "t1", text: "Bonjour")
+        text.frameShape = StoryTextFrameShape.none.rawValue
+        text.backgroundStyle = .solid(hex: "000000")
+        text.frameBorderWidth = 4
+
+        let layer = layer(configuredWith: text)
+
+        XCTAssertEqual(layer.borderWidth, 0)
+    }
 }
