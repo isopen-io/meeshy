@@ -64,6 +64,18 @@ public struct VideoClipBar: View, Equatable {
     private var width: CGFloat { geometry.width(for: duration) }
     private var xOrigin: CGFloat { geometry.x(for: startTime) }
 
+    /// Bandes EMPILÉES du clip vidéo : titre en haut, courbe de volume au
+    /// milieu, forme d'onde en bas.
+    ///
+    /// Trois calques parallèles plutôt que superposés. Superposée, la courbe
+    /// barrait le titre dès que le volume passait à mi-course — et le niveau
+    /// nominal, lui, se colle en haut : aucune position n'était sûre tant que
+    /// les deux partageaient la même hauteur (constat visuel 2026-07-28,
+    /// `VideoLaneCohabitationSnapshotTests`).
+    public nonisolated static let titleBandHeight: CGFloat = 18
+    /// Hauteur de la bande de forme d'onde, plaquée en bas du clip.
+    public nonisolated static let waveformBandHeight: CGFloat = 16
+
     /// Filmstrip auto-extrait quand l'hôte ne fournit pas de frames (vidéos).
     /// Exclu de `==` (état interne, pas une prop visuelle d'entrée).
     @State private var loadedFrames: [UIImage] = []
@@ -215,17 +227,20 @@ public struct VideoClipBar: View, Equatable {
     @ViewBuilder
     private var titleLabel: some View {
         if width >= 44 && !title.isEmpty {
-            HStack(spacing: 4) {
-                Text(title)
-                    .font(.system(size: 10, weight: .semibold))
-                    .foregroundStyle(.white)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-                    .shadow(color: .black.opacity(0.45), radius: 1, y: 0.5)
+            VStack(spacing: 0) {
+                HStack(spacing: 4) {
+                    Text(title)
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundStyle(.white)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                        .shadow(color: .black.opacity(0.45), radius: 1, y: 0.5)
+                }
+                .padding(.horizontal, 8)
+                .frame(height: Self.titleBandHeight)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                Spacer(minLength: 0)
             }
-            .padding(.horizontal, 8)
-            .padding(.vertical, 4)
-            .frame(maxWidth: .infinity, alignment: .leading)
             .allowsHitTesting(false)
         }
     }
@@ -276,20 +291,27 @@ public struct VideoClipBar: View, Equatable {
             VStack(spacing: 0) {
                 Spacer(minLength: 0)
                 WaveformStrip(samples: loadedWaveform, tint: Color.white.opacity(0.7))
-                    .frame(height: 16)
+                    .frame(height: Self.waveformBandHeight)
             }
             .allowsHitTesting(false)
         }
     }
 
-    /// Courbe d'automation du volume, en lecture seule. Même teinte que sur les
-    /// pistes audio : c'est le même objet, il doit se reconnaître partout.
+    /// Courbe d'automation du volume, en lecture seule, dans sa PROPRE bande —
+    /// entre le titre et la forme d'onde, sans jamais les traverser.
+    ///
+    /// Même teinte que sur les pistes audio : c'est le même objet, il doit se
+    /// reconnaître partout.
     @ViewBuilder
     private var volumeCurve: some View {
         if !keyframes.isEmpty {
-            VolumeCurveOverlay(keyframes: keyframes,
-                               duration: duration,
-                               tint: MeeshyColors.warning)
+            VStack(spacing: 0) {
+                Color.clear.frame(height: Self.titleBandHeight)
+                VolumeCurveOverlay(keyframes: keyframes,
+                                   duration: duration,
+                                   tint: MeeshyColors.warning)
+                Color.clear.frame(height: Self.waveformBandHeight)
+            }
         }
     }
 

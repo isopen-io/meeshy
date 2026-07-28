@@ -69,11 +69,11 @@ final class VideoLaneCohabitationSnapshotTests: XCTestCase {
         Self.attach(image, named: "video-lane-52pt", to: self)
     }
 
-    /// Cas le plus défavorable : une courbe PLATE à mi-hauteur, exactement là
-    /// où le titre est centré verticalement. Un niveau nominal se colle en
-    /// haut et ne gêne personne ; c'est un clip baissé de moitié qui met les
-    /// deux calques en collision.
-    func test_snapshot_videoLane_flatCurveCrossesTheTitle() async throws {
+    /// Le cas qui a motivé les trois bandes : une courbe PLATE à mi-course.
+    /// Superposée, elle barrait le titre ; le niveau nominal, lui, se collait
+    /// en haut — aucune position n'était sûre tant que les deux calques
+    /// partageaient la même hauteur.
+    func test_snapshot_videoLane_flatCurveStaysOutOfTheTitleBand() async throws {
         let tone = try Self.makeTremoloFile(seconds: 4)
         defer { try? FileManager.default.removeItem(at: tone) }
         _ = await AudioWaveform.samples(url: tone, count: 128)
@@ -98,12 +98,18 @@ final class VideoLaneCohabitationSnapshotTests: XCTestCase {
             size: CGSize(width: 360, height: Self.laneHeight)
         )
 
-        // Un volume à 50 % projette la courbe à mi-hauteur : c'est la bande où
-        // le titre est centré. Le tracé DOIT y être — le rendu ci-joint montre
-        // qu'il barre le texte, constat visuel à arbitrer, pas une régression.
-        XCTAssertTrue(Self.hasWarmPixels(image,
-                                         in: CGRect(x: 40, y: 20, width: 280, height: 10)),
-                      "La courbe ne se projette pas à mi-hauteur pour un volume de 50 %")
+        // La courbe vit dans SA bande, entre le titre et la forme d'onde.
+        let titleBand = CGRect(x: 30, y: 1, width: 300,
+                               height: VideoClipBar.titleBandHeight - 3)
+        XCTAssertFalse(Self.hasWarmPixels(image, in: titleBand),
+                       "La courbe entre dans la bande du titre et le barre")
+
+        let curveBand = CGRect(x: 30, y: VideoClipBar.titleBandHeight + 1, width: 300,
+                               height: Self.laneHeight - 4
+                                   - VideoClipBar.titleBandHeight
+                                   - VideoClipBar.waveformBandHeight - 2)
+        XCTAssertTrue(Self.hasWarmPixels(image, in: curveBand),
+                      "La courbe n'est pas tracée dans sa bande")
 
         Self.attach(image, named: "video-lane-52pt-flat", to: self)
     }

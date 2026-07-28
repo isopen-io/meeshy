@@ -165,33 +165,44 @@ public struct AudioClipBar: View, Equatable {
     private var titleOverlay: some View {
         let width = geometry.width(for: duration)
         if width >= 44 && !title.isEmpty {
-            HStack(spacing: 4) {
-                Image(systemName: "waveform")
-                    .font(.system(size: 9, weight: .semibold))
-                    .foregroundStyle(.white)
-                    .accessibilityHidden(true)
-                Text(title)
-                    .font(.system(size: 10, weight: .semibold))
-                    .foregroundStyle(.white)
-                    .lineLimit(1)
-                    .truncationMode(.tail)
-                    .shadow(color: .black.opacity(0.45), radius: 1, y: 0.5)
+            VStack(spacing: 0) {
+                HStack(spacing: 4) {
+                    Image(systemName: "waveform")
+                        .font(.system(size: 9, weight: .semibold))
+                        .foregroundStyle(.white)
+                        .accessibilityHidden(true)
+                    Text(title)
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundStyle(.white)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                        .shadow(color: .black.opacity(0.45), radius: 1, y: 0.5)
+                }
+                .padding(.horizontal, 8)
+                .frame(height: VideoClipBar.titleBandHeight)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                Spacer(minLength: 0)
             }
-            .padding(.horizontal, 8)
-            .padding(.vertical, 4)
-            .frame(maxWidth: .infinity, alignment: .leading)
             .allowsHitTesting(false)
         }
     }
 
     /// Courbe d'automation — même teinte que sur les pistes vidéo, pour qu'elle
     /// se reconnaisse d'un coup d'œil quel que soit le type de piste.
+    ///
+    /// Elle laisse la bande de titre libre, comme sur la vidéo : superposée,
+    /// elle barrait le nom du clip dès que le volume passait à mi-course. La
+    /// forme d'onde, elle, occupe toute la hauteur — sur une piste audio elle
+    /// EST le contenu, pas une bande d'appoint.
     @ViewBuilder
     private var volumeCurve: some View {
         if !keyframes.isEmpty {
-            VolumeCurveOverlay(keyframes: keyframes,
-                               duration: duration,
-                               tint: MeeshyColors.warning)
+            VStack(spacing: 0) {
+                Color.clear.frame(height: VideoClipBar.titleBandHeight)
+                VolumeCurveOverlay(keyframes: keyframes,
+                                   duration: duration,
+                                   tint: MeeshyColors.warning)
+            }
         }
     }
 
