@@ -389,12 +389,19 @@ public enum StoryExporter {
             )
         }
 
+        // Atténuation automatique. `assetAudioTrack` prouve déjà que la vidéo
+        // a du son : il ne reste qu'à savoir si une musique la concurrence.
+        let isDucking = StoryVolumeResolver.isDucking(
+            slideDucks: Self.exportCarriesBackgroundAudio(slide: slide),
+            isDuckingDisabled: entry.bg.isDuckingDisabled
+        )
+
         // AudioMix avec le volume du media object, automation comprise. Skip
-        // seulement quand la piste joue au niveau nominal SANS automation —
-        // AVFoundation traite alors la piste sans mix.
+        // seulement quand la piste joue au niveau nominal SANS automation NI
+        // atténuation — AVFoundation traite alors la piste sans mix.
         let bgVolume = entry.bg.volume
         let hasAutomation = (entry.bg.keyframes ?? []).contains { $0.volume != nil }
-        if abs(bgVolume - 1.0) < 0.001 && !hasAutomation {
+        if abs(bgVolume - 1.0) < 0.001 && !hasAutomation && !isDucking {
             return nil
         }
         let mix = AVMutableAudioMix()
@@ -404,11 +411,24 @@ public enum StoryExporter {
         // doit s'appliquer quand il n'y a pas d'automation.
         for (range, from, to) in Self.volumeRamps(base: bgVolume,
                                                   keyframes: entry.bg.keyframes,
-                                                  duration: totalDuration.seconds) {
+                                                  duration: totalDuration.seconds,
+                                                  isDucking: isDucking) {
             params.setVolumeRamp(fromStartVolume: from, toEndVolume: to, timeRange: range)
         }
         mix.inputParameters = [params]
         return mix
+    }
+
+    /// `true` quand le fichier produit contiendra réellement un audio de FOND
+    /// susceptible d'être couvert par la piste de la vidéo.
+    ///
+    /// Gate volontairement plus étroit que celui du lecteur, qui interroge
+    /// `resolvedBackgroundAudio` : `composeAudioLanes` n'exporte que les
+    /// `audioPlayerObjects` réels, jamais l'audio de fond LEGACY que le lecteur
+    /// sait synthétiser. Atténuer pour une musique absente du fichier rendrait
+    /// l'export plus sourd que la preview, sans rien dégager.
+    nonisolated static func exportCarriesBackgroundAudio(slide: StorySlide) -> Bool {
+        (slide.effects.audioPlayerObjects ?? []).contains { $0.isBackground == true }
     }
 
     /// Traduit une automation de volume en rampes `AVAudioMix`.
@@ -424,8 +444,16 @@ public enum StoryExporter {
     /// Retourne des triplets `(intervalle, volume de départ, volume d'arrivée)`.
     nonisolated static func volumeRamps(base: Float,
                                         keyframes: [StoryKeyframe]?,
-                                        duration: Double) -> [(CMTimeRange, Float, Float)] {
-        let clamp: (Float) -> Float = { min(StoryVolume.maxGain, max(0, $0)) }
+                                        duration: Double,
+                                        isDucking: Bool = false)
+    -> [(CMTimeRange, Float, Float)] {
+        // L'atténuation multiplie CHAQUE niveau, base comme points : elle
+        // s'applique par-dessus l'automation, jamais à sa place — un clip
+        // poussé à 200 % puis atténué reste plus fort qu'un clip nominal.
+        let clamp: (Float) -> Float = {
+            StoryVolumeResolver.ducked(min(StoryVolume.maxGain, max(0, $0)),
+                                       isDucking: isDucking)
+        }
         let points = (keyframes ?? [])
             .compactMap { kf -> (time: Float, value: Float)? in
                 guard let v = kf.volume else { return nil }
