@@ -107,6 +107,47 @@ final class ShareExtensionLocalizationTests: XCTestCase {
         }
     }
 
+    // MARK: - The bundle Apple ingests
+
+    /// App Store Connect refuses the whole archive — silently, hours after an
+    /// "upload succeeded" — when a share extension declares its activation rule
+    /// directly under `NSExtension`:
+    ///
+    ///   Missing Info.plist value. A value for the key 'NSExtensionAttributes'
+    ///   in bundle Meeshy.app/PlugIns/MeeshyShareExtension.appex is required.
+    ///
+    /// The rule belongs under `NSExtensionAttributes`. Build 1257 shipped it one
+    /// level too high and never appeared in ASC; nothing in the build or the test
+    /// suite caught it, because the extension only reaches Apple once it is
+    /// embedded in the app. This guard is the only thing standing between a
+    /// misplaced key and another blind three-hour wait.
+    func test_shareExtensionDeclaresItsActivationRuleUnderNSExtensionAttributes() throws {
+        let data = try Data(
+            contentsOf: iosRoot.appendingPathComponent("MeeshyShareExtension/Info.plist"))
+        let info = try PropertyListSerialization.propertyList(
+            from: data, options: [], format: nil
+        ) as? [String: Any]
+        let nsExtension = info?["NSExtension"] as? [String: Any]
+
+        XCTAssertNil(
+            nsExtension?["NSExtensionActivationRule"],
+            "NSExtensionActivationRule must not sit directly under NSExtension — App Store "
+            + "Connect rejects the archive with STATE_ERROR.VALIDATION_ERROR."
+        )
+
+        let attributes = nsExtension?["NSExtensionAttributes"] as? [String: Any]
+        XCTAssertNotNil(
+            attributes,
+            "NSExtension must carry an NSExtensionAttributes dictionary — Apple requires it "
+            + "for com.apple.share-services."
+        )
+        XCTAssertNotNil(
+            attributes?["NSExtensionActivationRule"],
+            "The activation rule must live inside NSExtensionAttributes, or the share sheet "
+            + "never offers Meeshy for any content type."
+        )
+    }
+
     // MARK: - No user-facing literal is left unkeyed
 
     func test_actionButtonsAndTitleAreLocalized() throws {
