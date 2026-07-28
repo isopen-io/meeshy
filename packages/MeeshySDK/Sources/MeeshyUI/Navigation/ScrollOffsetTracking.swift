@@ -32,4 +32,31 @@ public extension View {
             self
         }
     }
+
+    /// Pendant HORIZONTAL de `trackScrollContentOffset`, pour la timeline.
+    ///
+    /// Même partage des rôles entre versions d'iOS : `onScrollGeometryChange`
+    /// à partir d'iOS 18, où le lecteur par préférence ne re-déclenche plus ;
+    /// en deçà, l'appelant garde le chemin `ScrollOffsetPreferenceKey`.
+    /// Rapporte `contentOffset.x` — 0 tout à gauche, positif vers la droite.
+    @ViewBuilder
+    func trackScrollContentOffsetX(_ onChange: @escaping (CGFloat) -> Void) -> some View {
+        if #available(iOS 18.0, *) {
+            self.onScrollGeometryChange(for: CGFloat.self) { $0.contentOffset.x } action: { _, newValue in
+                onChange(newValue)
+            }
+        } else {
+            self
+        }
+    }
+}
+
+/// Décalage horizontal rapporté depuis l'intérieur du contenu défilant.
+/// Chemin iOS 16–17 : à partir d'iOS 18 c'est `trackScrollContentOffsetX` qui
+/// prend le relais, le lecteur par préférence n'y re-déclenchant plus.
+public struct HorizontalScrollOffsetKey: PreferenceKey {
+    public static let defaultValue: CGFloat = 0
+    public static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = nextValue()
+    }
 }
