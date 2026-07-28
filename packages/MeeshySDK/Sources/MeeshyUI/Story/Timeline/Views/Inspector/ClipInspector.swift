@@ -278,7 +278,7 @@ public struct ClipInspector: View {
     // MARK: - Test helpers
 
     public func simulateVolumeCommit(value: Float) {
-        onVolumeChanged(min(1, max(0, value)))
+        onVolumeChanged(min(StoryVolume.maxGain, max(0, value)))
     }
 
     /// Test-only read of the current local `@State` values. Used by
@@ -647,7 +647,7 @@ public struct ClipInspector: View {
             Text(String(localized: "story.timeline.inspector.volume", bundle: .module).uppercased())
                 .font(.system(size: 9, weight: .semibold))
                 .foregroundStyle(.secondary)
-            Slider(value: $volume, in: 0...1, step: 0.01) { editing in
+            Slider(value: $volume, in: 0...StoryVolume.maxGain, step: 0.01) { editing in
                 if !editing { onVolumeChanged(volume) }
             }
             .tint(MeeshyColors.indigo500)

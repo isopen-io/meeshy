@@ -238,7 +238,9 @@ public final class ReaderAudioMixer {
     // MARK: - Volume / mute
 
     public func setVolume(_ volume: Float, for audioId: String) {
-        let clamped = max(0, min(1, volume))
+        // Plafond partagé : un gain au-delà de 100 % doit survivre jusqu'au
+        // chemin d'amplification, le borner ici le rendrait inaudible.
+        let clamped = max(0, min(StoryVolume.maxGain, volume))
         guard var entry = entries[audioId] else { return }
         entry.targetVolume = clamped
         entries[audioId] = entry
