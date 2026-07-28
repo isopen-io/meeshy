@@ -200,4 +200,43 @@ describe('resolveParticipantLanguage', () => {
     // bot short-circuits to the fallback (participant.language), which must be lowercased
     expect(resolveParticipantLanguage(participant)).toBe('es')
   })
+
+  // The docstring promises the fallback gets "la même normalisation" as
+  // resolveUserLanguage — and the deviceLocale level strips region/script
+  // subtags via normalizeLanguageCode ('it-IT' -> 'it', asserted above). A
+  // region-tagged fallback ('pt-BR') that only lowercased to 'pt-br' would
+  // match no lowercase-keyed MessageTranslation.targetLanguage ('pt'), forcing
+  // the client onto the original — the exact Prisme violation this function
+  // claims to avoid. So the fallback must region-strip too.
+  it('should strip the region subtag from a region-tagged bot fallback', () => {
+    const participant = { type: 'bot' as const, language: 'pt-BR' }
+    expect(resolveParticipantLanguage(participant)).toBe('pt')
+  })
+
+  it('should strip the region subtag from a region-tagged fallback for a user without preferences', () => {
+    const participant = {
+      type: 'user' as const,
+      language: 'en-US',
+      user: { customDestinationLanguage: null, regionalLanguage: null, systemLanguage: null },
+    }
+    expect(resolveParticipantLanguage(participant)).toBe('en')
+  })
+
+  it('should strip script and region subtags from an anonymous fallback', () => {
+    const participant = { type: 'anonymous' as const, language: 'zh-Hant-HK' }
+    expect(resolveParticipantLanguage(participant)).toBe('zh')
+  })
+
+  it('should strip the underscore-separated region subtag from a user-with-null-user fallback', () => {
+    const participant = { type: 'user' as const, language: 'fr_FR', user: null }
+    expect(resolveParticipantLanguage(participant)).toBe('fr')
+  })
+
+  // Parity floor: normalizeLanguageCode returns undefined for structurally
+  // invalid input, so the fallback must NOT collapse to undefined — it retombes
+  // sur `.toLowerCase()` verbatim, preserving the terminal-fallback guarantee.
+  it('should preserve an unknown 2-letter fallback code verbatim (lowercased)', () => {
+    const participant = { type: 'anonymous' as const, language: 'QQ' }
+    expect(resolveParticipantLanguage(participant)).toBe('qq')
+  })
 })
