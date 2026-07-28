@@ -1665,11 +1665,29 @@ struct StoryViewerView: View {
         )
     }
 
+    /// Sentinelle « Original » de la feuille des langues.
+    ///
+    /// Une story est multilingue par nature : ses overlays peuvent être écrits
+    /// dans des langues différentes. Revenir à l'original ne peut donc PAS se
+    /// faire en choisissant la langue d'origine de la story — un overlay rédigé
+    /// en français dans une story marquée `en` possède une traduction `en`, qui
+    /// serait servie à la place de son texte réel. Aligner tous les bouts sur
+    /// une seule langue en efface.
+    ///
+    /// `StoryTextObject.resolvedText` rend le texte source dès que la chaîne
+    /// préférée est vide. « Original » est donc une chaîne VIDE : chaque overlay
+    /// retombe sur son propre texte, dans sa propre langue. La valeur choisie ne
+    /// peut pas entrer en collision avec un code BCP-47.
+    static let originalLanguageOverride = "__meeshy.original__"
+
     /// Helper pur (testable) : prépend l'override langue à la chaine préférée, dédupliqué.
     /// `nil`/vide → chaine de base inchangée. Sinon l'override passe en tête et est retiré
     /// de sa position d'origine (jamais de doublon).
+    ///
+    /// La sentinelle « Original » VIDE la chaine — voir `originalLanguageOverride`.
     static func viewerLanguageChain(base: [String], override: String?) -> [String] {
         guard let override, !override.isEmpty else { return base }
+        if override == originalLanguageOverride { return [] }
         return [override] + base.filter { $0 != override }
     }
 

@@ -398,10 +398,6 @@ public struct StoryTimelineView: View {
             onUndo: { viewModel.undo() },
             onRedo: { viewModel.redo() },
             onSnapToggle: { viewModel.toggleSnap() },
-            onExtendDuration: {
-                viewModel.extendSlideDuration(
-                    by: TimelineOperationsBar.extendStepSeconds)
-            },
             onSave: onExport
         )
     }
@@ -466,7 +462,6 @@ public struct StoryTimelineView: View {
                     rulerHeight: 22,
                     isPlaying: viewModel.isPlaying,
                     onZoomScaleChanged: { viewModel.zoomScale = $0 },
-                    onSlideDurationChanged: { viewModel.setSlideDuration($0) },
                     snapGuideTime: viewModel.selection.activeDrag.flatMap {
                         $0.snappedTo != nil ? $0.currentStartTime : nil
                     },
@@ -514,7 +509,11 @@ public struct StoryTimelineView: View {
                             selectedId: viewModel.selection.selectedClipId,
                             geometry: geometry,
                             laneHeight: 52,
-                            onSelect: { viewModel.selectClip(id: $0) }
+                            // Un marqueur fait 12–16 pt : exiger un double tap
+                            // sur une cible aussi petite serait une régression.
+                            // Il ouvre donc sa fiche au tap simple, contrairement
+                            // aux pistes, qui se contentent de se surligner.
+                            onSelect: { viewModel.inspectClip(id: $0) }
                         )
                         LaneTransitionOverlays(
                             junctions: TransitionJunctionResolver.junctions(
@@ -523,14 +522,14 @@ public struct StoryTimelineView: View {
                             isDark: colorScheme == .dark,
                             geometry: geometry,
                             laneHeight: 52,
-                            onSelect: { viewModel.selectClip(id: $0) },
+                            onSelect: { viewModel.inspectClip(id: $0) },
                             onCreate: { junction in
                                 if let id = viewModel.addTransition(
                                     fromClipId: junction.fromClipId,
                                     toClipId: junction.toClipId,
                                     kind: .crossfade,
                                     duration: 0.5) {
-                                    viewModel.selectClip(id: id)
+                                    viewModel.inspectClip(id: id)
                                 }
                             }
                         )
@@ -651,11 +650,7 @@ public struct StoryTimelineView: View {
                     ? CacheCoordinator.imageLocalFileURL(for: media.postMediaId)
                     : nil,
                 onTap: { viewModel.selectClip(id: media.id) },
-                onDoubleTap: {
-                    viewModel.selectClip(id: media.id)
-                    viewModel.splitSelectedAtPlayhead()
-                },
-                onLongPress: { viewModel.selectClip(id: media.id) },
+                onDoubleTap: { viewModel.inspectClip(id: media.id) },
                 onTrimStartDelta: { delta in
                     viewModel.trimClipStart(id: media.id,
                                             deltaTimeSeconds: Float(delta) / Float(geometry.pixelsPerSecond))
@@ -722,8 +717,7 @@ public struct StoryTimelineView: View {
                 waveformSamples: audio.waveformSamples,
                 audioURL: viewModel.loadedURL(for: audio.id),
                 onTap: { viewModel.selectClip(id: audio.id) },
-                onDoubleTap: { viewModel.selectClip(id: audio.id) },
-                onLongPress: { viewModel.selectClip(id: audio.id) },
+                onDoubleTap: { viewModel.inspectClip(id: audio.id) },
                 onMoveDelta: { delta in
                     // Snowball-drift guard mirrors VideoClipBar above: only call
                     // beginClipDrag once per gesture (when activeDrag is absent
@@ -778,8 +772,7 @@ public struct StoryTimelineView: View {
                 geometry: geometry,
                 laneHeight: laneHeight,
                 onTap: { viewModel.selectClip(id: text.id) },
-                onDoubleTap: { viewModel.selectClip(id: text.id) },
-                onLongPress: { viewModel.selectClip(id: text.id) },
+                onDoubleTap: { viewModel.inspectClip(id: text.id) },
                 onMoveDelta: { delta in
                     // Snowball-drift guard mirrors VideoClipBar above: only call
                     // beginClipDrag once per gesture (when activeDrag is absent
@@ -828,8 +821,7 @@ public struct StoryTimelineView: View {
                 geometry: geometry,
                 laneHeight: laneHeight,
                 onTap: { viewModel.selectClip(id: sticker.id) },
-                onDoubleTap: { viewModel.selectClip(id: sticker.id) },
-                onLongPress: { viewModel.selectClip(id: sticker.id) },
+                onDoubleTap: { viewModel.inspectClip(id: sticker.id) },
                 onMoveDelta: { delta in
                     let stickerId = sticker.id
                     if viewModel.selection.activeDrag?.clipId != stickerId {

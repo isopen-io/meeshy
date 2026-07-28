@@ -45,7 +45,7 @@ final class AudioClipBarSnapshotTests: XCTestCase {
             geometry: TimelineGeometry(zoomScale: 1.0),
             laneHeight: 44,
             waveformSamples: samples,
-            onTap: {}, onDoubleTap: {}, onLongPress: {},
+            onTap: {}, onDoubleTap: {},
             onMoveDelta: { _ in }
         )
         .frame(width: 390, height: 60, alignment: .leading)

@@ -45,6 +45,16 @@ export interface ResponseMeta {
   requestId?: string;
   processingTime?: number;
   mentionedUsers?: MentionedUser[];
+  /**
+   * Tombstones du delta-sync des stories (`GET /posts/feed/stories?updatedSince`) :
+   * ids des stories disparues depuis le curseur — supprimées par leur auteur, ou
+   * périmées puis balayées par `ExpiredStoriesCleanupService`.
+   *
+   * Un delta ne renvoie que ce qui existe encore ; sans ces ids, un client qui a
+   * manqué l'event socket `story:deleted` (app fermée, hors-ligne) n'a aucun moyen
+   * d'apprendre la disparition et garde la story dans son cache local.
+   */
+  deletedStoryIds?: string[];
 }
 
 /**

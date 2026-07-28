@@ -238,7 +238,9 @@ public final class ReaderAudioMixer {
     // MARK: - Volume / mute
 
     public func setVolume(_ volume: Float, for audioId: String) {
-        let clamped = max(0, min(1, volume))
+        // Plafond partagé : un gain au-delà de 100 % doit survivre jusqu'au
+        // chemin d'amplification, le borner ici le rendrait inaudible.
+        let clamped = max(0, min(StoryVolume.maxGain, volume))
         guard var entry = entries[audioId] else { return }
         entry.targetVolume = clamped
         entries[audioId] = entry
@@ -253,6 +255,21 @@ public final class ReaderAudioMixer {
         if let bg = backgroundEntry {
             bg.player.volume = muted ? 0 : bg.targetVolume
         }
+    }
+
+    /// Volume courant du clip de fond, indépendant du mute global.
+    ///
+    /// Le mixer n'exposait que `setVolume(_:for:)`, réservé aux clips
+    /// d'avant-plan indexés par id : le slot de fond, unique et sans id
+    /// exposé, restait figé sur la valeur posée à `configureBackground`.
+    /// L'automation de volume a besoin de le piloter à chaque tick.
+    public func setBackgroundVolume(_ volume: Float) {
+        guard var bg = backgroundEntry else { return }
+        let clamped = min(StoryVolume.maxGain, max(0, volume))
+        guard bg.targetVolume != clamped else { return }
+        bg.targetVolume = clamped
+        backgroundEntry = bg
+        bg.player.volume = isMuted ? 0 : clamped
     }
 
     /// Mute / unmute a single foreground clip without touching the global

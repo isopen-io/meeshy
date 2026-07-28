@@ -242,6 +242,7 @@ public enum StoryTextBackgroundStyle: Codable, Sendable, Equatable {
 /// horizontal padding is always ≥ the width of one "o" glyph (see
 /// `StoryTextLayer`). `nil` on the object means `.rounded` (legacy default).
 public enum StoryTextFrameShape: String, Codable, CaseIterable, Sendable {
+    case none        // aucune boîte, quels que soient le fond et le liseré
     case rounded     // cornerRadius ≈ 15% of height (default)
     case pill        // full capsule (cornerRadius = 50% of height)
     case rectangle   // near-square corners
@@ -255,7 +256,7 @@ public enum StoryTextFrameShape: String, Codable, CaseIterable, Sendable {
     /// choisir le pipeline.
     public var usesCustomPath: Bool {
         switch self {
-        case .rounded, .pill, .rectangle: return false
+        case .none, .rounded, .pill, .rectangle: return false
         case .diamond, .cloud, .speech: return true
         }
     }
@@ -301,6 +302,20 @@ public struct StoryTextObject: Codable, Identifiable, Sendable {
     /// background is active. `nil` ⇒ `.rounded` (legacy default).
     public var frameShape: String?
 
+    /// Multiplicateur de la marge du cadre — l'espace entre les glyphes et le
+    /// bord de la boîte. `nil` ⇒ 1.0, la marge historique. Un multiplicateur
+    /// et non des points : la marge automatique vaut « au moins la chasse d'un
+    /// *o* », elle dépend donc de la police ET de la taille — une valeur
+    /// absolue deviendrait fausse au premier changement de l'une des deux.
+    public var framePaddingScale: Double?
+
+    /// Liseré tracé sur le bord de la boîte de cadre, en design-pixels.
+    /// `nil` ou `0` ⇒ aucun liseré. À ne pas confondre avec `borderWidth`,
+    /// qui contoure les GLYPHES et non la boîte.
+    public var frameBorderWidth: Double?
+    /// Couleur du liseré de la boîte. `nil` ⇒ blanc dès que la largeur > 0.
+    public var frameBorderColor: String?
+
     /// Outline / contour du texte. `borderColor == nil` ⇒ pas de bord
     /// (pas de booléen séparé). Hex "RRGGBB" ou "RRGGBBAA".
     public var borderColor: String?
@@ -329,6 +344,7 @@ public struct StoryTextObject: Codable, Identifiable, Sendable {
         case fontSize, fontFamily
         case textStyle, textColor, textAlign, textBg, backgroundStyle
         case fontWeight, frameShape
+        case framePaddingScale, frameBorderWidth, frameBorderColor
         case borderColor, borderWidth
         case translations, sourceLanguage
         case startTime, duration, fadeIn, fadeOut
@@ -352,6 +368,9 @@ public struct StoryTextObject: Codable, Identifiable, Sendable {
                 backgroundStyle: StoryTextBackgroundStyle? = nil,
                 fontWeight: String? = nil,
                 frameShape: String? = nil,
+                framePaddingScale: Double? = nil,
+                frameBorderWidth: Double? = nil,
+                frameBorderColor: String? = nil,
                 borderColor: String? = nil,
                 borderWidth: Double? = nil,
                 translations: [String: String]? = nil,
@@ -373,6 +392,9 @@ public struct StoryTextObject: Codable, Identifiable, Sendable {
         self.textAlign = textAlign; self.textBg = textBg
         self.backgroundStyle = backgroundStyle
         self.fontWeight = fontWeight; self.frameShape = frameShape
+        self.framePaddingScale = framePaddingScale
+        self.frameBorderWidth = frameBorderWidth
+        self.frameBorderColor = frameBorderColor
         self.borderColor = borderColor; self.borderWidth = borderWidth
         self.translations = translations
         self.sourceLanguage = sourceLanguage
@@ -423,6 +445,9 @@ public struct StoryTextObject: Codable, Identifiable, Sendable {
         backgroundStyle = try c.decodeIfPresent(StoryTextBackgroundStyle.self, forKey: .backgroundStyle)
         fontWeight = try c.decodeIfPresent(String.self, forKey: .fontWeight)
         frameShape = try c.decodeIfPresent(String.self, forKey: .frameShape)
+        framePaddingScale = try c.decodeIfPresent(Double.self, forKey: .framePaddingScale)
+        frameBorderWidth = try c.decodeIfPresent(Double.self, forKey: .frameBorderWidth)
+        frameBorderColor = try c.decodeIfPresent(String.self, forKey: .frameBorderColor)
         borderColor = try c.decodeIfPresent(String.self, forKey: .borderColor)
         borderWidth = try c.decodeIfPresent(Double.self, forKey: .borderWidth)
         translations = try c.decodeIfPresent([String: String].self, forKey: .translations)
@@ -462,6 +487,9 @@ public struct StoryTextObject: Codable, Identifiable, Sendable {
         try c.encodeIfPresent(backgroundStyle, forKey: .backgroundStyle)
         try c.encodeIfPresent(fontWeight, forKey: .fontWeight)
         try c.encodeIfPresent(frameShape, forKey: .frameShape)
+        try c.encodeIfPresent(framePaddingScale, forKey: .framePaddingScale)
+        try c.encodeIfPresent(frameBorderWidth, forKey: .frameBorderWidth)
+        try c.encodeIfPresent(frameBorderColor, forKey: .frameBorderColor)
         try c.encodeIfPresent(borderColor, forKey: .borderColor)
         try c.encodeIfPresent(borderWidth, forKey: .borderWidth)
         try c.encodeIfPresent(translations, forKey: .translations)
@@ -494,6 +522,27 @@ public struct StoryTextObject: Codable, Identifiable, Sendable {
     public var parsedFrameShape: StoryTextFrameShape {
         guard let raw = frameShape, let shape = StoryTextFrameShape(rawValue: raw) else { return .rounded }
         return shape
+    }
+
+    /// Marge du cadre effectivement appliquée, bornée à 0…3. Le bornage vit
+    /// ici et non dans la vue : un JSON hostile ou un curseur futur ne doivent
+    /// pas pouvoir faire exploser les bounds du calque.
+    public var resolvedFramePaddingScale: Double {
+        min(3, max(0, framePaddingScale ?? 1))
+    }
+
+    /// Le texte porte-t-il une boîte de cadre ? Source de vérité unique,
+    /// partagée par le calque, les tests et les panneaux d'outils.
+    ///
+    /// La boîte existe dès qu'une forme est choisie ET qu'il y a quelque chose
+    /// à voir — un fond, un liseré, ou les deux. C'est ce qui détache le cadre
+    /// du fond : avant, sans fond il n'y avait pas de boîte, donc choisir une
+    /// forme forçait un fond noir et repeignait le texte sans qu'on l'ait
+    /// demandé.
+    public var hasFrameBox: Bool {
+        guard parsedFrameShape != StoryTextFrameShape.none else { return false }
+        if resolvedBackgroundStyle != StoryTextBackgroundStyle.none { return true }
+        return (frameBorderWidth ?? 0) > 0
     }
 
     /// Legacy helper — returns design-pixel fontSize.
@@ -821,11 +870,16 @@ public struct StoryAudioPlayerObject: Codable, Identifiable, Sendable {
     public var sourceLanguage: String?
     /// Optional author-assigned clip name (persisted, backward-compatible).
     public var name: String?
+    /// Automation par keyframes, parité avec `StoryMediaObject.keyframes`.
+    /// Seul le canal `volume` a un sens pour un son : sa position `x`/`y`
+    /// existe dans le modèle mais ne pilote aucun rendu.
+    public var keyframes: [StoryKeyframe]?
 
     enum CodingKeys: String, CodingKey {
         case id, postMediaId, placement, x, y, volume, waveformSamples
         case isBackground, backgroundAudioVariants, zIndex
         case startTime, duration, loop, fadeIn, fadeOut, sourceLanguage, name
+        case keyframes
     }
 
     public init(id: String = UUID().uuidString, postMediaId: String = "",
@@ -837,7 +891,8 @@ public struct StoryAudioPlayerObject: Codable, Identifiable, Sendable {
                 startTime: Float? = nil, duration: Float? = nil,
                 loop: Bool? = nil, fadeIn: Float? = nil, fadeOut: Float? = nil,
                 sourceLanguage: String? = nil,
-                name: String? = nil) {
+                name: String? = nil,
+                keyframes: [StoryKeyframe]? = nil) {
         self.id = id; self.postMediaId = postMediaId
         self.placement = placement; self.x = x; self.y = y
         self.volume = volume; self.waveformSamples = waveformSamples
@@ -847,6 +902,7 @@ public struct StoryAudioPlayerObject: Codable, Identifiable, Sendable {
         self.loop = loop; self.fadeIn = fadeIn; self.fadeOut = fadeOut
         self.sourceLanguage = sourceLanguage
         self.name = name
+        self.keyframes = keyframes
     }
 }
 
@@ -1635,6 +1691,16 @@ public struct StoryEffects: Codable, Sendable {
                  "x": p.x, "y": p.y, "volume": p.volume,
                  "waveformSamples": p.waveformSamples]
                 if let bg = p.isBackground { d["isBackground"] = bg }
+                // Automation de volume : sans cette sérialisation, les points
+                // posés par l'auteur seraient perdus à la publication.
+                if let frames = p.keyframes, !frames.isEmpty {
+                    d["keyframes"] = frames.map { kf -> [String: Any] in
+                        var f: [String: Any] = ["id": kf.id, "time": kf.time]
+                        if let v = kf.volume { f["volume"] = v }
+                        if let e = kf.easing { f["easing"] = e.rawValue }
+                        return f
+                    }
+                }
                 if let variants = p.backgroundAudioVariants, !variants.isEmpty {
                     d["backgroundAudioVariants"] = variants.map { v in
                         ["postMediaId": v.postMediaId, "language": v.language,
@@ -1865,6 +1931,37 @@ public struct StoryItem: Identifiable, Codable, Sendable {
             return explicit <= now
         }
         return createdAt.addingTimeInterval(Self.defaultExpiryInterval) <= now
+    }
+
+    /// Prisme realtime : traduction du CONTENU de la story (sa légende), que le
+    /// gateway diffuse via `post:translation-updated`.
+    ///
+    /// Distinct de `mergingTextObjectTranslations`, qui ne touche QUE les textes
+    /// posés sur le canvas. Sans ce chemin, une traduction demandée depuis la
+    /// feuille « Langues » arrivait bien en base mais n'atteignait jamais la
+    /// story du lecteur : l'anneau de chargement tournait sans fin sur une
+    /// langue pourtant traduite (constaté au simulateur le 2026-07-27).
+    ///
+    /// La langue est normalisée en minuscules — la feuille compare sur cette
+    /// forme. Une langue déjà présente est remplacée, sinon ajoutée.
+    public func mergingContentTranslation(language: String, content: String) -> StoryItem {
+        let code = language.lowercased()
+        guard !code.isEmpty, !content.isEmpty else { return self }
+        var merged = (translations ?? []).filter { $0.language.lowercased() != code }
+        merged.append(StoryTranslation(language: code, content: content))
+        return StoryItem(
+            id: id, content: self.content, media: media, storyEffects: storyEffects,
+            createdAt: createdAt, expiresAt: expiresAt, repostOfId: repostOfId,
+            originalRepostOfId: originalRepostOfId, repostAuthorName: repostAuthorName,
+            repostAuthorUsername: repostAuthorUsername,
+            visibility: visibility, visibilityUserIds: visibilityUserIds, audioUrl: audioUrl, isViewed: isViewed,
+            viewedAt: viewedAt, updatedAt: updatedAt,
+            translations: merged,
+            backgroundAudio: backgroundAudio,
+            reactionCount: reactionCount, commentCount: commentCount,
+            shareCount: shareCount, viewCount: viewCount, impressionCount: impressionCount, repostCount: repostCount,
+            currentUserReactions: currentUserReactions
+        )
     }
 
     /// Prisme realtime : le gateway diffuse les traductions PAR text-object via
@@ -3019,7 +3116,15 @@ private extension TimelineProject {
             try block(&arr)
             textObjects[idx].keyframes = arr.isEmpty ? nil : arr
         case .audio:
-            throw EditCommandError.invalidState(reason: "audio clips do not support keyframes")
+            // Les clips audio portent désormais des keyframes — le canal
+            // `volume` y pilote l'automation sonore. Refuser ici rendait toute
+            // automation impossible sur un son, alors que le média l'avait.
+            guard let idx = audioPlayerObjects.firstIndex(where: { $0.id == clipId }) else {
+                throw EditCommandError.clipNotFound(id: clipId)
+            }
+            var arr = audioPlayerObjects[idx].keyframes ?? []
+            try block(&arr)
+            audioPlayerObjects[idx].keyframes = arr.isEmpty ? nil : arr
         case .sticker:
             throw EditCommandError.invalidState(reason: "sticker clips do not support keyframes")
         }
@@ -3247,13 +3352,19 @@ public struct SetClipPropertyCommand: EditCommand {
         case isBackground(old: Bool?, new: Bool?)
         case isLocked(old: Bool?, new: Bool?)
         case name(old: String?, new: String?)
+        /// Place de la piste dans le PLAN — position, taille, rotation, rang de
+        /// superposition. Un seul cas plutôt que cinq : régler un champ produit
+        /// une transformation COMPLÈTE, donc une seule entrée d'annulation par
+        /// réglage, et l'encodage reste à deux clés.
+        case transform(old: ClipTransform, new: ClipTransform)
 
         private enum CodingKeys: String, CodingKey {
             case type, oldFloat, newFloat, oldBool, newBool, oldString, newString
+            case oldTransform, newTransform
         }
 
         private enum Tag: String, Codable {
-            case volume, fadeIn, fadeOut, loop, isBackground, isLocked, name
+            case volume, fadeIn, fadeOut, loop, isBackground, isLocked, name, transform
         }
 
         public init(from decoder: Decoder) throws {
@@ -3288,6 +3399,10 @@ public struct SetClipPropertyCommand: EditCommand {
                 let old = try c.decodeIfPresent(String.self, forKey: .oldString)
                 let new = try c.decodeIfPresent(String.self, forKey: .newString)
                 self = .name(old: old, new: new)
+            case .transform:
+                let old = try c.decode(ClipTransform.self, forKey: .oldTransform)
+                let new = try c.decode(ClipTransform.self, forKey: .newTransform)
+                self = .transform(old: old, new: new)
             }
         }
 
@@ -3322,6 +3437,10 @@ public struct SetClipPropertyCommand: EditCommand {
                 try c.encode(Tag.name, forKey: .type)
                 try c.encodeIfPresent(old, forKey: .oldString)
                 try c.encodeIfPresent(new, forKey: .newString)
+            case .transform(let old, let new):
+                try c.encode(Tag.transform, forKey: .type)
+                try c.encode(old, forKey: .oldTransform)
+                try c.encode(new, forKey: .newTransform)
             }
         }
     }
@@ -3392,6 +3511,11 @@ public struct SetClipPropertyCommand: EditCommand {
             break
         case .name(let old, let new):
             media.name = useNew ? new : old
+        case .transform(let old, let new):
+            let t = useNew ? new : old
+            media.x = t.x; media.y = t.y
+            media.scale = t.scale; media.rotation = t.rotation
+            media.zIndex = t.zIndex
         }
     }
 
@@ -3415,6 +3539,10 @@ public struct SetClipPropertyCommand: EditCommand {
             break
         case .name(let old, let new):
             audio.name = useNew ? new : old
+        case .transform:
+            // Un audio ne se voit pas : ses x/y existent dans le modèle mais ne
+            // pilotent aucun rendu. La fiche ne propose pas la section.
+            break
         }
     }
 
@@ -3432,6 +3560,11 @@ public struct SetClipPropertyCommand: EditCommand {
             text.fadeOut = val
         case .name(let old, let new):
             text.name = useNew ? new : old
+        case .transform(let old, let new):
+            let tr = useNew ? new : old
+            text.x = tr.x; text.y = tr.y
+            text.scale = tr.scale; text.rotation = tr.rotation
+            text.zIndex = tr.zIndex
         case .volume, .loop, .isBackground:
             break
         }
@@ -3516,6 +3649,12 @@ public struct StoryKeyframe: Codable, Identifiable, Sendable {
     public var y: CGFloat?
     public var scale: CGFloat?
     public var opacity: CGFloat?
+    /// Volume du clip à cet instant, dans `0...StoryVolume.maxGain`.
+    ///
+    /// 5ᵉ canal optionnel : un point « volume seul » laisse les quatre autres
+    /// à `nil` et l'interpolation les ignore alors, exactement comme un point
+    /// de position ignore le volume.
+    public var volume: Float?
     public var easing: StoryEasing?
 
     public init(id: String = UUID().uuidString,
@@ -3524,6 +3663,7 @@ public struct StoryKeyframe: Codable, Identifiable, Sendable {
                 y: CGFloat? = nil,
                 scale: CGFloat? = nil,
                 opacity: CGFloat? = nil,
+                volume: Float? = nil,
                 easing: StoryEasing? = nil) {
         self.id = id
         self.time = time
@@ -3531,6 +3671,7 @@ public struct StoryKeyframe: Codable, Identifiable, Sendable {
         self.y = y
         self.scale = scale
         self.opacity = opacity
+        self.volume = volume
         self.easing = easing
     }
 }

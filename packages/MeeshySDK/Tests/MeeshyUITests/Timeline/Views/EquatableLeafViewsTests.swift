@@ -26,14 +26,14 @@ final class EquatableLeafViewsTests: XCTestCase {
             clipId: "v1", title: "Clip 1", startTime: 0, duration: 4,
             fadeIn: 0, fadeOut: 0, isSelected: false, isLocked: false,
             isDark: false, geometry: geo, laneHeight: 44, frames: [],
-            onTap: noop, onDoubleTap: noop, onLongPress: noop,
+            onTap: noop, onDoubleTap: noop,
             onTrimStartDelta: noopc, onTrimEndDelta: noopc, onMoveDelta: noopc
         )
         let b = VideoClipBar(
             clipId: "v1", title: "Clip 1", startTime: 0, duration: 4,
             fadeIn: 0, fadeOut: 0, isSelected: false, isLocked: false,
             isDark: false, geometry: geo, laneHeight: 44, frames: [],
-            onTap: noop, onDoubleTap: noop, onLongPress: noop,
+            onTap: noop, onDoubleTap: noop,
             onTrimStartDelta: noopc, onTrimEndDelta: noopc, onMoveDelta: noopc
         )
         XCTAssertEqual(a, b, "VideoClipBar must be Equatable and bit-equal when props match")
@@ -47,14 +47,14 @@ final class EquatableLeafViewsTests: XCTestCase {
             clipId: "v1", title: "Clip 1", startTime: 0, duration: 4,
             fadeIn: 0, fadeOut: 0, isSelected: false, isLocked: false,
             isDark: false, geometry: geo, laneHeight: 44, frames: [],
-            onTap: noop, onDoubleTap: noop, onLongPress: noop,
+            onTap: noop, onDoubleTap: noop,
             onTrimStartDelta: noopc, onTrimEndDelta: noopc, onMoveDelta: noopc
         )
         let b = VideoClipBar(
             clipId: "v1", title: "Clip 1", startTime: 0, duration: 4,
             fadeIn: 0, fadeOut: 0, isSelected: true, isLocked: false,
             isDark: false, geometry: geo, laneHeight: 44, frames: [],
-            onTap: noop, onDoubleTap: noop, onLongPress: noop,
+            onTap: noop, onDoubleTap: noop,
             onTrimStartDelta: noopc, onTrimEndDelta: noopc, onMoveDelta: noopc
         )
         XCTAssertNotEqual(a, b, "Selection change must invalidate equality")
@@ -70,13 +70,13 @@ final class EquatableLeafViewsTests: XCTestCase {
             clipId: "a1", title: "Audio 1", startTime: 0, duration: 8,
             volume: 1.0, isMuted: false, isSelected: false, isLocked: false,
             isDark: false, geometry: geo, laneHeight: 36, waveformSamples: [0.1, 0.5, 0.9],
-            onTap: noop, onDoubleTap: noop, onLongPress: noop, onMoveDelta: noopc
+            onTap: noop, onDoubleTap: noop, onMoveDelta: noopc
         )
         let b = AudioClipBar(
             clipId: "a1", title: "Audio 1", startTime: 0, duration: 8,
             volume: 1.0, isMuted: false, isSelected: false, isLocked: false,
             isDark: false, geometry: geo, laneHeight: 36, waveformSamples: [0.1, 0.5, 0.9],
-            onTap: noop, onDoubleTap: noop, onLongPress: noop, onMoveDelta: noopc
+            onTap: noop, onDoubleTap: noop, onMoveDelta: noopc
         )
         XCTAssertEqual(a, b)
     }
@@ -89,13 +89,13 @@ final class EquatableLeafViewsTests: XCTestCase {
             clipId: "a1", title: "Audio 1", startTime: 0, duration: 8,
             volume: 1.0, isMuted: false, isSelected: false, isLocked: false,
             isDark: false, geometry: geo, laneHeight: 36, waveformSamples: [],
-            onTap: noop, onDoubleTap: noop, onLongPress: noop, onMoveDelta: noopc
+            onTap: noop, onDoubleTap: noop, onMoveDelta: noopc
         )
         let b = AudioClipBar(
             clipId: "a1", title: "Audio 1", startTime: 0, duration: 8,
             volume: 1.0, isMuted: true, isSelected: false, isLocked: false,
             isDark: false, geometry: geo, laneHeight: 36, waveformSamples: [],
-            onTap: noop, onDoubleTap: noop, onLongPress: noop, onMoveDelta: noopc
+            onTap: noop, onDoubleTap: noop, onMoveDelta: noopc
         )
         XCTAssertNotEqual(a, b, "Mute change must invalidate equality")
     }
@@ -109,12 +109,12 @@ final class EquatableLeafViewsTests: XCTestCase {
         let a = TextClipBar(
             clipId: "t1", content: "Hello", startTime: 0, duration: 3,
             isSelected: false, isLocked: false, isDark: false, geometry: geo, laneHeight: 28,
-            onTap: noop, onDoubleTap: noop, onLongPress: noop, onMoveDelta: noopc
+            onTap: noop, onDoubleTap: noop, onMoveDelta: noopc
         )
         let b = TextClipBar(
             clipId: "t1", content: "Hello", startTime: 0, duration: 3,
             isSelected: false, isLocked: false, isDark: false, geometry: geo, laneHeight: 28,
-            onTap: noop, onDoubleTap: noop, onLongPress: noop, onMoveDelta: noopc
+            onTap: noop, onDoubleTap: noop, onMoveDelta: noopc
         )
         XCTAssertEqual(a, b)
     }

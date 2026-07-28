@@ -132,7 +132,7 @@ SWIFT_COMPILATION_MODE = wholemodule # Pour Release
 # Code Signing
 CODE_SIGN_STYLE = Manual # ou Automatic
 CODE_SIGN_IDENTITY[sdk=iphoneos*] = Apple Distribution
-DEVELOPMENT_TEAM = [VOTRE_TEAM_ID]
+DEVELOPMENT_TEAM = D72UK7R5RE # figée depuis le 2026-07-28 (cf. fastlane/Appfile)
 
 # Assets
 ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon

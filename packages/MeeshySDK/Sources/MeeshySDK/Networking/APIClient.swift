@@ -102,12 +102,36 @@ public struct PaginatedAPIResponse<T: Decodable>: Decodable {
     public let data: T
     public let pagination: CursorPagination?
     public let error: String?
+    public let meta: APIResponseMeta?
 
-    public init(success: Bool, data: T, pagination: CursorPagination?, error: String?) {
+    /// `meta` par défaut à `nil` : les call sites qui fabriquent une page à la
+    /// main (tests, chemins optimistes) restent inchangés.
+    public init(success: Bool, data: T, pagination: CursorPagination?, error: String?,
+                meta: APIResponseMeta? = nil) {
         self.success = success
         self.data = data
         self.pagination = pagination
         self.error = error
+        self.meta = meta
+    }
+}
+
+/// Métadonnées hors-page d'une réponse paginée.
+///
+/// `data` ne peut dire que ce qui EXISTE ; certaines informations portent sur
+/// ce qui a disparu, et n'ont donc nulle part où tenir dans la page elle-même.
+public struct APIResponseMeta: Decodable, Sendable {
+    /// Tombstones du delta-sync des stories (`GET /posts/feed/stories?updatedSince`) :
+    /// ids des stories disparues depuis le curseur — supprimées par leur auteur,
+    /// ou périmées puis balayées côté serveur.
+    ///
+    /// Le merge delta client étant purement additif, c'est le SEUL canal par
+    /// lequel un client ayant manqué l'event socket `story:deleted` (app fermée
+    /// ou hors-ligne, aucun replay) apprend qu'il doit purger son cache.
+    public let deletedStoryIds: [String]?
+
+    public init(deletedStoryIds: [String]? = nil) {
+        self.deletedStoryIds = deletedStoryIds
     }
 }
 

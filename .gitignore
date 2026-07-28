@@ -317,6 +317,15 @@ Jinu_*/
 *.p8
 match_key
 match_key.pub
+
+# ANDP credential/state files (2026-07-28). `meeshy.sh release --andp` writes
+# the FULL App Store Connect .p8 private key into .andp/secrets.yml, and the
+# CI steps write secrets.yml the same way — neither path was covered by the
+# `*.p8` rule above, so a later `git add` would have committed the key.
+apps/ios/.andp/
+apps/ios/secrets.yml
+apps/ios/andp.yml
+
 apps/ios/SourcePackages/
 .superpowers/
 tasks/screenshots/

@@ -176,6 +176,14 @@ interface LeaveCallData {
   callId: string;
   userId: string;
   participantId: string;
+  // Overrides the default `completed` end reason for a post-answer leave.
+  // Set by CallEventsHandler.leaveParticipationAndBroadcast (the only caller
+  // reached from a disconnect-grace expiry, never an explicit call:leave/
+  // call:end) to `connectionLost` — otherwise a genuine involuntary
+  // disconnect is indistinguishable from a deliberate hangup, which also
+  // silently excludes it from the web retry-on-failure feature
+  // (isRetryableCallFailure only treats failed/connectionLost as retryable).
+  endReasonHint?: CallEndReason;
 }
 
 export class CallService {
@@ -1352,7 +1360,7 @@ export class CallService {
    * - Returns updated CallSession
    */
   async leaveCall(data: LeaveCallData): Promise<CallSessionWithParticipants> {
-    const { callId, userId, participantId } = data;
+    const { callId, userId, participantId, endReasonHint } = data;
 
     logger.info('📞 User leaving call', { callId, userId });
 
@@ -1438,7 +1446,7 @@ export class CallService {
           where: { id: callId, version: existing.version },
           data: {
             status: idemPreAnswered ? CallStatus.missed : CallStatus.ended,
-            endReason: idemPreAnswered ? CallEndReason.missed : CallEndReason.completed,
+            endReason: idemPreAnswered ? CallEndReason.missed : (endReasonHint ?? CallEndReason.completed),
             endedAt: idemNow,
             duration: idemDuration,
             // Mirror endCall(): record WHO ended the call in the metadata
@@ -1545,7 +1553,7 @@ export class CallService {
     // stale client's ring-time watchdog (see endCall's doc comment).
     const wasPreAnswered = !call.answeredAt;
     const targetEndedStatus = wasPreAnswered ? CallStatus.missed : CallStatus.ended;
-    const targetEndReason = wasPreAnswered ? CallEndReason.missed : CallEndReason.completed;
+    const targetEndReason = wasPreAnswered ? CallEndReason.missed : (endReasonHint ?? CallEndReason.completed);
 
     // Update in transaction. Version-guarded on the terminal write (see
     // endCall()'s doc comment): a racing terminal writer for this same call

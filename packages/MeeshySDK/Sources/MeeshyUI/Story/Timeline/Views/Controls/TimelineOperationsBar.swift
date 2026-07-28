@@ -2,14 +2,14 @@ import SwiftUI
 
 /// Bande d'opérations de la timeline — rendue SOUS la bande des outils du
 /// composer et AU-DESSUS du transport (retour user 2026-07-20) : l'historique
-/// (annuler / rétablir), l'aimantation, la prolongation « +10 s » et
-/// l'enregistrement vivent ici. Le transport ne garde que la lecture, le
-/// temps, le zoom et le son. Leaf view — paramètres primitifs uniquement.
+/// (annuler / rétablir), l'aimantation et l'enregistrement vivent ici. Le
+/// transport ne garde que la lecture, le temps, le zoom et le son. Leaf view —
+/// paramètres primitifs uniquement.
+///
+/// Le chip « +10 s » a été retiré : il posait une durée de slide que le
+/// recalcul depuis le contenu effaçait à l'édition suivante (décision produit
+/// 2026-07-27 — la durée dérive du contenu, on l'allonge en allongeant un clip).
 public struct TimelineOperationsBar: View {
-
-    /// Pas de prolongation du bouton « +10 s ». La RÉDUCTION reste au handler
-    /// de fin de ruler (`DurationHandle`) — ce bouton ne fait qu'étendre.
-    public nonisolated static let extendStepSeconds: Float = 10
 
     public let canUndo: Bool
     public let canRedo: Bool
@@ -17,14 +17,12 @@ public struct TimelineOperationsBar: View {
     public let onUndo: () -> Void
     public let onRedo: () -> Void
     public let onSnapToggle: () -> Void
-    public let onExtendDuration: () -> Void
     public let onSave: (() -> Void)?
 
     public init(canUndo: Bool, canRedo: Bool, isSnapEnabled: Bool,
                 onUndo: @escaping () -> Void,
                 onRedo: @escaping () -> Void,
                 onSnapToggle: @escaping () -> Void,
-                onExtendDuration: @escaping () -> Void,
                 onSave: (() -> Void)?) {
         self.canUndo = canUndo
         self.canRedo = canRedo
@@ -32,7 +30,6 @@ public struct TimelineOperationsBar: View {
         self.onUndo = onUndo
         self.onRedo = onRedo
         self.onSnapToggle = onSnapToggle
-        self.onExtendDuration = onExtendDuration
         self.onSave = onSave
     }
 
@@ -46,7 +43,6 @@ public struct TimelineOperationsBar: View {
                                        defaultValue: "Rétablir", bundle: .module))
             snapChip
             Spacer(minLength: 8)
-            extendChip
             if let onSave {
                 saveButton(onSave)
             }
@@ -98,29 +94,6 @@ public struct TimelineOperationsBar: View {
         .accessibilityLabel(isSnapEnabled
             ? String(localized: "story.timeline.a11y.snap.on", bundle: .module)
             : String(localized: "story.timeline.a11y.snap.off", bundle: .module))
-    }
-
-    /// « +10 s » : prolonge la durée de la timeline d'un pas fixe — le geste
-    /// rapide pour se donner de la place à droite sans pincer le ruler.
-    private var extendChip: some View {
-        Button(action: onExtendDuration) {
-            HStack(spacing: 3) {
-                Image(systemName: "plus")
-                    .font(.system(size: 10, weight: .bold))
-                Text("10 s")
-                    .font(.caption2.weight(.semibold))
-                    .monospacedDigit()
-            }
-            .padding(.horizontal, 9)
-            .padding(.vertical, 4)
-            .background(Capsule().fill(MeeshyColors.indigo500.opacity(0.15)))
-            .contentShape(Rectangle().inset(by: -6))
-        }
-        .buttonStyle(.plain)
-        .foregroundStyle(MeeshyColors.indigo700)
-        .accessibilityLabel(String(localized: "story.timeline.ops.extend",
-                                   defaultValue: "Prolonger la timeline de 10 secondes",
-                                   bundle: .module))
     }
 
     private func saveButton(_ action: @escaping () -> Void) -> some View {

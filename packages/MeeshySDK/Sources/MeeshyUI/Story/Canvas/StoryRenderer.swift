@@ -333,8 +333,24 @@ public enum StoryRenderer {
             fallback.combine(UUID())
             return fallback.finalize()
         }
+        return contentKey(for: data)
+    }
+
+    /// Clé de contenu dérivée de TOUS les octets.
+    ///
+    /// `hasher.combine(data)` ne convient pas : `Data.hash(into:)` de
+    /// Foundation n'échantillonne qu'un PRÉFIXE BORNÉ (~80 octets) plus le
+    /// `count`, par souci de performance. Comme le JSON est encodé en
+    /// `.sortedKeys`, la position d'un champ y est stable — et tout champ
+    /// trié tardivement tombait hors de la fenêtre échantillonnée. Deux
+    /// couleurs hex ayant exactement la même longueur, `textColor` (octet
+    /// ~135) produisait deux hash IDENTIQUES : le cache servait une calque
+    /// périmée et le canvas gardait l'ancienne couleur, alors que `fontSize`
+    /// (octet ~50) passait. `combine(bytes:)` couvre l'intégralité du tampon.
+    nonisolated static func contentKey(for data: Data) -> Int {
         var hasher = Hasher()
-        hasher.combine(data)
+        hasher.combine(data.count)
+        data.withUnsafeBytes { hasher.combine(bytes: $0) }
         return hasher.finalize()
     }
 

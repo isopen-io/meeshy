@@ -56,6 +56,15 @@ public struct TimelineInspectorHost: View {
     /// Sélection à présenter, gardes comprises. `nil` = rien à montrer.
     /// Extrait ici pour piloter une `sheet(item:)` depuis l'hôte.
     public static func presentedSelection(viewModel: TimelineViewModel) -> SelectionKind? {
+        // La fiche ne s'ouvre QUE sur une intention explicite — double tap sur
+        // une piste, tap sur un marqueur. Auparavant elle suivait
+        // `selectedClipId` : surligner, c'était présenter, et le moindre tap
+        // recouvrait la timeline qu'on était en train de lire.
+        //
+        // Les `resolve*Snapshot` ci-dessous lisent toujours `selectedClipId` :
+        // c'est exact grâce à l'invariant d'ouverture
+        // (`inspectedClipId != nil ⟹ inspectedClipId == selectedClipId`).
+        guard viewModel.selection.inspectedClipId != nil else { return nil }
         switch resolveSelectionKind(viewModel: viewModel) {
         case .clip(let snapshot):
             // Un clip synthétique n'a rien d'éditable : ouvrir une sheet vide
@@ -109,7 +118,9 @@ public struct TimelineInspectorHost: View {
                 fadeOutDuration: Float(media.fadeOut ?? 0),
                 isLooping: media.loop,
                 isBackground: media.isBackground,
-                name: media.name
+                name: media.name,
+                transform: ClipTransform(x: media.x, y: media.y, scale: media.scale,
+                                         rotation: media.rotation, zIndex: media.zIndex)
             )
         }
         if let audio = viewModel.project.audioPlayerObjects.first(where: { $0.id == id }) {
@@ -143,7 +154,9 @@ public struct TimelineInspectorHost: View {
                 fadeOutDuration: Float(text.fadeOut ?? 0),
                 isLooping: false,
                 isBackground: false,
-                name: text.name
+                name: text.name,
+                transform: ClipTransform(x: text.x, y: text.y, scale: text.scale,
+                                         rotation: text.rotation, zIndex: text.zIndex)
             )
         }
         // Le sticker a une lane TAPABLE dans la timeline mais aucune branche
@@ -311,7 +324,10 @@ public struct TimelineInspectorHost: View {
             },
             onAddKeyframe: { viewModel.addKeyframeAtPlayhead() },
             onDelete: { viewModel.deleteClip(id: clipId) },
-            onClose: { viewModel.selectClip(id: nil) },
+            // `splitSelectedAtPlayhead` lit `selectedClipId` : correct sans
+            // changement, puisque `inspect(_:)` pose les deux identifiants.
+            onSplit: { viewModel.splitSelectedAtPlayhead() },
+            onClose: { viewModel.endInspection() },
             // Stepper de PRÉCISION, pas un geste : `dragClip` aurait fait
             // avaler le pas de 0,1 s par l'aimant magnétique (~0,16 s au zoom
             // par défaut).
@@ -330,7 +346,19 @@ public struct TimelineInspectorHost: View {
             onStartTrimmed: { [viewModel] delta in
                 viewModel.trimClipStart(id: clipId, deltaTimeSeconds: delta)
             },
-            slideDuration: viewModel.project.slideDuration
+            slideDuration: viewModel.project.slideDuration,
+            onStartSet: { [viewModel] seconds in
+                viewModel.setClipStart(id: clipId, to: seconds)
+            },
+            onEndSet: { [viewModel] seconds in
+                viewModel.setClipEnd(id: clipId, to: seconds)
+            },
+            onDurationSet: { [viewModel] seconds in
+                viewModel.setClipDuration(id: clipId, to: seconds)
+            },
+            onTransformChanged: { [viewModel] field in
+                viewModel.setClipTransform(id: clipId, field: field)
+            }
         )
         .padding(presentation == .popover ? 12 : 0)
         .transition(.opacity)
@@ -373,7 +401,7 @@ public struct TimelineInspectorHost: View {
             onDelete: { [viewModel] in
                 viewModel.deleteKeyframe(clipId: clipId, keyframeId: keyframeId)
             },
-            onClose: { viewModel.selectClip(id: nil) }
+            onClose: { viewModel.endInspection() }
         )
         .padding(presentation == .popover ? 12 : 0)
         .transition(.opacity)
@@ -402,7 +430,7 @@ public struct TimelineInspectorHost: View {
             onDelete: { [viewModel] in
                 viewModel.removeTransition(transitionId: transitionId)
             },
-            onClose: { viewModel.selectClip(id: nil) },
+            onClose: { viewModel.endInspection() },
             onEasingChanged: { [viewModel] easing in
                 viewModel.changeTransition(transitionId: transitionId,
                                            kind: snapshot.kind,
@@ -436,7 +464,9 @@ private struct TimelineInspectorSheetModifier: ViewModifier {
             get: { TimelineInspectorHost.presentedSelection(viewModel: viewModel) },
             // Fermer la sheet DÉSÉLECTIONNE : sans ça, la sélection resterait
             // posée et la sheet se rouvrirait au prochain rendu.
-            set: { if $0 == nil { viewModel.selectClip(id: nil) } }
+            // Fermer la sheet referme l'INSPECTION, sans désélectionner : le
+            // clip reste surligné, l'utilisateur retrouve où il en était.
+            set: { if $0 == nil { viewModel.endInspection() } }
         )) { _ in
             TimelineInspectorHost(viewModel: viewModel, presentation: .sheet)
                 .presentationDetents([.medium, .large])

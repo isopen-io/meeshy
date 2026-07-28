@@ -1085,32 +1085,62 @@ describe('CallStore', () => {
       act(() => { useCallStore.getState().clearCallRetry(); });
     });
 
-    it('offerCallRetry records the conversation + type', () => {
+    it('offerCallRetry records the conversation + type, keyed by conversationId', () => {
       act(() => {
         useCallStore.getState().offerCallRetry({ conversationId: 'conv-1', type: 'video' });
       });
-      expect(useCallStore.getState().pendingRetry).toEqual({ conversationId: 'conv-1', type: 'video' });
+      expect(useCallStore.getState().pendingRetry).toEqual({
+        'conv-1': { conversationId: 'conv-1', type: 'video' },
+      });
     });
 
-    it('clearCallRetry drops the offer', () => {
+    it('clearCallRetry(conversationId) drops only that conversation\'s offer', () => {
       act(() => {
         useCallStore.getState().offerCallRetry({ conversationId: 'conv-1', type: 'audio' });
-        useCallStore.getState().clearCallRetry();
+        useCallStore.getState().offerCallRetry({ conversationId: 'conv-2', type: 'video' });
+        useCallStore.getState().clearCallRetry('conv-1');
       });
-      expect(useCallStore.getState().pendingRetry).toBeNull();
+      expect(useCallStore.getState().pendingRetry).toEqual({
+        'conv-2': { conversationId: 'conv-2', type: 'video' },
+      });
     });
 
-    it('reset() PRESERVES a pending retry (the failed call teardown must not erase the offer)', () => {
+    it('clearCallRetry() with no argument drops every offer', () => {
+      act(() => {
+        useCallStore.getState().offerCallRetry({ conversationId: 'conv-1', type: 'audio' });
+        useCallStore.getState().offerCallRetry({ conversationId: 'conv-2', type: 'video' });
+        useCallStore.getState().clearCallRetry();
+      });
+      expect(useCallStore.getState().pendingRetry).toEqual({});
+    });
+
+    it('a second offer for a DIFFERENT conversation does not clobber an earlier unconsumed offer', () => {
+      // Regression: pendingRetry used to be a single scalar overwritten on
+      // every offerCallRetry call — a transient failure on conv-2 silently
+      // destroyed conv-1's still-unconsumed retry offer forever.
+      act(() => {
+        useCallStore.getState().offerCallRetry({ conversationId: 'conv-1', type: 'video' });
+        useCallStore.getState().offerCallRetry({ conversationId: 'conv-2', type: 'audio' });
+      });
+      expect(useCallStore.getState().pendingRetry).toEqual({
+        'conv-1': { conversationId: 'conv-1', type: 'video' },
+        'conv-2': { conversationId: 'conv-2', type: 'audio' },
+      });
+    });
+
+    it('reset() PRESERVES pending retries (the failed call teardown must not erase the offers)', () => {
       act(() => {
         useCallStore.getState().offerCallRetry({ conversationId: 'conv-1', type: 'video' });
         useCallStore.getState().reset();
       });
-      expect(useCallStore.getState().pendingRetry).toEqual({ conversationId: 'conv-1', type: 'video' });
+      expect(useCallStore.getState().pendingRetry).toEqual({
+        'conv-1': { conversationId: 'conv-1', type: 'video' },
+      });
     });
 
-    it('reset() with no pending retry leaves it null', () => {
+    it('reset() with no pending retry leaves it empty', () => {
       act(() => { useCallStore.getState().reset(); });
-      expect(useCallStore.getState().pendingRetry).toBeNull();
+      expect(useCallStore.getState().pendingRetry).toEqual({});
     });
   });
 });

@@ -175,6 +175,8 @@ jobs:
           # build settings here — future-proof, no agvtool, no file mutation.
           VERSION_ARGS=("CURRENT_PROJECT_VERSION=$ANDP_BUILD_NUMBER")
           [ -n "${RELEASE_VERSION}" ] && VERSION_ARGS+=("MARKETING_VERSION=$RELEASE_VERSION")
+          # DEVELOPMENT_TEAM pinned to D72UK7R5RE since 2026-07-28 — see the
+          # header block in apps/ios/fastlane/Appfile for every site carrying it.
           xcodebuild archive \
             -project Meeshy.xcodeproj -scheme Meeshy -configuration Release \
             -archivePath build/Meeshy.xcarchive \

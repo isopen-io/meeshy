@@ -46,7 +46,6 @@ public struct VideoClipBar: View, Equatable {
     public let imageURL: URL?
     public let onTap: () -> Void
     public let onDoubleTap: () -> Void
-    public let onLongPress: () -> Void
     public let onTrimStartDelta: (CGFloat) -> Void
     public let onTrimEndDelta: (CGFloat) -> Void
     public let onMoveDelta: (CGFloat) -> Void
@@ -91,7 +90,6 @@ public struct VideoClipBar: View, Equatable {
         imageURL: URL? = nil,
         onTap: @escaping () -> Void,
         onDoubleTap: @escaping () -> Void,
-        onLongPress: @escaping () -> Void,
         onTrimStartDelta: @escaping (CGFloat) -> Void,
         onTrimEndDelta: @escaping (CGFloat) -> Void,
         onMoveDelta: @escaping (CGFloat) -> Void,
@@ -113,7 +111,6 @@ public struct VideoClipBar: View, Equatable {
         self.imageURL = imageURL
         self.onTap = onTap
         self.onDoubleTap = onDoubleTap
-        self.onLongPress = onLongPress
         self.onTrimStartDelta = onTrimStartDelta
         self.onTrimEndDelta = onTrimEndDelta
         self.onMoveDelta = onMoveDelta
@@ -128,7 +125,7 @@ public struct VideoClipBar: View, Equatable {
             titleLabel
             if isLocked { lockBadge }
             if isSelected { selectionHalo }
-            if !isLocked {
+            if ClipTrimHandles.shouldShow(isSelected: isSelected, isLocked: isLocked) {
                 ClipTrimHandles(laneHeight: laneHeight,
                                 onTrimStartDelta: onTrimStartDelta,
                                 onTrimEndDelta: onTrimEndDelta)
@@ -138,14 +135,19 @@ public struct VideoClipBar: View, Equatable {
         .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
         .offset(x: xOrigin)
         .contentShape(Rectangle())
-        .onTapGesture(count: 2) { onDoubleTap() }
-        .onTapGesture { onTap() }
-        .onLongPressGesture(minimumDuration: 0.4) { onLongPress() }
-        .gesture(
+        // Le drag AVANT les taps et en HAUTE priorité. En basse priorité
+        // (.gesture) il cédait au ScrollView horizontal de TimelineScrubArea ;
+        // et le onLongPressGesture qui le précédait s'engageait à 0,4 s de
+        // doigt immobile, donc un glissement lent — poser, hésiter, glisser —
+        // ne démarrait jamais. minimumDistance: 4 laisse passer les taps, qui
+        // ne translatent pas.
+        .highPriorityGesture(
             DragGesture(minimumDistance: 4)
                 .onChanged { v in if !isLocked { onMoveDelta(v.translation.width) } }
                 .onEnded { _ in if !isLocked { onMoveEnded() } }
         )
+        .onTapGesture(count: 2) { onDoubleTap() }
+        .onTapGesture { onTap() }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(accessibilityComposed)
         .accessibilityValue(String(

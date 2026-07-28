@@ -4,6 +4,8 @@
 <dict>
 	<key>method</key>
 	<string>app-store</string>
+	<!-- Team ID pinned to D72UK7R5RE since 2026-07-28. See the header block in
+	     Appfile for every site carrying this value. -->
 	<key>teamID</key>
 	<string>D72UK7R5RE</string>
 	<key>signingStyle</key>

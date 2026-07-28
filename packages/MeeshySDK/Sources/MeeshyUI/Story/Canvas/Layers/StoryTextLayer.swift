@@ -103,7 +103,7 @@ public final class StoryTextLayer: CATextLayer {
         // Le losange double l'encombrement du texte (rect inscrit dans le
         // rhombe) — sa largeur de mesure est plafonnée à 44 % pour que la forme
         // complète tienne dans le canvas.
-        let isFramed = text.resolvedBackgroundStyle != .none
+        let isFramed = text.hasFrameBox
         let frameShape = text.parsedFrameShape
         let widthFraction: CGFloat = (isFramed && frameShape == .diamond) ? 0.44 : 0.88
         let maxDesignWidth = CanvasGeometry.designWidth * widthFraction
@@ -157,7 +157,8 @@ public final class StoryTextLayer: CATextLayer {
         let metrics = Self.frameMetrics(shape: frameShape,
                                         isFramed: isFramed,
                                         textSize: effectiveDesignSize,
-                                        oGlyphWidth: oGlyphWidth)
+                                        oGlyphWidth: oGlyphWidth,
+                                        paddingScale: CGFloat(text.resolvedFramePaddingScale))
 
         // Render-space bounds is the linear projection of the design bounds.
         let renderedBounds = geometry.render(metrics.bounds)
@@ -226,6 +227,7 @@ public final class StoryTextLayer: CATextLayer {
         // être posé sur `backgroundColor` de la calque (peint avant le contenu),
         // tandis que le GLASS reste un sous-calque (il fait du blur GPU).
         applyBackgroundStyle(text.resolvedBackgroundStyle, geometry: geometry)
+        applyFrameBorder(text, geometry: geometry)
     }
 
     /// Rend les glyphes invisibles (couleur de premier plan transparente) tout
@@ -264,6 +266,21 @@ public final class StoryTextLayer: CATextLayer {
 
         switch style {
         case .none:
+            // Boîte en LISERÉ SEUL : il n'y a rien à remplir, mais il y a bien
+            // une forme à tracer. Les formes à coins passent par le `border`
+            // du calque (posé par `applyFrameBorder`) ; les formes path-based
+            // ont besoin de leur `CAShapeLayer` porteur, créé ici sans fond.
+            if let framePath = pathFramePath, textObject?.hasFrameBox == true {
+                let shape = CAShapeLayer()
+                shape.frame = CGRect(origin: .zero, size: bounds.size)
+                shape.path = framePath
+                shape.fillColor = nil
+                shape.zPosition = -1
+                shape.contentsScale = UIScreen.main.scale
+                addSublayer(shape)
+                backgroundFillLayer = shape
+                installGlyphSublayer(frame: pathGlyphFrame ?? bounds)
+            }
             return
 
         case .solid(let hex):
@@ -331,6 +348,42 @@ public final class StoryTextLayer: CATextLayer {
         }
     }
 
+    /// Liseré du bord de la boîte de cadre. Les formes à coins le portent sur
+    /// le `border` du calque lui-même, qui suit automatiquement le
+    /// `cornerRadius` déjà posé ; les formes path-based le portent sur le
+    /// `strokeColor` de leur `CAShapeLayer`, seul objet qui connaisse le tracé.
+    ///
+    /// Appelé APRÈS `applyBackgroundStyle` : c'est elle qui crée (ou détruit)
+    /// `backgroundFillLayer`, dont dépend le choix du support.
+    @MainActor
+    private func applyFrameBorder(_ text: StoryTextObject, geometry: CanvasGeometry) {
+        // `backgroundFillLayer` est un `CALayer?` : seul le cas path-based y
+        // met un `CAShapeLayer` (le fond des formes à coins vit sur le
+        // `backgroundColor` du calque lui-même). Le cast porte donc exactement
+        // la distinction dont le liseré a besoin.
+        let pathShape = backgroundFillLayer as? CAShapeLayer
+        let width = text.frameBorderWidth ?? 0
+        guard text.hasFrameBox, width > 0 else {
+            borderWidth = 0
+            borderColor = nil
+            pathShape?.strokeColor = nil
+            pathShape?.lineWidth = 0
+            return
+        }
+        let color = parseHexColor(text.frameBorderColor ?? "FFFFFF") ?? .white
+        let rendered = geometry.render(CGFloat(width))
+        if let shape = pathShape, text.parsedFrameShape.usesCustomPath {
+            shape.strokeColor = color.cgColor
+            shape.lineWidth = rendered
+            borderWidth = 0
+            borderColor = nil
+        } else {
+            borderWidth = rendered
+            borderColor = color.cgColor
+            cornerRadius = frameCornerRadius(height: bounds.height)
+        }
+    }
+
     /// Sous-calque de glyphes posée au-dessus du fond (backdrop glass ou forme
     /// path-based) ; les glyphes propres du parent sont rendus transparents.
     /// Pour les formes path-based, `frame` est la zone de contenu centrée de
@@ -373,7 +426,7 @@ public final class StoryTextLayer: CATextLayer {
     /// est un défaut défensif.
     private func frameCornerRadius(height: CGFloat) -> CGFloat {
         switch textObject?.parsedFrameShape ?? .rounded {
-        case .rounded, .diamond, .cloud, .speech: return max(4, height * 0.15)
+        case .none, .rounded, .diamond, .cloud, .speech: return max(4, height * 0.15)
         case .pill:      return height / 2
         case .rectangle: return max(2, height * 0.04)
         }
@@ -430,35 +483,43 @@ public final class StoryTextLayer: CATextLayer {
     nonisolated static func frameMetrics(shape: StoryTextFrameShape,
                                          isFramed: Bool,
                                          textSize: CGSize,
-                                         oGlyphWidth: CGFloat) -> FrameMetrics {
+                                         oGlyphWidth: CGFloat,
+                                         paddingScale: CGFloat = 1) -> FrameMetrics {
         let w = ceil(textSize.width)
         let h = ceil(textSize.height)
-        let hPad = max(8, oGlyphWidth)
+        // Un texte NU n'a pas de boîte : le curseur de marge ne le concerne
+        // pas, et lui appliquer changerait la mise en page de toutes les
+        // stories sans cadre.
+        let scale = isFramed ? max(0, paddingScale) : 1
+        let hPad = max(8, oGlyphWidth) * scale
+        let vPad = 8 * scale
         guard isFramed, shape.usesCustomPath else {
-            return FrameMetrics(bounds: CGSize(width: w + hPad * 2, height: h + 16),
-                                glyphRect: CGRect(x: hPad, y: 8, width: w, height: h))
+            return FrameMetrics(bounds: CGSize(width: w + hPad * 2, height: h + vPad * 2),
+                                glyphRect: CGRect(x: hPad, y: vPad, width: w, height: h))
         }
         switch shape {
-        case .rounded, .pill, .rectangle:
+        case .none, .rounded, .pill, .rectangle:
             // Couvert par le guard (usesCustomPath == false) — jamais atteint.
-            return FrameMetrics(bounds: CGSize(width: w + hPad * 2, height: h + 16),
-                                glyphRect: CGRect(x: hPad, y: 8, width: w, height: h))
+            return FrameMetrics(bounds: CGSize(width: w + hPad * 2, height: h + vPad * 2),
+                                glyphRect: CGRect(x: hPad, y: vPad, width: w, height: h))
         case .diamond:
             let width = max(w * 2, w + hPad * 2)
-            let height = max(h * 2, h + 16)
+            let height = max(h * 2, h + vPad * 2)
             return FrameMetrics(bounds: CGSize(width: width, height: height),
                                 glyphRect: CGRect(x: (width - w) / 2,
                                                   y: (height - h) / 2,
                                                   width: w, height: h))
         case .speech:
+            // `speechTailHeight` est une caractéristique de la forme et non une
+            // marge : la faire suivre le curseur détacherait la queue du corps.
             return FrameMetrics(bounds: CGSize(width: w + hPad * 2,
-                                               height: h + 16 + speechTailHeight),
-                                glyphRect: CGRect(x: hPad, y: 8, width: w, height: h))
+                                               height: h + vPad * 2 + speechTailHeight),
+                                glyphRect: CGRect(x: hPad, y: vPad, width: w, height: h))
         case .cloud:
             let puff = cloudPuffRadius
             return FrameMetrics(bounds: CGSize(width: w + hPad * 2 + puff * 2,
-                                               height: h + 16 + puff * 2 + cloudThoughtHeight),
-                                glyphRect: CGRect(x: hPad + puff, y: 8 + puff,
+                                               height: h + vPad * 2 + puff * 2 + cloudThoughtHeight),
+                                glyphRect: CGRect(x: hPad + puff, y: vPad + puff,
                                                   width: w, height: h))
         }
     }
@@ -470,7 +531,7 @@ public final class StoryTextLayer: CATextLayer {
     /// translucide (hex "…A6").
     nonisolated static func framePath(shape: StoryTextFrameShape, in rect: CGRect) -> CGPath? {
         switch shape {
-        case .rounded, .pill, .rectangle:
+        case .none, .rounded, .pill, .rectangle:
             return nil
 
         case .diamond:

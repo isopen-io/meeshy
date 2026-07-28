@@ -21,7 +21,6 @@ final class AudioClipBarTests: XCTestCase {
             waveformSamples: samples,
             onTap: {},
             onDoubleTap: {},
-            onLongPress: {},
             onMoveDelta: { _ in }
         )
     }

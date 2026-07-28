@@ -257,6 +257,8 @@ services:
       - ATABETH_CUSTOM_DESTINATION_LANGUAGE=${ATABETH_CUSTOM_DESTINATION_LANGUAGE}
       - FIREBASE_ADMIN_CREDENTIALS_PATH=/app/secrets/firebase-admin-sdk.json
       - APNS_KEY_ID=J73QFCYZGC
+      # Même Team ID Apple que la pipeline de publication iOS, figée à
+      # D72UK7R5RE depuis le 2026-07-28 (cf. apps/ios/fastlane/Appfile).
       - APNS_TEAM_ID=D72UK7R5RE
       - APNS_KEY_PATH=/app/secrets/apns_key.p8
       - APNS_BUNDLE_ID=me.meeshy.app

@@ -61,6 +61,21 @@ public final class StoryMediaLayer: CALayer {
         }
     }
 
+    /// Volume courant de la couche, dans `0...StoryVolume.maxGain`.
+    ///
+    /// Initialisé depuis `media.volume` au `configure`, puis réécrit à chaque
+    /// tick par l'automation du canvas (`applyVolumeAutomation`). C'est cette
+    /// propriété — et non `media?.volume` — que `attachPlayer` stampe : relire
+    /// le modèle à l'attache écraserait l'automation en cours, exactement
+    /// comme le `1.0` codé en dur le faisait sur la couche de fond.
+    @MainActor
+    public var volume: Float = 1.0 {
+        didSet {
+            guard oldValue != volume else { return }
+            avPlayer?.volume = volume
+        }
+    }
+
     /// Drapeau de lecture levé par le canvas (`StoryCanvasUIView`) en mode
     /// `.play` pour autoriser le démarrage de la vidéo foreground — EXACT
     /// pendant du `StoryBackgroundLayer.isPlaybackActive`. Sans ce gate,
@@ -204,6 +219,11 @@ public final class StoryMediaLayer: CALayer {
                           resolver: (@Sendable (String) -> URL?)? = nil,
                           imageCache: ImageCacheReader? = nil) {
         self.media = media
+        // Niveau de BASE repris du modèle. L'automation du canvas réécrira
+        // `volume` au tick suivant si la slide en porte une ; sans cette ligne,
+        // une couche fraîchement configurée jouerait à 1.0 et ignorerait le
+        // réglage de l'auteur.
+        volume = media.volume
         // Un layer fraîchement configuré démarre visible : la disparition d'une
         // vidéo foreground terminée (`.play`) est posée par l'observer de fin,
         // pas héritée d'un état masqué d'une précédente configuration.
@@ -546,7 +566,10 @@ public final class StoryMediaLayer: CALayer {
         // susceptibles d'avoir changé entre deux configure d'un même média.
         if attachedURL == url, let existing = avPlayerLayer?.player, existing.currentItem != nil {
             existing.isMuted = isMuted
-            existing.volume = media?.volume ?? 1.0
+            // `volume` de la couche, jamais `media?.volume` : le modèle porte
+            // le niveau de BASE, la couche porte le niveau COURANT (base +
+            // automation + ducking).
+            existing.volume = volume
             return
         }
         attachedURL = url
@@ -577,18 +600,15 @@ public final class StoryMediaLayer: CALayer {
         // l'attach et le prochain `forEachMediaLayer { $0.isMuted = ... }`.
         player.isMuted = isMuted
 
-        // Volume explicite : l'AVPlayer démarre par défaut à 1.0 mais on le
-        // force ici en defensive — certains paths (live composer, cache LRU)
-        // re-attachent un player existant via `replaceCurrentItem`, et si le
-        // volume avait été baissé à 0 ailleurs, on hérite du silence sans le
-        // savoir. Le modèle `StoryMediaObject` porte un champ `volume` à
-        // 1.0 par défaut ; on le respecte mais on le ré-applique à chaque
-        // attach pour garantir le state determinist.
-        if let mediaVolume = media?.volume {
-            player.volume = mediaVolume
-        } else {
-            player.volume = 1.0
-        }
+        // Volume explicite : certains paths (live composer, cache LRU)
+        // re-attachent un player existant via `replaceCurrentItem`, et sans
+        // ré-application on hériterait d'un niveau posé ailleurs.
+        //
+        // On stampe la propriété `volume` de la COUCHE, pas `media?.volume` :
+        // le modèle ne porte que le niveau de base, tandis que la couche porte
+        // le niveau courant (base + automation + ducking). Relire le modèle ici
+        // annulerait l'automation à chaque ré-attache.
+        player.volume = volume
 
         // Defensive : s'assurer que l'`AVAudioSession` est en `.playback` avant
         // de lancer le player. La session est normalement déjà activée par

@@ -17,6 +17,19 @@ intentionally fails fast (via `require_env`) when any required value is missing.
 
 Provide either `ASC_KEY_CONTENT` (CI) or `ASC_KEY_FILEPATH` (local) — not both.
 
+## Team ID (optional override, not a secret)
+
+| Variable               | Default      | Notes                                              |
+|------------------------|--------------|----------------------------------------------------|
+| `FASTLANE_TEAM_ID`     | `D72UK7R5RE` | Apple Developer Portal team. Override only to build under a different team. |
+| `FASTLANE_ITC_TEAM_ID` | `FASTLANE_TEAM_ID`, then `D72UK7R5RE` | App Store Connect team. |
+
+**Changed 2026-07-28**: `D72UK7R5RE` is the single Team ID of the publishing
+pipeline; the previous team is retired. The Appfile/Matchfile treat an *empty*
+value as absent, so an unset `APPLE_TEAM_ID` GitHub secret falls back to the
+default rather than signing with a blank team. The header block in
+`apps/ios/fastlane/Appfile` lists every file carrying the hardcoded value.
+
 ## Required for `release` lane (App Store submission)
 
 | Variable             | Purpose                                      |

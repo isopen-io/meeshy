@@ -281,6 +281,10 @@ extension StoryCanvasUIView {
 
             self.audioMixer.setMute(self.readerContext.mute)
 
+            // Le ducking a besoin de savoir quelles vidéos portent réellement
+            // du son — sondage une seule fois par clip, mémorisé.
+            self.probeVideoAudioTracks()
+
             // Re-pose du flag R1 d'après ce que le configure a RÉELLEMENT
             // chargé : si tous les clips ont échoué au cache (URL non résolue,
             // téléchargement KO), la slide est de facto silencieuse — le gate

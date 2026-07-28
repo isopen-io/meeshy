@@ -126,10 +126,21 @@ final class AudioMixerTests: XCTestCase {
 
     // MARK: - C5 setVolume + setMute
 
-    func test_setVolume_clampsAboveOneToOne() {
+    /// Attente mise à jour avec l'ouverture du volume à 200 % : le plafond
+    /// n'est plus 1.0 mais `StoryVolume.maxGain`. Le brider à 1 ici annulerait
+    /// le gain avant qu'il n'atteigne le chemin d'amplification.
+    func test_setVolume_clampsToSharedCeiling() {
         let mixer = AudioMixer()
         mixer.setVolume(2.5, for: "a1")
-        XCTAssertEqual(mixer.intendedVolume(for: "a1"), 1.0)
+        XCTAssertEqual(mixer.intendedVolume(for: "a1"), StoryVolume.maxGain)
+        mixer.shutdown()
+    }
+
+    /// Un gain intermédiaire au-dessus de 1 doit passer intact.
+    func test_setVolume_preservesGainAboveOne() {
+        let mixer = AudioMixer()
+        mixer.setVolume(1.6, for: "a1")
+        XCTAssertEqual(mixer.intendedVolume(for: "a1"), 1.6)
         mixer.shutdown()
     }
 

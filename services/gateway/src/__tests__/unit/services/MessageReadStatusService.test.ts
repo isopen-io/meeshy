@@ -3867,6 +3867,41 @@ describe('MessageReadStatusService', () => {
       // p2 authored every candidate → zero unread, whatever order the rows arrived in.
       expect(result.get('p2')).toBe(0);
     });
+
+    it('computes the min counting floor without an argument-spread overflow at 100k+ scale (regression)', async () => {
+      // This fires on the hottest path (`_updateUnreadCounts` on EVERY `message:new`).
+      // `floors` carries one entry per participant, so a public/global conversation at the
+      // platform's 100k+ scale would blow `Math.min(...floors)` past V8's argument-spread
+      // ceiling (~131k) → `RangeError: Maximum call stack size exceeded` → swallowed by the
+      // service's catch → an all-ZERO unread map for the whole conversation. A reduce-based
+      // min holds for any group size, so the real counts survive.
+      const PARTICIPANT_COUNT = 200_000; // safely above the spread ceiling in Node 22
+      const baseFloor = Date.parse('2024-01-01T10:00:00Z');
+      // Distinct per-participant floors so the min is a genuine reduction, not a constant.
+      // The OLDEST floor belongs to the last participant (baseFloor − PARTICIPANT_COUNT ms).
+      const participants = Array.from({ length: PARTICIPANT_COUNT }, (_, i) => ({
+        id: `p${i}`,
+        joinedAt: new Date(baseFloor - i),
+      }));
+      mockPrisma.conversationReadCursor.findMany.mockResolvedValue([]);
+      // One candidate strictly after every floor (so every participant has exactly 1 unread),
+      // sent by someone none of them are, so no own-message cut applies.
+      mockCandidates([{ at: '2024-01-01T12:00:00Z', from: 'someone-else' }]);
+
+      const result = await service.getUnreadCountsForParticipants(
+        participants, testConversationId
+      );
+
+      // The fetch is bounded by the OLDEST floor — proof the min reduction ran, not the
+      // unbounded (undefined) branch and not the swallowed-error zero map.
+      expect(mockPrisma.message.findMany.mock.calls[0][0].where.createdAt).toEqual({
+        gt: new Date(baseFloor - (PARTICIPANT_COUNT - 1)),
+      });
+      // Real counts survived (the RangeError path would have made every entry 0).
+      expect(result.size).toBe(PARTICIPANT_COUNT);
+      expect(result.get('p0')).toBe(1);
+      expect(result.get(`p${PARTICIPANT_COUNT - 1}`)).toBe(1);
+    });
   });
 
   describe('markMessagesAsReceived error path', () => {

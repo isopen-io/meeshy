@@ -18,6 +18,13 @@ public protocol StoryServiceProviding: Sendable {
     /// post drained on a cold-start notification tap), so `cachedPost(id:)` then
     /// resolves it without a network round-trip.
     func cache(post: APIPost)
+    /// Évince des posts du cache by-id.
+    ///
+    /// Miroir de `cache(post:)` : quand une story disparaît (supprimée,
+    /// périmée), la laisser dans ce cache la ferait ressusciter au premier
+    /// deep-link — `cachedPost(id:)` la resservirait AVANT le `fetchPost` qui,
+    /// lui, aurait dit 404.
+    func invalidate(postIds: Set<String>)
 }
 
 public extension StoryServiceProviding {
@@ -113,6 +120,13 @@ public final class StoryService: StoryServiceProviding, @unchecked Sendable {
 
     public func cache(post: APIPost) {
         cachePost(post)
+    }
+
+    public func invalidate(postIds: Set<String>) {
+        guard !postIds.isEmpty else { return }
+        cacheLock.lock()
+        for id in postIds { _ = postCache.removeValue(forKey: id) }
+        cacheLock.unlock()
     }
 
     private func cachePost(_ post: APIPost) {

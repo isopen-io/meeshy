@@ -1,5 +1,12 @@
 # @meeshy/web
 
+## 1.17.1
+
+### Patch Changes
+
+- Updated dependencies [27d78d9]
+  - @meeshy/shared@1.8.4
+
 ## 1.17.0
 
 ### Minor Changes

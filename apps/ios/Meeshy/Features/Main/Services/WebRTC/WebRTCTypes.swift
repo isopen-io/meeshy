@@ -360,6 +360,26 @@ nonisolated enum CallReliabilityPolicy {
         secondsInAttempt >= budgetSeconds ? .retry : .waiting
     }
 
+    /// Exponential backoff before the next ICE-restart reconnect attempt,
+    /// jittered around the deterministic base. A shared network event (a cell
+    /// tower handoff, a regional TURN outage) puts every affected call through
+    /// this same formula on the same schedule — without jitter they'd all
+    /// re-hit the TURN allocation endpoint in lockstep, the exact thundering
+    /// herd jitter exists to prevent. `unitRandom` must be in `[0, 1)`; callers
+    /// pass `Double.random(in: 0..<1)` in production and a fixed value in
+    /// tests so the result stays deterministic and testable.
+    static func reconnectBackoffSeconds(
+        attempt: Int,
+        unitRandom: Double,
+        cap: TimeInterval = 4.0,
+        jitterFraction: Double = 0.15
+    ) -> TimeInterval {
+        guard attempt > 1 else { return 0.0 }
+        let base = min(pow(2.0, Double(attempt - 1)), cap)
+        let jitter = base * jitterFraction * (unitRandom * 2 - 1)
+        return max(0.0, base + jitter)
+    }
+
     /// Reconnection-trigger arbitration. Reconnection is requested from several
     /// independent sources: NWPathMonitor edges (path lost / restored / interface
     /// handoff), the PC-state delegate, the watchdogs, and the ICE-restart
