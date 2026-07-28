@@ -195,4 +195,109 @@ describe('CallEventsHandler — call:join acks every failure branch', () => {
     const { ack } = await setupAndJoin({ prisma });
     expect(ack).toHaveBeenCalledWith(expect.objectContaining({ success: false }));
   });
+
+  // -------------------------------------------------------------------------
+  // Audit gateway (2026-07-28) — the ack's `error` field must be the
+  // documented `{code, message}` object (packages/shared/types/video-call.ts
+  // `CallJoinAck`), never a bare string. A bare string previously reached
+  // this ack via `as unknown as CallJoinAck` casts, which silently broke
+  // `apps/web/components/video-call/CallManager.tsx`'s reconnect-rejoin
+  // cleanup — it gates on `ack.error.code === 'CALL_ENDED'`, which can only
+  // ever be `undefined` on a plain string.
+  // -------------------------------------------------------------------------
+
+  describe('ack.error is always a {code, message} object, never a bare string', () => {
+    it('acks {code: NOT_AUTHENTICATED, message} when the socket has no authenticated user', async () => {
+      const { ack } = await setupAndJoin({ getUserId: () => undefined });
+      expect(ack).toHaveBeenCalledWith(
+        expect.objectContaining({
+          success: false,
+          error: { code: 'NOT_AUTHENTICATED', message: 'User not authenticated' }
+        })
+      );
+    });
+
+    it('acks {code: PERMISSION_DENIED, message} when the user is anonymous', async () => {
+      const { ack } = await setupAndJoin({
+        getUserInfo: () => ({ id: USER_ID, isAnonymous: true }),
+      });
+      expect(ack).toHaveBeenCalledWith(
+        expect.objectContaining({
+          success: false,
+          error: { code: 'PERMISSION_DENIED', message: 'Anonymous users cannot join calls' }
+        })
+      );
+    });
+
+    it('acks {code: RATE_LIMIT_EXCEEDED, message} when rate-limited', async () => {
+      mockCheckSocketRateLimit.mockResolvedValue(false);
+      const { ack } = await setupAndJoin({});
+      expect(ack).toHaveBeenCalledWith(
+        expect.objectContaining({
+          success: false,
+          error: { code: 'RATE_LIMIT_EXCEEDED', message: 'Rate limit exceeded' }
+        })
+      );
+    });
+
+    it('acks {code: VALIDATION_ERROR, message} on validation failure', async () => {
+      mockValidateSocketEvent.mockReturnValue({ success: false, error: 'Invalid payload' });
+      const { ack } = await setupAndJoin({});
+      expect(ack).toHaveBeenCalledWith(
+        expect.objectContaining({
+          success: false,
+          error: { code: 'VALIDATION_ERROR', message: 'Invalid payload' }
+        })
+      );
+    });
+
+    it('acks {code: NOT_A_PARTICIPANT, message} when the user is not a participant', async () => {
+      const prisma = makePrisma();
+      (prisma.participant.findFirst as any).mockResolvedValue(null);
+      const { ack } = await setupAndJoin({ prisma });
+      expect(ack).toHaveBeenCalledWith(
+        expect.objectContaining({
+          success: false,
+          error: { code: 'NOT_A_PARTICIPANT', message: 'You are not a participant in this conversation' }
+        })
+      );
+    });
+
+    it('preserves the CODE:message split from a thrown Error in the ack, matching the parallel call:error emit', async () => {
+      const prisma = makePrisma();
+      (prisma.participant.findFirst as any).mockResolvedValue({ id: 'participant-abc' });
+      mockJoinCall.mockRejectedValue(new Error('CALL_NOT_FOUND: gone'));
+      const { ack } = await setupAndJoin({ prisma });
+      expect(ack).toHaveBeenCalledWith(
+        expect.objectContaining({
+          success: false,
+          error: { code: 'CALL_NOT_FOUND', message: 'gone' }
+        })
+      );
+    });
+
+    it('regression: rejoin-after-reconnect on an already-ended call surfaces error.code === CALL_ENDED in the ack (not just the sibling call:error event)', async () => {
+      // Reproduces the exact scenario apps/web/components/video-call/CallManager.tsx's
+      // rejoinActiveCallAfterReconnect depends on: joinCall() rejects because the
+      // call already ended while this client was disconnected. Before this fix,
+      // the ack carried only the bare message string, so `ack.error?.code` was
+      // always undefined and the web client's cleanup branch never ran.
+      const prisma = makePrisma();
+      (prisma.participant.findFirst as any).mockResolvedValue({ id: 'participant-abc' });
+      mockJoinCall.mockRejectedValue(new Error('CALL_ENDED: The call has already ended'));
+      const { ack, socket } = await setupAndJoin({ prisma });
+
+      expect(ack).toHaveBeenCalledWith(
+        expect.objectContaining({
+          success: false,
+          error: { code: 'CALL_ENDED', message: 'The call has already ended' }
+        })
+      );
+      // The ack and the sibling call:error event must agree — same code/message.
+      expect(socket.emit).toHaveBeenCalledWith(
+        CALL_EVENTS.ERROR,
+        expect.objectContaining({ code: 'CALL_ENDED', message: 'The call has already ended' })
+      );
+    });
+  });
 });

@@ -1626,7 +1626,7 @@ export class CallEventsHandler {
       try {
         const userId = getUserId(socket.id);
         if (!userId) {
-          ack?.({ success: false, error: 'User not authenticated' } as unknown as CallInitiateAck);
+          ack?.({ success: false, error: { code: CALL_ERROR_CODES.NOT_AUTHENTICATED, message: 'User not authenticated' } });
           socket.emit(CALL_EVENTS.ERROR, {
             code: 'NOT_AUTHENTICATED',
             message: 'User not authenticated'
@@ -1634,7 +1634,7 @@ export class CallEventsHandler {
           return;
         }
         if (denyAnonymous()) {
-          ack?.({ success: false, error: 'Anonymous users cannot initiate calls' } as unknown as CallInitiateAck);
+          ack?.({ success: false, error: { code: CALL_ERROR_CODES.PERMISSION_DENIED, message: 'Anonymous users cannot initiate calls' } });
           return;
         }
         rememberAuth(userId);
@@ -1648,7 +1648,7 @@ export class CallEventsHandler {
           CALL_EVENTS.ERROR
         );
         if (!rateLimitPassed) {
-          ack?.({ success: false, error: 'Rate limit exceeded' } as unknown as CallInitiateAck);
+          ack?.({ success: false, error: { code: CALL_ERROR_CODES.RATE_LIMIT_EXCEEDED, message: 'Rate limit exceeded' } });
           return;
         }
 
@@ -1656,7 +1656,7 @@ export class CallEventsHandler {
         const validation = validateSocketEvent(socketInitiateCallSchema, data);
         if (isValidationFailure(validation)) {
           const { error: validationError, details: validationDetails } = validation;
-          ack?.({ success: false, error: validationError } as unknown as CallInitiateAck);
+          ack?.({ success: false, error: { code: CALL_ERROR_CODES.VALIDATION_ERROR, message: validationError } });
           socket.emit(CALL_EVENTS.ERROR, {
             code: CALL_ERROR_CODES.VALIDATION_ERROR,
             message: validationError,
@@ -1675,7 +1675,7 @@ export class CallEventsHandler {
         // Resolve participantId from userId + conversationId
         const participantId = await this.resolveParticipantId(userId, data.conversationId);
         if (!participantId) {
-          ack?.({ success: false, error: 'You are not a participant in this conversation' } as unknown as CallInitiateAck);
+          ack?.({ success: false, error: { code: CALL_ERROR_CODES.NOT_A_PARTICIPANT, message: 'You are not a participant in this conversation' } });
           socket.emit(CALL_EVENTS.ERROR, {
             code: CALL_ERROR_CODES.NOT_A_PARTICIPANT,
             message: 'You are not a participant in this conversation'
@@ -1946,7 +1946,7 @@ export class CallEventsHandler {
       try {
         const userId = getUserId(socket.id);
         if (!userId) {
-          ack?.({ success: false, error: 'User not authenticated' } as unknown as CallJoinAck);
+          ack?.({ success: false, error: { code: CALL_ERROR_CODES.NOT_AUTHENTICATED, message: 'User not authenticated' } });
           socket.emit(CALL_EVENTS.ERROR, {
             code: 'NOT_AUTHENTICATED',
             message: 'User not authenticated',
@@ -1955,7 +1955,7 @@ export class CallEventsHandler {
           return;
         }
         if (denyAnonymous()) {
-          ack?.({ success: false, error: 'Anonymous users cannot join calls' } as unknown as CallJoinAck);
+          ack?.({ success: false, error: { code: CALL_ERROR_CODES.PERMISSION_DENIED, message: 'Anonymous users cannot join calls' } });
           return;
         }
         rememberAuth(userId);
@@ -1969,7 +1969,7 @@ export class CallEventsHandler {
           CALL_EVENTS.ERROR
         );
         if (!rateLimitPassed) {
-          ack?.({ success: false, error: 'Rate limit exceeded' } as unknown as CallJoinAck);
+          ack?.({ success: false, error: { code: CALL_ERROR_CODES.RATE_LIMIT_EXCEEDED, message: 'Rate limit exceeded' } });
           return;
         }
 
@@ -1977,7 +1977,7 @@ export class CallEventsHandler {
         const validation = validateSocketEvent(socketJoinCallSchema, data);
         if (isValidationFailure(validation)) {
           const { error: validationError, details: validationDetails } = validation;
-          ack?.({ success: false, error: validationError } as unknown as CallJoinAck);
+          ack?.({ success: false, error: { code: CALL_ERROR_CODES.VALIDATION_ERROR, message: validationError } });
           socket.emit(CALL_EVENTS.ERROR, {
             code: CALL_ERROR_CODES.VALIDATION_ERROR,
             message: validationError,
@@ -1996,7 +1996,7 @@ export class CallEventsHandler {
         // Resolve participantId from userId + callId
         const joinParticipantId = await this.resolveParticipantIdFromCall(userId, data.callId);
         if (!joinParticipantId) {
-          ack?.({ success: false, error: 'You are not a participant in this conversation' } as unknown as CallJoinAck);
+          ack?.({ success: false, error: { code: CALL_ERROR_CODES.NOT_A_PARTICIPANT, message: 'You are not a participant in this conversation' } });
           socket.emit(CALL_EVENTS.ERROR, {
             code: CALL_ERROR_CODES.NOT_A_PARTICIPANT,
             message: 'You are not a participant in this conversation',
@@ -2186,7 +2186,14 @@ export class CallEventsHandler {
           ? errorMessage.split(':').slice(1).join(':').trim()
           : errorMessage;
 
-        ack?.({ success: false, error: message } as unknown as CallJoinAck);
+        // Audit gateway (2026-07-28) — this ack previously sent only the bare
+        // `message` string despite `errorCode` already being computed above,
+        // violating the documented `CallJoinAck.error: {code, message}` shape
+        // (packages/shared/types/video-call.ts) and silently breaking the web
+        // reconnect-rejoin cleanup path, which gates on `ack.error.code ===
+        // 'CALL_ENDED'` (apps/web/components/video-call/CallManager.tsx) —
+        // that branch could never fire because `code` was always undefined.
+        ack?.({ success: false, error: { code: errorCode, message } });
         // callId systématique : sans lui, le garde de scoping par appel côté
         // client (CallError.callId, audit iOS 2026-07-08) ne peut pas
         // s'appliquer — un CALL_ENDED de rejoin tardif doit nommer SON appel.
