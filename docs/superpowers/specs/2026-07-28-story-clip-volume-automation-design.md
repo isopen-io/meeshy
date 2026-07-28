@@ -182,12 +182,33 @@ Les huit plafonds à lever :
 Le changement Zod est **bloquant** : sans lui, publier une story portant un volume
 supérieur à 1 renvoie `400`. Il impose un déploiement de la gateway.
 
-Amplifier ×2 un fichier déjà mastérisé près de 0 dBFS **écrête**. Aucun limiteur n'est
-prévu ; en contrepartie le slider distingue visuellement la zone au-delà de 100 %, qui
-est un gain et non un réglage neutre.
+### Saturation : capacité assumée, pas défaut à corriger
 
-Compatibilité : une version antérieure de l'application borne la valeur à 1,0 et joue
-simplement le clip moins fort — dégradation acceptable, aucune erreur.
+Amplifier ×2 un fichier déjà mastérisé près de 0 dBFS écrête. C'est **voulu** : l'auteur
+doit pouvoir pousser un son au-delà de son niveau nominal quand la composition l'exige,
+quitte à saturer. Aucun limiteur, aucune correction automatique, aucun avertissement
+bloquant. Le slider signale simplement que la zone au-delà de 100 % est un gain.
+
+Le réglage se fait à la composition et **se persiste dans le JSON de la story**
+(`storyEffects`), au même titre que les autres propriétés de clip : la valeur est donc
+partagée avec tous les clients qui liront cette story.
+
+Le plafond vit dans **une constante unique et documentée** (`StoryVolume.maxGain = 2.0`),
+consommée par le slider, les clamps et la validation. Le ramener à `1.0` plus tard est
+un changement d'une ligne côté app, plus l'ajustement symétrique du schéma Zod.
+
+### Comportement des autres clients
+
+| Client | Valeur > 1 |
+|---|---|
+| iOS antérieur | Bornée à 1,0 — le clip joue moins fort |
+| Web | Bornée à 1,0 par `Math.min` (`StoryViewer.tsx`) |
+| Android | Décodée sans erreur (`Story.kt`, `volume: Float`) |
+
+Aucun client n'échoue : tous dégradent vers 100 %. La parité web au-delà de 100 %
+resterait de toute façon impossible en l'état — la spec HTML borne
+`HTMLMediaElement.volume` à `[0, 1]` et lève `IndexSizeError` au-delà ; il faudrait
+passer par un `GainNode` Web Audio. Hors périmètre de ce chantier.
 
 ## 9. Interface
 
