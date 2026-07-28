@@ -1,16 +1,15 @@
 import SwiftUI
 import MeeshySDK
 
-/// Contrôles de mise en forme du texte, répartis sur deux rangées.
+/// Contrôles de mise en forme du texte pendant l'édition.
 ///
-/// En HAUT, sous l'encoche : les attributs à valeurs discrètes, qui tournent
-/// d'un cran au tap (`StoryTextEditTopBar`), et le bouton « Terminé ».
-/// En BAS, au-dessus du clavier : les outils qui demandent un panneau
-/// (`TextEditFloatingBubbles`), et le panneau lui-même quand il est déplié.
+/// En HAUT, sous l'encoche : la sortie (`StoryTextEditTopBar`). En BAS, au
+/// -dessus du clavier : la rangée unique d'outils (`TextEditFloatingBubbles`)
+/// et le panneau de l'outil déplié.
 ///
-/// La séparation vient d'un débordement : à neuf outils plus la sortie sur une
-/// seule rangée, il fallait 432 pt là où un iPhone 16 Pro en offre 361 — les
-/// deux extrémités étaient coupées, dont l'unique chemin de sortie.
+/// Deux gestes, deux portées : toucher hors d'un panneau ouvert le REFERME et
+/// rend la main aux bulles ; seul « Terminé » quitte l'édition. Sans cette
+/// distinction, refermer un panneau demandait de retrouver sa bulle d'origine.
 ///
 /// Vide tant que `viewModel.textEditingMode` est `.inactive`.
 struct StoryTextEditToolbar: View {
@@ -19,16 +18,36 @@ struct StoryTextEditToolbar: View {
     var body: some View {
         if case .active(let textId, let expandedTool) = viewModel.textEditingMode,
            let binding = textObjectBinding(for: textId) {
-            VStack(spacing: 0) {
-                StoryTextEditTopBar(onFinish: { viewModel.exitTextEditingMode() })
+            ZStack {
+                if expandedTool != nil {
+                    dismissCatcher
+                }
+                VStack(spacing: 0) {
+                    StoryTextEditTopBar(onFinish: { viewModel.exitTextEditingMode() })
 
-                Spacer(minLength: 0)
+                    Spacer(minLength: 0)
 
-                bottomRow(expandedTool: expandedTool, binding: binding)
+                    bottomRow(expandedTool: expandedTool, binding: binding)
+                }
             }
             .animation(.spring(response: 0.3, dampingFraction: 0.85),
                        value: viewModel.textEditingMode)
         }
+    }
+
+    /// Surface transparente qui referme le panneau déplié au moindre toucher
+    /// hors de lui. Montée SOUS les contrôles dans le `ZStack` : les bulles,
+    /// le panneau et « Terminé » reçoivent donc leurs touches en premier, et
+    /// seul ce qui les manque atterrit ici.
+    ///
+    /// N'existe que panneau ouvert — au repos, elle intercepterait les gestes
+    /// du canvas (déplacement du texte, pinch, tap sur un autre élément).
+    private var dismissCatcher: some View {
+        Color.clear
+            .contentShape(Rectangle())
+            .ignoresSafeArea()
+            .onTapGesture { viewModel.setExpandedTool(nil) }
+            .accessibilityHidden(true)
     }
 
     /// Plus de bandeau pleine largeur derrière les contrôleurs : les bulles

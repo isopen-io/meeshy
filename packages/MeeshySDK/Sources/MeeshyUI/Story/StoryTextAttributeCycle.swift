@@ -19,7 +19,10 @@ nonisolated enum StoryTextAttributeCycle {
     enum Indicator: Equatable, Sendable {
         /// Symbole SF reflétant la valeur courante. `emphasis` (0…4) rend une
         /// intensité — seul le contour s'en sert, pour montrer son épaisseur.
-        case symbol(name: String, emphasis: Int)
+        /// `tint` porte la couleur que l'outil applique (contour du texte,
+        /// liseré du cadre) : sans elle, la bulle dirait l'épaisseur mais pas
+        /// la teinte, alors que la bulle Couleur montre déjà la sienne.
+        case symbol(name: String, emphasis: Int, tint: String? = nil)
         /// Lettre témoin rendue dans la POLICE courante (bouton Police).
         case styledGlyph(String, style: StoryTextStyle)
         /// Pastille pleine de la couleur courante (bouton Couleur).
@@ -145,11 +148,14 @@ nonisolated enum StoryTextAttributeCycle {
         case .align:
             return .symbol(name: alignSymbol(text.textAlign ?? defaultAlign), emphasis: 0)
         case .frame:
-            return .symbol(name: frameSymbol(text.parsedFrameShape), emphasis: 0)
+            // Teinte = liseré du cadre, et seulement s'il en porte un : sans
+            // trait, il n'y a pas de couleur à annoncer.
+            let frameTint = (text.frameBorderWidth ?? 0) > 0 ? text.frameBorderColor : nil
+            return .symbol(name: frameSymbol(text.parsedFrameShape), emphasis: 0, tint: frameTint)
         case .border:
             let width = text.borderWidth ?? 0
             guard width > 0 else { return .symbol(name: "square.dashed", emphasis: 0) }
-            return .symbol(name: "square", emphasis: borderEmphasis(width))
+            return .symbol(name: "square", emphasis: borderEmphasis(width), tint: text.borderColor)
         }
     }
 
