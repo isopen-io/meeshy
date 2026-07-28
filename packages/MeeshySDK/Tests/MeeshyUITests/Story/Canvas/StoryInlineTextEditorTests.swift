@@ -143,4 +143,56 @@ final class StoryInlineTextEditorTests: XCTestCase {
         XCTAssertLessThan(r + g + b, 1.0, "tint doit être proche du noir")
         XCTAssertGreaterThan(a, 0.4)
     }
+
+    // MARK: - Rendu live des curseurs du panneau Police
+
+    /// Le champ d'édition en place peint les glyphes pendant la frappe : c'est
+    /// LUI qui doit refléter taille et graisse, pas seulement le calque en
+    /// dessous. Rien dans le système de types ne garantit cette propriété.
+    func test_theInlineEditorReflectsAWeightChangeWithoutRetyping() {
+        let editor = StoryInlineTextEditor()
+        var text = StoryTextObject(id: "t1", text: "Bonjour")
+
+        text.fontWeight = StoryTextWeight.thin.rawValue
+        editor.apply(textObject: text, geometry: geometry, setText: true)
+        let thin = editor.font
+
+        text.fontWeight = StoryTextWeight.bold.rawValue
+        editor.apply(textObject: text, geometry: geometry, setText: false)
+
+        XCTAssertNotEqual(editor.font, thin, "le champ doit re-résoudre sa police")
+    }
+
+    func test_theInlineEditorReflectsASizeChangeWithoutRetyping() {
+        let editor = StoryInlineTextEditor()
+        var text = StoryTextObject(id: "t1", text: "Bonjour")
+
+        text.fontSize = 40
+        editor.apply(textObject: text, geometry: geometry, setText: true)
+        let small = editor.font?.pointSize ?? 0
+
+        text.fontSize = 120
+        editor.apply(textObject: text, geometry: geometry, setText: false)
+
+        XCTAssertGreaterThan(editor.font?.pointSize ?? 0, small)
+    }
+
+    /// Le curseur de taille écrit `fontSize` ET remet `scale` à 1 : le champ
+    /// lit le PRODUIT des deux, donc un `scale` résiduel gonflerait le rendu
+    /// au-delà de la valeur affichée par le curseur.
+    func test_theInlineEditorReadsTheProductOfSizeAndScale() {
+        let editor = StoryInlineTextEditor()
+        var text = StoryTextObject(id: "t1", text: "Bonjour")
+        text.fontSize = 50
+        text.scale = 2
+
+        editor.apply(textObject: text, geometry: geometry, setText: true)
+        let doubled = editor.font?.pointSize ?? 0
+
+        TextEditToolOptions.applyingSliderValue(50, to: &text)
+        editor.apply(textObject: text, geometry: geometry, setText: false)
+
+        XCTAssertEqual(text.scale, 1)
+        XCTAssertLessThan(editor.font?.pointSize ?? 0, doubled)
+    }
 }

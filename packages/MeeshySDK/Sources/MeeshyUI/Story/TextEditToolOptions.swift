@@ -87,7 +87,64 @@ struct TextEditToolOptions: View {
 
     // MARK: - Style
 
+    /// Taille et graisse coiffent la liste des polices : ce sont des valeurs
+    /// continues, elles se règlent là où on choisit la famille plutôt que
+    /// derrière une bulle chacune.
     private var styleOptions: some View {
+        VStack(spacing: 10) {
+            sizeSlider
+            weightSlider
+            styleFamilyRow
+        }
+    }
+
+    private var sizeSlider: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "textformat.size.smaller")
+                .font(.system(size: 12))
+                .foregroundStyle(.secondary)
+            Slider(
+                value: Binding(
+                    get: { Self.displayedSize(for: textObject) },
+                    set: { Self.applyingSliderValue($0, to: &textObject) }
+                ),
+                in: 14...160, step: 1
+            )
+            .tint(MeeshyColors.brandPrimary)
+            Image(systemName: "textformat.size.larger")
+                .font(.system(size: 16))
+                .foregroundStyle(.secondary)
+            Text("\(Int(Self.displayedSize(for: textObject)))")
+                .font(.system(size: 12, weight: .bold, design: .monospaced))
+                .foregroundStyle(.secondary)
+                .frame(width: 34)
+        }
+    }
+
+    private var weightSlider: some View {
+        HStack(spacing: 10) {
+            Text("A")
+                .font(.system(size: 13, weight: .thin))
+                .foregroundStyle(.secondary)
+            Slider(
+                value: Binding(
+                    get: { Self.weightSliderValue(for: textObject) },
+                    set: { Self.applyingWeightSliderValue($0, to: &textObject) }
+                ),
+                in: 0...Double(StoryTextWeight.allCases.count - 1), step: 1
+            )
+            .tint(MeeshyColors.brandPrimary)
+            Text("A")
+                .font(.system(size: 15, weight: .bold))
+                .foregroundStyle(.secondary)
+            Text(TextEditLabels.title(for: textObject.parsedFontWeight ?? .normal))
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(.secondary)
+                .frame(width: 52)
+        }
+    }
+
+    private var styleFamilyRow: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 10) {
                 ForEach(StoryTextStyle.allCases, id: \.self) { style in
@@ -205,6 +262,24 @@ struct TextEditToolOptions: View {
     nonisolated static func applyingSliderValue(_ value: Double, to text: inout StoryTextObject) {
         text.fontSize = value
         text.scale = 1
+    }
+
+    /// Rang du curseur de graisse (0…3) pour l'état courant. `nil` se lit
+    /// « normal » — la même valeur de repli que partout ailleurs — sinon le
+    /// curseur démarrerait à « fin » et le premier drag épaissirait un texte
+    /// que l'auteur n'a pas touché.
+    nonisolated static func weightSliderValue(for text: StoryTextObject) -> Double {
+        let weight = text.parsedFontWeight ?? .normal
+        return Double(StoryTextWeight.allCases.firstIndex(of: weight) ?? 1)
+    }
+
+    /// Écrit la graisse correspondant à un rang de curseur, borné à la plage
+    /// réelle de l'énuméré.
+    nonisolated static func applyingWeightSliderValue(_ value: Double,
+                                                      to text: inout StoryTextObject) {
+        let steps = StoryTextWeight.allCases
+        let index = min(steps.count - 1, max(0, Int(value.rounded())))
+        text.fontWeight = steps[index].rawValue
     }
 
     // MARK: - Align
