@@ -291,11 +291,45 @@ Chaque comportement est écrit en test avant son implémentation.
 | `StoryTextStyleAndFrameShapeTests` | round-trip Codable des trois champs ; `hasFrameBox` sur les 6 combinaisons forme × fond × liseré |
 | `StoryComposerView` (framing) | `canvasIsCarded` est faux en édition texte **même quand la band n'est pas `.hidden`** |
 
+### Tests existants qui deviennent faux
+
+Trois tests de `TextEditToolbarLayoutTests` s'appuient sur la répartition en deux
+rangées (`test_theTwoRowsCoverEveryToolExactlyOnce`,
+`test_everyToolOnTheTopRowCanBeCycled`,
+`test_theTopRowFitsOnTheNarrowestSupportedScreen_finishButtonIncluded`) et disparaissent
+avec elle.
+
+Un quatrième, `test_theOriginalSingleRowLayoutDoesNotFitAnywhere`, devient **faux sans
+que son intention le devienne** — c'est le piège. Il pose « tous les outils plus la
+sortie sur une rangée ne tiennent nulle part » et le vérifie sur deux largeurs. Avec
+sept outils au lieu de neuf, sa seconde assertion demande 8 bulles = 344 pt sur les
+361 pt d'un iPhone 16 Pro : ça tient, donc le `XCTAssertFalse` casse. Il faut le
+réécrire autour de la nouvelle garde — sept bulles tiennent partout, huit ne tiennent
+plus sur un iPhone SE — et non le supprimer : c'est lui qui empêche la troncature
+silencieuse de revenir.
+
+Dans `StoryTextAttributeCycleTests`, `test_weight_visitsEveryStepThenWrapsAround`,
+`test_weight_whenUnset_departsFromNormal` et l'assertion sur `.glyph("A", weight: .bold)`
+tombent avec le tool Graisse.
+
+## 9. Un second éditeur de texte, hors scope
+
+`StoryTextEditorView` — le panneau que `ComposerBottomBand` affiche pour l'outil Texte —
+est une **seconde** interface d'édition, atteinte par la tuile Texte plutôt que par un
+tap sur un texte du canvas. Elle duplique déjà, dans sa propre grammaire, la palette de
+couleurs, la rotation de style, la rotation d'alignement, le bascule de fond et le
+curseur de taille.
+
+Elle n'est pas touchée ici : les deux surfaces ne sont jamais visibles en même temps
+(`isFloatingEditorActive` masque la band), et l'aligner doublerait la tâche. Mais la
+divergence se creuse d'un cran avec ce travail, et c'est à traiter dans un lot séparé —
+soit en alignant sa grammaire, soit en la supprimant au profit de l'éditeur flottant.
+
 Vérification finale : `./apps/ios/meeshy.sh build` puis `./apps/ios/meeshy.sh test`.
 `build` ne compile pas le bundle de tests — un `build-for-testing` est nécessaire dès
 qu'une signature change, et les signatures changent ici (`TextEditTool` perd deux cas).
 
-## 9. Risques
+## 10. Risques
 
 | Risque | Traitement |
 |---|---|
