@@ -870,11 +870,16 @@ public struct StoryAudioPlayerObject: Codable, Identifiable, Sendable {
     public var sourceLanguage: String?
     /// Optional author-assigned clip name (persisted, backward-compatible).
     public var name: String?
+    /// Automation par keyframes, parité avec `StoryMediaObject.keyframes`.
+    /// Seul le canal `volume` a un sens pour un son : sa position `x`/`y`
+    /// existe dans le modèle mais ne pilote aucun rendu.
+    public var keyframes: [StoryKeyframe]?
 
     enum CodingKeys: String, CodingKey {
         case id, postMediaId, placement, x, y, volume, waveformSamples
         case isBackground, backgroundAudioVariants, zIndex
         case startTime, duration, loop, fadeIn, fadeOut, sourceLanguage, name
+        case keyframes
     }
 
     public init(id: String = UUID().uuidString, postMediaId: String = "",
@@ -886,7 +891,8 @@ public struct StoryAudioPlayerObject: Codable, Identifiable, Sendable {
                 startTime: Float? = nil, duration: Float? = nil,
                 loop: Bool? = nil, fadeIn: Float? = nil, fadeOut: Float? = nil,
                 sourceLanguage: String? = nil,
-                name: String? = nil) {
+                name: String? = nil,
+                keyframes: [StoryKeyframe]? = nil) {
         self.id = id; self.postMediaId = postMediaId
         self.placement = placement; self.x = x; self.y = y
         self.volume = volume; self.waveformSamples = waveformSamples
@@ -896,6 +902,7 @@ public struct StoryAudioPlayerObject: Codable, Identifiable, Sendable {
         self.loop = loop; self.fadeIn = fadeIn; self.fadeOut = fadeOut
         self.sourceLanguage = sourceLanguage
         self.name = name
+        self.keyframes = keyframes
     }
 }
 
@@ -1684,6 +1691,16 @@ public struct StoryEffects: Codable, Sendable {
                  "x": p.x, "y": p.y, "volume": p.volume,
                  "waveformSamples": p.waveformSamples]
                 if let bg = p.isBackground { d["isBackground"] = bg }
+                // Automation de volume : sans cette sérialisation, les points
+                // posés par l'auteur seraient perdus à la publication.
+                if let frames = p.keyframes, !frames.isEmpty {
+                    d["keyframes"] = frames.map { kf -> [String: Any] in
+                        var f: [String: Any] = ["id": kf.id, "time": kf.time]
+                        if let v = kf.volume { f["volume"] = v }
+                        if let e = kf.easing { f["easing"] = e.rawValue }
+                        return f
+                    }
+                }
                 if let variants = p.backgroundAudioVariants, !variants.isEmpty {
                     d["backgroundAudioVariants"] = variants.map { v in
                         ["postMediaId": v.postMediaId, "language": v.language,
@@ -3099,7 +3116,15 @@ private extension TimelineProject {
             try block(&arr)
             textObjects[idx].keyframes = arr.isEmpty ? nil : arr
         case .audio:
-            throw EditCommandError.invalidState(reason: "audio clips do not support keyframes")
+            // Les clips audio portent désormais des keyframes — le canal
+            // `volume` y pilote l'automation sonore. Refuser ici rendait toute
+            // automation impossible sur un son, alors que le média l'avait.
+            guard let idx = audioPlayerObjects.firstIndex(where: { $0.id == clipId }) else {
+                throw EditCommandError.clipNotFound(id: clipId)
+            }
+            var arr = audioPlayerObjects[idx].keyframes ?? []
+            try block(&arr)
+            audioPlayerObjects[idx].keyframes = arr.isEmpty ? nil : arr
         case .sticker:
             throw EditCommandError.invalidState(reason: "sticker clips do not support keyframes")
         }
@@ -3624,6 +3649,12 @@ public struct StoryKeyframe: Codable, Identifiable, Sendable {
     public var y: CGFloat?
     public var scale: CGFloat?
     public var opacity: CGFloat?
+    /// Volume du clip à cet instant, dans `0...StoryVolume.maxGain`.
+    ///
+    /// 5ᵉ canal optionnel : un point « volume seul » laisse les quatre autres
+    /// à `nil` et l'interpolation les ignore alors, exactement comme un point
+    /// de position ignore le volume.
+    public var volume: Float?
     public var easing: StoryEasing?
 
     public init(id: String = UUID().uuidString,
@@ -3632,6 +3663,7 @@ public struct StoryKeyframe: Codable, Identifiable, Sendable {
                 y: CGFloat? = nil,
                 scale: CGFloat? = nil,
                 opacity: CGFloat? = nil,
+                volume: Float? = nil,
                 easing: StoryEasing? = nil) {
         self.id = id
         self.time = time
@@ -3639,6 +3671,7 @@ public struct StoryKeyframe: Codable, Identifiable, Sendable {
         self.y = y
         self.scale = scale
         self.opacity = opacity
+        self.volume = volume
         self.easing = easing
     }
 }
