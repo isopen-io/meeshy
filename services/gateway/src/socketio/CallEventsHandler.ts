@@ -704,7 +704,14 @@ export class CallEventsHandler {
       const leftSession = await this.callService.leaveCall({
         callId: participation.callSessionId,
         userId,
-        participantId: participation.participantId
+        participantId: participation.participantId,
+        // This method is reached exclusively from a disconnect-grace expiry
+        // (see onDisconnectGraceExpired, its only caller) — an involuntary
+        // socket drop that never reconnected, never an explicit call:leave/
+        // call:end. Mirrors the connectionLost reason this same scenario's
+        // error-fallback branch below already stamps via
+        // forceEndOrphanedCallSession.
+        endReasonHint: CallEndReason.connectionLost
       });
       this.invalidateSignalSession(participation.callSessionId);
 
