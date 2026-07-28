@@ -16,6 +16,35 @@ annulables et la persistance déjà en place.
 
 **Spec :** `docs/superpowers/specs/2026-07-28-story-clip-volume-automation-design.md`
 
+## État au 2026-07-28 — les 13 tâches sont livrées
+
+Suite complète verte : 2270 tests, 0 échec. Deux écarts au plan, corrigés à l'exécution
+et signalés ici parce que le texte des tâches les porte encore :
+
+- `TimelineProject.mutateKeyframes` est `fileprivate`, pas `internal` — la Task 2 se
+  teste à travers `AddKeyframeCommand.apply(to:)`.
+- La garde de source de la Task 5 remonte de `Tests/MeeshyUITests/Story/` : **quatre**
+  `deletingLastPathComponent`, pas trois.
+
+Deux défauts absents du plan ont été trouvés en chemin : `StoryMediaLayer` relisait
+`media?.volume` à chaque ré-attache et aurait écrasé l'automation ; et
+`mutateKeyframes` REFUSAIT explicitement les clips audio — le vrai verrou de
+l'automation sonore.
+
+**Il reste deux choses**, toutes deux hors de portée d'un test :
+
+1. **Étape 8 de la Task 13 — vérification sur appareil.** La cohabitation filmstrip +
+   waveform + courbe dans 52 pt ne se juge pas au test.
+2. **Le drapeau `isDuckingDisabled`** (spec A2) est reporté : sans bascule dans
+   l'interface, un champ de modèle ne sert à rien, et son ajout demande cinq points de
+   contact dans le décodeur manuel de `StoryMediaObject`. Le ducking reste donc actif
+   sans possibilité de le couper.
+
+⚠️ Le gate PNG de `ClipInspectorSnapshotTests` **n'a pas réagi** à l'ajout du bloc
+d'automation, alors qu'une mesure de hauteur prouve qu'il est monté
+(`ClipInspectorVolumeSectionMountedTests`). Ne pas s'appuyer sur ces références pour
+valider une évolution de cette fiche.
+
 **Pile :** Swift 6 / SwiftUI / AVFoundation (iOS) · TypeScript / Zod / Jest (gateway)
 
 ## Contraintes globales
