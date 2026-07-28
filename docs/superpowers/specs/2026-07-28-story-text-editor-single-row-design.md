@@ -34,7 +34,8 @@ Trois manques s'y ajoutent :
 
 - Les rendus bitmap simplifiés (`StorySlideRenderer`, `SlideMiniPreview`) ignorent déjà
   les formes path-based (losange, nuage, bulle BD). Cet écart préexistant n'est pas
-  comblé ici ; seuls marge et liseré y sont portés pour les formes à coins.
+  comblé ici, et marge et liseré n'y sont pas portés non plus — voir §7 pour pourquoi
+  c'est impossible à moindre coût dans l'un et sans intérêt dans l'autre.
 - Aucun changement de format d'échange. Les effets de slide voyagent en JSON opaque
   vers le gateway : ni `packages/shared/types/`, ni le schéma Prisma ne sont touchés.
 
@@ -273,9 +274,19 @@ tout de suite » n'étant garantie par aucune barrière de type.
 `StoryTextLayer` est le seul rendu haute fidélité : canvas composer, reader **et** export
 vidéo passent par lui. C'est là que marge, liseré et `.none` sont implémentés en entier.
 
-`StorySlideRenderer` (bitmaps statiques) et `SlideMiniPreview` (vignettes) reçoivent
-marge et liseré pour les formes à coins uniquement, conformément au non-objectif : leur
-écart existant sur les formes path-based n'est pas comblé ici.
+Les deux rendus simplifiés restent en dehors, chacun pour sa raison propre :
+
+- **`StorySlideRenderer`** (cover et thumbHash) peint le fond de texte via l'attribut
+  `NSAttributedString.backgroundColor`, posé par run de glyphes. Cet attribut n'a **ni
+  padding ni rayon de coin** : il n'existe aucun endroit où écrire une marge ou un
+  liseré. Les porter demanderait de remplacer le dessin du texte par un tracé explicite
+  de boîte — une réécriture réelle, pour un gain nul sur une vignette de hash perceptuel.
+- **`SlideMiniPreview`** (bande de vignettes) sait faire les deux, en SwiftUI. Mais sur
+  une vignette large de quelques dizaines de points, un liseré de 2 px design tombe sous
+  le pixel. Le coût de maintenance d'un troisième site de vérité n'achète rien de visible.
+
+Les deux divergences existantes sont documentées ici plutôt que corrigées : c'est le
+même arbitrage que celui déjà pris pour les formes path-based.
 
 ## 8. Tests
 
