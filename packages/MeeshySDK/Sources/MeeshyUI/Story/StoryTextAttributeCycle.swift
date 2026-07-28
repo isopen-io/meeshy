@@ -12,13 +12,24 @@ import MeeshySDK
 /// doit l'être sur le type pour que les extensions et les conformances suivent.
 nonisolated enum StoryTextAttributeCycle {
 
-    /// Ce qu'affiche un bouton de la rangée haute pour son attribut.
+    /// Ce qu'affiche une bulle pour son attribut. Chaque bulle rend l'état
+    /// COURANT et non un pictogramme figé : c'est ce qui rend le tap-pour-
+    /// tourner utilisable — sans lui, parcourir quatorze couleurs se ferait à
+    /// l'aveugle.
     enum Indicator: Equatable, Sendable {
         /// Symbole SF reflétant la valeur courante. `emphasis` (0…4) rend une
         /// intensité — seul le contour s'en sert, pour montrer son épaisseur.
         case symbol(name: String, emphasis: Int)
         /// Lettre témoin rendue dans la graisse courante (bouton Graisse).
         case glyph(String, weight: StoryTextWeight)
+        /// Lettre témoin rendue dans la POLICE courante (bouton Police).
+        case styledGlyph(String, style: StoryTextStyle)
+        /// Pastille pleine de la couleur courante (bouton Couleur).
+        case colorDot(hex: String)
+        /// Fond courant : `hex == nil && !isGlass` ⇒ aucun fond.
+        case backgroundSwatch(hex: String?, isGlass: Bool)
+        /// Code de langue en capitales (bouton Langue).
+        case code(String)
     }
 
     /// Crans du contour, en points. Le panneau détaillé garde son curseur
@@ -35,24 +46,58 @@ nonisolated enum StoryTextAttributeCycle {
     /// style » ; la traiter comme `normal` donne un point de départ prévisible.
     static let defaultWeight: StoryTextWeight = .normal
 
-    /// Fond discret posé quand une forme de cadre est choisie sans fond — un
-    /// cadrage sans fond ne se voit pas. Même valeur que le panneau détaillé.
-    static let implicitFrameBackground = "000000A6"
-
     /// Couleur posée quand le contour quitte zéro sans couleur choisie.
     static let defaultBorderColor = "FFFFFF"
+
+    /// Liseré posé quand une forme de cadre est choisie sans rien à voir. Le
+    /// code posait auparavant un fond noir 65 %, qui recouvrait le texte.
+    static let defaultFrameBorderWidth: Double = 2
+    static let defaultFrameBorderColor = "FFFFFF"
 
     // MARK: - Avance
 
     static func advance(_ tool: TextEditTool, on text: inout StoryTextObject) {
         switch tool {
-        case .weight: advanceWeight(on: &text)
-        case .align:  advanceAlign(on: &text)
-        case .border: advanceBorder(on: &text)
-        case .frame:  advanceFrame(on: &text)
-        case .style, .color, .size, .background, .language:
-            break
+        case .weight:     advanceWeight(on: &text)
+        case .align:      advanceAlign(on: &text)
+        case .border:     advanceBorder(on: &text)
+        case .frame:      advanceFrame(on: &text)
+        case .style:      advanceStyle(on: &text)
+        case .color:      advanceColor(on: &text)
+        case .background: advanceBackground(on: &text)
+        case .language:   advanceLanguage(on: &text)
+        case .size:       break
         }
+    }
+
+    private static func advanceStyle(on text: inout StoryTextObject) {
+        let steps = StoryTextStyle.allCases
+        let index = steps.firstIndex(of: text.parsedTextStyle) ?? 0
+        text.textStyle = steps[(index + 1) % steps.count].rawValue
+    }
+
+    private static func advanceColor(on text: inout StoryTextObject) {
+        let steps = StoryTextColors.palette
+        let current = text.textColor ?? steps[0]
+        let index = steps.firstIndex(where: { $0.caseInsensitiveCompare(current) == .orderedSame }) ?? 0
+        text.textColor = steps[(index + 1) % steps.count]
+    }
+
+    /// Purge `textBg` en même temps : le renderer préfère `backgroundStyle`
+    /// mais retombe encore sur ce champ legacy, qui laisserait sinon un fond
+    /// fantôme derrière un `.none` fraîchement choisi.
+    private static func advanceBackground(on text: inout StoryTextObject) {
+        let steps = StoryTextBackgroundPresets.all
+        let index = steps.firstIndex(of: text.resolvedBackgroundStyle) ?? 0
+        text.backgroundStyle = steps[(index + 1) % steps.count]
+        text.textBg = nil
+    }
+
+    private static func advanceLanguage(on text: inout StoryTextObject) {
+        let steps = TextEditToolOptions.languageChoices(current: text.sourceLanguage)
+        let current = TextEditToolOptions.normalisedCode(text.sourceLanguage) ?? steps[0]
+        let index = steps.firstIndex(of: current) ?? 0
+        text.sourceLanguage = steps[(index + 1) % steps.count]
     }
 
     private static func advanceWeight(on text: inout StoryTextObject) {
@@ -79,14 +124,19 @@ nonisolated enum StoryTextAttributeCycle {
         }
     }
 
+    /// Le cadre inclut « Aucun » dans sa rotation. Quitter « Aucun » pose un
+    /// LISERÉ, pas un fond : la version précédente peignait un noir 65 % pour
+    /// rendre la forme visible, ce qui recouvrait le texte de l'auteur sans
+    /// qu'il l'ait demandé.
     private static func advanceFrame(on text: inout StoryTextObject) {
         let steps = StoryTextFrameShape.allCases
         let index = steps.firstIndex(of: text.parsedFrameShape) ?? 0
         text.frameShape = steps[(index + 1) % steps.count].rawValue
-        if case .none = text.resolvedBackgroundStyle {
-            text.backgroundStyle = .solid(hex: implicitFrameBackground)
-            text.textBg = nil
-        }
+        guard text.parsedFrameShape != StoryTextFrameShape.none,
+              text.resolvedBackgroundStyle == StoryTextBackgroundStyle.none,
+              (text.frameBorderWidth ?? 0) == 0 else { return }
+        text.frameBorderWidth = defaultFrameBorderWidth
+        text.frameBorderColor = defaultFrameBorderColor
     }
 
     // MARK: - État affiché
@@ -95,6 +145,20 @@ nonisolated enum StoryTextAttributeCycle {
         switch tool {
         case .weight:
             return .glyph("A", weight: text.parsedFontWeight ?? defaultWeight)
+        case .style:
+            return .styledGlyph("Aa", style: text.parsedTextStyle)
+        case .color:
+            return .colorDot(hex: text.textColor ?? "FFFFFF")
+        case .background:
+            switch text.resolvedBackgroundStyle {
+            case .none:           return .backgroundSwatch(hex: nil, isGlass: false)
+            case .glass:          return .backgroundSwatch(hex: nil, isGlass: true)
+            case .solid(let hex): return .backgroundSwatch(hex: hex, isGlass: false)
+            }
+        case .language:
+            let code = TextEditToolOptions.normalisedCode(text.sourceLanguage)
+                ?? TextEditToolOptions.languageChoices(current: nil)[0]
+            return .code(code.uppercased())
         case .align:
             return .symbol(name: alignSymbol(text.textAlign ?? defaultAlign), emphasis: 0)
         case .frame:
@@ -103,7 +167,7 @@ nonisolated enum StoryTextAttributeCycle {
             let width = text.borderWidth ?? 0
             guard width > 0 else { return .symbol(name: "square.dashed", emphasis: 0) }
             return .symbol(name: "square", emphasis: borderEmphasis(width))
-        case .style, .color, .size, .background, .language:
+        case .size:
             return .symbol(name: tool.sfSymbol, emphasis: 0)
         }
     }

@@ -261,7 +261,7 @@ struct TextEditToolOptions: View {
     /// Langues proposées : celles de l'interface Meeshy, la langue déjà posée
     /// sur le texte en tête si elle sort du lot — jamais de liste vide, et
     /// jamais de perte du choix courant.
-    static func languageChoices(current: String?) -> [String] {
+    nonisolated static func languageChoices(current: String?) -> [String] {
         let base = ["fr", "en", "es", "de", "it", "pt", "ar"]
         guard let normalised = normalisedCode(current) else { return base }
         return base.contains(normalised) ? base : [normalised] + base
@@ -269,7 +269,7 @@ struct TextEditToolOptions: View {
 
     /// Réduit un code au format des pastilles (`pt-BR` → `pt`), ou `nil` s'il
     /// n'y a rien d'exploitable.
-    static func normalisedCode(_ raw: String?) -> String? {
+    nonisolated static func normalisedCode(_ raw: String?) -> String? {
         guard let raw else { return nil }
         let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return nil }

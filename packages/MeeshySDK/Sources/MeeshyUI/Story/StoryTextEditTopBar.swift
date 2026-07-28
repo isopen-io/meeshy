@@ -68,6 +68,32 @@ struct StoryTextEditTopBar: View {
             Image(systemName: name)
                 .font(.system(size: 14, weight: Self.strokeWeight(emphasis)))
                 .glassControlForeground()
+        case .styledGlyph(let letter, let style):
+            Text(letter)
+                .font(storyFont(for: style, size: 15))
+                .glassControlForeground()
+        case .colorDot(let hex):
+            Circle()
+                .fill(Color(hex: hex))
+                .frame(width: 18, height: 18)
+                .overlay(Circle().stroke(Color.white.opacity(0.6), lineWidth: 1))
+        case .backgroundSwatch(let hex, let isGlass):
+            if let hex {
+                RoundedRectangle(cornerRadius: 5, style: .continuous)
+                    .fill(Color(hex: hex))
+                    .frame(width: 18, height: 18)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 5, style: .continuous)
+                            .stroke(Color.white.opacity(0.6), lineWidth: 1))
+            } else {
+                Image(systemName: isGlass ? "square.on.square.dashed" : "square.slash")
+                    .font(.system(size: 14, weight: .semibold))
+                    .glassControlForeground()
+            }
+        case .code(let code):
+            Text(code)
+                .font(.system(size: 12, weight: .bold))
+                .glassControlForeground()
         }
     }
 

@@ -123,25 +123,90 @@ final class StoryTextAttributeCycleTests: XCTestCase {
                               StoryTextFrameShape.none, .rounded])
     }
 
-    /// Une forme de cadre sans fond ne se voit pas. Le panneau détaillé pose
-    /// déjà un fond discret dans ce cas ; le tap doit faire de même, sinon la
-    /// rotation paraît sans effet.
-    func test_frame_withoutABackground_postsOne() {
-        var obj = text(frameShape: nil, backgroundStyle: nil)
+    func test_frame_includesNoneInTheRotation() {
+        var obj = text(frameShape: StoryTextFrameShape.speech.rawValue)
         StoryTextAttributeCycle.advance(.frame, on: &obj)
-        guard case .solid(let hex) = obj.resolvedBackgroundStyle else {
-            return XCTFail("un cadrage sans fond doit poser un fond visible")
-        }
-        XCTAssertEqual(hex, "000000A6")
+        XCTAssertEqual(obj.parsedFrameShape, StoryTextFrameShape.none,
+                       "après la dernière forme vient Aucun")
     }
 
-    func test_frame_neverReplacesABackgroundTheUserChose() {
-        var obj = text(frameShape: nil, backgroundStyle: .solid(hex: "6366F1"))
+    /// Le comportement d'avant posait un fond noir 65 % pour rendre la forme
+    /// visible — ce qui recouvrait le texte sans qu'on l'ait demandé. On pose
+    /// un liseré : même intention, geste non destructeur.
+    func test_frame_leavingNoneLaysAThinBorderRatherThanRepaintingTheText() {
+        var obj = text(frameShape: StoryTextFrameShape.none.rawValue)
+
         StoryTextAttributeCycle.advance(.frame, on: &obj)
-        guard case .solid(let hex) = obj.resolvedBackgroundStyle else {
-            return XCTFail("le fond choisi doit survivre au changement de forme")
+
+        XCTAssertEqual(obj.parsedFrameShape, StoryTextFrameShape.rounded)
+        XCTAssertEqual(obj.frameBorderWidth, StoryTextAttributeCycle.defaultFrameBorderWidth)
+        XCTAssertEqual(obj.frameBorderColor, "FFFFFF")
+        XCTAssertEqual(obj.resolvedBackgroundStyle, StoryTextBackgroundStyle.none,
+                       "le fond du texte n'est pas touché")
+    }
+
+    func test_frame_keepsAnExistingBackgroundAndAddsNoBorder() {
+        var obj = text(frameShape: StoryTextFrameShape.none.rawValue,
+                       backgroundStyle: .solid(hex: "6366F1"))
+
+        StoryTextAttributeCycle.advance(.frame, on: &obj)
+
+        XCTAssertEqual(obj.resolvedBackgroundStyle, StoryTextBackgroundStyle.solid(hex: "6366F1"))
+        XCTAssertNil(obj.frameBorderWidth, "un fond suffit déjà à rendre la forme visible")
+    }
+
+    // MARK: - Rotations nouvellement couvertes
+
+    func test_style_visitsEveryFamilyThenWrapsAround() {
+        var obj = text()
+        obj.textStyle = StoryTextStyle.bold.rawValue
+        var seen: [StoryTextStyle] = []
+        for _ in 0..<StoryTextStyle.allCases.count {
+            StoryTextAttributeCycle.advance(.style, on: &obj)
+            seen.append(obj.parsedTextStyle)
         }
-        XCTAssertEqual(hex, "6366F1")
+        XCTAssertEqual(Set(seen), Set(StoryTextStyle.allCases))
+        XCTAssertEqual(obj.parsedTextStyle, .bold, "un tour complet revient au départ")
+    }
+
+    func test_color_visitsEveryPaletteEntryThenWrapsAround() {
+        var obj = text()
+        obj.textColor = StoryTextColors.palette[0]
+        for _ in 0..<StoryTextColors.palette.count {
+            StoryTextAttributeCycle.advance(.color, on: &obj)
+        }
+        XCTAssertEqual(obj.textColor, StoryTextColors.palette[0])
+    }
+
+    /// La rotation doit écrire `backgroundStyle` ET purger le champ legacy
+    /// `textBg` : sinon le renderer, qui préfère `backgroundStyle` mais lit
+    /// encore `textBg` en repli, garderait un fond fantôme.
+    func test_background_advancesAndClearsTheLegacyField() {
+        var obj = text()
+        obj.textBg = "123456"
+        StoryTextAttributeCycle.advance(.background, on: &obj)
+
+        XCTAssertNil(obj.textBg)
+        XCTAssertEqual(obj.backgroundStyle, StoryTextBackgroundPresets.all[1])
+    }
+
+    func test_background_wrapsAroundTheWholePresetList() {
+        var obj = text()
+        obj.backgroundStyle = StoryTextBackgroundPresets.all[0]
+        for _ in 0..<StoryTextBackgroundPresets.all.count {
+            StoryTextAttributeCycle.advance(.background, on: &obj)
+        }
+        XCTAssertEqual(obj.resolvedBackgroundStyle, StoryTextBackgroundPresets.all[0])
+    }
+
+    func test_language_visitsEveryOfferedCodeThenWrapsAround() {
+        let codes = TextEditToolOptions.languageChoices(current: nil)
+        var obj = text()
+        obj.sourceLanguage = codes[0]
+        for _ in 0..<codes.count {
+            StoryTextAttributeCycle.advance(.language, on: &obj)
+        }
+        XCTAssertEqual(obj.sourceLanguage, codes[0])
     }
 
     // MARK: - Indicateurs
@@ -173,5 +238,42 @@ final class StoryTextAttributeCycleTests: XCTestCase {
             return XCTFail("le contour doit rendre son épaisseur")
         }
         XCTAssertGreaterThan(heavy, light)
+    }
+
+    func test_indicator_forStyle_showsTheCurrentFamily() {
+        var obj = text()
+        obj.textStyle = StoryTextStyle.neon.rawValue
+        XCTAssertEqual(StoryTextAttributeCycle.indicator(.style, of: obj),
+                       .styledGlyph("Aa", style: .neon))
+    }
+
+    func test_indicator_forColor_showsTheCurrentSwatch() {
+        var obj = text()
+        obj.textColor = "FF2E63"
+        XCTAssertEqual(StoryTextAttributeCycle.indicator(.color, of: obj),
+                       .colorDot(hex: "FF2E63"))
+    }
+
+    func test_indicator_forBackground_distinguishesNoneGlassAndSolid() {
+        var obj = text()
+
+        obj.backgroundStyle = StoryTextBackgroundStyle.none
+        XCTAssertEqual(StoryTextAttributeCycle.indicator(.background, of: obj),
+                       .backgroundSwatch(hex: nil, isGlass: false))
+
+        obj.backgroundStyle = .glass(radius: 24)
+        XCTAssertEqual(StoryTextAttributeCycle.indicator(.background, of: obj),
+                       .backgroundSwatch(hex: nil, isGlass: true))
+
+        obj.backgroundStyle = .solid(hex: "34D399")
+        XCTAssertEqual(StoryTextAttributeCycle.indicator(.background, of: obj),
+                       .backgroundSwatch(hex: "34D399", isGlass: false))
+    }
+
+    func test_indicator_forLanguage_showsTheUppercasedCode() {
+        var obj = text()
+        obj.sourceLanguage = "pt-BR"
+        XCTAssertEqual(StoryTextAttributeCycle.indicator(.language, of: obj),
+                       .code("PT"))
     }
 }
