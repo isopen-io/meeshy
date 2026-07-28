@@ -398,7 +398,8 @@ public struct StoryTimelineView: View {
             onUndo: { viewModel.undo() },
             onRedo: { viewModel.redo() },
             onSnapToggle: { viewModel.toggleSnap() },
-            onSave: onExport
+            onSave: onExport,
+            onExtendDuration: { viewModel.extendSlideDuration() }
         )
     }
 
