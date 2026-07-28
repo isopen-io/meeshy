@@ -21,7 +21,7 @@ struct BrandSignature: View {
     var body: some View {
         VStack(spacing: 4) {
             Text("Meeshy \(appVersion) · \(buildNumber)")
-                .font(MeeshyFont.relative(17, design: .rounded))
+                .font(MeeshyFont.relative(14, design: .rounded))
                 .foregroundColor(theme.textMuted.opacity(0.9))
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
