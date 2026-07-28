@@ -189,6 +189,15 @@ extension StoryCanvasUIView {
         }
         backgroundLayer.slidePlayheadSeconds = playheadSeconds
         backgroundLayer.isMuted = effectiveAudioMuted
+        // Volume du fond : valeur d'ouverture, résolue depuis le modèle. Le
+        // suivi dans le temps (automation, ducking) est réappliqué à chaque
+        // tick par `applyVolumeAutomation` — ici on garantit simplement que
+        // le réglage de l'auteur atteint le player dès le premier rendu.
+        if let bg = slide.effects.mediaObjects?.first(where: { $0.isBackground }) {
+            backgroundLayer.volume = StoryVolumeResolver.effectiveVolume(
+                base: bg.volume, keyframes: bg.keyframes, at: 0
+            )
+        }
 
         // Prune le cache des layers dont l'id n'est plus présent dans la
         // slide (élément supprimé) — libère les AVPlayer associés.
