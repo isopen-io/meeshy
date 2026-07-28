@@ -124,6 +124,7 @@ nonisolated enum StoryTextAttributeCycle {
 
     private static func frameSymbol(_ shape: StoryTextFrameShape) -> String {
         switch shape {
+        case .none:      return "square.slash"
         case .rounded:   return "rectangle.roundedtop"
         case .pill:      return "capsule"
         case .rectangle: return "square"

@@ -30,6 +30,7 @@ enum TextEditLabels {
 
     static func title(for shape: StoryTextFrameShape) -> String {
         switch shape {
+        case .none:      return String(localized: "story.composer.noEffect", defaultValue: "Aucun", bundle: .module)
         case .rounded:   return String(localized: "story.textEdit.frame.rounded", defaultValue: "Arrondi", bundle: .module)
         case .pill:      return String(localized: "story.textEdit.frame.pill", defaultValue: "Pilule", bundle: .module)
         case .rectangle: return String(localized: "story.textEdit.frame.rectangle", defaultValue: "Carré", bundle: .module)
@@ -370,7 +371,7 @@ struct TextEditToolOptions: View {
     /// arrondi standard — leur libellé porte l'information.
     private func frameChipRadius(_ shape: StoryTextFrameShape) -> CGFloat {
         switch shape {
-        case .rounded, .diamond, .cloud, .speech: return 10
+        case .none, .rounded, .diamond, .cloud, .speech: return 10
         case .pill:      return 19
         case .rectangle: return 2
         }

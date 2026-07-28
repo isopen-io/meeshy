@@ -118,8 +118,9 @@ final class StoryTextAttributeCycleTests: XCTestCase {
 
     func test_frame_visitsEveryShapeThenWrapsAround() {
         let seen = trace(.frame, from: text(frameShape: StoryTextFrameShape.rounded.rawValue),
-                         taps: 6) { $0.parsedFrameShape }
-        XCTAssertEqual(seen, [.pill, .rectangle, .diamond, .cloud, .speech, .rounded])
+                         taps: 7) { $0.parsedFrameShape }
+        XCTAssertEqual(seen, [.pill, .rectangle, .diamond, .cloud, .speech,
+                              StoryTextFrameShape.none, .rounded])
     }
 
     /// Une forme de cadre sans fond ne se voit pas. Le panneau détaillé pose

@@ -242,6 +242,7 @@ public enum StoryTextBackgroundStyle: Codable, Sendable, Equatable {
 /// horizontal padding is always ≥ the width of one "o" glyph (see
 /// `StoryTextLayer`). `nil` on the object means `.rounded` (legacy default).
 public enum StoryTextFrameShape: String, Codable, CaseIterable, Sendable {
+    case none        // aucune boîte, quels que soient le fond et le liseré
     case rounded     // cornerRadius ≈ 15% of height (default)
     case pill        // full capsule (cornerRadius = 50% of height)
     case rectangle   // near-square corners
@@ -255,7 +256,7 @@ public enum StoryTextFrameShape: String, Codable, CaseIterable, Sendable {
     /// choisir le pipeline.
     public var usesCustomPath: Bool {
         switch self {
-        case .rounded, .pill, .rectangle: return false
+        case .none, .rounded, .pill, .rectangle: return false
         case .diamond, .cloud, .speech: return true
         }
     }
@@ -301,6 +302,20 @@ public struct StoryTextObject: Codable, Identifiable, Sendable {
     /// background is active. `nil` ⇒ `.rounded` (legacy default).
     public var frameShape: String?
 
+    /// Multiplicateur de la marge du cadre — l'espace entre les glyphes et le
+    /// bord de la boîte. `nil` ⇒ 1.0, la marge historique. Un multiplicateur
+    /// et non des points : la marge automatique vaut « au moins la chasse d'un
+    /// *o* », elle dépend donc de la police ET de la taille — une valeur
+    /// absolue deviendrait fausse au premier changement de l'une des deux.
+    public var framePaddingScale: Double?
+
+    /// Liseré tracé sur le bord de la boîte de cadre, en design-pixels.
+    /// `nil` ou `0` ⇒ aucun liseré. À ne pas confondre avec `borderWidth`,
+    /// qui contoure les GLYPHES et non la boîte.
+    public var frameBorderWidth: Double?
+    /// Couleur du liseré de la boîte. `nil` ⇒ blanc dès que la largeur > 0.
+    public var frameBorderColor: String?
+
     /// Outline / contour du texte. `borderColor == nil` ⇒ pas de bord
     /// (pas de booléen séparé). Hex "RRGGBB" ou "RRGGBBAA".
     public var borderColor: String?
@@ -329,6 +344,7 @@ public struct StoryTextObject: Codable, Identifiable, Sendable {
         case fontSize, fontFamily
         case textStyle, textColor, textAlign, textBg, backgroundStyle
         case fontWeight, frameShape
+        case framePaddingScale, frameBorderWidth, frameBorderColor
         case borderColor, borderWidth
         case translations, sourceLanguage
         case startTime, duration, fadeIn, fadeOut
@@ -352,6 +368,9 @@ public struct StoryTextObject: Codable, Identifiable, Sendable {
                 backgroundStyle: StoryTextBackgroundStyle? = nil,
                 fontWeight: String? = nil,
                 frameShape: String? = nil,
+                framePaddingScale: Double? = nil,
+                frameBorderWidth: Double? = nil,
+                frameBorderColor: String? = nil,
                 borderColor: String? = nil,
                 borderWidth: Double? = nil,
                 translations: [String: String]? = nil,
@@ -373,6 +392,9 @@ public struct StoryTextObject: Codable, Identifiable, Sendable {
         self.textAlign = textAlign; self.textBg = textBg
         self.backgroundStyle = backgroundStyle
         self.fontWeight = fontWeight; self.frameShape = frameShape
+        self.framePaddingScale = framePaddingScale
+        self.frameBorderWidth = frameBorderWidth
+        self.frameBorderColor = frameBorderColor
         self.borderColor = borderColor; self.borderWidth = borderWidth
         self.translations = translations
         self.sourceLanguage = sourceLanguage
@@ -423,6 +445,9 @@ public struct StoryTextObject: Codable, Identifiable, Sendable {
         backgroundStyle = try c.decodeIfPresent(StoryTextBackgroundStyle.self, forKey: .backgroundStyle)
         fontWeight = try c.decodeIfPresent(String.self, forKey: .fontWeight)
         frameShape = try c.decodeIfPresent(String.self, forKey: .frameShape)
+        framePaddingScale = try c.decodeIfPresent(Double.self, forKey: .framePaddingScale)
+        frameBorderWidth = try c.decodeIfPresent(Double.self, forKey: .frameBorderWidth)
+        frameBorderColor = try c.decodeIfPresent(String.self, forKey: .frameBorderColor)
         borderColor = try c.decodeIfPresent(String.self, forKey: .borderColor)
         borderWidth = try c.decodeIfPresent(Double.self, forKey: .borderWidth)
         translations = try c.decodeIfPresent([String: String].self, forKey: .translations)
@@ -462,6 +487,9 @@ public struct StoryTextObject: Codable, Identifiable, Sendable {
         try c.encodeIfPresent(backgroundStyle, forKey: .backgroundStyle)
         try c.encodeIfPresent(fontWeight, forKey: .fontWeight)
         try c.encodeIfPresent(frameShape, forKey: .frameShape)
+        try c.encodeIfPresent(framePaddingScale, forKey: .framePaddingScale)
+        try c.encodeIfPresent(frameBorderWidth, forKey: .frameBorderWidth)
+        try c.encodeIfPresent(frameBorderColor, forKey: .frameBorderColor)
         try c.encodeIfPresent(borderColor, forKey: .borderColor)
         try c.encodeIfPresent(borderWidth, forKey: .borderWidth)
         try c.encodeIfPresent(translations, forKey: .translations)
@@ -494,6 +522,27 @@ public struct StoryTextObject: Codable, Identifiable, Sendable {
     public var parsedFrameShape: StoryTextFrameShape {
         guard let raw = frameShape, let shape = StoryTextFrameShape(rawValue: raw) else { return .rounded }
         return shape
+    }
+
+    /// Marge du cadre effectivement appliquée, bornée à 0…3. Le bornage vit
+    /// ici et non dans la vue : un JSON hostile ou un curseur futur ne doivent
+    /// pas pouvoir faire exploser les bounds du calque.
+    public var resolvedFramePaddingScale: Double {
+        min(3, max(0, framePaddingScale ?? 1))
+    }
+
+    /// Le texte porte-t-il une boîte de cadre ? Source de vérité unique,
+    /// partagée par le calque, les tests et les panneaux d'outils.
+    ///
+    /// La boîte existe dès qu'une forme est choisie ET qu'il y a quelque chose
+    /// à voir — un fond, un liseré, ou les deux. C'est ce qui détache le cadre
+    /// du fond : avant, sans fond il n'y avait pas de boîte, donc choisir une
+    /// forme forçait un fond noir et repeignait le texte sans qu'on l'ait
+    /// demandé.
+    public var hasFrameBox: Bool {
+        guard parsedFrameShape != StoryTextFrameShape.none else { return false }
+        if resolvedBackgroundStyle != StoryTextBackgroundStyle.none { return true }
+        return (frameBorderWidth ?? 0) > 0
     }
 
     /// Legacy helper — returns design-pixel fontSize.

@@ -373,7 +373,7 @@ public final class StoryTextLayer: CATextLayer {
     /// est un défaut défensif.
     private func frameCornerRadius(height: CGFloat) -> CGFloat {
         switch textObject?.parsedFrameShape ?? .rounded {
-        case .rounded, .diamond, .cloud, .speech: return max(4, height * 0.15)
+        case .none, .rounded, .diamond, .cloud, .speech: return max(4, height * 0.15)
         case .pill:      return height / 2
         case .rectangle: return max(2, height * 0.04)
         }
@@ -439,7 +439,7 @@ public final class StoryTextLayer: CATextLayer {
                                 glyphRect: CGRect(x: hPad, y: 8, width: w, height: h))
         }
         switch shape {
-        case .rounded, .pill, .rectangle:
+        case .none, .rounded, .pill, .rectangle:
             // Couvert par le guard (usesCustomPath == false) — jamais atteint.
             return FrameMetrics(bounds: CGSize(width: w + hPad * 2, height: h + 16),
                                 glyphRect: CGRect(x: hPad, y: 8, width: w, height: h))
@@ -470,7 +470,7 @@ public final class StoryTextLayer: CATextLayer {
     /// translucide (hex "…A6").
     nonisolated static func framePath(shape: StoryTextFrameShape, in rect: CGRect) -> CGPath? {
         switch shape {
-        case .rounded, .pill, .rectangle:
+        case .none, .rounded, .pill, .rectangle:
             return nil
 
         case .diamond:
