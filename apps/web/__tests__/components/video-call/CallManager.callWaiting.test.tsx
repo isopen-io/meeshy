@@ -251,7 +251,7 @@ describe('CallManager — call-waiting banner (busy-path swap)', () => {
     // action. A « Réessayer » offer for the DROPPED active call stacked behind
     // it would be conflicting UI, so the promotion suppresses the retry offer.
     expect(screen.queryByTestId('accept-call-btn')).not.toBeNull();
-    expect(useCallStore.getState().pendingRetry).toBeNull();
+    expect(useCallStore.getState().pendingRetry).toEqual({});
   });
 
   it('still shows the normal incoming notification (no banner) when NOT busy', () => {

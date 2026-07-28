@@ -126,8 +126,7 @@ describe('CallManager — call:ended retry offer', () => {
       });
 
       expect(useCallStore.getState().pendingRetry).toEqual({
-        conversationId: CONVERSATION_ID,
-        type: callType,
+        [CONVERSATION_ID]: { conversationId: CONVERSATION_ID, type: callType },
       });
     }
   );
@@ -145,7 +144,7 @@ describe('CallManager — call:ended retry offer', () => {
         socket.fire(SERVER_EVENTS.CALL_ENDED, makeCallEndedEvent(reason));
       });
 
-      expect(useCallStore.getState().pendingRetry).toBeNull();
+      expect(useCallStore.getState().pendingRetry).toEqual({});
     }
   );
 

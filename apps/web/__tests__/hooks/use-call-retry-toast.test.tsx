@@ -28,10 +28,10 @@ describe('useCallRetryToast', () => {
     expect(toastError).toHaveBeenCalledTimes(1);
     expect(toastError.mock.calls[0][0]).toBe('calls.toasts.callFailed');
     // The offer is consumed so it doesn't re-fire.
-    expect(useCallStore.getState().pendingRetry).toBeNull();
+    expect(useCallStore.getState().pendingRetry['conv-1']).toBeUndefined();
   });
 
-  it('ignores an offer for a DIFFERENT conversation', () => {
+  it('ignores an offer for a DIFFERENT conversation, without dropping it', () => {
     renderHook(() => useCallRetryToast('conv-1', jest.fn()));
 
     act(() => {
@@ -39,8 +39,24 @@ describe('useCallRetryToast', () => {
     });
 
     expect(toastError).not.toHaveBeenCalled();
-    // Left for the other conversation's hook to consume.
-    expect(useCallStore.getState().pendingRetry).not.toBeNull();
+    // Left standing (keyed by conversationId) for the other conversation's
+    // hook instance to consume — a later offer for THIS conversation must
+    // not silently destroy it (regression: pendingRetry used to be a single
+    // scalar clobbered by every offerCallRetry call, so this offer would
+    // have been lost forever the moment any other conversation failed too).
+    expect(useCallStore.getState().pendingRetry['conv-OTHER']).toEqual({
+      conversationId: 'conv-OTHER',
+      type: 'audio',
+    });
+
+    act(() => {
+      useCallStore.getState().offerCallRetry({ conversationId: 'conv-YET-ANOTHER', type: 'video' });
+    });
+
+    expect(useCallStore.getState().pendingRetry['conv-OTHER']).toEqual({
+      conversationId: 'conv-OTHER',
+      type: 'audio',
+    });
   });
 
   it('the toast action re-initiates the same call type', () => {

@@ -45,6 +45,15 @@ export interface PendingCallRetry {
   type: 'audio' | 'video';
 }
 
+/**
+ * Keyed by `conversationId` so a transient failure on one conversation can
+ * never clobber a still-unconsumed offer for another (only one
+ * `useCallRetryToast` instance is mounted at a time, scoped to the currently
+ * selected conversation — an offer for a conversation the user isn't
+ * currently viewing must survive until they navigate back to it).
+ */
+export type PendingCallRetryMap = Record<string, PendingCallRetry>;
+
 interface CallStoreState extends CallState {
   // Extended state
   callEndReason: CallEndReason | null;
@@ -52,8 +61,8 @@ interface CallStoreState extends CallState {
   connectionQuality: ConnectionQualityLevel | null;
   isReconnecting: boolean;
   joinRequest: JoinCallRequest | null;
-  /** A retry affordance owed after a transient call failure (see PendingCallRetry). */
-  pendingRetry: PendingCallRetry | null;
+  /** Retry affordances owed after transient call failures, keyed by conversationId (see PendingCallRetryMap). */
+  pendingRetry: PendingCallRetryMap;
 
   // Server-provided ICE servers (STUN + time-limited TURN credentials).
   // Supplied by the gateway via the initiate/join acks and the
@@ -111,7 +120,8 @@ interface CallStoreState extends CallState {
 
   // Actions: Retry a transiently-failed call
   offerCallRetry: (retry: PendingCallRetry) => void;
-  clearCallRetry: () => void;
+  /** Omit `conversationId` to clear every pending offer (used by test teardown). */
+  clearCallRetry: (conversationId?: string) => void;
 
   // Actions: Cleanup
   reset: () => void;
@@ -176,7 +186,7 @@ export const useCallStore = create<CallStoreState>((set, get) => ({
   isReconnecting: false,
   iceServers: null,
   joinRequest: null,
-  pendingRetry: null,
+  pendingRetry: {},
 
   // ===== CALL MANAGEMENT =====
 
@@ -504,8 +514,16 @@ export const useCallStore = create<CallStoreState>((set, get) => ({
 
   clearJoinRequest: () => set({ joinRequest: null }),
 
-  offerCallRetry: (retry) => set({ pendingRetry: retry }),
-  clearCallRetry: () => set({ pendingRetry: null }),
+  offerCallRetry: (retry) =>
+    set((state) => ({ pendingRetry: { ...state.pendingRetry, [retry.conversationId]: retry } })),
+  clearCallRetry: (conversationId) =>
+    set((state) => {
+      if (!conversationId) return { pendingRetry: {} };
+      if (!(conversationId in state.pendingRetry)) return state;
+      const rest = { ...state.pendingRetry };
+      delete rest[conversationId];
+      return { pendingRetry: rest };
+    }),
 
   // ===== CLEANUP =====
 

@@ -2961,3 +2961,60 @@ existant, donc jamais revu.
   post-answer en `completed`, y compris une vraie coupure réseau détectée seulement par l'expiry de la
   grâce de déconnexion — semble intentionnel d'après les commentaires du fichier, non creusé cette vague,
   à ré-évaluer) ; PR #1889/#1890 (autres sessions) à suivre séparément.
+
+## Vague 41 — `pendingRetry` (retry-on-failure, web) était un scalaire unique : deux échecs transitoires sur des conversations différentes se clobbaient silencieusement (2026-07-27)
+
+Point d'entrée : routine calling-feature (agent Cowork non interactif, mandat PHASE 1-12). Branche
+`claude/modest-cori-q44x1t` redémarrée depuis `origin/main` à jour (0 commit en retard/avance). Aucune
+PR ouverte au démarrage (`list_pull_requests` state=open → `[]`). 3 commits calling déjà mergés
+aujourd'hui/hier, non revus : `9816c79d` (web, negotiationId), `ba58580f` (iOS, jitter reconnect),
+`f31d4fe3` (gateway, scope analytics writes). Un agent d'exploration dédié, briefé avec les 40 vagues
+précédentes + ces 3 commits pour falsifier tout candidat déjà couvert, a ciblé la feature retry-on-failure
+elle-même (introduite Vague 40, jamais réauditée depuis).
+
+- **[MOYEN, web, CONFIRMÉ + CORRIGÉ, TDD]** `pendingRetry: PendingCallRetry | null` (`call-store.ts:56`)
+  était un scalaire unique écrasé sans condition par `offerCallRetry` (`set({ pendingRetry: retry })`,
+  ligne 507). Deux writers de production existent (`VideoCallInterface.tsx:451`, watchdog local 45s ;
+  `CallManager.tsx:431`, `call:ended` server-authoritative) et un seul consommateur — `useCallRetryToast`
+  — est monté par instance UNIQUE, reparamétrée par `selectedConversation?.id`
+  (`ConversationLayout.tsx:214`), pas « une instance par conversation » comme le suggérait le commentaire
+  du test existant (`use-call-retry-toast.test.tsx:42`, « Left for the other conversation's hook to
+  consume » — ce hook n'existe nulle part ailleurs dans l'arbre).
+- **Scénario concret** : utilisateur sur la conversation Y (ou toute autre page) quand un appel
+  ÉTABLI sur la conversation Z (reçu, décroché plus tôt) tombe réellement (perte réseau, tab en fond) →
+  résolu côté serveur en `call:ended` `reason: 'failed'|'connectionLost'` → `CallManager` (monté
+  globalement à la racine) pose `pendingRetry = {conversationId: Z, type}`. Le hook monté (scope Y ou
+  absent) ne le consomme pas — c'est le comportement voulu, en attendant que l'utilisateur navigue vers
+  Z. Mais si un DEUXIÈME échec transitoire survient sur une conversation W avant que l'utilisateur ne
+  navigue vers Z, `offerCallRetry` écrase le scalaire : l'offre de Z est perdue **silencieusement et
+  définitivement**, même si l'utilisateur ouvre Z des heures plus tard — aucun toast ne se déclenchera
+  jamais pour cet appel, à l'encontre du but même de la feature (« ~16% des appels finissent en échec
+  transitoire », motivation du commit `7e6ea5d49`/Vague 40).
+- **Fix** : `pendingRetry` devient `PendingCallRetryMap` (`Record<conversationId, PendingCallRetry>`,
+  `call-store.ts`). `offerCallRetry` fusionne par clé (`{...state.pendingRetry, [retry.conversationId]:
+  retry}`) au lieu d'écraser. `clearCallRetry(conversationId?)` : avec un id, ne retire que cette entrée ;
+  sans argument (compat des `beforeEach` de test existants), vide tout. `useCallRetryToast` lit
+  `pendingRetryMap[conversationId]` et ne consomme (`clearCallRetry(conversationId)`) que l'entrée de SA
+  conversation — les offres des autres conversations survivent intactes. `reset()` continue de préserver
+  toute la map (logique inchangée, juste le type). Aucun changement de signature pour les 2 sites
+  `offerCallRetry(...)` de production (même shape d'argument) ni pour `CallManager.tsx`/
+  `VideoCallInterface.tsx`.
+- **Tests TDD** : `call-store.test.ts` — nouveau cas « a second offer for a DIFFERENT conversation does
+  not clobber an earlier unconsumed offer » (RED avant fix : la 2e offre écrasait la 1re) + cas
+  `clearCallRetry(id)` scope-only vs `clearCallRetry()` clear-all. `use-call-retry-toast.test.tsx` —
+  cas existant étendu : une 2e offre pour une 3e conversation ne doit pas faire disparaître l'offre déjà
+  en attente pour `conv-OTHER`. `CallManager.callEndedRetry.test.tsx`/`CallManager.callWaiting.test.tsx`
+  adaptés à la forme map (`toEqual({[id]: {...}})` / `toEqual({})` au lieu de `toBeNull()`). Suite
+  `--testPathPatterns=call` complète : 35/35 suites, 372/372 tests verts. `tsc --noEmit` web : 1184
+  erreurs préexistantes identiques avant/après (`git stash` diff, aucune dans les fichiers touchés) ;
+  0 nouvelle erreur. `eslint` cassé dans ce sandbox (config circulaire `@eslint/eslintrc`), même
+  limitation pré-existante que Vagues 38/40, non bloquant.
+- **iOS/Android (lecture seule, aucun changement)** : hors périmètre (aucune toolchain Swift/Kotlin dans
+  ce sandbox) ; la feature retry-on-failure reste web-only.
+- **Reste ouvert (inchangé + addition)** : tout ce qui précède (Vague 40) ; noter que même après ce fix,
+  une offre pour une conversation jamais revisitée par l'utilisateur reste en mémoire indéfiniment (pas de
+  TTL/expiry) — pas une fuite pratique (une entrée = ~2 champs string, bornée par le nombre de
+  conversations distinctes ayant eu un échec transitoire, purgée dès la visite ou un nouvel appel réussi
+  sur cette même conversation via les writers existants) mais un candidat de suivi si une UX de
+  staleness (« cet appel a échoué il y a longtemps ») s'avère nécessaire ; piste `CallService.leaveCall`
+  de la Vague 40 toujours non creusée ; PR #1889/#1890 à suivre séparément.
