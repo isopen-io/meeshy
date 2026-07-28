@@ -82,6 +82,7 @@ dessiner la courbe séparément : le modèle est commun, la représentation ne l
 | **A3** | Automation du volume par keyframes |
 | **A4** | Waveform sous les lignes vidéo |
 | **A5** | Plage de volume étendue à 200 % |
+| **A6** | Waveform fidèle à l'amplitude réelle, mise en cache sur disque |
 
 Hors périmètre : graduation de la règle, contrôleur de scroll global, limiteur
 anti-saturation, parité web et Android.
@@ -247,6 +248,57 @@ Contrainte à surveiller : la piste fait 52 pt de haut et doit désormais loger 
 waveform et courbe. C'est le point d'intégration visuelle le plus délicat du chantier ;
 il se valide sur device, pas au jugé.
 
+## 9 bis. Waveform fidèle et cache persistant (A6)
+
+L'implémentation actuelle présente trois défauts qui la rendent inexploitable pour
+régler des volumes.
+
+### Amplitude réelle plutôt que normalisée au pic
+
+`computeRMSBuckets` termine aujourd'hui par `normalize(rms)`, qui divise toutes les
+valeurs par le pic. Conséquence : **une piste douce et une piste forte se dessinent
+exactement à la même hauteur**, et baisser un clip ne change rien à son tracé.
+
+L'appel à `normalize` est retiré du chemin par défaut ; les valeurs RMS restent
+absolues. La fonction elle-même est **conservée** — elle est pure, testée, et n'a qu'un
+seul appelant de production : rien à supprimer, seulement à ne plus invoquer.
+
+Le stockage reste en RMS **linéaire** (fidèle et réutilisable), mais le rendu applique
+une **échelle logarithmique en dB, plancher à −60 dB**. Motif : un RMS linéaire absolu
+est visuellement plat, la plupart des contenus vivant entre 0,05 et 0,3 — la bande
+paraîtrait vide alors que la mesure serait juste. L'échelle dB restitue la dynamique
+sans mentir sur les niveaux ; c'est la convention des éditeurs audio.
+
+### Résolution suivant le zoom
+
+`count` vaut 80, quelle que soit la durée : pour un audio de 240 s, cela écrase
+3 secondes par barre. Il est désormais dérivé de la largeur réelle de la barre
+multipliée par l'échelle de l'écran.
+
+Cette valeur est **quantifiée par paliers** (128, 256, 512, 1024, 2048). Sans
+quantification, un `count` variant continûment avec le pincement de zoom multiplierait
+les entrées de cache et relancerait un calcul complet à chaque image — le cache ne
+servirait plus à rien.
+
+### Cache sur disque
+
+Le cache actuel est un `NSCache`, donc en mémoire seule : évincé sous pression, perdu à
+chaque lancement. On conserve ce niveau en première ligne et on ajoute une persistance
+via **`DiskCacheStore`** (déjà présent dans le SDK, avec éviction LRU), clé
+`hash(URL) + palier`, valeurs `[Float]` sérialisées en `Data`. Un fichier déjà analysé
+ne l'est jamais deux fois, même après redémarrage.
+
+### Priorité des sources, à inverser
+
+`AudioClipBar.effectiveSamples` fait aujourd'hui primer `waveformSamples` — les
+80 valeurs du modèle, normalisées au pic et publiées dans le JSON — sur le calcul local.
+La priorité s'inverse : le calcul local haute résolution l'emporte dès que l'URL est
+disponible, `waveformSamples` restant le repli utile (repost, brouillon restauré,
+fichier introuvable).
+
+La sémantique des 80 valeurs du modèle **ne change pas** : les stories déjà publiées
+continuent de s'afficher comme aujourd'hui, sans migration.
+
 ## 10. Cas limites
 
 - Le mute global reste prioritaire sur tout (facteur 0).
@@ -272,6 +324,14 @@ il se valide sur device, pas au jugé.
 - **Round-trip** `Codable` + `toJSON()` pour `StoryKeyframe.volume` et
   `StoryAudioPlayerObject.keyframes`.
 - **Gateway** — un volume à 2,0 est accepté ; à 2,1, rejeté.
+- **Amplitude fidèle** — deux fichiers de niveaux différents produisent des hauteurs
+  différentes. C'est le test qui manquait : les tests actuels de `normalize` ne
+  pouvaient pas le détecter, puisqu'ils valident précisément le comportement qu'on
+  retire du chemin par défaut.
+- **Paliers de résolution** — deux zooms voisins retombent sur le même palier et ne
+  déclenchent qu'un seul calcul.
+- **Cache disque** — après vidage du cache mémoire, un second affichage ne relance
+  aucune analyse.
 
 ## 12. Suites
 
