@@ -27,6 +27,9 @@ jest.mock('../../../validation/socket-event-schemas', () => ({
   SocketCommentReactionRemoveSchema: {
     safeParse: jest.fn(),
   },
+  SocketCommentReactionRequestSyncSchema: {
+    safeParse: jest.fn(),
+  },
 }));
 
 jest.mock('../../../middleware/validation', () => ({
@@ -575,6 +578,7 @@ describe('CommentReactionHandler', () => {
       };
 
       mockReactionService.getCommentReactions.mockResolvedValue(syncData as any);
+      mockValidate.mockReturnValue({ success: true, data });
 
       await handler.handleRequestSync(socket as any, data, callback);
 
@@ -589,10 +593,32 @@ describe('CommentReactionHandler', () => {
       });
     });
 
+    it('test_handleRequestSync_malformedCommentId_validationErrorNoServiceCall', async () => {
+      const socket = createMockSocket();
+      const data = {} as { commentId: string };
+      const callback = jest.fn();
+
+      // A malformed sync payload (missing/invalid commentId) must be rejected at
+      // the socket boundary with the clean schema error — never fall through to
+      // the service, whose `validateCommentId` would throw an opaque
+      // `TypeError: Cannot read properties of undefined (reading 'substring')`.
+      mockValidate.mockReturnValue({ success: false, error: 'Invalid commentId format' });
+
+      await handler.handleRequestSync(socket as any, data, callback);
+
+      expect(mockReactionService.getCommentReactions).not.toHaveBeenCalled();
+      expect(callback).toHaveBeenCalledWith({
+        success: false,
+        error: 'Invalid commentId format',
+      });
+    });
+
     it('test_handleRequestSync_unauthenticated_callbackError', async () => {
       const socket = { ...createMockSocket(), id: 'unknown-socket' };
       const data = { commentId: COMMENT_ID };
       const callback = jest.fn();
+
+      mockValidate.mockReturnValue({ success: true, data });
 
       await handler.handleRequestSync(socket as any, data, callback);
 

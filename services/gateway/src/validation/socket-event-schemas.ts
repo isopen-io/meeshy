@@ -116,6 +116,14 @@ export const SocketCommentReactionRemoveSchema = z.object({
 
 export type SocketCommentReactionRemoveData = z.infer<typeof SocketCommentReactionRemoveSchema>;
 
+export const SocketCommentReactionRequestSyncSchema = z.object({
+  commentId: mongoId,
+});
+
+export type SocketCommentReactionRequestSyncData = z.infer<
+  typeof SocketCommentReactionRequestSyncSchema
+>;
+
 export const SocketPostRoomActionSchema = z.object({
   postId: mongoId,
 });
