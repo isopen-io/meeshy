@@ -121,15 +121,6 @@ public struct StoryComposerView: View {
     /// `.greatestFiniteMagnitude` = band repliée (réserve 0).
     @State var measuredBandTopY: CGFloat = .greatestFiniteMagnitude
 
-    /// Y (coord GLOBALES écran) du bord SUPÉRIEUR de la rangée basse de
-    /// l'éditeur texte, rapporté par `StoryTextEditToolbar.onBottomEdgeChange`.
-    /// Même rôle que `measuredBandTopY` pour la band : la réserve basse suivait
-    /// la constante `keyboardHeight + 132`, qui sous-estime dès que le panneau
-    /// déplié est haut (contour = curseur + palette) et laissait le panneau
-    /// recouvrir le bas du canvas. `.greatestFiniteMagnitude` = pas encore
-    /// mesuré (la constante sert alors de repli).
-    @State var measuredTextToolbarTopY: CGFloat = .greatestFiniteMagnitude
-
     @State var showDiscardAlert = false
     @State var showRestoreDraftAlert = false
     /// U4 inc.2 — données de la carte de reprise (cover rendu async depuis

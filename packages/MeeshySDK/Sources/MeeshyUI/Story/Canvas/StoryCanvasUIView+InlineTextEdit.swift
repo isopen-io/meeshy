@@ -99,9 +99,9 @@ extension StoryCanvasUIView: UITextViewDelegate {
     /// durée de l'édition — override PUREMENT visuel : le modèle (`x`, `y`,
     /// `rotation`) n'est pas touché, et `rebuildLayers()` replace toujours la
     /// calque depuis le modèle (d'où le re-recentrage dans
-    /// `reapplyInlineEditingIfNeeded`). Le composer carde déjà le canvas
-    /// au-dessus du clavier pendant l'édition texte, donc le centre du canvas
-    /// est le centre de la zone visible.
+    /// `reapplyInlineEditingIfNeeded`). Le canvas reste plein écran pendant
+    /// l'édition : son centre est donc le centre de l'écran, au-dessus du
+    /// clavier sur tous les appareils supportés.
     private func centerLayerForEditing(_ layer: StoryTextLayer) {
         CATransaction.begin()
         CATransaction.setDisableActions(true)

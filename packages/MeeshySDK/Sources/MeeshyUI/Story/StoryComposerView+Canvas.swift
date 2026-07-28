@@ -100,11 +100,9 @@ extension StoryComposerView {
 
             // Floating text edit overlay — sits above every composer control.
             // Empty view when `textEditingMode == .inactive`.
-            StoryTextEditToolbar(viewModel: viewModel) { topY in
-                measuredTextToolbarTopY = topY
-            }
-            .padding(.bottom, keyboardHeight)
-            .environment(\.colorScheme, canvasChromeScheme)
+            StoryTextEditToolbar(viewModel: viewModel)
+                .padding(.bottom, keyboardHeight)
+                .environment(\.colorScheme, canvasChromeScheme)
 
             // Le dessin utilise le band PARTAGÉ (`ComposerBottomBand` →
             // `drawingPanel` = liste éditable des traits), comme tous les autres
@@ -702,11 +700,9 @@ extension StoryComposerView {
             // garder ses 59 pt réservés faisait démarrer la carte cardée sous
             // un header FANTÔME (bande noire en haut, perçue « canvas coupé »,
             // capture user). Header caché → la carte monte sous la status bar.
-            // L'édition texte remplace le header par sa propre rangée
-            // d'attributs (`StoryTextEditTopBar`, même gabarit de 36 pt) :
-            // sans réserve, la carte cardée monterait sous cette rangée et le
-            // haut du canvas passerait dessous.
-            let chromeAtTop = showTopBar || viewModel.textEditingMode != .inactive
+            // L'édition texte ne carde plus le canvas : il n'y a donc plus rien
+            // à réserver pour sa rangée haute, qui flotte par-dessus.
+            let chromeAtTop = showTopBar
             let headerInset = chromeAtTop
                 ? max(proxy.safeAreaInsets.top, 59) + 12
                 : proxy.safeAreaInsets.top + 12
@@ -842,13 +838,14 @@ extension StoryComposerView {
     /// REPOS (FABs flottants, band `.hidden`) et le dessin immersif restent PLEIN
     /// écran — les FABs/bulles flottent par-dessus. Cf. `StoryCanvasFraming.isCarded`.
     var canvasIsCarded: Bool {
+        // L'édition texte garde le canvas plein écran, sheet système comprise.
+        guard viewModel.textEditingMode == .inactive else { return false }
         let bandPresent = bandStateMachine.state != .hidden
         let drawingActive = viewModel.drawingEditingMode.isActive
-        let textActive = viewModel.textEditingMode != .inactive
         if StoryCanvasFraming.isCarded(
             bandPresent: bandPresent,
             drawingActive: drawingActive,
-            textActive: textActive,
+            textActive: false,
             timelineActive: viewModel.isTimelineVisible
         ) {
             return true
@@ -867,20 +864,6 @@ extension StoryComposerView {
     var presentedSheetHeight: CGFloat {
         guard canvasIsCarded else { return 0 }
         var height: CGFloat = 0
-        if viewModel.textEditingMode != .inactive {
-            // Réserve = distance du HAUT RÉEL de la rangée basse au bas de
-            // l'écran. La constante `keyboardHeight + 132` suppose une rangée
-            // de bulles et un panneau court ; le panneau Contour (curseur +
-            // palette) la dépasse et se faisait alors recouvrir par le canvas.
-            // Même correctif que `measuredBandTopY` pour la band (2026-07-20).
-            // `.greatestFiniteMagnitude` (« pas encore mesuré ») EST fini, donc
-            // `isFinite` ne suffit pas : on teste l'appartenance à l'écran.
-            let hasToolbarTop = measuredTextToolbarTopY.isFinite
-                && measuredTextToolbarTopY < composerScreenHeight
-            height = max(height, hasToolbarTop
-                ? max(0, composerScreenHeight - measuredTextToolbarTopY)
-                : keyboardHeight + 132)
-        }
         if bandStateMachine.state != .hidden {
             // Réserve = distance du HAUT RÉEL de la band (coord globales,
             // `measuredBandTopY`) au bas de l'écran → le canvas se rétracte

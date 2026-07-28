@@ -16,12 +16,6 @@ import MeeshySDK
 struct StoryTextEditToolbar: View {
     @ObservedObject var viewModel: StoryComposerViewModel
 
-    /// Bord SUPÉRIEUR réel de la rangée basse, en coordonnées globales. Le
-    /// composer y colle le bas de la carte canvas : une constante de réserve
-    /// sous-estime dès que le panneau déplié est haut (contour = curseur +
-    /// palette), et le canvas se fait alors recouvrir.
-    var onBottomEdgeChange: (CGFloat) -> Void = { _ in }
-
     var body: some View {
         if case .active(let textId, let expandedTool) = viewModel.textEditingMode,
            let binding = textObjectBinding(for: textId) {
@@ -31,7 +25,6 @@ struct StoryTextEditToolbar: View {
                 Spacer(minLength: 0)
 
                 bottomRow(expandedTool: expandedTool, binding: binding)
-                    .background(bottomEdgeReporter)
             }
             .animation(.spring(response: 0.3, dampingFraction: 0.85),
                        value: viewModel.textEditingMode)
@@ -64,16 +57,6 @@ struct StoryTextEditToolbar: View {
             }
             .padding(.horizontal, TextEditToolbarMetrics.horizontalMargin)
             .padding(.vertical, 12)
-        }
-    }
-
-    private var bottomEdgeReporter: some View {
-        GeometryReader { proxy in
-            Color.clear
-                .onAppear { onBottomEdgeChange(proxy.frame(in: .global).minY) }
-                .adaptiveOnChange(of: proxy.frame(in: .global).minY) { _, y in
-                    onBottomEdgeChange(y)
-                }
         }
     }
 
