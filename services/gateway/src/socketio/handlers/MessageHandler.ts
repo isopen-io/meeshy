@@ -38,6 +38,7 @@ import {
   groupSocketsByLanguage,
 } from '../utils/message-payload-filter.js';
 import { resolveParticipant } from '../utils/participant-resolver.js';
+import { buildMessageAckData, stripClientMessageId, type MessageAckSource } from '../utils/message-ack-shaping.js';
 import { BoundedTtlCache } from '../../utils/bounded-cache.js';
 import type {
   MessageRequest,
@@ -949,8 +950,7 @@ export class MessageHandler {
       //     can promote the optimistic row to `.sent` even after a crash
       //     that lost the ACK.
       const senderPayload = messagePayload as Record<string, unknown>;
-      const broadcastPayload: Record<string, unknown> = { ...senderPayload };
-      delete broadcastPayload.clientMessageId;
+      const broadcastPayload: Record<string, unknown> = stripClientMessageId(senderPayload);
 
       // Resolve the sender's USER id (not the participant id) so we can
       // address every device session via `ROOMS.user(userId)`. The sender
@@ -1719,17 +1719,10 @@ export class MessageHandler {
         // `createdAt` is echoed too so the WS-first send path can stamp the
         // optimistic row with the authoritative server time without waiting
         // for the `message:new` broadcast.
-        const data = response.data as { id: string; clientMessageId?: string; createdAt?: Date | string };
-        const createdAt = data.createdAt instanceof Date
-          ? data.createdAt.toISOString()
-          : data.createdAt;
+        const data = response.data as MessageAckSource;
         callback({
           success: true,
-          data: {
-            messageId: data.id,
-            ...(data.clientMessageId ? { clientMessageId: data.clientMessageId } : {}),
-            ...(createdAt ? { createdAt } : {})
-          }
+          data: buildMessageAckData(data)
         });
       } else {
         callback({
