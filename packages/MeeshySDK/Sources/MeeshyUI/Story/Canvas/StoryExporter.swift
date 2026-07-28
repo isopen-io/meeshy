@@ -389,18 +389,65 @@ public enum StoryExporter {
             )
         }
 
-        // AudioMix avec le `volume` du media object (0.0–1.0). Skip si
-        // c'est le volume nominal (1.0) pour économiser une struct AVAudioMix
-        // — AVFoundation traite la piste sans mix dans ce cas.
+        // AudioMix avec le volume du media object, automation comprise. Skip
+        // seulement quand la piste joue au niveau nominal SANS automation —
+        // AVFoundation traite alors la piste sans mix.
         let bgVolume = entry.bg.volume
-        if abs(bgVolume - 1.0) < 0.001 {
+        let hasAutomation = (entry.bg.keyframes ?? []).contains { $0.volume != nil }
+        if abs(bgVolume - 1.0) < 0.001 && !hasAutomation {
             return nil
         }
         let mix = AVMutableAudioMix()
         let params = AVMutableAudioMixInputParameters(track: audioTrack)
-        params.setVolume(bgVolume, at: .zero)
+        // `totalDuration` : la piste de fond couvre toute la slide (bouclée si
+        // nécessaire), c'est donc l'étendue sur laquelle la rampe constante
+        // doit s'appliquer quand il n'y a pas d'automation.
+        for (range, from, to) in Self.volumeRamps(base: bgVolume,
+                                                  keyframes: entry.bg.keyframes,
+                                                  duration: totalDuration.seconds) {
+            params.setVolumeRamp(fromStartVolume: from, toEndVolume: to, timeRange: range)
+        }
         mix.inputParameters = [params]
         return mix
+    }
+
+    /// Traduit une automation de volume en rampes `AVAudioMix`.
+    ///
+    /// `AVMutableAudioMixInputParameters` ne connaît que des segments
+    /// linéaires : une courbe s'exprime donc comme une suite de rampes entre
+    /// points consécutifs. Sans keyframe — ou avec un seul — une rampe
+    /// constante unique suffit.
+    ///
+    /// Contrairement aux nodes AVFoundation, `AVAudioMix` n'est pas borné à
+    /// 1.0 : c'est ici que le gain au-delà de 100 % devient réellement audible.
+    ///
+    /// Retourne des triplets `(intervalle, volume de départ, volume d'arrivée)`.
+    nonisolated static func volumeRamps(base: Float,
+                                        keyframes: [StoryKeyframe]?,
+                                        duration: Double) -> [(CMTimeRange, Float, Float)] {
+        let clamp: (Float) -> Float = { min(StoryVolume.maxGain, max(0, $0)) }
+        let points = (keyframes ?? [])
+            .compactMap { kf -> (time: Float, value: Float)? in
+                guard let v = kf.volume else { return nil }
+                return (kf.time, clamp(v))
+            }
+            .sorted { $0.time < $1.time }
+
+        let clampedBase = clamp(base)
+        guard points.count >= 2 else {
+            let level = points.first?.value ?? clampedBase
+            let range = CMTimeRange(start: .zero,
+                                    duration: CMTime(seconds: duration, preferredTimescale: 600))
+            return [(range, level, level)]
+        }
+
+        var ramps: [(CMTimeRange, Float, Float)] = []
+        for (a, b) in zip(points, points.dropFirst()) {
+            let start = CMTime(seconds: Double(a.time), preferredTimescale: 600)
+            let end = CMTime(seconds: Double(b.time), preferredTimescale: 600)
+            ramps.append((CMTimeRange(start: start, end: end), a.value, b.value))
+        }
+        return ramps
     }
 
     // MARK: - Audio lanes (audioPlayerObjects)
@@ -475,14 +522,33 @@ public enum StoryExporter {
                 insertedEnd = start + playable
             }
 
-            let baseVolume = max(0, min(1, audio.volume))
+            // Plafond `StoryVolume.maxGain` et non 1.0 : un gain au-delà de
+            // 100 % n'est applicable QUE par AVAudioMix, les nodes
+            // AVFoundation étant bornés — le brider ici le rendrait inaudible
+            // partout.
+            let baseVolume = min(StoryVolume.maxGain, max(0, audio.volume))
             let fadeIn = Double(audio.fadeIn ?? 0)
             let fadeOut = Double(audio.fadeOut ?? 0)
+            let automation = (audio.keyframes ?? []).filter { $0.volume != nil }
             let needsMix = abs(baseVolume - 1.0) > 0.001 || fadeIn > 0.01 || fadeOut > 0.01
+                || !automation.isEmpty
             guard needsMix else { continue }
 
             let params = AVMutableAudioMixInputParameters(track: track)
-            params.setVolume(baseVolume, at: .zero)
+            if automation.isEmpty {
+                params.setVolume(baseVolume, at: .zero)
+            } else {
+                // L'automation prime sur le niveau statique ; les rampes sont
+                // décalées de `start`, position du clip dans la timeline.
+                for (range, from, to) in Self.volumeRamps(base: baseVolume,
+                                                          keyframes: audio.keyframes,
+                                                          duration: insertedEnd.seconds) {
+                    let shifted = CMTimeRange(start: range.start + start,
+                                              duration: range.duration)
+                    params.setVolumeRamp(fromStartVolume: from, toEndVolume: to,
+                                         timeRange: shifted)
+                }
+            }
             if fadeIn > 0.01 {
                 params.setVolumeRamp(
                     fromStartVolume: 0,
