@@ -3078,3 +3078,58 @@ n'est vérifiable ici (même contrainte que TOUTES les vagues précédentes).
   Xcode) ; `CallManager.swift` (5462 lignes) et `CallEventsHandler.ts` (4089 lignes) restent des candidats
   de découpage God-object, non traités cette vague (refactor risqué sans compilation/tests locaux
   vérifiables sur la partie iOS) ; parité iOS/Android du retry-on-failure toujours à construire.
+
+## Vague 43 — `AuthHandler`'s anonymous-guest disconnect leave était le sibling manqué du fix Vague 42 (2026-07-29)
+
+Point d'entrée : routine calling-feature (agent Cowork non interactif, mandat PHASE 1-12). Branche
+`claude/modest-cori-nurgaz` : le ref remote avait déjà été mergé et auto-supprimé par l'exécution d'hier
+(`merge-base --is-ancestor` confirme le tip local contenu dans `origin/main`) — redémarrée depuis
+`origin/main` à jour, règle "PR déjà mergée = travail neuf". 2 PR ouvertes trouvées au démarrage :
+**#2428** (iOS, CallKit `timedOutPerforming` + race audio-reactivation) et **#2430** (gateway, hors
+périmètre calls — share-link `maxUses` gate sur l'envoi de message). #2428 n'a **aucun run `iOS Tests`**
+sur sa branche (`ios-tests.yml` ne se déclenche que sur push `dev` ou `workflow_dispatch` manuel, jamais
+sur PR — décision délibérée du 2026-07-27, cf. l'en-tête du workflow) et le token GitHub de cette session
+n'a pas la permission de déclencher `workflow_dispatch` (`403 Resource not accessible by integration`) —
+commentaire posté sur la PR signalant que ses checks verts ne couvrent pas le diff Swift, laissée non
+mergée en attendant une vérification humaine.
+
+- **[MOYEN, gateway, CONFIRMÉ + CORRIGÉ, TDD]** Un agent d'exploration dédié, briefé avec les 42 vagues
+  précédentes + l'audit historique pour falsifier tout candidat déjà couvert, a trouvé le sibling exact
+  du fix Vague 42 sur le chemin **anonyme** : `AuthHandler.handleDisconnection` (`AuthHandler.ts:392-398`)
+  appelle `callService.leaveCall()` sur `disconnect` pour un participant anonyme **sans jamais passer
+  `endReasonHint`** — alors que ce chemin est, par construction (commentaire in-code `CALL-RESILIENCE` à
+  `AuthHandler.ts:360-368`), la seule route de cleanup d'appel pour les participants anonymes
+  (`CallEventsHandler` ne peut pas les résoudre, sa recherche est indexée sur `participant.userId`,
+  toujours `null` pour un anonyme) et se déclenche **exclusivement** sur une coupure socket involontaire —
+  jamais un `call:leave`/`call:end` délibéré. Sans le hint, `CallService.leaveCall` retombe sur son défaut
+  `CallEndReason.completed`, exactement le même bug que Vague 42 avait corrigé pour
+  `leaveParticipationAndBroadcast` (le twin registered-user de ce même événement `disconnect`).
+- **Impact concret** : un invité anonyme (lien de partage) dont l'app crash ou le réseau tombe pendant un
+  appel voit son départ enregistré `completed` (raccroché normal) au lieu de `connectionLost` — la feature
+  retry-on-failure web (Vagues 40/41) n'offre "Réessayer" que pour `failed`/`connectionLost`, donc ce
+  scénario précis (coupure réseau d'un invité anonyme) ne déclenche jamais le retry, à l'inverse du même
+  scénario côté utilisateur enregistré (déjà corrigé hier).
+- **Fix** : ajout de `endReasonHint: CallEndReason.connectionLost` sur cet unique site d'appel
+  (`AuthHandler.ts`), import `CallEndReason` depuis `@meeshy/shared/prisma/client` (déjà exporté comme
+  valeur, même pattern que `CallEventsHandler.ts`). Changement d'une ligne + un import, aucune autre
+  branche touchée.
+- **Non corrigé, noté en suivi** : ce même chemin anonyme ne broadcast jamais `PARTICIPANT_LEFT`/
+  `call:ended`/`postCallSummary`/`evictCallRoomSockets` contrairement à `leaveParticipationAndBroadcast`
+  (confirmé : zéro `CALL_EVENTS`/`io.emit` dans `AuthHandler.ts`) — l'autre partie ne voit jamais que
+  l'appel s'est terminé, l'UI reste "en appel" jusqu'au GC `CallCleanupService` (~120s). Fix réel plus
+  large (`AuthHandler` n'a pas de référence `io`/callback de broadcast — nécessite le même genre
+  d'injection que `CallCleanupService.setPostSummaryCallback`) ; laissé pour une session dédiée plutôt que
+  d'élargir la portée de ce fix chirurgical.
+- **Tests TDD** : RED confirmé (`AuthHandler.test.ts` pinnait l'ancien payload sans `endReasonHint`, avant
+  le fix la nouvelle assertion échoue exactement comme attendu) puis GREEN après le fix. Suite complète
+  `AuthHandler.test.ts` : 50/50. Suite gateway complète (`jest --config=jest.config.json --coverage=false`,
+  après `prisma generate` + `bun run build` de `packages/shared` comme documenté ci-dessus — `bun install`
+  a d'abord échoué sur le postinstall natif de `grpc-tools` (téléchargement binaire bloqué par le proxy
+  sandbox), contourné avec `--ignore-scripts`) : 544/544 suites, 14790/14791 tests verts (1 skip
+  pré-existant, sans rapport). `tsc --noEmit` gateway : 0 erreur.
+- **iOS/Android (lecture seule, aucun changement)** : hors périmètre (aucune toolchain Swift/Kotlin dans
+  ce sandbox).
+- **Reste ouvert (inchangé + addition)** : tout ce qui précède ; broadcast manquant sur le chemin anonyme
+  (ci-dessus) ; dead code Swift `CallManager.handleRemoteReject` ; God-objects `CallManager.swift`/
+  `CallEventsHandler.ts` ; parité iOS/Android retry-on-failure ; PR #2428 (iOS) non mergée en attendant
+  une vérification `iOS Tests` manuelle par un humain.
