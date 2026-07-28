@@ -75,12 +75,14 @@ struct TextEditToolOptions: View {
         }
         .frame(maxWidth: .infinity)
         .onAppear {
-            if tool == .border {
-                var local = textObject
-                Self.initializeBorderDefaultsIfNeutral(on: &local)
-                if local.borderColor != textObject.borderColor || local.borderWidth != textObject.borderWidth {
-                    textObject = local
-                }
+            var local = textObject
+            if tool == .border { Self.initializeBorderDefaultsIfNeutral(on: &local) }
+            if tool == .frame { Self.initializeFrameDefaultsIfNeutral(on: &local) }
+            if local.borderColor != textObject.borderColor
+                || local.borderWidth != textObject.borderWidth
+                || local.frameBorderColor != textObject.frameBorderColor
+                || local.frameBorderWidth != textObject.frameBorderWidth {
+                textObject = local
             }
         }
     }
@@ -421,20 +423,28 @@ struct TextEditToolOptions: View {
 
     /// Forme de la boîte de cadrage derrière le texte (actif uniquement quand un
     /// fond est présent). Le padding ≥ 1 'o' est automatique côté rendu.
+    /// Forme, marge et liseré de la boîte de cadre. La forme est indépendante
+    /// du fond depuis que `hasFrameBox` existe : choisir un cadre ne repeint
+    /// plus le texte d'un fond noir non demandé.
     private var frameOptions: some View {
+        VStack(spacing: 10) {
+            frameShapeRow
+            framePaddingSlider
+            frameBorderSlider
+            frameBorderPalette
+        }
+    }
+
+    private var frameShapeRow: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 10) {
                 ForEach(StoryTextFrameShape.allCases, id: \.self) { shape in
                     let isSel = textObject.parsedFrameShape == shape
                     Button {
-                        textObject.frameShape = shape.rawValue
-                        // Un cadrage n'a de sens qu'avec un fond : si aucun fond
-                        // n'est actif, on en pose un (verre discret) pour rendre
-                        // le choix visible immédiatement.
-                        if case .none = textObject.resolvedBackgroundStyle {
-                            textObject.backgroundStyle = .solid(hex: "000000A6")
-                            textObject.textBg = nil
-                        }
+                        var local = textObject
+                        local.frameShape = shape.rawValue
+                        Self.initializeFrameDefaultsIfNeutral(on: &local)
+                        textObject = local
                         HapticFeedback.light()
                     } label: {
                         Text(TextEditLabels.title(for: shape))
@@ -452,6 +462,85 @@ struct TextEditToolOptions: View {
                 }
             }
             .padding(.horizontal, 2)
+        }
+    }
+
+    /// Marge exprimée en MULTIPLICATEUR : la marge automatique vaut « au moins
+    /// la chasse d'un *o* », elle dépend donc de la police et de la taille.
+    /// Un réglage en points deviendrait faux au premier changement de l'une
+    /// des deux.
+    private var framePaddingSlider: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "rectangle.compress.vertical")
+                .font(.system(size: 12))
+                .foregroundStyle(.secondary)
+            Slider(
+                value: Binding(
+                    get: { textObject.resolvedFramePaddingScale },
+                    set: { textObject.framePaddingScale = $0 }
+                ),
+                in: 0...3, step: 0.1
+            )
+            .tint(MeeshyColors.brandPrimary)
+            Image(systemName: "rectangle.expand.vertical")
+                .font(.system(size: 14))
+                .foregroundStyle(.secondary)
+            Text("×\(String(format: "%.1f", textObject.resolvedFramePaddingScale))")
+                .font(.system(size: 12, weight: .bold, design: .monospaced))
+                .foregroundStyle(.secondary)
+                .frame(width: 40)
+        }
+    }
+
+    /// Liseré à 0 ⇒ aucun trait rendu. La couleur est conservée pour qu'on
+    /// puisse remonter le curseur sans avoir à la re-choisir — même règle que
+    /// le contour de glyphes.
+    private var frameBorderSlider: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "square.dashed")
+                .font(.system(size: 12))
+                .foregroundStyle(.secondary)
+            Slider(
+                value: Binding(
+                    get: { textObject.frameBorderWidth ?? 0 },
+                    set: { newValue in
+                        textObject.frameBorderWidth = newValue
+                        if textObject.frameBorderColor == nil {
+                            textObject.frameBorderColor = StoryTextAttributeCycle.defaultFrameBorderColor
+                        }
+                    }
+                ),
+                in: 0...12, step: 0.5
+            )
+            .tint(MeeshyColors.brandPrimary)
+            Image(systemName: "square")
+                .font(.system(size: 14, weight: .bold))
+                .foregroundStyle(.secondary)
+            Text(String(format: "%.1f", textObject.frameBorderWidth ?? 0))
+                .font(.system(size: 12, weight: .bold, design: .monospaced))
+                .foregroundStyle(.secondary)
+                .frame(width: 34)
+        }
+    }
+
+    private var frameBorderPalette: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 10) {
+                ForEach(StoryTextColors.palette, id: \.self) { hex in
+                    let isSel = textObject.frameBorderColor?.caseInsensitiveCompare(hex) == .orderedSame
+                    Button {
+                        textObject.frameBorderColor = hex
+                        if (textObject.frameBorderWidth ?? 0) == 0 {
+                            textObject.frameBorderWidth = StoryTextAttributeCycle.defaultFrameBorderWidth
+                        }
+                        HapticFeedback.light()
+                    } label: {
+                        colorDot(hex: hex, selected: isSel, size: 28)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(4)
         }
     }
 
@@ -476,6 +565,20 @@ struct TextEditToolOptions: View {
             obj.borderColor = "FFFFFF"
             obj.borderWidth = 4
         }
+    }
+
+    /// Pose un liseré discret quand le panneau Cadre s'ouvre sur un texte qui
+    /// n'a rien à montrer — ni fond, ni liseré. Sans ça, les sept formes se
+    /// choisissent sans qu'aucune ne se voie.
+    ///
+    /// Ne touche pas un texte qui a déjà un fond (la forme y est visible), ni
+    /// un texte dont l'auteur a explicitement choisi « Aucun ».
+    static func initializeFrameDefaultsIfNeutral(on obj: inout StoryTextObject) {
+        guard obj.parsedFrameShape != StoryTextFrameShape.none,
+              obj.resolvedBackgroundStyle == StoryTextBackgroundStyle.none,
+              (obj.frameBorderWidth ?? 0) == 0 else { return }
+        obj.frameBorderWidth = StoryTextAttributeCycle.defaultFrameBorderWidth
+        obj.frameBorderColor = StoryTextAttributeCycle.defaultFrameBorderColor
     }
 
     private var borderOptions: some View {

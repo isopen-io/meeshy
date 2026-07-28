@@ -49,4 +49,37 @@ final class TextEditToolOptionsBorderTests: XCTestCase {
         XCTAssertEqual(obj.borderColor, "FFFFFF", "Color preserved at slider=0")
         XCTAssertEqual(obj.borderWidth, 0, "Width stays at 0 — no auto-rebump")
     }
+
+    // MARK: - Cadre
+
+    /// Ouvrir le panneau Cadre sur un texte qui n'a ni fond ni liseré doit
+    /// donner un retour visuel immédiat — sinon les sept formes se choisissent
+    /// sans que rien ne change à l'écran.
+    func test_openingTheFramePanelOnANeutralTextLaysAThinBorder() {
+        var obj = StoryTextObject(id: "t1", text: "X")
+        TextEditToolOptions.initializeFrameDefaultsIfNeutral(on: &obj)
+
+        XCTAssertEqual(obj.frameBorderWidth, StoryTextAttributeCycle.defaultFrameBorderWidth)
+        XCTAssertEqual(obj.frameBorderColor, "FFFFFF")
+    }
+
+    /// Un texte qui a DÉJÀ un fond n'a besoin de rien : lui poser un liseré
+    /// changerait son apparence au seul fait de regarder ses options.
+    func test_openingTheFramePanelLeavesATextWithABackgroundUntouched() {
+        var obj = StoryTextObject(id: "t1", text: "X")
+        obj.backgroundStyle = .solid(hex: "6366F1")
+        TextEditToolOptions.initializeFrameDefaultsIfNeutral(on: &obj)
+
+        XCTAssertNil(obj.frameBorderWidth)
+    }
+
+    /// « Aucun » est un choix de l'auteur : le panneau ne doit pas le défaire
+    /// en lui reposant un liseré à la réouverture.
+    func test_openingTheFramePanelRespectsAnExplicitNone() {
+        var obj = StoryTextObject(id: "t1", text: "X")
+        obj.frameShape = StoryTextFrameShape.none.rawValue
+        TextEditToolOptions.initializeFrameDefaultsIfNeutral(on: &obj)
+
+        XCTAssertNil(obj.frameBorderWidth)
+    }
 }
