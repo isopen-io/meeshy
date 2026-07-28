@@ -306,26 +306,40 @@ struct TextEditToolOptions: View {
     private var backgroundOptions: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 10) {
-                bgChip(label: String(localized: "story.composer.noEffect", defaultValue: "Aucun", bundle: .module), isSel: isBgNone) {
-                    textObject.backgroundStyle = StoryTextBackgroundStyle.none
-                    textObject.textBg = nil
+                ForEach(Array(StoryTextBackgroundPresets.all.enumerated()), id: \.offset) { _, style in
+                    backgroundChip(style)
                 }
-                bgChip(label: String(localized: "story.textEdit.bg.glass", defaultValue: "Verre", bundle: .module), isSel: isBgGlass) {
-                    textObject.backgroundStyle = .glass(radius: 24)
-                    textObject.textBg = nil
-                }
-                bgSolidChip(hex: "000000", label: String(localized: "story.textEdit.bg.black", defaultValue: "Noir", bundle: .module))
-                bgSolidChip(hex: "000000A6", label: String(localized: "story.textEdit.bg.black65", defaultValue: "Noir 65%", bundle: .module))
-                bgSolidChip(hex: "FFFFFF", label: String(localized: "story.textEdit.bg.white", defaultValue: "Blanc", bundle: .module))
-                bgSolidChip(hex: "FFFFFFA6", label: String(localized: "story.textEdit.bg.white65", defaultValue: "Blanc 65%", bundle: .module))
-                bgSolidChip(hex: "6366F1", label: String(localized: "story.textEdit.bg.indigo", defaultValue: "Indigo", bundle: .module))
-                bgSolidChip(hex: "6366F1A6", label: String(localized: "story.textEdit.bg.indigo65", defaultValue: "Indigo 65%", bundle: .module))
-                bgSolidChip(hex: "F472B6", label: String(localized: "story.textEdit.bg.pink", defaultValue: "Rose", bundle: .module))
-                bgSolidChip(hex: "34D399", label: String(localized: "story.textEdit.bg.green", defaultValue: "Vert", bundle: .module))
-                bgSolidChip(hex: "FBBF24", label: String(localized: "story.textEdit.bg.amber", defaultValue: "Ambre", bundle: .module))
-                bgSolidChip(hex: "F87171", label: String(localized: "story.textEdit.bg.red", defaultValue: "Rouge", bundle: .module))
             }
         }
+    }
+
+    private func backgroundChip(_ style: StoryTextBackgroundStyle) -> some View {
+        let isSel = textObject.resolvedBackgroundStyle == style
+        return Button {
+            textObject.backgroundStyle = style
+            textObject.textBg = nil
+            HapticFeedback.light()
+        } label: {
+            HStack(spacing: 6) {
+                if case .solid(let hex) = style {
+                    Circle()
+                        .fill(Color(hex: hex))
+                        .frame(width: 16, height: 16)
+                        .overlay(Circle().stroke(.white.opacity(0.4), lineWidth: 0.5))
+                }
+                Text(StoryTextBackgroundPresets.label(for: style))
+                    .font(.system(size: Self.chipFontSize, weight: .semibold))
+            }
+            .foregroundStyle(isSel ? Color.white : Color.primary)
+            .padding(.horizontal, 9)
+            .frame(height: Self.chipHeight)
+            .background(
+                RoundedRectangle(cornerRadius: 10)
+                    .fill(isSel ? AnyShapeStyle(MeeshyColors.brandGradient)
+                                : AnyShapeStyle(Color.gray.opacity(0.18)))
+            )
+        }
+        .buttonStyle(.plain)
     }
 
     // MARK: - Frame (cadrage)
@@ -375,66 +389,6 @@ struct TextEditToolOptions: View {
         case .pill:      return 19
         case .rectangle: return 2
         }
-    }
-
-    private var isBgNone: Bool {
-        if case .none = textObject.resolvedBackgroundStyle { return true }
-        return false
-    }
-    private var isBgGlass: Bool {
-        if case .glass = textObject.resolvedBackgroundStyle { return true }
-        return false
-    }
-    private func isBgSolid(_ hex: String) -> Bool {
-        if case .solid(let h) = textObject.resolvedBackgroundStyle {
-            return h.caseInsensitiveCompare(hex) == .orderedSame
-        }
-        return false
-    }
-
-    private func bgChip(label: String, isSel: Bool, action: @escaping () -> Void) -> some View {
-        Button {
-            action()
-            HapticFeedback.light()
-        } label: {
-            Text(label)
-                .font(.system(size: Self.chipFontSize, weight: .semibold))
-                .foregroundStyle(isSel ? Color.white : Color.primary)
-                .padding(.horizontal, 10)
-                .frame(height: Self.chipHeight)
-                .background(
-                    RoundedRectangle(cornerRadius: 10)
-                        .fill(isSel ? AnyShapeStyle(MeeshyColors.brandGradient)
-                                    : AnyShapeStyle(Color.gray.opacity(0.18)))
-                )
-        }
-        .buttonStyle(.plain)
-    }
-
-    private func bgSolidChip(hex: String, label: String) -> some View {
-        let isSel = isBgSolid(hex)
-        return Button {
-            textObject.backgroundStyle = .solid(hex: hex)
-            textObject.textBg = nil
-            HapticFeedback.light()
-        } label: {
-            HStack(spacing: 6) {
-                Circle()
-                    .fill(Color(hex: hex))
-                    .frame(width: 16, height: 16)
-                    .overlay(Circle().stroke(.white.opacity(0.4), lineWidth: 0.5))
-                Text(label).font(.system(size: Self.chipFontSize, weight: .semibold))
-            }
-            .foregroundStyle(isSel ? Color.white : Color.primary)
-            .padding(.horizontal, 9)
-            .frame(height: Self.chipHeight)
-            .background(
-                RoundedRectangle(cornerRadius: 10)
-                    .fill(isSel ? AnyShapeStyle(MeeshyColors.brandGradient)
-                                : AnyShapeStyle(Color.gray.opacity(0.18)))
-            )
-        }
-        .buttonStyle(.plain)
     }
 
     // MARK: - Border

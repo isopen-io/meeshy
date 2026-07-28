@@ -1,9 +1,35 @@
 import Testing
 import Foundation
 @testable import MeeshySDK
+@testable import MeeshyUI
 
 @Suite("StoryTextBackgroundStyle — Codable & legacy fallback")
 struct StoryTextBackgroundStyleTests {
+
+    // MARK: - Préréglages partagés
+
+    /// Le panneau d'options et la rotation au tap lisent la MÊME liste. Deux
+    /// sources séparées divergeraient au premier fond ajouté, et la rotation
+    /// deviendrait incapable d'atteindre une valeur que le panneau propose.
+    @Test("les préréglages commencent par Aucun et n'ont pas de doublon")
+    func presetListStartsWithNoneAndHasNoDuplicates() {
+        let all = StoryTextBackgroundPresets.all
+
+        #expect(all.first == StoryTextBackgroundStyle.none)
+        #expect(all.count == 12)
+        for (index, style) in all.enumerated() {
+            #expect(!all[(index + 1)...].contains(style),
+                    "\(style) figure deux fois dans les préréglages")
+        }
+    }
+
+    @MainActor
+    @Test("chaque préréglage porte un libellé non vide")
+    func everyPresetHasANonEmptyLabel() {
+        for style in StoryTextBackgroundPresets.all {
+            #expect(!StoryTextBackgroundPresets.label(for: style).isEmpty)
+        }
+    }
 
     // MARK: - StoryTextBackgroundStyle Codable round-trips
 
