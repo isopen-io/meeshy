@@ -1,3 +1,5 @@
+import { normalizeLanguageCode } from '@meeshy/shared/utils/language-normalize';
+
 /**
  * Per-recipient language filtering for the `message:new` socket payload
  * (bandwidth sprint Phase B1).
@@ -52,6 +54,25 @@ export function filterMessagePayloadForLanguages<T extends object>(
   return next;
 }
 
+/**
+ * Canonicalise un code de langue destinataire vers la forme 2-lettres sous
+ * laquelle les traductions sont stockées (`translations[].targetLanguage`,
+ * `attachments[].translations{}` — voir {@link filterMessagePayloadForLanguages}).
+ *
+ * Les destinataires REGISTERED arrivent déjà normalisés (`resolveUserLanguagesOrdered`),
+ * mais un participant ANONYME porte un `language` brut persisté verbatim par
+ * `AuthHandler` (`'pt-BR'`, `'zh-Hant-HK'`) et n'a AUCUNE `resolvedLanguages` —
+ * le repli tombe alors sur cette valeur brute. Sans réduction, le set de langues
+ * du groupe contient `'pt-br'`, qui ne matche jamais la clé de traduction `'pt'`
+ * : la traduction existante est prunée et le lecteur retombe sur l'original —
+ * violation directe du Prisme. On délègue à `normalizeLanguageCode` (source de
+ * vérité partagée) et, si elle rejette l'entrée, on conserve le repli historique
+ * (`.trim().toLowerCase()`) pour ne dropper aucun code plausible.
+ */
+function normalizeGroupLanguage(code: string): string {
+  return normalizeLanguageCode(code) ?? code.trim().toLowerCase();
+}
+
 export interface SocketLanguageGroup {
   /** Room socket ids that share the same resolved language set. */
   readonly socketIds: string[];
@@ -84,7 +105,7 @@ export interface GroupSocketsByLanguageOptions {
 export function groupSocketsByLanguage(
   opts: GroupSocketsByLanguageOptions
 ): SocketLanguageGroup[] {
-  const original = opts.originalLanguage.toLowerCase();
+  const original = normalizeGroupLanguage(opts.originalLanguage);
   const groups = new Map<string, { socketIds: string[]; languages: string[] }>();
 
   for (const socketId of opts.socketIds) {
@@ -95,8 +116,8 @@ export function groupSocketsByLanguage(
     const resolved = userId ? opts.resolveLanguages(userId) : undefined;
     const base =
       resolved && resolved.length > 0
-        ? resolved.map((l) => l.toLowerCase())
-        : [String((userId ? opts.userLanguage(userId) : undefined) || original).toLowerCase()];
+        ? resolved.map(normalizeGroupLanguage)
+        : [normalizeGroupLanguage(String((userId ? opts.userLanguage(userId) : undefined) || original))];
 
     const languages = Array.from(new Set([...base, original]));
     const key = languages.slice().sort().join(',');
