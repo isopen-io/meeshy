@@ -230,6 +230,21 @@ final class PermissionGateSourceGuardTests: XCTestCase {
                       "Le cablage doit se faire au premier usage, de maniere idempotente.")
     }
 
+    /// À l'ouverture d'un picker déjà autorisé, `requestPermission()` et le
+    /// callback d'autorisation initial tirent chacun un `requestLocation()` :
+    /// CoreLocation annule alors la première requête et répond
+    /// `kCLErrorLocationUnknown`, laissant l'UI attendre un relevé qui
+    /// n'arrivera pas.
+    func test_locationPicker_guardsAgainstConcurrentFixRequests() throws {
+        let src = try source("Meeshy/Features/Main/Components/LocationPickerView.swift")
+        XCTAssertTrue(src.contains("isAwaitingFix"),
+                      "Deux requestLocation() concurrents font annuler la premiere par CoreLocation, qui repond kCLErrorLocationUnknown.")
+        let fail = try body(from: "func locationManager(_ manager: CLLocationManager, didFailWithError",
+                            to: "func locationManagerDidChangeAuthorization", in: src)
+        XCTAssertTrue(fail.contains("isAwaitingFix = false"),
+                      "Un echec doit rearmer la garde, sinon plus aucun releve ne peut partir.")
+    }
+
     // MARK: - Mot de passe
 
     /// Sans `.newPassword`, iOS ne propose ni mot de passe fort ni — surtout —

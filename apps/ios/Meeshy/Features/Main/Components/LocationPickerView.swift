@@ -382,6 +382,19 @@ nonisolated final class LocationPickerModel: NSObject, ObservableObject, CLLocat
     private let geocoder = CLGeocoder()
     private var geocodeTask: Task<Void, Never>?
 
+    /// Garde contre deux relevés concurrents. À l'ouverture d'un picker déjà
+    /// autorisé, `requestPermission()` et le callback d'autorisation initial
+    /// tiraient chacun un `requestLocation()` : CoreLocation annulait alors la
+    /// première requête et répondait `kCLErrorLocationUnknown`, laissant l'UI
+    /// attendre un relevé qui n'arriverait jamais.
+    private var isAwaitingFix = false
+
+    private func requestFixIfIdle() {
+        guard !isAwaitingFix else { return }
+        isAwaitingFix = true
+        manager.requestLocation()
+    }
+
     override init() {
         super.init()
         manager.desiredAccuracy = kCLLocationAccuracyBest
@@ -408,7 +421,7 @@ nonisolated final class LocationPickerModel: NSObject, ObservableObject, CLLocat
         case .notDetermined:
             manager.requestWhenInUseAuthorization()
         case .authorizedWhenInUse, .authorizedAlways:
-            manager.requestLocation()
+            requestFixIfIdle()
         default:
             break
         }
@@ -471,12 +484,13 @@ nonisolated final class LocationPickerModel: NSObject, ObservableObject, CLLocat
     }
 
     func centerOnUser() {
-        manager.requestLocation()
+        requestFixIfIdle()
     }
 
     // Les trois callbacks de delegate ne portent plus `nonisolated` : le TYPE
     // entier l'est désormais, l'annotation par méthode serait redondante.
     func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
+        isAwaitingFix = false
         guard let loc = locations.last else { return }
         Task { @MainActor [weak self] in
             guard let self else { return }
@@ -493,6 +507,7 @@ nonisolated final class LocationPickerModel: NSObject, ObservableObject, CLLocat
         // transient CoreLocation errors. Log so we can diagnose why the
         // picker never surfaces a result, and clear the pending geocoding
         // state so the UI does not spin forever.
+        isAwaitingFix = false
         Logger(subsystem: "me.meeshy.app", category: "location")
             .error("Location manager failed: \(error.localizedDescription, privacy: .public)")
         Task { @MainActor [weak self] in
@@ -506,7 +521,7 @@ nonisolated final class LocationPickerModel: NSObject, ObservableObject, CLLocat
             self?.authorization = status
         }
         if status == .authorizedWhenInUse || status == .authorizedAlways {
-            manager.requestLocation()
+            requestFixIfIdle()
         }
     }
 }
