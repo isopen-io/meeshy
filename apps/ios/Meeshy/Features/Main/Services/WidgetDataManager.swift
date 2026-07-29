@@ -70,6 +70,8 @@ final class WidgetDataManager: NotificationWidgetSink {
     /// Store keyé `[id: ConversationSnapshotPayload]` — résolution Local-First
     /// des détails de conversation pour la NSE + les widgets.
     private let snapshotsKey = "conversation_snapshots"
+    /// Environnement API courant, lu par les extensions (NSE + partage).
+    private let apiBaseURLKey = "meeshy_api_base_url"
     /// Borne de taille du store keyé (évite un blob App Group illimité).
     private let snapshotsCap = 500
 
@@ -85,13 +87,37 @@ final class WidgetDataManager: NotificationWidgetSink {
 
     private init() {}
 
+    // MARK: - Environnement API
+
+    /// Miroir de l'environnement API courant dans l'App Group.
+    ///
+    /// `NSEDataSync.resolveApiBaseURL` documente depuis toujours que « l'app
+    /// principale écrit `meeshy_api_base_url` » — sans qu'aucun code ne l'ait
+    /// jamais écrite : la NSE retombait donc systématiquement sur la
+    /// production. Bénin pour elle (son repli EST la production), mais
+    /// l'extension de partage lit la même clé et posterait, en Debug, vers
+    /// `gate.meeshy.me` au lieu de `localhost:3000`. Écrire cette clé corrige
+    /// les deux extensions d'un coup.
+    ///
+    /// Les lecteurs valident la valeur contre une allowlist et retombent sur la
+    /// production si elle en sort — un environnement inattendu ne peut donc pas
+    /// détourner un partage vers un hôte arbitraire.
+    func publishAPIBaseURL(_ origin: String = MeeshyConfig.shared.serverOrigin) {
+        sharedDefaults?.set(origin, forKey: apiBaseURLKey)
+    }
+
     // MARK: - NotificationWidgetSink
 
     func publishConversations(_ conversations: [MeeshyConversation]) {
         let widgetConversations = conversations
             .sorted { ($0.userState.isPinned ? 0 : 1, $0.lastMessageAt) < ($1.userState.isPinned ? 0 : 1, $1.lastMessageAt) }
             .reversed()
-            .prefix(10)
+            // 50 et non 10 : l'extension de partage lit cette MÊME clé pour
+            // proposer ses destinations, et 10 conversations font une liste
+            // frustrante. Les widgets tranchent au rendu (`.prefix(2)` /
+            // `.prefix(5)` dans MeeshyWidgets.swift) et ne présument jamais de
+            // la longueur du tableau — le changement leur est transparent.
+            .prefix(50)
             .map { conv in
                 WidgetConversation(
                     id: conv.id,

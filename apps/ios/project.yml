@@ -211,6 +211,20 @@ targets:
       # NSEPreferencesGate importe MeeshySDK (modèle UserNotificationPreferences,
       # déjà lié au bundle de tests) + UserNotifications (data-only en test).
       - path: MeeshyNotificationExtension/NSEPreferencesGate.swift
+      # Helpers purs de l'extension de partage, compilés DANS le bundle de tests
+      # pour la même raison que les helpers NSE ci-dessus : ils vivent dans une
+      # cible app-extension, donc `@testable import Meeshy` ne les atteint pas.
+      # Foundation/Security uniquement — ShareViewController (UIKit + SwiftUI)
+      # reste HORS du bundle : toute sa logique décidable en a été extraite.
+      #
+      # Compiler ShareSender ici est aussi ce qui rend possible
+      # SharePendingSendContractTests : c'est le seul endroit du dépôt où le
+      # miroir extension (SharePendingSend) et le miroir app
+      # (SharePendingSendConsumer.PendingSend) coexistent, donc le seul où leur
+      # dérive peut être attrapée mécaniquement.
+      - path: MeeshyShareExtension/ShareSession.swift
+      - path: MeeshyShareExtension/ShareConversationStore.swift
+      - path: MeeshyShareExtension/ShareSender.swift
     settings:
       PRODUCT_BUNDLE_IDENTIFIER: me.meeshy.app.tests
       CODE_SIGN_STYLE: Automatic

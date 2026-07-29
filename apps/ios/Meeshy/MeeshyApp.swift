@@ -187,6 +187,11 @@ struct MeeshyApp: App {
                     ImageDownsamplingConfig.applyGlobal()
                     KeychainManager.shared.migrateToAfterFirstUnlock()
                     MeeshyConfig.shared.restoreEnvironment()
+                    // Miroir de l'environnement pour les extensions (NSE +
+                    // partage), qui n'ont pas accès à MeeshyConfig. À poser
+                    // APRÈS restoreEnvironment, sinon on publierait la valeur
+                    // par défaut au lieu de l'environnement restauré.
+                    WidgetDataManager.shared.publishAPIBaseURL()
                     // Bridge iOS Focus filter selection into the SDK so in-app
                     // toasts respect the currently-active Focus filter.
                     NotificationToastManager.shared.focusFilterProvider = {
@@ -236,6 +241,14 @@ struct MeeshyApp: App {
                     // inflight record regardless of kind or id prefix.
                     let bootPool = dependencies.dbPool
                     await OfflineQueue.shared.configure(pool: bootPool)
+
+                    // Partages que l'extension n'a pas pu envoyer : ils
+                    // rejoignent l'outbox dès qu'il est capable d'enfiler,
+                    // donc juste APRÈS `configure(pool:)` — plus tôt, chaque
+                    // enfilement échouerait sur `poolNotConfigured`. Non
+                    // bloquant pour le boot ; un échec laisse le relais sur
+                    // disque pour la reprise en avant-plan.
+                    Task { await SharePendingSendConsumer.shared.consumeAll() }
 
                     // Wire preference mutations to flush the outbox immediately after
                     // enqueue so changes don't get stuck `.pending` until boot/foreground

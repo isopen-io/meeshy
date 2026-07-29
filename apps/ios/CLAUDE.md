@@ -445,10 +445,33 @@ Les composants suivants gerent l'**entite** Notification (CRUD, listing, prefere
   dans les `dependencies` de Meeshy (phase « Embed Foundation Extensions »), l'App ID
   `me.meeshy.app.share-extension` (QA8KGP7U96) est enregistré au portail avec APP_GROUPS, et
   le bundle id figure dans `fastlane/Matchfile` + les lanes `sync_certificates`/`force_sync`.
-  ⚠️ **Le tuyau produit n'est pas branché** : l'extension écrit `pending_shared_content` dans
-  l'App Group et ouvre `meeshy://share?contactId=…`, mais aucun code app ne lit cette clé et
-  `DeepLinkRouter` n'interprète que `?text=`/`?url=` → le contenu partagé est perdu
-  (`popToRoot()` seul). À câbler sur `Router.pendingShareContent` avant de compter dessus.
+  **Câblée produit depuis 2026-07-29** — extension AUTONOME : elle lit la session dans
+  l'App Group (`meeshy_active_user_id` → Keychain `meeshy_token_<userId>`, groupe partagé
+  `<TEAMID>.me.meeshy.app`, d'où le `keychain-access-groups` ajouté aux entitlements),
+  liste les vraies conversations (`recent_conversations` enrichie par
+  `conversation_snapshots`), et poste elle-même `POST /api/v1/conversations/:id/messages`.
+  Elle n'ouvre JAMAIS l'app.
+  - **Portée lot 1 : texte + URL.** L'`Info.plist` n'annonce que `SupportsText` +
+    `SupportsWebURL` — s'annoncer pour une image qu'on ne sait pas envoyer ferait
+    apparaître Meeshy dans la feuille de partage de Photos pour y échouer. Les images et
+    vidéos reviendront avec le pipeline TUS (lot 2), leur règle d'activation EN MÊME TEMPS.
+  - **Échec d'envoi = relais durable, jamais une perte** : `ShareSender` dépose
+    `share_pending_sends/<clientMessageId>.json` dans le conteneur App Group ;
+    `SharePendingSendConsumer` (app) le verse dans l'`OfflineQueue` au boot et au retour en
+    avant-plan. Le `clientMessageId` est repris à l'identique → le gateway dédoublonne, donc
+    un POST abouti dont la réponse s'est perdue ne produit pas de doublon au rejeu.
+  - **Aucun jeu de données de repli.** Sans session ou sans conversation, l'écran l'affiche
+    explicitement. L'ancien `ContactPreview.sampleContacts` masquait une lecture morte
+    derrière trois contacts crédibles — c'est ce qui a permis à la panne de survivre aux
+    itérations d'audit 220i/221i/222i. `ShareExtensionSourceGuardTests` interdit son retour.
+  - Helpers purs (`ShareSession`, `ShareConversationStore`, `ShareSender`) compilés AUSSI
+    dans `MeeshyTests` via `project.yml` (motif `NSEDecryptor`) — `ShareViewController`
+    (UIKit+SwiftUI) reste hors du bundle, toute sa logique décidable en a été extraite.
+    Ces types sont `nonisolated` **sur le type ET sur leurs extensions** : la cible compile
+    sous `SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor`, le bundle de tests sous `nonisolated`.
+  - `meeshy_api_base_url` est désormais ÉCRITE par l'app (`WidgetDataManager.publishAPIBaseURL`).
+    `NSEDataSync` la documentait depuis toujours comme écrite par l'app sans que personne
+    ne l'écrive : la NSE retombait systématiquement sur la production.
 - **App Intents (Siri/Shortcuts)** — `Meeshy/Features/Intents/MeeshyAppIntents.swift`,
   compilé **dans le target app** (pas d'extension séparée : les `AppIntent` définis par
   l'app sont exposés à Siri/Shortcuts automatiquement). Recâblé 2026-06-24 depuis l'ancien

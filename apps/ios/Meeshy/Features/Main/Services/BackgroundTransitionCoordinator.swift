@@ -105,6 +105,14 @@ final class BackgroundTransitionCoordinator: BackgroundTransitioning {
         await withBudget("nse.consumePendingPosts") {
             await NSEPendingPostConsumer.shared.consumeAll()
         }
+        // Partages que l'extension n'a pas pu envoyer (hors-ligne, jeton
+        // périmé) : ils rejoignent l'outbox, qui les rejouera. Republier
+        // l'environnement au passage garde l'extension alignée si l'utilisateur
+        // a changé de gateway pendant la session.
+        await withBudget("share.consumePendingSends") {
+            WidgetDataManager.shared.publishAPIBaseURL()
+            await SharePendingSendConsumer.shared.consumeAll()
+        }
         await withBudget("sockets.resume") {
             // CALL-FIX 2026-06-05 — if a call kept the sockets alive (see the
             // enterBackground guard), do NOT force-reconnect on resume: that would
