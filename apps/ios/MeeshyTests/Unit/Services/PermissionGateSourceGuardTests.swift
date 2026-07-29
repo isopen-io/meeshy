@@ -245,6 +245,18 @@ final class PermissionGateSourceGuardTests: XCTestCase {
                       "Un echec doit rearmer la garde, sinon plus aucun releve ne peut partir.")
     }
 
+    /// Le crash est corrigé sans trace. Ces breadcrumbs sont ce qui rendra un
+    /// éventuel re-crash diagnosticable au lieu d'imposer une seconde correction
+    /// à l'aveugle.
+    func test_locationPicker_leavesBreadcrumbsOnEveryAuthorizationStep() throws {
+        let src = try source("Meeshy/Features/Main/Components/LocationPickerView.swift")
+        for step in ["breadcrumb.request", "breadcrumb.authorization", "breadcrumb.fix",
+                     "breadcrumb.failure", "breadcrumb.selection"] {
+            XCTAssertTrue(src.contains(step),
+                          "Etape \(step) non tracee : un re-crash resterait indiagnosticable.")
+        }
+    }
+
     // MARK: - Mot de passe
 
     /// Sans `.newPassword`, iOS ne propose ni mot de passe fort ni — surtout —

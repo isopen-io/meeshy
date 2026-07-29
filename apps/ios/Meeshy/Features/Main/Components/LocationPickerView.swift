@@ -287,6 +287,8 @@ struct LocationPickerView: View {
 
                 Button {
                     guard let coord = viewModel.selectedCoordinate else { return }
+                    Logger(subsystem: "me.meeshy.app", category: "location")
+                        .info("breadcrumb.selection hasAddress=\(viewModel.addressString != nil, privacy: .public)")
                     onSelect(coord, viewModel.addressString)
                     HapticFeedback.success()
                     dismiss()
@@ -381,6 +383,7 @@ nonisolated final class LocationPickerModel: NSObject, ObservableObject, CLLocat
     private let manager = CLLocationManager()
     private let geocoder = CLGeocoder()
     private var geocodeTask: Task<Void, Never>?
+    private let log = Logger(subsystem: "me.meeshy.app", category: "location")
 
     /// Garde contre deux relevés concurrents. À l'ouverture d'un picker déjà
     /// autorisé, `requestPermission()` et le callback d'autorisation initial
@@ -417,6 +420,7 @@ nonisolated final class LocationPickerModel: NSObject, ObservableObject, CLLocat
     func requestPermission() {
         if manager.delegate == nil { manager.delegate = self }
         authorization = manager.authorizationStatus
+        log.info("breadcrumb.request status=\(self.authorization.rawValue, privacy: .public)")
         switch authorization {
         case .notDetermined:
             manager.requestWhenInUseAuthorization()
@@ -491,6 +495,7 @@ nonisolated final class LocationPickerModel: NSObject, ObservableObject, CLLocat
     // entier l'est désormais, l'annotation par méthode serait redondante.
     func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
         isAwaitingFix = false
+        log.info("breadcrumb.fix count=\(locations.count, privacy: .public)")
         guard let loc = locations.last else { return }
         Task { @MainActor [weak self] in
             guard let self else { return }
@@ -508,8 +513,7 @@ nonisolated final class LocationPickerModel: NSObject, ObservableObject, CLLocat
         // picker never surfaces a result, and clear the pending geocoding
         // state so the UI does not spin forever.
         isAwaitingFix = false
-        Logger(subsystem: "me.meeshy.app", category: "location")
-            .error("Location manager failed: \(error.localizedDescription, privacy: .public)")
+        log.error("breadcrumb.failure \(error.localizedDescription, privacy: .public)")
         Task { @MainActor [weak self] in
             self?.isGeocoding = false
         }
@@ -517,6 +521,7 @@ nonisolated final class LocationPickerModel: NSObject, ObservableObject, CLLocat
 
     func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
         let status = manager.authorizationStatus
+        log.info("breadcrumb.authorization status=\(status.rawValue, privacy: .public)")
         Task { @MainActor [weak self] in
             self?.authorization = status
         }
