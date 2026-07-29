@@ -35,7 +35,17 @@ import Combine
 /// démonter sur le main actor : le saut d'exécuteur ne protégeait rien et ne
 /// coûtait qu'un crash.
 nonisolated public final class ScrollOffsetRelay: ObservableObject {
-    @Published public var offset: CGFloat = 0
+    /// `willSet { objectWillChange.send() }` PLUTÔT que `@Published` : le
+    /// compilateur refuse `nonisolated` sur une propriété enveloppée
+    /// (« 'nonisolated' is not supported on properties with property wrappers »),
+    /// et l'annotation doit vivre sur le TYPE pour désisoler la deinit.
+    ///
+    /// Ce n'est pas un contournement : c'est EXACTEMENT ce que `@Published`
+    /// fait — publier sur `willSet`, avant l'écriture. Les consommateurs
+    /// s'abonnent à `objectWillChange` via `@ObservedObject`, inchangé.
+    public var offset: CGFloat = 0 {
+        willSet { objectWillChange.send() }
+    }
 
     public init() {}
 }

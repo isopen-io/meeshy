@@ -947,7 +947,19 @@ struct FeedView: View {
                     // and the iPhone feed so stories load identically here. Le tap
                     // ouvre le viewer via StoryViewerCoordinator (chemin unique),
                     // exactement comme la liste de conversations.
-                    StoryTrayView(viewModel: storyViewModel)
+                    //
+                    // Absent sur iPad : les deux colonnes sont visibles EN MÊME
+                    // TEMPS et la liste de conversations porte déjà ce même tray.
+                    // L'afficher ici le montrait DEUX FOIS côte à côte, avec les
+                    // mêmes avatars — la seconde occurrence n'apprend rien et
+                    // repousse le fil vers le bas. `sizeClass == .regular` est le
+                    // discriminant qui monte `iPadRootView` (cf. AdaptiveRootView),
+                    // donc le tray de la colonne droite est là par construction.
+                    // Les stories restent chargées : les anneaux d'auteur des
+                    // cartes en dépendent.
+                    if sizeClass != .regular {
+                        StoryTrayView(viewModel: storyViewModel)
+                    }
 
                     // Composer placeholder
                     composerPlaceholder
