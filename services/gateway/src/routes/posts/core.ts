@@ -11,7 +11,7 @@ import { resolveMentionedUsers, MentionService } from '../../services/MentionSer
 import { createPostRouteRateLimitConfig } from '../../middleware/rate-limiter';
 import { withMutationLog } from '../../utils/withMutationLog';
 import { SecuritySanitizer } from '../../utils/sanitize.js';
-import { sharedPlaceFromMetadata } from '../../services/location/sharedPlace';
+import { hoistLocationDeep } from '../../services/location/sharedPlace';
 
 /**
  * Hisse `metadata.trackingLinks` ([{ url, token }]) en top-level sur le payload
@@ -30,18 +30,14 @@ function hoistTrackingLinks<T extends Record<string, unknown>>(post: T): T {
 }
 
 /**
- * Hisse `metadata.location` en top-level `location` — même miroir que
- * `hoistTrackingLinks`, appliqué à la fois à la réponse REST et au payload
- * socket (contrairement à `trackingLinks`, qui ne hissait jusqu'ici que le
- * payload socket). No-op si le post ne porte aucun lieu.
+ * Hisse `metadata.location` en top-level `location`, sur le post ET sur
+ * chaque commentaire de son aperçu embarqué (`post.comments`) — voir
+ * `hoistLocationDeep` (services/location/sharedPlace.ts). Appliqué à la fois
+ * à la réponse REST et au payload socket (contrairement à `trackingLinks`,
+ * qui ne hissait jusqu'ici que le payload socket, et qui ne descend pas dans
+ * `comments`). No-op si rien ne porte de lieu.
  */
-function hoistLocation<T extends Record<string, unknown>>(post: T): T {
-  const place = sharedPlaceFromMetadata(post?.metadata);
-  if (place) {
-    return { ...post, location: place } as T;
-  }
-  return post;
-}
+const hoistLocation = hoistLocationDeep;
 
 export function registerCoreRoutes(
   fastify: FastifyInstance,

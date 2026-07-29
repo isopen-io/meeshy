@@ -77,3 +77,45 @@ export function sharedPlaceFromMetadata(metadata: unknown): SharedPlace | null {
   if (!('location' in obj)) return null;
   return parseSharedPlace(obj['location']);
 }
+
+/**
+ * Hisse `metadata.location` en champ top-level `location` sur UNE entité
+ * (message, post ou commentaire). Miroir exact du hoist `postReplyTo` —
+ * source UNIQUE réutilisée par tous les payloads REST/socket, pour éviter
+ * qu'une surface de lecture oublie le hoist qu'une autre applique déjà (voir
+ * `hoistLocationDeep` ci-dessous : c'est exactement ce qui manquait à
+ * l'aperçu des commentaires embarqué dans un post). No-op si absent/invalide.
+ */
+export function hoistLocationOnto<T extends Record<string, unknown>>(entity: T): T {
+  const place = sharedPlaceFromMetadata(entity?.metadata);
+  if (place) {
+    return { ...entity, location: place } as T;
+  }
+  return entity;
+}
+
+/**
+ * Hisse la position d'une entité ET de chaque item de sa relation `comments`
+ * embarquée (l'aperçu des 3 premiers commentaires attaché à tout `Post` via
+ * `postInclude`/`storyPostInclude` — voir `postIncludes.ts`).
+ *
+ * Sans ce second niveau, un commentaire géolocalisé restitue sa position dans
+ * la liste complète (`GET /posts/:postId/comments`) mais pas dans l'aperçu
+ * embarqué sur le post — la position semble disparaître selon la surface
+ * consultée par le client. `hoistLocationOnto` seul ne couvre QUE le post
+ * lui-même ; utiliser cette fonction partout où un `Post` complet (avec son
+ * `comments[]`) est renvoyé à un client.
+ */
+export function hoistLocationDeep<T extends Record<string, unknown>>(entity: T): T {
+  const hoisted = hoistLocationOnto(entity);
+  const comments = (hoisted as { comments?: unknown }).comments;
+  if (!Array.isArray(comments) || comments.length === 0) {
+    return hoisted;
+  }
+  const hoistedComments = comments.map((comment) =>
+    comment && typeof comment === 'object' && !Array.isArray(comment)
+      ? hoistLocationOnto(comment as Record<string, unknown>)
+      : comment
+  );
+  return { ...hoisted, comments: hoistedComments } as T;
+}

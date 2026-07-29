@@ -1,4 +1,4 @@
-import { parseSharedPlace, sharedPlaceFromMetadata } from '../sharedPlace';
+import { parseSharedPlace, sharedPlaceFromMetadata, hoistLocationOnto, hoistLocationDeep } from '../sharedPlace';
 
 describe('parseSharedPlace', () => {
   it('accepte un lieu complet', () => {
@@ -61,5 +61,50 @@ describe('contrat d entree', () => {
     // commentaires — un seul extracteur, pas de copie locale par surface.
     const metadata = { location: { latitude: 48.85, longitude: 2.35, name: 'Paris' } };
     expect(sharedPlaceFromMetadata(metadata)).toMatchObject({ name: 'Paris' });
+  });
+});
+
+describe('hoistLocationOnto', () => {
+  it('hisse metadata.location en champ top-level location', () => {
+    const entity = { id: 'c1', metadata: { location: { latitude: 1, longitude: 2, name: null, address: null, category: null } } };
+    expect(hoistLocationOnto(entity)).toMatchObject({ location: { latitude: 1, longitude: 2 } });
+  });
+
+  it('ne modifie rien quand metadata ne porte aucun lieu', () => {
+    const entity = { id: 'c1', metadata: { trackingLinks: [] } };
+    const result = hoistLocationOnto(entity) as typeof entity & { location?: unknown };
+    expect(result.location).toBeUndefined();
+  });
+});
+
+describe('hoistLocationDeep', () => {
+  it('hisse la position du post ET de chaque commentaire de son apercu embarque', () => {
+    // Reproduit exactement la forme d'un Post hydrate par `postInclude` :
+    // un commentaire geolocalise present dans `post.comments` (apercu des 3
+    // premiers) doit restituer sa position au meme titre qu'un post lui-meme
+    // geolocalise — sinon la position "disparait" selon la surface consultee
+    // (liste complete des commentaires vs apercu embarque dans le post).
+    const post = {
+      id: 'p1',
+      metadata: { location: { latitude: 48.85, longitude: 2.35, name: null, address: null, category: null } },
+      comments: [
+        { id: 'c1', metadata: { location: { latitude: 40.7, longitude: -74, name: null, address: null, category: null } } },
+        { id: 'c2', metadata: {} },
+      ],
+    };
+
+    const hoisted = hoistLocationDeep(post) as typeof post & {
+      location?: { latitude: number };
+      comments: Array<{ location?: { latitude: number } }>;
+    };
+
+    expect(hoisted.location).toMatchObject({ latitude: 48.85 });
+    expect(hoisted.comments[0].location).toMatchObject({ latitude: 40.7 });
+    expect(hoisted.comments[1].location).toBeUndefined();
+  });
+
+  it('ne plante pas quand comments est absent ou vide', () => {
+    expect(hoistLocationDeep({ id: 'p1', metadata: {} })).toEqual({ id: 'p1', metadata: {} });
+    expect(hoistLocationDeep({ id: 'p1', metadata: {}, comments: [] })).toEqual({ id: 'p1', metadata: {}, comments: [] });
   });
 });

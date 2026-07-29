@@ -143,6 +143,14 @@ describe('posts/postIncludes — canonical shared selects', () => {
       );
     });
 
+    it('selects metadata so a geotagged comment keeps its location in the embedded preview', () => {
+      // Sans `metadata` ici, un commentaire portant `metadata.location` montre sa
+      // position dans la liste complète (GET .../comments) mais PAS dans l'aperçu
+      // des 3 commentaires embarqué sur le post lui-même — la position "disparaît"
+      // selon la surface consultée.
+      expect(commentsPreviewInclude.select.metadata).toBe(true);
+    });
+
     it('embeds the comment media preview so a comment attachment survives reload', () => {
       // The comments-with-media bug: a comment attachment (image/video/audio,
       // incl. its transcription + per-language TTS variants) showed live (via

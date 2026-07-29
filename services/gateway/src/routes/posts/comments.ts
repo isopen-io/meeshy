@@ -10,7 +10,7 @@ import { resolveMentionedUsers, MentionService } from '../../services/MentionSer
 import { createPostRouteRateLimitConfig } from '../../middleware/rate-limiter';
 import { withMutationLog } from '../../utils/withMutationLog';
 import { SecuritySanitizer } from '../../utils/sanitize.js';
-import { sharedPlaceFromMetadata } from '../../services/location/sharedPlace';
+import { hoistLocationOnto } from '../../services/location/sharedPlace';
 
 /**
  * Hisse `metadata.trackingLinks` ([{ url, token }]) en top-level sur le payload
@@ -30,14 +30,12 @@ function hoistCommentTrackingLinks<T extends Record<string, unknown>>(comment: T
 /**
  * Hisse `metadata.location` en top-level `location` sur un commentaire —
  * appliqué à la liste (GET), aux réponses (GET replies) ET à la réponse de
- * création (POST), en plus du payload socket. No-op si absent.
+ * création (POST), en plus du payload socket. Source UNIQUE partagée avec
+ * `core.ts` (via `hoistLocationDeep`, qui l'applique aussi aux commentaires
+ * embarqués dans un post) — pas de copie locale de la logique de hoist.
  */
 function hoistCommentLocation<T extends Record<string, unknown>>(comment: T): T {
-  const place = sharedPlaceFromMetadata(comment?.metadata);
-  if (place) {
-    return { ...comment, location: place } as T;
-  }
-  return comment;
+  return hoistLocationOnto(comment);
 }
 
 export function registerCommentRoutes(
