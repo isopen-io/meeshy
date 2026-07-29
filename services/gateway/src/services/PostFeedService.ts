@@ -11,6 +11,7 @@ import {
 import type { CacheStore } from './CacheStore';
 import { getCommunityCoMemberIds, isActiveCommunityMember } from './posts/communityVisibility';
 import { enhancedLogger } from '../utils/logger-enhanced';
+import { hoistLocationDeep } from './location/sharedPlace';
 
 const logger = enhancedLogger.child({ module: 'PostFeedService' });
 
@@ -228,7 +229,7 @@ export class PostFeedService {
     const repostedIds = new Set(userReposts.map((r) => r.repostOfId).filter(Boolean) as string[]);
 
     return {
-      items: items.map((s) => ({
+      items: items.map((s) => hoistLocationDeep({
         ...this.enrichWithLikeStatus(s.post, userReactionsMap.get(s.post.id) ?? []),
         currentUserReactions: userReactionsMap.get(s.post.id) ?? [],
         isBookmarkedByMe: bookmarkedIds.has(s.post.id),
@@ -369,7 +370,10 @@ export class PostFeedService {
       userReactionsMap.set(r.postId, list);
     }
 
-    const items = stories.map((s) => ({
+    // hoistLocationDeep est un no-op sûr sur la projection tray (ni `metadata`
+    // ni `comments` sélectionnés — cf. trayStorySelect) : elle ne rend de
+    // toute façon pas de badge de lieu (anneaux + miniature seuls).
+    const items = stories.map((s) => hoistLocationDeep({
       ...this.enrichWithLikeStatus(s, userReactionsMap.get(s.id) ?? []),
       isViewedByMe: viewedSet.has(s.id),
       currentUserReactions: userReactionsMap.get(s.id) ?? [],
@@ -428,7 +432,7 @@ export class PostFeedService {
     });
 
     const hasMore = statuses.length > limit;
-    const items = hasMore ? statuses.slice(0, limit) : statuses;
+    const items = (hasMore ? statuses.slice(0, limit) : statuses).map(hoistLocationDeep);
     const nextCursor = hasMore && items.length > 0
       ? encodeCursor(items[items.length - 1].createdAt, items[items.length - 1].id)
       : null;
@@ -468,7 +472,7 @@ export class PostFeedService {
     });
 
     const hasMore = statuses.length > limit;
-    const items = hasMore ? statuses.slice(0, limit) : statuses;
+    const items = (hasMore ? statuses.slice(0, limit) : statuses).map(hoistLocationDeep);
     const nextCursor = hasMore && items.length > 0
       ? encodeCursor(items[items.length - 1].createdAt, items[items.length - 1].id)
       : null;
@@ -623,7 +627,7 @@ export class PostFeedService {
       userReactionsMap.set(r.postId, list);
     }
     const bookmarkedIds = new Set(userBookmarks.map((b) => b.postId));
-    return items.map((p) => ({
+    return items.map((p) => hoistLocationDeep({
       ...this.enrichWithLikeStatus(p, userReactionsMap.get(p.id) ?? []),
       currentUserReactions: userReactionsMap.get(p.id) ?? [],
       isBookmarkedByMe: bookmarkedIds.has(p.id),
@@ -765,7 +769,7 @@ export class PostFeedService {
 
     if (!viewerUserId || items.length === 0) {
       return {
-        items: items.map((p) => ({ ...p, currentUserReactions: [] as string[] })),
+        items: items.map((p) => hoistLocationDeep({ ...p, currentUserReactions: [] as string[] })),
         nextCursor,
         hasMore,
       };
@@ -784,7 +788,7 @@ export class PostFeedService {
     }
 
     return {
-      items: items.map((p) => ({
+      items: items.map((p) => hoistLocationDeep({
         ...this.enrichWithLikeStatus(p, userReactionsMap.get(p.id) ?? []),
         currentUserReactions: userReactionsMap.get(p.id) ?? [],
       })),
@@ -831,7 +835,7 @@ export class PostFeedService {
 
     if (!viewerUserId || items.length === 0) {
       return {
-        items: items.map((p) => ({ ...p, currentUserReactions: [] as string[] })),
+        items: items.map((p) => hoistLocationDeep({ ...p, currentUserReactions: [] as string[] })),
         nextCursor,
         hasMore,
       };
@@ -850,7 +854,7 @@ export class PostFeedService {
     }
 
     return {
-      items: items.map((p) => ({
+      items: items.map((p) => hoistLocationDeep({
         ...this.enrichWithLikeStatus(p, communityReactionsMap.get(p.id) ?? []),
         currentUserReactions: communityReactionsMap.get(p.id) ?? [],
       })),
@@ -904,7 +908,7 @@ export class PostFeedService {
     }
 
     return {
-      items: posts.map((p) => ({ ...p, currentUserReactions: bookmarkReactionsMap.get(p.id) ?? [] })),
+      items: posts.map((p) => hoistLocationDeep({ ...p, currentUserReactions: bookmarkReactionsMap.get(p.id) ?? [] })),
       nextCursor,
       hasMore,
     };

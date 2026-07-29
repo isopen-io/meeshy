@@ -7,7 +7,7 @@
  * @jest-environment node
  */
 
-import { describe, it, expect, beforeEach } from '@jest/globals';
+import { describe, it, expect, beforeEach, jest } from '@jest/globals';
 import { PostFeedService } from '../../../services/PostFeedService';
 import { decodeCursor, encodeCursor } from '../../../routes/posts/types';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
@@ -952,5 +952,114 @@ describe('PostFeedService.getReels — chronological cursor', () => {
     expect(result.hasMore).toBe(false);
     expect(result.nextCursor).toBeNull();
     expect(result.items).toHaveLength(2);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Partage de position — hoist `metadata.location` → `location` top-level.
+//
+// Un test PAR SURFACE, délibérément séparé : une seule assertion générique
+// sur « le feed » aurait laissé passer les cinq autres méthodes sans hoist
+// (c'est exactement ainsi que ce trou est né — core.ts/comments.ts hissaient
+// déjà la position, mais aucune des 8 surfaces de PostFeedService ne le
+// faisait). Chaque test ci-dessous appelle une méthode DIFFÉRENTE.
+// ---------------------------------------------------------------------------
+
+const GEOTAG = { latitude: 48.8566, longitude: 2.3522, name: 'Tour Eiffel', address: null, category: null };
+
+function makeGeotaggedPost(id: string, overrides: Record<string, unknown> = {}) {
+  return makePost(id, { metadata: { location: GEOTAG }, ...overrides });
+}
+
+describe('PostFeedService — hoist de position par surface', () => {
+  it('getFeed restitue `location` sur un post géolocalisé', async () => {
+    mockPostFindMany.mockResolvedValue([makeGeotaggedPost('geo-feed-1')]);
+    mockPostReactionFindMany.mockResolvedValue([]);
+
+    const service = new PostFeedService(mockPrisma);
+    const result = await service.getFeed('user-1');
+
+    expect((result.items[0] as any).location).toMatchObject({ latitude: 48.8566, name: 'Tour Eiffel' });
+  });
+
+  it('getStories (corps complet) restitue `location` sur une story géolocalisée', async () => {
+    mockPostFindMany.mockResolvedValue([makeGeotaggedPost('geo-story-1', { type: 'STORY' })]);
+    mockPostViewFindMany.mockResolvedValue([]);
+    mockPostReactionFindMany.mockResolvedValue([]);
+
+    const service = new PostFeedService(mockPrisma);
+    const result = await service.getStories('user-1');
+
+    expect((result.items[0] as any).location).toMatchObject({ latitude: 48.8566 });
+  });
+
+  it('getReels restitue `location` sur un reel géolocalisé', async () => {
+    mockPostFindMany.mockResolvedValue([makeGeotaggedPost('geo-reel-1', { type: 'REEL' })]);
+    mockPostReactionFindMany.mockResolvedValue([]);
+    mockPostBookmarkFindMany.mockResolvedValue([]);
+
+    const service = new PostFeedService(mockPrisma);
+    const result = await service.getReels('user-1');
+
+    expect((result.items[0] as any).location).toMatchObject({ latitude: 48.8566 });
+  });
+
+  it('getStatuses restitue `location` sur un statut géolocalisé', async () => {
+    mockPostFindMany.mockResolvedValue([makeGeotaggedPost('geo-status-1', { type: 'STATUS' })]);
+
+    const service = new PostFeedService(mockPrisma);
+    const result = await service.getStatuses('user-1');
+
+    expect((result.items[0] as any).location).toMatchObject({ latitude: 48.8566 });
+  });
+
+  it('getDiscoverStatuses restitue `location` sur un statut public géolocalisé', async () => {
+    mockPostFindMany.mockResolvedValue([makeGeotaggedPost('geo-discover-1', { type: 'STATUS', visibility: 'PUBLIC' })]);
+
+    const service = new PostFeedService(mockPrisma);
+    const result = await service.getDiscoverStatuses('user-1');
+
+    expect((result.items[0] as any).location).toMatchObject({ latitude: 48.8566 });
+  });
+
+  it('getUserPosts restitue `location` (viewer anonyme ET authentifié)', async () => {
+    mockPostFindMany.mockResolvedValue([makeGeotaggedPost('geo-userposts-1')]);
+
+    const service = new PostFeedService(mockPrisma);
+    const anonymous = await service.getUserPosts('author-1', undefined);
+    expect((anonymous.items[0] as any).location).toMatchObject({ latitude: 48.8566 });
+
+    mockPostReactionFindMany.mockResolvedValue([]);
+    const authenticated = await service.getUserPosts('author-1', 'viewer-1');
+    expect((authenticated.items[0] as any).location).toMatchObject({ latitude: 48.8566 });
+  });
+
+  it('getCommunityFeed restitue `location` (viewer anonyme ET authentifié)', async () => {
+    mockPostFindMany.mockResolvedValue([makeGeotaggedPost('geo-community-1')]);
+
+    const service = new PostFeedService(mockPrisma);
+    const anonymous = await service.getCommunityFeed('community-1', undefined);
+    expect((anonymous.items[0] as any).location).toMatchObject({ latitude: 48.8566 });
+
+    mockPostReactionFindMany.mockResolvedValue([]);
+    const authenticated = await service.getCommunityFeed('community-1', 'viewer-1');
+    expect((authenticated.items[0] as any).location).toMatchObject({ latitude: 48.8566 });
+  });
+
+  it('getBookmarks restitue `location` sur un post geolocalise mis en favori', async () => {
+    const post = makeGeotaggedPost('geo-bookmark-1');
+    mockPostBookmarkFindMany.mockResolvedValue([{ post, createdAt: new Date(), id: 'bk-geo-1' }]);
+    mockPostReactionFindMany.mockResolvedValue([]);
+
+    const service = new PostFeedService(mockPrisma);
+    const result = await service.getBookmarks('user-1');
+
+    expect((result.items[0] as any).location).toMatchObject({ latitude: 48.8566 });
+  });
+
+  it("n'ajoute aucun champ `location` quand le post ne porte aucun lieu", () => {
+    // Garde de non-régression : hoistLocationDeep ne doit rien inventer.
+    const plain = makePost('plain-1');
+    expect((plain as any).location).toBeUndefined();
   });
 });
