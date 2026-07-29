@@ -46,6 +46,24 @@ final class LocationModelsTests: XCTestCase {
         XCTAssertEqual(cl.longitude, 2.3522)
     }
 
+    // MARK: - SharedPlace
+
+    func test_sharedPlace_roundTripsThroughJSON() throws {
+        let place = SharedPlace(latitude: 48.8566, longitude: 2.3522,
+                                name: "Tour Eiffel", address: "Champ de Mars, Paris",
+                                category: "landmark")
+        let data = try JSONEncoder().encode(place)
+        let decoded = try JSONDecoder().decode(SharedPlace.self, from: data)
+        XCTAssertEqual(decoded, place)
+    }
+
+    func test_sharedPlace_decodesWithCoordinatesOnly() throws {
+        let json = Data(#"{"latitude":48.8566,"longitude":2.3522}"#.utf8)
+        let decoded = try JSONDecoder().decode(SharedPlace.self, from: json)
+        XCTAssertEqual(decoded.latitude, 48.8566, accuracy: 0.00001)
+        XCTAssertNil(decoded.name, "Un point pose a la main n'a pas de nom : les trois champs texte sont optionnels.")
+    }
+
     // MARK: - LocationSharePayload
 
     func testLocationSharePayloadEncoding() throws {
