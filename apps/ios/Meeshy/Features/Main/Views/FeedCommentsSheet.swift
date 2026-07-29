@@ -2,7 +2,6 @@ import SwiftUI
 import Combine
 import PhotosUI
 import UniformTypeIdentifiers
-import CoreLocation
 import MeeshySDK
 import MeeshyUI
 
@@ -252,6 +251,10 @@ struct CommentsSheetView: View {
     @State private var commentPhotoPickerPriming: Bool = false
     @State private var showCommentFilePicker: Bool = false
     @State private var showCommentLocationPicker: Bool = false
+    /// Lieu choisi via le picker, en attente d'envoi (Task 11/12, 2026-07-29).
+    /// `SharedPlace` porte le nom ; `ComposerAttachment.location` ne le
+    /// portait pas et n'est plus le véhicule.
+    @State private var commentPendingPlace: SharedPlace? = nil
     /// "Éditer" from the recent-media strip — the editor opens before staging;
     /// the edited output is ingested, never the original.
     @State private var commentRecentImageToEdit: UIImage? = nil
@@ -1092,7 +1095,7 @@ struct CommentsSheetView: View {
             onLocationRequest: { showCommentLocationPicker = true },
             textBinding: $composerText,
             replyBanner: replyingTo.map { AnyView(commentReplyBanner($0)) },
-            customAttachmentsPreview: commentAttachments.isEmpty
+            customAttachmentsPreview: (commentAttachments.isEmpty && commentPendingPlace == nil)
                 ? nil
                 : AnyView(commentAttachmentsPreview),
             onTextChange: { text in
@@ -1137,10 +1140,8 @@ struct CommentsSheetView: View {
             handleCommentFileImport(result)
         }
         .sheet(isPresented: $showCommentLocationPicker) {
-            LocationPickerView(accentColor: accentColor) { coordinate, _ in
-                commentAttachments.append(
-                    ComposerAttachment.location(lat: coordinate.latitude, lng: coordinate.longitude)
-                )
+            LocationPickerView(accentColor: accentColor) { place in
+                commentPendingPlace = place
                 showCommentLocationPicker = false
             }
         }
@@ -1186,6 +1187,38 @@ struct CommentsSheetView: View {
     private var commentAttachmentsPreview: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
+                if let place = commentPendingPlace {
+                    HStack(spacing: 6) {
+                        Image(systemName: "location.fill")
+                            .font(.caption)
+                            .foregroundColor(MeeshyColors.success)
+                        Text(place.name ?? String(localized: "attachment.label.location", defaultValue: "Location", bundle: .main))
+                            .font(.caption.weight(.medium))
+                            .lineLimit(1)
+                            .frame(maxWidth: 120)
+                        Button {
+                            HapticFeedback.light()
+                            withAnimation(.spring(response: 0.25, dampingFraction: 0.7)) {
+                                commentPendingPlace = nil
+                            }
+                        } label: {
+                            Image(systemName: "xmark")
+                                .font(.caption2.weight(.bold))
+                                .foregroundColor(theme.textMuted)
+                                .frame(width: 18, height: 18)
+                                .background(Circle().fill(theme.textMuted.opacity(0.15)))
+                        }
+                        .accessibilityLabel(String(localized: "composer.a11y.removeAttachment", defaultValue: "Retirer la pi\u{00E8}ce jointe", bundle: .main))
+                    }
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .background(
+                        Capsule()
+                            .fill(theme.inputBackground)
+                            .overlay(Capsule().stroke(theme.textMuted.opacity(0.2), lineWidth: 0.5))
+                    )
+                    .foregroundColor(theme.textPrimary)
+                }
                 ForEach(commentAttachments) { attachment in
                     HStack(spacing: 6) {
                         Image(systemName: commentAttachmentIcon(attachment.type))

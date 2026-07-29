@@ -73,6 +73,11 @@ struct PostDetailView: View {
     @State private var showCommentPhotoPicker: Bool = false
     @State private var commentPhotoItems: [PhotosPickerItem] = []
     @State private var showCommentFilePicker: Bool = false
+    @State private var showCommentLocationPicker: Bool = false
+    /// Lieu choisi via le picker, en attente d'envoi — transporté jusqu'au
+    /// commentaire à l'envoi (contrairement à `FeedCommentsSheet`, dont le
+    /// transport arrive dans une tâche ultérieure du plan).
+    @State private var pendingPlace: SharedPlace? = nil
     @StateObject private var audioRecorder = AudioRecorderManager()
     @State private var isTextExpanded = false
     @State private var headerScrollOffset: CGFloat = 0
@@ -2022,13 +2027,14 @@ struct PostDetailView: View {
             selectedLanguage: composerLanguage,
             onLanguageChange: { composerLanguage = $0 },
             onSendMessage: { text, attachments, _ in submitComment(text: text, attachments: attachments) },
+            onLocationRequest: { showCommentLocationPicker = true },
             textBinding: $composerText,
             replyBanner: replyBannerView,
-            customAttachmentsPreview: commentAttachments.isEmpty
+            customAttachmentsPreview: (commentAttachments.isEmpty && pendingPlace == nil)
                 ? nil
-                : AnyView(CommentAttachmentsTray(attachments: commentAttachments) { id in
+                : AnyView(CommentAttachmentsTray(attachments: commentAttachments, onRemove: { id in
                     commentAttachments.removeAll { $0.id == id }
-                  }),
+                  }, place: pendingPlace, onRemovePlace: { pendingPlace = nil })),
             onTextChange: { text in
                 mentionController.handleQuery(in: text)
                 CommentDraftStore.shared.save(postId: postId, text: text)
@@ -2040,7 +2046,7 @@ struct PostDetailView: View {
             externalIsRecording: audioRecorder.isRecording,
             externalRecordingDuration: audioRecorder.duration,
             externalAudioLevels: audioRecorder.audioLevels,
-            externalHasContent: !commentAttachments.isEmpty || audioRecorder.isRecording,
+            externalHasContent: !commentAttachments.isEmpty || audioRecorder.isRecording || pendingPlace != nil,
             onPhotoLibrary: { showCommentPhotoPicker = true },
             onFilePicker: { showCommentFilePicker = true },
             isBlurEnabled: $commentBlurEnabled,
@@ -2061,6 +2067,12 @@ struct PostDetailView: View {
         ) { result in
             if case .success(let urls) = result {
                 commentAttachments = CommentComposerStaging.fileAttachments(from: urls)
+            }
+        }
+        .sheet(isPresented: $showCommentLocationPicker) {
+            LocationPickerView(accentColor: accentColor) { place in
+                pendingPlace = place
+                showCommentLocationPicker = false
             }
         }
         .adaptiveOnChange(of: commentPhotoItems) { _, items in
@@ -2101,7 +2113,9 @@ struct PostDetailView: View {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         let media = CommentComposerStaging.firstPendingMedia(in: attachments)
         commentAttachments.removeAll()
-        guard !trimmed.isEmpty || media != nil else { return }
+        let place = pendingPlace
+        pendingPlace = nil
+        guard !trimmed.isEmpty || media != nil || place != nil else { return }
         let effects = commentEffects
         let blur = commentBlurEnabled
         commentEffects = .none
@@ -2112,11 +2126,11 @@ struct PostDetailView: View {
         let effectFlags = flags > 0 ? Int(flags) : nil
         Task {
             if let media {
-                await viewModel.submitCommentWithMedia(trimmed, effectFlags: effectFlags, parentId: parentId, pendingMedia: media)
+                await viewModel.submitCommentWithMedia(trimmed, effectFlags: effectFlags, parentId: parentId, pendingMedia: media, location: place)
             } else if parentId != nil {
-                await viewModel.sendReply(trimmed, effectFlags: effectFlags)
+                await viewModel.sendReply(trimmed, effectFlags: effectFlags, location: place)
             } else {
-                await viewModel.sendComment(trimmed, effectFlags: effectFlags)
+                await viewModel.sendComment(trimmed, effectFlags: effectFlags, location: place)
             }
         }
     }

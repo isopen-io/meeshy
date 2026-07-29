@@ -257,6 +257,37 @@ final class PermissionGateSourceGuardTests: XCTestCase {
         }
     }
 
+    // MARK: - Partage de position (Task 11/12, 2026-07-29)
+
+    /// Le picker rendait des coordonnées nues et jetait le nom du lieu :
+    /// l'ancienne signature `(CLLocationCoordinate2D, String?) -> Void` est ce
+    /// qui faisait jeter le nom aux quatre call sites, dont un littéral
+    /// `{ coordinate, _ in }`. Personne ne l'avait vu parce que rien
+    /// n'arrivait jamais à destination.
+    func test_locationPicker_emitsAFullPlace_notBareCoordinates() throws {
+        let src = try source("Meeshy/Features/Main/Components/LocationPickerView.swift")
+        XCTAssertTrue(src.contains("let onSelect: (SharedPlace) -> Void"),
+                      "Le picker doit emettre un lieu complet : la signature (coordonnees, String?) est ce qui faisait jeter le nom.")
+        XCTAssertTrue(src.contains("pointOfInterestCategory"),
+                      "La categorie POI de MapKit est disponible et doit etre conservee.")
+    }
+
+    /// Les quatre call sites (message, feed inline, feed sheet, commentaire)
+    /// jetaient le lieu — `FeedCommentsSheet` écrivait littéralement
+    /// `{ coordinate, _ in }`.
+    func test_noCallSiteDiscardsThePlace() throws {
+        for path in ["Meeshy/Features/Main/Views/ConversationView+Composer.swift",
+                     "Meeshy/Features/Main/Views/FeedView.swift",
+                     "Meeshy/Features/Main/Views/FeedView+Attachments.swift",
+                     "Meeshy/Features/Main/Views/FeedCommentsSheet.swift"] {
+            let src = try source(path)
+            XCTAssertFalse(src.contains("LocationPickerView(accentColor: accentColor) { coordinate, _ in"),
+                           "\(path) jette encore le lieu.")
+            XCTAssertFalse(src.contains("coordinate: CLLocationCoordinate2D, address: String?"),
+                           "\(path) porte encore la signature qui separait le point de son nom.")
+        }
+    }
+
     // MARK: - Mot de passe
 
     /// Sans `.newPassword`, iOS ne propose ni mot de passe fort ni — surtout —

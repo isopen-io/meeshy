@@ -357,17 +357,23 @@ public struct CreateCommentPayload: Codable, Sendable, Equatable {
     public let postId: String
     public let parentCommentId: String?
     public let content: String
+    /// Lieu partagé en attente d'envoi. `nil` pour l'immense majorité des
+    /// commentaires — porté ici pour que le chemin durable (offline queue)
+    /// transporte la position exactement comme le chemin direct.
+    public let location: SharedPlace?
 
     public init(
         clientMutationId: String,
         postId: String,
         parentCommentId: String?,
-        content: String
+        content: String,
+        location: SharedPlace? = nil
     ) {
         self.clientMutationId = clientMutationId
         self.postId = postId
         self.parentCommentId = parentCommentId
         self.content = content
+        self.location = location
     }
 }
 

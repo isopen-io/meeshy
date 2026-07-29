@@ -72,7 +72,8 @@ final class StoryInteractionService {
         effectFlags: Int? = nil,
         parentId: String? = nil,
         attachmentIds: [String]? = nil,
-        mobileTranscription: MobileTranscriptionPayload? = nil
+        mobileTranscription: MobileTranscriptionPayload? = nil,
+        location: SharedPlace? = nil
     ) async throws {
         let body = StoryCommentBody(
             content: content,
@@ -80,7 +81,8 @@ final class StoryInteractionService {
             effectFlags: effectFlags,
             parentId: parentId,
             attachmentIds: (attachmentIds?.isEmpty == false) ? attachmentIds : nil,
-            mobileTranscription: mobileTranscription
+            mobileTranscription: mobileTranscription,
+            location: location
         )
         do {
             let _: APIResponse<AnyCodable> = try await api.post(
@@ -161,9 +163,12 @@ final class StoryInteractionService {
         /// par commentaire (le gateway borne à 1). Omis quand vide.
         let attachmentIds: [String]?
         let mobileTranscription: MobileTranscriptionPayload?
+        /// Lieu partagé — une story est un post de type STORY, donc la même
+        /// clé `location` que pour un commentaire de post s'applique ici.
+        let location: SharedPlace?
 
         enum CodingKeys: String, CodingKey {
-            case content, originalLanguage, effectFlags, parentId, attachmentIds, mobileTranscription
+            case content, originalLanguage, effectFlags, parentId, attachmentIds, mobileTranscription, location
         }
 
         func encode(to encoder: Encoder) throws {
@@ -173,6 +178,7 @@ final class StoryInteractionService {
             try container.encodeIfPresent(effectFlags, forKey: .effectFlags)
             try container.encodeIfPresent(parentId, forKey: .parentId)
             try container.encodeIfPresent(attachmentIds, forKey: .attachmentIds)
+            try container.encodeIfPresent(location, forKey: .location)
             try container.encodeIfPresent(mobileTranscription, forKey: .mobileTranscription)
         }
     }

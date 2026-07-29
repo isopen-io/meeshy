@@ -1,7 +1,6 @@
 import SwiftUI
 import PhotosUI
 import AVFoundation
-import CoreLocation
 import Combine
 import MeeshySDK
 import MeeshyUI
@@ -107,14 +106,12 @@ extension FeedView {
     }
 
     // MARK: - Location Selection
-    func handleFeedLocationSelection(coordinate: CLLocationCoordinate2D, address: String?) {
-        let attachment = MessageAttachment.location(
-            latitude: coordinate.latitude,
-            longitude: coordinate.longitude,
-            color: "2ECC71"
-        )
+    /// Le picker émet désormais un `SharedPlace` complet (nom + adresse +
+    /// catégorie) — `MessageAttachment.location` ne portait ni l'un ni
+    /// l'autre et n'est plus le véhicule (Task 11/12, 2026-07-29).
+    func handleFeedLocationSelection(_ place: SharedPlace) {
         withAnimation {
-            pendingAttachments.append(attachment)
+            pendingPlace = place
         }
         HapticFeedback.light()
     }
@@ -356,6 +353,7 @@ extension FeedView {
     // MARK: - Cleanup
     private func feedCleanupAttachments() {
         pendingAttachments.removeAll()
+        pendingPlace = nil
         pendingAudioURL = nil
         pendingMediaFiles.removeAll()
         pendingThumbnails.removeAll()
@@ -376,6 +374,9 @@ extension FeedView {
                     }
                     ForEach(pendingAttachments) { attachment in
                         feedAttachmentTile(attachment)
+                    }
+                    if let place = pendingPlace {
+                        feedPlaceTile(place)
                     }
                     if isLoadingMedia && preparingAttachments.isEmpty {
                         ProgressView()
@@ -483,6 +484,66 @@ extension FeedView {
         }
     }
 
+    // MARK: - Pending Place Tile
+    /// Depuis la Task 11/12, un lieu choisi ne vit plus dans `pendingAttachments`
+    /// (`SharedPlace` porte le nom, `MessageAttachment.location` ne le portait
+    /// pas) : sans cette tuile dédiée le choix d'un lieu ne produirait plus
+    /// aucun retour visuel dans le composer. Même gabarit pin-drop que le
+    /// rendu `.location` existant ci-dessus.
+    private func feedPlaceTile(_ place: SharedPlace) -> some View {
+        HStack(spacing: 0) {
+            Button {
+                HapticFeedback.light()
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                    pendingPlace = nil
+                }
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundColor(.white)
+                    .frame(width: 28, height: 28)
+                    .background(
+                        Circle()
+                            .fill(MeeshyColors.error)
+                            .shadow(color: MeeshyColors.error.opacity(0.4), radius: 4, y: 2)
+                    )
+            }
+            .accessibilityLabel(String(localized: "feed.attachment.remove", defaultValue: "Retirer la pièce jointe", bundle: .main))
+            .padding(.trailing, 8)
+
+            VStack(spacing: 4) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 10)
+                        .fill(
+                            LinearGradient(
+                                colors: [MeeshyColors.success, MeeshyColors.success.opacity(0.7)],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                        .frame(width: 56, height: 56)
+                    VStack(spacing: 2) {
+                        Image(systemName: "mappin.circle.fill")
+                            .font(.system(size: 22))
+                            .foregroundStyle(.white, .white.opacity(0.3))
+                            .accessibilityHidden(true)
+                        Circle()
+                            .fill(Color.white.opacity(0.3))
+                            .frame(width: 8, height: 4)
+                            .scaleEffect(x: 1.8, y: 1)
+                    }
+                }
+                .frame(width: 56, height: 56)
+
+                Text(place.name ?? String(localized: "attachment.label.location", defaultValue: "Location", bundle: .main))
+                    .font(MeeshyFont.relative(10, weight: .medium))
+                    .foregroundColor(ThemeManager.shared.textSecondary)
+                    .lineLimit(1)
+                    .frame(width: 60)
+            }
+        }
+    }
+
     // MARK: - Helpers
     func feedGenerateVideoThumbnail(url: URL) async -> UIImage? {
         // Async AVFoundation API (iOS 16+): decodes off AVFoundation's queue
@@ -557,6 +618,10 @@ struct FeedComposerSheet: View {
     @State private var editingVideoURL: URL?
 
     @State private var pendingAttachments: [MessageAttachment] = []
+    /// Lieu choisi via le picker, en attente d'envoi (Task 11/12,
+    /// 2026-07-29) — `SharedPlace` porte le nom, `MessageAttachment.location`
+    /// ne le portait pas et n'est plus le véhicule.
+    @State private var pendingPlace: SharedPlace? = nil
     @State private var pendingMediaFiles: [String: URL] = [:]
     @State private var pendingThumbnails: [String: UIImage] = [:]
     @State private var pendingAudioURL: URL?
@@ -752,7 +817,7 @@ struct FeedComposerSheet: View {
                 }
 
                 // Pending attachments
-                if !pendingAttachments.isEmpty || !preparingAttachments.isEmpty || isLoadingMedia {
+                if !pendingAttachments.isEmpty || !preparingAttachments.isEmpty || isLoadingMedia || pendingPlace != nil {
                     sheetAttachmentsRow
                 }
 
@@ -868,8 +933,8 @@ struct FeedComposerSheet: View {
             .ignoresSafeArea()
         }
         .sheet(isPresented: $showLocationPicker) {
-            LocationPickerView(accentColor: MeeshyColors.brandPrimaryHex) { coordinate, address in
-                handleLocationSelection(coordinate: coordinate, address: address)
+            LocationPickerView(accentColor: MeeshyColors.brandPrimaryHex) { place in
+                handleLocationSelection(place)
             }
         }
         .fullScreenCover(item: Binding<EditingAttachmentItem?>(
@@ -978,6 +1043,9 @@ struct FeedComposerSheet: View {
                 ForEach(pendingAttachments) { attachment in
                     sheetAttachmentTile(attachment)
                 }
+                if let place = pendingPlace {
+                    sheetPlaceTile(place)
+                }
                 if isLoadingMedia && preparingAttachments.isEmpty {
                     ProgressView()
                         .tint(MeeshyColors.brandPrimary)
@@ -1066,6 +1134,52 @@ struct FeedComposerSheet: View {
             }
 
             Text(sheetLabelForAttachment(attachment))
+                .font(MeeshyFont.relative(10, weight: .medium))
+                .foregroundColor(theme.textSecondary)
+                .lineLimit(1)
+                .frame(width: 72)
+        }
+    }
+
+    /// Depuis la Task 11/12, un lieu choisi ne vit plus dans `pendingAttachments`
+    /// — cette tuile dédiée (même gabarit 72×72 pin-drop) est ce qui évite que
+    /// le choix d'un lieu ne produise plus aucun retour visuel ici.
+    private func sheetPlaceTile(_ place: SharedPlace) -> some View {
+        VStack(spacing: 4) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 10)
+                    .fill(LinearGradient(colors: [MeeshyColors.success, MeeshyColors.successDeep], startPoint: .topLeading, endPoint: .bottomTrailing))
+                    .frame(width: 72, height: 72)
+                    .overlay(
+                        Image(systemName: "mappin.circle.fill")
+                            .font(.system(size: 26))
+                            .foregroundStyle(.white, .white.opacity(0.3))
+                            .accessibilityHidden(true)
+                    )
+            }
+            .frame(width: 72, height: 72)
+            .overlay(alignment: .topTrailing) {
+                Button {
+                    HapticFeedback.light()
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                        pendingPlace = nil
+                    }
+                } label: {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 9, weight: .bold))
+                        .foregroundColor(.white)
+                        .frame(width: 20, height: 20)
+                        .background(
+                            Circle()
+                                .fill(MeeshyColors.error)
+                                .shadow(color: .black.opacity(0.3), radius: 2, y: 1)
+                        )
+                }
+                .accessibilityLabel(String(localized: "feed.attachment.remove", defaultValue: "Retirer la pièce jointe", bundle: .main))
+                .offset(x: 6, y: -6)
+            }
+
+            Text(place.name ?? String(localized: "attachment.label.location", defaultValue: "Location", bundle: .main))
                 .font(MeeshyFont.relative(10, weight: .medium))
                 .foregroundColor(theme.textSecondary)
                 .lineLimit(1)
@@ -1165,9 +1279,10 @@ struct FeedComposerSheet: View {
         HapticFeedback.light()
     }
 
-    private func handleLocationSelection(coordinate: CLLocationCoordinate2D, address: String?) {
-        let attachment = MessageAttachment.location(latitude: coordinate.latitude, longitude: coordinate.longitude, color: "2ECC71")
-        withAnimation { pendingAttachments.append(attachment) }
+    /// Le picker émet désormais un `SharedPlace` complet — `MessageAttachment.location`
+    /// ne portait ni le nom ni l'adresse et n'est plus le véhicule (Task 11/12).
+    private func handleLocationSelection(_ place: SharedPlace) {
+        withAnimation { pendingPlace = place }
         HapticFeedback.light()
     }
 

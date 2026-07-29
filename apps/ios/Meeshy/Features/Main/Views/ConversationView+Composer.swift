@@ -125,7 +125,8 @@ extension ConversationView {
                 : nil,
             customAttachmentsPreview: (!composerState.pendingAttachments.isEmpty
                                         || !composerState.preparingAttachments.isEmpty
-                                        || composerState.isLoadingMedia)
+                                        || composerState.isLoadingMedia
+                                        || composerState.pendingPlace != nil)
                 ? AnyView(pendingAttachmentsRow)
                 : nil,
             isEditMode: composerState.editingMessageId != nil,
@@ -219,8 +220,8 @@ extension ConversationView {
             .ignoresSafeArea()
         }
         .sheet(isPresented: $composerState.showLocationPicker) {
-            LocationPickerView(accentColor: accentColor) { coordinate, address in
-                handleLocationSelection(coordinate: coordinate, address: address)
+            LocationPickerView(accentColor: accentColor) { place in
+                handleLocationSelection(place)
             }
         }
         .sheet(isPresented: $composerState.showContactPicker) {
@@ -754,6 +755,9 @@ extension ConversationView {
                 ForEach(composerState.pendingAttachments) { attachment in
                     attachmentPreviewTile(attachment)
                 }
+                if let place = composerState.pendingPlace {
+                    pendingPlaceTile(place)
+                }
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 10)
@@ -1013,6 +1017,49 @@ extension ConversationView {
                     .frame(width: 8, height: 4)
                     .scaleEffect(x: 1.8, y: 1)
             }
+        }
+    }
+
+    /// Tuile d'aperçu du lieu en attente d'envoi — même gabarit 56×56 que
+    /// `attachmentPreviewTile`, mais pour un `SharedPlace` : depuis la Task
+    /// 11/12 il ne vit plus dans `pendingAttachments`, donc sans cette tuile
+    /// dédiée le choix d'un lieu ne produirait plus aucun retour visuel dans
+    /// le composer (régression que l'ancien `MessageAttachment.location`
+    /// couvrait par accident).
+    private func pendingPlaceTile(_ place: SharedPlace) -> some View {
+        VStack(spacing: 4) {
+            ZStack(alignment: .topTrailing) {
+                locationTileFallback()
+
+                Button {
+                    removePendingPlace()
+                } label: {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 8, weight: .bold))
+                        .foregroundColor(.white)
+                        .frame(width: 18, height: 18)
+                        .background(
+                            Circle()
+                                .fill(MeeshyColors.error)
+                                .shadow(color: MeeshyColors.error.opacity(0.4), radius: 3, y: 1)
+                        )
+                }
+                .accessibilityLabel(String(localized: "conversation.view.composer.delete_attachment", defaultValue: "Supprimer \(place.name ?? String(localized: "attachment.label.location", defaultValue: "Location", bundle: .main))", bundle: .main))
+                .offset(x: 5, y: -5)
+            }
+
+            Text(place.name ?? String(localized: "attachment.label.location", defaultValue: "Location", bundle: .main))
+                .font(MeeshyFont.relative(10, weight: .medium))
+                .foregroundColor(theme.textSecondary)
+                .lineLimit(1)
+                .frame(width: 60)
+        }
+    }
+
+    private func removePendingPlace() {
+        HapticFeedback.light()
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+            composerState.pendingPlace = nil
         }
     }
 

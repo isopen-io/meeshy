@@ -2,12 +2,17 @@ import SwiftUI
 import Combine
 import MapKit
 import CoreLocation
+import MeeshySDK
 import MeeshyUI
 import os
 
 struct LocationPickerView: View {
     let accentColor: String
-    let onSelect: (CLLocationCoordinate2D, String?) -> Void
+    /// Émet un lieu COMPLET (coordonnées + nom + adresse + catégorie POI),
+    /// pas de simples coordonnées nues : c'est ce que jetait l'ancienne
+    /// signature `(CLLocationCoordinate2D, String?) -> Void` aux quatre call
+    /// sites, dont un littéral `{ coordinate, _ in }`.
+    let onSelect: (SharedPlace) -> Void
     @Environment(\.dismiss) private var dismiss
     private var theme: ThemeManager { ThemeManager.shared }
     @Environment(\.colorScheme) private var colorScheme
@@ -160,6 +165,11 @@ struct LocationPickerView: View {
                 Button {
                     let coord = item.placemark.coordinate
                     viewModel.updateSelectedLocation(coord)
+                    // Après `updateSelectedLocation` (qui les remet à `nil`) :
+                    // MapKit connaît déjà le nom et la catégorie POI du
+                    // résultat choisi, inutile d'attendre le géocodage inverse.
+                    viewModel.selectedName = item.name
+                    viewModel.selectedCategory = item.placemark.pointOfInterestCategory?.rawValue
                     viewModel.reverseGeocode(coord)
                     mapTarget = MapTarget(
                         center: coord,
@@ -286,10 +296,10 @@ struct LocationPickerView: View {
                 }
 
                 Button {
-                    guard let coord = viewModel.selectedCoordinate else { return }
+                    guard let place = viewModel.selectedPlace else { return }
                     Logger(subsystem: "me.meeshy.app", category: "location")
-                        .info("breadcrumb.selection hasAddress=\(viewModel.addressString != nil, privacy: .public)")
-                    onSelect(coord, viewModel.addressString)
+                        .info("breadcrumb.selection hasName=\(place.name != nil, privacy: .public)")
+                    onSelect(place)
                     HapticFeedback.success()
                     dismiss()
                 } label: {
@@ -356,6 +366,12 @@ nonisolated final class LocationPickerModel: NSObject, ObservableObject, CLLocat
     /// exactement ce que `@Published` fait — publier avant l'écriture.
     var selectedCoordinate: CLLocationCoordinate2D? { willSet { objectWillChange.send() } }
     var addressString: String? { willSet { objectWillChange.send() } }
+    /// Nom du POI choisi depuis un résultat de recherche MapKit. `nil` pour un
+    /// point posé à la main (déplacement de la carte) — seule l'adresse
+    /// géocodée est alors disponible.
+    var selectedName: String? { willSet { objectWillChange.send() } }
+    /// Catégorie MapKit du POI (`MKPointOfInterestCategory.rawValue`).
+    var selectedCategory: String? { willSet { objectWillChange.send() } }
     var isGeocoding = false { willSet { objectWillChange.send() } }
     var searchResults: [MKMapItem] = [] { willSet { objectWillChange.send() } }
     var userLocation: CLLocationCoordinate2D? {
@@ -378,6 +394,15 @@ nonisolated final class LocationPickerModel: NSObject, ObservableObject, CLLocat
 
     var isLocationRefused: Bool {
         authorization == .denied || authorization == .restricted
+    }
+
+    /// Lieu complet prêt à être partagé, ou `nil` tant qu'aucun point n'est
+    /// choisi. Le nom vient d'un résultat de recherche ; pour un point posé à
+    /// la main il reste `nil` et seule l'adresse géocodée est disponible.
+    var selectedPlace: SharedPlace? {
+        guard let coordinate = selectedCoordinate else { return nil }
+        return SharedPlace(latitude: coordinate.latitude, longitude: coordinate.longitude,
+                           name: selectedName, address: addressString, category: selectedCategory)
     }
 
     private let manager = CLLocationManager()
@@ -433,6 +458,11 @@ nonisolated final class LocationPickerModel: NSObject, ObservableObject, CLLocat
 
     func updateSelectedLocation(_ coordinate: CLLocationCoordinate2D) {
         selectedCoordinate = coordinate
+        // Déplacer la carte après avoir choisi un POI ne doit pas conserver le
+        // nom d'un point qu'on a quitté — sinon un point posé à la main
+        // hériterait du nom du dernier résultat de recherche sélectionné.
+        selectedName = nil
+        selectedCategory = nil
         geocodeTask?.cancel()
         // Hop `@MainActor` explicite : le type est désormais nonisolated, donc
         // ce `Task` n'hérite plus du main actor comme avant. Le géocodage écrit

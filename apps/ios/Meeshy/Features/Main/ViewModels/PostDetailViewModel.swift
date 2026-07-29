@@ -593,7 +593,7 @@ class PostDetailViewModel: ObservableObject {
     /// while it's pending the optimistic id (`cmid`) is shown in the
     /// list — when the server response arrives, the socket
     /// `comment:added` broadcast reconciles via the normal path.
-    func sendComment(_ content: String, effectFlags: Int? = nil) async {
+    func sendComment(_ content: String, effectFlags: Int? = nil, location: SharedPlace? = nil) async {
         guard let post else { return }
         let cmid = ClientMutationId.generate()
         let snapshot = comments
@@ -617,7 +617,8 @@ class PostDetailViewModel: ObservableObject {
             clientMutationId: cmid,
             postId: post.id,
             parentCommentId: nil,
-            content: content
+            content: content,
+            location: location
         )
         do {
             try await offlineQueue.enqueue(.createComment, payload: payload, conversationId: post.id)
@@ -639,7 +640,7 @@ class PostDetailViewModel: ObservableObject {
         }
     }
 
-    func sendReply(_ content: String, effectFlags: Int? = nil) async {
+    func sendReply(_ content: String, effectFlags: Int? = nil, location: SharedPlace? = nil) async {
         guard let post, let parent = replyingTo else { return }
         // Réponse plate à 2 niveaux : répondre à une réponse rattache au MÊME
         // parent racine pour rester au niveau 2 ; l'auteur ciblé est notifié via
@@ -647,7 +648,10 @@ class PostDetailViewModel: ObservableObject {
         let parentId = parent.parentId ?? parent.id
         replyingTo = nil
         do {
-            let apiComment = try await postService.addComment(postId: post.id, content: content, parentId: parentId, effectFlags: effectFlags)
+            let apiComment = try await postService.addComment(
+                postId: post.id, content: content, parentId: parentId, effectFlags: effectFlags,
+                attachmentIds: nil, mobileTranscription: nil, originalLanguage: nil, location: location
+            )
             let reply = FeedComment(
                 id: apiComment.id, author: apiComment.author.name, authorId: apiComment.author.id,
                 authorUsername: apiComment.author.username,
@@ -690,7 +694,7 @@ class PostDetailViewModel: ObservableObject {
     /// l'OfflineQueue, un commentaire média DOIT passer en direct (l'upload du fichier
     /// exige le réseau). Optimistic-first avec le média local, puis upload TUS
     /// (`uploadContext=comment`) → `addComment(attachmentIds:)`, réconcilie/rollback.
-    func submitCommentWithMedia(_ content: String, effectFlags: Int?, parentId: String?, pendingMedia: PendingCommentMedia) async {
+    func submitCommentWithMedia(_ content: String, effectFlags: Int?, parentId: String?, pendingMedia: PendingCommentMedia, location: SharedPlace? = nil) async {
         guard let post else { return }
         if parentId != nil { replyingTo = nil }
         let tempId = "tmp_\(UUID().uuidString)"
@@ -725,7 +729,7 @@ class PostDetailViewModel: ObservableObject {
             let apiComment = try await postService.addComment(
                 postId: post.id, content: content, parentId: parentId, effectFlags: effectFlags,
                 attachmentIds: [attachmentId], mobileTranscription: pendingMedia.mobileTranscription,
-                originalLanguage: nil
+                originalLanguage: nil, location: location
             )
             let server = FeedComment(
                 id: apiComment.id, author: apiComment.author.name, authorId: apiComment.author.id,

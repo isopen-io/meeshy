@@ -106,17 +106,22 @@ public struct CreateCommentRequest: Encodable {
     /// re-transcription serveur). Même structure que pour les posts.
     public let mobileTranscription: MobileTranscriptionPayload?
     public let originalLanguage: String?
+    /// Lieu partagé (picker → `SharedPlace`) — même clé `location` que pour un
+    /// message ou un post, hissée par le gateway depuis `metadata.location`.
+    public let location: SharedPlace?
 
     public init(content: String, parentId: String? = nil, effectFlags: Int? = nil,
                 attachmentIds: [String]? = nil,
                 mobileTranscription: MobileTranscriptionPayload? = nil,
-                originalLanguage: String? = nil) {
+                originalLanguage: String? = nil,
+                location: SharedPlace? = nil) {
         self.content = content
         self.parentId = parentId
         self.effectFlags = effectFlags
         self.attachmentIds = (attachmentIds?.isEmpty == false) ? attachmentIds : nil
         self.mobileTranscription = mobileTranscription
         self.originalLanguage = originalLanguage
+        self.location = location
     }
 }
 

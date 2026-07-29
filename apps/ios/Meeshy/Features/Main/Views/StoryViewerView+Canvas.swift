@@ -672,13 +672,17 @@ struct StoryComposerBarView: View {
     /// `parentId` non-nil quand l'utilisateur répond à un commentaire (via
     /// `replyingToStoryComment` set par l'overlay). Sinon nil → commentaire
     /// top-level sur la story. `pendingMedia` non-nil = commentaire avec UN média.
-    let sendComment: (_ text: String, _ effectFlags: Int?, _ parentId: String?, _ pendingMedia: PendingCommentMedia?) -> Void
+    /// `place` non-nil = un lieu a été choisi via le picker et voyage jusqu'à
+    /// l'envoi, exactement comme n'importe quel autre message/commentaire.
+    let sendComment: (_ text: String, _ effectFlags: Int?, _ parentId: String?, _ pendingMedia: PendingCommentMedia?, _ place: SharedPlace?) -> Void
 
     // Comment attachments + real voice capture (parity with feed/reels composer).
     @State private var commentAttachments: [ComposerAttachment] = []
     @State private var showCommentPhotoPicker: Bool = false
     @State private var commentPhotoItems: [PhotosPickerItem] = []
     @State private var showCommentFilePicker: Bool = false
+    @State private var showCommentLocationPicker: Bool = false
+    @State private var pendingPlace: SharedPlace? = nil
     @StateObject private var audioRecorder = AudioRecorderManager()
 
     var body: some View {
@@ -707,6 +711,7 @@ struct StoryComposerBarView: View {
                 }
             },
             onSendMessage: { text, attachments, _ in submitStoryComment(text: text, attachments: attachments) },
+            onLocationRequest: { showCommentLocationPicker = true },
             replyBanner: replyingToStoryComment.map { reply in
                 AnyView(
                     HStack(spacing: 8) {
@@ -756,11 +761,11 @@ struct StoryComposerBarView: View {
                     )
                 )
             },
-            customAttachmentsPreview: commentAttachments.isEmpty
+            customAttachmentsPreview: (commentAttachments.isEmpty && pendingPlace == nil)
                 ? nil
-                : AnyView(CommentAttachmentsTray(attachments: commentAttachments) { id in
+                : AnyView(CommentAttachmentsTray(attachments: commentAttachments, onRemove: { id in
                     commentAttachments.removeAll { $0.id == id }
-                  }),
+                  }, place: pendingPlace, onRemovePlace: { pendingPlace = nil })),
             onStartRecording: { audioRecorder.startRecording(); HapticFeedback.medium() },
             onStopRecordingToAttachment: { stopRecordingToAttachment() },
             onSendRecording: { if stopRecordingToAttachment() { submitStoryComment(text: "", attachments: commentAttachments) } },
@@ -768,7 +773,7 @@ struct StoryComposerBarView: View {
             externalIsRecording: audioRecorder.isRecording,
             externalRecordingDuration: audioRecorder.duration,
             externalAudioLevels: audioRecorder.audioLevels,
-            externalHasContent: !commentAttachments.isEmpty || audioRecorder.isRecording,
+            externalHasContent: !commentAttachments.isEmpty || audioRecorder.isRecording || pendingPlace != nil,
             onPhotoLibrary: { showCommentPhotoPicker = true },
             onFilePicker: { showCommentFilePicker = true },
             onShowAttachments: {
@@ -834,6 +839,12 @@ struct StoryComposerBarView: View {
                 commentAttachments = CommentComposerStaging.fileAttachments(from: urls)
             }
         }
+        .sheet(isPresented: $showCommentLocationPicker) {
+            LocationPickerView(accentColor: accentColor) { place in
+                pendingPlace = place
+                showCommentLocationPicker = false
+            }
+        }
         .adaptiveOnChange(of: commentPhotoItems) { _, items in
             Task {
                 commentAttachments = await CommentComposerStaging.photoAttachments(from: items)
@@ -844,11 +855,16 @@ struct StoryComposerBarView: View {
 
     /// Construit le média éventuel (un seul) + appelle le `sendComment` injecté avec
     /// le pendingMedia. Capture `parentId` AVANT de clear le reply context.
+    /// Une réponse à une story part comme un message : elle porte donc le lieu
+    /// choisi exactement comme n'importe quel autre message (une story est un
+    /// post de type STORY côté gateway — même route `/posts/:id/comments`).
     private func submitStoryComment(text: String, attachments: [ComposerAttachment]) {
         let media = CommentComposerStaging.firstPendingMedia(in: attachments)
         commentAttachments.removeAll()
+        let place = pendingPlace
+        pendingPlace = nil
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty || media != nil else { return }
+        guard !trimmed.isEmpty || media != nil || place != nil else { return }
         let effects = commentEffects
         let blur = commentBlurEnabled
         commentEffects = .none
@@ -861,7 +877,7 @@ struct StoryComposerBarView: View {
         // à l'ouverture de la réponse (cf. makeStoryCommentRow).
         let parentId = replyingToStoryComment?.parentId ?? replyingToStoryComment?.id
         replyingToStoryComment = nil
-        sendComment(trimmed, effectFlags, parentId, media)
+        sendComment(trimmed, effectFlags, parentId, media, place)
     }
 
     @discardableResult
@@ -1096,7 +1112,7 @@ struct StoryCardView: View {
     let dismissComposer: () -> Void
     let goToPrevious: () -> Void
     let goToNext: () -> Void
-    let sendComment: (_ text: String, _ effectFlags: Int?, _ parentId: String?, _ pendingMedia: PendingCommentMedia?) -> Void
+    let sendComment: (_ text: String, _ effectFlags: Int?, _ parentId: String?, _ pendingMedia: PendingCommentMedia?, _ place: SharedPlace?) -> Void
     let makeStoryCommentRow: (FeedComment, String) -> StoryCommentRowView
     let toggleStoryCommentThread: (String) async -> Void
     let makeStoryExternalShareURL: (String) -> URL?

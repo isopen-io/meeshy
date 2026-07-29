@@ -2,7 +2,6 @@ import SwiftUI
 import Combine
 import os
 import PhotosUI
-import CoreLocation
 import AVFoundation
 import Contacts
 import MeeshySDK
@@ -151,6 +150,10 @@ struct ConversationComposerState {
     var isUploading = false
     var uploadProgress: UploadQueueProgress? = nil
     var showLocationPicker = false
+    /// Lieu choisi via le picker, en attente d'envoi. `SharedPlace` porte le
+    /// nom et l'adresse — `MessageAttachment.location` ne les portait pas et
+    /// n'est plus le véhicule (Task 11/12, 2026-07-29).
+    var pendingPlace: SharedPlace? = nil
     
     // Language (source language for outgoing messages).
     // Resolved via DefaultComposerLanguage: keyboard layout > "fr" fallback.

@@ -940,7 +940,7 @@ extension StoryViewerView {
 
     // MARK: - Actions
 
-    func sendComment(text: String, effectFlags: Int? = nil, parentId: String? = nil, pendingMedia: PendingCommentMedia? = nil) {
+    func sendComment(text: String, effectFlags: Int? = nil, parentId: String? = nil, pendingMedia: PendingCommentMedia? = nil, location: SharedPlace? = nil) {
         guard (!text.isEmpty || pendingMedia != nil), let story = currentStory else { return }
         EngagementTracker.shared.recordAction(.commented, surface: .storyViewer)
 
@@ -1008,7 +1008,8 @@ extension StoryViewerView {
                     effectFlags: effectFlags,
                     parentId: parentId,
                     attachmentIds: attachmentIds,
-                    mobileTranscription: pendingMedia?.mobileTranscription
+                    mobileTranscription: pendingMedia?.mobileTranscription,
+                    location: location
                 )
             } catch {
                 // Le POST direct a échoué — le plus souvent parce qu'on est
@@ -1031,7 +1032,8 @@ extension StoryViewerView {
                             clientMutationId: cmid,
                             postId: story.id,
                             parentCommentId: parentId,
-                            content: text
+                            content: text,
+                            location: location
                         ),
                         conversationId: story.id
                     )

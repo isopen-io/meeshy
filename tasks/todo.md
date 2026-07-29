@@ -65,3 +65,24 @@ la story redevient « non vue » pour tous (la date de publication ne bouge pas)
   fermeture, toast d'erreur (la version précédente reste intacte serveur).
 - Fond de slide : identité d'instance UIImage (hydratée vs publiée) décide
   du ré-upload ; un fond inchangé garde son PostMedia d'origine.
+
+## Vérification PROD + temps réel (session 2, 2026-07-29 soir)
+- E2E API prod (gate.meeshy.me) : création → vue+like par un 2e compte →
+  édition → reset complet (compteurs 0, viewers vidés, isViewedByMe=false,
+  contentEditedAt posé, createdAt/expiresAt INTACTS) ; visibilité-seule ne
+  reset RIEN ; retraduction Prisme relancée (~8 s après édition).
+- Latences socket mesurées (client A auteur + client B viewer, socket.io-client) :
+  story:viewed 314 ms · story:reacted 417 ms · story:updated 407 ms ·
+  engagementReset=true (contenu) / false (visibilité) reçus corrects.
+- UI simulateur (prod) : liste « Mes stories » conforme (œil à gauche de la
+  bulle, compteur si >0, cœur uniquement si ≥1) ; vue+like distants affichés
+  en <3 s SANS action ; menu ⋯ → Edit → composer hydraté (fond, texte
+  éditable en place, 1 slide, brouillons gatés, alerte sans « Save ») ;
+  publication → reset serveur + vignette re-rendue + compteurs à 0 en liste.
+- BUG TROUVÉ + FIXÉ (`f4b8bae3d`) : offMainDecoder socket sans stratégie de
+  dates → story:updated/created/post:created silencieusement perdus (UI au
+  prochain refresh REST). Factory partagée + garde de source, 4/4 verts.
+- Web : transport validé 1:1 (mêmes events via socket.io-client du web) ;
+  handlers audités (patch-in-place, zéro batch) ; vérif visuelle non faite
+  (extension Chrome non connectée).
+- Nettoyage : 2 stories de test supprimées de prod, tokens purgés.

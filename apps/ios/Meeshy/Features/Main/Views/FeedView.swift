@@ -1,6 +1,5 @@
 import SwiftUI
 import PhotosUI
-import CoreLocation
 import Combine
 import os
 import MeeshySDK
@@ -106,6 +105,10 @@ struct FeedView: View {
 
     // Attachment states
     @State var pendingAttachments: [MessageAttachment] = []
+    /// Lieu choisi via le picker, en attente d'envoi. `SharedPlace` porte le
+    /// nom et l'adresse ; `MessageAttachment.location` ne les portait pas et
+    /// n'est plus le véhicule (Task 11/12, 2026-07-29).
+    @State var pendingPlace: SharedPlace? = nil
     @State var pendingMediaFiles: [String: URL] = [:]
     @State var pendingThumbnails: [String: UIImage] = [:]
     @State var pendingAudioURL: URL?
@@ -1382,7 +1385,7 @@ struct FeedView: View {
                 }
 
                 // Pending attachments preview
-                if !pendingAttachments.isEmpty || !preparingAttachments.isEmpty || isLoadingMedia {
+                if !pendingAttachments.isEmpty || !preparingAttachments.isEmpty || isLoadingMedia || pendingPlace != nil {
                     feedPendingAttachmentsRow
                 }
 
@@ -1496,8 +1499,8 @@ struct FeedView: View {
             .ignoresSafeArea()
         }
         .sheet(isPresented: $showLocationPicker) {
-            LocationPickerView(accentColor: MeeshyColors.brandPrimaryHex) { coordinate, address in
-                handleFeedLocationSelection(coordinate: coordinate, address: address)
+            LocationPickerView(accentColor: MeeshyColors.brandPrimaryHex) { place in
+                handleFeedLocationSelection(place)
             }
         }
         .sheet(isPresented: $showEmojiPicker) {

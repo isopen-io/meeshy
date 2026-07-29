@@ -40,6 +40,12 @@ public protocol PostServiceProviding: Sendable {
     func getPost(postId: String) async throws -> APIPost
     func getComments(postId: String, cursor: String?, limit: Int) async throws -> PaginatedAPIResponse<[APIPostComment]>
     func addComment(postId: String, content: String, parentId: String?, effectFlags: Int?, attachmentIds: [String]?, mobileTranscription: MobileTranscriptionPayload?, originalLanguage: String?) async throws -> APIPostComment
+    /// Variante qui transporte un lieu partagé (`SharedPlace`) — même contrat
+    /// que le message et le post (Task 9 gateway). Requirement séparée (et non
+    /// un paramètre par défaut sur la précédente) pour que les conformeurs
+    /// existants (mocks) restent valides via le défaut ci-dessous, qui ignore
+    /// simplement `location` s'il n'est pas surchargé.
+    func addComment(postId: String, content: String, parentId: String?, effectFlags: Int?, attachmentIds: [String]?, mobileTranscription: MobileTranscriptionPayload?, originalLanguage: String?, location: SharedPlace?) async throws -> APIPostComment
     /// Idempotent text-only variant — sends `clientMutationId` as the
     /// `X-Client-Mutation-Id` header so the gateway `MutationLog` replays the
     /// recorded result instead of duplicating the comment on retry (offline
@@ -84,6 +90,18 @@ public extension PostServiceProviding {
     func addComment(postId: String, content: String, parentId: String? = nil, effectFlags: Int? = nil) async throws -> APIPostComment {
         try await addComment(postId: postId, content: content, parentId: parentId, effectFlags: effectFlags,
                              attachmentIds: nil, mobileTranscription: nil, originalLanguage: nil)
+    }
+
+    /// Défaut : un conformeur qui n'implémente que la signature sans
+    /// `location` (mocks existants) reste valide — la position est
+    /// simplement ignorée tant que le type ne surcharge pas cette méthode.
+    /// `PostService` la surcharge réellement plus bas.
+    func addComment(postId: String, content: String, parentId: String?, effectFlags: Int?,
+                    attachmentIds: [String]?, mobileTranscription: MobileTranscriptionPayload?,
+                    originalLanguage: String?, location: SharedPlace?) async throws -> APIPostComment {
+        try await addComment(postId: postId, content: content, parentId: parentId, effectFlags: effectFlags,
+                             attachmentIds: attachmentIds, mobileTranscription: mobileTranscription,
+                             originalLanguage: originalLanguage)
     }
 
     /// Default for the idempotent variant: drop the mutation id and fall
@@ -145,9 +163,21 @@ public final class PostService: PostServiceProviding, @unchecked Sendable {
     public func addComment(postId: String, content: String, parentId: String?, effectFlags: Int?,
                            attachmentIds: [String]?, mobileTranscription: MobileTranscriptionPayload?,
                            originalLanguage: String?) async throws -> APIPostComment {
+        try await addComment(postId: postId, content: content, parentId: parentId, effectFlags: effectFlags,
+                             attachmentIds: attachmentIds, mobileTranscription: mobileTranscription,
+                             originalLanguage: originalLanguage, location: nil)
+    }
+
+    /// Seule surcharge qui envoie réellement `location` au gateway — le
+    /// commentaire d'un post ET la réponse/commentaire d'une story empruntent
+    /// tous deux `POST /posts/:id/comments` (une story est un post de type
+    /// STORY), donc ce chemin unique couvre les deux surfaces.
+    public func addComment(postId: String, content: String, parentId: String?, effectFlags: Int?,
+                           attachmentIds: [String]?, mobileTranscription: MobileTranscriptionPayload?,
+                           originalLanguage: String?, location: SharedPlace?) async throws -> APIPostComment {
         let body = CreateCommentRequest(content: content, parentId: parentId, effectFlags: effectFlags,
                                         attachmentIds: attachmentIds, mobileTranscription: mobileTranscription,
-                                        originalLanguage: originalLanguage)
+                                        originalLanguage: originalLanguage, location: location)
         let response: APIResponse<APIPostComment> = try await api.post(endpoint: "/posts/\(postId)/comments", body: body)
         return response.data
     }

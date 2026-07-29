@@ -2,7 +2,6 @@
 import SwiftUI
 import PhotosUI
 import AVFoundation
-import CoreLocation
 import Combine
 import MeeshySDK
 import MeeshyUI
@@ -586,14 +585,14 @@ extension ConversationView {
         composerState.showLocationPicker = true
     }
 
-    func handleLocationSelection(coordinate: CLLocationCoordinate2D, address: String?) {
-        let attachment = MessageAttachment.location(
-            latitude: coordinate.latitude,
-            longitude: coordinate.longitude,
-            color: MeeshyColors.successHex
-        )
+    /// Le picker émet désormais un `SharedPlace` complet (nom + adresse +
+    /// catégorie) — `MessageAttachment.location` ne portait ni l'un ni
+    /// l'autre et n'est plus le véhicule (Task 11/12, 2026-07-29). Le lieu
+    /// reste en attente ; son transport jusqu'à l'envoi arrive dans une tâche
+    /// ultérieure du plan.
+    func handleLocationSelection(_ place: SharedPlace) {
         withAnimation {
-            composerState.pendingAttachments.append(attachment)
+            composerState.pendingPlace = place
         }
         HapticFeedback.light()
     }
