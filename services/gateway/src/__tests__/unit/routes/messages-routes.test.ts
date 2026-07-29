@@ -1575,6 +1575,49 @@ describe('GET /conversations/:id/pinned-messages', () => {
     await getHandler_()(makeRequest(), reply);
     expect(mockSendInternalError).toHaveBeenCalled();
   });
+
+  it('restitue `location` sur un message épinglé géolocalisé', async () => {
+    // Lot 1 : un message épinglé est une bulle complète — sans le hoist,
+    // l'épingle affiche tout SAUF la position qu'elle était censée fixer.
+    const geoPinnedMsg = {
+      id: MSG_ID,
+      conversationId: CONV_ID,
+      senderId: PART_ID,
+      content: '',
+      originalLanguage: 'fr',
+      messageType: 'text',
+      editedAt: null,
+      deletedAt: null,
+      replyToId: null,
+      forwardedFromId: null,
+      forwardedFromConversationId: null,
+      pinnedAt: new Date(),
+      pinnedBy: USER_ID,
+      isViewOnce: false,
+      isBlurred: false,
+      expiresAt: null,
+      effectFlags: 0,
+      translations: null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      metadata: { location: { latitude: 48.8566, longitude: 2.3522, name: 'Tour Eiffel', address: null, category: null } },
+      sender: {
+        id: PART_ID,
+        userId: USER_ID,
+        displayName: 'Alice',
+        avatar: null,
+        type: 'member',
+        user: { id: USER_ID, username: 'alice', firstName: 'Alice', lastName: 'Smith', displayName: 'Alice', avatar: null, isOnline: false },
+      },
+      attachments: [],
+      _count: { reactions: 0, replies: 0 },
+    };
+    prisma.message.findMany.mockResolvedValue([geoPinnedMsg]);
+    prisma.message.count.mockResolvedValue(1);
+    const reply = makeReply();
+    await getHandler_()(makeRequest(), reply);
+    expect(reply._body.data[0].location).toMatchObject({ latitude: 48.8566, name: 'Tour Eiffel' });
+  });
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -1817,6 +1860,36 @@ describe('GET /conversations/:id/messages/search', () => {
     const reply = makeReply();
     await getHandler_()(makeSearchReq(), reply);
     expect(mockSendInternalError).toHaveBeenCalled();
+  });
+
+  it('restitue `location` sur un resultat de recherche geolocalise', async () => {
+    // Lot 1 : un resultat de recherche est une bulle complete elle aussi —
+    // sans le hoist, le message trouve n'affiche jamais sa position.
+    const geoMatch = {
+      id: MSG_ID,
+      conversationId: CONV_ID,
+      content: 'hello world',
+      originalLanguage: 'fr',
+      messageType: 'text',
+      translations: null,
+      createdAt: new Date(),
+      senderId: PART_ID,
+      metadata: { location: { latitude: 48.8566, longitude: 2.3522, name: 'Tour Eiffel', address: null, category: null } },
+      sender: {
+        id: PART_ID,
+        userId: USER_ID,
+        displayName: 'Alice',
+        avatar: null,
+        type: 'member',
+        user: { id: USER_ID, username: 'alice', displayName: 'Alice', avatar: null, isOnline: true },
+      },
+    };
+    prisma.message.findMany
+      .mockResolvedValueOnce([geoMatch]) // content matches
+      .mockResolvedValueOnce([]); // translation candidates
+    const reply = makeReply();
+    await getHandler_()(makeSearchReq('hello'), reply);
+    expect(reply._body.data[0].location).toMatchObject({ latitude: 48.8566, name: 'Tour Eiffel' });
   });
 });
 

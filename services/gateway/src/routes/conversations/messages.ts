@@ -9,7 +9,7 @@ import {
   postReplyToFromMetadata,
   POST_REPLY_SNAPSHOT_SELECT,
 } from '../../services/messaging/postReplySnapshot';
-import { sharedPlaceFromMetadata } from '../../services/location/sharedPlace';
+import { sharedPlaceFromMetadata, hoistLocationOnto } from '../../services/location/sharedPlace';
 import { TrackingLinkService } from '../../services/TrackingLinkService';
 import { AttachmentService } from '../../services/attachments';
 import { attachmentMediaSelect, attachmentFullSelect, attachmentForwardPreviewSelect } from '../../services/attachments/attachmentIncludes';
@@ -2315,6 +2315,10 @@ export function registerMessagesRoutes(
           translations: true,
           createdAt: true,
           updatedAt: true,
+          // Lot 1 : un message épinglé est une bulle complète — sans
+          // `metadata`, un message géolocalisé épinglé n'affiche jamais sa
+          // position alors que la liste complète la restitue déjà.
+          metadata: true,
           sender: {
             select: {
               id: true,
@@ -2356,6 +2360,7 @@ export function registerMessagesRoutes(
 
       const formattedMessages = pinnedMessages.map((message: any) => {
         const sender = message.sender;
+        const place = sharedPlaceFromMetadata(message.metadata);
         return {
           id: message.id,
           conversationId: message.conversationId,
@@ -2393,7 +2398,10 @@ export function registerMessagesRoutes(
           } : null,
           attachments: message.attachments || [],
           reactionCount: message._count?.reactions ?? 0,
-          replyCount: message._count?.replies ?? 0
+          replyCount: message._count?.replies ?? 0,
+          // Lot 1 : hisser metadata.location en champ top-level `location`,
+          // même miroir que la liste complète des messages.
+          ...(place ? { location: place } : {})
         };
       });
 
@@ -2615,6 +2623,10 @@ export function registerMessagesRoutes(
         translations: true,
         createdAt: true,
         senderId: true,
+        // Lot 1 : un résultat de recherche est une bulle complète elle
+        // aussi — sans `metadata`, un message géolocalisé trouvé par
+        // recherche n'affiche jamais sa position.
+        metadata: true,
         sender: {
           // `sender` is a `Participant`, which has no `username`/`isOnline` of
           // its own — those live on the related `User`. Selecting `username`
@@ -2692,7 +2704,9 @@ export function registerMessagesRoutes(
       // `user` relation) so the userMinimalSchema serializer keeps them.
       const mappedResults = results.map((msg: any) => {
         const sender = msg.sender;
-        return {
+        // Lot 1 : hoistLocationOnto hisse metadata.location en `location`
+        // top-level — un résultat de recherche géolocalisé le perdait sinon.
+        return hoistLocationOnto({
           ...msg,
           sender: sender ? {
             id: sender.id,
@@ -2707,7 +2721,7 @@ export function registerMessagesRoutes(
           translations: msg.translations
             ? transformTranslationsToArray(msg.id, msg.translations as Record<string, any>)
             : undefined
-        };
+        });
       });
 
       // NOTE: Cannot use sendSuccess() — response includes a top-level `cursorPagination`

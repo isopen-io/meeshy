@@ -237,6 +237,19 @@ describe('GET /messages/:messageId', () => {
     const res = await app.inject({ method: 'GET', url: '/messages/' + MSG_ID });
     expect(res.statusCode).toBe(500);
   });
+
+  it('restitue `location` en champ top-level pour un message géolocalisé', async () => {
+    // Lot 1 : le message affiché en entier (bulle complète) doit montrer sa
+    // position — sans hoist, l'utilisateur ouvre le message et ne voit rien.
+    (app as any).prisma.message.findFirst.mockResolvedValueOnce({
+      ...mockMessage,
+      metadata: { location: { latitude: 48.8566, longitude: 2.3522, name: 'Tour Eiffel', address: null, category: null } },
+    });
+    const res = await app.inject({ method: 'GET', url: '/messages/' + MSG_ID });
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body.data.location).toMatchObject({ latitude: 48.8566, name: 'Tour Eiffel' });
+  });
 });
 
 // ─── PUT /messages/:messageId ─────────────────────────────────────────────────
