@@ -760,22 +760,27 @@ export class MeeshySocketIOManager {
           logger.info(`📸 [PRESENCE_SNAPSHOT] ${users.length} contacts sent to ${userId} (${users.filter(u => u.isOnline).length} online)`);
         }
       }
-
-      // Drain offline delivery queue regardless of snapshot cache hit/miss.
-      // Previously this only ran on the non-cached path — on quick reconnects
-      // (within the 30s TTL) queued messages were silently dropped.
-      // Anonymous users drain too: their queue is keyed by participant id
-      // (same key as connectedUsers / ROOMS.user for anonymous identities).
-      this._drainPendingMessages(userId, isAnonymous).catch(err => {
-        logger.warn('Failed to drain pending messages on connect', { userId, error: err });
-      });
-      if (!isAnonymous) {
-        this._emitUnreadCountsSnapshot(socket, userId).catch(err => {
-          logger.warn('Failed to emit unread counts snapshot on reconnect', { userId, error: err });
-        });
-      }
     } catch (error) {
       logger.error('❌ [PRESENCE_SNAPSHOT] Failed to build snapshot', error);
+    }
+
+    // Drain offline delivery queue regardless of snapshot cache hit/miss AND of
+    // whether the snapshot build above threw. `_drainPendingMessages` is the sole
+    // reconnect trigger that replays queued offline messages + their delivered
+    // receipts; the presence snapshot ("who's online") is cosmetic and must never
+    // gate it. Previously both lived in one try/catch, so a transient DB error in
+    // the snapshot build stranded queued messages until the next clean reconnect
+    // (or the queue TTL). Both calls carry their own `.catch` — they are
+    // independent of the snapshot outcome.
+    // Anonymous users drain too: their queue is keyed by participant id
+    // (same key as connectedUsers / ROOMS.user for anonymous identities).
+    this._drainPendingMessages(userId, isAnonymous).catch(err => {
+      logger.warn('Failed to drain pending messages on connect', { userId, error: err });
+    });
+    if (!isAnonymous) {
+      this._emitUnreadCountsSnapshot(socket, userId).catch(err => {
+        logger.warn('Failed to emit unread counts snapshot on reconnect', { userId, error: err });
+      });
     }
   }
 
