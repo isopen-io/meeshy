@@ -19,7 +19,7 @@ import {
   postReplyToFromMetadata,
   POST_REPLY_SNAPSHOT_SELECT,
 } from '../../services/messaging/postReplySnapshot';
-import { sharedPlaceFromMetadata } from '../../services/location/sharedPlace';
+import { sharedPlaceFromMetadata, hoistLocationOnto } from '../../services/location/sharedPlace';
 import { StatusService } from '../../services/StatusService';
 import { NotificationService } from '../../services/notifications/NotificationService';
 import { MessageTranslationService } from '../../services/message-translation/MessageTranslationService';
@@ -893,6 +893,10 @@ export class MessageHandler {
             where: { id: message.forwardedFromId },
             select: {
               id: true, content: true, senderId: true, messageType: true, createdAt: true,
+              // Lot 2 : message transféré (objet imbriqué) — sans `metadata`,
+              // un message géolocalisé transféré n'affiche jamais sa
+              // position sur le chemin socket (parité avec le chemin REST).
+              metadata: true,
               sender: { select: { id: true, userId: true, displayName: true, avatar: true, type: true } },
               attachments: { select: attachmentForwardPreviewSelect, take: 1 }
             }
@@ -904,7 +908,7 @@ export class MessageHandler {
               })
             : Promise.resolve(null)
         ]);
-        if (originalMsg) (messagePayload as Record<string, unknown>).forwardedFrom = originalMsg;
+        if (originalMsg) (messagePayload as Record<string, unknown>).forwardedFrom = hoistLocationOnto(originalMsg as unknown as Record<string, unknown>);
         if (originalConv) (messagePayload as Record<string, unknown>).forwardedFromConversation = originalConv;
       }
 
@@ -1516,7 +1520,17 @@ export class MessageHandler {
       } : undefined,
       attachments: this._serializeAttachmentsField(message),
       replyToId: message.replyToId,
-      replyTo: message.replyTo,
+      // Lot 2 : `MessageProcessor.saveMessage` récupère déjà `metadata` du
+      // message CITÉ (include, pas select restrictif), donc la donnée brute
+      // voyageait déjà — mais sans ce hoist elle restait invisible sous
+      // `replyTo.metadata.location` au lieu de `replyTo.location`.
+      // DUPLICATION CONNUE avec MeeshySocketIOManager._broadcastNewMessage
+      // (son bloc `replyTo`, qui reconstruit/aplatit le sender à la main) —
+      // voir le commentaire à cet endroit précis. Tout champ ajouté ici doit
+      // y être répliqué à la main, et inversement.
+      replyTo: message.replyTo
+        ? hoistLocationOnto(message.replyTo as unknown as Record<string, unknown>)
+        : message.replyTo,
       // Réponse à un post : `postReplyTo` (snapshot figé) est ajouté par
       // `broadcastNewMessage` après ce build, en miroir de `forwardedFrom`.
       storyReplyToId: message.storyReplyToId || undefined,

@@ -2025,6 +2025,34 @@ describe('GET /conversations/:id/messages — coverage extension', () => {
     expect(replyTo.sender.username).toBe('bob_user');
   });
 
+  it('Lot 2 : replyTo geolocalise restitue `location` (hoist sur l objet cite, pas la racine)', async () => {
+    const GEO = { latitude: 48.8566, longitude: 2.3522, name: 'Tour Eiffel', address: null, category: null };
+    const msg = makeMessage({
+      replyTo: {
+        id: 'reply-msg-id',
+        content: 'original reply',
+        originalLanguage: 'fr',
+        metadata: { location: GEO },
+        sender: {
+          id: PART_ID,
+          displayName: 'Bob',
+          avatar: null,
+          username: null,
+          user: { username: 'bob_user', displayName: 'Bob Full', avatar: null },
+        },
+      },
+    });
+    prisma.message.findMany.mockResolvedValue([msg]);
+    prisma.message.count.mockResolvedValue(1);
+    const reply = makeReply();
+    await getMessagesHandler()(makeRequest(), reply);
+    const replyTo = reply._body.data[0].replyTo;
+    expect(replyTo.location).toMatchObject({ latitude: 48.8566, name: 'Tour Eiffel' });
+    // La racine elle-même n'est pas géolocalisée ici — le hoist ne doit pas
+    // fabriquer une position sur le message qui cite.
+    expect(reply._body.data[0].location).toBeUndefined();
+  });
+
   it('forwarded message enrichment: adds forwardedFrom and forwardedFromConversation', async () => {
     const msg = makeMessage({ forwardedFromId: 'fwd-msg-id', forwardedFromConversationId: 'fwd-conv-id' });
     const forwardedMsg = {
@@ -2051,6 +2079,30 @@ describe('GET /conversations/:id/messages — coverage extension', () => {
     expect(result.forwardedFrom.sender.username).toBe('orig_bob');
     expect(result.forwardedFromConversation).toBeDefined();
     expect(result.forwardedFromConversation.title).toBe('Original Convo');
+  });
+
+  it('Lot 2 : message transfere geolocalise restitue `location` sur forwardedFrom', async () => {
+    const GEO = { latitude: 40.7128, longitude: -74.006, name: 'Times Square', address: null, category: null };
+    const msg = makeMessage({ forwardedFromId: 'fwd-msg-id' });
+    const forwardedMsg = {
+      id: 'fwd-msg-id',
+      content: 'original content',
+      messageType: 'text',
+      createdAt: new Date('2024-01-01'),
+      senderId: 'orig-part-id',
+      conversationId: 'fwd-conv-id',
+      metadata: { location: GEO },
+      sender: { id: 'orig-part-id', userId: 'orig-user-id', displayName: 'Original Bob', avatar: null, user: { username: 'orig_bob' } },
+      attachments: [],
+    };
+    prisma.message.findMany
+      .mockResolvedValueOnce([msg])
+      .mockResolvedValueOnce([forwardedMsg]);
+    prisma.message.count.mockResolvedValue(1);
+    const reply = makeReply();
+    await getMessagesHandler()(makeRequest(), reply);
+    const result = reply._body.data[0];
+    expect(result.forwardedFrom.location).toMatchObject({ name: 'Times Square' });
   });
 
   it('markMessagesAsReceived error: caught in fire-and-forget, handler still succeeds', async () => {

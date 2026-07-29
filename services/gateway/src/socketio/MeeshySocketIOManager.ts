@@ -16,7 +16,7 @@ import { MessagingService } from '../services/MessagingService';
 import { CallEventsHandler } from './CallEventsHandler';
 import { SocialEventsHandler } from './handlers/SocialEventsHandler';
 import { LocationHandler } from './handlers/LocationHandler';
-import { sharedPlaceFromMetadata } from '../services/location/sharedPlace';
+import { sharedPlaceFromMetadata, hoistLocationOnto } from '../services/location/sharedPlace';
 import { AuthHandler } from './handlers/AuthHandler';
 import { MessageHandler } from './handlers/MessageHandler';
 import { StatusHandler } from './handlers/StatusHandler';
@@ -1917,7 +1917,21 @@ export class MeeshySocketIOManager {
         } : undefined,
         attachments: message.attachments ?? [],
         replyToId: message.replyToId || undefined,
-        replyTo: message.replyTo ? {
+        // DUPLICATION CONNUE — pas unifiée avec MessageHandler._buildMessagePayload
+        // (services/gateway/src/socketio/handlers/MessageHandler.ts, champ
+        // `replyTo`) : ce bloc RECONSTRUIT et APLATIT le sender (username/
+        // firstName/lastName remontés depuis `sender.user`), alors que
+        // `_buildMessagePayload` fait un passthrough BRUT de `message.replyTo`
+        // (sender imbriqué, non aplati). Les deux formes de fil sont donc
+        // DÉLIBÉRÉMENT différentes aujourd'hui (chemin socket `message:send`
+        // vs chemin REST/agent de ce fichier) — les fusionner changerait la
+        // forme du payload consommée par un client sans certitude sur lequel
+        // des deux client iOS/web dépend. D'où le commentaire plutôt que la
+        // fusion demandée : **tout champ ajouté ici sur `replyTo` (dont
+        // `location`) doit être répliqué à la main dans `_buildMessagePayload`**,
+        // et inversement — c'est la 3e fois que cette duplication cause un
+        // bug de parité (cf. `location` ci-dessous).
+        replyTo: message.replyTo ? hoistLocationOnto({
           id: message.replyTo.id,
           conversationId: normalizedId,
           senderId: message.replyTo.senderId || undefined,
@@ -1925,6 +1939,7 @@ export class MeeshySocketIOManager {
           originalLanguage: message.replyTo.originalLanguage || 'fr',
           messageType: (message.replyTo.messageType || 'text') as MessageType,
           createdAt: message.replyTo.createdAt || new Date(),
+          metadata: (message.replyTo as unknown as { metadata?: unknown }).metadata,
           sender: message.replyTo.sender ? {
             id: message.replyTo.sender.id,
             displayName: message.replyTo.sender.nickname || message.replyTo.sender.displayName,
@@ -1935,7 +1950,7 @@ export class MeeshySocketIOManager {
             firstName: message.replyTo.sender.user?.firstName || '',
             lastName: message.replyTo.sender.user?.lastName || '',
           } : undefined
-        } : undefined,
+        } as unknown as Record<string, unknown>) : undefined,
       };
 
       // Lieu partagé : hisser `metadata.location` en top-level `location`.

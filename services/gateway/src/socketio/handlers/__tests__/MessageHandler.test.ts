@@ -732,6 +732,39 @@ describe('MessageHandler', () => {
       );
     });
 
+    it('Lot 2 : forwardedFrom geolocalise restitue `location` sur le payload message:new', async () => {
+      const GEO = { latitude: 48.8566, longitude: 2.3522, name: 'Tour Eiffel', address: null, category: null };
+      (deps.prisma.message.findUnique as jest.Mock<any>).mockImplementation(({ where }: any) => {
+        if (where.id === 'orig-msg') {
+          return Promise.resolve({ id: 'orig-msg', content: 'original', sender: null, attachments: [], metadata: { location: GEO } });
+        }
+        return Promise.resolve({ translations: [] });
+      });
+      const msg = makeMessage({ forwardedFromId: 'orig-msg', translations: null });
+
+      await handler.broadcastNewMessage(msg as any, VALID_CONV_ID, socket);
+
+      const toResult: any = (deps.io.to as jest.Mock).mock.results[0]?.value;
+      const payload = (toResult.emit.mock.calls as [string, { forwardedFrom?: { location?: unknown } }][])
+        .find((c) => c[0] === 'message:new')?.[1];
+      expect(payload?.forwardedFrom?.location).toMatchObject({ latitude: 48.8566, name: 'Tour Eiffel' });
+    });
+
+    it('Lot 2 : replyTo geolocalise restitue `location` sur le payload message:new (chemin socket nominal)', async () => {
+      const GEO = { latitude: 40.7128, longitude: -74.006, name: 'Times Square', address: null, category: null };
+      const msg = makeMessage({
+        replyToId: 'reply-1',
+        replyTo: { id: 'reply-1', content: 'quoted', metadata: { location: GEO }, sender: null },
+      });
+
+      await handler.broadcastNewMessage(msg as any, VALID_CONV_ID, socket);
+
+      const toResult: any = (deps.io.to as jest.Mock).mock.results[0]?.value;
+      const payload = (toResult.emit.mock.calls as [string, { replyTo?: { location?: unknown } }][])
+        .find((c) => c[0] === 'message:new')?.[1];
+      expect(payload?.replyTo?.location).toMatchObject({ name: 'Times Square' });
+    });
+
     it('attaches snapshot postReplyTo when storyReplyToId present and snapshot found', async () => {
       mockPostReplyToFromMetadata.mockReturnValue({ id: 'post-snap-1', type: 'story' });
       const msg = makeMessage({ storyReplyToId: 'story-1', metadata: { postReplyTo: { id: 'post-snap-1' } } });

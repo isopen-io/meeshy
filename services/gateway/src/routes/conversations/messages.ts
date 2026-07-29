@@ -812,6 +812,10 @@ export function registerMessagesRoutes(
             createdAt: true,
             senderId: true,
             validatedMentions: true,
+            // Lot 2 : le message CITÉ est un objet imbriqué, pas la racine —
+            // le hoist doit porter sur `replyTo` lui-même, pas seulement sur
+            // le message qui cite.
+            metadata: true,
             sender: {
               select: {
                 id: true,
@@ -1217,7 +1221,10 @@ export function registerMessagesRoutes(
         }
         if (includeReplies && message.replyTo) {
           const replySender = (message as any).replyTo.sender;
-          mappedMessage.replyTo = {
+          // Lot 2 : hoistLocationOnto hisse metadata.location du message CITÉ
+          // — sans lui, une citation d'un message géolocalisé n'affiche
+          // jamais sa position, même si la liste principale la restitue.
+          mappedMessage.replyTo = hoistLocationOnto({
             ...message.replyTo,
             originalLanguage: message.replyTo.originalLanguage || 'fr',
             sender: replySender ? {
@@ -1226,7 +1233,7 @@ export function registerMessagesRoutes(
               displayName: resolveParticipantDisplayName(replySender),
               avatar: resolveParticipantAvatar(replySender),
             } : null,
-          };
+          });
         }
 
         return mappedMessage;
@@ -1251,6 +1258,10 @@ export function registerMessagesRoutes(
             conversationId: true,
             messageType: true,
             createdAt: true,
+            // Lot 2 : le message d'ORIGINE transféré est un objet imbriqué —
+            // sans `metadata`, un message géolocalisé transféré n'affiche
+            // jamais sa position dans l'aperçu de transfert.
+            metadata: true,
             sender: {
               select: { id: true, userId: true, displayName: true, avatar: true, user: { select: { username: true } } }
             },
@@ -1280,6 +1291,10 @@ export function registerMessagesRoutes(
           if (msg.forwardedFromId) {
             const original = forwardedMap.get(msg.forwardedFromId);
             if (original) {
+              // Lot 2 : la position du message TRANSFÉRÉ (l'objet imbriqué),
+              // pas celle de `msg` lui-même — sans elle, un message transféré
+              // géolocalisé n'affiche jamais sa position dans l'aperçu.
+              const forwardedPlace = sharedPlaceFromMetadata((original as { metadata?: unknown }).metadata);
               msg.forwardedFrom = {
                 id: original.id,
                 content: original.content,
@@ -1291,7 +1306,8 @@ export function registerMessagesRoutes(
                   displayName: resolveParticipantDisplayName(original.sender as any),
                   avatar: resolveParticipantAvatar(original.sender as any),
                 } : null,
-                attachments: original.attachments
+                attachments: original.attachments,
+                ...(forwardedPlace ? { location: forwardedPlace } : {}),
               };
             }
           }
