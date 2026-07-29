@@ -1,5 +1,6 @@
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { ROOMS, SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
+import { sharedPlaceFromMetadata } from '../services/location/sharedPlace';
 
 /**
  * Minimal Socket.IO surface used by this helper. Kept structural so the
@@ -53,9 +54,17 @@ export async function emitConversationPreviewUpdate(
       prisma.message.findFirst({
         where: { conversationId, deletedAt: null },
         orderBy: { createdAt: 'desc' },
-        select: { id: true, content: true, senderId: true, createdAt: true },
+        // Lot 3 : sans `metadata`, un dernier message géolocalisé n'affiche
+        // jamais sa position dans ce fanout temps réel de l'aperçu.
+        select: { id: true, content: true, senderId: true, createdAt: true, metadata: true },
       }),
     ]);
+
+    // Un message géolocalisé sans légende a un `lastMessagePreview` vide —
+    // hisser `location` ne fabrique aucun texte de repli côté serveur ; le
+    // client décide comment rendre "" + location (ex. via messageType ou la
+    // seule présence de `location`), pas ce helper.
+    const place = sharedPlaceFromMetadata((latest as { metadata?: unknown } | null)?.metadata);
 
     const payload = {
       conversationId,
@@ -71,6 +80,7 @@ export async function emitConversationPreviewUpdate(
       lastMessagePreview: latest?.content ?? null,
       senderId: latest?.senderId ?? null,
       updatedAt: new Date().toISOString(),
+      ...(place ? { location: place } : {}),
     };
 
     const seen = new Set<string>();

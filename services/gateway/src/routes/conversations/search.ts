@@ -12,6 +12,7 @@ import type { SearchQuery } from './types';
 import { sendSuccess, sendInternalError } from '../../utils/response';
 import { getPresenceVisibilityService } from '../../services/PresenceVisibilityService';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
+import { sharedPlaceFromMetadata } from '../../services/location/sharedPlace';
 
 const logger = enhancedLogger.child({ module: 'ConversationSearchRoutes' });
 
@@ -192,6 +193,11 @@ export function registerSearchRoutes(
         // AND a hand-mapped object like this one drops anything we don't
         // copy explicitly — both layers can blank the field. Mirror exactly
         // what `core.ts` does via `{ ...msg }`.
+        // Lot 3 : `metadata` (donc `metadata.location`) est déjà récupéré par
+        // le `include` Prisma ci-dessus (aucun `select` restrictif sur
+        // `messages`), mais était jusqu'ici jeté par cette reconstruction
+        // manuelle — la donnée était payée puis perdue. Hisser explicitement.
+        const place = sharedPlaceFromMetadata((msg as { metadata?: unknown } | undefined)?.metadata);
         const lastMessage = msg ? {
           id: msg.id,
           content: msg.content,
@@ -210,6 +216,7 @@ export function registerSearchRoutes(
           } : null,
           attachments: msg.attachments || [],
           _count: (msg as any)._count,
+          ...(place ? { location: place } : {}),
         } : null;
 
         return {
