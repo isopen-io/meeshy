@@ -5,6 +5,13 @@ import MeeshyUI
 
 struct DataExportView: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.isPresented) private var isPresented
+    @Environment(\.meeshyPanelDismiss) private var panelDismiss
+    /// Retour operant dans les trois contextes de presentation : pile iPhone,
+    /// panneau droit iPad (ni pile ni modale — d'ou l'inertie historique), sheet.
+    private var back: PanelBackAction {
+        PanelBackAction(isPresented: isPresented, dismiss: dismiss, panelDismiss: panelDismiss)
+    }
     @Environment(\.colorScheme) private var colorScheme
     private var isDark: Bool { colorScheme == .dark }
     private var theme: ThemeManager { ThemeManager.shared }
@@ -68,7 +75,7 @@ struct DataExportView: View {
         HStack {
             Button {
                 HapticFeedback.light()
-                dismiss()
+                back()
             } label: {
                 HStack(spacing: 4) {
                     Image(systemName: "chevron.backward")

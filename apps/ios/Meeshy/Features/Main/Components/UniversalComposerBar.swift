@@ -780,19 +780,18 @@ struct UniversalComposerBar: View {
                 permanentEffectsToggleButton
             }
 
-            // Sentiment indicator
-            Button {
-                onAnyInteraction?()
-                HapticFeedback.light()
-            } label: {
-                Text(textAnalyzer.sentiment.emoji)
-                    .font(.callout)
-                    .frame(width: 30, height: 30)
-                    .contentShape(Circle())
-            }
-            .animation(.spring(response: 0.3, dampingFraction: 0.5), value: textAnalyzer.sentiment)
-            .accessibilityLabel(String(localized: "a11y.composer.sentiment", defaultValue: "Tonalité du message", bundle: .main))
-            .accessibilityValue(textAnalyzer.sentiment.emoji)
+            // Sentiment indicator — LECTURE SEULE.
+            // C'était un `Button` dont l'action se limitait à un retour
+            // haptique : il se présentait comme actionnable (et comme tel à
+            // VoiceOver) sans mener nulle part. Rendu passif, il reste lisible
+            // par les technologies d'assistance via label + valeur.
+            Text(textAnalyzer.sentiment.emoji)
+                .font(.callout)
+                .frame(width: 30, height: 30)
+                .animation(.spring(response: 0.3, dampingFraction: 0.5), value: textAnalyzer.sentiment)
+                .accessibilityElement()
+                .accessibilityLabel(String(localized: "a11y.composer.sentiment", defaultValue: "Tonalité du message", bundle: .main))
+                .accessibilityValue(textAnalyzer.sentiment.emoji)
 
             // Language selector
             languageSelectorPill

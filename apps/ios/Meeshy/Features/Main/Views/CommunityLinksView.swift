@@ -9,6 +9,13 @@ struct CommunityLinksView: View {
     @StateObject private var viewModel = CommunityLinksViewModel()
 
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.isPresented) private var isPresented
+    @Environment(\.meeshyPanelDismiss) private var panelDismiss
+    /// Retour operant dans les trois contextes de presentation : pile iPhone,
+    /// panneau droit iPad (ni pile ni modale — d'ou l'inertie historique), sheet.
+    private var back: PanelBackAction {
+        PanelBackAction(isPresented: isPresented, dismiss: dismiss, panelDismiss: panelDismiss)
+    }
     @EnvironmentObject private var router: Router
 
     private let accent = MeeshyColors.communityAccent
@@ -41,7 +48,7 @@ struct CommunityLinksView: View {
         HStack {
             Button {
                 HapticFeedback.light()
-                dismiss()
+                back()
             } label: {
                 Image(systemName: "chevron.backward")
                     .font(MeeshyFont.relative(16, weight: .semibold))

@@ -250,7 +250,38 @@ struct iPadRootView: View {
             .navigationBarHidden(true)
             .onAppear { router.pendingReplyContext = nil }
         } else if let route = rightPanelRoute {
-            rightPanelContent(for: route)
+            // `NavigationStack` OBLIGATOIRE : sans lui, tout `NavigationLink`
+            // interne à un écran du panneau est inerte (lignes de
+            // TrackingLinksView / ShareLinksView / CommunityLinksView vers leur
+            // vue de détail — mortes sur iPad jusqu'au 2026-07-29). `.id(route)`
+            // vide la pile locale quand on change de route, sinon la vue de
+            // détail poussée survivrait au changement d'écran racine.
+            NavigationStack {
+                rightPanelContent(for: route)
+                    // Filet de sécurité pour les écrans qui délèguent leur
+                    // chrome à la barre système (Messages favoris, membres
+                    // d'une communauté…) : racine du panneau, ils n'ont ni
+                    // bouton retour propre ni geste de retour, donc aucune
+                    // sortie. Les écrans à en-tête maison posent
+                    // `.navigationBarHidden(true)` et ne voient jamais ce
+                    // bouton — pas de doublon.
+                    .toolbar {
+                        ToolbarItem(placement: .topBarLeading) {
+                            Button {
+                                HapticFeedback.light()
+                                rightPanelRoute = nil
+                            } label: {
+                                Image(systemName: "chevron.backward")
+                            }
+                            .accessibilityLabel(String(localized: "root.ipad.close_panel", defaultValue: "Fermer", bundle: .main))
+                        }
+                    }
+            }
+            .id(route)
+            // Rend `dismiss()` opérant pour les écrans racine du panneau : ils
+            // ne sont ni poussés ni présentés, leur bouton retour n'avait donc
+            // aucun effet. Cf. `PanelBackAction`.
+            .environment(\.meeshyPanelDismiss, { rightPanelRoute = nil })
         } else {
             iPadConversationList(showFeedButton: false)
         }

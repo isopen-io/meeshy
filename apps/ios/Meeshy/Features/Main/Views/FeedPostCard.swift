@@ -838,6 +838,11 @@ struct FeedPostCard: View {
                         .contentTransition(.numericText())
                 }
             }
+            // Cible tactile 44x44 (HIG) : les glyphes font 17-18 pt, la zone
+            // de hit se limitait au tracé — le marque-page (icone fine, sans
+            // compteur) ratait un tap sur deux a l'usage.
+            .frame(minWidth: 44, minHeight: 44)
+            .contentShape(Rectangle())
             .disabled(isHeartInFlight)
             .animation(.easeOut(duration: 0.2), value: effectiveIsLiked)
             .accessibilityLabel(String(localized: "a11y.feed.post.like", defaultValue: "Aimer", bundle: .main))
@@ -862,6 +867,11 @@ struct FeedPostCard: View {
                 }
                 .foregroundColor(showCommentsSheet ? theme.accentText(accentColor) : theme.textSecondary)
             }
+            // Cible tactile 44x44 (HIG) : les glyphes font 17-18 pt, la zone
+            // de hit se limitait au tracé — le marque-page (icone fine, sans
+            // compteur) ratait un tap sur deux a l'usage.
+            .frame(minWidth: 44, minHeight: 44)
+            .contentShape(Rectangle())
             .accessibilityLabel(String(localized: "feed.post.comments_count", defaultValue: "\(post.commentCount) commentaires", bundle: .main))
             .accessibilityHint(String(localized: "feed.post.comments.hint", defaultValue: "Ouvre les commentaires", bundle: .main))
 
@@ -895,6 +905,11 @@ struct FeedPostCard: View {
                 .animation(.spring(response: 0.35, dampingFraction: 0.55), value: isReposted)
                 .animation(.spring(response: 0.3, dampingFraction: 0.6), value: isRepostInFlight)
             }
+            // Cible tactile 44x44 (HIG) : les glyphes font 17-18 pt, la zone
+            // de hit se limitait au tracé — le marque-page (icone fine, sans
+            // compteur) ratait un tap sur deux a l'usage.
+            .frame(minWidth: 44, minHeight: 44)
+            .contentShape(Rectangle())
             .disabled(isRepostInFlight)
             .accessibilityLabel(String(localized: "feed.post.repost", defaultValue: "Repartager", bundle: .main))
             .accessibilityValue(String(format: String(localized: "a11y.feed.post.repost.value", defaultValue: "%d repartages", bundle: .main), displayRepostCount ?? post.repostCount))
@@ -936,6 +951,11 @@ struct FeedPostCard: View {
                 .animation(.spring(response: 0.35, dampingFraction: 0.55), value: isBookmarked)
                 .animation(.spring(response: 0.3, dampingFraction: 0.6), value: isBookmarkInFlight)
             }
+            // Cible tactile 44x44 (HIG) : les glyphes font 17-18 pt, la zone
+            // de hit se limitait au tracé — le marque-page (icone fine, sans
+            // compteur) ratait un tap sur deux a l'usage.
+            .frame(minWidth: 44, minHeight: 44)
+            .contentShape(Rectangle())
             .disabled(isBookmarkInFlight)
             .accessibilityLabel(String(localized: "feed.post.save", defaultValue: "Enregistrer", bundle: .main))
             .accessibilityValue(String(format: String(localized: "a11y.feed.post.save.value", defaultValue: "%d enregistrements", bundle: .main), displayBookmarkCount ?? post.bookmarkCount))
@@ -970,6 +990,11 @@ struct FeedPostCard: View {
                 .foregroundColor(theme.textSecondary)
                 .animation(.easeInOut(duration: 0.2), value: isShareInFlight)
             }
+            // Cible tactile 44x44 (HIG) : les glyphes font 17-18 pt, la zone
+            // de hit se limitait au tracé — le marque-page (icone fine, sans
+            // compteur) ratait un tap sur deux a l'usage.
+            .frame(minWidth: 44, minHeight: 44)
+            .contentShape(Rectangle())
             .disabled(isShareInFlight)
             .accessibilityLabel(String(localized: "feed.post.share", defaultValue: "Partager", bundle: .main))
             .accessibilityValue(String(format: String(localized: "a11y.feed.post.share.value", defaultValue: "%d partages", bundle: .main), displayShareCount ?? post.shareCount))

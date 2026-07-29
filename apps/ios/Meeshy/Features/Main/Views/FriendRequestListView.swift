@@ -18,6 +18,13 @@ struct FriendRequestListView: View {
     private var isDark: Bool { colorScheme == .dark }
     private var theme: ThemeManager { ThemeManager.shared }
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.isPresented) private var isPresented
+    @Environment(\.meeshyPanelDismiss) private var panelDismiss
+    /// Retour operant dans les trois contextes de presentation : pile iPhone,
+    /// panneau droit iPad (ni pile ni modale — d'ou l'inertie historique), sheet.
+    private var back: PanelBackAction {
+        PanelBackAction(isPresented: isPresented, dismiss: dismiss, panelDismiss: panelDismiss)
+    }
     @EnvironmentObject private var statusViewModel: StatusViewModel
 
     var body: some View {
@@ -52,7 +59,7 @@ struct FriendRequestListView: View {
     private var header: some View {
         HStack {
             Button {
-                dismiss()
+                back()
             } label: {
                 Image(systemName: "chevron.backward")
                     .font(.callout.weight(.semibold))

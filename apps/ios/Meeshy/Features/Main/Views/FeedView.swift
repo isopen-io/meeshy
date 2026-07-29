@@ -503,6 +503,10 @@ struct FeedView: View {
     }
 
     var body: some View {
+        postActionPresentations(feedBody)
+    }
+
+    private var feedBody: some View {
         ZStack {
             // Themed background
             theme.backgroundGradient.ignoresSafeArea()
@@ -1492,45 +1496,58 @@ struct FeedView: View {
             .presentationDetents([.medium, .large])
             .presentationDragIndicator(.visible)
         }
-        .sheet(item: $shareableLink) { link in
-            // System share sheet — paste/AirDrop/Messages/etc. all receive the
-            // `meeshy.me/l/<token>` URL so every external touchpoint funnels
-            // through the user's TrackingLink for attribution.
-            ShareSheet(activityItems: [link.url])
-        }
-        .sheet(item: $reelCommentsPost) { post in
-            // Même feuille de commentaires que les cartes post (`FeedPostCard`) —
-            // ouverte directement depuis le bouton commentaire d'un réel du feed.
-            CommentsSheetView(post: post, accentColor: post.authorColor)
-        }
-        .sheet(item: $editingPost) { post in
-            EditPostSheet(
-                originalContent: post.content,
-                originalLanguage: post.originalLanguage,
-                originalType: post.type,
-                canBeReel: post.hasMedia,
-                media: post.media.map { EditablePostMedia($0) },
-                isRepost: post.repost != nil,
-                onSave: { draft in
-                    await viewModel.updatePost(post.id, content: draft.content, language: draft.language, type: draft.type, removeMediaIds: draft.removeMediaIds.isEmpty ? nil : draft.removeMediaIds)
-                },
-                onDismiss: { editingPost = nil }
-            )
-        }
         .adaptiveOnChange(of: selectedPhotoItems) { _, items in
             handleFeedPhotoSelection(items)
         }
-        .fullScreenCover(item: $quoteTargetPost) { quoted in
-            FeedComposerSheet(
-                viewModel: viewModel,
-                initialText: "",
-                pendingAttachmentType: nil,
-                quotePost: quoted,
-                onDismiss: {
-                    quoteTargetPost = nil
-                }
-            )
-        }
+    }
+
+    // MARK: - Post Action Presentations
+    //
+    // Partage, commentaires de réel, édition et citation sont déclenchés depuis
+    // les CARTES du feed — jamais depuis le composer. Ces présentations vivaient
+    // pourtant sur `composerOverlay`, monté sous `if showComposer` : composer
+    // fermé, la vue portant le `.sheet` n'existait pas, donc « Partager » et
+    // « Citer » ne produisaient rien. Pire, l'item restait armé et bloquait les
+    // présentations suivantes du feed jusqu'au redémarrage. Elles sont désormais
+    // ancrées au `body`, monté en permanence.
+    private func postActionPresentations(_ content: some View) -> some View {
+        content
+            .sheet(item: $shareableLink) { link in
+                // System share sheet — paste/AirDrop/Messages/etc. all receive the
+                // `meeshy.me/l/<token>` URL so every external touchpoint funnels
+                // through the user's TrackingLink for attribution.
+                ShareSheet(activityItems: [link.url])
+            }
+            .sheet(item: $reelCommentsPost) { post in
+                // Même feuille de commentaires que les cartes post (`FeedPostCard`) —
+                // ouverte directement depuis le bouton commentaire d'un réel du feed.
+                CommentsSheetView(post: post, accentColor: post.authorColor)
+            }
+            .sheet(item: $editingPost) { post in
+                EditPostSheet(
+                    originalContent: post.content,
+                    originalLanguage: post.originalLanguage,
+                    originalType: post.type,
+                    canBeReel: post.hasMedia,
+                    media: post.media.map { EditablePostMedia($0) },
+                    isRepost: post.repost != nil,
+                    onSave: { draft in
+                        await viewModel.updatePost(post.id, content: draft.content, language: draft.language, type: draft.type, removeMediaIds: draft.removeMediaIds.isEmpty ? nil : draft.removeMediaIds)
+                    },
+                    onDismiss: { editingPost = nil }
+                )
+            }
+            .fullScreenCover(item: $quoteTargetPost) { quoted in
+                FeedComposerSheet(
+                    viewModel: viewModel,
+                    initialText: "",
+                    pendingAttachmentType: nil,
+                    quotePost: quoted,
+                    onDismiss: {
+                        quoteTargetPost = nil
+                    }
+                )
+            }
     }
     // MARK: - Impression Tracking
 

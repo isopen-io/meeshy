@@ -322,7 +322,9 @@ struct RootView: View {
                             }
                         )
                     case .communityInvite(let communityId):
-                        CommunityInviteView(communityId: communityId)
+                        // Poussée dans la pile : `dismiss()` interne à son propre
+                        // NavigationStack est inerte, « Done » ne fermait rien.
+                        CommunityInviteView(communityId: communityId, onDone: { router.pop() })
                     case .notifications:
                         NotificationListView(
                             onNotificationTap: { notification in

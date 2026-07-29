@@ -9,6 +9,13 @@ import MeeshyUI
 struct StarredMessagesView: View {
     @StateObject private var store = StarredMessagesStore.shared
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.isPresented) private var isPresented
+    @Environment(\.meeshyPanelDismiss) private var panelDismiss
+    /// Retour operant dans les trois contextes de presentation : pile iPhone,
+    /// panneau droit iPad (ni pile ni modale — d'ou l'inertie historique), sheet.
+    private var back: PanelBackAction {
+        PanelBackAction(isPresented: isPresented, dismiss: dismiss, panelDismiss: panelDismiss)
+    }
     private var theme: ThemeManager { ThemeManager.shared }
     @EnvironmentObject private var router: Router
 
@@ -84,7 +91,7 @@ struct StarredMessagesView: View {
             name: .meeshyNavigateToConversation,
             object: snapshot.conversationId
         )
-        dismiss()
+        back()
     }
 }
 
