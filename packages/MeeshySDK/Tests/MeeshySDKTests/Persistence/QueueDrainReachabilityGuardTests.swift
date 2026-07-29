@@ -35,8 +35,7 @@ final class QueueDrainReachabilityGuardTests: XCTestCase {
     /// garantie de ne jamais repartir après un relancement en ligne.
     func test_persistentQueues_doNotDropTheCurrentNetworkState() throws {
         let suspects = [
-            "Sources/MeeshySDK/Persistence/SettingsActionQueue.swift",
-            "Sources/MeeshyUI/Story/StoryOfflineQueueBootstrap.swift"
+            "Sources/MeeshySDK/Persistence/SettingsActionQueue.swift"
         ]
 
         for path in suspects {

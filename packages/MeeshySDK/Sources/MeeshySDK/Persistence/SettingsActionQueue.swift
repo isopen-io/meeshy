@@ -211,8 +211,8 @@ public actor SettingsActionQueue {
     /// sur le disque indéfiniment. `flushIfPossible` est un no-op sur file vide,
     /// donc écouter la valeur courante ne coûte rien dans le cas normal.
     ///
-    /// Même règle que `StoryOfflineQueueBootstrap`, qui n'a jamais eu ce
-    /// `.dropFirst()` — et qui, lui, se vidait bien au démarrage.
+    /// Règle générale, verrouillée par `QueueDrainReachabilityGuardTests` : une
+    /// file qui survit à un kill ne peut pas dépendre d'un FRONT pour repartir.
     private func observeConnection() {
         NetworkMonitor.shared.$isOffline
             .removeDuplicates()

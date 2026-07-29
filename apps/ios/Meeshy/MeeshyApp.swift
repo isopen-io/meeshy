@@ -224,9 +224,12 @@ struct MeeshyApp: App {
                     // monitor would first start at the gate and still report the
                     // optimistic `online` default, defeating the offline fast-path.
                     _ = NetworkMonitor.shared
-                    // Wire StoryOfflineQueue publish handler + network-reconnect
-                    // flush. Idempotent — safe to call on every cold start.
-                    StoryOfflineQueueBootstrap.shared.start()
+                    // `StoryOfflineQueueBootstrap` a été supprimé : son
+                    // gestionnaire de publication ré-enfilait l'item dans la
+                    // MÊME file (`StoryPublishQueue`), et sa vidange sur retour
+                    // réseau doublait l'observateur de connexion que la file
+                    // possède déjà. Le seul gestionnaire légitime est posé par
+                    // `StoryPublishService.setExecutor`, depuis les racines.
                     // Wire the outbox pool so OfflineQueue can persist every
                     // outbox kind (sendMessage, sendReaction, edit/delete,
                     // and the 14 non-message mutations) to SQLite on enqueue.

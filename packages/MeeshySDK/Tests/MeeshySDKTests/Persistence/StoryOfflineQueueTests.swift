@@ -98,47 +98,6 @@ final class StoryOfflineQueueTests: XCTestCase {
 
     // MARK: - Flush
 
-    func test_flush_callsHandler_andRemovesOnSuccess() async {
-        let queue = StoryOfflineQueue.shared
-        // Use a Sendable counter to avoid captured-var mutation concurrency error.
-        actor PublishTracker {
-            var ids: [String] = []
-            func record(_ id: String) { ids.append(id) }
-        }
-        let tracker = PublishTracker()
-        await queue.setOnPublish { item in
-            await tracker.record(item.id)
-            return true
-        }
-        let item = makeItem()
-        await queue.enqueue(item)
-        await queue.flush()
-        let ids = await tracker.ids
-        XCTAssertEqual(ids.count, 1)
-        let pending = await queue.pendingItems
-        XCTAssertEqual(pending.count, 0, "Flushed item must be removed from queue")
-    }
-
-    func test_flush_stopsOnFirstFailure() async {
-        let queue = StoryOfflineQueue.shared
-        actor PublishTracker {
-            var ids: [String] = []
-            func record(_ id: String) { ids.append(id) }
-        }
-        let tracker = PublishTracker()
-        await queue.setOnPublish { item in
-            await tracker.record(item.id)
-            return false  // always fail
-        }
-        await queue.enqueue(makeItem(slideId: "a"))
-        await queue.enqueue(makeItem(slideId: "b"))
-        await queue.flush()
-        let ids = await tracker.ids
-        XCTAssertEqual(ids.count, 1, "Flush must stop after first failure")
-        let pending = await queue.pendingItems
-        XCTAssertEqual(pending.count, 2, "Both items remain after flush failure")
-    }
-
     // MARK: - Storage security
 
     /// Asserts `.completeFileProtection` is requested on each write.
