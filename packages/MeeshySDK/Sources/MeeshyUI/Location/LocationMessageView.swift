@@ -18,6 +18,20 @@ public struct LocationMessageView: View {
         self.accentColor = accentColor; self.onTapFullscreen = onTapFullscreen
     }
 
+    /// Rendu unique d'un lieu (Task 14, 2026-07-29) : message, post et
+    /// commentaire partagent désormais tous `SharedPlace` comme véhicule, donc
+    /// tous convergent vers cet initialiseur plutôt que de reconstruire leur
+    /// propre notion de « position ». L'initialiseur historique par
+    /// coordonnées brutes reste ci-dessus (public API du package) pour les
+    /// consommateurs qui n'ont qu'une paire lat/lon sans `SharedPlace`.
+    public init(place: SharedPlace,
+                accentColor: String = MeeshyColors.brandPrimaryHex,
+                onTapFullscreen: (() -> Void)? = nil) {
+        self.init(latitude: place.latitude, longitude: place.longitude,
+                  placeName: place.name, address: place.address,
+                  accentColor: accentColor, onTapFullscreen: onTapFullscreen)
+    }
+
     private var coordinate: CLLocationCoordinate2D {
         CLLocationCoordinate2D(latitude: latitude, longitude: longitude)
     }

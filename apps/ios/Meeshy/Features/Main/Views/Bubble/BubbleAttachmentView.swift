@@ -108,40 +108,26 @@ struct BubbleAttachmentView: View {
             }
 
         case .location:
+            // Rendu unique (Task 14, 2026-07-29) : `SharedPlace` reste le
+            // véhicule même ici, alors que `MessageAttachment` ne porte que
+            // lat/lon + originalName (pas d'adresse — même limite que
+            // CommentMediaView/FeedView, cf. leurs commentaires `SharedPlace`).
+            // Le fallback textuel sans coordonnées a été retiré : une fois la
+            // position validée et hissée par le gateway (Task 7/8), un message
+            // de type `.location` porte toujours lat/lon, ce cas devenait
+            // inatteignable.
             if let lat = attachment.latitude, let lon = attachment.longitude {
                 LocationMessageView(
-                    latitude: lat,
-                    longitude: lon,
-                    placeName: attachment.originalName.isEmpty ? nil : attachment.originalName,
-                    address: nil,
+                    place: SharedPlace(
+                        latitude: lat,
+                        longitude: lon,
+                        name: attachment.originalName.isEmpty ? nil : attachment.originalName
+                    ),
                     accentColor: accentHex,
                     onTapFullscreen: {
                         onTapLocation?(attachment)
                     }
                 )
-            } else {
-                RoundedRectangle(cornerRadius: 12)
-                    .fill(
-                        LinearGradient(
-                            colors: [Color(hex: attachment.thumbnailColor), Color(hex: attachment.thumbnailColor).opacity(0.6)],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-                    .frame(maxWidth: .infinity).aspectRatio(5/3, contentMode: .fit)
-                    .overlay(
-                        VStack(spacing: 8) {
-                            Image(systemName: "mappin.circle.fill")
-                                .font(.system(.largeTitle))
-                                .foregroundColor(.white)
-
-                            Text(String(localized: "bubble.attachment.locationShared", defaultValue: "Position partagee", bundle: .main))
-                                .font(.caption.weight(.medium))
-                                .foregroundColor(.white.opacity(0.9))
-                        }
-                    )
-                    .accessibilityElement(children: .combine)
-                    .accessibilityLabel(String(localized: "bubble.attachment.locationShared", defaultValue: "Position partagee", bundle: .main))
             }
         }
     }
