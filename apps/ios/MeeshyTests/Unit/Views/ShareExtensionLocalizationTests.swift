@@ -163,9 +163,9 @@ final class ShareExtensionLocalizationTests: XCTestCase {
         }
     }
 
-    // MARK: - Contact rows are reachable by VoiceOver
+    // MARK: - Conversation rows are reachable by VoiceOver
 
-    func test_contactRow_exposesButtonAndSelectionTraits() throws {
+    func test_conversationRow_exposesButtonAndSelectionTraits() throws {
         // Sans élément explicite, la rangée atteint VoiceOver comme du texte
         // épars, et son état sélectionné ne tient qu'à une coche et une teinte.
         let source = try extensionSource()
@@ -190,15 +190,20 @@ final class ShareExtensionLocalizationTests: XCTestCase {
         // vrai Button. Elle contredisait frontalement
         // `ShareExtensionAccessibilityTests`, qui exige `.ignore` : les deux
         // itérations ont atterri sur `main` et se sont mutuellement bloquées.
+        //
+        // 2026-07-29 : la rangée liste désormais des CONVERSATIONS réelles
+        // (`ShareTargetRow`, nom `target.displayName`) et non plus des contacts
+        // fabriqués — l'ancien `contact.name` n'existe plus. La garantie, elle,
+        // est identique.
         let collapsesIntoOneElement =
             source.contains(".accessibilityElement(children: .combine)")
             || (source.contains(".accessibilityElement(children: .ignore)")
-                && source.contains(".accessibilityLabel(contact.name)"))
+                && source.contains(".accessibilityLabel(target.displayName)"))
         XCTAssertTrue(
             collapsesIntoOneElement,
-            "The contact row must be a single accessibility element so its name, status and state " +
+            "The conversation row must be a single accessibility element so its name and state " +
             "are announced together rather than as separate stops — either via .combine, or via " +
-            ".ignore paired with an explicit .accessibilityLabel(contact.name)."
+            ".ignore paired with an explicit .accessibilityLabel(target.displayName)."
         )
     }
 }

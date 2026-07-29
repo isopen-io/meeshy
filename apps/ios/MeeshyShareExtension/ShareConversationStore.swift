@@ -31,14 +31,19 @@ nonisolated struct ShareTarget: Identifiable, Equatable, Sendable {
 /// visible une session absente ou un App Group vide. L'ancien repli de contacts
 /// fabriqués affichait au contraire une liste crédible par-dessus une lecture
 /// morte, ce qui a masqué la panne pendant trois itérations d'audit.
+/// La session est portée PAR le cas `.ready` — et non à côté de l'état — pour
+/// qu'il soit impossible d'afficher une liste sans jeton pour l'envoyer. Sans
+/// ça, le chemin d'envoi devait se garder contre une session absente et
+/// renvoyer « différé » sans rien avoir persisté : un état inatteignable, mais
+/// qui aurait menti à l'utilisateur le jour où il devenait atteignable.
 nonisolated enum ShareScreenState: Equatable {
     case signedOut
     case noConversations
-    case ready([ShareTarget])
+    case ready(session: ShareSession, targets: [ShareTarget])
 
     static func resolve(session: ShareSession?, targets: [ShareTarget]) -> ShareScreenState {
-        guard session != nil else { return .signedOut }
-        return targets.isEmpty ? .noConversations : .ready(targets)
+        guard let session else { return .signedOut }
+        return targets.isEmpty ? .noConversations : .ready(session: session, targets: targets)
     }
 }
 

@@ -37,9 +37,11 @@ class ShareViewController: UIViewController {
         let root = ShareContentView(
             content: content,
             state: state,
-            onSend: { [weak self] target in
-                guard let self, let session, let content else { return .deferred }
-                return await ShareSender.send(content: content, to: target.id, session: session)
+            // Aucune capture : la session et le contenu arrivent par le
+            // chemin d'envoi lui-même, qui ne peut être emprunté que depuis
+            // l'état `.ready` — lequel porte déjà la session.
+            onSend: { session, target, content in
+                await ShareSender.send(content: content, to: target.id, session: session)
             },
             onFinish: { [weak self] in self?.complete() }
         )
@@ -149,7 +151,7 @@ class ShareViewController: UIViewController {
 struct ShareContentView: View {
     let content: String?
     let state: ShareScreenState
-    let onSend: (ShareTarget) async -> ShareOutcome
+    let onSend: (ShareSession, ShareTarget, String) async -> ShareOutcome
     let onFinish: () -> Void
 
     @State private var selectedId: String?
@@ -181,7 +183,7 @@ struct ShareContentView: View {
                             defaultValue: "Ouvrez Meeshy une fois pour retrouver vos conversations ici"
                         )
                     )
-                case .ready(let targets):
+                case .ready(_, let targets):
                     conversationList(targets)
                 }
 
@@ -312,12 +314,13 @@ struct ShareContentView: View {
     }
 
     private func send() {
-        guard case .ready(let targets) = state,
-              let target = targets.first(where: { $0.id == selectedId }) else { return }
+        guard case .ready(let session, let targets) = state,
+              let target = targets.first(where: { $0.id == selectedId }),
+              let content, !content.isEmpty else { return }
 
         isSending = true
         Task {
-            let outcome = await onSend(target)
+            let outcome = await onSend(session, target, content)
             isSending = false
             resultMessage = outcome == .sent
                 ? String(localized: "share.status.sent", defaultValue: "Envoyé")

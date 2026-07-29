@@ -177,7 +177,7 @@ final class ShareConversationStoreTests: XCTestCase {
     func test_screenState_withSessionAndTargets_isReady() {
         XCTAssertEqual(
             ShareScreenState.resolve(session: anySession, targets: [anyTarget]),
-            .ready([anyTarget])
+            .ready(session: anySession, targets: [anyTarget])
         )
     }
 
