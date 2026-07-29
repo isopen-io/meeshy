@@ -11,6 +11,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Badge } from '@/components/ui/badge';
 import { useI18n } from '@/hooks/useI18n';
+import { buildAttachmentUrl } from '@/utils/attachment-url';
 
 interface ConversationPickerProps {
   selectedId: string | null;
@@ -83,13 +84,13 @@ export function ConversationPicker({ selectedId, onSelect, onClear, label, place
         {selectedConversation ? (
           <div className="flex-1 rounded-lg border border-indigo-200 bg-indigo-50 dark:bg-indigo-900/20 dark:border-indigo-800 overflow-hidden">
             {selectedConversation.banner && (
-              <div className="h-16 w-full bg-cover bg-center" style={{ backgroundImage: `url(${selectedConversation.banner})` }} />
+              <div className="h-16 w-full bg-cover bg-center" style={{ backgroundImage: `url(${buildAttachmentUrl(selectedConversation.banner)})` }} />
             )}
             <div className="p-3">
               <div className="flex items-start justify-between gap-2">
                 <div className="flex items-center gap-3 min-w-0">
                   {selectedConversation.avatar ? (
-                    <img src={selectedConversation.avatar} alt="" loading="lazy" decoding="async" className="h-10 w-10 rounded-full object-cover shrink-0" />
+                    <img src={buildAttachmentUrl(selectedConversation.avatar) ?? undefined} alt="" loading="lazy" decoding="async" className="h-10 w-10 rounded-full object-cover shrink-0" />
                   ) : (
                     <div className="p-2 rounded-full bg-indigo-100 dark:bg-indigo-900/50 text-indigo-600 dark:text-indigo-400 shrink-0">
                       {getIcon(selectedConversation.type)}

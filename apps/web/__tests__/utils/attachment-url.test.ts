@@ -2,6 +2,21 @@
  * Tests for attachment-url utility
  */
 
+// Mock partiel de lib/config : `getBackendUrl` devient un jest.fn() qui
+// delegue par defaut a l'implementation reelle (donc les tests existants,
+// qui pilotent le comportement via NEXT_PUBLIC_BACKEND_URL, continuent de
+// passer inchanges) ; seuls les 2 tests "runtime origin derivation"
+// ci-dessous le surchargent ponctuellement (mockReturnValueOnce) pour
+// prouver que buildAttachmentUrl delegue bien a cette fonction — la SSOT du
+// projet pour deriver l'origine API au runtime — plutot que de coder en dur
+// process.env/localhost. `getBackendUrl` lui-meme (sa derivation depuis
+// window.location) est hors perimetre : non modifie ici, deja proprietaire
+// de son propre contrat dans lib/config.ts.
+jest.mock('../../lib/config', () => {
+  const actual = jest.requireActual('../../lib/config');
+  return { ...actual, getBackendUrl: jest.fn(actual.getBackendUrl) };
+});
+
 import {
   buildAttachmentUrl,
   buildAttachmentUrls,
@@ -9,6 +24,9 @@ import {
   isRelativeUrl,
   extractRelativePath,
 } from '../../utils/attachment-url';
+import { getBackendUrl } from '../../lib/config';
+
+const mockedGetBackendUrl = getBackendUrl as jest.Mock;
 
 describe('attachment-url', () => {
   const originalEnv = process.env;
@@ -104,6 +122,37 @@ describe('attachment-url', () => {
         const relativePath = '/api/attachments/file/2024/11/userId/photo.jpg';
         const result = freshBuildAttachmentUrl(relativePath);
         expect(result).toBe('http://localhost:3000/api/attachments/file/2024/11/userId/photo.jpg');
+      });
+    });
+
+    describe('runtime origin derivation delegates to getBackendUrl() (SSOT, lib/config.ts)', () => {
+      // Ce qui compte ici : buildAttachmentUrl ne doit JAMAIS lire
+      // `process.env.NEXT_PUBLIC_*` ni coder un `localhost:3000` en dur
+      // lui-meme — il doit deleguer a l'unique fonction de derivation runtime
+      // du projet (`getBackendUrl`, qui retombe elle-meme sur
+      // `window.location` — regle CLAUDE.md apps/web : jamais d'URL en dur).
+
+      it('uses whatever origin getBackendUrl() resolves, even with no NEXT_PUBLIC_* env vars set', () => {
+        // Reproduit le bug de production : NEXT_PUBLIC_BACKEND_URL absent/vide
+        // (placeholder __RUNTIME_* non remplace) sur meeshy.me. Avant ce fix,
+        // buildAttachmentUrl lisait process.env directement et retombait sur
+        // 'http://localhost:3000' — casse les avatars/bannieres en prod.
+        delete process.env.NEXT_PUBLIC_BACKEND_URL;
+        delete process.env.NEXT_PUBLIC_API_URL;
+        mockedGetBackendUrl.mockReturnValueOnce('https://gate.meeshy.me');
+
+        const relativePath = '/api/v1/attachments/file/2026/07/u1/avatar_640w.webp';
+        const result = buildAttachmentUrl(relativePath);
+
+        expect(result).toBe('https://gate.meeshy.me/api/v1/attachments/file/2026/07/u1/avatar_640w.webp');
+      });
+
+      it('reflects a different origin whenever getBackendUrl() resolves one (proves no hardcoded fallback)', () => {
+        mockedGetBackendUrl.mockReturnValueOnce('https://gate.staging.meeshy.me');
+
+        const result = buildAttachmentUrl('/api/v1/attachments/file/photo.jpg');
+
+        expect(result).toBe('https://gate.staging.meeshy.me/api/v1/attachments/file/photo.jpg');
       });
     });
 

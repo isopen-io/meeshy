@@ -7,6 +7,7 @@ import { MessageSquare, Users, Clock, Loader2, Paperclip, ShieldCheck, X } from 
 import { apiService } from '@/services/api.service';
 import { useI18n } from '@/hooks/use-i18n';
 import { useCurrentInterfaceLanguage } from '@/stores/language-store';
+import { buildAttachmentUrl } from '@/utils/attachment-url';
 
 interface ParticipantUser {
   id: string;
@@ -130,7 +131,7 @@ function ParticipantAvatar({ p, size = 28 }: { p: ParticipantLike; size?: number
       style={{ width: size, height: size }}
     >
       {avatar ? (
-        <img src={avatar} alt="" loading="lazy" decoding="async" className="w-full h-full object-cover" />
+        <img src={buildAttachmentUrl(avatar) ?? undefined} alt="" loading="lazy" decoding="async" className="w-full h-full object-cover" />
       ) : (
         name.charAt(0).toUpperCase()
       )}
@@ -440,7 +441,7 @@ export function UserConversationsSection({ userId }: { userId: string }) {
                     <div className="flex items-center gap-2 min-w-0">
                       <div className="w-8 h-8 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center text-xs font-medium overflow-hidden flex-shrink-0">
                         {conv.avatar ? (
-                          <img src={conv.avatar} alt="" loading="lazy" decoding="async" className="w-8 h-8 rounded-full object-cover" />
+                          <img src={buildAttachmentUrl(conv.avatar) ?? undefined} alt="" loading="lazy" decoding="async" className="w-8 h-8 rounded-full object-cover" />
                         ) : (
                           (conv.title || conv.identifier || '#').charAt(0).toUpperCase()
                         )}
