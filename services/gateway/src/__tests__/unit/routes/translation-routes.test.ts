@@ -44,11 +44,17 @@ const mockTranslationResult = {
 async function buildApp(setUser = true): Promise<FastifyInstance> {
   const app = Fastify({ logger: false, ajv: { customOptions: { strict: false } } });
 
-  if (setUser) {
-    app.addHook('preHandler', async (req) => {
-      (req as any).user = { userId: USER_ID };
-    });
-  }
+  // Reproduit `createUnifiedAuthMiddleware({ requireAuth: true })` : 401
+  // immédiat sans jeton, sinon peuple `request.user.userId` (compat legacy —
+  // voir middleware/auth.ts:489-517). La route /translate-blocking exige
+  // désormais ce `preHandler` (cf. faille CWE-862 corrigée : la vérification
+  // d'appartenance était sautée quand `request.user` restait `undefined`).
+  app.decorate('authenticate', async (req: any, reply: any) => {
+    if (!setUser) {
+      return reply.status(401).send({ error: 'Authentication required', code: 'AUTH_REQUIRED' });
+    }
+    req.user = { userId: USER_ID };
+  });
 
   app.decorate('prisma', {
     message: {
