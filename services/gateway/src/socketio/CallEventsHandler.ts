@@ -1082,6 +1082,29 @@ export class CallEventsHandler {
   }
 
   /**
+   * Resolve the caller's own CallParticipant.participantId for THIS call,
+   * regardless of `leftAt` — unlike `resolveActiveCallParticipantId`, a
+   * participant who has already left this call still resolves (needed by
+   * call:analytics, which fires post-hangup). Unlike
+   * `resolveParticipantIdFromCall`, which only checks conversation
+   * membership, a conversation member who never joined this specific call
+   * resolves to null — closing the gap where any member of the conversation
+   * could submit fabricated telemetry against a call they were never part
+   * of.
+   */
+  private async resolveEverCallParticipantId(userId: string, callId: string): Promise<string | null> {
+    try {
+      const callSession = await this.callService.getCallSession(callId);
+      const everParticipant = callSession.participants.find(
+        (p) => (p.participant?.userId ?? p.participantId) === userId
+      );
+      return everParticipant?.participantId ?? null;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
    * CallService throws plain `Error`s formatted as `"<CODE>: <description>"`
    * (e.g. getCallSession's `CALL_NOT_FOUND: Call session not found`, thrown
    * when the peer ends the call in the same instant a toggle is in flight).
@@ -3820,12 +3843,16 @@ export class CallEventsHandler {
         if (!validation.success) return;
 
         // Authorization — was previously unchecked, letting any authenticated
-        // user submit telemetry against an arbitrary callId. Scoped to
-        // conversation membership (not `resolveActiveCallParticipantId`,
-        // which requires `leftAt: null` — analytics fires after the client
-        // has already left the call, so an active-participant check would
-        // reject the legitimate sender).
-        const analyticsParticipantId = await this.resolveParticipantIdFromCall(userId, data.callId);
+        // user submit telemetry against an arbitrary callId, then scoped to
+        // conversation membership via `resolveParticipantIdFromCall` — which
+        // still let ANY member of the conversation submit fabricated
+        // telemetry for a call they never joined, since it never looks at
+        // CallParticipant rows at all. `resolveEverCallParticipantId` checks
+        // the caller actually has a CallParticipant row for THIS call
+        // (regardless of `leftAt`, since analytics fires after the sender
+        // has already left — `resolveActiveCallParticipantId`'s `leftAt:
+        // null` requirement would reject the legitimate sender).
+        const analyticsParticipantId = await this.resolveEverCallParticipantId(userId, data.callId);
         if (!analyticsParticipantId) return;
 
         logger.info('📞 Socket: call:analytics received', {
