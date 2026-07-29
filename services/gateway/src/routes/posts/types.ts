@@ -268,6 +268,10 @@ export const UpdatePostSchema = z.object({
   // Ids of attached media (PostMedia) to detach during the edit. Only media
   // belonging to this post is removed; a reel must keep at least one media.
   removeMediaIds: z.array(z.string()).max(50).optional(),
+  // Ids of freshly uploaded media (PostMedia created by TUS with postId=null)
+  // to attach during the edit — same contract and bound as CreatePostSchema.
+  // On a STORY this counts as a content edit (engagement reset).
+  mediaIds: z.array(z.string()).max(10).optional(),
 }).refine((data) => {
   if ((data.visibility === 'EXCEPT' || data.visibility === 'ONLY') && (!data.visibilityUserIds || data.visibilityUserIds.length === 0)) {
     return false;

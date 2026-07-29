@@ -291,11 +291,20 @@ export class SocialEventsHandler {
   /// Emitted when an author edits a published story (PUT /posts/:id). Mirrors
   /// `broadcastStoryCreated`'s visibility filtering — only viewers who can
   /// currently see the story receive the update.
-  async broadcastStoryUpdated(story: Post, authorId: string): Promise<void> {
+  /// `engagementReset: true` when the edit wiped views/reactions (content
+  /// edit) — clients must mark the story unseen again for every viewer.
+  async broadcastStoryUpdated(
+    story: Post,
+    authorId: string,
+    options?: { engagementReset?: boolean },
+  ): Promise<void> {
     const visibility = story.visibility;
     const visibilityUserIds = [...(story.visibilityUserIds ?? [])];
     const recipients = await this.getVisibilityFilteredRecipients(authorId, visibility, visibilityUserIds);
-    this.emitToFriends(recipients, authorId, SERVER_EVENTS.STORY_UPDATED, { story });
+    this.emitToFriends(recipients, authorId, SERVER_EVENTS.STORY_UPDATED, {
+      story,
+      engagementReset: options?.engagementReset ?? false,
+    });
   }
 
   /// Emitted when an author deletes a story. Sent to all friends (we don't have

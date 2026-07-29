@@ -16,6 +16,7 @@ import { ZMQSingleton } from './ZmqSingleton';
 import { authorSelect, mediaSelect, mediaInclude, postInclude } from './posts/postIncludes';
 import { remapStoryEffectsMediaIds } from './posts/storyEffectsMediaRemap';
 import { composeStoryContent, storyTextObjectText } from './posts/storyContentComposition';
+import { storyContentEditRequested } from './posts/storyEditPolicy';
 import { normalizeLanguageCode } from '@meeshy/shared/utils/language-normalize';
 
 const log = enhancedLogger.child({ module: 'PostService' });
@@ -603,6 +604,7 @@ export class PostService {
     originalLanguage?: string;
     type?: PostType;
     removeMediaIds?: string[];
+    mediaIds?: string[];
   }) {
     const post = await this.prisma.post.findFirst({
       where: { id: postId, deletedAt: NOT_DELETED },
@@ -616,7 +618,7 @@ export class PostService {
 
     // The edit-only fields are handled explicitly below; keep them out of the
     // blind spread so they are never written unconditionally.
-    const { type: requestedType, originalLanguage: requestedLanguage, removeMediaIds, ...rest } = data;
+    const { type: requestedType, originalLanguage: requestedLanguage, removeMediaIds, mediaIds, ...rest } = data;
 
     const updateData: any = {
       ...rest,
@@ -632,7 +634,8 @@ export class PostService {
     // another post's media is silently ignored (never cross-deletes).
     const ownMediaIds = new Set(post.media.map((m) => m.id));
     const mediaIdsToRemove = (removeMediaIds ?? []).filter((id) => ownMediaIds.has(id));
-    const remainingMediaCount = post.media.length - mediaIdsToRemove.length;
+    const mediaIdsToAttach = mediaIds ?? [];
+    const remainingMediaCount = post.media.length - mediaIdsToRemove.length + mediaIdsToAttach.length;
     const finalType = requestedType ?? post.type;
 
     // Type switch is limited to POST <-> REEL on the author's OWN original post:
@@ -680,9 +683,59 @@ export class PostService {
       updateData.translations = {};
     }
 
+    // Editing a published story's CONTENT restarts its life (directive
+    // 2026-07-29): views, reactions and impressions are wiped — rows,
+    // denormalized counters AND embedded JSON mirrors — so every viewer sees
+    // the story as new again. The publication date never moves: createdAt and
+    // expiresAt are absent from updateData. Metadata-only updates (visibility)
+    // leave engagement untouched. Same predicate as the route's broadcast flag.
+    const editedTextObjects = Array.isArray((data.storyEffects as Record<string, unknown> | undefined)?.textObjects)
+      ? ((data.storyEffects as Record<string, unknown>).textObjects as StoryTextObjectRaw[])
+      : undefined;
+    const storyContentEdit = post.type === PostType.STORY && storyContentEditRequested(data);
+    if (storyContentEdit) {
+      // `updatedAt` bouge sur CHAQUE écriture (compteurs de vues inclus) —
+      // ce champ dédié est le SEUL horodatage fiable pour que les clients
+      // fassent céder leur garde « viewed monotone » après cette édition.
+      updateData.contentEditedAt = new Date();
+      updateData.viewCount = 0;
+      updateData.impressionCount = 0;
+      updateData.reactionCount = 0;
+      updateData.likeCount = 0;
+      updateData.reactionSummary = {};
+      updateData.reactions = [];
+      updateData.storyViews = [];
+      // Text changed → the existing translations describe the OLD content.
+      // (languageChanged already wiped them with the new source language.)
+      if (!languageChanged) {
+        updateData.translations = {};
+      }
+      // Keep the search index in sync when the composition carries the text
+      // (same rule as createPost: content mirrors the textObjects).
+      if (data.content === undefined && editedTextObjects?.length) {
+        const searchContent = composeStoryContent(editedTextObjects);
+        if (searchContent) {
+          updateData.content = searchContent;
+        }
+      }
+    }
+
     const updated = await this.prisma.$transaction(async (tx) => {
       if (mediaIdsToRemove.length > 0) {
         await tx.postMedia.deleteMany({ where: { id: { in: mediaIdsToRemove }, postId } });
+      }
+      // Attach freshly uploaded media (TUS creates PostMedia with postId=null);
+      // an id already claimed by another post is silently ignored.
+      if (mediaIdsToAttach.length > 0) {
+        await tx.postMedia.updateMany({
+          where: { id: { in: mediaIdsToAttach }, postId: null },
+          data: { postId },
+        });
+      }
+      if (storyContentEdit) {
+        await tx.postView.deleteMany({ where: { postId } });
+        await tx.postReaction.deleteMany({ where: { postId } });
+        await tx.postImpression.deleteMany({ where: { postId } });
       }
       return tx.post.update({
         where: { id: postId },
@@ -696,6 +749,24 @@ export class PostService {
       if (content) {
         this.triggerStoryTextTranslation(postId, content, userId, requestedCanonical).catch((err: unknown) => {
           log.error('triggerStoryTextTranslation failed on update', err instanceof Error ? err : new Error(String(err)));
+        });
+      }
+    }
+
+    // Re-run the Prisme pipeline over the edited story text — mirrors
+    // createPost. Fire-and-forget; clients re-hydrate as ZMQ results land.
+    // The languageChanged branch above already covers the plain-content case
+    // with an explicit source override, so only fill the gaps here.
+    if (storyContentEdit) {
+      if (!languageChanged && data.content) {
+        this.triggerStoryTextTranslation(postId, data.content, userId, post.originalLanguage ?? undefined)
+          .catch((err: unknown) => {
+            log.error('triggerStoryTextTranslation failed on story edit', err instanceof Error ? err : new Error(String(err)));
+          });
+      }
+      if (editedTextObjects?.length) {
+        this.triggerStoryTextObjectTranslation(postId, editedTextObjects, userId).catch((err: unknown) => {
+          log.error('triggerStoryTextObjectTranslation failed on story edit', err instanceof Error ? err : new Error(String(err)));
         });
       }
     }

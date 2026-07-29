@@ -313,6 +313,30 @@ describe('SocialEventsHandler', () => {
     });
   });
 
+  describe('broadcastStoryUpdated', () => {
+    it('carries engagementReset: true in the payload when the edit reset engagement', async () => {
+      const story = createMockPost({ id: 'story-1', type: 'STORY' });
+
+      await handler.broadcastStoryUpdated(story, AUTHOR_ID, { engagementReset: true });
+
+      expect(mockIO.emit).toHaveBeenCalledWith(
+        SERVER_EVENTS.STORY_UPDATED,
+        { story, engagementReset: true },
+      );
+    });
+
+    it('defaults engagementReset to false when no options are given', async () => {
+      const story = createMockPost({ id: 'story-1', type: 'STORY' });
+
+      await handler.broadcastStoryUpdated(story, AUTHOR_ID);
+
+      expect(mockIO.emit).toHaveBeenCalledWith(
+        SERVER_EVENTS.STORY_UPDATED,
+        { story, engagementReset: false },
+      );
+    });
+  });
+
   describe('broadcastStoryViewed', () => {
     it('should emit STORY_VIEWED ONLY to the story author', () => {
       const data: StoryViewedEventData = {

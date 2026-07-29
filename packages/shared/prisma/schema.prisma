@@ -2957,6 +2957,12 @@ model Post {
   // ============================================
   isPinned  Boolean   @default(false)
   isEdited  Boolean   @default(false)
+  /// null = jamais édité en CONTENU, non-null = horodatage de la dernière
+  /// édition de contenu (texte / storyEffects / médias). Distinct de
+  /// `updatedAt`, qui bouge sur CHAQUE écriture (compteurs de vues inclus) —
+  /// les clients s'appuient dessus pour céder la garde « viewed monotone »
+  /// après une édition de story (reset d'engagement, directive 2026-07-29).
+  contentEditedAt DateTime?
   /// null = actif, non-null = supprimé (soft delete) avec horodatage
   deletedAt DateTime?
 

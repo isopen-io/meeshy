@@ -62,6 +62,10 @@ function createMockPrisma() {
       create: jest.fn(),
       update: jest.fn(),
       count: jest.fn(),
+      deleteMany: jest.fn(),
+    },
+    postImpression: {
+      deleteMany: jest.fn(),
     },
     postMedia: {
       updateMany: jest.fn(),
@@ -74,6 +78,7 @@ function createMockPrisma() {
     },
     postReaction: {
       findMany: jest.fn(),
+      deleteMany: jest.fn(),
     },
     friendRequest: {
       findMany: jest.fn(),
@@ -1547,6 +1552,139 @@ describe('PostService', () => {
       const call = prisma.post.update.mock.calls[0][0];
       expect(call.data.originalLanguage).toBe('en');
       expect(call.data.translations).toEqual({});
+    });
+
+    // -----------------------------------------------------------------------
+    // Story edit — engagement reset (directive 2026-07-29)
+    //
+    // Editing a published STORY's content restarts its life: views, reactions
+    // and impressions are wiped (rows + denormalized counters + embedded JSON)
+    // so every viewer sees it as new again. The publication date never moves:
+    // createdAt/expiresAt are NOT part of the update payload.
+    // -----------------------------------------------------------------------
+
+    describe('STORY content edit — engagement reset', () => {
+      it('wipes views, reactions and impressions when storyEffects change', async () => {
+        prisma.post.findFirst.mockResolvedValue(makePost({ authorId: 'user-1', type: 'STORY', media: [] }));
+        prisma.post.update.mockResolvedValue(makePost({ type: 'STORY' }));
+
+        await service.updatePost('post-1', 'user-1', { storyEffects: { background: { kind: 'color' } } });
+
+        expect(prisma.postView.deleteMany).toHaveBeenCalledWith({ where: { postId: 'post-1' } });
+        expect(prisma.postReaction.deleteMany).toHaveBeenCalledWith({ where: { postId: 'post-1' } });
+        expect(prisma.postImpression.deleteMany).toHaveBeenCalledWith({ where: { postId: 'post-1' } });
+        expect(prisma.post.update).toHaveBeenCalledWith(
+          expect.objectContaining({
+            data: expect.objectContaining({
+              viewCount: 0,
+              impressionCount: 0,
+              reactionCount: 0,
+              likeCount: 0,
+              reactionSummary: {},
+              reactions: [],
+              storyViews: [],
+              isEdited: true,
+              contentEditedAt: expect.any(Date),
+            }),
+          }),
+        );
+      });
+
+      it('wipes stale translations on a content edit even without language change', async () => {
+        prisma.post.findFirst.mockResolvedValue(makePost({ authorId: 'user-1', type: 'STORY', originalLanguage: 'fr', media: [] }));
+        prisma.post.update.mockResolvedValue(makePost({ type: 'STORY' }));
+
+        await service.updatePost('post-1', 'user-1', { content: 'nouveau texte' });
+
+        expect(prisma.post.update).toHaveBeenCalledWith(
+          expect.objectContaining({ data: expect.objectContaining({ translations: {} }) }),
+        );
+      });
+
+      it('never touches createdAt or expiresAt (publication date is immutable)', async () => {
+        prisma.post.findFirst.mockResolvedValue(makePost({ authorId: 'user-1', type: 'STORY', media: [] }));
+        prisma.post.update.mockResolvedValue(makePost({ type: 'STORY' }));
+
+        await service.updatePost('post-1', 'user-1', { content: 'edited', storyEffects: {} });
+
+        const dataArg = prisma.post.update.mock.calls[0][0].data;
+        expect(dataArg).not.toHaveProperty('createdAt');
+        expect(dataArg).not.toHaveProperty('expiresAt');
+      });
+
+      it('does NOT reset engagement on a visibility-only STORY update', async () => {
+        prisma.post.findFirst.mockResolvedValue(makePost({ authorId: 'user-1', type: 'STORY', media: [] }));
+        prisma.post.update.mockResolvedValue(makePost({ type: 'STORY' }));
+
+        await service.updatePost('post-1', 'user-1', { visibility: PostVisibility.FRIENDS, visibilityUserIds: [] });
+
+        expect(prisma.postView.deleteMany).not.toHaveBeenCalled();
+        expect(prisma.postReaction.deleteMany).not.toHaveBeenCalled();
+        expect(prisma.postImpression.deleteMany).not.toHaveBeenCalled();
+        const dataArg = prisma.post.update.mock.calls[0][0].data;
+        expect(dataArg).not.toHaveProperty('viewCount');
+        expect(dataArg).not.toHaveProperty('translations');
+        expect(dataArg).not.toHaveProperty('contentEditedAt');
+      });
+
+      it('does NOT reset engagement when a non-STORY post is edited', async () => {
+        prisma.post.findFirst.mockResolvedValue(makePost({ authorId: 'user-1', type: 'POST', media: [] }));
+        prisma.post.update.mockResolvedValue(makePost());
+
+        await service.updatePost('post-1', 'user-1', { content: 'edited post' });
+
+        expect(prisma.postView.deleteMany).not.toHaveBeenCalled();
+        expect(prisma.postReaction.deleteMany).not.toHaveBeenCalled();
+        const dataArg = prisma.post.update.mock.calls[0][0].data;
+        expect(dataArg).not.toHaveProperty('viewCount');
+      });
+    });
+
+    describe('mediaIds — attach pre-uploaded media on update', () => {
+      it('attaches only PENDING media (postId null) to the post', async () => {
+        prisma.post.findFirst.mockResolvedValue(makePost({ authorId: 'user-1', type: 'STORY', media: [] }));
+        prisma.post.update.mockResolvedValue(makePost({ type: 'STORY' }));
+
+        await service.updatePost('post-1', 'user-1', { mediaIds: ['new-m1', 'new-m2'] });
+
+        expect(prisma.postMedia.updateMany).toHaveBeenCalledWith({
+          where: { id: { in: ['new-m1', 'new-m2'] }, postId: null },
+          data: { postId: 'post-1' },
+        });
+      });
+
+      it('adding media to a STORY counts as a content edit (engagement reset)', async () => {
+        prisma.post.findFirst.mockResolvedValue(makePost({ authorId: 'user-1', type: 'STORY', media: [] }));
+        prisma.post.update.mockResolvedValue(makePost({ type: 'STORY' }));
+
+        await service.updatePost('post-1', 'user-1', { mediaIds: ['new-m1'] });
+
+        expect(prisma.postView.deleteMany).toHaveBeenCalledWith({ where: { postId: 'post-1' } });
+      });
+
+      it('never writes mediaIds as a scalar field on the post', async () => {
+        prisma.post.findFirst.mockResolvedValue(makePost({ authorId: 'user-1', type: 'STORY', media: [] }));
+        prisma.post.update.mockResolvedValue(makePost({ type: 'STORY' }));
+
+        await service.updatePost('post-1', 'user-1', { mediaIds: ['new-m1'] });
+
+        expect(prisma.post.update.mock.calls[0][0].data).not.toHaveProperty('mediaIds');
+      });
+
+      it('REEL: newly added media counts toward the at-least-one-media rule', async () => {
+        prisma.post.findFirst.mockResolvedValue(makePost({ authorId: 'user-1', type: 'REEL', media: [{ id: 'm1' }] }));
+        prisma.post.update.mockResolvedValue(makePost({ type: 'REEL' }));
+
+        await service.updatePost('post-1', 'user-1', { removeMediaIds: ['m1'], mediaIds: ['new-m1'] });
+
+        expect(prisma.postMedia.deleteMany).toHaveBeenCalledWith({
+          where: { id: { in: ['m1'] }, postId: 'post-1' },
+        });
+        expect(prisma.postMedia.updateMany).toHaveBeenCalledWith({
+          where: { id: { in: ['new-m1'] }, postId: null },
+          data: { postId: 'post-1' },
+        });
+      });
     });
   });
 

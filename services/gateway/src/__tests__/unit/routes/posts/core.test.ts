@@ -455,6 +455,42 @@ describe('PUT /posts/:postId — STORY type broadcasts story updated', () => {
     expect(res.statusCode).toBe(200);
     await app.close();
   });
+
+  // Directive 2026-07-29 : une édition de CONTENU (content / storyEffects /
+  // mediaIds) remet l'engagement à zéro côté service — le broadcast doit le
+  // dire aux clients (engagementReset: true) pour qu'ils repassent la story
+  // en « non vue ». Une mise à jour de visibilité seule ne le fait PAS.
+  it('flags engagementReset: true on a content edit broadcast', async () => {
+    mockUpdatePost.mockResolvedValueOnce({ id: POST_ID, content: 'Updated story', type: 'STORY' });
+    const app = await buildApp({ withSocialEvents: true });
+    await app.inject({
+      method: 'PUT', url: `/posts/${POST_ID}`,
+      payload: { content: 'Updated story content' },
+    });
+    const se = (app as any).socialEvents;
+    expect(se.broadcastStoryUpdated).toHaveBeenCalledWith(
+      expect.objectContaining({ id: POST_ID }),
+      USER_ID,
+      { engagementReset: true },
+    );
+    await app.close();
+  });
+
+  it('flags engagementReset: false on a visibility-only update broadcast', async () => {
+    mockUpdatePost.mockResolvedValueOnce({ id: POST_ID, type: 'STORY', visibility: 'FRIENDS' });
+    const app = await buildApp({ withSocialEvents: true });
+    await app.inject({
+      method: 'PUT', url: `/posts/${POST_ID}`,
+      payload: { visibility: 'FRIENDS' },
+    });
+    const se = (app as any).socialEvents;
+    expect(se.broadcastStoryUpdated).toHaveBeenCalledWith(
+      expect.objectContaining({ id: POST_ID }),
+      USER_ID,
+      { engagementReset: false },
+    );
+    await app.close();
+  });
 });
 
 describe('PUT /posts/:postId — STATUS type broadcasts status updated', () => {

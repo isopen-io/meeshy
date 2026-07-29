@@ -195,6 +195,7 @@ export const trayStorySelect = Prisma.validator<Prisma.PostSelect>()({
   visibility: true,
   createdAt: true,
   updatedAt: true,
+  contentEditedAt: true,
   expiresAt: true,
   originalRepostOfId: true,
   viewCount: true,
