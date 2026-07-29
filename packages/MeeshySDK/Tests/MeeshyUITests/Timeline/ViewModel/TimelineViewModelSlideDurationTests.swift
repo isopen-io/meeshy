@@ -170,43 +170,49 @@ final class TimelineViewModelSlideDurationTests: XCTestCase {
         // otherwise a LATER, unrelated edit's toast uses a stale pre-drag baseline.
         // This test reproduces the bug on the prior commit (5487a2fca) and verifies
         // the fix (review finding).
-        // L'écart entre valeur courante et valeur auto vient du BOOTSTRAP : une
-        // story dont le pin `timelineDuration` valait 20 s alors que son contenu
-        // n'en fait que 10. Avant 2026-07-27 ce test fabriquait l'écart avec
-        // setSlideDuration(20) — la méthode n'existe plus, mais le cas qu'elle
-        // servait à monter, lui, reste atteignable en ouvrant une story pinée.
+        // Il faut que la valeur courante CHANGE entre la fin du drag et
+        // l'édition suivante, sinon la base périmée serait indiscernable de la
+        // bonne. Ce test fabriquait l'écart avec une story pinée à 20 s pour un
+        // contenu de 10 : depuis que « +10 s » traite la demande d'auteur comme
+        // un plancher (2026-07-29), une slide pinée ne redescend plus — le
+        // véhicule a disparu, pas le défaut qu'il servait à monter. On écarte
+        // donc les valeurs avec « +10 s » lui-même, APRÈS le drag.
         let media = StoryMediaObject(id: "m1", kind: .video, aspectRatio: 1.78, startTime: 4, duration: 6)
         let sut = TimelineViewModel(engine: MockStoryTimelineEngine(),
                                     commandStack: CommandStack(),
                                     snapEngine: SnapEngine(toleranceSeconds: 0.1))
-        sut.bootstrap(project: TimelineProject(slideId: "s", slideDuration: 20,
+        sut.bootstrap(project: TimelineProject(slideId: "s", slideDuration: 10,
                                                mediaObjects: [media], audioPlayerObjects: [],
                                                textObjects: [], clipTransitions: []),
                       mediaURLs: [:], images: [:])
         await sut.awaitConfigured()
-        XCTAssertEqual(sut.project.slideDuration, 20, accuracy: 0.01)
+        XCTAssertEqual(sut.project.slideDuration, 10, accuracy: 0.01)
 
         // No-op drag: begin, don't actually move, end.
         sut.beginClipDrag(clipId: "m1")
         sut.endClipDrag()
         XCTAssertNil(sut.durationDidAutoAdjust, "No-op drag must not fire a toast.")
 
-        // Content edit: add a second clip. This calls recomputeSlideDuration().
-        // The auto value is still 10 (max of windows [10, 3]), which differs from
-        // the current value (20), so a toast SHOULD fire with (from: 20, to: 10).
+        // La valeur courante passe à 20 sans recalcul : si la base a fui, elle
+        // vaut encore 10.
+        sut.extendSlideDuration()
+        XCTAssertEqual(sut.project.slideDuration, 20, accuracy: 0.01)
+
+        // Édition de contenu : un clip qui porte la durée auto à 25. Le toast
+        // doit annoncer (from: 20, to: 25).
         //
-        // BUG ON 5487a2fca: No toast fires because slideDurationBeforeDrag = 10
-        // leaks from the no-op drag, so toastBaseline = 10, and abs(10-10) < 0.05
-        // suppresses the toast.
+        // BUG SUR 5487a2fca : `slideDurationBeforeDrag = 10` fuit du drag à
+        // vide, et le toast annonce une valeur de départ que l'utilisateur n'a
+        // jamais vue.
         //
-        // FIX: endClipDrag() must clear slideDurationBeforeDrag in the
-        // "unchanged" branch, so toastBaseline = 20, and the toast fires correctly.
-        sut.addMedia(id: "m2", postMediaId: "pm2", kind: .video, startTime: 0, duration: 3)
+        // CORRECTIF : `endClipDrag()` doit vider `slideDurationBeforeDrag` dans
+        // sa branche « inchangé », comme `cancelClipDrag()` le fait déjà.
+        sut.addMedia(id: "m2", postMediaId: "pm2", kind: .video, startTime: 0, duration: 25)
         XCTAssertNotNil(sut.durationDidAutoAdjust,
-                        "Toast must fire when auto duration (10s) differs from manual pin (20s).")
+                        "Toast must fire when the auto duration (25s) differs from the current one (20s).")
         XCTAssertEqual(sut.durationDidAutoAdjust?.from ?? -1, 20, accuracy: 0.01,
                        "Toast must use the ACTUAL prior value (20), not the stale pre-drag baseline (10).")
-        XCTAssertEqual(sut.durationDidAutoAdjust?.to ?? -1, 10, accuracy: 0.01)
+        XCTAssertEqual(sut.durationDidAutoAdjust?.to ?? -1, 25, accuracy: 0.01)
     }
 
     // MARK: - Undo / redo must restore the duration too
