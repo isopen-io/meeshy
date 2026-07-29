@@ -384,7 +384,6 @@ nonisolated final class LocationPickerModel: NSObject, ObservableObject, CLLocat
 
     override init() {
         super.init()
-        manager.delegate = self
         manager.desiredAccuracy = kCLLocationAccuracyBest
         authorization = manager.authorizationStatus
     }
@@ -392,11 +391,18 @@ nonisolated final class LocationPickerModel: NSObject, ObservableObject, CLLocat
     /// Appelé à l'ouverture du picker — c'est-à-dire APRÈS le tap explicite sur
     /// « Localisation » dans le composer, le bon moment pour demander.
     ///
+    /// Le delegate est câblé ici et non dans `init()` : CoreLocation émet un
+    /// callback d'autorisation dès l'assignation, et le recevoir avant que
+    /// SwiftUI ait installé le `@StateObject` publie une modification en
+    /// plein cycle de rendu. `if manager.delegate == nil` rend le câblage
+    /// idempotent puisque `requestPermission()` peut être rappelé.
+    ///
     /// `requestLocation()` n'est plus lancé tant que l'autorisation n'est pas
     /// acquise : l'appeler sur un statut refusé ne produisait qu'un
     /// `didFailWithError` silencieux. Sur un octroi,
     /// `locationManagerDidChangeAuthorization` déclenche le relevé.
     func requestPermission() {
+        if manager.delegate == nil { manager.delegate = self }
         authorization = manager.authorizationStatus
         switch authorization {
         case .notDetermined:

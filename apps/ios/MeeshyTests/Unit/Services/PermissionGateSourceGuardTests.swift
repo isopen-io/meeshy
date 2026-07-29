@@ -216,6 +216,20 @@ final class PermissionGateSourceGuardTests: XCTestCase {
                       "Le dépliage doit publier sur willSet, exactement comme @Published.")
     }
 
+    /// CoreLocation délivre un callback d'autorisation dès l'assignation du
+    /// delegate — asynchroniquement sur la runloop, pas pendant `init()`. Le
+    /// recevoir avant que SwiftUI ait installé le `@StateObject` publie une
+    /// modification en plein cycle de rendu.
+    func test_locationPickerModel_doesNotWireCoreLocationFromInit() throws {
+        let src = try source("Meeshy/Features/Main/Components/LocationPickerView.swift")
+        let initBody = try body(from: "override init() {", to: "func requestPermission()", in: src)
+        XCTAssertFalse(initBody.contains("manager.delegate = self"),
+                       "Assigner le delegate depuis init() declenche un callback d'autorisation avant que le @StateObject soit installe.")
+        let request = try body(from: "func requestPermission() {", to: "func updateSelectedLocation", in: src)
+        XCTAssertTrue(request.contains("manager.delegate = self"),
+                      "Le cablage doit se faire au premier usage, de maniere idempotente.")
+    }
+
     // MARK: - Mot de passe
 
     /// Sans `.newPassword`, iOS ne propose ni mot de passe fort ni — surtout —
