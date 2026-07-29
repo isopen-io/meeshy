@@ -25,6 +25,11 @@ struct MyStoriesView: View {
     /// Création d'une nouvelle story, gérée par le tray (ferme cette sheet
     /// avant de présenter le composer — évite la course sheet/fullScreenCover).
     let onCreateStory: () -> Void
+    /// Édition d'une story publiée, gérée par le tray (même raison : le
+    /// composer se présente en fullScreenCover APRÈS fermeture de la sheet).
+    /// L'édition remet vues/réactions à zéro côté serveur — la story
+    /// « recommence » pour tous, seule la date de publication ne bouge pas.
+    let onEditStory: (StoryItem) -> Void
 
     @Environment(\.dismiss) private var dismiss
     @Environment(\.colorScheme) private var colorScheme
@@ -129,6 +134,8 @@ struct MyStoriesView: View {
                                 handleRowTap(story)
                             } onOpenComments: {
                                 openComments(for: story)
+                            } onOpenViewers: {
+                                viewersStory = story
                             }
                             .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                                 if !isSelecting {
@@ -336,6 +343,11 @@ struct MyStoriesView: View {
             viewersStory = story
         } label: {
             Label(String(localized: "story.mine.viewers", defaultValue: "Listing des vues"), systemImage: "eye")
+        }
+        Button {
+            onEditStory(story)
+        } label: {
+            Label(String(localized: "story.mine.edit", defaultValue: "Modifier"), systemImage: "pencil")
         }
         Menu {
             ForEach(PostVisibility.composerSelectableCases) { mode in
@@ -630,13 +642,15 @@ private struct MyStoryRow<MenuContent: View>: View {
     let menuContent: () -> MenuContent
     let onTap: () -> Void
     let onOpenComments: () -> Void
+    let onOpenViewers: () -> Void
 
     init(story: StoryItem, accentColor: Color, isDark: Bool,
          isSelecting: Bool = false, isSelected: Bool = false,
          saveService: StoryPhotoSaveService = .shared,
          @ViewBuilder menuContent: @escaping () -> MenuContent,
          onTap: @escaping () -> Void,
-         onOpenComments: @escaping () -> Void) {
+         onOpenComments: @escaping () -> Void,
+         onOpenViewers: @escaping () -> Void) {
         self.story = story
         self.accentColor = accentColor
         self.isDark = isDark
@@ -646,6 +660,7 @@ private struct MyStoryRow<MenuContent: View>: View {
         self.menuContent = menuContent
         self.onTap = onTap
         self.onOpenComments = onOpenComments
+        self.onOpenViewers = onOpenViewers
     }
 
     /// URL brute (résolue en interne par `CachedAsyncImage` via `MeeshyConfig`).
@@ -670,8 +685,11 @@ private struct MyStoryRow<MenuContent: View>: View {
                         Text(story.timeAgo)
                             .font(MeeshyFont.relative(15, weight: .semibold))
                             .foregroundColor(isDark ? .white : MeeshyColors.indigo950)
-                        HStack(spacing: 12) {
-                            metric(icon: "eye.fill", value: story.viewCount ?? 0)
+                        // Cœur UNIQUEMENT si au moins une réaction — jamais de
+                        // « 0 » décoratif sous l'heure (directive 2026-07-29).
+                        // Le compteur de vues a migré vers le bouton œil dédié,
+                        // à gauche du bouton commentaires.
+                        if story.reactionCount > 0 {
                             metric(icon: "heart.fill", value: story.reactionCount)
                         }
                     }
@@ -680,6 +698,30 @@ private struct MyStoryRow<MenuContent: View>: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            // Icône vues + compteur, immédiatement à gauche du bouton
+            // commentaires (même patron visuel) — ouvre le « Listing des
+            // vues » (`StoryViewersSheet`, la même sheet que l'entrée du menu
+            // `⋯`). Masquée du rotor : l'accès VoiceOver passe par une action
+            // de ligne (cf. .accessibilityActions ci-dessous).
+            if !isSelecting {
+                Button {
+                    onOpenViewers()
+                } label: {
+                    HStack(spacing: 3) {
+                        Image(systemName: "eye")
+                            .font(.system(size: 15, weight: .semibold))
+                        if (story.viewCount ?? 0) > 0 {
+                            Text("\(story.viewCount ?? 0)")
+                                .font(MeeshyFont.relative(12, weight: .medium))
+                        }
+                    }
+                    .foregroundColor(.secondary)
+                    .padding(8)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityHidden(true)
+            }
             // Icône commentaire + compteur, immédiatement à gauche de
             // l'anneau/« … » — ouvre `CommentsSheetView` (celle des posts) sur
             // les commentaires de la story. Masquée du rotor comme le reste de
@@ -761,10 +803,16 @@ private struct MyStoryRow<MenuContent: View>: View {
                     saveService.cancel(storyId: story.id)
                 }
             }
-            // Même visibilité que le bouton (masqué du rotor, `if !isSelecting`
+            // Même visibilité que les boutons (masqués du rotor, `if !isSelecting`
             // ci-dessus) : le contenu du builder varie, le modifier lui-même
             // reste TOUJOURS attaché — jamais de if/else autour de body.
             if !isSelecting {
+                Button(String(
+                    localized: "story.mine.viewers.a11y",
+                    defaultValue: "Listing des vues"
+                )) {
+                    onOpenViewers()
+                }
                 Button(String(
                     localized: "story.mine.comments.a11y",
                     defaultValue: "Afficher les commentaires"

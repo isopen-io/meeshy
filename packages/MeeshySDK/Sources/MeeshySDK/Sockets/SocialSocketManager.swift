@@ -53,6 +53,11 @@ public struct SocketStoryCreatedData: Decodable, Sendable {
 
 public struct SocketStoryUpdatedData: Decodable, Sendable {
     public let story: APIPost
+    /// true quand l'édition a remis l'engagement à zéro côté serveur (vues,
+    /// réactions, impressions) — les clients doivent repasser la story en
+    /// « non vue ». Absent/false sur les mises à jour de métadonnées seules
+    /// (visibilité). Miroir de `StoryUpdatedEventData.engagementReset`.
+    public let engagementReset: Bool?
 }
 
 public struct SocketStoryDeletedData: Decodable, Sendable {

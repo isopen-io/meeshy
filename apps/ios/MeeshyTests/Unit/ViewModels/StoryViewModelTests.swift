@@ -1872,4 +1872,98 @@ final class StoryViewModelTests: XCTestCase {
         XCTAssertTrue(allIds.contains("s-other"),
                       "les stories serveur sont bien chargées en parallèle")
     }
+
+    // MARK: - Garde « viewed monotone » raffinée (édition de story, 2026-07-29)
+    //
+    // Une fois vue localement, une story reste vue même si le serveur (laggé)
+    // dit le contraire — SAUF quand son contenu a été édité APRÈS la vue
+    // locale : le serveur a alors volontairement effacé les vues (reset
+    // d'engagement) et la story redevient légitimement non-vue.
+
+    func test_shouldKeepLocalViewed_noContentEdit_keepsViewed() {
+        XCTAssertTrue(StoryViewModel.shouldKeepLocalViewed(
+            localViewedAt: Date(), contentEditedAt: nil))
+        XCTAssertTrue(StoryViewModel.shouldKeepLocalViewed(
+            localViewedAt: nil, contentEditedAt: nil))
+    }
+
+    func test_shouldKeepLocalViewed_editAfterLocalView_yieldsToServer() {
+        let viewedAt = Date(timeIntervalSinceNow: -3600)
+        let editedAt = Date()
+        XCTAssertFalse(StoryViewModel.shouldKeepLocalViewed(
+            localViewedAt: viewedAt, contentEditedAt: editedAt),
+            "Édition postérieure à la vue → la story redevient non-vue")
+    }
+
+    func test_shouldKeepLocalViewed_viewAfterEdit_keepsViewed() {
+        let editedAt = Date(timeIntervalSinceNow: -3600)
+        let viewedAt = Date()
+        XCTAssertTrue(StoryViewModel.shouldKeepLocalViewed(
+            localViewedAt: viewedAt, contentEditedAt: editedAt),
+            "Une vue POSTÉRIEURE à l'édition reste acquise (re-vue de la nouvelle version)")
+    }
+
+    func test_shouldKeepLocalViewed_editedButNoLocalTimestamp_yieldsToServer() {
+        XCTAssertFalse(StoryViewModel.shouldKeepLocalViewed(
+            localViewedAt: nil, contentEditedAt: Date(timeIntervalSinceNow: -60)),
+            "Vue sans horodatage (cache legacy) : impossible de prouver qu'elle est postérieure à l'édition → la vérité serveur gagne")
+    }
+
+    func test_insertOrMergeStoryGroups_replacing_contentEditedAfterView_resetsViewed() {
+        let viewedAt = Date(timeIntervalSinceNow: -3600)
+        var local = makeStoryItem(id: "s-edit")
+        local.isViewed = true
+        local.viewedAt = viewedAt
+        sut.storyGroups = [makeStoryGroup(userId: "author-1", username: "alice", stories: [local])]
+
+        var incoming = makeStoryItem(id: "s-edit")
+        incoming.isViewed = false
+        incoming.contentEditedAt = Date()
+        sut.insertOrMergeStoryGroups(
+            [makeStoryGroup(userId: "author-1", username: "alice", stories: [incoming])],
+            replacingExisting: true
+        )
+
+        XCTAssertEqual(sut.storyGroups.first?.stories.first?.isViewed, false,
+                       "Le reset d'engagement fait céder la monotonie : la story redevient non-vue")
+    }
+
+    func test_insertOrMergeStoryGroups_replacing_noContentEdit_staysViewed() {
+        var local = makeStoryItem(id: "s-lag")
+        local.isViewed = true
+        local.viewedAt = Date()
+        sut.storyGroups = [makeStoryGroup(userId: "author-1", username: "alice", stories: [local])]
+
+        var incoming = makeStoryItem(id: "s-lag")
+        incoming.isViewed = false
+        sut.insertOrMergeStoryGroups(
+            [makeStoryGroup(userId: "author-1", username: "alice", stories: [incoming])],
+            replacingExisting: true
+        )
+
+        XCTAssertEqual(sut.storyGroups.first?.stories.first?.isViewed, true,
+                       "Sans édition de contenu, le lag serveur ne dévisse jamais l'état vu local")
+    }
+
+    func test_insertOrMergeStoryGroups_replacing_ownStory_neverResetsViewed() {
+        let previous = AuthManager.shared.currentUser
+        defer { AuthManager.shared.currentUser = previous }
+        AuthManager.shared.currentUser = MeeshyUser(id: "me-id", username: "me", displayName: "Moi")
+
+        var local = makeStoryItem(id: "s-mine")
+        local.isViewed = true
+        local.viewedAt = Date(timeIntervalSinceNow: -3600)
+        sut.storyGroups = [makeStoryGroup(userId: "me-id", username: "Moi", stories: [local])]
+
+        var incoming = makeStoryItem(id: "s-mine")
+        incoming.isViewed = false
+        incoming.contentEditedAt = Date()
+        sut.insertOrMergeStoryGroups(
+            [makeStoryGroup(userId: "me-id", username: "Moi", stories: [incoming])],
+            replacingExisting: true
+        )
+
+        XCTAssertEqual(sut.storyGroups.first?.stories.first?.isViewed, true,
+                       "L'état « vu » de ses PROPRES stories est client-only (recordView exclut l'auteur) — jamais dévissé")
+    }
 }

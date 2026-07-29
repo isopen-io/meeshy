@@ -327,12 +327,22 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
             if response.success {
                 var groups = response.data.toStoryGroups()
 
-                // Preserve locally-viewed state for stories the API hasn't synced yet
-                let locallyViewed = buildLocallyViewedSet()
+                // Preserve locally-viewed state for stories the API hasn't synced yet.
+                // Garde raffinée : une édition de CONTENU postérieure à la vue
+                // locale (reset d'engagement serveur) fait céder la monotonie —
+                // sauf pour ses PROPRES stories, dont l'état « vu » est
+                // client-only par construction (recordView exclut l'auteur).
+                let locallyViewed = buildLocallyViewedMap()
+                let selfId = AuthManager.shared.currentUser?.id
                 if !locallyViewed.isEmpty {
                     groups = groups.map { group in
+                        let isOwnGroup = group.id == selfId
                         let merged = group.stories.map { story in
-                            guard !story.isViewed, locallyViewed.contains(story.id) else { return story }
+                            guard !story.isViewed, let viewedAt = locallyViewed[story.id] else { return story }
+                            guard isOwnGroup || Self.shouldKeepLocalViewed(
+                                localViewedAt: viewedAt == .distantPast ? nil : viewedAt,
+                                contentEditedAt: story.contentEditedAt
+                            ) else { return story }
                             var copy = story; copy.isViewed = true; return copy
                         }
                         return group.with(stories: merged)
@@ -380,6 +390,33 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
             }
         }
         return ids
+    }
+
+    /// `id → viewedAt` des stories vues localement (`.distantPast` quand le
+    /// moment de la vue est inconnu — caches antérieurs au champ). Sert à la
+    /// garde monotone raffinée : une vue sans horodatage cède toujours devant
+    /// une édition de contenu.
+    private func buildLocallyViewedMap() -> [String: Date] {
+        var map: [String: Date] = [:]
+        for group in storyGroups {
+            for story in group.stories where story.isViewed {
+                map[story.id] = story.viewedAt ?? .distantPast
+            }
+        }
+        return map
+    }
+
+    /// Garde « viewed monotone » raffinée (directive 2026-07-29) : une fois
+    /// vue localement, une story RESTE vue même si le serveur (laggé) dit le
+    /// contraire — SAUF quand son contenu a été édité APRÈS la vue locale :
+    /// le serveur a alors volontairement effacé les vues (reset
+    /// d'engagement), la story redevient légitimement non-vue.
+    /// `contentEditedAt` est le SEUL horodatage fiable pour ce test —
+    /// `updatedAt` bouge sur chaque écriture (compteurs de vues inclus).
+    nonisolated static func shouldKeepLocalViewed(localViewedAt: Date?, contentEditedAt: Date?) -> Bool {
+        guard let contentEditedAt else { return true }
+        guard let localViewedAt else { return false }
+        return localViewedAt >= contentEditedAt
     }
 
     // MARK: - Background Prefetch (triggered on story load)
@@ -1514,6 +1551,224 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
         return newPostIds
     }
 
+    // MARK: - Background Update (édition d'une story publiée, 2026-07-29)
+
+    /// Contexte d'édition capturé depuis `StoryComposerViewModel` au moment du
+    /// publish — valeurs COPIÉES, le VM du composer n'est jamais retenu.
+    struct StoryEditContext {
+        let postId: String
+        let originalMediaIds: [String]
+        let originalBackgroundMediaId: String?
+        let hydratedBackgroundImage: UIImage?
+    }
+
+    /// Route le publish d'un composer en mode édition vers `PUT /posts/:id`.
+    /// Le serveur remet vues/réactions à zéro (contenu édité) et conserve la
+    /// date de publication ; `story:updated` + le delta-sync propagent le
+    /// « redevenu non-vu » aux autres clients.
+    ///
+    /// V1 en ligne uniquement : contrairement au publish, l'édition ne passe
+    /// pas par la file offline — retourne `false` (composer laissé ouvert)
+    /// quand le réseau manque, pour ne rien perdre.
+    @discardableResult
+    func updateStoryInBackground(
+        edit: StoryEditContext,
+        slides: [StorySlide],
+        slideImages: [String: UIImage],
+        loadedImages: [String: UIImage],
+        loadedVideoURLs: [String: URL],
+        loadedAudioURLs: [String: URL] = [:],
+        originalLanguage: String? = nil,
+        visibility: String = "FRIENDS",
+        visibilityUserIds: [String] = []
+    ) -> Bool {
+        guard let slide = slides.first else { return false }
+        if NetworkMonitor.shared.isOffline {
+            FeedbackToastManager.shared.showError(String(
+                localized: "story.edit.offline",
+                defaultValue: "Connexion requise pour modifier la story"))
+            return false
+        }
+        Task { [weak self] in
+            await self?.runStoryUpdate(
+                edit: edit, slide: slide, slideImages: slideImages,
+                loadedImages: loadedImages, loadedVideoURLs: loadedVideoURLs,
+                loadedAudioURLs: loadedAudioURLs, originalLanguage: originalLanguage,
+                visibility: visibility, visibilityUserIds: visibilityUserIds
+            )
+        }
+        return true
+    }
+
+    /// Pipeline d'update : n'uploade QUE les assets nouveaux (`postMediaId`
+    /// vide — même règle que `runStoryUpload`), garde les médias serveur
+    /// encore référencés, retire les orphelins via `removeMediaIds`, puis
+    /// `PUT /posts/:id` avec le blob d'effects complet.
+    private func runStoryUpdate(
+        edit: StoryEditContext,
+        slide: StorySlide,
+        slideImages: [String: UIImage],
+        loadedImages: [String: UIImage],
+        loadedVideoURLs: [String: URL],
+        loadedAudioURLs: [String: URL],
+        originalLanguage: String?,
+        visibility: String,
+        visibilityUserIds: [String]
+    ) async {
+        do {
+            let serverOrigin = MeeshyConfig.shared.serverOrigin
+            guard let baseURL = URL(string: serverOrigin), let token = api.authToken else {
+                throw URLError(.userAuthenticationRequired)
+            }
+            let uploader = TusUploadManager(baseURL: baseURL)
+            var updatedEffects = slide.effects
+            var newMediaIds: [String] = []
+            var keptOriginalIds = Set<String>()
+
+            // 1. Fond de slide. Identité d'instance : le MÊME UIImage que
+            // celui posé par l'hydratation = fond inchangé → l'original reste
+            // attaché, aucun ré-upload. Une autre instance = fond remplacé.
+            if let bgImage = slideImages[slide.id] {
+                if let hydrated = edit.hydratedBackgroundImage, hydrated === bgImage,
+                   let originalBg = edit.originalBackgroundMediaId {
+                    keptOriginalIds.insert(originalBg)
+                } else {
+                    let thumbHash = bgImage.toThumbHash()
+                    let compressed = await MediaCompressor.shared.compressImage(bgImage)
+                    let fileName = "image_\(UUID().uuidString).\(compressed.fileExtension)"
+                    let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent(fileName)
+                    try compressed.data.write(to: tempURL)
+                    defer { try? FileManager.default.removeItem(at: tempURL) }
+                    let result = try await uploader.uploadFile(
+                        fileURL: tempURL, mimeType: compressed.mimeType,
+                        token: token, uploadContext: "story", thumbHash: thumbHash
+                    )
+                    await CacheCoordinator.shared.images.adoptImage(localFile: tempURL, for: result.fileUrl)
+                    newMediaIds.append(result.id)
+                }
+            } else if slide.mediaURL != nil, let originalBg = edit.originalBackgroundMediaId {
+                // Fond distant sans bitmap local (vidéo de fond) toujours
+                // référencé par la slide → conservé tel quel.
+                keptOriginalIds.insert(originalBg)
+            }
+
+            // 2. Médias de premier plan — même règle que le publish : seuls
+            // les objets sans `postMediaId` sont uploadés, les autres restent
+            // pointés sur leurs assets serveur (et sont donc conservés).
+            if var mediaObjects = updatedEffects.mediaObjects {
+                for i in mediaObjects.indices {
+                    let obj = mediaObjects[i]
+                    if !obj.postMediaId.isEmpty {
+                        keptOriginalIds.insert(obj.postMediaId)
+                        continue
+                    }
+                    if obj.kind == .video, let videoURL = loadedVideoURLs[obj.id] {
+                        let result = try await uploader.uploadFile(
+                            fileURL: videoURL, mimeType: "video/mp4",
+                            token: token, uploadContext: "story"
+                        )
+                        await CacheCoordinator.shared.video.seed(copyingLocalFile: videoURL, for: result.fileUrl)
+                        mediaObjects[i].postMediaId = result.id
+                        mediaObjects[i].mediaURL = result.fileUrl
+                        newMediaIds.append(result.id)
+                    } else if obj.kind == .image, let uiImage = loadedImages[obj.id] {
+                        let fgThumbHash = uiImage.toThumbHash()
+                        let compressed = await MediaCompressor.shared.compressImage(uiImage)
+                        let fileName = "image_\(UUID().uuidString).\(compressed.fileExtension)"
+                        let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent(fileName)
+                        try compressed.data.write(to: tempURL)
+                        defer { try? FileManager.default.removeItem(at: tempURL) }
+                        let result = try await uploader.uploadFile(
+                            fileURL: tempURL, mimeType: compressed.mimeType,
+                            token: token, uploadContext: "story", thumbHash: fgThumbHash
+                        )
+                        await CacheCoordinator.shared.images.adoptImage(localFile: tempURL, for: result.fileUrl)
+                        mediaObjects[i].postMediaId = result.id
+                        mediaObjects[i].mediaURL = result.fileUrl
+                        newMediaIds.append(result.id)
+                    } else {
+                        os.Logger.storyAudio.error(
+                            "update foreground media asset missing kind=\(obj.mediaType, privacy: .public) id=\(obj.id, privacy: .public) — layer will be invisible to viewers"
+                        )
+                    }
+                }
+                updatedEffects.mediaObjects = mediaObjects
+            }
+
+            // 3. Clips audio — même contrat.
+            if var audioObjects = updatedEffects.audioPlayerObjects {
+                for i in audioObjects.indices {
+                    let obj = audioObjects[i]
+                    if !obj.postMediaId.isEmpty {
+                        keptOriginalIds.insert(obj.postMediaId)
+                        continue
+                    }
+                    guard let audioURL = loadedAudioURLs[obj.id] ?? loadedVideoURLs[obj.id] else {
+                        os.Logger.storyAudio.error(
+                            "update audio URL missing audioId=\(obj.id, privacy: .public) — clip unplayable (postMediaId stays empty)"
+                        )
+                        continue
+                    }
+                    let result = try await uploader.uploadFile(
+                        fileURL: audioURL, mimeType: "audio/mp4",
+                        token: token, uploadContext: "story"
+                    )
+                    await CacheCoordinator.shared.audio.seed(copyingLocalFile: audioURL, for: result.fileUrl)
+                    audioObjects[i].postMediaId = result.id
+                    newMediaIds.append(result.id)
+                }
+                updatedEffects.audioPlayerObjects = audioObjects
+            }
+
+            // 4. Les originaux plus référencés par la composition éditée.
+            let removeMediaIds = edit.originalMediaIds.filter { !keptOriginalIds.contains($0) }
+
+            // 5. PUT — le gateway pose `contentEditedAt`, remet l'engagement à
+            // zéro et broadcast `story:updated` avec `engagementReset: true`.
+            let post = try await postService.update(
+                postId: edit.postId,
+                content: slide.content,
+                visibility: visibility,
+                visibilityUserIds: visibilityUserIds,
+                moodEmoji: nil,
+                originalLanguage: originalLanguage,
+                type: nil,
+                removeMediaIds: removeMediaIds.isEmpty ? nil : removeMediaIds,
+                storyEffects: updatedEffects,
+                mediaIds: newMediaIds.isEmpty ? nil : newMediaIds
+            )
+
+            // 6. Réconciliation locale : cover local-first re-rendue (la
+            // composition a changé) + remplacement de l'item dans le groupe.
+            var editedSlide = slide
+            editedSlide.effects = updatedEffects
+            if let cover = StorySlideRenderer.renderComposite(
+                slide: editedSlide,
+                bgImage: slideImages[slide.id],
+                loadedImages: loadedImages,
+                size: StoryCoverThumbnail.renderSize
+            ), let jpeg = cover.jpegData(compressionQuality: 0.85) {
+                await CacheCoordinator.shared.thumbnails.store(
+                    jpeg, for: StoryCoverThumbnail.cacheKey(storyId: post.id)
+                )
+            }
+            let groups = [post].toStoryGroups(currentUserId: AuthManager.shared.currentUser?.id)
+            if var item = groups.first?.stories.first {
+                item.isViewed = true
+                item.viewedAt = Date()
+                insertOrAppendStoryItem(item, forAuthor: post.author)
+            }
+            storyService.cache(post: post)
+            HapticFeedback.success()
+            FeedbackToastManager.shared.showSuccess(String(
+                localized: "story.edit.success", defaultValue: "Story mise à jour", bundle: .main))
+        } catch {
+            Logger.messages.error("[StoryVM] Story update failed: \(error.localizedDescription)")
+            FeedbackToastManager.shared.showError(String(
+                localized: "story.edit.error", defaultValue: "Échec de la mise à jour de la story", bundle: .main))
+        }
+    }
+
     /// Hydrates the in-memory dictionaries that `runStoryUpload` consumes
     /// from a flat `[StoryMediaReference]` list. The queue stores absolute
     /// disk paths because the in-memory `UIImage` / `URL` graph is not
@@ -1676,14 +1931,23 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
     /// avec la garde isViewed MONOTONE du sink storyUpdated / fetch full —
     /// un `isViewedByMe` serveur en retard ne dé-voit jamais un anneau local.
     func insertOrMergeStoryGroups(_ groups: [StoryGroup], replacingExisting: Bool = false) {
+        let selfId = AuthManager.shared.currentUser?.id
         for newGroup in groups {
             if let idx = storyGroups.firstIndex(where: { $0.id == newGroup.id }) {
+                let isOwnGroup = newGroup.id == selfId
                 var stories = storyGroups[idx].stories
                 for story in newGroup.stories {
                     if let j = stories.firstIndex(where: { $0.id == story.id }) {
                         guard replacingExisting else { continue }
                         var replacement = story
-                        if stories[j].isViewed && !replacement.isViewed {
+                        // Monotone raffinée : cède quand le CONTENU a été édité
+                        // après la vue locale (reset d'engagement) — jamais pour
+                        // ses propres stories (état « vu » client-only).
+                        if stories[j].isViewed && !replacement.isViewed,
+                           isOwnGroup || Self.shouldKeepLocalViewed(
+                               localViewedAt: stories[j].viewedAt,
+                               contentEditedAt: replacement.contentEditedAt
+                           ) {
                             replacement.isViewed = true
                             replacement.viewedAt = stories[j].viewedAt
                         }
@@ -1782,9 +2046,16 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] event in
                 guard let self else { return }
-                let updated = [event.story].toStoryGroups(currentUserId: AuthManager.shared.currentUser?.id)
+                let selfId = AuthManager.shared.currentUser?.id
+                // Reset d'engagement (édition de contenu) : le serveur a effacé
+                // vues et réactions — la story redevient non-vue pour les
+                // viewers. Jamais pour l'auteur lui-même (son état « vu » est
+                // client-only, recordView l'exclut côté serveur).
+                let engagementReset = event.engagementReset ?? false
+                let updated = [event.story].toStoryGroups(currentUserId: selfId)
                 for updatedGroup in updated {
                     guard let groupIdx = self.storyGroups.firstIndex(where: { $0.id == updatedGroup.id }) else { continue }
+                    let isOwnGroup = updatedGroup.id == selfId
                     var stories = self.storyGroups[groupIdx].stories
                     for newStory in updatedGroup.stories {
                         if let storyIdx = stories.firstIndex(where: { $0.id == newStory.id }) {
@@ -1792,16 +2063,25 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
                             // Local-first : `isViewed` est posé en optimiste par markViewed
                             // (fire-and-forget) ; le serveur peut lagger → un `isViewedByMe`
                             // stale dans story:updated reverterait l'anneau en « non-vu ».
-                            // Viewed est MONOTONE (une fois vu, reste vu). Même garde que
-                            // fetchStoriesFromNetwork (buildLocallyViewedSet) appliquée ici
-                            // au chemin socket pour éviter la divergence REST/temps-réel.
-                            if stories[storyIdx].isViewed && !replacement.isViewed {
+                            // Viewed est MONOTONE (une fois vu, reste vu) — SAUF quand
+                            // l'édition a remis l'engagement à zéro (flag de l'event, ou
+                            // `contentEditedAt` postérieur à la vue locale pour le chemin
+                            // REST). Même garde que fetchStoriesFromNetwork.
+                            if stories[storyIdx].isViewed && !replacement.isViewed,
+                               isOwnGroup || (!engagementReset && Self.shouldKeepLocalViewed(
+                                   localViewedAt: stories[storyIdx].viewedAt,
+                                   contentEditedAt: replacement.contentEditedAt
+                               )) {
                                 replacement.isViewed = true
+                                replacement.viewedAt = stories[storyIdx].viewedAt
                             }
                             stories[storyIdx] = replacement
                         }
                     }
                     self.storyGroups[groupIdx] = self.storyGroups[groupIdx].with(stories: stories)
+                    // L'anneau du groupe peut redevenir « non-vu » — même
+                    // re-tri que storyViewed pour remonter la bulle fraîche.
+                    self.sortStoryGroupsInPlace()
                 }
                 self.persistStoryCache()
             }

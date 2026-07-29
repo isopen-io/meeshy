@@ -208,7 +208,18 @@ public struct StoryComposerView: View {
         self.onPublishAllInBackground = onPublishAllInBackground
         self.onPreview = onPreview
         self.onDismiss = onDismiss
+        // Mode édition (`init(editing:)`) : le composer s'ouvre sur la
+        // visibilité ACTUELLE de la story — pas sur le défaut « Contacts ».
+        if let initialVisibility = viewModel.editingInitialVisibility {
+            self._visibility = State(initialValue: initialVisibility)
+            self._visibilityUserIds = State(initialValue: viewModel.editingInitialVisibilityUserIds)
+        }
     }
+
+    /// True quand le composer ÉDITE une story publiée — gate le système de
+    /// brouillons (restore/save/autosave) et le multi-slide (une story
+    /// publiée = UN slide), et bascule le libellé du bouton publier.
+    var isEditingExistingStory: Bool { viewModel.editingPostId != nil }
 
     // MARK: - Body
 
@@ -248,8 +259,10 @@ public struct StoryComposerView: View {
             // (StoryViewerView) qui traverse la présentation ; sur iOS 26 l'alerte est
             // dessinée sur verre clair → sans teinte, le label des boutons sans rôle /
             // .cancel devient quasi-blanc et illisible. L'indigo reste lisible partout.
-            Button(String(localized: "story.composer.save", defaultValue: "Sauvegarder", bundle: .module)) { saveDraftAndDismiss() }
-                .tint(MeeshyColors.indigo500)
+            if !isEditingExistingStory {
+                Button(String(localized: "story.composer.save", defaultValue: "Sauvegarder", bundle: .module)) { saveDraftAndDismiss() }
+                    .tint(MeeshyColors.indigo500)
+            }
             Button(String(localized: "story.composer.quit", defaultValue: "Quitter", bundle: .module), role: .destructive) { cancelAndDismiss() }
             Button(String(localized: "story.composer.cancelAction", defaultValue: "Annuler", bundle: .module), role: .cancel) { }
                 .tint(MeeshyColors.indigo500)
@@ -295,7 +308,11 @@ public struct StoryComposerView: View {
             ))
         }
         .onAppear {
-            checkForDraft()
+            // Mode édition : jamais de carte de reprise de brouillon par-dessus
+            // la story hydratée — le brouillon appartient au flux de CRÉATION.
+            if !isEditingExistingStory {
+                checkForDraft()
+            }
             // C9 — trajectoire d'annulation : seed sur l'état d'entrée
             // (composer vierge ; `restoreDraft()` re-seed après reprise).
             viewModel.seedHistory()

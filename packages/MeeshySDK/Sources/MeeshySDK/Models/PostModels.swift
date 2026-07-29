@@ -137,6 +137,12 @@ public struct APIPost: Sendable {
     public let originalLanguage: String?
     public let createdAt: Date
     public let updatedAt: Date?
+    /// Horodatage de la dernière édition de CONTENU (texte / storyEffects /
+    /// médias) — distinct d'`updatedAt` qui bouge sur chaque écriture
+    /// (compteurs inclus). Sert à céder la garde « viewed monotone » après
+    /// une édition de story. Défaut memberwise `= nil`, même patron que
+    /// `postOpenCount` : décodage via `decodeIfPresent` ci-dessous.
+    public var contentEditedAt: Date? = nil
     public let expiresAt: Date?
     public let author: APIAuthor
     public let likeCount: Int?
@@ -185,7 +191,7 @@ public struct APIPost: Sendable {
 
 extension APIPost: Decodable {
     private enum CodingKeys: String, CodingKey {
-        case id, type, visibility, visibilityUserIds, content, originalLanguage, createdAt, updatedAt, expiresAt
+        case id, type, visibility, visibilityUserIds, content, originalLanguage, createdAt, updatedAt, contentEditedAt, expiresAt
         case author, likeCount, commentCount, repostCount, viewCount
         case postOpenCount, qualifiedViewCount, playCount, impressionCount
         case bookmarkCount, shareCount, reactionSummary, isPinned, isEdited
@@ -212,6 +218,7 @@ extension APIPost: Decodable {
         originalLanguage = try c.decodeIfPresent(String.self, forKey: .originalLanguage)
         createdAt = try c.decode(Date.self, forKey: .createdAt)
         updatedAt = try c.decodeIfPresent(Date.self, forKey: .updatedAt)
+        contentEditedAt = try c.decodeIfPresent(Date.self, forKey: .contentEditedAt)
         expiresAt = try c.decodeIfPresent(Date.self, forKey: .expiresAt)
         author = try c.decode(APIAuthor.self, forKey: .author)
         likeCount = try c.decodeIfPresent(Int.self, forKey: .likeCount)

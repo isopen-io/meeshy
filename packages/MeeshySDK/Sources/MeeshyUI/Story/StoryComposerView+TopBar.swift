@@ -134,7 +134,9 @@ extension StoryComposerView {
             .contentShape(Circle())
         }
         .disabled(isPublishing)
-        .accessibilityLabel(String(localized: "story.composer.publish", defaultValue: "Publier", bundle: .module))
+        .accessibilityLabel(isEditingExistingStory
+            ? String(localized: "story.composer.updateStory", defaultValue: "Mettre à jour", bundle: .module)
+            : String(localized: "story.composer.publish", defaultValue: "Publier", bundle: .module))
     }
 
     var visibilityMenu: some View {
@@ -253,8 +255,10 @@ extension StoryComposerView {
 
             Divider()
 
-            Button { saveDraft() } label: {
-                Label(String(localized: "story.composer.saveDraft", defaultValue: "Sauvegarder le brouillon", bundle: .module), systemImage: "square.and.arrow.down")
+            if !isEditingExistingStory {
+                Button { saveDraft() } label: {
+                    Label(String(localized: "story.composer.saveDraft", defaultValue: "Sauvegarder le brouillon", bundle: .module), systemImage: "square.and.arrow.down")
+                }
             }
             Divider()
             Button(role: .destructive) {

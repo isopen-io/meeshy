@@ -145,16 +145,26 @@ public struct UpdatePostRequest: Encodable, Sendable {
     public let type: String?
     /// Ids of attached media (PostMedia) to detach during the edit.
     public let removeMediaIds: [String]?
+    /// Full replacement composition blob for a STORY edit. On a STORY, its
+    /// presence counts as a CONTENT edit — the gateway resets views/reactions
+    /// (`engagementReset`) while keeping the publication date.
+    public let storyEffects: StoryEffects?
+    /// Ids of freshly uploaded media (TUS, postId=null) to attach during the
+    /// edit — same contract as `CreateStoryRequest.mediaIds`.
+    public let mediaIds: [String]?
 
     public init(content: String? = nil, visibility: String? = nil, visibilityUserIds: [String]? = nil,
                 moodEmoji: String? = nil, originalLanguage: String? = nil, type: String? = nil,
-                removeMediaIds: [String]? = nil) {
+                removeMediaIds: [String]? = nil, storyEffects: StoryEffects? = nil,
+                mediaIds: [String]? = nil) {
         self.content = content; self.visibility = visibility
         self.visibilityUserIds = visibilityUserIds
         self.moodEmoji = moodEmoji
         self.originalLanguage = originalLanguage
         self.type = type
         self.removeMediaIds = removeMediaIds
+        self.storyEffects = storyEffects
+        self.mediaIds = mediaIds
     }
 }
 

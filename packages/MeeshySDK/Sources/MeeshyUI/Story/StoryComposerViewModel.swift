@@ -20,6 +20,30 @@ public final class StoryComposerViewModel: StoryComposerProviding, ObservableObj
     @Published var repostOfId: String?
     @Published var originalRepostOfId: String?
 
+    // MARK: - Edit mode (directive 2026-07-29 — édition d'une story publiée)
+
+    /// Non-nil quand le composer ÉDITE une story publiée (`init(editing:)`).
+    /// L'app le lit au publish pour router vers `PUT /posts/:id` (update +
+    /// reset d'engagement serveur) au lieu de `createStory`. Le mode édition
+    /// désactive aussi le système de brouillons (restore/save) et le
+    /// multi-slide — une story publiée = UN slide.
+    public internal(set) var editingPostId: String?
+    /// Ids des `PostMedia` attachés à la story au moment de l'hydratation —
+    /// sert à diff-er `removeMediaIds` au publish (médias plus référencés).
+    public internal(set) var editingOriginalMediaIds: [String] = []
+    /// Id du média de FOND original (celui de `story.media` qui n'est
+    /// référencé par aucun objet des effects) — conservé tel quel si le fond
+    /// n'a pas changé, retiré + ré-uploadé sinon.
+    public internal(set) var editingOriginalBackgroundMediaId: String?
+    /// Instance UIImage posée par le préchargement d'hydratation comme fond
+    /// de slide. Comparaison d'IDENTITÉ (`===`) au publish : la même instance
+    /// = fond inchangé (ne pas ré-uploader), une autre = l'utilisateur a
+    /// remplacé le fond.
+    public internal(set) var editingHydratedBackgroundImage: UIImage?
+    /// Visibilité initiale de la story éditée (seed de l'état du composer).
+    public internal(set) var editingInitialVisibility: String?
+    public internal(set) var editingInitialVisibilityUserIds: [String] = []
+
     // Cancellable preload Task started by `init(reposting:authorHandle:)`.
     // Marked `nonisolated(unsafe)` so the `nonisolated deinit` below can cancel it
     // without requiring a MainActor hop (cancellation is Sendable / thread-safe).

@@ -1826,6 +1826,13 @@ public struct StoryItem: Identifiable, Codable, Sendable {
     /// douce (rows GRDB et payloads antérieurs à ce champ décodent en nil,
     /// qui désactive simplement le delta au profit du full historique).
     public var updatedAt: Date?
+    /// Horodatage serveur de la dernière édition de CONTENU (texte /
+    /// storyEffects / médias) — distinct d'`updatedAt`, qui bouge sur CHAQUE
+    /// écriture (compteurs de vues inclus). C'est le SEUL horodatage fiable
+    /// pour faire céder la garde « viewed monotone » : une story éditée
+    /// APRÈS ma vue locale redevient non-vue (reset d'engagement,
+    /// directive 2026-07-29). Optionnel → rétro-compatible cache/payloads.
+    public var contentEditedAt: Date?
     public let translations: [StoryTranslation]?
     public let backgroundAudio: StoryBackgroundAudioEntry?
     public var reactionCount: Int
@@ -1905,7 +1912,7 @@ public struct StoryItem: Identifiable, Codable, Sendable {
                 originalRepostOfId: String? = nil, repostAuthorName: String? = nil,
                 repostAuthorUsername: String? = nil,
                 visibility: String? = nil, visibilityUserIds: [String]? = nil, audioUrl: String? = nil,
-                isViewed: Bool = false, viewedAt: Date? = nil, updatedAt: Date? = nil, translations: [StoryTranslation]? = nil, backgroundAudio: StoryBackgroundAudioEntry? = nil,
+                isViewed: Bool = false, viewedAt: Date? = nil, updatedAt: Date? = nil, contentEditedAt: Date? = nil, translations: [StoryTranslation]? = nil, backgroundAudio: StoryBackgroundAudioEntry? = nil,
                 reactionCount: Int = 0, commentCount: Int = 0,
                 shareCount: Int? = nil, viewCount: Int? = nil, impressionCount: Int? = nil, repostCount: Int? = nil,
                 currentUserReactions: [String]? = nil) {
@@ -1916,6 +1923,7 @@ public struct StoryItem: Identifiable, Codable, Sendable {
         self.repostAuthorUsername = repostAuthorUsername
         self.visibility = visibility; self.visibilityUserIds = visibilityUserIds; self.audioUrl = audioUrl
         self.isViewed = isViewed; self.viewedAt = viewedAt; self.updatedAt = updatedAt
+        self.contentEditedAt = contentEditedAt
         self.translations = translations; self.backgroundAudio = backgroundAudio
         self.reactionCount = reactionCount; self.commentCount = commentCount
         self.shareCount = shareCount; self.viewCount = viewCount; self.impressionCount = impressionCount; self.repostCount = repostCount
@@ -2180,6 +2188,7 @@ extension Array where Element == APIPost {
                                  audioUrl: post.audioUrl ?? repostSource?.audioUrl,
                                  isViewed: post.isViewedByMe ?? false,
                                  updatedAt: post.updatedAt,
+                                 contentEditedAt: post.contentEditedAt,
                                  translations: storyTranslations,
                                  reactionCount: totalReactions, commentCount: post.commentCount ?? 0,
                                  shareCount: post.shareCount,

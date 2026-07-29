@@ -4,6 +4,56 @@ import os
 import MeeshySDK
 import MeeshyUI
 
+/// Session d'édition d'une story publiée (directive 2026-07-29) : porte
+/// l'item ET le VM du composer pré-hydraté (`StoryComposerViewModel(editing:)`)
+/// pour que le callback de publish relise les champs d'édition
+/// (`editingHydratedBackgroundImage`, ids des médias originaux…) du MÊME VM
+/// que celui monté dans le composer.
+struct StoryEditSession: Identifiable {
+    let story: StoryItem
+    let composer: StoryComposerViewModel
+    var id: String { story.id }
+}
+
+extension View {
+    /// Cover du composer en mode ÉDITION — partagé par le tray et la mini
+    /// trail épinglée (les deux surfaces « Mes stories »). Le publish route
+    /// vers `StoryViewModel.updateStoryInBackground` (PUT + reset
+    /// d'engagement serveur) au lieu de `publishStoryInBackground`.
+    func storyEditComposerCover(
+        session: Binding<StoryEditSession?>,
+        viewModel: StoryViewModel
+    ) -> some View {
+        fullScreenCover(item: session) { current in
+            StoryComposerView(
+                viewModel: current.composer,
+                onPublishAllInBackground: { slides, slideImages, loadedImages, loadedVideoURLs, loadedAudioURLs, originalLanguage, visibility, visibilityUserIds in
+                    let edit = StoryViewModel.StoryEditContext(
+                        postId: current.composer.editingPostId ?? current.story.id,
+                        originalMediaIds: current.composer.editingOriginalMediaIds,
+                        originalBackgroundMediaId: current.composer.editingOriginalBackgroundMediaId,
+                        hydratedBackgroundImage: current.composer.editingHydratedBackgroundImage
+                    )
+                    let accepted = viewModel.updateStoryInBackground(
+                        edit: edit,
+                        slides: slides,
+                        slideImages: slideImages,
+                        loadedImages: loadedImages,
+                        loadedVideoURLs: loadedVideoURLs,
+                        loadedAudioURLs: loadedAudioURLs,
+                        originalLanguage: originalLanguage,
+                        visibility: visibility,
+                        visibilityUserIds: visibilityUserIds
+                    )
+                    // Hors-ligne : le composer reste ouvert, rien n'est perdu.
+                    if accepted { session.wrappedValue = nil }
+                },
+                onDismiss: { session.wrappedValue = nil }
+            )
+        }
+    }
+}
+
 private struct StoryPreviewAssets: Identifiable {
     let id = UUID()
     let slides: [StorySlide]
@@ -46,6 +96,8 @@ struct StoryTrayView: View {
     /// Sheet « Mes stories envoyées » (gestion : ouvrir, vues, partager,
     /// republier, supprimer). Directive user 2026-07-14.
     @State private var showMyStories = false
+    /// Session d'édition d'une story publiée (composer en mode édition).
+    @State private var editingStorySession: StoryEditSession?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -90,6 +142,17 @@ struct StoryTrayView: View {
                         try? await Task.sleep(for: .milliseconds(350))
                         viewModel.showStoryComposer = true
                     }
+                },
+                onEditStory: { story in
+                    showMyStories = false
+                    // Même pattern anti-course : sheet fermée AVANT le cover.
+                    Task { @MainActor in
+                        try? await Task.sleep(for: .milliseconds(350))
+                        editingStorySession = StoryEditSession(
+                            story: story,
+                            composer: StoryComposerViewModel(editing: story)
+                        )
+                    }
                 }
             )
             // Réinjection à travers la frontière de sheet : la sheet interne
@@ -98,6 +161,7 @@ struct StoryTrayView: View {
             .environmentObject(router)
             .environmentObject(conversationListViewModel)
         }
+        .storyEditComposerCover(session: $editingStorySession, viewModel: viewModel)
         .sheet(item: $selectedProfileUser) { user in
             UserProfileSheet(
                 user: user,
@@ -641,6 +705,8 @@ struct PinnedStoryTrailBand: View {
     /// toujours la liste de gestion, même depuis le band épinglé replié —
     /// même comportement que `MyStoryButton` dans la grande trail.
     @State private var showMyStories = false
+    /// Session d'édition d'une story publiée (composer en mode édition).
+    @State private var editingStorySession: StoryEditSession?
 
     // Layout-derived: the full trail (120pt + 8 top pad) sits under the 64pt
     // expanded header and is fully hidden behind the 44pt collapsed header after
@@ -728,11 +794,23 @@ struct PinnedStoryTrailBand: View {
                                 try? await Task.sleep(for: .milliseconds(350))
                                 viewModel.showStoryComposer = true
                             }
+                        },
+                        onEditStory: { story in
+                            showMyStories = false
+                            // Même pattern anti-course : sheet fermée AVANT le cover.
+                            Task { @MainActor in
+                                try? await Task.sleep(for: .milliseconds(350))
+                                editingStorySession = StoryEditSession(
+                                    story: story,
+                                    composer: StoryComposerViewModel(editing: story)
+                                )
+                            }
                         }
                     )
                     .environmentObject(router)
                     .environmentObject(conversationListViewModel)
                 }
+                .storyEditComposerCover(session: $editingStorySession, viewModel: viewModel)
         }
     }
 

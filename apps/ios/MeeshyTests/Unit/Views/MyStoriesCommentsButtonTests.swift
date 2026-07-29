@@ -253,19 +253,76 @@ final class MyStoriesCommentsButtonTests: XCTestCase {
         )
     }
 
-    /// Les deux autres métriques de la rangée (vues, réactions) ne sont pas
-    /// concernées par le retrait de bubble.left.fill — elles doivent rester
-    /// strictement inchangées.
-    func test_otherMetrics_untouchedByBubbleLeftFillRemoval() throws {
+    // MARK: - Vues + cœur (directive 2026-07-29)
+
+    /// Le compteur de vues quitte la rangée sous l'heure pour devenir un bouton
+    /// dédié (icône `eye` + compteur), immédiatement à gauche du bouton
+    /// commentaires — même patron visuel, ouvre le « Listing des vues » (la
+    /// même sheet que l'entrée du menu `⋯`). Ordre visuel garanti :
+    /// œil < bulle < ellipsis. Littéral exact guillemets inclus : `"eye"` est
+    /// un préfixe de `"eye.fill"`, une recherche non bornée matcherait la
+    /// mauvaise icône.
+    func test_viewsButton_eyePrecedesCommentsBubble() throws {
         let bodyBlock = try rowBody()
 
+        guard let eyeRange = bodyBlock.range(of: "Image(systemName: \"eye\")") else {
+            XCTFail("Le bouton vues doit utiliser l'icône eye. Bloc lu: \(bodyBlock)")
+            return
+        }
+        guard let bubbleRange = bodyBlock.range(of: "Image(systemName: \"bubble.left\")") else {
+            XCTFail("Le bouton commentaires doit rester. Bloc lu: \(bodyBlock)")
+            return
+        }
         XCTAssertTrue(
-            bodyBlock.contains("metric(icon: \"eye.fill\", value: story.viewCount ?? 0)"),
-            "La métrique vues doit rester inchangée. Bloc lu: \(bodyBlock)"
+            eyeRange.lowerBound < bubbleRange.lowerBound,
+            "Le bouton vues doit précéder visuellement le bouton commentaires. Bloc lu: \(bodyBlock)"
         )
+    }
+
+    /// L'ancienne métrique décorative `eye.fill` sous l'heure disparaît — le
+    /// compteur de vues n'a plus qu'UN affichage, le bouton actionnable
+    /// ci-dessus (même dédoublonnage que Task 11 pour les commentaires).
+    func test_decorativeEyeFillMetric_removed() throws {
+        let bodyBlock = try rowBody()
+        XCTAssertFalse(
+            bodyBlock.contains("metric(icon: \"eye.fill\""),
+            "La métrique décorative eye.fill sous l'heure doit être retirée. Bloc lu: \(bodyBlock)"
+        )
+    }
+
+    /// Le cœur sous l'heure n'apparaît QUE si au moins une réaction existe —
+    /// jamais de « 0 » décoratif (directive : « afficher le cœur en bas de
+    /// l'heure UNIQUEMENT si une vue a donné au moins un cœur »).
+    func test_heartMetric_onlyWhenReactionCountPositive() throws {
+        let bodyBlock = try rowBody()
+
+        guard let guardRange = bodyBlock.range(of: "if story.reactionCount > 0 {") else {
+            XCTFail("Le cœur doit être gardé par story.reactionCount > 0. Bloc lu: \(bodyBlock)")
+            return
+        }
+        XCTAssertNotNil(
+            bodyBlock.range(
+                of: "metric(icon: \"heart.fill\", value: story.reactionCount)",
+                range: guardRange.upperBound..<bodyBlock.endIndex
+            ),
+            "La métrique cœur doit être À L'INTÉRIEUR de sa garde reactionCount > 0. Bloc lu: \(bodyBlock)"
+        )
+    }
+
+    /// Parité a11y avec les commentaires : l'action « Listing des vues » est
+    /// déclarée dans `.accessibilityActions` (le bouton lui-même reste masqué
+    /// du rotor, la ligne compose son propre libellé).
+    func test_accessibilityActions_viewersAction_present() throws {
+        let bodyBlock = try rowBody()
+
+        guard let actionsRange = bodyBlock.range(of: ".accessibilityActions {") else {
+            XCTFail(".accessibilityActions introuvable dans body. Bloc lu: \(bodyBlock)")
+            return
+        }
+        let actionsBlock = String(bodyBlock[actionsRange.lowerBound...])
         XCTAssertTrue(
-            bodyBlock.contains("metric(icon: \"heart.fill\", value: story.reactionCount)"),
-            "La métrique réactions doit rester inchangée. Bloc lu: \(bodyBlock)"
+            actionsBlock.contains("story.mine.viewers.a11y"),
+            "L'action « Listing des vues » doit être déclarée dans .accessibilityActions. Bloc lu: \(actionsBlock)"
         )
     }
 }
