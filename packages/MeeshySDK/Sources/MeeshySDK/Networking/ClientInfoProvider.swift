@@ -102,13 +102,19 @@ public actor ClientInfoProvider {
         }
 
         // Check permission passively via instance property (iOS 14+) — never request.
-        // `geoManager` (propriété de l'acteur) plutôt qu'un manager jetable :
-        // voir le commentaire sur sa déclaration.
-        let locationResult: CLLocation? = await MainActor.run { [geoManager] in
-            let status = geoManager.authorizationStatus
-            guard status == .authorizedWhenInUse || status == .authorizedAlways else { return nil }
-            return geoManager.location
-        }
+        // `geoManager` est une propriété ISOLÉE à cet acteur : on la lit
+        // directement depuis le contexte isolé de l'acteur, sans hop
+        // `MainActor.run`. Le hop précédent capturait `geoManager` (un
+        // `CLLocationManager`, non `Sendable`) dans une fermeture `@Sendable`
+        // pour traverser vers le MainActor — Swift 6 refuse d'envoyer une
+        // valeur isolée à l'acteur vers un autre domaine d'isolation
+        // (« task or actor isolated value cannot be sent »). Lire une
+        // propriété qu'on possède déjà, depuis SON PROPRE acteur, ne traverse
+        // aucune frontière d'isolation : aucun hop n'est nécessaire.
+        let status = geoManager.authorizationStatus
+        let locationResult: CLLocation? = (status == .authorizedWhenInUse || status == .authorizedAlways)
+            ? geoManager.location
+            : nil
         guard let location = locationResult else {
             // Cache négatif : sans lui, l'absence de relevé (autorisation tout
             // juste accordée mais CoreLocation n'a pas encore de position, ou
