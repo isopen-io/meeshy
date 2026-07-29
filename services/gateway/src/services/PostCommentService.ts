@@ -4,6 +4,7 @@ import type { MobileTranscription } from '../routes/posts/types';
 import { authorSelect, commentMediaInclude, NOT_DELETED } from './posts/postIncludes';
 import { TrackingLinkService } from './TrackingLinkService';
 import { normalizeLanguageCode } from '@meeshy/shared/utils/language-normalize';
+import { parseSharedPlace } from './location/sharedPlace';
 
 export class PostCommentService {
   private readonly trackingLinkService: TrackingLinkService;
@@ -30,6 +31,9 @@ export class PostCommentService {
     /// Transcription Whisper mobile pour un média audio — persistée sur le PostMedia
     /// (évite la re-transcription serveur, même mécanisme que les posts).
     mobileTranscription?: MobileTranscription,
+    /// Lieu partagé — champ dédié, jamais un `metadata` brut. Validé par
+    /// `parseSharedPlace` ci-dessous avant écriture.
+    location?: unknown,
   ) {
     // Verify post exists
     const post = await this.prisma.post.findFirst({
@@ -56,6 +60,12 @@ export class PostCommentService {
       }
     }
 
+    // Lieu partagé : validation stricte côté serveur (bornes, rejet
+    // NaN/Infinity, bornage des chaînes). Chiffrement : stockage EN CLAIR
+    // dans `metadata.location`, même décision assumée que pour message/post
+    // (cf. services/location/sharedPlace.ts).
+    const sharedPlace = parseSharedPlace(location);
+
     const comment = await this.prisma.postComment.create({
       data: {
         postId,
@@ -71,6 +81,7 @@ export class PostCommentService {
           originalLanguage != null
             ? (normalizeLanguageCode(originalLanguage) ?? originalLanguage)
             : null,
+        ...(sharedPlace ? { metadata: { location: sharedPlace } as unknown as Prisma.InputJsonValue } : {}),
       },
       select: {
         id: true,

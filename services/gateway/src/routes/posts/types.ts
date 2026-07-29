@@ -194,6 +194,11 @@ export const CreatePostSchema = z.object({
   mobileTranscription: MobileTranscriptionSchema.optional(),
   // Repost source ID (for StoryComposer publishing a repost via POST /posts)
   repostOfId: z.string().optional(),
+  // Lieu partagé — champ dédié, JAMAIS un `metadata` brut (cf.
+  // services/location/sharedPlace.ts). Validation stricte des coordonnées
+  // et bornage des chaînes délégués à `parseSharedPlace`, appelé côté
+  // `PostService.createPost`.
+  location: z.unknown().optional(),
 }).refine((data) => {
   if ((data.visibility === 'EXCEPT' || data.visibility === 'ONLY') && (!data.visibilityUserIds || data.visibilityUserIds.length === 0)) {
     return false;
@@ -296,6 +301,8 @@ export const CreateCommentSchema = z.object({
   /// Transcription Whisper produite côté mobile pour un média audio (évite la
   /// re-transcription serveur). Même structure que pour les posts.
   mobileTranscription: MobileTranscriptionSchema.optional(),
+  /// Lieu partagé — même contrat que CreatePostSchema ci-dessus.
+  location: z.unknown().optional(),
 }).refine(
   (data) => (data.content?.trim().length ?? 0) > 0 || (data.attachmentIds?.length ?? 0) > 0,
   { message: 'A comment must have text content or an attached media' },

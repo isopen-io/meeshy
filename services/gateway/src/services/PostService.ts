@@ -18,6 +18,7 @@ import { remapStoryEffectsMediaIds } from './posts/storyEffectsMediaRemap';
 import { composeStoryContent, storyTextObjectText } from './posts/storyContentComposition';
 import { storyContentEditRequested } from './posts/storyEditPolicy';
 import { normalizeLanguageCode } from '@meeshy/shared/utils/language-normalize';
+import { parseSharedPlace } from './location/sharedPlace';
 
 const log = enhancedLogger.child({ module: 'PostService' });
 
@@ -107,6 +108,8 @@ export class PostService {
     mediaIds?: string[];
     mobileTranscription?: MobileTranscription;
     repostOfId?: string;
+    /** Lieu partagé — champ dédié, jamais un `metadata` brut. Validé par `parseSharedPlace`. */
+    location?: unknown;
   }, userId: string) {
     const now = new Date();
     let expiresAt: Date | undefined;
@@ -124,6 +127,11 @@ export class PostService {
     const originalLanguage = data.originalLanguage
       ? (normalizeLanguageCode(data.originalLanguage) ?? data.originalLanguage)
       : (data.content ? detectLanguage(data.content) : undefined);
+
+    // Lieu partagé : validation stricte des coordonnées côté serveur (bornes,
+    // rejet NaN/Infinity, bornage des chaînes). Chiffrement : stockage EN
+    // CLAIR dans `metadata.location`, décision assumée — cf. sharedPlace.ts.
+    const sharedPlace = parseSharedPlace(data.location);
 
     let repostOfId: string | undefined;
     let originalRepostOfId: string | undefined;
@@ -158,6 +166,7 @@ export class PostService {
         audioUrl: data.audioUrl,
         audioDuration: data.audioDuration,
         expiresAt,
+        ...(sharedPlace ? { metadata: { location: sharedPlace } as unknown as Prisma.InputJsonValue } : {}),
         ...(repostOfId !== undefined ? { repostOfId, originalRepostOfId } : {}),
       },
       include: postInclude,

@@ -11,6 +11,7 @@ import { resolveMentionedUsers, MentionService } from '../../services/MentionSer
 import { createPostRouteRateLimitConfig } from '../../middleware/rate-limiter';
 import { withMutationLog } from '../../utils/withMutationLog';
 import { SecuritySanitizer } from '../../utils/sanitize.js';
+import { sharedPlaceFromMetadata } from '../../services/location/sharedPlace';
 
 /**
  * Hisse `metadata.trackingLinks` ([{ url, token }]) en top-level sur le payload
@@ -24,6 +25,20 @@ function hoistTrackingLinks<T extends Record<string, unknown>>(post: T): T {
   const tl = metadata?.trackingLinks;
   if (Array.isArray(tl) && tl.length > 0) {
     return { ...post, trackingLinks: tl } as T;
+  }
+  return post;
+}
+
+/**
+ * Hisse `metadata.location` en top-level `location` — même miroir que
+ * `hoistTrackingLinks`, appliqué à la fois à la réponse REST et au payload
+ * socket (contrairement à `trackingLinks`, qui ne hissait jusqu'ici que le
+ * payload socket). No-op si le post ne porte aucun lieu.
+ */
+function hoistLocation<T extends Record<string, unknown>>(post: T): T {
+  const place = sharedPlaceFromMetadata(post?.metadata);
+  if (place) {
+    return { ...post, location: place } as T;
   }
   return post;
 }
@@ -81,7 +96,7 @@ export function registerCoreRoutes(
       const socialEvents = fastify.socialEvents;
       if (socialEvents) {
         const postType = parsed.data.type ?? 'POST';
-        const broadcastPost = hoistTrackingLinks(post) as unknown as Post;
+        const broadcastPost = hoistLocation(hoistTrackingLinks(post)) as unknown as Post;
         if (postType === 'STORY') {
           socialEvents.broadcastStoryCreated(broadcastPost, authContext.registeredUser.id).catch((err) => fastify.log.warn({ err }, '[POST /posts]: broadcast story created failed'));
         } else if (postType === 'STATUS') {
@@ -189,7 +204,7 @@ export function registerCoreRoutes(
         });
       }
 
-      return sendSuccess(reply, post, { statusCode: 201, meta: { mentionedUsers } });
+      return sendSuccess(reply, hoistLocation(post as unknown as Record<string, unknown>), { statusCode: 201, meta: { mentionedUsers } });
     } catch (error) {
       fastify.log.error(`[POST /posts] Error: ${error}`);
       return sendInternalError(reply, 'Internal server error', { code: 'INTERNAL_ERROR' });
@@ -224,7 +239,7 @@ export function registerCoreRoutes(
         ? await resolveMentionedUsers(prisma, contentStrings)
         : [];
 
-      return sendSuccess(reply, post, { meta: { mentionedUsers } });
+      return sendSuccess(reply, hoistLocation(post as unknown as Record<string, unknown>), { meta: { mentionedUsers } });
     } catch (error) {
       fastify.log.error(`[GET /posts/:postId] Error: ${error}`);
       return sendInternalError(reply, 'Internal server error', { code: 'INTERNAL_ERROR' });
@@ -305,20 +320,26 @@ export function registerCoreRoutes(
       const socialEvents = fastify.socialEvents;
       if (socialEvents) {
         const updatedPostType = (post as any).type as string;
+        // Second chemin d'enrichissement (le premier est la création
+        // ci-dessus) : un lieu partagé à la création n'est jamais réécrit par
+        // l'édition (`updatePost` ne touche pas `metadata`), mais doit rester
+        // visible sur CE broadcast aussi — sinon un post modifié après coup
+        // (visibilité, contenu…) republierait sans sa position.
+        const broadcastPost = hoistLocation(post as unknown as Record<string, unknown>) as unknown as Post;
         if (updatedPostType === 'STORY') {
           // Même prédicat que le reset d'engagement du service — les deux ne
           // peuvent pas diverger sur un même payload.
-          socialEvents.broadcastStoryUpdated(post as any, authContext.registeredUser.id, {
+          socialEvents.broadcastStoryUpdated(broadcastPost, authContext.registeredUser.id, {
             engagementReset: storyContentEditRequested(parsed.data),
           }).catch((err) => fastify.log.warn({ err }, '[PUT /posts/:postId]: broadcast story updated failed'));
         } else if (updatedPostType === 'STATUS') {
-          socialEvents.broadcastStatusUpdated(post as any, authContext.registeredUser.id).catch((err) => fastify.log.warn({ err }, '[PUT /posts/:postId]: broadcast status updated failed'));
+          socialEvents.broadcastStatusUpdated(broadcastPost, authContext.registeredUser.id).catch((err) => fastify.log.warn({ err }, '[PUT /posts/:postId]: broadcast status updated failed'));
         } else {
-          socialEvents.broadcastPostUpdated(post as any, authContext.registeredUser.id).catch((err) => fastify.log.warn({ err }, '[PUT /posts/:postId]: broadcast post updated failed'));
+          socialEvents.broadcastPostUpdated(broadcastPost, authContext.registeredUser.id).catch((err) => fastify.log.warn({ err }, '[PUT /posts/:postId]: broadcast post updated failed'));
         }
       }
 
-      return sendSuccess(reply, post, { meta: { mentionedUsers: updateMentionedUsers } });
+      return sendSuccess(reply, hoistLocation(post as unknown as Record<string, unknown>), { meta: { mentionedUsers: updateMentionedUsers } });
     } catch (error) {
       if (error instanceof Error && error.message === 'FORBIDDEN') {
         return sendForbidden(reply, 'Not authorized to edit this post', { code: 'FORBIDDEN' });

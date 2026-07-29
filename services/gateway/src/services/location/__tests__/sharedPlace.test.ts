@@ -55,4 +55,11 @@ describe('contrat d entree', () => {
     const forged = { postReplyTo: { id: 'vole' }, location: { latitude: 1, longitude: 2 } };
     expect(parseSharedPlace(forged)).toBeNull();
   });
+
+  it('le meme extracteur sert post et commentaire', () => {
+    // sharedPlaceFromMetadata est utilisé tel quel par messages, posts ET
+    // commentaires — un seul extracteur, pas de copie locale par surface.
+    const metadata = { location: { latitude: 48.85, longitude: 2.35, name: 'Paris' } };
+    expect(sharedPlaceFromMetadata(metadata)).toMatchObject({ name: 'Paris' });
+  });
 });
