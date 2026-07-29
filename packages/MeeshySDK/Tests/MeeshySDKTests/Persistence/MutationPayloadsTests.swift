@@ -363,6 +363,33 @@ final class MutationPayloadsTests: XCTestCase {
         XCTAssertNil(decoded.visibilityUserIds)
     }
 
+    /// Task 17 — un envoi hors-ligne conserve sa position au flush : la charge
+    /// d'outbox doit survivre au roundtrip JSON avec son `location`.
+    func test_outboxPayload_survivesAFlushWithItsLocation() throws {
+        let place = SharedPlace(latitude: 48.8566, longitude: 2.3522, name: "Tour Eiffel")
+        let payload = CreatePostPayload(
+            clientMutationId: ClientMutationId.generate(),
+            content: "ici",
+            attachmentIds: [],
+            visibility: "PUBLIC",
+            location: place
+        )
+        let restored = try decoder.decode(CreatePostPayload.self, from: try encoder.encode(payload))
+        XCTAssertEqual(restored.location?.name, "Tour Eiffel")
+        XCTAssertEqual(restored, payload)
+    }
+
+    /// Une ligne persistée avant Task 17 (pas de clé `location`) doit continuer
+    /// à décoder — sinon toutes les créations de post déjà en file échouent au
+    /// redémarrage de l'app.
+    func test_createPostPayload_decodesLegacyRowWithoutLocation() throws {
+        let legacyJSON = """
+        {"clientMutationId":"cmid_legacy3","content":"hi","attachmentIds":[],"visibility":"PUBLIC"}
+        """
+        let decoded = try decoder.decode(CreatePostPayload.self, from: Data(legacyJSON.utf8))
+        XCTAssertNil(decoded.location)
+    }
+
     // MARK: - ToggleLikePostPayload (Phase C)
 
     func test_toggleLikePostPayload_encodes_likedBool() throws {

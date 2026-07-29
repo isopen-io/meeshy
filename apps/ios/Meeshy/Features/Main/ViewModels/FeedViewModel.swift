@@ -494,19 +494,17 @@ class FeedViewModel: ObservableObject {
         // gateway only echoes the cmid on the POST branch of post:created, so
         // only type == "POST" can be reconciled by FeedViewModel.postCreated.
         let hasMedia = !(mediaIds?.isEmpty ?? true)
-        // La file durable ne porte pas encore de lieu (câblage à part — cf.
-        // Task 17) : un post texte + position doit rester sur le chemin direct
-        // ci-dessous (qui, lui, transmet `location`), sinon la position est
-        // jetée en silence. Seul un post texte SANS position passe par la file.
+        // Task 17 — `CreatePostPayload` porte désormais `location` : un post
+        // texte + position peut passer par la file durable comme n'importe
+        // quel autre post texte, sa position survivant au flush.
         let isDurableTextOnly = type == "POST"
             && !hasMedia
             && audioUrl == nil
             && mobileTranscription == nil
-            && location == nil
         if isDurableTextOnly,
            let text = content,
            !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            await enqueueDurableTextPost(content: text, visibility: visibility, originalLanguage: originalLanguage)
+            await enqueueDurableTextPost(content: text, visibility: visibility, originalLanguage: originalLanguage, location: location)
             return
         }
 
@@ -546,7 +544,7 @@ class FeedViewModel: ObservableObject {
     /// echoes the cmid on `post:created`, where FeedViewModel reconciles the
     /// optimistic post in place (cmid -> server id). Rolls back if the outbox
     /// refuses the row synchronously, or later exhausts its retry budget.
-    private func enqueueDurableTextPost(content: String, visibility: String, originalLanguage: String?) async {
+    private func enqueueDurableTextPost(content: String, visibility: String, originalLanguage: String?, location: SharedPlace? = nil) async {
         let cmid = ClientMutationId.generate()
         let currentUser = AuthManager.shared.currentUser
         let optimistic = FeedPost(
@@ -568,7 +566,8 @@ class FeedViewModel: ObservableObject {
             content: content,
             attachmentIds: [],
             visibility: visibility,
-            originalLanguage: originalLanguage
+            originalLanguage: originalLanguage,
+            location: location
         )
         do {
             try await offlineQueue.enqueue(.createPost, payload: payload, conversationId: nil)
@@ -636,10 +635,9 @@ class FeedViewModel: ObservableObject {
     /// exact post durability machinery, only the server-side `type` differs.
     ///
     /// `location` widens the call surface so both `FeedView+Attachments.swift`
-    /// call sites can pass `pendingPlace` — the durable outbox (`CreatePostPayload`
-    /// / `enqueuePostMedia`) doesn't carry a location yet (cf. Task 17), so it
-    /// isn't forwarded any further here. A media post composed offline with a
-    /// position attached still enqueues; the position itself isn't durable yet.
+    /// call sites can pass `pendingPlace` — Task 17 a donné à `CreatePostPayload`
+    /// / `enqueuePostMedia` un champ `location`, donc un média posté hors-ligne
+    /// avec une position attachée la conserve désormais jusqu'au flush.
     func createOfflineMediaPost(
         localMediaURLs: [URL],
         content: String?,
@@ -654,7 +652,8 @@ class FeedViewModel: ObservableObject {
             await enqueueDurableTextPost(
                 content: content ?? "",
                 visibility: visibility,
-                originalLanguage: originalLanguage
+                originalLanguage: originalLanguage,
+                location: location
             )
             return
         }
@@ -683,7 +682,8 @@ class FeedViewModel: ObservableObject {
                 content: content,
                 visibility: visibility,
                 originalLanguage: originalLanguage,
-                type: type
+                type: type,
+                location: location
             )
             publishSuccess = true
             observeOutcome(cmid: cmid, rollback: { [weak self] in

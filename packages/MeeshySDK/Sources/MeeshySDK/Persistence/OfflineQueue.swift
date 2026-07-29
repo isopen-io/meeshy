@@ -1592,7 +1592,8 @@ public actor OfflineQueue {
         content: String?,
         visibility: String,
         originalLanguage: String? = nil,
-        type: String? = nil
+        type: String? = nil,
+        location: SharedPlace? = nil
     ) async throws -> EnqueueMediaResult {
         guard let pool = outboxPool else { throw EnqueueMediaError.poolNotConfigured }
 
@@ -1607,7 +1608,8 @@ public actor OfflineQueue {
             visibility: visibility,
             originalLanguage: originalLanguage,
             localMediaPaths: relativePaths,
-            type: type
+            type: type,
+            location: location
         )
 
         // Phase A — write-ahead INSERT of the `.createPost` row (referencing the

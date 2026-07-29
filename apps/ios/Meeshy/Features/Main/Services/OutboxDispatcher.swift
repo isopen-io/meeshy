@@ -493,6 +493,11 @@ struct OutboxDispatcher: OutboxDispatching {
             let audioUrl: String?
             let audioDuration: Int?
             let visibilityUserIds: [String]?
+            /// Task 17 — même clé top-level `location` que le chemin direct
+            /// (`CreatePostRequest`, `PostService.create`) : sans elle ici, la
+            /// position survivrait jusqu'au décodage de `CreatePostPayload` mais
+            /// serait tout de même jetée en silence à l'ultime saut réseau.
+            let location: SharedPlace?
 
             func encode(to encoder: Encoder) throws {
                 var container = encoder.container(keyedBy: CodingKeys.self)
@@ -505,11 +510,12 @@ struct OutboxDispatcher: OutboxDispatching {
                 if let audioUrl, !audioUrl.isEmpty { try container.encode(audioUrl, forKey: .audioUrl) }
                 if let audioDuration { try container.encode(audioDuration, forKey: .audioDuration) }
                 if let visibilityUserIds, !visibilityUserIds.isEmpty { try container.encode(visibilityUserIds, forKey: .visibilityUserIds) }
+                if let location { try container.encode(location, forKey: .location) }
             }
 
             enum CodingKeys: String, CodingKey {
                 case content, mediaIds, visibility, originalLanguage, type
-                case moodEmoji, audioUrl, audioDuration, visibilityUserIds
+                case moodEmoji, audioUrl, audioDuration, visibilityUserIds, location
             }
         }
         let body = CreatePostBody(
@@ -521,7 +527,8 @@ struct OutboxDispatcher: OutboxDispatching {
             moodEmoji: payload.moodEmoji,
             audioUrl: payload.audioUrl,
             audioDuration: payload.audioDuration,
-            visibilityUserIds: payload.visibilityUserIds
+            visibilityUserIds: payload.visibilityUserIds,
+            location: payload.location
         )
         let _: APIResponse<[String: AnyCodable]> = try await APIClient.shared.requestWithHeaders(
             endpoint: "/posts",

@@ -310,6 +310,13 @@ public struct CreatePostPayload: Codable, Sendable, Equatable {
     /// Explicit recipient ids for `EXCEPT` / `ONLY` visibility (and audience
     /// scoping for statuses). `nil` for the public/friends default.
     public let visibilityUserIds: [String]?
+    /// Task 17 — lieu partagé en attente d'envoi. `nil` pour l'immense
+    /// majorité des posts — porté ici pour que le chemin durable (outbox)
+    /// transporte la position exactement comme le chemin direct
+    /// (`PostService.create`), au lieu de la perdre au flush après un envoi
+    /// hors-ligne. Optionnel : un enregistrement persisté avant Task 17
+    /// décode toujours sans cette clé.
+    public let location: SharedPlace?
 
     public init(
         clientMutationId: String,
@@ -322,7 +329,8 @@ public struct CreatePostPayload: Codable, Sendable, Equatable {
         moodEmoji: String? = nil,
         audioUrl: String? = nil,
         audioDuration: Int? = nil,
-        visibilityUserIds: [String]? = nil
+        visibilityUserIds: [String]? = nil,
+        location: SharedPlace? = nil
     ) {
         self.clientMutationId = clientMutationId
         self.content = content
@@ -335,6 +343,7 @@ public struct CreatePostPayload: Codable, Sendable, Equatable {
         self.audioUrl = audioUrl
         self.audioDuration = audioDuration
         self.visibilityUserIds = visibilityUserIds
+        self.location = location
     }
 }
 
