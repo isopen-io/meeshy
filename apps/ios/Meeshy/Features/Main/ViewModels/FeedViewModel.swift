@@ -494,16 +494,18 @@ class FeedViewModel: ObservableObject {
         // gateway only echoes the cmid on the POST branch of post:created, so
         // only type == "POST" can be reconciled by FeedViewModel.postCreated.
         let hasMedia = !(mediaIds?.isEmpty ?? true)
+        // La file durable ne porte pas encore de lieu (câblage à part — cf.
+        // Task 17) : un post texte + position doit rester sur le chemin direct
+        // ci-dessous (qui, lui, transmet `location`), sinon la position est
+        // jetée en silence. Seul un post texte SANS position passe par la file.
         let isDurableTextOnly = type == "POST"
             && !hasMedia
             && audioUrl == nil
             && mobileTranscription == nil
+            && location == nil
         if isDurableTextOnly,
            let text = content,
            !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            // La position n'est pas encore portée par la file durable (charge et
-            // câblage à part — cf. Task 17) : un post texte + lieu passe encore
-            // ici sans sa position tant que ce chemin n'est pas étendu.
             await enqueueDurableTextPost(content: text, visibility: visibility, originalLanguage: originalLanguage)
             return
         }
