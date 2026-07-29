@@ -1720,7 +1720,7 @@ final class StoryViewModelTests: XCTestCase {
         let local = URL(fileURLWithPath: "/tmp/story-cover.jpg")
         let resolved = StoryCoverThumbnail.preferredCoverURLString(
             localCover: local, serverThumbnailUrl: "https://cdn/x.jpg",
-            mediaUrl: "https://cdn/raw.mp4", avatarURL: "https://cdn/avatar.png")
+            mediaUrl: "https://cdn/raw.mp4", mediaIsImage: false, avatarURL: "https://cdn/avatar.png")
         XCTAssertEqual(resolved, local.absoluteString,
                        "local composite (captures text/drawing) must win over the server thumbnail")
     }
@@ -1730,19 +1730,39 @@ final class StoryViewModelTests: XCTestCase {
         XCTAssertEqual(
             StoryCoverThumbnail.preferredCoverURLString(
                 localCover: nil, serverThumbnailUrl: "https://cdn/thumb.jpg",
-                mediaUrl: "https://cdn/raw.mp4", avatarURL: "av"),
+                mediaUrl: "https://cdn/raw.mp4", mediaIsImage: false, avatarURL: "av"),
             "https://cdn/thumb.jpg")
-        // empty server thumb is skipped → media url
+        // empty server thumb is skipped → image media url
         XCTAssertEqual(
             StoryCoverThumbnail.preferredCoverURLString(
                 localCover: nil, serverThumbnailUrl: "",
-                mediaUrl: "https://cdn/raw.mp4", avatarURL: "av"),
-            "https://cdn/raw.mp4")
+                mediaUrl: "https://cdn/raw.jpg", mediaIsImage: true, avatarURL: "av"),
+            "https://cdn/raw.jpg")
         // nothing but avatar
         XCTAssertEqual(
             StoryCoverThumbnail.preferredCoverURLString(
-                localCover: nil, serverThumbnailUrl: nil, mediaUrl: nil, avatarURL: "av"),
+                localCover: nil, serverThumbnailUrl: nil, mediaUrl: nil, mediaIsImage: false, avatarURL: "av"),
             "av")
+    }
+
+    func test_preferredCoverURL_videoWithoutThumbnail_skipsMediaURL_fallsBackToAvatar() {
+        // A video mediaUrl is never decodable by CachedAvatarImage — must not be
+        // used as the tray cover, even when there is no server thumbnail.
+        XCTAssertEqual(
+            StoryCoverThumbnail.preferredCoverURLString(
+                localCover: nil, serverThumbnailUrl: nil,
+                mediaUrl: "https://cdn/raw.mp4", mediaIsImage: false, avatarURL: "https://cdn/avatar.png"),
+            "https://cdn/avatar.png",
+            "video without a thumbnail must fall through to the avatar, never the raw mp4 URL")
+    }
+
+    func test_preferredCoverURL_imageWithoutThumbnail_usesMediaURL() {
+        XCTAssertEqual(
+            StoryCoverThumbnail.preferredCoverURLString(
+                localCover: nil, serverThumbnailUrl: nil,
+                mediaUrl: "https://cdn/raw.jpg", mediaIsImage: true, avatarURL: "https://cdn/avatar.png"),
+            "https://cdn/raw.jpg",
+            "image without a thumbnail can safely use the raw (decodable) media URL")
     }
 
     // MARK: - mediaURLStrings (prefetch dedup — extraction pure)

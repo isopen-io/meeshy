@@ -573,22 +573,11 @@ struct FeedView: View {
     // MARK: - Composer Placeholder
     private var composerPlaceholder: some View {
         HStack(spacing: 12) {
-            // Avatar
-            ZStack {
-                Circle()
-                    .fill(
-                        LinearGradient(
-                            colors: [MeeshyColors.error, MeeshyColors.indigo300],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-                    .frame(width: 40, height: 40)
-
-                Text("M")
-                    .font(.headline.weight(.bold))
-                    .foregroundColor(.white)
-            }
+            MeeshyAvatar(
+                name: getUserDisplayName(AuthManager.shared.currentUser, fallback: "M"),
+                context: .custom(40),
+                avatarURL: AuthManager.shared.currentUser?.avatar
+            )
             .accessibilityHidden(true)
 
             // Text input placeholder

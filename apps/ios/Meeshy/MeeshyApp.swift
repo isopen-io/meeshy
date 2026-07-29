@@ -560,6 +560,7 @@ struct MeeshyApp: App {
                         // incoming calls use the in-app banner (socket) instead of a
                         // VoIP push / CallKit.
                         MessageSocketManager.shared.emitAppForeground(true)
+                        Task { await AuthManager.shared.refreshCurrentUserProfile() }
                         // Only rearm the socket + backfill if we ACTUALLY backgrounded.
                         // A transient .inactive→.active (Control Center, notification
                         // banner, app-switcher peek, Face ID) never suspended the

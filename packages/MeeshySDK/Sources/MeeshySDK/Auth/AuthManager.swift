@@ -130,6 +130,11 @@ public final class AuthManager: ObservableObject, AuthManaging {
     /// Prevents concurrent refresh loops when APIClient fires multiple 401s.
     private var tokenRefreshTask: Task<String, Error>?
 
+    /// Throttle gate for `refreshCurrentUserProfile()` — foreground transitions
+    /// can fire in quick succession (Control Center, app-switcher peek); this
+    /// keeps each one from re-hitting `/auth/me`.
+    private var lastProfileRefreshAt: Date?
+
     #if DEBUG
     /// Tâche d'arrière-plan lancée par `handleUnauthorized()`, retenue pour que
     /// les tests puissent l'attendre. Voir `cancelPendingTokenRefreshForTesting`.
@@ -659,6 +664,37 @@ public final class AuthManager: ObservableObject, AuthManaging {
             } catch {
                 // Cancellation / unknown — preserve session.
             }
+        }
+    }
+
+    /// Revalidates `currentUser` against `/auth/me` on scene foreground so a
+    /// profile edit made from another device (avatar, displayName…) reaches
+    /// this device without waiting for a cold start. Throttled to once per
+    /// 60s and a no-op when not authenticated. Shares the exact error
+    /// semantics of the `checkExistingSession` background revalidation: a
+    /// dead account (`isActive == false`) or an auth failure surfaces
+    /// re-authentication, any other error is transient and leaves the
+    /// session untouched.
+    public func refreshCurrentUserProfile() async {
+        guard isAuthenticated, let userId = activeUserId else { return }
+        if let lastProfileRefreshAt, Date().timeIntervalSince(lastProfileRefreshAt) < 60 {
+            return
+        }
+        lastProfileRefreshAt = Date()
+
+        do {
+            let user = try await authService.me()
+            updateUserAfterRevalidation(user, userId: userId)
+        } catch let error as MeeshyError {
+            switch error {
+            case .auth:
+                requireReauthentication(userId: userId)
+            case .network, .server, .message, .media, .forbidden, .unknown:
+                // Transient — keep session, retry on next foreground / launch.
+                break
+            }
+        } catch {
+            // Cancellation / unknown — preserve session.
         }
     }
 

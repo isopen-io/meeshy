@@ -24,16 +24,18 @@ enum StoryCoverThumbnail {
     static func cacheKey(storyId: String) -> String { "story-cover:\(storyId)" }
 
     /// Tray cover resolution order: locally-rendered composite (captures every layer)
-    /// → server thumbnail → raw media URL → author avatar. Pure + testable.
+    /// → server thumbnail → raw media URL (image only — `CachedAvatarImage` cannot
+    /// decode a video file) → author avatar. Pure + testable.
     static func preferredCoverURLString(
         localCover: URL?,
         serverThumbnailUrl: String?,
         mediaUrl: String?,
+        mediaIsImage: Bool,
         avatarURL: String?
     ) -> String? {
         if let localCover { return localCover.absoluteString }
         if let t = serverThumbnailUrl, !t.isEmpty { return t }
-        if let u = mediaUrl, !u.isEmpty { return u }
+        if mediaIsImage, let u = mediaUrl, !u.isEmpty { return u }
         return avatarURL
     }
 }

@@ -431,6 +431,7 @@ fileprivate func latestStoryThumbnailURL(_ group: StoryGroup) -> String? {
         localCover: localCover,
         serverThumbnailUrl: lastStory.media.first?.thumbnailUrl,
         mediaUrl: lastStory.media.first?.url,
+        mediaIsImage: lastStory.media.first?.type == .image,
         avatarURL: group.avatarURL
     )
 }
