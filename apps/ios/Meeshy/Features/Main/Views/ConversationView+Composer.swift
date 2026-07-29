@@ -1027,7 +1027,8 @@ extension ConversationView {
     /// le composer (régression que l'ancien `MessageAttachment.location`
     /// couvrait par accident).
     private func pendingPlaceTile(_ place: SharedPlace) -> some View {
-        VStack(spacing: 4) {
+        let label = place.name ?? String(localized: "attachment.label.location", defaultValue: "Location", bundle: .main)
+        return VStack(spacing: 4) {
             ZStack(alignment: .topTrailing) {
                 locationTileFallback()
 
@@ -1044,11 +1045,11 @@ extension ConversationView {
                                 .shadow(color: MeeshyColors.error.opacity(0.4), radius: 3, y: 1)
                         )
                 }
-                .accessibilityLabel(String(localized: "conversation.view.composer.delete_attachment", defaultValue: "Supprimer \(place.name ?? String(localized: "attachment.label.location", defaultValue: "Location", bundle: .main))", bundle: .main))
+                .accessibilityLabel(String(localized: "conversation.view.composer.delete_attachment", defaultValue: "Supprimer \(label)", bundle: .main))
                 .offset(x: 5, y: -5)
             }
 
-            Text(place.name ?? String(localized: "attachment.label.location", defaultValue: "Location", bundle: .main))
+            Text(label)
                 .font(MeeshyFont.relative(10, weight: .medium))
                 .foregroundColor(theme.textSecondary)
                 .lineLimit(1)
