@@ -79,6 +79,114 @@ final class CallManagerAudioSessionTests: XCTestCase {
         )
     }
 
+    /// CallKit has its own internal per-action deadline, independent of any
+    /// app-side safety net (e.g. `pendingAnswerActionSafetyNetSeconds` for a
+    /// held `CXAnswerCallAction`). If CallKit's deadline elapses first, it
+    /// calls `provider(_:timedOutPerforming:)` — without this delegate method
+    /// implemented, the app never learns CallKit already gave up on the
+    /// action, and can be left holding a stale `pendingAnswerAction` it will
+    /// later try to `.fulfill()` on a transaction CallKit no longer tracks.
+    func test_callKitDelegateProxy_implementsTimedOutPerforming() throws {
+        let source = try callManagerSource()
+        XCTAssertTrue(
+            source.contains("func provider(_ provider: CXProvider, timedOutPerforming action: CXAction)"),
+            "CallKitDelegateProxy must implement provider(_:timedOutPerforming:) to reconcile local " +
+            "call state when CallKit's own internal action deadline elapses before we settle it."
+        )
+    }
+
+    /// Apple's CXProviderDelegate docs: once `timedOutPerforming` fires, CallKit has
+    /// already torn down its side of the action — calling `.fulfill()`/`.fail()` on it
+    /// again is undefined behavior. The handler must only reconcile local state
+    /// (clear the held reference, end the call), never re-settle the timed-out action.
+    func test_callKitDelegateProxy_timedOutPerforming_doesNotSettleAction() throws {
+        let source = try callManagerSource()
+        guard let range = source.range(of: "func provider(_ provider: CXProvider, timedOutPerforming action: CXAction) {") else {
+            XCTFail("provider(_:timedOutPerforming:) not found"); return
+        }
+        let end = source.range(of: "\n    }", range: range.upperBound..<source.endIndex)?.upperBound ?? source.endIndex
+        let body = String(source[range.lowerBound..<end])
+
+        XCTAssertFalse(
+            body.contains("action.fulfill()"),
+            "timedOutPerforming must NOT call action.fulfill() — CallKit already gave up on the " +
+            "action by the time this fires; re-settling it is undefined behavior."
+        )
+        XCTAssertFalse(
+            body.contains("action.fail()"),
+            "timedOutPerforming must NOT call action.fail() — CallKit already gave up on the " +
+            "action by the time this fires; re-settling it is undefined behavior."
+        )
+        XCTAssertTrue(
+            body.contains("manager.endCall()") || body.contains("manager?.endCall()"),
+            "timedOutPerforming must reconcile local state by tearing down the call CallKit " +
+            "already abandoned."
+        )
+    }
+
+    // MARK: - Audio Interruption Reactivation vs. Hangup Race
+
+    /// `handleAudioInterruption`'s `.ended` branch reactivates RTCAudioSession via
+    /// `audioSessionQueue.async` (fire-and-forget, so the MainActor isn't blocked). If a
+    /// hangup races that dispatch, the reactivation can run AFTER `deactivateAudioSession()`
+    /// (or CallKit's `didDeactivate`, delivered on CallKit's own private queue — a
+    /// different thread than this dispatch) and resurrect audio post-hangup. The block
+    /// must re-check a shared "is a call still expected to be active" flag from INSIDE
+    /// `audioSessionQueue` (where it's actually serialized against every writer) rather
+    /// than only checking `callState.isActive` once, outside the queue, before dispatch.
+    func test_handleAudioInterruption_reactivation_guardsOnAudioSessionExpectedActiveFlag() throws {
+        let source = try callManagerSource()
+        guard let fnRange = source.range(of: "private func handleAudioInterruption(") else {
+            XCTFail("handleAudioInterruption not found"); return
+        }
+        let endIdx = source.index(fnRange.lowerBound, offsetBy: 2500, limitedBy: source.endIndex) ?? source.endIndex
+        let fnBody = String(source[fnRange.lowerBound ..< endIdx])
+
+        guard let asyncRange = fnBody.range(of: "audioSessionQueue.async") else {
+            XCTFail("audioSessionQueue.async not found in handleAudioInterruption"); return
+        }
+        let asyncBody = String(fnBody[asyncRange.lowerBound...])
+
+        XCTAssertTrue(
+            asyncBody.contains("isAudioSessionExpectedActive"),
+            "The interruption-ended reactivation block must re-check " +
+            "CallManager.isAudioSessionExpectedActive INSIDE the audioSessionQueue dispatch — " +
+            "a hangup racing the async dispatch must not resurrect RTCAudioSession post-teardown."
+        )
+    }
+
+    func test_configureAudioSession_setsAudioSessionExpectedActiveTrue() throws {
+        let source = try callManagerSource()
+        guard let fnRange = source.range(of: "private func configureAudioSession() {") else {
+            XCTFail("configureAudioSession not found"); return
+        }
+        let endIdx = source.range(of: "private func updateAudioSessionModeForCurrentVideoState", range: fnRange.upperBound..<source.endIndex)?.lowerBound
+            ?? source.endIndex
+        let fnBody = String(source[fnRange.lowerBound ..< endIdx])
+
+        XCTAssertTrue(
+            fnBody.contains("isAudioSessionExpectedActive = true"),
+            "configureAudioSession must mark CallManager.isAudioSessionExpectedActive = true — " +
+            "this is the single flag the interruption-reactivation race guard reads."
+        )
+    }
+
+    func test_deactivateAudioSession_setsAudioSessionExpectedActiveFalse() throws {
+        let source = try callManagerSource()
+        guard let fnRange = source.range(of: "private func deactivateAudioSession() {") else {
+            XCTFail("deactivateAudioSession not found"); return
+        }
+        let endIdx = source.index(fnRange.lowerBound, offsetBy: 900, limitedBy: source.endIndex) ?? source.endIndex
+        let fnBody = String(source[fnRange.lowerBound ..< endIdx])
+
+        XCTAssertTrue(
+            fnBody.contains("isAudioSessionExpectedActive = false"),
+            "deactivateAudioSession must mark CallManager.isAudioSessionExpectedActive = false — " +
+            "otherwise a concurrently-dispatched interruption-ended reactivation can resurrect " +
+            "audio after this teardown ran."
+        )
+    }
+
     func test_callManager_toggleTranscription_doesNotHardcodeLanguage() throws {
         // Regression guard: toggleTranscription() must not hardcode language strings.
         // Language resolution is delegated to CallManager.preferredCallLanguage(for:)
