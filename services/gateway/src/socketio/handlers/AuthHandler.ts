@@ -1,5 +1,5 @@
 import type { Socket } from 'socket.io';
-import { PrismaClient } from '@meeshy/shared/prisma/client';
+import { PrismaClient, CallEndReason } from '@meeshy/shared/prisma/client';
 import { StatusService } from '../../services/StatusService';
 import { MaintenanceService } from '../../services/MaintenanceService';
 import { CallService } from '../../services/CallService';
@@ -394,7 +394,14 @@ export class AuthHandler {
             await this.callService.leaveCall({
               callId: participation.callSessionId,
               userId: userIdOrToken,
-              participantId: participation.participantId
+              participantId: participation.participantId,
+              // CALL-RESILIENCE (Vague 43) — this loop only ever runs on socket
+              // `disconnect` (see the comment above), never a deliberate
+              // call:leave/call:end. Mirrors CallEventsHandler
+              // .leaveParticipationAndBroadcast's identical Vague 42 fix: without
+              // this hint, leaveCall() defaults to endReason 'completed',
+              // misrecording an involuntary drop as a normal hangup.
+              endReasonHint: CallEndReason.connectionLost
             });
           } catch (error) {
             logger.error('error auto-leaving call on disconnect', { callId: participation.callSessionId, error });

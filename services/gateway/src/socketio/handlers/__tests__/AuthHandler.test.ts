@@ -7,6 +7,7 @@ import { describe, it, expect, beforeEach, afterEach } from '@jest/globals';
 import { AuthHandler } from '../AuthHandler';
 import type { Socket } from 'socket.io';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
+import { CallEndReason } from '@meeshy/shared/prisma/client';
 import { StatusService } from '../../../services/StatusService';
 import jwt from 'jsonwebtoken';
 
@@ -417,15 +418,21 @@ describe('AuthHandler', () => {
         })
       );
       expect(mockCallService.leaveCall).toHaveBeenCalledTimes(2);
+      // CALL-RESILIENCE (Vague 43) — mirrors CallEventsHandler.leaveParticipationAndBroadcast's
+      // Vague 42 fix: an anonymous participant's disconnect here is always an
+      // involuntary socket drop, never a deliberate call:leave/call:end, so
+      // leaveCall must stamp connectionLost rather than defaulting to completed.
       expect(mockCallService.leaveCall).toHaveBeenCalledWith({
         callId: 'call-1',
         userId: 'anon-123',
-        participantId: 'participant-a'
+        participantId: 'participant-a',
+        endReasonHint: CallEndReason.connectionLost
       });
       expect(mockCallService.leaveCall).toHaveBeenCalledWith({
         callId: 'call-2',
         userId: 'anon-123',
-        participantId: 'participant-b'
+        participantId: 'participant-b',
+        endReasonHint: CallEndReason.connectionLost
       });
       // Maps cleaned despite leaving calls
       expect(connectedUsers.has('anon-123')).toBe(false);
