@@ -26,6 +26,10 @@ public struct CommentRecord: Codable, FetchableRecord, PersistableRecord, Sendab
     /// so the displayed count survives an app restart instead of reverting to the
     /// last REST snapshot. Decoded lazily via the `reactionSummary` accessor.
     public var reactionSummaryJson: Data?
+    /// Lieu partagé (JSON `SharedPlace`), hissé depuis `APIPostComment.location`.
+    /// Stocké en texte comme sur `MessageRecord.locationJson` (Task 15) —
+    /// même mécanique, même colonne texte plutôt que blob.
+    public var locationJson: String?
 
     public init(
         id: String, postId: String, parentId: String?,
@@ -35,7 +39,8 @@ public struct CommentRecord: Codable, FetchableRecord, PersistableRecord, Sendab
         translatedContent: String?,
         likeCount: Int, replyCount: Int, effectFlags: Int,
         createdAt: Date, changeVersion: Int64,
-        reactionSummaryJson: Data? = nil
+        reactionSummaryJson: Data? = nil,
+        locationJson: String? = nil
     ) {
         self.id = id
         self.postId = postId
@@ -53,6 +58,7 @@ public struct CommentRecord: Codable, FetchableRecord, PersistableRecord, Sendab
         self.createdAt = createdAt
         self.changeVersion = changeVersion
         self.reactionSummaryJson = reactionSummaryJson
+        self.locationJson = locationJson
     }
 }
 
@@ -66,6 +72,13 @@ public extension CommentRecord {
                                                       field: "comment reactionSummaryJson", id: id)
         else { return [:] }
         return decoded
+    }
+
+    /// Position décodée depuis `locationJson`, `nil` quand le commentaire n'en
+    /// porte pas. Décodage paresseux, symétrique de `reactionSummary`.
+    var location: SharedPlace? {
+        guard let locationJson, let data = locationJson.data(using: .utf8) else { return nil }
+        return JSONDecoder().decodeOrLog(SharedPlace.self, from: data, field: "comment locationJson", id: id)
     }
 }
 

@@ -28,6 +28,19 @@ final class PostRecordTests: XCTestCase {
         }
         XCTAssertEqual(fetched?.content, "Hello feed")
     }
+
+    func test_location_defaultsToNil() {
+        let post = PostRecordFactory.make(id: "post_no_loc")
+        XCTAssertNil(post.location)
+    }
+
+    func test_location_roundTripsThroughTheCache() throws {
+        let place = SharedPlace(latitude: 45.75, longitude: 4.85, name: "Lyon")
+        let json = String(data: try JSONEncoder().encode(place), encoding: .utf8)
+        let post = PostRecordFactory.make(id: "post_loc", locationJson: json)
+        XCTAssertEqual(post.location?.name, "Lyon",
+                       "Une position affichee en ligne puis perdue au relaunch viole le principe Cache-First.")
+    }
 }
 
 enum PostRecordFactory {
@@ -35,7 +48,8 @@ enum PostRecordFactory {
         id: String = "post_\(UUID().uuidString)",
         authorId: String = "user_1",
         content: String? = "Test post",
-        changeVersion: Int64 = 0
+        changeVersion: Int64 = 0,
+        locationJson: String? = nil
     ) -> PostRecord {
         PostRecord(
             id: id, authorId: authorId, authorUsername: "testuser",
@@ -47,7 +61,8 @@ enum PostRecordFactory {
             moodEmoji: nil, audioUrl: nil, audioDuration: nil,
             mediaJson: nil, reactionSummaryJson: nil, repostOfJson: nil,
             mentionedUsersJson: nil, translationsJson: nil,
-            createdAt: Date(), updatedAt: nil, changeVersion: changeVersion
+            createdAt: Date(), updatedAt: nil, changeVersion: changeVersion,
+            locationJson: locationJson
         )
     }
 }

@@ -68,6 +68,19 @@ final class CommentRecordTests: XCTestCase {
         XCTAssertEqual(fetched?.reactionSummary["👍"], 3)
         XCTAssertEqual(fetched?.reactionSummary["🔥"], 1)
     }
+
+    func test_location_defaultsToNil() {
+        let comment = CommentRecordFactory.make(id: "c_no_loc")
+        XCTAssertNil(comment.location)
+    }
+
+    func test_location_roundTripsThroughTheCache() throws {
+        let place = SharedPlace(latitude: 45.75, longitude: 4.85, name: "Lyon")
+        let json = String(data: try JSONEncoder().encode(place), encoding: .utf8)
+        let comment = CommentRecordFactory.make(id: "c_loc", locationJson: json)
+        XCTAssertEqual(comment.location?.name, "Lyon",
+                       "Une position affichee en ligne puis perdue au relaunch viole le principe Cache-First.")
+    }
 }
 
 enum CommentRecordFactory {
@@ -77,7 +90,8 @@ enum CommentRecordFactory {
         parentId: String? = nil,
         content: String = "Test comment",
         changeVersion: Int64 = 0,
-        reactionSummaryJson: Data? = nil
+        reactionSummaryJson: Data? = nil,
+        locationJson: String? = nil
     ) -> CommentRecord {
         CommentRecord(
             id: id, postId: postId, parentId: parentId,
@@ -86,7 +100,8 @@ enum CommentRecordFactory {
             content: content, originalLanguage: "fr",
             translatedContent: nil, likeCount: 0, replyCount: 0,
             effectFlags: 0, createdAt: Date(), changeVersion: changeVersion,
-            reactionSummaryJson: reactionSummaryJson
+            reactionSummaryJson: reactionSummaryJson,
+            locationJson: locationJson
         )
     }
 }

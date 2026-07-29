@@ -34,6 +34,10 @@ public struct PostRecord: Codable, FetchableRecord, PersistableRecord, Sendable 
     public var createdAt: Date
     public var updatedAt: Date?
     public var changeVersion: Int64
+    /// Lieu partagé (JSON `SharedPlace`), hissé depuis `APIPost.location`.
+    /// Stocké en texte comme sur `MessageRecord.locationJson` (Task 15) —
+    /// même mécanique, même colonne texte plutôt que blob.
+    public var locationJson: String?
 
     public init(
         id: String, authorId: String,
@@ -51,7 +55,8 @@ public struct PostRecord: Codable, FetchableRecord, PersistableRecord, Sendable 
         repostOfJson: Data?, mentionedUsersJson: Data?,
         translationsJson: Data?,
         createdAt: Date, updatedAt: Date?,
-        changeVersion: Int64
+        changeVersion: Int64,
+        locationJson: String? = nil
     ) {
         self.id = id
         self.authorId = authorId
@@ -83,6 +88,17 @@ public struct PostRecord: Codable, FetchableRecord, PersistableRecord, Sendable 
         self.createdAt = createdAt
         self.updatedAt = updatedAt
         self.changeVersion = changeVersion
+        self.locationJson = locationJson
+    }
+}
+
+public extension PostRecord {
+    /// Position décodée depuis `locationJson`, `nil` quand le post n'en porte
+    /// pas. Décodage paresseux (comme `CommentRecord.reactionSummary`) plutôt
+    /// que colonne stockée séparément — un seul champ JSON fait foi.
+    var location: SharedPlace? {
+        guard let locationJson, let data = locationJson.data(using: .utf8) else { return nil }
+        return JSONDecoder().decodeOrLog(SharedPlace.self, from: data, field: "post locationJson", id: id)
     }
 }
 

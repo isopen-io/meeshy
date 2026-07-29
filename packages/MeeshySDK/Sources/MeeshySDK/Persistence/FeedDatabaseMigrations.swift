@@ -87,5 +87,17 @@ public enum FeedDatabaseMigrations {
                 t.add(column: "reactionSummaryJson", .blob)
             }
         }
+
+        // Lieu partagé sur un post/commentaire de feed — même schéma que
+        // `messages_location` (Task 15) : colonne texte nullable, les lignes
+        // existantes décodent en `nil`.
+        migrator.registerMigration("feed_location") { db in
+            try db.alter(table: "feed_posts") { t in
+                t.add(column: "locationJson", .text)
+            }
+            try db.alter(table: "feed_comments") { t in
+                t.add(column: "locationJson", .text)
+            }
+        }
     }
 }

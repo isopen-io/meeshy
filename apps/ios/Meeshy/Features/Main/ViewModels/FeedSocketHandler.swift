@@ -268,7 +268,11 @@ extension PostRecord {
             translationsJson: Self.encode(post.translations),
             createdAt: post.createdAt,
             updatedAt: post.updatedAt,
-            changeVersion: 0
+            changeVersion: 0,
+            // Sans ce hissage, une position affichée juste après l'envoi
+            // disparaît au prochain chargement du cache : `locationJson`
+            // resterait nil pour toujours (Task 16).
+            locationJson: Self.encode(post.location).flatMap { String(data: $0, encoding: .utf8) }
         )
     }
 
@@ -298,7 +302,11 @@ extension CommentRecord {
             replyCount: comment.replyCount ?? 0,
             effectFlags: comment.effectFlags ?? 0,
             createdAt: comment.createdAt,
-            changeVersion: 0
+            changeVersion: 0,
+            // Même hissage que sur PostRecord : sans lui, la position d'un
+            // commentaire disparaît au prochain chargement du cache (Task 16).
+            locationJson: comment.location.flatMap { try? JSONEncoder().encode($0) }
+                .flatMap { String(data: $0, encoding: .utf8) }
         )
     }
 }
