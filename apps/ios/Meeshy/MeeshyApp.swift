@@ -981,12 +981,48 @@ enum UILanguageOverride {
 
     private static let cacheKey = "meeshy.ui.language"
     private static let appleLanguagesKey = "AppleLanguages"
+    private static let explicitKey = "meeshy.ui.language.explicit"
+
+    /// Sentinelle « suivre la langue principale » — un choix, pas une langue.
+    nonisolated static let automaticCode = "auto"
+
+    /// Langues proposées dans les Réglages, hors sentinelle. Dérivée de ce que
+    /// l'app sait réellement afficher : la liste des choix ne peut pas
+    /// s'écarter des catalogues.
+    nonisolated static var selectableCodes: [String] { supportedUICodes }
+
+    /// Langue d'affichage retenue : le choix explicite de l'auteur s'il est
+    /// posé ET livré, sinon la langue principale du compte.
+    ///
+    /// Le repli n'est pas un détail. `AppearancePreferences.interfaceLanguage`
+    /// vaut « en » par défaut pour tout le monde : faire primer cette
+    /// préférence telle quelle aurait basculé en anglais l'interface de chaque
+    /// utilisateur qui n'y a jamais touché. Le choix explicite vit donc à part,
+    /// et son absence rend la main à la langue principale.
+    nonisolated static func resolvedCode(explicit: String?, fallback: String?) -> String? {
+        if let explicit, explicit != automaticCode, let code = normalized(explicit) {
+            return code
+        }
+        return normalized(fallback)
+    }
+
+    /// Choix explicite de langue d'interface. `nil` = automatique.
+    static var explicitChoice: String? {
+        get { UserDefaults.standard.string(forKey: explicitKey) }
+        set {
+            if let newValue, newValue != automaticCode, normalized(newValue) != nil {
+                UserDefaults.standard.set(newValue, forKey: explicitKey)
+            } else {
+                UserDefaults.standard.removeObject(forKey: explicitKey)
+            }
+        }
+    }
 
     /// Normalise un code de langue vers un code UI supporté, ou `nil`.
     /// - Comparaison insensible à la casse contre `supportedUICodes`.
     /// - `pt` (ou `pt_PT`, `pt-BR`…) → `pt-BR` (seule variante portugaise traduite).
     /// - Sinon réduit à la base 2-lettres lowercase et re-teste l'appartenance.
-    static func normalized(_ raw: String?) -> String? {
+    nonisolated static func normalized(_ raw: String?) -> String? {
         guard let trimmed = raw?.trimmingCharacters(in: .whitespacesAndNewlines),
               !trimmed.isEmpty else { return nil }
         let lower = trimmed.lowercased()
@@ -1008,10 +1044,12 @@ enum UILanguageOverride {
     }
 
     /// Applique l'override au tout début du lancement (à appeler depuis
-    /// `MeeshyApp.init()`). No-op si le cache est absent/non-supporté.
+    /// `MeeshyApp.init()`). No-op si rien n'est choisi ni mis en cache.
     static func applyIfNeeded() {
-        guard let cached = normalized(UserDefaults.standard.string(forKey: cacheKey)) else { return }
-        UserDefaults.standard.set([cached], forKey: appleLanguagesKey)
+        guard let code = resolvedCode(explicit: explicitChoice,
+                                      fallback: UserDefaults.standard.string(forKey: cacheKey))
+        else { return }
+        UserDefaults.standard.set([code], forKey: appleLanguagesKey)
     }
 }
 

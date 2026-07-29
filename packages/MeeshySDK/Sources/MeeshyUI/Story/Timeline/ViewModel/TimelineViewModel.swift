@@ -320,8 +320,8 @@ public final class TimelineViewModel: ObservableObject {
         // Tolérance adaptée au zoom (~8pt de doigt). L'engine figé à 0.06s était
         // trop serré pour un aimant perceptible ; le magnet doit accrocher dès
         // qu'un bord approche visuellement celui d'un autre.
-        let pixelsPerSecond = max(1, Float(50.0 * zoomScale))
-        let magnetEngine = SnapEngine(toleranceSeconds: 8.0 / pixelsPerSecond)
+        let magnetEngine = SnapEngine(
+            toleranceSeconds: TimelineGeometry(zoomScale: zoomScale).dragSnapToleranceSeconds)
         let snapResult = magnetEngine.snap(rawTime: rawTime,
                                            candidates: snapCandidates + magnetCandidates,
                                            disabled: !isSnapEnabled)

@@ -89,32 +89,33 @@ public struct ClipInspector: View {
 
     // MARK: - Sections (modale allégée)
 
-    /// Régions de la modale, dans l'ordre de rendu. La modale « surchargée »
-    /// (retour user 2026-07-11) n'expose plus que l'essentiel : la barre de
-    /// timing tactile (`timing`) est l'affordance principale de début/durée
-    /// (capture user 2026-07-20 : « du bout du doigt ») ; les steppers fins et
-    /// hints vivent derrière le bouton (i), la configuration d'animation
-    /// (fondus + étape au playhead) derrière le bouton Animation.
+    /// Régions de la modale, dans l'ordre de rendu.
+    ///
+    /// `timing` et `transform` ne sont plus jamais rendues (directive user
+    /// 2026-07-29 : « enlever les éléments modifiables par la gestuelle »).
+    /// Les cas restent dans l'énumération le temps que les vues qui les
+    /// portent soient retirées — leur absence de `visibleSections` suffit à
+    /// les faire disparaître de la fiche, et un test le verrouille.
     public enum Section: String, CaseIterable, Sendable, Equatable {
         case header, timing, transform, volume, animation, toggles, actions
     }
 
     /// Résout les sections visibles pour un état donné.
     ///
-    /// TOUT est visible d'emblée (directive user 2026-07-27) : les deux replis
-    /// d'avant — ⓘ pour le timing fin, « Animation » pour les fondus —
-    /// cachaient l'essentiel derrière un tap de plus. La section `details` a
-    /// disparu : ses trois valeurs sont devenues les champs saisissables de
-    /// `timing`.
+    /// La fiche ne redit plus ce qu'un geste fait déjà. Le début, la fin et la
+    /// durée se règlent en glissant le clip sur sa piste et en tirant ses
+    /// poignées ; la position, la taille, la rotation et le rang de
+    /// superposition se manipulent au doigt sur le canvas. Ces deux blocs
+    /// occupaient la moitié de la hauteur de la fiche pour des réglages que la
+    /// main atteint plus vite — retour user 2026-07-29 sur une fiche jugée
+    /// surchargée.
     ///
-    /// Un clip FOND couvre toute la slide : début et durée sont ignorés par le
-    /// moteur, la barre de timing disparaît (contrôle sans effet). Pure —
-    /// testée sans monter la vue (voir `ClipInspectorTests.test_visibleSections_*`).
+    /// Restent les réglages qu'aucun geste ne produit : le nom, le volume et
+    /// sa courbe, les fondus, les interrupteurs, les actions. Pure — testée
+    /// sans monter la vue (voir `ClipInspectorGestureDuplicationTests`).
     public static func visibleSections(kind: ClipSnapshot.Kind,
                                        isBackground: Bool) -> [Section] {
         var sections: [Section] = [.header]
-        if !isBackground { sections.append(.timing) }
-        if supportsTransform(kind: kind, isBackground: isBackground) { sections.append(.transform) }
         if hasAudioAffordances(kind: kind) { sections.append(.volume) }
         sections.append(.animation)
         // La rangée d'interrupteurs ne s'affiche que si l'un d'eux agit
@@ -455,10 +456,11 @@ public struct ClipInspector: View {
         let sections = Self.visibleSections(kind: clip.kind, isBackground: background)
         VStack(alignment: .leading, spacing: 12) {
             header
-            // Un fond couvre toute la slide : à la place des contrôles de
-            // timing, qui n'auraient aucun effet, on dit POURQUOI ils manquent.
-            if sections.contains(.timing) { timingSection } else { backgroundHint }
-            if sections.contains(.transform) { transformSection }
+            // Un fond couvre toute la slide : sa fenêtre début/durée est
+            // ignorée par le moteur. Le dire reste utile même depuis que la
+            // fiche ne montre plus de contrôles de timing — c'est la piste,
+            // désormais, qui semblerait mentir sans cette phrase.
+            if background { backgroundHint }
             if sections.contains(.volume) { volumeSlider }
             if sections.contains(.animation) { animationConfig }
             if sections.contains(.toggles) { togglesRow }
