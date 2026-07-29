@@ -39,6 +39,11 @@ export const SocketMessageSendSchema = z.object({
   effectFlags: z.number().int().optional(),
   isViewOnce: z.boolean().optional(),
   maxViewOnceCount: z.number().int().optional(),
+  // Lieu partagé — champ dédié, JAMAIS un `metadata` brut (cf.
+  // services/location/sharedPlace.ts). Forme non contrainte ici : la
+  // validation stricte des coordonnées / longueurs vit dans
+  // `parseSharedPlace`, appelé côté `MessageProcessor.saveMessage`.
+  location: z.unknown().optional(),
 });
 
 export type SocketMessageSendData = z.infer<typeof SocketMessageSendSchema>;
@@ -54,6 +59,8 @@ export const SocketMessageSendWithAttachmentsSchema = z.object({
   // Forward references — validated as ObjectIds (mirrors SocketMessageSendSchema).
   forwardedFromId: mongoId.optional(),
   forwardedFromConversationId: mongoId.optional(),
+  // Lieu partagé — même contrat que SocketMessageSendSchema ci-dessus.
+  location: z.unknown().optional(),
 });
 
 export type SocketMessageSendWithAttachmentsData = z.infer<typeof SocketMessageSendWithAttachmentsSchema>;

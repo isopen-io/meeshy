@@ -11,6 +11,8 @@ import {
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
 import { normalizeLanguageCode } from '@meeshy/shared/utils/language-normalize';
+import { parseSharedPlace, sharedPlaceFromMetadata } from '../../services/location/sharedPlace';
+import type { Prisma } from '@meeshy/shared/prisma/client';
 import {
   sendMessageSchema,
   sendMessageBodySchema,
@@ -192,6 +194,14 @@ export async function registerMessageRoutes(fastify: FastifyInstance) {
         createdBy: undefined
       });
 
+      // Lieu partagé — ce chemin (participant anonyme via lien de partage)
+      // CONTOURNE MessagingService.handleMessage / MessageProcessor.saveMessage,
+      // donc la validation `parseSharedPlace` + l'écriture dans
+      // `metadata.location` doivent être refaites ICI. Chiffrement : stockage
+      // EN CLAIR, même décision assumée que pour le chemin nominal (cf.
+      // sharedPlace.ts).
+      const sharedPlace = parseSharedPlace(body.location);
+
       // Créer le message avec le contenu transformé.
       // Phase 4 §6.2 — `clientMessageId` propagé pour le dedup contract.
       // Pas de catch-P2002 ici (chemin anonyme simple) — un retry serveur
@@ -205,7 +215,8 @@ export async function registerMessageRoutes(fastify: FastifyInstance) {
           originalLanguage,
           messageType: body.messageType,
           clientMessageId: body.clientMessageId,
-          deletedAt: null
+          deletedAt: null,
+          ...(sharedPlace ? { metadata: { location: sharedPlace } as unknown as Prisma.InputJsonValue } : {})
         },
         include: {
           sender: {
@@ -237,6 +248,10 @@ export async function registerMessageRoutes(fastify: FastifyInstance) {
         await trackingLinkService.updateTrackingLinksMessageId(tokens, message.id);
       }
 
+      // Lieu partagé : hisser `metadata.location` en top-level `location`,
+      // même contrat que le chemin nominal (messages.ts / MessageHandler).
+      const place = sharedPlaceFromMetadata(message.metadata);
+
       // Émettre l'événement WebSocket
       const socketIOManager = fastify.socketIOHandler.getManager();
       if (socketIOManager) {
@@ -252,7 +267,8 @@ export async function registerMessageRoutes(fastify: FastifyInstance) {
             replyToId: message.replyToId,
             createdAt: message.createdAt,
             updatedAt: message.updatedAt,
-            sender: message.sender
+            sender: message.sender,
+            ...(place ? { location: place } : {})
           }
         });
       }
@@ -270,7 +286,8 @@ export async function registerMessageRoutes(fastify: FastifyInstance) {
           replyToId: message.replyToId,
           createdAt: message.createdAt,
           updatedAt: message.updatedAt,
-          sender: message.sender
+          sender: message.sender,
+          ...(place ? { location: place } : {})
         }
       }, { statusCode: 201 });
 
@@ -448,6 +465,11 @@ export async function registerMessageRoutes(fastify: FastifyInstance) {
         createdBy: userId
       });
 
+      // Lieu partagé — ce chemin (lien de partage, utilisateur authentifié)
+      // CONTOURNE lui aussi MessagingService.handleMessage ; même contrat
+      // que le jumeau anonyme ci-dessus (validation + stockage en clair).
+      const sharedPlace = parseSharedPlace(body.location);
+
       // Créer le message avec le contenu transformé.
       // Phase 4 §6.2 — `clientMessageId` propagé pour le dedup contract.
       const message = await fastify.prisma.message.create({
@@ -458,7 +480,8 @@ export async function registerMessageRoutes(fastify: FastifyInstance) {
           originalLanguage,
           messageType: body.messageType,
           clientMessageId: body.clientMessageId,
-          deletedAt: null
+          deletedAt: null,
+          ...(sharedPlace ? { metadata: { location: sharedPlace } as unknown as Prisma.InputJsonValue } : {})
         },
         include: {
           sender: {
@@ -491,6 +514,9 @@ export async function registerMessageRoutes(fastify: FastifyInstance) {
         await trackingLinkService.updateTrackingLinksMessageId(tokens, message.id);
       }
 
+      // Lieu partagé : hisser `metadata.location` en top-level `location`.
+      const place = sharedPlaceFromMetadata(message.metadata);
+
       // Émettre l'événement WebSocket
       const socketIOManager = fastify.socketIOHandler.getManager();
       if (socketIOManager) {
@@ -506,7 +532,8 @@ export async function registerMessageRoutes(fastify: FastifyInstance) {
             replyToId: message.replyToId,
             createdAt: message.createdAt,
             updatedAt: message.updatedAt,
-            sender: message.sender
+            sender: message.sender,
+            ...(place ? { location: place } : {})
           }
         });
       }
@@ -524,7 +551,8 @@ export async function registerMessageRoutes(fastify: FastifyInstance) {
           replyToId: message.replyToId,
           createdAt: message.createdAt,
           updatedAt: message.updatedAt,
-          sender: message.sender
+          sender: message.sender,
+          ...(place ? { location: place } : {})
         }
       }, { statusCode: 201 });
 

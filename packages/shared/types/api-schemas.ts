@@ -639,6 +639,18 @@ export const messageSchema = {
         moodEmoji: { type: 'string', nullable: true }
       }
     },
+    location: {
+      type: 'object',
+      nullable: true,
+      description: 'Lieu partagé (position figée + POI enrichi) — hissé depuis metadata.location. Validé serveur (parseSharedPlace) ; null si le message ne porte aucun lieu.',
+      properties: {
+        latitude: { type: 'number' },
+        longitude: { type: 'number' },
+        name: { type: 'string', nullable: true },
+        address: { type: 'string', nullable: true },
+        category: { type: 'string', nullable: true }
+      }
+    },
     replyTo: {
       type: 'object',
       nullable: true,

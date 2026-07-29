@@ -16,6 +16,7 @@ import { MessagingService } from '../services/MessagingService';
 import { CallEventsHandler } from './CallEventsHandler';
 import { SocialEventsHandler } from './handlers/SocialEventsHandler';
 import { LocationHandler } from './handlers/LocationHandler';
+import { sharedPlaceFromMetadata } from '../services/location/sharedPlace';
 import { AuthHandler } from './handlers/AuthHandler';
 import { MessageHandler } from './handlers/MessageHandler';
 import { StatusHandler } from './handlers/StatusHandler';
@@ -1936,6 +1937,18 @@ export class MeeshySocketIOManager {
           } : undefined
         } : undefined,
       };
+
+      // Lieu partagé : hisser `metadata.location` en top-level `location`.
+      // Ce broadcast sert AUSSI le chemin REST (POST /conversations/:id/messages
+      // → MeeshySocketIOManager.broadcastMessage) et les messages d'agent — un
+      // hoist manquant ICI laisserait la position invisible en temps réel pour
+      // tout message envoyé via REST, alors même que `messagePayload.metadata`
+      // porte déjà le bloc brut. Miroir de MessageHandler.broadcastNewMessage
+      // (chemin socket `message:send`).
+      const place = sharedPlaceFromMetadata(message.metadata);
+      if (place) {
+        (messagePayload as Record<string, unknown>).location = place;
+      }
 
       if (message.attachments && message.attachments.length > 0) {
         const first = message.attachments[0] as unknown as Record<string, unknown>;

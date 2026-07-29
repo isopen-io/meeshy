@@ -22,6 +22,7 @@ import {
   POST_REPLY_SNAPSHOT_SELECT,
   type PostReplyTo,
 } from './postReplySnapshot';
+import { parseSharedPlace } from '../location/sharedPlace';
 
 // Logger dédié pour MessageProcessor
 const logger = enhancedLogger.child({ module: 'MessageProcessor' });
@@ -346,6 +347,8 @@ export class MessageProcessor {
     isViewOnce?: boolean;
     maxViewOnceCount?: number;
     clientMessageId?: string;
+    /** Lieu partagé — champ dédié, jamais un `metadata` brut. Validé par `parseSharedPlace`. */
+    location?: unknown;
   }): Promise<Message> {
     const corr: Record<string, any> = {
       clientMessageId: data.clientMessageId,
@@ -412,9 +415,18 @@ export class MessageProcessor {
       ? []
       : await this.buildRawUrlTrackingLinks(processedContent, data.conversationId, data.senderId);
 
+    // Partage de position : le client transporte un champ `location` DÉDIÉ
+    // (jamais un `metadata` brut — voir sharedPlace.ts). `parseSharedPlace`
+    // revalide les coordonnées côté serveur avant écriture. Chiffrement :
+    // stockage EN CLAIR dans `metadata.location`, décision assumée (cf.
+    // commentaire de tête de sharedPlace.ts) — au même régime que
+    // `postReplyTo` / `trackingLinks` ci-dessus.
+    const sharedPlace = parseSharedPlace(data.location);
+
     const messageMetadata: Record<string, unknown> = {};
     if (postReplyTo) messageMetadata.postReplyTo = postReplyTo;
     if (trackingLinks.length > 0) messageMetadata.trackingLinks = trackingLinks;
+    if (sharedPlace) messageMetadata.location = sharedPlace;
 
     // ÉTAPE 3: Créer le message avec le contenu traité et encryption.
     //

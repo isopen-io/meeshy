@@ -19,6 +19,7 @@ import {
   postReplyToFromMetadata,
   POST_REPLY_SNAPSHOT_SELECT,
 } from '../../services/messaging/postReplySnapshot';
+import { sharedPlaceFromMetadata } from '../../services/location/sharedPlace';
 import { StatusService } from '../../services/StatusService';
 import { NotificationService } from '../../services/notifications/NotificationService';
 import { MessageTranslationService } from '../../services/message-translation/MessageTranslationService';
@@ -164,6 +165,7 @@ export class MessageHandler {
       forwardedFromId?: string;
       forwardedFromConversationId?: string;
       encryptedPayload?: unknown;
+      location?: unknown;
     },
     callback?: (response: SocketIOResponse<{ messageId: string }>) => void
   ): Promise<void> {
@@ -282,6 +284,9 @@ export class MessageHandler {
         isViewOnce: validated.isViewOnce,
         maxViewOnceCount: validated.maxViewOnceCount,
         isAnonymous,
+        // Lieu partagé — champ dédié transmis tel quel ; validé et écrit
+        // dans `metadata.location` par `MessageProcessor.saveMessage`.
+        location: validated.location,
         metadata: {
           source: 'websocket',
           socketId: socket.id,
@@ -360,6 +365,7 @@ export class MessageHandler {
       replyToId?: string;
       forwardedFromId?: string;
       forwardedFromConversationId?: string;
+      location?: unknown;
     },
     callback?: (response: SocketIOResponse<{ messageId: string }>) => void
   ): Promise<void> {
@@ -479,6 +485,8 @@ export class MessageHandler {
         isAnonymous,
         // Aligner avec GatewayMessage: attachments are passed as IDs for linking
         attachmentIds: validated.attachmentIds,
+        // Lieu partagé — même contrat que handleMessageSend ci-dessus.
+        location: validated.location,
         metadata: {
           source: 'websocket',
           socketId: socket.id,
@@ -937,6 +945,16 @@ export class MessageHandler {
         if (Array.isArray(tl) && tl.length > 0) {
           (messagePayload as Record<string, unknown>).trackingLinks = tl;
         }
+      }
+
+      // Lieu partagé : hisser `metadata.location` en top-level `location` —
+      // même miroir que `postReplyTo`/`trackingLinks` ci-dessus.
+      // `_buildMessagePayload` n'embarque pas `metadata`, donc sans ce hoist
+      // le destinataire ne voit la position qu'après rechargement (relecture
+      // REST, qui hisse aussi `location` — cf. routes/conversations/messages.ts).
+      const place = sharedPlaceFromMetadata(message.metadata);
+      if (place) {
+        (messagePayload as Record<string, unknown>).location = place;
       }
 
       const room = ROOMS.conversation(normalizedId);

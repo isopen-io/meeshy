@@ -157,6 +157,16 @@ export interface MessageRequest {
 
   // Metadata pour WebSocket/REST tracking
   readonly metadata?: MessageRequestMetadata;
+
+  /**
+   * Lieu partagé (position figée + POI enrichi), champ dédié — jamais
+   * fusionné dans `metadata` côté client. Le serveur seul le valide
+   * (`parseSharedPlace`) et l'écrit dans `Message.metadata.location`.
+   * Forme non typée ici volontairement : la validation stricte (bornes des
+   * coordonnées, longueur des chaînes) vit côté gateway
+   * (`services/location/sharedPlace.ts`), pas dans ce type partagé.
+   */
+  readonly location?: unknown;
 }
 
 // ===== RÉPONSE UNIFIÉE =====

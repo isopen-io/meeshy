@@ -9,6 +9,7 @@ import {
   postReplyToFromMetadata,
   POST_REPLY_SNAPSHOT_SELECT,
 } from '../../services/messaging/postReplySnapshot';
+import { sharedPlaceFromMetadata } from '../../services/location/sharedPlace';
 import { TrackingLinkService } from '../../services/TrackingLinkService';
 import { AttachmentService } from '../../services/attachments';
 import { attachmentMediaSelect, attachmentFullSelect, attachmentForwardPreviewSelect } from '../../services/attachments/attachmentIncludes';
@@ -126,6 +127,10 @@ export const SendMessageBodySchema = z.object({
   isViewOnce: z.boolean().optional(),
   maxViewOnceCount: z.number().int().optional(),
   mentionedUserIds: z.array(z.string()).optional(),
+  // Lieu partagé — champ dédié, JAMAIS un `metadata` brut (cf.
+  // services/location/sharedPlace.ts). Validation stricte déléguée à
+  // `parseSharedPlace`, appelé côté `MessageProcessor.saveMessage`.
+  location: z.unknown().optional(),
 }).refine(
   (data) =>
     (data.content?.trim().length ?? 0) > 0 ||
@@ -1338,6 +1343,14 @@ export function registerMessagesRoutes(
         }
       }
 
+      // Lieu partagé : hisser `metadata.location` en top-level `location` —
+      // même miroir que `postReplyTo` ci-dessus, mais sur TOUT message
+      // (contrairement à postReplyTo, indépendant de `storyReplyToId`).
+      for (const m of mappedMessages) {
+        const place = sharedPlaceFromMetadata(m.metadata);
+        if (place) m.location = place;
+      }
+
       // Marquer les messages comme "reçus" — EFFET DE BORD (statut de livraison
       // propagé aux autres participants via socket). La réponse (mappedMessages)
       // n'en dépend PAS. Déféré en fire-and-forget : l'awaiter ajoutait
@@ -1610,7 +1623,12 @@ export function registerMessagesRoutes(
           isBlurred: { type: 'boolean' },
           expiresAt: { type: 'string', format: 'date-time' },
           effectFlags: { type: 'integer', description: 'Bitfield for message effects' },
-          mentionedUserIds: { type: 'array', items: { type: 'string' } }
+          mentionedUserIds: { type: 'array', items: { type: 'string' } },
+          location: {
+            type: 'object',
+            additionalProperties: true,
+            description: 'Lieu partagé (latitude, longitude, name?, address?, category?) — validé serveur',
+          }
         }
       },
       response: {
@@ -1664,7 +1682,8 @@ export function registerMessagesRoutes(
         expiresAt,
         isViewOnce,
         maxViewOnceCount,
-        mentionedUserIds
+        mentionedUserIds,
+        location
       } = bodyResult.data as SendMessageBody;
 
       // Resolve identifier (e.g. "meeshy") → ObjectId, same as GET route
@@ -1757,6 +1776,9 @@ export function registerMessagesRoutes(
         effectFlags,
         isViewOnce,
         maxViewOnceCount,
+        // Lieu partagé — champ dédié transmis tel quel ; validé et écrit
+        // dans `metadata.location` par `MessageProcessor.saveMessage`.
+        location,
         encryptedPayload: isEncrypted ? {
           ciphertext: encryptedContent!,
           mode: encryptionMode as any,

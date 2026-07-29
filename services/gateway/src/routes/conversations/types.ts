@@ -51,6 +51,9 @@ export interface SendMessageBody {
   isViewOnce?: boolean;
   maxViewOnceCount?: number;
   mentionedUserIds?: string[];
+  // Lieu partagé — champ dédié, jamais un `metadata` brut. Validé et écrit
+  // dans `metadata.location` par `MessageProcessor.saveMessage`.
+  location?: unknown;
 }
 
 export interface MessagesQuery {

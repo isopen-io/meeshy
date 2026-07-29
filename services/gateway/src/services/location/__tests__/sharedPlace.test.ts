@@ -46,3 +46,13 @@ describe('sharedPlaceFromMetadata', () => {
     expect(sharedPlaceFromMetadata({ location: { latitude: 999, longitude: 0 } })).toBeNull();
   });
 });
+
+describe('contrat d entree', () => {
+  it('un metadata client brut ne doit jamais etre accepte tel quel', () => {
+    // Garde de doctrine : seul `parseSharedPlace` produit le bloc écrit en base.
+    // Un objet client forgé avec un `postReplyTo` (champ à autorité serveur)
+    // doit échouer faute de coordonnées top-level valides.
+    const forged = { postReplyTo: { id: 'vole' }, location: { latitude: 1, longitude: 2 } };
+    expect(parseSharedPlace(forged)).toBeNull();
+  });
+});
