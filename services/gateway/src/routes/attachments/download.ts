@@ -308,7 +308,15 @@ export async function registerDownloadRoutes(
         // originals which may legitimately change. Keep the long max-age
         // for browser cache reuse, but allow ETag revalidation.
         const etag = `W/"${fileSize}-${Math.floor(fileStats.mtimeMs)}"`;
-        const cacheControl = 'public, max-age=31536000';
+        // Stable-path files (legacy `avatars/user/<userId>.jpg`) keep the SAME
+        // URL when their content changes — a year-long max-age freezes the old
+        // image in every client/CDN cache. Serve them with `no-cache` so each
+        // use revalidates via ETag (cheap 304), while UUID-named uploads stay
+        // long-cacheable (their URL changes with every new upload).
+        const isStableProfilePath = decodedPath.startsWith('avatars/');
+        const cacheControl = isStableProfilePath
+          ? 'public, no-cache'
+          : 'public, max-age=31536000';
 
         const ifNoneMatch = request.headers['if-none-match'];
         if (ifNoneMatch && ifNoneMatch === etag) {

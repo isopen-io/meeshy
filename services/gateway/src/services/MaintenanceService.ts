@@ -403,7 +403,8 @@ export class MaintenanceService {
           originalName: true,
           fileSize: true,
           createdAt: true,
-          uploadedBy: true
+          uploadedBy: true,
+          fileUrl: true
         }
       });
 
@@ -416,10 +417,16 @@ export class MaintenanceService {
 
       let successCount = 0;
       let failCount = 0;
+      let skippedCount = 0;
       let totalSize = 0;
 
       for (const attachment of orphanedAttachments) {
         try {
+          if (await this.isReferencedAsProfileMedia(attachment.fileUrl)) {
+            skippedCount++;
+            continue;
+          }
+
           await this.attachmentService.deleteAttachment(attachment.id);
           successCount++;
           totalSize += attachment.fileSize;
@@ -432,11 +439,39 @@ export class MaintenanceService {
       }
 
       const totalSizeMB = (totalSize / (1024 * 1024)).toFixed(2);
-      logger.info(`✅ [CLEANUP] Nettoyage terminé: ${successCount} attachments supprimés (${totalSizeMB} MB libérés), ${failCount} échecs`);
+      logger.info(`✅ [CLEANUP] Nettoyage terminé: ${successCount} attachments supprimés (${totalSizeMB} MB libérés), ${skippedCount} médias de profil conservés, ${failCount} échecs`);
 
     } catch (error) {
       logger.error('❌ [CLEANUP] Erreur lors du nettoyage des attachments orphelins:', error);
     }
+  }
+
+  /**
+   * Un upload de profil (avatar/bannière de User, Conversation ou Community)
+   * passe par POST /attachments/upload et reste messageId:null — il est donc
+   * indiscernable d'un orphelin. On le protège en vérifiant si son fileUrl
+   * (relatif) est référencé, en forme relative ou absolue, par un champ
+   * avatar/banner : le match par suffixe couvre les deux formes.
+   */
+  private async isReferencedAsProfileMedia(fileUrl: string | null | undefined): Promise<boolean> {
+    if (!fileUrl) {
+      return false;
+    }
+
+    const referencesFileUrl = {
+      OR: [
+        { avatar: { endsWith: fileUrl } },
+        { banner: { endsWith: fileUrl } }
+      ]
+    };
+
+    const [user, conversation, community] = await Promise.all([
+      this.prisma.user.findFirst({ where: referencesFileUrl, select: { id: true } }),
+      this.prisma.conversation.findFirst({ where: referencesFileUrl, select: { id: true } }),
+      this.prisma.community.findFirst({ where: referencesFileUrl, select: { id: true } })
+    ]);
+
+    return Boolean(user || conversation || community);
   }
 
   /**

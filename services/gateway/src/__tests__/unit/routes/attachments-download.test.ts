@@ -521,6 +521,15 @@ describe('GET /attachments/file/*', () => {
       expect(res.headers['access-control-allow-origin']).toBe('*');
     });
 
+    it('serves stable avatar paths with no-cache so a changed file is picked up via ETag', async () => {
+      const res = await app.inject({
+        method: 'GET',
+        url: '/attachments/file/avatars%2Fuser%2F68f2a81417a557e8ce4ddfc1.jpg',
+      });
+      expect(res.statusCode).toBe(200);
+      expect(res.headers['cache-control']).toBe('public, no-cache');
+    });
+
     it('returns 200 for a PDF file', async () => {
       const res = await app.inject({
         method: 'GET',
