@@ -169,7 +169,10 @@ struct LocationPickerView: View {
                     // MapKit connaît déjà le nom et la catégorie POI du
                     // résultat choisi, inutile d'attendre le géocodage inverse.
                     viewModel.selectedName = item.name
-                    viewModel.selectedCategory = item.placemark.pointOfInterestCategory?.rawValue
+                    // `pointOfInterestCategory` vit sur `MKMapItem` lui-même
+                    // depuis iOS 13 — PAS sur `MKPlacemark`/`CLPlacemark`, qui
+                    // ne l'expose pas.
+                    viewModel.selectedCategory = item.pointOfInterestCategory?.rawValue
                     viewModel.reverseGeocode(coord)
                     mapTarget = MapTarget(
                         center: coord,
