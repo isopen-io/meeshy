@@ -169,7 +169,10 @@ extension FeedView {
     // MARK: - Publish Post with Attachments
     func publishPostWithAttachments() {
         let text = composerText.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !text.isEmpty || !pendingAttachments.isEmpty else { return }
+        // Une position seule, sans texte ni piece jointe, doit pouvoir partir : sinon
+        // handleFeedLocationSelection() range le lieu dans pendingPlace et ce garde
+        // le jette en silence (Task 13, 2026-07-29).
+        guard !text.isEmpty || !pendingAttachments.isEmpty || pendingPlace != nil else { return }
 
         // A recovered stuck post is being re-sent — supersede its queued row so
         // the resend replaces it (and reclaims its pending-media) instead of
@@ -182,6 +185,10 @@ extension FeedView {
         let attachments = pendingAttachments
         let audioURL = pendingAudioURL
         let mediaFiles = pendingMediaFiles
+        // Capturé avant feedCleanupAttachments() (qui remet pendingPlace à nil) :
+        // sans ce cliché local, la Task async ci-dessous lirait toujours nil,
+        // exactement comme text/attachments/mediaFiles le sont pour la même raison.
+        let pendingPlace = pendingPlace
         let hasFiles = audioURL != nil || !mediaFiles.isEmpty
 
         if !hasFiles || attachments.isEmpty {
@@ -192,9 +199,9 @@ extension FeedView {
             }
             feedCleanupAttachments()
             HapticFeedback.success()
-            if !text.isEmpty {
+            if !text.isEmpty || pendingPlace != nil {
                 let lang = composerLanguage
-                Task { await viewModel.createPost(content: text, visibility: postVisibility, originalLanguage: lang) }
+                Task { await viewModel.createPost(content: text, visibility: postVisibility, originalLanguage: lang, location: pendingPlace) }
             }
             return
         }
@@ -649,7 +656,10 @@ struct FeedComposerSheet: View {
     }
 
     private var hasContent: Bool {
-        !composerText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !pendingAttachments.isEmpty
+        // pendingPlace inclus : sinon le bouton Publier reste desactive pour une
+        // position seule et publishPost() (dont le garde autorise deja ce cas)
+        // ne devient jamais atteignable (Task 13, 2026-07-29).
+        !composerText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !pendingAttachments.isEmpty || pendingPlace != nil
     }
 
     /// Reel ⇄ Post chip shown when the composer holds media. A media post is a
@@ -1289,7 +1299,10 @@ struct FeedComposerSheet: View {
     // MARK: - Publish
     private func publishPost() {
         let text = composerText.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !text.isEmpty || !pendingAttachments.isEmpty else { return }
+        // Une position seule, sans texte ni piece jointe, doit pouvoir partir : sinon
+        // handleLocationSelection() range le lieu dans pendingPlace et ce garde le
+        // jette en silence (Task 13, 2026-07-29).
+        guard !text.isEmpty || !pendingAttachments.isEmpty || pendingPlace != nil else { return }
 
         // Quote mode: repost with content instead of createPost
         if let quotePost {
@@ -1306,9 +1319,9 @@ struct FeedComposerSheet: View {
         if !hasFiles || attachments.isEmpty {
             onDismiss()
             HapticFeedback.success()
-            if !text.isEmpty {
+            if !text.isEmpty || pendingPlace != nil {
                 let lang = composerLanguage
-                Task { await viewModel.createPost(content: text, visibility: postVisibility, originalLanguage: lang) }
+                Task { await viewModel.createPost(content: text, visibility: postVisibility, originalLanguage: lang, location: pendingPlace) }
             }
             return
         }

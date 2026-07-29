@@ -82,14 +82,19 @@ public struct CreatePostRequest: Encodable {
     public let mobileTranscription: MobileTranscriptionPayload?
     public let viaUsername: String?
     public let repostOfId: String?
+    /// Lieu partagé (picker → `SharedPlace`) — même clé `location` top-level que
+    /// pour un message ou un commentaire, hissée par le gateway depuis
+    /// `metadata.location` (Task 9).
+    public let location: SharedPlace?
 
-    public init(content: String? = nil, type: String = "POST", visibility: String = "PUBLIC", moodEmoji: String? = nil, visibilityUserIds: [String]? = nil, mediaIds: [String]? = nil, audioUrl: String? = nil, audioDuration: Int? = nil, originalLanguage: String? = nil, mobileTranscription: MobileTranscriptionPayload? = nil, viaUsername: String? = nil, repostOfId: String? = nil) {
+    public init(content: String? = nil, type: String = "POST", visibility: String = "PUBLIC", moodEmoji: String? = nil, visibilityUserIds: [String]? = nil, mediaIds: [String]? = nil, audioUrl: String? = nil, audioDuration: Int? = nil, originalLanguage: String? = nil, mobileTranscription: MobileTranscriptionPayload? = nil, viaUsername: String? = nil, repostOfId: String? = nil, location: SharedPlace? = nil) {
         self.content = content; self.type = type; self.visibility = visibility
         self.moodEmoji = moodEmoji; self.visibilityUserIds = visibilityUserIds
         self.mediaIds = mediaIds; self.audioUrl = audioUrl; self.audioDuration = audioDuration
         self.originalLanguage = originalLanguage
         self.mobileTranscription = mobileTranscription; self.viaUsername = viaUsername
         self.repostOfId = repostOfId
+        self.location = location
     }
 }
 

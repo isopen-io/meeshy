@@ -137,7 +137,10 @@ struct FeedView: View {
     @State private var quoteTargetPost: FeedPost?
 
     var composerHasContent: Bool {
-        !composerText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !pendingAttachments.isEmpty
+        // pendingPlace inclus : sinon le bouton Publier reste desactive pour une
+        // position seule et publishPostWithAttachments() (dont le garde autorise
+        // deja ce cas) ne devient jamais atteignable (Task 13, 2026-07-29).
+        !composerText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !pendingAttachments.isEmpty || pendingPlace != nil
     }
 
     // MARK: - Post Heart Seeding (Prisme Linguistique — reaction state)

@@ -483,7 +483,7 @@ class FeedViewModel: ObservableObject {
         }
     }
 
-    func createPost(content: String? = nil, type: String = "POST", visibility: String = "PUBLIC", mediaIds: [String]? = nil, audioUrl: String? = nil, audioDuration: Int? = nil, originalLanguage: String? = nil, mobileTranscription: MobileTranscriptionPayload? = nil) async {
+    func createPost(content: String? = nil, type: String = "POST", visibility: String = "PUBLIC", mediaIds: [String]? = nil, audioUrl: String? = nil, audioDuration: Int? = nil, originalLanguage: String? = nil, mobileTranscription: MobileTranscriptionPayload? = nil, location: SharedPlace? = nil) async {
         publishError = nil
         publishSuccess = false
 
@@ -501,6 +501,9 @@ class FeedViewModel: ObservableObject {
         if isDurableTextOnly,
            let text = content,
            !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            // La position n'est pas encore portée par la file durable (charge et
+            // câblage à part — cf. Task 17) : un post texte + lieu passe encore
+            // ici sans sa position tant que ce chemin n'est pas étendu.
             await enqueueDurableTextPost(content: text, visibility: visibility, originalLanguage: originalLanguage)
             return
         }
@@ -516,7 +519,8 @@ class FeedViewModel: ObservableObject {
                 audioDuration: audioDuration,
                 originalLanguage: originalLanguage,
                 mobileTranscription: mobileTranscription,
-                repostOfId: nil
+                repostOfId: nil,
+                location: location
             )
             let feedPost = apiPost.toFeedPost(preferredLanguages: preferredLanguages)
             posts.insert(feedPost, at: 0)

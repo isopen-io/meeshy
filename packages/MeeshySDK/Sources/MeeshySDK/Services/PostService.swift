@@ -30,6 +30,12 @@ public protocol PostServiceProviding: Sendable {
     /// `isBookmarkedByMe` (cf. `enrichReelsForViewer`).
     func getReels(seedReelId: String?, cursor: String?, limit: Int) async throws -> PaginatedAPIResponse<[APIPost]>
     func create(content: String?, type: String, visibility: String, moodEmoji: String?, mediaIds: [String]?, audioUrl: String?, audioDuration: Int?, originalLanguage: String?, mobileTranscription: MobileTranscriptionPayload?, repostOfId: String?) async throws -> APIPost
+    /// Variante qui transporte un lieu partagé (`SharedPlace`) — même convention que
+    /// `addComment` ci-dessous (Task 9 gateway). Requirement séparée (et non un
+    /// paramètre par défaut sur la précédente) pour que les conformeurs existants
+    /// (mocks) restent valides via le défaut ci-dessous, qui ignore simplement
+    /// `location` s'il n'est pas surchargé.
+    func create(content: String?, type: String, visibility: String, moodEmoji: String?, mediaIds: [String]?, audioUrl: String?, audioDuration: Int?, originalLanguage: String?, mobileTranscription: MobileTranscriptionPayload?, repostOfId: String?, location: SharedPlace?) async throws -> APIPost
     func update(postId: String, content: String?, visibility: String?, visibilityUserIds: [String]?, moodEmoji: String?, originalLanguage: String?, type: String?, removeMediaIds: [String]?, storyEffects: StoryEffects?, mediaIds: [String]?) async throws -> APIPost
     func delete(postId: String) async throws
     func like(postId: String) async throws
@@ -82,6 +88,14 @@ public extension PostServiceProviding {
         try await update(postId: postId, content: content, visibility: visibility, visibilityUserIds: visibilityUserIds,
                          moodEmoji: moodEmoji, originalLanguage: originalLanguage, type: type,
                          removeMediaIds: removeMediaIds, storyEffects: nil, mediaIds: nil)
+    }
+
+    /// Défaut : un conformeur qui n'implémente que la signature sans `location`
+    /// (mocks existants) reste valide — la position est simplement ignorée tant
+    /// que le type ne surcharge pas cette méthode. `PostService` la surcharge
+    /// réellement plus bas.
+    func create(content: String?, type: String, visibility: String, moodEmoji: String?, mediaIds: [String]?, audioUrl: String?, audioDuration: Int?, originalLanguage: String?, mobileTranscription: MobileTranscriptionPayload?, repostOfId: String?, location: SharedPlace?) async throws -> APIPost {
+        try await create(content: content, type: type, visibility: visibility, moodEmoji: moodEmoji, mediaIds: mediaIds, audioUrl: audioUrl, audioDuration: audioDuration, originalLanguage: originalLanguage, mobileTranscription: mobileTranscription, repostOfId: repostOfId)
     }
 
     /// Convenience texte-seul (attachements = nil). Préserve les appels existants
@@ -139,7 +153,13 @@ public final class PostService: PostServiceProviding, @unchecked Sendable {
     }
 
     public func create(content: String? = nil, type: String = "POST", visibility: String = "PUBLIC", moodEmoji: String? = nil, mediaIds: [String]? = nil, audioUrl: String? = nil, audioDuration: Int? = nil, originalLanguage: String? = nil, mobileTranscription: MobileTranscriptionPayload? = nil, repostOfId: String? = nil) async throws -> APIPost {
-        let body = CreatePostRequest(content: content, type: type, visibility: visibility, moodEmoji: moodEmoji, mediaIds: mediaIds, audioUrl: audioUrl, audioDuration: audioDuration, originalLanguage: originalLanguage, mobileTranscription: mobileTranscription, repostOfId: repostOfId)
+        try await create(content: content, type: type, visibility: visibility, moodEmoji: moodEmoji, mediaIds: mediaIds, audioUrl: audioUrl, audioDuration: audioDuration, originalLanguage: originalLanguage, mobileTranscription: mobileTranscription, repostOfId: repostOfId, location: nil)
+    }
+
+    /// Seule surcharge qui envoie réellement `location` au gateway — même
+    /// convention que l'`addComment` porteur de lieu plus bas.
+    public func create(content: String?, type: String, visibility: String, moodEmoji: String?, mediaIds: [String]?, audioUrl: String?, audioDuration: Int?, originalLanguage: String?, mobileTranscription: MobileTranscriptionPayload?, repostOfId: String?, location: SharedPlace?) async throws -> APIPost {
+        let body = CreatePostRequest(content: content, type: type, visibility: visibility, moodEmoji: moodEmoji, mediaIds: mediaIds, audioUrl: audioUrl, audioDuration: audioDuration, originalLanguage: originalLanguage, mobileTranscription: mobileTranscription, repostOfId: repostOfId, location: location)
         let response: APIResponse<APIPost> = try await api.post(endpoint: "/posts", body: body)
         return response.data
     }

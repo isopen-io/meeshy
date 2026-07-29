@@ -288,6 +288,26 @@ final class PermissionGateSourceGuardTests: XCTestCase {
         }
     }
 
+    // MARK: - Partage de position (Task 13, 2026-07-29)
+
+    /// `publishPost()` **et** `publishPostWithAttachments()` sortaient tous deux
+    /// par `createPost(content:)` seul quand il n'y avait pas de fichier : une
+    /// position seule, sans texte ni piece jointe, n'envoyait rien. Corriger un
+    /// seul des deux chemins laisse la moitie du bug.
+    func test_bothPublishPathsCarryTheLocation() throws {
+        let src = try source("Meeshy/Features/Main/Views/FeedView+Attachments.swift")
+        let publish = try body(from: "private func publishPost()", to: "// MARK:", in: src)
+        XCTAssertTrue(publish.contains("location: pendingPlace"),
+                      "publishPost perd la position dans sa branche sans fichier.")
+
+        let withAttachments = try body(from: "func publishPostWithAttachments", to: "private func publishPost()", in: src)
+        XCTAssertTrue(withAttachments.contains("location: pendingPlace"),
+                      "publishPostWithAttachments a le meme defaut : corriger un seul chemin laisse la moitie du bug.")
+
+        XCTAssertTrue(publish.contains("pendingPlace != nil"),
+                      "Une position seule, sans texte ni piece jointe, doit pouvoir partir.")
+    }
+
     // MARK: - Mot de passe
 
     /// Sans `.newPassword`, iOS ne propose ni mot de passe fort ni — surtout —
