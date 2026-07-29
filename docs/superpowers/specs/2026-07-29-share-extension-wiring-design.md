@@ -60,7 +60,7 @@ Safari / Notes / n'importe quelle app → « Partager » → Meeshy
   │    enrichie par conversation_snapshots  (customName local prioritaire, unreadCount)
   │    vide → « Ouvrez Meeshy une fois pour retrouver vos conversations ici »
   │
-  └─ tap sur une conversation
+  └─ sélection d'une conversation, puis « Envoyer »
        POST {base}/api/v1/conversations/<id>/messages
          Authorization: Bearer <token>
          { "clientMessageId": "cid_<uuid v4 lowercase>", "content": "<texte ou URL>" }
@@ -205,12 +205,23 @@ et au retour en avant-plan.
 | Non connecté | `meeshy_active_user_id` ou token absent | Message « Connectez-vous à Meeshy pour partager » + bouton Fermer. **Aucune liste.** |
 | Aucune conversation | `recent_conversations` absente ou vide | « Ouvrez Meeshy une fois pour retrouver vos conversations ici » |
 | Liste | ≥ 1 conversation | Aperçu du contenu partagé + liste (initiales, nom, pastille `accentColor`) |
-| Envoi en cours | POST en vol | Ligne désactivée + indicateur sur la conversation ciblée |
-| Envoyé | 2xx | Haptique succès, « Envoyé », fermeture |
-| Différé | échec | « Sera envoyé à la reconnexion », fermeture |
+| Envoi en cours | POST en vol | Liste désactivée + indicateur dans le bouton « Envoyer » |
+| Envoyé | 2xx | « Envoyé », puis fermeture |
+| Différé | échec | « Sera envoyé à la reconnexion », puis fermeture |
 
 Le champ de recherche est **retiré** : sur 50 entrées au plus, il n'apporte rien et
 c'était un ornement de maquette.
+
+**Confirmation en deux temps** (sélection, puis « Envoyer ») plutôt qu'envoi au premier
+tap : envoyer un message à un tiers est irréversible et sortant, et un tap malencontreux
+dans une feuille système coûte cher. Cela réutilise en prime la clé `share.send`, déjà
+traduite dans les 7 langues.
+
+**La session est portée par le cas `.ready`** de `ShareScreenState`, et non rangée à côté
+de l'état : il devient impossible d'afficher une liste sans jeton pour l'envoyer. Sans ça,
+le chemin d'envoi devait se garder contre une session absente et renvoyer « différé » sans
+avoir rien persisté — un état inatteignable aujourd'hui, mais qui aurait menti à
+l'utilisateur le jour où il le serait devenu.
 
 Toutes les chaînes passent par `Localizable.xcstrings` de l'extension (7 langues déjà
 déclarées dans `CFBundleLocalizations`).
@@ -246,7 +257,21 @@ Vérification manuelle finale, sur simulateur puis appareil : partager une URL d
 et un texte depuis Notes, connecté puis déconnecté, en ligne puis en mode avion (le message
 doit apparaître dans la conversation après réouverture de l'app).
 
-## 10. Hors périmètre
+## 10. Limites connues et assumées
+
+- **Pas d'épinglage TLS dans l'extension.** `URLSession.shared` n'y passe pas par
+  `CertificatePinningDelegate`, contrairement à `APIClient` et `MessageSocketManager`.
+  C'est la pratique déjà en vigueur dans `NSEDataSync`, qui poste au gateway sans
+  épinglage non plus. À traiter pour les deux extensions ensemble, jamais pour une seule.
+- **Utilisateurs anonymes non couverts.** L'extension résout un JWT
+  (`meeshy_token_<userId>`) ; une session anonyme s'appuie sur `X-Session-Token` et n'a pas
+  d'entrée trousseau. Un utilisateur anonyme voit donc « Connectez-vous à Meeshy » — état
+  honnête, mais qui n'est pas la vérité complète de son statut.
+- **Aucune vérification manuelle sur appareil réel n'a encore eu lieu** : le trousseau
+  partagé ne peut être validé qu'avec l'entitlement signé, donc après activation de la
+  capability au portail (§8).
+
+## 11. Hors périmètre
 
 - Images, vidéos, fichiers, localisation (**lot 2** : TUS dans l'extension)
 - Recherche dans la liste des conversations
