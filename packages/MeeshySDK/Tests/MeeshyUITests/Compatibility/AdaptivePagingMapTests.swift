@@ -2,7 +2,7 @@ import XCTest
 import SwiftUI
 import MapKit
 import CoreLocation
-import MeeshyUI
+@testable import MeeshyUI
 
 /// Tests for the Session 4 `Compatibility/` wrappers (paging + MapKit).
 ///
