@@ -117,11 +117,29 @@ public struct TimelineInspectorHost: View {
         project.audioPlayerObjects.contains { $0.isBackground == true }
     }
 
+    /// Fenêtre ANNONCÉE d'un clip, début et durée.
+    ///
+    /// Un clip permanent (`duration == nil`) court de son début jusqu'à la fin
+    /// de la slide : c'est ce que la piste dessine
+    /// (`TimelineGeometry.effectiveClipDuration`, même appel) et ce que le trim
+    /// au doigt matérialise au premier geste. La fiche lisait `duration ?? 0`
+    /// et annonçait « DÉBUT 0,0 · FIN 0,0 · DURÉE 0,0 » sur un texte de 16 s —
+    /// trois valeurs fausses, et un piège : un appui sur « + » de la durée
+    /// ramenait le clip à 0,1 s au lieu de l'allonger.
+    private static func window(startTime: Float,
+                               duration: Float?,
+                               slideDuration: Float) -> (start: Float, duration: Float) {
+        (startTime, TimelineGeometry.effectiveClipDuration(startTime: startTime,
+                                                           duration: duration,
+                                                           slideDuration: slideDuration))
+    }
+
     /// Pure mapping from the current timeline selection to a `ClipSnapshot`.
     /// Returns `nil` when no clip is selected or when the selected id matches
     /// neither a media clip nor an audio player object.
     public static func resolveClipSnapshot(viewModel: TimelineViewModel) -> ClipInspector.ClipSnapshot? {
         guard let id = viewModel.selection.selectedClipId else { return nil }
+        let slideDuration = viewModel.project.slideDuration
         if let media = viewModel.project.mediaObjects.first(where: { $0.id == id }) {
             // Media objects only carry image/video — audio lives in
             // `audioPlayerObjects`. An unrecognized mediaType (forward-compat)
@@ -134,12 +152,15 @@ public struct TimelineInspectorHost: View {
                 case .none:         return .video
                 }
             }()
+            let win = window(startTime: Float(media.startTime ?? 0),
+                             duration: media.duration.map { Float($0) },
+                             slideDuration: slideDuration)
             return ClipInspector.ClipSnapshot(
                 id: media.id,
                 displayName: media.postMediaId,
                 kind: kind,
-                startTime: Float(media.startTime ?? 0),
-                duration: Float(media.duration ?? 0),
+                startTime: win.start,
+                duration: win.duration,
                 volume: media.volume,
                 fadeInDuration: Float(media.fadeIn ?? 0),
                 fadeOutDuration: Float(media.fadeOut ?? 0),
@@ -155,12 +176,15 @@ public struct TimelineInspectorHost: View {
             )
         }
         if let audio = viewModel.project.audioPlayerObjects.first(where: { $0.id == id }) {
+            let win = window(startTime: audio.startTime ?? 0,
+                             duration: audio.duration,
+                             slideDuration: slideDuration)
             return ClipInspector.ClipSnapshot(
                 id: audio.id,
                 displayName: audio.postMediaId,
                 kind: .audio,
-                startTime: audio.startTime ?? 0,
-                duration: audio.duration ?? 0,
+                startTime: win.start,
+                duration: win.duration,
                 volume: audio.volume,
                 fadeInDuration: audio.fadeIn ?? 0,
                 fadeOutDuration: audio.fadeOut ?? 0,
@@ -176,12 +200,15 @@ public struct TimelineInspectorHost: View {
         // Pas de volume ni de boucle pour le texte (slider masqué via
         // hasAudioAffordances(.text) == false).
         if let text = viewModel.project.textObjects.first(where: { $0.id == id }) {
+            let win = window(startTime: Float(text.startTime ?? 0),
+                             duration: text.duration.map { Float($0) },
+                             slideDuration: slideDuration)
             return ClipInspector.ClipSnapshot(
                 id: text.id,
                 displayName: text.text,
                 kind: .text,
-                startTime: Float(text.startTime ?? 0),
-                duration: Float(text.duration ?? 0),
+                startTime: win.start,
+                duration: win.duration,
                 volume: 1.0,
                 fadeInDuration: Float(text.fadeIn ?? 0),
                 fadeOutDuration: Float(text.fadeOut ?? 0),
@@ -198,12 +225,15 @@ public struct TimelineInspectorHost: View {
         // inatteignables alors que le view model les gère tous.
         // Pas de nom persisté sur `StorySticker` — l'emoji EST son identité.
         if let sticker = viewModel.project.stickerObjects.first(where: { $0.id == id }) {
+            let win = window(startTime: Float(sticker.startTime ?? 0),
+                             duration: sticker.duration.map { Float($0) },
+                             slideDuration: slideDuration)
             return ClipInspector.ClipSnapshot(
                 id: sticker.id,
                 displayName: sticker.emoji,
                 kind: .sticker,
-                startTime: Float(sticker.startTime ?? 0),
-                duration: Float(sticker.duration ?? 0),
+                startTime: win.start,
+                duration: win.duration,
                 volume: 1.0,
                 fadeInDuration: Float(sticker.fadeIn ?? 0),
                 fadeOutDuration: Float(sticker.fadeOut ?? 0),

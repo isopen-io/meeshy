@@ -205,10 +205,7 @@ public struct TimelineScrubArea<TracksContent: View>: View {
 
     /// Ancre mobile pilotée par la poignée.
     private var scrollTargetAnchor: some View {
-        Color.clear
-            .frame(width: 1, height: 1)
-            .offset(x: requestedScrollX)
-            .id(Self.scrollTargetAnchorId)
+        TimelineScrollAnchor(x: requestedScrollX, anchorId: Self.scrollTargetAnchorId)
     }
 
     /// Lecteur de décalage pour iOS 16–17 — au-delà, c'est
@@ -248,10 +245,8 @@ public struct TimelineScrubArea<TracksContent: View>: View {
     /// Ancre invisible qui suit le playhead dans l'espace du contenu —
     /// cible du `scrollTo` de l'auto-follow.
     private var playheadAnchor: some View {
-        Color.clear
-            .frame(width: 1, height: 1)
-            .offset(x: Self.playheadLeadingInset + geometry.x(for: currentTime))
-            .id(Self.playheadAnchorId)
+        TimelineScrollAnchor(x: Self.playheadLeadingInset + geometry.x(for: currentTime),
+                             anchorId: Self.playheadAnchorId)
     }
 
     /// Suit le playhead PENDANT LA LECTURE uniquement (un scrub = le doigt de

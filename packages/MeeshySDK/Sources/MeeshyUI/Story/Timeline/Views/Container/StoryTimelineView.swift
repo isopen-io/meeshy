@@ -140,7 +140,13 @@ public struct StoryTimelineView: View {
 
         let nonEmpty = allTracks.filter { !$0.isEmpty }
         var picked: [CompactTrack] = []
-        if let selectedId = selectedClipId,
+        // Hisser la piste sélectionnée en tête ne sert que lorsque la place
+        // manque — c'est alors la seule façon de garder sous les yeux celle
+        // qu'on règle. Quand tout tient déjà, le hissage faisait permuter les
+        // lanes au moindre tap : rien de gagné, et le repère spatial de
+        // l'auteur qui saute.
+        if nonEmpty.count > maxCount,
+           let selectedId = selectedClipId,
            let selectedTrack = nonEmpty.first(where: { $0.containsClipId(selectedId) }) {
             picked.append(selectedTrack)
         }

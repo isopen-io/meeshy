@@ -128,12 +128,23 @@ public final class TimelineViewModel: ObservableObject {
     }
 
     /// Prolonge la timeline d'un pas fixe, plafonné à `ClipWindowResolver.maximumEnd`.
+    ///
+    /// Passe par la pile de commandes comme toute autre édition : un appui de
+    /// trop se retire avec « Annuler », et deux appuis se retirent un par un.
     public func extendSlideDuration(by seconds: Float = TimelineOperationsBar.extendStepSeconds) {
         let target = min(ClipWindowResolver.maximumEnd, project.slideDuration + seconds)
         guard target - project.slideDuration > 0.05 else { return }
-        authoredSlideDuration = target
-        project.slideDuration = target
-        scheduleEngineReconfigure()
+        let command = SetSlideDurationCommand(oldDuration: project.slideDuration,
+                                              newDuration: target,
+                                              oldAuthoredDuration: authoredSlideDuration)
+        do {
+            try command.apply(to: &project)
+            commandStack.push(.setSlideDuration(command))
+            authoredSlideDuration = target
+            scheduleEngineReconfigure()
+        } catch {
+            errorMessage = error.localizedDescription
+        }
     }
 
     @Published public internal(set) var showOfflineQueuedConfirmation: Bool = false
@@ -519,6 +530,12 @@ public final class TimelineViewModel: ObservableObject {
         guard let command = commandStack.undo() else { return }
         do {
             try command.underlying.revert(from: &project)
+            // La durée d'AUTEUR ne vit pas dans le projet : sans cette reprise,
+            // `recomputeSlideDuration` juste en dessous la relirait et
+            // restaurerait la longueur qu'on vient d'annuler.
+            if case .setSlideDuration(let c) = command {
+                authoredSlideDuration = c.oldAuthoredDuration
+            }
             scheduleEngineReconfigure()
             recomputeSlideDuration(announcing: false)
         } catch {
@@ -530,6 +547,9 @@ public final class TimelineViewModel: ObservableObject {
         guard let command = commandStack.redo() else { return }
         do {
             try command.underlying.apply(to: &project)
+            if case .setSlideDuration(let c) = command {
+                authoredSlideDuration = c.newDuration
+            }
             scheduleEngineReconfigure()
             recomputeSlideDuration(announcing: false)
         } catch {

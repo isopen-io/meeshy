@@ -3070,6 +3070,42 @@ public struct RemoveTransitionCommand: EditCommand {
     }
 }
 
+/// Allonge (ou raccourcit) la timeline elle-même — ce que pose « +10 s ».
+///
+/// La commande porte AUSSI la durée d'auteur d'avant : c'est le champ qui
+/// distingue une longueur voulue d'un simple calcul du contenu, et sans lui
+/// l'annulation aurait rendu la durée au projet pour se la faire aussitôt
+/// reprendre par le premier recalcul venu.
+public struct SetSlideDurationCommand: EditCommand {
+    public let id: String
+    public let timestamp: Date
+    public let oldDuration: Float
+    public let newDuration: Float
+    /// Durée d'auteur d'avant la commande — `nil` quand la longueur dérivait
+    /// encore du contenu seul.
+    public let oldAuthoredDuration: Float?
+
+    public init(id: String = UUID().uuidString,
+                timestamp: Date = Date(),
+                oldDuration: Float,
+                newDuration: Float,
+                oldAuthoredDuration: Float?) {
+        self.id = id
+        self.timestamp = timestamp
+        self.oldDuration = oldDuration
+        self.newDuration = newDuration
+        self.oldAuthoredDuration = oldAuthoredDuration
+    }
+
+    public func apply(to project: inout TimelineProject) throws {
+        project.slideDuration = newDuration
+    }
+
+    public func revert(from project: inout TimelineProject) throws {
+        project.slideDuration = oldDuration
+    }
+}
+
 public struct ChangeTransitionCommand: EditCommand {
     public let id: String
     public let timestamp: Date
@@ -3727,6 +3763,7 @@ public enum AnyEditCommand: Codable, Sendable {
     case moveKeyframe(MoveKeyframeCommand)
     case deleteKeyframe(DeleteKeyframeCommand)
     case setClipProperty(SetClipPropertyCommand)
+    case setSlideDuration(SetSlideDurationCommand)
 
     public var underlying: any EditCommand {
         switch self {
@@ -3742,6 +3779,7 @@ public enum AnyEditCommand: Codable, Sendable {
         case .moveKeyframe(let c):      return c
         case .deleteKeyframe(let c):    return c
         case .setClipProperty(let c):   return c
+        case .setSlideDuration(let c):  return c
         }
     }
 
@@ -3767,6 +3805,7 @@ public enum AnyEditCommand: Codable, Sendable {
         case .moveKeyframe:      return "moveKeyframe"
         case .deleteKeyframe:    return "deleteKeyframe"
         case .setClipProperty:   return "setClipProperty"
+        case .setSlideDuration:  return "setSlideDuration"
         }
     }
 
@@ -3802,6 +3841,8 @@ public enum AnyEditCommand: Codable, Sendable {
             self = .deleteKeyframe(try c.decode(DeleteKeyframeCommand.self, forKey: .payload))
         case "setClipProperty":
             self = .setClipProperty(try c.decode(SetClipPropertyCommand.self, forKey: .payload))
+        case "setSlideDuration":
+            self = .setSlideDuration(try c.decode(SetSlideDurationCommand.self, forKey: .payload))
         default:
             throw DecodingError.dataCorruptedError(
                 forKey: .type, in: c,
@@ -3826,6 +3867,7 @@ public enum AnyEditCommand: Codable, Sendable {
         case .moveKeyframe(let v):      try c.encode(v, forKey: .payload)
         case .deleteKeyframe(let v):    try c.encode(v, forKey: .payload)
         case .setClipProperty(let v):   try c.encode(v, forKey: .payload)
+        case .setSlideDuration(let v):  try c.encode(v, forKey: .payload)
         }
     }
 }
