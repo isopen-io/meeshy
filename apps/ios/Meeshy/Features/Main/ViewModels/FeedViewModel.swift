@@ -634,12 +634,19 @@ class FeedViewModel: ObservableObject {
     /// video / multi-image post created offline is enqueued as a `REEL` so it
     /// lands on the reels surface once the OutboxFlusher uploads it — reusing the
     /// exact post durability machinery, only the server-side `type` differs.
+    ///
+    /// `location` widens the call surface so both `FeedView+Attachments.swift`
+    /// call sites can pass `pendingPlace` — the durable outbox (`CreatePostPayload`
+    /// / `enqueuePostMedia`) doesn't carry a location yet (cf. Task 17), so it
+    /// isn't forwarded any further here. A media post composed offline with a
+    /// position attached still enqueues; the position itself isn't durable yet.
     func createOfflineMediaPost(
         localMediaURLs: [URL],
         content: String?,
         visibility: String = "PUBLIC",
         originalLanguage: String? = nil,
-        type: String = "POST"
+        type: String = "POST",
+        location: SharedPlace? = nil
     ) async {
         publishError = nil
         publishSuccess = false

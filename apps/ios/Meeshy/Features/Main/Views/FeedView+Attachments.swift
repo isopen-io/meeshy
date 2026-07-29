@@ -236,7 +236,8 @@ extension FeedView {
                     content: text,
                     visibility: postVisibility,
                     originalLanguage: lang,
-                    type: postType
+                    type: postType,
+                    location: pendingPlace
                 )
             }
             return
@@ -1350,7 +1351,8 @@ struct FeedComposerSheet: View {
                     content: text,
                     visibility: postVisibility,
                     originalLanguage: lang,
-                    type: postType
+                    type: postType,
+                    location: pendingPlace
                 )
             }
             return
