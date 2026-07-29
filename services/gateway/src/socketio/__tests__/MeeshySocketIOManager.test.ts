@@ -2239,6 +2239,22 @@ describe('MeeshySocketIOManager', () => {
       prisma.participant.findMany.mockRejectedValue(new Error('DB fail'));
       await expect((manager as any)._emitPresenceSnapshot(socket, 'user-err', false)).resolves.not.toThrow();
     });
+
+    it('still replays the offline delivery queue when the presence-snapshot build throws (delivery must not depend on the cosmetic snapshot)', async () => {
+      // A transient Mongo hiccup on the presence-snapshot contacts query must NOT
+      // skip the offline-queue replay: _drainPendingMessages is the sole reconnect
+      // trigger that redelivers queued messages + their delivered receipts. Gating
+      // it behind the snapshot build stranded them until the next clean reconnect.
+      const socket = makeSocket('sock-ps-drain-onerror');
+      prisma.participant.findMany.mockRejectedValue(new Error('transient Mongo hiccup'));
+      const drainSpy = jest.spyOn(manager as any, '_drainPendingMessages').mockResolvedValue(undefined);
+      const unreadSpy = jest.spyOn(manager as any, '_emitUnreadCountsSnapshot').mockResolvedValue(undefined);
+
+      await (manager as any)._emitPresenceSnapshot(socket, 'user-drain-onerror', false);
+
+      expect(drainSpy).toHaveBeenCalledWith('user-drain-onerror', false);
+      expect(unreadSpy).toHaveBeenCalledWith(socket, 'user-drain-onerror');
+    });
   });
 
   // -------------------------------------------------------------------------
