@@ -44,7 +44,7 @@ struct LocationPickerView: View {
                 }
             }
             .onAppear { viewModel.requestPermission() }
-            .onReceive(viewModel.$userLocation.compactMap { $0 }) { loc in
+            .onReceive(viewModel.userLocationUpdates) { loc in
                 // iOS 17 keeps `.userLocation(fallback:)` inside the adaptive
                 // map, so it self-centers. iOS 16 has no such mode — recenter
                 // explicitly on the first fix only.
@@ -328,16 +328,51 @@ struct LocationPickerView: View {
 
 // MARK: - Location Picker Model
 
-@MainActor
-final class LocationPickerModel: NSObject, ObservableObject, CLLocationManagerDelegate {
-    @Published var selectedCoordinate: CLLocationCoordinate2D?
-    @Published var addressString: String?
-    @Published var isGeocoding = false
-    @Published var searchResults: [MKMapItem] = []
-    @Published var userLocation: CLLocationCoordinate2D?
+/// `nonisolated` sur le TYPE + `@unchecked Sendable`.
+///
+/// Le target app compile avec `SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor` :
+/// une classe `@MainActor` sans `deinit` écrite reçoit une deinit ISOLÉE
+/// (SE-0466). Sur iOS < 26 cette deinit passe par le shim de rétro-déploiement
+/// `swift_task_deinitOnExecutorMainActorBackDeploy`, qui libère DEUX FOIS le
+/// scope task-local et tue le processus. Le picker étant une sheet, ce chemin
+/// est exercé à CHAQUE fermeture. Même signature que le crash `ScrollOffsetRelay`.
+///
+/// `@unchecked Sendable` est requis parce que les fermetures de delegate et de
+/// complétion capturent `self` depuis un contexte nonisolated. Ce n'est pas une
+/// échappatoire : l'invariant est vérifié — le modèle naît dans un `@StateObject`
+/// (donc sur le main), `CLLocationManager` créé sur le main rappelle sur le main,
+/// `CLGeocoder` et `MKLocalSearch` documentent une complétion sur le main, et
+/// toute écriture de propriété publiée est faite depuis le main (les fermetures
+/// de complétion repassent explicitement par `Task { @MainActor }`).
+/// `objectWillChange` n'est donc jamais émis hors du main. Même patron que
+/// `PiPVideoRenderer`.
+nonisolated final class LocationPickerModel: NSObject, ObservableObject, CLLocationManagerDelegate, @unchecked Sendable {
+    /// `willSet { objectWillChange.send() }` PLUTÔT que `@Published` : le
+    /// compilateur refuse `nonisolated` sur une propriété enveloppée
+    /// (« 'nonisolated' is not supported on properties with property wrappers »),
+    /// et l'annotation doit vivre sur le TYPE pour désisoler la deinit. C'est
+    /// exactement ce que `@Published` fait — publier avant l'écriture.
+    var selectedCoordinate: CLLocationCoordinate2D? { willSet { objectWillChange.send() } }
+    var addressString: String? { willSet { objectWillChange.send() } }
+    var isGeocoding = false { willSet { objectWillChange.send() } }
+    var searchResults: [MKMapItem] = [] { willSet { objectWillChange.send() } }
+    var userLocation: CLLocationCoordinate2D? {
+        willSet {
+            objectWillChange.send()
+            if let newValue { userLocationUpdates.send(newValue) }
+        }
+    }
+    /// Remplaçant explicite de la projection `$userLocation`, que le dépliage
+    /// des `@Published` supprime. La vue en a besoin pour recentrer la carte sur
+    /// le PREMIER relevé seulement (iOS 16 n'a pas de mode `.userLocation`) :
+    /// `objectWillChange` ne peut pas la servir, il tire avant l'écriture et ne
+    /// porte pas la valeur.
+    let userLocationUpdates = PassthroughSubject<CLLocationCoordinate2D, Never>()
     /// Statut d'autorisation, publié pour que la vue puisse expliquer un refus
     /// au lieu de laisser l'utilisateur attendre un relevé qui ne viendra pas.
-    @Published private(set) var authorization: CLAuthorizationStatus = .notDetermined
+    private(set) var authorization: CLAuthorizationStatus = .notDetermined {
+        willSet { objectWillChange.send() }
+    }
 
     var isLocationRefused: Bool {
         authorization == .denied || authorization == .restricted
@@ -376,10 +411,14 @@ final class LocationPickerModel: NSObject, ObservableObject, CLLocationManagerDe
     func updateSelectedLocation(_ coordinate: CLLocationCoordinate2D) {
         selectedCoordinate = coordinate
         geocodeTask?.cancel()
-        geocodeTask = Task {
+        // Hop `@MainActor` explicite : le type est désormais nonisolated, donc
+        // ce `Task` n'hérite plus du main actor comme avant. Le géocodage écrit
+        // `isGeocoding`/`addressString`, donc `objectWillChange` — SwiftUI exige
+        // que ces émissions restent sur le main.
+        geocodeTask = Task { @MainActor [weak self] in
             try? await Task.sleep(nanoseconds: 300_000_000)
             guard !Task.isCancelled else { return }
-            reverseGeocode(coordinate)
+            self?.reverseGeocode(coordinate)
         }
     }
 
@@ -429,7 +468,9 @@ final class LocationPickerModel: NSObject, ObservableObject, CLLocationManagerDe
         manager.requestLocation()
     }
 
-    nonisolated func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
+    // Les trois callbacks de delegate ne portent plus `nonisolated` : le TYPE
+    // entier l'est désormais, l'annotation par méthode serait redondante.
+    func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
         guard let loc = locations.last else { return }
         Task { @MainActor [weak self] in
             guard let self else { return }
@@ -441,7 +482,7 @@ final class LocationPickerModel: NSObject, ObservableObject, CLLocationManagerDe
         }
     }
 
-    nonisolated func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
+    func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
         // A silent no-op here swallows denied permissions, airplane mode and
         // transient CoreLocation errors. Log so we can diagnose why the
         // picker never surfaces a result, and clear the pending geocoding
@@ -453,7 +494,7 @@ final class LocationPickerModel: NSObject, ObservableObject, CLLocationManagerDe
         }
     }
 
-    nonisolated func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
+    func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
         let status = manager.authorizationStatus
         Task { @MainActor [weak self] in
             self?.authorization = status

@@ -198,6 +198,24 @@ final class PermissionGateSourceGuardTests: XCTestCase {
                       "Un refus doit être expliqué dans l'UI, pas seulement journalisé.")
     }
 
+    /// Une classe `@MainActor` sans `deinit` écrite reçoit une deinit ISOLÉE
+    /// (SE-0466) dont le shim de rétro-déploiement double-libère le scope
+    /// task-local et tue le processus au démontage. Le picker étant une sheet,
+    /// ce chemin est exercé à chaque fermeture. Même signature que le crash
+    /// `ScrollOffsetRelay`.
+    func test_locationPickerModel_isTypeLevelNonisolated() throws {
+        let src = try source("Meeshy/Features/Main/Components/LocationPickerView.swift")
+
+        XCTAssertTrue(src.contains("nonisolated final class LocationPickerModel"),
+                      "Le `nonisolated` doit vivre sur le TYPE : c'est la seule annotation qui désisole la deinit.")
+        XCTAssertTrue(src.contains("@unchecked Sendable"),
+                      "Un type nonisolated capturé dans des fermetures de delegate doit être Sendable.")
+        XCTAssertFalse(src.contains("@Published var selectedCoordinate"),
+                       "`nonisolated` est refusé sur une propriété enveloppée : les @Published doivent être dépliés.")
+        XCTAssertTrue(src.contains("willSet { objectWillChange.send() }"),
+                      "Le dépliage doit publier sur willSet, exactement comme @Published.")
+    }
+
     // MARK: - Mot de passe
 
     /// Sans `.newPassword`, iOS ne propose ni mot de passe fort ni — surtout —
