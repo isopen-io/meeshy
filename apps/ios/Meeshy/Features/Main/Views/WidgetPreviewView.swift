@@ -523,7 +523,7 @@ struct WidgetPreviewView: View {
                 Text(String(localized: "widget.preview.widgetsTitle", defaultValue: "Widgets Meeshy", bundle: .main))
                     .font(MeeshyFont.relative(14, weight: .bold))
                     .foregroundColor(theme.textPrimary)
-                Text(String(localized: "widget.preview.widgetsHint", defaultValue: "Ajoutez ces widgets a votre ecran d'accueil pour un acces rapide.", bundle: .main))
+                Text(String(localized: "widget.preview.widgetsHint", defaultValue: "Ajoutez ces widgets à votre écran d'accueil pour un accès rapide.", bundle: .main))
                     .font(MeeshyFont.relative(12))
                     .foregroundColor(theme.textMuted)
                     .fixedSize(horizontal: false, vertical: true)

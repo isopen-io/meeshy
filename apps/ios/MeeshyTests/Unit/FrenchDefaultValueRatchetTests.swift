@@ -15,7 +15,7 @@ import XCTest
 /// explicitement les appels porteurs d'un `defaultValue`. C'est par ce trou que
 /// les 488 sont passées.
 ///
-/// **Cliquet, pas interdiction.** La dette existante est gelée dans
+/// **Cliquet, pas interdiction.** La dette est portée par
 /// `FrenchDefaultValueDebt.json`. Ce test échoue si :
 /// - une clé NEUVE apparaît avec un `defaultValue` français sans entrée au
 ///   catalogue (la dette ne peut pas grandir) ;
@@ -24,6 +24,17 @@ import XCTest
 ///
 /// Traduire une clé = l'ajouter au catalogue dans les 7 langues, puis la
 /// retirer de ce fichier. La liste ne peut que RÉTRÉCIR.
+///
+/// **La dette est à ZÉRO depuis le 2026-07-29** : les 488 clés d'origine ont
+/// toutes été portées au catalogue en 7 langues. Le fichier reste — vide — car
+/// c'est lui qui donne au cliquet son point de comparaison : liste vide =
+/// aucune tolérance, toute nouvelle clé française hors catalogue échoue
+/// immédiatement. Le remplir de nouveau serait une régression, pas un usage.
+///
+/// Un corollaire non couvert ici : une clé PRÉSENTE au catalogue peut quand
+/// même mal s'afficher si le type de son placeholder (`%@` vs `%lld`) ne
+/// correspond pas à l'argument interpolé au site d'appel. C'est l'objet de
+/// `InterpolatedLocalizationSubstitutionTests`.
 final class FrenchDefaultValueRatchetTests: XCTestCase {
 
     private var iosRoot: URL {

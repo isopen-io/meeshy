@@ -242,7 +242,7 @@ struct OnboardingFlowView: View {
         case .profile:
             return String(localized: "common.continue", defaultValue: "Continuer", bundle: .main)
         default:
-            return String(localized: "onboarding.button.next", defaultValue: "C'est bon, suivant!", bundle: .main)
+            return String(localized: "onboarding.button.next", defaultValue: "C'est bon, suivant !", bundle: .main)
         }
     }
 

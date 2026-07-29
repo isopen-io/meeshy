@@ -869,7 +869,7 @@ struct SecurityView: View {
                 HStack(spacing: 12) {
                     fieldIcon("laptopcomputer.and.iphone", color: "818CF8")
 
-                    Text(String(localized: "security_sessions_manage", defaultValue: "Gerer les sessions actives"))
+                    Text(String(localized: "security_sessions_manage", defaultValue: "Gérer les sessions actives"))
                         .font(.subheadline.weight(.medium))
                         .foregroundColor(theme.textPrimary)
 

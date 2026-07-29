@@ -45,7 +45,7 @@ final class EmailVerificationViewModel: ObservableObject {
             resendSuccess = false
         } catch {
             self.error = (error as? MeeshyError)?.localizedDescription
-                ?? String(localized: "emailVerification.error.resendFailed", defaultValue: "Impossible de renvoyer le code de verification")
+                ?? String(localized: "emailVerification.error.resendFailed", defaultValue: "Impossible de renvoyer le code de vérification")
         }
 
         isResending = false

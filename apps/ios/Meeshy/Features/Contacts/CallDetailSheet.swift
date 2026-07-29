@@ -127,7 +127,7 @@ struct CallDetailSheet: View {
             if !record.durationLabel.isEmpty {
                 detailRow(
                     icon: "clock",
-                    label: String(localized: "calls.detail.duration", defaultValue: "Duree", bundle: .main),
+                    label: String(localized: "calls.detail.duration", defaultValue: "Durée", bundle: .main),
                     value: record.durationLabel
                 )
             }

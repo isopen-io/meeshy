@@ -130,11 +130,11 @@ struct DataExportView: View {
                 .accessibilityHidden(true)
 
             VStack(alignment: .leading, spacing: 4) {
-                Text(String(localized: "settings.data.export.info.title", defaultValue: "Vos donnees, votre controle", bundle: .main))
+                Text(String(localized: "settings.data.export.info.title", defaultValue: "Vos données, votre contrôle", bundle: .main))
                     .font(MeeshyFont.relative(14, weight: .bold))
                     .foregroundColor(theme.textPrimary)
 
-                Text(String(localized: "settings.data.export.info.body", defaultValue: "Conformement au RGPD, vous pouvez exporter toutes vos donnees personnelles.", bundle: .main))
+                Text(String(localized: "settings.data.export.info.body", defaultValue: "Conformément au RGPD, vous pouvez exporter toutes vos données personnelles.", bundle: .main))
                     .font(MeeshyFont.relative(12))
                     .foregroundColor(theme.textMuted)
             }
@@ -288,7 +288,7 @@ struct DataExportView: View {
         .accessibilityLabel(String(localized: "settings.data.export.button.start", defaultValue: "Exporter mes donnees", bundle: .main))
         .accessibilityHint(isExporting
             ? String(localized: "settings.data.export.hint.exporting", defaultValue: "Export en cours", bundle: .main)
-            : String(localized: "settings.data.export.hint.start", defaultValue: "Lance l'export de vos donnees", bundle: .main))
+            : String(localized: "settings.data.export.hint.start", defaultValue: "Lance l'export de vos données", bundle: .main))
     }
 
     private func sectionHeader(title: String, icon: String, color: Color) -> some View {

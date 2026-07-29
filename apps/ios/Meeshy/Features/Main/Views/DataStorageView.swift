@@ -33,7 +33,7 @@ struct DataStorageView: View {
                 clearCache()
             }
         } message: {
-            Text(String(localized: "settings.data.storage.clear.message", defaultValue: "Cela supprimera tous les medias mis en cache localement. Ils seront retelecharges si necessaire.", bundle: .main))
+            Text(String(localized: "settings.data.storage.clear.message", defaultValue: "Cela supprimera tous les médias mis en cache localement. Ils seront retéléchargés si nécessaire.", bundle: .main))
         }
     }
 
@@ -117,7 +117,7 @@ struct DataStorageView: View {
                 .padding(.vertical, 10)
                 .accessibilityElement(children: .combine)
 
-                Text(String(localized: "settings.data.storage.cache.description", defaultValue: "Le cache permet de charger les medias plus rapidement et reduit la consommation de donnees. Les fichiers mis en cache sont automatiquement supprimes apres 7 jours.", bundle: .main))
+                Text(String(localized: "settings.data.storage.cache.description", defaultValue: "Le cache permet de charger les médias plus rapidement et réduit la consommation de données. Les fichiers mis en cache sont automatiquement supprimés après 7 jours.", bundle: .main))
                     .font(MeeshyFont.relative(13, weight: .regular))
                     .foregroundColor(theme.textMuted)
                     .lineSpacing(3)
@@ -157,8 +157,8 @@ struct DataStorageView: View {
             }
             .disabled(isClearing)
             .background(sectionBackground(tint: MeeshyColors.neutral500Hex))
-            .accessibilityLabel(String(localized: "settings.data.storage.action.clear.label", defaultValue: "Vider le cache media", bundle: .main))
-            .accessibilityHint(String(localized: "settings.data.storage.action.clear.hint", defaultValue: "Supprime tous les medias mis en cache localement", bundle: .main))
+            .accessibilityLabel(String(localized: "settings.data.storage.action.clear.label", defaultValue: "Vider le cache média", bundle: .main))
+            .accessibilityHint(String(localized: "settings.data.storage.action.clear.hint", defaultValue: "Supprime tous les médias mis en cache localement", bundle: .main))
         }
     }
 

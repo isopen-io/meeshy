@@ -240,7 +240,7 @@ extension ConversationView {
                                 .shadow(color: Color(hex: accentColor).opacity(0.4), radius: 8, y: 2)
                         )
                     }
-                    .accessibilityLabel(String(localized: "conversation.view.return_to_recent", defaultValue: "Retourner aux messages recents", bundle: .main))
+                    .accessibilityLabel(String(localized: "conversation.view.return_to_recent", defaultValue: "Retourner aux messages récents", bundle: .main))
                     Spacer()
                 }
                 .padding(.bottom, composerHeight + 8)
@@ -433,7 +433,7 @@ extension ConversationView {
             )
         }
         .accessibilityLabel(label)
-        .accessibilityHint(String(localized: "conversation.view.go_to_first_reply", defaultValue: "Aller a la premiere reponse de ce message", bundle: .main))
+        .accessibilityHint(String(localized: "conversation.view.go_to_first_reply", defaultValue: "Aller à la première réponse de ce message", bundle: .main))
     }
 }
 

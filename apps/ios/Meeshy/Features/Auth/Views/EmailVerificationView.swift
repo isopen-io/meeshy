@@ -74,7 +74,7 @@ struct EmailVerificationView: View {
     // MARK: - Title
 
     private var titleSection: some View {
-        Text(String(localized: "emailVerification.title", defaultValue: "Verifiez votre email"))
+        Text(String(localized: "emailVerification.title", defaultValue: "Vérifiez votre email"))
             .font(.system(.title, design: .rounded).weight(.bold))
             .foregroundStyle(theme.textPrimary)
             .accessibilityAddTraits(.isHeader)
@@ -195,7 +195,7 @@ struct EmailVerificationView: View {
 
     private var resendSection: some View {
         VStack(spacing: 8) {
-            Text(String(localized: "emailVerification.noCode", defaultValue: "Vous n'avez pas recu le code ?"))
+            Text(String(localized: "emailVerification.noCode", defaultValue: "Vous n'avez pas reçu le code ?"))
                 .font(.footnote)
                 .foregroundStyle(theme.textSecondary)
 

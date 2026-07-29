@@ -71,7 +71,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ou entrez cette cle manuellement :"
+            "value" : "Ou entrez cette clé manuellement :"
           }
         },
         "it": {
@@ -118,7 +118,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Generer les codes"
+            "value" : "Générer les codes"
           }
         },
         "it": {
@@ -165,7 +165,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Entrez le code a 6 chiffres affiche dans votre application"
+            "value" : "Entrez le code à 6 chiffres affiché dans votre application"
           }
         },
         "it": {
@@ -212,7 +212,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Votre compte sera moins securise sans 2FA. Entrez votre mot de passe et votre code pour confirmer."
+            "value" : "Votre compte sera moins sécurisé sans 2FA. Entrez votre mot de passe et votre code pour confirmer."
           }
         },
         "it": {
@@ -306,7 +306,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Confirmer la desactivation"
+            "value" : "Confirmer la désactivation"
           }
         },
         "it": {
@@ -353,7 +353,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ces codes remplacent les precedents. Conservez-les en lieu sur."
+            "value" : "Ces codes remplacent les précédents. Conservez-les en lieu sûr."
           }
         },
         "it": {
@@ -400,7 +400,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Conservez ces codes de secours dans un endroit sur. Chaque code ne peut etre utilise qu'une seule fois."
+            "value" : "Conservez ces codes de secours dans un endroit sûr. Chaque code ne peut être utilisé qu'une seule fois."
           }
         },
         "it": {
@@ -447,7 +447,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Entrez votre code 2FA pour generer de nouveaux codes de secours"
+            "value" : "Entrez votre code 2FA pour générer de nouveaux codes de secours"
           }
         },
         "it": {
@@ -541,7 +541,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "2FA active avec succes !"
+            "value" : "2FA activé avec succès !"
           }
         },
         "it": {
@@ -23135,7 +23135,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Meeshy utilise les bibliotheques open source suivantes."
+            "value" : "Meeshy utilise les bibliothèques open source suivantes."
           }
         },
         "it": {
@@ -23182,7 +23182,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ouvre le depot dans Safari"
+            "value" : "Ouvre le dépôt dans Safari"
           }
         },
         "it": {
@@ -23229,7 +23229,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Meeshy est une plateforme de messagerie en temps reel haute performance avec traduction multilingue, clonage vocal et chiffrement de bout en bout."
+            "value" : "Meeshy est une plateforme de messagerie en temps réel haute performance avec traduction multilingue, clonage vocal et chiffrement de bout en bout."
           }
         },
         "it": {
@@ -23383,6 +23383,53 @@
           "stringUnit": {
             "state": "translated",
             "value": "Chave secreta"
+          }
+        }
+      }
+    },
+    "about.link.hint": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "يفتح %@ في Safari"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Öffnet %@ in Safari"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Opens %@ in Safari"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Abre %@ en Safari"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ouvre %@ dans Safari"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Apre %@ in Safari"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Abre %@ no Safari"
           }
         }
       }
@@ -25451,7 +25498,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Vos preferences et parametres"
+            "value" : "Vos préférences et paramètres"
           }
         },
         "it": {
@@ -25545,7 +25592,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tous vos medias partages"
+            "value" : "Tous vos médias partagés"
           }
         },
         "it": {
@@ -25592,7 +25639,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "La suppression de votre compte entrainera la perte definitive de :"
+            "value" : "La suppression de votre compte entraînera la perte définitive de :"
           }
         },
         "it": {
@@ -25780,7 +25827,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Etes-vous absolument certain ? Cette action est irreversible."
+            "value" : "Êtes-vous absolument certain ? Cette action est irréversible."
           }
         },
         "it": {
@@ -25827,7 +25874,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Erreur lors de la suppression du compte. Veuillez reessayer."
+            "value" : "Erreur lors de la suppression du compte. Veuillez réessayer."
           }
         },
         "it": {
@@ -25874,7 +25921,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Un email de confirmation vous a ete envoye"
+            "value" : "Un email de confirmation vous a été envoyé"
           }
         },
         "it": {
@@ -25921,7 +25968,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Verifiez votre boite de reception pour confirmer la suppression de votre compte."
+            "value" : "Vérifiez votre boîte de réception pour confirmer la suppression de votre compte."
           }
         },
         "it": {
@@ -26109,7 +26156,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Supprimer definitivement mon compte"
+            "value" : "Supprimer définitivement mon compte"
           }
         },
         "it": {
@@ -27096,7 +27143,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Creez un lien pour inviter vos amis"
+            "value" : "Créez un lien pour inviter vos amis"
           }
         },
         "it": {
@@ -27190,7 +27237,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Erreur lors de la creation"
+            "value" : "Erreur lors de la création"
           }
         },
         "it": {
@@ -27237,7 +27284,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Creer le lien"
+            "value" : "Créer le lien"
           }
         },
         "it": {
@@ -28600,7 +28647,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Lien expire, renvoyez-en un nouveau"
+            "value" : "Lien expiré, renvoyez-en un nouveau"
           }
         },
         "it": {
@@ -28647,7 +28694,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Une erreur est survenue. Veuillez reessayer."
+            "value" : "Une erreur est survenue. Veuillez réessayer."
           }
         },
         "it": {
@@ -28741,7 +28788,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Nous vous enverrons un lien de connexion securise"
+            "value" : "Nous vous enverrons un lien de connexion sécurisé"
           }
         },
         "it": {
@@ -29258,7 +29305,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Les utilisateurs que vous bloquez apparaitront ici"
+            "value" : "Les utilisateurs que vous bloquez apparaîtront ici"
           }
         },
         "it": {
@@ -29305,7 +29352,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Aucun utilisateur bloque"
+            "value" : "Aucun utilisateur bloqué"
           }
         },
         "it": {
@@ -29365,6 +29412,53 @@
           "stringUnit": {
             "state": "translated",
             "value": "Carregando"
+          }
+        }
+      }
+    },
+    "blocked.users.unblock.confirm": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "هل تريد إلغاء حظر %@؟"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Möchtest du %@ entsperren?"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Do you want to unblock %@?"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "¿Quieres desbloquear a %@?"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Voulez-vous débloquer %@ ?"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vuoi sbloccare %@?"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Deseja desbloquear %@?"
           }
         }
       }
@@ -30715,7 +30809,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Voir toutes les reactions"
+            "value" : "Voir toutes les réactions"
           }
         },
         "it": {
@@ -30762,7 +30856,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Appuyer pour basculer la reaction, maintenir pour voir toutes les reactions"
+            "value" : "Appuyer pour basculer la réaction, maintenir pour voir toutes les réactions"
           }
         },
         "it": {
@@ -30809,7 +30903,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Appuyer pour reagir rapidement, maintenir pour choisir un emoji"
+            "value" : "Appuyer pour réagir rapidement, maintenir pour choisir un emoji"
           }
         },
         "it": {
@@ -30950,7 +31044,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Media a voir une fois"
+            "value" : "Média à voir une fois"
           }
         },
         "it": {
@@ -30997,7 +31091,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Maintenir pour reveler le contenu"
+            "value" : "Maintenir pour révéler le contenu"
           }
         },
         "it": {
@@ -37530,7 +37624,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Duree"
+            "value" : "Durée"
           }
         },
         "it": {
@@ -37671,7 +37765,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Aucun appel recent"
+            "value" : "Aucun appel récent"
           }
         },
         "it": {
@@ -37718,7 +37812,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Vos appels recus, manques, annules et emis apparaitront ici."
+            "value" : "Vos appels reçus, manqués, annulés et émis apparaîtront ici."
           }
         },
         "it": {
@@ -40030,6 +40124,288 @@
         }
       }
     },
+    "composer.a11y.removeAttachment": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "إزالة المرفق"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Anhang entfernen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Remove attachment"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Quitar el archivo adjunto"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Retirer la pièce jointe"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rimuovi l'allegato"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Remover o anexo"
+          }
+        }
+      }
+    },
+    "composer.a11y.panelHandleHint": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "اسحب لأعلى لفتح مكتبة الصور كاملة"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nach oben wischen, um die gesamte Fotomediathek zu öffnen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Swipe up to open the full photo library"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Desliza hacia arriba para abrir toda la fototeca"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Glisser vers le haut pour ouvrir toute la photothèque"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Scorri verso l'alto per aprire l'intera libreria foto"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Deslize para cima para abrir toda a fototeca"
+          }
+        }
+      }
+    },
+    "composer.a11y.openFullLibrary": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "فتح مكتبة الصور كاملة"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gesamte Fotomediathek öffnen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open the full photo library"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Abrir toda la fototeca"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ouvrir toute la photothèque"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Apri l'intera libreria foto"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Abrir toda a fototeca"
+          }
+        }
+      }
+    },
+    "composer.a11y.openAttachMenu": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "فتح قائمة المرفقات"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Menü für Anhänge öffnen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open the attachments menu"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Abrir el menú de archivos adjuntos"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ouvrir le menu des pièces jointes"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Apri il menu degli allegati"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Abrir o menu de anexos"
+          }
+        }
+      }
+    },
+    "composer.a11y.cancelSelection": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "إلغاء التحديد"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Auswahl abbrechen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cancel selection"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cancelar la selección"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Annuler la sélection"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Annulla la selezione"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cancelar a seleção"
+          }
+        }
+      }
+    },
+    "composer.a11y.addSelection": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "إضافة التحديد"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Auswahl hinzufügen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Add selection"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Añadir la selección"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ajouter la sélection"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aggiungi la selezione"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Adicionar a seleção"
+          }
+        }
+      }
+    },
     "composer.recent.accessDenied.hint": {
       "extractionState": "manual",
       "localizations": {
@@ -40154,7 +40530,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Activer le mode ephemere"
+            "value" : "Activer le mode éphémère"
           }
         },
         "it": {
@@ -40402,6 +40778,53 @@
           "stringUnit": {
             "state": "translated",
             "value": "Remover o conteúdo da área de transferência"
+          }
+        }
+      }
+    },
+    "composer.recent.addSelected": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "إضافة (%lld)"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hinzufügen (%lld)"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Add (%lld)"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Añadir (%lld)"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ajouter (%lld)"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aggiungi (%lld)"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Adicionar (%lld)"
           }
         }
       }
@@ -41000,7 +41423,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Aucun de tes contacts n'est encore sur Meeshy — invite-les!"
+            "value" : "Aucun de tes contacts n'est encore sur Meeshy — invite-les !"
           }
         },
         "it": {
@@ -41094,7 +41517,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Retrouver mes contacts qui sont deja sur Meeshy"
+            "value" : "Retrouver mes contacts qui sont déjà sur Meeshy"
           }
         },
         "it": {
@@ -41188,7 +41611,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Aucun utilisateur bloque"
+            "value" : "Aucun utilisateur bloqué"
           }
         },
         "it": {
@@ -41329,7 +41752,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Les demandes que vous envoyez apparaitront ici"
+            "value" : "Les demandes que vous envoyez apparaîtront ici"
           }
         },
         "it": {
@@ -41376,7 +41799,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Aucune demande envoyee"
+            "value" : "Aucune demande envoyée"
           }
         },
         "it": {
@@ -41423,7 +41846,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Les demandes de contact recues apparaitront ici"
+            "value" : "Les demandes de contact reçues apparaîtront ici"
           }
         },
         "it": {
@@ -41470,7 +41893,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Aucune demande recue"
+            "value" : "Aucune demande reçue"
           }
         },
         "it": {
@@ -43247,7 +43670,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Erreur lors de la creation du lien"
+            "value" : "Erreur lors de la création du lien"
           }
         },
         "it": {
@@ -43294,7 +43717,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Gerer les membres du groupe"
+            "value" : "Gérer les membres du groupe"
           }
         },
         "it": {
@@ -43341,7 +43764,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Gerer les membres"
+            "value" : "Gérer les membres"
           }
         },
         "it": {
@@ -43482,7 +43905,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Erreur lors du depart de la conversation"
+            "value" : "Erreur lors du départ de la conversation"
           }
         },
         "it": {
@@ -43529,7 +43952,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Vous ne recevrez plus de messages de %@. Vous pourrez le debloquer dans les reglages."
+            "value" : "Vous ne recevrez plus de messages de %@. Vous pourrez le débloquer dans les réglages."
           }
         },
         "it": {
@@ -46224,6 +46647,53 @@
         }
       }
     },
+    "conversation.view.composer.delete_attachment": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "حذف %@"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ löschen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Delete %@"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Eliminar %@"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Supprimer %@"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Elimina %@"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Excluir %@"
+          }
+        }
+      }
+    },
     "conversation.view.composer.edit_message": {
       "extractionState": "manual",
       "localizations": {
@@ -46301,7 +46771,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Annuler la reponse"
+            "value" : "Annuler la réponse"
           }
         },
         "it": {
@@ -46630,7 +47100,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Aller a la premiere reponse de ce message"
+            "value" : "Aller à la première réponse de ce message"
           }
         },
         "it": {
@@ -47100,7 +47570,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Retourner aux messages recents"
+            "value" : "Retourner aux messages récents"
           }
         },
         "it": {
@@ -49193,7 +49663,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Impossible de renvoyer le code de verification"
+            "value" : "Impossible de renvoyer le code de vérification"
           }
         },
         "it": {
@@ -49351,6 +49821,53 @@
         }
       }
     },
+    "emailVerification.subtitle": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "أدخل الرمز المكوّن من 6 أرقام المُرسَل إلى **%@**"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gib den 6-stelligen Code ein, der an **%@** gesendet wurde"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enter the 6-digit code sent to **%@**"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Introduce el código de 6 dígitos enviado a **%@**"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Entrez le code à 6 chiffres envoyé à **%@**"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Inserisci il codice a 6 cifre inviato a **%@**"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Digite o código de 6 dígitos enviado para **%@**"
+          }
+        }
+      }
+    },
     "emailVerification.verifying.a11y": {
       "extractionState": "manual",
       "localizations": {
@@ -49428,7 +49945,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Verifiez votre email"
+            "value" : "Vérifiez votre email"
           }
         },
         "it": {
@@ -49522,7 +50039,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Vous n'avez pas recu le code ?"
+            "value" : "Vous n'avez pas reçu le code ?"
           }
         },
         "it": {
@@ -50381,6 +50898,53 @@
           "stringUnit": {
             "state": "translated",
             "value": "Comentário excluído"
+          }
+        }
+      }
+    },
+    "feed.post.comment.replies_count": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld ردود"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld Antworten"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld replies"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld respuestas"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld réponses"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld risposte"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld respostas"
           }
         }
       }
@@ -52307,6 +52871,53 @@
         }
       }
     },
+    "feed.post.view_comments": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "عرض %lld تعليقات"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Alle %lld Kommentare ansehen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "View all %lld comments"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ver los %lld comentarios"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Voir les %lld commentaires"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vedi i %lld commenti"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ver os %lld comentários"
+          }
+        }
+      }
+    },
     "feed.post.view_comments.hint": {
       "extractionState": "manual",
       "localizations": {
@@ -52683,6 +53294,100 @@
         }
       }
     },
+    "feed.reel.repost.by": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ريل من %@"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reel von %@"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reel by %@"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reel de %@"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Réel de %@"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reel di %@"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reel de %@"
+          }
+        }
+      }
+    },
+    "feed.reel.card.a11y": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ريل من %@"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reel von %@"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reel by %@"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reel de %@"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Réel de %@"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reel di %@"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reel de %@"
+          }
+        }
+      }
+    },
     "feed.reel.repost.hint": {
       "extractionState": "manual",
       "localizations": {
@@ -52820,6 +53525,53 @@
           "stringUnit": {
             "state": "translated",
             "value": "Privado"
+          }
+        }
+      }
+    },
+    "feed.reel.republished.by": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "أعاد نشره %@"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Geteilt von %@"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reposted by %@"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Republicado por %@"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Republié par %@"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ricondiviso da %@"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Republicado por %@"
           }
         }
       }
@@ -53512,7 +54264,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Les demandes d'amis apparaitront ici"
+            "value" : "Les demandes d'amis apparaîtront ici"
           }
         },
         "it": {
@@ -53717,6 +54469,100 @@
         }
       }
     },
+    "invite.a11y.summary.permissions": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@. المحتوى المسموح به: %2$@"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@. Erlaubte Inhalte: %2$@"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@. Allowed content: %2$@"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@. Contenido permitido: %2$@"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@. Contenus autorisés : %2$@"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@. Contenuti consentiti: %2$@"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@. Conteúdo permitido: %2$@"
+          }
+        }
+      }
+    },
+    "invite.a11y.summary.noPermissions": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@. لا يُسمح بأي محتوى"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@. Keine Inhalte erlaubt"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@. No content allowed"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@. Ningún contenido permitido"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@. Aucun contenu autorisé"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@. Nessun contenuto consentito"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@. Nenhum conteúdo permitido"
+          }
+        }
+      }
+    },
     "invite.limitUses": {
       "extractionState": "manual",
       "localizations": {
@@ -53794,7 +54640,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Rejoins moi pour echanger sans filtre ni barriere..."
+            "value" : "Rejoins-moi pour échanger sans filtre ni barrière..."
           }
         },
         "it": {
@@ -53888,7 +54734,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Trouvez une personne par numero de telephone ou par nom."
+            "value" : "Trouvez une personne par numéro de téléphone ou par nom."
           }
         },
         "it": {
@@ -54230,6 +55076,53 @@
           "stringUnit": {
             "state": "translated",
             "value": "Abre o link no navegador"
+          }
+        }
+      }
+    },
+    "linkpreview.a11y.label": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "معاينة الرابط: %@"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Linkvorschau: %@"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Link preview: %@"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vista previa del enlace: %@"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aperçu du lien : %@"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Anteprima del link: %@"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Prévia do link: %@"
           }
         }
       }
@@ -55807,6 +56700,53 @@
         }
       }
     },
+    "new_conversation.contacts.empty.subtitle": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ابحث عن مستخدم لبدء محادثة."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Suche nach einer Person, um eine Unterhaltung zu beginnen."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Search for a user to start a conversation."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Busca un usuario para iniciar una conversación."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Recherchez un utilisateur pour démarrer une conversation."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cerca un utente per iniziare una conversazione."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Busque um usuário para iniciar uma conversa."
+          }
+        }
+      }
+    },
     "new_conversation.contacts.empty.title": {
       "extractionState": "manual",
       "localizations": {
@@ -56718,7 +57658,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "C'est bon, suivant!"
+            "value" : "C'est bon, suivant !"
           }
         },
         "it": {
@@ -60840,7 +61780,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Changer le role ?"
+            "value" : "Changer le rôle ?"
           }
         },
         "it": {
@@ -60887,7 +61827,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Cette personne ne pourra plus acceder a la conversation."
+            "value" : "Cette personne ne pourra plus accéder à la conversation."
           }
         },
         "it": {
@@ -63909,6 +64849,53 @@
         }
       }
     },
+    "recentMedia.resolveFailed.multiple": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تعذّر تجهيز %lld من الوسائط — استخدم مكتبة الصور كاملة"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld Medien konnten nicht vorbereitet werden – nutze die gesamte Fotomediathek"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld media items couldn't be prepared — use the full photo library"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No se pudieron preparar %lld archivos: usa toda la fototeca"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld médias n'ont pas pu être préparés — passez par la photothèque complète"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Non è stato possibile preparare %lld media — usa l'intera libreria foto"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Não foi possível preparar %lld mídias — use toda a fototeca"
+          }
+        }
+      }
+    },
     "reels.empty": {
       "extractionState": "manual",
       "localizations": {
@@ -63986,7 +64973,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Impossible de creer la conversation"
+            "value" : "Impossible de créer la conversation"
           }
         },
         "it": {
@@ -66148,7 +67135,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Impossible de revoquer les sessions"
+            "value" : "Impossible de révoquer les sessions"
           }
         },
         "it": {
@@ -66195,7 +67182,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Revoquer cette session"
+            "value" : "Révoquer cette session"
           }
         },
         "it": {
@@ -66289,7 +67276,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Vos appareils connectes apparaitront ici."
+            "value" : "Vos appareils connectés apparaîtront ici."
           }
         },
         "it": {
@@ -66383,7 +67370,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Gerer les sessions actives"
+            "value" : "Gérer les sessions actives"
           }
         },
         "it": {
@@ -66430,7 +67417,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Revoquer toutes les autres sessions"
+            "value" : "Révoquer toutes les autres sessions"
           }
         },
         "it": {
@@ -66477,7 +67464,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Revoquer toutes les autres sessions"
+            "value" : "Révoquer toutes les autres sessions"
           }
         },
         "it": {
@@ -66618,7 +67605,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Impossible de revoquer la session"
+            "value" : "Impossible de révoquer la session"
           }
         },
         "it": {
@@ -66853,7 +67840,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Cela supprimera tous les medias mis en cache localement. Ils seront retelecharges si necessaire."
+            "value" : "Cela supprimera tous les médias mis en cache localement. Ils seront retéléchargés si nécessaire."
           }
         },
         "it": {
@@ -66900,7 +67887,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Le cache permet de charger les medias plus rapidement et reduit la consommation de donnees. Les fichiers mis en cache sont automatiquement supprimes apres 7 jours."
+            "value" : "Le cache permet de charger les médias plus rapidement et réduit la consommation de données. Les fichiers mis en cache sont automatiquement supprimés après 7 jours."
           }
         },
         "it": {
@@ -66947,7 +67934,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Vider le cache media"
+            "value" : "Vider le cache média"
           }
         },
         "it": {
@@ -66994,7 +67981,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Supprime tous les medias mis en cache localement"
+            "value" : "Supprime tous les médias mis en cache localement"
           }
         },
         "it": {
@@ -67041,7 +68028,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Vos donnees, votre controle"
+            "value" : "Vos données, votre contrôle"
           }
         },
         "it": {
@@ -67088,7 +68075,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Conformement au RGPD, vous pouvez exporter toutes vos donnees personnelles."
+            "value" : "Conformément au RGPD, vous pouvez exporter toutes vos données personnelles."
           }
         },
         "it": {
@@ -67135,7 +68122,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Lance l'export de vos donnees"
+            "value" : "Lance l'export de vos données"
           }
         },
         "it": {
@@ -68122,7 +69109,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Choisissez quand telecharger automatiquement chaque type de media selon votre connexion."
+            "value" : "Choisissez quand télécharger automatiquement chaque type de média selon votre connexion."
           }
         },
         "it": {
@@ -74962,6 +75949,53 @@
         }
       }
     },
+    "share.loading": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "جارٍ تحميل المحادثات…"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unterhaltungen werden geladen …"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Loading conversations…"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cargando conversaciones…"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Chargement des conversations…"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Caricamento delle conversazioni…"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Carregando conversas…"
+          }
+        }
+      }
+    },
     "share.picker.title": {
       "localizations": {
         "ar": {
@@ -78963,6 +79997,53 @@
         }
       }
     },
+    "story.mine.failed.a11y": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "لم يتم نشر القصة، قبل %1$@. %2$@"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Story nicht veröffentlicht, vor %1$@. %2$@"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Story not published, %1$@ ago. %2$@"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Historia no publicada, hace %1$@. %2$@"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Story non publiée, il y a %1$@. %2$@"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Storia non pubblicata, %1$@ fa. %2$@"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Story não publicado, há %1$@. %2$@"
+          }
+        }
+      }
+    },
     "story.mine.forward": {
       "extractionState": "manual",
       "localizations": {
@@ -80416,6 +81497,53 @@
           "stringUnit": {
             "state": "translated",
             "value": "Uma mídia não está mais disponível. Recomponha o story e publique novamente."
+          }
+        }
+      }
+    },
+    "story.publish.queue.unrecoverable": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "رفض الخادم النشر: %@"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Der Server hat die Veröffentlichung abgelehnt: %@"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The server rejected this publication: %@"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El servidor rechazó la publicación: %@"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La publication a été rejetée par le serveur : %@"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Il server ha rifiutato la pubblicazione: %@"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "O servidor rejeitou a publicação: %@"
           }
         }
       }
@@ -83401,7 +84529,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Suggerer une fonctionnalite"
+            "value" : "Suggérer une fonctionnalité"
           }
         },
         "it": {
@@ -89546,7 +90674,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Votre profil vocal est en cours de creation. Cela peut prendre quelques instants."
+            "value" : "Votre profil vocal est en cours de création. Cela peut prendre quelques instants."
           }
         },
         "it": {
@@ -89593,7 +90721,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Utilise pour generer des traductions avec votre voix"
+            "value" : "Utilisé pour générer des traductions avec votre voix"
           }
         },
         "it": {
@@ -89687,7 +90815,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Le clonage vocal necessite une verification d'age pour les mineurs."
+            "value" : "Le clonage vocal nécessite une vérification d'âge pour les mineurs."
           }
         },
         "it": {
@@ -91191,7 +92319,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Vos messages audio traduits utiliseront desormais votre voix clonee."
+            "value" : "Vos messages audio traduits utiliseront désormais votre voix clonée."
           }
         },
         "it": {
@@ -91332,7 +92460,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Enregistrez votre voix pour activer le clonage vocal personnalise. Vos messages audio traduits garderont votre voix naturelle."
+            "value" : "Enregistrez votre voix pour activer le clonage vocal personnalisé. Vos messages audio traduits garderont votre voix naturelle."
           }
         },
         "it": {
@@ -91345,6 +92473,53 @@
           "stringUnit": {
             "state": "translated",
             "value": "Grave sua voz para ativar a clonagem de voz personalizada. Suas mensagens de voz traduzidas manterão sua voz natural."
+          }
+        }
+      }
+    },
+    "voice.profile.wizard.uploadProgress": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "جارٍ إرسال %1$lld/%2$lld عيّنات"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$lld/%2$lld Aufnahmen werden hochgeladen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Uploading %1$lld/%2$lld samples"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enviando %1$lld/%2$lld muestras"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Envoi %1$lld/%2$lld échantillons"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Invio di %1$lld/%2$lld campioni"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enviando %1$lld/%2$lld amostras"
           }
         }
       }
@@ -91631,6 +92806,53 @@
         }
       }
     },
+    "widget.preview.a11y.openConversation": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "فتح المحادثة مع %@"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unterhaltung mit %@ öffnen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open the conversation with %@"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Abrir la conversación con %@"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ouvrir la conversation avec %@"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Apri la conversazione con %@"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Abrir a conversa com %@"
+          }
+        }
+      }
+    },
     "widget.preview.action.new": {
       "extractionState": "manual",
       "localizations": {
@@ -91849,7 +93071,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ajoutez ces widgets a votre ecran d'accueil pour un acces rapide."
+            "value" : "Ajoutez ces widgets à votre écran d'accueil pour un accès rapide."
           }
         },
         "it": {

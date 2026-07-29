@@ -1137,7 +1137,7 @@ struct UniversalComposerBar: View {
         }
         .accessibilityLabel(isActive
                             ? String(localized: "composer.ephemeral.active", defaultValue: "Mode ephemere actif: \(ephemeralDuration.wrappedValue?.displayLabel ?? "")", bundle: .main)
-                            : String(localized: "composer.ephemeral.activate", defaultValue: "Activer le mode ephemere", bundle: .main))
+                            : String(localized: "composer.ephemeral.activate", defaultValue: "Activer le mode éphémère", bundle: .main))
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: isActive)
     }
 

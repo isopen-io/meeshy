@@ -114,7 +114,7 @@ struct KeypadTab: View {
             // completed search found nothing.
             hintMessage(
                 title: String(localized: "keypad.prompt.title", defaultValue: "Composez un numero ou un nom", bundle: .main),
-                subtitle: String(localized: "keypad.prompt.subtitle", defaultValue: "Trouvez une personne par numero de telephone ou par nom.", bundle: .main)
+                subtitle: String(localized: "keypad.prompt.subtitle", defaultValue: "Trouvez une personne par numéro de téléphone ou par nom.", bundle: .main)
             )
         }
     }

@@ -132,7 +132,7 @@ struct FriendRequestListView: View {
         AdaptiveContentUnavailableView(
             String(localized: "friends.requests.empty.title", defaultValue: "Aucune demande", bundle: .main),
             systemImage: "person.2.slash",
-            description: Text(String(localized: "friends.requests.empty.subtitle", defaultValue: "Les demandes d'amis apparaitront ici", bundle: .main))
+            description: Text(String(localized: "friends.requests.empty.subtitle", defaultValue: "Les demandes d'amis apparaîtront ici", bundle: .main))
         )
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }

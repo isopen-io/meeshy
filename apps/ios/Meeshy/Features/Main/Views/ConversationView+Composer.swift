@@ -504,7 +504,7 @@ extension ConversationView {
                     .frame(width: 24, height: 24)
                     .background(Circle().fill(isDark ? Color.white.opacity(0.1) : Color.black.opacity(0.05)))
             }
-            .accessibilityLabel(String(localized: "conversation.view.composer.cancel_reply", defaultValue: "Annuler la reponse", bundle: .main))
+            .accessibilityLabel(String(localized: "conversation.view.composer.cancel_reply", defaultValue: "Annuler la réponse", bundle: .main))
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)

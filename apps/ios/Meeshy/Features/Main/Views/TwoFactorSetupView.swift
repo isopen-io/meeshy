@@ -108,7 +108,7 @@ struct TwoFactorSetupView: View {
             }
 
             VStack(spacing: 8) {
-                Text(String(localized: "2fa_manual_entry_label", defaultValue: "Ou entrez cette cle manuellement :"))
+                Text(String(localized: "2fa_manual_entry_label", defaultValue: "Ou entrez cette clé manuellement :"))
                     .font(.caption.weight(.medium))
                     .foregroundColor(theme.textMuted)
 
@@ -179,7 +179,7 @@ struct TwoFactorSetupView: View {
                 .padding(.top, MeeshySpacing.xl)
                 .accessibilityHidden(true)
 
-            Text(String(localized: "2fa_enter_code_instruction", defaultValue: "Entrez le code a 6 chiffres affiche dans votre application"))
+            Text(String(localized: "2fa_enter_code_instruction", defaultValue: "Entrez le code à 6 chiffres affiché dans votre application"))
                 .font(MeeshyFont.relative(14, weight: .medium))
                 .foregroundColor(theme.textSecondary)
                 .multilineTextAlignment(.center)
@@ -254,11 +254,11 @@ struct TwoFactorSetupView: View {
                 .padding(.top, MeeshySpacing.xl)
                 .accessibilityHidden(true)
 
-            Text(String(localized: "2fa_activated_title", defaultValue: "2FA active avec succes !"))
+            Text(String(localized: "2fa_activated_title", defaultValue: "2FA activé avec succès !"))
                 .font(MeeshyFont.relative(18, weight: .bold))
                 .foregroundColor(theme.textPrimary)
 
-            Text(String(localized: "2fa_backup_codes_instruction", defaultValue: "Conservez ces codes de secours dans un endroit sur. Chaque code ne peut etre utilise qu'une seule fois."))
+            Text(String(localized: "2fa_backup_codes_instruction", defaultValue: "Conservez ces codes de secours dans un endroit sûr. Chaque code ne peut être utilisé qu'une seule fois."))
                 .font(MeeshyFont.relative(13, weight: .medium))
                 .foregroundColor(theme.textSecondary)
                 .multilineTextAlignment(.center)
@@ -426,7 +426,7 @@ struct TwoFactorDisableView: View {
                         .foregroundColor(theme.textPrimary)
                         .multilineTextAlignment(.center)
 
-                    Text(String(localized: "2fa_disable_warning", defaultValue: "Votre compte sera moins securise sans 2FA. Entrez votre mot de passe et votre code pour confirmer."))
+                    Text(String(localized: "2fa_disable_warning", defaultValue: "Votre compte sera moins sécurisé sans 2FA. Entrez votre mot de passe et votre code pour confirmer."))
                         .font(MeeshyFont.relative(13, weight: .medium))
                         .foregroundColor(theme.textSecondary)
                         .multilineTextAlignment(.center)
@@ -480,7 +480,7 @@ struct TwoFactorDisableView: View {
                             if disabling {
                                 ProgressView().scaleEffect(0.7).tint(.white)
                             }
-                            Text(String(localized: "2fa_confirm_disable", defaultValue: "Confirmer la desactivation"))
+                            Text(String(localized: "2fa_confirm_disable", defaultValue: "Confirmer la désactivation"))
                                 .font(MeeshyFont.relative(15, weight: .bold))
                         }
                         .foregroundColor(.white)
@@ -590,7 +590,7 @@ struct TwoFactorBackupCodesView: View {
                                 .padding(.top, MeeshySpacing.xl)
                                 .accessibilityHidden(true)
 
-                            Text(String(localized: "2fa_backup_codes_warning", defaultValue: "Ces codes remplacent les precedents. Conservez-les en lieu sur."))
+                            Text(String(localized: "2fa_backup_codes_warning", defaultValue: "Ces codes remplacent les précédents. Conservez-les en lieu sûr."))
                                 .font(MeeshyFont.relative(13, weight: .medium))
                                 .foregroundColor(theme.textSecondary)
                                 .multilineTextAlignment(.center)
@@ -671,7 +671,7 @@ struct TwoFactorBackupCodesView: View {
                 .padding(.top, MeeshySpacing.xxxl + MeeshySpacing.sm)
                 .accessibilityHidden(true)
 
-            Text(String(localized: "2fa_backup_code_verify", defaultValue: "Entrez votre code 2FA pour generer de nouveaux codes de secours"))
+            Text(String(localized: "2fa_backup_code_verify", defaultValue: "Entrez votre code 2FA pour générer de nouveaux codes de secours"))
                 .font(MeeshyFont.relative(14, weight: .medium))
                 .foregroundColor(theme.textSecondary)
                 .multilineTextAlignment(.center)
@@ -699,7 +699,7 @@ struct TwoFactorBackupCodesView: View {
                 HapticFeedback.medium()
                 loadCodes()
             } label: {
-                Text(String(localized: "2fa_generate_codes", defaultValue: "Generer les codes"))
+                Text(String(localized: "2fa_generate_codes", defaultValue: "Générer les codes"))
                     .font(MeeshyFont.relative(15, weight: .bold))
                     .foregroundColor(.white)
                     .frame(maxWidth: .infinity)

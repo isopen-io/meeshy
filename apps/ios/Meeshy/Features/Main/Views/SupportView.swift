@@ -125,7 +125,7 @@ struct SupportView: View {
 
             VStack(spacing: 0) {
                 supportLink(icon: "ladybug.fill", title: String(localized: "support.report.bug", defaultValue: "Signaler un bug", bundle: .main), url: "mailto:bugs@meeshy.me?subject=Bug%20Report%20-%20Meeshy%20iOS", color: MeeshyColors.warningHex)
-                supportLink(icon: "lightbulb.fill", title: String(localized: "support.report.feature", defaultValue: "Suggerer une fonctionnalite", bundle: .main), url: "mailto:features@meeshy.me?subject=Feature%20Suggestion%20-%20Meeshy%20iOS", color: MeeshyColors.warningHex)
+                supportLink(icon: "lightbulb.fill", title: String(localized: "support.report.feature", defaultValue: "Suggérer une fonctionnalité", bundle: .main), url: "mailto:features@meeshy.me?subject=Feature%20Suggestion%20-%20Meeshy%20iOS", color: MeeshyColors.warningHex)
             }
             .background(sectionBackground(tint: MeeshyColors.warningHex))
         }

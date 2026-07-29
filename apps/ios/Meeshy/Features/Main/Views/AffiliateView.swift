@@ -200,7 +200,7 @@ struct AffiliateView: View {
                 .font(MeeshyFont.relative(14, weight: .semibold))
                 .foregroundColor(theme.textPrimary)
 
-            Text(String(localized: "affiliate.empty.subtitle", defaultValue: "Creez un lien pour inviter vos amis", bundle: .main))
+            Text(String(localized: "affiliate.empty.subtitle", defaultValue: "Créez un lien pour inviter vos amis", bundle: .main))
                 .font(MeeshyFont.relative(12))
                 .foregroundColor(theme.textMuted)
         }

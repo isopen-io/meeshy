@@ -113,7 +113,7 @@ struct BlockedTab: View {
     private var emptyState: some View {
         EmptyStateView(
             icon: "hand.raised.slash",
-            title: String(localized: "contacts.blocked.empty", defaultValue: "Aucun utilisateur bloque", bundle: .main),
+            title: String(localized: "contacts.blocked.empty", defaultValue: "Aucun utilisateur bloqué", bundle: .main),
             subtitle: String(localized: "contacts.blocked.empty-subtitle", defaultValue: "Les personnes que vous bloquez apparaitront ici.", bundle: .main)
         )
     }

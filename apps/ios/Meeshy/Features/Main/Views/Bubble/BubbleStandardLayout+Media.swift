@@ -680,8 +680,8 @@ private struct AttachmentBlurOverlayView: View {
         }
         .contentShape(Rectangle())
         .accessibilityElement(children: .combine)
-        .accessibilityLabel(isViewOnce ? String(localized: "bubble.media.a11y.viewOnce", defaultValue: "Media a voir une fois", bundle: .main) : String(localized: "bubble.media.a11y.masked", defaultValue: "Media masque", bundle: .main))
-        .accessibilityHint(String(localized: "bubble.media.a11y.holdToReveal", defaultValue: "Maintenir pour reveler le contenu", bundle: .main))
+        .accessibilityLabel(isViewOnce ? String(localized: "bubble.media.a11y.viewOnce", defaultValue: "Média à voir une fois", bundle: .main) : String(localized: "bubble.media.a11y.masked", defaultValue: "Media masque", bundle: .main))
+        .accessibilityHint(String(localized: "bubble.media.a11y.holdToReveal", defaultValue: "Maintenir pour révéler le contenu", bundle: .main))
         .onLongPressGesture(minimumDuration: 0.3) {
             onReveal()
         }

@@ -101,7 +101,7 @@ struct MagicLinkView: View {
                 .foregroundColor(theme.textPrimary)
                 .multilineTextAlignment(.center)
 
-            Text(String(localized: "auth.magiclink.email.subtitle", defaultValue: "Nous vous enverrons un lien de connexion securise", bundle: .main))
+            Text(String(localized: "auth.magiclink.email.subtitle", defaultValue: "Nous vous enverrons un lien de connexion sécurisé", bundle: .main))
                 .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .regular))
                 .foregroundColor(theme.textMuted)
                 .multilineTextAlignment(.center)
@@ -230,7 +230,7 @@ struct MagicLinkView: View {
             .accessibilityElement(children: .combine)
 
             if linkExpired {
-                Text(String(localized: "auth.magiclink.expired", defaultValue: "Lien expire, renvoyez-en un nouveau", bundle: .main))
+                Text(String(localized: "auth.magiclink.expired", defaultValue: "Lien expiré, renvoyez-en un nouveau", bundle: .main))
                     .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .medium))
                     .foregroundColor(MeeshyColors.error)
                     .multilineTextAlignment(.center)
@@ -317,7 +317,7 @@ struct MagicLinkView: View {
                 isLoading = false
                 Self.logger.error("Magic link send failed: \(error.localizedDescription)")
             } catch {
-                errorMessage = String(localized: "auth.magiclink.error.generic", defaultValue: "Une erreur est survenue. Veuillez reessayer.", bundle: .main)
+                errorMessage = String(localized: "auth.magiclink.error.generic", defaultValue: "Une erreur est survenue. Veuillez réessayer.", bundle: .main)
                 isLoading = false
                 Self.logger.error("Magic link send failed: \(error.localizedDescription)")
             }
