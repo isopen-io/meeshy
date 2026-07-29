@@ -14,7 +14,21 @@ import GRDB
 /// The gate skips the entire flush when the supplied reachability
 /// closure returns `false`. `OutboxRetryScheduler` separately listens
 /// to `NWPath` transitions and re-fires `flushNow()` when the device
-/// comes back online, so no rows are lost.
+/// comes back online.
+///
+/// **Contrat corrigé (2026-07-29).** Ce fichier affirmait auparavant que le
+/// flush hors-ligne devait rendre `nil` — « short-circuit without scheduling ».
+/// C'était le défaut, pas la règle : `nil` signifie « rien n'est différé », et
+/// `OutboxRetryScheduler.schedule(at: nil)` ANNULE le timer. La file ne
+/// comptait donc que sur le front montant hors-ligne → en-ligne ; quand ce
+/// front ne venait jamais (moniteur figé sur une valeur fausse, ou front déjà
+/// passé avant l'abonnement), plus rien ne la réveillait de toute la session.
+/// Observé en production : « Synchronisation des vues story » tournant en
+/// boucle sans jamais se vider.
+///
+/// Le gate garde son rôle — aucun dispatch hors-ligne — mais rend désormais une
+/// échéance de reprise QUAND il reste du travail. Le front montant demeure le
+/// chemin rapide ; l'échéance est le filet.
 final class OutboxFlusherBandwidthGateTests: XCTestCase {
 
     func test_flush_offline_skipsDispatchEntirely() async throws {
@@ -40,7 +54,13 @@ final class OutboxFlusherBandwidthGateTests: XCTestCase {
 
         let nextRetry = await flusher.flush()
 
-        XCTAssertNil(nextRetry, "Offline flush must short-circuit without scheduling")
+        let deadline = try XCTUnwrap(
+            nextRetry,
+            "Une file NON VIDE doit repartir avec une échéance de reprise. " +
+            "Rendre `nil` annulait le timer et laissait la ligne dormir jusqu'à " +
+            "un front réseau qui pouvait ne jamais venir."
+        )
+        XCTAssertGreaterThan(deadline, Date(), "L'échéance doit être dans le futur.")
         let calls = await dispatcher.callCount
         XCTAssertEqual(calls, 0, "Dispatcher must not be invoked when offline")
 
@@ -50,6 +70,27 @@ final class OutboxFlusherBandwidthGateTests: XCTestCase {
         }
         XCTAssertEqual(after.status, .pending)
         XCTAssertEqual(after.attempts, 0)
+    }
+
+    /// Le filet ne doit pas devenir un réveille-matin : sans rien à envoyer,
+    /// armer un timer chaque minute rallumerait l'app pour rien — exactement ce
+    /// que le gate de bande passante cherchait à éviter.
+    func test_flush_offline_emptyQueue_schedulesNothing() async throws {
+        let pool = try DatabaseQueue()
+        try MessageDatabaseMigrations.runAll(on: pool)
+
+        let dispatcher = TrackingDispatcher()
+        let flusher = OutboxFlusher(
+            pool: pool,
+            dispatcher: dispatcher,
+            isNetworkReachable: { false }
+        )
+
+        let nextRetry = await flusher.flush()
+
+        XCTAssertNil(nextRetry, "File vide hors ligne : rien à reprendre, donc aucun timer.")
+        let calls = await dispatcher.callCount
+        XCTAssertEqual(calls, 0)
     }
 
     func test_flush_online_dispatchesAsBefore() async throws {

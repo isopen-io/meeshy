@@ -151,12 +151,40 @@ public actor OutboxFlusher {
     /// l'idempotence cmid côté gateway.
     public static let staleInflightReclaimSeconds: TimeInterval = 30 * 60
 
+    /// Délai de re-tentative quand le flush est court-circuité par le gate
+    /// réseau. Assez long pour ne pas réveiller la radio en boucle en mode
+    /// avion, assez court pour qu'un moniteur qui se trompe coûte une minute
+    /// d'attente et non la session entière.
+    public static let offlineRetrySeconds: TimeInterval = 60
+
     @discardableResult
     public func flush() async -> Date? {
-        // BW1 — bandwidth gate. Re-arm later via the same earliestDeferred
-        // path; the OutboxRetryScheduler also re-fires on NWPath transitions
-        // so the round-trip is bounded.
-        guard await isNetworkReachable() else { return nil }
+        // BW1 — gate de bande passante : en mode avion / 1G saturé, dispatcher
+        // brûlerait les `maxAttempts` en timeouts URLSession de 60 s chacun.
+        //
+        // Rendre `nil` ici était un piège : `nil` signifie « rien n'est
+        // différé », et `OutboxRetryScheduler.schedule(at: nil)` ANNULE le
+        // timer. La file ne comptait donc plus que sur le front montant
+        // hors-ligne → en-ligne. Si ce front ne vient jamais — moniteur figé
+        // sur une valeur fausse, ou front déjà passé avant l'abonnement — plus
+        // rien ne réveille la file de toute la session. C'est ce qui laissait
+        // « Synchronisation des vues story » tourner indéfiniment.
+        //
+        // On rend désormais une échéance : le front montant reste le chemin
+        // RAPIDE, cette échéance est le filet. Un moniteur menteur coûte un
+        // retard, plus un blocage.
+        guard await isNetworkReachable() else {
+            // Uniquement s'il y a réellement quelque chose à reprendre : armer
+            // un réveil chaque minute sur une file VIDE ne ferait que réveiller
+            // l'app pour rien, ce que le gate cherchait précisément à éviter.
+            let hasWork = (try? await pool.read { db in
+                try OutboxRecord
+                    .filter([OutboxStatus.pending.rawValue, OutboxStatus.inflight.rawValue]
+                        .contains(Column("status")))
+                    .fetchCount(db)
+            }) ?? 0
+            return hasWork > 0 ? Date().addingTimeInterval(Self.offlineRetrySeconds) : nil
+        }
 
         let now = Date()
         let reclaimCutoff = now.addingTimeInterval(-Self.staleInflightReclaimSeconds)

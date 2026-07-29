@@ -752,6 +752,12 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
         _ = try await OfflineQueue.shared.enqueue(
             .markStoryViewed, payload: payload, conversationId: storyId
         )
+        // Sans ce réveil explicite, la ligne dort `.pending` jusqu'à ce qu'une
+        // mutation SANS RAPPORT (envoi, réaction) réveille le videur — la
+        // pastille affichait « Synchronisation des vues story » en boucle sans
+        // jamais se vider. C'était le SEUL site d'enfilement à ne pas le faire :
+        // même correctif que `markAsRead` (cf. OutboxFlushTrigger).
+        await OutboxFlushTrigger.flushNow()
     }
 
     /// C3 (unification des remontées, 2026-07-14) : chaque slide de story affiché émet
