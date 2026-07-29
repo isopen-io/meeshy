@@ -42,6 +42,15 @@ export function registerTranslationRoutes(
    * Flexible voice translation - accepts audioBase64 OR attachmentId
    */
   fastify.post(`${prefix}/translate`, {
+    // SECURITY: authentification obligatoire.
+    // Sans ce `preHandler`, `registerVoiceRoutes` (câblée depuis
+    // server.ts:1111) n'installait AUCUNE vérification en amont, et
+    // `getUserId()` retombait sur l'en-tête brut `x-user-id` fourni par le
+    // client : n'importe quel appelant anonyme pouvait usurper l'identité de
+    // n'importe quel utilisateur (CWE-290 / CWE-807). Aligné sur le mécanisme
+    // déjà utilisé par routes/translation.ts (`/translate-blocking`) et
+    // routes/translation-non-blocking.ts:268.
+    preHandler: [(req: FastifyRequest, reply: FastifyReply) => fastify.authenticate(req, reply)],
     schema: {
       description: 'Translate audio to one or more target languages with voice cloning support. Accepts either direct audio (audioBase64) or an existing attachment (attachmentId). When using attachmentId, returns existing translations if available.',
       tags: ['voice'],
@@ -208,6 +217,9 @@ export function registerTranslationRoutes(
    * Asynchronous voice translation with advanced options
    */
   fastify.post(`${prefix}/translate/async`, {
+    // SECURITY: authentification obligatoire — voir commentaire sur
+    // POST /translate ci-dessus. Même faille, même correctif.
+    preHandler: [(req: FastifyRequest, reply: FastifyReply) => fastify.authenticate(req, reply)],
     schema: {
       description: 'Asynchronous voice translation with advanced options. Accepts audioBase64 or attachmentId. Supports webhooks for completion notification, priority queuing, and custom metadata.',
       tags: ['voice'],
@@ -379,6 +391,11 @@ export function registerTranslationRoutes(
    * Get job status
    */
   fastify.get(`${prefix}/job/:jobId`, {
+    // SECURITY: authentification obligatoire — voir commentaire sur
+    // POST /translate ci-dessus. Sans elle, un appelant anonyme pouvait
+    // consulter le statut de n'importe quel job en usurpant l'identité de
+    // son propriétaire via x-user-id.
+    preHandler: [(req: FastifyRequest, reply: FastifyReply) => fastify.authenticate(req, reply)],
     schema: {
       description: 'Check the status of an asynchronous translation job. Returns job metadata, current progress, and results if completed. Jobs can be in pending, processing, completed, failed, or cancelled status.',
       tags: ['voice'],
@@ -437,6 +454,11 @@ export function registerTranslationRoutes(
    * Cancel a pending job
    */
   fastify.delete(`${prefix}/job/:jobId`, {
+    // SECURITY: authentification obligatoire — voir commentaire sur
+    // POST /translate ci-dessus. Sans elle, un appelant anonyme pouvait
+    // annuler le job de n'importe quel utilisateur en usurpant son identité
+    // via x-user-id.
+    preHandler: [(req: FastifyRequest, reply: FastifyReply) => fastify.authenticate(req, reply)],
     schema: {
       description: 'Cancel a pending or processing translation job. Only jobs that have not completed can be cancelled. Returns the updated job status. Cancelled jobs cannot be resumed.',
       tags: ['voice'],
@@ -505,6 +527,9 @@ export function registerTranslationRoutes(
    * Flexible transcription - accepts file upload, audioBase64, OR attachmentId
    */
   fastify.post(`${prefix}/transcribe`, {
+    // SECURITY: authentification obligatoire — voir commentaire sur
+    // POST /translate ci-dessus. Même faille, même correctif.
+    preHandler: [(req: FastifyRequest, reply: FastifyReply) => fastify.authenticate(req, reply)],
     schema: {
       description: 'Transcribe audio to text using Whisper. Accepts file upload (multipart/form-data), direct audio (audioBase64), or existing attachment (attachmentId). Returns transcription with detected language, confidence score, and word-level timestamps. OpenAI-compatible when using file upload.',
       tags: ['voice'],

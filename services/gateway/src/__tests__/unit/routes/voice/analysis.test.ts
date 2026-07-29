@@ -54,6 +54,16 @@ async function buildApp(opts: {
 
   const app = Fastify({ logger: false, ajv: { customOptions: { strict: false } } });
 
+  // Chaque route voice exige désormais `fastify.authenticate` en `preHandler`
+  // (voir routes/voice/analysis.ts). Ce double reproduit le comportement réel
+  // de `createUnifiedAuthMiddleware({ requireAuth: true })` : 401 immédiat si
+  // aucune identité vérifiée n'a été posée sur `request.user`.
+  app.decorate('authenticate', async (req: any, reply: any) => {
+    if (!req.user?.userId) {
+      reply.status(401).send({ success: false, error: 'UNAUTHORIZED', message: 'Authentication required' });
+    }
+  });
+
   // Set request.user to simulate JWT auth
   app.addHook('preHandler', async (req) => {
     if (authenticated) {
@@ -248,6 +258,11 @@ describe('GET /api/v1/voice/admin/metrics — admin success', () => {
     const metrics = { activeJobs: 2, queuedJobs: 5, completionRate: 0.98, uptime: 99999 };
     const service = makeAudioTranslateService({ getSystemMetrics: jest.fn<any>().mockResolvedValue(metrics) });
     const app = Fastify({ logger: false, ajv: { customOptions: { strict: false } } });
+    app.decorate('authenticate', async (req: any, reply: any) => {
+      if (!req.user?.userId) {
+        reply.status(401).send({ success: false, error: 'UNAUTHORIZED', message: 'Authentication required' });
+      }
+    });
     app.addHook('preHandler', async (req) => {
       (req as any).user = { userId: USER_ID, role: 'admin' };
     });
@@ -264,6 +279,11 @@ describe('GET /api/v1/voice/admin/metrics — service error', () => {
   it('returns 500 when service throws', async () => {
     const service = makeAudioTranslateService({ getSystemMetrics: jest.fn<any>().mockRejectedValue(new Error('metrics error')) });
     const app = Fastify({ logger: false, ajv: { customOptions: { strict: false } } });
+    app.decorate('authenticate', async (req: any, reply: any) => {
+      if (!req.user?.userId) {
+        reply.status(401).send({ success: false, error: 'UNAUTHORIZED', message: 'Authentication required' });
+      }
+    });
     app.addHook('preHandler', async (req) => {
       (req as any).user = { userId: USER_ID, role: 'admin' };
     });

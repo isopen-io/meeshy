@@ -79,6 +79,19 @@ async function buildApp(opts: {
 
   const app = Fastify({ logger: false, ajv: { customOptions: { strict: false } } });
 
+  // Chaque route voice exige désormais `fastify.authenticate` en `preHandler`
+  // (voir routes/voice/translation.ts). Ce double reproduit le comportement
+  // réel de `createUnifiedAuthMiddleware({ requireAuth: true })` : 401
+  // immédiat si aucune identité vérifiée n'a été posée sur `request.user`.
+  // Le hook global ci-dessous, qui pose `request.user`, s'exécute AVANT le
+  // `preHandler` de la route (les hooks globaux précèdent toujours les hooks
+  // déclarés au niveau route).
+  app.decorate('authenticate', async (req: any, reply: any) => {
+    if (!req.user?.userId) {
+      reply.status(401).send({ success: false, error: 'UNAUTHORIZED', message: 'Authentication required' });
+    }
+  });
+
   app.addHook('preHandler', async (req) => {
     if (authenticated) {
       (req as any).user = { userId: USER_ID, role: 'user' };

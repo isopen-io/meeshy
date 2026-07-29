@@ -21,6 +21,49 @@ import * as path from 'path';
 
 const API_URL = process.env.GATEWAY_URL || 'http://localhost:3000';
 const VOICE_API_PREFIX = `${API_URL}/api/v1/voice`;
+const AUTH_API_PREFIX = `${API_URL}/api/v1/auth`;
+
+// Jeton de session de l'utilisateur de test, obtenu via une VRAIE inscription
+// (voir registerTestUser() plus bas). Rempli dans test.beforeAll().
+//
+// SECURITY: les routes voice n'acceptent plus l'en-tête `x-user-id` comme
+// preuve d'identité — cet en-tête n'était protégé par aucune vérification
+// cryptographique et permettait à n'importe quel appelant anonyme d'usurper
+// l'identité de n'importe quel utilisateur (CWE-290 / CWE-807). L'identité
+// doit désormais provenir exclusivement d'une session authentifiée
+// (`Authorization: Bearer <jeton>`), exactement comme un vrai client.
+let authToken = '';
+let authUserId = '';
+
+// Helper: Register a real test user via the auth API and return a real
+// session token — comme le ferait n'importe quel client légitime.
+async function registerTestUser(): Promise<{ token: string; userId: string }> {
+  const unique = Date.now().toString(36);
+  const response = await fetch(`${AUTH_API_PREFIX}/register`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      username: `voe2e${unique}`,
+      email: `voice-e2e-${unique}@test.meeshy.local`,
+      password: 'Test1234!Voice',
+      firstName: 'Voice',
+      lastName: 'E2E',
+      systemLanguage: 'fr',
+      regionalLanguage: 'fr',
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to register voice API test user: ${response.status} ${await response.text()}`);
+  }
+
+  const body = await response.json();
+  if (!body.success || !body.data?.token || !body.data?.user?.id) {
+    throw new Error(`Unexpected register response shape: ${JSON.stringify(body)}`);
+  }
+
+  return { token: body.data.token, userId: body.data.user.id };
+}
 
 // Helper: Create base64 audio from a simple sine wave
 function generateTestAudioBase64(): string {
@@ -59,26 +102,28 @@ function generateTestAudioBase64(): string {
   return wavBuffer.toString('base64');
 }
 
-// Helper: Make authenticated request
+// Helper: Make authenticated request.
+//
+// Par défaut, s'authentifie comme un vrai client via le jeton de session
+// obtenu par registerTestUser() (Authorization: Bearer <jeton>). Passer
+// `token: null` explicitement pour simuler un appelant anonyme (aucun
+// en-tête d'authentification) — jamais via x-user-id, qui n'est plus lu par
+// le serveur (voir routes/voice/types.ts::getUserId).
 async function apiRequest(
   endpoint: string,
   options: {
     method?: string;
     body?: any;
-    token?: string;
-    userId?: string;
+    token?: string | null;
   } = {}
 ): Promise<Response> {
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
   };
 
-  if (options.token) {
-    headers['Authorization'] = `Bearer ${options.token}`;
-  }
-
-  if (options.userId) {
-    headers['x-user-id'] = options.userId;
+  const token = options.token === undefined ? authToken : options.token;
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
   }
 
   return fetch(`${VOICE_API_PREFIX}${endpoint}`, {
@@ -89,11 +134,16 @@ async function apiRequest(
 }
 
 test.describe('Voice API E2E Tests', () => {
-  const testUserId = `test-user-${Date.now()}`;
   let testAudioBase64: string;
 
-  test.beforeAll(() => {
+  test.beforeAll(async () => {
     testAudioBase64 = generateTestAudioBase64();
+    // Authentification réelle : on s'inscrit comme le ferait n'importe quel
+    // client, puis on utilise le jeton renvoyé pour toutes les requêtes
+    // (apiRequest() l'ajoute automatiquement en Authorization: Bearer).
+    const { token, userId } = await registerTestUser();
+    authToken = token;
+    authUserId = userId;
   });
 
   test.describe('System Endpoints', () => {
@@ -132,7 +182,6 @@ test.describe('Voice API E2E Tests', () => {
     test('POST /translate - should translate audio (sync)', async () => {
       const response = await apiRequest('/translate', {
         method: 'POST',
-        userId: testUserId,
         body: {
           audioBase64: testAudioBase64,
           targetLanguages: ['fr'],
@@ -159,7 +208,6 @@ test.describe('Voice API E2E Tests', () => {
     test('POST /translate/async - should submit async translation job', async () => {
       const response = await apiRequest('/translate/async', {
         method: 'POST',
-        userId: testUserId,
         body: {
           audioBase64: testAudioBase64,
           targetLanguages: ['fr', 'es'],
@@ -186,7 +234,6 @@ test.describe('Voice API E2E Tests', () => {
     test('POST /translate - should return 400 for missing targetLanguages', async () => {
       const response = await apiRequest('/translate', {
         method: 'POST',
-        userId: testUserId,
         body: {
           audioBase64: testAudioBase64,
           // Missing targetLanguages
@@ -203,7 +250,6 @@ test.describe('Voice API E2E Tests', () => {
     test('POST /analyze - should analyze voice characteristics', async () => {
       const response = await apiRequest('/analyze', {
         method: 'POST',
-        userId: testUserId,
         body: {
           audioBase64: testAudioBase64,
           analysisTypes: ['pitch', 'timbre', 'mfcc'],
@@ -221,7 +267,6 @@ test.describe('Voice API E2E Tests', () => {
     test('POST /compare - should compare two voices', async () => {
       const response = await apiRequest('/compare', {
         method: 'POST',
-        userId: testUserId,
         body: {
           audioBase64_1: testAudioBase64,
           audioBase64_2: testAudioBase64,
@@ -244,7 +289,6 @@ test.describe('Voice API E2E Tests', () => {
     test('POST /profiles - should create a voice profile', async () => {
       const response = await apiRequest('/profiles', {
         method: 'POST',
-        userId: testUserId,
         body: {
           name: 'Test Voice Profile',
           audioBase64: testAudioBase64,
@@ -262,9 +306,7 @@ test.describe('Voice API E2E Tests', () => {
     });
 
     test('GET /profiles - should list profiles with pagination', async () => {
-      const response = await apiRequest('/profiles?limit=10&offset=0', {
-        userId: testUserId,
-      });
+      const response = await apiRequest('/profiles?limit=10&offset=0');
 
       const data = await response.json();
 
@@ -284,9 +326,7 @@ test.describe('Voice API E2E Tests', () => {
         return;
       }
 
-      const response = await apiRequest(`/profiles/${profileId}`, {
-        userId: testUserId,
-      });
+      const response = await apiRequest(`/profiles/${profileId}`);
 
       const data = await response.json();
 
@@ -304,7 +344,6 @@ test.describe('Voice API E2E Tests', () => {
 
       const response = await apiRequest(`/profiles/${profileId}`, {
         method: 'PUT',
-        userId: testUserId,
         body: {
           name: 'Updated Profile Name',
         },
@@ -325,7 +364,6 @@ test.describe('Voice API E2E Tests', () => {
 
       const response = await apiRequest(`/profiles/${profileId}`, {
         method: 'DELETE',
-        userId: testUserId,
       });
 
       if (response.ok) {
@@ -339,7 +377,6 @@ test.describe('Voice API E2E Tests', () => {
     test('POST /feedback - should submit feedback', async () => {
       const response = await apiRequest('/feedback', {
         method: 'POST',
-        userId: testUserId,
         body: {
           translationId: `test-trans-${Date.now()}`,
           rating: 5,
@@ -356,9 +393,7 @@ test.describe('Voice API E2E Tests', () => {
     });
 
     test('GET /history - should get translation history', async () => {
-      const response = await apiRequest('/history?limit=10', {
-        userId: testUserId,
-      });
+      const response = await apiRequest('/history?limit=10');
 
       const data = await response.json();
 
@@ -369,9 +404,7 @@ test.describe('Voice API E2E Tests', () => {
     });
 
     test('GET /stats - should get user statistics', async () => {
-      const response = await apiRequest('/stats?period=month', {
-        userId: testUserId,
-      });
+      const response = await apiRequest('/stats?period=month');
 
       const data = await response.json();
 
@@ -384,9 +417,7 @@ test.describe('Voice API E2E Tests', () => {
 
   test.describe('Job Management', () => {
     test('GET /job/:jobId - should return 404 for non-existent job', async () => {
-      const response = await apiRequest('/job/non-existent-job-id', {
-        userId: testUserId,
-      });
+      const response = await apiRequest('/job/non-existent-job-id');
 
       expect(response.status).toBe(404);
       const data = await response.json();
@@ -396,7 +427,6 @@ test.describe('Voice API E2E Tests', () => {
     test('DELETE /job/:jobId - should return 404 for non-existent job', async () => {
       const response = await apiRequest('/job/non-existent-job-id', {
         method: 'DELETE',
-        userId: testUserId,
       });
 
       expect(response.status).toBe(404);
@@ -414,15 +444,35 @@ test.describe('Voice API E2E Tests', () => {
         }),
       });
 
-      // Should either return 401 or work if auth is optional
-      const status = response.status;
-      expect([200, 401, 500]).toContain(status);
+      // SECURITY: l'authentification est désormais obligatoire sur toutes les
+      // routes voice (voir routes/voice/translation.ts) — un appelant sans
+      // jeton doit systématiquement être refusé, jamais laissé passer.
+      expect(response.status).toBe(401);
+    });
+
+    test('should refuse a request bearing x-user-id for another user with no valid token (identity spoofing)', async () => {
+      // Régression directe de la faille corrigée : x-user-id n'est plus lu
+      // par le serveur (voir routes/voice/types.ts::getUserId). Un attaquant
+      // sans jeton ne doit JAMAIS pouvoir usurper l'identité de la victime en
+      // fournissant simplement son identifiant dans cet en-tête.
+      const response = await fetch(`${VOICE_API_PREFIX}/translate`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-user-id': authUserId,
+        },
+        body: JSON.stringify({
+          audioBase64: testAudioBase64,
+          targetLanguages: ['fr'],
+        }),
+      });
+
+      expect(response.status).toBe(401);
     });
 
     test('should return proper error format for invalid requests', async () => {
       const response = await apiRequest('/translate', {
         method: 'POST',
-        userId: testUserId,
         body: {
           // Invalid: empty targetLanguages
           audioBase64: testAudioBase64,

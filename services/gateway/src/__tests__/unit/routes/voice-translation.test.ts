@@ -48,14 +48,15 @@ jest.mock('@meeshy/shared/types/api-schemas', () => ({
   },
 }));
 
-// Mock the voice/types module to avoid complex schema deps that pull in shared types
+// Mock the voice/types module to avoid complex schema deps that pull in shared types.
+// SECURITY: ce double ne doit PAS réintroduire le repli sur l'en-tête client
+// `x-user-id` retiré de la vraie `getUserId()` (voir routes/voice/types.ts) —
+// un test qui mocke la fonction auditée avec l'ancien comportement vulnérable
+// ne prouverait rien et pourrait laisser croire que ce raccourci est encore
+// légitime. L'identité ne provient ici que de `request.user`, posé par le
+// `fastify.authenticate` décoré dans buildApp()/buildAppNoAuth() ci-dessous.
 jest.mock('../../../routes/voice/types', () => ({
-  getUserId: jest.fn((request: any) => {
-    if (request.user?.userId) return request.user.userId;
-    const headerUserId = request.headers?.['x-user-id'];
-    if (typeof headerUserId === 'string') return headerUserId;
-    return null;
-  }),
+  getUserId: jest.fn((request: any) => request.user?.userId ?? null),
   voiceTranslationResultSchema: {
     type: 'object',
     properties: {
@@ -153,6 +154,22 @@ type AppOptions = {
   translationService?: ReturnType<typeof makeTranslationService> | null;
 };
 
+// Chaque route voice exige désormais `fastify.authenticate` en `preHandler`
+// (voir routes/voice/translation.ts). Ce double reproduit fidèlement le
+// comportement réel de `createUnifiedAuthMiddleware({ requireAuth: true })` :
+// 401 immédiat si aucune identité vérifiée n'a été posée sur `request.user`,
+// passage sinon. Les tests de logique métier de ce fichier n'ont pas besoin
+// de simuler un vrai jeton : ils posent directement `request.user` via un
+// hook `preHandler` global, qui s'exécute AVANT le `preHandler` de la route
+// (les hooks globaux précèdent toujours les hooks déclarés au niveau route).
+function decorateAuthenticate(app: FastifyInstance) {
+  app.decorate('authenticate', async (req: any, reply: any) => {
+    if (!req.user?.userId) {
+      reply.status(401).send({ success: false, error: 'UNAUTHORIZED', message: 'Authentication required' });
+    }
+  });
+}
+
 async function buildApp(opts: AppOptions = {}) {
   const audioService = opts.audioService ?? makeAudioService();
   // Use null as sentinel for "no translation service" to avoid default param override
@@ -164,6 +181,7 @@ async function buildApp(opts: AppOptions = {}) {
   app.addHook('preHandler', async (req) => {
     (req as any).user = { userId: 'user-1', role: 'user' };
   });
+  decorateAuthenticate(app);
   registerTranslationRoutes(app, audioService as any, translationService as any, PREFIX);
   await app.ready();
   return app;
@@ -176,6 +194,7 @@ async function buildAppNoAuth(opts: AppOptions = {}) {
     : makeTranslationService();
   const app = Fastify({ logger: false, ajv: { customOptions: { strict: false } } });
   // No user injected → getUserId() returns null
+  decorateAuthenticate(app);
   registerTranslationRoutes(app, audioService as any, translationService as any, PREFIX);
   await app.ready();
   return app;
