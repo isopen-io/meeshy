@@ -308,6 +308,68 @@ final class PermissionGateSourceGuardTests: XCTestCase {
                       "Une position seule, sans texte ni piece jointe, doit pouvoir partir.")
     }
 
+    // MARK: - Partage de position (Task 14, 2026-07-29)
+
+    /// `CommentsSheetView` (le commentaire depuis le FEED, distinct de
+    /// `PostDetailView`) capturait le lieu choisi dans `commentPendingPlace`
+    /// mais ne l'envoyait jamais : ni au chemin direct, ni au chemin
+    /// hors-ligne. Choisir un lieu dans un commentaire du feed ne produisait
+    /// donc aucun effet réseau — le symétrique exact du bug déjà corrigé
+    /// côté détail de post (`PostDetailView.submitComment`, qui capture
+    /// `place` avant la garde et l'inclut dans la condition de départ).
+    func test_feedCommentsSheet_submitComment_capturesPlaceBeforeTheEmptyGuard() throws {
+        let src = try source("Meeshy/Features/Main/Views/FeedCommentsSheet.swift")
+        let fn = try body(from: "private func submitComment(text: String, attachments: [ComposerAttachment]) {",
+                          to: "// Réponse plate à 2 niveaux", in: src)
+
+        XCTAssertTrue(fn.contains("let place = commentPendingPlace"),
+                      "Le lieu en attente doit être capturé au début de submitComment, avant tout early-return.")
+        XCTAssertTrue(fn.contains("commentPendingPlace = nil"),
+                      "La chip doit être effacée après capture — sinon elle réapparaît sur le commentaire suivant.")
+        XCTAssertTrue(fn.contains("guard !trimmed.isEmpty || media != nil || place != nil else { return }"),
+                      "Un commentaire « lieu seul » (sans texte ni média) doit pouvoir partir — l'ancienne garde à 2 conditions l'aurait avorté silencieusement, exactement comme le bug déjà corrigé sur publishPost.")
+    }
+
+    /// Le chemin direct (réseau disponible) doit transmettre le lieu à
+    /// `PostService.addComment` — sinon `POST /posts/:postId/comments` part
+    /// sans `location` et le serveur (qui persiste pourtant `metadata.location`)
+    /// ne reçoit jamais rien à persister.
+    func test_feedCommentsSheet_submitComment_sendsLocationOnTheDirectPath() throws {
+        let src = try source("Meeshy/Features/Main/Views/FeedCommentsSheet.swift")
+        let fn = try body(from: "let apiComment = try await PostService.shared.addComment(",
+                          to: "let feedComment = FeedComment(", in: src)
+
+        XCTAssertTrue(fn.contains("location: place"),
+                      "submitComment doit transmettre le lieu capturé à addComment — sinon il ne part jamais sur le réseau.")
+    }
+
+    /// Le chemin hors-ligne (durable, `OfflineQueue`) doit transporter le
+    /// MÊME lieu — `OutboxDispatcher.dispatchCreateComment` sait déjà relayer
+    /// `CreateCommentPayload.location`, mais seulement si l'appelant le
+    /// remplit. Sans ce fil, une position choisie hors réseau disparaît
+    /// silencieusement au lieu de survivre au replay.
+    func test_feedCommentsSheet_submitComment_sendsLocationOnTheOfflinePath() throws {
+        let src = try source("Meeshy/Features/Main/Views/FeedCommentsSheet.swift")
+        let fn = try body(from: "let payload = CreateCommentPayload(",
+                          to: "try await OfflineQueue.shared.enqueue", in: src)
+
+        XCTAssertTrue(fn.contains("location: place"),
+                      "Le repli hors-ligne doit transporter le lieu — sinon une position choisie sans réseau disparaît.")
+    }
+
+    /// `hasContent` (qui gate l'activation du bouton d'envoi dans
+    /// `UniversalComposerBar`) ignorait `commentPendingPlace` : même une fois
+    /// le transport câblé, un commentaire « lieu seul » resterait injouable
+    /// si le bouton d'envoi ne s'active jamais. Miroir exact de
+    /// `PostDetailView`'s `externalHasContent: ... || pendingPlace != nil`.
+    func test_feedCommentsSheet_locationOnlyComment_countsAsContent() throws {
+        let src = try source("Meeshy/Features/Main/Views/FeedCommentsSheet.swift")
+        XCTAssertTrue(
+            src.contains("externalHasContent: !commentAttachments.isEmpty || audioRecorder.isRecording || commentPendingPlace != nil,"),
+            "Sans commentPendingPlace dans la jauge de contenu, le bouton d'envoi reste désactivé pour un commentaire « lieu seul »."
+        )
+    }
+
     // MARK: - Mot de passe
 
     /// Sans `.newPassword`, iOS ne propose ni mot de passe fort ni — surtout —

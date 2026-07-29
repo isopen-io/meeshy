@@ -1111,7 +1111,7 @@ struct CommentsSheetView: View {
             externalIsRecording: audioRecorder.isRecording,
             externalRecordingDuration: audioRecorder.duration,
             externalAudioLevels: audioRecorder.audioLevels,
-            externalHasContent: !commentAttachments.isEmpty || audioRecorder.isRecording,
+            externalHasContent: !commentAttachments.isEmpty || audioRecorder.isRecording || commentPendingPlace != nil,
             onPhotoLibrary: { showCommentPhotoPicker = true },
             onFilePicker: { showCommentFilePicker = true },
             onRecentMediaSelected: { pick in ingestCommentRecentMedia(pick) },
@@ -1420,19 +1420,28 @@ struct CommentsSheetView: View {
     // MARK: - Comment Send (optimistic, with single media)
 
     /// Poste un commentaire de façon optimiste, avec optionnellement UN média
-    /// (image/vidéo/audio — un commentaire ne porte qu'un seul média). Le texte
-    /// suit le flux reconcile/rollback existant ; le média est uploadé via TUS
-    /// (`uploadContext: "comment"` → PostMedia) puis lié via `addComment(attachmentIds:)`.
-    /// Les attachements file/location et la voix sans fichier sont ignorés (hors périmètre).
-    /// Un commentaire média-seul (sans texte) est autorisé.
+    /// (image/vidéo/audio — un commentaire ne porte qu'un seul média) ET/OU un
+    /// lieu partagé. Le texte suit le flux reconcile/rollback existant ; le
+    /// média est uploadé via TUS (`uploadContext: "comment"` → PostMedia) puis
+    /// lié via `addComment(attachmentIds:)` ; le lieu transite par
+    /// `addComment(location:)` en ligne et par `CreateCommentPayload.location`
+    /// hors-ligne (même contrat que `PostDetailViewModel.sendComment/sendReply/
+    /// submitCommentWithMedia`). Les attachements file et la voix sans fichier
+    /// restent ignorés (hors périmètre).
+    /// Un commentaire média-seul ou lieu-seul (sans texte) est autorisé.
     private func submitComment(text: String, attachments: [ComposerAttachment]) {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         // Un seul média par commentaire : on prend le premier image/vidéo/audio valide.
         let media: PendingCommentMedia? = CommentComposerStaging.firstPendingMedia(in: attachments)
         commentAttachments.removeAll()
+        // Lieu partagé en attente — capturé puis effacé AVANT le guard (comme
+        // `PostDetailView.submitComment`) : la chip ne doit pas ré-apparaître
+        // sur le commentaire suivant, qu'il parte ou soit rejeté par le guard.
+        let place = commentPendingPlace
+        commentPendingPlace = nil
 
-        // Rien à envoyer (ni texte ni média exploitable).
-        guard !trimmed.isEmpty || media != nil else { return }
+        // Rien à envoyer (ni texte, ni média, ni lieu exploitable).
+        guard !trimmed.isEmpty || media != nil || place != nil else { return }
 
         // Réponse plate à 2 niveaux : répondre à une réponse rattache la nouvelle
         // réponse au MÊME parent racine (`replyingTo.parentId`) pour qu'elle reste
@@ -1496,7 +1505,7 @@ struct CommentsSheetView: View {
                 let apiComment = try await PostService.shared.addComment(
                     postId: post.id, content: trimmed, parentId: parentId, effectFlags: effectFlags,
                     attachmentIds: attachmentIds, mobileTranscription: media?.mobileTranscription,
-                    originalLanguage: lang
+                    originalLanguage: lang, location: place
                 )
                 let feedComment = FeedComment(
                     id: apiComment.id, author: apiComment.author.name, authorId: apiComment.author.id,
@@ -1544,7 +1553,8 @@ struct CommentsSheetView: View {
                         clientMutationId: cmid,
                         postId: post.id,
                         parentCommentId: parentId,
-                        content: trimmed
+                        content: trimmed,
+                        location: place
                     )
                     try await OfflineQueue.shared.enqueue(.createComment, payload: payload, conversationId: post.id)
                     onCommentSent?(post.id)
