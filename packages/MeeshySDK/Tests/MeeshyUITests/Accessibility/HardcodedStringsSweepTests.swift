@@ -101,6 +101,23 @@ final class HardcodedStringsSweepTests: XCTestCase {
         "videoEditor.trim.handles_hint",
         "voiceProfile.recording.min_duration",
         "voiceProfile.recording.sample",
+        "audio.recorder.micDeniedSettings",
+        "category.picker.new.placeholder",
+        "category.picker.create.a11y",
+        "category.picker.new.button",
+        "story.timeline.track.section.sticker",
+        "story.timeline.container",
+        "story.timeline.a11y.scrollbar",
+        "story.timeline.ops.extend.label",
+        "story.timeline.ops.extend",
+        "story.timeline.inspector.name.placeholder",
+        "story.timeline.inspector.ducking",
+        "story.timeline.inspector.ducking.caption",
+        "story.timeline.inspector.volume.addPoint",
+        "story.timeline.inspector.volume.addPoint.hint",
+        "story.timeline.inspector.volume.automation.caption",
+        "story.timeline.inspector.volume.removePoint",
+        "voiceProfile.recording.languagePicker",
         "media.video.play",
         "community.settings.color",
     ]
@@ -169,6 +186,8 @@ final class HardcodedStringsSweepTests: XCTestCase {
             "videoEditor.rotation",          // "Rotation" identical fr/en
             "media.video.pause",             // "Pause" identical fr/en
             "story.audio.pause",             // idem
+            "story.timeline.container",      // "Timeline" verbatim en fr
+            "story.timeline.ops.extend.label", // "%@ s" — unité seule
             "conversation.settings.slowmode.1min",
             "conversation.settings.slowmode.5min",
             "conversation.unread_messages",  // "%lld messages" identical fr/en
