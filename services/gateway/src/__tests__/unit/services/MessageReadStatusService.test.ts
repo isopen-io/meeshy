@@ -921,6 +921,52 @@ describe('MessageReadStatusService', () => {
       );
     });
 
+    // Rattrapage — « je suis arrivé au dernier message ». Le badge tombe, les
+    // accusés de lecture ne bougent pas d'un pouce.
+    it('rattrapage : fait sauter le curseur au dernier message et remet le compteur à zéro', async () => {
+      const msgSeen = '507f1f77bcf86cd799439021';
+      const msgNewest = '507f1f77bcf86cd799439099';
+      mockPrisma.message.findFirst.mockResolvedValue({ id: msgNewest, createdAt: new Date('2025-01-02T00:00:00Z') });
+      mockPrisma.conversationReadCursor.findUnique.mockResolvedValue({ lastReadAt: new Date('2024-12-01T00:00:00Z') });
+      mockPrisma.message.findMany.mockResolvedValue([{ id: msgSeen }]);
+      mockPrisma.messageStatusEntry.findMany.mockResolvedValue([]);
+
+      await service.markMessagesAsRead(testParticipantId, testConversationId, msgNewest, {
+        messageIds: [msgSeen],
+        caughtUpToMessageId: msgNewest
+      });
+
+      const cursorWrites = mockPrisma.conversationReadCursor.updateMany.mock.calls
+        .map((c: any[]) => c[0].data)
+        .filter((d: any) => d.lastReadMessageId !== undefined);
+      expect(cursorWrites).toContainEqual(
+        expect.objectContaining({ lastReadMessageId: msgNewest, unreadCount: 0 })
+      );
+    });
+
+    // Le badge et les coches bleues répondent à deux questions différentes.
+    // Vider le premier ne doit RIEN ajouter aux secondes, sinon l'expéditeur
+    // voit « lu » sur des messages que personne n'a affichés.
+    it('rattrapage : ne fige aucun readAt au-delà des messages réellement affichés', async () => {
+      const msgSeen = '507f1f77bcf86cd799439021';
+      const msgNewest = '507f1f77bcf86cd799439099';
+      mockPrisma.message.findFirst.mockResolvedValue({ id: msgNewest, createdAt: new Date('2025-01-02T00:00:00Z') });
+      mockPrisma.conversationReadCursor.findUnique.mockResolvedValue({ lastReadAt: new Date('2024-12-01T00:00:00Z') });
+      mockPrisma.message.findMany.mockResolvedValue([{ id: msgSeen }]);
+      mockPrisma.messageStatusEntry.findMany.mockResolvedValue([]);
+
+      await service.markMessagesAsRead(testParticipantId, testConversationId, msgNewest, {
+        messageIds: [msgSeen],
+        caughtUpToMessageId: msgNewest
+      });
+
+      const readFreezeWhere = mockPrisma.message.findMany.mock.calls[0][0].where;
+      expect(readFreezeWhere).toEqual(expect.objectContaining({ id: { in: [msgSeen] } }));
+      expect(mockPrisma.messageStatusEntry.createMany).toHaveBeenCalledWith({
+        data: [expect.objectContaining({ messageId: msgSeen, readAt: expect.any(Date) })]
+      });
+    });
+
     it('exact mode: the delivered freeze stays window-based (delivered = fetched)', async () => {
       mockPrisma.message.findFirst.mockResolvedValue({ id: testMessageId, createdAt: new Date('2025-01-01T00:00:00Z') });
       mockPrisma.conversationReadCursor.findUnique.mockResolvedValue({

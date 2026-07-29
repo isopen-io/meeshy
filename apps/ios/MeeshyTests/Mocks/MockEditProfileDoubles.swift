@@ -110,17 +110,6 @@ final class MockProfileCacheWriter: ProfileCacheWriting, @unchecked Sendable {
     }
 }
 
-// MARK: - TestSleeper
-
-final class TestSleeper: Sleeping, @unchecked Sendable {
-    var sleepCalls: [UInt64] = []
-
-    func sleep(milliseconds: UInt64) async {
-        sleepCalls.append(milliseconds)
-        // intentional no-op for test speed
-    }
-}
-
 // MARK: - MockFeedbackToast
 
 @MainActor

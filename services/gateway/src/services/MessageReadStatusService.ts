@@ -658,6 +658,12 @@ export class MessageReadStatusService {
       readonly language?: string | null;
       /** Exceptions par message — cf. `freezeMessageStatus`. */
       readonly messageLanguages?: Readonly<Record<string, string>>;
+      /**
+       * Message le plus récent, ATTEINT par le lecteur. Fait sauter le curseur
+       * de non-lus jusque-là — donc vide le badge — sans figer un seul `readAt`
+       * de plus. Cf. `MarkReadBodySchema.caughtUpToMessageId`.
+       */
+      readonly caughtUpToMessageId?: string;
     }
   ): Promise<number> {
     // Hoisted so the catch below can release the dedup key when the write
@@ -755,7 +761,7 @@ export class MessageReadStatusService {
 
         // `null` = le message suivant immédiatement le curseur n'a pas été vu.
         // Le curseur ne bouge pas : sauter au bas d'une conversation ne doit
-        // pas vider le badge de non-lus de ce qui a été survolé.
+        // pas figer un `readAt` sur ce qui a été survolé.
         if (cursorTarget) {
           await this._advanceCursor({
             participantId,
@@ -766,6 +772,25 @@ export class MessageReadStatusService {
             idField: "lastReadMessageId",
             atField: "lastReadAt",
             resetUnreadCount: false,
+          });
+        }
+
+        // Rattrapage : le lecteur a ATTEINT le dernier message. Le curseur
+        // saute jusque-là et le badge tombe, sans qu'aucun `readAt`
+        // supplémentaire n'ait été figé au-dessus — les accusés de lecture
+        // restent le reflet exact de ce qui a été affiché. Après l'avance par
+        // préfixe contigu, jamais avant : la garde de fraîcheur de
+        // `_advanceCursor` ignorerait alors la seconde comme périmée.
+        if (options?.caughtUpToMessageId) {
+          await this._advanceCursor({
+            participantId,
+            conversationId,
+            messageId: options.caughtUpToMessageId,
+            now,
+            cursorExists: cursorExists || cursorTarget != null,
+            idField: "lastReadMessageId",
+            atField: "lastReadAt",
+            resetUnreadCount: true,
           });
         }
       } else {

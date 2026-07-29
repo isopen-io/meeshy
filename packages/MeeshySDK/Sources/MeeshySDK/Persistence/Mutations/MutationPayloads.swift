@@ -60,13 +60,29 @@ public struct MarkAsReadPayload: Codable, Sendable, Equatable {
     /// mentirait là où l'auteur a précisément besoin de savoir.
     public let messageLanguages: [String: String]?
 
+    /// Le lecteur a ATTEINT ce message, le plus récent de la conversation :
+    /// il n'a plus de retard. Fait avancer le curseur de non-lus jusque-là,
+    /// donc vide le badge côté serveur.
+    ///
+    /// Distinct de `messageIds`, et volontairement : « quels messages ai-je
+    /// affichés » (accusés de lecture, coches bleues — exact, jamais gonflé) et
+    /// « ai-je rattrapé mon retard » (badge) sont deux questions différentes.
+    /// Descendre au dernier message d'une conversation à deux cents non-lus ne
+    /// rend pas les cent quatre-vingt-dix intermédiaires lus ; ça rend bien la
+    /// conversation rattrapée. Les gonfler ensemble mentirait à l'expéditeur.
+    ///
+    /// `nil` = l'appelant ne se prononce pas ; le curseur avance alors sur le
+    /// seul préfixe contigu réellement lu.
+    public let caughtUpToMessageId: String?
+
     public init(
         clientMutationId: String,
         conversationId: String,
         upToMessageId: String,
         messageIds: [String]? = nil,
         language: String? = nil,
-        messageLanguages: [String: String]? = nil
+        messageLanguages: [String: String]? = nil,
+        caughtUpToMessageId: String? = nil
     ) {
         self.clientMutationId = clientMutationId
         self.conversationId = conversationId
@@ -74,6 +90,7 @@ public struct MarkAsReadPayload: Codable, Sendable, Equatable {
         self.messageIds = messageIds
         self.language = language
         self.messageLanguages = (messageLanguages?.isEmpty ?? true) ? nil : messageLanguages
+        self.caughtUpToMessageId = caughtUpToMessageId
     }
 }
 

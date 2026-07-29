@@ -17,7 +17,24 @@ import Combine
 /// s'abonne pas) et écrit `relay.offset` depuis son callback de scroll.
 /// SEULE la sous-vue header l'observe via `@ObservedObject` et se re-rend
 /// à chaque tick.
-public final class ScrollOffsetRelay: ObservableObject {
+/// `nonisolated` sur le TYPE, pas par membre. `MeeshyUI` compile avec
+/// `.defaultIsolation(MainActor.self)` (SE-0466) : sans cette annotation la
+/// classe est implicitement `@MainActor`, et Swift 6.2 dote alors sa `deinit`
+/// d'une isolation. Sur iOS < 26 cette deinit isolée passe par le shim de
+/// rétro-déploiement `swift_task_deinitOnExecutorMainActorBackDeploy`, qui
+/// libère DEUX FOIS le scope task-local :
+///
+///     ___BUG_IN_CLIENT_OF_LIBMALLOC_POINTER_BEING_FREED_WAS_NOT_ALLOCATED
+///     ← swift::TaskLocal::StopLookupScope::~StopLookupScope()
+///     ← swift_task_deinitOnExecutorMainActorBackDeploy
+///     ← ScrollOffsetRelay.__deallocating_deinit
+///     ← destroy for ConversationListView
+///
+/// Le démontage d'une `ConversationListView` (fin d'un test, pop de la pile)
+/// tuait donc le processus. Un relais qui ne porte qu'un `CGFloat` n'a rien à
+/// démonter sur le main actor : le saut d'exécuteur ne protégeait rien et ne
+/// coûtait qu'un crash.
+nonisolated public final class ScrollOffsetRelay: ObservableObject {
     @Published public var offset: CGFloat = 0
 
     public init() {}

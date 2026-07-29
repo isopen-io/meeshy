@@ -1523,6 +1523,7 @@ export function registerMessagesRoutes(
       let reportedMessageIds: readonly string[] | undefined;
       let reportedLanguage: string | undefined;
       let reportedMessageLanguages: Readonly<Record<string, string>> | undefined;
+      let caughtUpToMessageId: string | undefined;
       if (request.body !== undefined && request.body !== null) {
         const bodyResult = MarkReadBodySchema.safeParse(request.body);
         if (!bodyResult.success) {
@@ -1531,6 +1532,7 @@ export function registerMessagesRoutes(
         reportedMessageIds = bodyResult.data.messageIds;
         reportedLanguage = bodyResult.data.language;
         reportedMessageLanguages = bodyResult.data.messageLanguages;
+        caughtUpToMessageId = bodyResult.data.caughtUpToMessageId;
       }
 
       const { MessageReadStatusService } = await import('../../services/MessageReadStatusService');
@@ -1540,7 +1542,7 @@ export function registerMessagesRoutes(
       // Le raccourci « 0 non-lu → ne rien faire » ne vaut que SANS ids
       // rapportés : le curseur peut buter sur un trou et annoncer 0 alors que
       // le client vient d'afficher des messages situés après ce trou.
-      if (unreadCount === 0 && !reportedMessageIds) {
+      if (unreadCount === 0 && !reportedMessageIds && !caughtUpToMessageId) {
         return sendSuccess(reply, { markedCount: 0 });
       }
 
@@ -1551,11 +1553,12 @@ export function registerMessagesRoutes(
         currentParticipant.id,
         conversationId,
         undefined,
-        reportedMessageIds || reportedLanguage || reportedMessageLanguages
+        reportedMessageIds || reportedLanguage || reportedMessageLanguages || caughtUpToMessageId
           ? {
               messageIds: reportedMessageIds,
               language: reportedLanguage,
-              messageLanguages: reportedMessageLanguages
+              messageLanguages: reportedMessageLanguages,
+              caughtUpToMessageId
             }
           : undefined
       );

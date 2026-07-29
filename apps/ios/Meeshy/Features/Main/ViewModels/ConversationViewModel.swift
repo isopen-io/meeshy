@@ -300,6 +300,12 @@ class ConversationViewModel: ObservableObject {
     /// successful load so older messages are ready before the user reaches them.
     var isCurrentlyNearBottom: Bool = true
 
+    /// Dernier message dont l'affichage a fait « rattraper » la conversation.
+    /// Rendu obsolète tout seul dès qu'un message plus récent arrive — la
+    /// comparaison se fait sur le message le plus récent du moment.
+    /// Cf. `caughtUpMessageId(seen:)`.
+    private var lastCaughtUpMessageId: String?
+
     /// Detailed reaction data for a specific message (used by reaction detail sheet)
     @Published var reactionDetails: [ReactionGroup] = []
     @Published var isLoadingReactions = false
@@ -2199,13 +2205,20 @@ class ConversationViewModel: ObservableObject {
             await self?.persistMessagesUsingServerIds()
         }
         let sentSenderName = authManager.currentUser?.displayName ?? authManager.currentUser?.username
-        Task {
-            await ConversationSyncEngine.shared.updateConversationAfterSend(
-                conversationId: convId,
-                messagePreview: msgContent,
-                messageAt: msgTime,
-                senderName: sentSenderName
+        // Facette relue sur la ligne optimiste : elle porte les pièces jointes et
+        // les effets réellement envoyés. Recomposer une facette « texte nu » ici
+        // effacerait de la liste la photo qu'on vient d'envoyer, une seconde
+        // après que l'insert optimiste l'y a mise.
+        let ackedFacet = messages.first(where: { $0.id == tempId }).map {
+            LastMessageFacet(
+                message: $0,
+                preview: Self.optimisticListPreview(text: msgContent, messageType: $0.messageType),
+                id: serverId,
+                at: msgTime
             )
+        } ?? LastMessageFacet(id: serverId, preview: msgContent.meeshyPreviewTruncated, senderName: sentSenderName, at: msgTime)
+        Task {
+            await ConversationSyncEngine.shared.updateConversationAfterSend(ackedFacet, conversationId: convId)
         }
 
         if ephemeralDuration != nil { ephemeralDuration = nil }
@@ -2398,16 +2411,9 @@ class ConversationViewModel: ObservableObject {
             // just-typed message — with the correct author name — even before
             // the network returns. Without this the preview keeps the previous
             // author/content while the user waits for connectivity.
-            let previewContent = text
-            let previewAt = offlineMessage.createdAt
-            let senderName = authManager.currentUser?.displayName ?? authManager.currentUser?.username
+            let offlineFacet = LastMessageFacet(message: offlineMessage, preview: text)
             Task {
-                await ConversationSyncEngine.shared.updateConversationAfterSend(
-                    conversationId: convId,
-                    messagePreview: previewContent,
-                    messageAt: previewAt,
-                    senderName: senderName
-                )
+                await ConversationSyncEngine.shared.updateConversationAfterSend(offlineFacet, conversationId: convId)
             }
 
             // AWAITED enqueue (Bug 1 fix). If the outbox write throws, flip
@@ -2523,10 +2529,19 @@ class ConversationViewModel: ObservableObject {
                 // appear/reorder in the list until its ACK. finalizeSuccessfulSend
                 // refreshes it with the server timestamp at ACK time.
                 await ConversationSyncEngine.shared.updateConversationAfterSend(
-                    conversationId: conversationId,
-                    messagePreview: Self.optimisticListPreview(text: text, messageType: optimisticMessageType),
-                    messageAt: optimisticRecord.createdAt,
-                    senderName: authManager.currentUser?.displayName ?? authManager.currentUser?.username
+                    LastMessageFacet(
+                        id: tempId,
+                        preview: Self.optimisticListPreview(text: text, messageType: optimisticMessageType),
+                        senderName: authManager.currentUser?.displayName ?? authManager.currentUser?.username,
+                        at: optimisticRecord.createdAt,
+                        attachments: resolvedAttachments,
+                        attachmentCount: resolvedAttachments.count,
+                        isBlurred: resolvedBlur ?? false,
+                        isViewOnce: resolvedIsViewOnce,
+                        expiresAt: resolvedExpiresAt,
+                        originalLanguage: optimisticRecord.originalLanguage
+                    ),
+                    conversationId: conversationId
                 )
             } catch {
                 Logger.messages.error("SendFlow insertOptimistic FAILED tempId=\(tempId, privacy: .public) error=\(error.localizedDescription, privacy: .public)")
@@ -2991,8 +3006,15 @@ class ConversationViewModel: ObservableObject {
         let attachmentCount = attachments.count
         // Captured for the conversation-list optimistic update below (computed on
         // the MainActor before the detached insert).
-        let listPreview = Self.optimisticListPreview(text: content, messageType: messageType)
-        let listSenderName = authManager.currentUser?.displayName ?? authManager.currentUser?.username
+        let listFacet = LastMessageFacet(
+            id: tempId,
+            preview: Self.optimisticListPreview(text: content, messageType: messageType),
+            senderName: authManager.currentUser?.displayName ?? authManager.currentUser?.username,
+            at: now,
+            attachments: attachments,
+            attachmentCount: attachments.count,
+            originalLanguage: resolvedOriginalLanguage
+        )
         Task.detached(priority: .userInitiated) {
             do {
                 try await persistence.insertOptimistic(record)
@@ -3000,12 +3022,7 @@ class ConversationViewModel: ObservableObject {
                 // Local-first: surface the media message in the conversation list
                 // immediately (preview + bump to top), before any server ACK —
                 // the media path previously never updated the list optimistically.
-                await ConversationSyncEngine.shared.updateConversationAfterSend(
-                    conversationId: recordConversationId,
-                    messagePreview: listPreview,
-                    messageAt: now,
-                    senderName: listSenderName
-                )
+                await ConversationSyncEngine.shared.updateConversationAfterSend(listFacet, conversationId: recordConversationId)
             } catch {
                 Logger.messages.error("SendFlow insertOptimisticMedia FAILED tempId=\(tempId, privacy: .public) error=\(error.localizedDescription, privacy: .public)")
             }
@@ -3518,15 +3535,17 @@ class ConversationViewModel: ObservableObject {
     ///   « appelant non informé » et laisse le gateway sur son repli
     ///   historique par fenêtre temporelle, qui sur-déclare.
     ///
-    ///   Le badge local n'est vidé que pour un appel non informé : rapporter
-    ///   dix messages sur deux cents ne signifie pas que la conversation est
-    ///   lue, et le remettre à zéro afficherait un mensonge que le serveur
-    ///   corrigerait aussitôt — un clignotement pour rien.
+    ///   Rapporter dix messages sur deux cents ne veut pas dire que la
+    ///   conversation est lue — le badge ne tombe donc PAS sur un lot
+    ///   quelconque. Il tombe quand le lot contient le message le PLUS RÉCENT :
+    ///   à cet instant l'utilisateur n'a plus de retard, et c'est exactement ce
+    ///   que compte le badge.
     ///
     ///   Voir `docs/superpowers/specs/2026-07-24-read-exactness-design.md`.
     func markAsRead(messageIds: [String]? = nil) {
         let convId = conversationId
-        if messageIds == nil {
+        let caughtUpId = caughtUpMessageId(seen: messageIds)
+        if messageIds == nil || caughtUpId != nil {
             // 1. Update cache immediately (local-first) — survives reloadFromCache()
             Task { await ConversationSyncEngine.shared.markConversationReadLocally(convId) }
             // 2. Notify ConversationListViewModel to clear badge in current @Published state
@@ -3554,7 +3573,8 @@ class ConversationViewModel: ObservableObject {
                 upToMessageId: lastMessageId,
                 messageIds: messageIds,
                 language: languages?.language,
-                messageLanguages: languages?.exceptions
+                messageLanguages: languages?.exceptions,
+                caughtUpToMessageId: caughtUpId
             )
             do {
                 try await OfflineQueue.shared.enqueue(.markAsRead, payload: payload, conversationId: convId)
@@ -3570,6 +3590,46 @@ class ConversationViewModel: ObservableObject {
                 ))
             }
         }
+    }
+
+    /// Identifiant SERVEUR du message le plus récent, quand le lecteur vient
+    /// de l'atteindre — donc quand la conversation n'a plus de retard.
+    ///
+    /// Trois conditions, toutes nécessaires :
+    /// - la fenêtre chargée est bien au SOMMET (`!hasNewerMessages`) : après un
+    ///   saut vers un message cité, le bas de l'écran n'est pas le bas de la
+    ///   conversation, et croire l'inverse viderait un badge encore dû ;
+    /// - l'appelant est INFORMÉ (`seen != nil`) : un appel aveugle laisse le
+    ///   gateway sur son repli par fenêtre, qui vide déjà le compteur ;
+    /// - le lot contient le dernier message connu du serveur.
+    ///
+    /// Le repli sur `lastCaughtUpMessageId` rend le rattrapage COLLANT :
+    /// remonter dans l'historique après avoir touché le bas ne remet pas la
+    /// conversation en retard tant qu'aucun message plus récent n'est arrivé.
+    /// Sans lui, un lot ultérieur portant des messages anciens supplanterait
+    /// dans l'outbox (coalescence par conversation) celui qui portait le
+    /// rattrapage, et le badge repartirait au prochain sync.
+    private func caughtUpMessageId(seen: [String]?) -> String? {
+        guard let seen, !hasNewerMessages else { return nil }
+        // Le message le plus récent que le SERVEUR connaît : une bulle
+        // optimiste qu'on vient d'envoyer ne porte pas encore d'ObjectId, et
+        // l'annoncer comme borne de curseur ferait rejeter le corps entier.
+        guard let newest = messages.reversed().lazy
+            .map({ self.serverId(for: $0.id) })
+            .first(where: { Self.isServerMessageId($0) })
+        else { return nil }
+
+        if seen.contains(newest) {
+            lastCaughtUpMessageId = newest
+            return newest
+        }
+        return lastCaughtUpMessageId == newest ? newest : nil
+    }
+
+    /// Un ObjectId MongoDB : 24 caractères hexadécimaux. Le gateway valide le
+    /// corps de `mark-read` avec ce format et rejette tout le lot sinon.
+    nonisolated static func isServerMessageId(_ id: String) -> Bool {
+        id.count == 24 && id.allSatisfy(\.isHexDigit)
     }
 
     /// Server-side delivery confirmation. Fully delegated to the command

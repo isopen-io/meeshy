@@ -66,7 +66,7 @@ final class ViewModelErrorLocalizationTests: XCTestCase {
             "twofactor.error.disable", "twofactor.error.backupCodes",
             "conversation.options.error.loadPreferences", "conversation.options.error.createCategory",
             "conversation.options.error.deleteConversation", "conversation.options.error.leaveConversation",
-            "conversation.options.error.save", "profile.edit.error.update",
+            "conversation.options.error.save",
         ]
         let data = try Data(contentsOf: iosRoot.appendingPathComponent("Meeshy/Localizable.xcstrings"))
         let strings = (try JSONSerialization.jsonObject(with: data) as? [String: Any])?["strings"] as? [String: Any] ?? [:]

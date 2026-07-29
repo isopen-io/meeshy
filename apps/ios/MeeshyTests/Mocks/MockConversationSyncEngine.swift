@@ -81,8 +81,14 @@ final class MockConversationSyncEngine: ConversationSyncEngineProviding, @unchec
         lastMarkReadConversationId = conversationId
     }
 
-    func updateConversationAfterSend(conversationId: String, messagePreview: String, messageAt: Date, senderName: String?) async {
+    /// Dernière facette appliquée — permet aux tests d'affirmer que la ligne
+    /// reçoit bien les pièces jointes et les effets du message envoyé, et pas
+    /// seulement son texte.
+    var lastSentFacet: LastMessageFacet?
+
+    func updateConversationAfterSend(_ facet: LastMessageFacet, conversationId: String) async {
         updateConversationAfterSendCallCount += 1
+        lastSentFacet = facet
     }
 
     var setCurrentlyOpenConversationCallCount = 0

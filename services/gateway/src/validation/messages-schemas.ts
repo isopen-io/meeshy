@@ -164,7 +164,21 @@ export const MarkReadBodySchema = z.object({
     .refine((table) => Object.keys(table).length <= 200, {
       message: 'Too many per-message languages'
     })
-    .optional()
+    .optional(),
+
+  /**
+   * Le lecteur a ATTEINT ce message, le plus récent de la conversation : il n'a
+   * plus de retard. Fait avancer le curseur de non-lus jusque-là — donc vide le
+   * badge — sans élargir d'un seul message l'ensemble déclaré LU.
+   *
+   * Les deux notions sont délibérément séparées. « Quels messages ai-je
+   * affichés » nourrit les accusés de lecture, que l'expéditeur voit : il doit
+   * rester exact. « Ai-je rattrapé mon retard » nourrit le badge, que seul le
+   * lecteur voit : descendre au dernier message d'une conversation à deux cents
+   * non-lus ne rend pas les cent quatre-vingt-dix intermédiaires lus, mais rend
+   * bien la conversation rattrapée. Les confondre gonflerait les coches bleues.
+   */
+  caughtUpToMessageId: mongoId.optional()
 }).strict();
 
 export const AttachmentStatusBodySchema = z.object({

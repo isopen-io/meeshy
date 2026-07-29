@@ -360,15 +360,14 @@ struct RootView: View {
                     case .postDetail(let postId, let initialPost, let showComments, let commentId, let parentCommentId):
                         PostDetailView(postId: postId, initialPost: initialPost, showComments: showComments, targetCommentId: commentId, targetParentCommentId: parentCommentId)
                     case .bookmarks:
+                        // Pas de `navigationBarHidden` : cet écran n'a pas
+                        // d'en-tête maison, la barre système porte son titre ET
+                        // son retour. La masquer en ferait un cul-de-sac.
                         BookmarksView()
-                            .navigationBarHidden(true)
                     case .starredMessages:
                         StarredMessagesView()
                     case .friendRequests:
                         FriendRequestListView()
-                            .navigationBarHidden(true)
-                    case .editProfile:
-                        EditProfileView()
                             .navigationBarHidden(true)
                     case .storyNotificationTarget(let storyId, let intent, let context, let commentId, let parentCommentId):
                         StoryNotificationTargetScreen(

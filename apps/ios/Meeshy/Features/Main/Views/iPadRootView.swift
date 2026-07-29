@@ -45,6 +45,10 @@ struct iPadRootView: View {
     // `.modifier(CallPresentationLayer())` (partagé avec RootView) qui isole le
     // churn d'appel hors de `iPadRootView.body`. Cf. watchdog 0x8BADF00D.
     @ObservedObject var notificationManager = NotificationToastManager.shared
+    /// Ne publie que `launch` — une ouverture/fermeture de lecteur de réels,
+    /// pas un flux. L'observer ne rejoue donc pas le churn que `CallManager`
+    /// imposait ici (cf. watchdog 0x8BADF00D juste au-dessus).
+    @ObservedObject var reelsPresenter = ReelsPresenter.shared
     @EnvironmentObject var deepLinkRouter: DeepLinkRouter
     @Environment(\.colorScheme) var systemColorScheme
 

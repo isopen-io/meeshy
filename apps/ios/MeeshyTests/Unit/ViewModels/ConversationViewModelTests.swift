@@ -1479,6 +1479,80 @@ final class ConversationViewModelTests: XCTestCase {
         wait(for: [expectation], timeout: 1.0)
     }
 
+    // MARK: - Rattrapage : le badge tombe à l'arrivée sur le dernier message
+
+    /// Identifiants d'aspect serveur (24 hex) : le corps de `mark-read` est
+    /// validé sur ce format, un `cid_…` ferait rejeter tout le lot.
+    private static let idOldest = "aaaaaaaaaaaaaaaaaaaaaaa1"
+    private static let idNewest = "aaaaaaaaaaaaaaaaaaaaaaa2"
+
+    /// Le lot vu contient le message le PLUS RÉCENT : l'utilisateur n'a plus de
+    /// retard, le badge doit tomber sans attendre l'aller-retour serveur.
+    func test_markAsRead_seenBatchContainsNewestMessage_clearsBadgeImmediately() {
+        let sut = makeSUT()
+        sut.messages = [
+            makeMessage(id: Self.idOldest, content: "A"),
+            makeMessage(id: Self.idNewest, content: "B")
+        ]
+        let expectedId = testConversationId
+        let cleared = expectation(forNotification: .conversationMarkedRead, object: nil) { notification in
+            (notification.object as? String) == expectedId
+        }
+
+        sut.markAsRead(messageIds: [Self.idNewest])
+
+        wait(for: [cleared], timeout: 1.0)
+    }
+
+    /// Rapporter dix messages sur deux cents ne veut PAS dire que la
+    /// conversation est lue : tant que le dernier message n'a pas été atteint,
+    /// le badge reste. Le vider afficherait un chiffre que le serveur
+    /// corrigerait aussitôt.
+    func test_markAsRead_seenBatchWithoutNewestMessage_leavesBadgeAlone() {
+        let sut = makeSUT()
+        sut.messages = [
+            makeMessage(id: Self.idOldest, content: "A"),
+            makeMessage(id: Self.idNewest, content: "B")
+        ]
+        let expectedId = testConversationId
+        let cleared = expectation(forNotification: .conversationMarkedRead, object: nil) { notification in
+            (notification.object as? String) == expectedId
+        }
+        cleared.isInverted = true
+
+        sut.markAsRead(messageIds: [Self.idOldest])
+
+        wait(for: [cleared], timeout: 0.5)
+    }
+
+    /// Après un saut vers un message cité, le bas de l'écran n'est PAS le bas de
+    /// la conversation. Traiter le dernier message chargé comme le plus récent
+    /// viderait un badge encore dû.
+    func test_markAsRead_windowNotAtTip_doesNotClearBadge() {
+        let sut = makeSUT()
+        sut.messages = [makeMessage(id: Self.idNewest, content: "B")]
+        sut.hasNewerMessages = true
+        let expectedId = testConversationId
+        let cleared = expectation(forNotification: .conversationMarkedRead, object: nil) { notification in
+            (notification.object as? String) == expectedId
+        }
+        cleared.isInverted = true
+
+        sut.markAsRead(messageIds: [Self.idNewest])
+
+        wait(for: [cleared], timeout: 0.5)
+    }
+
+    /// Une bulle optimiste qu'on vient d'envoyer ne porte pas encore d'ObjectId.
+    /// L'annoncer comme borne de curseur ferait rejeter le corps entier par le
+    /// gateway ; c'est le dernier message CONNU DU SERVEUR qui fait foi.
+    func test_isServerMessageId_rejectsOptimisticClientIds() {
+        XCTAssertTrue(ConversationViewModel.isServerMessageId(Self.idNewest))
+        XCTAssertFalse(ConversationViewModel.isServerMessageId("cid_9f1c2d3e-4a5b-4c6d-8e9f-0a1b2c3d4e5f"))
+        XCTAssertFalse(ConversationViewModel.isServerMessageId(""))
+        XCTAssertFalse(ConversationViewModel.isServerMessageId("zzzzzzzzzzzzzzzzzzzzzzzz"))
+    }
+
     // MARK: - messageIndex Tests
 
     func test_messageIndex_returnsCorrectIndex() {

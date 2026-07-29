@@ -302,7 +302,11 @@ struct OutboxDispatcher: OutboxDispatching {
             // (`messageIds == nil`) continue de poster sans corps : c'est le
             // seul comportement sûr pour un enregistrement non informé.
             let reported = payload.messageIds.map(MarkAsReadBody.cap) ?? []
-            let body = reported.isEmpty
+            // Le rattrapage voyage même quand le plafond a rogné le lot : c'est
+            // une borne de curseur, pas un identifiant à figer, et la perdre
+            // laisserait le badge plein précisément dans le cas — deux cents
+            // messages d'un coup — où il gêne le plus.
+            let body = (reported.isEmpty && payload.caughtUpToMessageId == nil)
                 ? nil
                 : try JSONEncoder().encode(
                     MarkAsReadBody(
@@ -310,7 +314,8 @@ struct OutboxDispatcher: OutboxDispatching {
                         language: payload.language,
                         messageLanguages: MarkAsReadBody.scopedLanguages(
                             payload.messageLanguages, to: reported
-                        )
+                        ),
+                        caughtUpToMessageId: payload.caughtUpToMessageId
                     )
                 )
 
@@ -1066,6 +1071,11 @@ nonisolated struct MarkAsReadBody: Encodable {
     /// gateway n'accepte que des identifiants qu'il vient de recevoir, une clé
     /// écartée par le plafond ferait rejeter le corps entier.
     var messageLanguages: [String: String]?
+
+    /// Le lecteur a atteint ce message, le plus récent : le curseur de non-lus
+    /// avance jusque-là et le badge tombe à zéro côté serveur. N'élargit PAS
+    /// l'ensemble des messages marqués lus — cf. `MarkAsReadPayload`.
+    var caughtUpToMessageId: String?
 
     /// Plafond accepté par le gateway.
     static let limit = 200

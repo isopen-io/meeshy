@@ -65,7 +65,6 @@ extension Route {
         case .bookmarks: return "Bookmarks"
         case .starredMessages: return "StarredMessages"
         case .friendRequests: return "FriendRequests"
-        case .editProfile: return "EditProfile"
         case .storyNotificationTarget: return "StoryNotificationTarget"
         }
     }

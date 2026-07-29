@@ -34,7 +34,7 @@ public protocol ConversationSyncEngineProviding: AnyObject, Sendable {
     func startSocketRelay() async
     func stopSocketRelay() async
     func markConversationReadLocally(_ conversationId: String) async
-    func updateConversationAfterSend(conversationId: String, messagePreview: String, messageAt: Date, senderName: String?) async
+    func updateConversationAfterSend(_ facet: LastMessageFacet, conversationId: String) async
 
     /// Declare which conversation is currently visible to the user.
     /// While set, the engine will:
@@ -900,11 +900,23 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
         await apiMessagePersistor?([apiMessage])
         _messagesDidChange.send(msg.conversationId)
 
-        // Preserve the existing author when the broadcast payload omits the
-        // sender envelope (can happen for lightweight socket echoes). Falling
-        // back to `nil` would otherwise wipe the preview author for the whole
-        // list row until the next full sync.
-        let resolvedSenderName = msg.senderName ?? msg.senderUsername
+        // Facette COMPLÈTE du nouveau dernier message. Les onze champs
+        // `lastMessage*` décrivent un seul message : n'en écrire que trois
+        // laissait la ligne mélanger le texte du nouveau message avec la pièce
+        // jointe, l'expiration et le drapeau « vue unique » de l'ANCIEN — un
+        // texte tout neuf résumé « Vue unique » parce que la photo précédente
+        // l'était. Cf. `LastMessageFacet`.
+        //
+        // Changement assumé : quand un écho socket allégé omet l'enveloppe
+        // expéditeur, l'auteur devient `nil` au lieu de conserver le précédent.
+        // Garder l'ancien collait le nom d'Alice sous le message de Bob — la
+        // ligne était FAUSSE, pas incomplète, et rien ne la corrigeait. Ne pas
+        // « restaurer » ce repli.
+        let facet = LastMessageFacet(
+            message: msg,
+            preview: msg.content,
+            translations: Self.previewTranslations(from: apiMessage)
+        )
 
         // Snapshot the cached list to decide whether the conversation
         // already exists. The `update` mutate closure is sync +
@@ -921,12 +933,7 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
                     // regress the row to older content/position once a
                     // newer message has already been applied.
                     guard msg.createdAt > updated[idx].lastMessageAt else { return updated }
-                    updated[idx].lastMessagePreview = msg.content.meeshyPreviewTruncated
-                    updated[idx].lastMessageId = msg.id
-                    if let resolvedSenderName, !resolvedSenderName.isEmpty {
-                        updated[idx].lastMessageSenderName = resolvedSenderName
-                    }
-                    updated[idx].lastMessageAt = msg.createdAt
+                    updated[idx].applyLastMessage(facet)
                     let conv = updated.remove(at: idx)
                     updated.insert(conv, at: 0)
                 }
@@ -1288,20 +1295,25 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
         _messagesDidChange.send(event.conversationId)
     }
 
-    public func updateConversationAfterSend(conversationId: String, messagePreview: String, messageAt: Date, senderName: String?) async {
+    /// `[langue: contenu]` du message, prêt pour le Prisme de la ligne de liste.
+    /// Les codes sont minusculés — `resolvedLastMessagePreview` résout en
+    /// minuscules et une clé « FR » ne serait jamais trouvée.
+    static func previewTranslations(from apiMessage: APIMessage) -> [String: String]? {
+        guard let translations = apiMessage.translations, !translations.isEmpty else { return nil }
+        return Dictionary(
+            translations.map { ($0.targetLanguage.lowercased(), $0.translatedContent) },
+            uniquingKeysWith: { _, latest in latest }
+        )
+    }
+
+    /// Applique la facette du message qu'on vient d'envoyer, AVANT tout écho
+    /// serveur. La ligne montre donc immédiatement l'auteur, la pièce jointe et
+    /// les effets du message réellement envoyé — et non ceux du précédent.
+    public func updateConversationAfterSend(_ facet: LastMessageFacet, conversationId: String) async {
         await cache.conversations.update(for: "list") { conversations in
             var updated = conversations
             if let idx = updated.firstIndex(where: { $0.id == conversationId }) {
-                updated[idx].lastMessagePreview = messagePreview.meeshyPreviewTruncated
-                updated[idx].lastMessageAt = messageAt
-                // Propagate the author so the conversation list renders
-                // "You: <preview>" in groups immediately — previously this
-                // field kept the prior sender until the socket broadcast
-                // echoed back, producing a confusing "Alice: <your msg>"
-                // for a second or two after every send.
-                if let senderName, !senderName.isEmpty {
-                    updated[idx].lastMessageSenderName = senderName
-                }
+                updated[idx].applyLastMessage(facet)
                 updated[idx].userState.unreadCount = 0
                 let conv = updated.remove(at: idx)
                 updated.insert(conv, at: 0)

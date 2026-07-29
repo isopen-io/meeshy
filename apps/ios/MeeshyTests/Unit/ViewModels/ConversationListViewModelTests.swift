@@ -1517,7 +1517,7 @@ final class ConversationListViewModelTests: XCTestCase {
         ])
 
         let newer = Date(timeIntervalSince1970: 9_000)
-        sut.bumpToTop(conversationId: "third", newLastMessageAt: newer)
+        sut.bumpToTop(conversationId: "third", facet: .bumped(at: newer))
 
         XCTAssertEqual(sut.conversations.first?.id, "third")
         XCTAssertEqual(sut.conversations.first?.lastMessageAt.timeIntervalSinceReferenceDate ?? 0,
@@ -1533,7 +1533,7 @@ final class ConversationListViewModelTests: XCTestCase {
         })
         let originalSnapshot = sut.conversations.map(\.id)
 
-        sut.bumpToTop(conversationId: "ghost", newLastMessageAt: Date())
+        sut.bumpToTop(conversationId: "ghost", facet: .bumped(at: Date()))
 
         XCTAssertEqual(sut.conversations.map(\.id), originalSnapshot,
                        "bumpToTop on unknown id must leave the list untouched")
@@ -1572,7 +1572,7 @@ final class ConversationListViewModelTests: XCTestCase {
         conv.lastMessageOriginalLanguage = "fr"
         sut.setConversations([conv])
 
-        sut.bumpToTop(conversationId: "conv1", newLastMessageAt: Date(timeIntervalSince1970: 9_000))
+        sut.bumpToTop(conversationId: "conv1", facet: .bumped(at: Date(timeIntervalSince1970: 9_000)))
 
         let bumped = sut.conversations[0]
         XCTAssertNil(bumped.lastMessageSenderName, "stale author must not survive the bump")
@@ -1584,6 +1584,30 @@ final class ConversationListViewModelTests: XCTestCase {
         XCTAssertNil(bumped.lastMessagePreview, "stale preview text must not survive the bump — an unattributed old text is worse than a blank row")
         XCTAssertNil(bumped.lastMessageTranslations, "stale translations must not survive the bump — resolvedLastMessagePreview would otherwise surface a stale translated string even with lastMessagePreview cleared")
         XCTAssertNil(bumped.lastMessageOriginalLanguage)
+    }
+
+    /// `conversation:updated` transporte l'identifiant et le texte du nouveau
+    /// dernier message. Ils étaient posés sur la ligne PUIS effacés une ligne
+    /// plus bas par la remise à neutre du bump : la ligne restait muette
+    /// jusqu'à la synchro suivante alors que le gateway venait d'envoyer le
+    /// texte. Ce que l'appelant SAIT doit traverser le bump.
+    func test_bumpToTop_facetCarryingPreview_survivesTheReset() async {
+        let (sut, _, _, _, _, _, _) = makeSUT()
+        var conv = makeConversation(id: "conv1", lastMessageAt: Date(timeIntervalSince1970: 1_000))
+        conv.lastMessageSenderName = "Alice"
+        conv.lastMessageIsViewOnce = true
+        sut.setConversations([conv])
+
+        sut.bumpToTop(
+            conversationId: "conv1",
+            facet: .bumped(at: Date(timeIntervalSince1970: 9_000), id: "msg-9", preview: "Nouveau message")
+        )
+
+        let bumped = sut.conversations[0]
+        XCTAssertEqual(bumped.lastMessageId, "msg-9")
+        XCTAssertEqual(bumped.lastMessagePreview, "Nouveau message")
+        XCTAssertFalse(bumped.lastMessageIsViewOnce, "les champs NON portés par la facette restent remis à neutre")
+        XCTAssertNil(bumped.lastMessageSenderName)
     }
 
     // MARK: - conversation:updated socket event — graft du titre
