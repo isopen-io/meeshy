@@ -195,4 +195,46 @@ final class LocationModelsTests: XCTestCase {
 
         XCTAssertEqual(location.id, "user3")
     }
+
+    // MARK: - ClientInfoProvider.enrichWithLocation (garde de source)
+
+    /// Avant correctif, `enrichWithLocation` instanciait un `CLLocationManager()`
+    /// JETABLE à CHAQUE appel — c'est-à-dire à CHAQUE requête API construisant
+    /// ses en-têtes. Le garde `status == .authorizedWhenInUse` sortait toujours
+    /// avant l'octroi de l'autorisation (le chemin dormait) ; dès l'octroi, ce
+    /// code s'exécute pour la première fois ET sur toutes les requêtes API en
+    /// vol simultanément — c'est le seul chemin réveillé globalement par
+    /// l'octroi, hors du picker lui-même, donc le suspect n°1 du crash « juste
+    /// après avoir accordé la permission ».
+    ///
+    /// Deux défauts corrigés ici : (1) un manager instancié par requête plutôt
+    /// qu'une instance durable rattachée à une runloop — CoreLocation n'aime
+    /// pas les managers éphémères créés/détruits en rafale ; (2) l'absence de
+    /// cache négatif — un échec de géocodage relançait le cycle CoreLocation +
+    /// réseau complet à la requête suivante, donc potentiellement des dizaines
+    /// de fois par seconde sur un flux de requêtes API.
+    func testClientInfoProviderReusesASingleLocationManagerWithNegativeCache() throws {
+        // Depuis ce fichier de test : Models -> MeeshySDKTests -> Tests -> MeeshySDK -> packages
+        // Donc 4 `deletingLastPathComponent()` (en comptant celle qui retire le
+        // nom de fichier) pour atteindre `packages/MeeshySDK`, pas 5.
+        let packageRoot = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()  // Models/ -> retire le fichier
+            .deletingLastPathComponent()  // MeeshySDKTests/
+            .deletingLastPathComponent()  // Tests/
+            .deletingLastPathComponent()  // packages/MeeshySDK
+        let sourceURL = packageRoot
+            .appendingPathComponent("Sources/MeeshySDK/Networking/ClientInfoProvider.swift")
+        let src = try String(contentsOf: sourceURL, encoding: .utf8)
+
+        guard let bodyStart = src.range(of: "func enrichWithLocation") else {
+            XCTFail("enrichWithLocation introuvable dans ClientInfoProvider.swift")
+            return
+        }
+        let body = src[bodyStart.upperBound...]
+
+        XCTAssertFalse(body.contains("CLLocationManager()"),
+                       "Un manager par requête API : CoreLocation attend une instance durable, pas une instance jetable créée à chaque appel.")
+        XCTAssertTrue(src.contains("geoCacheExpiry = Date().addingTimeInterval("),
+                      "Un échec (pas de localisation disponible) doit poser un TTL négatif, sinon le cycle CoreLocation + réseau repart à chaque requête API.")
+    }
 }

@@ -9,6 +9,18 @@ public actor ClientInfoProvider {
     private var cachedRegion: String?
     private var geoCacheExpiry: Date = .distantPast
 
+    /// Instance unique et durable, PAS un `CLLocationManager()` jetable créé à
+    /// chaque appel de `enrichWithLocation`. Avant l'octroi de l'autorisation,
+    /// le garde `status == .authorizedWhenInUse` (ci-dessous) sortait toujours
+    /// en amont : ce chemin ne s'exécutait jamais et le défaut restait
+    /// invisible. Dès l'octroi, il se réveille d'un coup sur TOUTES les
+    /// requêtes API — c'est le seul chemin réveillé globalement par l'octroi,
+    /// hors du picker lui-même, ce qui colle exactement au symptôme « crash
+    /// juste après avoir accordé la permission ». CoreLocation attend un
+    /// manager rattaché à une runloop et réutilisé, pas un objet éphémère
+    /// construit/détruit en rafale sur `MainActor.run`.
+    private let geoManager = CLLocationManager()
+
     private init() {}
 
     // MARK: - Public API
@@ -89,14 +101,23 @@ public actor ClientInfoProvider {
             return
         }
 
-        // Check permission passively via instance property (iOS 14+) — never request
-        let locationResult: CLLocation? = await MainActor.run {
-            let manager = CLLocationManager()
-            let status = manager.authorizationStatus
+        // Check permission passively via instance property (iOS 14+) — never request.
+        // `geoManager` (propriété de l'acteur) plutôt qu'un manager jetable :
+        // voir le commentaire sur sa déclaration.
+        let locationResult: CLLocation? = await MainActor.run { [geoManager] in
+            let status = geoManager.authorizationStatus
             guard status == .authorizedWhenInUse || status == .authorizedAlways else { return nil }
-            return manager.location
+            return geoManager.location
         }
-        guard let location = locationResult else { return }
+        guard let location = locationResult else {
+            // Cache négatif : sans lui, l'absence de relevé (autorisation tout
+            // juste accordée mais CoreLocation n'a pas encore de position, ou
+            // refusée) relançait le cycle CoreLocation + géocodage complet à
+            // CHAQUE requête API suivante — potentiellement des dizaines de
+            // fois par seconde sur un flux de requêtes en rafale.
+            geoCacheExpiry = Date().addingTimeInterval(300) // 5 min
+            return
+        }
 
         do {
             let placemarks = try await CLGeocoder().reverseGeocodeLocation(location)
@@ -109,7 +130,11 @@ public actor ClientInfoProvider {
                 if let region = cachedRegion { headers["X-Meeshy-Region"] = region }
             }
         } catch {
-            // Silently ignore geocoding errors — geo headers are optional
+            // Échec de géocodage (réseau, throttling Apple...) : même cache
+            // négatif que l'absence de relevé, pour la même raison — un échec
+            // silencieux ne doit pas relancer un cycle complet à la requête
+            // suivante.
+            geoCacheExpiry = Date().addingTimeInterval(300) // 5 min
         }
     }
 }
