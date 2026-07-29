@@ -228,11 +228,35 @@ déclarées dans `CFBundleLocalizations`).
 
 ## 8. Signature et livraison
 
-L'ajout de `keychain-access-groups` impose d'activer la capability **Keychain Sharing** sur
-l'App ID `me.meeshy.app.share-extension` (équipe QA8KGP7U96) au portail Apple, puis de
-régénérer le profil. Le signing automatique (`-allowProvisioningUpdates`, cf. `Gymfile`)
-crée le profil à la volée ; `fastlane/Matchfile` et les lanes `sync_certificates` /
-`force_sync` référencent déjà ce bundle id.
+**Aucune action au portail n'est nécessaire — vérifié.** L'hypothèse initiale (activer la
+capability Keychain Sharing sur l'App ID `me.meeshy.app.share-extension`) était fausse :
+
+```
+xcodebuild build -configuration Release -destination 'generic/platform=iOS'   # SANS -allowProvisioningUpdates
+→ BUILD SUCCEEDED, 0 erreur de signature
+→ .xcent produit : keychain-access-groups = ["D72UK7R5RE.me.meeshy.app"]
+```
+
+Le profil Xcode-managed **et** le profil `match AppStore me.meeshy.app.share-extension`
+accordent tous deux `keychain-access-groups: ["D72UK7R5RE.*", "com.apple.token"]`, qui
+couvre le groupe demandé. L'absence d'`application-groups` dans les profils match n'est
+pas un signal : les **quatre** profils match en sont dépourvus, y compris ceux de l'app et
+de la NSE, qui utilisent des App Groups en production.
+
+Commande de vérification (à relancer après tout changement d'entitlements) :
+
+```bash
+find apps/ios/Build -name "MeeshyShareExtension.appex.xcent" -newermt "-10 minutes" \
+  -exec plutil -p {} \;
+```
+
+⚠️ `apps/ios/Build/` contient deux arbres d'intermédiaires (`Build/Meeshy.build/` est un
+résidu d'anciens builds, `Build/Intermediates.noindex/Meeshy.build/` est l'actif). Filtrer
+sur la fraîcheur, jamais sur le chemin — sans quoi on lit un `.xcent` de la veille et on
+conclut à un entitlement élagué qui ne l'est pas.
+
+**Non prouvé** : l'archive + export distribution complète (lane fastlane `release`). Les
+profils l'autorisent, mais seul un export réel le confirmerait.
 
 **Séquencement arbitré** : le build 1257 (extension inerte) est **retiré et remplacé** par
 un 1258 câblé, pour ne jamais exposer publiquement une extension qui ne fait rien. La file
@@ -267,9 +291,10 @@ doit apparaître dans la conversation après réouverture de l'app).
   (`meeshy_token_<userId>`) ; une session anonyme s'appuie sur `X-Session-Token` et n'a pas
   d'entrée trousseau. Un utilisateur anonyme voit donc « Connectez-vous à Meeshy » — état
   honnête, mais qui n'est pas la vérité complète de son statut.
-- **Aucune vérification manuelle sur appareil réel n'a encore eu lieu** : le trousseau
-  partagé ne peut être validé qu'avec l'entitlement signé, donc après activation de la
-  capability au portail (§8).
+- **Aucune vérification manuelle sur appareil réel n'a encore eu lieu.** Les builds
+  simulateur n'appliquent pas l'entitlement trousseau (`.xcent` vide, la vérité est dans
+  `*-Simulated.xcent`), donc la lecture effective du JWT partagé ne peut être constatée que
+  sur appareil.
 
 ## 11. Hors périmètre
 

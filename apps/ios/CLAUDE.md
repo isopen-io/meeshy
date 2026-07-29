@@ -471,7 +471,16 @@ Les composants suivants gerent l'**entite** Notification (CRUD, listing, prefere
     sous `SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor`, le bundle de tests sous `nonisolated`.
   - `meeshy_api_base_url` est désormais ÉCRITE par l'app (`WidgetDataManager.publishAPIBaseURL`).
     `NSEDataSync` la documentait depuis toujours comme écrite par l'app sans que personne
-    ne l'écrive : la NSE retombait systématiquement sur la production.
+    ne l'écrive. **Impact nul en production** (le repli EST `gate.meeshy.me`) ; l'écart ne
+    mordait qu'en staging et en dev, où la NSE interrogeait la prod pendant que l'app
+    tapait ailleurs.
+  - **Signature : aucune action au portail.** Vérifié par un build device Release SANS
+    `-allowProvisioningUpdates` → le `.xcent` porte bien
+    `keychain-access-groups = ["D72UK7R5RE.me.meeshy.app"]`. Les profils (Xcode-managed et
+    `match AppStore`) accordent `D72UK7R5RE.*`, qui le couvre.
+    Contrôle : `find apps/ios/Build -name "MeeshyShareExtension.appex.xcent" -newermt "-10 minutes" -exec plutil -p {} \;`
+    — filtrer sur la FRAÎCHEUR : `Build/Meeshy.build/` est un résidu d'anciens builds,
+    l'actif est `Build/Intermediates.noindex/Meeshy.build/`.
 - **App Intents (Siri/Shortcuts)** — `Meeshy/Features/Intents/MeeshyAppIntents.swift`,
   compilé **dans le target app** (pas d'extension séparée : les `AppIntent` définis par
   l'app sont exposés à Siri/Shortcuts automatiquement). Recâblé 2026-06-24 depuis l'ancien
