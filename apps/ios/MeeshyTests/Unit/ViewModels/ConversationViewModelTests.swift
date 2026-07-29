@@ -2493,7 +2493,14 @@ final class ConversationViewModelTests: XCTestCase {
         await sut.joinOngoingCall(makeLiveCallSummary())
 
         XCTAssertTrue(spy.rejoinCalls.isEmpty)
-        XCTAssertEqual(FeedbackToastManager.shared.currentToast?.message, "L'appel est terminé")
+        // Résolu depuis la MÊME clé/valeur-par-défaut/bundle que le site d'appel
+        // (`ConversationViewModel.joinOngoingCall`) — un littéral français en dur
+        // ne teste plus que la langue du simulateur (cf. `CallsViewModelTests`,
+        // même patron).
+        XCTAssertEqual(
+            FeedbackToastManager.shared.currentToast?.message,
+            String(localized: "bubble.call.join.ended", defaultValue: "L'appel est terminé", bundle: .main)
+        )
     }
 
     func test_joinOngoingCall_staleSessionDifferentCallId_treatedAsEnded() async {

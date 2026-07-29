@@ -667,34 +667,51 @@ final class BubbleContentMatrixTests: XCTestCase {
         )
     }
 
+    // Les valeurs attendues sont résolues via la MÊME clé/valeur-par-défaut/bundle
+    // que `CallNoticePresentation` (`BubbleCallNoticeView.swift`) — jamais un
+    // littéral français en dur. Le simulateur CI tourne en `en-US` : comparer à
+    // un littéral français ne teste alors plus le code mais la langue de la
+    // machine (cf. `CallsViewModelTests.expected`, même patron). Ici les deux
+    // membres de chaque égalité viennent du catalogue : l'assertion prouve que
+    // la BONNE clé est choisie pour ces entrées, quelle que soit la langue active.
+
     func test_liveCallPresentation_showsOngoingTitleAndJoinHint() {
         let presentation = CallNoticePresentation(summary: makeLiveSummary(), isOutgoing: false, accentHex: accentHex)
 
-        XCTAssertEqual(presentation.title, "Appel audio en cours")
-        XCTAssertEqual(presentation.liveSubtitle, "Toucher pour rejoindre")
+        XCTAssertEqual(presentation.title, String(localized: "bubble.call.audio.ongoing", defaultValue: "Appel audio en cours", bundle: .main))
+        XCTAssertEqual(presentation.liveSubtitle, String(localized: "bubble.call.join.hint", defaultValue: "Toucher pour rejoindre", bundle: .main))
     }
 
     func test_liveVideoCallPresentation_titleIsVideoOngoing() {
         let presentation = CallNoticePresentation(summary: makeLiveSummary(callType: .video), isOutgoing: true, accentHex: accentHex)
 
-        XCTAssertEqual(presentation.title, "Appel vidéo en cours")
+        XCTAssertEqual(presentation.title, String(localized: "bubble.call.video.ongoing", defaultValue: "Appel vidéo en cours", bundle: .main))
     }
 
     func test_liveCallPresentation_readsKindBeforeOutcome_placeholderNeverRendersTerminal() {
-        // Le live porte outcome:'completed' comme placeholder neutre — il ne
-        // doit JAMAIS produire le rendu terminal (« Appel audio sortant »).
+        // Le live porte outcome:'completed' comme placeholder neutre — il ne doit
+        // JAMAIS produire le rendu terminal (« Appel audio sortant » et ses
+        // traductions). L'intérêt du test est la SÉLECTION de branche (live
+        // avant outcome), pas le texte : on compare donc le titre live au titre
+        // terminal composé — tous deux résolus depuis le catalogue — plutôt que
+        // de chercher un sous-mot français (`contains("sortant")`), qui ne
+        // prouverait plus rien dans une autre langue.
         let presentation = CallNoticePresentation(summary: makeLiveSummary(), isOutgoing: true, accentHex: accentHex)
+        let terminalOutgoingTitle = String(localized: "bubble.call.audio", defaultValue: "Appel audio", bundle: .main)
+            + " " + String(localized: "bubble.call.outgoing.suffix", defaultValue: "sortant", bundle: .main)
 
-        XCTAssertEqual(presentation.title, "Appel audio en cours")
-        XCTAssertFalse(presentation.title.contains("sortant"))
+        XCTAssertEqual(presentation.title, String(localized: "bubble.call.audio.ongoing", defaultValue: "Appel audio en cours", bundle: .main))
+        XCTAssertNotEqual(presentation.title, terminalOutgoingTitle)
     }
 
     func test_terminalCallPresentation_hasNoLiveSubtitle() {
         let terminal = makeCallSummary(initiatorId: "u1", callType: .audio, outcome: .completed, durationSeconds: 30)
         let presentation = CallNoticePresentation(summary: terminal, isOutgoing: true, accentHex: accentHex)
+        let expectedTitle = String(localized: "bubble.call.audio", defaultValue: "Appel audio", bundle: .main)
+            + " " + String(localized: "bubble.call.outgoing.suffix", defaultValue: "sortant", bundle: .main)
 
         XCTAssertNil(presentation.liveSubtitle)
-        XCTAssertEqual(presentation.title, "Appel audio sortant")
+        XCTAssertEqual(presentation.title, expectedTitle)
     }
 
     func test_cancelledCallPresentation_titleIsPerViewer() {
@@ -705,17 +722,18 @@ final class BubbleContentMatrixTests: XCTestCase {
         )
 
         let initiatorView = CallNoticePresentation(summary: cancelled, isOutgoing: true, accentHex: accentHex)
-        XCTAssertEqual(initiatorView.title, "Appel annulé")
+        XCTAssertEqual(initiatorView.title, String(localized: "bubble.call.cancelled", defaultValue: "Appel annulé", bundle: .main))
 
         let calleeView = CallNoticePresentation(summary: cancelled, isOutgoing: false, accentHex: accentHex)
-        XCTAssertEqual(calleeView.title, "Appel audio manqué")
+        XCTAssertEqual(calleeView.title, String(localized: "bubble.call.audio.missed", defaultValue: "Appel audio manqué", bundle: .main))
     }
 
     func test_missedWithoutEndedByInitiator_staysMissedForBothViewers() {
         let missed = makeCallSummary(initiatorId: "u1", callType: .audio, outcome: .missed, durationSeconds: 0)
+        let expectedMissedTitle = String(localized: "bubble.call.audio.missed", defaultValue: "Appel audio manqué", bundle: .main)
 
-        XCTAssertEqual(CallNoticePresentation(summary: missed, isOutgoing: true, accentHex: accentHex).title, "Appel audio manqué")
-        XCTAssertEqual(CallNoticePresentation(summary: missed, isOutgoing: false, accentHex: accentHex).title, "Appel audio manqué")
+        XCTAssertEqual(CallNoticePresentation(summary: missed, isOutgoing: true, accentHex: accentHex).title, expectedMissedTitle)
+        XCTAssertEqual(CallNoticePresentation(summary: missed, isOutgoing: false, accentHex: accentHex).title, expectedMissedTitle)
     }
 
     func test_liveCallSummary_stillBuildsACallNotice() {
