@@ -110,6 +110,11 @@ public struct APIPostComment: Decodable, Sendable {
     /// `APIPostMedia` (mêmes champs Prisme : transcription/translations). Un commentaire
     /// ne porte qu'un seul média ; le tableau reste pour parité avec les posts.
     public let media: [APIPostMedia]?
+    /// Lieu partagé, hissé par le gateway depuis `metadata.location` — même
+    /// mécanique que sur `APIMessage`/`APIPost`. Décodage synthétisé (pas de
+    /// `CodingKeys` custom sur ce type). `var`/`= nil` : source-compatible
+    /// avec le memberwise init déjà utilisé par les tests existants.
+    public var location: SharedPlace? = nil
 }
 
 public struct APIPostTranslationEntry: Codable, Sendable {
@@ -144,6 +149,11 @@ public struct APIPost: Sendable {
     /// `postOpenCount` : décodage via `decodeIfPresent` ci-dessous.
     public var contentEditedAt: Date? = nil
     public let expiresAt: Date?
+    /// Lieu partagé, hissé par le gateway depuis `metadata.location` — même
+    /// mécanique que sur `APIMessage`. `var`/`= nil` : même patron que
+    /// `trackingLinks` plus bas, pour rester source-compatible avec le
+    /// memberwise init déjà utilisé par les tests existants.
+    public var location: SharedPlace? = nil
     public let author: APIAuthor
     public let likeCount: Int?
     public let commentCount: Int?
@@ -191,7 +201,7 @@ public struct APIPost: Sendable {
 
 extension APIPost: Decodable {
     private enum CodingKeys: String, CodingKey {
-        case id, type, visibility, visibilityUserIds, content, originalLanguage, createdAt, updatedAt, contentEditedAt, expiresAt
+        case id, type, visibility, visibilityUserIds, content, originalLanguage, createdAt, updatedAt, contentEditedAt, expiresAt, location
         case author, likeCount, commentCount, repostCount, viewCount
         case postOpenCount, qualifiedViewCount, playCount, impressionCount
         case bookmarkCount, shareCount, reactionSummary, isPinned, isEdited
@@ -220,6 +230,7 @@ extension APIPost: Decodable {
         updatedAt = try c.decodeIfPresent(Date.self, forKey: .updatedAt)
         contentEditedAt = try c.decodeIfPresent(Date.self, forKey: .contentEditedAt)
         expiresAt = try c.decodeIfPresent(Date.self, forKey: .expiresAt)
+        location = try c.decodeIfPresent(SharedPlace.self, forKey: .location)
         author = try c.decode(APIAuthor.self, forKey: .author)
         likeCount = try c.decodeIfPresent(Int.self, forKey: .likeCount)
         commentCount = try c.decodeIfPresent(Int.self, forKey: .commentCount)

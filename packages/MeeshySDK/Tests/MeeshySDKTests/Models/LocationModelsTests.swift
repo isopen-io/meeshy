@@ -64,6 +64,31 @@ final class LocationModelsTests: XCTestCase {
         XCTAssertNil(decoded.name, "Un point pose a la main n'a pas de nom : les trois champs texte sont optionnels.")
     }
 
+    // MARK: - APIMessage.location (lieu partage hisse par le gateway)
+
+    func test_apiMessage_decodesTopLevelLocation() throws {
+        let json = Data("""
+        {"id":"m1","conversationId":"c1","senderId":"u1","content":"ici",
+         "createdAt":"2026-07-29T10:00:00.000Z",
+         "location":{"latitude":48.8566,"longitude":2.3522,"name":"Tour Eiffel"}}
+        """.utf8)
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        let message = try decoder.decode(APIMessage.self, from: json)
+        XCTAssertEqual(message.location?.name, "Tour Eiffel")
+    }
+
+    func test_apiMessage_withoutLocationDecodesToNil() throws {
+        let json = Data("""
+        {"id":"m1","conversationId":"c1","senderId":"u1","content":"ici",
+         "createdAt":"2026-07-29T10:00:00.000Z"}
+        """.utf8)
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        let message = try decoder.decode(APIMessage.self, from: json)
+        XCTAssertNil(message.location)
+    }
+
     // MARK: - LocationSharePayload
 
     func testLocationSharePayloadEncoding() throws {

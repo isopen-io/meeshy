@@ -391,6 +391,12 @@ public struct APIMessage: Sendable {
     public let isViewOnce: Bool?
     public let isBlurred: Bool?
     public let expiresAt: Date?
+    /// Lieu partagé, hissé par le gateway depuis `metadata.location` — même
+    /// mécanique que `postReplyTo`. Le SDK ne décode pas `metadata` brut.
+    /// `var`/`= nil` (au lieu de `let`) : même patron que `trackingLinks`
+    /// ci-dessous, pour rester source-compatible avec le memberwise init déjà
+    /// utilisé par les tests existants sans devoir y ajouter ce paramètre.
+    public var location: SharedPlace? = nil
     public let isEncrypted: Bool?
     public let encryptionMode: String?
     public let createdAt: Date
@@ -437,7 +443,7 @@ extension APIMessage: Decodable {
         case id, clientMessageId, conversationId, senderId, content, originalLanguage
         case messageType, messageSource, isEdited, editedAt, deletedAt
         case replyToId, storyReplyToId, postReplyTo, storyReplyTo, forwardedFromId, forwardedFromConversationId
-        case pinnedAt, pinnedBy, isViewOnce, isBlurred, expiresAt
+        case pinnedAt, pinnedBy, isViewOnce, isBlurred, expiresAt, location
         case isEncrypted, encryptionMode, createdAt, updatedAt
         case sender, attachments, replyTo, forwardedFrom, forwardedFromConversation
         case reactionSummary, reactionCount, currentUserReactions
@@ -488,6 +494,7 @@ extension APIMessage: Decodable {
         isViewOnce = try c.decodeIfPresent(Bool.self, forKey: .isViewOnce)
         isBlurred = try c.decodeIfPresent(Bool.self, forKey: .isBlurred)
         expiresAt = try c.decodeIfPresent(Date.self, forKey: .expiresAt)
+        location = try c.decodeIfPresent(SharedPlace.self, forKey: .location)
         isEncrypted = try c.decodeIfPresent(Bool.self, forKey: .isEncrypted)
         encryptionMode = try c.decodeIfPresent(String.self, forKey: .encryptionMode)
         createdAt = try c.decode(Date.self, forKey: .createdAt)
