@@ -158,6 +158,20 @@ struct iPadRootView: View {
                     )
                 }
 
+                // Exécuteur de la file de publication des stories. `setExecutor`
+                // enregistre AUSSI le `publishHandler` de la file, dans le même
+                // appel : sans lui, `StoryPublishQueue.processNext` journalise
+                // « No publish handler set, skipping process » et rend la main à
+                // chaque passage. Une story publiée depuis un iPad restait donc
+                // en file INDÉFINIMENT, sans jamais partir.
+                //
+                // Ce câblage n'existait que dans `RootView` (iPhone). Il doit
+                // vivre dans les DEUX racines, et non dans `MeeshyApp` : le
+                // handler doit être posé de façon atomique avec l'exécuteur,
+                // sinon le drain se déclenche sur un exécutif nul et brûle le
+                // budget de reprise (cf. StoryPublishService.setExecutor).
+                StoryPublishService.shared.setExecutor(storyViewModel)
+
                 await storyViewModel.loadStories()
                 await statusViewModel.loadStatuses()
                 await conversationViewModel.loadConversations()
