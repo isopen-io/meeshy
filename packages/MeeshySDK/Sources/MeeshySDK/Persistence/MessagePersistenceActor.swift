@@ -66,6 +66,7 @@ fileprivate func upsertMutatedFieldsEqual(_ a: MessageRecord, _ b: MessageRecord
         && a.forwardedFromJson == b.forwardedFromJson
     let extras = a.mentionedUsersJson == b.mentionedUsersJson
         && a.callSummaryJson == b.callSummaryJson && a.effectFlags == b.effectFlags
+        && a.locationJson == b.locationJson
     return contentAndState && attachmentsAndReactions && encryptionAndDelivery
         && sender && replyAndForward && extras
 }
@@ -1609,6 +1610,16 @@ public actor MessagePersistenceActor {
                 // persisted so the rich call bubble survives a cache reload.
                 let callSummaryJson: Data? = api.callSummary.flatMap { encoder.encodeOrLog($0, field: "callSummaryJson", id: api.id) }
 
+                // Lieu partagé — même mécanique que callSummaryJson : le
+                // pipeline ne stocke pas l'`APIMessage` brut, seulement des
+                // colonnes dérivées, donc une position affichée en ligne mais
+                // jamais hissée ici disparaîtrait au prochain chargement du
+                // cache (relaunch, pull-to-refresh).
+                let locationJson: String? = api.location.flatMap { place in
+                    encoder.encodeOrLog(place, field: "locationJson", id: api.id)
+                        .flatMap { String(data: $0, encoding: .utf8) }
+                }
+
                 var effectFlags: UInt32 = api.effectFlags ?? 0
                 if effectFlags == 0 {
                     var flags = MessageEffectFlags()
@@ -1821,6 +1832,11 @@ public actor MessagePersistenceActor {
                     existing.callSummaryJson = staleLiveCallSnapshot
                         ? existing.callSummaryJson
                         : (callSummaryJson ?? existing.callSummaryJson)
+                    // Coalesce like attachmentsJson/replyToJson above: a
+                    // refresh that omits `location` (older gateway payload,
+                    // partial socket event) must not erase a position already
+                    // persisted from an earlier, richer snapshot.
+                    existing.locationJson = locationJson ?? existing.locationJson
                     existing.effectFlags = effectFlags
                     // Write ONLY when something actually changed: either a
                     // mirrored field differs from the pre-mutation snapshot,
@@ -1912,7 +1928,8 @@ public actor MessagePersistenceActor {
                         cachedTimeString: timeString,
                         changeVersion: 0,
                         callSummaryJson: callSummaryJson,
-                        recipientCount: api.recipientCount ?? 0
+                        recipientCount: api.recipientCount ?? 0,
+                        locationJson: locationJson
                     )
                     try record.insert(db)
                     changedConvIds.insert(api.conversationId)

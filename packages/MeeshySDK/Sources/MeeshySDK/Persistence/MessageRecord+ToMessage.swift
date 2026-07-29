@@ -58,6 +58,11 @@ extension MessageRecord {
             decoder.decodeOrLog(CallSummaryMetadata.self, from: $0, field: "callSummaryJson", id: localId)
         }
 
+        let uiLocation = locationJson.flatMap { json -> SharedPlace? in
+            guard let data = json.data(using: .utf8) else { return nil }
+            return decoder.decodeOrLog(SharedPlace.self, from: data, field: "locationJson", id: localId)
+        }
+
         var effects = MessageEffects.none
         if effectFlags > 0 {
             effects.flags = MessageEffectFlags(rawValue: effectFlags)
@@ -136,7 +141,8 @@ extension MessageRecord {
             readCount: readCount,
             recipientCount: recipientCount,
             cachedTimeString: cachedTimeString,
-            callSummary: uiCallSummary
+            callSummary: uiCallSummary,
+            location: uiLocation
         )
     }
 }

@@ -39,6 +39,16 @@ final class MessageRecordTests: XCTestCase {
         XCTAssertEqual(fetched?.state, .sending)
     }
 
+    func test_messageRecord_roundTripsLocationThroughTheCache() throws {
+        let place = SharedPlace(latitude: 48.8566, longitude: 2.3522, name: "Tour Eiffel")
+        var record = MessageRecordFactory.make(localId: "m1")
+        record.locationJson = String(data: try JSONEncoder().encode(place), encoding: .utf8)
+
+        let message = record.toMessage(currentUserId: "user_me")
+        XCTAssertEqual(message.location?.name, "Tour Eiffel",
+                       "Une position affichee en ligne puis perdue au relaunch viole le principe Cache-First.")
+    }
+
     func test_grdb_allFieldsPersist() throws {
         let dbQueue = try DatabaseQueue()
         try MessageDatabaseMigrations.runAll(on: dbQueue)
