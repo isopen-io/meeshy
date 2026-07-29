@@ -194,6 +194,6 @@ struct LocationPinView: View {
 // MARK: - Annotation Item for iOS 16
 
 struct LocationAnnotationItem: Identifiable {
-    let id = UUID()
     let coordinate: CLLocationCoordinate2D
+    var id: String { "\(coordinate.latitude),\(coordinate.longitude)" }
 }

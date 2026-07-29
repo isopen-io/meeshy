@@ -100,4 +100,17 @@ final class AdaptivePagingMapTests: XCTestCase {
         _ = Text("x").adaptiveCarouselScrollTransition()
         _ = Text("x").adaptiveCarouselScrollTransition(enabled: false)
     }
+
+    // MARK: - PinItem stability
+
+    func test_pinItem_identityIsDerivedFromCoordinate_notRandom() {
+        let coord = CLLocationCoordinate2D(latitude: 48.8566, longitude: 2.3522)
+        let a = PinItem(coordinate: coord)
+        let b = PinItem(coordinate: coord)
+        XCTAssertEqual(a.id, b.id,
+                       "Deux pins sur le même point doivent partager leur identité : une identité aléatoire fait recréer l'annotation à chaque rendu.")
+
+        let elsewhere = PinItem(coordinate: CLLocationCoordinate2D(latitude: 45.75, longitude: 4.85))
+        XCTAssertNotEqual(a.id, elsewhere.id, "Deux points distincts doivent rester distinguables.")
+    }
 }

@@ -194,9 +194,15 @@ private struct LegacyInteractiveMap<PinContent: View>: View {
     }
 }
 
-private struct PinItem: Identifiable {
-    let id = UUID()
+/// Identité dérivée des coordonnées, PAS un `UUID()` neuf à chaque
+/// construction : `annotationItems` est reconstruit à chaque rendu, et sur
+/// iOS 16 `onChange(of: RegionKey(region))` tire en continu pendant une
+/// animation de région. Une identité aléatoire faisait donc détruire et
+/// recréer l'annotation à chaque frame. Même parade que le cache d'items de
+/// `LocationFullscreenView`.
+struct PinItem: Identifiable {
     let coordinate: CLLocationCoordinate2D
+    var id: String { "\(coordinate.latitude),\(coordinate.longitude)" }
 }
 
 /// `MKCoordinateRegion` is not `Equatable`; this key lets `onChange` observe
