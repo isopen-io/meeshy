@@ -250,5 +250,6 @@ struct CallBubbleView: View {
         }
         .pressable()
         .accessibilityLabel(String(localized: "call.bubble.hangup", defaultValue: "Raccrocher l'appel"))
+        .accessibilityHint(String(localized: "call.end.hint", defaultValue: "Termine l'appel en cours", bundle: .main))
     }
 }
