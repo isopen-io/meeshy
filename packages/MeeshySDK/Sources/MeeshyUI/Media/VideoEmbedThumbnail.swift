@@ -54,6 +54,6 @@ public struct VideoEmbedThumbnail: View {
             .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("Lire la vidéo \(providerLabel)")
+        .accessibilityLabel(String(localized: "media.embed.play_video", defaultValue: "Lire la vidéo \(providerLabel)", bundle: .module))
     }
 }

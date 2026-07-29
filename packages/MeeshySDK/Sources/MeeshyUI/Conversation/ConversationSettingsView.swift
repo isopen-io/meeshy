@@ -317,8 +317,8 @@ public struct ConversationSettingsView: View {
                         Text(String(localized: "conversation.settings.permissions.slowMode.off", defaultValue: "Desactive", bundle: .module)).tag(0)
                         Text("10s").tag(10)
                         Text("30s").tag(30)
-                        Text("1min").tag(60)
-                        Text("5min").tag(300)
+                        Text(String(localized: "conversation.settings.slowmode.1min", defaultValue: "1 min", bundle: .module)).tag(60)
+                        Text(String(localized: "conversation.settings.slowmode.5min", defaultValue: "5 min", bundle: .module)).tag(300)
                     }
                     .pickerStyle(.segmented)
                 }

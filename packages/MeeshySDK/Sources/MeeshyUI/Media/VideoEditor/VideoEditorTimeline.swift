@@ -85,7 +85,7 @@ struct VideoEditorTimeline: View {
             .gesture(scrubGesture(duration: duration))
             .simultaneousGesture(zoomGesture)
             .accessibilityElement()
-            .accessibilityLabel("Timeline")
+            .accessibilityLabel(String(localized: "videoEditor.timeline.a11y", defaultValue: "Timeline", bundle: .module))
             .accessibilityValue(formatTime(viewModel.playheadTime))
         }
         .frame(height: trackHeight + 44 + waveformHeight)

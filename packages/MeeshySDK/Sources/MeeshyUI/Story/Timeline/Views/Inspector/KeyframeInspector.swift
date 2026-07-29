@@ -235,7 +235,7 @@ public struct KeyframeInspector: View {
                 Text(kind.displayName).tag(kind)
             }
         } label: {
-            Text("Easing")
+            Text(String(localized: "story.timeline.inspector.easing.title", defaultValue: "Interpolation", bundle: .module))
         }
         .pickerStyle(.segmented)
         .disabled(exposed.count == 1)

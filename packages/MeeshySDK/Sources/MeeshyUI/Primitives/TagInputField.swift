@@ -66,7 +66,7 @@ public struct TagInputField: View {
                             .meeshyTapTarget()
                     }
                     .buttonStyle(.plain)
-                    .accessibilityLabel(Text("Retirer le tag \(tag)"))
+                    .accessibilityLabel(Text(String(localized: "tag.remove", defaultValue: "Retirer le tag \(tag)", bundle: .module)))
                 }
                 .padding(.leading, MeeshySpacing.sm)
                 .padding(.trailing, 0)
@@ -78,7 +78,7 @@ public struct TagInputField: View {
 
     private var inputField: some View {
         HStack(spacing: MeeshySpacing.xs) {
-            TextField("Ajouter un tag...", text: $editing)
+            TextField(String(localized: "tag.placeholder", defaultValue: "Ajouter un tag…", bundle: .module), text: $editing)
                 .focused($focused)
                 .textFieldStyle(.plain)
                 .font(MeeshyFont.relative(15, weight: .medium))
@@ -92,7 +92,7 @@ public struct TagInputField: View {
                     Image(systemName: "xmark.circle.fill").foregroundColor(.secondary)
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel("Effacer la saisie")
+                .accessibilityLabel(String(localized: "common.clear_input", defaultValue: "Effacer la saisie", bundle: .module))
             }
         }
         .padding(MeeshySpacing.md)
@@ -121,7 +121,7 @@ public struct TagInputField: View {
                     .padding(.horizontal, MeeshySpacing.md).padding(.vertical, MeeshySpacing.sm)
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel(Text("Ajouter le tag \(tag)"))
+                .accessibilityLabel(Text(String(localized: "tag.add", defaultValue: "Ajouter le tag \(tag)", bundle: .module)))
             }
 
             if canCreate {
@@ -131,7 +131,7 @@ public struct TagInputField: View {
                 } label: {
                     HStack(spacing: MeeshySpacing.xs) {
                         Image(systemName: "plus.circle.fill").foregroundColor(accentColor)
-                        Text("Créer \"\(trimmedQuery)\"")
+                        Text(String(localized: "common.create_quoted", defaultValue: "Créer « \(trimmedQuery) »", bundle: .module))
                             .font(MeeshyFont.relative(13, weight: .semibold))
                             .foregroundColor(accentColor)
                         Spacer()
@@ -139,7 +139,7 @@ public struct TagInputField: View {
                     .padding(.horizontal, MeeshySpacing.md).padding(.vertical, MeeshySpacing.sm)
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel(Text("Créer le tag \(trimmedQuery)"))
+                .accessibilityLabel(Text(String(localized: "tag.create", defaultValue: "Créer le tag \(trimmedQuery)", bundle: .module)))
             }
         }
         .background(RoundedRectangle(cornerRadius: MeeshyRadius.sm).fill(isDark ? Color.white.opacity(0.06) : Color.white))

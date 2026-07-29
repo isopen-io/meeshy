@@ -1262,7 +1262,9 @@ extension StoryComposerView {
         }
         .buttonStyle(.plain)
         .position(x: px, y: py)
-        .accessibilityLabel(muted ? "Activer le son de la vidéo" : "Couper le son de la vidéo")
+        .accessibilityLabel(muted
+            ? String(localized: "story.video.unmute", defaultValue: "Activer le son de la vidéo", bundle: .module)
+            : String(localized: "story.video.mute", defaultValue: "Couper le son de la vidéo", bundle: .module))
     }
 
     /// Bindings vers chaque vidéo foreground (`isBackground == false`, kind

@@ -138,7 +138,7 @@ public struct ConversationScrollControlsView: View {
                     HStack(spacing: 8) {
                         Image(systemName: "wifi.slash")
                             .font(.system(size: 13, weight: .bold))
-                        Text("Hors ligne")
+                        Text(String(localized: "conversation.offline", defaultValue: "Hors ligne", bundle: .module))
                             .font(.system(size: 13, weight: .semibold))
                     }
                     .foregroundColor(contentColor)
@@ -176,7 +176,7 @@ public struct ConversationScrollControlsView: View {
                 .scaleEffect(searchPulse ? 1.15 : 0.85)
                 .opacity(searchPulse ? 1.0 : 0.6)
 
-            Text("Recherche…")
+            Text(String(localized: "conversation.searching", defaultValue: "Recherche…", bundle: .module))
                 .font(.system(size: 12, weight: .semibold))
                 .lineLimit(1)
 
@@ -256,7 +256,7 @@ public struct ConversationScrollControlsView: View {
 
                 // Count headline — only when more than one message is pending.
                 if unreadCount > 1 {
-                    Text("\(unreadCount) messages")
+                    Text(String(localized: "conversation.unread_messages", defaultValue: "\(unreadCount) messages", bundle: .module))
                         .font(.system(size: 13, weight: .heavy))
                         .lineLimit(1)
                 }

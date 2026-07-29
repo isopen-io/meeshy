@@ -87,7 +87,9 @@ public struct VideoTransportControls: View {
                 .frame(width: 52, height: 52)
                 .adaptiveGlass(in: Circle(), interactive: true)
         }
-        .accessibilityLabel(seconds < 0 ? "Reculer de 10 secondes" : "Avancer de 10 secondes")
+        .accessibilityLabel(seconds < 0
+            ? String(localized: "media.video.seek.backward", defaultValue: "Reculer de 10 secondes", bundle: .module)
+            : String(localized: "media.video.seek.forward", defaultValue: "Avancer de 10 secondes", bundle: .module))
     }
 
     private var playPauseButton: some View {
@@ -103,7 +105,9 @@ public struct VideoTransportControls: View {
                 .frame(width: 64, height: 64)
                 .adaptiveGlassProminent(in: Circle(), tint: accent.opacity(0.85))
         }
-        .accessibilityLabel(manager.isPlaying ? "Pause" : "Play")
+        .accessibilityLabel(manager.isPlaying
+            ? String(localized: "media.video.pause", defaultValue: "Pause", bundle: .module)
+            : String(localized: "media.video.play", defaultValue: "Lire la vidéo", bundle: .module))
     }
 
     // MARK: - Barre unique bas : temps · scrubber · durée · mute · airplay · ⋯
@@ -149,19 +153,21 @@ public struct VideoTransportControls: View {
                 .frame(width: 32, height: 32)
                 .contentShape(Circle())
         }
-        .accessibilityLabel(manager.isMuted ? "Réactiver le son" : "Couper le son")
+        .accessibilityLabel(manager.isMuted
+            ? String(localized: "media.video.unmute", defaultValue: "Réactiver le son", bundle: .module)
+            : String(localized: "media.video.mute", defaultValue: "Couper le son", bundle: .module))
     }
 
     private var airplayButton: some View {
         AirPlayRoutePicker(tintColor: .white)
             .frame(width: 32, height: 32)
-            .accessibilityLabel("AirPlay")
+            .accessibilityLabel(String(localized: "media.video.airplay", defaultValue: "AirPlay", bundle: .module))
     }
 
     private var moreMenu: some View {
         Menu {
             if TransportLayout.menuItems(for: controls).contains(.speed) {
-                Picker("Vitesse", selection: Binding(
+                Picker(String(localized: "media.video.speed", defaultValue: "Vitesse", bundle: .module), selection: Binding(
                     get: { manager.playbackSpeed },
                     set: { manager.setSpeed($0) }
                 )) {
@@ -172,7 +178,7 @@ public struct VideoTransportControls: View {
             }
             if TransportLayout.menuItems(for: controls).contains(.loop) {
                 Toggle(isOn: $manager.shouldLoop) {
-                    Label("Boucle", systemImage: "repeat")
+                    Label(String(localized: "media.video.loop", defaultValue: "Boucle", bundle: .module), systemImage: "repeat")
                 }
             }
             if TransportLayout.menuItems(for: controls).contains(.pip) {
@@ -180,7 +186,9 @@ public struct VideoTransportControls: View {
                     if manager.isPipActive { manager.stopPip() } else { manager.startPip() }
                 } label: {
                     Label(
-                        manager.isPipActive ? "Quitter le Picture in Picture" : "Picture in Picture",
+                        manager.isPipActive
+                            ? String(localized: "media.video.pip.exit", defaultValue: "Quitter le Picture in Picture", bundle: .module)
+                            : String(localized: "media.video.pip.enter", defaultValue: "Picture in Picture", bundle: .module),
                         systemImage: manager.isPipActive ? "pip.exit" : "pip.enter"
                     )
                 }
@@ -193,7 +201,7 @@ public struct VideoTransportControls: View {
                 .frame(width: 32, height: 32)
                 .contentShape(Circle())
         }
-        .accessibilityLabel("Plus d'options")
+        .accessibilityLabel(String(localized: "media.video.more_options", defaultValue: "Plus d'options", bundle: .module))
     }
 
     // MARK: - Seek bar (highPriorityGesture conservé — fix pager historique)

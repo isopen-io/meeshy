@@ -95,7 +95,9 @@ struct StoryAudioCell: View {
         }
         .buttonStyle(.plain)
         .disabled(url == nil)
-        .accessibilityLabel(playback.isPlaying ? "Pause" : "Play")
+        .accessibilityLabel(playback.isPlaying
+            ? String(localized: "story.audio.pause", defaultValue: "Pause", bundle: .module)
+            : String(localized: "story.audio.play", defaultValue: "Lire", bundle: .module))
     }
 
     private var waveformView: some View {
@@ -136,7 +138,9 @@ struct StoryAudioCell: View {
                 .frame(width: 28, height: 28)
         }
         .buttonStyle(.plain)
-        .accessibilityLabel(isBackground ? "Fond" : "Premier plan")
+        .accessibilityLabel(isBackground
+            ? String(localized: "story.audio.layer.background", defaultValue: "Fond", bundle: .module)
+            : String(localized: "story.audio.layer.foreground", defaultValue: "Premier plan", bundle: .module))
     }
 
     private var volumeSlider: some View {
@@ -156,7 +160,7 @@ struct StoryAudioCell: View {
         )
         .tint(MeeshyColors.indigo400)
         .frame(width: 60)
-        .accessibilityLabel("Volume")
+        .accessibilityLabel(String(localized: "story.audio.volume", defaultValue: "Volume", bundle: .module))
         .accessibilityValue("\(Int(localVolume * 100))%")
     }
 
@@ -172,7 +176,7 @@ struct StoryAudioCell: View {
                 .frame(width: 22, height: 22)
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("Supprimer")
+        .accessibilityLabel(String(localized: "common.delete", defaultValue: "Supprimer", bundle: .module))
     }
 
     // MARK: - Actions

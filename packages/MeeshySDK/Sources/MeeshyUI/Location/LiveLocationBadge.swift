@@ -27,7 +27,7 @@ public struct LiveLocationBadge: View {
                 .foregroundColor(Color(hex: accentColor))
 
             VStack(alignment: .leading, spacing: 1) {
-                Text("\(username) partage sa position")
+                Text(String(localized: "location.live.sharing", defaultValue: "\(username) partage sa position", bundle: .module))
                     .font(.system(size: 11, weight: .semibold))
                     .foregroundColor(.primary)
                     .lineLimit(1)

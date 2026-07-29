@@ -112,7 +112,7 @@ public struct JoinLinkPreviewView: View {
                 Image(systemName: "person.fill")
                     .font(MeeshyFont.relative(11))
                     .foregroundColor(theme.textMuted)
-                Text("Invite par \(linkInfo.creator.name)")
+                Text(String(localized: "joinFlow.preview.invited_by", defaultValue: "Invité par \(linkInfo.creator.name)", bundle: .module))
                     .font(MeeshyFont.relative(13, weight: .medium))
                     .foregroundColor(theme.textSecondary)
             }
@@ -122,7 +122,7 @@ public struct JoinLinkPreviewView: View {
                     Image(systemName: "clock")
                         .font(MeeshyFont.relative(11))
                         .foregroundColor(MeeshyColors.warning)
-                    Text("Expire \(relativeDate(expiresAt))")
+                    Text(String(localized: "joinFlow.preview.expires", defaultValue: "Expire \(relativeDate(expiresAt))", bundle: .module))
                         .font(MeeshyFont.relative(12, weight: .medium))
                         .foregroundColor(MeeshyColors.warning)
                 }
@@ -218,7 +218,7 @@ public struct JoinLinkPreviewView: View {
                     Image(systemName: "globe")
                         .font(MeeshyFont.relative(11))
                         .foregroundColor(theme.textMuted)
-                    Text("Langues: \(linkInfo.allowedLanguages.joined(separator: ", "))")
+                    Text(String(localized: "joinFlow.preview.languages", defaultValue: "Langues : \(linkInfo.allowedLanguages.joined(separator: ", "))", bundle: .module))
                         .font(MeeshyFont.relative(12, weight: .medium))
                         .foregroundColor(theme.textMuted)
                 }
@@ -275,7 +275,7 @@ public struct JoinLinkPreviewView: View {
             }
 
             if let maxUses = linkInfo.maxUses {
-                Text("\(linkInfo.currentUses)/\(maxUses) utilisations")
+                Text(String(localized: "joinFlow.preview.uses", defaultValue: "\(linkInfo.currentUses)/\(maxUses) utilisations", bundle: .module))
                     .font(MeeshyFont.relative(11, weight: .medium))
                     .foregroundColor(theme.textMuted)
             }

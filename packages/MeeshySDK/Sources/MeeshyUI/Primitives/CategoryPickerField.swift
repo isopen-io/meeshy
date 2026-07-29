@@ -87,7 +87,7 @@ public struct CategoryPickerField: View {
                     .meeshyTapTarget()
             }
             .buttonStyle(.plain)
-            .accessibilityLabel(Text("Retirer la catégorie \(category.name)"))
+            .accessibilityLabel(Text(String(localized: "category.remove", defaultValue: "Retirer la catégorie \(category.name)", bundle: .module)))
         }
         .padding(.leading, MeeshySpacing.sm)
         .padding(.trailing, 0)
@@ -112,7 +112,7 @@ public struct CategoryPickerField: View {
                     Image(systemName: "xmark.circle.fill").foregroundColor(.secondary)
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel("Effacer la saisie")
+                .accessibilityLabel(String(localized: "common.clear_input", defaultValue: "Effacer la saisie", bundle: .module))
             }
         }
         .padding(MeeshySpacing.md)
@@ -149,7 +149,7 @@ public struct CategoryPickerField: View {
                     .padding(.horizontal, MeeshySpacing.md).padding(.vertical, MeeshySpacing.sm)
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel(Text("Sélectionner la catégorie \(cat.name)"))
+                .accessibilityLabel(Text(String(localized: "category.select", defaultValue: "Sélectionner la catégorie \(cat.name)", bundle: .module)))
             }
 
             if canCreate {
@@ -163,7 +163,7 @@ public struct CategoryPickerField: View {
                         } else {
                             Image(systemName: "plus.circle.fill").foregroundColor(accentColor)
                         }
-                        Text("Créer \"\(trimmedQuery)\"")
+                        Text(String(localized: "common.create_quoted", defaultValue: "Créer « \(trimmedQuery) »", bundle: .module))
                             .font(MeeshyFont.relative(13, weight: .semibold))
                             .foregroundColor(accentColor)
                         Spacer()
@@ -172,7 +172,7 @@ public struct CategoryPickerField: View {
                 }
                 .buttonStyle(.plain)
                 .disabled(isCreating)
-                .accessibilityLabel(Text("Créer la catégorie \(trimmedQuery)"))
+                .accessibilityLabel(Text(String(localized: "category.create", defaultValue: "Créer la catégorie \(trimmedQuery)", bundle: .module)))
             }
         }
         .background(RoundedRectangle(cornerRadius: MeeshyRadius.sm).fill(isDark ? Color.white.opacity(0.06) : Color.white))

@@ -211,7 +211,7 @@ public struct CommunitySettingsView: View {
 
             // Color picker
             VStack(alignment: .leading, spacing: 10) {
-                Text("Couleur")
+                Text(String(localized: "community.settings.color", defaultValue: "Couleur", bundle: .module))
                     .font(.system(size: 12, weight: .semibold, design: .rounded))
                     .foregroundColor(theme.textSecondary)
 

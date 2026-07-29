@@ -49,7 +49,7 @@ public struct TagInputView: View {
     }
 
     private var inputField: some View {
-        TextField("Ajouter un tag...", text: $inputText)
+        TextField(String(localized: "tag.placeholder", defaultValue: "Ajouter un tag…", bundle: .module), text: $inputText)
             .font(.system(size: 13))
             .foregroundColor(theme.textPrimary)
             .frame(minWidth: 100)

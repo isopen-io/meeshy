@@ -270,7 +270,7 @@ public struct CollapsibleHeader<LeadingContent: View, TitleContent: View, Traili
                 .frame(minWidth: 44, minHeight: 44)
                 .contentShape(Rectangle())
         }
-        .accessibilityLabel("Retour")
+        .accessibilityLabel(String(localized: "common.back", defaultValue: "Retour", bundle: .module))
     }
 }
 

@@ -47,8 +47,8 @@ public struct LocationMessageView: View {
         .onTapGesture {
             onTapFullscreen?()
         }
-        .accessibilityLabel("Location: \(placeName ?? "Shared location")")
-        .accessibilityHint("Tap to open full map")
+        .accessibilityLabel(String(localized: "location.a11y.label", defaultValue: "Position : \(placeName ?? String(localized: "location.shared", defaultValue: "Position partagée", bundle: .module))", bundle: .module))
+        .accessibilityHint(String(localized: "location.a11y.hint", defaultValue: "Touchez pour ouvrir la carte en plein écran", bundle: .module))
     }
 
     @ViewBuilder

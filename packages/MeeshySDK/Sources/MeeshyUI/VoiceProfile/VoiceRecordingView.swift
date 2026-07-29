@@ -232,7 +232,7 @@ public struct VoiceRecordingView<Recorder: AudioRecordingProviding>: View {
                 if recorder.isRecording {
                     Spacer()
 
-                    Text("min \(minimumDurationSeconds)s")
+                    Text(String(localized: "voiceProfile.recording.min_duration", defaultValue: "min \(minimumDurationSeconds) s", bundle: .module))
                         .font(.system(size: 11, weight: .medium))
                         .foregroundColor(.secondary)
                 }
@@ -266,7 +266,7 @@ public struct VoiceRecordingView<Recorder: AudioRecordingProviding>: View {
                         .font(.system(size: 16))
                         .foregroundColor(MeeshyColors.success)
 
-                    Text("Echantillon \(index + 1)")
+                    Text(String(localized: "voiceProfile.recording.sample", defaultValue: "Échantillon \(index + 1)", bundle: .module))
                         .font(.system(size: 13, weight: .medium))
                         .foregroundColor(.primary)
 

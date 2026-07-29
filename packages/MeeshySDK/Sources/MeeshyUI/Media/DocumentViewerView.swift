@@ -134,7 +134,7 @@ public struct DocumentViewerView: View {
 
                     if let pages = attachment.pageCount {
                         Circle().fill(isDark ? Color.white.opacity(0.2) : Color.black.opacity(0.15)).frame(width: 3, height: 3)
-                        Text("\(pages) pages")
+                        Text(String(localized: "media.document.pages", defaultValue: "\(pages) pages", bundle: .module))
                             .font(.system(size: 10, weight: .medium))
                             .foregroundColor(isDark ? .white.opacity(0.45) : .black.opacity(0.35))
                     }

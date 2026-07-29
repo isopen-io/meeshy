@@ -136,7 +136,7 @@ public struct RulerView: View, Equatable {
                 }
         )
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Ruler")
+        .accessibilityLabel(String(localized: "story.timeline.ruler.a11y", defaultValue: "Règle", bundle: .module))
     }
 
     /// `lineX` is the actual time anchor (kept aligned with clips below).
