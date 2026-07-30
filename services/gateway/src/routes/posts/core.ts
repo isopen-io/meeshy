@@ -11,7 +11,7 @@ import { resolveMentionedUsers, MentionService } from '../../services/MentionSer
 import { createPostRouteRateLimitConfig } from '../../middleware/rate-limiter';
 import { withMutationLog } from '../../utils/withMutationLog';
 import { SecuritySanitizer } from '../../utils/sanitize.js';
-import { hoistLocationDeep } from '../../services/location/sharedPlace';
+import { hoistLocationDeep, parseSharedPlace, type SharedPlace } from '../../services/location/sharedPlace';
 
 /**
  * Hisse `metadata.trackingLinks` ([{ url, token }]) en top-level sur le payload
@@ -260,9 +260,26 @@ export function registerCoreRoutes(
         return sendBadRequest(reply, 'Invalid request', { code: 'VALIDATION_ERROR' });
       }
 
-      const sanitizedUpdateData = parsed.data.content !== undefined
+      // Lieu à l'édition — tri-état : absent = inchangé, null = retrait,
+      // objet = remplacement validé par le MÊME parseSharedPlace que la
+      // création (jamais de passthrough du bloc client vers metadata).
+      let locationUpdate: SharedPlace | null | undefined;
+      if (parsed.data.location !== undefined) {
+        if (parsed.data.location === null) {
+          locationUpdate = null;
+        } else {
+          const place = parseSharedPlace(parsed.data.location);
+          if (!place) {
+            return sendBadRequest(reply, 'Invalid location', { code: 'INVALID_LOCATION' });
+          }
+          locationUpdate = place;
+        }
+      }
+
+      const baseUpdateData = parsed.data.content !== undefined
         ? { ...parsed.data, content: SecuritySanitizer.sanitizeText(parsed.data.content) }
         : parsed.data;
+      const sanitizedUpdateData = { ...baseUpdateData, location: locationUpdate };
       const post = await postService.updatePost(postId, authContext.registeredUser.id, sanitizedUpdateData);
       if (!post) {
         return sendNotFound(reply, 'Post not found', { code: 'POST_NOT_FOUND' });
@@ -317,10 +334,10 @@ export function registerCoreRoutes(
       if (socialEvents) {
         const updatedPostType = (post as any).type as string;
         // Second chemin d'enrichissement (le premier est la création
-        // ci-dessus) : un lieu partagé à la création n'est jamais réécrit par
-        // l'édition (`updatePost` ne touche pas `metadata`), mais doit rester
-        // visible sur CE broadcast aussi — sinon un post modifié après coup
-        // (visibilité, contenu…) republierait sans sa position.
+        // ci-dessus) : le lieu — posé à la création OU modifié/retiré par
+        // l'édition (tri-état `location`, merge metadata dans `updatePost`)
+        // — doit rester visible sur CE broadcast aussi, sinon un post modifié
+        // après coup (visibilité, contenu…) republierait sans sa position.
         const broadcastPost = hoistLocation(post as unknown as Record<string, unknown>) as unknown as Post;
         if (updatedPostType === 'STORY') {
           // Même prédicat que le reset d'engagement du service — les deux ne

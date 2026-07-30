@@ -86,6 +86,41 @@ final class PostDetailViewModelTests: XCTestCase {
         XCTAssertNil(sut.post)
     }
 
+    // MARK: - updatePost (position à l'édition)
+
+    func test_updatePost_forwardsLocationSet_andAppliesItOptimistically() async {
+        let (sut, mock) = makeSUT()
+        mock.getPostResult = .success(Self.makeAPIPost(id: "p1"))
+        await sut.loadPost("p1")
+        let place = SharedPlace(latitude: 48.8584, longitude: 2.2945, name: "Tour Eiffel")
+
+        await sut.updatePost(content: "Hello", location: .set(place))
+
+        XCTAssertEqual(mock.lastUpdateLocation, .set(place),
+                       "Le tri-état .set doit partir tel quel au service")
+    }
+
+    func test_updatePost_forwardsLocationRemove() async {
+        let (sut, mock) = makeSUT()
+        mock.getPostResult = .success(Self.makeAPIPost(id: "p1"))
+        await sut.loadPost("p1")
+
+        await sut.updatePost(content: "Hello", location: .remove)
+
+        XCTAssertEqual(mock.lastUpdateLocation, .remove)
+    }
+
+    func test_updatePost_withoutLocation_forwardsNil() async {
+        let (sut, mock) = makeSUT()
+        mock.getPostResult = .success(Self.makeAPIPost(id: "p1"))
+        await sut.loadPost("p1")
+
+        await sut.updatePost(content: "Hello")
+
+        XCTAssertNil(mock.lastUpdateLocation,
+                     "Sans modification, la position ne doit pas partir (inchangée)")
+    }
+
     // MARK: - registerDetailOpen
 
     func test_registerDetailOpen_recordsImpression_withDetailSource() async {

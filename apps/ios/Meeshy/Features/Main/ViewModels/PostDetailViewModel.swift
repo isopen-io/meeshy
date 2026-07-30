@@ -561,15 +561,20 @@ class PostDetailViewModel: ObservableObject {
     /// Updates the loaded post's body content. Optimistic UX mirrors
     /// FeedViewModel.updatePost: flip the in-memory post immediately, clear
     /// translations so the bubble re-renders, rollback on API failure.
-    func updatePost(content: String, language: String? = nil, type: String? = nil, removeMediaIds: [String]? = nil) async {
+    func updatePost(content: String, language: String? = nil, type: String? = nil, removeMediaIds: [String]? = nil, location: PostLocationUpdate? = nil) async {
         guard let snapshot = post else { return }
         var optimistic = snapshot
         optimistic.content = content
         optimistic.translatedContent = nil
         optimistic.translations = nil
+        switch location {
+        case .set(let place): optimistic.location = place
+        case .remove: optimistic.location = nil
+        case nil: break
+        }
         self.post = optimistic
         do {
-            let updated = try await postService.update(postId: snapshot.id, content: content, visibility: nil, visibilityUserIds: nil, moodEmoji: nil, originalLanguage: language, type: type, removeMediaIds: removeMediaIds)
+            let updated = try await postService.update(postId: snapshot.id, content: content, visibility: nil, visibilityUserIds: nil, moodEmoji: nil, originalLanguage: language, type: type, removeMediaIds: removeMediaIds, storyEffects: nil, mediaIds: nil, location: location)
             self.post = updated.toFeedPost(preferredLanguages: preferredLanguages)
             FeedbackToastManager.shared.showSuccess(String(localized: "Post modifie", defaultValue: "Post modifie"))
         } catch {

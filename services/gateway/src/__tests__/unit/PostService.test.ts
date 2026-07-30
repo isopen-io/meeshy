@@ -1465,6 +1465,61 @@ describe('PostService', () => {
       expect(prisma.postMedia.deleteMany).not.toHaveBeenCalled();
     });
 
+    it('writes metadata.location on edit and preserves the other metadata blocks', async () => {
+      // Le lieu à l'édition passe par le MÊME contrat qu'à la création :
+      // écrit dans metadata.location, sans clobber postReplyTo/trackingLinks.
+      prisma.post.findFirst.mockResolvedValue(makePost({
+        authorId: 'user-1', type: 'POST', media: [],
+        metadata: { postReplyTo: { id: 'other' } },
+      }));
+      prisma.post.update.mockResolvedValue(makePost());
+      const place = { latitude: 48.8584, longitude: 2.2945, name: 'Tour Eiffel', address: null, category: null };
+
+      await service.updatePost('post-1', 'user-1', { location: place });
+
+      expect(prisma.post.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            metadata: { postReplyTo: { id: 'other' }, location: place },
+          }),
+        }),
+      );
+    });
+
+    it('removes metadata.location when location is null, keeping the other blocks', async () => {
+      prisma.post.findFirst.mockResolvedValue(makePost({
+        authorId: 'user-1', type: 'POST', media: [],
+        metadata: {
+          postReplyTo: { id: 'other' },
+          location: { latitude: 1, longitude: 2, name: null, address: null, category: null },
+        },
+      }));
+      prisma.post.update.mockResolvedValue(makePost());
+
+      await service.updatePost('post-1', 'user-1', { location: null });
+
+      expect(prisma.post.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            metadata: { postReplyTo: { id: 'other' } },
+          }),
+        }),
+      );
+    });
+
+    it('leaves metadata untouched when location is absent from the edit', async () => {
+      prisma.post.findFirst.mockResolvedValue(makePost({
+        authorId: 'user-1', type: 'POST', media: [],
+        metadata: { location: { latitude: 1, longitude: 2, name: null, address: null, category: null } },
+      }));
+      prisma.post.update.mockResolvedValue(makePost());
+
+      await service.updatePost('post-1', 'user-1', { content: 'x' });
+
+      const updateArg = prisma.post.update.mock.calls[0][0];
+      expect(updateArg.data.metadata).toBeUndefined();
+    });
+
     it('rejects removing the last media of a REEL (422) and deletes nothing', async () => {
       prisma.post.findFirst.mockResolvedValue(makePost({ authorId: 'user-1', type: 'REEL', media: [{ id: 'm1' }] }));
 

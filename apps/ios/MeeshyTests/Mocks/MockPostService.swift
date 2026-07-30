@@ -109,6 +109,7 @@ final class MockPostService: PostServiceProviding, @unchecked Sendable {
     var lastUpdateRemoveMediaIds: [String]?
     var lastUpdateStoryEffects: StoryEffects?
     var lastUpdateMediaIds: [String]?
+    var lastUpdateLocation: PostLocationUpdate?
 
     var viewPostCallCount = 0
     var lastViewPostId: String?
@@ -320,7 +321,7 @@ final class MockPostService: PostServiceProviding, @unchecked Sendable {
 
     func unpinPost(postId: String) async throws {}
 
-    func update(postId: String, content: String?, visibility: String?, visibilityUserIds: [String]?, moodEmoji: String?, originalLanguage: String?, type: String?, removeMediaIds: [String]?, storyEffects: StoryEffects?, mediaIds: [String]?) async throws -> APIPost {
+    func update(postId: String, content: String?, visibility: String?, visibilityUserIds: [String]?, moodEmoji: String?, originalLanguage: String?, type: String?, removeMediaIds: [String]?, storyEffects: StoryEffects?, mediaIds: [String]?, location: PostLocationUpdate?) async throws -> APIPost {
         updateCallCount += 1
         lastUpdatePostId = postId
         lastUpdateContent = content
@@ -331,6 +332,7 @@ final class MockPostService: PostServiceProviding, @unchecked Sendable {
         lastUpdateRemoveMediaIds = removeMediaIds
         lastUpdateStoryEffects = storyEffects
         lastUpdateMediaIds = mediaIds
+        lastUpdateLocation = location
         return try createResult.get()
     }
 
@@ -498,6 +500,7 @@ final class MockPostService: PostServiceProviding, @unchecked Sendable {
         lastUpdateType = nil
         lastUpdateStoryEffects = nil
         lastUpdateMediaIds = nil
+        lastUpdateLocation = nil
         viewPostCallCount = 0
         lastViewPostId = nil
         getPostViewsCallCount = 0

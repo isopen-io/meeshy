@@ -1870,7 +1870,8 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
                 type: nil,
                 removeMediaIds: removeMediaIds.isEmpty ? nil : removeMediaIds,
                 storyEffects: updatedEffects,
-                mediaIds: newMediaIds.isEmpty ? nil : newMediaIds
+                mediaIds: newMediaIds.isEmpty ? nil : newMediaIds,
+                location: nil
             )
 
             // 6. Réconciliation locale : cover local-first re-rendue (la

@@ -855,9 +855,10 @@ struct PostDetailView: View {
                     originalType: post.type,
                     canBeReel: post.hasMedia,
                     media: post.media.map { EditablePostMedia($0) },
+                    originalLocation: post.location,
                     isRepost: post.repost != nil,
                     onSave: { draft in
-                        await viewModel.updatePost(content: draft.content, language: draft.language, type: draft.type, removeMediaIds: draft.removeMediaIds.isEmpty ? nil : draft.removeMediaIds)
+                        await viewModel.updatePost(content: draft.content, language: draft.language, type: draft.type, removeMediaIds: draft.removeMediaIds.isEmpty ? nil : draft.removeMediaIds, location: draft.location)
                     },
                     onDismiss: { isEditing = false }
                 )

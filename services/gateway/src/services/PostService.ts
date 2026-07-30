@@ -17,8 +17,9 @@ import { authorSelect, mediaSelect, mediaInclude, postInclude } from './posts/po
 import { remapStoryEffectsMediaIds } from './posts/storyEffectsMediaRemap';
 import { composeStoryContent, storyTextObjectText } from './posts/storyContentComposition';
 import { storyContentEditRequested } from './posts/storyEditPolicy';
+import { SoundCaptureService, type CaptureTrack } from './posts/SoundCaptureService';
 import { normalizeLanguageCode } from '@meeshy/shared/utils/language-normalize';
-import { parseSharedPlace } from './location/sharedPlace';
+import { parseSharedPlace, type SharedPlace } from './location/sharedPlace';
 
 const log = enhancedLogger.child({ module: 'PostService' });
 
@@ -68,6 +69,7 @@ function detectLanguage(text: string): string {
 export class PostService {
   private readonly postReactionService: PostReactionService;
   private readonly trackingLinkService: TrackingLinkService;
+  private readonly soundCaptureService: SoundCaptureService;
 
   constructor(
     private readonly prisma: PrismaClient,
@@ -89,9 +91,31 @@ export class PostService {
     // `/l/<token>`), partagée avec messages/stories/commentaires. Injectable
     // pour les tests ; défaut = instance câblée sur le même prisma.
     trackingLinkService?: TrackingLinkService,
+    // Bibliothèque de sons — capture des pistes audio originales à la
+    // publication d'un contenu public. Injectable pour les tests ; défaut =
+    // instance câblée sur le même prisma.
+    soundCaptureService?: SoundCaptureService,
   ) {
     this.postReactionService = postReactionService ?? new PostReactionService(prisma);
     this.trackingLinkService = trackingLinkService ?? new TrackingLinkService(prisma);
+    this.soundCaptureService = soundCaptureService ?? new SoundCaptureService(prisma);
+  }
+
+  /** Toutes les pistes audio, pas la première : une story en porte jusqu'à cinq. */
+  private extractCaptureTracks(storyEffects?: Record<string, unknown>): CaptureTrack[] {
+    const raw = storyEffects?.['audioPlayerObjects'];
+    if (!Array.isArray(raw)) return [];
+    return raw
+      .filter((o): o is Record<string, unknown> => typeof o === 'object' && o !== null)
+      .map((o) => ({
+        trackId: String(o['id'] ?? ''),
+        postMediaId: typeof o['postMediaId'] === 'string' && o['postMediaId'] ? o['postMediaId'] : undefined,
+        soundId: typeof o['soundId'] === 'string' && o['soundId'] ? o['soundId'] : undefined,
+        startMs: typeof o['startTime'] === 'number' ? Math.round(o['startTime'] * 1000) : undefined,
+        endMs: typeof o['duration'] === 'number' && typeof o['startTime'] === 'number'
+          ? Math.round((o['startTime'] + o['duration']) * 1000) : undefined,
+      }))
+      .filter((t) => t.trackId && (t.postMediaId || t.soundId));
   }
 
   async createPost(data: {
@@ -212,6 +236,18 @@ export class PostService {
         });
       }
     }
+
+    // Bibliothèque de sons : capture des pistes audio du blob storyEffects.
+    // HORS de la garde médias — une story peut réutiliser un média déjà attaché
+    // — et fire-and-forget : publier ne dépend jamais de la bibliothèque.
+    this.soundCaptureService.captureSounds({
+      postId: post.id,
+      authorId: post.authorId,
+      isPublic: data.visibility === PostVisibility.PUBLIC,
+      tracks: this.extractCaptureTracks(data.storyEffects),
+    }).catch((err: unknown) => {
+      log.error('captureSounds (createPost) a échoué', err instanceof Error ? err : new Error(String(err)), { postId: post.id });
+    });
 
     // Déclencher la traduction Prisme pour les stories avec texte (fire-and-forget)
     if (data.type === PostType.STORY && data.content) {
@@ -614,6 +650,9 @@ export class PostService {
     type?: PostType;
     removeMediaIds?: string[];
     mediaIds?: string[];
+    /// Tri-état : `undefined` = inchangé, `null` = retirer, objet = remplacer.
+    /// Déjà validé par `parseSharedPlace` côté route — jamais un bloc client brut.
+    location?: SharedPlace | null;
   }) {
     const post = await this.prisma.post.findFirst({
       where: { id: postId, deletedAt: NOT_DELETED },
@@ -627,7 +666,7 @@ export class PostService {
 
     // The edit-only fields are handled explicitly below; keep them out of the
     // blind spread so they are never written unconditionally.
-    const { type: requestedType, originalLanguage: requestedLanguage, removeMediaIds, mediaIds, ...rest } = data;
+    const { type: requestedType, originalLanguage: requestedLanguage, removeMediaIds, mediaIds, location: locationUpdate, ...rest } = data;
 
     const updateData: any = {
       ...rest,
@@ -637,6 +676,22 @@ export class PostService {
     };
     if (data.visibilityUserIds !== undefined) {
       updateData.visibilityUserIds = data.visibilityUserIds;
+    }
+
+    // Lieu à l'édition : merge NON destructif de metadata — les autres blocs
+    // à autorité serveur (postReplyTo, trackingLinks…) sont préservés.
+    // `null` retire le bloc, un objet le remplace, absent ne touche à rien.
+    if (locationUpdate !== undefined) {
+      const baseMetadata: Record<string, unknown> =
+        post.metadata && typeof post.metadata === 'object' && !Array.isArray(post.metadata)
+          ? { ...(post.metadata as Record<string, unknown>) }
+          : {};
+      if (locationUpdate === null) {
+        delete baseMetadata['location'];
+      } else {
+        baseMetadata['location'] = locationUpdate as unknown as Record<string, unknown>;
+      }
+      updateData.metadata = baseMetadata;
     }
 
     // Only remove media that actually belongs to this post — an id pointing at

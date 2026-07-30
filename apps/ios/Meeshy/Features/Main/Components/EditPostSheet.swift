@@ -14,6 +14,9 @@ struct EditPostDraft {
     let type: String?
     /// Ids of attached media the author chose to remove. Empty when none.
     let removeMediaIds: [String]
+    /// Non-nil UNIQUEMENT quand l'auteur a touché à la position : `.set` la
+    /// remplace, `.remove` la retire. `nil` = inchangée (clé absente du PATCH).
+    var location: PostLocationUpdate? = nil
 }
 
 /// Lightweight, presentation-only view of an attached media item for the edit
@@ -56,6 +59,9 @@ struct EditPostSheet: View {
     /// Attached media shown with a remove control. Removing here sends the ids
     /// in `removeMediaIds`; the gateway detaches them.
     var media: [EditablePostMedia] = []
+    /// Position actuellement attachée au post (`FeedPost.location`) — affichée
+    /// dans la sheet avec « retirer » / « changer » (picker).
+    var originalLocation: SharedPlace? = nil
     /// A repost mirrors its source; its type is not editable.
     var isRepost: Bool = false
     var maxLength: Int = 5000
@@ -71,6 +77,10 @@ struct EditPostSheet: View {
     @FocusState private var isFocused: Bool
     @State private var isSaving: Bool = false
     @State private var removedMediaIds: Set<String> = []
+    /// Modification de la position pendant l'édition — `nil` tant que
+    /// l'auteur n'y a pas touché (la clé ne part pas au PATCH).
+    @State private var locationEdit: PostLocationUpdate? = nil
+    @State private var showEditLocationPicker = false
 
     private var trimmedContent: String {
         draftContent.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -90,7 +100,18 @@ struct EditPostSheet: View {
     private var languageChanged: Bool { selectedLanguage != (originalLanguage ?? "") }
     private var typeChanged: Bool { showTypePicker && selectedType != normalizedOriginalType }
     private var mediaChanged: Bool { !removedMediaIds.isEmpty }
-    private var hasChanges: Bool { contentChanged || languageChanged || typeChanged || mediaChanged }
+    private var locationChanged: Bool { locationEdit != nil }
+    private var hasChanges: Bool { contentChanged || languageChanged || typeChanged || mediaChanged || locationChanged }
+
+    /// Position telle qu'elle sera après sauvegarde : l'édition locale prime,
+    /// sinon la position d'origine.
+    private var displayedLocation: SharedPlace? {
+        switch locationEdit {
+        case .set(let place): return place
+        case .remove: return nil
+        case nil: return originalLocation
+        }
+    }
 
     private var remainingMediaCount: Int { media.count - removedMediaIds.count }
 
@@ -133,6 +154,8 @@ struct EditPostSheet: View {
                         .frame(maxHeight: .infinity)
 
                     mediaSection
+
+                    locationSection
 
                     metadataSection
 
@@ -248,6 +271,56 @@ struct EditPostSheet: View {
             }
         }
         .padding(.horizontal, 16)
+    }
+
+    // MARK: - Position
+
+    /// Sticker de la position + « changer »/« retirer », ou bouton d'ajout
+    /// quand le post n'en porte pas. Le tap du sticker ouvre le picker (en
+    /// édition, « ouvrir la carte » serait un détour — on est là pour changer).
+    @ViewBuilder
+    private var locationSection: some View {
+        HStack(spacing: 10) {
+            if let place = displayedLocation {
+                FeedPostLocationSticker(place: place) {
+                    showEditLocationPicker = true
+                }
+                Button {
+                    HapticFeedback.light()
+                    // Retirer une position ajoutée pendant CETTE édition =
+                    // simple retour à l'état d'origine (clé absente du PATCH).
+                    locationEdit = originalLocation == nil ? nil : .remove
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.body)
+                        .foregroundColor(theme.textMuted)
+                }
+                .disabled(isSaving)
+                .accessibilityLabel(String(localized: "feed.post.edit.location.remove", defaultValue: "Retirer la position", bundle: .main))
+            } else {
+                Button {
+                    HapticFeedback.light()
+                    showEditLocationPicker = true
+                } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "mappin.and.ellipse")
+                            .font(.footnote.weight(.semibold))
+                        Text(String(localized: "feed.post.edit.location.add", defaultValue: "Ajouter une position", bundle: .main))
+                            .font(.footnote.weight(.semibold))
+                    }
+                    .foregroundColor(MeeshyColors.indigo400)
+                }
+                .disabled(isSaving)
+            }
+            Spacer()
+        }
+        .padding(.horizontal, 16)
+        .sheet(isPresented: $showEditLocationPicker) {
+            LocationPickerView(accentColor: MeeshyColors.brandPrimaryHex) { place in
+                locationEdit = .set(place)
+                showEditLocationPicker = false
+            }
+        }
     }
 
     // MARK: - Attached media
@@ -369,7 +442,8 @@ struct EditPostSheet: View {
             content: trimmedContent,
             language: languageChanged ? selectedLanguage : nil,
             type: typeChanged ? selectedType : nil,
-            removeMediaIds: Array(removedMediaIds)
+            removeMediaIds: Array(removedMediaIds),
+            location: locationEdit
         )
         await onSave(draft)
         isSaving = false

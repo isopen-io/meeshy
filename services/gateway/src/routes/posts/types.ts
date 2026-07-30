@@ -285,6 +285,10 @@ export const UpdatePostSchema = z.object({
   // to attach during the edit — same contract and bound as CreatePostSchema.
   // On a STORY this counts as a content edit (engagement reset).
   mediaIds: z.array(z.string()).max(10).optional(),
+  // Lieu partagé — tri-état : clé ABSENTE = inchangé, `null` = retrait,
+  // objet = remplacement (validé par parseSharedPlace côté route, comme à
+  // la création). Écrit/effacé dans metadata.location par le service.
+  location: z.unknown().optional(),
 }).refine((data) => {
   if ((data.visibility === 'EXCEPT' || data.visibility === 'ONLY') && (!data.visibilityUserIds || data.visibilityUserIds.length === 0)) {
     return false;

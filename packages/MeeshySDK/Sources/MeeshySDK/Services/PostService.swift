@@ -36,7 +36,7 @@ public protocol PostServiceProviding: Sendable {
     /// (mocks) restent valides via le défaut ci-dessous, qui ignore simplement
     /// `location` s'il n'est pas surchargé.
     func create(content: String?, type: String, visibility: String, moodEmoji: String?, mediaIds: [String]?, audioUrl: String?, audioDuration: Int?, originalLanguage: String?, mobileTranscription: MobileTranscriptionPayload?, repostOfId: String?, location: SharedPlace?) async throws -> APIPost
-    func update(postId: String, content: String?, visibility: String?, visibilityUserIds: [String]?, moodEmoji: String?, originalLanguage: String?, type: String?, removeMediaIds: [String]?, storyEffects: StoryEffects?, mediaIds: [String]?) async throws -> APIPost
+    func update(postId: String, content: String?, visibility: String?, visibilityUserIds: [String]?, moodEmoji: String?, originalLanguage: String?, type: String?, removeMediaIds: [String]?, storyEffects: StoryEffects?, mediaIds: [String]?, location: PostLocationUpdate?) async throws -> APIPost
     func delete(postId: String) async throws
     func like(postId: String) async throws
     func unlike(postId: String) async throws
@@ -87,7 +87,7 @@ public extension PostServiceProviding {
     func update(postId: String, content: String?, visibility: String?, visibilityUserIds: [String]?, moodEmoji: String?, originalLanguage: String?, type: String?, removeMediaIds: [String]?) async throws -> APIPost {
         try await update(postId: postId, content: content, visibility: visibility, visibilityUserIds: visibilityUserIds,
                          moodEmoji: moodEmoji, originalLanguage: originalLanguage, type: type,
-                         removeMediaIds: removeMediaIds, storyEffects: nil, mediaIds: nil)
+                         removeMediaIds: removeMediaIds, storyEffects: nil, mediaIds: nil, location: nil)
     }
 
     /// Défaut : un conformeur qui n'implémente que la signature sans `location`
@@ -351,11 +351,11 @@ public final class PostService: PostServiceProviding, @unchecked Sendable {
 
     // MARK: - Update Post
 
-    public func update(postId: String, content: String? = nil, visibility: String? = nil, visibilityUserIds: [String]? = nil, moodEmoji: String? = nil, originalLanguage: String? = nil, type: String? = nil, removeMediaIds: [String]? = nil, storyEffects: StoryEffects? = nil, mediaIds: [String]? = nil) async throws -> APIPost {
+    public func update(postId: String, content: String? = nil, visibility: String? = nil, visibilityUserIds: [String]? = nil, moodEmoji: String? = nil, originalLanguage: String? = nil, type: String? = nil, removeMediaIds: [String]? = nil, storyEffects: StoryEffects? = nil, mediaIds: [String]? = nil, location: PostLocationUpdate? = nil) async throws -> APIPost {
         // `visibilityUserIds` était déclaré dans `UpdatePostRequest` mais JAMAIS
         // renseigné ici : il partait toujours à `nil`, et le `refine` Zod du
         // gateway rejetait donc systématiquement EXCEPT/ONLY.
-        let body = UpdatePostRequest(content: content, visibility: visibility, visibilityUserIds: visibilityUserIds, moodEmoji: moodEmoji, originalLanguage: originalLanguage, type: type, removeMediaIds: removeMediaIds, storyEffects: storyEffects, mediaIds: mediaIds)
+        let body = UpdatePostRequest(content: content, visibility: visibility, visibilityUserIds: visibilityUserIds, moodEmoji: moodEmoji, originalLanguage: originalLanguage, type: type, removeMediaIds: removeMediaIds, storyEffects: storyEffects, mediaIds: mediaIds, location: location)
         let response: APIResponse<APIPost> = try await api.put(endpoint: "/posts/\(postId)", body: body)
         return response.data
     }
