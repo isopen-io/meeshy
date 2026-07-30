@@ -262,6 +262,57 @@ public struct AudioForegroundChip: View {
     }
 }
 
+/// Mini-waveform de badge : barres statiques dessinées depuis les samples
+/// réels de la piste (~80 extraits à la composition), sinusoïde animée en
+/// repli quand la piste n'en porte pas (payloads antérieurs). Atome pur —
+/// paramètres opaques, aucune décision produit.
+@MainActor
+public struct StoryWaveformBadgeView: View {
+    public let samples: [Float]
+    public let paused: Bool
+
+    public init(samples: [Float], paused: Bool = false) {
+        self.samples = samples
+        self.paused = paused
+    }
+
+    public var body: some View {
+        if samples.isEmpty {
+            AudioForegroundSineWave(paused: paused)
+        } else {
+            Canvas { ctx, size in
+                let bars = Self.downsample(samples, to: 24)
+                let barWidth = size.width / CGFloat(bars.count)
+                let centerY = size.height / 2
+                for (index, sample) in bars.enumerated() {
+                    let x = CGFloat(index) * barWidth + barWidth / 2
+                    let height = max(2, CGFloat(sample) * size.height * 0.9)
+                    ctx.fill(
+                        Path(roundedRect: CGRect(x: x - barWidth * 0.3,
+                                                 y: centerY - height / 2,
+                                                 width: barWidth * 0.6,
+                                                 height: height),
+                             cornerRadius: barWidth * 0.3),
+                        with: .color(.white.opacity(0.9))
+                    )
+                }
+            }
+        }
+    }
+
+    /// Downsample par MAX de bucket — le max préserve les pics visuels que la
+    /// moyenne écraserait. Pur + testable.
+    nonisolated public static func downsample(_ samples: [Float], to buckets: Int) -> [Float] {
+        guard buckets > 0, samples.count > buckets else { return samples }
+        let bucketSize = Double(samples.count) / Double(buckets)
+        return (0..<buckets).map { bucket in
+            let start = Int(Double(bucket) * bucketSize)
+            let end = min(samples.count, Int(Double(bucket + 1) * bucketSize))
+            return samples[start..<max(start + 1, end)].max() ?? 0
+        }
+    }
+}
+
 /// Onde sinusoïdale animée — TimelineView pour ne pas re-render le parent à
 /// chaque frame (sinon toutes les vues observant le ViewModel scintillent).
 @MainActor

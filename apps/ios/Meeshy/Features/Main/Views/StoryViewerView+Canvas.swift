@@ -1508,6 +1508,18 @@ struct StoryCardView: View {
                 }
                 .frame(maxWidth: .infinity, alignment: .center)
                 .allowsHitTesting(false)
+            } else if let recordedBackground = currentStory?.storyEffects?.audioPlayerObjects?
+                .first(where: { $0.isBackground == true && $0.volume > 0 }) {
+                // Fond audio enregistré/importé (éditeur timeline) : pas d'entrée
+                // bibliothèque à titrer — le badge signale la piste par sa
+                // waveform réelle (note musicale + barres), gelée pendant la pause.
+                VStack {
+                    Spacer()
+                    recordedBackgroundAudioBadge(audio: recordedBackground)
+                        .padding(.bottom, topInset + 165)
+                }
+                .frame(maxWidth: .infinity, alignment: .center)
+                .allowsHitTesting(false)
             }
 
             // === Translation indicator (Prisme Linguistique — discret) ===
@@ -2157,6 +2169,25 @@ struct StoryCardView: View {
                 .fill(.ultraThinMaterial)
                 .overlay(Capsule().fill(Color.black.opacity(0.35)))
         )
+    }
+
+    private func recordedBackgroundAudioBadge(audio: StoryAudioPlayerObject) -> some View {
+        HStack(spacing: 6) {
+            Image(systemName: "music.note")
+                .font(MeeshyFont.relative(11, weight: .semibold))
+            StoryWaveformBadgeView(samples: audio.waveformSamples, paused: isLongPressPaused)
+                .frame(width: 64, height: 14)
+        }
+        .foregroundColor(.white)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 6)
+        .background(
+            Capsule()
+                .fill(.ultraThinMaterial)
+                .overlay(Capsule().fill(Color.black.opacity(0.35)))
+        )
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(String(localized: "story.viewer.background-audio", defaultValue: "Audio de fond", bundle: .main))
     }
 
     // Le badge de langue courante vit désormais dans le rail (accolé à « Abc »),

@@ -315,8 +315,14 @@ struct iPadRootView: View {
             feedIsVisible: $feedIsVisible,
             onSelect: { conversation in openConversation(conversation) },
             onStoryViewRequest: { userId, _ in
-                selectedStoryUserIdFromConv = userId
-                showStoryViewerFromConv = true
+                // Chemin coordinator (`fullScreenCover(item:)`) : la requête
+                // porte son uid, contrairement au couple @State legacy
+                // (`selectedStoryUserIdFromConv` + `isPresented`) dont la
+                // course de commit présentait le viewer avec un uid vide —
+                // l'écran « Story introuvable » du tray de la colonne conv.
+                storyViewerCoordinator.present(
+                    StoryViewerRequest(id: userId, startAtFirstUnviewed: true)
+                )
             },
             onNewConversation: { showNewConversation = true },
             iPadNotificationCount: notificationManager.unreadCount,

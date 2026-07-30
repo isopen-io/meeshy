@@ -99,6 +99,15 @@ public enum StoryAudioAvailability {
                                                 backgroundAudio: StoryBackgroundAudioEntry?) -> Bool {
         if backgroundAudio != nil { return true }
         guard let effects else { return false }
-        return effects.backgroundAudioId != nil && (effects.backgroundAudioVolume ?? 1) > 0
+        if effects.backgroundAudioId != nil && (effects.backgroundAudioVolume ?? 1) > 0 {
+            return true
+        }
+        // Piste enregistrée/importée posée en FOND via l'éditeur timeline
+        // (`isBackground`) : un fond audio au même titre qu'une piste de
+        // bibliothèque. Les pistes foreground gardent leur chip dédié dans le
+        // reader et ne déclenchent pas cet indicateur.
+        return effects.audioPlayerObjects?.contains {
+            $0.isBackground == true && $0.volume > 0
+        } ?? false
     }
 }
