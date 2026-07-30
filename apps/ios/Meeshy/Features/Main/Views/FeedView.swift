@@ -1469,6 +1469,15 @@ struct FeedView: View {
                 RoundedRectangle(cornerRadius: 24)
                     .stroke(theme.border(tint: MeeshyColors.brandPrimaryHex, intensity: 0.3), lineWidth: 1)
             )
+            // Cible de dépôt de la recette commune (Lot 1). Cette surface POST
+            // n'instancie pas `UniversalComposerBar` : le point de câblage est
+            // donc le modificateur partagé, appliqué à toute la carte du
+            // composer (champ, tiroir de pièces jointes, barre d'outils) —
+            // même affordance et même résolution que la barre.
+            .modifier(ComposerDropTargetModifier(
+                accentColor: MeeshyColors.brandPrimaryHex,
+                onIngest: { handleFeedComposerIngest($0) }
+            ))
             .padding(.horizontal, 16)
             .padding(.vertical, 80)
             .shadow(color: MeeshyColors.indigo300.opacity(0.2), radius: 30, y: 20)

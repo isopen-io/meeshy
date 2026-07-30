@@ -80,29 +80,101 @@ extension FeedView {
                 defer { url.stopAccessingSecurityScopedResource() }
 
                 let fileName = url.lastPathComponent
-                let fileSize = feedGetFileSize(url)
                 let mimeType = feedMimeTypeForURL(url)
 
                 let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent("file_\(UUID().uuidString)_\(fileName)")
                 try? FileManager.default.copyItem(at: url, to: tempURL)
 
-                let attachmentId = UUID().uuidString
-                let attachment = MessageAttachment(
-                    id: attachmentId,
-                    fileName: fileName,
-                    originalName: fileName,
-                    mimeType: mimeType,
-                    fileSize: fileSize,
-                    fileUrl: tempURL.absoluteString,
-                    thumbnailColor: "45B7D1"
-                )
-                pendingMediaFiles[attachmentId] = tempURL
-                pendingAttachments.append(attachment)
+                appendFeedFileAttachment(tempURL: tempURL, fileName: fileName, mimeType: mimeType)
             }
             HapticFeedback.light()
         case .failure:
             break
         }
+    }
+
+    /// Cœur commun de l'importateur de documents et de l'ingestion
+    /// dépôt/collage : enregistre un fichier DÉJÀ présent dans notre
+    /// conteneur comme pièce jointe en attente (`pendingAttachments` +
+    /// `pendingMediaFiles`), exactement comme `handleFeedFileImport` le
+    /// faisait inline — factorisé pour que le dépôt n'introduise aucune
+    /// variante de ce chemin.
+    func appendFeedFileAttachment(tempURL: URL, fileName: String, mimeType: String) {
+        let attachmentId = UUID().uuidString
+        let attachment = MessageAttachment(
+            id: attachmentId,
+            fileName: fileName,
+            originalName: fileName,
+            mimeType: mimeType,
+            fileSize: feedGetFileSize(tempURL),
+            fileUrl: tempURL.absoluteString,
+            thumbnailColor: "45B7D1"
+        )
+        pendingMediaFiles[attachmentId] = tempURL
+        pendingAttachments.append(attachment)
+    }
+
+    // MARK: - Ingestion dépôt / collage (recette commune des quatre hôtes)
+
+    /// Rappel `onIngest` de la surface POST : chaque `.file` pointe un
+    /// fichier déjà copié dans notre conteneur (la surface en devient
+    /// propriétaire), chaque `.text` est destiné au champ de saisie. Le
+    /// routage MIME est partagé (`ComposerIngestRouter.route(mime:)`) et
+    /// chaque branche réutilise EXACTEMENT le pipeline existant de cette
+    /// surface — toute nouvelle voie contournerait l'amorçage du cache de
+    /// vignettes, la bulle optimiste et le magasin de brouillons durable.
+    func handleFeedComposerIngest(_ ingests: [ComposerIngest]) {
+        guard !ingests.isEmpty else { return }
+        var texts: [String] = []
+        for ingest in ingests {
+            switch ingest {
+            case .text(let value):
+                texts.append(value)
+            case .file(let url, let name, let mime):
+                switch ComposerIngestRouter.route(mime: mime) {
+                case .image:
+                    guard let image = UIImage(contentsOfFile: url.path) else {
+                        // Pas de tuile fantôme : l'image illisible est nommée
+                        // dans un toast et son fichier temporaire retiré.
+                        ComposerIngestFeedback.showFailure(names: [name])
+                        try? FileManager.default.removeItem(at: url)
+                        continue
+                    }
+                    let prep = AttachmentPreparationService.shared.prepareImage(
+                        image,
+                        context: .feedPost,
+                        accentColor: MeeshyColors.brandPrimaryHex
+                    )
+                    trackFeedPreparation(prep)
+                    // L'UIImage est chargée : le fichier source déposé ne sert
+                    // plus, et cette surface en est propriétaire.
+                    try? FileManager.default.removeItem(at: url)
+                case .video:
+                    // `deleteSourceAfterCompression: true` : la préparation
+                    // consomme le fichier déposé, dont nous sommes propriétaires.
+                    let prep = AttachmentPreparationService.shared.prepareVideo(
+                        sourceURL: url,
+                        deleteSourceAfterCompression: true,
+                        context: .feedPost
+                    )
+                    trackFeedPreparation(prep)
+                case .audio, .file:
+                    // Même chemin fichier que l'importateur de documents de
+                    // cette surface (tuile audio / document).
+                    appendFeedFileAttachment(tempURL: url, fileName: name, mimeType: mime)
+                }
+            }
+        }
+        if !texts.isEmpty {
+            // Plusieurs `.text` d'un même dépôt : concaténés par un saut de
+            // ligne, dans l'ordre, en UNE SEULE insertion. Le champ est un
+            // `TextEditor` SwiftUI (cible iOS 16) qui n'expose pas la position
+            // du curseur (`TextSelection` = iOS 18) : l'insertion se fait à la
+            // fin — le cas « champ sans focus » de la recette commune.
+            let joined = texts.joined(separator: "\n")
+            composerText = composerText.isEmpty ? joined : composerText + "\n" + joined
+        }
+        HapticFeedback.light()
     }
 
     // MARK: - Location Selection
@@ -909,6 +981,13 @@ struct FeedComposerSheet: View {
                 .background(theme.backgroundSecondary)
             }
         }
+        // Cible de dépôt de la recette commune (Lot 1) : la feuille EST le
+        // composer, la bande couvre donc tout son contenu. Même modificateur
+        // que `UniversalComposerBar.body` — affordance et résolution partagées.
+        .modifier(ComposerDropTargetModifier(
+            accentColor: MeeshyColors.brandPrimaryHex,
+            onIngest: { handleSheetComposerIngest($0) }
+        ))
         .sheet(isPresented: $showAudioComposer) {
             AudioPostComposerView { audioURL, mimeType, transcription in
                 showAudioComposer = false
@@ -1278,14 +1357,67 @@ struct FeedComposerSheet: View {
             guard url.startAccessingSecurityScopedResource() else { continue }
             defer { url.stopAccessingSecurityScopedResource() }
             let fileName = url.lastPathComponent
-            let fileSize = (try? FileManager.default.attributesOfItem(atPath: url.path)[.size] as? Int) ?? 0
             let mimeType = mimeTypeForURL(url)
             let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent("file_\(UUID().uuidString)_\(fileName)")
             try? FileManager.default.copyItem(at: url, to: tempURL)
-            let attachmentId = UUID().uuidString
-            let attachment = MessageAttachment(id: attachmentId, fileName: fileName, originalName: fileName, mimeType: mimeType, fileSize: fileSize, fileUrl: tempURL.absoluteString, thumbnailColor: "45B7D1")
-            pendingMediaFiles[attachmentId] = tempURL
-            pendingAttachments.append(attachment)
+            appendSheetFileAttachment(tempURL: tempURL, fileName: fileName, mimeType: mimeType)
+        }
+        HapticFeedback.light()
+    }
+
+    /// Cœur commun de l'importateur de documents et de l'ingestion dépôt :
+    /// enregistre un fichier DÉJÀ dans notre conteneur comme pièce jointe en
+    /// attente — même factorisation que `FeedView.appendFeedFileAttachment`.
+    private func appendSheetFileAttachment(tempURL: URL, fileName: String, mimeType: String) {
+        let fileSize = (try? FileManager.default.attributesOfItem(atPath: tempURL.path)[.size] as? Int) ?? 0
+        let attachmentId = UUID().uuidString
+        let attachment = MessageAttachment(id: attachmentId, fileName: fileName, originalName: fileName, mimeType: mimeType, fileSize: fileSize, fileUrl: tempURL.absoluteString, thumbnailColor: "45B7D1")
+        pendingMediaFiles[attachmentId] = tempURL
+        pendingAttachments.append(attachment)
+    }
+
+    /// Recette commune des quatre hôtes, déclinée pour la feuille plein
+    /// écran : mêmes pipelines que ses pickers (`trackSheetPreparation`,
+    /// `handleFileImport`), même règle « une seule insertion » pour le texte.
+    private func handleSheetComposerIngest(_ ingests: [ComposerIngest]) {
+        guard !ingests.isEmpty else { return }
+        var texts: [String] = []
+        for ingest in ingests {
+            switch ingest {
+            case .text(let value):
+                texts.append(value)
+            case .file(let url, let name, let mime):
+                switch ComposerIngestRouter.route(mime: mime) {
+                case .image:
+                    guard let image = UIImage(contentsOfFile: url.path) else {
+                        // Pas de tuile fantôme : l'image illisible est nommée
+                        // dans un toast et son fichier temporaire retiré.
+                        ComposerIngestFeedback.showFailure(names: [name])
+                        try? FileManager.default.removeItem(at: url)
+                        continue
+                    }
+                    let prep = AttachmentPreparationService.shared.prepareImage(
+                        image, context: .feedPost, accentColor: MeeshyColors.brandPrimaryHex
+                    )
+                    trackSheetPreparation(prep)
+                    try? FileManager.default.removeItem(at: url)
+                case .video:
+                    let prep = AttachmentPreparationService.shared.prepareVideo(
+                        sourceURL: url,
+                        deleteSourceAfterCompression: true,
+                        context: .feedPost
+                    )
+                    trackSheetPreparation(prep)
+                case .audio, .file:
+                    appendSheetFileAttachment(tempURL: url, fileName: name, mimeType: mime)
+                }
+            }
+        }
+        if !texts.isEmpty {
+            // UNE seule insertion, `\n` entre éléments — le `TextEditor`
+            // SwiftUI (cible iOS 16) n'expose pas le curseur : fin de champ.
+            let joined = texts.joined(separator: "\n")
+            composerText = composerText.isEmpty ? joined : composerText + "\n" + joined
         }
         HapticFeedback.light()
     }
