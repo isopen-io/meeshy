@@ -42,6 +42,9 @@ describe('PostService — câblage de la capture', () => {
 
   it('test_repostPost_isNotWired_inLotA', () => {
     const start = code.indexOf('async repostPost');
+    // Sans cette borne, renommer la méthode ferait passer le test À VIDE :
+    // indexOf rend -1, slice(-1) rend le dernier caractère du fichier.
+    expect(start).toBeGreaterThan(-1);
     expect(code.slice(start)).not.toContain('this.soundCaptureService.captureSounds');
   });
 
@@ -54,6 +57,38 @@ describe('PostService — câblage de la capture', () => {
   it('test_createPost_repostPath_doesNotFeedTheLibrary', () => {
     const capture = code.indexOf('this.soundCaptureService.captureSounds');
     const call = code.slice(capture, capture + 400);
-    expect(call).toContain('!data.repostOfId');
+    // `&&` explicite : avec un `||`, le texte cherché serait toujours là et la
+    // porte grande ouverte — la garde passerait sur son propre contraire.
+    expect(call).toContain('PostVisibility.PUBLIC && !data.repostOfId');
+  });
+
+  /**
+   * L'édition est la TROISIÈME porte du piège d'attribution : `repostPost`
+   * duplique les médias de la source SOUS le reposteur, donc un PUT sur le
+   * repost passe le scope `postId` de la capture.
+   */
+  it('test_updatePost_repostPath_doesNotFeedTheLibrary', () => {
+    const start = code.indexOf('async updatePost');
+    const end = code.indexOf('async deletePost');
+    expect(start).toBeGreaterThan(-1);
+    expect(end).toBeGreaterThan(start);
+    expect(code.slice(start, end)).toContain('PostVisibility.PUBLIC && !updated.repostOfId');
+  });
+
+  /**
+   * `UpdatePostSchema` a tous ses champs optionnels : un PUT partiel (audience,
+   * légende) arrive sans `storyEffects`, et le blob en base n'est alors PAS
+   * réécrit. Sans cette garde, la capture recevrait `tracks: []` et
+   * `dropRemovedUsages` effacerait tous les usages d'une story qui joue
+   * pourtant toujours son audio, en faussant `usageCount`.
+   */
+  it('test_updatePost_withoutStoryEffects_doesNotTouchUsages', () => {
+    const start = code.indexOf('async updatePost');
+    const end = code.indexOf('async deletePost');
+    const body = code.slice(start, end);
+    const guard = body.indexOf('if (data.storyEffects !== undefined)');
+    const call = body.indexOf('this.soundCaptureService.captureSounds');
+    expect(guard).toBeGreaterThan(-1);
+    expect(call).toBeGreaterThan(guard);
   });
 });

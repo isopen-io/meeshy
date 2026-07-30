@@ -843,14 +843,28 @@ export class PostService {
 
     // Édition : même contrat qu'à la création. Le service retire aussi les
     // usages des pistes disparues, sinon elles surcompteraient pour toujours.
-    this.soundCaptureService.captureSounds({
-      postId: updated.id,
-      authorId: updated.authorId,
-      isPublic: updated.visibility === PostVisibility.PUBLIC,
-      tracks: this.extractCaptureTracks(data.storyEffects),
-    }).catch((err: unknown) => {
-      log.error('captureSounds (updatePost) a échoué', err instanceof Error ? err : new Error(String(err)), { postId: updated.id });
-    });
+    //
+    // GARDE 1 — `storyEffects` ABSENT ≠ « plus aucune piste ». `UpdatePostSchema`
+    // a tous ses champs optionnels : un changement d'audience ou une retouche de
+    // légende arrive ici sans `storyEffects`, et le blob en base n'est alors pas
+    // réécrit. Appeler la capture avec `tracks: []` ferait supprimer TOUS les
+    // usages d'une story qui joue toujours son audio, en faussant `usageCount`.
+    // Une édition qui n'exprime rien sur les pistes ne doit rien décider.
+    //
+    // GARDE 2 — `!updated.repostOfId` : troisième porte du piège d'attribution.
+    // `repostPost` snapshotte les médias de la source SOUS le reposteur ; un PUT
+    // sur le repost passerait donc le scope `postId` et créerait un `Sound`
+    // crédité au reposteur avec l'audio d'autrui.
+    if (data.storyEffects !== undefined) {
+      this.soundCaptureService.captureSounds({
+        postId: updated.id,
+        authorId: updated.authorId,
+        isPublic: updated.visibility === PostVisibility.PUBLIC && !updated.repostOfId,
+        tracks: this.extractCaptureTracks(data.storyEffects),
+      }).catch((err: unknown) => {
+        log.error('captureSounds (updatePost) a échoué', err instanceof Error ? err : new Error(String(err)), { postId: updated.id });
+      });
+    }
 
     return updated;
   }
