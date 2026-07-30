@@ -107,13 +107,15 @@ struct StatusBubbleOverlayModifier: ViewModifier {
 
     /// Un SEUL overlay doit être rendu par présentation.
     ///
-    /// `.withStatusBubble()` est appliqué sur ~15 surfaces, dont certaines
-    /// IMBRIQUÉES l'une dans l'autre : `StoryTrayView` vit à l'intérieur de
-    /// `ConversationListView`, et les deux le posaient. Le commentaire
-    /// historique supposait que « seule l'instance au sommet est visible » —
-    /// faux pour des hôtes imbriqués : chacun mesure SON conteneur et dessine
-    /// dans SON repère, donc les deux bulles apparaissent, décalées. L'écran de
-    /// la liste en montrait deux.
+    /// Ce mécanisme ne déduplique qu'entre ANCÊTRE et DESCENDANT (l'environment
+    /// ne se propage qu'aux enfants) — il est AVEUGLE aux hôtes FRÈRES. D'où la
+    /// règle de placement (gardée par `StatusBubbleHostPlacementTests`) : un
+    /// hôte non modal UNIQUE par fenêtre (`RootView`, `iPadRootView`) ; seules
+    /// les présentations modales (sheet / fullScreenCover) posent le leur.
+    /// Poser le modificateur sur des vues sœurs (une carte de feed, une colonne
+    /// iPad, un écran poussé) rendait une bulle PAR hôte, chacune convertissant
+    /// l'ancre globale dans son propre repère (bulles dupliquées et flottantes,
+    /// bug 2026-07-30).
     ///
     /// La frontière est la PRÉSENTATION, pas la hiérarchie de vues : une
     /// `.sheet` a son propre `PresentationHostingController` et l'overlay du
