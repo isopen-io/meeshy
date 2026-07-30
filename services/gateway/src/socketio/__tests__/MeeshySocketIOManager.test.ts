@@ -189,7 +189,6 @@ jest.mock('../handlers/SocialEventsHandler', () => ({
 
 jest.mock('../handlers/LocationHandler', () => ({
   LocationHandler: jest.fn().mockImplementation(() => ({
-    handleLocationShare: jest.fn().mockResolvedValue(undefined),
     handleLiveLocationStart: jest.fn().mockResolvedValue(undefined),
     handleLiveLocationUpdate: jest.fn().mockResolvedValue(undefined),
     handleLiveLocationStop: jest.fn().mockResolvedValue(undefined),
@@ -930,7 +929,6 @@ describe('MeeshySocketIOManager', () => {
       expect(registeredEvents).toContain(CLIENT_EVENTS.HEARTBEAT);
       expect(registeredEvents).toContain(CLIENT_EVENTS.REACTION_ADD);
       expect(registeredEvents).toContain(CLIENT_EVENTS.REACTION_REMOVE);
-      expect(registeredEvents).toContain(CLIENT_EVENTS.LOCATION_SHARE);
       expect(registeredEvents).toContain('disconnect');
     });
 
@@ -3231,13 +3229,6 @@ describe('MeeshySocketIOManager', () => {
   });
 
   describe('LOCATION event handlers', () => {
-    it('LOCATION_SHARE invokes locationHandler.handleLocationShare', async () => {
-      const socket = makeSocket('sock-ls1');
-      triggerConnection(socket);
-      const cb = jest.fn();
-      await socket._handlers[CLIENT_EVENTS.LOCATION_SHARE]({ lat: 1, lon: 2 }, cb);
-    });
-
     it('LOCATION_LIVE_START invokes locationHandler.handleLiveLocationStart', async () => {
       const socket = makeSocket('sock-lls1');
       triggerConnection(socket);

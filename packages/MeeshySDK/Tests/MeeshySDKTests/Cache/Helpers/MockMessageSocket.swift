@@ -32,7 +32,6 @@ final class MockMessageSocket: MessageSocketProviding, @unchecked Sendable {
     let userPreferencesConversationUpdated = PassthroughSubject<UserPreferencesConversationUpdatedSocketEvent, Never>()
     let conversationStatsReceived = PassthroughSubject<ConversationStatsEvent, Never>()
     let messageConsumed = PassthroughSubject<MessageConsumedEvent, Never>()
-    let locationShared = PassthroughSubject<LocationSharedEvent, Never>()
     let liveLocationStarted = PassthroughSubject<LiveLocationStartedEvent, Never>()
     let liveLocationUpdated = PassthroughSubject<LiveLocationUpdatedEvent, Never>()
     let liveLocationStopped = PassthroughSubject<LiveLocationStoppedEvent, Never>()
@@ -89,7 +88,6 @@ final class MockMessageSocket: MessageSocketProviding, @unchecked Sendable {
     func emitTypingStart(conversationId: String) {}
     func emitTypingStop(conversationId: String) {}
     func requestTranslation(messageId: String, targetLanguage: String) {}
-    func emitLocationShare(payload: LocationSharePayload) {}
     func emitLiveLocationStart(payload: LiveLocationStartPayload) {}
     func emitLiveLocationUpdate(payload: LiveLocationUpdatePayload) {}
     func emitLiveLocationStop(conversationId: String) {}

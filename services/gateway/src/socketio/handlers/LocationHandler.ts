@@ -1,6 +1,6 @@
 /**
  * Location Handler
- * Handles static and live location sharing events.
+ * Handles live location sharing events.
  *
  * Real-time only — no Prisma persistence (no Location model in schema).
  * Validates participant membership, then broadcasts to conversation room.
@@ -12,8 +12,6 @@ import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
 import type {
   SocketIOResponse,
-  LocationShareData,
-  LocationSharedEventData,
   LocationLiveStartData,
   LocationLiveStartedEventData,
   LocationLiveUpdateData,
@@ -49,58 +47,6 @@ export class LocationHandler {
     this.connectedUsers = deps.connectedUsers;
     this.socketToUser = deps.socketToUser;
     this.normalizeConversationId = deps.normalizeConversationId;
-  }
-
-  async handleLocationShare(
-    socket: Socket,
-    data: LocationShareData,
-    callback?: (response: SocketIOResponse<LocationSharedEventData>) => void
-  ): Promise<void> {
-    try {
-      const context = this._getUserContext(socket);
-      if (!context) {
-        this._sendError(callback, 'User not authenticated');
-        return;
-      }
-
-      const allowed = await this.rateLimiter.checkLimit(context.userId, SOCKET_RATE_LIMITS.LOCATION_SHARE);
-      if (!allowed) {
-        this._sendError(callback, 'Rate limit exceeded');
-        return;
-      }
-
-      if (!this._validateCoordinates(data.latitude, data.longitude)) {
-        this._sendError(callback, 'Invalid coordinates');
-        return;
-      }
-
-      const normalizedId = await this.normalizeConversationId(data.conversationId);
-
-      const participantId = await this._resolveParticipantId(context, normalizedId);
-      if (!participantId) {
-        this._sendError(callback, 'Not a participant in this conversation');
-        return;
-      }
-
-      const eventData: LocationSharedEventData = {
-        messageId: this._generateTempId(),
-        conversationId: normalizedId,
-        userId: context.userId,
-        latitude: data.latitude,
-        longitude: data.longitude,
-        altitude: data.altitude,
-        accuracy: data.accuracy,
-        placeName: data.placeName,
-        address: data.address,
-        timestamp: new Date(),
-      };
-
-      callback?.({ success: true, data: eventData });
-      this.io.to(ROOMS.conversation(normalizedId)).emit(SERVER_EVENTS.LOCATION_SHARED, eventData);
-    } catch (error: unknown) {
-      logger.error('Error handling location:share', error);
-      this._sendError(callback, error instanceof Error ? error.message : 'Failed to share location');
-    }
   }
 
   async handleLiveLocationStart(
@@ -273,9 +219,5 @@ export class LocationHandler {
 
   private _sendError<T>(callback: ((response: SocketIOResponse<T>) => void) | undefined, message: string): void {
     callback?.({ success: false, error: message });
-  }
-
-  private _generateTempId(): string {
-    return `loc_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
   }
 }

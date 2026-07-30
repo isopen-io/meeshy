@@ -89,60 +89,6 @@ final class LocationModelsTests: XCTestCase {
         XCTAssertNil(message.location)
     }
 
-    // MARK: - LocationSharePayload
-
-    func testLocationSharePayloadEncoding() throws {
-        let payload = LocationSharePayload(
-            conversationId: "conv1",
-            latitude: 48.8566,
-            longitude: 2.3522,
-            altitude: 35.0,
-            accuracy: 10.0,
-            placeName: "Eiffel Tower",
-            address: "Paris, France"
-        )
-
-        let data = try JSONEncoder().encode(payload)
-        let dict = try JSONSerialization.jsonObject(with: data) as! [String: Any]
-
-        XCTAssertEqual(dict["conversationId"] as? String, "conv1")
-        XCTAssertEqual(dict["latitude"] as? Double, 48.8566)
-        XCTAssertEqual(dict["longitude"] as? Double, 2.3522)
-        XCTAssertEqual(dict["placeName"] as? String, "Eiffel Tower")
-        XCTAssertEqual(dict["address"] as? String, "Paris, France")
-    }
-
-    // MARK: - LocationSharedEvent
-
-    func testLocationSharedEventDecoding() throws {
-        let json = """
-        {
-            "messageId": "msg1",
-            "conversationId": "conv1",
-            "userId": "user1",
-            "latitude": 48.8566,
-            "longitude": 2.3522,
-            "altitude": 35.0,
-            "accuracy": 10.0,
-            "placeName": "Tour Eiffel",
-            "address": "Paris"
-        }
-        """.data(using: .utf8)!
-
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
-        let event = try decoder.decode(LocationSharedEvent.self, from: json)
-
-        XCTAssertEqual(event.messageId, "msg1")
-        XCTAssertEqual(event.conversationId, "conv1")
-        XCTAssertEqual(event.userId, "user1")
-        XCTAssertEqual(event.latitude, 48.8566)
-        XCTAssertEqual(event.longitude, 2.3522)
-        XCTAssertEqual(event.altitude, 35.0)
-        XCTAssertEqual(event.placeName, "Tour Eiffel")
-        XCTAssertNil(event.timestamp)
-    }
-
     // MARK: - LiveLocationDuration
 
     func testLiveLocationDurationAllCases() {

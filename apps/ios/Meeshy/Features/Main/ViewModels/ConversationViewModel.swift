@@ -4415,14 +4415,6 @@ class ConversationViewModel: ObservableObject {
 
     // MARK: - Location Sharing
 
-    func shareLocation(latitude: Double, longitude: Double, placeName: String? = nil, address: String? = nil) {
-        LocationService.shared.shareLocation(
-            conversationId: conversationId,
-            latitude: latitude, longitude: longitude,
-            placeName: placeName, address: address
-        )
-    }
-
     func startLiveLocation(latitude: Double, longitude: Double, durationMinutes: Int) {
         LocationService.shared.startLiveLocation(
             conversationId: conversationId,

@@ -19,40 +19,6 @@ public struct MeeshyLocationCoordinate: Codable, Equatable {
     }
 }
 
-// MARK: - Static Location Share
-
-public struct LocationSharePayload: Encodable {
-    public let conversationId: String
-    public let latitude: Double
-    public let longitude: Double
-    public let altitude: Double?
-    public let accuracy: Double?
-    public let placeName: String?
-    public let address: String?
-
-    public init(conversationId: String, latitude: Double, longitude: Double,
-                altitude: Double? = nil, accuracy: Double? = nil,
-                placeName: String? = nil, address: String? = nil) {
-        self.conversationId = conversationId
-        self.latitude = latitude; self.longitude = longitude
-        self.altitude = altitude; self.accuracy = accuracy
-        self.placeName = placeName; self.address = address
-    }
-}
-
-public struct LocationSharedEvent: Decodable, Sendable {
-    public let messageId: String
-    public let conversationId: String
-    public let userId: String
-    public let latitude: Double
-    public let longitude: Double
-    public let altitude: Double?
-    public let accuracy: Double?
-    public let placeName: String?
-    public let address: String?
-    public let timestamp: Date?
-}
-
 // MARK: - Live Location Sharing
 
 public enum LiveLocationDuration: Int, CaseIterable, Identifiable {

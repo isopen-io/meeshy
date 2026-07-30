@@ -1116,7 +1116,6 @@ public protocol MessageSocketProviding: Sendable {
     var userPreferencesConversationUpdated: PassthroughSubject<UserPreferencesConversationUpdatedSocketEvent, Never> { get }
     var conversationStatsReceived: PassthroughSubject<ConversationStatsEvent, Never> { get }
     var messageConsumed: PassthroughSubject<MessageConsumedEvent, Never> { get }
-    var locationShared: PassthroughSubject<LocationSharedEvent, Never> { get }
     var liveLocationStarted: PassthroughSubject<LiveLocationStartedEvent, Never> { get }
     var liveLocationUpdated: PassthroughSubject<LiveLocationUpdatedEvent, Never> { get }
     var liveLocationStopped: PassthroughSubject<LiveLocationStoppedEvent, Never> { get }
@@ -1177,7 +1176,6 @@ public protocol MessageSocketProviding: Sendable {
     func emitTypingStart(conversationId: String)
     func emitTypingStop(conversationId: String)
     func requestTranslation(messageId: String, targetLanguage: String)
-    func emitLocationShare(payload: LocationSharePayload)
     func emitLiveLocationStart(payload: LiveLocationStartPayload)
     func emitLiveLocationUpdate(payload: LiveLocationUpdatePayload)
     func emitLiveLocationStop(conversationId: String)
@@ -1343,7 +1341,6 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
     public let messageConsumed = PassthroughSubject<MessageConsumedEvent, Never>()
 
     // Combine publishers — location sharing
-    public let locationShared = PassthroughSubject<LocationSharedEvent, Never>()
     public let liveLocationStarted = PassthroughSubject<LiveLocationStartedEvent, Never>()
     public let liveLocationUpdated = PassthroughSubject<LiveLocationUpdatedEvent, Never>()
     public let liveLocationStopped = PassthroughSubject<LiveLocationStoppedEvent, Never>()
@@ -1879,10 +1876,6 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
         } catch {
             Logger.socket.error("\(event, privacy: .public) not emitted — payload encode failed: \(error.localizedDescription, privacy: .public)")
         }
-    }
-
-    public func emitLocationShare(payload: LocationSharePayload) {
-        emitEncodable(payload, event: "location:share")
     }
 
     public func emitLiveLocationStart(payload: LiveLocationStartPayload) {
@@ -2952,13 +2945,6 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
         }
 
         // --- Location events ---
-
-        socket.on("location:shared") { [weak self] data, _ in
-            guard let self else { return }
-            self.decode(LocationSharedEvent.self, from: data) { [weak self] event in
-                self?.locationShared.send(event)
-            }
-        }
 
         socket.on("location:live-started") { [weak self] data, _ in
             guard let self else { return }

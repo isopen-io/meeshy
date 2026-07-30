@@ -320,7 +320,6 @@ export const SERVER_EVENTS = {
   PENDING_MESSAGES_DELIVERED: 'message:pending-delivered',
 
   // --- Location sharing ---
-  LOCATION_SHARED: 'location:shared',
   LOCATION_LIVE_STARTED: 'location:live-started',
   LOCATION_LIVE_UPDATED: 'location:live-updated',
   LOCATION_LIVE_STOPPED: 'location:live-stopped',
@@ -463,7 +462,6 @@ export const CLIENT_EVENTS = {
   CALL_REQUEST_ICE_SERVERS: 'call:request-ice-servers',
 
   // --- Location sharing ---
-  LOCATION_SHARE: 'location:share',
   LOCATION_LIVE_START: 'location:live-start',
   LOCATION_LIVE_UPDATE: 'location:live-update',
   LOCATION_LIVE_STOP: 'location:live-stop',
@@ -993,29 +991,6 @@ export interface TranscriptionFailedEventData {
 
 // ===== LOCATION SHARING EVENTS =====
 
-export interface LocationShareData {
-  readonly conversationId: string;
-  readonly latitude: number;
-  readonly longitude: number;
-  readonly altitude?: number;
-  readonly accuracy?: number;
-  readonly placeName?: string;
-  readonly address?: string;
-}
-
-export interface LocationSharedEventData {
-  readonly messageId: string;
-  readonly conversationId: string;
-  readonly userId: string;
-  readonly latitude: number;
-  readonly longitude: number;
-  readonly altitude?: number;
-  readonly accuracy?: number;
-  readonly placeName?: string;
-  readonly address?: string;
-  readonly timestamp: Date;
-}
-
 export interface LocationLiveStartData {
   readonly conversationId: string;
   readonly latitude: number;
@@ -1387,7 +1362,6 @@ export interface ServerToClientEvents {
   [SERVER_EVENTS.MESSAGE_UNPINNED]: (data: MessageUnpinnedEventData) => void;
 
   // Location sharing
-  [SERVER_EVENTS.LOCATION_SHARED]: (data: LocationSharedEventData) => void;
   [SERVER_EVENTS.LOCATION_LIVE_STARTED]: (data: LocationLiveStartedEventData) => void;
   [SERVER_EVENTS.LOCATION_LIVE_UPDATED]: (data: LocationLiveUpdatedEventData) => void;
   [SERVER_EVENTS.LOCATION_LIVE_STOPPED]: (data: LocationLiveStoppedEventData) => void;
@@ -1658,7 +1632,6 @@ export interface ClientToServerEvents {
   [CLIENT_EVENTS.PRESENCE_APP_STATE]: (data: { foreground?: boolean }) => void;
 
   // Location sharing
-  [CLIENT_EVENTS.LOCATION_SHARE]: (data: LocationShareData, callback?: (response: SocketIOResponse<LocationSharedEventData>) => void) => void;
   [CLIENT_EVENTS.LOCATION_LIVE_START]: (data: LocationLiveStartData, callback?: (response: SocketIOResponse<LocationLiveStartedEventData>) => void) => void;
   [CLIENT_EVENTS.LOCATION_LIVE_UPDATE]: (data: LocationLiveUpdateData) => void;
   [CLIENT_EVENTS.LOCATION_LIVE_STOP]: (data: LocationLiveStopData) => void;

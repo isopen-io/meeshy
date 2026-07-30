@@ -1085,10 +1085,6 @@ export class MeeshySocketIOManager {
         try { await this.postReactionHandler.handleRequestSync(socket, data, callback); } catch (error) { logger.error('[POST_REACTION_SYNC] Error:', error); callback?.({ success: false, error: 'Internal server error' }); }
       });
 
-      socket.on(CLIENT_EVENTS.LOCATION_SHARE, async (data, callback) => {
-        try { await this.locationHandler.handleLocationShare(socket, data, callback); } catch (error) { logger.error('[LOCATION_SHARE] Error:', error); callback?.({ success: false, error: 'Internal server error' }); }
-      });
-
       socket.on(CLIENT_EVENTS.LOCATION_LIVE_START, async (data, callback) => {
         try { await this.locationHandler.handleLiveLocationStart(socket, data, callback); } catch (error) { logger.error('[LOCATION_LIVE_START] Error:', error); callback?.({ success: false, error: 'Internal server error' }); }
       });

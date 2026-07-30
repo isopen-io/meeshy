@@ -4,11 +4,9 @@ import Combine
 // MARK: - Protocol
 
 public protocol LocationServiceProviding: Sendable {
-    var locationShared: PassthroughSubject<LocationSharedEvent, Never> { get }
     var liveLocationStarted: PassthroughSubject<LiveLocationStartedEvent, Never> { get }
     var liveLocationUpdated: PassthroughSubject<LiveLocationUpdatedEvent, Never> { get }
     var liveLocationStopped: PassthroughSubject<LiveLocationStoppedEvent, Never> { get }
-    func shareLocation(conversationId: String, latitude: Double, longitude: Double, altitude: Double?, accuracy: Double?, placeName: String?, address: String?)
     func startLiveLocation(conversationId: String, latitude: Double, longitude: Double, durationMinutes: Int)
     func updateLiveLocation(conversationId: String, latitude: Double, longitude: Double, altitude: Double?, accuracy: Double?, speed: Double?, heading: Double?)
     func stopLiveLocation(conversationId: String)
@@ -21,24 +19,9 @@ public final class LocationService: LocationServiceProviding, @unchecked Sendabl
 
     // MARK: - Combine Publishers
 
-    public let locationShared = PassthroughSubject<LocationSharedEvent, Never>()
     public let liveLocationStarted = PassthroughSubject<LiveLocationStartedEvent, Never>()
     public let liveLocationUpdated = PassthroughSubject<LiveLocationUpdatedEvent, Never>()
     public let liveLocationStopped = PassthroughSubject<LiveLocationStoppedEvent, Never>()
-
-    // MARK: - Share Static Location
-
-    public func shareLocation(conversationId: String, latitude: Double, longitude: Double,
-                               altitude: Double? = nil, accuracy: Double? = nil,
-                               placeName: String? = nil, address: String? = nil) {
-        let payload = LocationSharePayload(
-            conversationId: conversationId,
-            latitude: latitude, longitude: longitude,
-            altitude: altitude, accuracy: accuracy,
-            placeName: placeName, address: address
-        )
-        socketManager.emitLocationShare(payload: payload)
-    }
 
     // MARK: - Start Live Location
 
