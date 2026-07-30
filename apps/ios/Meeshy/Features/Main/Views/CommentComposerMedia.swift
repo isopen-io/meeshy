@@ -290,13 +290,17 @@ enum CommentComposerIngestion {
     }
 
     /// Premier répondant courant s'il est un champ texte (le champ du composer
-    /// quand il a le focus). Parcours des fenêtres de toutes les scènes.
+    /// quand il a le focus).
+    ///
+    /// Fenêtres de la scène ACTIVE, résolue par `DeviceLayout` : parcourir
+    /// `connectedScenes` ici rendrait un ensemble non ordonné, dont la
+    /// première scène est régulièrement une scène d'arrière-plan sous Split
+    /// View / Slide Over / Stage Manager — le texte déposé atterrirait alors
+    /// dans un champ que l'utilisateur ne regarde pas.
     private static func firstResponderTextInput() -> (UIView & UITextInput)? {
-        for scene in UIApplication.shared.connectedScenes {
-            guard let windowScene = scene as? UIWindowScene else { continue }
-            for window in windowScene.windows {
-                if let found = findFirstResponderTextInput(in: window) { return found }
-            }
+        guard let scene = DeviceLayout.activeWindowScene else { return nil }
+        for window in scene.windows {
+            if let found = findFirstResponderTextInput(in: window) { return found }
         }
         return nil
     }

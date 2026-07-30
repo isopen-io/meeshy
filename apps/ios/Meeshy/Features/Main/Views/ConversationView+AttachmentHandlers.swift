@@ -721,12 +721,16 @@ extension ConversationView {
     }
 
     /// Premier répondant de la scène active s'il accepte la saisie clavier.
+    ///
+    /// La scène passe par `DeviceLayout.activeWindowScene`, jamais par un
+    /// parcours de `connectedScenes` fait ici : cet ensemble n'est pas
+    /// ordonné, et sous Split View / Slide Over / Stage Manager la scène qui
+    /// en sort est régulièrement une scène d'ARRIÈRE-PLAN. Insérer le texte
+    /// déposé dans le champ d'une autre fenêtre serait invisible à
+    /// l'utilisateur.
     private static func currentKeyInputResponder() -> (UIView & UIKeyInput)? {
-        let windows = UIApplication.shared.connectedScenes
-            .compactMap { $0 as? UIWindowScene }
-            .filter { $0.activationState == .foregroundActive }
-            .flatMap { $0.windows }
-        for window in windows {
+        guard let scene = DeviceLayout.activeWindowScene else { return nil }
+        for window in scene.windows {
             if let responder = firstResponderKeyInput(in: window) { return responder }
         }
         return nil

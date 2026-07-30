@@ -127,7 +127,12 @@ nonisolated enum ComposerDropResolver {
             guard let type = UTType(identifier) else { return false }
             return isFileLike(type)
         }) {
-            if let copied = await copyFileRepresentation(of: provider, typeIdentifier: fileTypeIdentifier) {
+            let originalName = await originalFileName(of: provider)
+            if let copied = await copyFileRepresentation(
+                of: provider,
+                typeIdentifier: fileTypeIdentifier,
+                originalName: originalName
+            ) {
                 return .file(
                     url: copied.url,
                     name: copied.name,
@@ -152,8 +157,17 @@ nonisolated enum ComposerDropResolver {
         // 3. Texte, puis URL. Une URL web devient du texte ; une URL de
         // fichier sans représentation fichier est une lecture morte — on ne
         // fabrique pas de repli, on refuse.
+        //
+        // Le filtre `looksLikeFileURL` n'est pas une précaution de style :
+        // un provider construit sur un DOSSIER, ou sur un fichier de 0 octet,
+        // sait aussi se charger en `NSString` et rend alors son chemin
+        // `file://…`. Sans ce filtre, un dossier refusé plus haut ressortait
+        // en `.text("file:///…/Dossier/")` — l'utilisateur voyait un chemin
+        // brut atterrir dans son champ de saisie au lieu d'un toast d'échec.
         if provider.canLoadObject(ofClass: NSString.self),
-           let text = await loadString(from: provider), !text.isEmpty {
+           let text = await loadString(from: provider),
+           !text.isEmpty,
+           !looksLikeFileURL(text) {
             return .text(text)
         }
         if provider.canLoadObject(ofClass: NSURL.self),
@@ -170,6 +184,15 @@ nonisolated enum ComposerDropResolver {
 
     // MARK: - Détail des étapes
 
+    /// `true` quand la chaîne chargée n'est en réalité que le CHEMIN d'un
+    /// fichier que les étapes 1 et 2 n'ont pas su lire. Rendre ce chemin comme
+    /// texte serait un repli fabriqué qui masque une lecture morte.
+    private static func looksLikeFileURL(_ text: String) -> Bool {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed.lowercased().hasPrefix("file://") else { return false }
+        return URL(string: trimmed)?.isFileURL == true
+    }
+
     /// Un type « fichier » : des octets concrets (`.data`), mais ni du texte
     /// ni une URL — ceux-là passent par l'étape 3 et finissent dans le champ.
     private static func isFileLike(_ type: UTType) -> Bool {
@@ -183,7 +206,8 @@ nonisolated enum ComposerDropResolver {
     /// le fichier source du système disparaît — c'est la seule fenêtre.
     private static func copyFileRepresentation(
         of provider: NSItemProvider,
-        typeIdentifier: String
+        typeIdentifier: String,
+        originalName: String?
     ) async -> (url: URL, name: String)? {
         let suggestedName = provider.suggestedName
         return await withCheckedContinuation { continuation in
@@ -207,7 +231,11 @@ nonisolated enum ComposerDropResolver {
                         continuation.resume(returning: nil)
                         return
                     }
-                    let name = resolvedName(suggested: suggestedName, sourceURL: sourceURL)
+                    let name = resolvedName(
+                        original: originalName,
+                        suggested: suggestedName,
+                        sourceURL: sourceURL
+                    )
                     let destination = FileManager.default.temporaryDirectory
                         .appendingPathComponent("drop_\(UUID().uuidString)_\(name)")
                     try FileManager.default.copyItem(at: sourceURL, to: destination)
@@ -284,17 +312,48 @@ nonisolated enum ComposerDropResolver {
         }
     }
 
-    /// Nom retenu : `provider.suggestedName`, à défaut le nom du fichier
-    /// source. Si le nom suggéré n'a pas d'extension mais que la source en a
-    /// une, elle est rattachée — le MIME en dépend.
-    private static func resolvedName(suggested: String?, sourceURL: URL) -> String {
-        guard var name = suggested?.trimmingCharacters(in: .whitespacesAndNewlines),
-              !name.isEmpty else {
-            return sourceURL.lastPathComponent
-        }
+    /// Nom du fichier d'ORIGINE, lu sur la représentation `public.file-url`.
+    ///
+    /// C'est le seul endroit où le vrai nom survit. Ni `suggestedName` ni le
+    /// fichier temporaire de `loadFileRepresentation` ne sont fiables : quand
+    /// le provider n'expose pas de nom propre, le système les fabrique tous
+    /// deux à partir de la description LOCALISÉE du type. Un PDF nommé
+    /// « rapport final.pdf » ressortait ainsi « PDF document.pdf » en anglais
+    /// — et « document PDF.pdf » sur un appareil en français. Le nom de la
+    /// pièce jointe reçue dépendait donc de la langue de l'expéditeur.
+    ///
+    /// Seul le NOM est lu ; les octets passent par `loadFileRepresentation`.
+    /// Aucun `startAccessingSecurityScopedResource` n'est demandé : lire
+    /// `lastPathComponent` n'ouvre pas le fichier.
+    private static func originalFileName(of provider: NSItemProvider) async -> String? {
+        guard provider.hasItemConformingToTypeIdentifier(UTType.fileURL.identifier),
+              let url = await loadURL(from: provider),
+              url.isFileURL else { return nil }
+        let name = url.lastPathComponent
+        return name.isEmpty ? nil : name
+    }
+
+    /// Nom retenu, du plus fiable au moins fiable : le nom d'origine, puis
+    /// celui du fichier livré, puis `provider.suggestedName`.
+    ///
+    /// Si le nom retenu n'a pas d'extension mais qu'une des autres sources en
+    /// a une, elle est rattachée — le MIME en dépend.
+    private static func resolvedName(
+        original: String?,
+        suggested: String?,
+        sourceURL: URL
+    ) -> String {
+        let candidates = [original, sourceURL.lastPathComponent, suggested]
+            .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+        guard var name = candidates.first else { return "fichier" }
         name = name.replacingOccurrences(of: "/", with: "_")
-        if (name as NSString).pathExtension.isEmpty, !sourceURL.pathExtension.isEmpty {
-            name += ".\(sourceURL.pathExtension)"
+        if (name as NSString).pathExtension.isEmpty {
+            let fallbackExtension = candidates
+                .lazy
+                .map { ($0 as NSString).pathExtension }
+                .first { !$0.isEmpty } ?? sourceURL.pathExtension
+            if !fallbackExtension.isEmpty { name += ".\(fallbackExtension)" }
         }
         return name
     }
