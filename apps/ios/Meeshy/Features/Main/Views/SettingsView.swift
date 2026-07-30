@@ -299,17 +299,16 @@ struct SettingsView: View {
                             VStack(spacing: MeeshySpacing.xs) {
                                 Image(systemName: pref.icon)
                                     .font(MeeshyFont.relative(14))
-                                Text(pref.label)
+                                Text(themeLabel(for: pref))
                                     .font(MeeshyFont.relative(9, weight: .medium))
-                                    // Un seul segment = une seule ligne : sous
-                                    // grande taille Dynamic Type le libellé
-                                    // débordait et repassait à la ligne
-                                    // (« Aut o », « So mbr e »). On le garde sur
-                                    // une ligne, on l'amincit légèrement, puis on
-                                    // tronque avec « … » si vraiment trop long.
+                                    // Un seul segment = une seule ligne, à sa
+                                    // largeur idéale : sans `fixedSize`, le
+                                    // HStack compressait d'abord ces libellés
+                                    // (« Au… », « So… ») alors que la place ne
+                                    // manquait pas — le Spacer de la row doit
+                                    // céder avant le texte.
                                     .lineLimit(1)
-                                    .minimumScaleFactor(0.8)
-                                    .truncationMode(.tail)
+                                    .fixedSize(horizontal: true, vertical: false)
                             }
                             .foregroundColor(theme.preference == pref ? Color(hex: pref.tintColor) : theme.textMuted)
                             .padding(.horizontal, MeeshySpacing.sm + 2)
@@ -319,7 +318,7 @@ struct SettingsView: View {
                                     .fill(theme.preference == pref ? Color(hex: pref.tintColor).opacity(0.15) : Color.clear)
                             )
                         }
-                        .accessibilityLabel("\(String(localized: "settings.theme", bundle: .main)) \(pref.label)")
+                        .accessibilityLabel("\(String(localized: "settings.theme", bundle: .main)) \(themeLabel(for: pref))")
                         .accessibilityValue(theme.preference == pref ? String(localized: "common.selected", bundle: .main) : "")
                         .accessibilityAddTraits(theme.preference == pref ? .isSelected : [])
                     }
@@ -331,6 +330,20 @@ struct SettingsView: View {
             // réellement la langue au lancement depuis le 2026-07-25 — c'était
             // le fil manquant, pas le contrôle qui était en trop.
             interfaceLanguageRow
+        }
+    }
+
+    /// Libellés localisés des segments de thème — `ThemePreference.label`
+    /// (SDK) renvoie du français en dur, qui fuyait tel quel dans les six
+    /// autres langues de l'interface.
+    private func themeLabel(for pref: ThemePreference) -> String {
+        switch pref {
+        case .system:
+            return String(localized: "settings.theme.auto", defaultValue: "Auto", bundle: .main)
+        case .light:
+            return String(localized: "settings.theme.light", defaultValue: "Clair", bundle: .main)
+        case .dark:
+            return String(localized: "settings.theme.dark", defaultValue: "Sombre", bundle: .main)
         }
     }
 

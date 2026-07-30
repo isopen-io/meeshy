@@ -973,6 +973,10 @@ struct ConversationListHeaderOverlay: View {
                     .foregroundStyle(
                         LinearGradient(colors: [MeeshyColors.indigo500, MeeshyColors.indigo700], startPoint: .leading, endPoint: .trailing)
                     )
+                    // Volet latéral iPad : chip Feed + 4 actions laissent ~110 pt
+                    // au titre, qui tronquait en « Mee. » — rétrécir plutôt.
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.55)
                     .accessibilityAddTraits(.isHeader)
             },
             trailing: {

@@ -69,9 +69,14 @@ struct FeedPostLocationMapCard: View {
     private static let cardHeight: CGFloat = 190
 
     var body: some View {
-        mapLayer
+        // La vignette (640 pt de large) vit en OVERLAY d'une base flexible :
+        // en enfant direct, son `.scaledToFill()` gonflait la largeur de la
+        // carte au-delà du conteneur dès que celui-ci était plus étroit que
+        // 640 pt (volet feed iPad : tout le post débordait hors écran).
+        Color.clear
             .frame(height: Self.cardHeight)
             .frame(maxWidth: .infinity)
+            .overlay { mapLayer }
             .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
             .overlay(alignment: .bottomLeading) {
                 if let overlayText, !overlayText.isEmpty {

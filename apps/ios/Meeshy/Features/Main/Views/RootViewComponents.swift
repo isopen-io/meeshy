@@ -365,6 +365,10 @@ struct ThemedFeedOverlay: View {
                     .foregroundStyle(
                         LinearGradient(colors: [MeeshyColors.indigo500, MeeshyColors.indigo700], startPoint: .leading, endPoint: .trailing)
                     )
+                    // Même garde-fou que « Meeshy Chats » : rétrécir plutôt que
+                    // tronquer quand le volet (iPad) est étroit.
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.55)
             },
             trailing: {
                 Button {
