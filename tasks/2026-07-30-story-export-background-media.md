@@ -135,10 +135,33 @@ part vers Photos / WhatsApp / AirDrop / Android / Windows, où il n'est pas
 universel. Le plafond apporte déjà ÷7,8 sans toucher à la compatibilité. HEVC
 resterait une option à exposer, pas un défaut à imposer.
 
-## Reste ouvert
-Une story de 4 min pèsera ~226 Mo : c'est la physique du 1080p à 7,5 Mbps, pas un
-défaut. Les leviers, si le besoin se confirme : abaisser `bitsPerPixelPerFrame`
-(0,08 → ~5 Mbps, ce que fait Instagram) ou proposer HEVC en option.
+## Lot 3 — descente à 5 Mbps (2026-07-31, après livraison du build 1264)
+`bitsPerPixelPerFrame` 0,12 → **0,08**, bornes 2–9 Mbps. Aligné sur le
+ré-encodage d'Instagram/TikTok : c'est de toute façon le débit auquel une story
+finit sa vie une fois repartagée, et l'écart avec 7,5 Mbps n'est pas perceptible
+sur un écran de téléphone.
+
+Progression mesurée (même fixture structurée, 1080×1920) :
+
+| Étape | Débit | 1 min | 4 min |
+|---|---|---|---|
+| Origine (`HighestQuality`) | 58,8 Mbps | 441 Mo | 1 764 Mo |
+| Plafond 0,12 bpp | 7,5 Mbps | 56 Mo | 226 Mo |
+| **Plafond 0,08 bpp** | **5,0 Mbps** | **37 Mo** | **151 Mo** |
+
+**÷11,8 au total.** Les 314 Mo signalés retombent à ≈ 27 Mo.
+Reste possible si besoin : HEVC en OPTION (÷2 supplémentaire), jamais par défaut
+— l'export part vers Photos / WhatsApp / Android / Windows.
+
+## Livraison
+Build **1264** livré à TestFlight le 2026-07-31 (VALID), avec le plafond à
+7,5 Mbps. La descente à 5 Mbps entrera au build suivant.
+⚠️ Le workflow `ios-release.yml` (ANDP) est CASSÉ depuis le 2026-07-22 : l'étape
+« Install signing assets » échoue car `MATCH_PASSWORD` (secret du 07/04) ne
+déchiffre pas les blobs `MATCH_*_ENC` (posés le 22/07). Contourné par une
+livraison LOCALE reproduisant les mêmes étapes (`andp build-number` → `xcodebuild
+archive` → strip ITMS-90035 → `-exportArchive` → `andp release`). À réparer :
+re-chiffrer les assets avec le `MATCH_PASSWORD` courant, ou aligner le secret.
 
 ### Dette croisée rencontrée
 `StoryModelsTests.swift:457` ne compilait plus : une session concurrente ajoute

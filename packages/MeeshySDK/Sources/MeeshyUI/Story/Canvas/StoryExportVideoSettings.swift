@@ -24,10 +24,14 @@ import Foundation
 /// ## Le débit cible
 /// Dérivé de la surface plutôt que fixé en dur : la story s'exporte en 1080×1920
 /// (portrait) ou 1920×1080 (paysage), et un futur gabarit ne doit pas hériter
-/// d'un débit calibré pour un autre. `bitsPerPixelPerFrame` à 0,12 est le point
-/// de fonctionnement usuel de H.264 High pour du contenu social — au-dessus, le
-/// gain visuel n'est plus perceptible sur un écran de téléphone ; en dessous, les
-/// aplats et les dégradés commencent à bloquer.
+/// d'un débit calibré pour un autre.
+///
+/// `bitsPerPixelPerFrame` à **0,08** place le 1080×1920 à ~5 Mbps, soit le point
+/// de fonctionnement auquel ré-encodent Instagram et TikTok — c'est de toute
+/// façon le débit auquel une story finit sa vie une fois repartagée. Sur un écran
+/// de téléphone, l'écart avec 0,12 (7,5 Mbps) n'est pas perceptible, alors que le
+/// fichier maigrit encore d'un tiers : 37 Mo la minute au lieu de 56.
+/// En dessous de ~0,06, les dégradés et les aplats commencent à bloquer.
 ///
 /// ## H.264 et pas HEVC
 /// L'export est destiné au partage EXTERNE (Photos, WhatsApp, AirDrop, Android,
@@ -37,13 +41,14 @@ import Foundation
 /// à exposer, pas un défaut à imposer.
 public nonisolated enum StoryExportVideoSettings {
 
-    /// Bits par pixel et par image. Point de fonctionnement H.264 High.
-    static let bitsPerPixelPerFrame: Double = 0.12
+    /// Bits par pixel et par image. Point de fonctionnement H.264 High, aligné
+    /// sur le ré-encodage des plateformes sociales (~5 Mbps en 1080×1920).
+    static let bitsPerPixelPerFrame: Double = 0.08
 
     /// Bornes de sécurité : un gabarit minuscule ne doit pas tomber sous le seuil
     /// de lisibilité, un gabarit géant ne doit pas rouvrir le problème d'origine.
-    static let minimumBitRate = 2_500_000
-    static let maximumBitRate = 12_000_000
+    static let minimumBitRate = 2_000_000
+    static let maximumBitRate = 9_000_000
 
     /// Débit vidéo moyen visé pour `size`, à la cadence du pipeline.
     static func averageBitRate(for size: CGSize) -> Int {
