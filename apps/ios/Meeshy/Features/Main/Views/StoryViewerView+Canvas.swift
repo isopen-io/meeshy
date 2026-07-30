@@ -1057,6 +1057,8 @@ struct StoryCardView: View {
     @Binding var sharedContentWrapper: SharedContentWrapper?
     @Binding var repostStoryComposerSource: RepostStorySourceWrapper?
     @Binding var editAndRepostAsPostSource: RepostPostSourceWrapper?
+    /// Lieu ouvert plein écran au tap d'une pastille de position (Layer 6.6).
+    @Binding var readerFullscreenPlace: StoryReaderPlaceWrapper?
     @Binding var isPresented: Bool
     @Binding var selectedProfileUser: ProfileSheetUser?
     @Binding var showReportSheet: Bool
@@ -1646,6 +1648,29 @@ struct StoryCardView: View {
                     slideDuration: currentSlideDuration,
                     fallbackElapsedTime: progress > 0 ? TimeInterval(progress) * currentSlideDuration : nil
                 )
+                .allowsHitTesting(!isComposerEngaged)
+            }
+
+            // === Layer 6.6: Location badge tap targets ===
+            // Au-dessus du gesture overlay (même règle que les chips audio) :
+            // le tap d'une pastille de lieu ouvre la carte au lieu de
+            // naviguer. Réplique le cadrage EXACT du canvas visible (frame
+            // `canvasFitSize` + scale/offset carte, même ressort) pour que
+            // les cibles tombent sur les badges dessinés par
+            // `StoryLocationLayer` — la zone vient de `badgeFrame`, la mesure
+            // partagée avec le rendu.
+            if let story = currentStory,
+               let locations = story.storyEffects?.locationObjects,
+               !locations.isEmpty {
+                StoryLocationReaderTapOverlay(locations: locations, onTap: { place in
+                    HapticFeedback.light()
+                    pauseTimer()
+                    readerFullscreenPlace = StoryReaderPlaceWrapper(place: place)
+                })
+                .frame(width: canvasFitSize.width, height: canvasFitSize.height)
+                .scaleEffect(readerCanvasFraming.scale)
+                .offset(y: readerCanvasFraming.offset.height)
+                .animation(.spring(response: 0.42, dampingFraction: 0.84), value: canvasIsExpanded)
                 .allowsHitTesting(!isComposerEngaged)
             }
 

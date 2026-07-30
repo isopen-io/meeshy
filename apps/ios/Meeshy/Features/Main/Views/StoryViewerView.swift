@@ -33,6 +33,15 @@ struct RepostPostSourceWrapper: Identifiable {
     let authorHandle: String
 }
 
+/// Enveloppe `Identifiable` d'un `SharedPlace` pour le
+/// `.fullScreenCover(item:)` du reader — ouverte au tap d'une pastille de
+/// lieu de la story (Layer 6.6). Même identité que `BubbleFullscreenPlace`
+/// côté bulle : la paire de coordonnées.
+struct StoryReaderPlaceWrapper: Identifiable {
+    let place: SharedPlace
+    var id: String { "\(place.latitude),\(place.longitude)" }
+}
+
 /// Draft state for a single story's composer
 struct StoryDraft {
     var text: String = ""
@@ -827,6 +836,20 @@ struct StoryViewerView: View {
             .environmentObject(statusViewModel)
             .presentationDetents([.medium, .large] as Set<PresentationDetent>)
         }
+        .fullScreenCover(item: $readerFullscreenPlace, onDismiss: { resumeTimer() }) { wrapper in
+            // Tap d'une pastille de lieu (Layer 6.6) : la story est déjà en
+            // pause (`pauseTimer()` au tap), la carte plein écran offre
+            // « Ouvrir dans Plans » / « Itinéraire » — même surface que la
+            // bulle de message (`LocationFullscreenView`).
+            LocationFullscreenView(
+                latitude: wrapper.place.latitude,
+                longitude: wrapper.place.longitude,
+                placeName: wrapper.place.name,
+                address: wrapper.place.address,
+                accentColor: currentGroup?.avatarColor ?? MeeshyColors.brandPrimaryHex,
+                senderName: currentGroup?.username
+            )
+        }
         .fullScreenCover(item: $repostStoryComposerSource, onDismiss: { resumeTimer() }) { wrapper in
             StoryComposerView(
                 viewModel: StoryComposerViewModel(
@@ -1283,6 +1306,8 @@ struct StoryViewerView: View {
     @State private var sharedContentWrapper: SharedContentWrapper?
     @State private var repostStoryComposerSource: RepostStorySourceWrapper?
     @State private var editAndRepostAsPostSource: RepostPostSourceWrapper?
+    /// Lieu de la story ouvert plein écran (tap sur une pastille de position).
+    @State private var readerFullscreenPlace: StoryReaderPlaceWrapper?
 
     private let quickEmojis = ["❤️", "😂", "😮", "🔥", "😢", "👏"]
 
@@ -1404,6 +1429,7 @@ struct StoryViewerView: View {
             sharedContentWrapper: $sharedContentWrapper,
             repostStoryComposerSource: $repostStoryComposerSource,
             editAndRepostAsPostSource: $editAndRepostAsPostSource,
+            readerFullscreenPlace: $readerFullscreenPlace,
             isPresented: $isPresented,
             selectedProfileUser: $selectedProfileUser,
             showReportSheet: $showReportSheet,
