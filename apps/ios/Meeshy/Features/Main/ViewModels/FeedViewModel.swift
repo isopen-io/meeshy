@@ -547,7 +547,7 @@ class FeedViewModel: ObservableObject {
     private func enqueueDurableTextPost(content: String, visibility: String, originalLanguage: String?, location: SharedPlace? = nil) async {
         let cmid = ClientMutationId.generate()
         let currentUser = AuthManager.shared.currentUser
-        let optimistic = FeedPost(
+        var optimistic = FeedPost(
             id: cmid,
             author: currentUser?.displayName ?? currentUser?.username ?? "",
             authorId: currentUser?.id ?? "",
@@ -558,6 +558,7 @@ class FeedViewModel: ObservableObject {
             timestamp: Date(),
             originalLanguage: originalLanguage
         )
+        optimistic.location = location
         posts.insert(optimistic, at: 0)
         debouncedCacheSave()
 

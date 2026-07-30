@@ -481,6 +481,9 @@ extension APIPost {
         // stable signature, so we set these post-construction like the counters.
         feedPost.storyEffects = storyEffects
         feedPost.audioUrl = audioUrl
+        // Lieu partagé — décodé sur APIPost depuis toujours, mais jeté ici
+        // jusqu'au 2026-07-30 : aucun post du feed ne portait sa position.
+        feedPost.location = location
         // Outbound-link tracking map (runtime-only, like the counters above).
         feedPost.trackedLinkMap = trackedLinkMap
         return feedPost

@@ -514,6 +514,13 @@ public struct FeedPost: Identifiable, Sendable {
     public var storyEffects: StoryEffects? = nil
     /// Legacy voice-note audio URL for story/status posts. `nil` for normal posts.
     public var audioUrl: String? = nil
+    /// Lieu attaché au post (picker → `SharedPlace`, persisté gateway-side en
+    /// `metadata.location` et hissé en champ top-level). Porté sur le modèle
+    /// domaine — comme `storyEffects` — pour survivre au round-trip
+    /// `CacheCoordinator.feed` : sans lui la position était décodée
+    /// (`APIPost.location`) puis PERDUE au passage domaine (constat user
+    /// 2026-07-30, aucune carte sur les posts).
+    public var location: SharedPlace? = nil
 
     public var hasMedia: Bool { !media.isEmpty }
     public var mediaUrl: String? { media.first?.url }
@@ -607,7 +614,7 @@ extension FeedPost: Codable {
         case viewCount, postOpenCount, impressionCount, qualifiedViewCount, playCount
         case repost, repostAuthor, isQuote, media
         case originalLanguage, translations, translatedContent
-        case storyEffects, audioUrl
+        case storyEffects, audioUrl, location
     }
 
     public init(from decoder: Decoder) throws {
@@ -648,6 +655,7 @@ extension FeedPost: Codable {
         translatedContent = try c.decodeIfPresent(String.self, forKey: .translatedContent)
         storyEffects = try c.decodeIfPresent(StoryEffects.self, forKey: .storyEffects)
         audioUrl = try c.decodeIfPresent(String.self, forKey: .audioUrl)
+        location = try c.decodeIfPresent(SharedPlace.self, forKey: .location)
         let stableId = authorId.isEmpty ? author : authorId
         authorColor = DynamicColorGenerator.colorForPost(authorId: stableId, type: type, originalLanguage: originalLanguage)
     }
@@ -685,6 +693,7 @@ extension FeedPost: Codable {
         try c.encodeIfPresent(translatedContent, forKey: .translatedContent)
         try c.encodeIfPresent(storyEffects, forKey: .storyEffects)
         try c.encodeIfPresent(audioUrl, forKey: .audioUrl)
+        try c.encodeIfPresent(location, forKey: .location)
     }
 }
 
