@@ -320,6 +320,67 @@ export async function notificationRoutes(fastify: FastifyInstance) {
   );
 
   // ============================================
+  // POST /notifications/post/:postId/read
+  // Marque toutes les notifications liées à un post comme lues.
+  // Appelé à l'ouverture d'une story / d'un post : le contenu étant consommé,
+  // ses notifications ne doivent plus apparaître comme non lues.
+  //
+  // Distinct de l'appel opportuniste fait par `POST /posts/:postId/view`, qui
+  // est borné à la PREMIÈRE vue : une notification arrivée après cette première
+  // vue (nouveau commentaire, réaction) resterait non lue pour toujours, et le
+  // « vu » client est coalescé donc la seconde ouverture ne repart même pas.
+  // ============================================
+
+  fastify.post(
+    '/notifications/post/:postId/read',
+    {
+      onRequest: [fastify.authenticate],
+      schema: {
+        description: 'Mark all notifications of a post (story, status, feed post) as read',
+        tags: ['notifications'],
+        summary: 'Mark post notifications as read',
+        params: {
+          type: 'object',
+          properties: {
+            postId: { type: 'string', description: 'Post / story ID' },
+          },
+          required: ['postId'],
+        },
+        response: {
+          200: {
+            type: 'object',
+            properties: {
+              success: { type: 'boolean' },
+              count: {
+                type: 'number',
+                description: 'Number of notifications marked as read',
+              },
+            },
+          },
+          401: errorResponseSchema,
+          500: errorResponseSchema,
+        },
+      },
+    },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      try {
+        const userId = request.user!.userId;
+        const { postId } = request.params as { postId: string };
+
+        const count = await notificationService.markPostNotificationsAsRead(userId, postId);
+
+        return {
+          success: true,
+          count,
+        };
+      } catch (error) {
+        fastify.log.error({ error }, 'Error marking post notifications as read');
+        return sendInternalError(reply, 'Failed to mark post notifications as read');
+      }
+    }
+  );
+
+  // ============================================
   // POST /notifications/read-by-types
   // Marque comme lues toutes les notifications de l'utilisateur dont le type
   // est dans la liste fournie. Appelé quand un écran consomme une catégorie

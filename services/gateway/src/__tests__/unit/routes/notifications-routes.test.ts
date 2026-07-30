@@ -61,6 +61,7 @@ import { notificationRoutes } from '../../../routes/notifications';
 const USER_ID = 'aabbccddeeff001122334455';
 const NOTIF_ID = 'bbccddeeff001122334455aa';
 const CONV_ID = 'ccddeeff001122334455aabb';
+const POST_ID = 'ddeeff001122334455aabbcc';
 
 // ─── Factories ────────────────────────────────────────────────────────────────
 
@@ -73,6 +74,7 @@ function createMockNotificationService() {
     markAsRead: jest.fn<any>().mockResolvedValue({ id: NOTIF_ID, isRead: true }),
     markAllAsRead: jest.fn<any>().mockResolvedValue(3),
     markConversationNotificationsAsRead: jest.fn<any>().mockResolvedValue(2),
+    markPostNotificationsAsRead: jest.fn<any>().mockResolvedValue(2),
     markNotificationsByTypesAsRead: jest.fn<any>().mockResolvedValue(4),
     deleteNotification: jest.fn<any>().mockResolvedValue(true),
     createMessageNotification: jest.fn<any>().mockResolvedValue({ id: 'new-notif' }),
@@ -359,6 +361,35 @@ describe('POST /notifications/conversation/:conversationId/read', () => {
     ns.markConversationNotificationsAsRead.mockRejectedValue(new Error('DB error'));
 
     const req = makeRequest({ params: { conversationId: CONV_ID } });
+    await route.handler(req, reply);
+
+    expect(mockSendInternalError).toHaveBeenCalledWith(reply, expect.any(String));
+  });
+});
+
+// ─── POST /notifications/post/:postId/read ───────────────────────────────────
+
+describe('POST /notifications/post/:postId/read', () => {
+  beforeEach(() => jest.clearAllMocks());
+
+  it('marks post notifications as read', async () => {
+    const { fastify, ns, reply } = setup();
+    const route = getRoute(fastify, 'POST', 'post/:postId/read');
+    ns.markPostNotificationsAsRead.mockResolvedValue(3);
+
+    const req = makeRequest({ params: { postId: POST_ID } });
+    const result = await route.handler(req, reply);
+
+    expect(result).toEqual({ success: true, count: 3 });
+    expect(ns.markPostNotificationsAsRead).toHaveBeenCalledWith(USER_ID, POST_ID);
+  });
+
+  it('returns 500 on service error', async () => {
+    const { fastify, ns, reply } = setup();
+    const route = getRoute(fastify, 'POST', 'post/:postId/read');
+    ns.markPostNotificationsAsRead.mockRejectedValue(new Error('DB error'));
+
+    const req = makeRequest({ params: { postId: POST_ID } });
     await route.handler(req, reply);
 
     expect(mockSendInternalError).toHaveBeenCalledWith(reply, expect.any(String));

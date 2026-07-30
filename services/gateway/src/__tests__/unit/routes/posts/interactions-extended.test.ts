@@ -171,6 +171,26 @@ describe('POST /posts/:postId/impression (authenticated)', () => {
     });
     expect(res.statusCode).toBe(200);
   });
+
+  // Le viewer de story iOS envoie `source: "story"` à chaque slide révélé.
+  // L'enum de validation l'ignorait → 400 systématique, `impressionCount`
+  // resté à 0 sur toutes les stories malgré des vues réelles.
+  it('accepts source=story (story viewer slide reveal)', async () => {
+    const res = await app.inject({
+      method: 'POST', url: `/posts/${POST_ID}/impression`,
+      payload: { source: 'story' },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().data.recorded).toBe(true);
+  });
+
+  it('rejects an unknown source', async () => {
+    const res = await app.inject({
+      method: 'POST', url: `/posts/${POST_ID}/impression`,
+      payload: { source: 'not-a-surface' },
+    });
+    expect(res.statusCode).toBe(400);
+  });
 });
 
 // ─── POST /posts/impressions/batch ────────────────────────────────────────────
@@ -210,6 +230,14 @@ describe('POST /posts/impressions/batch (authenticated)', () => {
     });
     expect(res.statusCode).toBe(200);
     expect(res.json().data.recorded).toBe(2);
+  });
+
+  it('accepts source=story', async () => {
+    const res = await app.inject({
+      method: 'POST', url: '/posts/impressions/batch',
+      payload: { postIds: [POST_ID], source: 'story' },
+    });
+    expect(res.statusCode).toBe(200);
   });
 });
 
