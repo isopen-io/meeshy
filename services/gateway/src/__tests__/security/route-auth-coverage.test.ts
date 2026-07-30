@@ -445,22 +445,20 @@ const PUBLIC_ROUTES: Array<{ method: string; url: string; why: string }> = [
 // la ligne dès que le correctif correspondant est mergé.
 // ---------------------------------------------------------------------------
 const KNOWN_GAPS: Array<{ method: string; url: string; why: string }> = [
-  { method: 'POST', url: '/api/v1/auth/refresh', why: 'CRITIQUE — jwt.decode() non vérifié en repli si jwt.verify échoue : forge un JWT valide pour un userId arbitraire. Audit §"auth/refresh". Corriger : rejeter en 401 toute signature invalide, ne jamais retomber sur decode() non vérifié.' },
-  { method: 'POST', url: '/api/v1/auth/force-init', why: "CRITIQUE — déclenche InitService.initializeDatabase() sans authentification, peut créer un compte BIGBOSS/ADMIN par défaut avec mot de passe codé en dur si les env vars ne sont pas positionnées. Audit §\"auth/force-init\". Corriger : supprimer la route ou la gater derrière requireAdmin." },
+  // Fermés depuis l'audit, retirés de cette liste — ne les y remets pas :
+  //   POST /auth/refresh              → 573581e27 (signature vérifiée exigée)
+  //   POST /auth/force-init           → route supprimée, l'init reste au démarrage
+  //   GET  /status/:messageId/:lang   → 8b7c95010 (auth + appartenance)
+  //   GET  /conversation/:identifier  → 8b7c95010 (auth)
+  //   DELETE /attachments/:id         → 4201a63f9 (garde réparée)
+  //   GET  /conversations/:id/attachments → 4201a63f9
+  //   POST /attachments/upload        → 4201a63f9
   { method: 'GET', url: '/api/v1/users/:userId/affiliate-token', why: "IDOR de lecture — récupère le token d'affiliation actif de n'importe quel utilisateur sans auth ni rate-limit. Audit §\"users/:userId/affiliate-token\"." },
   { method: 'POST', url: '/api/v1/affiliate/register', why: "SÉVÈRE — aucune authentification ; force une relation d'ami acceptée entre le créateur du token et un referredUserId arbitraire fourni par le client, puis expose les données de la victime via /affiliate/stats. Audit §\"affiliate/register\"." },
-  { method: 'GET', url: '/api/v1/status/:messageId/:language', why: "CRITIQUE — aucune authentification ; lit le texte traduit et déchiffré de N'IMPORTE QUEL message, y compris dans des conversations privées. Audit §\"translation-non-blocking / status\"." },
-  { method: 'GET', url: '/api/v1/conversation/:identifier', why: "aucune authentification ; expose titre/type/dates/compteurs de n'importe quelle conversation par son identifiant. Audit §\"translation-non-blocking / conversation\"." },
   { method: 'GET', url: '/api/v1/attachments/:attachmentId', why: "aucune garde du tout (pas même une vérification d'authentification) ; ObjectId Mongo à faible entropie comme seul secret. Audit §\"attachments download\"." },
   { method: 'GET', url: '/api/attachments/:attachmentId', why: 'même route, montage legacy sans /v1.' },
   { method: 'GET', url: '/api/v1/attachments/:attachmentId/thumbnail', why: 'même trou que ci-dessus, miniature.' },
   { method: 'GET', url: '/api/attachments/:attachmentId/thumbnail', why: 'même route, montage legacy sans /v1.' },
-  { method: 'DELETE', url: '/api/v1/attachments/:attachmentId', why: "CRITIQUE — garde cassée : `!authContext.isAuthenticated && !authContext.isAnonymous` est TOUJOURS fausse pour un appelant sans aucun credential (le contexte non-authentifié par défaut a isAnonymous:true). Même anti-pattern que /translate-blocking. Audit §\"attachments delete\"." },
-  { method: 'DELETE', url: '/api/attachments/:attachmentId', why: 'même route, montage legacy sans /v1.' },
-  { method: 'GET', url: '/api/v1/conversations/:conversationId/attachments', why: "CRITIQUE — même garde cassée que ci-dessus, sans même de branche `else` : un appelant sans aucun credential tombe directement sur la liste complète des pièces jointes. Audit §\"attachments conversation list\"." },
-  { method: 'GET', url: '/api/conversations/:conversationId/attachments', why: 'même route, montage legacy sans /v1.' },
-  { method: 'POST', url: '/api/v1/attachments/upload', why: "CRITIQUE — même garde cassée ; upload de fichier jusqu'à 4 Go sans aucun credential. Audit §\"attachments upload\"." },
-  { method: 'POST', url: '/api/attachments/upload', why: 'même route, montage legacy sans /v1.' },
   { method: 'POST', url: '/api/v1/tracking-links', why: "authOptional sans aucune vérification d'appartenance sur conversationId/messageId fournis dans le corps — pollution de données par un appelant anonyme. Audit §\"tracking-links creation\"." },
 ];
 

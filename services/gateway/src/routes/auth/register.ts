@@ -298,17 +298,16 @@ export function registerRegistrationRoutes(context: AuthRouteContext) {
     }
   });
 
-  // POST /force-init - Force database initialization (temporary)
-  fastify.post('/force-init', async (request: FastifyRequest, reply: FastifyReply) => {
-    try {
-      const { InitService } = await import('../../services/InitService');
-      const initService = new InitService(fastify.prisma);
-      await initService.initializeDatabase();
-
-      return sendSuccess(reply, { message: 'Database initialized successfully' });
-    } catch (error) {
-      logger.error('Error during forced initialization', error as Error);
-      return sendInternalError(reply, 'Failed to initialize database');
-    }
-  });
+  // `POST /force-init` a été retirée.
+  //
+  // Elle était publique et déclenchait `InitService.initializeDatabase()`, qui
+  // crée un compte BIGBOSS dont le mot de passe retombe sur une valeur écrite
+  // dans le code source quand la variable d'environnement n'est pas posée.
+  // N'importe qui pouvait donc s'octroyer — ou réactiver — un compte de plus
+  // haut privilège dont le mot de passe est public, sur un service joignable
+  // depuis l'Internet.
+  //
+  // Rien n'est perdu : `initializeDatabase()` s'exécute déjà à chaque démarrage
+  // du serveur (`server.ts`), et aucun appelant de cette route n'existait dans
+  // le dépôt. Un redémarrage fait exactement le même travail.
 }

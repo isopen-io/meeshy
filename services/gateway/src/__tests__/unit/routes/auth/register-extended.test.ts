@@ -325,31 +325,18 @@ describe('GET /check-availability — prisma throws → 500', () => {
   });
 });
 
-// ─── POST /force-init — success (lines 303-308) ───────────────────────────────
+// ─── POST /force-init — route retirée ────────────────────────────────────────
 
-describe('POST /force-init — success', () => {
-  it('returns 200 with Database initialized successfully message', async () => {
+describe('POST /force-init — retirée', () => {
+  // Publique, elle déclenchait la création d'un compte BIGBOSS dont le mot de
+  // passe retombe sur une valeur écrite dans le code source. L'initialisation
+  // reste assurée au démarrage du serveur ; ce test empêche son retour.
+  it('n\'existe plus', async () => {
     mockInitializeDatabase.mockResolvedValue(undefined);
     const { app } = await buildApp();
     const res = await app.inject({ method: 'POST', url: '/force-init' });
-    expect(res.statusCode).toBe(200);
-    const body = res.json();
-    expect(body.success).toBe(true);
-    expect(body.data.message).toBe('Database initialized successfully');
-    await app.close();
-  });
-});
-
-// ─── POST /force-init — error → 500 (lines 309-311) ──────────────────────────
-
-describe('POST /force-init — initializeDatabase throws → 500', () => {
-  it('returns 500 when initializeDatabase throws', async () => {
-    mockInitializeDatabase.mockRejectedValue(new Error('Init failed'));
-    const { app } = await buildApp();
-    const res = await app.inject({ method: 'POST', url: '/force-init' });
-    expect(res.statusCode).toBe(500);
-    const body = res.json();
-    expect(body.success).toBe(false);
+    expect(res.statusCode).toBe(404);
+    expect(mockInitializeDatabase).not.toHaveBeenCalled();
     await app.close();
   });
 });
