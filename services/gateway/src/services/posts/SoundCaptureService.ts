@@ -78,20 +78,14 @@ export class SoundCaptureService {
       where: { postId: ctx.postId, trackId: { notIn: kept } },
       select: { soundId: true },
     });
-    if (removed.length > 0) {
-      await this.prisma.soundUsage.deleteMany({
-        where: { postId: ctx.postId, trackId: { notIn: kept } },
-      });
-      for (const usage of removed) {
-        await this.prisma.sound.update({
-          where: { id: usage.soundId },
-          data: { usageCount: { decrement: 1 } },
-        }).catch(() => undefined);
-      }
-    } else {
-      await this.prisma.soundUsage.deleteMany({
-        where: { postId: ctx.postId, trackId: { notIn: kept } },
-      });
+    await this.prisma.soundUsage.deleteMany({
+      where: { postId: ctx.postId, trackId: { notIn: kept } },
+    });
+    for (const usage of removed) {
+      await this.prisma.sound.update({
+        where: { id: usage.soundId },
+        data: { usageCount: { decrement: 1 } },
+      }).catch(() => undefined);
     }
   }
 

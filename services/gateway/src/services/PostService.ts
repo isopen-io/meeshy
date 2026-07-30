@@ -245,7 +245,11 @@ export class PostService {
     this.soundCaptureService.captureSounds({
       postId: post.id,
       authorId: post.authorId,
-      isPublic: data.visibility === PostVisibility.PUBLIC,
+      // `!data.repostOfId` : `createPost` accepte AUSSI un repost. Sans cette
+      // condition, republier une story par cette voie créerait un `Sound`
+      // crédité au REPOSTEUR — le piège d'attribution que le lot A évite déjà
+      // sur `repostPost`, rouvert par l'autre porte.
+      isPublic: data.visibility === PostVisibility.PUBLIC && !data.repostOfId,
       tracks: this.extractCaptureTracks(data.storyEffects),
     }).catch((err: unknown) => {
       log.error('captureSounds (createPost) a échoué', err instanceof Error ? err : new Error(String(err)), { postId: post.id });

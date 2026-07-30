@@ -44,4 +44,16 @@ describe('PostService — câblage de la capture', () => {
     const start = code.indexOf('async repostPost');
     expect(code.slice(start)).not.toContain('this.soundCaptureService.captureSounds');
   });
+
+  /**
+   * `repostPost` n'est pas la seule porte : `createPost` accepte lui aussi un
+   * `repostOfId`. Sans cette condition, republier par cette voie créerait un
+   * `Sound` crédité au REPOSTEUR — le piège d'attribution refermé d'un côté et
+   * rouvert de l'autre.
+   */
+  it('test_createPost_repostPath_doesNotFeedTheLibrary', () => {
+    const capture = code.indexOf('this.soundCaptureService.captureSounds');
+    const call = code.slice(capture, capture + 400);
+    expect(call).toContain('!data.repostOfId');
+  });
 });

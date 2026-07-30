@@ -236,6 +236,10 @@ services:
       # ce dernier est monté en lecture seule par nginx (static.<domaine>) et
       # servi sans authentification — les sons ne le sont que par la route JWT.
       - UPLOAD_DIR=/app/sounds
+      # Capture de sons : INERTE tant que ce drapeau ne vaut pas 'true'. Le
+      # socle se déploie et se vérifie sans capturer un seul son ; on l'ouvrira
+      # au canary, une fois `prisma db push` joué et le lot B livré.
+      - SOUND_LIBRARY_ENABLED=false
       - PUBLIC_URL=${PUBLIC_URL:-https://gate.${DOMAIN:-meeshy.me}}
       - MAX_TRANSLATION_LENGTH=10000
       # Variables d'initialisation des utilisateurs
