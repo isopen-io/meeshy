@@ -1,5 +1,6 @@
 import XCTest
 import SwiftUI
+import MapKit
 import SnapshotTesting
 @testable import MeeshySDK
 @testable import MeeshyUI
@@ -15,8 +16,20 @@ import SnapshotTesting
 // Comme les suites `Timeline`/`Story`, le mode par défaut `.missing` enregistre
 // la baseline PNG au premier run puis échoue une fois pour le signaler ; le
 // second run compare proprement. Commits atterrissent avec `record: false`.
+//
+// DÉTERMINISME : la vignette n'embarque plus de Map vivante (les tuiles Metal
+// async faisaient crasher/diverger la capture sync de swift-snapshot-testing).
+// On injecte un provider stub qui retourne `nil` → le placeholder statique
+// (dégradé + épingle) est rendu, 100 % stable d'un run à l'autre.
 @MainActor
 final class LocationMessageViewSnapshotTests: XCTestCase {
+
+    @MainActor
+    private struct StubThumbnailProvider: LocationMapThumbnailProviding {
+        func thumbnail(coordinate: CLLocationCoordinate2D, size: CGSize, isDark: Bool) async -> UIImage? {
+            nil
+        }
+    }
 
     private func makePlace() -> SharedPlace {
         SharedPlace(latitude: 48.8566, longitude: 2.3522,
@@ -24,7 +37,7 @@ final class LocationMessageViewSnapshotTests: XCTestCase {
     }
 
     private func makeView(colorScheme: ColorScheme) -> some View {
-        LocationMessageView(place: makePlace())
+        LocationMessageView(place: makePlace(), thumbnailProvider: StubThumbnailProvider())
             .environment(\.colorScheme, colorScheme)
             .background(colorScheme == .dark ? Color.black : Color.white)
     }
