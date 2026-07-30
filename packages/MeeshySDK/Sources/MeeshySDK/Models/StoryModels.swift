@@ -1135,22 +1135,33 @@ public struct StorySlide: Identifiable, Codable, Sendable {
     public var effects: StoryEffects
     public var duration: TimeInterval
     public var order: Int
+
     /// Pastilles de lieu posées sur cette slide. Hors timeline (pas de
     /// `startTime`/`duration`) : toujours visibles tant que la slide l'est.
-    public var locationObjects: [StoryLocationObject]
+    ///
+    /// Simple accès ergonomique : le STOCKAGE est `effects.locationObjects`,
+    /// parce que `StoryEffects` est la seule unité que le dépôt persiste
+    /// (`StoryDraftStore` n'écrit que `effects_json`) et envoie au serveur
+    /// (`PostService.createStory(content:storyEffects:)`). Un champ propre au
+    /// `StorySlide` disparaissait à chaque enregistrement de brouillon, à la
+    /// publication, et dans les cinq sites qui reconstruisent un slide depuis
+    /// ses seuls `storyEffects` (édition, repost, `StoryItem.asSlide`, chargement
+    /// de brouillon, cover receveur).
+    public var locationObjects: [StoryLocationObject] {
+        get { effects.locationObjects }
+        set { effects.locationObjects = newValue }
+    }
 
     public init(id: String = UUID().uuidString, mediaURL: String? = nil, mediaData: Data? = nil,
                 content: String? = nil, effects: StoryEffects = StoryEffects(),
-                duration: TimeInterval = 6, order: Int = 0,
-                locationObjects: [StoryLocationObject] = []) {
+                duration: TimeInterval = 6, order: Int = 0) {
         self.id = id; self.mediaURL = mediaURL; self.mediaData = mediaData
         self.content = content; self.effects = effects
         self.duration = duration; self.order = order
-        self.locationObjects = locationObjects
     }
 
     enum CodingKeys: String, CodingKey {
-        case id, mediaURL, content, effects, duration, order, locationObjects
+        case id, mediaURL, content, effects, duration, order
     }
 
     public init(from decoder: Decoder) throws {
@@ -1162,8 +1173,6 @@ public struct StorySlide: Identifiable, Codable, Sendable {
         effects = try container.decodeIfPresent(StoryEffects.self, forKey: .effects) ?? StoryEffects()
         duration = try container.decodeIfPresent(TimeInterval.self, forKey: .duration) ?? 6
         order = try container.decodeIfPresent(Int.self, forKey: .order) ?? 0
-        // Legacy stories on disk predate this key — must still decode.
-        locationObjects = try container.decodeIfPresent([StoryLocationObject].self, forKey: .locationObjects) ?? []
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -1171,7 +1180,6 @@ public struct StorySlide: Identifiable, Codable, Sendable {
         try container.encode(id, forKey: .id)
         try container.encodeIfPresent(mediaURL, forKey: .mediaURL)
         try container.encodeIfPresent(content, forKey: .content)
-        try container.encode(locationObjects, forKey: .locationObjects)
         try container.encode(effects, forKey: .effects)
         try container.encode(duration, forKey: .duration)
         try container.encode(order, forKey: .order)
@@ -1453,6 +1461,11 @@ public struct StoryEffects: Codable, Sendable {
 
     // Objets canvas composites
     public var textObjects: [StoryTextObject]
+    /// Pastilles de lieu posées sur la slide (hors timeline). Portées par les
+    /// EFFETS — la seule unité que `StoryDraftStore` persiste (`effects_json`)
+    /// et que `PostService.createStory` envoie au serveur. Non-optionnel comme
+    /// `textObjects` : `[]` quand la clef est absente (stories antérieures).
+    public var locationObjects: [StoryLocationObject]
     public var mediaObjects: [StoryMediaObject]?
     public var audioPlayerObjects: [StoryAudioPlayerObject]?
     public var backgroundAudioVariants: [StoryAudioVariant]?
@@ -1503,6 +1516,7 @@ public struct StoryEffects: Codable, Sendable {
                 voiceAttachmentId: String? = nil, voiceTranscriptions: [StoryVoiceTranscription]? = nil,
                 opening: StoryTransitionEffect? = nil, closing: StoryTransitionEffect? = nil,
                 textObjects: [StoryTextObject] = [],
+                locationObjects: [StoryLocationObject] = [],
                 mediaObjects: [StoryMediaObject]? = nil,
                 audioPlayerObjects: [StoryAudioPlayerObject]? = nil,
                 backgroundAudioVariants: [StoryAudioVariant]? = nil,
@@ -1526,6 +1540,7 @@ public struct StoryEffects: Codable, Sendable {
         self.opening = opening
         self.closing = closing
         self.textObjects = textObjects
+        self.locationObjects = locationObjects
         self.mediaObjects = mediaObjects
         self.audioPlayerObjects = audioPlayerObjects
         self.backgroundAudioVariants = backgroundAudioVariants
@@ -1545,7 +1560,7 @@ public struct StoryEffects: Codable, Sendable {
         case backgroundAudioId, backgroundAudioVolume, backgroundAudioStart, backgroundAudioEnd
         case voiceAttachmentId, voiceTranscriptions
         case opening, closing
-        case textObjects, mediaObjects, audioPlayerObjects, backgroundAudioVariants
+        case textObjects, locationObjects, mediaObjects, audioPlayerObjects, backgroundAudioVariants
         case thumbHash, backgroundTransform, slideDuration, timelineDuration, clipTransitions
         case canvasAspectRatio
         case musicTrackId, musicStartTime, musicEndTime
@@ -1589,6 +1604,7 @@ public struct StoryEffects: Codable, Sendable {
         // is skipped rather than dropping the whole collection (or, via the
         // APIPost do/catch above, the whole story's effects).
         textObjects = c.decodeLossyArrayIfPresent([StoryTextObject].self, forKey: .textObjects) ?? []
+        locationObjects = c.decodeLossyArrayIfPresent([StoryLocationObject].self, forKey: .locationObjects) ?? []
         mediaObjects = c.decodeLossyArrayIfPresent([StoryMediaObject].self, forKey: .mediaObjects)
         audioPlayerObjects = c.decodeLossyArrayIfPresent([StoryAudioPlayerObject].self, forKey: .audioPlayerObjects)
         backgroundAudioVariants = try c.decodeIfPresent([StoryAudioVariant].self, forKey: .backgroundAudioVariants)
@@ -1626,6 +1642,7 @@ public struct StoryEffects: Codable, Sendable {
         try c.encodeIfPresent(opening, forKey: .opening)
         try c.encodeIfPresent(closing, forKey: .closing)
         try c.encode(textObjects, forKey: .textObjects)
+        try c.encode(locationObjects, forKey: .locationObjects)
         try c.encodeIfPresent(mediaObjects, forKey: .mediaObjects)
         try c.encodeIfPresent(audioPlayerObjects, forKey: .audioPlayerObjects)
         try c.encodeIfPresent(backgroundAudioVariants, forKey: .backgroundAudioVariants)
