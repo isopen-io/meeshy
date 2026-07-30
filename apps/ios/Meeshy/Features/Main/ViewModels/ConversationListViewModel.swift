@@ -1527,6 +1527,10 @@ class ConversationListViewModel: ObservableObject {
 
     func markAsUnread(conversationId: String) async {
         guard convIndex(for: conversationId) != nil else { return }
+        // Efface la frontière de lecture locale dans le cache : sans ça,
+        // `ConversationSyncEngine.reconcileUnread` reclamperait le compteur à 0
+        // au prochain instantané serveur et le geste serait sans effet.
+        await syncEngine.markConversationUnreadLocally(conversationId)
         // Store sets unreadCount ≥ 1 optimistically + dispatches markUnread.
         try? await store.apply(.markAsUnread, for: conversationId)
     }

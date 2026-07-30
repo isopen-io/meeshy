@@ -1220,6 +1220,11 @@ extension StoryViewerView {
             // C3 : ce slide vient d'être affiché → 1 impression (source "story") pour CE
             // post-slide, en plus de la vue unique. Chaque changement de slide en émet une.
             viewModel.recordStoryImpression(storyId: story.id)
+            // Contenu consommé → ses notifications ne doivent plus être non lues,
+            // ET toute notification qui arrive PENDANT la lecture naît consommée
+            // (`activePostId`). Idempotent : le manager ignore une story déjà
+            // déclarée active et coalesce les appels serveur.
+            NotificationToastManager.shared.onPostOpened(story.id)
         }
     }
 

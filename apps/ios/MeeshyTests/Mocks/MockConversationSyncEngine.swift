@@ -32,6 +32,8 @@ final class MockConversationSyncEngine: ConversationSyncEngineProviding, @unchec
     var stopSocketRelayCallCount = 0
     var markConversationReadLocallyCallCount = 0
     var lastMarkReadConversationId: String?
+    var markConversationUnreadLocallyCallCount = 0
+    var lastMarkUnreadConversationId: String?
     var updateConversationAfterSendCallCount = 0
 
     /// Optional hook invoked inside `syncSinceLastCheckpoint()` so tests can
@@ -79,6 +81,11 @@ final class MockConversationSyncEngine: ConversationSyncEngineProviding, @unchec
     func markConversationReadLocally(_ conversationId: String) async {
         markConversationReadLocallyCallCount += 1
         lastMarkReadConversationId = conversationId
+    }
+
+    func markConversationUnreadLocally(_ conversationId: String) async {
+        markConversationUnreadLocallyCallCount += 1
+        lastMarkUnreadConversationId = conversationId
     }
 
     /// Dernière facette appliquée — permet aux tests d'affirmer que la ligne
@@ -129,6 +136,8 @@ final class MockConversationSyncEngine: ConversationSyncEngineProviding, @unchec
         stopSocketRelayCallCount = 0
         markConversationReadLocallyCallCount = 0
         lastMarkReadConversationId = nil
+        markConversationUnreadLocallyCallCount = 0
+        lastMarkUnreadConversationId = nil
         updateConversationAfterSendCallCount = 0
         setCurrentlyOpenConversationCallCount = 0
         lastSetCurrentlyOpenConversationId = nil

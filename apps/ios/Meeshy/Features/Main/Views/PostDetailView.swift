@@ -735,8 +735,11 @@ struct PostDetailView: View {
             SocialSocketManager.shared.joinPostRoom(postId: postId)
             // Anti-spam banner: declare this post as "currently visible" so
             // NotificationToastManager can drop in-app banners about it (the user
-            // already sees the content live).
-            NotificationToastManager.shared.activePostId = postId
+            // already sees the content live). `onPostOpened` fait DAVANTAGE que
+            // l'ancienne affectation nue de `activePostId` : il marque aussi les
+            // notifications de ce post comme lues (cache local + serveur), le
+            // contenu étant consommé.
+            NotificationToastManager.shared.onPostOpened(postId)
             // Record view when post detail is opened.
             // - viewPost → vue UNIQUE (viewCount, dédupliquée, sauvegardée non affichée)
             // - registerDetailOpen → vue TOTALE (postOpenCount, chaque ouverture) + impression,
@@ -750,9 +753,7 @@ struct PostDetailView: View {
         }
         .onDisappear {
             SocialSocketManager.shared.leavePostRoom(postId: postId)
-            if NotificationToastManager.shared.activePostId == postId {
-                NotificationToastManager.shared.activePostId = nil
-            }
+            NotificationToastManager.shared.onPostClosed(postId)
         }
         .trackEngagement(postId: postId, contentType: .post, surface: .detail)
         .adaptiveOnChange(of: viewModel.post) { _, updatedPost in

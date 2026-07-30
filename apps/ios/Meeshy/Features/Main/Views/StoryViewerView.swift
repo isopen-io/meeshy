@@ -594,6 +594,10 @@ struct StoryViewerView: View {
             PlaybackCoordinator.shared.stopAll()
             if let story = currentStory {
                 SocialSocketManager.shared.leavePostRoom(postId: story.id)
+                // Relâche la déclaration de contenu actif — conditionnelle à
+                // l'identité pour rester correcte si un autre écran a déjà
+                // déclaré le sien entre-temps.
+                NotificationToastManager.shared.onPostClosed(story.id)
             }
             Task { await EngagementTracker.shared.end(surface: .storyViewer) }
         }

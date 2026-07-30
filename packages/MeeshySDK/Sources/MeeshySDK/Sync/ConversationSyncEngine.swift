@@ -34,6 +34,8 @@ public protocol ConversationSyncEngineProviding: AnyObject, Sendable {
     func startSocketRelay() async
     func stopSocketRelay() async
     func markConversationReadLocally(_ conversationId: String) async
+    /// Efface la frontière de lecture locale (geste « marquer comme non lu »).
+    func markConversationUnreadLocally(_ conversationId: String) async
     func updateConversationAfterSend(_ facet: LastMessageFacet, conversationId: String) async
 
     /// Declare which conversation is currently visible to the user.
@@ -1315,6 +1317,10 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
             if let idx = updated.firstIndex(where: { $0.id == conversationId }) {
                 updated[idx].applyLastMessage(facet)
                 updated[idx].userState.unreadCount = 0
+                // Envoyer, c'est avoir lu : la frontière avance au-delà du
+                // message qu'on vient de poser, sinon `reconcileUnread` la
+                // trouverait périmée face au nouveau `lastMessageAt`.
+                updated[idx].userState.lastReadAt = Date()
                 let conv = updated.remove(at: idx)
                 updated.insert(conv, at: 0)
             }
@@ -1329,6 +1335,31 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
             var updated = conversations
             if let idx = updated.firstIndex(where: { $0.id == conversationId }) {
                 updated[idx].userState.unreadCount = 0
+                // Frontière de lecture locale — lue par `reconcileUnread` pour
+                // qu'un instantané serveur en retard sur l'accusé de lecture
+                // (outbox encore pleine, hors-ligne, 429) ne rallume pas la
+                // pastille.
+                updated[idx].userState.lastReadAt = Date()
+            }
+            return updated
+        }
+        _conversationsDidChange.send()
+        await recomputeTotalUnread()
+    }
+
+    /// Symétrique de `markConversationReadLocally` : « marquer comme non lu »
+    /// EFFACE la frontière de lecture, sinon `reconcileUnread` ramènerait le
+    /// compteur à 0 au prochain instantané et le geste serait sans effet.
+    public func markConversationUnreadLocally(_ conversationId: String) async {
+        await cache.conversations.update(for: "list") { conversations in
+            var updated = conversations
+            if let idx = updated.firstIndex(where: { $0.id == conversationId }) {
+                updated[idx].userState.lastReadAt = nil
+                if updated[idx].userState.unreadCount == 0 {
+                    // Le serveur reste autoritatif sur le compte exact ; on pose
+                    // localement ≥ 1 pour que la pastille apparaisse tout de suite.
+                    updated[idx].userState.unreadCount = 1
+                }
             }
             return updated
         }
@@ -1354,7 +1385,22 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
     /// sorted (interleaved deltas, parallel page merges, server-side tweaks),
     /// so the engine must enforce the order rather than trust the network.
     private func saveSorted(_ items: [MeeshyConversation], to cacheKey: String) async {
-        let sorted = items.sorted { $0.lastMessageAt > $1.lastMessageAt }
+        // Chokepoint UNIQUE de toute écriture liste dérivée du serveur (fullSync
+        // ×3, deltaSync ×1) : on y réconcilie le non-lu AVANT de persister, sinon
+        // un instantané serveur en retard sur un `markAsRead` encore dans
+        // l'outbox rallume la pastille (« ça part puis ça revient »).
+        let reconciled: [MeeshyConversation]
+        if cacheKey == "list" {
+            let existing = await cache.conversations.load(for: cacheKey).snapshot() ?? []
+            reconciled = Self.reconcileUnread(
+                incoming: items,
+                existing: existing,
+                openConversationId: currentlyOpenConversationId
+            )
+        } else {
+            reconciled = items
+        }
+        let sorted = reconciled.sorted { $0.lastMessageAt > $1.lastMessageAt }
         do {
             try await cache.conversations.save(sorted, for: cacheKey)
         } catch {
@@ -1362,6 +1408,70 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
         }
         if cacheKey == "list" {
             await recomputeTotalUnread()
+        }
+    }
+
+    // MARK: - Réconciliation du non-lu
+
+    /// Réconcilie un instantané serveur avec la frontière de lecture LOCALE.
+    ///
+    /// Le gateway ne renvoie jamais `lastReadAt` (`APIConversation.toConversation`
+    /// ne le mappe pas) : ce champ est donc une frontière purement locale, posée
+    /// par `markConversationReadLocally` et par l'entrée dans une conversation,
+    /// et qui survit au round-trip GRDB. Deux règles, dans cet ordre :
+    ///
+    /// 1. **Conversation ouverte** → 0. L'utilisateur la REGARDE ; tout compteur
+    ///    non nul est un mensonge visuel. Même gate que `handleUnreadUpdated`,
+    ///    qui l'appliquait déjà aux broadcasts socket mais pas aux syncs REST.
+    /// 2. **Lecture locale postérieure au dernier message connu du serveur** → 0.
+    ///    Le compteur serveur est en retard (accusé de lecture encore dans
+    ///    l'outbox, hors-ligne, 429…). Dès qu'un message VRAIMENT plus récent
+    ///    arrive, `lastMessageAt` repasse devant la frontière et le compteur
+    ///    serveur reprend la main — la règle se répare donc toute seule et ne
+    ///    peut pas masquer durablement un vrai non-lu.
+    ///
+    /// La frontière locale est toujours préservée (le serveur ne la porte pas),
+    /// ce qui laisse `markAsUnread` — qui l'efface — survivre au prochain sync.
+    nonisolated static func reconcileUnread(
+        incoming: MeeshyConversation,
+        local: MeeshyConversation?,
+        openConversationId: String?,
+        now: Date = Date()
+    ) -> MeeshyConversation {
+        var result = incoming
+        // La frontière ne voyage que localement : la reprendre du cache est la
+        // seule façon qu'elle traverse l'écrasement par l'instantané serveur.
+        result.userState.lastReadAt = local?.userState.lastReadAt ?? incoming.userState.lastReadAt
+
+        if incoming.id == openConversationId {
+            result.userState.unreadCount = 0
+            result.userState.lastReadAt = max(result.userState.lastReadAt ?? .distantPast, now)
+            return result
+        }
+
+        if let frontier = result.userState.lastReadAt, frontier >= incoming.lastMessageAt {
+            result.userState.unreadCount = 0
+        }
+        return result
+    }
+
+    /// Variante par lot — applique la règle ci-dessus à chaque ligne entrante en
+    /// la confrontant à son homologue en cache.
+    nonisolated static func reconcileUnread(
+        incoming: [MeeshyConversation],
+        existing: [MeeshyConversation],
+        openConversationId: String?,
+        now: Date = Date()
+    ) -> [MeeshyConversation] {
+        guard !incoming.isEmpty else { return incoming }
+        let localById = Dictionary(existing.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        return incoming.map {
+            reconcileUnread(
+                incoming: $0,
+                local: localById[$0.id],
+                openConversationId: openConversationId,
+                now: now
+            )
         }
     }
 
@@ -1413,6 +1523,10 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
                 var updated = conversations
                 if let idx = updated.firstIndex(where: { $0.id == id }) {
                     updated[idx].userState.unreadCount = 0
+                    // Frontière de lecture : sans elle, le prochain instantané
+                    // serveur (delta au retour en avant-plan, reconnexion socket)
+                    // ré-injecterait le compteur d'AVANT l'ouverture.
+                    updated[idx].userState.lastReadAt = Date()
                 }
                 return updated
             }

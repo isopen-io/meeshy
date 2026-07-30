@@ -177,6 +177,99 @@ final class ConversationSyncEngineTests: XCTestCase {
         await fulfillment(of: [expectation], timeout: 2.0)
     }
 
+    // MARK: - Le delta sync ne ré-inflate pas un non-lu déjà lu localement
+
+    /// « La pastille part puis revient » : l'utilisateur ouvre la conversation
+    /// (compteur à 0 + frontière de lecture posée), puis un retour en
+    /// avant-plan ou une reconnexion socket déclenche un delta sync. Le serveur,
+    /// qui n'a pas encore traité l'accusé de lecture (outbox), renvoie encore
+    /// `unreadCount: 4` — et l'écriture cache brute rallumait la pastille.
+    func test_syncSinceLastCheckpoint_doesNotReviveUnread_afterLocalRead() async {
+        await CacheCoordinator.shared.conversations.invalidate(for: "list")
+        UserDefaults.standard.set(Date(), forKey: "me.meeshy.lastFullReconcileAt")
+
+        let lastMessageAt = Date().addingTimeInterval(-60)
+        var read = MeeshyConversation(
+            id: "c-read", identifier: "test-c-read", type: .direct,
+            lastMessageAt: lastMessageAt, unreadCount: 0
+        )
+        read.userState.lastReadAt = Date()  // frontière postérieure au dernier message
+        try? await CacheCoordinator.shared.conversations.save([read], for: "list")
+
+        mockAPI.stub("/conversations", result: OffsetPaginatedAPIResponse<[APIConversation]>(
+            success: true,
+            data: [TestFactories.makeAPIConversation(
+                id: "c-read", lastMessageAt: lastMessageAt, unreadCount: 4
+            )],
+            pagination: OffsetPagination(total: 1, hasMore: false, limit: 500, offset: 0),
+            error: nil
+        ))
+
+        await engine.syncSinceLastCheckpoint()
+
+        let cached = await CacheCoordinator.shared.conversations.load(for: "list").snapshot() ?? []
+        XCTAssertEqual(cached.first(where: { $0.id == "c-read" })?.userState.unreadCount, 0,
+            "un instantané serveur en retard sur la lecture locale ne doit pas rallumer la pastille")
+    }
+
+    /// Le pendant : un message VRAIMENT plus récent que la frontière doit
+    /// repasser la conversation en non-lu. La règle se répare toute seule et ne
+    /// peut pas masquer durablement un vrai non-lu.
+    func test_syncSinceLastCheckpoint_keepsUnread_whenMessageIsNewerThanLocalRead() async {
+        await CacheCoordinator.shared.conversations.invalidate(for: "list")
+        UserDefaults.standard.set(Date(), forKey: "me.meeshy.lastFullReconcileAt")
+
+        let readAt = Date().addingTimeInterval(-120)
+        var read = MeeshyConversation(
+            id: "c-fresh", identifier: "test-c-fresh", type: .direct,
+            lastMessageAt: readAt, unreadCount: 0
+        )
+        read.userState.lastReadAt = readAt
+        try? await CacheCoordinator.shared.conversations.save([read], for: "list")
+
+        mockAPI.stub("/conversations", result: OffsetPaginatedAPIResponse<[APIConversation]>(
+            success: true,
+            data: [TestFactories.makeAPIConversation(
+                id: "c-fresh", lastMessageAt: Date(), unreadCount: 2
+            )],
+            pagination: OffsetPagination(total: 1, hasMore: false, limit: 500, offset: 0),
+            error: nil
+        ))
+
+        await engine.syncSinceLastCheckpoint()
+
+        let cached = await CacheCoordinator.shared.conversations.load(for: "list").snapshot() ?? []
+        XCTAssertEqual(cached.first(where: { $0.id == "c-fresh" })?.userState.unreadCount, 2,
+            "un message postérieur à la frontière de lecture doit rendre la conversation non lue")
+    }
+
+    /// La conversation OUVERTE était protégée des broadcasts socket
+    /// (`handleUnreadUpdated`) mais pas des syncs REST.
+    func test_syncSinceLastCheckpoint_forcesOpenConversationToZero() async {
+        await CacheCoordinator.shared.conversations.invalidate(for: "list")
+        UserDefaults.standard.set(Date(), forKey: "me.meeshy.lastFullReconcileAt")
+        try? await CacheCoordinator.shared.conversations.save(
+            [MeeshyConversation(id: "c-open", identifier: "test-c-open", type: .direct)], for: "list"
+        )
+        engine.setCurrentlyOpenConversation("c-open")
+
+        mockAPI.stub("/conversations", result: OffsetPaginatedAPIResponse<[APIConversation]>(
+            success: true,
+            data: [TestFactories.makeAPIConversation(
+                id: "c-open", lastMessageAt: Date(), unreadCount: 75
+            )],
+            pagination: OffsetPagination(total: 1, hasMore: false, limit: 500, offset: 0),
+            error: nil
+        ))
+
+        await engine.syncSinceLastCheckpoint()
+
+        let cached = await CacheCoordinator.shared.conversations.load(for: "list").snapshot() ?? []
+        XCTAssertEqual(cached.first(where: { $0.id == "c-open" })?.userState.unreadCount, 0,
+            "l'utilisateur regarde cette conversation — aucun sync ne doit y remettre un compteur")
+        engine.setCurrentlyOpenConversation(nil)
+    }
+
     // MARK: - P7-10: réconciliation complète périodique (ghost pruning)
 
     /// Une conversation HARD-supprimée côté serveur n'est JAMAIS renvoyée par
@@ -1085,7 +1178,8 @@ private final class MockMessageService: MessageServiceProviding, @unchecked Send
 private extension TestFactories {
     static func makeAPIConversation(
         id: String = "conv-1",
-        lastMessageAt: Date? = nil
+        lastMessageAt: Date? = nil,
+        unreadCount: Int = 0
     ) -> APIConversation {
         var json: [String: Any] = [
             "id": id,
@@ -1094,7 +1188,7 @@ private extension TestFactories {
             "createdAt": ISO8601DateFormatter().string(from: Date()),
             "updatedAt": ISO8601DateFormatter().string(from: Date()),
             "isActive": true,
-            "unreadCount": 0
+            "unreadCount": unreadCount
         ]
         if let lastMessageAt {
             json["lastMessageAt"] = ISO8601DateFormatter().string(from: lastMessageAt)
