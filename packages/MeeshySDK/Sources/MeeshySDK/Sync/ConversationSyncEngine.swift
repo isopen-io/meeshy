@@ -278,6 +278,10 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
         let pageSize = 100
         let userId = await currentUserId()
         let service = self.conversationService
+        // Figée AVANT la première écriture : `saveSorted(firstPage)` remplace le
+        // cache par la seule page 1, et sans cette baseline les pages suivantes
+        // n'auraient plus d'homologue local où retrouver leur frontière de lecture.
+        let baseline = await cache.conversations.load(for: "list").snapshot() ?? []
 
         // Fetch the first page to show something on screen as fast as
         // possible, then fan out to the remaining pages in parallel. On
@@ -293,7 +297,7 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
             firstPage = (await Self.mapConversationsOffMain(response.data, userId: userId))
             firstPageReturnedCount = response.data.count
             totalCount = response.pagination?.total
-            await saveSorted(firstPage, to: "list")
+            await saveSorted(firstPage, to: "list", baseline: baseline)
             await SearchIndex.shared.indexConversations(firstPage)
             _conversationsDidChange.send()
         } catch {
@@ -429,7 +433,7 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
                 succeeded = recoveredAll
             }
 
-            await saveSorted(merged, to: "list")
+            await saveSorted(merged, to: "list", baseline: baseline)
             await SearchIndex.shared.indexConversations(merged)
             _conversationsDidChange.send()
         }
@@ -460,7 +464,7 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
                 let newItems = page.filter { !existingIds.contains($0.id) }
                 merged.append(contentsOf: newItems)
                 if !newItems.isEmpty {
-                    await saveSorted(merged, to: "list")
+                    await saveSorted(merged, to: "list", baseline: baseline)
                     await SearchIndex.shared.indexConversations(newItems)
                     _conversationsDidChange.send()
                 }
@@ -571,7 +575,7 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
                 await cache.messages.invalidate(for: removedId)
             }
 
-            await saveSorted(merged, to: "list")
+            await saveSorted(merged, to: "list", baseline: existing)
             await SearchIndex.shared.indexConversations(deltaConversations.filter { $0.isActive })
             _conversationsDidChange.send()
 
@@ -1384,14 +1388,29 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
     /// grouping pipeline. Backend pagination is not guaranteed to be timestamp-
     /// sorted (interleaved deltas, parallel page merges, server-side tweaks),
     /// so the engine must enforce the order rather than trust the network.
-    private func saveSorted(_ items: [MeeshyConversation], to cacheKey: String) async {
+    /// - Parameter baseline: instantané cache pris AVANT le début de la sync.
+    ///   Indispensable pour `fullSync`, qui persiste sa première page avant
+    ///   d'avoir les suivantes : sans baseline figée, la deuxième écriture
+    ///   confronterait les pages 2+ à un cache réduit à la page 1, et leurs
+    ///   frontières de lecture — introuvables — seraient silencieusement
+    ///   perdues. `nil` relit le cache (appelants à écriture unique).
+    private func saveSorted(
+        _ items: [MeeshyConversation],
+        to cacheKey: String,
+        baseline: [MeeshyConversation]? = nil
+    ) async {
         // Chokepoint UNIQUE de toute écriture liste dérivée du serveur (fullSync
         // ×3, deltaSync ×1) : on y réconcilie le non-lu AVANT de persister, sinon
         // un instantané serveur en retard sur un `markAsRead` encore dans
         // l'outbox rallume la pastille (« ça part puis ça revient »).
         let reconciled: [MeeshyConversation]
         if cacheKey == "list" {
-            let existing = await cache.conversations.load(for: cacheKey).snapshot() ?? []
+            let existing: [MeeshyConversation]
+            if let baseline {
+                existing = baseline
+            } else {
+                existing = await cache.conversations.load(for: cacheKey).snapshot() ?? []
+            }
             reconciled = Self.reconcileUnread(
                 incoming: items,
                 existing: existing,

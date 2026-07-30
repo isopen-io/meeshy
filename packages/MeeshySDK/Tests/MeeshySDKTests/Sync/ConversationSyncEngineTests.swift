@@ -270,6 +270,55 @@ final class ConversationSyncEngineTests: XCTestCase {
         engine.setCurrentlyOpenConversation(nil)
     }
 
+    /// `fullSync` persiste sa PREMIÈRE page avant d'avoir les suivantes : le
+    /// cache est alors réduit à la page 1. Sans baseline figée avant la sync,
+    /// la deuxième écriture confronterait les conversations des pages 2+ à ce
+    /// cache tronqué, n'y trouverait aucun homologue local, et perdrait
+    /// silencieusement leur frontière de lecture — la pastille revenait donc
+    /// pour toute conversation lue au-delà de la première page.
+    func test_fullSync_preservesReadFrontier_forConversationsBeyondFirstPage() async {
+        await CacheCoordinator.shared.conversations.invalidate(for: "list")
+
+        let lastMessageAt = Date().addingTimeInterval(-300)
+        // 3 conversations en cache, toutes lues localement.
+        var cached: [MeeshyConversation] = (0..<3).map { i in
+            MeeshyConversation(
+                id: "c-page\(i)", identifier: "test-c-page\(i)", type: .direct,
+                lastMessageAt: lastMessageAt, unreadCount: 0
+            )
+        }
+        for i in cached.indices { cached[i].userState.lastReadAt = Date() }
+        try? await CacheCoordinator.shared.conversations.save(cached, for: "list")
+
+        // Le serveur les renvoie toutes non lues (accusés de lecture pas encore
+        // traités), sur DEUX pages : `c-page0` seule en page 1, les deux autres
+        // au fan-out. La première écriture réduit le cache à `c-page0` — sans
+        // baseline figée, la seconde ne retrouvait plus la frontière de
+        // `c-page1` / `c-page2` et laissait passer le compteur serveur.
+        func page(_ ids: [Int], total: Int) -> Result<OffsetPaginatedAPIResponse<[APIConversation]>, Error> {
+            .success(OffsetPaginatedAPIResponse(
+                success: true,
+                data: ids.map {
+                    TestFactories.makeAPIConversation(
+                        id: "c-page\($0)", lastMessageAt: lastMessageAt, unreadCount: 6
+                    )
+                },
+                pagination: OffsetPagination(total: total, hasMore: false, limit: 100, offset: 0),
+                error: nil
+            ))
+        }
+        mockConvService.listResultsByOffset = [0: page([0], total: 3), 1: page([1, 2], total: 3)]
+        mockConvService.listResult = page([], total: 3)
+
+        await engine.fullSync()
+
+        let result = await CacheCoordinator.shared.conversations.load(for: "list").snapshot() ?? []
+        for i in 0..<3 {
+            XCTAssertEqual(result.first(where: { $0.id == "c-page\(i)" })?.userState.unreadCount, 0,
+                "c-page\(i) était lue localement — aucune écriture de fullSync ne doit rallumer sa pastille")
+        }
+    }
+
     // MARK: - P7-10: réconciliation complète périodique (ghost pruning)
 
     /// Une conversation HARD-supprimée côté serveur n'est JAMAIS renvoyée par
@@ -1100,14 +1149,21 @@ private final class MockConversationService: ConversationServiceProviding, @unch
         OffsetPaginatedAPIResponse(success: true, data: [], pagination: nil, error: nil)
     )
     var listCallCount = 0
+    /// Réponses par OFFSET — nécessaire pour exercer la pagination réelle de
+    /// `fullSync` (page 1 puis fan-out) : avec la seule `listResult`, toutes
+    /// les pages renvoient les mêmes ids et le code de fusion des pages 2+
+    /// n'est jamais atteint. Un offset absent retombe sur `listResult`.
+    var listResultsByOffset: [Int: Result<OffsetPaginatedAPIResponse<[APIConversation]>, Error>] = [:]
 
     func reset() {
         listCallCount = 0
+        listResultsByOffset = [:]
         listResult = .success(OffsetPaginatedAPIResponse(success: true, data: [], pagination: nil, error: nil))
     }
 
     func list(offset: Int, limit: Int) async throws -> OffsetPaginatedAPIResponse<[APIConversation]> {
         listCallCount += 1
+        if let scoped = listResultsByOffset[offset] { return try scoped.get() }
         return try listResult.get()
     }
 
