@@ -173,6 +173,13 @@ struct iPadRootView: View {
 
                 conversationViewModel.observeSync()
 
+                #if DEBUG
+                // Pré-résout à pile courte les métadonnées du 1er rendu de
+                // ConversationView (classe de crashs stack-overflow du décodeur
+                // Swift sur device Debug — cf. ConversationFirstRenderWarmup).
+                ConversationFirstRenderWarmup.run()
+                #endif
+
                 // Réponse à un mood : résout/ouvre la DM avec l'auteur et amorce
                 // le composer (voir RootView pour l'équivalent iPhone).
                 StatusBubbleController.shared.onConfirmedReply = { entry in
