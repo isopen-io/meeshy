@@ -661,6 +661,7 @@ public struct RepostImportResult: Sendable {
     public let stickers: [StorySticker]
     public let drawingData: Data?
     public let audios: [StoryAudioPlayerObject]
+    public let locations: [StoryLocationObject]
     public let warnings: [CanvasReprojector.ReprojectionWarning]
     public let targetSize: CGSize
 
@@ -684,6 +685,7 @@ extension UnifiedPostComposer {
         var stickers: [StorySticker] = []
         var drawingData: Data? = nil
         var audios: [StoryAudioPlayerObject] = []
+        var locations: [StoryLocationObject] = []
 
         for t in payload.textObjects {
             let r = projector.reproject(text: t)
@@ -709,6 +711,11 @@ extension UnifiedPostComposer {
             // audio reprojection is identity (no spatial position)
             audios.append(projector.reproject(audio: a).value)
         }
+        for l in payload.locationObjects {
+            let r = projector.reproject(location: l)
+            locations.append(r.value)
+            if let w = r.warning { warnings.append(w) }
+        }
 
         return RepostImportResult(
             texts: texts,
@@ -716,6 +723,7 @@ extension UnifiedPostComposer {
             stickers: stickers,
             drawingData: drawingData,
             audios: audios,
+            locations: locations,
             warnings: warnings,
             targetSize: targetSize
         )

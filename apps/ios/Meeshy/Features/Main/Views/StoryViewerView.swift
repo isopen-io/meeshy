@@ -873,7 +873,7 @@ struct StoryViewerView: View {
                 },
                 onStoryImported: { result in
                     Logger.stories.info(
-                        "repost.import slide=\(result.targetSize.width, privacy: .public)x\(result.targetSize.height, privacy: .public) texts=\(result.texts.count, privacy: .public) media=\(result.media.count, privacy: .public) stickers=\(result.stickers.count, privacy: .public) drawing=\(result.drawingData != nil, privacy: .public) audios=\(result.audios.count, privacy: .public) clamped=\(result.warnings.count, privacy: .public)"
+                        "repost.import slide=\(result.targetSize.width, privacy: .public)x\(result.targetSize.height, privacy: .public) texts=\(result.texts.count, privacy: .public) media=\(result.media.count, privacy: .public) stickers=\(result.stickers.count, privacy: .public) drawing=\(result.drawingData != nil, privacy: .public) audios=\(result.audios.count, privacy: .public) locations=\(result.locations.count, privacy: .public) clamped=\(result.warnings.count, privacy: .public)"
                     )
                 },
                 onDismiss: { editAndRepostAsPostSource = nil }

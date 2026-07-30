@@ -125,6 +125,35 @@ final class UnifiedPostComposerImportTests: XCTestCase {
         XCTAssertEqual(result.warnings.count, 0)
     }
 
+    /// Regression: reposting a story carrying a location badge must not drop it —
+    /// mirrors the audio/text/media/sticker coverage above.
+    func test_realComposer_importFromStory_preservesLocation_reprojected() {
+        let location = StoryLocationObject(
+            id: "l1",
+            place: SharedPlace(latitude: 48.8566, longitude: 2.3522),
+            x: 0.5, y: 0.5
+        )
+        let payload = RepostPayload(
+            textObjects: [],
+            mediaObjects: [],
+            stickers: [],
+            drawingData: nil,
+            audioPlayerObjects: [],
+            locationObjects: [location],
+            sourceCanvasSize: CGSize(width: 1080, height: 1920),
+            sourceSlideId: "slide-1",
+            sourceStoryItemId: nil
+        )
+        let composer = UnifiedPostComposer(
+            onPublish: { _, _, _, _, _ in },
+            onDismiss: { }
+        )
+        let result = composer.importFromStory(payload, targetSize: CGSize(width: 1080, height: 1080))
+        XCTAssertEqual(result.locations.count, 1)
+        XCTAssertEqual(result.locations.first?.id, "l1")
+        XCTAssertEqual(result.warnings.count, 0)
+    }
+
     // MARK: - StoryItem.extractRepostPayload
 
     func test_storyItem_extractRepostPayload_pullsAllItemsFromStoryEffects() {
@@ -143,6 +172,20 @@ final class UnifiedPostComposerImportTests: XCTestCase {
         XCTAssertEqual(payload.sourceSlideId, "story-99")
         XCTAssertEqual(payload.sourceStoryItemId, "story-99")
         XCTAssertEqual(payload.sourceCanvasSize, CanvasGeometry.designSize)
+    }
+
+    /// Regression: reposting a StoryItem carrying a location badge must not drop it —
+    /// mirrors `test_extract_preservesLocationObjects` in RepostPayloadTests (StorySlide side).
+    func test_storyItem_extractRepostPayload_preservesLocationObjects() {
+        var effects = StoryEffects()
+        effects.locationObjects = [
+            StoryLocationObject(id: "l1", place: SharedPlace(latitude: 48.8566, longitude: 2.3522))
+        ]
+        let item = StoryItem(id: "story-loc", content: nil, media: [],
+                             storyEffects: effects, createdAt: Date())
+        let payload = item.extractRepostPayload()
+        XCTAssertEqual(payload.locationObjects.count, 1)
+        XCTAssertEqual(payload.locationObjects.first?.id, "l1")
     }
 
     /// Regression: a landscape-canvas StoryItem's repost payload must carry the
