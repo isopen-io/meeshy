@@ -131,6 +131,21 @@ export class ExpiredStoriesCleanupService {
           where: { postId: { in: allPostIds } },
         });
 
+        // Les usages meurent avec le post ; le Sound, lui, SURVIT.
+        // `allPostIds` = stories expirées + leurs reposts. Ne PAS utiliser `ids`
+        // (stories seules), qui laisserait les usages des reposts orphelins.
+        const orphanUsages = await this.prisma.soundUsage.findMany({
+          where: { postId: { in: allPostIds } },
+          select: { soundId: true },
+        });
+        await this.prisma.soundUsage.deleteMany({ where: { postId: { in: allPostIds } } });
+        for (const usage of orphanUsages) {
+          await this.prisma.sound.update({
+            where: { id: usage.soundId },
+            data: { usageCount: { decrement: 1 } },
+          }).catch(() => undefined);
+        }
+
         // G7 — PostMedia.post/.comment are `onDelete: SetNull`: without this
         // explicit purge every hard-deleted story left its media rows
         // orphaned (postId = null) FOREVER — stories are the most

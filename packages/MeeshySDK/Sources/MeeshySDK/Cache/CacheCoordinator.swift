@@ -114,6 +114,22 @@ public actor CacheCoordinator {
         return audioLocalFileURL(for: remote.absoluteString)
     }
 
+    /// Idem pour l'image. Utilisé par l'export MP4 de story, qui doit disposer
+    /// d'un `file://` : son compositor décode le fond frame par frame, sur le
+    /// main actor et de façon SYNCHRONE — il ne peut donc rien télécharger
+    /// lui-même. `StoryExporter` résout tous les visuels par ici AVANT de
+    /// composer.
+    nonisolated public static func imageLocalFileURLAwait(for remote: URL) async -> URL? {
+        if remote.isFileURL { return remote }
+        if let cached = imageLocalFileURL(for: remote.absoluteString) { return cached }
+        do {
+            _ = try await shared.images.data(for: remote.absoluteString)
+        } catch {
+            Logger.cache.error("Image prefetch failed before local-URL resolution: \(error.localizedDescription, privacy: .public)")
+        }
+        return imageLocalFileURL(for: remote.absoluteString)
+    }
+
     /// Check image disk cache synchronously. Returns cached UIImage if available.
     nonisolated public static func cachedImage(for urlString: String) -> UIImage? {
         DiskCacheStore.cachedImage(for: urlString)

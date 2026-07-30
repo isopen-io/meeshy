@@ -511,26 +511,59 @@ public final class StoryAVCompositor: NSObject, nonisolated AVVideoCompositing, 
         }
     }
 
-    /// Resolves the bitmap for a slide whose background is an image. Looks
-    /// for the first `mediaObjects` entry with `isBackground == true &&
-    /// kind == .image`. Tries the local file URL first (composer in-memory
-    /// case) then falls back to `mediaURL` as a file path. Returns `nil` if
-    /// the image can't be loaded — caller leaves the substrate untouched.
+    /// Dernier bitmap de fond décodé, mémoïsé par adresse.
+    ///
+    /// `resolveBackgroundImage` est appelé à CHAQUE frame ; sans mémo, une story
+    /// de 10 s re-décode 300 fois le même JPEG plein cadre. Une seule entrée
+    /// suffit : une slide n'a qu'un fond, et l'entrée se remplace d'elle-même dès
+    /// que l'adresse change. Isolé `@MainActor` comme `renderFrame`, son unique
+    /// lecteur.
+    ///
+    /// Contrepartie assumée : un bitmap (≈ 8 Mo en 1080×1920) reste retenu après
+    /// le dernier export, jusqu'à ce que l'export suivant le remplace. C'est le
+    /// prix d'un slot unique sans `deinit` — un `deinit` isolé sur ce type ferait
+    /// courir le risque de double-libération documenté par SE-0466 sur iOS < 26.
+    @MainActor
+    private static var backgroundImageMemo: (key: String, image: UIImage)?
+
+    /// Resolves the bitmap for a slide whose background is an image.
+    ///
+    /// Priorité IDENTIQUE à celle de `StoryRenderer.renderBackground` : l'entrée
+    /// `mediaObjects` marquée `isBackground && kind == .image` d'abord, puis le
+    /// fond legacy porté par `StorySlide.mediaURL` (stories d'avant les
+    /// mediaObjects, et backdrop statique d'une story moderne — cf.
+    /// `StoryItem.toRenderableSlide`). Ce second cas n'était pas couvert : le
+    /// renderer annonçait `.image`, le compositor ne trouvait rien, et le fond
+    /// sortait noir du MP4.
+    ///
+    /// L'adresse est attendue LOCALE — `StoryExporter.hydratingLocalMedia` a
+    /// rapatrié les URLs distantes avant que la composition ne commence, parce
+    /// qu'ici on est sur le main actor, en synchrone, une fois par frame.
+    /// Retourne `nil` si l'image ne charge pas — l'appelant laisse alors le
+    /// substrat intact.
     @MainActor
     private static func resolveBackgroundImage(for slide: StorySlide) -> UIImage? {
-        guard let bg = slide.effects.mediaObjects?.first(where: {
+        let candidate: String?
+        if let bg = slide.effects.mediaObjects?.first(where: {
             $0.isBackground && $0.kind == .image
-        }) else { return nil }
-        if let urlString = bg.mediaURL,
-           let url = URL(string: urlString),
-           url.isFileURL,
-           let image = UIImage(contentsOfFile: url.path) {
-            return image
+        }) {
+            candidate = bg.mediaURL
+        } else {
+            candidate = slide.mediaURL
         }
-        if let path = bg.mediaURL, let image = UIImage(contentsOfFile: path) {
-            return image
+        guard let candidate, !candidate.isEmpty else { return nil }
+
+        if let memo = backgroundImageMemo, memo.key == candidate { return memo.image }
+
+        let loaded: UIImage?
+        if let url = URL(string: candidate), url.isFileURL {
+            loaded = UIImage(contentsOfFile: url.path)
+        } else {
+            loaded = UIImage(contentsOfFile: candidate)
         }
-        return nil
+        guard let image = loaded else { return nil }
+        backgroundImageMemo = (candidate, image)
+        return image
     }
 
     /// Paints `image` in `cg` to fill `size`, preserving aspect ratio

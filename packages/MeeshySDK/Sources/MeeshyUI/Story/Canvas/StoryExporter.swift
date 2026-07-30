@@ -52,7 +52,8 @@ public enum StoryExporter {
     /// Exports `slide` to `outputURL` as an MP4 file.
     ///
     /// - Parameters:
-    ///   - slide: The slide to render through the AV compositor.
+    ///   - inputSlide: The slide to render through the AV compositor. Ses médias
+    ///     sont d'abord ramenés à des fichiers locaux par `hydratingLocalMedia`.
     ///   - outputURL: Destination MP4 path. Overwritten if it already exists.
     ///   - languages: Preferred languages threaded to `StoryRenderer.render`
     ///     so text overlays bake in the chosen language (Prisme Linguistique).
@@ -81,7 +82,7 @@ public enum StoryExporter {
     ///     insérés comme pistes, jamais re-rendus — c'est ce qui permet de
     ///     supprimer la passe de ré-encodage que `StoryExportBranding.wrap`
     ///     imposait (mesurée ~2,5 s sur une story de 10 s).
-    public static func export(_ slide: StorySlide,
+    public static func export(_ inputSlide: StorySlide,
                               to outputURL: URL,
                               languages: [String] = [],
                               watermark: StoryExportWatermark? = nil,
@@ -101,6 +102,15 @@ public enum StoryExporter {
                 Task { @MainActor in UIApplication.shared.endBackgroundTask(backgroundTaskId) }
             }
         }
+
+        // Tous les visuels sont ramenés à des `file://` locaux AVANT la moindre
+        // composition. C'est la seule étape du pipeline qui a le droit d'être
+        // asynchrone : la piste vidéo de fond est posée juste en dessous, et le
+        // compositor décode le fond image frame par frame, sur le main actor et
+        // de façon synchrone — ni l'un ni l'autre ne peut télécharger quoi que ce
+        // soit. Placée DANS la fenêtre de `beginBackgroundTask` pour qu'un
+        // téléchargement survive au passage en arrière-plan.
+        let slide = await hydratingLocalMedia(inputSlide)
 
         let composition = AVMutableComposition()
         // Use the deterministic total duration so every element on the slide
@@ -520,6 +530,77 @@ public enum StoryExporter {
             params.setVolumeRamp(fromStartVolume: 1, toEndVolume: 0, timeRange: fade)
         }
         return parameters
+    }
+
+    // MARK: - Résolution des médias visuels
+
+    /// Adresse LOCALE d'un média visuel — **point de résolution UNIQUE** de tous
+    /// les chemins d'export, miroir exact de `resolveLaneURL` pour l'audio.
+    ///
+    /// Trois formes d'adresse arrivent ici, et une seule était jusqu'ici gérée :
+    /// 1. `file://` — la session composer. Honoré tel quel, mais seulement s'il
+    ///    existe sur CET appareil : un `file://` publié pointe vers la sandbox de
+    ///    l'auteur et serait servi mort à AVFoundation.
+    /// 2. `https://…` — l'URL serveur qu'une story publiée porte réellement
+    ///    (`StoryViewModel` flippe le `file://` local vers `TusUploadResult.fileUrl`).
+    /// 3. `/api/v1/attachments/…` — la même, en relatif, telle que l'émettent
+    ///    `getAttachmentPath` / le forward / le repost.
+    ///
+    /// Les deux dernières sont normalisées par `StoryBackgroundLayer.directURLIfAny`
+    /// (donc par `MeeshyConfig.resolveMediaURL`, garde SSRF comprise) puis
+    /// rapatriées sur disque. C'est exactement la cascade du canvas live : sans
+    /// elle, l'export ne savait résoudre QUE les stories encore ouvertes dans le
+    /// composer, et bakait un fond noir pour toutes les autres.
+    static func resolveVisualURL(_ raw: String, kind: StoryMediaKind?) async -> URL? {
+        guard let url = StoryBackgroundLayer.directURLIfAny(from: raw) else { return nil }
+        if url.isFileURL {
+            return FileManager.default.fileExists(atPath: url.path) ? url : nil
+        }
+        switch kind {
+        case .video: return await CacheCoordinator.videoLocalFileURLAwait(for: url)
+        case .image, .none: return await CacheCoordinator.imageLocalFileURLAwait(for: url)
+        }
+    }
+
+    /// Retourne une copie de `slide` dont chaque média visuel porte une adresse
+    /// LOCALE, prête à être consommée par la suite du pipeline.
+    ///
+    /// Pourquoi réécrire le MODÈLE plutôt que câbler chaque site : quatre
+    /// consommateurs distincts lisent `mediaURL` en aval — la pose de la piste
+    /// vidéo de fond, `StoryAVCompositor.resolveBackgroundImage`,
+    /// `StoryForegroundVideoFrameSource` et `StoryMediaLayer` — et tous
+    /// fonctionnent déjà parfaitement sur un `file://` (c'est ce que prouve le
+    /// chemin composer). Résoudre une fois en amont les répare tous, et rend
+    /// impossible qu'un cinquième consommateur naisse cassé.
+    ///
+    /// **Ne nullifie jamais.** Une adresse non résolvable (hors ligne, 404,
+    /// fichier disparu) est laissée telle quelle : le comportement reste au pire
+    /// celui d'avant la résolution, jamais pire.
+    static func hydratingLocalMedia(_ slide: StorySlide) async -> StorySlide {
+        var hydrated = slide
+
+        if var medias = hydrated.effects.mediaObjects, !medias.isEmpty {
+            for index in medias.indices {
+                guard let raw = medias[index].mediaURL, !raw.isEmpty else { continue }
+                if let local = await resolveVisualURL(raw, kind: medias[index].kind) {
+                    medias[index].mediaURL = local.absoluteString
+                }
+            }
+            hydrated.effects.mediaObjects = medias
+        }
+
+        // Fond legacy : `StoryRenderer.renderBackground` ne le consulte que si
+        // AUCUN `mediaObject` ne porte le fond — on applique ici la même
+        // priorité, pour ne jamais rapatrier un asset que le rendu ignorera.
+        let hasBackgroundObject = (hydrated.effects.mediaObjects ?? [])
+            .contains { $0.isBackground }
+        if !hasBackgroundObject,
+           let legacy = hydrated.mediaURL, !legacy.isEmpty,
+           let local = await resolveVisualURL(legacy, kind: .image) {
+            hydrated.mediaURL = local.absoluteString
+        }
+
+        return hydrated
     }
 
     // MARK: - Audio composition
