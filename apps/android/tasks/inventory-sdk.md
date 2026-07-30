@@ -644,7 +644,7 @@ All models are Decodable/Encodable with readonly properties and optional CodingK
   - `audio:translations-completed` ← AudioTranslationsCompletedEventData (final batch)
 
 - [ ] **Location**
-  - `location:shared` ← LocationSharedEventData { messageId, conversationId, userId, latitude, longitude, altitude?, accuracy?, placeName?, address?, timestamp }
+  - `location:shared` — retired end-to-end (commit `c07d4648d`); gateway no longer routes it, live location is the only surviving path.
   - `location:live-started` ← LocationLiveStartedEventData { conversationId, userId, username, latitude, longitude, durationMinutes, expiresAt, startedAt }
   - `location:live-updated` ← LocationLiveUpdatedEventData { conversationId, userId, latitude, longitude, altitude?, accuracy?, speed?, heading?, timestamp }
   - `location:live-stopped` ← LocationLiveStoppedEventData { conversationId, userId, stoppedAt }

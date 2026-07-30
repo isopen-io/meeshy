@@ -600,7 +600,7 @@ core utilities, crypto/diagnostics, and the bulk of the SDK domain models.
 
 **Purpose**: Static + live location sharing DTOs and the active-session model.
 
-**Public API**: `MeeshyLocationCoordinate` (+ `clLocationCoordinate`); static share `LocationSharePayload`/`LocationSharedEvent`; `enum LiveLocationDuration` (15m–8h); live `LiveLocationStartPayload`/`StartedEvent`, `UpdatePayload`/`UpdatedEvent`, `StoppedEvent`; `struct ActiveLiveLocation` (Identifiable — `isExpired`, `remainingTime`, `coordinate`).
+**Public API**: `MeeshyLocationCoordinate` (+ `clLocationCoordinate`); `enum LiveLocationDuration` (15m–8h); live `LiveLocationStartPayload`/`StartedEvent`, `UpdatePayload`/`UpdatedEvent`, `StoppedEvent`; `struct ActiveLiveLocation` (Identifiable — `isExpired`, `remainingTime`, `coordinate`). Static share (`LocationSharePayload`/`LocationSharedEvent`) was retired end-to-end (commit `c07d4648d`) — live location is the only surviving path.
 
 **Android port note**: `data class`es; `CLLocationCoordinate2D` → `com.google.android.gms.maps.model.LatLng` (or a plain pair). Live location uses socket events — wire to the socket layer.
 

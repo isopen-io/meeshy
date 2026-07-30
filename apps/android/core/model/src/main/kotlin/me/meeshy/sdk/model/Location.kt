@@ -11,32 +11,6 @@ data class MeeshyLocationCoordinate(
     val accuracy: Double? = null,
 )
 
-/** Static location share payload — port of LocationSharePayload (LocationModels.swift). */
-@Serializable
-data class LocationSharePayload(
-    val conversationId: String,
-    val latitude: Double = 0.0,
-    val longitude: Double = 0.0,
-    val altitude: Double? = null,
-    val accuracy: Double? = null,
-    val placeName: String? = null,
-    val address: String? = null,
-)
-
-@Serializable
-data class LocationSharedEvent(
-    val messageId: String = "",
-    val conversationId: String = "",
-    val userId: String = "",
-    val latitude: Double = 0.0,
-    val longitude: Double = 0.0,
-    val altitude: Double? = null,
-    val accuracy: Double? = null,
-    val placeName: String? = null,
-    val address: String? = null,
-    val timestamp: String? = null,
-)
-
 @Serializable
 data class LiveLocationStartPayload(
     val conversationId: String,
