@@ -45,6 +45,12 @@ struct UniversalComposerBar: View {
     /// Called when clipboard content exceeds 2000 chars (creates a clipboard_content attachment)
     var onClipboardContent: ((ClipboardContent) -> Void)? = nil
 
+    /// Émis quand l'utilisateur dépose ou colle du contenu dans la bande du
+    /// composer. Chaque `.file` pointe un fichier DÉJÀ copié dans notre
+    /// conteneur : l'hôte en devient propriétaire (il le déplace ou le
+    /// supprime). Un `.text` est destiné au champ de saisie de l'hôte.
+    var onIngest: (([ComposerIngest]) -> Void)? = nil
+
     // MARK: - Configuration
 
     var placeholder: String = "Message..."
@@ -411,6 +417,10 @@ struct UniversalComposerBar: View {
             }
         }
         .animation(.spring(response: 0.35, dampingFraction: 0.8), value: isMinimized)
+        // Cible de dépôt sur le conteneur externe : couvre toute la bande
+        // (champ, barre d'outils, bandeaux édition/réponse, tiroir
+        // d'attachements). Voir UniversalComposerBar+Drop.swift.
+        .modifier(ComposerDropTargetModifier(accentColor: accentColor, onIngest: onIngest))
         .onAppear {
             isMinimized = startMinimized
         }

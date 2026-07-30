@@ -386,6 +386,30 @@ extension UniversalComposerBar {
     // MARK: - Clipboard Content Handling
 
     func handleClipboardCheck(_ newText: String) {
+        // Collage d'une URL `file://` → pièce jointe, pas du texte. Delta
+        // HONNÊTE, distinct de l'expression historique ci-dessous (qui compte
+        // le double de la croissance réelle et dont le seuil ne doit pas
+        // bouger) : seule une INSERTION assez grande pour contenir
+        // « file:// » déclenche la détection — un utilisateur qui tape ces
+        // caractères un par un n'a jamais une insertion de cette taille.
+        let insertedCount = newText.count - text.count
+        if insertedCount >= "file://".count, newText.contains("file://") {
+            let (cleaned, urls) = FileURLPasteDetector.detect(in: newText)
+            if !urls.isEmpty {
+                // Le champ garde le texte débarrassé des URLs ; les fichiers
+                // partent par `onIngest`, comme un dépôt.
+                DispatchQueue.main.async {
+                    text = cleaned
+                }
+                ingestPastedFileURLs(urls)
+                HapticFeedback.medium()
+                // Pas de tuile presse-papier pour un collage de fichiers :
+                // la spec exige « une pièce jointe — pas du texte, pas une
+                // tuile presse-papier ».
+                return
+            }
+        }
+
         // Detect if a paste of 2000+ chars just happened
         let delta = newText.count - (text.count - (newText.count - text.count))
         if newText.count > 2000 && delta > 500 {
