@@ -777,7 +777,10 @@ struct OutboxDispatcher: OutboxDispatching {
                     replyToId: item.replyToId,
                     storyReplyToId: nil,
                     originalLanguage: item.originalLanguage,
-                    clientMessageId: item.clientMessageId
+                    clientMessageId: item.clientMessageId,
+                    // Lieu partagé rejoué au renvoi — le canal socket porte la
+                    // même clé `location` que le corps REST.
+                    location: item.location
                 )
                 guard let ack else {
                     throw NSError(
@@ -864,7 +867,10 @@ struct OutboxDispatcher: OutboxDispatching {
                     replyToId: item.replyToId,
                     storyReplyToId: nil,
                     originalLanguage: item.originalLanguage,
-                    clientMessageId: item.clientMessageId
+                    clientMessageId: item.clientMessageId,
+                    // Lieu partagé rejoué au renvoi — même clé `location` que
+                    // le corps REST.
+                    location: item.location
                 )
                 guard let ack else {
                     throw NSError(
@@ -894,7 +900,10 @@ struct OutboxDispatcher: OutboxDispatching {
                 forwardedFromId: item.forwardedFromId,
                 forwardedFromConversationId: item.forwardedFromConversationId,
                 attachmentIds: item.attachmentIds,
-                clientMessageId: item.clientMessageId
+                clientMessageId: item.clientMessageId,
+                // Lieu partagé rejoué au renvoi, comme pour un post et un
+                // commentaire : clé top-level `location`, omise quand nil.
+                location: item.location
             )
             let response = try await MessageService.shared.send(
                 conversationId: item.conversationId, request: request

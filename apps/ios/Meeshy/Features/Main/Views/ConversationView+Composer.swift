@@ -155,7 +155,10 @@ extension ConversationView {
             externalIsRecording: audioRecorder.isRecording,
             externalRecordingDuration: audioRecorder.duration,
             externalAudioLevels: audioRecorder.audioLevels,
-            externalHasContent: !composerState.pendingAttachments.isEmpty || audioRecorder.isRecording,
+            // `pendingPlace` inclus (parité PostDetailView / StoryViewerView) :
+            // sans lui le bouton d'envoi reste inactif pour un message
+            // « lieu seul », que les gardes acceptent pourtant désormais.
+            externalHasContent: !composerState.pendingAttachments.isEmpty || audioRecorder.isRecording || composerState.pendingPlace != nil,
             // ⚠️ NE PAS câbler `viewModel.isSending` ici : il reste true pendant
             // tout le cycle REST(12s)+fallback socket(10s) d'UN message — le
             // bouton d'envoi serait mort ~22s par message en réseau dégradé

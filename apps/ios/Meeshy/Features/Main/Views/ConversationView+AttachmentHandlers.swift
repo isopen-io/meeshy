@@ -73,7 +73,13 @@ extension ConversationView {
             return
         }
         let text = composerText.text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !text.isEmpty || !composerState.pendingAttachments.isEmpty else {
+        // Lieu capturé AVANT toute remise à zéro d'état : il n'est remis à nil
+        // QU'AU SUCCÈS de l'envoi qui le porte — un échec laisse la tuile en
+        // place pour réessayer sans re-choisir son lieu (lot 2, spec 2026-07-30).
+        let place = composerState.pendingPlace
+        // Garde partagé avec `ConversationViewModel.sendMessage` : un message
+        // « lieu seul » est un envoi valide.
+        guard SendEligibility.canSend(text: text, attachmentIds: composerState.pendingAttachments.map(\.id), location: place) else {
             Logger.messages.error("SendTap BLOCKED guard=emptyContent convId=\(viewModel.conversationId, privacy: .public)")
             return
         }
@@ -122,7 +128,14 @@ extension ConversationView {
             viewModel.stopTypingEmission()
             HapticFeedback.light()
             Logger.messages.info("SendTap text-only dispatch convId=\(viewModel.conversationId, privacy: .public) textLen=\(text.count, privacy: .public) — field cleared, launching sendMessage Task")
-            Task { await viewModel.sendMessage(content: text, replyToId: replyId, storyReplyToId: storyReplyId, storyReplyReference: storyRef, originalLanguage: lang) }
+            Task {
+                let ok = await viewModel.sendMessage(content: text, replyToId: replyId, storyReplyToId: storyReplyId, storyReplyReference: storyRef, originalLanguage: lang, location: place)
+                // Succès (ACK ou mise en file durable) : le lieu est parti, la
+                // tuile disparaît. Échec : la tuile reste pour un nouvel essai.
+                if ok, place != nil {
+                    withAnimation { composerState.pendingPlace = nil }
+                }
+            }
             return
         }
 
@@ -457,14 +470,33 @@ extension ConversationView {
             }
 
             // Send text group last (preserves original planner ordering intent).
+            // Le lieu voyage avec le message texte (envoyé en dernier, comme la
+            // tuile l'annonce dans le composer) ; sans texte, il part comme
+            // message « lieu seul » après les médias. Dans les deux cas
+            // `pendingPlace` n'est remis à nil QU'AU SUCCÈS de l'envoi qui le
+            // porte — un échec laisse la tuile pour réessayer.
             if let textGroup = plan.first(where: { $0.kind == .text }) {
                 let ok = await viewModel.sendMessage(
                     content: textGroup.text ?? "",
                     replyToId: textGroup.carriesReply ? replyId : nil,
                     storyReplyToId: textGroup.carriesReply ? storyReplyId : nil,
                     storyReplyReference: textGroup.carriesReply ? storyRef : nil,
-                    originalLanguage: lang
+                    originalLanguage: lang,
+                    location: place
                 )
+                if ok, place != nil {
+                    withAnimation { composerState.pendingPlace = nil }
+                }
+                anySuccess = anySuccess || ok
+            } else if place != nil {
+                let ok = await viewModel.sendMessage(
+                    content: "",
+                    originalLanguage: lang,
+                    location: place
+                )
+                if ok {
+                    withAnimation { composerState.pendingPlace = nil }
+                }
                 anySuccess = anySuccess || ok
             }
 
@@ -715,8 +747,8 @@ extension ConversationView {
     /// Le picker émet désormais un `SharedPlace` complet (nom + adresse +
     /// catégorie) — `MessageAttachment.location` ne portait ni l'un ni
     /// l'autre et n'est plus le véhicule (Task 11/12, 2026-07-29). Le lieu
-    /// reste en attente ; son transport jusqu'à l'envoi arrive dans une tâche
-    /// ultérieure du plan.
+    /// reste en attente jusqu'au prochain envoi : `sendMessageWithAttachments`
+    /// le capture et le passe aux trois transports (lot 2, spec 2026-07-30).
     func handleLocationSelection(_ place: SharedPlace) {
         withAnimation {
             composerState.pendingPlace = place

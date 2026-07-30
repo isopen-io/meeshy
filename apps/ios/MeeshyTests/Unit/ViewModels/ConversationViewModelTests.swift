@@ -609,6 +609,48 @@ final class ConversationViewModelTests: XCTestCase {
         XCTAssertEqual(preview(.location), "📍 Position")
     }
 
+    func test_optimisticListPreview_lieuSeul_composeNomPuisAdressePuisPosition() throws {
+        // Lot 2 (spec 2026-07-30) : un message « lieu seul » a un `content`
+        // vide et un messageType .text — sans la branche `location`, son
+        // aperçu de conversation serait vide. « 📍 <nom, à défaut adresse,
+        // à défaut Position> ». Table française fixée : on juge le code, pas
+        // la langue du simulateur.
+        let path = try XCTUnwrap(Bundle.main.path(forResource: "fr", ofType: "lproj"))
+        let fr = try XCTUnwrap(Bundle(path: path))
+        let loc = Locale(identifier: "fr")
+        func preview(_ place: SharedPlace?) -> String {
+            ConversationViewModel.optimisticListPreview(
+                text: "", messageType: .text, location: place, bundle: fr, locale: loc)
+        }
+
+        let nomEtAdresse = SharedPlace(latitude: 48.85, longitude: 2.35,
+                                       name: "Café de Flore",
+                                       address: "172 boulevard Saint-Germain, Paris")
+        XCTAssertEqual(preview(nomEtAdresse), "📍 Café de Flore", "le nom prime sur l'adresse")
+
+        let adresseSeule = SharedPlace(latitude: 48.85, longitude: 2.35,
+                                       name: nil,
+                                       address: "172 boulevard Saint-Germain, Paris")
+        XCTAssertEqual(preview(adresseSeule), "📍 172 boulevard Saint-Germain, Paris")
+
+        let nomVide = SharedPlace(latitude: 48.85, longitude: 2.35, name: "", address: "")
+        XCTAssertEqual(preview(nomVide), "📍 Position",
+                       "nom et adresse vides → libellé localisé de repli")
+
+        let pointBrut = SharedPlace(latitude: 48.85, longitude: 2.35)
+        XCTAssertEqual(preview(pointBrut), "📍 Position")
+    }
+
+    func test_optimisticListPreview_texteAvecLieu_prefereLeTexte() {
+        // Un message qui porte texte ET lieu montre le texte en aperçu — le
+        // lieu n'écrase jamais une légende.
+        let place = SharedPlace(latitude: 48.85, longitude: 2.35, name: "Café de Flore")
+        XCTAssertEqual(
+            ConversationViewModel.optimisticListPreview(text: "On se voit ici ?", messageType: .text, location: place),
+            "On se voit ici ?"
+        )
+    }
+
     func test_sendMessage_restAndSocketBothFail_returnsFalse() async {
         mockMessageService.sendResult = .failure(NSError(domain: "test", code: 500))
         mockMessageSocket.sendViaSocketFallbackResult = nil

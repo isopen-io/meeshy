@@ -2152,14 +2152,19 @@ class ConversationViewModel: ObservableObject {
         replyToId: String?,
         storyReplyToId: String?,
         forwardedFromId: String?,
-        attachmentIds: [String]?
+        attachmentIds: [String]?,
+        location: SharedPlace? = nil
     ) -> String {
         [
             content,
             replyToId ?? "",
             storyReplyToId ?? "",
             forwardedFromId ?? "",
-            (attachmentIds ?? []).sorted().joined(separator: ",")
+            (attachmentIds ?? []).sorted().joined(separator: ","),
+            // Deux messages « lieu seul » rapprochés ont le MÊME texte (vide) :
+            // sans les coordonnées dans la clé, l'envoi de deux lieux distincts
+            // coup sur coup serait dédupliqué à tort.
+            location.map { "\($0.latitude),\($0.longitude)" } ?? ""
         ].joined(separator: "\u{1F}")
     }
 
@@ -2212,7 +2217,7 @@ class ConversationViewModel: ObservableObject {
         let ackedFacet = messages.first(where: { $0.id == tempId }).map {
             LastMessageFacet(
                 message: $0,
-                preview: Self.optimisticListPreview(text: msgContent, messageType: $0.messageType),
+                preview: Self.optimisticListPreview(text: msgContent, messageType: $0.messageType, location: $0.location),
                 id: serverId,
                 at: msgTime
             )
@@ -2235,9 +2240,20 @@ class ConversationViewModel: ObservableObject {
     /// compute it for a `Task.detached`.
     nonisolated static func optimisticListPreview(text: String,
                                                   messageType: Message.MessageType,
+                                                  location: SharedPlace? = nil,
                                                   bundle: Bundle = .main,
                                                   locale: Locale = .current) -> String {
         if !text.isEmpty { return text }
+        // Message porteur d'un lieu sans texte : « 📍 <nom, à défaut adresse,
+        // à défaut Position> ». Sans cette branche, l'aperçu d'un message
+        // « lieu seul » (content vide, messageType .text) serait vide — la clé
+        // `media.summary.location` n'était atteinte que par le type de pièce
+        // jointe, jamais par `message.location` (lot 2, spec 2026-07-30).
+        if let location {
+            if let name = location.name, !name.isEmpty { return "📍 \(name)" }
+            if let address = location.address, !address.isEmpty { return "📍 \(address)" }
+            return String(localized: "media.summary.location", defaultValue: "📍 Position", bundle: bundle, locale: locale)
+        }
         switch messageType {
         case .image: return String(localized: "media.summary.photo", defaultValue: "📷 Photo", bundle: bundle, locale: locale)
         case .video: return String(localized: "media.summary.video", defaultValue: "🎥 Vidéo", bundle: bundle, locale: locale)
@@ -2249,10 +2265,13 @@ class ConversationViewModel: ObservableObject {
     }
 
     @discardableResult
-    func sendMessage(content: String, replyToId: String? = nil, storyReplyToId: String? = nil, storyReplyReference: ReplyReference? = nil, forwardedFromId: String? = nil, forwardedFromConversationId: String? = nil, attachmentIds: [String]? = nil, localAttachments: [MeeshyMessageAttachment]? = nil, expiresAt: Date? = nil, isViewOnce: Bool? = nil, maxViewOnceCount: Int? = nil, isBlurred: Bool? = nil, originalLanguage: String? = nil, existingTempId: String? = nil) async -> Bool {
+    func sendMessage(content: String, replyToId: String? = nil, storyReplyToId: String? = nil, storyReplyReference: ReplyReference? = nil, forwardedFromId: String? = nil, forwardedFromConversationId: String? = nil, attachmentIds: [String]? = nil, localAttachments: [MeeshyMessageAttachment]? = nil, expiresAt: Date? = nil, isViewOnce: Bool? = nil, maxViewOnceCount: Int? = nil, isBlurred: Bool? = nil, originalLanguage: String? = nil, existingTempId: String? = nil, location: SharedPlace? = nil) async -> Bool {
         let text = content.trimmingCharacters(in: .whitespacesAndNewlines)
         Logger.messages.info("SendFlow enter convId=\(self.conversationId, privacy: .public) textLen=\(text.count, privacy: .public) attachmentIds=\((attachmentIds ?? []).count, privacy: .public) existingTempId=\(existingTempId ?? "nil", privacy: .public) isSending=\(self.isSending, privacy: .public)")
-        guard !text.isEmpty || !(attachmentIds ?? []).isEmpty else {
+        // Garde partagé avec le composer (`SendEligibility`) : un message
+        // « lieu seul » — texte vide, aucune pièce jointe, `location` non nil —
+        // est un envoi valide (lot 2, spec 2026-07-30).
+        guard SendEligibility.canSend(text: text, attachmentIds: attachmentIds ?? [], location: location) else {
             Logger.messages.error("SendFlow EARLY-RETURN guard=emptyContent convId=\(self.conversationId, privacy: .public)")
             return false
         }
@@ -2290,7 +2309,7 @@ class ConversationViewModel: ObservableObject {
         // (`existingTempId != nil`) are a deliberate re-send and bypass the
         // debounce (the gateway dedups them by clientMessageId).
         if existingTempId == nil {
-            let dedupKey = Self.sendDedupKey(content: text, replyToId: replyToId, storyReplyToId: storyReplyToId, forwardedFromId: forwardedFromId, attachmentIds: attachmentIds)
+            let dedupKey = Self.sendDedupKey(content: text, replyToId: replyToId, storyReplyToId: storyReplyToId, forwardedFromId: forwardedFromId, attachmentIds: attachmentIds, location: location)
             if let last = lastAcceptedSend, last.key == dedupKey, Date().timeIntervalSince(last.at) < Self.duplicateSendDebounce {
                 Logger.messages.error("SendFlow BLOCKED guard=duplicate-debounce convId=\(self.conversationId, privacy: .public) textLen=\(text.count, privacy: .public) — identical message re-fired within \(Self.duplicateSendDebounce, privacy: .public)s; deduped")
                 return false
@@ -2330,8 +2349,16 @@ class ConversationViewModel: ObservableObject {
                 forwardedFromId: forwardedFromId,
                 forwardedFromConversationId: forwardedFromConversationId,
                 attachmentIds: attachmentIds,
-                attachmentKinds: offlineKinds
+                attachmentKinds: offlineKinds,
+                location: location
             )
+            // Lieu partagé encodé pour la colonne `locationJson` du record
+            // optimiste : une écriture GRDB concurrente déclenche
+            // `messagesDidChange` et effacerait un lieu qui ne vivrait
+            // qu'en mémoire.
+            let offlineLocationJson: String? = location
+                .flatMap { JSONEncoder().encodeOrLog($0, field: "locationJson", id: offlineClientMessageId) }
+                .flatMap { String(data: $0, encoding: .utf8) }
 
             let offlineTempId = queueItem.tempId
             let offlineMessage = Message(
@@ -2346,7 +2373,8 @@ class ConversationViewModel: ObservableObject {
                 createdAt: Date(),
                 updatedAt: Date(),
                 deliveryStatus: .sending,
-                isMe: true
+                isMe: true,
+                location: location
             )
             // Persist offline message to GRDB; store observation surfaces the row
             // automatically — no direct messages.append needed.
@@ -2380,7 +2408,8 @@ class ConversationViewModel: ObservableObject {
                 cachedLastLineWidth: nil, cachedLineCount: nil,
                 cachedTimestampInline: nil,
                 layoutVersion: 0, layoutMaxWidth: nil,
-                changeVersion: 0
+                changeVersion: 0,
+                locationJson: offlineLocationJson
             )
 
             // `insertOptimistic` is a synchronous actor-isolated throw (no
@@ -2411,7 +2440,10 @@ class ConversationViewModel: ObservableObject {
             // just-typed message — with the correct author name — even before
             // the network returns. Without this the preview keeps the previous
             // author/content while the user waits for connectivity.
-            let offlineFacet = LastMessageFacet(message: offlineMessage, preview: text)
+            let offlineFacet = LastMessageFacet(
+                message: offlineMessage,
+                preview: Self.optimisticListPreview(text: text, messageType: .text, location: location)
+            )
             Task {
                 await ConversationSyncEngine.shared.updateConversationAfterSend(offlineFacet, conversationId: convId)
             }
@@ -2483,6 +2515,14 @@ class ConversationViewModel: ObservableObject {
         // GRDB optimistic insert — the store observation surfaces the row in `messages`
         // automatically (Task 1.5: no direct messages.append here).
         if existingTempId == nil {
+            // Lieu partagé encodé pour la colonne `locationJson` du record
+            // optimiste : écrit EN BASE, pas seulement dans le `Message` en
+            // mémoire — une écriture GRDB concurrente déclenche
+            // `messagesDidChange` et effacerait une valeur purement mémoire.
+            // Les transports, eux, portent le `SharedPlace` tel quel.
+            let optimisticLocationJson: String? = location
+                .flatMap { JSONEncoder().encodeOrLog($0, field: "locationJson", id: tempId) }
+                .flatMap { String(data: $0, encoding: .utf8) }
             let persistence = messagePersistence
             let optimisticRecord = MessageRecord(
                 localId: tempId, serverId: nil,
@@ -2515,7 +2555,8 @@ class ConversationViewModel: ObservableObject {
                 cachedLastLineWidth: nil, cachedLineCount: nil,
                 cachedTimestampInline: nil,
                 layoutVersion: 0, layoutMaxWidth: nil,
-                changeVersion: 0
+                changeVersion: 0,
+                locationJson: optimisticLocationJson
             )
             Logger.messages.info("SendFlow insertOptimistic START tempId=\(tempId, privacy: .public) convId=\(self.conversationId, privacy: .public)")
             do {
@@ -2531,7 +2572,7 @@ class ConversationViewModel: ObservableObject {
                 await ConversationSyncEngine.shared.updateConversationAfterSend(
                     LastMessageFacet(
                         id: tempId,
-                        preview: Self.optimisticListPreview(text: text, messageType: optimisticMessageType),
+                        preview: Self.optimisticListPreview(text: text, messageType: optimisticMessageType, location: location),
                         senderName: authManager.currentUser?.displayName ?? authManager.currentUser?.username,
                         at: optimisticRecord.createdAt,
                         attachments: resolvedAttachments,
@@ -2597,7 +2638,8 @@ class ConversationViewModel: ObservableObject {
                 effectFlags: pendingEffects.hasAnyEffect ? pendingEffects.flags.rawValue : nil,
                 isEncrypted: isEncrypted ? true : nil,
                 encryptionMode: encryptionMode,
-                clientMessageId: tempId
+                clientMessageId: tempId,
+                location: location
             )
 
             // WebSocket-first send (re-enabled 2026-06-11). On a persistent
@@ -2628,7 +2670,11 @@ class ConversationViewModel: ObservableObject {
                     storyReplyToId: storyReplyToId,
                     originalLanguage: originalLanguage ?? Self.composeLanguage(for: content, preferred: preferredLanguages),
                     isEncrypted: false,
-                    clientMessageId: tempId
+                    clientMessageId: tempId,
+                    // Le canal socket accepte le lieu (MessageHandler.ts) : le
+                    // socket-first RESTE éligible pour un message porteur de
+                    // lieu — pas d'ajout à la liste d'inéligibilité ci-dessus.
+                    location: location
                 ) {
                     await recordSendAttempt(tempId, transport: .socketFirst, startedAt: socketFirstStartedAt, outcome: .success)
                     await finalizeSuccessfulSend(
@@ -2718,7 +2764,8 @@ class ConversationViewModel: ObservableObject {
                     storyReplyToId: storyReplyToId,
                     originalLanguage: originalLanguage ?? Self.composeLanguage(for: content, preferred: preferredLanguages),
                     isEncrypted: isEncrypted,
-                    clientMessageId: tempId
+                    clientMessageId: tempId,
+                    location: location
                 )
                 await recordSendAttempt(
                     tempId,
@@ -2761,7 +2808,8 @@ class ConversationViewModel: ObservableObject {
                 originalLanguage: originalLanguage ?? Self.composeLanguage(for: content, preferred: preferredLanguages),
                 replyToId: replyToId,
                 attachmentIds: attachmentIds,
-                attachmentKinds: retryKinds
+                attachmentKinds: retryKinds,
+                location: location
             )
 
             // AWAITED enqueue (Bug 1 fix — online retry path, B2 2026-05-27).
