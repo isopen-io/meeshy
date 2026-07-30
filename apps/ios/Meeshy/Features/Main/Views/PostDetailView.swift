@@ -49,6 +49,8 @@ struct PostDetailView: View {
     @State private var fullscreenMediaId: String? = nil
     @State private var showFullscreenGallery = false
     @State private var audioFullscreen: AudioFullscreenSource?
+    /// Lieu du post ouvert plein écran (sticker / carte de la page Detail).
+    @State private var detailFullscreenPlace: BubbleFullscreenPlace?
     @State private var composerLanguage: String = DefaultComposerLanguage.resolve()
     @State private var commentBlurEnabled: Bool = false
     @State private var commentEffects: MessageEffects = .none
@@ -401,6 +403,29 @@ struct PostDetailView: View {
             detailMediaSection(post.media)
                 .padding(.horizontal, 16)
                 .padding(.top, 8)
+        }
+
+        // Lieu attaché au post (constat user 2026-07-30) : même paire de
+        // rendus que la card du feed — carte pleine largeur + texte overlay
+        // quand la position est le seul visuel, sinon sticker compact.
+        if let place = post.location {
+            Group {
+                if !post.hasMedia && post.repost == nil {
+                    // Pas de texte en overlay ici : la page Detail rend déjà le
+                    // texte complet dans sa `textZone` — la carte est le visuel.
+                    FeedPostLocationMapCard(
+                        place: place,
+                        overlayText: nil,
+                        onOpen: { detailFullscreenPlace = BubbleFullscreenPlace(place: place) }
+                    )
+                } else {
+                    FeedPostLocationSticker(place: place) {
+                        detailFullscreenPlace = BubbleFullscreenPlace(place: place)
+                    }
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.top, 8)
         }
 
         // Repost embed
@@ -837,6 +862,18 @@ struct PostDetailView: View {
                     onDismiss: { isEditing = false }
                 )
             }
+        }
+        .fullScreenCover(item: $detailFullscreenPlace) { item in
+            // Même surface plein écran que la bulle et la card feed :
+            // carte + « Ouvrir dans Plans » / « Itinéraire ».
+            LocationFullscreenView(
+                latitude: item.place.latitude,
+                longitude: item.place.longitude,
+                placeName: item.place.name,
+                address: item.place.address,
+                accentColor: accentColor,
+                senderName: displayPost?.author
+            )
         }
         .fullScreenCover(isPresented: $showFullscreenGallery) {
             if let post = displayPost {

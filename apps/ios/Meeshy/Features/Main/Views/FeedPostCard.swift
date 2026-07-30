@@ -78,6 +78,8 @@ struct FeedPostCard: View {
     @State var fullscreenMediaId: String? = nil
     @State var showFullscreenGallery = false
     @State private var isTextExpanded = false
+    /// Lieu du post ouvert plein écran (tap sur le sticker ou la carte).
+    @State private var fullscreenPlace: BubbleFullscreenPlace?
 
     var accentColor: String { post.authorColor }
     private var topComments: [FeedComment] { Array(post.comments.sorted { $0.likes > $1.likes }.prefix(3)) }
@@ -169,6 +171,12 @@ struct FeedPostCard: View {
         activeDisplayLangCode
             ?? post.resolvedLanguageCode(preferredLanguages: AuthManager.shared.currentUser?.preferredContentLanguages ?? [])
             ?? "fr"
+    }
+
+    /// Post « position seule » : aucun média visuel, aucun repost — la carte
+    /// devient le visuel principal et le texte part en overlay dessus.
+    private var isLocationOnlyPost: Bool {
+        post.location != nil && !post.hasMedia && post.repost == nil
     }
 
     private var effectiveContent: String {
@@ -280,8 +288,13 @@ struct FeedPostCard: View {
                     // Le corps passe par `MessageTextRenderer` pour rendre les URLs
                     // cliquables + trackées (`/l/<token>`) tout en gardant `onTapPost`
                     // sur le texte non-lien (priorité au lien = défaut SwiftUI).
+                    // Post « position seule » : le texte part EN OVERLAY sur la
+                    // carte (`FeedPostLocationMapCard` plus bas) — le bloc texte
+                    // standard serait un doublon (directive user 2026-07-30).
                     let truncation = truncatedContent
-                    if isTextExpanded {
+                    if isLocationOnlyPost {
+                        EmptyView()
+                    } else if isTextExpanded {
                         MessageTextRenderer.render(effectiveContent, color: theme.textPrimary, accentColor: postLinkTint, trackedLinks: post.trackedLinkMap.isEmpty ? nil : post.trackedLinkMap)
                             .lineLimit(nil)
                             .tint(postLinkTint)
@@ -428,6 +441,23 @@ struct FeedPostCard: View {
                     }
                 }
 
+                // Lieu attaché au post (constat user 2026-07-30) : carte pleine
+                // largeur + texte en overlay quand la position est le seul
+                // contenu visuel, sinon sticker compact — cliquables tous deux.
+                if let place = post.location {
+                    if isLocationOnlyPost {
+                        FeedPostLocationMapCard(
+                            place: place,
+                            overlayText: effectiveContent.isEmpty ? nil : effectiveContent,
+                            onOpen: { fullscreenPlace = BubbleFullscreenPlace(place: place) }
+                        )
+                    } else {
+                        FeedPostLocationSticker(place: place) {
+                            fullscreenPlace = BubbleFullscreenPlace(place: place)
+                        }
+                    }
+                }
+
                 // Actions bar (not inside the tap target)
                 actionsBar
             }
@@ -494,6 +524,18 @@ struct FeedPostCard: View {
             )
             .presentationDetents([.large, .medium])
             .presentationDragIndicator(.visible)
+        }
+        .fullScreenCover(item: $fullscreenPlace) { item in
+            // Même surface plein écran que la bulle de message : carte +
+            // « Ouvrir dans Plans » / « Itinéraire » (`LocationFullscreenView`).
+            LocationFullscreenView(
+                latitude: item.place.latitude,
+                longitude: item.place.longitude,
+                placeName: item.place.name,
+                address: item.place.address,
+                accentColor: accentColor,
+                senderName: post.author
+            )
         }
         .fullScreenCover(isPresented: $showFullscreenGallery) {
             let attachments = post.media
