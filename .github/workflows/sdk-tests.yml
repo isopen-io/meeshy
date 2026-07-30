@@ -37,9 +37,21 @@ concurrency:
 jobs:
   sdk-tests:
     runs-on: macos-15
-    # Hard cap: the suite normally finishes in <15 min (incl. the one-time 18.2
-    # runtime download). 25 min fails fast if a test deadlocks instead of hanging.
-    timeout-minutes: 25
+    # Hard cap, re-measured 2026-07-30. The old 25-min cap was calibrated on a
+    # suite that no longer exists: the last green run (#30161575001, 2026-07-25)
+    # took 12m32 total — 4m07 runtime provisioning + 8m09 build+test. Since then
+    # the package gained ~9.5k lines of tests over 77 new files (timeline pass)
+    # plus five video-export suites (StoryExportSinglePass, VideoFramePixel,
+    # FrameRate, Watermark, Branding) that do real AVFoundation encoding.
+    #
+    # Measured on run #30546762282: 5m14 provisioning + 4m20 compile + >15m30 of
+    # test execution, killed mid-suite by the cap. Locally the same 6132 tests
+    # run in 6m43 on Apple Silicon; the 3-vCPU runner is ~2.5-3x slower on the
+    # encode-bound suites, so ~28-32 min end-to-end is the honest expectation.
+    # 45 keeps real headroom without turning into a no-op: a genuine deadlock is
+    # still caught first by -maximum-test-execution-time-allowance 180 (per test)
+    # below, and this cap only exists so a hung job never sits for GitHub's 6h.
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v7
 
