@@ -1,7 +1,7 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import { logError, logger } from '../utils/logger';
-import { sendSuccess, sendError, sendBadRequest, sendNotFound, sendInternalError } from '../utils/response.js';
+import { sendSuccess, sendError, sendBadRequest, sendNotFound, sendInternalError, sendForbidden } from '../utils/response.js';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { resolveConversationId } from '../utils/conversation-id-cache';
 import type { UnifiedAuthRequest } from '../middleware/auth';
@@ -249,6 +249,42 @@ const conversationParamsSchema = {
 } as const;
 
 // ===== ROUTE NON-BLOQUANTE =====
+/**
+ * L'appelant participe-t-il à cette conversation ?
+ *
+ * La traduction porte le CONTENU des messages : sans cette garde, connaître un
+ * identifiant suffisait à lire le texte traduit — donc déchiffré — de n'importe
+ * quelle conversation privée. Le contrôle vit ici, partagé par toutes les
+ * routes du module, plutôt que recopié dans chacune : c'est la recopie qui a
+ * produit les trous (une route l'avait, sa voisine non).
+ *
+ * Couvre les deux formes d'identité : utilisateur enregistré et participant
+ * anonyme arrivé par un lien de partage.
+ */
+async function callerParticipatesIn(
+  fastify: FastifyInstance,
+  authContext: UnifiedAuthRequest['authContext'] | undefined,
+  conversationId: string
+): Promise<boolean> {
+  if (!authContext?.isAuthenticated && !authContext?.participantId) return false;
+
+  if (authContext?.participantId) {
+    const anonymous = await fastify.prisma.participant.findFirst({
+      where: { id: authContext.participantId, conversationId, isActive: true },
+      select: { id: true }
+    });
+    return anonymous !== null;
+  }
+
+  if (!authContext?.userId) return false;
+
+  const member = await fastify.prisma.participant.findFirst({
+    where: { userId: authContext.userId, conversationId, isActive: true },
+    select: { id: true }
+  });
+  return member !== null;
+}
+
 export async function translationRoutes(fastify: FastifyInstance, _options: Record<string, unknown>) {
   // Recuperer les services depuis l'instance fastify (comme dans translation.ts)
   const translationService = fastify.translationService;
@@ -307,6 +343,17 @@ export async function translationRoutes(fastify: FastifyInstance, _options: Reco
         if (!existingMessage) {
           logger.warn(`[Translation] Message ${validatedData.message_id} not found`);
           return sendNotFound(reply, 'Message not found');
+        }
+
+        // Les participants étaient chargés ci-dessus mais jamais consultés :
+        // tout compte valide pouvait déclencher la retraduction d'un message
+        // arbitraire, puis en lire le texte via /status. La garde ferme la
+        // chaîne des deux côtés.
+        if (!(await callerParticipatesIn(fastify, authContext, existingMessage.conversationId))) {
+          logger.warn('[Translation] Retraduction refusée : appelant hors de la conversation', {
+            messageId: validatedData.message_id
+          });
+          return sendForbidden(reply, 'Access denied to this message');
         }
 
 
@@ -404,6 +451,9 @@ export async function translationRoutes(fastify: FastifyInstance, _options: Reco
 
   // ===== ROUTE UTILITAIRE POUR RECUPERER LE STATUT =====
   fastify.get('/status/:messageId/:language', {
+    // Cette route rendait le texte TRADUIT — donc déchiffré — de n'importe quel
+    // message à qui devinait un identifiant, sans aucune identité.
+    preHandler: [(req: FastifyRequest, rep: FastifyReply) => fastify.authenticate(req, rep)],
     schema: {
       description: 'Get the translation status and result for a specific message and target language. Returns "processing" status if the translation is still being processed, or "completed" status with the translation result if available. This endpoint is used to poll for translation completion after submitting a non-blocking translation request.',
       tags: ['translation'],
@@ -420,6 +470,23 @@ export async function translationRoutes(fastify: FastifyInstance, _options: Reco
   }, async (request: FastifyRequest<{ Params: { messageId: string; language: string } }>, reply: FastifyReply) => {
     try {
       const { messageId, language } = request.params;
+
+      // Être authentifié ne suffit pas : il faut participer à la conversation
+      // du message. Sans ce contrôle, tout compte valide lisait le contenu
+      // traduit de toutes les conversations du produit.
+      const message = await fastify.prisma.message.findUnique({
+        where: { id: messageId },
+        select: { conversationId: true }
+      });
+
+      if (!message) {
+        return sendNotFound(reply, 'Message not found');
+      }
+
+      const authContext = (request as unknown as UnifiedAuthRequest).authContext;
+      if (!(await callerParticipatesIn(fastify, authContext, message.conversationId))) {
+        return sendForbidden(reply, 'Access denied to this message');
+      }
 
       const result = await translationService.getTranslation(messageId, language);
 
@@ -441,6 +508,9 @@ export async function translationRoutes(fastify: FastifyInstance, _options: Reco
 
   // ===== ROUTE POUR RECUPERER UNE CONVERSATION PAR IDENTIFIANT =====
   fastify.get<{ Params: { identifier: string } }>('/conversation/:identifier', {
+    // Exposait titre, type, dates et nombre de membres de n'importe quelle
+    // conversation à un appelant anonyme.
+    preHandler: [(req: FastifyRequest, rep: FastifyReply) => fastify.authenticate(req, rep)],
     schema: {
       description: 'Retrieve conversation details by identifier. Accepts either a human-readable identifier or a MongoDB ObjectId. Returns conversation metadata including ID, title, type, timestamps, and counts of messages and members. This endpoint is useful for validating conversation identifiers before submitting translation requests.',
       tags: ['translation'],
