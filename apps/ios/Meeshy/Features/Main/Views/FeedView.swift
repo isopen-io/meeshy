@@ -1440,25 +1440,22 @@ struct FeedView: View {
                         showComposerLanguagePicker = true
                         HapticFeedback.light()
                     } label: {
-                        HStack(spacing: 4) {
-                            Image(systemName: "globe")
-                                .font(.footnote)
-                            Text(composerLanguageDisplayName)
-                                .font(.footnote.weight(.semibold))
-                        }
-                        .foregroundColor(MeeshyColors.indigo500)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 6)
-                        .background(
-                            Capsule()
-                                .fill(MeeshyColors.indigo100.opacity(isDark ? 0.15 : 1))
-                                .overlay(
-                                    Capsule()
-                                        .stroke(MeeshyColors.indigo300.opacity(0.3), lineWidth: 1)
-                                )
-                        )
+                        Text(ComposerLanguageFlag.label(for: composerLanguage))
+                            .font(.footnote.weight(.semibold))
+                            .foregroundColor(MeeshyColors.indigo500)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 6)
+                            .background(
+                                Capsule()
+                                    .fill(MeeshyColors.indigo100.opacity(isDark ? 0.15 : 1))
+                                    .overlay(
+                                        Capsule()
+                                            .stroke(MeeshyColors.indigo300.opacity(0.3), lineWidth: 1)
+                                    )
+                            )
                     }
                     .accessibilityLabel(String(localized: "Langue du post", defaultValue: "Langue du post"))
+                    .accessibilityValue(composerLanguageDisplayName)
                 }
                 .padding(16)
                 .background(theme.backgroundSecondary)

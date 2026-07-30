@@ -245,6 +245,10 @@ final class StatusViewModelTests: XCTestCase {
         XCTAssertEqual(mockStatusService.lastCreateContent, "Party")
         XCTAssertEqual(mockStatusService.lastCreateVisibility, "FRIENDS")
         XCTAssertEqual(mockStatusService.lastCreateVisibilityUserIds, ["u1", "u2"])
+        XCTAssertEqual(
+            mockStatusService.lastCreateOriginalLanguage, "fr",
+            "Le mood part en français par défaut (Prisme, public cible France — directive 2026-07-30)"
+        )
     }
 
     // MARK: - clearStatus() Tests
@@ -654,6 +658,10 @@ final class StatusViewModelTests: XCTestCase {
         XCTAssertEqual(payload?.type, "STATUS")
         XCTAssertEqual(payload?.moodEmoji, "🎉")
         XCTAssertEqual(payload?.content, "Offline mood")
+        XCTAssertEqual(
+            payload?.originalLanguage, "fr",
+            "La ligne outbox porte la langue française par défaut pour que le rejeu la transmette au gateway"
+        )
     }
 
     func test_recoverUnsentStatus_queriesStatusTypeWithOfflineThreshold() async {

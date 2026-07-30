@@ -162,6 +162,7 @@ class StatusViewModel: ObservableObject {
                 content: content ?? "",
                 attachmentIds: [],
                 visibility: visibility,
+                originalLanguage: DefaultComposerLanguage.resolve(),
                 type: "STATUS",
                 moodEmoji: emoji,
                 visibilityUserIds: visibilityUserIds
@@ -176,7 +177,7 @@ class StatusViewModel: ObservableObject {
         }
 
         do {
-            let post = try await statusService.create(moodEmoji: emoji, content: content, visibility: visibility, visibilityUserIds: visibilityUserIds, viaUsername: viaUsername, audioUrl: audioUrl, repostOfId: repostOfId)
+            let post = try await statusService.create(moodEmoji: emoji, content: content, originalLanguage: DefaultComposerLanguage.resolve(), visibility: visibility, visibilityUserIds: visibilityUserIds, viaUsername: viaUsername, audioUrl: audioUrl, repostOfId: repostOfId)
 
             if let entry = post.toStatusEntry() {
                 myStatus = entry

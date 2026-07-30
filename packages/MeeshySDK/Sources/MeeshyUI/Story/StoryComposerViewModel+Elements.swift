@@ -7,46 +7,20 @@ import PencilKit
 // MARK: - StoryComposerViewModel + Elements
 
 extension StoryComposerViewModel {
-    /// Pure resolver for the composer's source language.
+    /// Langue source par défaut d'un élément de story fraîchement créé (texte,
+    /// média, audio) et de la story elle-même à l'ouverture du composer.
     ///
-    /// Per CLAUDE.md "Prisme Linguistique", the source language assigned to a
-    /// newly authored story element (text, media, audio) MUST come from the
-    /// user's in-app content preferences (`systemLanguage` then
-    /// `regionalLanguage`), NEVER from the device locale or the active
-    /// keyboard. A French speaker typing on an English keyboard still produces
-    /// French content; using `UITextInputMode.primaryLanguage` here would
-    /// mislabel that content as English and poison the translation pipeline.
-    ///
-    /// Resolution order matches `MeeshyUser.preferredContentLanguages` and the
-    /// gateway's `resolveUserLanguage()`:
-    /// 1. `systemLanguage` (primary in-app language)
-    /// 2. `regionalLanguage` (secondary in-app language)
-    /// 3. Hardcoded `"fr"` fallback.
-    /// Langue dans laquelle le texte a été ÉCRIT — à ne pas confondre avec
-    /// celle dans laquelle son auteur préfère LIRE.
-    ///
-    /// Les deux étaient confondues : on renvoyait le `systemLanguage`, une
-    /// préférence de CONSOMMATION. Un francophone ayant réglé l'app en anglais
-    /// voyait son texte français étiqueté `en` ; la traduction partait alors de
-    /// la mauvaise langue et le texte ressortait inchangé.
-    ///
-    /// Le clavier actif au moment de la frappe fait foi ; les préférences ne
-    /// sont qu'un repli quand il est inconnu.
-    nonisolated public static func resolveComposerSourceLanguage(
-        user: MeeshyUser?,
-        keyboardLanguage: String? = nil
-    ) -> String {
-        if let typed = normalisedWritingLanguage(keyboardLanguage) {
-            return typed
-        }
-        if let sys = user?.systemLanguage, !sys.isEmpty {
-            return sys
-        }
-        if let reg = user?.regionalLanguage, !reg.isEmpty {
-            return reg
-        }
-        return "fr"
-    }
+    /// Directive produit 2026-07-30 (public cible premier : la France) : le
+    /// composer démarre TOUJOURS en français, à parité avec la barre
+    /// universelle (`DefaultComposerLanguage` côté app). Ni la locale
+    /// appareil, ni le clavier actif (`UITextInputMode` — premier clavier
+    /// ACTIVÉ, pas celui de la frappe), ni la langue de LECTURE
+    /// (`systemLanguage`/`regionalLanguage`, des préférences de CONSOMMATION)
+    /// ne pilotent ce défaut : chacun de ces signaux a déjà mal étiqueté du
+    /// contenu français. La pastille langue de l'éditeur de texte reste le
+    /// choix EXPLICITE de l'auteur (directive 2026-07-25) et prime toujours
+    /// sur ce défaut via `updateElementLanguage`.
+    nonisolated public static var defaultSourceLanguage: String { "fr" }
 
     /// Réduit un identifiant de clavier à un code de langue exploitable, ou
     /// `nil` quand ce n'en est pas un.
@@ -67,22 +41,6 @@ extension StoryComposerViewModel {
                 .first.map { $0.lowercased() } ?? trimmed.lowercased()
         guard !base.isEmpty, base != "emoji", base != "dictation" else { return nil }
         return base
-    }
-
-    /// Langue d'écriture présumée : le clavier PRINCIPAL de l'utilisateur
-    /// (`activeInputModes.first`), sinon les préférences.
-    ///
-    /// Limite assumée : c'est le premier clavier ACTIVÉ, pas celui affiché à
-    /// l'instant de la frappe — le connaître exigerait d'interroger le
-    /// `textInputMode` du champ en cours d'édition, que le ViewModel n'a pas
-    /// sous la main. Reste nettement plus proche de la vérité que la langue de
-    /// LECTURE qu'on utilisait avant : un francophone lisant en anglais a
-    /// presque toujours le clavier français en tête de liste.
-    var detectedKeyboardLanguage: String {
-        Self.resolveComposerSourceLanguage(
-            user: AuthManager.shared.currentUser,
-            keyboardLanguage: UITextInputMode.activeInputModes.first?.primaryLanguage
-        )
     }
 
     var currentEffects: StoryEffects {
@@ -273,7 +231,7 @@ extension StoryComposerViewModel {
             textStyle: "classic",
             textColor: "FFFFFF",
             textAlign: "center",
-            sourceLanguage: detectedKeyboardLanguage
+            sourceLanguage: Self.defaultSourceLanguage
         )
         var effects = currentEffects
         var texts = effects.textObjects
@@ -387,7 +345,7 @@ extension StoryComposerViewModel {
             // (user report 2026-05-27).
             isBackground: shouldBeBackground,
             loop: shouldBeBackground,
-            sourceLanguage: detectedKeyboardLanguage
+            sourceLanguage: Self.defaultSourceLanguage
         )
         var medias = targetEffects.mediaObjects ?? []
         medias.append(obj)
@@ -492,7 +450,7 @@ extension StoryComposerViewModel {
             volume: 1.0,
             waveformSamples: [],
             isBackground: hasExistingBackgroundAudio ? nil : true,
-            sourceLanguage: detectedKeyboardLanguage
+            sourceLanguage: Self.defaultSourceLanguage
         )
         var effects = currentEffects
         var audios = effects.audioPlayerObjects ?? []

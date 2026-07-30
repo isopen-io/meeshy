@@ -59,12 +59,10 @@ public struct StoryComposerView: View {
     /// picker est injectée par l'app via `\.storyLocationPicker` : MapKit et les
     /// permissions restent app-side (SDK purity).
     @State var showLocationPicker = false
-    // Prisme Linguistique: the story's source language comes from the user's
-    // in-app content preferences (systemLanguage → regionalLanguage → "fr"),
-    // NEVER from the keyboard locale. See `StoryComposerViewModel
-    // .resolveComposerSourceLanguage(user:)` for the canonical resolver.
-    @State var storyLanguage: String = StoryComposerViewModel
-        .resolveComposerSourceLanguage(user: AuthManager.shared.currentUser)
+    // Prisme Linguistique : le composer démarre toujours en français
+    // (directive 2026-07-30, public cible France) — ni clavier, ni locale, ni
+    // préférences de lecture. Voir `StoryComposerViewModel.defaultSourceLanguage`.
+    @State var storyLanguage: String = StoryComposerViewModel.defaultSourceLanguage
     @State var showTransitionSheet = false
     @State var audioEditorItem: AudioEditorItemWrapper?
     @State var mediaAudioEditorItem: AudioEditorItemWrapper?

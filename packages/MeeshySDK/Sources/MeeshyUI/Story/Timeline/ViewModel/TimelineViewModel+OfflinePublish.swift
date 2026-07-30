@@ -72,14 +72,12 @@ extension TimelineViewModel {
     ///   the queued item. Required by the Prisme Linguistique pipeline so the
     ///   gateway can route NLLB-200 translations correctly when the item
     ///   flushes after reconnect. Defaults to `StoryComposerViewModel
-    ///   .resolveComposerSourceLanguage(user: AuthManager.shared.currentUser)`
-    ///   which honours the user's in-app `systemLanguage` / `regionalLanguage`
-    ///   preference (NEVER the device locale). Callers should pass an explicit
-    ///   value when the composer's source language is already known.
+    ///   .defaultSourceLanguage` (`"fr"` — directive 2026-07-30, public cible
+    ///   France). Callers should pass an explicit value when the composer's
+    ///   source language is already known.
     public func handlePublishTap(
         visibility: StoryVisibility,
-        originalLanguage: String = StoryComposerViewModel
-            .resolveComposerSourceLanguage(user: AuthManager.shared.currentUser),
+        originalLanguage: String = StoryComposerViewModel.defaultSourceLanguage,
         networkMonitor: NetworkMonitorProviding = NetworkMonitor.shared,
         offlineQueue: OfflineQueueProviding = StoryOfflineQueue.shared,
         onlinePublisher: TimelineOnlinePublishing = StubOnlinePublisher()
@@ -134,7 +132,7 @@ extension TimelineViewModel {
     /// the persisted item so the gateway can route NLLB-200 translations on
     /// flush — passing `nil` would break the Prisme Linguistique pipeline
     /// (P0 data-integrity regression). The caller is expected to resolve the
-    /// language up-front via `StoryComposerViewModel.resolveComposerSourceLanguage`
+    /// language up-front (défaut : `StoryComposerViewModel.defaultSourceLanguage`)
     /// so that this helper stays a pure transformer of `project` + inputs.
     internal func buildOfflineQueueItem(
         visibility: StoryVisibility,
