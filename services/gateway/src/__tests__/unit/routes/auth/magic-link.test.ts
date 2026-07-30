@@ -353,6 +353,62 @@ describe('POST /refresh — invalid token no userId', () => {
   });
 });
 
+describe('POST /refresh — signature forgée', () => {
+  // `jwt.decode` désérialise sans rien vérifier. Tant que la garde en aval ne
+  // testait que la PRÉSENCE de `userId`, un jeton portant n'importe quelle
+  // signature suffisait à obtenir un JWT valide signé par le serveur pour le
+  // compte visé, plus le profil complet — usurpation d'identité en une requête,
+  // sur une route publique d'un service joignable depuis l'Internet.
+  it('refuse un jeton dont la signature ne vérifie pas, sans session de confiance', async () => {
+    const jwt = await import('jsonwebtoken');
+    (jwt.verify as jest.Mock<any>).mockImplementationOnce(() => {
+      throw new Error('invalid signature');
+    });
+    (jwt.decode as jest.Mock<any>).mockReturnValueOnce({
+      userId: USER_ID, username: 'victime', role: 'USER',
+    });
+
+    const app = await buildApp();
+    const res = await app.inject({
+      method: 'POST',
+      url: '/refresh',
+      payload: { token: 'jeton-forge-avec-signature-bidon' },
+    });
+
+    expect(res.statusCode).toBe(401);
+    // Et surtout : aucun jeton signé par le serveur n'est renvoyé.
+    expect(res.json().data?.token).toBeUndefined();
+    await app.close();
+  });
+
+  it('accepte une signature invalide UNIQUEMENT si une session de confiance la couvre', async () => {
+    const jwt = await import('jsonwebtoken');
+    (jwt.verify as jest.Mock<any>).mockImplementationOnce(() => {
+      throw new Error('invalid signature');
+    });
+    (jwt.decode as jest.Mock<any>).mockReturnValueOnce({
+      userId: USER_ID, username: 'alice', role: 'USER',
+    });
+
+    const prisma = makePrisma({
+      userSession: {
+        findFirst: jest.fn<any>().mockResolvedValue({ id: 'sess-1', userId: USER_ID, expiresAt: new Date() }),
+        update: jest.fn<any>().mockResolvedValue({}),
+      },
+    });
+
+    const app = await buildApp({ prisma });
+    const res = await app.inject({
+      method: 'POST',
+      url: '/refresh',
+      payload: { token: 'jeton-perime', sessionToken: 'session-de-confiance' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    await app.close();
+  });
+});
+
 describe('POST /refresh — with trusted session', () => {
   it('returns 200 and slides session TTL', async () => {
     const prisma = makePrisma({
