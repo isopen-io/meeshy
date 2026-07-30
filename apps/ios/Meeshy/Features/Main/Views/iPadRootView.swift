@@ -54,6 +54,8 @@ struct iPadRootView: View {
 
     @State var activeConversation: Conversation?
     @State var rightPanelRoute: Route?
+    /// Mood à republier depuis la bulle (hôte racine) — composer pré-rempli.
+    @State private var republishStatusEntry: StatusEntry?
     @State var showStoryViewerFromConv = false
     @State var selectedStoryUserIdFromConv: String?
     @State var showSharePicker = false
@@ -94,6 +96,30 @@ struct iPadRootView: View {
                 }
 
                 overlays
+            }
+            // Hôte UNIQUE de la bulle de mood pour toute la fenêtre iPad :
+            // couvre les DEUX colonnes dans un seul repère. Les colonnes sont
+            // des vues SŒURS — un hôte par colonne rendait DEUX bulles,
+            // chacune convertissant l'ancre globale dans son propre repère
+            // (bug 2026-07-30). Les sheets gardent leur propre pose.
+            .withStatusBubble()
+            // Popover contextuel : fermé dès que le panneau droit navigue.
+            .adaptiveOnChange(of: rightPanelRoute) { _, _ in
+                if StatusBubbleController.shared.currentEntry != nil {
+                    StatusBubbleController.shared.dismiss()
+                }
+            }
+            .sheet(item: $republishStatusEntry) { entry in
+                StatusComposerView(
+                    viewModel: statusViewModel,
+                    initialEmoji: entry.moodEmoji,
+                    initialText: entry.content,
+                    viaUsername: entry.username,
+                    repostOfId: entry.id,
+                    repostAudioUrl: entry.audioUrl
+                )
+                .presentationDetents([.medium, .large])
+                .presentationDragIndicator(.visible)
             }
             .environmentObject(router)
             .environmentObject(storyViewModel)
@@ -156,6 +182,12 @@ struct iPadRootView: View {
                                 content: entry.content, publishedAt: entry.createdAt),
                         conversationListViewModel: conversationViewModel
                     )
+                }
+
+                // Republication d'un mood depuis la bulle (hôte racine) —
+                // même câblage que RootView.
+                StatusBubbleController.shared.onRepublish = { entry in
+                    republishStatusEntry = entry
                 }
 
                 // Exécuteur de la file de publication des stories. `setExecutor`

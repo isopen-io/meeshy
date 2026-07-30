@@ -236,7 +236,6 @@ struct StoryTrayView: View {
                 .environmentObject(statusViewModel)
             }
         }
-        .withStatusBubble()
     }
 
     // MARK: - Story Scroll View

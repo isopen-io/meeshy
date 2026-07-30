@@ -514,7 +514,6 @@ struct FeedPostCard: View {
             )
         }
         .audioFullscreenCover($audioFullscreen, accentColor: accentColor)
-        .withStatusBubble()
     }
 
     // MARK: - Author Header

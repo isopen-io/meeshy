@@ -183,6 +183,9 @@ struct RootView: View {
     /// notification toast — presented as a reusable `ConversationView` preview
     /// (last messages + simple composer) over the current page.
     @State private var notificationPreviewConversation: Conversation?
+    /// Mood à republier depuis la bulle (hôte racine) — présente le composer
+    /// de statut pré-rempli. Anciennement dans ConversationListView, mort.
+    @State private var republishStatusEntry: StatusEntry?
     /// Suppresses the toast `Button`'s tap action that can fire on release right
     /// after a long-press / drag opened the preview, preventing a double action
     /// (preview sheet + underlying navigation).
@@ -504,6 +507,33 @@ struct RootView: View {
             .animation(MeeshyAnimation.springDefault, value: notificationManager.currentToast?.id)
             .zIndex(201)
         }
+        // Hôte UNIQUE de la bulle de mood pour toute la fenêtre iPhone. La
+        // bulle se rend dans le repère de CE conteneur — poser l'hôte plus
+        // bas (liste, carte de feed, tray…) faisait rendre une bulle par
+        // hôte frère, chacune décalée dans son propre repère (bug
+        // 2026-07-30). Les présentations modales (sheets, fullScreenCover)
+        // gardent leur propre pose : l'overlay racine est invisible sous
+        // elles. Cf. StatusBubbleOverlayModifier.
+        .withStatusBubble()
+        // Une bulle est un popover contextuel : elle ne survit pas à une
+        // navigation (sinon elle se ré-ancre absurdement sur l'écran suivant).
+        .adaptiveOnChange(of: router.path) { _, _ in
+            if StatusBubbleController.shared.currentEntry != nil {
+                StatusBubbleController.shared.dismiss()
+            }
+        }
+        .sheet(item: $republishStatusEntry) { entry in
+            StatusComposerView(
+                viewModel: statusViewModel,
+                initialEmoji: entry.moodEmoji,
+                initialText: entry.content,
+                viaUsername: entry.username,
+                repostOfId: entry.id,
+                repostAudioUrl: entry.audioUrl
+            )
+            .presentationDetents([.medium, .large])
+            .presentationDragIndicator(.visible)
+        }
         .environment(\.openURL, OpenURLAction { url in
             let destination = DeepLinkParser.parse(url)
             switch destination {
@@ -590,6 +620,14 @@ struct RootView: View {
                             content: entry.content, publishedAt: entry.createdAt),
                     conversationListViewModel: conversationViewModel
                 )
+            }
+
+            // Republication d'un mood : câblé ICI (hôte racine de la bulle)
+            // — l'ancien branchement vivait dans un overlay mort de
+            // ConversationListView, le bouton « Republier » n'agissait donc
+            // jamais depuis la bulle du modifier.
+            StatusBubbleController.shared.onRepublish = { entry in
+                republishStatusEntry = entry
             }
 
             // Pilier 22 V3 wiring — register the StoryViewModel as the

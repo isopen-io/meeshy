@@ -683,7 +683,6 @@ struct ConversationView: View {
                         .environmentObject(statusViewModel)
                 }
             }
-            .withStatusBubble()
     }
 
     private var bodyWithCovers: some View {

@@ -51,7 +51,6 @@ struct FriendRequestListView: View {
                 }
             }
         }
-        .withStatusBubble()
     }
 
     // MARK: - Header
