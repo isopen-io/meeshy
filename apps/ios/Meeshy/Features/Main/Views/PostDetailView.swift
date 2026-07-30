@@ -53,6 +53,9 @@ struct PostDetailView: View {
     @State private var commentBlurEnabled: Bool = false
     @State private var commentEffects: MessageEffects = .none
     @State private var composerFocusTrigger: Bool = false
+    /// Focus réel du champ du composer — pilote l'insertion d'un texte déposé
+    /// (au curseur quand le champ a le focus, sinon à la fin).
+    @State private var composerIsFocused: Bool = false
     /// Section de commentaire actuellement surlignée (cible d'une notification).
     @State private var highlightedCommentId: String? = nil
     /// Garde-fou : ne défile vers la cible qu'une seule fois (les commentaires
@@ -2021,11 +2024,13 @@ struct PostDetailView: View {
         UniversalComposerBar(
             style: .light,
             mode: .comment,
+            onIngest: { ingests in handleComposerIngest(ingests) },
             accentColor: accentColor,
             forceShowAttachment: true,
             forceShowVoice: true,
             selectedLanguage: composerLanguage,
             onLanguageChange: { composerLanguage = $0 },
+            onFocusChange: { composerIsFocused = $0 },
             onSendMessage: { text, attachments, _ in submitComment(text: text, attachments: attachments) },
             onLocationRequest: { showCommentLocationPicker = true },
             textBinding: $composerText,
@@ -2108,6 +2113,26 @@ struct PostDetailView: View {
     }
 
     // MARK: - Comment send + voice (parity with feed/reels composer)
+
+    /// Dépôt / collage arrivé par la bande du composer (`onIngest`) : textes
+    /// fusionnés en UNE insertion (au curseur si le champ a le focus, sinon à
+    /// la fin), fichiers routés vers le staging commentaire existant
+    /// (spec 2026-07-30, lot 1).
+    private func handleComposerIngest(_ ingests: [ComposerIngest]) {
+        if let block = CommentComposerIngestion.mergedText(from: ingests) {
+            if !(composerIsFocused && CommentComposerIngestion.insertAtCursor(block)) {
+                composerText += block
+            }
+        }
+        CommentComposerIngestion.stageFiles(
+            CommentComposerIngestion.files(from: ingests),
+            accentColor: accentColor
+        ) { staged in
+            withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
+                commentAttachments.append(contentsOf: staged)
+            }
+        }
+    }
 
     private func submitComment(text: String, attachments: [ComposerAttachment]) {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)

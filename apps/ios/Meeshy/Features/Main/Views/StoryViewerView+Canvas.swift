@@ -683,18 +683,23 @@ struct StoryComposerBarView: View {
     @State private var showCommentFilePicker: Bool = false
     @State private var showCommentLocationPicker: Bool = false
     @State private var pendingPlace: SharedPlace? = nil
+    /// Focus réel du champ du composer — pilote l'insertion d'un texte déposé
+    /// (au curseur quand le champ a le focus, sinon à la fin via `emojiToInject`).
+    @State private var composerIsFocused: Bool = false
     @StateObject private var audioRecorder = AudioRecorderManager()
 
     var body: some View {
         UniversalComposerBar(
             style: .dark,
             mode: .comment,
+            onIngest: { ingests in handleComposerIngest(ingests) },
             accentColor: replyingToStoryComment?.authorColor ?? accentColor,
             forceShowAttachment: true,
             forceShowVoice: true,
             selectedLanguage: composerLanguage,
             onLanguageChange: { composerLanguage = $0 },
             onFocusChange: { focused in
+                composerIsFocused = focused
                 if focused {
                     isComposerEngaged = true
                     // Keyboard opening → dismiss emoji panel
@@ -849,6 +854,31 @@ struct StoryComposerBarView: View {
             Task {
                 commentAttachments = await CommentComposerStaging.photoAttachments(from: items)
                 await MainActor.run { commentPhotoItems = [] }
+            }
+        }
+    }
+
+    /// Dépôt / collage arrivé par la bande du composer (`onIngest`). Un dépôt
+    /// est une interaction utilisateur : il engage le composer
+    /// (`isComposerEngaged`), ce qui met le minuteur de story en pause via
+    /// `shouldPauseTimer` — exactement comme la saisie le fait déjà par le
+    /// focus ; le tap sur la story (`dismissComposer`) le relâche. Textes
+    /// fusionnés en UNE insertion (au curseur si focus ; sinon en fin de champ
+    /// via le canal `injectedEmoji` — cette surface n'a pas de binding texte),
+    /// fichiers routés vers le staging commentaire existant (spec 2026-07-30).
+    private func handleComposerIngest(_ ingests: [ComposerIngest]) {
+        isComposerEngaged = true
+        if let block = CommentComposerIngestion.mergedText(from: ingests) {
+            if !(composerIsFocused && CommentComposerIngestion.insertAtCursor(block)) {
+                emojiToInject = block
+            }
+        }
+        CommentComposerIngestion.stageFiles(
+            CommentComposerIngestion.files(from: ingests),
+            accentColor: accentColor
+        ) { staged in
+            withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
+                commentAttachments.append(contentsOf: staged)
             }
         }
     }
