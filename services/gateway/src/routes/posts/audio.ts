@@ -5,7 +5,7 @@ import path from 'path';
 import fs from 'fs/promises';
 import { createHash, randomUUID } from 'crypto';
 import { UnifiedAuthRequest } from '../../middleware/auth';
-import { sendSuccess, sendUnauthorized, sendBadRequest, sendNotFound } from '../../utils/response';
+import { sendSuccess, sendUnauthorized, sendBadRequest, sendNotFound, sendError } from '../../utils/response';
 import { toDTO } from './sounds';
 
 // Volume DÉDIÉ, servi uniquement par la route JWT `/static/:filename`.
@@ -134,6 +134,19 @@ export function registerStoryAudioRoutes(
 
     const safeName = path.basename(filename);
     const filePath = path.join(UPLOAD_DIR, safeName);
+
+    // LIMITE ASSUMÉE : le PostMedia SOURCE reste servi par `/attachments/file/*`
+    // (sans authentification) et par nginx en cache immutable. Couper un son
+    // arrête la copie de bibliothèque, pas l'original du post. Le retrait
+    // complet suppose de supprimer le média source — lot 2.
+    // `mutedAt` doit arrêter la DIFFUSION, pas seulement masquer la métadonnée.
+    const muted = await prisma.sound.findFirst({
+      where: { fileUrl: { endsWith: `/${safeName}` }, mutedAt: { not: null } },
+      select: { id: true },
+    });
+    if (muted) {
+      return sendError(reply, 410, 'Sound is no longer available', { code: 'SOUND_MUTED' });
+    }
 
     try {
       await fs.access(filePath);

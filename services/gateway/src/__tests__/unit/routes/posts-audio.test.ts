@@ -48,6 +48,9 @@ function makePrisma(overrides: any = {}) {
     sound: {
       create: jest.fn<any>().mockResolvedValue({ id: 'audio-1', title: 'Test Audio', fileUrl: '/api/v1/static/story_audio_test.mp3', uploader: { username: 'alice' } }),
       findMany: jest.fn<any>().mockResolvedValue([]),
+      // `GET /static/:filename` consulte `mutedAt` avant de servir : `null` =
+      // aucun son coupé. Le cas coupé vit dans routes/posts/__tests__/staticMuted.test.ts.
+      findFirst: jest.fn<any>().mockResolvedValue(null),
       update: jest.fn<any>().mockResolvedValue({}),
       ...overrides.sound,
     },

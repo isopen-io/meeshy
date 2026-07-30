@@ -47,6 +47,10 @@ function buildMockPrisma() {
     sound: {
       create: jest.fn(),
       findMany: jest.fn<() => Promise<unknown[]>>().mockResolvedValue([]),
+      // `GET /static/:filename` consulte `mutedAt` avant de servir le fichier :
+      // `null` = aucun son coupé, la route sert normalement. Le cas coupé est
+      // couvert par `staticMuted.test.ts`.
+      findFirst: jest.fn<() => Promise<unknown>>().mockResolvedValue(null),
       update: jest.fn(),
     },
   } as unknown as import('@meeshy/shared/prisma/client').PrismaClient;
