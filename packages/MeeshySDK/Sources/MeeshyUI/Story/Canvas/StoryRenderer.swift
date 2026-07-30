@@ -395,10 +395,10 @@ public enum StoryRenderer {
         let foregroundMedias = (slide.effects.mediaObjects ?? []).filter { $0.isBackground == false }
         items.append(contentsOf: foregroundMedias)
         items.append(contentsOf: slide.effects.stickerObjects ?? [])
-        // Pastilles de lieu : pas de layer dédiée avant T19 (dessin), mais
-        // elles doivent déjà traverser le cycle collectItems → cache pour que
-        // `editContentHash` les couvre (sinon la layer placeholder reste
-        // figée dans l'ancienne `place`/position après édition — brief T18).
+        // Pastilles de lieu : doivent traverser le cycle collectItems → cache
+        // pour que `editContentHash` les couvre, sinon le rendu reste figé
+        // sur l'ancienne `place`/position après édition (le hash ne change
+        // pas donc `StoryLocationLayer` ne se re-dessine pas).
         items.append(contentsOf: slide.locationObjects)
         return items
     }
