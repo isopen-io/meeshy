@@ -1660,21 +1660,23 @@ struct ConversationView: View {
         }
     }
 
-    private var expandedHeaderSearchButton: some View {
-        Button {
+    // AnyView + label extrait en struct NOMINALE : casse la récursion de type
+    // du bouton lui-même (crash stack-overflow du décodeur de métadonnées Swift
+    // au 1er rendu SUR DEVICE, .ips du 2026-07-30 dans
+    // `expandedHeaderSearchButton.getter`). Leçon 5cdde93c4 : couper au niveau
+    // du type qui est décodé — le type structurel (opaques
+    // `adaptiveGlass`/`meeshyTapTarget`, 2 branches #available chacun) reste
+    // scopé au body de `HeaderSearchGlyph`, le Button devient trivial.
+    private var expandedHeaderSearchButton: AnyView {
+        AnyView(Button {
             withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { headerState.showSearch = true }
             isSearchFocused = true
         } label: {
-            Image(systemName: "magnifyingglass")
-                .font(MeeshyFont.relative(13, weight: .semibold))
-                .foregroundStyle(LinearGradient(colors: [Color(hex: accentColor), Color(hex: secondaryColor)], startPoint: .topLeading, endPoint: .bottomTrailing))
-                .frame(width: 28, height: 28)
-                .adaptiveGlass(in: Circle(), tint: Color(hex: accentColor).opacity(0.25))
-                .meeshyTapTarget()
+            HeaderSearchGlyph(accentColor: accentColor, secondaryColor: secondaryColor)
         }
         .accessibilityLabel(String(localized: "conversation.view.search_in_conversation", bundle: .main))
         .accessibilityHint(String(localized: "accessibility.search.hint", bundle: .main))
-        .accessibilityIdentifier("conversation.header.search")
+        .accessibilityIdentifier("conversation.header.search"))
     }
 
     private var expandedHeaderBackground: AnyView {
@@ -1952,5 +1954,26 @@ struct ConversationView: View {
                 Label(String(localized: "common.delete", defaultValue: "Supprimer", bundle: .main), systemImage: "trash")
             }
         }
+    }
+}
+
+// MARK: - Header Search Glyph (extracted struct to keep the Button's type trivial)
+
+/// Struct NOMINALE : le type structurel du glyphe (opaques `adaptiveGlass` +
+/// `meeshyTapTarget`, chacun portant ses 2 branches #available) reste scopé à
+/// ce body au lieu de gonfler le mangled name du Button parent — dont le
+/// décodage récursif débordait la pile du main thread au 1er rendu SUR DEVICE
+/// (.ips 2026-07-30, `expandedHeaderSearchButton.getter`).
+private struct HeaderSearchGlyph: View {
+    let accentColor: String
+    let secondaryColor: String
+
+    var body: some View {
+        Image(systemName: "magnifyingglass")
+            .font(MeeshyFont.relative(13, weight: .semibold))
+            .foregroundStyle(LinearGradient(colors: [Color(hex: accentColor), Color(hex: secondaryColor)], startPoint: .topLeading, endPoint: .bottomTrailing))
+            .frame(width: 28, height: 28)
+            .adaptiveGlass(in: Circle(), tint: Color(hex: accentColor).opacity(0.25))
+            .meeshyTapTarget()
     }
 }
