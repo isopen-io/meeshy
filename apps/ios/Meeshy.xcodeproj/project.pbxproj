@@ -557,6 +557,7 @@
 		A526080C290DAA4A4D9C4A85 /* BubbleDeliveryCheck.swift in Sources */ = {isa = PBXBuildFile; fileRef = 05328BB6B8343F9BFE1EF1AE /* BubbleDeliveryCheck.swift */; };
 		A55596575329CB49EE9DB1BF /* HeaderCallButtonsViewTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5415F2EAA24DE3F68DD44281 /* HeaderCallButtonsViewTests.swift */; };
 		A5DD68B6D81928911EF583E5 /* StoryVerticalGestureFeatureGuardTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 40FDFC69FB8835C859E1B310 /* StoryVerticalGestureFeatureGuardTests.swift */; };
+		A6C6116B6464BB4A219470CF /* StatusBubbleHostPlacementTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 85A9DA52A2806CCDFB24119F /* StatusBubbleHostPlacementTests.swift */; };
 		A7657AA68F5BFB9EB7BA73AF /* MyStoriesEmptyStateResolver.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A160C980B971C7AC2B3C822 /* MyStoriesEmptyStateResolver.swift */; };
 		A7B510C5BCA2C1234E3D3007 /* DeleteAccountView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 39D092ECE24FB44A3D3D3F0A /* DeleteAccountView.swift */; };
 		A83CBA640DC92BFB3A56422A /* ContactCardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 50266C28923130C5BC3A4D00 /* ContactCardView.swift */; };
@@ -1370,6 +1371,7 @@
 		852E28A619A922E19AA4C66A /* DeepLinkRouter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeepLinkRouter.swift; sourceTree = "<group>"; };
 		855DA44038B4A4DA1F9C4232 /* BubbleCallNoticeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BubbleCallNoticeView.swift; sourceTree = "<group>"; };
 		8591A7F9A412E18EA0263044 /* UniversalComposerBar+Recording.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "UniversalComposerBar+Recording.swift"; sourceTree = "<group>"; };
+		85A9DA52A2806CCDFB24119F /* StatusBubbleHostPlacementTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatusBubbleHostPlacementTests.swift; sourceTree = "<group>"; };
 		8643AE5BE359B30610A23812 /* CallView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallView.swift; sourceTree = "<group>"; };
 		867F7A4CB879D7390F12F046 /* BubbleStandardLayout.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BubbleStandardLayout.swift; sourceTree = "<group>"; };
 		868E05983DB90E26551D04AD /* ConnectionStatusViewModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectionStatusViewModelTests.swift; sourceTree = "<group>"; };
@@ -2335,6 +2337,7 @@
 				55C0554FD34388B676A52EF8 /* StarredMessagesStoreTests.swift */,
 				1ABF76B8551B950BB417F705 /* StatusBubbleControllerReplyTests.swift */,
 				32023BCEEF13A92DC355A64D /* StatusBubbleControllerTests.swift */,
+				85A9DA52A2806CCDFB24119F /* StatusBubbleHostPlacementTests.swift */,
 				16C2A5BBA4EEC989E8A71E9E /* StatusBubbleHostScopeTests.swift */,
 				A66E16E8EA352BC3F587D3AF /* StoryExportPreflightTests.swift */,
 				ECF82BB3461D0F3AA3CBDEEA /* StoryInteractionServiceTests.swift */,
@@ -4054,6 +4057,7 @@
 				93B40982F3C9268DC637C7CD /* StatsTimelineChartAccessibilityTests.swift in Sources */,
 				000948901E548E0CAC33E529 /* StatusBubbleControllerReplyTests.swift in Sources */,
 				04B5040CE0DF8A762828ABE0 /* StatusBubbleControllerTests.swift in Sources */,
+				A6C6116B6464BB4A219470CF /* StatusBubbleHostPlacementTests.swift in Sources */,
 				E04BFD9AA0E0335F32FBE301 /* StatusBubbleHostScopeTests.swift in Sources */,
 				1D836B7D2DB588FA7BBE9BDD /* StatusBubbleOverlayLayoutTests.swift in Sources */,
 				444E542E211C28A5D40476E9 /* StatusComposerAccessibilityTests.swift in Sources */,
