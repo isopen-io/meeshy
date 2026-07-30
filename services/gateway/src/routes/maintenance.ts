@@ -11,6 +11,14 @@ import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { enhancedLogger } from '../utils/logger-enhanced.js';
 import { sendSuccess, sendInternalError } from '../utils/response.js';
+// Ces routes décrivent elles-mêmes leur public : « for system administrators »,
+// « allows administrators to override ». La garde correspondante manquait :
+// `server.ts` les enregistre sans enveloppe et aucune ne portait de
+// `preHandler`. Un appelant anonyme pouvait donc basculer le statut de
+// n'importe quel utilisateur (`userId` lu dans le corps de la requête),
+// déclencher un nettoyage, ou remettre les métriques à zéro — le gateway
+// étant joignable depuis l'Internet public.
+import { requireAdmin } from '../middleware/auth.js';
 const logger = enhancedLogger.child({ module: 'MaintenanceRoutes' });
 
 export async function maintenanceRoutes(fastify: FastifyInstance) {
@@ -21,6 +29,7 @@ export async function maintenanceRoutes(fastify: FastifyInstance) {
 
   // Route pour obtenir les statistiques de maintenance
   fastify.get('/stats', {
+    onRequest: [fastify.authenticate, requireAdmin],
     schema: {
       description: 'Retrieve comprehensive maintenance statistics including online users, total users, anonymous sessions, and system health metrics. This endpoint provides real-time monitoring data for system administrators.',
       tags: ['maintenance', 'monitoring'],
@@ -64,6 +73,7 @@ export async function maintenanceRoutes(fastify: FastifyInstance) {
 
   // Route pour déclencher manuellement le nettoyage des données expirées
   fastify.post('/cleanup', {
+    onRequest: [fastify.authenticate, requireAdmin],
     schema: {
       description: 'Manually trigger cleanup of expired data including old sessions, inactive anonymous participants, expired share links, and stale attachments. This maintenance operation helps keep the database clean and optimized.',
       tags: ['maintenance', 'admin'],
@@ -99,6 +109,7 @@ export async function maintenanceRoutes(fastify: FastifyInstance) {
 
   // Route pour mettre à jour manuellement le statut d'un utilisateur
   fastify.post('/user-status', {
+    onRequest: [fastify.authenticate, requireAdmin],
     schema: {
       description: 'Manually update the online/offline status of a specific user. This allows administrators to override the automatic status tracking for troubleshooting or testing purposes.',
       tags: ['maintenance', 'admin', 'users'],
@@ -146,6 +157,7 @@ export async function maintenanceRoutes(fastify: FastifyInstance) {
 
   // NOUVEAU: Route pour obtenir les métriques du StatusService
   fastify.get('/status-metrics', {
+    onRequest: [fastify.authenticate, requireAdmin],
     schema: {
       description: 'Retrieve detailed performance metrics for the StatusService including request counts, throttling statistics, update success/failure rates, and cache utilization. This endpoint provides insights into the status tracking system performance.',
       tags: ['maintenance', 'monitoring', 'metrics'],
@@ -189,6 +201,7 @@ export async function maintenanceRoutes(fastify: FastifyInstance) {
 
   // NOUVEAU: Route pour réinitialiser les métriques du StatusService
   fastify.post('/status-metrics/reset', {
+    onRequest: [fastify.authenticate, requireAdmin],
     schema: {
       description: 'Reset all StatusService performance metrics to zero. This operation clears accumulated request counts, throttling statistics, and update counters. Useful for starting fresh metric collection after maintenance or for testing purposes.',
       tags: ['maintenance', 'admin', 'metrics'],
