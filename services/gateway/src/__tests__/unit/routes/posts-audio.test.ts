@@ -1,7 +1,6 @@
 /**
  * Unit tests for posts/audio.ts
- * Tests POST /stories/audio, GET /stories/audio,
- *       POST /stories/audio/:audioId/use, GET /static/:filename
+ * Tests POST /stories/audio, GET /stories/audio, GET /static/:filename
  *
  * @jest-environment node
  */
@@ -234,33 +233,6 @@ describe('GET /stories/audio — with results and search', () => {
     expect(mockFindMany).toHaveBeenCalledWith(expect.objectContaining({
       where: expect.objectContaining({ title: expect.any(Object) }),
     }));
-  });
-});
-
-// ─── POST /stories/audio/:audioId/use ────────────────────────────────────────
-
-describe('POST /stories/audio/:audioId/use — increment counter', () => {
-  let app: FastifyInstance;
-  const mockUpdate = jest.fn<any>().mockResolvedValue({});
-  beforeAll(async () => {
-    app = await buildApp({ prismaOverrides: { sound: { update: mockUpdate } } });
-  });
-  afterAll(async () => { await app.close(); });
-
-  it('returns 200 and calls prisma update', async () => {
-    const res = await app.inject({ method: 'POST', url: '/stories/audio/audio-1/use' });
-    expect(res.statusCode).toBe(200);
-    expect(res.json().success).toBe(true);
-    expect(mockUpdate).toHaveBeenCalledWith(expect.objectContaining({
-      where: { id: 'audio-1' },
-      data: { usageCount: { increment: 1 } },
-    }));
-  });
-
-  it('returns 200 even when audio does not exist (silent fail)', async () => {
-    mockUpdate.mockRejectedValueOnce(new Error('Record not found'));
-    const res = await app.inject({ method: 'POST', url: '/stories/audio/nonexistent/use' });
-    expect(res.statusCode).toBe(200);
   });
 });
 

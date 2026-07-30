@@ -331,22 +331,6 @@ export const postsService = {
     return unwrap(response);
   },
 
-  // ── Story Background Audio ──────────────────────────────────────────────
-
-  async getStoryAudioLibrary(query?: string, limit = 20): Promise<{ id: string; title: string; duration: number; fileUrl: string; usageCount: number }[]> {
-    const params = new URLSearchParams();
-    if (query) params.set('q', query);
-    params.set('limit', String(limit));
-    const qs = params.toString();
-    const response = await apiService.get<{ id: string; title: string; duration: number; fileUrl: string; usageCount: number }[]>(
-      `/stories/audio${qs ? `?${qs}` : ''}`,
-    );
-    return unwrap(response);
-  },
-
-  async trackStoryAudioUse(audioId: string): Promise<void> {
-    await apiService.post(`/stories/audio/${audioId}/use`);
-  },
 };
 
 /**

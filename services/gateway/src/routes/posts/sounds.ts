@@ -11,8 +11,12 @@ const MineQuerySchema = z.object({
 });
 const PatchBodySchema = z.object({ isPublic: z.boolean() });
 
-/** Projection explicite : `contentHash` et `uploaderId` ne sortent jamais. */
-function toDTO(s: Record<string, unknown>) {
+/**
+ * Projection explicite : `contentHash` et `uploaderId` ne sortent jamais.
+ * Exportée pour `audio.ts` : les routes héritées `/stories/audio` renvoyaient
+ * l'entité Prisma brute et fuiteraient les mêmes champs.
+ */
+export function toDTO(s: Record<string, unknown>) {
   return {
     id: s['id'], title: s['title'], fileUrl: s['fileUrl'],
     durationMs: s['durationMs'] ?? null, waveform: s['waveform'] ?? [],

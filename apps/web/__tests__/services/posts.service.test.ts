@@ -406,42 +406,6 @@ describe('postsService gap-fill', () => {
     });
   });
 
-  describe('getStoryAudioLibrary', () => {
-    it('calls GET /stories/audio with default limit and no query', async () => {
-      mockApi.get.mockResolvedValue({ success: true, data: [] });
-
-      await postsService.getStoryAudioLibrary();
-
-      expect(mockApi.get).toHaveBeenCalledWith('/stories/audio?limit=20');
-    });
-
-    it('includes q param when query is provided', async () => {
-      mockApi.get.mockResolvedValue({ success: true, data: [] });
-
-      await postsService.getStoryAudioLibrary('chill');
-
-      expect(mockApi.get).toHaveBeenCalledWith('/stories/audio?q=chill&limit=20');
-    });
-
-    it('uses custom limit when provided', async () => {
-      mockApi.get.mockResolvedValue({ success: true, data: [] });
-
-      await postsService.getStoryAudioLibrary(undefined, 50);
-
-      expect(mockApi.get).toHaveBeenCalledWith('/stories/audio?limit=50');
-    });
-  });
-
-  describe('trackStoryAudioUse', () => {
-    it('calls POST /stories/audio/:audioId/use', async () => {
-      mockApi.post.mockResolvedValue({ success: true });
-
-      await postsService.trackStoryAudioUse('audio-123');
-
-      expect(mockApi.post).toHaveBeenCalledWith('/stories/audio/audio-123/use');
-    });
-  });
-
   describe('repost with default empty body', () => {
     it('calls POST /posts/:postId/repost with empty body by default', async () => {
       mockApi.post.mockResolvedValue({ success: true });

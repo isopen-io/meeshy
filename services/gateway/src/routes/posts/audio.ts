@@ -3,9 +3,10 @@ import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { z } from 'zod';
 import path from 'path';
 import fs from 'fs/promises';
-import { randomUUID } from 'crypto';
+import { createHash, randomUUID } from 'crypto';
 import { UnifiedAuthRequest } from '../../middleware/auth';
 import { sendSuccess, sendUnauthorized, sendBadRequest, sendNotFound } from '../../utils/response';
+import { toDTO } from './sounds';
 
 // Volume DÉDIÉ, servi uniquement par la route JWT `/static/:filename`.
 // Surtout PAS sous UPLOAD_PATH : tout ce qui s'y trouve est exposé par
@@ -67,9 +68,18 @@ export function registerStoryAudioRoutes(
     const ext = path.extname(data.filename || '') || '.m4a';
     const filename = `story_audio_${randomUUID()}${ext}`;
     const filePath = path.join(UPLOAD_DIR, filename);
-    await fs.writeFile(filePath, await data.toBuffer());
+    const buffer = await data.toBuffer();
+    await fs.writeFile(filePath, buffer);
 
     const fileUrl = `/api/v1/static/${filename}`;
+
+    // OBLIGATOIRE : MongoDB traite l'absence comme `null` dans un index unique.
+    // Sans `contentHash`, le SECOND upload d'un même utilisateur violerait
+    // `@@unique([uploaderId, contentHash])` et renverrait 500.
+    // Haché sur le buffer DÉJÀ en mémoire (`toBuffer()` l'a matérialisé de toute
+    // façon) : même SHA-256 que `SoundCaptureService.hashFile`, donc les deux
+    // chemins de création dédoublonnent ensemble, sans relire le disque.
+    const contentHash = createHash('sha256').update(buffer).digest('hex');
 
     const audio = await prisma.sound.create({
       data: {
@@ -78,13 +88,11 @@ export function registerStoryAudioRoutes(
         title,
         duration,
         isPublic,
-      },
-      include: {
-        uploader: { select: { username: true } },
+        contentHash,
       },
     });
 
-    return sendSuccess(reply, audio, { statusCode: 201 });
+    return sendSuccess(reply, toDTO(audio as unknown as Record<string, unknown>), { statusCode: 201 });
   });
 
   // GET /stories/audio — Liste bibliothèque publique (triée par popularité)
@@ -97,7 +105,8 @@ export function registerStoryAudioRoutes(
     }
 
     const { q, limit } = parsed.data;
-    const where: any = { isPublic: true };
+    // `mutedAt` retire de la DÉCOUVERTE en plus d'arrêter la diffusion.
+    const where: any = { isPublic: true, mutedAt: null };
     if (q) {
       where.title = { contains: q, mode: 'insensitive' };
     }
@@ -106,23 +115,9 @@ export function registerStoryAudioRoutes(
       where,
       orderBy: { usageCount: 'desc' },
       take: limit,
-      include: { uploader: { select: { username: true } } },
     });
 
-    return sendSuccess(reply, audios);
-  });
-
-  // POST /stories/audio/:audioId/use — Incrémenter le compteur d'utilisation
-  fastify.post<{ Params: { audioId: string } }>('/stories/audio/:audioId/use', {
-    preValidation: [requiredAuth],
-  }, async (request, reply) => {
-    const { audioId } = request.params;
-    await prisma.sound.update({
-      where: { id: audioId },
-      data: { usageCount: { increment: 1 } },
-    }).catch(() => null); // Silencieux si l'audio n'existe pas
-
-    return sendSuccess(reply, null);
+    return sendSuccess(reply, audios.map((a) => toDTO(a as unknown as Record<string, unknown>)));
   });
 
   // GET /static/:filename — Serve uploaded story audio files (JWT-protected)
