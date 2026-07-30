@@ -247,6 +247,94 @@ restore_entitlements() {
     ok "Entitlements restored"
 }
 
+# ─── Build number ────────────────────────────────────────────────────────────
+#
+# `CFBundleVersion` vaut `$(CURRENT_PROJECT_VERSION)` dans les 4 Info.plist, et
+# cette variable vit à DEUX endroits qui doivent rester d'accord :
+#   • project.yml                      → source de vérité XcodeGen
+#   • Meeshy.xcodeproj/project.pbxproj → ce que meeshy.sh compile réellement
+#     (ce script ne lance JAMAIS `xcodegen`, cf. apps/ios/CLAUDE.md)
+#
+# Le 2026-07-25 un `xcodegen generate` a réécrit le pbxproj depuis le
+# placeholder `"1"` de project.yml, et ce reset est parti dans un commit de
+# feature (85bb7e8d6, 1255 → 1). Depuis, toute app posée par `device` portait le
+# build **1**. La chaîne de publication ne l'a jamais vu : `ios-release.yml`
+# calcule son numéro avec `andp build-number --strategy max-build` et le passe
+# en build setting, et les lanes fastlane prennent `max(dépôt, TestFlight) + 1`
+# — le dépôt n'est jamais lu comme vérité. D'où une dérive muette de ~260.
+#
+# Le remède est un MÉCANISME, pas une valeur figée : on va chercher la vérité
+# chez Apple quand c'est possible. `andp build-number --strategy max-build
+# --json` renvoie `source.latest_asc`, le dernier build réellement présent sur
+# App Store Connect — exactement ce que le dépôt doit porter pour que la
+# prochaine publication soit un +1. Sans `andp`, sans credentials ou hors ligne,
+# on n'échoue JAMAIS le build : on garde la valeur committée et on le dit.
+
+# Numéro actuellement gravé dans le projet compilé.
+current_build_number() {
+    grep -m1 -o 'CURRENT_PROJECT_VERSION = [0-9][0-9]*' "$PROJECT/project.pbxproj" 2>/dev/null \
+        | grep -o '[0-9][0-9]*$' || true
+}
+
+# Dernier build présent sur App Store Connect, ou échec (code 1) si la vérité
+# n'est pas joignable. Aucune sortie sur stderr : l'appelant décide du message.
+fetch_latest_asc_build() {
+    command -v andp >/dev/null 2>&1 || return 1
+    local out
+    out=$(andp build-number "$BUNDLE_ID" --strategy max-build --json 2>/dev/null) || return 1
+    # Enveloppe ANDP : {"ok":true,…,"source":{"floor":0,"latest_asc":1263,…}}
+    # `build_number` est le PROCHAIN (latest+1) ; c'est `latest_asc` qu'on veut.
+    printf '%s' "$out" | grep -q '"ok"[[:space:]]*:[[:space:]]*true' || return 1
+    local latest
+    latest=$(printf '%s' "$out" \
+        | grep -o '"latest_asc"[[:space:]]*:[[:space:]]*[0-9][0-9]*' \
+        | grep -o '[0-9][0-9]*$' | head -n 1)
+    [ -n "$latest" ] || return 1
+    [ "$latest" -gt 0 ] 2>/dev/null || return 1
+    printf '%s' "$latest"
+}
+
+# Écrit le numéro dans les DEUX fichiers. Omettre project.yml rendrait le
+# correctif éphémère : le prochain `xcodegen generate` réécraserait le pbxproj
+# depuis le placeholder — c'est très exactement la panne d'origine.
+write_build_number() {
+    local value="$1"
+    sed -i '' -E "s/^([[:space:]]*CURRENT_PROJECT_VERSION:[[:space:]]*).*$/\1\"$value\"/" project.yml
+    sed -i '' -E "s/CURRENT_PROJECT_VERSION = [0-9][0-9]*;/CURRENT_PROJECT_VERSION = $value;/g" \
+        "$PROJECT/project.pbxproj"
+}
+
+# Aligne le dépôt sur App Store Connect. Best-effort : ne fait jamais échouer
+# l'appelant.
+sync_build_number() {
+    local committed latest
+    committed=$(current_build_number)
+
+    if ! latest=$(fetch_latest_asc_build); then
+        if command -v andp >/dev/null 2>&1; then
+            warn "Build number : App Store Connect injoignable (credentials .andp/secrets.yml ou réseau) — build ${BOLD}${committed:-?}${NC} conservé"
+        else
+            warn "Build number : ${BOLD}andp${NC} introuvable — build ${BOLD}${committed:-?}${NC} conservé"
+        fi
+        # Le placeholder XcodeGen mérite un cri : c'est la panne de 2026-07-25,
+        # et sans réseau on ne peut pas la réparer tout seul.
+        if [ "${committed:-1}" = "1" ]; then
+            err "Build number = ${BOLD}1${NC} — c'est le placeholder XcodeGen, pas un vrai build."
+            err "  Corrigez : ./meeshy.sh build-number   (ou éditez CURRENT_PROJECT_VERSION dans project.yml ET le pbxproj)"
+        fi
+        return 0
+    fi
+
+    if [ "$committed" = "$latest" ]; then
+        ok "Build number ${BOLD}$latest${NC} — aligné sur le dernier build App Store Connect"
+        return 0
+    fi
+
+    write_build_number "$latest"
+    ok "Build number ${BOLD}${committed:-?}${NC} → ${BOLD}$latest${NC} (dernier build App Store Connect ; la prochaine publication sera $((latest + 1)))"
+    log "project.yml et $PROJECT/project.pbxproj mis à jour — pensez à committer ce bump"
+}
+
 do_device_deploy() {
     detect_physical_device
     do_device_deploy_only
@@ -1599,6 +1687,7 @@ usage() {
     echo -e "    ${GREEN}test${NC}         Run unit tests ${DIM}(SDK package suite + 3 app phases; --skip-sdk, --ui)${NC}"
     echo -e "    ${GREEN}setup${NC}        Check/install dev dependencies"
     echo -e "    ${GREEN}device${NC}       Pick a device (simulator or physical) and deploy ${DIM}(interactive)${NC}"
+    echo -e "    ${GREEN}build-number${NC} Align CURRENT_PROJECT_VERSION on the latest App Store Connect build ${DIM}(via andp)${NC}"
     echo -e "    ${GREEN}screenshot${NC}   Take simulator screenshot"
     echo ""
     echo -e "  ${BOLD}Platform:${NC}"
@@ -1649,7 +1738,7 @@ DEEP_CLEAN=false
 
 # Check if first arg is a known command
 case "$COMMAND" in
-    run|build|stop|restart|logs|status|clean|archive|release-check|release|distribute|test|setup|screenshot|device|help|-h|--help)
+    run|build|stop|restart|logs|status|clean|archive|release-check|release|distribute|test|setup|screenshot|device|build-number|help|-h|--help)
         shift || true
         ;;
     -*)
@@ -1823,10 +1912,21 @@ case "$COMMAND" in
         do_screenshot "$1"
         ;;
 
+    build-number)
+        echo ""
+        echo -e "${BOLD}${CYAN}  Meeshy iOS Build Number${NC}"
+        echo ""
+        sync_build_number
+        echo ""
+        ;;
+
     device)
         echo ""
         echo -e "${BOLD}${CYAN}  Meeshy iOS Device Deploy${NC}"
         echo ""
+        # Avant de compiler : l'app posée sur un appareil réel doit porter le
+        # numéro de build du dernier TestFlight, pas le placeholder XcodeGen.
+        sync_build_number
         pick_device
 
         if [ "$PICKED_DEVICE_TYPE" = "physical" ]; then

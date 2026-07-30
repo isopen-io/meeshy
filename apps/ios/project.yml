@@ -34,11 +34,26 @@ settings:
   # `agvtool what-version -terse` sortait en code 6 ("setup your project
   # properly") au lancement de la lane `beta`/`release`. Elles miroitaient
   # Configuration/*.xcconfig, supprimés le 2026-07-28 (jamais câblés au
-  # projet : aucune clé `configFiles`, donc sans effet). Les lanes prennent
-  # max(version locale, dernier build TestFlight) + 1, donc le "1" littéral
-  # n'est qu'un plancher — le build réel reste strictement croissant.
+  # projet : aucune clé `configFiles`, donc sans effet).
+  #
+  # CETTE VALEUR N'EST PAS UN PLACEHOLDER. Elle doit refléter le dernier build
+  # présent sur App Store Connect, pour deux raisons :
+  #   1. `xcodegen generate` la recopie telle quelle dans le pbxproj. Laisser
+  #      "1" ici a suffi, le 2026-07-25, à faire retomber le projet de 1255 à 1
+  #      (commit 85bb7e8d6) — et toute app posée par `meeshy.sh device` a porté
+  #      le build 1 pendant cinq jours, sans que la CI de release le voie
+  #      (`ios-release.yml` calcule son numéro via `andp build-number` et le
+  #      passe en build setting, sans lire le dépôt).
+  #   2. Les lanes fastlane prennent `max(dépôt, dernier TestFlight) + 1` : une
+  #      valeur juste ici rend le prochain build prévisible (+1), une valeur
+  #      fausse le rend seulement non-régressif.
+  #
+  # Maintenue par `./meeshy.sh build-number` (et automatiquement avant chaque
+  # `./meeshy.sh device`), qui lit `source.latest_asc` d'`andp build-number
+  # --strategy max-build` et écrit ICI **et** dans le pbxproj — les deux, sinon
+  # la prochaine régénération réécrase le correctif.
   VERSIONING_SYSTEM: apple-generic
-  CURRENT_PROJECT_VERSION: "1"
+  CURRENT_PROJECT_VERSION: "1263"
   MARKETING_VERSION: "1.0.0"
 
   # Équipe de signature (Automatic). Indispensable pour `meeshy.sh device`
