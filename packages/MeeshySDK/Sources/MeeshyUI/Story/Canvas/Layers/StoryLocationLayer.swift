@@ -27,6 +27,19 @@ public final class StoryLocationLayer: CALayer {
     private static let verticalPad: CGFloat = 14
     private static let iconGap: CGFloat = 10
 
+    /// Palette de marque MeeshyColors — jamais de couleur système en dur
+    /// (`packages/MeeshySDK/CLAUDE.md`, Visual Identity). Réutilise le
+    /// parseur hex déjà employé par `StoryTextLayer` pour brancher les
+    /// tokens `MeeshyColors` (déclarés en `Color`, pas en `UIColor`) sur ce
+    /// rendu `UIGraphicsImageRenderer`.
+    static let pinTintColor: UIColor =
+        StoryTextLayer.parseHexColorNonisolated(MeeshyColors.errorHex) ?? .systemRed
+    static let labelTextColor: UIColor =
+        StoryTextLayer.parseHexColorNonisolated(MeeshyColors.indigo900Hex) ?? .black
+    static let pillBackgroundColor: UIColor =
+        (StoryTextLayer.parseHexColorNonisolated(MeeshyColors.indigo50Hex) ?? .white)
+            .withAlphaComponent(0.94)
+
     public override nonisolated init() { super.init() }
     public override nonisolated init(layer: Any) { super.init(layer: layer) }
 
@@ -87,8 +100,10 @@ public final class StoryLocationLayer: CALayer {
         return String(localized: "story.location.here", defaultValue: "Ici", bundle: .module)
     }
 
-    /// Rasterizes the pill badge (white pill, red pin glyph, black label) at
-    /// render-space size. Returns `nil` image only if `UIGraphicsImageRenderer`
+    /// Rasterizes the pill badge (`pillBackgroundColor` pill, `pinTintColor`
+    /// pin glyph, `labelTextColor` label — all three MeeshyColors, never a
+    /// hardcoded system color) at render-space size. Returns `nil` image
+    /// only if `UIGraphicsImageRenderer`
     /// itself fails to produce a backing store (never observed in practice) —
     /// callers must still assign the `renderedSize` so `bounds`/hit-testing
     /// stay correct even in that degenerate case.
@@ -100,7 +115,7 @@ public final class StoryLocationLayer: CALayer {
                                    gap: CGFloat,
                                    screenScale: CGFloat) -> (UIImage?, CGSize) {
         let font = UIFont.systemFont(ofSize: fontSize, weight: .semibold)
-        let textAttrs: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: UIColor.black]
+        let textAttrs: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: labelTextColor]
         let textSize = (label as NSString).size(withAttributes: textAttrs)
         let iconSize = fontSize
         let size = CGSize(
@@ -116,14 +131,14 @@ public final class StoryLocationLayer: CALayer {
         let image = renderer.image { _ in
             let pill = UIBezierPath(roundedRect: CGRect(origin: .zero, size: size),
                                     cornerRadius: size.height / 2)
-            UIColor.white.withAlphaComponent(0.94).setFill()
+            pillBackgroundColor.setFill()
             pill.fill()
 
             let iconRect = CGRect(x: hPad, y: (size.height - iconSize) / 2,
                                   width: iconSize, height: iconSize)
             let symbolConfig = UIImage.SymbolConfiguration(pointSize: iconSize * 0.82, weight: .semibold)
             UIImage(systemName: "mappin.circle.fill", withConfiguration: symbolConfig)?
-                .withTintColor(.systemRed, renderingMode: .alwaysOriginal)
+                .withTintColor(pinTintColor, renderingMode: .alwaysOriginal)
                 .draw(in: iconRect)
 
             let textRect = CGRect(x: hPad + iconSize + gap, y: (size.height - textSize.height) / 2,

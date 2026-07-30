@@ -121,4 +121,45 @@ final class StoryLocationBadgeRenderTests: XCTestCase {
         let expected = String(localized: "story.location.here", defaultValue: "Ici", bundle: .module)
         XCTAssertEqual(StoryLocationLayer.resolvedLabel(for: place), expected)
     }
+
+    // MARK: - Palette de marque (pas de couleur système en dur)
+
+    /// Le glyphe d'épingle doit suivre `MeeshyColors.error` (#F87171), pas
+    /// `.systemRed` (#FF3B30) — deux rouges visuellement distincts.
+    func test_pinTintColor_matchesBrandErrorRed_notSystemRed() {
+        assertColor(StoryLocationLayer.pinTintColor, hex: "F87171")
+        XCTAssertNotEqual(StoryLocationLayer.pinTintColor, .systemRed)
+    }
+
+    /// Le libellé doit suivre `MeeshyColors.indigo900` (#312E81), pas un
+    /// noir pur hors charte.
+    func test_labelTextColor_matchesBrandIndigo900_notPureBlack() {
+        assertColor(StoryLocationLayer.labelTextColor, hex: "312E81")
+        XCTAssertNotEqual(StoryLocationLayer.labelTextColor, .black)
+    }
+
+    /// Le fond de la pastille doit rester un fond clair (glass, jamais
+    /// retiré) mais teinté Indigo (`indigo50`), pas un blanc système pur.
+    func test_pillBackgroundColor_isIndigoTinted_notPureSystemWhite() {
+        assertColor(StoryLocationLayer.pillBackgroundColor, hex: "EEF2FF", alpha: 0.94)
+        XCTAssertNotEqual(StoryLocationLayer.pillBackgroundColor, UIColor.white.withAlphaComponent(0.94))
+    }
+
+    private func assertColor(_ color: UIColor, hex: String, alpha: CGFloat = 1,
+                             file: StaticString = #filePath, line: UInt = #line) {
+        let scanner = Scanner(string: hex)
+        var rgb: UInt64 = 0
+        XCTAssertTrue(scanner.scanHexInt64(&rgb), file: file, line: line)
+        let expectedR = CGFloat((rgb & 0xFF0000) >> 16) / 255
+        let expectedG = CGFloat((rgb & 0x00FF00) >> 8) / 255
+        let expectedB = CGFloat(rgb & 0x0000FF) / 255
+
+        var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+        color.getRed(&r, green: &g, blue: &b, alpha: &a)
+
+        XCTAssertEqual(r, expectedR, accuracy: 0.01, file: file, line: line)
+        XCTAssertEqual(g, expectedG, accuracy: 0.01, file: file, line: line)
+        XCTAssertEqual(b, expectedB, accuracy: 0.01, file: file, line: line)
+        XCTAssertEqual(a, alpha, accuracy: 0.01, file: file, line: line)
+    }
 }
