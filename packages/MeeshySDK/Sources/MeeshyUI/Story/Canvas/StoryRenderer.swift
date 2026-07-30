@@ -54,6 +54,16 @@ extension StoryTextObject: RenderableItem {}
 extension StoryMediaObject: RenderableItem {}
 extension StorySticker: RenderableItem {}
 
+/// La pastille de lieu est hors timeline par design (voir doc `StoryLocationObject`
+/// dans MeeshySDK) : `nil` pour les quatre champs de timing en fait un item
+/// `isStatic` toujours visible, jamais gouverné par une fenêtre de lecture.
+extension StoryLocationObject: RenderableItem {
+    public var startTime: Double? { nil }
+    public var duration: Double? { nil }
+    public var fadeIn: Double? { nil }
+    public var fadeOut: Double? { nil }
+}
+
 extension RenderableItem {
     /// A static item has no timing windows, no fades, no keyframes — its rendered
     /// representation never changes during a slide, so it's a good rasterization
@@ -325,6 +335,8 @@ public enum StoryRenderer {
             data = try? encoder.encode(media)
         } else if let sticker = item as? StorySticker {
             data = try? encoder.encode(sticker)
+        } else if let location = item as? StoryLocationObject {
+            data = try? encoder.encode(location)
         } else {
             data = nil
         }
@@ -383,6 +395,11 @@ public enum StoryRenderer {
         let foregroundMedias = (slide.effects.mediaObjects ?? []).filter { $0.isBackground == false }
         items.append(contentsOf: foregroundMedias)
         items.append(contentsOf: slide.effects.stickerObjects ?? [])
+        // Pastilles de lieu : pas de layer dédiée avant T19 (dessin), mais
+        // elles doivent déjà traverser le cycle collectItems → cache pour que
+        // `editContentHash` les couvre (sinon la layer placeholder reste
+        // figée dans l'ancienne `place`/position après édition — brief T18).
+        items.append(contentsOf: slide.locationObjects)
         return items
     }
 
@@ -452,6 +469,11 @@ public enum StoryRenderer {
                                        geometry: geometry,
                                        into: layer)
             }
+            return layer
+        }
+        if let location = item as? StoryLocationObject {
+            let layer = StoryLocationLayer()
+            layer.configure(with: location, geometry: geometry, mode: mode)
             return layer
         }
         if let sticker = item as? StorySticker {
