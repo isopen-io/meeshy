@@ -92,6 +92,54 @@ sort noir.
 - Le coût d'export reste dominé par le bake (cf. mémoire export) ; la mémoïsation
   du fond ne fait qu'éviter d'en ajouter.
 
+---
+
+# Lot 2 — le MP4 pesait 314 Mo (2026-07-31)
+
+## Racine
+`AVAssetExportSession` n'expose **aucun** réglage d'encodage : ses presets bornent
+la DÉFINITION, jamais le débit. Mesuré sur source à forte entropie (1080×1920) :
+
+| Preset | Débit | Sortie | 1 min |
+|---|---|---|---|
+| `HighestQuality` | 58,8 Mbps | 1080×1920 | **441 Mo** |
+| `1920x1080` | 58,8 Mbps | 1080×1920 | **441 Mo** — strictement identique |
+| `HEVC1920x1080` | 23,6 Mbps | 1080×1920 | 177 Mo |
+| `1280x720` | 11,1 Mbps | 720×1280 | 84 Mo, au prix de la définition |
+
+Aucun preset ne plafonne le débit en pleine définition → 314 Mo ≈ une minute de
+contenu détaillé. **Changer de preset ne servait à rien** : c'est la mesure qui a
+écarté le correctif d'une ligne et justifié la refonte.
+
+## Correctif
+`AVAssetReader` + `AVAssetWriter` remplacent la session à preset — seul couple qui
+accepte un `AVVideoAverageBitRateKey`. `StoryExportVideoSettings` dérive le débit
+de la surface (0,12 bit/pixel/image, H.264 High, bornes 2,5–12 Mbps) ;
+`AVAssetReaderVideoCompositionOutput` continue de piloter le compositor custom.
+
+Mesuré après : **7,5 Mbps quelle que soit la source** (4K comprise) — le débit ne
+suit plus la définition d'entrée. **58,8 → 7,5 Mbps, soit ÷7,8.** Les 314 Mo
+signalés retombent à ≈ 40 Mo.
+
+## Le piège de ce lot : la fixture décide du verdict
+Trois fixtures, trois verdicts contradictoires sur le MÊME pipeline :
+- **aplat de couleur** → 0,1 Mbps : « tout va bien » sur un pipeline à 300 Mo ;
+- **bruit blanc par pixel** → incompressible, l'encodeur défonce toute cible
+  (cible 2 Mbps → 42,7 Mbps réels) : « le correctif ne marche pas », faux ;
+- **dégradé animé** (contenu structuré, régime d'une vraie vidéo) → cible 2 Mbps
+  → 2,1 réels ; cible 7,5 → 7,4. C'est la seule qui mesure quelque chose.
+
+## H.264 et pas HEVC
+HEVC diviserait encore par ~2 (23,6 vs 58,8 sur la même source), mais l'export
+part vers Photos / WhatsApp / AirDrop / Android / Windows, où il n'est pas
+universel. Le plafond apporte déjà ÷7,8 sans toucher à la compatibilité. HEVC
+resterait une option à exposer, pas un défaut à imposer.
+
+## Reste ouvert
+Une story de 4 min pèsera ~226 Mo : c'est la physique du 1080p à 7,5 Mbps, pas un
+défaut. Les leviers, si le besoin se confirme : abaisser `bitsPerPixelPerFrame`
+(0,08 → ~5 Mbps, ce que fait Instagram) ou proposer HEVC en option.
+
 ### Dette croisée rencontrée
 `StoryModelsTests.swift:457` ne compilait plus : une session concurrente ajoute
 `location: SharedPlace?` à `APIRepostOf` (`PostModels.swift` modifié, pas par
