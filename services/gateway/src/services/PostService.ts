@@ -200,7 +200,9 @@ export class PostService {
     // mediaIds contains PostMedia IDs (created directly by TUS handler with postId=null)
     if (data.mediaIds?.length) {
       await this.prisma.postMedia.updateMany({
-        where: { id: { in: data.mediaIds } },
+        // Garde de propriété : un id déjà réclamé par un autre post est
+        // silencieusement ignoré — même règle que `updatePost`.
+        where: { id: { in: data.mediaIds }, postId: null },
         data: { postId: post.id },
       });
 
@@ -834,6 +836,17 @@ export class PostService {
         });
       }
     }
+
+    // Édition : même contrat qu'à la création. Le service retire aussi les
+    // usages des pistes disparues, sinon elles surcompteraient pour toujours.
+    this.soundCaptureService.captureSounds({
+      postId: updated.id,
+      authorId: updated.authorId,
+      isPublic: updated.visibility === PostVisibility.PUBLIC,
+      tracks: this.extractCaptureTracks(data.storyEffects),
+    }).catch((err: unknown) => {
+      log.error('captureSounds (updatePost) a échoué', err instanceof Error ? err : new Error(String(err)), { postId: updated.id });
+    });
 
     return updated;
   }

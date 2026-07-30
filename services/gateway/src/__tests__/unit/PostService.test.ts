@@ -168,7 +168,8 @@ describe('PostService', () => {
       await service.createPost({ ...basePostData, mediaIds: ['media-1', 'media-2'] }, 'user-1');
 
       expect(prisma.postMedia.updateMany).toHaveBeenCalledWith({
-        where: { id: { in: ['media-1', 'media-2'] } },
+        // `postId: null` : garde de propriété au rattachement (lot A sons).
+        where: { id: { in: ['media-1', 'media-2'] }, postId: null },
         data: { postId: 'post-1' },
       });
       // findFirst is called to detect audio media for Whisper processing
