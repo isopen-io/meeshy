@@ -1,88 +1,93 @@
-# Stories publiées : vues/cœur dans la liste + édition complète (2026-07-29)
+# Lectures & notifications — nettoyage des vues (2026-07-31)
 
-Demande user : (1) dans « Mes stories », icône vues + compteur juste à gauche de
-l'icône commentaires (même patron) ; (2) cœur sous l'heure UNIQUEMENT si ≥ 1
-réaction ; (3) activer l'ÉDITION d'une story publiée — charger les données dans
-le composer, mettre à jour la story ; l'édition remet à zéro vues + réactions et
-la story redevient « non vue » pour tous (la date de publication ne bouge pas).
+## Symptôme rapporté
+« Les vues de conversation ne se nettoient pas — ça part puis ça revient. »
+Plus : ouvrir une conversation doit marquer sa notification lue ; ouvrir une
+story doit incrémenter l'impression à CHAQUE fois, poser le « vu », et marquer
+la notification lue.
 
-## A. Liste « Mes stories » (MyStoriesView.swift)
-- [x] A1. RED : tests-gardes `MyStoriesCommentsButtonTests` adaptés
-- [x] A2. GREEN : bouton œil+compteur (→ StoryViewersSheet) à gauche du bouton
-      commentaires ; cœur sous l'heure seulement si `reactionCount > 0` ;
-      `onOpenViewers` + action a11y + clé `story.mine.viewers.a11y` (7 langues)
+## Causes racines (Phase 1 — investigation)
 
-## B. Édition d'une story publiée
-- [x] B1. Exploration : PUT /posts/:id existait (storyEffects OK) mais aucun
-      reset d'engagement, pas de mediaIds à l'update, aucun mode édition iOS
-- [x] B2. Gateway (TDD, 16 suites/473 verts + tsc propre) :
-      · `storyEditPolicy.storyContentEditRequested` (prédicat partagé route/service)
-      · reset : PostView/PostReaction/PostImpression deleteMany + compteurs à 0
-        + reactions/reactionSummary/storyViews JSON vidés + translations rewipe
-        + retraduction Prisme (content + textObjects) ; `createdAt`/`expiresAt`
-        JAMAIS touchés (date de publication immuable)
-      · `mediaIds` accepté à l'update (attach TUS postId=null, borné 10)
-      · `Post.contentEditedAt DateTime?` (schéma+trayStorySelect+types partagés)
-        — SEUL horodatage fiable pour céder la garde « viewed monotone »
-      · `story:updated` porte `engagementReset` (handler + shared + tests)
-- [x] B3. iOS : « Modifier » dans le menu ⋯ (2 surfaces : tray + mini-trail) →
-      `StoryComposerViewModel(editing:)` (hydratation fidèle, préchargement
-      3-tier, pas de badge) ; composer gate brouillons/multi-slide en édition,
-      seed visibilité, libellé « Mettre à jour »
-- [x] B4. iOS : `StoryViewModel.updateStoryInBackground` — upload des seuls
-      assets nouveaux (postMediaId vide), diff removeMediaIds, PUT, cover
-      local-first re-rendue, remplacement dans le groupe ; garde monotone
-      raffinée (`shouldKeepLocalViewed`) appliquée aux 3 sites de merge,
-      jamais pour ses propres stories ; V1 édition = en ligne uniquement
-      (hors-ligne → composer reste ouvert + toast)
+### D1 — Les impressions de story ne sont JAMAIS enregistrées (HTTP 400)
+`POST /posts/:postId/impression` valide `source` contre l'enum
+`['feed','profile','search','shared_link','notification','detail']`.
+iOS envoie `source: "story"` (`StoryViewModel.recordStoryImpression`).
+Preuve prod : `HTTP 400` + toutes les stories à `impressionCount = 0` malgré
+`viewCount > 0`. Même classe de bug que le fix `reports` (f408b2584).
+Fichier : `services/gateway/src/routes/posts/interactions.ts:333` (+ batch :381).
 
-## C. Vérification
-- [x] C1. Gateway : suite INTÉGRALE verte (545 suites / 14 822 tests, bun)
-      + `tsc --noEmit` propre
-- [x] C2. iOS : `meeshy.sh build` vert ; bundle de tests compilé
-      (`build-for-testing`, DerivedData privée ensemencée — lock DB partagé
-      par la session concurrente) ; simu 18.2 :
-      MyStoriesCommentsButtonTests 10/10, StoryViewModelTests 103/103 (un
-      crash de 1re passe NON reproduit en isolé — bruit de la file de
-      publication persistante du simu), SDK : Edit 6/6, Repost 7/7,
-      ComposeAndPublishFlow 14/14
-- [x] C3. Commits : `093a0ddb2` (gateway/shared) + lot iOS (sélectif ; le
-      catalogue SDK est passé par le commit i18n concurrent `e94b56422` qui a
-      embarqué ma clé `story.composer.updateStory`)
+### D2 — L'état « lu » des notifications n'est jamais écrit dans le cache
+`NotificationListViewModel.handleReadEvent` / `handleConversationReadEvent` /
+`deleteNotification` ne mutent que le tableau `@Published` en mémoire. Le store
+GRDB `CacheCoordinator.notifications` garde `isRead:false`.
+`loadInitial()` lit le cache d'abord : `.fresh` (< 2 min) → il rend l'instantané
+d'AVANT le marquage → **les notifications lues réapparaissent non lues**.
+Fichier : `packages/MeeshySDK/Sources/MeeshyUI/Notifications/NotificationListView.swift:442-534`.
 
-## Review
-- Prisme respecté : l'édition invalide et relance les traductions (content +
-  textObjects) ; l'index de recherche dérivé reste synchrone.
-- Choix structurant : `contentEditedAt` (DateTime? nullable, conforme à la
-  règle « pas de booléen redondant ») — `updatedAt` bouge sur chaque
-  compteur, il était INUTILISABLE pour faire céder la garde « viewed
-  monotone » ; sans ce champ, les clients hors-ligne au moment de l'édition
-  n'auraient jamais vu la story « recommencer ».
-- L'état « vu » de ses PROPRES stories est client-only (recordView exclut
-  l'auteur) → jamais dévissé par le reset.
-- V1 assumée : l'édition exige le réseau (pas de file offline dédiée) — le
-  composer reste ouvert en cas d'échec réseau ; en cas d'échec du PUT après
-  fermeture, toast d'erreur (la version précédente reste intacte serveur).
-- Fond de slide : identité d'instance UIImage (hydratée vs publiée) décide
-  du ré-upload ; un fond inchangé garde son PostMedia d'origine.
+### D3 — Les instantanés serveur ré-inflatent le non-lu déjà lu localement
+`deltaSyncCore` / `fullSync` écrivent la charge serveur telle quelle dans le
+cache liste (`byId[delta.id] = delta`) — sans la garde « conversation ouverte »
+que `handleUnreadUpdated` applique, et sans frontière de lecture locale. Un
+retour en avant-plan / reconnexion socket pendant que le `markAsRead` est encore
+dans l'outbox rend la pastille.
+Fichier : `packages/MeeshySDK/Sources/MeeshySDK/Sync/ConversationSyncEngine.swift:271,527,1327`.
 
-## Vérification PROD + temps réel (session 2, 2026-07-29 soir)
-- E2E API prod (gate.meeshy.me) : création → vue+like par un 2e compte →
-  édition → reset complet (compteurs 0, viewers vidés, isViewedByMe=false,
-  contentEditedAt posé, createdAt/expiresAt INTACTS) ; visibilité-seule ne
-  reset RIEN ; retraduction Prisme relancée (~8 s après édition).
-- Latences socket mesurées (client A auteur + client B viewer, socket.io-client) :
-  story:viewed 314 ms · story:reacted 417 ms · story:updated 407 ms ·
-  engagementReset=true (contenu) / false (visibilité) reçus corrects.
-- UI simulateur (prod) : liste « Mes stories » conforme (œil à gauche de la
-  bulle, compteur si >0, cœur uniquement si ≥1) ; vue+like distants affichés
-  en <3 s SANS action ; menu ⋯ → Edit → composer hydraté (fond, texte
-  éditable en place, 1 slide, brouillons gatés, alerte sans « Save ») ;
-  publication → reset serveur + vignette re-rendue + compteurs à 0 en liste.
-- BUG TROUVÉ + FIXÉ (`f4b8bae3d`) : offMainDecoder socket sans stratégie de
-  dates → story:updated/created/post:created silencieusement perdus (UI au
-  prochain refresh REST). Factory partagée + garde de source, 4/4 verts.
-- Web : transport validé 1:1 (mêmes events via socket.io-client du web) ;
-  handlers audités (patch-in-place, zéro batch) ; vérif visuelle non faite
-  (extension Chrome non connectée).
-- Nettoyage : 2 stories de test supprimées de prod, tokens purgés.
+### D4 — Ouvrir une story ne marque ses notifications lues qu'à la 1re vue
+Le gateway n'appelle `markPostNotificationsAsRead` que si `isNewView`
+(`/posts/:postId/view`). Or le « vu » iOS est coalescé (binaire) : une 2e
+ouverture ne repart même pas. Une notif de commentaire arrivée APRÈS la 1re vue
+reste non lue pour toujours. Aucune route `/notifications/post/:id/read`.
+
+### D5 — Le contenu consommé (post/story ouvert) ne marque pas la notif lue
+`NotificationToastManager.handleNewNotification` : la branche `conversationId`
+marque lu côté serveur ; la branche `postId` fait un `return` nu → le serveur a
+incrémenté, le client non → dérive de la cloche. Et le viewer de story ne pose
+même pas `activePostId`.
+
+## Plan
+
+- [x] T1 gateway — accepter `story` dans les deux enums d'impression (+ tests)
+- [x] T2 gateway — `POST /notifications/post/:postId/read` (+ tests)
+- [x] T3 SDK — `NotificationService.markPostRead(postId:)`
+- [x] T4 SDK — write-through cache des notifications (lu/lu-par-conv/lu-par-post/types/tout/supprimé)
+- [x] T5 SDK — `onPostOpened` / marquage lu de la branche `activePostId`
+- [x] T6 SDK — réconciliation du non-lu dans `ConversationSyncEngine` (frontière de lecture locale + conversation ouverte)
+- [x] T7 iOS — le viewer de story déclare la story active + marque ses notifs lues
+- [x] T8 vérification — tsc gateway, tests gateway, tests SDK, tests iOS, build iOS, run iPad
+
+## Revue
+
+### Ce qui a été livré (4 commits)
+| Commit | Portée |
+|---|---|
+| `bcdd84228` | gateway — enum d'impression partagée (`story` accepté), route `POST /notifications/post/:postId/read` |
+| `3ddcc3339` | SDK+app — réconciliation du non-lu, write-through cache notifications, `onPostOpened`/`onPostClosed` |
+| `62f355019` | SDK — baseline de `fullSync` (frontière perdue pour les pages 2+) |
+| `d8e99bebf` | SDK+app — portée `.types`, dernier appelant qui court-circuitait le manager |
+
+### Défaut trouvé pendant l'auto-revue
+`fullSync` persiste sa PREMIÈRE page avant d'avoir les suivantes : le cache est
+alors réduit à cette page. La deuxième écriture confrontait donc les pages 2+ à
+un cache tronqué et perdait leur frontière de lecture — le symptôme d'origine
+survivait au-delà de la première page. Corrigé par une baseline figée avant la
+sync. Le premier test écrit ne prouvait rien (le mock renvoyait les mêmes ids à
+chaque page) ; corrigé, puis **vérifié rouge** (unread 6 au lieu de 0) avant
+d'être vert.
+
+### Vérification
+- gateway : `npx tsc --noEmit` → 0 erreur ; 213 tests (notifications + posts) verts
+- SDK : 60 tests ciblés verts (dont 12 nouveaux), suite `MeeshySDKTests` complète verte
+- iOS : 261 tests (`ConversationListViewModelTests`, `StoryViewModelTests`) verts ; build vert
+- iPad (simulateur, compte de démo, prod) :
+  - « Tout lire » → retour → réouverture de la cloche dans la fenêtre fraîche de
+    2 min → **les notifications restent lues** (c'était le chemin qui régressait)
+  - cycle arrière-plan/avant-plan (⇒ delta sync + réconciliation complète) →
+    **aucune pastille ne revient**, l'anneau de story reste « vu »
+  - ouverture d'une story → le log prod confirme le défaut D1 tel que diagnostiqué :
+    `recordStoryImpression failed for 6a6ba6e2… : An unexpected error occurred` (400)
+
+### Reste à faire (hors de mon contrôle)
+Les deux correctifs gateway ne prennent effet **qu'une fois déployés** :
+`source: "story"` continuera de partir en 400 et `POST /notifications/post/:id/read`
+en 404 tant que la prod n'est pas à jour. Le client dégrade proprement (échec
+loggué, marquage local déjà appliqué de façon optimiste).
