@@ -51,7 +51,9 @@ enum ConversationFirstRenderWarmup {
                 .environmentObject(ConversationListViewModel())
         )
         host.view.frame = CGRect(x: 0, y: 0, width: 390, height: 844)
+        let start = CFAbsoluteTimeGetCurrent()
         host.view.layoutIfNeeded()
+        NSLog("[ConversationFirstRenderWarmup] done in %.0f ms", (CFAbsoluteTimeGetCurrent() - start) * 1000)
     }
 }
 #endif

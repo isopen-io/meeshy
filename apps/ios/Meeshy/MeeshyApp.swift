@@ -54,6 +54,13 @@ struct MeeshyApp: App {
         // appareil), ne crashe jamais.
         UILanguageOverride.applyIfNeeded()
 
+        #if DEBUG
+        // Filet de diagnostic dev : capture la stack des SIGSEGV que
+        // ReportCrash throttle et que MetricKit tronque (stack overflows du
+        // décodeur de métadonnées — cf. ConversationFirstRenderWarmup).
+        CrashStackDumper.install()
+        #endif
+
         // Task 1.3 — register the BGProcessingTask identifier BEFORE the
         // scene is created. `BGTaskScheduler.register` MUST run before
         // `application(_:didFinishLaunchingWithOptions:)` returns, which
