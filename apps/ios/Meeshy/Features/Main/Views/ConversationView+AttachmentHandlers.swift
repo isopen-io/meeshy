@@ -1,5 +1,6 @@
 // MARK: - Extracted from ConversationView.swift
 import SwiftUI
+import UIKit
 import PhotosUI
 import AVFoundation
 import Combine
@@ -547,18 +548,12 @@ extension ConversationView {
                     continue
                 }
 
-                let attachmentId = UUID().uuidString
-                let attachment = MessageAttachment(
-                    id: attachmentId,
+                appendPendingFileAttachment(
+                    tempURL: tempURL,
                     fileName: fileName,
-                    originalName: fileName,
                     mimeType: mimeType,
-                    fileSize: fileSize,
-                    fileUrl: tempURL.absoluteString,
-                    thumbnailColor: MeeshyColors.infoHex
+                    fileSize: fileSize
                 )
-                composerState.pendingMediaFiles[attachmentId] = tempURL
-                composerState.pendingAttachments.append(attachment)
                 importedAny = true
             }
             if importedAny { HapticFeedback.light() }
@@ -579,6 +574,138 @@ extension ConversationView {
             return 0
         }
         return size
+    }
+
+    // MARK: - Ingestion par dépôt & collage (UniversalComposerBar.onIngest)
+
+    /// Ajoute au tiroir une pièce jointe « fichier » dont la copie temporaire
+    /// existe DÉJÀ dans notre conteneur. Cœur commun entre l'importateur de
+    /// documents (`handleFileImport`) et l'ingestion par dépôt / collage
+    /// (`handleComposerIngest`) : une seule voie vers `pendingAttachments` /
+    /// `pendingMediaFiles`, pas de variante qui divergerait.
+    func appendPendingFileAttachment(tempURL: URL, fileName: String, mimeType: String, fileSize: Int) {
+        let attachmentId = UUID().uuidString
+        let attachment = MessageAttachment(
+            id: attachmentId,
+            fileName: fileName,
+            originalName: fileName,
+            mimeType: mimeType,
+            fileSize: fileSize,
+            fileUrl: tempURL.absoluteString,
+            thumbnailColor: MeeshyColors.infoHex
+        )
+        composerState.pendingMediaFiles[attachmentId] = tempURL
+        composerState.pendingAttachments.append(attachment)
+    }
+
+    /// Contenu déposé ou collé dans la bande du composer (rappel `onIngest`
+    /// de `UniversalComposerBar`). Chaque `.file` pointe un fichier DÉJÀ
+    /// copié dans notre conteneur : cette surface en devient propriétaire
+    /// (les pipelines réutilisés le consomment, ou on le supprime).
+    ///
+    /// Réutiliser exactement les pipelines existants est délibéré : toute
+    /// nouvelle voie d'ingestion contournerait l'amorçage du cache de
+    /// vignettes, la bulle optimiste et le magasin de brouillons durable —
+    /// trois choses qui ne se voient pas casser.
+    func handleComposerIngest(_ items: [ComposerIngest]) {
+        var textParts: [String] = []
+        var ingestedAny = false
+
+        for item in items {
+            switch item {
+            case .text(let snippet):
+                textParts.append(snippet)
+            case .file(let url, let name, let mime):
+                ingestedAny = true
+                switch ComposerIngestRouter.route(mime: mime) {
+                case .image:
+                    ingestImageFile(at: url, name: name)
+                case .video:
+                    let prep = AttachmentPreparationService.shared.prepareVideo(
+                        sourceURL: url,
+                        deleteSourceAfterCompression: true,
+                        context: .message,
+                        accentColor: accentColor
+                    )
+                    trackPreparation(prep)
+                case .audio, .file:
+                    appendPendingFileAttachment(
+                        tempURL: url,
+                        fileName: name,
+                        mimeType: mime,
+                        fileSize: getFileSize(url)
+                    )
+                }
+            }
+        }
+
+        // Plusieurs `.text` d'un même dépôt : concaténés par un saut de
+        // ligne, dans l'ordre, en UNE SEULE insertion — pas N insertions
+        // successives, qui feraient N fois le tour de l'analyseur de langue
+        // et de la détection de collage.
+        if !textParts.isEmpty {
+            insertComposerText(textParts.joined(separator: "\n"))
+            ingestedAny = true
+        }
+
+        if ingestedAny { HapticFeedback.light() }
+    }
+
+    /// Image déposée / collée : octets lus hors du main, puis remise au
+    /// pipeline de préparation standard (tuile éditable + compression +
+    /// suivi), exactement comme une capture caméra.
+    private func ingestImageFile(at url: URL, name: String) {
+        Task { @MainActor in
+            let data = await ConversationView.readAttachmentFileBytes(url)
+            // Le fichier nous appartient ; une fois les octets en mémoire
+            // (ou le décodage refusé), la copie disque ne sert plus.
+            try? FileManager.default.removeItem(at: url)
+            guard let data, let image = UIImage(data: data) else {
+                // Pas de tuile fantôme : on refuse et on le dit.
+                Logger.messages.error("Ingestion image impossible (lecture ou décodage) pour \(name, privacy: .public)")
+                ComposerIngestFeedback.showFailure(names: [name])
+                return
+            }
+            let prep = AttachmentPreparationService.shared.prepareImage(
+                image,
+                context: .message,
+                accentColor: accentColor
+            )
+            trackPreparation(prep)
+        }
+    }
+
+    /// Insère du texte déposé / collé dans le champ de saisie : à la position
+    /// du curseur quand le champ a le focus (le premier répondant est alors
+    /// le champ du composer — `insertText` insère au curseur ou remplace la
+    /// sélection, et la synchro de binding de la barre répercute la valeur),
+    /// sinon à la fin du texte courant.
+    private func insertComposerText(_ snippet: String) {
+        if isTyping, let field = Self.currentKeyInputResponder() {
+            field.insertText(snippet)
+            return
+        }
+        composerText.text += snippet
+    }
+
+    /// Premier répondant de la scène active s'il accepte la saisie clavier.
+    private static func currentKeyInputResponder() -> (UIView & UIKeyInput)? {
+        let windows = UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .filter { $0.activationState == .foregroundActive }
+            .flatMap { $0.windows }
+        for window in windows {
+            if let responder = firstResponderKeyInput(in: window) { return responder }
+        }
+        return nil
+    }
+
+    private static func firstResponderKeyInput(in view: UIView) -> (UIView & UIKeyInput)? {
+        if view.isFirstResponder { return view as? (UIView & UIKeyInput) }
+        for subview in view.subviews {
+            if let found = firstResponderKeyInput(in: subview) { return found }
+        }
+        return nil
     }
 
     func addCurrentLocation() {

@@ -97,6 +97,12 @@ extension ConversationView {
             UniversalComposerBar(
             style: .light,
             mode: .message,
+            // Dépôt (Files / Finder) et collage d'URL `file://` résolus par la
+            // barre : chaque `.file` est DÉJÀ copié dans notre conteneur, cette
+            // surface en devient propriétaire et route vers ses pipelines
+            // existants (déclaré avant `accentColor` → doit apparaître ici pour
+            // l'ordre d'arguments de l'initialiseur memberwise synthétisé).
+            onIngest: { items in handleComposerIngest(items) },
             accentColor: viewModel.ephemeralDuration != nil ? MeeshyColors.errorHex : viewModel.isBlurEnabled ? MeeshyColors.trackingAccentHex : viewModel.pendingEffects.hasAnyEffect ? MeeshyColors.brandPrimaryHex : accentColor,
             secondaryColor: secondaryColor,
             // Hide file/photo attachments in the notification preview composer
