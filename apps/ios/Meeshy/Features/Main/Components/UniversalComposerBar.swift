@@ -256,6 +256,10 @@ struct UniversalComposerBar: View {
     /// raccourci photothèque de la poignée préselectionne les mêmes assets.
     /// Non-`private` : muté depuis `UniversalComposerBar+Attachments.swift`.
     @State var recentStripSelectionIds: [String] = []
+    /// `true` pendant l'étirement qui précède la présentation de la photothèque
+    /// complète — cf. `ComposerLibraryHandoff`. Non-`private` : muté depuis
+    /// `UniversalComposerBar+Attachments.swift`.
+    @State var isExpandingToLibrary = false
     @State private var attachButtonPressed = false
     @State var currentLanguage: String = "fr"
     // Voice recording
@@ -302,7 +306,12 @@ struct UniversalComposerBar: View {
         // compact two-row floor since its screen is short.
         let recentFloor: CGFloat = DeviceLayout.isPad ? 460 : 324
         let contentFloor: CGFloat = onRecentMediaSelected != nil ? recentFloor : 150
-        return max(keyboard, contentFloor)
+        let resting = max(keyboard, contentFloor)
+        guard isExpandingToLibrary else { return resting }
+        return ComposerLibraryHandoff.expandedHeight(
+            resting: resting,
+            windowHeight: DeviceLayout.windowSize.height
+        )
     }
 
     // MARK: - Recording constants
