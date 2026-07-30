@@ -45,13 +45,18 @@ jobs:
     # FrameRate, Watermark, Branding) that do real AVFoundation encoding.
     #
     # Measured on run #30546762282: 5m14 provisioning + 4m20 compile + >15m30 of
-    # test execution, killed mid-suite by the cap. Locally the same 6132 tests
-    # run in 6m43 on Apple Silicon; the 3-vCPU runner is ~2.5-3x slower on the
-    # encode-bound suites, so ~28-32 min end-to-end is the honest expectation.
-    # 45 keeps real headroom without turning into a no-op: a genuine deadlock is
-    # still caught first by -maximum-test-execution-time-allowance 180 (per test)
-    # below, and this cap only exists so a hung job never sits for GitHub's 6h.
-    timeout-minutes: 45
+    # test execution, killed mid-suite by the cap. Run #30549812265 then went the
+    # full distance at 42m25 — WITH two export tests killed early by the per-test
+    # allowance, so the honest budget is higher still (see that allowance below).
+    # Locally the same 6132 tests run in 6m43 on Apple Silicon; the 3-vCPU runner
+    # is far slower on the encode-bound suites, which dominate the wall clock.
+    #
+    # 60 covers ~45 min of measured work plus the tail. It is NOT a healthy
+    # target: this suite now burns the better part of an hour of macOS runner per
+    # push. The structural fix is to move the AVFoundation export suites to their
+    # own nightly workflow so per-push feedback stays minutes, not an hour —
+    # until then this cap only exists so a hung job never sits for GitHub's 6h.
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v7
 
@@ -78,12 +83,21 @@ jobs:
       - name: Run SDK tests
         run: |
           rm -rf TestResults.xcresult
+          # Per-test allowance is 600, raised from 180 on 2026-07-30. Two export
+          # tests were killed by the 180 s allowance on run #30549812265 —
+          # ExportEquivalenceTests.test_export_frame_visually_resembles_live_render_at_t5s
+          # and StoryExportSinglePassTests.test_singlePass_withIdentity_matchesWrappedOutput
+          # — which take 20 s and 32 s locally. They are not hung: they encode real
+          # video, and the runner has no usable hardware encoder, so the gap is ~9x
+          # rather than the ~2.5x the rest of the suite shows. 180 s sat below the
+          # floor for that work and turned slow into red. This allowance is still
+          # the deadlock guard — it must stay well under timeout-minutes.
           xcodebuild test \
             -scheme MeeshySDK-Package \
             -destination "platform=iOS Simulator,id=${{ steps.sim.outputs.sim_id }}" \
             -resultBundlePath TestResults.xcresult \
             -test-timeouts-enabled YES \
-            -maximum-test-execution-time-allowance 180 \
+            -maximum-test-execution-time-allowance 600 \
             -quiet
         working-directory: packages/MeeshySDK
 
