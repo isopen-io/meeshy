@@ -140,8 +140,24 @@ public final class StoryAVCompositor: NSObject, nonisolated AVVideoCompositing, 
         // MP4 shows a black background while the audio (baked into a separate
         // track) still plays — the "sound over black" bug. nil for
         // static-only / image-background slides (their substrate is overpainted).
-        let sourceVideoFrame: CVPixelBuffer? = request.sourceTrackIDs.first
-            .flatMap { request.sourceFrame(byTrackID: $0.int32Value) }
+        // Le substrat de la STORY vient de sa piste nommée. On ne peut plus se
+        // contenter de `sourceTrackIDs.first` : depuis que l'emballage de marque
+        // est composé dans cette même passe, la composition porte jusqu'à trois
+        // pistes vidéo et l'ordre n'est pas garanti.
+        let storyTrackID = instruction.storyTrackID != kCMPersistentTrackID_Invalid
+            ? instruction.storyTrackID
+            : (request.sourceTrackIDs.first?.int32Value ?? kCMPersistentTrackID_Invalid)
+        let sourceVideoFrame: CVPixelBuffer? = request.sourceFrame(byTrackID: storyTrackID)
+        let introFrame: CVPixelBuffer? = instruction.introTrackID
+            .flatMap { request.sourceFrame(byTrackID: $0) }
+        let outroFrame: CVPixelBuffer? = instruction.outroTrackID
+            .flatMap { request.sourceFrame(byTrackID: $0) }
+
+        // Temps de STORY : les keyframes, transitions et le filigrane restent
+        // datés depuis le début de la slide, pas depuis celui de l'interlude.
+        let storyTime = CMTimeSubtract(request.compositionTime, instruction.storyStart)
+        let storyAlpha = instruction.storyOpacity(at: request.compositionTime)
+        let outroAlpha = instruction.outroOpacity(at: request.compositionTime)
 
         // The pixel buffer is produced and consumed on the main actor (where
         // StoryRenderer.render runs) — finishing the request from inside the
@@ -154,14 +170,14 @@ public final class StoryAVCompositor: NSObject, nonisolated AVVideoCompositing, 
         // export would hang indefinitely). The provider then just looks up the
         // pre-decoded frame by media id.
         let overlayFrames = foregroundVideoFrameSource.decodeOverlayFrames(
-            slide: instruction.slide, at: request.compositionTime)
+            slide: instruction.slide, at: storyTime)
         DispatchQueue.main.sync {
             MainActor.assumeIsolated {
                 do {
                     let backdropCapture = self.sharedBackdropCapture()
                     try Self.renderFrame(slide: instruction.slide,
                                          languages: instruction.languages,
-                                         at: request.compositionTime,
+                                         at: storyTime,
                                          renderSize: renderContext.size,
                                          into: buffer,
                                          backgroundVideoFrame: sourceVideoFrame,
@@ -171,7 +187,11 @@ public final class StoryAVCompositor: NSObject, nonisolated AVVideoCompositing, 
                                          mediaFrameProvider: { media, _ in
                                              overlayFrames[media.id]
                                          },
-                                         watermark: instruction.watermark)
+                                         watermark: instruction.watermark,
+                                         brandUnderlay: introFrame,
+                                         storyOpacity: storyAlpha,
+                                         brandOverlay: outroFrame,
+                                         overlayOpacity: outroAlpha)
                     request.finish(withComposedVideoFrame: buffer)
                 } catch {
                     request.finish(with: error)
@@ -219,41 +239,54 @@ public final class StoryAVCompositor: NSObject, nonisolated AVVideoCompositing, 
                                      cache: StoryRendererCache,
                                      backdropCapture: any BackdropCapturing,
                                      mediaFrameProvider: ((StoryMediaObject, CMTime) -> CGImage?)? = nil,
-                                     watermark: StoryExportWatermark? = nil) throws {
-        // Scope check: flush the cache if the slide / languages / mode this
-        // compositor is now processing differs from the previous frame's
-        // scope.
-        cache.invalidateIfNeeded(slideId: slide.id, languages: languages, mode: .play)
+                                     watermark: StoryExportWatermark? = nil,
+                                     brandUnderlay: CVPixelBuffer? = nil,
+                                     storyOpacity: CGFloat = 1,
+                                     brandOverlay: CVPixelBuffer? = nil,
+                                     overlayOpacity: CGFloat = 0) throws {
+        // Pendant la tenue de l'interlude de marque, la story est totalement
+        // masquée : ni backdrop, ni arbre de layers, ni rasterisation. C'est
+        // l'étage le plus cher du pipeline — le sauter rend ces frames-là
+        // quasi gratuites.
+        let paintsStory = storyOpacity > 0.001
+        var layer: CALayer?
+        if paintsStory {
+            // Scope check: flush the cache if the slide / languages / mode this
+            // compositor is now processing differs from the previous frame's
+            // scope.
+            cache.invalidateIfNeeded(slideId: slide.id, languages: languages, mode: .play)
 
-        let geometry = CanvasGeometry(renderSize: renderSize)
+            let geometry = CanvasGeometry(renderSize: renderSize)
 
-        backdropCapture.invalidate()
-        _ = backdropCapture.captureCanvasBackdrop(slide: slide,
-                                                  geometry: geometry,
-                                                  time: time,
-                                                  mode: .play,
-                                                  languages: languages)
+            backdropCapture.invalidate()
+            _ = backdropCapture.captureCanvasBackdrop(slide: slide,
+                                                      geometry: geometry,
+                                                      time: time,
+                                                      mode: .play,
+                                                      languages: languages)
 
-        // Foreground layer tree (text/media/stickers/drawing).
-        let layer = StoryRenderer.render(slide: slide,
-                                          into: geometry,
-                                          at: time,
-                                          mode: .play,
-                                          languages: languages,
-                                          cache: cache,
-                                          backdropProvider: { frame in
-                                              backdropCapture.cropRegion(frame)
-                                          },
-                                          mediaFrameProvider: mediaFrameProvider,
-                                          contentsScale: 1.0)
+            // Foreground layer tree (text/media/stickers/drawing).
+            let tree = StoryRenderer.render(slide: slide,
+                                            into: geometry,
+                                            at: time,
+                                            mode: .play,
+                                            languages: languages,
+                                            cache: cache,
+                                            backdropProvider: { frame in
+                                                backdropCapture.cropRegion(frame)
+                                            },
+                                            mediaFrameProvider: mediaFrameProvider,
+                                            contentsScale: 1.0)
 
-        // Opening transition — only visible during the first 0.5s. The
-        // live canvas uses `CABasicAnimation`, but `layer.render(in:)`
-        // doesn't run the animation engine — it renders the model layer
-        // as-is. So we apply the static state of the opening at the
-        // current playhead directly on the model layer.
-        if let opening = slide.effects.opening, time.seconds < 0.5 {
-            applyStaticOpening(opening, rootLayer: layer, elapsed: time.seconds)
+            // Opening transition — only visible during the first 0.5s. The
+            // live canvas uses `CABasicAnimation`, but `layer.render(in:)`
+            // doesn't run the animation engine — it renders the model layer
+            // as-is. So we apply the static state of the opening at the
+            // current playhead directly on the model layer.
+            if let opening = slide.effects.opening, time.seconds < 0.5 {
+                applyStaticOpening(opening, rootLayer: tree, elapsed: time.seconds)
+            }
+            layer = tree
         }
 
         CVPixelBufferLockBaseAddress(buffer, [])
@@ -285,6 +318,37 @@ public final class StoryAVCompositor: NSObject, nonisolated AVVideoCompositing, 
         // bottom-up. Flip Y so the buffer lays out frames upright.
         cg.translateBy(x: 0, y: CGFloat(height))
         cg.scaleBy(x: 1, y: -1)
+
+        let canvasSize = CGSize(width: width, height: height)
+
+        // Couche du DESSOUS — l'interlude de marque. Il tient à pleine opacité
+        // puis la story se lève par-dessus : c'est ce recouvrement progressif
+        // qui produit le fondu croisé, sans piste ni passe supplémentaire.
+        if let brandUnderlay {
+            Self.paintBrandFrame(brandUnderlay, in: cg, size: canvasSize)
+        }
+
+        // Story invisible (on est dans la tenue de l'interlude) : rien à peindre
+        // et surtout rien à rendre — l'arbre de layers n'a même pas été
+        // construit plus haut.
+        guard let layer else {
+            if let brandOverlay, overlayOpacity > 0.001 {
+                cg.saveGState()
+                cg.setAlpha(overlayOpacity)
+                Self.paintBrandFrame(brandOverlay, in: cg, size: canvasSize)
+                cg.restoreGState()
+            }
+            return
+        }
+
+        // La story se compose en UN SEUL groupe : appliquer l'alpha primitive
+        // par primitive éclaircirait les recouvrements internes de la slide.
+        let blendsStory = storyOpacity < 0.999
+        if blendsStory {
+            cg.saveGState()
+            cg.setAlpha(storyOpacity)
+            cg.beginTransparencyLayer(auxiliaryInfo: nil)
+        }
 
         // Paint the slide background BEFORE the foreground tree so the
         // baked MP4 matches the live preview exactly. For video backgrounds
@@ -381,9 +445,40 @@ public final class StoryAVCompositor: NSObject, nonisolated AVVideoCompositing, 
 
         if let watermark {
             watermark.draw(in: cg,
-                           renderSize: CGSize(width: width, height: height),
+                           renderSize: canvasSize,
                            at: time.seconds)
         }
+
+        if blendsStory {
+            cg.endTransparencyLayer()
+            cg.restoreGState()
+        }
+
+        // Couche du DESSUS — la carte de fin, qui monte en fondu sur la fin.
+        if let brandOverlay, overlayOpacity > 0.001 {
+            cg.saveGState()
+            cg.setAlpha(overlayOpacity)
+            Self.paintBrandFrame(brandOverlay, in: cg, size: canvasSize)
+            cg.restoreGState()
+        }
+    }
+
+    /// Peint plein cadre une frame de clip de marque. Ces clips sont encodés au
+    /// gabarit exact de la composition : ni recadrage ni orientation à gérer.
+    @MainActor
+    private static func paintBrandFrame(_ pixelBuffer: CVPixelBuffer,
+                                        in cg: CGContext,
+                                        size: CGSize) {
+        let ciImage = CIImage(cvPixelBuffer: pixelBuffer)
+        guard let cgImage = StoryRenderingContext.shared.ciContext.createCGImage(
+            ciImage, from: ciImage.extent) else { return }
+        cg.saveGState()
+        // Le contexte est en repère UIKit (flip global) ; `draw` dessine
+        // bottom-up, d'où le re-flip local.
+        cg.translateBy(x: 0, y: size.height)
+        cg.scaleBy(x: 1, y: -1)
+        cg.draw(cgImage, in: CGRect(origin: .zero, size: size))
+        cg.restoreGState()
     }
 
     /// Applies the static state of an opening transition to `rootLayer` at
@@ -570,20 +665,84 @@ public final class StoryCompositionInstruction: NSObject,
     /// slide has no background video). The custom compositor receives decoded
     /// source frames in their storage orientation, so it must apply this itself.
     public let backgroundVideoTransform: CGAffineTransform
+    /// Décalage de la story dans la composition — non nul quand un interlude de
+    /// marque la précède. TOUT le rendu de la slide se fait à
+    /// `compositionTime - storyStart` : keyframes, transitions et filigrane
+    /// restent datés en temps de story.
+    public let storyStart: CMTime
+    /// Piste portant le substrat de la story (fond vidéo ou substrat synthétique).
+    public let storyTrackID: CMPersistentTrackID
+    /// Pistes des clips de marque, `nil` quand l'emballage est absent.
+    public let introTrackID: CMPersistentTrackID?
+    public let outroTrackID: CMPersistentTrackID?
+    /// Fenêtres de fondu, en temps de COMPOSITION.
+    public let introFade: CMTimeRange?
+    public let outroFade: CMTimeRange?
     public let enablePostProcessing: Bool = false
     public let containsTweening: Bool = true
-    public let requiredSourceTrackIDs: [NSValue]? = nil
+    /// Pistes que ce segment consomme RÉELLEMENT.
+    ///
+    /// `nil` signifie « toutes les pistes de la composition » : AVFoundation
+    /// décode alors les trois pistes (story + interlude + carte de fin) pour
+    /// CHAQUE frame, y compris là où deux d'entre elles sont invisibles. Avec
+    /// l'emballage composé dans le bake, ça multipliait le coût de l'export.
+    /// `StoryExporter` segmente donc la timeline et déclare, segment par
+    /// segment, les seules pistes utiles.
+    public let requiredSourceTrackIDs: [NSValue]?
     public let passthroughTrackID: CMPersistentTrackID = kCMPersistentTrackID_Invalid
 
     public nonisolated init(slide: StorySlide, languages: [String] = [],
                             timeRange: CMTimeRange,
                             watermark: StoryExportWatermark? = nil,
-                            backgroundVideoTransform: CGAffineTransform = .identity) {
+                            backgroundVideoTransform: CGAffineTransform = .identity,
+                            storyStart: CMTime = .zero,
+                            storyTrackID: CMPersistentTrackID = kCMPersistentTrackID_Invalid,
+                            introTrackID: CMPersistentTrackID? = nil,
+                            outroTrackID: CMPersistentTrackID? = nil,
+                            introFade: CMTimeRange? = nil,
+                            outroFade: CMTimeRange? = nil,
+                            requiredSourceTrackIDs: [NSValue]? = nil) {
+        self.requiredSourceTrackIDs = requiredSourceTrackIDs
         self.slide = slide
         self.languages = languages
         self.timeRange = timeRange
         self.watermark = watermark
         self.backgroundVideoTransform = backgroundVideoTransform
+        self.storyStart = storyStart
+        self.storyTrackID = storyTrackID
+        self.introTrackID = introTrackID
+        self.outroTrackID = outroTrackID
+        self.introFade = introFade
+        self.outroFade = outroFade
         super.init()
+    }
+
+    /// Opacité de la couche STORY au temps de composition `t` : elle se lève
+    /// pendant le fondu d'ouverture, tient, puis s'efface sous la carte de fin.
+    /// Hors emballage, elle vaut 1 partout.
+    nonisolated func storyOpacity(at t: CMTime) -> CGFloat {
+        var alpha: CGFloat = 1
+        if let fade = introFade, fade.duration > .zero {
+            alpha *= Self.progress(t, in: fade)
+        }
+        if let fade = outroFade, fade.duration > .zero {
+            alpha *= 1 - Self.progress(t, in: fade)
+        }
+        return alpha
+    }
+
+    /// Opacité de la carte de fin : nulle avant son fondu, pleine ensuite.
+    nonisolated func outroOpacity(at t: CMTime) -> CGFloat {
+        guard let fade = outroFade, fade.duration > .zero else { return 0 }
+        return Self.progress(t, in: fade)
+    }
+
+    /// Fraction `0…1` de `t` dans `range`, bornée aux extrémités.
+    nonisolated static func progress(_ t: CMTime, in range: CMTimeRange) -> CGFloat {
+        if t <= range.start { return 0 }
+        let end = CMTimeAdd(range.start, range.duration)
+        if t >= end { return 1 }
+        return CGFloat(CMTimeGetSeconds(CMTimeSubtract(t, range.start))
+                       / CMTimeGetSeconds(range.duration))
     }
 }

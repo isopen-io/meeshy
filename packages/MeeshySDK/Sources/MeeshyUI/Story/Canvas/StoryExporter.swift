@@ -75,10 +75,17 @@ public enum StoryExporter {
     /// runs (one every 100ms), plus the terminal `1.0` call on success. Use
     /// this fraction directly to drive a `ProgressView` — no further smoothing
     /// is required for UI bars.
+    ///   - branding: emballage de marque composé DANS cette passe (interlude
+    ///     d'identité en tête, carte de fin en queue). `nil` exporte la story
+    ///     nue. Les clips du plan sont déjà encodés et mémoïsés : ils sont
+    ///     insérés comme pistes, jamais re-rendus — c'est ce qui permet de
+    ///     supprimer la passe de ré-encodage que `StoryExportBranding.wrap`
+    ///     imposait (mesurée ~2,5 s sur une story de 10 s).
     public static func export(_ slide: StorySlide,
                               to outputURL: URL,
                               languages: [String] = [],
                               watermark: StoryExportWatermark? = nil,
+                              branding: StoryExportBranding.Plan? = nil,
                               audioResolver: (@Sendable (StoryAudioPlayerObject) -> URL?)? = nil,
                               progress: (@Sendable (Double) -> Void)? = nil) async throws {
         // Keep the export alive if the app is backgrounded mid-render — the same
@@ -102,7 +109,31 @@ public enum StoryExporter {
         // background videos, which meant a 14s foreground video on a slide
         // whose user-set duration was 12s got truncated to 12s of footage.
         let effective = slide.computedTotalDuration()
-        let totalDuration = CMTime(seconds: effective, preferredTimescale: 600)
+        // Durée de la STORY seule. `totalDuration` ci-dessous couvre en plus
+        // l'emballage de marque quand il y en a un.
+        let storyDuration = CMTime(seconds: effective, preferredTimescale: 600)
+
+        // Décalage de la story dans la composition : l'interlude d'identité la
+        // précède quand une identité a été résolue. Tout ce qui est daté plus
+        // bas — pistes vidéo, pistes audio, rampes de volume — est posé à
+        // `storyStart + t`, jamais à `t`.
+        let storyStart = branding?.storyStart ?? .zero
+        let storyEnd = CMTimeAdd(storyStart, storyDuration)
+
+        // Début de la carte de fin : elle mord sur les dernières secondes de la
+        // story, sans jamais empiéter sur le fondu d'ouverture (deux rampes
+        // d'opacité qui se chevauchent sur la même couche ne se multiplient pas).
+        let outroFade: CMTimeRange? = branding.map { plan in
+            let overlap = CMTime(seconds: StoryExportBranding.outroOverlap, preferredTimescale: 600)
+            let raw = CMTimeSubtract(storyEnd, overlap)
+            let floor = CMTimeMaximum(.zero, CMTimeAdd(plan.introFade.start, plan.introFade.duration))
+            let start = CMTimeMaximum(raw, floor)
+            return CMTimeRange(start: start, duration: CMTimeSubtract(storyEnd, start))
+        }
+        let totalDuration: CMTime = {
+            guard let plan = branding, let fade = outroFade else { return storyDuration }
+            return CMTimeAdd(fade.start, plan.outroDuration)
+        }()
 
         // Taille de rendu MP4 selon la forme du canvas figée par l'auteur : un fond
         // paysage impose un canvas 16:9 (1920×1080) ; sinon le vertical 9:16 par
@@ -158,13 +189,13 @@ public enum StoryExporter {
                 // slide length up to a full repetition for looped backgrounds,
                 // so the final chunk is always a complete cycle.
                 var inserted = CMTime.zero
-                while inserted < totalDuration {
-                    let remaining = totalDuration - inserted
+                while inserted < storyDuration {
+                    let remaining = storyDuration - inserted
                     let chunkDuration = CMTimeMinimum(assetDuration, remaining)
                     try videoTrack.insertTimeRange(
                         CMTimeRange(start: .zero, duration: chunkDuration),
                         of: assetVideoTrack,
-                        at: inserted
+                        at: storyStart + inserted
                     )
                     inserted = inserted + chunkDuration
                 }
@@ -176,18 +207,18 @@ public enum StoryExporter {
                 // track to draw on for the tail (StoryRenderer keeps rendering
                 // static content — text, stickers, drawings — past the end of
                 // the background clip).
-                let playableDuration = CMTimeMinimum(assetDuration, totalDuration)
+                let playableDuration = CMTimeMinimum(assetDuration, storyDuration)
                 try videoTrack.insertTimeRange(
                     CMTimeRange(start: .zero, duration: playableDuration),
                     of: assetVideoTrack,
-                    at: .zero
+                    at: storyStart
                 )
 
-                let tailDuration = totalDuration - playableDuration
+                let tailDuration = storyDuration - playableDuration
                 if tailDuration > .zero {
                     try await appendTransparentTail(
                         to: videoTrack,
-                        at: playableDuration,
+                        at: storyStart + playableDuration,
                         duration: tailDuration,
                         size: canvasRenderSize
                     )
@@ -199,7 +230,8 @@ public enum StoryExporter {
             //    StoryRenderer through `layerTree.render(in:)` each frame, so
             //    they don't need a real video track underneath.
             try await ensureVideoTrack(in: composition,
-                                       duration: totalDuration,
+                                       at: storyStart,
+                                       duration: storyDuration,
                                        size: canvasRenderSize)
         }
 
@@ -217,7 +249,8 @@ public enum StoryExporter {
         let bgVideoAudioMix = try await composeBackgroundVideoAudio(
             slide: slide,
             composition: composition,
-            totalDuration: totalDuration,
+            totalDuration: storyDuration,
+            storyStart: storyStart,
             backgroundVideoAsset: backgroundVideoAsset
         )
         var mixParameters: [AVAudioMixInputParameters] =
@@ -226,8 +259,25 @@ public enum StoryExporter {
             mixParameters += try await composeAudioLanes(
                 slide: slide,
                 composition: composition,
-                totalDuration: totalDuration,
+                totalDuration: storyDuration,
+                storyStart: storyStart,
                 resolver: audioResolver
+            )
+        }
+
+        // Signatures sonores de la marque + atténuation de la story sous la
+        // carte de fin — l'équivalent audio de ce que `wrap` posait dans sa
+        // propre passe, désormais mixé ici.
+        var brandVideoTracks: (intro: CMPersistentTrackID?, outro: CMPersistentTrackID?) = (nil, nil)
+        if let plan = branding {
+            brandVideoTracks = try await composeBrandVideo(
+                plan: plan, composition: composition, outroFade: outroFade)
+            mixParameters += try await composeBrandAudio(
+                plan: plan,
+                composition: composition,
+                outroFade: outroFade,
+                storyAudioTracks: composition.tracks(withMediaType: .audio),
+                storyParameters: mixParameters
             )
         }
         let audioMix: AVAudioMix? = {
@@ -238,18 +288,66 @@ public enum StoryExporter {
         }()
 
         let videoComposition = AVMutableVideoComposition()
-        videoComposition.frameDuration = CMTime(value: 1, timescale: 60) // 60 fps master
+        // Même cadence que les passes de marque qui ré-encodent ce fichier
+        // ensuite : un master plus rapide qu'elles verrait la moitié de ses
+        // frames — les plus coûteuses du pipeline — jetées au ré-échantillonnage.
+        videoComposition.frameDuration = StoryExportFrameRate.frameDuration
         videoComposition.renderSize = canvasRenderSize                    // 1080×1920 (portrait) / 1920×1080 (paysage)
         videoComposition.customVideoCompositorClass = StoryAVCompositor.self
-        videoComposition.instructions = [
+        let storyTrackID = composition.tracks(withMediaType: .video)
+            .first?.trackID ?? kCMPersistentTrackID_Invalid
+
+        // Segmentation de la timeline. Une instruction unique couvrant tout
+        // laisserait `requiredSourceTrackIDs` à nil, et AVFoundation décoderait
+        // les TROIS pistes à chaque frame — y compris la carte de fin pendant
+        // le corps de la story, où elle est invisible. Chaque segment ne
+        // déclare donc que les pistes qu'il consomme vraiment.
+        func instruction(_ range: CMTimeRange, tracks: [CMPersistentTrackID]) -> StoryCompositionInstruction {
             StoryCompositionInstruction(
                 slide: slide,
                 languages: languages,
-                timeRange: CMTimeRange(start: .zero, duration: totalDuration),
+                timeRange: range,
                 watermark: watermark,
-                backgroundVideoTransform: backgroundVideoTransform
+                backgroundVideoTransform: backgroundVideoTransform,
+                storyStart: storyStart,
+                storyTrackID: storyTrackID,
+                introTrackID: brandVideoTracks.intro,
+                outroTrackID: brandVideoTracks.outro,
+                introFade: branding?.introFade,
+                outroFade: outroFade,
+                requiredSourceTrackIDs: tracks.map { NSNumber(value: $0) }
             )
-        ]
+        }
+
+        var instructions: [StoryCompositionInstruction] = []
+        if let plan = branding {
+            let introEnd = CMTimeAdd(plan.introFade.start, plan.introFade.duration)
+            let outroStart = outroFade?.start ?? totalDuration
+            // 1. Interlude + levée de la story.
+            if introEnd > .zero, let introID = brandVideoTracks.intro {
+                instructions.append(instruction(
+                    CMTimeRange(start: .zero, duration: introEnd),
+                    tracks: [introID, storyTrackID]))
+            }
+            // 2. Corps de la story — la piste story SEULE.
+            let bodyStart = CMTimeMaximum(introEnd, .zero)
+            if outroStart > bodyStart {
+                instructions.append(instruction(
+                    CMTimeRange(start: bodyStart, duration: CMTimeSubtract(outroStart, bodyStart)),
+                    tracks: [storyTrackID]))
+            }
+            // 3. Carte de fin.
+            if let outroID = brandVideoTracks.outro, totalDuration > outroStart {
+                instructions.append(instruction(
+                    CMTimeRange(start: outroStart, duration: CMTimeSubtract(totalDuration, outroStart)),
+                    tracks: [storyTrackID, outroID]))
+            }
+        }
+        if instructions.isEmpty {
+            instructions = [instruction(CMTimeRange(start: .zero, duration: totalDuration),
+                                        tracks: [storyTrackID])]
+        }
+        videoComposition.instructions = instructions
 
         guard let session = AVAssetExportSession(
             asset: composition,
@@ -316,6 +414,110 @@ public enum StoryExporter {
         }
     }
 
+    // MARK: - Marque composée dans le bake
+
+    /// Insère les pistes VIDÉO de l'emballage de marque et retourne leurs
+    /// identifiants, que l'instruction de composition transmet au compositor.
+    ///
+    /// Les clips sont déjà encodés et mémoïsés (`StoryExportBranding`) : ils
+    /// entrent ici comme pistes à décoder, pas comme frames à re-rendre.
+    static func composeBrandVideo(
+        plan: StoryExportBranding.Plan,
+        composition: AVMutableComposition,
+        outroFade: CMTimeRange?
+    ) async throws -> (intro: CMPersistentTrackID?, outro: CMPersistentTrackID?) {
+        var introID: CMPersistentTrackID?
+        var outroID: CMPersistentTrackID?
+
+        if let clip = plan.introClip {
+            let asset = AVURLAsset(url: clip)
+            if let track = try await asset.loadTracks(withMediaType: .video).first,
+               let composed = composition.addMutableTrack(
+                   withMediaType: .video, preferredTrackID: kCMPersistentTrackID_Invalid) {
+                let duration = try await asset.load(.duration)
+                try composed.insertTimeRange(
+                    CMTimeRange(start: .zero, duration: duration), of: track, at: .zero)
+                introID = composed.trackID
+            }
+        }
+
+        if let fade = outroFade {
+            let asset = AVURLAsset(url: plan.outroClip)
+            if let track = try await asset.loadTracks(withMediaType: .video).first,
+               let composed = composition.addMutableTrack(
+                   withMediaType: .video, preferredTrackID: kCMPersistentTrackID_Invalid) {
+                try composed.insertTimeRange(
+                    CMTimeRange(start: .zero, duration: plan.outroDuration),
+                    of: track, at: fade.start)
+                outroID = composed.trackID
+            }
+        }
+
+        return (introID, outroID)
+    }
+
+    /// Mixe les deux signatures sonores de la marque et atténue les pistes de
+    /// la story sous la carte de fin — l'équivalent audio de ce que la passe
+    /// `StoryExportBranding.wrap` posait auparavant.
+    /// - Parameter storyParameters: les paramètres DÉJÀ construits pour les
+    ///   pistes de la story. L'atténuation de fin est posée dessus plutôt que
+    ///   sur un second objet : `AVAudioMix` n'honore qu'une seule entrée par
+    ///   piste, un doublon effacerait silencieusement le volume de l'auteur.
+    static func composeBrandAudio(
+        plan: StoryExportBranding.Plan,
+        composition: AVMutableComposition,
+        outroFade: CMTimeRange?,
+        storyAudioTracks: [AVMutableCompositionTrack],
+        storyParameters: [AVAudioMixInputParameters]
+    ) async throws -> [AVMutableAudioMixInputParameters] {
+        var parameters: [AVMutableAudioMixInputParameters] = []
+
+        // Signature d'ouverture : elle s'estompe sur le fondu vers la story.
+        if let jingle = plan.introJingle, plan.introFade.duration > .zero {
+            let asset = AVURLAsset(url: jingle)
+            if let track = try await asset.loadTracks(withMediaType: .audio).first,
+               let composed = composition.addMutableTrack(
+                   withMediaType: .audio, preferredTrackID: kCMPersistentTrackID_Invalid) {
+                let duration = try await asset.load(.duration)
+                try composed.insertTimeRange(
+                    CMTimeRange(start: .zero, duration: duration), of: track, at: .zero)
+                let params = AVMutableAudioMixInputParameters(track: composed)
+                params.setVolumeRamp(fromStartVolume: 1, toEndVolume: 0,
+                                     timeRange: plan.introFade)
+                parameters.append(params)
+            }
+        }
+
+        guard let fade = outroFade else { return parameters }
+
+        // Signature de fermeture, décalée à la 2ᵉ phase quand une identité est
+        // peinte (le logo termine alors la vidéo en silence).
+        let asset = AVURLAsset(url: plan.outroJingle)
+        if let track = try await asset.loadTracks(withMediaType: .audio).first,
+           let composed = composition.addMutableTrack(
+               withMediaType: .audio, preferredTrackID: kCMPersistentTrackID_Invalid) {
+            let duration = try await asset.load(.duration)
+            try composed.insertTimeRange(
+                CMTimeRange(start: .zero, duration: duration),
+                of: track, at: fade.start + plan.outroJingleOffset)
+            parameters.append(AVMutableAudioMixInputParameters(track: composed))
+        }
+
+        // La story s'éteint pendant que la carte de fin entre. On complète les
+        // paramètres existants quand la piste en a déjà (volume auteur,
+        // automation, fades) et on n'en crée que pour les pistes nominales.
+        let existingIDs = Set(storyParameters.map(\.trackID))
+        for track in storyAudioTracks where !existingIDs.contains(track.trackID) {
+            let params = AVMutableAudioMixInputParameters(track: track)
+            params.setVolumeRamp(fromStartVolume: 1, toEndVolume: 0, timeRange: fade)
+            parameters.append(params)
+        }
+        for case let params as AVMutableAudioMixInputParameters in storyParameters {
+            params.setVolumeRamp(fromStartVolume: 1, toEndVolume: 0, timeRange: fade)
+        }
+        return parameters
+    }
+
     // MARK: - Audio composition
 
     /// Composes the audio track of the **background video** (if any) into
@@ -339,6 +541,7 @@ public enum StoryExporter {
         slide: StorySlide,
         composition: AVMutableComposition,
         totalDuration: CMTime,
+        storyStart: CMTime = .zero,
         backgroundVideoAsset: (asset: AVURLAsset, bg: StoryMediaObject)?
     ) async throws -> AVMutableAudioMix? {
         guard let entry = backgroundVideoAsset else {
@@ -373,7 +576,7 @@ public enum StoryExporter {
                 try audioTrack.insertTimeRange(
                     CMTimeRange(start: .zero, duration: chunkDuration),
                     of: assetAudioTrack,
-                    at: inserted
+                    at: storyStart + inserted
                 )
                 inserted = inserted + chunkDuration
             }
@@ -385,7 +588,7 @@ public enum StoryExporter {
             try audioTrack.insertTimeRange(
                 CMTimeRange(start: .zero, duration: playableDuration),
                 of: assetAudioTrack,
-                at: .zero
+                at: storyStart
             )
         }
 
@@ -413,7 +616,10 @@ public enum StoryExporter {
                                                   keyframes: entry.bg.keyframes,
                                                   duration: totalDuration.seconds,
                                                   isDucking: isDucking) {
-            params.setVolumeRamp(fromStartVolume: from, toEndVolume: to, timeRange: range)
+            // Les rampes sont calculées en temps de STORY ; la piste, elle, est
+            // posée à `storyStart` quand un interlude la précède.
+            let shifted = CMTimeRange(start: range.start + storyStart, duration: range.duration)
+            params.setVolumeRamp(fromStartVolume: from, toEndVolume: to, timeRange: shifted)
         }
         mix.inputParameters = [params]
         return mix
@@ -495,6 +701,7 @@ public enum StoryExporter {
         slide: StorySlide,
         composition: AVMutableComposition,
         totalDuration: CMTime,
+        storyStart: CMTime = .zero,
         resolver: @Sendable (StoryAudioPlayerObject) -> URL?
     ) async throws -> [AVMutableAudioMixInputParameters] {
         var parameters: [AVMutableAudioMixInputParameters] = []
@@ -526,6 +733,10 @@ public enum StoryExporter {
                 throw StoryExporterError.sessionCreationFailed
             }
 
+            // `start` et `insertedEnd` restent en temps de STORY (les keyframes
+            // et fenêtres de l'auteur y sont exprimées) ; seules les POSES dans
+            // la composition portent le décalage de l'interlude.
+            let timelineStart = start + storyStart
             let insertedEnd: CMTime
             if loopsAsBackground {
                 var inserted = CMTime.zero
@@ -535,7 +746,7 @@ public enum StoryExporter {
                     try track.insertTimeRange(
                         CMTimeRange(start: .zero, duration: chunk),
                         of: assetTrack,
-                        at: start + inserted
+                        at: timelineStart + inserted
                     )
                     inserted = inserted + chunk
                 }
@@ -545,7 +756,7 @@ public enum StoryExporter {
                 try track.insertTimeRange(
                     CMTimeRange(start: .zero, duration: playable),
                     of: assetTrack,
-                    at: start
+                    at: timelineStart
                 )
                 insertedEnd = start + playable
             }
@@ -571,7 +782,7 @@ public enum StoryExporter {
                 for (range, from, to) in Self.volumeRamps(base: baseVolume,
                                                           keyframes: audio.keyframes,
                                                           duration: insertedEnd.seconds) {
-                    let shifted = CMTimeRange(start: range.start + start,
+                    let shifted = CMTimeRange(start: range.start + timelineStart,
                                               duration: range.duration)
                     params.setVolumeRamp(fromStartVolume: from, toEndVolume: to,
                                          timeRange: shifted)
@@ -582,7 +793,7 @@ public enum StoryExporter {
                     fromStartVolume: 0,
                     toEndVolume: baseVolume,
                     timeRange: CMTimeRange(
-                        start: start,
+                        start: timelineStart,
                         duration: CMTime(seconds: fadeIn, preferredTimescale: 600)
                     )
                 )
@@ -594,7 +805,8 @@ public enum StoryExporter {
                     params.setVolumeRamp(
                         fromStartVolume: baseVolume,
                         toEndVolume: 0,
-                        timeRange: CMTimeRange(start: rampStart, duration: rampDuration)
+                        timeRange: CMTimeRange(start: rampStart + storyStart,
+                                               duration: rampDuration)
                     )
                 }
             }
@@ -615,6 +827,7 @@ public enum StoryExporter {
     /// pixel content is irrelevant because `StoryAVCompositor.startRequest`
     /// overwrites every pixel of every frame via `layerTree.render(in:)`.
     static func ensureVideoTrack(in composition: AVMutableComposition,
+                                 at startTime: CMTime = .zero,
                                  duration: CMTime,
                                  size: CGSize) async throws {
         if !composition.tracks(withMediaType: .video).isEmpty { return }
@@ -651,7 +864,7 @@ public enum StoryExporter {
             try videoTrack.insertTimeRange(
                 CMTimeRange(start: .zero, duration: chunkDuration),
                 of: assetVideoTrack,
-                at: inserted
+                at: startTime + inserted
             )
             inserted = inserted + chunkDuration
         }

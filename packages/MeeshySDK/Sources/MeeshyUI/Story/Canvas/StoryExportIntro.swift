@@ -477,7 +477,7 @@ public enum StoryExportIntro {
 
         let videoComposition = AVMutableVideoComposition()
         videoComposition.instructions = [instruction]
-        videoComposition.frameDuration = CMTime(value: 1, timescale: 30)
+        videoComposition.frameDuration = StoryExportFrameRate.frameDuration
         videoComposition.renderSize = renderSize
 
         // Audio — la signature sonore s'estompe sur le fondu (pas de bascule

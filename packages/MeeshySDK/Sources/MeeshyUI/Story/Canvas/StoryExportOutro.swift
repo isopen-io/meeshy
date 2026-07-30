@@ -19,8 +19,8 @@ public enum StoryExportOutro {
     /// Durée de la carte de fin — calée sur la signature sonore de fermeture (2 s).
     public static var duration: TimeInterval { MeeshyBrandJingle.outroDuration }
 
-    /// Cadence de rendu des frames animées.
-    static let fps: Double = 30
+    /// Cadence de rendu des frames animées — celle du pipeline entier.
+    static let fps: Double = StoryExportFrameRate.fps
 
     /// Le logo est ENTIÈREMENT tracé à cet instant : le trace du watermark dure
     /// 3 s, trop long pour une carte de 2 s — on l'accélère pour qu'il se forme
@@ -331,7 +331,7 @@ public enum StoryExportOutro {
 
         let videoComposition = AVMutableVideoComposition()
         videoComposition.instructions = [instruction]
-        videoComposition.frameDuration = CMTime(value: 1, timescale: 30)
+        videoComposition.frameDuration = StoryExportFrameRate.frameDuration
         videoComposition.renderSize = renderSize
 
         // Audio — la story s'estompe pendant que la signature de fermeture entre.
