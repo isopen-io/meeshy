@@ -206,6 +206,11 @@ extension StoryCanvasUIView {
             slide.effects.textObjects.forEach { keepIds.insert($0.id) }
             (slide.effects.mediaObjects ?? []).forEach { keepIds.insert($0.id) }
             (slide.effects.stickerObjects ?? []).forEach { keepIds.insert($0.id) }
+            // Les pastilles de lieu passent par le MÊME cache (cf. `collectItems`) :
+            // les omettre ici évinçait leur calque à chaque tick — mesure de texte,
+            // rendu du SF Symbol et `UIGraphicsImageRenderer` re-exécutés jusqu'à
+            // 120 Hz en `.edit`, exactement le régime que ce cache évite.
+            slide.locationObjects.forEach { keepIds.insert($0.id) }
             cacheForRender.prune(keepIds: keepIds)
         }
 

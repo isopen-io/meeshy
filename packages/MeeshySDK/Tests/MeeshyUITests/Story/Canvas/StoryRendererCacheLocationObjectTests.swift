@@ -73,6 +73,29 @@ final class StoryRendererCacheLocationObjectTests: XCTestCase {
                        "une pastille de lieu inchangée doit réutiliser sa calque")
     }
 
+    /// Le contrôle négatif ci-dessus ne vaut que si l'APPELANT de production
+    /// conserve la calque : `StoryCanvasUIView.rebuildLayers()` termine par
+    /// `prune(keepIds:)`, et un ensemble construit sans les pastilles évince la
+    /// calque à CHAQUE tick — mesure de texte + SF Symbol + `UIGraphicsImageRenderer`
+    /// re-exécutés jusqu'à 120 Hz en `.edit`.
+    func test_theLiveCanvasKeepsTheLocationLayerAcrossTicks() {
+        var slide = StorySlide(id: "s1")
+        slide.locationObjects = [
+            StoryLocationObject(id: "loc-1",
+                                place: SharedPlace(latitude: 48.8566, longitude: 2.3522,
+                                                   name: "Tour Eiffel"))
+        ]
+        let canvas = StoryCanvasUIView(slide: slide, mode: .edit)
+        canvas.frame = CGRect(x: 0, y: 0, width: 393, height: 699)
+
+        canvas.rebuildLayers()
+        let hitsAfterFirst = canvas.rendererCache.cacheHitCount
+        canvas.rebuildLayers()
+
+        XCTAssertEqual(canvas.rendererCache.cacheHitCount, hitsAfterFirst + 1,
+                       "prune(keepIds:) évince la pastille : chaque tick redessine le badge à neuf")
+    }
+
     /// Une mutation de position/rotation invalide déjà le cache via
     /// `ItemSignature.position`/`rotation` de base — vérifié ici pour
     /// confirmer que la pastille traverse bien `collectItems` (préalable au
