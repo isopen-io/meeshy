@@ -1682,7 +1682,7 @@ model AdminBroadcast {
 /// Signalement de contenu inapproprié
 model Report {
   id               String    @id @default(auto()) @map("_id") @db.ObjectId
-  /// Type de contenu signalé: message, user, conversation, community
+  /// Type de contenu signalé: message, user, conversation, community, post, story, sound
   reportedType     String
   /// ID de l'entité signalée
   reportedEntityId String    @db.ObjectId
