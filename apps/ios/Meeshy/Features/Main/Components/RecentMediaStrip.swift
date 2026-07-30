@@ -187,15 +187,38 @@ final class RecentMediaStripModel: NSObject, ObservableObject, PHPhotoLibraryCha
     //
     // Same fix, same reason as `CallTranscriptionService.requestPermission()`.
 
-    /// Square thumbnail for a cell. `.fastFormat` guarantees a single callback,
-    /// which keeps the continuation safe (multi-callback modes would resume it
-    /// more than once).
-    func thumbnail(for asset: PHAsset, size: CGSize) async -> UIImage? {
+    /// Options des vignettes de la bande d'échantillons.
+    ///
+    /// `nonisolated static` pour être vérifiable telle quelle par un test, sans
+    /// photothèque ni contexte d'acteur : c'est le comportement des réglages qui
+    /// doit être verrouillé, pas leur présence dans le fichier.
+    ///
+    /// `.highQualityFormat` et NON `.fastFormat`. L'invariant que `.fastFormat`
+    /// protégeait est le callback UNIQUE — `withCheckedContinuation` plante si
+    /// on le reprend deux fois — et non la vitesse. Or `.highQualityFormat` est
+    /// mono-callback lui aussi : c'est déjà ce que font `preview(for:)` et
+    /// `resolveImage(_:)` juste en dessous. Seul `.opportunistic` (le défaut)
+    /// rappelle plusieurs fois. `.fastFormat` livrait un rendu dégradé que
+    /// PhotoKit ne remplace JAMAIS par une meilleure version, donc la bande
+    /// restait floue pour toujours — un prix payé pour une sûreté qui ne le
+    /// demandait pas.
+    ///
+    /// `.exact` et non `.fast` : `.fast` rend une taille seulement « proche de »
+    /// la cible, ce qui ajoute un rééchantillonnage par-dessus le rendu.
+    nonisolated static func thumbnailRequestOptions() -> PHImageRequestOptions {
         let options = PHImageRequestOptions()
-        options.deliveryMode = .fastFormat
-        options.resizeMode = .fast
+        options.deliveryMode = .highQualityFormat
+        options.resizeMode = .exact
         options.isNetworkAccessAllowed = true
         options.isSynchronous = false
+        return options
+    }
+
+    /// Square thumbnail for a cell. La taille demandée est déjà en PIXELS
+    /// (`cell * displayScale`, côté `RecentMediaCell`) : demander des points
+    /// rendrait une image au tiers de la résolution sur un écran 3x.
+    func thumbnail(for asset: PHAsset, size: CGSize) async -> UIImage? {
+        let options = Self.thumbnailRequestOptions()
         return await withCheckedContinuation { (continuation: CheckedContinuation<ImageBox, Never>) in
             let completion: @Sendable (UIImage?, [AnyHashable: Any]?) -> Void = { image, _ in
                 continuation.resume(returning: ImageBox(image: image))
