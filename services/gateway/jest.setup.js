@@ -8,6 +8,13 @@ process.env.NODE_ENV = 'test';
 process.env.DATABASE_URL = 'file:./test.db';
 process.env.JWT_SECRET = 'test-jwt-secret';
 process.env.GRPC_SERVER_URL = 'localhost:50051';
+// `routes/uploads/tus-handler.ts` lit UPLOAD_PATH une seule fois au chargement
+// du module (constante top-level) et y crée un sous-dossier au démarrage des
+// routes (`fs.mkdir(UPLOAD_PATH/.tus-resumable)`). Sans ceci, tout test qui
+// assemble le graphe de routes complet (ex. route-auth-coverage.test.ts)
+// tenterait d'écrire dans le défaut de production `/app/uploads`, absent en
+// environnement de test.
+process.env.UPLOAD_PATH = process.env.UPLOAD_PATH || require('os').tmpdir() + '/meeshy-gateway-test-uploads';
 
 // Mock isomorphic-dompurify (pulls in jsdom which has ESM deps Jest can't handle)
 jest.mock('isomorphic-dompurify', () => ({
