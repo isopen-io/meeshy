@@ -342,11 +342,26 @@ d'un enregistrement original. Par ailleurs `createPost` rattache les médias
 **sans garde de propriété** (`PostService.ts:178-181`), là où `updatePost` garde
 `postId: null` (`:740`).
 
-Mitigations du lot 1 : capture restreinte aux `PostMedia` dont l'`uploadContext`
-est `post`/`story` **et** dont le rattachement est gardé comme dans
-`updatePost`. **Limite assumée et écrite** : un fichier réimporté depuis
-l'extérieur reste indiscernable ; la garantie est le recours (signalement +
-`mutedAt`), pas la détection.
+**`uploadContext` n'est pas exploitable** : il n'existe que comme métadonnée TUS
+transitoire (`routes/uploads/tus-handler.ts:185-190`), le temps de décider si
+l'upload devient un `PostMedia` ou un `MessageAttachment`. Rien n'en subsiste en
+base. Filtrer dessus est donc impossible sans le persister d'abord.
+
+Ce que le lot 1 fait réellement :
+
+1. **Une barrière structurelle gratuite** : un `MessageAttachment` n'est jamais
+   un `PostMedia` (`tus-handler.ts:189-190`). Une pièce jointe de conversation
+   ne peut donc pas être capturée directement.
+2. **La garde de rattachement** : aligner `createPost` sur `updatePost` en
+   n'attachant que des médias `postId: null` (`PostService.ts:740` contre
+   `:178-181`), sinon le `Sound` serait crédité à l'auteur du post et non au
+   propriétaire du média.
+
+**Limite assumée et écrite** : un vocal exporté puis réimporté devient un
+`PostMedia` légitime et reste indiscernable d'un enregistrement original. La
+garantie est le recours — signalement (§9) et `mutedAt` — **pas la détection**.
+Persister `uploadContext` sur `PostMedia` est le premier candidat du lot 2 pour
+resserrer ce point.
 
 **Blocage.** `isBlockedBetween` / `getBlockedUserIdsAmong`
 (`utils/blocking.ts:21-73`) ne sont appelés **nulle part dans `routes/posts/`**.
