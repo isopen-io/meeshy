@@ -1474,34 +1474,25 @@ struct ConversationView: View {
     private var isAnonymous: Bool { anonymousSession != nil }
 
     @ViewBuilder
+    // Enfants en AnyView : le type structurel du tuple (branches anonymous /
+    // typing / bande + searchBar) gonflait le mangled name de
+    // `floatingHeaderSection` ET celui de `bodyContent` au point que leur
+    // décodage récursif au 1er rendu SUR DEVICE débordait la pile du main
+    // thread (dump segv du 2026-07-30 21:12, `__swift_instantiate…` dans la
+    // closure du VStack). Même famille que expandedHeaderMidContent — couper
+    // au niveau des ENFANTS du type décodé (leçon 5cdde93c4).
     private var floatingHeaderSection: some View {
         VStack {
             if isAnonymous {
-                anonymousHeaderBar
+                AnyView(anonymousHeaderBar)
             } else if isTyping {
-                HStack(spacing: MeeshySpacing.sm) {
-                    ThemedBackButton(color: accentColor, unreadCount: viewModel.otherConversationsUnread) { HapticFeedback.light(); router.pop() }
-                    Spacer()
-                    ThemedAvatarButton(
-                        name: conversation?.name ?? "?", color: accentColor, secondaryColor: secondaryColor,
-                        isExpanded: false, storyState: headerStoryRingState,
-                        avatarURL: conversation?.type == .direct ? conversation?.participantAvatarURL : conversation?.avatar,
-                        presenceState: headerPresenceState,
-                        moodEmoji: headerMoodEmoji
-                    ) {
-                        isTyping = false
-                        withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) { composerState.showOptions = true }
-                    }
-                }
-                .padding(.horizontal, MeeshySpacing.lg)
-                .padding(.top, MeeshySpacing.sm)
-                .transition(.opacity)
+                AnyView(typingHeaderBar)
             } else {
                 expandedHeaderBand
             }
 
             if headerState.showSearch {
-                searchBar.transition(.move(edge: .top).combined(with: .opacity))
+                AnyView(searchBar.transition(.move(edge: .top).combined(with: .opacity)))
             }
 
             Spacer()
@@ -1510,6 +1501,26 @@ struct ConversationView: View {
         .animation(.spring(response: 0.35, dampingFraction: 0.8), value: composerState.showOptions)
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: isTyping)
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: headerState.showSearch)
+    }
+
+    private var typingHeaderBar: some View {
+        HStack(spacing: MeeshySpacing.sm) {
+            ThemedBackButton(color: accentColor, unreadCount: viewModel.otherConversationsUnread) { HapticFeedback.light(); router.pop() }
+            Spacer()
+            ThemedAvatarButton(
+                name: conversation?.name ?? "?", color: accentColor, secondaryColor: secondaryColor,
+                isExpanded: false, storyState: headerStoryRingState,
+                avatarURL: conversation?.type == .direct ? conversation?.participantAvatarURL : conversation?.avatar,
+                presenceState: headerPresenceState,
+                moodEmoji: headerMoodEmoji
+            ) {
+                isTyping = false
+                withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) { composerState.showOptions = true }
+            }
+        }
+        .padding(.horizontal, MeeshySpacing.lg)
+        .padding(.top, MeeshySpacing.sm)
+        .transition(.opacity)
     }
 
     @ViewBuilder
