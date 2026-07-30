@@ -768,6 +768,28 @@ final class FeedViewModelTests: XCTestCase {
         XCTAssertEqual(queue.enqueuePostMediaCalls.first?.type, "REEL")
     }
 
+    /// Garde de la désynchronisation protocole/implémentation : `location` a été
+    /// ajoutée à l'implémentation concrète d'`enqueuePostMedia` sans être portée
+    /// sur `OfflineQueueing`, ce qui a cassé la conformité (une valeur par défaut
+    /// ne satisfait pas une exigence de protocole en Swift). Aucun test ne
+    /// traversait le protocole avec une position — d'où le silence. Celui-ci
+    /// exerce le chemin complet ViewModel → protocole → file.
+    func test_createOfflineMediaPost_withLocation_propagatesPlaceToOutbox() async {
+        let queue = MockOfflineQueue()
+        let (sut, _, _, _) = makeSUT(offlineQueue: queue)
+        let place = SharedPlace(latitude: 48.8566, longitude: 2.3522, name: "Paris")
+
+        await sut.createOfflineMediaPost(
+            localMediaURLs: [URL(fileURLWithPath: "/tmp/a.jpg")],
+            content: "Vue depuis le toit",
+            location: place
+        )
+
+        XCTAssertEqual(queue.enqueuePostMediaCalls.count, 1)
+        XCTAssertEqual(queue.enqueuePostMediaCalls.first?.location, place,
+            "une position attachée à un média posté hors-ligne doit survivre jusqu'au flush")
+    }
+
     func test_createOfflineMediaPost_enqueueRefused_rollsBackOptimisticPost() async {
         let queue = MockOfflineQueue()
         queue.enqueuePostMediaError = APIError.networkError(URLError(.timedOut))

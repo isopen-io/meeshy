@@ -422,13 +422,18 @@ public protocol OfflineQueueing: Sendable {
     /// ViewModels can route offline media posts through an injected (mockable)
     /// queue, like the generic `enqueue`.
     @discardableResult
+    /// `location` fait partie de l'exigence : une valeur par défaut sur
+    /// l'implémentation concrète ne satisfait PAS une exigence de protocole en
+    /// Swift, et les appelants (`FeedViewModel.createOfflineMediaPost`) passent
+    /// la position à travers ce protocole.
     func enqueuePostMedia(
         sourceMediaURLs: [URL],
         clientMutationId: String,
         content: String?,
         visibility: String,
         originalLanguage: String?,
-        type: String?
+        type: String?,
+        location: SharedPlace?
     ) async throws -> OfflineQueue.EnqueueMediaResult
 
     /// Draft recovery — returns the most recent unsent `.createPost` row whose
