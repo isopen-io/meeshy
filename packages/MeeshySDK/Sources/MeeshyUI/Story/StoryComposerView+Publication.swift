@@ -176,6 +176,7 @@ extension StoryComposerView {
                 || !slide.effects.textObjects.isEmpty
                 || !(slide.effects.mediaObjects ?? []).isEmpty
                 || !(slide.effects.drawingStrokes ?? []).isEmpty
+                || !slide.effects.locationObjects.isEmpty
         } || hasStickerObjects || hasDrawingData || hasDrawingStrokes
     }
 

@@ -81,4 +81,14 @@ final class StoryComposerContentRuleTests: XCTestCase {
         second.content = "Slide 2"
         XCTAssertTrue(hasContent(slides: [StorySlide(), second]))
     }
+
+    func test_slideWithLocationObject_hasContent() {
+        var slide = StorySlide()
+        var effects = StoryEffects()
+        effects.locationObjects = [
+            StoryLocationObject(place: SharedPlace(latitude: 48.8566, longitude: 2.3522))
+        ]
+        slide.effects = effects
+        XCTAssertTrue(hasContent(slides: [slide]))
+    }
 }
