@@ -163,7 +163,8 @@ public enum StoryRenderer {
                                              geometry: geometry,
                                              mode: mode,
                                              resolver: resolver,
-                                             imageCache: imageCache)
+                                             imageCache: imageCache,
+                                             renderScale: contentsScale)
                         return mediaLayer
                     }
                     : nil
@@ -176,7 +177,8 @@ public enum StoryRenderer {
                                mode: mode,
                                languages: languages,
                                resolver: resolver,
-                               imageCache: imageCache)
+                               imageCache: imageCache,
+                               contentsScale: contentsScale)
                 }
             } else {
                 layer = renderItem(item,
@@ -185,7 +187,8 @@ public enum StoryRenderer {
                                    mode: mode,
                                    languages: languages,
                                    resolver: resolver,
-                                   imageCache: imageCache)
+                                   imageCache: imageCache,
+                                   contentsScale: contentsScale)
             }
 
             // Feed glass-style text layers with a backdrop snapshot when the
@@ -425,14 +428,16 @@ public enum StoryRenderer {
                                    mode: RenderMode,
                                    languages: [String] = [],
                                    resolver: (@Sendable (String) -> URL?)? = nil,
-                                   imageCache: ImageCacheReader? = nil) -> CALayer {
+                                   imageCache: ImageCacheReader? = nil,
+                                   contentsScale: CGFloat = UIScreen.main.scale) -> CALayer {
         if let media = item as? StoryMediaObject {
             let layer = StoryMediaLayer()
             layer.configure(with: media,
                             geometry: geometry,
                             mode: mode,
                             resolver: resolver,
-                            imageCache: imageCache)
+                            imageCache: imageCache,
+                            renderScale: contentsScale)
             // Keyframe overrides for media objects (position, scale, opacity)
             if mode == .play, let kfs = media.keyframes, !kfs.isEmpty {
                 applyKeyframeOverrides(kfs,
@@ -453,7 +458,8 @@ public enum StoryRenderer {
                 : text.text
             var displayObj = text
             displayObj.text = displayText
-            layer.configure(with: displayObj, geometry: geometry, mode: mode)
+            layer.configure(with: displayObj, geometry: geometry, mode: mode,
+                            renderScale: contentsScale)
             // Snapshot fadeIn/fadeOut envelope at the current playhead. Applied
             // before keyframe overrides so that an explicit keyframe `opacity`
             // wins over the fade envelope (keyframes are authored explicitly,
@@ -473,12 +479,14 @@ public enum StoryRenderer {
         }
         if let location = item as? StoryLocationObject {
             let layer = StoryLocationLayer()
-            layer.configure(with: location, geometry: geometry, mode: mode)
+            layer.configure(with: location, geometry: geometry, mode: mode,
+                            renderScale: contentsScale)
             return layer
         }
         if let sticker = item as? StorySticker {
             let layer = StoryStickerLayer()
-            layer.configure(with: sticker, geometry: geometry, mode: mode)
+            layer.configure(with: sticker, geometry: geometry, mode: mode,
+                            renderScale: contentsScale)
             // Snapshot fadeIn/fadeOut envelope at the current playhead.
             // StorySticker has no `keyframes` field (per StoryModels.swift),
             // so fades are the only animation channel for stickers.

@@ -255,15 +255,19 @@ public enum StoryExporter {
         )
         var mixParameters: [AVAudioMixInputParameters] =
             bgVideoAudioMix?.inputParameters ?? []
-        if let audioResolver {
-            mixParameters += try await composeAudioLanes(
-                slide: slide,
-                composition: composition,
-                totalDuration: storyDuration,
-                storyStart: storyStart,
-                resolver: audioResolver
-            )
-        }
+        // Inconditionnel : `audioResolver` est une OPTIMISATION (le composer sert
+        // ses fichiers locaux pas encore uploadés), jamais la condition
+        // d'existence de l'audio. Le gater ici rendait muets tous les chemins qui
+        // n'ont pas de resolver à offrir — « Partager » et « Enregistrer dans
+        // Photos », qui exportent des stories dont l'audio n'existe QUE derrière
+        // une URL. Le repli par `mediaURL` vit dans `composeAudioLanes`.
+        mixParameters += try await composeAudioLanes(
+            slide: slide,
+            composition: composition,
+            totalDuration: storyDuration,
+            storyStart: storyStart,
+            resolver: audioResolver
+        )
 
         // Signatures sonores de la marque + atténuation de la story sous la
         // carte de fin — l'équivalent audio de ce que `wrap` posait dans sa
@@ -686,6 +690,32 @@ public enum StoryExporter {
 
     // MARK: - Audio lanes (audioPlayerObjects)
 
+    /// Adresse jouable d'une piste de la timeline — **point de résolution
+    /// UNIQUE** de tous les chemins d'export.
+    ///
+    /// Deux sources, dans cet ordre :
+    /// 1. `resolver` — le composer sert ses fichiers de session, y compris ceux
+    ///    qui n'ont pas encore été uploadés. Toujours plus frais.
+    /// 2. `audio.mediaURL` — l'adresse persistée (ou hydratée depuis `FeedMedia`
+    ///    par `StoryItem.toRenderableSlide`). Résolue via le cache disque, avec
+    ///    téléchargement quand il manque : une story relue depuis la liste n'a
+    ///    aucune raison d'avoir ses pistes déjà en cache.
+    ///
+    /// C'est ce repli qui rend l'audio indépendant du site d'appel : aucun
+    /// appelant ne peut plus produire un export muet en oubliant de câbler un
+    /// resolver.
+    static func resolveLaneURL(
+        _ audio: StoryAudioPlayerObject,
+        resolver: (@Sendable (StoryAudioPlayerObject) -> URL?)?
+    ) async -> URL? {
+        if let url = resolver?(audio) { return url }
+        guard let raw = audio.mediaURL, let remote = URL(string: raw) else { return nil }
+        if remote.isFileURL {
+            return FileManager.default.fileExists(atPath: remote.path) ? remote : nil
+        }
+        return await CacheCoordinator.audioLocalFileURLAwait(for: remote)
+    }
+
     /// Composes the slide's `audioPlayerObjects` (musique, voix — lanes de la
     /// timeline) into dedicated audio tracks, honouring the timeline window
     /// (`startTime`/`duration`), `volume`, `fadeIn`/`fadeOut`.
@@ -702,12 +732,12 @@ public enum StoryExporter {
         composition: AVMutableComposition,
         totalDuration: CMTime,
         storyStart: CMTime = .zero,
-        resolver: @Sendable (StoryAudioPlayerObject) -> URL?
+        resolver: (@Sendable (StoryAudioPlayerObject) -> URL?)?
     ) async throws -> [AVMutableAudioMixInputParameters] {
         var parameters: [AVMutableAudioMixInputParameters] = []
 
         for audio in slide.effects.audioPlayerObjects ?? [] {
-            guard let url = resolver(audio) else { continue }
+            guard let url = await resolveLaneURL(audio, resolver: resolver) else { continue }
             let asset = AVURLAsset(url: url)
             guard let assetTrack = (try? await asset.loadTracks(withMediaType: .audio))?.first,
                   let assetDuration = try? await asset.load(.duration),

@@ -861,6 +861,16 @@ extension StoryMediaObject {
 public struct StoryAudioPlayerObject: Codable, Identifiable, Sendable {
     public var id: String
     public var postMediaId: String      // référence PostMedia en DB
+    /// URL de l'asset — miroir de `StoryMediaObject.mediaURL`.
+    ///
+    /// `postMediaId` seul n'est adressable que par un consommateur qui possède
+    /// l'index `postMediaId → URL` (le reader via `postMediaURLResolver`, le
+    /// composer via ses caches de session). L'exporteur, lui, ne reçoit qu'un
+    /// `StorySlide` : sans cette URL, les chemins « Partager » et « Enregistrer
+    /// dans Photos » ne pouvaient pas retrouver le son et bakaient un MP4 muet.
+    /// Hydratée depuis `FeedMedia` par `StoryItem.toRenderableSlide` quand elle
+    /// n'a pas été persistée.
+    public var mediaURL: String?
     public var placement: String        // kept for backward compat; no longer drives rendering
     public var x: CGFloat              // normalisé 0–1
     public var y: CGFloat
@@ -891,7 +901,7 @@ public struct StoryAudioPlayerObject: Codable, Identifiable, Sendable {
     public var keyframes: [StoryKeyframe]?
 
     enum CodingKeys: String, CodingKey {
-        case id, postMediaId, placement, x, y, volume, waveformSamples
+        case id, postMediaId, mediaURL, placement, x, y, volume, waveformSamples
         case isBackground, backgroundAudioVariants, zIndex
         case startTime, duration, loop, fadeIn, fadeOut, sourceLanguage, name
         case keyframes
@@ -907,8 +917,10 @@ public struct StoryAudioPlayerObject: Codable, Identifiable, Sendable {
                 loop: Bool? = nil, fadeIn: Float? = nil, fadeOut: Float? = nil,
                 sourceLanguage: String? = nil,
                 name: String? = nil,
-                keyframes: [StoryKeyframe]? = nil) {
+                keyframes: [StoryKeyframe]? = nil,
+                mediaURL: String? = nil) {
         self.id = id; self.postMediaId = postMediaId
+        self.mediaURL = mediaURL
         self.placement = placement; self.x = x; self.y = y
         self.volume = volume; self.waveformSamples = waveformSamples
         self.isBackground = isBackground
@@ -2517,10 +2529,18 @@ extension StoryItem {
             effects.mediaObjects = medias
         }
         if var audios = effects.audioPlayerObjects, !audios.isEmpty {
-            for i in audios.indices where audios[i].duration == nil {
-                if let feed = self.media.first(where: { $0.id == audios[i].postMediaId }),
-                   let dur = feed.duration, dur > 0 {
+            for i in audios.indices {
+                let feed = self.media.first(where: { $0.id == audios[i].postMediaId })
+                if audios[i].duration == nil, let dur = feed?.duration, dur > 0 {
                     audios[i].duration = Float(dur)
+                }
+                // Adresse de l'asset : `postMediaId` n'est résolvable que par un
+                // consommateur qui porte l'index des médias. L'exporteur ne reçoit
+                // qu'un slide — sans cette URL, « Partager » et « Enregistrer dans
+                // Photos » bakaient un MP4 muet. Une URL déjà persistée par le
+                // composer gagne : elle est plus fraîche que le repli.
+                if audios[i].mediaURL == nil, let url = feed?.url, !url.isEmpty {
+                    audios[i].mediaURL = url
                 }
             }
             effects.audioPlayerObjects = audios

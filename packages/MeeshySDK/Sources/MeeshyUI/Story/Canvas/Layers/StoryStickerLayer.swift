@@ -23,7 +23,8 @@ public final class StoryStickerLayer: CALayer {
     @MainActor
     public func configure(with sticker: StorySticker,
                           geometry: CanvasGeometry,
-                          mode: RenderMode) {
+                          mode: RenderMode,
+                          renderScale: CGFloat = UIScreen.main.scale) {
         self.sticker = sticker
 
         // Règle partagée avec le composite et l'export — voir
@@ -45,12 +46,12 @@ public final class StoryStickerLayer: CALayer {
         anchorPoint = sticker.anchor
         transform = CATransform3DMakeRotation(CGFloat(sticker.rotation) * .pi / 180, 0, 0, 1)
         zPosition = CGFloat(sticker.zIndex)
-        contentsScale = UIScreen.main.scale
+        contentsScale = renderScale
         name = sticker.id
 
         // Stickers are pre-rasterized via StoryStickerRasterizer; in .play we
         // additionally flag the layer for the GPU rasterization fast path.
         shouldRasterize = mode == .play && sticker.isStatic
-        if shouldRasterize { rasterizationScale = UIScreen.main.scale }
+        if shouldRasterize { rasterizationScale = renderScale }
     }
 }

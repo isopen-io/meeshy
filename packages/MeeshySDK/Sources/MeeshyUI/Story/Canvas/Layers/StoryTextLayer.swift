@@ -47,6 +47,19 @@ public final class StoryTextLayer: CATextLayer {
     /// forme (hors queue de bulle / bulles de pensée).
     private var pathGlyphFrame: CGRect?
 
+    /// Densité de rasterisation de CE rendu. À l'écran c'est celle de l'appareil ;
+    /// à l'export c'est 1.0 — le buffer de sortie est déjà en pixels de design
+    /// (1080×1920), rasteriser à 3× y coûte 9× la surface pour rien. Les
+    /// sous-calques posées par les méthodes privées ci-dessous la lisent ici,
+    /// faute d'avoir le paramètre de `configure` sous la main.
+    ///
+    /// Valeur de départ NEUTRE et non isolée : les deux `init` sont
+    /// `nonisolated`, et y lire `UIScreen.main.scale` (MainActor) ne compile
+    /// pas. La vraie densité arrive par `configure`, dont le paramètre porte le
+    /// défaut `UIScreen.main.scale` — évalué au site d'appel, lui MainActor.
+    /// Toutes les lectures ci-dessous sont postérieures à cette affectation.
+    private var renderScale: CGFloat = 1
+
     public override nonisolated init() { super.init() }
     public override nonisolated init(layer: Any) { super.init(layer: layer) }
 
@@ -58,8 +71,10 @@ public final class StoryTextLayer: CATextLayer {
     @MainActor
     public func configure(with text: StoryTextObject,
                           geometry: CanvasGeometry,
-                          mode: RenderMode) {
+                          mode: RenderMode,
+                          renderScale: CGFloat = UIScreen.main.scale) {
         self.textObject = text
+        self.renderScale = renderScale
 
         // Cross-device parity invariant: every render-space dimension MUST be a
         // linear function of `geometry.scaleFactor`. Therefore we measure the
@@ -200,7 +215,7 @@ public final class StoryTextLayer: CATextLayer {
         // (and tests) can read it directly without unwrapping the attributed string.
         fontSize = renderedFontSize
         alignmentMode = caTextAlignment(from: alignment)
-        contentsScale = UIScreen.main.scale
+        contentsScale = renderScale
         isWrapped = true
         // Jamais de troncature « … » : la mesure ci-dessus dimensionne `bounds`
         // pour contenir tout le texte wrappé. `.none` garantit l'absence
@@ -217,7 +232,7 @@ public final class StoryTextLayer: CATextLayer {
 
         // Static text is a rasterization candidate during playback.
         shouldRasterize = mode == .play && text.isStatic
-        if shouldRasterize { rasterizationScale = UIScreen.main.scale }
+        if shouldRasterize { rasterizationScale = renderScale }
 
         // Install background fill / glass backdrop behind the text glyphs.
         // The CATextLayer renders its `string` into its OWN contents. Un
@@ -276,7 +291,7 @@ public final class StoryTextLayer: CATextLayer {
                 shape.path = framePath
                 shape.fillColor = nil
                 shape.zPosition = -1
-                shape.contentsScale = UIScreen.main.scale
+                shape.contentsScale = renderScale
                 addSublayer(shape)
                 backgroundFillLayer = shape
                 installGlyphSublayer(frame: pathGlyphFrame ?? bounds)
@@ -297,7 +312,7 @@ public final class StoryTextLayer: CATextLayer {
                 shape.path = framePath
                 shape.fillColor = fillColor.cgColor
                 shape.zPosition = -1
-                shape.contentsScale = UIScreen.main.scale
+                shape.contentsScale = renderScale
                 addSublayer(shape)
                 backgroundFillLayer = shape
                 installGlyphSublayer(frame: pathGlyphFrame ?? bounds)
@@ -329,7 +344,7 @@ public final class StoryTextLayer: CATextLayer {
                 backdrop.masksToBounds = true
             }
             backdrop.zPosition = -1
-            backdrop.contentsScale = UIScreen.main.scale
+            backdrop.contentsScale = renderScale
             // Sigma is design-px; project to render-px so the blur "feels" the
             // same on iPhone & iPad (consistent with CanvasGeometry.render).
             let renderedSigma = Float(geometry.render(CGFloat(radius)))
@@ -393,7 +408,7 @@ public final class StoryTextLayer: CATextLayer {
     private func installGlyphSublayer(frame: CGRect) {
         let glyphs = CATextLayer()
         glyphs.frame = frame
-        glyphs.contentsScale = UIScreen.main.scale
+        glyphs.contentsScale = renderScale
         glyphs.alignmentMode = alignmentMode
         glyphs.isWrapped = true
         glyphs.truncationMode = .none

@@ -51,7 +51,8 @@ public final class StoryLocationLayer: CALayer {
     @MainActor
     public func configure(with location: StoryLocationObject,
                           geometry: CanvasGeometry,
-                          mode: RenderMode) {
+                          mode: RenderMode,
+                          renderScale: CGFloat = UIScreen.main.scale) {
         self.locationObject = location
 
         let label = Self.resolvedLabel(for: location.place)
@@ -60,7 +61,7 @@ public final class StoryLocationLayer: CALayer {
         let renderedHPad = geometry.render(Self.horizontalPad * CGFloat(location.scale))
         let renderedVPad = geometry.render(Self.verticalPad * CGFloat(location.scale))
         let renderedGap = geometry.render(Self.iconGap * CGFloat(location.scale))
-        let scale = UIScreen.main.scale
+        let scale = contentsScale
 
         let (image, renderedSize) = Self.badgeImage(label: label,
                                                      fontSize: renderedFontSize,
