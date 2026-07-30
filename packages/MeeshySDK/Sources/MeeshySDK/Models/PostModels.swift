@@ -92,6 +92,9 @@ public struct APIRepostOf: Codable, Sendable {
     public let likeCount: Int?
     public let commentCount: Int?
     public let isQuote: Bool?
+    /// Lieu du post SOURCE, hissé par le gateway comme sur le post porteur.
+    /// `nil` sur les payloads antérieurs — décodage synthétisé tolérant.
+    public let location: SharedPlace?
 }
 
 public struct APIPostComment: Decodable, Sendable {
@@ -401,7 +404,8 @@ extension APIPost {
                         parentId: c.parentId, effectFlags: c.effectFlags ?? 0,
                         originalLanguage: c.originalLanguage, translatedContent: commentTranslatedContent,
                         currentUserReactions: c.currentUserReactions,
-                        media: (c.media ?? []).map { $0.toFeedMedia() })
+                        media: (c.media ?? []).map { $0.toFeedMedia() },
+                        location: c.location)
         }
 
         var repost: RepostContent?
@@ -435,7 +439,8 @@ extension APIPost {
                                    translations: repostTranslations,
                                    originalRepostOfId: r.originalRepostOfId,
                                    visibility: nil,
-                                   expiresAt: nil)
+                                   expiresAt: nil,
+                                   location: r.location)
         }
 
         let postTranslations: [String: PostTranslation]? = translations?.mapValues { entry in

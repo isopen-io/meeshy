@@ -333,7 +333,8 @@ class FeedViewModel: ObservableObject {
                             parentId: c.parentId,
                             originalLanguage: c.originalLanguage, translatedContent: translatedContent,
                             currentUserReactions: c.currentUserReactions,
-                            media: (c.media ?? []).map { $0.toFeedMedia() }
+                            media: (c.media ?? []).map { $0.toFeedMedia() },
+                            location: c.location
                         )
                     }
                 }.value
@@ -1100,7 +1101,8 @@ class FeedViewModel: ObservableObject {
                     effectFlags: data.comment.effectFlags ?? 0,
                     originalLanguage: data.comment.originalLanguage,
                     translatedContent: translatedContent,
-                    currentUserReactions: data.comment.currentUserReactions
+                    currentUserReactions: data.comment.currentUserReactions,
+                    location: data.comment.location
                 )
                 if !self.posts[index].comments.contains(where: { $0.id == feedComment.id }) {
                     self.posts[index].comments.insert(feedComment, at: 0)

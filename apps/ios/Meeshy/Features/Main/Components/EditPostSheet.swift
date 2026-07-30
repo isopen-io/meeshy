@@ -19,7 +19,7 @@ struct EditPostDraft {
 /// Lightweight, presentation-only view of an attached media item for the edit
 /// sheet — maps from the SDK `FeedMedia` to just what the thumbnail strip needs.
 struct EditablePostMedia: Identifiable, Equatable {
-    enum Kind { case image, video, audio, document, location }
+    enum Kind { case image, video, audio, document }
     let id: String
     let kind: Kind
     let previewURL: URL?
@@ -37,7 +37,6 @@ struct EditablePostMedia: Identifiable, Equatable {
         case .video: self.kind = .video
         case .audio: self.kind = .audio
         case .document: self.kind = .document
-        case .location: self.kind = .location
         }
         let raw = media.thumbnailUrl ?? media.url
         self.previewURL = raw.flatMap { MeeshyConfig.resolveMediaURL($0) }
@@ -339,7 +338,6 @@ struct EditPostSheet: View {
         case .audio: return "music.note"
         case .image: return "photo"
         case .document: return "doc"
-        case .location: return "mappin.and.ellipse"
         }
     }
 
@@ -351,7 +349,6 @@ struct EditPostSheet: View {
         case .video: return String(localized: "feed.post.edit.media.kind.video", defaultValue: "Vidéo", bundle: .main)
         case .audio: return String(localized: "feed.post.edit.media.kind.audio", defaultValue: "Audio", bundle: .main)
         case .document: return String(localized: "feed.post.edit.media.kind.document", defaultValue: "Document", bundle: .main)
-        case .location: return String(localized: "feed.post.edit.media.kind.location", defaultValue: "Position", bundle: .main)
         }
     }
 

@@ -1,8 +1,12 @@
 import Foundation
 
 // MARK: - Feed Media Type
+/// `location` a été retiré (2026-07-30) : ni le gateway (PostMedia est
+/// fichier-only), ni l'app (fabrique sans appelant) n'ont jamais produit un
+/// média de ce type — la position d'un post voyage par `FeedPost.location`
+/// (`SharedPlace`), pas par un média.
 public enum FeedMediaType: String, Sendable, Codable {
-    case image, video, audio, document, location
+    case image, video, audio, document
 }
 
 // MARK: - Story media store routing (R7)
@@ -54,9 +58,6 @@ public struct FeedMedia: Identifiable, Sendable, Codable {
     public var fileName: String?
     public var fileSize: String?
     public var pageCount: Int?
-    public var locationName: String?
-    public var latitude: Double?
-    public var longitude: Double?
     public var transcription: MessageTranscription?
     /// Per-language TTS variants of an audio media (Prisme Linguistique).
     /// Each carries the translated transcription text + the synthesized audio
@@ -78,13 +79,11 @@ public struct FeedMedia: Identifiable, Sendable, Codable {
                 thumbnailColor: String = "4ECDC4",
                 width: Int? = nil, height: Int? = nil, duration: Int? = nil,
                 fileName: String? = nil, fileSize: String? = nil, pageCount: Int? = nil,
-                locationName: String? = nil, latitude: Double? = nil, longitude: Double? = nil,
                 transcription: MessageTranscription? = nil,
                 translatedAudios: [MessageTranslatedAudio] = []) {
         self.id = id; self.type = type; self.url = url; self.thumbnailUrl = thumbnailUrl; self.thumbHash = thumbHash; self.thumbnailColor = thumbnailColor
         self.width = width; self.height = height; self.duration = duration
         self.fileName = fileName; self.fileSize = fileSize; self.pageCount = pageCount
-        self.locationName = locationName; self.latitude = latitude; self.longitude = longitude
         self.transcription = transcription
         self.translatedAudios = translatedAudios
     }
@@ -109,10 +108,6 @@ public struct FeedMedia: Identifiable, Sendable, Codable {
         FeedMedia(type: .document, thumbnailColor: color, fileName: name, fileSize: size, pageCount: pages)
     }
 
-    public static func location(name: String, lat: Double, lon: Double, color: String = "2ECC71") -> FeedMedia {
-        FeedMedia(type: .location, thumbnailColor: color, locationName: name, latitude: lat, longitude: lon)
-    }
-
     public var durationFormatted: String? {
         guard let d = duration else { return nil }
         return String(format: "%d:%02d", d / 60, d % 60)
@@ -125,7 +120,7 @@ public struct FeedMedia: Identifiable, Sendable, Codable {
     private enum CodingKeys: String, CodingKey {
         case id, type, url, thumbnailUrl, thumbHash, thumbnailColor
         case width, height, duration, fileName, fileSize, pageCount
-        case locationName, latitude, longitude, transcription, translatedAudios
+        case transcription, translatedAudios
     }
 
     public init(from decoder: Decoder) throws {
@@ -142,9 +137,6 @@ public struct FeedMedia: Identifiable, Sendable, Codable {
         fileName = try c.decodeIfPresent(String.self, forKey: .fileName)
         fileSize = try c.decodeIfPresent(String.self, forKey: .fileSize)
         pageCount = try c.decodeIfPresent(Int.self, forKey: .pageCount)
-        locationName = try c.decodeIfPresent(String.self, forKey: .locationName)
-        latitude = try c.decodeIfPresent(Double.self, forKey: .latitude)
-        longitude = try c.decodeIfPresent(Double.self, forKey: .longitude)
         transcription = try c.decodeIfPresent(MessageTranscription.self, forKey: .transcription)
         translatedAudios = try c.decodeIfPresent([MessageTranslatedAudio].self, forKey: .translatedAudios) ?? []
     }
@@ -163,9 +155,6 @@ public struct FeedMedia: Identifiable, Sendable, Codable {
         try c.encodeIfPresent(fileName, forKey: .fileName)
         try c.encodeIfPresent(fileSize, forKey: .fileSize)
         try c.encodeIfPresent(pageCount, forKey: .pageCount)
-        try c.encodeIfPresent(locationName, forKey: .locationName)
-        try c.encodeIfPresent(latitude, forKey: .latitude)
-        try c.encodeIfPresent(longitude, forKey: .longitude)
         try c.encodeIfPresent(transcription, forKey: .transcription)
         if !translatedAudios.isEmpty {
             try c.encode(translatedAudios, forKey: .translatedAudios)
@@ -189,8 +178,8 @@ extension FeedMedia {
             thumbnailUrl: thumbnailUrl,
             thumbHash: thumbHash,
             duration: duration.map { $0 * 1000 },
-            latitude: latitude,
-            longitude: longitude,
+            latitude: nil,
+            longitude: nil,
             thumbnailColor: thumbnailColor
         )
     }
@@ -201,7 +190,6 @@ extension FeedMedia {
         case .video: return "video/mp4"
         case .audio: return "audio/mpeg"
         case .document: return "application/pdf"
-        case .location: return "application/x-location"
         }
     }
 }
@@ -232,6 +220,10 @@ public struct RepostContent: Identifiable, Sendable {
     public let originalRepostOfId: String?
     public let visibility: String?
     public let expiresAt: Date?
+    /// Lieu attaché au post SOURCE (miroir de `FeedPost.location`) : sans lui,
+    /// un repost perdait la position de l'original (reste ouvert du lot 2,
+    /// clos 2026-07-30).
+    public let location: SharedPlace?
 
     public init(id: String = UUID().uuidString, author: String, authorId: String = "",
                 authorUsername: String? = nil, authorAvatarURL: String? = nil,
@@ -241,7 +233,7 @@ public struct RepostContent: Identifiable, Sendable {
                 storyEffects: StoryEffects? = nil, media: [FeedMedia] = [],
                 translations: [String: PostTranslation]? = nil,
                 originalRepostOfId: String? = nil, visibility: String? = nil,
-                expiresAt: Date? = nil) {
+                expiresAt: Date? = nil, location: SharedPlace? = nil) {
         self.id = id; self.author = author; self.authorId = authorId
         self.authorUsername = authorUsername
         self.authorColor = DynamicColorGenerator.colorForName(authorId.isEmpty ? author : authorId)
@@ -258,6 +250,7 @@ public struct RepostContent: Identifiable, Sendable {
         self.originalRepostOfId = originalRepostOfId
         self.visibility = visibility
         self.expiresAt = expiresAt
+        self.location = location
     }
 }
 
@@ -265,7 +258,7 @@ extension RepostContent: Codable {
     enum CodingKeys: String, CodingKey {
         case id, author, authorId, authorUsername, authorAvatarURL, content, timestamp, likes, isQuote
         case type, originalLanguage, audioUrl, moodEmoji, storyEffects, media, translations
-        case originalRepostOfId, visibility, expiresAt
+        case originalRepostOfId, visibility, expiresAt, location
     }
 
     public init(from decoder: Decoder) throws {
@@ -289,6 +282,7 @@ extension RepostContent: Codable {
         originalRepostOfId = try c.decodeIfPresent(String.self, forKey: .originalRepostOfId)
         visibility = try c.decodeIfPresent(String.self, forKey: .visibility)
         expiresAt = try c.decodeIfPresent(Date.self, forKey: .expiresAt)
+        location = try c.decodeIfPresent(SharedPlace.self, forKey: .location)
         authorColor = DynamicColorGenerator.colorForName(authorId.isEmpty ? author : authorId)
     }
 
@@ -313,6 +307,7 @@ extension RepostContent: Codable {
         try c.encodeIfPresent(originalRepostOfId, forKey: .originalRepostOfId)
         try c.encodeIfPresent(visibility, forKey: .visibility)
         try c.encodeIfPresent(expiresAt, forKey: .expiresAt)
+        try c.encodeIfPresent(location, forKey: .location)
     }
 }
 
@@ -363,6 +358,10 @@ public struct FeedComment: Identifiable, Sendable {
     /// plein écran que les messages). Vide pour un commentaire texte. Le pipeline
     /// audio enrichit la transcription/`translatedAudios` via `comment:media-updated`.
     public var media: [FeedMedia]
+    /// Lieu attaché au commentaire (`APIPostComment.location`, hissé par le
+    /// gateway depuis `metadata.location`). Était décodé puis JETÉ au passage
+    /// domaine — même panne que `FeedPost.location`, corrigée le 2026-07-30.
+    public var location: SharedPlace? = nil
 
     public var displayContent: String { translatedContent ?? content }
 
@@ -375,7 +374,8 @@ public struct FeedComment: Identifiable, Sendable {
                 content: String, timestamp: Date = Date(), likes: Int = 0, replies: Int = 0,
                 parentId: String? = nil, effectFlags: Int = 0,
                 originalLanguage: String? = nil, translatedContent: String? = nil,
-                currentUserReactions: [String]? = nil, media: [FeedMedia] = []) {
+                currentUserReactions: [String]? = nil, media: [FeedMedia] = [],
+                location: SharedPlace? = nil) {
         self.id = id; self.author = author; self.authorId = authorId; self.authorUsername = authorUsername
         self.authorColor = DynamicColorGenerator.colorForName(authorId.isEmpty ? author : authorId)
         self.authorAvatarURL = authorAvatarURL; self.parentId = parentId
@@ -384,6 +384,7 @@ public struct FeedComment: Identifiable, Sendable {
         self.originalLanguage = originalLanguage; self.translatedContent = translatedContent
         self.currentUserReactions = currentUserReactions
         self.media = media
+        self.location = location
     }
 }
 
@@ -392,7 +393,7 @@ extension FeedComment: CacheIdentifiable {}
 extension FeedComment: Codable {
     enum CodingKeys: String, CodingKey {
         case id, author, authorId, authorUsername, authorAvatarURL, parentId, content, timestamp, likes, replies
-        case effectFlags, originalLanguage, translatedContent, currentUserReactions, media
+        case effectFlags, originalLanguage, translatedContent, currentUserReactions, media, location
     }
 
     public init(from decoder: Decoder) throws {
@@ -412,6 +413,7 @@ extension FeedComment: Codable {
         translatedContent = try c.decodeIfPresent(String.self, forKey: .translatedContent)
         currentUserReactions = try c.decodeIfPresent([String].self, forKey: .currentUserReactions)
         media = try c.decodeIfPresent([FeedMedia].self, forKey: .media) ?? []
+        location = try c.decodeIfPresent(SharedPlace.self, forKey: .location)
         authorColor = DynamicColorGenerator.colorForName(authorId.isEmpty ? author : authorId)
     }
 
@@ -434,6 +436,7 @@ extension FeedComment: Codable {
         if !media.isEmpty {
             try c.encode(media, forKey: .media)
         }
+        try c.encodeIfPresent(location, forKey: .location)
     }
 }
 

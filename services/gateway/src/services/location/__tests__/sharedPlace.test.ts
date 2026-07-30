@@ -107,4 +107,30 @@ describe('hoistLocationDeep', () => {
     expect(hoistLocationDeep({ id: 'p1', metadata: {} })).toEqual({ id: 'p1', metadata: {} });
     expect(hoistLocationDeep({ id: 'p1', metadata: {}, comments: [] })).toEqual({ id: 'p1', metadata: {}, comments: [] });
   });
+
+  it('hisse la position du post SOURCE embarque dans repostOf', () => {
+    // Un repost d'un post geolocalise : sans ce hoist, `repostOf.location`
+    // n'existe pas cote client (iOS `APIRepostOf.location` decode nil) et le
+    // repost perd la position de l'original (reste ouvert lot 2, 2026-07-30).
+    const post = {
+      id: 'p2',
+      metadata: {},
+      repostOf: {
+        id: 'orig1',
+        metadata: { location: { latitude: 48.85, longitude: 2.35, name: 'Tour Eiffel', address: null, category: null } },
+      },
+    };
+
+    const hoisted = hoistLocationDeep(post) as typeof post & {
+      repostOf: { location?: { latitude: number; name: string | null } };
+    };
+
+    expect(hoisted.repostOf.location).toMatchObject({ latitude: 48.85, name: 'Tour Eiffel' });
+  });
+
+  it('ne plante pas quand repostOf est absent ou sans lieu', () => {
+    expect(hoistLocationDeep({ id: 'p1', metadata: {}, repostOf: null })).toEqual({ id: 'p1', metadata: {}, repostOf: null });
+    const noPlace = { id: 'p1', metadata: {}, repostOf: { id: 'o1', metadata: {} } };
+    expect(hoistLocationDeep(noPlace)).toEqual(noPlace);
+  });
 });

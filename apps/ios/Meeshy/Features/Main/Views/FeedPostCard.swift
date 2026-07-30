@@ -791,6 +791,15 @@ struct FeedPostCard: View {
                     repostMediaPreview(mediaModel)
                 }
 
+                // Lieu du post SOURCE — le sticker (Button) gagne sur le Button
+                // englobant du quote block, donc le tap ouvre la carte et non
+                // l'original (même règle que le sticker de la card réel).
+                if let place = repost.location {
+                    FeedPostLocationSticker(place: place) {
+                        fullscreenPlace = BubbleFullscreenPlace(place: place)
+                    }
+                }
+
                 // Original stats
                 HStack(spacing: 12) {
                     HStack(spacing: 4) {
@@ -1173,6 +1182,15 @@ struct FeedPostCard: View {
                             authorColor: comment.authorColor,
                             sentAt: comment.timestamp
                         )
+                        .padding(.top, 2)
+                    }
+
+                    // Lieu attaché au commentaire — sticker cliquable (même
+                    // véhicule SharedPlace que le post porteur).
+                    if let place = comment.location {
+                        FeedPostLocationSticker(place: place) {
+                            fullscreenPlace = BubbleFullscreenPlace(place: place)
+                        }
                         .padding(.top, 2)
                     }
 

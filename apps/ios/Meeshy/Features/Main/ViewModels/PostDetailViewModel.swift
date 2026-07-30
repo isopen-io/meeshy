@@ -235,7 +235,8 @@ class PostDetailViewModel: ObservableObject {
                         parentId: c.parentId,
                         originalLanguage: c.originalLanguage, translatedContent: translatedContent,
                         currentUserReactions: c.currentUserReactions,
-                        media: (c.media ?? []).map { $0.toFeedMedia() }
+                        media: (c.media ?? []).map { $0.toFeedMedia() },
+                        location: c.location
                     )
                 }
             }.value
@@ -388,7 +389,8 @@ class PostDetailViewModel: ObservableObject {
                     parentId: parentId,
                     originalLanguage: c.originalLanguage, translatedContent: translated,
                     currentUserReactions: c.currentUserReactions,
-                    media: (c.media ?? []).map { $0.toFeedMedia() }
+                    media: (c.media ?? []).map { $0.toFeedMedia() },
+                    location: c.location
                 )
             }
         }.value
@@ -609,7 +611,8 @@ class PostDetailViewModel: ObservableObject {
             timestamp: Date(),
             likes: 0,
             replies: 0,
-            effectFlags: effectFlags ?? 0
+            effectFlags: effectFlags ?? 0,
+            location: location
         )
         comments.insert(optimistic, at: 0)
         self.post?.commentCount = snapshotCount + 1

@@ -1397,6 +1397,16 @@ struct PostDetailView: View {
                     .padding(.bottom, 8)
             }
 
+            // Lieu du post SOURCE — sticker cliquable, même surface plein
+            // écran que le lieu du post porteur.
+            if let place = repost.location {
+                FeedPostLocationSticker(place: place) {
+                    detailFullscreenPlace = BubbleFullscreenPlace(place: place)
+                }
+                .padding(.horizontal, 12)
+                .padding(.bottom, 8)
+            }
+
             // Audio URL (legacy story audio)
             if let audioUrl = repost.audioUrl, !audioUrl.isEmpty, !isStoryRepost {
                 let repostAudio = MeeshyMessageAttachment(
@@ -1694,7 +1704,6 @@ struct PostDetailView: View {
         let visualMedia = mediaList.filter { $0.type == .image || $0.type == .video }
         let audioMedia = mediaList.filter { $0.type == .audio }
         let docMedia = mediaList.filter { $0.type == .document }
-        let locMedia = mediaList.filter { $0.type == .location }
 
         VStack(spacing: 8) {
             // Single media
@@ -1712,10 +1721,6 @@ struct PostDetailView: View {
                 }
                 // Documents
                 ForEach(docMedia) { media in
-                    detailSingleMedia(media, isPrimaryVideo: false)
-                }
-                // Locations
-                ForEach(locMedia) { media in
                     detailSingleMedia(media, isPrimaryVideo: false)
                 }
             }
@@ -1850,36 +1855,6 @@ struct PostDetailView: View {
             .accessibilityElement(children: .combine)
             .accessibilityLabel(String(format: String(localized: "a11y.post.media.document", defaultValue: "Document : %@", bundle: .main), media.fileName ?? String(localized: "feed.post.detail.document", defaultValue: "Document", bundle: .main)))
 
-        case .location:
-            HStack(spacing: 14) {
-                ZStack {
-                    RoundedRectangle(cornerRadius: 10)
-                        .fill(Color(hex: media.thumbnailColor).opacity(0.2))
-                        .frame(width: 64, height: 64)
-                    Image(systemName: "mappin.circle.fill")
-                        .font(.title2)
-                        .foregroundColor(Color(hex: media.thumbnailColor))
-                }
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(media.locationName ?? String(localized: "feed.post.detail.location", defaultValue: "Location", bundle: .main))
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundColor(theme.textPrimary)
-                    if let lat = media.latitude, let lon = media.longitude {
-                        Text(String(format: "%.4f, %.4f", lat, lon))
-                            .font(.caption2)
-                            .foregroundColor(theme.textMuted)
-                    }
-                }
-                Spacer()
-            }
-            .padding(14)
-            .background(
-                RoundedRectangle(cornerRadius: 12)
-                    .fill(theme.mode.isDark ? Color.white.opacity(0.05) : Color.black.opacity(0.03))
-                    .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color(hex: media.thumbnailColor).opacity(0.3), lineWidth: 1))
-            )
-            .accessibilityElement(children: .combine)
-            .accessibilityLabel(String(format: String(localized: "a11y.post.media.location", defaultValue: "Position : %@", bundle: .main), media.locationName ?? String(localized: "feed.post.detail.location", defaultValue: "Location", bundle: .main)))
         }
     }
 

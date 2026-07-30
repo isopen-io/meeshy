@@ -961,7 +961,8 @@ extension StoryViewerView {
             parentId: parentId,
             effectFlags: effectFlags ?? 0,
             originalLanguage: composerLanguage,
-            media: pendingMedia.map { [$0.optimistic] } ?? []
+            media: pendingMedia.map { [$0.optimistic] } ?? [],
+            location: location
         )
 
         if let parentId {
@@ -2080,7 +2081,8 @@ extension StoryViewerView {
                 parentId: parentId,
                 originalLanguage: c.originalLanguage, translatedContent: translated,
                 currentUserReactions: c.currentUserReactions,
-                media: (c.media ?? []).map { $0.toFeedMedia() }
+                media: (c.media ?? []).map { $0.toFeedMedia() },
+                location: c.location
             )
         }
     }
@@ -2178,7 +2180,8 @@ extension StoryViewerView {
             originalLanguage: data.comment.originalLanguage,
             translatedContent: translatedContent,
             currentUserReactions: data.comment.currentUserReactions,
-            media: (data.comment.media ?? []).map { $0.toFeedMedia() }
+            media: (data.comment.media ?? []).map { $0.toFeedMedia() },
+            location: data.comment.location
         )
 
         let result = Self.applyingStoryCommentAdded(
@@ -2394,7 +2397,8 @@ extension StoryViewerView {
                     parentId: c.parentId,
                     originalLanguage: c.originalLanguage, translatedContent: translated,
                     currentUserReactions: c.currentUserReactions,
-                    media: (c.media ?? []).map { $0.toFeedMedia() }
+                    media: (c.media ?? []).map { $0.toFeedMedia() },
+                    location: c.location
                 )
             }
             storyComments = comments
@@ -2444,7 +2448,8 @@ extension StoryViewerView {
                         translations: c.translations, originalLanguage: c.originalLanguage, preferredLanguages: langs
                     ),
                     currentUserReactions: c.currentUserReactions,
-                    media: (c.media ?? []).map { $0.toFeedMedia() }
+                    media: (c.media ?? []).map { $0.toFeedMedia() },
+                    location: c.location
                 )
             }
             let existing = Set(storyComments.map(\.id))
@@ -2543,6 +2548,8 @@ struct StoryCommentRowView: View, Equatable {
     var isInFlight: Bool = false
     let onReply: () -> Void
     let onToggleLike: () -> Void
+    /// Lieu du commentaire ouvert plein écran (tap sur le sticker).
+    @State private var rowFullscreenPlace: BubbleFullscreenPlace?
 
     static func == (lhs: Self, rhs: Self) -> Bool {
         lhs.comment.id == rhs.comment.id &&
@@ -2604,6 +2611,14 @@ struct StoryCommentRowView: View, Equatable {
                     )
                     .padding(.top, 2)
                 }
+                // Lieu attaché au commentaire — sticker cliquable, même surface
+                // plein écran que les autres rows de commentaires.
+                if let place = comment.location {
+                    FeedPostLocationSticker(place: place) {
+                        rowFullscreenPlace = BubbleFullscreenPlace(place: place)
+                    }
+                    .padding(.top, 2)
+                }
                 actionRow
             }
 
@@ -2611,6 +2626,16 @@ struct StoryCommentRowView: View, Equatable {
         }
         .padding(.vertical, 8)
         .padding(.trailing, 12)
+        .fullScreenCover(item: $rowFullscreenPlace) { item in
+            LocationFullscreenView(
+                latitude: item.place.latitude,
+                longitude: item.place.longitude,
+                placeName: item.place.name,
+                address: item.place.address,
+                accentColor: comment.authorColor,
+                senderName: comment.author
+            )
+        }
     }
 
     @ViewBuilder

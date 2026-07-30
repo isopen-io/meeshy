@@ -1384,7 +1384,7 @@ final class ReelPlayerLayerView: UIView {
 /// Not yet wired into `mediaLayer` (which still shows `primaryReelMedia`): it is
 /// the tested foundation for the deferred images+audio mixed-media composition.
 enum ReelMediaLayout: Equatable {
-    /// No playable/visual media (documents / locations only, or empty).
+    /// No playable/visual media (documents only, or empty).
     case empty
     /// A single video drives the reel — video wins over every other kind.
     case video(FeedMedia)
@@ -1396,7 +1396,7 @@ enum ReelMediaLayout: Equatable {
     case imagesWithAudio(images: [FeedMedia], audios: [FeedMedia])
 
     /// Classifies `media` into a layout. Video has top priority; otherwise the
-    /// presence of images and/or audios decides. Documents/locations are ignored
+    /// presence of images and/or audios decides. Documents are ignored
     /// (never a reel surface), so a post carrying only those resolves to `.empty`.
     static func resolve(media: [FeedMedia]) -> ReelMediaLayout {
         if let video = media.first(where: { $0.type == .video }) { return .video(video) }

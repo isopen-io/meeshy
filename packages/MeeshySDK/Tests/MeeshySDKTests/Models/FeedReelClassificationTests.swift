@@ -168,7 +168,6 @@ struct ReelCompositionTests {
     func doesNotSuggest() {
         #expect(ReelComposition.suggestsReel(mediaKinds: []) == false)
         #expect(ReelComposition.suggestsReel(mediaKinds: [.document]) == false)
-        #expect(ReelComposition.suggestsReel(mediaKinds: [.location]) == false)
     }
 
     @Test("media posts default to REEL")

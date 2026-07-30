@@ -95,19 +95,28 @@ export function hoistLocationOnto<T extends Record<string, unknown>>(entity: T):
 }
 
 /**
- * Hisse la position d'une entité ET de chaque item de sa relation `comments`
- * embarquée (l'aperçu des 3 premiers commentaires attaché à tout `Post` via
- * `postInclude`/`storyPostInclude` — voir `postIncludes.ts`).
+ * Hisse la position d'une entité ET de ses relations embarquées : chaque item
+ * de `comments` (l'aperçu des 3 premiers commentaires attaché à tout `Post`
+ * via `postInclude`/`storyPostInclude` — voir `postIncludes.ts`) et le post
+ * SOURCE `repostOf`.
  *
- * Sans ce second niveau, un commentaire géolocalisé restitue sa position dans
- * la liste complète (`GET /posts/:postId/comments`) mais pas dans l'aperçu
- * embarqué sur le post — la position semble disparaître selon la surface
- * consultée par le client. `hoistLocationOnto` seul ne couvre QUE le post
- * lui-même ; utiliser cette fonction partout où un `Post` complet (avec son
- * `comments[]`) est renvoyé à un client.
+ * Sans le niveau `comments`, un commentaire géolocalisé restitue sa position
+ * dans la liste complète (`GET /posts/:postId/comments`) mais pas dans
+ * l'aperçu embarqué sur le post. Sans le niveau `repostOf`, un repost perd la
+ * position de l'original (`repostOf.location` n'existe jamais côté client —
+ * reste ouvert du lot 2, clos 2026-07-30). La position semble alors
+ * disparaître selon la surface consultée. `hoistLocationOnto` seul ne couvre
+ * QUE le post lui-même ; utiliser cette fonction partout où un `Post` complet
+ * est renvoyé à un client.
  */
 export function hoistLocationDeep<T extends Record<string, unknown>>(entity: T): T {
-  const hoisted = hoistLocationOnto(entity);
+  let hoisted: T = hoistLocationOnto(entity);
+
+  const repostOf = (hoisted as { repostOf?: unknown }).repostOf;
+  if (repostOf && typeof repostOf === 'object' && !Array.isArray(repostOf)) {
+    hoisted = { ...hoisted, repostOf: hoistLocationOnto(repostOf as Record<string, unknown>) } as T;
+  }
+
   const comments = (hoisted as { comments?: unknown }).comments;
   if (!Array.isArray(comments) || comments.length === 0) {
     return hoisted;

@@ -1750,6 +1750,8 @@ struct CommentRowView: View, Equatable {
     @State private var selectedProfileUser: ProfileSheetUser?
     @State private var showOriginal = false
     @State private var hasPlayedAppearanceEffect = false
+    /// Lieu du commentaire ouvert plein écran (tap sur le sticker).
+    @State private var rowFullscreenPlace: BubbleFullscreenPlace?
 
     private var avatarContext: AvatarContext { .postComment }
     private var contentFont: CGFloat { isReply ? 14 : 15 }
@@ -1915,6 +1917,16 @@ struct CommentRowView: View, Equatable {
                     .padding(.top, 2)
                 }
 
+                // Lieu attaché au commentaire (`FeedComment.location`, hissé du
+                // gateway) — sticker cliquable → carte plein écran. Couvre la
+                // sheet ET la page détail (les deux passent par cette row).
+                if let place = comment.location {
+                    FeedPostLocationSticker(place: place) {
+                        rowFullscreenPlace = BubbleFullscreenPlace(place: place)
+                    }
+                    .padding(.top, 2)
+                }
+
                 HStack(spacing: 20) {
                     Button {
                         withAnimation(reduceMotion ? nil : .spring(response: 0.3, dampingFraction: 0.6)) {
@@ -2051,6 +2063,18 @@ struct CommentRowView: View, Equatable {
             )
             .presentationDetents([.large, .medium])
             .presentationDragIndicator(.visible)
+        }
+        .fullScreenCover(item: $rowFullscreenPlace) { item in
+            // Même surface plein écran que la bulle et la card feed :
+            // carte + « Ouvrir dans Plans » / « Itinéraire ».
+            LocationFullscreenView(
+                latitude: item.place.latitude,
+                longitude: item.place.longitude,
+                placeName: item.place.name,
+                address: item.place.address,
+                accentColor: accentColor,
+                senderName: comment.author
+            )
         }
         .withStatusBubble()
     }

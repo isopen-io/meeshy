@@ -169,7 +169,7 @@ struct CommentMediaView: View {
             videoView
         case .audio:
             audioView
-        case .document, .location:
+        case .document:
             // Hors périmètre commentaire (image/vidéo/audio) — fallback discret.
             EmptyView()
         }

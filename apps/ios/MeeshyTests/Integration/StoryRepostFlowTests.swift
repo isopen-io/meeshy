@@ -63,7 +63,7 @@ final class StoryRepostFlowTests: XCTestCase {
                 id: rid, type: repostType, content: nil, originalLanguage: nil, translations: nil,
                 storyEffects: nil, audioUrl: nil, moodEmoji: nil, originalRepostOfId: nil,
                 author: author, media: nil, createdAt: Date(), likeCount: nil,
-                commentCount: nil, isQuote: nil
+                commentCount: nil, isQuote: nil, location: nil
             )
         }
         return APIPost(
