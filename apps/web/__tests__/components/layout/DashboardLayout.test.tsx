@@ -105,8 +105,12 @@ jest.mock('@/components/affiliate/share-affiliate-button', () => ({
   ShareAffiliateButton: () => <div data-testid="share-button">Share</div>,
 }));
 
-// Mock config
+// Mock config. Le spread de l'implémentation réelle est essentiel : un mock
+// exhaustif casse dès qu'un composant rendu ici touche un autre export
+// (`<AvatarImage>` → `buildAttachmentUrl` → `getBackendUrl`). Seuls
+// `buildApiUrl` et `API_ENDPOINTS` sont figés pour les assertions sur `fetch`.
 jest.mock('@/lib/config', () => ({
+  ...jest.requireActual('@/lib/config'),
   buildApiUrl: (endpoint: string) => `http://api.test${endpoint}`,
   API_ENDPOINTS: {
     AUTH: {
