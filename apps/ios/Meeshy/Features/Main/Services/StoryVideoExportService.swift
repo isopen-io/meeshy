@@ -191,6 +191,16 @@ final class StoryVideoExportService: StoryVideoExportServiceProviding {
         // livre alors la story nue plutôt que rien.
         let renderSize = StoryExportIntroSizing.renderSize(for: slide)
 
+        // Chronométrage des DEUX étages. Le coût d'un export est linéaire en
+        // frames : sans le nombre de frames à côté des secondes, un temps brut
+        // ne dit pas si le pipeline est lent ou si la story est simplement
+        // longue. Les mesures simulateur ne transposent pas à l'appareil (ni le
+        // throttling thermique, ni les limites du cache de rasterisation) — ces
+        // traces sont le seul moyen de chiffrer un export réel.
+        // Lecture : `./apps/ios/meeshy.sh logs` ou Console.app, filtre « export-cost ».
+        let frames = slide.computedTotalDuration() * StoryExportFrameRate.fps
+        let startedAt = Date()
+
         do {
             // `StoryExporter` itself throttles `progress` at ~10Hz.
             try await exporter.export(
@@ -201,7 +211,8 @@ final class StoryVideoExportService: StoryVideoExportServiceProviding {
                 branding: nil,
                 progress: progressTrampoline
             )
-            logger.info("StoryVideoExportService : export complete for slide \(slide.id, privacy: .public)")
+            let bake = Date().timeIntervalSince(startedAt)
+            logger.info("export-cost : bake \(String(format: "%.1f", bake), privacy: .public) s pour \(Int(frames), privacy: .public) frames — \(String(format: "%.0f", bake / max(frames, 1) * 1000), privacy: .public) ms/frame (slide \(slide.id, privacy: .public))")
 
             // Emballage de marque en une passe dédiée.
             //
@@ -216,12 +227,15 @@ final class StoryVideoExportService: StoryVideoExportServiceProviding {
             //
             // Échec non fatal : on livre la story nue plutôt que rien.
             do {
+                let wrapStart = Date()
                 let finalURL = try await StoryExportBranding.wrap(
                     storyURL: outputURL,
                     intro: intro,
                     outro: intro,
                     renderSize: renderSize
                 )
+                let wrap = Date().timeIntervalSince(wrapStart)
+                logger.info("export-cost : emballage \(String(format: "%.1f", wrap), privacy: .public) s — TOTAL \(String(format: "%.1f", Date().timeIntervalSince(startedAt)), privacy: .public) s (slide \(slide.id, privacy: .public))")
                 cleanupExport(at: outputURL)
                 return finalURL
             } catch {
