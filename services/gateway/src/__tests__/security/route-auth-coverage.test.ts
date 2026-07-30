@@ -412,6 +412,7 @@ const PUBLIC_ROUTES: Array<{ method: string; url: string; why: string }> = [
   { method: 'GET', url: '/api/v1/links/:identifier', why: "aperçu public d'un lien d'invitation (design volontaire \"allowViewHistory\")" },
   { method: 'POST', url: '/api/v1/links/:identifier/messages', why: "x-session-token haché puis vérifié en base dans le handler (fail-closed), conversation dérivée du token pas de l'URL" },
   { method: 'GET', url: '/api/v1/links/:identifier/messages', why: 'accès conditionné à un match membre/participant anonyme vérifié dans le handler' },
+  { method: 'POST', url: '/api/v1/tracking-links', why: "création d'un lien de suivi NON rattaché : ouverte par conception. Le rattachement à une conversation (`conversationId` dans le corps) exige désormais d'y participer, vérifié dans le handler — c'était le trou." },
   { method: 'GET', url: '/api/v1/tracking-links/:token', why: 'résolution publique de lien court (design assumé, commentaire explicite dans le code)' },
   { method: 'GET', url: '/api/v1/tracking-links/:token/resolve', why: 'idem, aucune donnée sensible exposée' },
   { method: 'GET', url: '/api/v1/l/:token', why: 'redirection publique de lien court' },
@@ -453,13 +454,13 @@ const KNOWN_GAPS: Array<{ method: string; url: string; why: string }> = [
   //   DELETE /attachments/:id         → 4201a63f9 (garde réparée)
   //   GET  /conversations/:id/attachments → 4201a63f9
   //   POST /attachments/upload        → 4201a63f9
-  { method: 'GET', url: '/api/v1/users/:userId/affiliate-token', why: "IDOR de lecture — récupère le token d'affiliation actif de n'importe quel utilisateur sans auth ni rate-limit. Audit §\"users/:userId/affiliate-token\"." },
-  { method: 'POST', url: '/api/v1/affiliate/register', why: "SÉVÈRE — aucune authentification ; force une relation d'ami acceptée entre le créateur du token et un referredUserId arbitraire fourni par le client, puis expose les données de la victime via /affiliate/stats. Audit §\"affiliate/register\"." },
-  { method: 'GET', url: '/api/v1/attachments/:attachmentId', why: "aucune garde du tout (pas même une vérification d'authentification) ; ObjectId Mongo à faible entropie comme seul secret. Audit §\"attachments download\"." },
-  { method: 'GET', url: '/api/attachments/:attachmentId', why: 'même route, montage legacy sans /v1.' },
-  { method: 'GET', url: '/api/v1/attachments/:attachmentId/thumbnail', why: 'même trou que ci-dessus, miniature.' },
-  { method: 'GET', url: '/api/attachments/:attachmentId/thumbnail', why: 'même route, montage legacy sans /v1.' },
-  { method: 'POST', url: '/api/v1/tracking-links', why: "authOptional sans aucune vérification d'appartenance sur conversationId/messageId fournis dans le corps — pollution de données par un appelant anonyme. Audit §\"tracking-links creation\"." },
+  //   GET  /users/:userId/affiliate-token → authentification exigée
+  //   POST /affiliate/register            → le référé est l'appelant, pas le corps
+  //   GET  /attachments/:id (+thumbnail)  → auth + accès à la conversation du message
+  //   POST /tracking-links                → rattachement à une conversation = y participer
+  //
+  // La liste est vide. Toute nouvelle entrée doit être justifiée et datée : ce
+  // n'est pas un endroit où l'on range ce qu'on n'a pas eu le temps de faire.
 ];
 
 function findException(list: Array<{ method: string; url: string; why: string }>, method: string, url: string) {

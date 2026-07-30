@@ -549,6 +549,11 @@ export async function respondToFriendRequest(fastify: FastifyInstance) {
  */
 export async function getAffiliateToken(fastify: FastifyInstance) {
   fastify.get('/users/:userId/affiliate-token', {
+    // Route publique jusqu'ici : n'importe qui énumérait les jetons
+    // d'affiliation actifs de tous les utilisateurs, sans limitation de débit.
+    // Combinée à /affiliate/register, elle permettait de forger des relations
+    // de parrainage à la chaîne.
+    onRequest: [(req: FastifyRequest, rep: FastifyReply) => fastify.authenticate(req, rep)],
     schema: {
       description: 'Get the active affiliate token for a user. Used for automatic affiliation via /join links. Returns the most recent active token that has not expired.',
       tags: ['users', 'affiliate'],

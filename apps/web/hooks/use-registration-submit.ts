@@ -108,9 +108,15 @@ export function useRegistrationSubmit({
 
     if (affiliateToken) {
       try {
+        // Le jeton est indispensable : le serveur rattache désormais le
+        // parrainage à l'appelant authentifié et ignore `referredUserId`.
+        // Sans en-tête, la requête est rejetée et l'affiliation est perdue.
         await fetch(buildApiUrl('/affiliate/register'), {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`
+          },
           body: JSON.stringify({
             token: affiliateToken,
             referredUserId: user.id
