@@ -59,7 +59,7 @@ function makeRequiredAuth(authenticated: boolean) {
 
 function makePrisma(overrides: Record<string, any> = {}) {
   return {
-    storyBackgroundAudio: {
+    sound: {
       create: jest.fn<any>().mockResolvedValue(mockAudio),
       findMany: jest.fn<any>().mockResolvedValue([mockAudio]),
       update: jest.fn<any>().mockResolvedValue({ ...mockAudio, usageCount: 1 }),
@@ -196,7 +196,7 @@ describe('POST /stories/audio — success with title, isPublic, duration (lines 
     expect(res.statusCode).toBe(201);
     const body = res.json();
     expect(body.success).toBe(true);
-    expect(prisma.storyBackgroundAudio.create).toHaveBeenCalled();
+    expect(prisma.sound.create).toHaveBeenCalled();
   });
 });
 

@@ -44,7 +44,7 @@ function buildRequiredAuth(authenticated = true) {
 
 function buildMockPrisma() {
   return {
-    storyBackgroundAudio: {
+    sound: {
       create: jest.fn(),
       findMany: jest.fn<() => Promise<unknown[]>>().mockResolvedValue([]),
       update: jest.fn(),

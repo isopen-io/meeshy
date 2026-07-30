@@ -59,7 +59,7 @@ function makePreValidationAuth(authenticated: boolean) {
 
 function makePrisma(overrides: Record<string, any> = {}) {
   return {
-    storyBackgroundAudio: {
+    sound: {
       create: jest.fn<any>().mockResolvedValue(mockAudio),
       findMany: jest.fn<any>().mockResolvedValue([mockAudio]),
       update: jest.fn<any>().mockResolvedValue({ ...mockAudio, usageCount: 6 }),
@@ -116,7 +116,7 @@ describe('GET /stories/audio — with query filter', () => {
 describe('GET /stories/audio — empty result', () => {
   it('returns 200 with empty array when no audios found', async () => {
     const prisma = makePrisma({
-      storyBackgroundAudio: {
+      sound: {
         findMany: jest.fn<any>().mockResolvedValue([]),
         update: jest.fn<any>().mockResolvedValue({}),
         create: jest.fn<any>().mockResolvedValue(mockAudio),
@@ -163,7 +163,7 @@ describe('POST /stories/audio/:audioId/use — success', () => {
 describe('POST /stories/audio/:audioId/use — non-existent audio', () => {
   it('returns 200 silently when audio does not exist (update throws, caught silently)', async () => {
     const prisma = makePrisma({
-      storyBackgroundAudio: {
+      sound: {
         findMany: jest.fn<any>().mockResolvedValue([]),
         update: jest.fn<any>().mockRejectedValue(new Error('Record not found')),
         create: jest.fn<any>().mockResolvedValue(mockAudio),

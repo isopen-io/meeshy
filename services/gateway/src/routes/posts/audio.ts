@@ -67,7 +67,7 @@ export function registerStoryAudioRoutes(
 
     const fileUrl = `/api/v1/static/${filename}`;
 
-    const audio = await prisma.storyBackgroundAudio.create({
+    const audio = await prisma.sound.create({
       data: {
         uploaderId: authContext.registeredUser.id,
         fileUrl,
@@ -98,7 +98,7 @@ export function registerStoryAudioRoutes(
       where.title = { contains: q, mode: 'insensitive' };
     }
 
-    const audios = await prisma.storyBackgroundAudio.findMany({
+    const audios = await prisma.sound.findMany({
       where,
       orderBy: { usageCount: 'desc' },
       take: limit,
@@ -113,7 +113,7 @@ export function registerStoryAudioRoutes(
     preValidation: [requiredAuth],
   }, async (request, reply) => {
     const { audioId } = request.params;
-    await prisma.storyBackgroundAudio.update({
+    await prisma.sound.update({
       where: { id: audioId },
       data: { usageCount: { increment: 1 } },
     }).catch(() => null); // Silencieux si l'audio n'existe pas

@@ -46,11 +46,11 @@ const DEFAULT_MOCK_FILE = {
 
 function makePrisma(overrides: any = {}) {
   return {
-    storyBackgroundAudio: {
+    sound: {
       create: jest.fn<any>().mockResolvedValue({ id: 'audio-1', title: 'Test Audio', fileUrl: '/api/v1/static/story_audio_test.mp3', uploader: { username: 'alice' } }),
       findMany: jest.fn<any>().mockResolvedValue([]),
       update: jest.fn<any>().mockResolvedValue({}),
-      ...overrides.storyBackgroundAudio,
+      ...overrides.sound,
     },
     ...overrides,
   };
@@ -136,7 +136,7 @@ describe('POST /stories/audio — success', () => {
     uploader: { username: 'alice' },
   });
   beforeAll(async () => {
-    app = await buildApp({ prismaOverrides: { storyBackgroundAudio: { create: mockCreate } } });
+    app = await buildApp({ prismaOverrides: { sound: { create: mockCreate } } });
   });
   afterAll(async () => { await app.close(); });
 
@@ -161,7 +161,7 @@ describe('POST /stories/audio — isPublic false', () => {
   beforeAll(async () => {
     app = await buildApp({
       mockFile: { ...DEFAULT_MOCK_FILE, fields: { ...DEFAULT_MOCK_FILE.fields, isPublic: { value: 'false' } } },
-      prismaOverrides: { storyBackgroundAudio: { create: mockCreate } },
+      prismaOverrides: { sound: { create: mockCreate } },
     });
   });
   afterAll(async () => { await app.close(); });
@@ -183,7 +183,7 @@ describe('POST /stories/audio — missing extension defaults to .m4a', () => {
   beforeAll(async () => {
     app = await buildApp({
       mockFile: { ...DEFAULT_MOCK_FILE, filename: '' },
-      prismaOverrides: { storyBackgroundAudio: { create: mockCreate } },
+      prismaOverrides: { sound: { create: mockCreate } },
     });
   });
   afterAll(async () => { await app.close(); });
@@ -218,7 +218,7 @@ describe('GET /stories/audio — with results and search', () => {
   ];
   const mockFindMany = jest.fn<any>().mockResolvedValue(audioList);
   beforeAll(async () => {
-    app = await buildApp({ prismaOverrides: { storyBackgroundAudio: { findMany: mockFindMany } } });
+    app = await buildApp({ prismaOverrides: { sound: { findMany: mockFindMany } } });
   });
   afterAll(async () => { await app.close(); });
 
@@ -243,7 +243,7 @@ describe('POST /stories/audio/:audioId/use — increment counter', () => {
   let app: FastifyInstance;
   const mockUpdate = jest.fn<any>().mockResolvedValue({});
   beforeAll(async () => {
-    app = await buildApp({ prismaOverrides: { storyBackgroundAudio: { update: mockUpdate } } });
+    app = await buildApp({ prismaOverrides: { sound: { update: mockUpdate } } });
   });
   afterAll(async () => { await app.close(); });
 
