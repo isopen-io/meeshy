@@ -76,7 +76,50 @@ final class AppInitWireupTests: XCTestCase {
         MeeshyMetricsSubscriber.shared.register()
     }
 
+    // MARK: - Gate iOS : `meeshy.sh test` doit exécuter les tests du SDK
+
+    /// `./apps/ios/meeshy.sh test` est LE gate exigé avant tout commit iOS
+    /// (CLAUDE.md racine). Il ne lançait que le bundle de l'app
+    /// (`-only-testing:MeeshyTests`) : n'importe quel test rouge sous
+    /// `packages/MeeshySDK/Tests/**` restait invisible en local et n'apparaissait
+    /// qu'au push, dans `sdk-tests.yml`. Deux tests de `LocationModelsTests` ont
+    /// ainsi survécu à trois commits.
+    func test_meeshyShTestGate_runsTheMeeshySDKPackageSuite() throws {
+        let body = try scriptBody(of: "do_test() {", upTo: "# ─── Setup")
+
+        XCTAssertTrue(
+            body.contains("-scheme MeeshySDK-Package"),
+            "meeshy.sh test doit lancer la suite du package MeeshySDK (scheme MeeshySDK-Package) : "
+                + "sinon les tests de packages/MeeshySDK/Tests ne sont exercés que par sdk-tests.yml, au push."
+        )
+        XCTAssertTrue(
+            body.contains("p0 != 0"),
+            "L'exit code de la suite SDK doit entrer dans le verdict du gate — une phase dont "
+                + "l'échec ne fait pas rougir le script ne prouve rien (cf. le `|| true` des UI tests)."
+        )
+    }
+
     // MARK: - Helpers
+
+    /// Extrait une portion de `apps/ios/meeshy.sh`, commentaires `#` retirés :
+    /// une assertion qui matche un commentaire ne prouve rien.
+    private func scriptBody(of startMarker: String, upTo endMarker: String) throws -> String {
+        let projectRoot = #filePath.components(separatedBy: "/MeeshyTests/").first ?? ""
+        let source = try String(contentsOfFile: "\(projectRoot)/meeshy.sh", encoding: .utf8)
+        guard let start = source.range(of: startMarker) else {
+            XCTFail("meeshy.sh ne contient plus « \(startMarker) »")
+            return ""
+        }
+        let end = source.range(of: endMarker, range: start.upperBound..<source.endIndex)?.lowerBound
+            ?? source.endIndex
+        return String(source[start.lowerBound..<end])
+            .split(separator: "\n", omittingEmptySubsequences: false)
+            .map { line -> Substring in
+                guard let comment = line.range(of: "#") else { return line }
+                return line[line.startIndex..<comment.lowerBound]
+            }
+            .joined(separator: "\n")
+    }
 
     /// Returns the body of `application(_:didFinishLaunchingWithOptions:)`
     /// from `AppDelegate.swift`. Mirrors the file-path resolution used by

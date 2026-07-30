@@ -70,6 +70,9 @@ CLEAN=false
 EXPORT_METHOD="app-store"
 UI_TESTS=false
 COVERAGE=false
+# Phase 0 du gate `test` : suite du package MeeshySDK. Exécutée par défaut —
+# `--skip-sdk` ne la saute que pour une itération rapide sur du code app.
+SKIP_SDK_TESTS=false
 LOG_STREAM_PID=""
 CRASH_MONITOR_PID=""
 LOGFILE=""
@@ -1370,10 +1373,32 @@ do_test() {
     )
 
     mkdir -p "$TEST_OUTPUT_DIR"
-    rm -rf "$TEST_OUTPUT_DIR"/phase1-isolated.xcresult \
+    rm -rf "$TEST_OUTPUT_DIR"/phase0-sdk.xcresult \
+           "$TEST_OUTPUT_DIR"/phase1-isolated.xcresult \
            "$TEST_OUTPUT_DIR"/phase2-content.xcresult \
            "$TEST_OUTPUT_DIR"/phase3-connected.xcresult \
            "$TEST_OUTPUT_DIR"/unit-tests.xcresult
+
+    # Phase 0 — suite du package MeeshySDK (MeeshySDKTests + MeeshyUITests du
+    # package, scheme MeeshySDK-Package). Sans elle, le gate n'exerçait QUE le
+    # bundle de l'app : un test rouge sous packages/MeeshySDK/Tests restait
+    # invisible en local et n'apparaissait qu'au push, dans sdk-tests.yml.
+    # Hôte xctest distinct de Meeshy.app : aucun effet sur l'état de session, donc
+    # elle tourne AVANT les trois phases de l'app. `--skip-sdk` la saute pour une
+    # itération rapide sur du code purement app.
+    local p0=0
+    if [ "$SKIP_SDK_TESTS" = true ]; then
+        warn "Phase 0 (package MeeshySDK) sautée (--skip-sdk)"
+    else
+        log "Phase 0 — suite du package MeeshySDK (scheme MeeshySDK-Package)..."
+        ( cd ../../packages/MeeshySDK && xcodebuild test \
+            -scheme MeeshySDK-Package \
+            -destination "$destination" \
+            -resultBundlePath "../../apps/ios/$TEST_OUTPUT_DIR/phase0-sdk.xcresult" \
+            -test-timeouts-enabled YES \
+            -maximum-test-execution-time-allowance 180 \
+            2>&1 | xcpretty_or_cat ) || p0=$?
+    fi
 
     log "Building for testing..."
     xcodebuild build-for-testing "${common_flags[@]}" \
@@ -1430,6 +1455,7 @@ do_test() {
         -only-testing:MeeshyTests/$END_STATE_SUITE \
         2>&1 | xcpretty_or_cat || p3=$?
 
+    [ "$p0" -eq 0 ] && ok "Phase 0 (package MeeshySDK) : verte" || err "Phase 0 (package MeeshySDK) : échec (exit $p0) — voir $TEST_OUTPUT_DIR/phase0-sdk.xcresult"
     [ "$p1" -eq 0 ] && ok "Phase 1 (isolées) : verte" || err "Phase 1 (isolées) : échec (exit $p1) — voir $TEST_OUTPUT_DIR/phase1-isolated.xcresult"
     [ "$p2" -eq 0 ] && ok "Phase 2 (connexion & contenu) : verte" || err "Phase 2 (connexion & contenu) : échec (exit $p2) — voir $TEST_OUTPUT_DIR/phase2-content.xcresult"
     [ "$p3" -eq 0 ] && ok "Phase 3 (état connecté) : verte — l'app est connectée au compte de test" || err "Phase 3 (état connecté) : échec (exit $p3) — voir $TEST_OUTPUT_DIR/phase3-connected.xcresult"
@@ -1463,7 +1489,7 @@ do_test() {
         head -20 "$TEST_OUTPUT_DIR/coverage.txt"
     fi
 
-    return $(( p1 != 0 || p2 != 0 || p3 != 0 ? 1 : 0 ))
+    return $(( p0 != 0 || p1 != 0 || p2 != 0 || p3 != 0 ? 1 : 0 ))
 }
 
 # ─── Setup ───────────────────────────────────────────────────────────────────
@@ -1570,7 +1596,7 @@ usage() {
     echo -e "    ${GREEN}release-check${NC} Mirror Xcode Cloud Release build locally ${DIM}(catch -O/-wmo crashes before push)${NC}"
     echo -e "    ${GREEN}release${NC}      Upload to TestFlight ${DIM}(--fastlane or --andp; fastlane default)${NC}"
     echo -e "    ${GREEN}distribute${NC}   App Store build ${DIM}(auto: signing, aps-environment, preflight)${NC}"
-    echo -e "    ${GREEN}test${NC}         Run unit tests ${DIM}(add --ui for UI tests)${NC}"
+    echo -e "    ${GREEN}test${NC}         Run unit tests ${DIM}(SDK package suite + 3 app phases; --skip-sdk, --ui)${NC}"
     echo -e "    ${GREEN}setup${NC}        Check/install dev dependencies"
     echo -e "    ${GREEN}device${NC}       Pick a device (simulator or physical) and deploy ${DIM}(interactive)${NC}"
     echo -e "    ${GREEN}screenshot${NC}   Take simulator screenshot"
@@ -1591,6 +1617,7 @@ usage() {
     echo -e "    ${YELLOW}--appstore${NC}               Submit to App Store"
     echo -e "    ${YELLOW}--skip-tests${NC}             Skip unit tests before release"
     echo -e "    ${YELLOW}--ui${NC}                     Include UI tests"
+    echo -e "    ${YELLOW}--skip-sdk${NC}               Skip phase 0 (MeeshySDK package suite)"
     echo -e "    ${YELLOW}--coverage${NC}               Generate coverage report"
     echo -e "    ${YELLOW}--deep${NC}                   Deep clean (global Xcode caches)"
     echo ""
@@ -1650,6 +1677,7 @@ while [[ $# -gt 0 ]]; do
         -c|--configuration) CONFIGURATION="$2"; shift 2 ;;
         -m|--method)      EXPORT_METHOD="$2"; shift 2 ;;
         --ui)             UI_TESTS=true; shift ;;
+        --skip-sdk)       SKIP_SDK_TESTS=true; shift ;;
         --coverage)       COVERAGE=true; shift ;;
         --deep)           DEEP_CLEAN=true; shift ;;
         --iphone)         PLATFORM="iphone"; shift ;;

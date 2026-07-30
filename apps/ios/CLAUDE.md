@@ -42,14 +42,14 @@ Le build utilise le dossier `Build/` relatif au workspace (`apps/ios/Build/`). X
 ```
 
 ### `meeshy.sh test` — exécution phasée (2026-07-04)
-Le run se déroule en 3 phases (`build-for-testing` une fois, puis 3 × `test-without-building`) et **se termine toujours avec l'app connectée au compte de test** :
+Le run commence par la **phase 0** (suite du package MeeshySDK, cf. plus bas), puis se déroule en 3 phases côté app (`build-for-testing` une fois, puis 3 × `test-without-building`) et **se termine toujours avec l'app connectée au compte de test** :
 1. **Phase 1 — suites isolées** : infra, appels/WebRTC, média, value-logic (~190 classes).
 2. **Phase 2 — connexion & manipulation de contenu** : auth/session, stories, posts/feed/reels, traduction, brouillons locaux, UI/UX produit (~175 classes). Contient les 13 suites qui mutent l'état persistant réel (dont `AuthServiceTests` et ses vrais `AuthManager.shared.logout()`) — d'où leur passage AVANT la phase 3.
 3. **Phase 3 — `ZZEndStateConnectedSessionTests`** : login réel avec `DEMO_USER`/`DEMO_PASSWORD` (sourcés de `fastlane/.env`, injectés via `TEST_RUNNER_*`). `MeeshyTests` étant hébergé dans Meeshy.app, la session Keychain écrite par ce test survit au run : l'app relancée démarre connectée. Ne JAMAIS ajouter de logout/tearDown à cette suite, ni de suite qui s'exécuterait après elle.
 
 La répartition 1/2 est dérivée dynamiquement des noms de classes (`FINAL_PHASE_CLASS_PATTERN` dans `meeshy.sh`) : toute nouvelle suite dont le nom matche un token produit (Story, Post, Feed, Draft, Language, Auth, Session, Bubble, Conversation, Message…) rejoint automatiquement la phase 2. Un échec de phase n'empêche pas les phases suivantes de tourner (la phase 3 s'exécute toujours) ; le script sort non-zéro si une phase est rouge. Résultats : `test-results/phase{1-isolated,2-content,3-connected}.xcresult`.
 
-Les tests SPM du SDK (`MeeshySDKTests`, `MeeshyUITests` via le scheme `MeeshySDK-Package`) tournent dans leur propre hôte xctest, hors du conteneur de Meeshy.app — ils ne peuvent pas affecter l'état de session de l'app et restent hors du phasage.
+**Phase 0 — tests SPM du SDK** (`MeeshySDKTests`, `MeeshyUITests` via le scheme `MeeshySDK-Package`) : ils tournent dans leur propre hôte xctest, hors du conteneur de Meeshy.app — ils ne peuvent donc pas affecter l'état de session de l'app, et ne participent pas à la répartition 1/2. Ils font en revanche partie du **verdict** du gate depuis 2026-07-30 : sans eux, un test rouge sous `packages/MeeshySDK/Tests/**` restait invisible en local et n'apparaissait qu'au push (`sdk-tests.yml`). Résultat : `test-results/phase0-sdk.xcresult`. `--skip-sdk` la saute pour une itération rapide sur du code purement app — jamais avant un commit.
 - Simulator: iPhone 16 Pro (UDID: 30BFD3A6-C80B-489D-825E-5D14D6FCCAB5)
 - Bundle ID: `me.meeshy.app`
 
