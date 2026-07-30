@@ -136,7 +136,7 @@ const StoryStickerObjectSchema = z.object({
   zIndex: z.number().int().min(-1000).max(1000).optional(),
 }).passthrough();
 
-const StoryAudioObjectSchema = z.object({
+export const StoryAudioObjectSchema = z.object({
   id: z.string().max(STORY_ID_MAX).optional(),
   postMediaId: z.string().max(STORY_ID_MAX).optional(),
   placement: z.string().max(32).optional(),
@@ -147,6 +147,14 @@ const StoryAudioObjectSchema = z.object({
   startTime: z.number().min(0).max(86400).optional(),
   duration: z.number().min(0).max(86400).optional(),
   sourceLanguage: z.string().max(STORY_LANG_MAX).optional(),
+  // Le blob `storyEffects` est entierement controle par le client : `soundId`
+  // designe une entree de la bibliotheque de sons et sert de cle de lecture
+  // cote serveur. Sans forme ObjectId stricte il devient un vecteur d'injection
+  // (chemin, operateur Mongo) avant meme la garde d'autorisation.
+  soundId: z.string().regex(/^[a-f0-9]{24}$/).optional(),
+  mediaURL: z.string().max(2048).optional(),
+  keyframes: z.array(z.unknown()).max(STORY_ARRAY_CAP).optional(),
+  backgroundAudioVariants: z.array(z.unknown()).max(STORY_ARRAY_CAP).optional(),
 }).passthrough();
 
 /// Taille max sérialisée JSON acceptée pour `storyEffects` : 256 KB. Couvre
