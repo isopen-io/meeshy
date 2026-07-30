@@ -1765,6 +1765,93 @@ final class StoryViewModelTests: XCTestCase {
             "image without a thumbnail can safely use the raw (decodable) media URL")
     }
 
+    // MARK: - ReceiverCoverPlan (aperçu à la volée côté récepteur)
+
+    private func makeReceiverStory(
+        id: String = "recv-1",
+        media: [FeedMedia] = [],
+        effects: StoryEffects?
+    ) -> StoryItem {
+        StoryItem(
+            id: id,
+            content: "story",
+            media: media,
+            storyEffects: effects,
+            createdAt: Date(),
+            expiresAt: Date().addingTimeInterval(72000),
+            isViewed: false
+        )
+    }
+
+    func test_receiverCoverPlan_textOnColoredBackground_isRenderableWithoutAnyImage() {
+        var fx = StoryEffects()
+        fx.background = "FF5733"
+        let plan = StoryCoverThumbnail.receiverCoverPlan(
+            for: makeReceiverStory(media: [FeedMedia(id: "m-audio", type: .audio, url: "https://cdn/voice.m4a")], effects: fx))
+
+        XCTAssertNotNil(plan, "texte/fond coloré + audio : la composition est dérivable sans aucune image")
+        XCTAssertNil(plan?.legacyBackgroundURL)
+        XCTAssertEqual(plan?.imageURLsByObjectId, [:])
+        XCTAssertEqual(plan?.requiredObjectIds, [])
+    }
+
+    func test_receiverCoverPlan_modernImageBackground_requiresItsImage() {
+        var fx = StoryEffects()
+        var bg = StoryMediaObject(id: "obj-bg", mediaURL: "https://cdn/bg.jpg", kind: .image, aspectRatio: 1.0)
+        bg.isBackground = true
+        fx.mediaObjects = [bg]
+        let plan = StoryCoverThumbnail.receiverCoverPlan(for: makeReceiverStory(effects: fx))
+
+        XCTAssertEqual(plan?.imageURLsByObjectId["obj-bg"], "https://cdn/bg.jpg")
+        XCTAssertEqual(plan?.requiredObjectIds, ["obj-bg"],
+                       "le fond moderne est la couche dominante : sans son image, pas de cover")
+    }
+
+    func test_receiverCoverPlan_videoBackground_isNotRenderable() {
+        var fx = StoryEffects()
+        var bg = StoryMediaObject(id: "obj-bg", mediaURL: "https://cdn/bg.mp4", kind: .video, aspectRatio: 1.0)
+        bg.isBackground = true
+        fx.mediaObjects = [bg]
+        XCTAssertNil(StoryCoverThumbnail.receiverCoverPlan(for: makeReceiverStory(effects: fx)),
+                     "fond vidéo : pas de poster frame côté récepteur — laisser la chaîne existante décider")
+
+        var colorFx = StoryEffects()
+        colorFx.background = "112233"
+        XCTAssertNil(
+            StoryCoverThumbnail.receiverCoverPlan(
+                for: makeReceiverStory(media: [FeedMedia(id: "m-v", type: .video, url: "https://cdn/raw.mp4")], effects: colorFx)),
+            "fond legacy vidéo : idem, jamais de cover sans la couche dominante")
+    }
+
+    func test_receiverCoverPlan_legacyImageBackground_fillsBgImageSlot() {
+        var fx = StoryEffects()
+        fx.background = "000000"
+        let plan = StoryCoverThumbnail.receiverCoverPlan(
+            for: makeReceiverStory(media: [FeedMedia(id: "m-bg", type: .image, url: "https://cdn/legacy.jpg")], effects: fx))
+
+        XCTAssertEqual(plan?.legacyBackgroundURL, "https://cdn/legacy.jpg")
+        XCTAssertEqual(plan?.requiredObjectIds, [])
+    }
+
+    func test_receiverCoverPlan_withoutEffects_isNil() {
+        XCTAssertNil(StoryCoverThumbnail.receiverCoverPlan(for: makeReceiverStory(effects: nil)))
+    }
+
+    func test_receiverCoverCandidates_skipLastStoriesAlreadyCovered() {
+        let coveredLast = makeStoryItem(id: "covered-last")
+        let uncoveredLast = makeStoryItem(id: "uncovered-last")
+        let groups = [
+            makeStoryGroup(userId: "u1", stories: [makeStoryItem(id: "u1-old"), coveredLast]),
+            makeStoryGroup(userId: "u2", username: "bob", stories: [uncoveredLast])
+        ]
+
+        let candidates = StoryCoverThumbnail.receiverCoverCandidates(
+            groups: groups, hasLocalCover: { $0 == "covered-last" })
+
+        XCTAssertEqual(candidates.map(\.id), ["uncovered-last"],
+                       "seule la DERNIÈRE story de chaque groupe compte, et jamais celles déjà couvertes")
+    }
+
     // MARK: - mediaURLStrings (prefetch dedup — extraction pure)
 
     func test_mediaURLStrings_extractsAndDeduplicatesMediaURLs() {

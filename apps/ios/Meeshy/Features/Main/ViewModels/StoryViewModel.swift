@@ -38,6 +38,63 @@ enum StoryCoverThumbnail {
         if mediaIsImage, let u = mediaUrl, !u.isEmpty { return u }
         return avatarURL
     }
+
+    /// Plan de rendu d'une cover côté RÉCEPTEUR (aperçu à la volée) : quelles
+    /// images charger et dans quel slot du renderer les injecter. Une story
+    /// texte/fond coloré (± audio) est rendable sans aucune image ; un fond
+    /// visuel image doit être chargé (couche dominante) ; un fond VIDÉO n'a
+    /// pas de poster frame côté récepteur → pas de plan, la chaîne
+    /// `preferredCoverURLString` garde la main. Pure + testable.
+    struct ReceiverCoverPlan: Equatable {
+        /// Fond legacy (premier média image du post) → paramètre `bgImage`.
+        var legacyBackgroundURL: String?
+        /// Images par id d'objet (fond moderne inclus) → `loadedImages`.
+        var imageURLsByObjectId: [String: String]
+        /// Objets dont l'image est indispensable (fond moderne) : échec de
+        /// chargement = pas de cover plutôt qu'une cover sans sa couche dominante.
+        var requiredObjectIds: Set<String>
+    }
+
+    static func receiverCoverPlan(for item: StoryItem) -> ReceiverCoverPlan? {
+        guard let effects = item.storyEffects else { return nil }
+        var plan = ReceiverCoverPlan(
+            legacyBackgroundURL: nil, imageURLsByObjectId: [:], requiredObjectIds: []
+        )
+
+        if let bg = effects.resolvedBackgroundMedia {
+            let url = bg.mediaURL ?? item.media.first(where: { $0.id == bg.postMediaId })?.url
+            guard bg.kind == .image, let url, !url.isEmpty else { return nil }
+            plan.imageURLsByObjectId[bg.id] = url
+            plan.requiredObjectIds.insert(bg.id)
+        } else if let legacyVisual = item.media.first(where: { $0.type == .image || $0.type == .video }) {
+            guard legacyVisual.type == .image, let url = legacyVisual.url, !url.isEmpty else { return nil }
+            plan.legacyBackgroundURL = url
+        }
+
+        for obj in effects.resolvedForegroundMediaObjects where obj.kind == .image {
+            let url = obj.mediaURL ?? item.media.first(where: { $0.id == obj.postMediaId })?.url
+            if let url, !url.isEmpty { plan.imageURLsByObjectId[obj.id] = url }
+        }
+
+        let hasVisualBackground = plan.legacyBackgroundURL != nil || !plan.requiredObjectIds.isEmpty
+        let hasDrawableContent = !effects.textObjects.isEmpty
+            || effects.drawingData != nil
+            || !(effects.background ?? "").isEmpty
+        guard hasVisualBackground || hasDrawableContent else { return nil }
+        return plan
+    }
+
+    /// La DERNIÈRE story de chaque groupe (celle que la tuile du tray montre),
+    /// hors stories déjà couvertes par un composite local. Pure + testable.
+    static func receiverCoverCandidates(
+        groups: [StoryGroup],
+        hasLocalCover: (String) -> Bool
+    ) -> [StoryItem] {
+        groups.compactMap { group in
+            guard let last = group.stories.last, !hasLocalCover(last.id) else { return nil }
+            return last
+        }
+    }
 }
 
 @MainActor
@@ -57,6 +114,9 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
     @Published var isLoading = false
     @Published var showStoryComposer = false
     @Published var activeUpload: StoryUploadState?
+    /// Incrémenté quand une cover de tray vient d'être rendue côté récepteur —
+    /// invalide le tray pour que `latestStoryThumbnailURL` relise le cache local.
+    @Published private(set) var receiverCoverRenderTick = 0
     private var uploadTask: Task<Void, Never>?
 
     private let storyService: StoryServiceProviding
@@ -261,12 +321,14 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
             purgeDeadStories()
             sortStoryGroupsInPlace()
             prefetchAllStoryMedia(storyGroups)
+            renderMissingReceiverCovers()
             return
         case .stale(let data, _):
             storyGroups = data
             purgeDeadStories()
             sortStoryGroupsInPlace()
             prefetchAllStoryMedia(storyGroups)
+            renderMissingReceiverCovers()
             // R8 inc.1 — le refresh silencieux passe en DELTA quand le cache
             // porte un curseur updatedAt (sinon nil → full historique). Curseur
             // dérivé du tray APRÈS purge : il doit refléter ce qu'on détient
@@ -309,6 +371,7 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
                     purgeDeadStories(deletedIds: Set(response.meta?.deletedStoryIds ?? []))
                     if !deltaGroups.isEmpty {
                         prefetchAllStoryMedia(storyGroups)
+                        renderMissingReceiverCovers()
                     }
                     return
                 }
@@ -378,6 +441,7 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
                 sortStoryGroupsInPlace()
                 try? await CacheCoordinator.shared.stories.save(storyGroups, for: Self.storiesCacheKey)
                 prefetchAllStoryMedia(storyGroups)
+                renderMissingReceiverCovers()
             }
         } catch {
             Logger.messages.error("[StoryVM] Failed to load stories: \(error.localizedDescription)")
@@ -434,6 +498,75 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
     /// content-addressed donc immuables ; le viewer garde son chemin de charge à la
     /// demande si jamais le disque a évincé l'asset entre-temps).
     private var prefetchedMediaURLs: Set<String> = []
+
+    /// Stories dont le rendu de cover récepteur a déjà été tenté cette session —
+    /// évite de re-tenter en boucle les compositions non rendables (fond vidéo,
+    /// image de fond introuvable) à chaque rafraîchissement du tray.
+    private var attemptedReceiverCoverStoryIds: Set<String> = []
+
+    /// Aperçu à la volée côté récepteur : rend le composite (texte + fond +
+    /// couches) de la dernière story de chaque groupe depuis ses `StoryEffects`
+    /// et le stocke sous `StoryCoverThumbnail.cacheKey(storyId:)` — le même
+    /// emplacement que la cover locale de l'auteur, que la tuile du tray
+    /// préfère déjà à tout le reste. Aucun upload : le texte reste re-rendable
+    /// par viewer (Prisme) et les stories DÉJÀ publiées gagnent un aperçu.
+    func renderMissingReceiverCovers() {
+        let candidates = StoryCoverThumbnail.receiverCoverCandidates(
+            groups: storyGroups,
+            hasLocalCover: { storyId in
+                attemptedReceiverCoverStoryIds.contains(storyId)
+                    || CacheCoordinator.thumbnailLocalFileURL(
+                        for: StoryCoverThumbnail.cacheKey(storyId: storyId)
+                    ) != nil
+            }
+        )
+        guard !candidates.isEmpty else { return }
+        attemptedReceiverCoverStoryIds.formUnion(candidates.map(\.id))
+
+        Task(priority: .utility) { [weak self] in
+            let imageCache = await CacheCoordinator.shared.images
+            var storedAny = false
+
+            for item in candidates {
+                guard let plan = StoryCoverThumbnail.receiverCoverPlan(for: item) else { continue }
+
+                var legacyBackground: UIImage?
+                if let bgURL = plan.legacyBackgroundURL {
+                    let resolved = MeeshyConfig.resolveMediaURL(bgURL)?.absoluteString ?? bgURL
+                    legacyBackground = await imageCache.image(for: resolved)
+                    guard legacyBackground != nil else { continue }
+                }
+
+                var loadedImages: [String: UIImage] = [:]
+                for (objectId, urlString) in plan.imageURLsByObjectId {
+                    let resolved = MeeshyConfig.resolveMediaURL(urlString)?.absoluteString ?? urlString
+                    if let image = await imageCache.image(for: resolved) {
+                        loadedImages[objectId] = image
+                    }
+                }
+                guard plan.requiredObjectIds.allSatisfy({ loadedImages[$0] != nil }) else { continue }
+
+                let slide = StorySlide(
+                    id: item.id,
+                    content: item.content,
+                    effects: item.storyEffects ?? StoryEffects()
+                )
+                guard let cover = StorySlideRenderer.renderComposite(
+                    slide: slide,
+                    bgImage: legacyBackground,
+                    loadedImages: loadedImages,
+                    size: StoryCoverThumbnail.renderSize
+                ), let jpeg = cover.jpegData(compressionQuality: 0.85) else { continue }
+
+                await CacheCoordinator.shared.thumbnails.store(
+                    jpeg, for: StoryCoverThumbnail.cacheKey(storyId: item.id)
+                )
+                storedAny = true
+            }
+
+            if storedAny { self?.receiverCoverRenderTick += 1 }
+        }
+    }
 
     /// Prefetch all media for all story groups in the background.
     /// Downloads images to disk cache and prerolls video players for the first groups.
