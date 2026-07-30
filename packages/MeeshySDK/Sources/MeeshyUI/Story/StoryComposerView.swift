@@ -55,6 +55,10 @@ public struct StoryComposerView: View {
     @State var showVoiceRecorderSheet = false
     /// C8 — picker de stickers (bouton « Stickers » du panneau Texte).
     @State var showStickerPicker = false
+    /// T20 — sélecteur de lieu (chip « Lieu » du panneau Texte). La VUE du
+    /// picker est injectée par l'app via `\.storyLocationPicker` : MapKit et les
+    /// permissions restent app-side (SDK purity).
+    @State var showLocationPicker = false
     // Prisme Linguistique: the story's source language comes from the user's
     // in-app content preferences (systemLanguage → regionalLanguage → "fr"),
     // NEVER from the keyboard locale. See `StoryComposerViewModel
@@ -160,6 +164,10 @@ public struct StoryComposerView: View {
     @State var canvasNaturalFrame: CGRect = .zero
 
     @Environment(\.theme) var theme
+
+    /// Fabrique du sélecteur de lieu, injectée par l'app (le picker dépend de
+    /// MapKit, CoreLocation et du coordinateur de permissions — app-side).
+    @Environment(\.storyLocationPicker) var storyLocationPicker
 
     // MARK: - Callbacks (public API preserved)
 

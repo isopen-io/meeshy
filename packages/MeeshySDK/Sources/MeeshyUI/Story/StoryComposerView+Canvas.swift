@@ -282,7 +282,8 @@ extension StoryComposerView {
                     onBandHeightChange: { measuredBottomBandHeight = $0 },
                     onBandTopYChange: { measuredBandTopY = $0 },
                     onOpenMediaCrop: { id in openMediaEditor(elementId: id) },
-                    onOpenStickerPicker: { showStickerPicker = true }
+                    onOpenStickerPicker: { showStickerPicker = true },
+                    onOpenLocationPicker: { showLocationPicker = true }
                 )
             }
         }
@@ -976,7 +977,10 @@ extension StoryComposerView {
                     // posé ci-dessus. L'éditeur d'image plein écran s'ouvre
                     // au double-tap.
                     break
-                case .sticker:
+                case .sticker, .location:
+                    // Pastille de lieu : sélection seule (le canvas l'a remontée
+                    // au premier plan). Elle se déplace/redimensionne au doigt et
+                    // se retire par le menu contextuel — rien à éditer au tap.
                     break
                 }
             },
@@ -991,7 +995,7 @@ extension StoryComposerView {
                 case .media:
                     // Open dedicated full-screen media editor (image crop / video editor)
                     openMediaEditor(elementId: id)
-                case .sticker:
+                case .sticker, .location:
                     break
                 }
             },

@@ -99,6 +99,48 @@ final class AppInitWireupTests: XCTestCase {
         )
     }
 
+    // MARK: - Composer de story : le sélecteur de lieu vient de l'app
+
+    /// Le composer de story vit au SDK ; le sélecteur de lieu, non (MapKit,
+    /// CoreLocation, `MediaPermissionCoordinator`, catalogue `.main`). Le SDK
+    /// expose donc `\.storyLocationPicker` et l'app l'alimente. Un site de
+    /// présentation qui oublie l'injection rend le chip « Lieu » invisible : la
+    /// pastille redevient inatteignable, sans le moindre signal.
+    func test_everyStoryComposerPresentation_injectsTheLocationPicker() throws {
+        for path in ["Meeshy/Features/Main/Views/StoryTrayView.swift",
+                     "Meeshy/Features/Main/Views/StoryViewerView.swift"] {
+            let src = try appSource(path)
+            let presentations = occurrences(of: "StoryComposerView(", in: src)
+                + occurrences(of: "UnifiedPostComposer(", in: src)
+            let injections = occurrences(of: ".storyLocationPickerProvided()", in: src)
+            XCTAssertGreaterThan(presentations, 0, "\(path) ne présente plus de composer de story ?")
+            XCTAssertEqual(
+                injections, presentations,
+                "\(path) : chaque présentation du composer doit injecter le picker de lieu "
+                    + "(.storyLocationPickerProvided()) — sinon le chip « Lieu » n'est pas rendu."
+            )
+        }
+    }
+
+    private func occurrences(of needle: String, in haystack: String) -> Int {
+        haystack.components(separatedBy: needle).count - 1
+    }
+
+    /// Source d'un fichier de l'app, commentaires `//` retirés — un `.contains`
+    /// qui matche un commentaire ne prouve rien (et les doc-comments de ces deux
+    /// vues NOMMENT les composers qu'on compte ici).
+    private func appSource(_ relativePath: String) throws -> String {
+        let projectRoot = #filePath.components(separatedBy: "/MeeshyTests/").first ?? ""
+        let raw = try String(contentsOfFile: "\(projectRoot)/\(relativePath)", encoding: .utf8)
+        return raw
+            .split(separator: "\n", omittingEmptySubsequences: false)
+            .map { line -> Substring in
+                guard let comment = line.range(of: "//") else { return line }
+                return line[line.startIndex..<comment.lowerBound]
+            }
+            .joined(separator: "\n")
+    }
+
     // MARK: - Helpers
 
     /// Extrait une portion de `apps/ios/meeshy.sh`, commentaires `#` retirés :

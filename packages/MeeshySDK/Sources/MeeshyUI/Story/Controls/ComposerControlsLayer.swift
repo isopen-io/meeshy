@@ -29,6 +29,10 @@ public struct ComposerControlsLayer: View {
     /// C8 — ouvre le picker de stickers (sheet présentée par StoryComposerView).
     var onOpenStickerPicker: (() -> Void)? = nil
 
+    /// T20 — ouvre le sélecteur de lieu (sheet présentée par StoryComposerView,
+    /// qui tient la fabrique injectée par l'app).
+    var onOpenLocationPicker: (() -> Void)? = nil
+
     /// Reporte la hauteur RÉELLE rendue de `ComposerBottomBand` (content-driven) au
     /// parent, qui la réserve pour scaler le canvas exactement au-dessus. `0` quand
     /// la band est repliée (FABs seuls / dessin immersif) — le canvas reste plein.
@@ -57,7 +61,8 @@ public struct ComposerControlsLayer: View {
         onBandHeightChange: ((CGFloat) -> Void)? = nil,
         onBandTopYChange: ((CGFloat) -> Void)? = nil,
         onOpenMediaCrop: @escaping (String) -> Void,
-        onOpenStickerPicker: (() -> Void)? = nil
+        onOpenStickerPicker: (() -> Void)? = nil,
+        onOpenLocationPicker: (() -> Void)? = nil
     ) {
         self.viewModel = viewModel
         self._bandStateMachine = bandStateMachine
@@ -73,6 +78,7 @@ public struct ComposerControlsLayer: View {
         self.onBandTopYChange = onBandTopYChange
         self.onOpenMediaCrop = onOpenMediaCrop
         self.onOpenStickerPicker = onOpenStickerPicker
+        self.onOpenLocationPicker = onOpenLocationPicker
     }
 
     /// Le grabber redimensionne ET replie le band pour TOUS les panneaux d'outil
@@ -276,6 +282,7 @@ public struct ComposerControlsLayer: View {
                         viewModel.isTimelineVisible = true
                     },
                     onOpenStickerPicker: onOpenStickerPicker,
+                    onOpenLocationPicker: onOpenLocationPicker,
                     resizableHeight: isBandResizable ? $resizableBandHeight : nil,
                     minHeight: bandMinHeight,
                     maxHeight: bandMaxHeight,

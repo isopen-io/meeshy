@@ -70,6 +70,19 @@ extension StoryComposerView {
             .presentationDetents([.medium])
             .presentationDragIndicator(.visible)
         }
+        .sheet(isPresented: $showLocationPicker) {
+            // T20 — la pastille de lieu se pose depuis le composer. Le picker
+            // vient de l'app (MapKit + CoreLocation + permissions) via
+            // `\.storyLocationPicker` ; le SDK ne fait que le présenter et
+            // poser la pastille sur la slide courante.
+            if let provider = storyLocationPicker {
+                provider.makeView { place in
+                    viewModel.addLocation(place: place)
+                    HapticFeedback.light()
+                    showLocationPicker = false
+                }
+            }
+        }
         .sheet(isPresented: $showTransitionSheet) {
             NavigationStack {
                 transitionPicker

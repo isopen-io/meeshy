@@ -116,6 +116,7 @@ extension StoryCanvasUIView {
         if slide.effects.textObjects.contains(where: { $0.id == id }) { return .text }
         if (slide.effects.mediaObjects ?? []).contains(where: { $0.id == id }) { return .media }
         if (slide.effects.stickerObjects ?? []).contains(where: { $0.id == id }) { return .sticker }
+        if slide.locationObjects.contains(where: { $0.id == id }) { return .location }
         return nil
     }
 

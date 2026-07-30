@@ -50,6 +50,7 @@ extension View {
                 },
                 onDismiss: { session.wrappedValue = nil }
             )
+            .storyLocationPickerProvided()
         }
     }
 }
@@ -205,6 +206,7 @@ struct StoryTrayView: View {
                         viewModel.showStoryComposer = false
                     }
                 )
+                .storyLocationPickerProvided()
             }
             .fullScreenCover(item: $storyPreviewAssets, onDismiss: {
                 NotificationCenter.default.post(name: .storyComposerUnmuteCanvas, object: nil)

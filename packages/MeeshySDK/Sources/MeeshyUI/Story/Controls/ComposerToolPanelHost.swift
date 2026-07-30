@@ -16,6 +16,9 @@ struct ComposerToolPanelHost: View {
     /// C8 — ouvre le picker de stickers (sheet au niveau View : le sticker
     /// ajouté rejoint l'état canvas-authored du composer, pas le VM).
     var onOpenStickerPicker: (() -> Void)? = nil
+    /// T20 — ouvre le sélecteur de lieu (présenté par `StoryComposerView`, qui
+    /// tient la fabrique injectée par l'app via `\.storyLocationPicker`).
+    var onOpenLocationPicker: (() -> Void)? = nil
     /// Suppression d'un texte depuis la liste : remontée jusqu'à
     /// `ComposerControlsLayer` afin de fermer le format panel si le texte
     /// supprimé était celui en cours d'édition — sans ce relai la branche
@@ -30,6 +33,7 @@ struct ComposerToolPanelHost: View {
     var panelHeightOverride: CGFloat? = nil
 
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.storyLocationPicker) private var locationPicker
 
     /// État local pour piloter le `PhotosPicker` programmatiquement quand on
     /// entre dans l'outil media sur une slide vide. Pendant — comme le
@@ -568,6 +572,32 @@ struct ComposerToolPanelHost: View {
                         RoundedRectangle(cornerRadius: 10)
                             .fill(MeeshyColors.brandPrimary.opacity(0.12))
                     )
+                }
+                // T20 — la pastille de lieu partage ce foyer : c'est un overlay
+                // de la même famille que texte et sticker. Rendu SEULEMENT si
+                // l'app a injecté un picker (`\.storyLocationPicker`) : un chip
+                // qui ouvre le vide est pire que pas de chip.
+                if locationPicker != nil {
+                    Button {
+                        onOpenLocationPicker?()
+                    } label: {
+                        HStack(spacing: 6) {
+                            Image(systemName: "mappin.circle.fill")
+                                .font(.system(size: 14, weight: .medium))
+                            Text(String(localized: "story.location.add", defaultValue: "Lieu", bundle: .module))
+                                .font(.system(size: 13, weight: .medium))
+                        }
+                        .foregroundColor(MeeshyColors.brandPrimary)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 8)
+                        .background(
+                            RoundedRectangle(cornerRadius: 10)
+                                .fill(MeeshyColors.brandPrimary.opacity(0.12))
+                        )
+                    }
+                    .accessibilityLabel(String(localized: "story.location.add.a11y",
+                                               defaultValue: "Ajouter un lieu à la story",
+                                               bundle: .module))
                 }
                 Spacer()
             }

@@ -288,6 +288,30 @@ extension StoryComposerViewModel {
         return currentEffects.textObjects.first { $0.id == obj.id } ?? obj
     }
 
+    /// Pose une pastille de lieu en BAS de slide, centrée (brief T20) — hors
+    /// timeline : elle reste visible tant que la slide l'est. Écrit dans
+    /// `currentEffects`, la seule source de vérité (et la seule unité persistée
+    /// / envoyée au serveur). Décalage en cascade comme les stickers pour que
+    /// deux lieux successifs ne se superposent pas exactement.
+    @discardableResult
+    func addLocation(place: SharedPlace) -> StoryLocationObject {
+        let offset = Double(currentEffects.locationObjects.count % 5) * 0.04
+        let badge = StoryLocationObject(place: place, x: 0.5, y: 0.8 - offset)
+        var effects = currentEffects
+        effects.locationObjects.append(badge)
+        currentEffects = effects
+        selectedElementId = badge.id
+        bringToFront(id: badge.id)
+        return currentEffects.locationObjects.first { $0.id == badge.id } ?? badge
+    }
+
+    func removeLocation(id: String) {
+        var effects = currentEffects
+        effects.locationObjects.removeAll { $0.id == id }
+        currentEffects = effects
+        if selectedElementId == id { selectedElementId = nil }
+    }
+
     /// C13 — les stickers suivent le modèle moderne : `currentEffects` est la
     /// SEULE source de vérité (parité addText). L'ancien chemin @State View
     /// canvas-authored révertait les mutations VM/canvas au sync suivant.

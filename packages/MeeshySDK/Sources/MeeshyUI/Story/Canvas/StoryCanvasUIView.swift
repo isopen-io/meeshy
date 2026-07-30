@@ -144,7 +144,7 @@ public final class StoryCanvasUIView: UIView {
     /// Classifies an item that was hit by a gesture so the parent can route to
     /// the correct editor (text panel vs media editor sheet vs sticker UX).
     public enum CanvasItemKind: Sendable, Equatable {
-        case text, media, sticker
+        case text, media, sticker, location
     }
 
     /// Called when the user single-taps an item on the canvas. Used by the

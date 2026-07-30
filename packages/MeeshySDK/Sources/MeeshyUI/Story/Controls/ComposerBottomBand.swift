@@ -19,6 +19,7 @@ struct ComposerBottomBand: View {
     var onDeleteText: ((String) -> Void)? = nil
     var onShowInTimeline: (() -> Void)? = nil
     var onOpenStickerPicker: (() -> Void)? = nil
+    var onOpenLocationPicker: (() -> Void)? = nil
 
     /// Non-nil (mode dessin) → le grabber devient un handle de RESIZE : drag vertical
     /// ajuste cette hauteur de panneau (clampée), pilotée via `panelHeight`. Le canvas
@@ -108,6 +109,7 @@ struct ComposerBottomBand: View {
                         onEditMedia: onEditMedia,
                         onEditText: onEditText,
                         onOpenStickerPicker: onOpenStickerPicker,
+                        onOpenLocationPicker: onOpenLocationPicker,
                         onDeleteText: onDeleteText,
                         onShowInTimeline: onShowInTimeline,
                         panelHeightOverride: resizableHeight?.wrappedValue
