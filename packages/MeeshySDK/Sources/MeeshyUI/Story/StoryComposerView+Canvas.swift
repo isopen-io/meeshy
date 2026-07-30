@@ -100,7 +100,10 @@ extension StoryComposerView {
 
             // Floating text edit overlay — sits above every composer control.
             // Empty view when `textEditingMode == .inactive`.
-            StoryTextEditToolbar(viewModel: viewModel)
+            StoryTextEditToolbar(
+                viewModel: viewModel,
+                onControlsTopYChange: { measuredTextToolbarTopY = $0 }
+            )
                 .padding(.bottom, keyboardHeight)
                 .environment(\.colorScheme, canvasChromeScheme)
 
@@ -152,6 +155,16 @@ extension StoryComposerView {
             if newTool == .timeline {
                 viewModel.loadCurrentSlideIntoTimeline()
             }
+        }
+        // Le band s'ouvre à la hauteur de l'outil, pas à celle du précédent.
+        // `composerBandHeight` (état du grabber, semé à 280) était appliqué tel
+        // quel à TOUS les panneaux via `panelHeightOverride` : la timeline, qui
+        // demande 392 pt pour ses opérations + transport + scrubber + 3 pistes
+        // + footer, se retrouvait dans une fenêtre de 230 pt et son bas partait
+        // hors de l'écran (constat user 2026-07-30 « des contrôleurs coupés »).
+        .adaptiveOnChange(of: activeBandTool) { _, tool in
+            guard let tool else { return }
+            composerBandHeight = Self.bandHeight(for: tool)
         }
         .adaptiveOnChange(of: viewModel.isDrawingImmersive) { _, immersive in
             // Bascule liste ⇄ plein écran : le pinceau sélectionné replie le
@@ -317,6 +330,29 @@ extension StoryComposerView {
     var isFloatingEditorActive: Bool {
         viewModel.textEditingMode != .inactive
             || viewModel.isDrawingImmersive
+    }
+
+    /// Outil dont le panneau est EFFECTIVEMENT ouvert dans le band — overrides
+    /// dessin/timeline compris. `nil` quand le band est replié ou affiche un
+    /// panneau de format. Même résolution que `ComposerControlsLayer`, dont la
+    /// règle pure est partagée pour éviter deux vérités divergentes.
+    var activeBandTool: StoryToolMode? {
+        let state = ComposerControlsLayer.resolveEffectiveBandState(
+            machineState: bandStateMachine.state,
+            drawingActive: viewModel.drawingEditingMode.isActive,
+            drawingImmersive: viewModel.isDrawingImmersive,
+            timelineVisible: viewModel.isTimelineVisible
+        )
+        if case .toolPanel(let tool) = state { return tool }
+        return nil
+    }
+
+    /// Hauteur d'ouverture du band pour `tool` : sa hauteur de conception,
+    /// clampée dans les bornes du grabber.
+    static func bandHeight(for tool: StoryToolMode) -> CGFloat {
+        min(composerBandMaxHeight,
+            max(composerBandMinHeight,
+                ComposerToolPanelHost.defaultPanelHeight(for: tool)))
     }
 
     /// La surface de TRACÉ est montée : outil dessin actif ET plein écran
@@ -1035,6 +1071,10 @@ extension StoryComposerView {
             onInlineTextEditEnded: { _ in
                 viewModel.exitTextEditingMode()
             },
+            // Plafond de l'édition texte : le canvas garde la dernière ligne
+            // au-dessus des chips de l'outil, quitte à faire déborder un texte
+            // long par le HAUT de l'écran (user 2026-07-30).
+            inlineEditFloorGlobalY: measuredTextToolbarTopY,
             onManipulationLayerChanged: { layer in
                 manipulationLayer = layer
             },

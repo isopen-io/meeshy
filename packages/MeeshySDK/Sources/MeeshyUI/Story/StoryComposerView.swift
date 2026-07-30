@@ -158,6 +158,13 @@ public struct StoryComposerView: View {
 
     @State var keyboardHeight: CGFloat = 0
     @State var canvasEditShift: CGFloat = 0
+    /// Y (coord GLOBALES écran) du bord supérieur des contrôles de l'outil
+    /// texte (chips + panneau déplié, clavier compris), rapporté par
+    /// `StoryTextEditToolbar.onControlsTopYChange`. Le canvas y plafonne le
+    /// texte en cours d'édition : sa dernière ligne reste au-dessus des chips,
+    /// un texte long débordant vers le haut de l'écran (user 2026-07-30).
+    /// `.greatestFiniteMagnitude` = éditeur fermé, aucun plafond.
+    @State var measuredTextToolbarTopY: CGFloat = .greatestFiniteMagnitude
     /// Frame naturelle (non décalée) du canvas, mesurée hors `.offset`.
     @State var canvasNaturalFrame: CGRect = .zero
 

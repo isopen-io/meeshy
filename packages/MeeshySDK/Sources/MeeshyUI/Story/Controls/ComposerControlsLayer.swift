@@ -344,7 +344,15 @@ public struct ComposerControlsLayer: View {
                 )
             }
         }
-        .ignoresSafeArea(edges: .bottom)
+        // PAS d'`.ignoresSafeArea(edges: .bottom)` ici : il étendait le LAYOUT
+        // sous l'indicateur d'accueil, si bien que la dernière rangée du
+        // panneau d'outil et la barre de FABs finissaient à 16 pt du bord
+        // PHYSIQUE — donc à cheval sur la zone du geste système (constat user
+        // 2026-07-30 « des contrôleurs hors du viewport »). Le verre du band
+        // continue pourtant de saigner jusqu'en bas : c'est
+        // `ComposerBottomBand.bandBackground` qui porte son propre
+        // `.ignoresSafeArea(edges: .bottom)`, sur le FOND seul. Même règle que
+        // `emptyStateLargePicker`, qui réservait déjà `safeAreaBottomInset`.
         .animation(.spring(response: 0.3, dampingFraction: 0.85), value: bandStateMachine.state)
         .animation(.spring(response: 0.3, dampingFraction: 0.85), value: areFabsVisible)
         // Band repliée (FABs seuls / dessin immersif) → réserve 0 : le canvas

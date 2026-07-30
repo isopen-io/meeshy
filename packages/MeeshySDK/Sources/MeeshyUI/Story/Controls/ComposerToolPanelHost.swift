@@ -62,9 +62,19 @@ struct ComposerToolPanelHost: View {
             // déborde vers le BAS (hors sheet) — centré, il remontait SOUS la
             // rangée de chips et la bande d'opérations de la timeline se
             // superposait aux outils (capture user 2026-07-20).
+            //
+            // `.clipped()` ferme la fuite restante : la fenêtre est dérivée de
+            // la hauteur du BAND (que le grabber peut réduire jusqu'à
+            // `bandMinHeight`), donc un panneau à contenu incompressible —
+            // typiquement la timeline — peignait par-dessus les FABs et
+            // jusqu'en dehors de l'écran. Il est désormais borné à sa fenêtre,
+            // et le band s'ouvre à la hauteur propre de l'outil (cf.
+            // `defaultPanelHeight(for:)`, semée par `StoryComposerView`) pour
+            // que ce clip ne morde jamais dans l'état par défaut.
             placeholderPanel
-                .frame(height: panelHeight - 50, alignment: .top)
+                .frame(height: max(0, panelHeight - 50), alignment: .top)
                 .padding(.horizontal, Self.horizontalPadding(for: tool))
+                .clipped()
                 .padding(.bottom, 8)
         }
         .frame(maxWidth: .infinity)

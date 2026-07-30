@@ -37,6 +37,11 @@ public struct StoryComposerCanvasView: UIViewRepresentable {
     public var editingTextId: String?
     public var onInlineTextChanged: ((String, String) -> Void)?
     public var onInlineTextEditEnded: ((String) -> Void)?
+    /// Y (écran) du haut des contrôleurs de l'outil texte — le texte en cours
+    /// d'édition reste au-dessus (cf. `StoryCanvasUIView.inlineEditFloorGlobalY`).
+    /// `.greatestFiniteMagnitude` = pas de plafond (texte centré, comportement
+    /// historique).
+    public var inlineEditFloorGlobalY: CGFloat = .greatestFiniteMagnitude
     /// Notifié quand la couche manipulable change (`.canvas` / `.background` /
     /// `.foreground`). Le composer abonne ce callback à un `@State` qui pilote
     /// le `CanvasLayerIndicator` (chip row).
@@ -97,6 +102,7 @@ public struct StoryComposerCanvasView: UIViewRepresentable {
                 editingTextId: String? = nil,
                 onInlineTextChanged: ((String, String) -> Void)? = nil,
                 onInlineTextEditEnded: ((String) -> Void)? = nil,
+                inlineEditFloorGlobalY: CGFloat = .greatestFiniteMagnitude,
                 onManipulationLayerChanged: ((CanvasManipulationLayer) -> Void)? = nil,
                 onCanvasZoomScaleChanged: ((CGFloat, UIGestureRecognizer.State) -> Void)? = nil,
                 onBackgroundTapped: (() -> Void)? = nil,
@@ -116,6 +122,7 @@ public struct StoryComposerCanvasView: UIViewRepresentable {
         self.editingTextId = editingTextId
         self.onInlineTextChanged = onInlineTextChanged
         self.onInlineTextEditEnded = onInlineTextEditEnded
+        self.inlineEditFloorGlobalY = inlineEditFloorGlobalY
         self.onManipulationLayerChanged = onManipulationLayerChanged
         self.onCanvasZoomScaleChanged = onCanvasZoomScaleChanged
         self.onBackgroundTapped = onBackgroundTapped
@@ -161,6 +168,7 @@ public struct StoryComposerCanvasView: UIViewRepresentable {
         view.onItemDuplicated = onItemDuplicated
         view.onInlineTextChanged = onInlineTextChanged
         view.onInlineTextEditEnded = onInlineTextEditEnded
+        view.inlineEditFloorGlobalY = inlineEditFloorGlobalY
         view.onManipulationLayerChanged = onManipulationLayerChanged
         view.onCanvasZoomScaleChanged = onCanvasZoomScaleChanged
         view.onBackgroundTapped = onBackgroundTapped
@@ -257,6 +265,10 @@ public struct StoryComposerCanvasView: UIViewRepresentable {
         }
         uiView.onInlineTextChanged = onInlineTextChanged
         uiView.onInlineTextEditEnded = onInlineTextEditEnded
+        // Posé AVANT `beginInlineTextEdit` : l'ouverture ancre le bloc d'après
+        // ce plafond, sinon le premier placement partirait du centre et
+        // sauterait à la première frappe.
+        uiView.inlineEditFloorGlobalY = inlineEditFloorGlobalY
         if uiView.inlineEditingTextId != editingTextId {
             if let id = editingTextId {
                 uiView.beginInlineTextEdit(textId: id)

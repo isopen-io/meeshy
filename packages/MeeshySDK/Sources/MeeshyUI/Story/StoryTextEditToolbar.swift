@@ -15,6 +15,12 @@ import MeeshySDK
 struct StoryTextEditToolbar: View {
     @ObservedObject var viewModel: StoryComposerViewModel
 
+    /// Rapporte le Y (écran) du bord SUPÉRIEUR de la rangée de contrôles —
+    /// panneau déplié compris. Le composer le transmet au canvas, qui garde la
+    /// dernière ligne du texte édité au-dessus (directive user 2026-07-30).
+    /// `.greatestFiniteMagnitude` quand l'éditeur est fermé : aucun plafond.
+    var onControlsTopYChange: ((CGFloat) -> Void)? = nil
+
     var body: some View {
         if case .active(let textId, let expandedTool) = viewModel.textEditingMode,
            let binding = textObjectBinding(for: textId) {
@@ -28,10 +34,24 @@ struct StoryTextEditToolbar: View {
                     Spacer(minLength: 0)
 
                     bottomRow(expandedTool: expandedTool, binding: binding)
+                        // `minY` global plutôt que la hauteur : il intègre le
+                        // clavier (la barre est décalée par `padding(.bottom,
+                        // keyboardHeight)`) et le panneau déplié, sans que le
+                        // composer ait à ré-additionner ces termes.
+                        .background(
+                            GeometryReader { proxy in
+                                Color.clear
+                                    .onAppear { onControlsTopYChange?(proxy.frame(in: .global).minY) }
+                                    .adaptiveOnChange(of: proxy.frame(in: .global).minY) { _, y in
+                                        onControlsTopYChange?(y)
+                                    }
+                            }
+                        )
                 }
             }
             .animation(.spring(response: 0.3, dampingFraction: 0.85),
                        value: viewModel.textEditingMode)
+            .onDisappear { onControlsTopYChange?(.greatestFiniteMagnitude) }
         }
     }
 
