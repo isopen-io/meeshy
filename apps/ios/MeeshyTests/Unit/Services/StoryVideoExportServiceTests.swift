@@ -359,11 +359,16 @@ final class RealMP4StubExporter: StoryExporting, @unchecked Sendable {
         self.size = size
     }
 
+    /// `branding` est volontairement ignoré : ce double produit la piste
+    /// vidéo BRUTE, et c'est `StoryVideoExportService` qui pose ensuite
+    /// l'emballage de marque. Le consommer ici masquerait le fait que
+    /// l'emballage est bien appliqué EN AVAL de l'exporteur.
     func export(
         slide: StorySlide,
         to outputURL: URL,
         languages: [String],
         watermark: StoryExportWatermark?,
+        branding: StoryExportBranding.Plan?,
         progress: (@Sendable (Double) -> Void)?
     ) async throws {
         let image = UIGraphicsImageRenderer(size: size, format: {
@@ -414,6 +419,10 @@ final class MockStoryExporter: StoryExporting, @unchecked Sendable {
     private var _exportCallCount = 0
     private var _lastOutputURL: URL?
     private var _lastLanguages: [String] = []
+    /// Plan d'emballage de marque reçu au dernier appel. Enregistré plutôt
+    /// qu'ignoré : sans lui, un test ne pourrait pas distinguer « le plan est
+    /// transmis à l'exporteur » de « le plan est perdu en route ».
+    private var _lastBranding: StoryExportBranding.Plan?
     let behavior: Behavior
 
     init(behavior: Behavior) {
@@ -435,17 +444,24 @@ final class MockStoryExporter: StoryExporting, @unchecked Sendable {
         return _lastLanguages
     }
 
+    var lastBranding: StoryExportBranding.Plan? {
+        lock.lock(); defer { lock.unlock() }
+        return _lastBranding
+    }
+
     func export(
         slide: StorySlide,
         to outputURL: URL,
         languages: [String],
         watermark: StoryExportWatermark?,
+        branding: StoryExportBranding.Plan?,
         progress: (@Sendable (Double) -> Void)?
     ) async throws {
         lock.withLock {
             _exportCallCount += 1
             _lastOutputURL = outputURL
             _lastLanguages = languages
+            _lastBranding = branding
         }
 
         switch behavior {
