@@ -95,8 +95,13 @@ extension BubbleContent {
         // no reply → free-floating large emoji (no bubble); reply → emoji
         // hosted in the bubble above the quoted-reply card, large & centered.
         let emojiResult: EmojiDetector.EmojiOnlyResult = {
+            // `message.location` compte comme une pièce jointe pour cette
+            // détection : un emoji accompagné d'un lieu doit rendre la bulle
+            // (qui héberge LocationMessageView), pas l'emoji libre hors bulle —
+            // même sémantique qu'avec l'ancienne pièce jointe `.location`.
             guard !message.content.isEmpty,
-                  message.attachments.isEmpty else {
+                  message.attachments.isEmpty,
+                  message.location == nil else {
                 return .notEmojiOnly
             }
             return EmojiDetector.analyze(message.content)
@@ -159,10 +164,24 @@ extension BubbleContent {
             self.reply = nil
         }
 
+        // --- Lieu partagé ---
+        // `message.location` est la voie serveur actuelle (colonne
+        // `locationJson`, hissée par le gateway) : `MessageAttachment` n'a
+        // aucun champ géographique en Prisma, le serveur ne peut plus produire
+        // de pièce jointe `.location`. Celles-ci ne subsistent que dans
+        // d'anciennes lignes du cache local — la branche par pièce jointe
+        // reste donc en place pour elles (filtre `nonMedia` ci-dessous).
+        self.location = message.location
+
         // --- Attachments ---
         let visual = message.attachments.filter { $0.type == .image || $0.type == .video }
         let audio = message.attachments.filter { $0.type == .audio }
-        let nonMedia = message.attachments.filter { $0.type == .file || $0.type == .location }
+        // Exclusivité du rendu de lieu : quand `message.location` est présent,
+        // une éventuelle pièce jointe `.location` (doublon hérité du cache)
+        // est écartée pour que le lieu ne soit rendu qu'UNE fois.
+        let nonMedia = message.attachments.filter {
+            $0.type == .file || ($0.type == .location && message.location == nil)
+        }
 
         // Pure single-category cases route to dedicated enum variants. Anything
         // mixing two-or-more categories falls into `.mixed` which carries audio
