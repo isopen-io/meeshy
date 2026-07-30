@@ -145,6 +145,49 @@ final class StoryLocationBadgeRenderTests: XCTestCase {
         XCTAssertNotEqual(StoryLocationLayer.pillBackgroundColor, UIColor.white.withAlphaComponent(0.94))
     }
 
+    // MARK: - badgeFrame (hit-test reader)
+
+    /// Anti-dérive : le cadre annoncé au hit-test du reader doit être EXACTEMENT
+    /// celui que `configure` pose sur la layer (mêmes constantes, même mesure,
+    /// mêmes projections). À rotation nulle, `CALayer.frame` intègre déjà
+    /// position + anchor + bounds — c'est la référence.
+    func test_badgeFrame_matchesTheConfiguredLayerFrame() {
+        let location = StoryLocationObject(
+            id: "loc-hit",
+            place: SharedPlace(latitude: 48.8566, longitude: 2.3522, name: "Tour Eiffel"),
+            x: 0.42, y: 0.73)
+        let canvasSize = CGSize(width: 402, height: 715)
+        let layer = StoryLocationLayer()
+        layer.configure(with: location,
+                        geometry: CanvasGeometry(renderSize: canvasSize),
+                        mode: .play,
+                        renderScale: 2)
+
+        let frame = StoryLocationLayer.badgeFrame(for: location, canvasSize: canvasSize)
+
+        XCTAssertEqual(frame.minX, layer.frame.minX, accuracy: 0.5)
+        XCTAssertEqual(frame.minY, layer.frame.minY, accuracy: 0.5)
+        XCTAssertEqual(frame.width, layer.frame.width, accuracy: 0.5)
+        XCTAssertEqual(frame.height, layer.frame.height, accuracy: 0.5)
+    }
+
+    /// Le scale de l'auteur agrandit la zone touchable comme le rendu.
+    func test_badgeFrame_growsWithTheAuthorScale() {
+        var small = StoryLocationObject(
+            id: "loc-s",
+            place: SharedPlace(latitude: 1, longitude: 1, name: "Ici même"))
+        var big = small
+        small.scale = 1.0
+        big.scale = 1.8
+        let canvasSize = CGSize(width: 402, height: 715)
+
+        let smallFrame = StoryLocationLayer.badgeFrame(for: small, canvasSize: canvasSize)
+        let bigFrame = StoryLocationLayer.badgeFrame(for: big, canvasSize: canvasSize)
+
+        XCTAssertGreaterThan(bigFrame.width, smallFrame.width)
+        XCTAssertGreaterThan(bigFrame.height, smallFrame.height)
+    }
+
     private func assertColor(_ color: UIColor, hex: String, alpha: CGFloat = 1,
                              file: StaticString = #filePath, line: UInt = #line) {
         let scanner = Scanner(string: hex)

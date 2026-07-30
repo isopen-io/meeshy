@@ -95,10 +95,36 @@ public final class StoryLocationLayer: CALayer {
     /// `Bundle.module` is itself MainActor-isolated in this target — unlike
     /// `StoryTextLayer.parseHexColorNonisolated`, which touches no bundle.
     @MainActor
-    static func resolvedLabel(for place: SharedPlace) -> String {
+    public static func resolvedLabel(for place: SharedPlace) -> String {
         if let name = place.name, !name.isEmpty { return name }
         if let address = place.address, !address.isEmpty { return address }
         return String(localized: "story.location.here", defaultValue: "Ici", bundle: .module)
+    }
+
+    /// Cadre du badge dans l'espace CANVAS (boîte englobante, rotation
+    /// ignorée) — pensé pour le hit-test du reader : la couche de tap de
+    /// l'app doit tomber EXACTEMENT là où `configure` dessine, d'où le
+    /// partage strict des mêmes constantes, de la même mesure
+    /// (`measuredBadgeSize`) et des mêmes projections `CanvasGeometry`.
+    @MainActor
+    public static func badgeFrame(for location: StoryLocationObject,
+                                  canvasSize: CGSize) -> CGRect {
+        let geometry = CanvasGeometry(renderSize: canvasSize)
+        let label = resolvedLabel(for: location.place)
+        let size = measuredBadgeSize(
+            label: label,
+            fontSize: geometry.render(baseDesignFontSize * CGFloat(location.scale)),
+            hPad: geometry.render(horizontalPad * CGFloat(location.scale)),
+            vPad: geometry.render(verticalPad * CGFloat(location.scale)),
+            gap: geometry.render(iconGap * CGFloat(location.scale))
+        )
+        let designCenterX = geometry.designLength(forNormalized: CGFloat(location.x))
+        let designCenterY = geometry.designHeightLength(forNormalized: CGFloat(location.y))
+        let center = geometry.render(CGPoint(x: designCenterX, y: designCenterY))
+        return CGRect(x: center.x - size.width * location.anchor.x,
+                      y: center.y - size.height * location.anchor.y,
+                      width: size.width,
+                      height: size.height)
     }
 
     /// Rasterizes the pill badge (`pillBackgroundColor` pill, `pinTintColor`
@@ -108,6 +134,25 @@ public final class StoryLocationLayer: CALayer {
     /// itself fails to produce a backing store (never observed in practice) —
     /// callers must still assign the `renderedSize` so `bounds`/hit-testing
     /// stay correct even in that degenerate case.
+    /// Mesure du badge SANS rasterisation — partagée entre `badgeImage`
+    /// (rendu) et `badgeFrame` (hit-test reader) pour qu'aucun des deux ne
+    /// puisse dériver de l'autre.
+    @MainActor
+    static func measuredBadgeSize(label: String,
+                                  fontSize: CGFloat,
+                                  hPad: CGFloat,
+                                  vPad: CGFloat,
+                                  gap: CGFloat) -> CGSize {
+        let font = UIFont.systemFont(ofSize: fontSize, weight: .semibold)
+        let textAttrs: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: labelTextColor]
+        let textSize = (label as NSString).size(withAttributes: textAttrs)
+        let iconSize = fontSize
+        return CGSize(
+            width: ceil(hPad * 2 + iconSize + gap + textSize.width),
+            height: ceil(vPad * 2 + max(iconSize, textSize.height))
+        )
+    }
+
     @MainActor
     private static func badgeImage(label: String,
                                    fontSize: CGFloat,
@@ -119,10 +164,8 @@ public final class StoryLocationLayer: CALayer {
         let textAttrs: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: labelTextColor]
         let textSize = (label as NSString).size(withAttributes: textAttrs)
         let iconSize = fontSize
-        let size = CGSize(
-            width: ceil(hPad * 2 + iconSize + gap + textSize.width),
-            height: ceil(vPad * 2 + max(iconSize, textSize.height))
-        )
+        let size = measuredBadgeSize(label: label, fontSize: fontSize,
+                                     hPad: hPad, vPad: vPad, gap: gap)
         guard size.width > 0, size.height > 0 else { return (nil, size) }
 
         let format = UIGraphicsImageRendererFormat()

@@ -91,4 +91,39 @@ final class StoryCanvasLocationManipulationTests: XCTestCase {
         let canvas = makeCanvas([high])
         XCTAssertEqual(canvas.nextTopZ(), 8)
     }
+
+    // MARK: - Suivi LIVE de la layer pendant le geste
+
+    /// Le modèle bougeait mais la CALayer restait figée pendant tout le drag
+    /// (aucune branche location dans `updateManipulatedItemLayer`) : la
+    /// pastille téléportait à sa position finale au relâchement (constat user
+    /// 2026-07-30 « le sticker de position ne bouge pas »). Ce test verrouille
+    /// la LAYER, pas le modèle — les huit tests au-dessus passaient déjà.
+    func test_liveDrag_movesTheBadgeLayer_beforeGestureEnd() {
+        let canvas = makeCanvas([badge(x: 0.5, y: 0.8)])
+        let layer = canvas.itemsContainer.sublayers?.first { $0.name == "loc-1" }
+        let positionBefore = layer?.position ?? .zero
+
+        canvas.manipulatedItemId = "loc-1"
+        canvas.slide = canvas.updatePosition(slideId: "loc-1", x: 0.2, y: 0.3)
+
+        let positionAfter = layer?.position ?? .zero
+        XCTAssertNotEqual(positionBefore, positionAfter,
+                          "La layer doit suivre le doigt PENDANT le geste, pas seulement au rebuild final.")
+    }
+
+    /// Même contrat pour le pinch : le scale est cuit dans la rasterisation du
+    /// badge, donc le suivi live passe par un transform transitoire (motif
+    /// texte). Sans lui, `transform` reste l'identité jusqu'au relâchement.
+    func test_livePinch_scalesTheBadgeLayer_beforeGestureEnd() {
+        let canvas = makeCanvas([badge()])
+        let layer = canvas.itemsContainer.sublayers?.first { $0.name == "loc-1" }
+
+        canvas.manipulatedItemId = "loc-1"
+        canvas.slide = canvas.updateScale(slideId: "loc-1", scale: 1.8)
+
+        let transform = layer?.transform ?? CATransform3DIdentity
+        XCTAssertEqual(Double(transform.m11), 1.8, accuracy: 0.001,
+                       "Le ratio transitoire (scale modèle ÷ scale cuit) doit s'appliquer pendant le pinch.")
+    }
 }
