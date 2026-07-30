@@ -7,8 +7,11 @@ import { randomUUID } from 'crypto';
 import { UnifiedAuthRequest } from '../../middleware/auth';
 import { sendSuccess, sendUnauthorized, sendBadRequest, sendNotFound } from '../../utils/response';
 
-const UPLOAD_DIR = process.env.UPLOAD_DIR ?? '/tmp/meeshy-uploads';
-const MAX_AUDIO_DURATION_SEC = 60;
+// Volume DÉDIÉ, servi uniquement par la route JWT `/static/:filename`.
+// Surtout PAS sous UPLOAD_PATH : tout ce qui s'y trouve est exposé par
+// `GET /attachments/file/*` (sans authentification, download.ts:256) et par le
+// montage nginx en lecture seule sur `static.<domaine>`, en cache immutable un an.
+const UPLOAD_DIR = process.env.UPLOAD_DIR ?? '/app/sounds';
 const ALLOWED_MIME = new Set([
   'audio/mpeg',
   'audio/mp4',
@@ -57,7 +60,8 @@ export function registerStoryAudioRoutes(
     const title = String((data.fields['title'] as any)?.value ?? 'Son sans titre').slice(0, 100);
     const isPublic = (data.fields['isPublic'] as any)?.value !== 'false';
     const durationRaw = parseInt((data.fields['duration'] as any)?.value ?? '0', 10);
-    const duration = isNaN(durationRaw) ? 0 : Math.min(durationRaw, MAX_AUDIO_DURATION_SEC);
+    // Aucun plafond de durée (directive produit 2026-07-30).
+    const duration = isNaN(durationRaw) ? 0 : durationRaw;
 
     await fs.mkdir(UPLOAD_DIR, { recursive: true });
     const ext = path.extname(data.filename || '') || '.m4a';

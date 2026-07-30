@@ -232,6 +232,10 @@ services:
       - JWT_SECRET=${JWT_SECRET}
       - JWT_EXPIRES_IN=${JWT_EXPIRES_IN}
       - UPLOAD_PATH=/app/uploads
+      # Volume DÉDIÉ à la bibliothèque de sons. Surtout PAS sous UPLOAD_PATH :
+      # ce dernier est monté en lecture seule par nginx (static.<domaine>) et
+      # servi sans authentification — les sons ne le sont que par la route JWT.
+      - UPLOAD_DIR=/app/sounds
       - PUBLIC_URL=${PUBLIC_URL:-https://gate.${DOMAIN:-meeshy.me}}
       - MAX_TRANSLATION_LENGTH=10000
       # Variables d'initialisation des utilisateurs
@@ -286,6 +290,8 @@ services:
       - BRAND_LOGO_URL=${BRAND_LOGO_URL:-}
     volumes:
       - gateway_uploads:/app/uploads
+      # NE PAS monter dans le service nginx : ce montage rendrait les sons publics.
+      - gateway_sounds:/app/sounds
       - /opt/meeshy/secrets/firebase-admin-sdk.json:/app/secrets/firebase-admin-sdk.json
       - /opt/meeshy/secrets/apns_key.p8:/app/secrets/apns_key.p8:ro
     depends_on:
@@ -541,6 +547,9 @@ volumes:
   traefik_dumped_certs:
   models_data:
   gateway_uploads:
+  # Bibliothèque de sons — jamais monté par nginx, jamais sous UPLOAD_PATH.
+  gateway_sounds:
+    driver: local
   frontend_uploads:
 
 networks:

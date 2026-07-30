@@ -15,6 +15,10 @@ process.env.GRPC_SERVER_URL = 'localhost:50051';
 // tenterait d'écrire dans le défaut de production `/app/uploads`, absent en
 // environnement de test.
 process.env.UPLOAD_PATH = process.env.UPLOAD_PATH || require('os').tmpdir() + '/meeshy-gateway-test-uploads';
+// `routes/posts/audio.ts` lit UPLOAD_DIR au chargement du module et y crée le
+// dossier des sons à l'upload. Son défaut de production `/app/sounds` n'est pas
+// inscriptible en local : sans ceci, les tests d'upload audio échoueraient.
+process.env.UPLOAD_DIR = process.env.UPLOAD_DIR || '/tmp/meeshy-test-sounds';
 
 // Mock isomorphic-dompurify (pulls in jsdom which has ESM deps Jest can't handle)
 jest.mock('isomorphic-dompurify', () => ({
