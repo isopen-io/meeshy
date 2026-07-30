@@ -3,6 +3,7 @@ import UniformTypeIdentifiers
 import UIKit
 import MeeshyUI
 import MeeshySDK
+import os
 
 // MARK: - Extracted from UniversalComposerBar.swift
 
@@ -212,6 +213,8 @@ enum ComposerIngestFeedback {
 /// implicite (SE-0466) qui double-libérerait sur iOS < 26.
 nonisolated enum PastedFileCopier {
 
+    private static let logger = Logger(subsystem: "me.meeshy.app", category: "composer-drop")
+
     /// Copie l'URL vers `temporaryDirectory/paste_<uuid>_<nom>` si elle est
     /// lisible telle quelle. Refuse un dossier et un fichier de 0 octet.
     /// Renvoie `nil` sans fabriquer de repli : l'appelant tentera le
@@ -221,8 +224,14 @@ nonisolated enum PastedFileCopier {
         guard fm.isReadableFile(atPath: url.path) else { return nil }
         do {
             let values = try url.resourceValues(forKeys: [.isDirectoryKey, .fileSizeKey])
-            if values.isDirectory == true { return nil }
-            guard (values.fileSize ?? 0) > 0 else { return nil }
+            if values.isDirectory == true {
+                logger.info("Collage refusé : le chemin \(url.lastPathComponent, privacy: .public) est un dossier")
+                return nil
+            }
+            guard (values.fileSize ?? 0) > 0 else {
+                logger.info("Collage refusé : fichier de 0 octet (\(url.lastPathComponent, privacy: .public))")
+                return nil
+            }
             let name = url.lastPathComponent
             let destination = fm.temporaryDirectory
                 .appendingPathComponent("paste_\(UUID().uuidString)_\(name)")
@@ -233,6 +242,7 @@ nonisolated enum PastedFileCopier {
                 mime: MimeTypeResolver.mimeType(forURL: destination)
             )
         } catch {
+            logger.error("Copie du fichier collé impossible (\(url.lastPathComponent, privacy: .public)) : \(error.localizedDescription, privacy: .public)")
             return nil
         }
     }

@@ -418,6 +418,21 @@ entre les deux passes — la reproduction se fait sur un état propre.
    Confidentialité › Service de localisation) sans bouton inerte.
 5. Supprimer le doublon `MapUserLocationButton()` / « Ma position ».
 
+**Note de séquencement (post-hoc) :** le gel MapKit décrit dans
+`reference_mapkit_userlocation_fallback_reenters_and_freezes.md` — la carte
+s'ouvrant en `.userLocation(fallback:)` se ré-entre et fige le main thread —
+est un défaut bloquant déjà tracé séparément, distinct des cinq correctifs de
+l'étape 2 ci-dessus. Il a été corrigé par les commits `c82c22007` puis
+`90b39dc39`, qui touchent `LocationPickerView.swift` et `AdaptiveMap.swift`
+**avant** le reste de l'étape 2 de ce lot. Ce n'est pas une entorse au
+séquencement « reproduction d'abord » : chaque commit documente sa propre
+reproduction instrumentée (preuve par échantillonnage de processus, deux
+occurrences imbriquées du même sélecteur sur la pile, main thread à 60-99 %
+CPU) dans son message, avant correctif. Les cinq correctifs listés en étape 2
+(dimensionnement, recherche débattue, réticule, message Mac, doublon bouton)
+restent, eux, à traiter après une reproduction instrumentée dédiée sur le
+symptôme rapporté par l'utilisateur.
+
 ## Décisions et alternatives écartées
 
 - **`.onDrop` + `NSItemProvider`** plutôt que `.dropDestination(for:)` :

@@ -1,5 +1,6 @@
 import MapKit
 import UIKit
+import os
 
 /// Fournit l'image statique de la vignette carte d'un message de lieu.
 ///
@@ -24,6 +25,8 @@ public struct LocationMapThumbnailProvider: LocationMapThumbnailProviding {
         return cache
     }()
 
+    private static let logger = Logger(subsystem: "me.meeshy.app", category: "location-thumbnail")
+
     public init() {}
 
     public func thumbnail(coordinate: CLLocationCoordinate2D, size: CGSize, isDark: Bool) async -> UIImage? {
@@ -42,11 +45,14 @@ public struct LocationMapThumbnailProvider: LocationMapThumbnailProviding {
             UITraitCollection(userInterfaceStyle: isDark ? .dark : .light),
         ])
 
-        guard let snapshot = try? await MKMapSnapshotter(options: options).start() else {
+        do {
+            let snapshot = try await MKMapSnapshotter(options: options).start()
+            Self.cache.setObject(snapshot.image, forKey: key)
+            return snapshot.image
+        } catch {
+            Self.logger.error("MKMapSnapshotter a échoué pour (\(coordinate.latitude, privacy: .public), \(coordinate.longitude, privacy: .public)) : \(error.localizedDescription, privacy: .public)")
             return nil
         }
-        Self.cache.setObject(snapshot.image, forKey: key)
-        return snapshot.image
     }
 
     private static func cacheKey(coordinate: CLLocationCoordinate2D, size: CGSize, isDark: Bool) -> NSString {
