@@ -83,10 +83,17 @@ struct ComposerDropTargetModifier: ViewModifier {
 
     // MARK: - Dépôt
 
-    /// Résout les N providers EN PARALLÈLE puis appelle `onIngest` UNE SEULE
-    /// fois, dans l'ordre du dépôt (résultats indexés — l'ordre d'achèvement
-    /// du groupe n'est pas fiable). Les échecs produisent un toast nommant
-    /// les fichiers concernés — jamais de tuile fantôme.
+    /// Résout les N providers puis appelle `onIngest` UNE SEULE fois, dans
+    /// l'ordre du dépôt. Les échecs produisent un toast nommant les fichiers
+    /// concernés — jamais de tuile fantôme.
+    ///
+    /// Résolution SÉQUENTIELLE, et non par `withTaskGroup` : `NSItemProvider`
+    /// n'est pas `Sendable`, donc le confier à une tâche enfant (paramètre
+    /// `sending`) est refusé net par Swift 6 — et lui fabriquer une conformité
+    /// `@unchecked Sendable` serait affirmer une sûreté que le compilateur ne
+    /// peut pas vérifier. Le séquentiel ne bloque PAS le main : le travail
+    /// disque vit dans la closure de complétion de `NSItemProvider`, qui
+    /// rappelle hors du main ; ici `await` ne fait que suspendre.
     ///
     /// Renvoie `true` si au moins un provider est réclamable.
     private func handleDrop(_ providers: [NSItemProvider]) -> Bool {
@@ -97,16 +104,10 @@ struct ComposerDropTargetModifier: ViewModifier {
 
         let indexed = Array(providers.enumerated())
         Task {
-            var resolved = [ComposerIngest?](repeating: nil, count: indexed.count)
-            await withTaskGroup(of: (Int, ComposerIngest?).self) { group in
-                for (index, provider) in indexed {
-                    group.addTask {
-                        (index, await ComposerDropResolver.resolve(provider))
-                    }
-                }
-                for await (index, ingest) in group {
-                    resolved[index] = ingest
-                }
+            var resolved: [ComposerIngest?] = []
+            resolved.reserveCapacity(indexed.count)
+            for (_, provider) in indexed {
+                resolved.append(await ComposerDropResolver.resolve(provider))
             }
 
             let ingests = resolved.compactMap { $0 }
