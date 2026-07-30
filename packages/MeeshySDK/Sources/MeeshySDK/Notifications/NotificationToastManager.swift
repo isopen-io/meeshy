@@ -42,6 +42,10 @@ public final class NotificationToastManager: ObservableObject {
     /// Émis à l'ouverture du contenu (`onPostOpened`).
     public let postNotificationsRead = PassthroughSubject<String, Never>()
 
+    /// Émis quand une CATÉGORIE entière vient d'être consommée par un écran
+    /// dédié (demandes d'ajout).
+    public let typeNotificationsRead = PassthroughSubject<[String], Never>()
+
     /// Optional hook the app target uses to inject the current iOS Focus
     /// filter snapshot. The SDK can't observe `SetFocusFilterIntent` directly
     /// (it lives in the app target), so we ask for a pull closure instead.
@@ -313,6 +317,22 @@ public final class NotificationToastManager: ObservableObject {
         applyReadToCache(.notification(id: notificationId))
         notificationMarkedRead.send(notificationId)
         NotificationCoordinator.shared.decrementInAppNotificationUnread()
+    }
+
+    /// Marque lue toute une CATÉGORIE de notifications — appelé quand un écran
+    /// dédié la consomme (demandes d'ajout). Serveur + cache + publication : le
+    /// chemin direct par le service ne touchait ni le cache ni les vues, donc
+    /// les lignes repartaient non lues à la réouverture de la cloche.
+    public func markRead(types: [String]) async {
+        do {
+            _ = try await NotificationService.shared.markRead(types: types)
+        } catch {
+            logger.error("Failed to mark types \(types.joined(separator: ",")) read: \(error.localizedDescription)")
+            return
+        }
+        applyReadToCache(.types(types))
+        typeNotificationsRead.send(types)
+        await refreshUnreadCount()
     }
 
     /// Supprime UNE notification : serveur + cache + publication vers les vues.

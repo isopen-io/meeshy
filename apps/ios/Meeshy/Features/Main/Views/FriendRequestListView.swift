@@ -36,19 +36,15 @@ struct FriendRequestListView: View {
         .task {
             await viewModel.loadReceived()
             // Screen consulted → friend-request notifications should no
-            // longer read as unread. Fire-and-forget, logged rather than
-            // silently swallowed: a failure here only means a stale badge
-            // count, never a data-loss risk, but it's still worth a trace.
+            // longer read as unread. Passe par le manager (et non le service) :
+            // lui seul écrit aussi le cache durable et publie vers les vues —
+            // l'appel direct laissait `isRead:false` dans le store GRDB, donc
+            // les lignes repartaient non lues à la réouverture de la cloche.
             Task {
-                do {
-                    try await NotificationService.shared.markRead(types: [
-                        "friend_request", "contact_request",
-                        "friend_accepted", "contact_accepted"
-                    ])
-                } catch {
-                    Logger(subsystem: "me.meeshy.app", category: "friend-requests")
-                        .error("markRead(friend_request types) failed: \(error.localizedDescription, privacy: .public)")
-                }
+                await NotificationToastManager.shared.markRead(types: [
+                    "friend_request", "contact_request",
+                    "friend_accepted", "contact_accepted"
+                ])
             }
         }
     }

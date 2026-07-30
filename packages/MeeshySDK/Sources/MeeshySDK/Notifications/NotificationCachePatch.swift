@@ -11,6 +11,10 @@ public enum NotificationReadScope: Sendable, Equatable {
     case notification(id: String)
     case conversation(id: String)
     case post(id: String)
+    /// Une catégorie entière consommée par un écran dédié — l'écran des
+    /// demandes d'ajout consomme `friend_request` / `contact_request` /
+    /// `friend_accepted` / `contact_accepted`.
+    case types([String])
     case all
 }
 
@@ -54,6 +58,8 @@ public enum NotificationCachePatch {
             return item.context?.conversationId == id
         case .post(let id):
             return item.context?.postId == id
+        case .types(let types):
+            return types.contains(item.type)
         }
     }
 }

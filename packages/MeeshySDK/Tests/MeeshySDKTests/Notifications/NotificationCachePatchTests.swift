@@ -16,12 +16,13 @@ final class NotificationCachePatchTests: XCTestCase {
         id: String,
         isRead: Bool = false,
         conversationId: String? = nil,
-        postId: String? = nil
+        postId: String? = nil,
+        type: String = "new_message"
     ) -> APINotification {
         APINotification(
             id: id,
             userId: "u1",
-            type: "new_message",
+            type: type,
             priority: nil,
             title: "Titre",
             subtitle: "Sous-titre",
@@ -83,6 +84,24 @@ final class NotificationCachePatchTests: XCTestCase {
         XCTAssertTrue(result[0].isRead)
         XCTAssertFalse(result[1].isRead)
         XCTAssertFalse(result[2].isRead)
+    }
+
+    // MARK: - Portée : catégorie de types
+
+    func test_markingRead_types_marksEveryRowOfThoseTypes() {
+        let items = [
+            makeNotification(id: "n1", type: "friend_request"),
+            makeNotification(id: "n2", type: "contact_request"),
+            makeNotification(id: "n3", type: "new_message")
+        ]
+
+        let result = NotificationCachePatch.markingRead(
+            items, scope: .types(["friend_request", "contact_request"])
+        )
+
+        XCTAssertTrue(result[0].isRead)
+        XCTAssertTrue(result[1].isRead)
+        XCTAssertFalse(result[2].isRead, "un type hors de la catégorie consommée ne doit pas être touché")
     }
 
     // MARK: - Portée : tout

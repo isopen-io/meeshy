@@ -427,6 +427,16 @@ final class NotificationListViewModel: ObservableObject {
             }
             .store(in: &cancellables)
 
+        manager.typeNotificationsRead
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] types in
+                guard let self else { return }
+                self.notifications = NotificationCachePatch.markingRead(
+                    self.notifications, scope: .types(types)
+                )
+            }
+            .store(in: &cancellables)
+
         manager.notificationWasDeleted
             .receive(on: DispatchQueue.main)
             .sink { [weak self] notificationId in
