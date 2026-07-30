@@ -1056,6 +1056,75 @@ public struct StorySticker: Codable, Identifiable, Sendable {
     private enum AnchorKeys: String, CodingKey { case x, y }
 }
 
+// MARK: - Story Location Object (pastille de lieu posée sur une slide)
+
+/// Pastille de lieu posée sur une slide. Mêmes transforms qu'un
+/// `StoryTextObject` — la pastille est hors timeline : toujours visible sur sa
+/// slide, sans `startTime` ni `duration`. `TimelineClipKind` n'est donc pas
+/// étendu.
+public struct StoryLocationObject: Codable, Identifiable, Sendable {
+    public var id: String
+    public var place: SharedPlace
+    public var x: Double
+    public var y: Double
+    public var scale: Double
+    public var rotation: Double
+    /// Z-order persistent (non-optional; defaults to 0), même convention que
+    /// `StoryTextObject.zIndex` / `StorySticker.zIndex`.
+    public var zIndex: Int
+    /// Pivot point for rotation/scale (normalized 0–1). Default center (0.5, 0.5).
+    public var anchor: CGPoint
+
+    enum CodingKeys: String, CodingKey {
+        case id, place, x, y, scale, rotation, zIndex, anchor
+    }
+
+    public init(id: String = UUID().uuidString, place: SharedPlace,
+                x: Double = 0.5, y: Double = 0.8, scale: Double = 1.0,
+                rotation: Double = 0, zIndex: Int = 0,
+                anchor: CGPoint = CGPoint(x: 0.5, y: 0.5)) {
+        self.id = id; self.place = place
+        self.x = x; self.y = y; self.scale = scale
+        self.rotation = rotation; self.zIndex = zIndex; self.anchor = anchor
+    }
+
+    // Custom Codable: anchor uses the nested {x,y} container patron shared
+    // with StoryTextObject/StorySticker — NOT CGPoint's own synthesized
+    // Codable (which would encode as an unkeyed [x,y] array and break the
+    // wire format the composer/reader already agree on).
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(String.self, forKey: .id)
+        place = try c.decode(SharedPlace.self, forKey: .place)
+        x = try c.decodeIfPresent(Double.self, forKey: .x) ?? 0.5
+        y = try c.decodeIfPresent(Double.self, forKey: .y) ?? 0.8
+        scale = try c.decodeIfPresent(Double.self, forKey: .scale) ?? 1.0
+        rotation = try c.decodeIfPresent(Double.self, forKey: .rotation) ?? 0
+        zIndex = try c.decodeIfPresent(Int.self, forKey: .zIndex) ?? 0
+        if let nested = try? c.nestedContainer(keyedBy: AnchorKeys.self, forKey: .anchor) {
+            let ax = try nested.decodeIfPresent(Double.self, forKey: .x) ?? 0.5
+            let ay = try nested.decodeIfPresent(Double.self, forKey: .y) ?? 0.5
+            anchor = CGPoint(x: ax, y: ay)
+        } else {
+            anchor = CGPoint(x: 0.5, y: 0.5)
+        }
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(id, forKey: .id)
+        try c.encode(place, forKey: .place)
+        try c.encode(x, forKey: .x); try c.encode(y, forKey: .y)
+        try c.encode(scale, forKey: .scale); try c.encode(rotation, forKey: .rotation)
+        try c.encode(zIndex, forKey: .zIndex)
+        var anchorC = c.nestedContainer(keyedBy: AnchorKeys.self, forKey: .anchor)
+        try anchorC.encode(Double(anchor.x), forKey: .x)
+        try anchorC.encode(Double(anchor.y), forKey: .y)
+    }
+
+    private enum AnchorKeys: String, CodingKey { case x, y }
+}
+
 // MARK: - Story Slide
 
 public struct StorySlide: Identifiable, Codable, Sendable {
@@ -1066,17 +1135,22 @@ public struct StorySlide: Identifiable, Codable, Sendable {
     public var effects: StoryEffects
     public var duration: TimeInterval
     public var order: Int
+    /// Pastilles de lieu posées sur cette slide. Hors timeline (pas de
+    /// `startTime`/`duration`) : toujours visibles tant que la slide l'est.
+    public var locationObjects: [StoryLocationObject]
 
     public init(id: String = UUID().uuidString, mediaURL: String? = nil, mediaData: Data? = nil,
                 content: String? = nil, effects: StoryEffects = StoryEffects(),
-                duration: TimeInterval = 6, order: Int = 0) {
+                duration: TimeInterval = 6, order: Int = 0,
+                locationObjects: [StoryLocationObject] = []) {
         self.id = id; self.mediaURL = mediaURL; self.mediaData = mediaData
         self.content = content; self.effects = effects
         self.duration = duration; self.order = order
+        self.locationObjects = locationObjects
     }
 
     enum CodingKeys: String, CodingKey {
-        case id, mediaURL, content, effects, duration, order
+        case id, mediaURL, content, effects, duration, order, locationObjects
     }
 
     public init(from decoder: Decoder) throws {
@@ -1088,6 +1162,8 @@ public struct StorySlide: Identifiable, Codable, Sendable {
         effects = try container.decodeIfPresent(StoryEffects.self, forKey: .effects) ?? StoryEffects()
         duration = try container.decodeIfPresent(TimeInterval.self, forKey: .duration) ?? 6
         order = try container.decodeIfPresent(Int.self, forKey: .order) ?? 0
+        // Legacy stories on disk predate this key — must still decode.
+        locationObjects = try container.decodeIfPresent([StoryLocationObject].self, forKey: .locationObjects) ?? []
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -1095,6 +1171,7 @@ public struct StorySlide: Identifiable, Codable, Sendable {
         try container.encode(id, forKey: .id)
         try container.encodeIfPresent(mediaURL, forKey: .mediaURL)
         try container.encodeIfPresent(content, forKey: .content)
+        try container.encode(locationObjects, forKey: .locationObjects)
         try container.encode(effects, forKey: .effects)
         try container.encode(duration, forKey: .duration)
         try container.encode(order, forKey: .order)
