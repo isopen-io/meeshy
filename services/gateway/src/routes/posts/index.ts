@@ -5,6 +5,7 @@ import { registerFeedRoutes } from './feed';
 import { registerCommentRoutes } from './comments';
 import { registerInteractionRoutes } from './interactions';
 import { registerStoryAudioRoutes } from './audio';
+import { registerSoundRoutes } from './sounds';
 import type { OrphanMediaCleanupService } from '../../services/storage/OrphanMediaCleanupService';
 
 /**
@@ -34,4 +35,5 @@ export async function postRoutes(fastify: FastifyInstance) {
   registerCommentRoutes(fastify, prisma, requiredAuth);
   registerInteractionRoutes(fastify, prisma, requiredAuth, orphanCleanup);
   registerStoryAudioRoutes(fastify, prisma, requiredAuth);
+  registerSoundRoutes(fastify, prisma, requiredAuth);
 }
