@@ -712,7 +712,6 @@ struct StoryHeaderView: View {
     }
 
     let makeStoryExternalShareURL: (String) -> URL?
-    let storyTimeRemaining: (Date) -> String
     let deleteCurrentStory: () -> Void
     let repostAsPostDirect: () -> Void
     let pauseTimer: () -> Void
@@ -818,7 +817,13 @@ struct StoryHeaderView: View {
 
                         VStack(alignment: .leading, spacing: 2) {
                             HStack(spacing: 5) {
-                                Text(group.username)
+                                // Nom borné à 16 caractères comme dans les bulles de
+                                // conversation (directive user 2026-07-30) : au-delà,
+                                // un pseudo long poussait l'attribution de repost et
+                                // la méta hors du header. `lineLimit(1)` reste, mais
+                                // en dernier recours seulement — la borne est posée
+                                // à la source.
+                                Text(DisplayName.truncated(group.username))
                                     .font(MeeshyFont.relative(15, weight: .bold))
                                     .foregroundColor(.white)
                                     .lineLimit(1)
@@ -842,6 +847,18 @@ struct StoryHeaderView: View {
 
                             if let story = currentStory {
                                 HStack(spacing: 4) {
+                                    // Horloge accolée à l'HEURE DE PUBLICATION —
+                                    // elle qualifie la date affichée, elle ne parle
+                                    // plus d'expiration. Le compte à rebours
+                                    // « Expire dans Xh » a été retiré du header
+                                    // (directive user 2026-07-30) : la durée de vie
+                                    // d'une story est une constante produit, pas une
+                                    // information à relire à chaque slide.
+                                    Image(systemName: "clock")
+                                        .font(MeeshyFont.relative(9, weight: .semibold))
+                                        .foregroundColor(.white.opacity(0.6))
+                                        .accessibilityHidden(true)
+
                                     Text(story.timeAgo)
                                         .font(MeeshyFont.relative(12, weight: .medium))
                                         .foregroundColor(.white.opacity(0.75))
@@ -850,22 +867,23 @@ struct StoryHeaderView: View {
                                     // PRÉSENCE d'un audio de fond sur la story — pas
                                     // son état de lecture (ni mute, ni timing de la
                                     // timeline). Directive user 2026-07-13.
+                                    // L'onde qui la suit, elle, dit que ça joue
+                                    // (directive user 2026-07-30).
                                     if hasBackgroundAudio {
                                         Image(systemName: "music.note")
                                             .font(MeeshyFont.relative(10, weight: .semibold))
                                             .foregroundColor(.white.opacity(0.7))
                                             .accessibilityLabel(String(localized: "story.viewer.a11y.backgroundAudio", defaultValue: "Audio de fond", bundle: .main))
-                                    }
 
-                                    if let expiresAt = story.expiresAt, expiresAt.timeIntervalSinceNow > 0 {
-                                        Text("\u{00B7}")
-                                            .foregroundColor(.white.opacity(0.4))
-                                        Image(systemName: "clock")
-                                            .font(MeeshyFont.relative(9, weight: .semibold))
-                                            .foregroundColor(.white.opacity(0.5))
-                                        Text(storyTimeRemaining(expiresAt))
-                                            .font(MeeshyFont.relative(12, weight: .medium))
-                                            .foregroundColor(.white.opacity(0.55))
+                                        // Le header est reconstruit à chaque tick de
+                                        // la barre de progression : l'animation vit
+                                        // dans un `TimelineView` interne à l'atome,
+                                        // donc elle ne redéclenche jamais le rendu de
+                                        // ce header. Pas de câblage de la pause :
+                                        // l'appui long qui met la story en pause
+                                        // masque déjà tout le chrome, header compris.
+                                        StoryHeaderAudioWaveform()
+                                            .opacity(0.8)
                                     }
                                 }
                             }

@@ -350,6 +350,46 @@ struct AudioForegroundSineWave: View {
     }
 }
 
+/// Onde animée COMPACTE du header du reader : posée à la suite de la note
+/// musicale, elle signale qu'un audio de fond accompagne la story — la note
+/// dit la présence, l'onde dit que ça joue.
+///
+/// Taille imposée par construction : le `Canvas` sous-jacent s'étirerait à
+/// tout l'espace disponible dans un `HStack` sans cadre explicite.
+///
+/// Décorative pour VoiceOver : la note musicale voisine porte déjà le label
+/// « Audio de fond », une seconde annonce serait redondante.
+///
+/// Reduce Motion (système OU override in-app) fige l'onde sur sa silhouette
+/// courante plutôt que d'animer en boucle — même doctrine que
+/// `ReelAudioBackdrop`.
+@MainActor
+public struct StoryHeaderAudioWaveform: View {
+
+    public let width: CGFloat
+    public let height: CGFloat
+    /// Gel demandé par l'appelant (lecture en pause côté reader).
+    public let paused: Bool
+
+    @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
+    @Environment(\.meeshyForceReduceMotion) private var userForcedReduceMotion
+
+    public init(width: CGFloat = 26, height: CGFloat = 10, paused: Bool = false) {
+        self.width = width
+        self.height = height
+        self.paused = paused
+    }
+
+    public var body: some View {
+        AudioForegroundSineWave(
+            paused: paused || MeeshyMotion.shouldReduce(system: systemReduceMotion,
+                                                        userForced: userForcedReduceMotion)
+        )
+        .frame(width: width, height: height)
+        .accessibilityHidden(true)
+    }
+}
+
 /// Overlay reader : rend un `AudioForegroundChip` (mode `.reader`) pour chaque
 /// audio foreground de la slide ACTUELLEMENT dans sa fenêtre de lecture
 /// (`startTime` ... `startTime + duration`). Hors fenêtre → masqué (pas

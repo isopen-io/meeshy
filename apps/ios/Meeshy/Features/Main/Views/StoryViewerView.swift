@@ -1437,7 +1437,6 @@ struct StoryViewerView: View {
             },
             toggleStoryCommentThread: { await toggleStoryCommentThread($0) },
             makeStoryExternalShareURL: { makeStoryExternalShareURL($0) },
-            storyTimeRemaining: { storyTimeRemaining($0) },
             deleteCurrentStory: { deleteCurrentStory() },
             repostAsPostDirect: { repostAsPostDirect() },
             dismissViewer: { dismissViewer() },

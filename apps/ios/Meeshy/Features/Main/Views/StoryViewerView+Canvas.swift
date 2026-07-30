@@ -1146,7 +1146,6 @@ struct StoryCardView: View {
     let makeStoryCommentRow: (FeedComment, String) -> StoryCommentRowView
     let toggleStoryCommentThread: (String) async -> Void
     let makeStoryExternalShareURL: (String) -> URL?
-    let storyTimeRemaining: (Date) -> String
     let deleteCurrentStory: () -> Void
     let repostAsPostDirect: () -> Void
     let dismissViewer: () -> Void
@@ -1530,22 +1529,21 @@ struct StoryCardView: View {
             }
 
             // === Background audio badge ===
+            //
+            // Le canvas ne porte plus de chip « note + onde » pour l'audio de
+            // FOND (directive user 2026-07-30) : depuis que le header affiche la
+            // note musicale suivie de l'onde animée, ce chip répétait la même
+            // information au milieu de l'image. Les chips du canvas restent
+            // réservés aux pistes FOREGROUND, qui ont chacune leur fenêtre de
+            // lecture et leur mute propre (`AudioForegroundReaderOverlay`).
+            //
+            // Seule survit la carte d'une piste de BIBLIOTHÈQUE : elle titre le
+            // morceau et crédite son auteur — une attribution que le header, qui
+            // ne dit que la présence, ne porte pas.
             if let audio = currentStory?.backgroundAudio {
                 VStack {
                     Spacer()
                     backgroundAudioBadge(audio: audio)
-                        .padding(.bottom, topInset + 165)
-                }
-                .frame(maxWidth: .infinity, alignment: .center)
-                .allowsHitTesting(false)
-            } else if let recordedBackground = currentStory?.storyEffects?.audioPlayerObjects?
-                .first(where: { $0.isBackground == true && $0.volume > 0 }) {
-                // Fond audio enregistré/importé (éditeur timeline) : pas d'entrée
-                // bibliothèque à titrer — le badge signale la piste par sa
-                // waveform réelle (note musicale + barres), gelée pendant la pause.
-                VStack {
-                    Spacer()
-                    recordedBackgroundAudioBadge(audio: recordedBackground)
                         .padding(.bottom, topInset + 165)
                 }
                 .frame(maxWidth: .infinity, alignment: .center)
@@ -1673,7 +1671,6 @@ struct StoryCardView: View {
                     editAndRepostAsPostSource: $editAndRepostAsPostSource,
                     showReportSheet: $showReportSheet,
                     makeStoryExternalShareURL: makeStoryExternalShareURL,
-                    storyTimeRemaining: storyTimeRemaining,
                     deleteCurrentStory: deleteCurrentStory,
                     repostAsPostDirect: repostAsPostDirect,
                     pauseTimer: pauseTimer,
@@ -2201,24 +2198,11 @@ struct StoryCardView: View {
         )
     }
 
-    private func recordedBackgroundAudioBadge(audio: StoryAudioPlayerObject) -> some View {
-        HStack(spacing: 6) {
-            Image(systemName: "music.note")
-                .font(MeeshyFont.relative(11, weight: .semibold))
-            StoryWaveformBadgeView(samples: audio.waveformSamples, paused: isLongPressPaused)
-                .frame(width: 64, height: 14)
-        }
-        .foregroundColor(.white)
-        .padding(.horizontal, 12)
-        .padding(.vertical, 6)
-        .background(
-            Capsule()
-                .fill(.ultraThinMaterial)
-                .overlay(Capsule().fill(Color.black.opacity(0.35)))
-        )
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(String(localized: "story.viewer.background-audio", defaultValue: "Audio de fond", bundle: .main))
-    }
+    // Le chip « note + onde » d'une piste de fond ENREGISTRÉE/IMPORTÉE a été
+    // retiré du canvas (directive user 2026-07-30) : le header du reader porte
+    // désormais ce même signal — note musicale puis onde animée — juste après
+    // l'heure de publication. Une piste de fond sans entrée bibliothèque n'a
+    // donc plus rien à afficher au milieu de l'image.
 
     // Le badge de langue courante vit désormais dans le rail (accolé à « Abc »),
     // plus dans le canvas — voir `StoryActionSidebarView.displayedLanguageCode`.

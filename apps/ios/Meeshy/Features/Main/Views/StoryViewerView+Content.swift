@@ -1151,20 +1151,11 @@ extension StoryViewerView {
         return (priorReactions, priorCount)
     }
 
-    // MARK: - Story Time Remaining
-
-    func storyTimeRemaining(_ expiresAt: Date) -> String {
-        let seconds = Int(expiresAt.timeIntervalSinceNow)
-        if seconds <= 0 {
-            return String(localized: "story.viewer.expiresNow", defaultValue: "Expire bientôt", bundle: .main)
-        }
-        let hours = seconds / 3600
-        let minutes = (seconds % 3600) / 60
-        if hours > 0 {
-            return String(localized: "story.viewer.expiresInHours", defaultValue: "Expire dans \(hours)h", bundle: .main)
-        }
-        return String(localized: "story.viewer.expiresInMinutes", defaultValue: "Expire dans \(minutes)min", bundle: .main)
-    }
+    // Le compte à rebours d'expiration a quitté le header du reader (directive
+    // user 2026-07-30) : il n'existe plus de surface qui l'affiche, donc plus
+    // de formateur. `story.expiresAt` reste la source de vérité côté logique
+    // (`isExpired(at:)` pilote la sélection de slide et le bandeau « Story
+    // expirée ») — c'est seulement la relecture permanente du chrono qui part.
 
     // MARK: - Delete Story
 
