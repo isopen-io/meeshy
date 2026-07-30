@@ -111,5 +111,5 @@ final class MockMessageSocket: MessageSocketProviding, @unchecked Sendable {
     func emitCallForegrounded(callId: String, participantId: String) {}
     func emitCallScreenCaptureDetected(callId: String, participantId: String, isCapturing: Bool) {}
     func emitCallTranscriptionSegment(callId: String, segment: CallTranscriptionSegmentPayload) {}
-    func sendViaSocketFallback(conversationId: String, content: String?, attachmentIds: [String], replyToId: String?, storyReplyToId: String?, originalLanguage: String?, isEncrypted: Bool, clientMessageId: String) async -> MessageSocketManager.SendMessageAck? { nil }
+    func sendViaSocketFallback(conversationId: String, content: String?, attachmentIds: [String], replyToId: String?, storyReplyToId: String?, originalLanguage: String?, isEncrypted: Bool, clientMessageId: String, location: SharedPlace?) async -> MessageSocketManager.SendMessageAck? { nil }
 }

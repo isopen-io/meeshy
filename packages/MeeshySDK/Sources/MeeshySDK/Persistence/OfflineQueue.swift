@@ -53,6 +53,13 @@ public struct OfflineQueueItem: Codable, Identifiable, Sendable {
     /// so on-disk rows written before this field existed keep decoding without
     /// migration (S7b — durable offline media, parity with `localAudioPaths`).
     public let localMediaPaths: [String]?
+    /// Lieu partagé attaché au message (Lot 2 — chaîne d'écriture du lieu).
+    /// Rejoué tel quel par le dispatcher sous la clé `location` du corps REST.
+    /// `nil` pour un message sans lieu ET pour les lignes écrites avant ce
+    /// champ — décodé en `decodeIfPresent` pour que les payloads déjà sur le
+    /// disque des utilisateurs continuent à décoder sans migration (même
+    /// convention que `attachmentKinds` / `localAudioPaths`).
+    public let location: SharedPlace?
     public let createdAt: Date
 
     public init(
@@ -67,7 +74,8 @@ public struct OfflineQueueItem: Codable, Identifiable, Sendable {
         attachmentKinds: [String]? = nil,
         localAudioPath: String? = nil,
         localAudioPaths: [String]? = nil,
-        localMediaPaths: [String]? = nil
+        localMediaPaths: [String]? = nil,
+        location: SharedPlace? = nil
     ) {
         self.id = UUID().uuidString
         self.clientMessageId = clientMessageId ?? ClientMessageId.generate()
@@ -82,6 +90,7 @@ public struct OfflineQueueItem: Codable, Identifiable, Sendable {
         self.localAudioPath = localAudioPath
         self.localAudioPaths = localAudioPaths
         self.localMediaPaths = localMediaPaths
+        self.location = location
         self.createdAt = Date()
     }
 
@@ -101,6 +110,7 @@ public struct OfflineQueueItem: Codable, Identifiable, Sendable {
         localAudioPath: String?,
         localAudioPaths: [String]? = nil,
         localMediaPaths: [String]? = nil,
+        location: SharedPlace? = nil,
         createdAt: Date
     ) {
         self.id = id
@@ -116,6 +126,7 @@ public struct OfflineQueueItem: Codable, Identifiable, Sendable {
         self.localAudioPath = localAudioPath
         self.localAudioPaths = localAudioPaths
         self.localMediaPaths = localMediaPaths
+        self.location = location
         self.createdAt = createdAt
     }
 
@@ -133,6 +144,7 @@ public struct OfflineQueueItem: Codable, Identifiable, Sendable {
         case localAudioPath
         case localAudioPaths
         case localMediaPaths
+        case location
         case createdAt
     }
 
@@ -151,6 +163,8 @@ public struct OfflineQueueItem: Codable, Identifiable, Sendable {
         self.localAudioPath = try c.decodeIfPresent(String.self, forKey: .localAudioPath) ?? nil
         self.localAudioPaths = try c.decodeIfPresent([String].self, forKey: .localAudioPaths) ?? nil
         self.localMediaPaths = try c.decodeIfPresent([String].self, forKey: .localMediaPaths) ?? nil
+        // Clé absente des lignes écrites avant ce champ → nil, jamais d'échec.
+        self.location = try c.decodeIfPresent(SharedPlace.self, forKey: .location)
         self.createdAt = try c.decode(Date.self, forKey: .createdAt)
     }
 
@@ -169,6 +183,7 @@ public struct OfflineQueueItem: Codable, Identifiable, Sendable {
         try c.encodeIfPresent(localAudioPath, forKey: .localAudioPath)
         try c.encodeIfPresent(localAudioPaths, forKey: .localAudioPaths)
         try c.encodeIfPresent(localMediaPaths, forKey: .localMediaPaths)
+        try c.encodeIfPresent(location, forKey: .location)
         try c.encode(createdAt, forKey: .createdAt)
     }
 }
@@ -1732,6 +1747,9 @@ public actor OfflineQueue {
                         localAudioPath: item.localAudioPath,
                         localAudioPaths: item.localAudioPaths,
                         localMediaPaths: item.localMediaPaths,
+                        // L'édition ne porte que le texte : le lieu du send en
+                        // attente est conservé, pas silencieusement perdu.
+                        location: item.location,
                         createdAt: item.createdAt
                     )
                     let mergedPayload: Data

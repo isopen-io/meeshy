@@ -569,8 +569,13 @@ public struct SendMessageRequest: Encodable, Sendable {
     public var effectFlags: UInt32?
     public var isEncrypted: Bool?
     public var encryptionMode: String?
+    /// Lieu partagé attaché au message — clé JSON `location`, celle que le
+    /// schéma REST valide déjà (`routes/conversations/messages.ts`, champ
+    /// `location` passé à `parseSharedPlace`). L'encodage synthétisé omet les
+    /// optionnels nil : un `location` nil n'apparaît PAS dans le corps envoyé.
+    public var location: SharedPlace?
 
-    public init(content: String?, originalLanguage: String? = nil, replyToId: String? = nil, storyReplyToId: String? = nil, forwardedFromId: String? = nil, forwardedFromConversationId: String? = nil, attachmentIds: [String]? = nil, expiresAt: Date? = nil, ephemeralDuration: Int? = nil, isViewOnce: Bool? = nil, maxViewOnceCount: Int? = nil, isBlurred: Bool? = nil, effectFlags: UInt32? = nil, isEncrypted: Bool? = nil, encryptionMode: String? = nil, clientMessageId: String? = nil) {
+    public init(content: String?, originalLanguage: String? = nil, replyToId: String? = nil, storyReplyToId: String? = nil, forwardedFromId: String? = nil, forwardedFromConversationId: String? = nil, attachmentIds: [String]? = nil, expiresAt: Date? = nil, ephemeralDuration: Int? = nil, isViewOnce: Bool? = nil, maxViewOnceCount: Int? = nil, isBlurred: Bool? = nil, effectFlags: UInt32? = nil, isEncrypted: Bool? = nil, encryptionMode: String? = nil, clientMessageId: String? = nil, location: SharedPlace? = nil) {
         self.clientMessageId = clientMessageId ?? ClientMessageId.generate()
         self.content = content; self.originalLanguage = originalLanguage
         self.replyToId = replyToId; self.storyReplyToId = storyReplyToId; self.forwardedFromId = forwardedFromId
@@ -579,6 +584,7 @@ public struct SendMessageRequest: Encodable, Sendable {
         self.isViewOnce = isViewOnce; self.maxViewOnceCount = maxViewOnceCount
         self.isBlurred = isBlurred; self.effectFlags = effectFlags
         self.isEncrypted = isEncrypted; self.encryptionMode = encryptionMode
+        self.location = location
     }
 }
 
