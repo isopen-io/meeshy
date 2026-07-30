@@ -480,8 +480,16 @@ nonisolated final class LocationPickerModel: NSObject, ObservableObject, CLLocat
         // Déplacer la carte après avoir choisi un POI ne doit pas conserver le
         // nom d'un point qu'on a quitté — sinon un point posé à la main
         // hériterait du nom du dernier résultat de recherche sélectionné.
-        selectedName = nil
-        selectedCategory = nil
+        //
+        // Le nettoyage est CONDITIONNEL : `willSet` publie à chaque
+        // affectation, sans comparer. Écrire `nil` sur une valeur déjà `nil`
+        // tirait donc deux `objectWillChange` de plus par mise à jour — trois
+        // émissions pour un seul point choisi, donc trois re-renders de la
+        // carte au lieu d'un. C'est exactement le chemin de ré-entrance
+        // MapKit que la garde d'idempotence ci-dessus ferme ; le laisser
+        // ouvert ici l'aurait rouvert en trois exemplaires.
+        if selectedName != nil { selectedName = nil }
+        if selectedCategory != nil { selectedCategory = nil }
         geocodeTask?.cancel()
         // Hop `@MainActor` explicite : le type est désormais nonisolated, donc
         // ce `Task` n'hérite plus du main actor comme avant. Le géocodage écrit
