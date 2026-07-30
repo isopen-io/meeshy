@@ -1,4 +1,6 @@
 import XCTest
+import Combine
+import CoreLocation
 @testable import Meeshy
 
 /// Gardes d'analyse de source pour la campagne « demander au bon moment »
@@ -390,5 +392,72 @@ final class PermissionGateSourceGuardTests: XCTestCase {
         let src = try source("Meeshy/Meeshy.entitlements")
         XCTAssertTrue(src.contains("webcredentials:meeshy.me"),
                       "L'entitlement webcredentials est requis pour la sauvegarde/relecture trousseau.")
+    }
+}
+
+// MARK: - Idempotence de updateSelectedLocation (gel du picker de lieu, 2026-07-30)
+
+/// `LocationPickerModel.updateSelectedLocation` republiait la MÊME
+/// coordonnée à chaque callback caméra (`onMapCameraChange`), tirant
+/// `objectWillChange` sans écrire de valeur nouvelle. Combiné à une
+/// position de carte initiale non idempotente (`AdaptiveMapInitialRegion`,
+/// côté SDK), ce re-render en boucle ré-entrait MapKit et gelait le main
+/// thread — preuve par double `sample` du process montrant deux occurrences
+/// imbriquées de `-[MKMapView _performActionAsIfGoingToDefaultLocation:]`
+/// sur la même pile.
+///
+/// Comportement pur, testable par instanciation directe : pas de garde de
+/// source ici, `LocationPickerModel` n'a pas besoin de matériel ni de
+/// décision TCC pour exercer cette méthode.
+final class LocationPickerModelUpdateSelectedLocationTests: XCTestCase {
+
+    private func makeSUT() -> LocationPickerModel {
+        LocationPickerModel()
+    }
+
+    func test_updateSelectedLocation_calledTwiceWithTheSameCoordinate_notifiesOnlyOnce() {
+        let sut = makeSUT()
+        let coordinate = CLLocationCoordinate2D(latitude: 48.8566, longitude: 2.3522)
+        var notificationCount = 0
+        let cancellable = sut.objectWillChange.sink { _ in notificationCount += 1 }
+
+        sut.updateSelectedLocation(coordinate)
+        sut.updateSelectedLocation(coordinate)
+
+        cancellable.cancel()
+        XCTAssertEqual(notificationCount, 1,
+                       "Une coordonnée déjà sélectionnée ne doit tirer objectWillChange qu'une fois — " +
+                       "republier l'identique ré-entre MapKit via le re-render de la carte.")
+    }
+
+    func test_updateSelectedLocation_calledWithADriftedButEquivalentCoordinate_treatsItAsTheSamePoint() {
+        let sut = makeSUT()
+        let coordinate = CLLocationCoordinate2D(latitude: 48.8566, longitude: 2.3522)
+        let drifted = CLLocationCoordinate2D(latitude: 48.8566 + 5e-8, longitude: 2.3522 - 5e-8)
+        var notificationCount = 0
+        let cancellable = sut.objectWillChange.sink { _ in notificationCount += 1 }
+
+        sut.updateSelectedLocation(coordinate)
+        sut.updateSelectedLocation(drifted)
+
+        cancellable.cancel()
+        XCTAssertEqual(notificationCount, 1,
+                       "La dérive flottante de MapKit (~1e-9°) ne doit jamais republier — le seuil de tolérance l'absorbe.")
+    }
+
+    func test_updateSelectedLocation_calledWithAGenuinelyDifferentCoordinate_notifiesAndUpdates() {
+        let sut = makeSUT()
+        let first = CLLocationCoordinate2D(latitude: 48.8566, longitude: 2.3522)
+        let second = CLLocationCoordinate2D(latitude: 40.7128, longitude: -74.0060)
+        var notificationCount = 0
+        let cancellable = sut.objectWillChange.sink { _ in notificationCount += 1 }
+
+        sut.updateSelectedLocation(first)
+        sut.updateSelectedLocation(second)
+
+        cancellable.cancel()
+        XCTAssertEqual(notificationCount, 2, "Deux points réellement distincts doivent chacun notifier.")
+        XCTAssertEqual(sut.selectedCoordinate?.latitude ?? .nan, second.latitude, accuracy: 0.0001)
+        XCTAssertEqual(sut.selectedCoordinate?.longitude ?? .nan, second.longitude, accuracy: 0.0001)
     }
 }

@@ -50,10 +50,13 @@ struct LocationPickerView: View {
             }
             .onAppear { viewModel.requestPermission() }
             .onReceive(viewModel.userLocationUpdates) { loc in
-                // iOS 17 keeps `.userLocation(fallback:)` inside the adaptive
-                // map, so it self-centers. iOS 16 has no such mode — recenter
-                // explicitly on the first fix only.
-                guard !didCenterOnUser, !Platform.isIOS17OrLater else { return }
+                // The adaptive map opens on a fixed neutral region on EVERY OS
+                // version now — `.userLocation(fallback: .automatic)` resolved
+                // synchronously on the main thread inside `updateUIView` and
+                // could re-enter itself through `onMapCameraChange`, freezing
+                // the picker (see `AdaptiveMapInitialRegion` in the SDK). So
+                // every version recenters explicitly on the first fix only.
+                guard !didCenterOnUser else { return }
                 didCenterOnUser = true
                 mapTarget = MapTarget(center: loc, latitudinalMeters: 1000, longitudinalMeters: 1000)
             }
@@ -460,6 +463,19 @@ nonisolated final class LocationPickerModel: NSObject, ObservableObject, CLLocat
     }
 
     func updateSelectedLocation(_ coordinate: CLLocationCoordinate2D) {
+        // Idempotence : sans cette garde, un callback caméra qui republie la
+        // MÊME coordonnée (`onMapCameraChange` peut ré-émettre avec un centre
+        // identique à la dérive flottante près) écrit `selectedCoordinate`,
+        // ce qui tire `objectWillChange`, ce qui re-rend `mapView` →
+        // `ModernInteractiveMap.body`, ce qui fait rappeler `updateUIView`
+        // par SwiftUI — un chemin de ré-entrance dans MapKit qui gèle le
+        // main thread. Preuve par process sampling (2026-07-30) : deux
+        // occurrences imbriquées de
+        // `-[MKMapView _performActionAsIfGoingToDefaultLocation:]` sur la
+        // même pile.
+        if let current = selectedCoordinate, CoordinateEquivalence.isApproximatelyEqual(current, coordinate) {
+            return
+        }
         selectedCoordinate = coordinate
         // Déplacer la carte après avoir choisi un POI ne doit pas conserver le
         // nom d'un point qu'on a quitté — sinon un point posé à la main
