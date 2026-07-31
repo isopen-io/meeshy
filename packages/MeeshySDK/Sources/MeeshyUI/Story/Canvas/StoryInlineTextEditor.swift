@@ -102,22 +102,54 @@ public final class StoryInlineTextEditor: UITextView {
     /// d'afficher le placeholder — sinon une calque texte fraîchement
     /// ajoutée a des bounds quasi-nulles (designSize ≈ 0 + 16 padding)
     /// et l'invite "Exprimez-vous…" reste clippée à 6 px de large.
-    public func sizeToFitTextContent(maxWidth: CGFloat) {
+    ///
+    /// `maxHeight` borne la hauteur à celle de la ZONE d'édition (spec
+    /// 2026-08-01). Au-delà, le champ défile au lieu de continuer à grandir :
+    /// un texte long sortait auparavant par le haut de l'écran, ses premières
+    /// lignes devenant illisibles ET inéditables. Sans zone mesurée la valeur
+    /// par défaut laisse la croissance libre, comportement d'origine.
+    public func sizeToFitTextContent(maxWidth: CGFloat,
+                                     maxHeight: CGFloat = .greatestFiniteMagnitude) {
         let constraint = CGSize(width: max(maxWidth, 1), height: .greatestFiniteMagnitude)
-        let fit = sizeThatFits(constraint)
+        let fit = measuredSize(fitting: constraint)
         var width = min(fit.width, maxWidth)
-        var height = fit.height
+        var natural = fit.height
         if (text ?? "").isEmpty {
             let phFit = placeholderLabel.sizeThatFits(constraint)
             width = max(width, min(phFit.width, maxWidth))
-            height = max(height, phFit.height)
+            natural = max(natural, phFit.height)
         }
-        let next = CGSize(width: width, height: height)
-        guard next != bounds.size else { return }
-        let savedCenter = center
-        bounds.size = next
-        center = savedCenter
-        // `placeholderLabel.frame` est resynchronisé par `layoutSubviews`.
+
+        let clamped = min(natural, max(maxHeight, 1))
+        let shouldScroll = natural > clamped + 0.5
+        if isScrollEnabled != shouldScroll { isScrollEnabled = shouldScroll }
+
+        let next = CGSize(width: width, height: clamped)
+        if next != bounds.size {
+            let savedCenter = center
+            bounds.size = next
+            center = savedCenter
+            // `placeholderLabel.frame` est resynchronisé par `layoutSubviews`.
+        }
+        // Le curseur doit rester dans la fenêtre visible, sinon taper au-delà
+        // de la hauteur de zone écrit hors champ.
+        if shouldScroll { scrollRangeToVisible(selectedRange) }
+    }
+
+    /// Taille du CONTENU, mesurée défilement neutralisé : `sizeThatFits` d'un
+    /// `UITextView` défilant renvoie sa frame et non son contenu. Sans cette
+    /// neutralisation, la hauteur se fige au premier clamp et le champ ne
+    /// redescend jamais quand on efface. Le `contentOffset` est restauré —
+    /// couper le défilement le remet à zéro, ce qui ferait sauter la vue à
+    /// chaque frappe.
+    private func measuredSize(fitting constraint: CGSize) -> CGSize {
+        guard isScrollEnabled else { return sizeThatFits(constraint) }
+        let savedOffset = contentOffset
+        isScrollEnabled = false
+        let fit = sizeThatFits(constraint)
+        isScrollEnabled = true
+        contentOffset = savedOffset
+        return fit
     }
 
     /// Masque le placeholder dès que le champ contient du texte.
@@ -127,7 +159,10 @@ public final class StoryInlineTextEditor: UITextView {
 
     public override func layoutSubviews() {
         super.layoutSubviews()
-        placeholderLabel.frame = bounds.inset(by: textContainerInset)
+        // Origine forcée à zéro : `bounds.origin` d'une vue défilante porte le
+        // `contentOffset`, qui emporterait le placeholder hors du champ.
+        placeholderLabel.frame = CGRect(origin: .zero, size: bounds.size)
+            .inset(by: textContainerInset)
     }
 
     // MARK: - Helpers

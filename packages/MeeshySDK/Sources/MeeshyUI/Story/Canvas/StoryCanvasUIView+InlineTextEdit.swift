@@ -2,16 +2,43 @@ import UIKit
 import QuartzCore
 import MeeshySDK
 
+// MARK: - Zone d'édition
+
+/// Bande verticale (repère canvas) dans laquelle vit le texte en cours
+/// d'édition : entre le bas du bouton « Terminé » et le haut des bulles
+/// d'outils, marges comprises.
+///
+/// `nonisolated` sur le TYPE : le package pose `.defaultIsolation(MainActor
+/// .self)` (SE-0466), qui rendrait la zone illisible depuis les règles pures et
+/// depuis un test non isolé.
+nonisolated struct StoryInlineEditZone: Equatable, Sendable {
+    let top: CGFloat
+    let bottom: CGFloat
+
+    init(top: CGFloat, bottom: CGFloat) {
+        self.top = top
+        self.bottom = bottom
+    }
+
+    /// Jamais négative : des bornes croisées (panneau d'outil déplié plus haut
+    /// que le top bar sur un très petit écran) donneraient sinon un clamp de
+    /// hauteur absurde.
+    var height: CGFloat { max(0, bottom - top) }
+    var midY: CGFloat { (top + bottom) / 2 }
+}
+
 extension StoryCanvasUIView: UITextViewDelegate {
 
     /// Démarre l'édition du texte `textId`. Pendant l'édition, le texte
-    /// REPREND LE CENTRE de l'écran par-dessus le canvas (convention story :
-    /// le champ est toujours lisible, jamais sous le clavier ni collé à un
-    /// bord, ni tourné) : la calque est recentrée SANS muter le modèle
+    /// REJOINT LE CENTRE DE LA ZONE d'édition par-dessus le canvas (convention
+    /// story : le champ est toujours lisible, jamais sous le clavier ni collé à
+    /// un bord, ni tourné) : la calque est recentrée SANS muter le modèle
     /// (`x`/`y`/`rotation` intacts) et un `StoryInlineTextEditor` est
     /// superposé dessus, glyphes de la calque masqués (son fond — solide,
     /// glass, losange, bulle… — reste visible et suit les changements de
-    /// style en live). À la fermeture, le texte retrouve sa position réelle.
+    /// style en live). Le reste du canvas passe sous un ombrage. À la
+    /// fermeture, le texte retrouve sa position réelle et le canvas sa
+    /// luminosité.
     public func beginInlineTextEdit(textId: String) {
         guard inlineEditingTextId != textId,
               let textLayer = textLayer(forId: textId),
@@ -39,11 +66,13 @@ extension StoryCanvasUIView: UITextViewDelegate {
         // Garantit que l'éditeur a au moins la taille nécessaire pour
         // afficher son placeholder (l'auto-add part d'un texte vide donc
         // d'une calque bounds quasi-nulle).
-        editor.sizeToFitTextContent(maxWidth: bounds.width * 0.88)
+        editor.sizeToFitTextContent(maxWidth: bounds.width * 0.88,
+                                    maxHeight: inlineEditMaxHeight)
         // Ancrage APRÈS le dimensionnement : c'est la hauteur réelle du champ
-        // qui décide si le bloc doit remonter au-dessus des chips.
+        // qui décide si le fond de la calque doit être masqué à la fenêtre.
         anchorInlineEditing(layer: textLayer, editor: editor)
         textLayer.setGlyphsHidden(true)
+        setInlineEditScrimVisible(true)
         editor.becomeFirstResponder()
     }
 
@@ -63,6 +92,9 @@ extension StoryCanvasUIView: UITextViewDelegate {
         // `inlineEditingTextId` échoue alors — ce qui évite un second
         // `onInlineTextEditEnded` ré-entrant.
         inlineEditingTextId = nil
+        // Après la remise à nil : le fondu de sortie du scrim ne retire la
+        // calque que si aucune édition n'a repris entre-temps.
+        setInlineEditScrimVisible(false)
         editor?.resignFirstResponder()
         editor?.removeFromSuperview()
     }
@@ -85,73 +117,143 @@ extension StoryCanvasUIView: UITextViewDelegate {
             // la calque a des bounds quasi-nulles et le placeholder
             // serait clippé. `sizeToFitTextContent` rééquilibre les bounds
             // vers la taille du contenu (et du placeholder en empty).
-            editor.sizeToFitTextContent(maxWidth: bounds.width * 0.88)
+            editor.sizeToFitTextContent(maxWidth: bounds.width * 0.88,
+                                        maxHeight: inlineEditMaxHeight)
             anchorInlineEditing(layer: textLayer, editor: editor)
         }
     }
 
-    /// Pose le bloc en édition (calque + champ) sur la MÊME ligne de base, de
-    /// sorte que sa DERNIÈRE ligne reste au-dessus des chips de l'outil texte.
+    /// Pose le bloc en édition (calque + champ) au CENTRE DE LA ZONE, et borne
+    /// sa hauteur à celle de la zone (spec 2026-08-01).
     ///
-    /// Règle : centré tant que le bloc tient au-dessus du plafond ; sinon on
-    /// colle son bas au plafond, ce qui fait grandir le texte vers le HAUT —
-    /// quitte à ce qu'un texte très long déborde hors de l'écran par le haut
-    /// (directive user 2026-07-30). Aucun clamp haut, donc : le canvas ne
-    /// masque pas ses sous-vues en édition (`masksToBounds` n'est armé qu'avec
-    /// un `canvasCornerRadius > 0`, et l'édition garde le canvas plein écran
-    /// aux coins droits), le débordement est bien visible.
+    /// Le centre ne dépend plus de la hauteur du bloc : un texte neuf naît là où
+    /// se trouvera un texte de trois lignes, donc la première frappe ne déplace
+    /// plus rien. C'est ce qui donnait l'impression d'un champ « confondu avec
+    /// les contrôleurs » à l'ouverture, puis d'une zone qui n'apparaissait qu'en
+    /// tapant (règle précédente : `min(centre canvas, plafond − hauteur/2)`).
     ///
     /// La calque et le champ peuvent avoir des hauteurs différentes le temps
     /// d'un cycle — le champ grandit à la frappe, la calque au
-    /// `rebuildLayers()` d'après — donc on ancre sur la PLUS HAUTE des deux :
-    /// c'est elle qui déborderait sous les chips.
+    /// `rebuildLayers()` d'après — donc on mesure sur la PLUS HAUTE des deux.
     func anchorInlineEditing(layer: StoryTextLayer, editor: StoryInlineTextEditor) {
-        let blockHeight = max(layer.bounds.height, editor.bounds.height)
-        let centerY = inlineEditCenterY(forHeight: blockHeight)
+        let zone = inlineEditZone
+        let centerY = Self.inlineEditCenterY(zone: zone, canvasMidY: bounds.midY)
+        let visibleHeight = Self.inlineEditBlockHeight(
+            natural: max(layer.bounds.height, editor.bounds.height),
+            zoneHeight: zone?.height)
+
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         layer.position = CGPoint(x: bounds.midX, y: centerY)
         layer.transform = CATransform3DIdentity
+        applyInlineEditMask(to: layer, visibleHeight: visibleHeight)
         CATransaction.commit()
+
         editor.transform = .identity
         editor.center = CGPoint(x: bounds.midX, y: centerY)
     }
 
-    /// Marge entre la dernière ligne du texte édité et le haut des chips.
+    /// Marge entre le texte édité et chacune des deux bornes de la zone.
     static let inlineEditFloorGap: CGFloat = 12
 
-    /// Centre vertical (repère canvas) d'un bloc d'édition de `height` points.
-    func inlineEditCenterY(forHeight height: CGFloat) -> CGFloat {
-        Self.inlineEditCenterY(canvasMidY: bounds.midY,
-                               floorY: inlineEditFloorY,
-                               blockHeight: height)
-    }
+    /// En deçà, la zone mesurée n'a pas de sens (clavier à moitié levé, bornes
+    /// croisées) : on retombe sur le comportement historique plutôt que de
+    /// tasser le texte dans quelques points.
+    static let inlineEditMinimumZoneHeight: CGFloat = 44
 
-    /// Règle d'ancrage, pure et testable hors fenêtre.
+    /// Opacité de l'ombrage posé sur le canvas pendant l'édition.
+    static let inlineEditScrimAlpha: CGFloat = 0.45
+
+    /// Centre vertical du bloc édité. Pure et testable hors fenêtre.
     ///
-    /// - Sans plafond connu (`floorY == nil`) → centre du canvas, comportement
-    ///   historique.
-    /// - Avec plafond → `min` : le bloc reste centré tant qu'il tient au-dessus
-    ///   des contrôleurs, puis colle son BAS au plafond. Il ne redescend jamais,
-    ///   et rien ne le borne en haut : un texte long sort par le haut de
-    ///   l'écran plutôt que de passer sous les chips (user 2026-07-30).
-    nonisolated static func inlineEditCenterY(canvasMidY: CGFloat,
-                                              floorY: CGFloat?,
-                                              blockHeight: CGFloat) -> CGFloat {
-        guard let floorY else { return canvasMidY }
-        return min(canvasMidY, floorY - blockHeight / 2)
+    /// Sans zone mesurée → centre du canvas, comportement historique (canvas de
+    /// lecture, tests hors fenêtre, ouverture avant que le composer n'ait
+    /// mesuré ses contrôleurs).
+    nonisolated static func inlineEditCenterY(zone: StoryInlineEditZone?,
+                                              canvasMidY: CGFloat) -> CGFloat {
+        zone?.midY ?? canvasMidY
     }
 
-    /// Plafond (repère canvas) au-dessus duquel le texte édité doit rester, ou
-    /// `nil` si le composer n'a rapporté aucune position de contrôleurs.
-    var inlineEditFloorY: CGFloat? {
-        let globalY = inlineEditFloorGlobalY
-        guard globalY.isFinite, globalY < .greatestFiniteMagnitude,
-              window != nil else { return nil }
-        return convert(CGPoint(x: 0, y: globalY), from: nil).y - Self.inlineEditFloorGap
+    /// Hauteur VISIBLE du bloc édité. Pure et testable hors fenêtre.
+    ///
+    /// Sans zone mesurée → hauteur naturelle, croissance libre d'origine.
+    nonisolated static func inlineEditBlockHeight(natural: CGFloat,
+                                                  zoneHeight: CGFloat?) -> CGFloat {
+        guard let zoneHeight else { return natural }
+        return min(natural, zoneHeight)
+    }
+
+    /// Zone d'édition en repère canvas, ou `nil` tant que le composer n'a pas
+    /// mesuré ses DEUX contrôleurs (ou que la vue n'est pas en fenêtre).
+    ///
+    /// `convert(_:from: nil)` absorbe le `scaleEffect`/`offset` que SwiftUI
+    /// applique au conteneur du canvas.
+    var inlineEditZone: StoryInlineEditZone? {
+        guard window != nil,
+              let ceiling = canvasY(fromGlobal: inlineEditCeilingGlobalY),
+              let floor = canvasY(fromGlobal: inlineEditFloorGlobalY) else { return nil }
+        let zone = StoryInlineEditZone(top: ceiling + Self.inlineEditFloorGap,
+                                       bottom: floor - Self.inlineEditFloorGap)
+        return zone.height >= Self.inlineEditMinimumZoneHeight ? zone : nil
     }
 
     // MARK: - Private
+
+    /// Passe une ordonnée écran en repère canvas, ou `nil` si le composer n'a
+    /// rien rapporté pour cette borne.
+    private func canvasY(fromGlobal y: CGFloat) -> CGFloat? {
+        guard y.isFinite, y < .greatestFiniteMagnitude else { return nil }
+        return convert(CGPoint(x: 0, y: y), from: nil).y
+    }
+
+    /// Aligne le FOND du texte (solide, glass, losange, bulle — peint par la
+    /// calque, pas par le champ) sur la fenêtre de défilement.
+    ///
+    /// Les sous-calques de fond sont dimensionnés dans `StoryTextLayer
+    /// .configure()` à partir de `bounds` ; les muter après coup ne les
+    /// redimensionne pas. Un texte plus haut que la zone garderait donc un fond
+    /// sortant de l'écran sous un champ borné. `StoryTextLayer` n'utilise jamais
+    /// `self.mask` (seulement `backdrop.mask` sur son sous-calque de glass),
+    /// la propriété est libre.
+    private func applyInlineEditMask(to layer: StoryTextLayer, visibleHeight: CGFloat) {
+        guard layer.bounds.height > visibleHeight + 0.5 else {
+            layer.mask = nil
+            return
+        }
+        let mask = layer.mask ?? CALayer()
+        mask.backgroundColor = UIColor.white.cgColor
+        mask.frame = CGRect(x: 0,
+                            y: (layer.bounds.height - visibleHeight) / 2,
+                            width: layer.bounds.width,
+                            height: visibleHeight)
+        layer.mask = mask
+    }
+
+    /// Hauteur maximale offerte au champ : celle de la zone, ou aucune borne
+    /// tant qu'elle n'est pas mesurée.
+    private var inlineEditMaxHeight: CGFloat {
+        inlineEditZone?.height ?? .greatestFiniteMagnitude
+    }
+
+    /// Fait apparaître ou disparaître l'ombrage. `opacity` porte l'état — les
+    /// animations implicites d'une `CALayer` autonome donnent le fondu — et
+    /// `isHidden` ne retombe qu'une fois le fondu de sortie terminé, sans quoi
+    /// la sortie d'édition couperait net.
+    private func setInlineEditScrimVisible(_ visible: Bool) {
+        inlineEditScrimLayer.frame = bounds
+        guard visible else {
+            CATransaction.begin()
+            CATransaction.setCompletionBlock { [weak self] in
+                guard let self, self.inlineEditingTextId == nil else { return }
+                self.inlineEditScrimLayer.isHidden = true
+            }
+            inlineEditScrimLayer.opacity = 0
+            CATransaction.commit()
+            return
+        }
+        inlineEditScrimLayer.isHidden = false
+        inlineEditScrimLayer.opacity = 1
+    }
 
     private func textLayer(forId id: String) -> StoryTextLayer? {
         itemsContainer.sublayers?
@@ -163,14 +265,14 @@ extension StoryCanvasUIView: UITextViewDelegate {
     /// touché, et `rebuildLayers()` replace toujours la calque depuis le modèle
     /// (d'où le re-recentrage dans `reapplyInlineEditingIfNeeded`).
     ///
-    /// « Recentre » au sens de `inlineEditCenterY(forHeight:)` : centre du
-    /// canvas tant que le bloc tient au-dessus des chips de l'outil texte,
-    /// sinon bas collé à leur plafond.
+    /// « Recentre » au sens de `inlineEditCenterY(zone:canvasMidY:)` : milieu de
+    /// la zone d'édition, ou centre du canvas tant qu'aucune zone n'est mesurée.
     private func centerLayerForEditing(_ layer: StoryTextLayer) {
         CATransaction.begin()
         CATransaction.setDisableActions(true)
-        layer.position = CGPoint(x: bounds.midX,
-                                 y: inlineEditCenterY(forHeight: layer.bounds.height))
+        layer.position = CGPoint(
+            x: bounds.midX,
+            y: Self.inlineEditCenterY(zone: inlineEditZone, canvasMidY: bounds.midY))
         layer.transform = CATransform3DIdentity
         CATransaction.commit()
     }
@@ -184,6 +286,9 @@ extension StoryCanvasUIView: UITextViewDelegate {
         let designY = geometry.designHeightLength(forNormalized: CGFloat(textObject.y))
         CATransaction.begin()
         CATransaction.setDisableActions(true)
+        // Hors édition il n'y a plus de fenêtre de défilement : la calque
+        // retrouve son fond intégral.
+        layer.mask = nil
         layer.position = geometry.render(CGPoint(x: designX, y: designY))
         layer.transform = CATransform3DMakeRotation(
             CGFloat(textObject.rotation) * .pi / 180, 0, 0, 1)
@@ -219,12 +324,12 @@ extension StoryCanvasUIView: UITextViewDelegate {
         // Pendant ce gap, l'utilisateur voyait des mots disparaître ; le
         // resync visuel n'arrivait qu'après zoom/dezoom ou nouvelle frappe.
         let maxWidth = bounds.width * 0.88
-        editor?.sizeToFitTextContent(maxWidth: maxWidth)
+        editor?.sizeToFitTextContent(maxWidth: maxWidth, maxHeight: inlineEditMaxHeight)
         guard let id = inlineEditingTextId else { return }
         // La croissance est symétrique autour du centre (`sizeToFitTextContent`
-        // préserve `center`) : sans ce ré-ancrage, une ligne de plus poussait la
-        // dernière ligne SOUS les chips. On ré-ancre à chaque frappe pour que le
-        // texte grandisse vers le haut dès qu'il touche le plafond.
+        // préserve `center`) : le ré-ancrage à chaque frappe garde le bloc au
+        // milieu de la zone et réaligne le masque du fond sur la fenêtre de
+        // défilement quand le texte vient de dépasser la hauteur de zone.
         if let editor, let layer = textLayer(forId: id) {
             anchorInlineEditing(layer: layer, editor: editor)
         }
