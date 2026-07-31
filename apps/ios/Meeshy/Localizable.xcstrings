@@ -70583,6 +70583,53 @@
         }
       }
     },
+    "settings.privacy.analytics.info": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "قياسات استخدام مجهولة: الشاشات المفتوحة والميزات المستخدمة والأعطال. لا محتوى رسائلك ولا جهات اتصالك أبدًا. يسري الإعداد فورًا."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Anonyme Nutzungsdaten: geöffnete Bildschirme, genutzte Funktionen, Abstürze. Niemals Nachrichteninhalte oder Kontakte. Die Einstellung wirkt sofort."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Anonymous usage metrics: screens opened, features used, crashes. Never your message content or your contacts. The setting takes effect immediately."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Métricas de uso anónimas: pantallas abiertas, funciones utilizadas, fallos. Nunca el contenido de tus mensajes ni tus contactos. El ajuste se aplica de inmediato."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mesure d'usage anonyme : écrans ouverts, fonctionnalités utilisées, plantages. Jamais le contenu de vos messages, ni vos contacts. Le réglage prend effet immédiatement."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Metriche d'uso anonime: schermate aperte, funzioni usate, arresti anomali. Mai il contenuto dei messaggi né i contatti. L'impostazione ha effetto immediato."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Métricas de uso anônimas: telas abertas, recursos usados, falhas. Nunca o conteúdo das suas mensagens nem seus contatos. O ajuste vale imediatamente."
+          }
+        }
+      }
+    },
     "settings.privacy.coming_soon": {
       "extractionState": "manual",
       "localizations": {
@@ -70724,6 +70771,53 @@
         }
       }
     },
+    "settings.privacy.read_receipts.info": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "الأمر متبادل: إن لم تُرسل إشعارات القراءة، فلن ترى أيضًا ما إذا قُرئت رسائلك."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gilt in beide Richtungen: Wer keine Lesebestätigungen sendet, sieht auch nicht, ob die eigenen Nachrichten gelesen wurden."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This works both ways: if you don't send read receipts, you won't see whether your own messages were read."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Es recíproco: si no envías confirmaciones de lectura, tampoco verás si han leído tus mensajes."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Réciproque : si vous ne renvoyez pas d'accusé de lecture, vous ne verrez pas non plus si vos messages ont été lus."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "È reciproco: se non invii conferme di lettura, non vedrai nemmeno se i tuoi messaggi sono stati letti."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "É recíproco: se você não enviar confirmações de leitura, também não verá se suas mensagens foram lidas."
+          }
+        }
+      }
+    },
     "settings.privacy.save_media": {
       "extractionState": "manual",
       "localizations": {
@@ -70767,6 +70861,53 @@
           "stringUnit": {
             "state": "translated",
             "value": "Salvar mídia"
+          }
+        }
+      }
+    },
+    "settings.privacy.online_status.info": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "النقطة الخضراء على صورتك تعني أنك نشط. عند إيقافها لا يراها أحد، لكن الكتابة في محادثة تظل دليلاً على نشاطك."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Der grüne Punkt auf deinem Avatar zeigt, dass du aktiv bist. Deaktiviert sieht ihn niemand — wer aber in einer Unterhaltung schreibt, verrät seine Aktivität trotzdem."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The green dot on your avatar means you're active. Turned off, nobody sees it — but typing in a conversation still proves you're around."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El punto verde en tu avatar indica que estás activo. Desactivado, nadie lo ve, pero escribir en una conversación sigue delatando tu actividad."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La pastille verte sur votre avatar indique que vous êtes actif. Désactivée, personne ne voit ce point — mais écrire dans une conversation reste une preuve d'activité pour vos interlocuteurs."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Il punto verde sul tuo avatar indica che sei attivo. Disattivato, nessuno lo vede, ma scrivere in una conversazione rivela comunque la tua presenza."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "O ponto verde no seu avatar indica que você está ativo. Desativado, ninguém o vê — mas escrever em uma conversa continua revelando sua atividade."
           }
         }
       }
