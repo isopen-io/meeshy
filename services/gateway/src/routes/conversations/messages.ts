@@ -49,21 +49,28 @@ import { getPresenceVisibilityService } from '../../services/PresenceVisibilityS
 
 import { CLIENT_MESSAGE_ID_REGEX } from '@meeshy/shared/utils/client-message-id';
 
-// Mirrors MessageReadStatusService's isStaleCursorMessageId (MongoDB ObjectId
-// hex strings sort chronologically). Duplicated rather than imported: several
-// test suites `jest.mock('../../services/MessageReadStatusService', ...)`
-// with a factory that only exports `MessageReadStatusService`, so a named
-// import of this helper resolves to `undefined` under those mocks.
+// Mirrors the cursor-advance freshness guard in MessageReadStatusService. It
+// orders by the message's `createdAt` (millisecond precision, stable across
+// gateway processes); ObjectId hex order is only second-accurate and its next 5
+// bytes are per-process random, so it can invert real recency for same-second
+// messages from different nodes. The ObjectId comparison is kept only as a
+// fallback for legacy cursors written before `lastReadMessageCreatedAt` existed.
 const OBJECT_ID_RE = /^[0-9a-f]{24}$/i;
-function isStaleCursorMessageId(
-  candidateMessageId: string,
-  currentCursorMessageId: string | null | undefined
-): boolean {
-  if (!currentCursorMessageId) return false;
-  if (!OBJECT_ID_RE.test(candidateMessageId) || !OBJECT_ID_RE.test(currentCursorMessageId)) {
+function isStaleCursorMessageId(params: {
+  candidateMessageId: string;
+  candidateCreatedAt: Date;
+  cursorMessageId: string | null | undefined;
+  cursorMessageCreatedAt: Date | null | undefined;
+}): boolean {
+  const { candidateMessageId, candidateCreatedAt, cursorMessageId, cursorMessageCreatedAt } = params;
+  if (!cursorMessageId) return false;
+  if (cursorMessageCreatedAt) {
+    return candidateCreatedAt < cursorMessageCreatedAt;
+  }
+  if (!OBJECT_ID_RE.test(candidateMessageId) || !OBJECT_ID_RE.test(cursorMessageId)) {
     return false;
   }
-  return candidateMessageId.toLowerCase() < currentCursorMessageId.toLowerCase();
+  return candidateMessageId.toLowerCase() < cursorMessageId.toLowerCase();
 }
 
 /**
@@ -2002,7 +2009,7 @@ export function registerMessagesRoutes(
           createdAt: { lt: latestMessage.createdAt }
         },
         orderBy: { createdAt: 'desc' },
-        select: { id: true }
+        select: { id: true, createdAt: true }
       });
 
       // Update the cursor: set lastReadAt before the latest message
@@ -2025,10 +2032,15 @@ export function registerMessagesRoutes(
         where: {
           conversation_participant_cursor: { participantId: participantForCursor.id, conversationId }
         },
-        select: { lastReadMessageId: true }
+        select: { lastReadMessageId: true, lastReadMessageCreatedAt: true }
       });
 
-      if (isStaleCursorMessageId(latestMessage.id, currentCursor?.lastReadMessageId)) {
+      if (isStaleCursorMessageId({
+        candidateMessageId: latestMessage.id,
+        candidateCreatedAt: latestMessage.createdAt,
+        cursorMessageId: currentCursor?.lastReadMessageId,
+        cursorMessageCreatedAt: currentCursor?.lastReadMessageCreatedAt
+      })) {
         logger.info(
           `[MARK-UNREAD] Ignoring stale mark-unread for user ${userId} in conversation ${conversationId}: cursor already advanced past message ${latestMessage.id}`
         );
@@ -2043,12 +2055,18 @@ export function registerMessagesRoutes(
           participantId: participantForCursor.id,
           conversationId,
           lastReadMessageId: previousMessage?.id || null,
+          // Keep the (id, createdAt) pair consistent so the cursor-advance
+          // freshness guard in MessageReadStatusService stays correct — a stale
+          // createdAt left pointing at a newer message would wrongly reject
+          // later legitimate read advances.
+          lastReadMessageCreatedAt: previousMessage?.createdAt ?? null,
           lastReadAt: lastReadAt,
           unreadCount: 1,
           version: 0
         },
         update: {
           lastReadMessageId: previousMessage?.id || null,
+          lastReadMessageCreatedAt: previousMessage?.createdAt ?? null,
           lastReadAt: lastReadAt,
           unreadCount: 1,
           version: { increment: 1 }
