@@ -9,8 +9,6 @@ struct DataStorageView: View {
     private var isDark: Bool { colorScheme == .dark }
     private var theme: ThemeManager { ThemeManager.shared }
 
-    @State private var showClearConfirm = false
-    @State private var isClearing = false
     @State private var cacheSize: Int = 0
 
     private let accentColor = MeeshyColors.brandPrimaryHex
@@ -26,14 +24,6 @@ struct DataStorageView: View {
         }
         .task {
             await loadCacheSize()
-        }
-        .alert(String(localized: "settings.data.storage.clear.title", defaultValue: "Vider le cache", bundle: .main), isPresented: $showClearConfirm) {
-            Button(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .main), role: .cancel) { }
-            Button(String(localized: "settings.data.storage.clear.confirm", defaultValue: "Vider", bundle: .main), role: .destructive) {
-                clearCache()
-            }
-        } message: {
-            Text(String(localized: "settings.data.storage.clear.message", defaultValue: "Cela supprimera tous les médias mis en cache localement. Ils seront retéléchargés si nécessaire.", bundle: .main))
         }
     }
 
@@ -77,7 +67,10 @@ struct DataStorageView: View {
         ScrollView(showsIndicators: false) {
             VStack(spacing: 20) {
                 cacheSection
-                actionsSection
+                // Purge SÉLECTIVE (type × domaine). Vit dans MeeshyUI pour que
+                // ses libellés soient servis par le catalogue du module —
+                // `bundle: .module` — plutôt que par celui de l'app.
+                SelectiveCachePurgeView()
                 Spacer().frame(height: 40)
             }
             .padding(.horizontal, 16)
@@ -128,55 +121,7 @@ struct DataStorageView: View {
         }
     }
 
-    // MARK: - Actions Section
-
-    private var actionsSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            sectionHeader(title: String(localized: "settings.data.storage.section.actions", defaultValue: "Actions", bundle: .main), icon: "gear", color: MeeshyColors.neutral500Hex)
-
-            Button {
-                HapticFeedback.medium()
-                showClearConfirm = true
-            } label: {
-                HStack(spacing: 12) {
-                    fieldIcon("trash.fill", color: MeeshyColors.errorHex)
-
-                    Text(String(localized: "settings.data.storage.action.clear", defaultValue: "Vider le cache", bundle: .main))
-                        .font(MeeshyFont.relative(14, weight: .medium))
-                        .foregroundColor(MeeshyColors.error)
-
-                    Spacer()
-
-                    if isClearing {
-                        ProgressView()
-                            .scaleEffect(0.7)
-                    }
-                }
-                .padding(.horizontal, 14)
-                .padding(.vertical, 10)
-            }
-            .disabled(isClearing)
-            .background(sectionBackground(tint: MeeshyColors.neutral500Hex))
-            .accessibilityLabel(String(localized: "settings.data.storage.action.clear.label", defaultValue: "Vider le cache média", bundle: .main))
-            .accessibilityHint(String(localized: "settings.data.storage.action.clear.hint", defaultValue: "Supprime tous les médias mis en cache localement", bundle: .main))
-        }
-    }
-
     // MARK: - Actions
-
-    private func clearCache() {
-        isClearing = true
-        Task {
-            await CacheCoordinator.shared.images.clearAll()
-            await CacheCoordinator.shared.audio.clearAll()
-            await CacheCoordinator.shared.video.clearAll()
-            await CacheCoordinator.shared.thumbnails.clearAll()
-            await loadCacheSize()
-            HapticFeedback.success()
-            FeedbackToastManager.shared.showSuccess(String(localized: "settings.data.storage.toast.cleared", defaultValue: "Cache vide", bundle: .main))
-            isClearing = false
-        }
-    }
 
     private func loadCacheSize() async {
         let imageSize = await CacheCoordinator.shared.images.estimatedDiskBytes()

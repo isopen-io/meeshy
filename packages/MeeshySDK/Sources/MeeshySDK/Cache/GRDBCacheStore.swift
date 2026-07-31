@@ -610,11 +610,36 @@ public actor GRDBCacheStore<Key, Value>: MutableCacheStore
         }
     }
 
+    /// Purge les lignes L2 de CE store, et de lui seul.
+    ///
+    /// Tous les `GRDBCacheStore` partagent les tables `cache_entries` et
+    /// `cache_metadata` : seule la clé, préfixée `"<namespace>:"`, les
+    /// distingue. La version précédente faisait `CacheEntry.deleteAll(db)` sans
+    /// filtre — vider un seul store emportait TOUS les autres (messages, feed,
+    /// stories, préférences…). La perte restait invisible tant que les autres
+    /// stores répondaient depuis leur L1 : elle n'apparaissait qu'au démarrage
+    /// à froid suivant, ce qui l'a rendue indétectable en usage normal.
+    ///
+    /// Le filtre passe par `substr` et NON par `LIKE 'ns:%'` : `_` est un
+    /// joker `LIKE` (un caractère quelconque), et le préfixe seul ne suffirait
+    /// pas non plus — `prefs` et `prefs-user` coexistent dans le coordinator,
+    /// donc le séparateur `:` doit faire partie du motif comparé.
+    ///
+    /// Namespace VIDE : aucun préfixe ne permet d'identifier les lignes du
+    /// store, `substr(key, 1, 0) = ''` est vrai partout et l'on retombe donc —
+    /// volontairement — sur la purge globale historique. Tous les stores du
+    /// `CacheCoordinator` sont namespacés ; ce cas ne concerne que les stores
+    /// construits à la main (tests, usages ad hoc).
     private nonisolated func deleteAllL2() {
+        let prefix = namespace.isEmpty ? "" : "\(namespace):"
         do {
             try db.write { db in
-                try CacheEntry.deleteAll(db)
-                try DBCacheMetadata.deleteAll(db)
+                try CacheEntry
+                    .filter(sql: "substr(key, 1, ?) = ?", arguments: [prefix.count, prefix])
+                    .deleteAll(db)
+                try DBCacheMetadata
+                    .filter(sql: "substr(key, 1, ?) = ?", arguments: [prefix.count, prefix])
+                    .deleteAll(db)
             }
         } catch {
             logger.error("Failed to invalidate all L2: \(error)")
@@ -767,6 +792,80 @@ extension GRDBCacheStore where Key == String {
         let keys = Set(l1Keys).union(l2KeysHolding(itemId: itemId))
         for key in keys {
             await upsertPatch(for: key, itemId: itemId, mutate: mutate)
+        }
+    }
+}
+
+// MARK: - Inventaire pour la purge sélective
+
+extension GRDBCacheStore {
+
+    /// Toutes les valeurs persistées de CE store, toutes clés confondues.
+    ///
+    /// Sert à reconstruire l'attribution « URL de média → domaine » : les
+    /// stores disque ne savent pas à quel domaine appartient un fichier, seule
+    /// la relecture des payloads permet de le dire (cf. `CacheMediaAttribution`).
+    ///
+    /// Dédupliqué par `itemId` : un même post vit sous plusieurs clés
+    /// (`main-feed`, `<postId>`, `bookmarks`, la clé du pager de réels) et
+    /// serait sinon compté autant de fois qu'il est indexé.
+    ///
+    /// La fraîcheur est volontairement IGNORÉE : un payload périmé occupe
+    /// toujours de la place et ses médias sont toujours sur le disque. Filtrer
+    /// sur le TTL ferait basculer ces fichiers dans le résidu « non attribué »
+    /// alors qu'on sait parfaitement à qui ils appartiennent.
+    public func allCachedValues() async -> [Value] {
+        let prefix = namespace.isEmpty ? "" : "\(namespace):"
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        let encrypt = encrypted
+        let encryption = self.encryption
+        var seenItemIds = Set<String>()
+        var values: [Value] = []
+        do {
+            let rows: [CacheEntry] = try await db.read { db in
+                try CacheEntry
+                    .filter(sql: "substr(key, 1, ?) = ?", arguments: [prefix.count, prefix])
+                    .fetchAll(db)
+            }
+            for row in rows {
+                guard seenItemIds.insert(row.itemId).inserted else { continue }
+                let raw: Data
+                if encrypt {
+                    guard let decrypted = encryption.decrypt(row.encodedData) else { continue }
+                    raw = decrypted
+                } else {
+                    raw = row.encodedData
+                }
+                guard let value = try? decoder.decode(Value.self, from: raw) else { continue }
+                values.append(value)
+            }
+        } catch {
+            logger.error("Inventaire L2 impossible pour \(self.namespace, privacy: .public): \(error.localizedDescription, privacy: .public)")
+        }
+        return values
+    }
+
+    /// Octets occupés en base par les payloads de CE store.
+    ///
+    /// `length(encodedData)` sur les lignes du namespace : c'est la taille
+    /// réelle des blobs, mesurée par SQLite. On ne compte ni l'overhead des
+    /// pages ni les index — annoncer la place rendue au système exigerait un
+    /// `VACUUM`, que l'on ne déclenche pas ici. La valeur est donc un plancher
+    /// exact du contenu, jamais une estimation inventée.
+    public func l2ByteSize() async -> Int {
+        let prefix = namespace.isEmpty ? "" : "\(namespace):"
+        do {
+            return try await db.read { db in
+                try Int.fetchOne(
+                    db,
+                    sql: "SELECT COALESCE(SUM(LENGTH(encodedData)), 0) FROM cache_entries WHERE substr(key, 1, ?) = ?",
+                    arguments: [prefix.count, prefix]
+                ) ?? 0
+            }
+        } catch {
+            logger.error("Mesure L2 impossible pour \(self.namespace, privacy: .public): \(error.localizedDescription, privacy: .public)")
+            return 0
         }
     }
 }

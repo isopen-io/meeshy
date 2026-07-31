@@ -738,6 +738,25 @@ public actor CacheCoordinator {
         await userTags.invalidateAll()
         await userPreferences.invalidateAll()
         await conversationPreferences.invalidateAll()
+        // Ces douze stores n'étaient PAS énumérés ici. Ils disparaissaient
+        // quand même, par effet de bord : `GRDBCacheStore.deleteAllL2()` vidait
+        // les tables `cache_entries` / `cache_metadata` en entier, donc le
+        // premier `invalidateAll()` de la liste emportait déjà tout le reste.
+        // Ce comportement global ayant été corrigé (chaque store ne purge plus
+        // que son propre namespace), il faut désormais les nommer pour que
+        // `invalidateAll()` continue de tout vider comme avant.
+        await comments.invalidateAll()
+        await stats.invalidateAll()
+        await notifications.invalidateAll()
+        await affiliateTokens.invalidateAll()
+        await shareLinks.invalidateAll()
+        await trackingLinks.invalidateAll()
+        await communityLinks.invalidateAll()
+        await callTranscripts.invalidateAll()
+        await statuses.invalidateAll()
+        await friends.invalidateAll()
+        await callHistory.invalidateAll()
+        await timeline.invalidateAll()
         await images.invalidateAll()
         await audio.invalidateAll()
         await video.invalidateAll()
