@@ -1961,3 +1961,8 @@ qui pose l'état lu — tous étaient dans le code qui le RELIT.
    AVEC ET SANS le correctif : le mock renvoyait les mêmes ids à chaque page, donc le code
    de fusion des pages 2+ n'était jamais atteint. Toujours retirer le correctif et exiger le
    rouge — un test de régression non vu rouge est un test décoratif.
+
+## 2026-07-31 — Revue UI/UX simulateurs + incident xcstrings
+- **`.scaledToFill()` sur une Image resizable enfant direct d'un frame flexible gonfle la largeur du parent** dès que la vignette dépasse le conteneur (carte position du feed : 640 pt > volet iPad ET > iPhone une fois la vignette chargée). Antidote systématique : la média en `.overlay {}` d'une base `Color.clear.frame(...)` — un overlay ne participe pas au layout.
+- **Jamais de `git checkout -- <fichier>` sur un fichier potentiellement touché par une session parallèle** (récidive : Localizable.xcstrings — leur WIP de 5 clés détruit, puis leur commit a balayé mes clés sous un message trompeur). Réverter mes hunks chirurgicalement à la place. Et ne jamais réécrire un xcstrings par json.dump (churn intégral) : édition par blocs.
+- **Un titre custom `titleView` de CollapsibleHeader n'hérite d'aucun lineLimit/minimumScaleFactor** — tout appelant doit les poser lui-même sinon troncature (« Mee. » sur volet iPad).
