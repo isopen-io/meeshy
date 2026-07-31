@@ -52,6 +52,13 @@ public final class SoundPreviewPlayer: SoundPreviewing {
     public init() {
         player.$isPlaying
             .dropFirst()
+            // `@Published` émet à CHAQUE affectation, même à valeur égale, et
+            // `AudioPlayerManager.playLocalFile` commence par un `stop()`
+            // interne : sans dédoublonnage, démarrer une piste émettait un faux
+            // « terminé » juste avant de jouer. L'état final restait correct par
+            // accident d'ordonnancement — c'est exactement ce qu'on ne veut pas
+            // laisser reposer sur la chance.
+            .removeDuplicates()
             .sink { [weak self] isPlaying in
                 guard let self, !isPlaying, !self.isStoppingOnPurpose else { return }
                 self.finishedSubject.send()

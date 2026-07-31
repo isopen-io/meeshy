@@ -21,11 +21,15 @@ import MeeshySDK
 /// Et c'est bien à la LECTURE qu'il faut résoudre, jamais à l'écriture : graver
 /// une URL absolue dans `storyEffects` y figerait l'hôte du moment, et la story
 /// deviendrait injouable dès que l'environnement change.
+/// `nonisolated` volontairement : ce module est isolé `@MainActor` par défaut,
+/// et ces deux fonctions sont PURES (manipulation de chaînes, aucun état). Les
+/// laisser hériter de l'isolation imposait un saut sur le main actor au pipeline
+/// d'export, qui compose hors main — pour concaténer une URL.
 public enum StoryAudioSourceResolver {
 
     /// - Parameter resolver: transforme un `postMediaId` en URL. Absent ou
     ///   rendant `nil`, on bascule sur `mediaURL`.
-    public static func remoteURL(
+    public nonisolated static func remoteURL(
         for audio: StoryAudioPlayerObject,
         preferredLanguages: [String],
         resolver: ((String) -> URL?)?
@@ -39,7 +43,7 @@ public enum StoryAudioSourceResolver {
 
     /// Résout une adresse persistée — absolue, relative ou `file://` — en URL
     /// exploitable. `nil` sur une chaîne vide ou irrécupérable.
-    public static func playableURL(from raw: String?) -> URL? {
+    public nonisolated static func playableURL(from raw: String?) -> URL? {
         guard let raw, !raw.trimmingCharacters(in: .whitespaces).isEmpty else { return nil }
         if let direct = URL(string: raw), direct.isFileURL { return direct }
         return MeeshyConfig.resolveMediaURL(raw)

@@ -68,9 +68,14 @@ final class FakeSoundPreview: SoundPreviewing {
 
     func isReadyToPlayInstantly(_ sound: APISound) -> Bool { readyInstantly }
 
+    /// Rejoue le « terminé » parasite qu'émettait le vrai lecteur au démarrage
+    /// (`playLocalFile` commence par un `stop()` interne).
+    var emitsSpuriousFinishOnPlay = false
+
     @discardableResult
     func play(_ sound: APISound) async -> Bool {
         playedIds.append(sound.id)
+        if emitsSpuriousFinishOnPlay { finishedSubject.send() }
         guard blocksUntilReleased else { return playSucceeds }
         await withCheckedContinuation { gate = $0 }
         return playSucceeds
@@ -364,6 +369,22 @@ final class SoundLibraryPickerModelTests: XCTestCase {
 
         XCTAssertNil(model.previewingId)
         XCTAssertNil(model.preparingId)
+    }
+
+    func test_terminéParasiteAuDemarrage_neLaissePasLaLigneEteinte() async {
+        // Le vrai lecteur dédoublonne désormais `$isPlaying` pour ne plus
+        // l'émettre ; ce test garde l'autre bout, côté modèle, pour que la
+        // correction ne repose pas sur un seul point.
+        let preview = FakeSoundPreview()
+        preview.readyInstantly = true
+        preview.emitsSpuriousFinishOnPlay = true
+        let model = makeModel(preview)
+
+        model.togglePreview(makeSound(id: "a"))
+        await Task.yield()
+        await Task.yield()
+
+        XCTAssertEqual(model.previewingId, "a")
     }
 
     func test_echecDeLecture_neLaissePasLaLigneSurStop() async {
