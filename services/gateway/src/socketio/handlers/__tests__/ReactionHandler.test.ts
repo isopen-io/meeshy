@@ -897,6 +897,41 @@ describe('ReactionHandler', () => {
       }
     });
 
+    it('still propagates the replaced-emoji removal (degraded) when its aggregation read rejects', async () => {
+      // The swap is already persisted by addReaction, so the removal MUST reach
+      // peers. If createUpdateEvent('remove', …) rejects (aggregation DB read
+      // fails) the handler falls back to a degraded REACTION_REMOVED rather than
+      // dropping it — otherwise every peer shows the actor's stale 👍 forever.
+      const deliveryQueue = makeDeliveryQueue();
+      const createUpdateEvent = jest.fn<any>()
+        .mockImplementation((_m: string, emoji: string, action: string) =>
+          action === 'remove'
+            ? Promise.reject(new Error('aggregation read timeout'))
+            : Promise.resolve({ messageId: MESSAGE_ID, emoji, action }));
+      const { handler, io } = buildHandler({
+        prisma: makePrismaWithParticipants(),
+        connectedUsers: makeConnectedUsersWith(true),
+        deliveryQueue,
+        reactionService: {
+          addReaction: jest.fn<any>().mockResolvedValue({ reaction: { id: 'r2', emoji: '🔥' }, replacedEmojis: ['👍'] }),
+          createUpdateEvent,
+        },
+      });
+
+      await handler.handleReactionAdd(makeSocket(), { messageId: MESSAGE_ID, emoji: '🔥' }, jest.fn());
+      await flush();
+      await flush();
+
+      // Live peers still receive the removal broadcast for the replaced emoji…
+      const emitted = io._emit.mock.calls.map((c: any[]) => ({ event: c[0], payload: c[1] }));
+      expect(emitted).toEqual(expect.arrayContaining([
+        expect.objectContaining({ event: 'reaction:removed', payload: expect.objectContaining({ emoji: '👍', action: 'remove' }) }),
+      ]));
+      // …and offline peers get the removal enqueued, not just the addition.
+      const events = deliveryQueue.enqueue.mock.calls.map((c: any[]) => c[1].eventType);
+      expect(events).toEqual(expect.arrayContaining(['reaction-added', 'reaction-removed']));
+    });
+
     it('is a no-op when no delivery queue is wired (does not throw)', async () => {
       const { handler } = buildHandler({
         prisma: makePrismaWithParticipants(),
