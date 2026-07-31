@@ -244,8 +244,10 @@ describe('GET /stories/audio — with results and search', () => {
   it('passes search query to prisma', async () => {
     const res = await app.inject({ method: 'GET', url: '/stories/audio?q=happy&limit=5' });
     expect(res.statusCode).toBe(200);
+    // La clause est passée d'un `title` nu à un `OR` titre/pseudo : un son
+    // capturé naît sans titre, le chercher par titre seul le rendait invisible.
     expect(mockFindMany).toHaveBeenCalledWith(expect.objectContaining({
-      where: expect.objectContaining({ title: expect.any(Object) }),
+      where: expect.objectContaining({ OR: expect.any(Array) }),
     }));
   });
 });
@@ -391,5 +393,37 @@ describe('POST /stories/audio — fichier trop gros', () => {
     expect(res.statusCode).toBe(413);
     expect(res.json().code).toBe('FILE_TOO_LARGE');
     expect(mockCreate).not.toHaveBeenCalled();
+  });
+});
+
+describe('GET /stories/audio — recherche', () => {
+  let app: FastifyInstance;
+  const findMany = jest.fn<any>().mockResolvedValue([]);
+  beforeAll(async () => {
+    app = await buildApp({ prismaOverrides: { sound: { findMany } } });
+  });
+  afterAll(async () => { await app.close(); });
+
+  /**
+   * Un son CAPTURÉ naît sans titre — le libellé « Son original » est composé
+   * par le client dans sa langue. Chercher le titre seul rendrait donc
+   * introuvable tout ce que la bibliothèque produit d'elle-même.
+   */
+  it('matches the uploader username as well as the title', async () => {
+    await app.inject({ method: 'GET', url: '/stories/audio?q=alice' });
+    const where = (findMany.mock.calls[0][0] as any).where;
+    expect(where.OR).toEqual([
+      { title: { contains: 'alice', mode: 'insensitive' } },
+      { uploader: { username: { contains: 'alice', mode: 'insensitive' } } },
+    ]);
+    // La découverte reste bornée aux sons publics et non coupés.
+    expect(where.isPublic).toBe(true);
+    expect(where.mutedAt).toBeNull();
+  });
+
+  it('includes the uploader so the list can credit an author', async () => {
+    await app.inject({ method: 'GET', url: '/stories/audio' });
+    const args = findMany.mock.calls[findMany.mock.calls.length - 1][0] as any;
+    expect(args.include?.uploader).toBeDefined();
   });
 });

@@ -6,7 +6,7 @@ import fs from 'fs/promises';
 import { createHash, randomUUID } from 'crypto';
 import { UnifiedAuthRequest } from '../../middleware/auth';
 import { sendSuccess, sendUnauthorized, sendBadRequest, sendNotFound, sendError } from '../../utils/response';
-import { toDTO } from './sounds';
+import { toDTO, soundUploaderInclude } from './sounds';
 import {
   ALLOWED_UPLOAD_MIME as ALLOWED_MIME,
   ALLOWED_AUDIO_EXT,
@@ -102,6 +102,7 @@ export function registerStoryAudioRoutes(
     // second envoi violait l'index unique et renvoyait une 500 nue.
     const existing = await prisma.sound.findFirst({
       where: { uploaderId: authContext.registeredUser.id, contentHash },
+      include: soundUploaderInclude,
     });
     if (existing) {
       return sendSuccess(reply, toDTO(existing as unknown as Record<string, unknown>));
@@ -120,6 +121,7 @@ export function registerStoryAudioRoutes(
         isPublic,
         contentHash,
       },
+      include: soundUploaderInclude,
     });
 
     return sendSuccess(reply, toDTO(audio as unknown as Record<string, unknown>), { statusCode: 201 });
@@ -139,13 +141,21 @@ export function registerStoryAudioRoutes(
     // `mutedAt` retire de la DÉCOUVERTE en plus d'arrêter la diffusion.
     const where: any = { isPublic: true, mutedAt: null };
     if (q) {
-      where.title = { contains: q, mode: 'insensitive' };
+      // Titre OU pseudo de l'uploadeur. Un son CAPTURÉ naît sans titre — le
+      // libellé « Son original » est composé par le client dans sa langue —
+      // donc chercher le titre seul rendrait introuvable tout ce que la
+      // bibliothèque produit d'elle-même.
+      where.OR = [
+        { title: { contains: q, mode: 'insensitive' } },
+        { uploader: { username: { contains: q, mode: 'insensitive' } } },
+      ];
     }
 
     const audios = await prisma.sound.findMany({
       where,
       orderBy: { usageCount: 'desc' },
       take: limit,
+      include: soundUploaderInclude,
     });
 
     return sendSuccess(reply, audios.map((a) => toDTO(a as unknown as Record<string, unknown>)));
