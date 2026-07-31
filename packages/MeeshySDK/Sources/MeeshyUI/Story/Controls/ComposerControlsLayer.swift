@@ -14,6 +14,7 @@ public struct ComposerControlsLayer: View {
     @Binding var fgMediaItem: PhotosPickerItem?
     @Binding var showAudioDocumentPicker: Bool
     @Binding var showVoiceRecorderSheet: Bool
+    @Binding var showSoundLibrary: Bool
 
     /// Hauteur redimensionnable du panneau DESSIN (drag du grabber). En mode dessin
     /// (Option A) le canvas reste PLEIN — ce drawer flotte par-dessus son bas.
@@ -55,6 +56,7 @@ public struct ComposerControlsLayer: View {
         fgMediaItem: Binding<PhotosPickerItem?>,
         showAudioDocumentPicker: Binding<Bool>,
         showVoiceRecorderSheet: Binding<Bool>,
+        showSoundLibrary: Binding<Bool>,
         resizableBandHeight: Binding<CGFloat>,
         bandMinHeight: CGFloat,
         bandMaxHeight: CGFloat,
@@ -71,6 +73,7 @@ public struct ComposerControlsLayer: View {
         self._fgMediaItem = fgMediaItem
         self._showAudioDocumentPicker = showAudioDocumentPicker
         self._showVoiceRecorderSheet = showVoiceRecorderSheet
+        self._showSoundLibrary = showSoundLibrary
         self._resizableBandHeight = resizableBandHeight
         self.bandMinHeight = bandMinHeight
         self.bandMaxHeight = bandMaxHeight
@@ -219,6 +222,7 @@ public struct ComposerControlsLayer: View {
                     fgMediaItem: $fgMediaItem,
                     showAudioDocumentPicker: $showAudioDocumentPicker,
                     showVoiceRecorderSheet: $showVoiceRecorderSheet,
+                    showSoundLibrary: $showSoundLibrary,
                     // La machine gère `.timeline` de façon générique depuis le
                     // refactor 2026-07-14 (`BandStateMachineTests.
                     // tapTileTimelineSwapsOpenPanel`) — le spécial-cas qui

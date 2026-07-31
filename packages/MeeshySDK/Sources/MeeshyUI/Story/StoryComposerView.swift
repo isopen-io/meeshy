@@ -53,6 +53,8 @@ public struct StoryComposerView: View {
 
     @State var showAudioDocumentPicker = false
     @State var showVoiceRecorderSheet = false
+    /// Sélecteur de la bibliothèque de sons — « Mes sons » et « Tendances ».
+    @State var showSoundLibrary = false
     /// C8 — picker de stickers (bouton « Stickers » du panneau Texte).
     @State var showStickerPicker = false
     /// T20 — sélecteur de lieu (chip « Lieu » du panneau Texte). La VUE du

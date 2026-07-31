@@ -10,6 +10,7 @@ struct ComposerBottomBand: View {
     @Binding var fgMediaItem: PhotosPickerItem?
     @Binding var showAudioDocumentPicker: Bool
     @Binding var showVoiceRecorderSheet: Bool
+    @Binding var showSoundLibrary: Bool
 
     let onTapTile: (StoryToolMode) -> Void
     let onBackFromToolPanel: () -> Void
@@ -95,6 +96,7 @@ struct ComposerBottomBand: View {
                         fgMediaItem: $fgMediaItem,
                         showAudioDocumentPicker: $showAudioDocumentPicker,
                         showVoiceRecorderSheet: $showVoiceRecorderSheet,
+                        showSoundLibrary: $showSoundLibrary,
                         onBack: onBackFromToolPanel,
                         // Délègue à `onTapTile` qui est l'unique chemin de
                         // commutation d'éditeur (cf. `ComposerControlsLayer`) :

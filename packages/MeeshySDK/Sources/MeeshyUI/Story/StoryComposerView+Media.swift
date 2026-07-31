@@ -58,6 +58,15 @@ extension StoryComposerView {
             }
             .presentationDetents([.medium])
         }
+        .sheet(isPresented: $showSoundLibrary) {
+            SoundLibraryPicker(
+                onPick: { sound in
+                    viewModel.addBorrowedSound(sound)
+                    showSoundLibrary = false
+                },
+                onCancel: { showSoundLibrary = false }
+            )
+        }
         .sheet(isPresented: $showStickerPicker) {
             // C8 — le picker existait, complet, sans AUCUN call site. Sheet
             // medium, dismiss gestuel natif ; reste ouverte après un ajout

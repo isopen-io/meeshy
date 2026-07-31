@@ -73,6 +73,7 @@ final class ComposerControlsLayerTests: XCTestCase {
             fgMediaItem: .constant(nil),
             showAudioDocumentPicker: .constant(false),
             showVoiceRecorderSheet: .constant(false),
+            showSoundLibrary: .constant(false),
             resizableBandHeight: .constant(300),
             bandMinHeight: 160,
             bandMaxHeight: 540,

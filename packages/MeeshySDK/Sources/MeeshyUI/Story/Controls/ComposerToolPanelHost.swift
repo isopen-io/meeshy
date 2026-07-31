@@ -9,6 +9,9 @@ struct ComposerToolPanelHost: View {
     @Binding var fgMediaItem: PhotosPickerItem?
     @Binding var showAudioDocumentPicker: Bool
     @Binding var showVoiceRecorderSheet: Bool
+    /// Sélecteur de la bibliothèque de sons — troisième porte d'entrée audio,
+    /// à côté du fichier local et de l'enregistrement.
+    @Binding var showSoundLibrary: Bool
     let onBack: () -> Void
     var onSwitchTool: ((StoryToolMode) -> Void)? = nil
     var onEditMedia: ((String) -> Void)? = nil
@@ -288,6 +291,9 @@ struct ComposerToolPanelHost: View {
                     }
                     Button { showVoiceRecorderSheet = true } label: {
                         MediaPillLabel(icon: "mic.fill", text: String(localized: "story.composer.record", defaultValue: "Enregistrer", bundle: .module), destructive: false)
+                    }
+                    Button { showSoundLibrary = true } label: {
+                        MediaPillLabel(icon: "music.note.list", text: String(localized: "story.composer.soundLibrary", defaultValue: "Bibliothèque", bundle: .module), destructive: false)
                     }
                 }
                 Spacer()

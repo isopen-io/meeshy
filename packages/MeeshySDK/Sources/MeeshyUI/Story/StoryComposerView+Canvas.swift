@@ -285,6 +285,7 @@ extension StoryComposerView {
                     fgMediaItem: $fgMediaItem,
                     showAudioDocumentPicker: $showAudioDocumentPicker,
                     showVoiceRecorderSheet: $showVoiceRecorderSheet,
+                    showSoundLibrary: $showSoundLibrary,
                     resizableBandHeight: $composerBandHeight,
                     bandMinHeight: Self.composerBandMinHeight,
                     bandMaxHeight: Self.composerBandMaxHeight,

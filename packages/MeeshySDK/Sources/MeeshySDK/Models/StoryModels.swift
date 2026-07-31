@@ -899,12 +899,27 @@ public struct StoryAudioPlayerObject: Codable, Identifiable, Sendable {
     /// Seul le canal `volume` a un sens pour un son : sa position `x`/`y`
     /// existe dans le modèle mais ne pilote aucun rendu.
     public var keyframes: [StoryKeyframe]?
+    /// Son EMPRUNTÉ à la bibliothèque, quand la piste ne vient pas d'un média
+    /// téléversé dans ce post.
+    ///
+    /// Le serveur s'en sert pour enregistrer un `SoundUsage` **sans** capturer
+    /// de nouveau son ni recréditer qui que ce soit : c'est ce qui distingue
+    /// « j'utilise le son d'un autre » de « je publie mon son ».
+    ///
+    /// `postMediaId` reste vide dans ce cas — la résolution de l'URL passe par
+    /// `mediaURL`, hydratée depuis le DTO du son.
+    public var soundId: String?
 
     enum CodingKeys: String, CodingKey {
         case id, postMediaId, mediaURL, placement, x, y, volume, waveformSamples
         case isBackground, backgroundAudioVariants, zIndex
         case startTime, duration, loop, fadeIn, fadeOut, sourceLanguage, name
         case keyframes
+        // ⚠ Le `CodingKeys` de ce type est EXPLICITE : ajouter une propriété
+        // sans ajouter son `case` compile sans le moindre avertissement, et le
+        // champ n'est alors ni encodé ni décodé — le son emprunté serait perdu
+        // à la publication, en silence.
+        case soundId
     }
 
     public init(id: String = UUID().uuidString, postMediaId: String = "",
@@ -918,7 +933,9 @@ public struct StoryAudioPlayerObject: Codable, Identifiable, Sendable {
                 sourceLanguage: String? = nil,
                 name: String? = nil,
                 keyframes: [StoryKeyframe]? = nil,
-                mediaURL: String? = nil) {
+                mediaURL: String? = nil,
+                soundId: String? = nil) {
+        self.soundId = soundId
         self.id = id; self.postMediaId = postMediaId
         self.mediaURL = mediaURL
         self.placement = placement; self.x = x; self.y = y

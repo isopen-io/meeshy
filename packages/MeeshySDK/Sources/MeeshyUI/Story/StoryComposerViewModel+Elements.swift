@@ -435,6 +435,48 @@ extension StoryComposerViewModel {
         mediaAspectRatios[id] = CGFloat(aspectRatio)
     }
 
+    /// Insère une piste EMPRUNTÉE à la bibliothèque de sons.
+    ///
+    /// Se distingue d'`addAudioObject` sur deux points, et les deux comptent :
+    /// - `soundId` est renseigné et `postMediaId` reste vide — c'est ce couple
+    ///   qui dit au serveur « enregistre un usage, ne capture rien, ne crédite
+    ///   personne d'autre » ;
+    /// - `mediaURL` porte l'URL distante, sans quoi ni le lecteur ni l'export ne
+    ///   sauraient retrouver le son (l'export ne reçoit qu'un `StorySlide`).
+    @discardableResult
+    func addBorrowedSound(_ sound: APISound) -> StoryAudioPlayerObject? {
+        guard canAddMedia else { return nil }
+        let hasExistingBackgroundAudio = currentEffects.resolvedBackgroundAudio != nil
+        let obj = StoryAudioPlayerObject(
+            postMediaId: "",
+            placement: "overlay",
+            x: 0.5,
+            y: 0.65,
+            volume: 1.0,
+            waveformSamples: sound.waveform,
+            isBackground: hasExistingBackgroundAudio ? nil : true,
+            duration: sound.durationSeconds.map { Float($0) },
+            sourceLanguage: Self.defaultSourceLanguage,
+            // Le titre de l'auteur, quand il existe, sert de nom de piste dans
+            // la timeline. Sans titre on laisse `nil` : le libellé par défaut se
+            // compose à l'affichage, dans la langue du lecteur.
+            name: sound.hasAuthoredTitle ? sound.title : nil,
+            mediaURL: sound.fileUrl,
+            soundId: sound.id
+        )
+        var effects = currentEffects
+        var audios = effects.audioPlayerObjects ?? []
+        audios.append(obj)
+        effects.audioPlayerObjects = audios
+        currentEffects = effects
+        selectedElementId = obj.id
+        bringToFront(id: obj.id)
+        if let seconds = sound.durationSeconds {
+            autoExtendDuration(forElementEnd: Float(seconds))
+        }
+        return obj
+    }
+
     @discardableResult
     func addAudioObject() -> StoryAudioPlayerObject? {
         guard canAddMedia else { return nil }
