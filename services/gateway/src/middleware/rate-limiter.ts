@@ -155,7 +155,10 @@ export async function messageValidationHook(
  * - POST /posts/:id/like : 30/min — accommoder le toggle rapide
  * - POST /posts/:id/view : 60/min — un viewer parcourt vite plusieurs stories
  * - POST /posts/:id/comments : 20/min
- * - POST /posts/impressions/batch : 10/min — par lot de 50 ids max
+ * - POST /posts/impressions/batch : 30/min — par lot de 50 OCCURRENCES max.
+ *   Une impression est comptée par apparition à l'écran, donc un aller-retour
+ *   de scroll produit plusieurs lots (le client les regroupe sur 3 s) ; 10/min
+ *   déclenchait des 429 en usage normal.
  */
 export function createPostRouteRateLimitConfig(
   type: 'create' | 'like' | 'view' | 'comment' | 'impression' | 'engagement'
@@ -165,7 +168,7 @@ export function createPostRouteRateLimitConfig(
     like: { max: 30, label: 'like' },
     view: { max: 60, label: 'view' },
     comment: { max: 20, label: 'comment' },
-    impression: { max: 10, label: 'impression' },
+    impression: { max: 30, label: 'impression' },
     engagement: { max: 20, label: 'engagement' },
   };
   const cfg = configs[type];

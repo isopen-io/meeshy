@@ -138,7 +138,9 @@ describe('createPostRouteRateLimitConfig', () => {
     ['like', 30],
     ['view', 60],
     ['comment', 20],
-    ['impression', 10],
+    // Une impression par APPARITION à l'écran (et non plus une par post et par
+    // session) : un aller-retour de scroll produit légitimement plusieurs lots.
+    ['impression', 30],
     ['engagement', 20],
   ];
 

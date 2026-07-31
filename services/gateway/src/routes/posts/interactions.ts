@@ -33,6 +33,7 @@ const IMPRESSION_SOURCES = [
   'notification',
   'detail',
   'story',
+  'status',
 ] as const;
 
 export function registerInteractionRoutes(
@@ -434,10 +435,30 @@ export function registerInteractionRoutes(
         }))
       });
 
-      await prisma.post.updateMany({
-        where: { id: { in: capped } },
-        data: { impressionCount: { increment: 1 } }
-      });
+      // Une impression par APPARITION : le même post peut légitimement revenir
+      // plusieurs fois dans un lot (aller-retour de scroll). `createMany` insère
+      // bien une ligne par occurrence, mais `updateMany({ id: { in: [...] } })`
+      // n'incrémente chaque post qu'UNE fois — le `in` est dédupliqué côté base.
+      // On regroupe donc par nombre d'occurrences : un `updateMany` par valeur
+      // d'incrément distincte (en pratique 1 à 3), et non un par post.
+      const occurrences = capped.reduce<Map<string, number>>((acc, postId: string) => {
+        acc.set(postId, (acc.get(postId) ?? 0) + 1);
+        return acc;
+      }, new Map());
+
+      const idsByIncrement = [...occurrences].reduce<Map<number, string[]>>((acc, [postId, count]) => {
+        acc.set(count, [...(acc.get(count) ?? []), postId]);
+        return acc;
+      }, new Map());
+
+      await Promise.all(
+        [...idsByIncrement].map(([increment, ids]) =>
+          prisma.post.updateMany({
+            where: { id: { in: ids } },
+            data: { impressionCount: { increment } }
+          })
+        )
+      );
 
       return sendSuccess(reply, { recorded: capped.length });
     } catch (error) {
