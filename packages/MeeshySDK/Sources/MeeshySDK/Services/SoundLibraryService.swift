@@ -13,6 +13,19 @@ public protocol SoundLibraryServiceProviding: Sendable {
     func mySounds(query: String?, cursor: Date?, limit: Int) async throws -> SoundPage
     func trendingSounds(query: String?, limit: Int) async throws -> [APISound]
     func rename(soundId: String, title: String) async throws -> APISound
+    /// « Page du son » — les publications qui l'utilisent.
+    func posts(soundId: String, cursor: Date?, limit: Int) async throws -> SoundPostPage
+}
+
+public struct SoundPostPage: Sendable {
+    public let posts: [APISoundPost]
+    public let nextCursor: Date?
+    public var hasMore: Bool { nextCursor != nil }
+
+    public init(posts: [APISoundPost], nextCursor: Date?) {
+        self.posts = posts
+        self.nextCursor = nextCursor
+    }
 }
 
 public struct SoundPage: Sendable {
@@ -74,6 +87,24 @@ public final class SoundLibraryService: SoundLibraryServiceProviding, @unchecked
         return response.data
     }
 
+    /// Publications qui utilisent ce son.
+    ///
+    /// Le curseur suit les USAGES et non les publications — c'est la collection
+    /// que le serveur pagine. Une page peut donc rendre moins d'éléments que
+    /// `limit` sans que ce soit la fin : plusieurs usages désignent parfois la
+    /// même publication, et les non publiques sont écartées. S'arrêter sur une
+    /// page courte tronquerait la liste.
+    public func posts(soundId: String, cursor: Date? = nil, limit: Int = 24) async throws -> SoundPostPage {
+        var items = [URLQueryItem(name: "limit", value: String(limit))]
+        if let cursor {
+            items.append(URLQueryItem(name: "cursor", value: soundCursorFormatter().string(from: cursor)))
+        }
+        let response: PaginatedSoundPostResponse = try await api.request(
+            endpoint: "/sounds/\(soundId)/posts", method: "GET", body: nil, queryItems: items
+        )
+        return SoundPostPage(posts: response.data, nextCursor: response.pagination?.nextCursorDate)
+    }
+
     /// Filtre local sur le titre ET le pseudo — même règle que la recherche
     /// serveur de la liste publique, pour que les deux vues se comportent pareil.
     static func filterLocally(_ sounds: [APISound], query: String?) -> [APISound] {
@@ -95,16 +126,22 @@ struct PaginatedSoundResponse: Decodable {
     let success: Bool
     let data: [APISound]
     let pagination: SoundPagination?
+}
 
-    struct SoundPagination: Decodable {
-        let limit: Int?
-        let hasMore: Bool?
-        let nextCursor: String?
+struct PaginatedSoundPostResponse: Decodable {
+    let success: Bool
+    let data: [APISoundPost]
+    let pagination: SoundPagination?
+}
 
-        var nextCursorDate: Date? {
-            guard let nextCursor else { return nil }
-            return soundCursorFormatter().date(from: nextCursor)
-        }
+struct SoundPagination: Decodable {
+    let limit: Int?
+    let hasMore: Bool?
+    let nextCursor: String?
+
+    var nextCursorDate: Date? {
+        guard let nextCursor else { return nil }
+        return soundCursorFormatter().date(from: nextCursor)
     }
 }
 
