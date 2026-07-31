@@ -860,6 +860,9 @@ struct StoryViewerView: View {
                     reposting: wrapper.story,
                     authorHandle: wrapper.authorHandle
                 ),
+                // Un repost est une CRÉATION : il s'ouvre sur le dernier mode
+                // d'audience choisi, comme le composer du tray.
+                initialVisibility: viewModel.lastComposerVisibility,
                 onPublishSlide: { _, _, _, _, _ in },
                 onPublishAllInBackground: { slides, slideImages, loadedImages, loadedVideoURLs, loadedAudioURLs, originalLanguage, visibility, visibilityUserIds in
                     viewModel.publishStoryInBackground(
@@ -873,6 +876,7 @@ struct StoryViewerView: View {
                         visibilityUserIds: visibilityUserIds
                     )
                     repostStoryComposerSource = nil
+                    return true
                 },
                 onDismiss: { repostStoryComposerSource = nil }
             )
