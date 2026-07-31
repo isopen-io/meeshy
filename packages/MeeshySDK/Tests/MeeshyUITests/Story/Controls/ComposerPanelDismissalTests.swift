@@ -22,7 +22,8 @@ final class ComposerPanelDismissalTests: XCTestCase {
         isDrawingImmersive: Bool = false,
         isViewportZoomed: Bool = false,
         isTimelineVisible: Bool = false,
-        isEmptyStatePickerVisible: Bool = false
+        isEmptyStatePickerVisible: Bool = false,
+        isComposerEmpty: Bool = false
     ) -> ComposerChromeContext {
         ComposerChromeContext(
             machineState: machineState,
@@ -32,7 +33,8 @@ final class ComposerPanelDismissalTests: XCTestCase {
             isDrawingImmersive: isDrawingImmersive,
             isViewportZoomed: isViewportZoomed,
             isTimelineVisible: isTimelineVisible,
-            isEmptyStatePickerVisible: isEmptyStatePickerVisible
+            isEmptyStatePickerVisible: isEmptyStatePickerVisible,
+            isComposerEmpty: isComposerEmpty
         )
     }
 
@@ -85,6 +87,52 @@ final class ComposerPanelDismissalTests: XCTestCase {
         XCTAssertTrue(
             outcome.resultingContext.isViewportZoomed,
             "Fermer un panneau ne remet pas le viewport à l'échelle 1 — ce n'est pas son rôle."
+        )
+    }
+
+    // MARK: - `resultingContext.isEmptyStatePickerVisible` — recalcul, pas recopie
+
+    /// Reliquat S1 : recopier `ctx.isEmptyStatePickerVisible` était FAUX par
+    /// construction (toujours `false` en entrée, un panneau ouvert impliquant
+    /// `bandStateIsHidden == false` au moment de la capture) — jamais le vrai
+    /// scénario « sortie d'un dessin vide sur un composer resté vierge ». Seule
+    /// la sortie du DESSIN vide `activeTool` (`clearActiveTool`) ; Média/Texte/
+    /// Son le laissent posé, donc leur dismiss ne peut jamais rouvrir le picker.
+    func test_dismissing_fromEmptyDrawingSession_onEmptyComposer_revealsEmptyStatePicker() {
+        let outcome = ComposerChromePolicy.dismissing(
+            context(isDrawingActive: true, isComposerEmpty: true))
+        XCTAssertTrue(
+            outcome.resultingContext.isEmptyStatePickerVisible,
+            """
+            Sortir d'une session de dessin qui n'a RIEN produit sur un composer \
+            resté vierge doit rouvrir le picker géant — sinon un tap ultérieur sur \
+            le fond du canvas masquerait le chrome sur un écran sans poignée de \
+            restauration (le bug « écran nu » que ce domaine corrige).
+            """
+        )
+    }
+
+    func test_dismissing_fromNonEmptyDrawingSession_doesNotRevealEmptyStatePicker() {
+        let outcome = ComposerChromePolicy.dismissing(
+            context(isDrawingActive: true, isComposerEmpty: false))
+        XCTAssertFalse(outcome.resultingContext.isEmptyStatePickerVisible)
+    }
+
+    func test_dismissing_fromToolPanel_onEmptyComposer_neverRevealsEmptyStatePicker() {
+        let outcome = ComposerChromePolicy.dismissing(
+            context(machineState: .toolPanel(.media), isComposerEmpty: true))
+        XCTAssertFalse(
+            outcome.resultingContext.isEmptyStatePickerVisible,
+            "Quitter Média/Texte/Son laisse `activeTool` posé : le picker ne revient jamais par ce chemin."
+        )
+    }
+
+    func test_dismissing_fromTimelineOverride_onEmptyComposer_doesNotRevealEmptyStatePicker() {
+        let outcome = ComposerChromePolicy.dismissing(
+            context(isTimelineVisible: true, isComposerEmpty: true))
+        XCTAssertFalse(
+            outcome.resultingContext.isEmptyStatePickerVisible,
+            "La sortie de la timeline n'efface pas `activeTool` : le picker ne revient pas par ce chemin non plus."
         )
     }
 

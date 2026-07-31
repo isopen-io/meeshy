@@ -136,14 +136,6 @@ final class BandStateMachineChromeTests: XCTestCase {
         XCTAssertFalse(sut.isChromeHidden, "Un changement de slide efface tout, y compris un masquage volontaire.")
     }
 
-    func test_swipeDownOnBand_delegatesToCloseAnyPanel_leavingChromeVisible() {
-        var sut = BandStateMachine()
-        sut.tapFAB(.texture)
-        sut.swipeDownOnBand()
-        XCTAssertEqual(sut.state, .hidden)
-        XCTAssertFalse(sut.isChromeHidden)
-    }
-
     // MARK: - Invariant exhaustif
 
     func test_everyTransition_neverLeavesChromeHiddenWithOpenPanel() {
@@ -172,7 +164,6 @@ final class BandStateMachineChromeTests: XCTestCase {
             ("tapTile(.text)", { $0.tapTile(.text) }),
             ("openFormatPanel", { $0.openFormatPanel(.media, id: "m") }),
             ("closeAnyPanel", { $0.closeAnyPanel() }),
-            ("swipeDownOnBand", { $0.swipeDownOnBand() }),
             ("backFromToolPanel", { $0.backFromToolPanel() }),
             ("closeFormatPanel", { $0.closeFormatPanel() }),
             ("reset", { $0.reset() }),

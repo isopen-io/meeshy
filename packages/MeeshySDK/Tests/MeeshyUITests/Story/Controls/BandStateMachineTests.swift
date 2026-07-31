@@ -72,18 +72,27 @@ struct BandStateMachineTests {
         #expect(sm.state == .toolPanel(.media))
     }
 
-    @Test("swipeDownOnBand from .toolPanel closes to .hidden")
-    func swipeDownFromToolPanelCloses() {
+    // MARK: - closeAnyPanel — transition nommée par l'INTENTION, partagée par
+    // les quatre chemins de sortie (chevron « Retour », swipe-down sur le
+    // band, grabber tiré sous le minimum, tap sur le fond du canvas). Aucun
+    // synonyme « nommé par le doigt » : `swipeDownOnBand()` n'était jamais
+    // appelé (le geste de swipe-down route directement vers
+    // `dismissActiveBandPanel()` côté vue, cf. `ComposerControlsLayer`), donc
+    // retiré plutôt que maintenu comme code mort sous une doc-comment qui
+    // affirmait le contraire.
+
+    @Test("closeAnyPanel from .toolPanel closes to .hidden")
+    func closeAnyPanelFromToolPanelCloses() {
         var sm = BandStateMachine()
         sm.tapFAB(.media)
-        sm.swipeDownOnBand()
+        sm.closeAnyPanel()
         #expect(sm.state == .hidden)
     }
 
-    @Test("swipeDownOnBand from .hidden is no-op")
-    func swipeDownFromHiddenIsNoOp() {
+    @Test("closeAnyPanel from .hidden is no-op")
+    func closeAnyPanelFromHiddenIsNoOp() {
         var sm = BandStateMachine()
-        sm.swipeDownOnBand()
+        sm.closeAnyPanel()
         #expect(sm.state == .hidden)
     }
 

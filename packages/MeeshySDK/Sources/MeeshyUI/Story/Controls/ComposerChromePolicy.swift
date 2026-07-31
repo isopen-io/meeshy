@@ -22,6 +22,14 @@ public nonisolated struct ComposerChromeContext: Equatable, Sendable {
     /// Le picker géant d'état vide remplace `ComposerControlsLayer` dans l'arbre :
     /// dans cette branche, la poignée de restauration du chrome N'EXISTE PAS.
     public let isEmptyStatePickerVisible: Bool
+    /// Le slide courant ne porte encore aucun contenu d'authoring
+    /// (`StoryComposerView.isComposerEmpty`, négation de `composerHasContent`).
+    /// Brute et INDÉPENDANTE de `isEmptyStatePickerVisible` : cette dernière bake
+    /// déjà `bandStateIsHidden` au moment de la capture, donc `dismissing(_:)` ne
+    /// peut pas en déduire si le picker DOIT réapparaître une fois le panneau
+    /// refermé (band forcé à `.hidden`) — il lui faut ce signal brut séparément.
+    /// Défaut `false` : sans effet sur tous les appels qui ne le renseignent pas.
+    public let isComposerEmpty: Bool
 
     public init(
         machineState: BandState,
@@ -31,7 +39,8 @@ public nonisolated struct ComposerChromeContext: Equatable, Sendable {
         isDrawingImmersive: Bool,
         isViewportZoomed: Bool,
         isTimelineVisible: Bool,
-        isEmptyStatePickerVisible: Bool
+        isEmptyStatePickerVisible: Bool,
+        isComposerEmpty: Bool = false
     ) {
         self.machineState = machineState
         self.isChromeHidden = isChromeHidden
@@ -41,6 +50,7 @@ public nonisolated struct ComposerChromeContext: Equatable, Sendable {
         self.isViewportZoomed = isViewportZoomed
         self.isTimelineVisible = isTimelineVisible
         self.isEmptyStatePickerVisible = isEmptyStatePickerVisible
+        self.isComposerEmpty = isComposerEmpty
     }
 
     /// État RÉELLEMENT affiché du band — ex-`ComposerControlsLayer.
@@ -143,9 +153,24 @@ public nonisolated enum ComposerChromePolicy {
     public static func dismissing(_ ctx: ComposerChromeContext) -> ComposerDismissOutcome {
         let clearSelection: Bool
         if case .formatPanel = ctx.machineState { clearSelection = true } else { clearSelection = false }
+        let clearActiveTool = ctx.isDrawingActive
+        let clearTimeline = ctx.isTimelineVisible
+        // Le picker géant réapparaît après ce dismiss SEULEMENT si l'outil actif
+        // est effacé (seule sortie qui vide `activeTool` — quitter Média/Texte/Son
+        // laisse `activeTool` posé, donc `activeToolIsNil` reste faux et le
+        // picker ne revient jamais, cf. `resolveShouldShowEmptyStateLargePicker`)
+        // ET que le composer reste vierge ET qu'aucune timeline ne remplace la
+        // vue. Recopier tel quel `ctx.isEmptyStatePickerVisible` était FAUX par
+        // construction (un panneau ouvert implique `bandStateIsHidden == false`
+        // au moment de la capture, donc ce champ valait toujours `false` en
+        // entrée) : le résultat ne recouvrait jamais le cas réel « sortie d'un
+        // dessin vide sur un composer resté vierge », où le picker DOIT revenir
+        // — sans quoi un tap ultérieur sur le fond du canvas masquerait le chrome
+        // sur un écran où la poignée de restauration n'est plus montée.
+        let willShowEmptyStatePicker = clearActiveTool && ctx.isComposerEmpty && !clearTimeline
         return ComposerDismissOutcome(
-            clearActiveTool: ctx.isDrawingActive,
-            clearTimeline: ctx.isTimelineVisible,
+            clearActiveTool: clearActiveTool,
+            clearTimeline: clearTimeline,
             clearSelection: clearSelection,
             resultingContext: ComposerChromeContext(
                 machineState: .hidden,
@@ -155,7 +180,8 @@ public nonisolated enum ComposerChromePolicy {
                 isDrawingImmersive: false,
                 isViewportZoomed: ctx.isViewportZoomed,
                 isTimelineVisible: false,
-                isEmptyStatePickerVisible: ctx.isEmptyStatePickerVisible
+                isEmptyStatePickerVisible: willShowEmptyStatePicker,
+                isComposerEmpty: ctx.isComposerEmpty
             )
         )
     }

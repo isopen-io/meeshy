@@ -20,7 +20,8 @@ extension StoryComposerView {
             isDrawingImmersive: viewModel.isDrawingImmersive,
             isViewportZoomed: viewModel.isCanvasZoomed,
             isTimelineVisible: viewModel.isTimelineVisible,
-            isEmptyStatePickerVisible: shouldShowEmptyStateLargePicker
+            isEmptyStatePickerVisible: shouldShowEmptyStateLargePicker,
+            isComposerEmpty: isComposerEmpty
         )
     }
 

@@ -68,16 +68,23 @@ final class ComposerControlHitTargetTests: XCTestCase {
             topBar.contains("AdaptiveGlassContainer(spacing: ComposerControlMetrics.glassBlendSpacing)"))
     }
 
-    /// Les trois contrôles hors header portés au minimum HIG — dont la poignée
-    /// de restauration, unique recours de l'écran quand le chrome est masqué.
+    /// Les quatre contrôles hors header portés au minimum HIG — dont la poignée
+    /// de restauration, unique recours de l'écran quand le chrome est masqué, et
+    /// le grabber du band (21 pt de rendu avant fix). Compte EXACT et non `>= 1` :
+    /// un `>=` reste vert si une régression future EN RETIRE un sans en enlever
+    /// la trace du fichier (ex. un contrôle dupliqué puis un seul corrigé).
     func test_offHeaderControls_routeThroughTheHitTargetModifier() throws {
-        for path in ["Controls/ComposerControlsLayer.swift",
-                     "Controls/CanvasLayerIndicator.swift",
-                     "StoryComposerView+Canvas.swift"] {
+        let expectedOccurrences: [(path: String, count: Int)] = [
+            ("Controls/ComposerControlsLayer.swift", 1),  // fabRestoreHandle
+            ("Controls/CanvasLayerIndicator.swift", 1),   // chip(_:icon:label:), partagée par les 2 chips
+            ("StoryComposerView+Canvas.swift", 1),        // canvasZoomResetButton
+            ("Controls/ComposerBottomBand.swift", 1),     // grabber, partagé par les 2 branches (resize/décoratif)
+        ]
+        for (path, expected) in expectedOccurrences {
             let code = try ComposerSourceGuard.source(path)
-            XCTAssertGreaterThanOrEqual(
-                ComposerSourceGuard.occurrences(of: ".composerHitTarget()", in: code), 1,
-                "\(path) porte encore un contrôle sous le minimum HIG."
+            XCTAssertEqual(
+                ComposerSourceGuard.occurrences(of: ".composerHitTarget()", in: code), expected,
+                "\(path) : compte exact attendu (\(expected)) — un contrôle sous le minimum HIG ou une régression silencieuse."
             )
         }
     }

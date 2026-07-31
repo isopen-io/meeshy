@@ -113,12 +113,6 @@ public nonisolated struct BandStateMachine: Equatable, Sendable {
         }
     }
 
-    /// Geste nommé par le doigt ; `closeAnyPanel()` est la transition nommée par
-    /// l'intention. Les deux existent à dessein — pas de synonyme mort.
-    public mutating func swipeDownOnBand() {
-        closeAnyPanel()
-    }
-
     public mutating func openFormatPanel(_ kind: BandElementKind, id: String) {
         open(.formatPanel(kind, elementId: id))
     }

@@ -100,9 +100,11 @@ struct ComposerBottomBand: View {
                         onBack: onBackFromToolPanel,
                         // Délègue à `onTapTile` qui est l'unique chemin de
                         // commutation d'éditeur (cf. `ComposerControlsLayer`) :
-                        //   .timeline → `viewModel.isTimelineVisible = true`
-                        //   sinon     → `bandStateMachine.tapTile(tool)` +
-                        //               `viewModel.selectTool(tool)`
+                        //   .timeline → `bandStateMachine.openTimeline(isTimelineVisible:)`
+                        //               (intention UNIQUE d'ouverture, S4)
+                        //   sinon     → `viewModel.isTimelineVisible = false` +
+                        //               `bandStateMachine.tapTile(tool)`
+                        // puis, dans les deux cas, `viewModel.selectTool(tool)`.
                         // Sans ce relai, le chip ne changerait QUE
                         // `viewModel.activeTool` — le BandStateMachine
                         // resterait sur `.toolPanel(.media)` et le panel
@@ -213,14 +215,14 @@ struct ComposerBottomBand: View {
             .padding(.top, 10)
             .padding(.bottom, 6)
             .frame(maxWidth: .infinity)        // hit-area sur toute la largeur
-            // 5 + 10 + 6 = 21 pt de haut. Porter ce grabber à 44 pt de contact
-            // exigerait d'ALLONGER la band de 23 pt sur chaque panneau — le seul
-            // procédé qui étende réellement le hit-test est d'élargir la boîte
-            // de layout — au risque de tronquer les panneaux déjà plafonnés par
-            // `bandMaxHeight`. Laissé tel quel : il occupe toute la LARGEUR, et
-            // la fermeture reste accessible par le chevron « Retour », le FAB de
-            // l'outil et le tap sur le fond du canvas.
-            .contentShape(Rectangle())
+            // 5 + 10 + 6 = 21 pt de haut, sous le minimum HIG (même technique que
+            // `fabRestoreHandle`/`canvasZoomResetButton`/`CanvasLayerIndicator` :
+            // `composerHitTarget()` élargit la boîte de layout à 44 pt SANS
+            // toucher au rendu de la poignée elle-même. La band gagne 23 pt sur
+            // CHAQUE panneau (assumé, comme les 2 pt de la topbar) — le contenu du
+            // panel reste plafonné par `bandMaxHeight`/`maxHeight`, indépendant de
+            // la hauteur du grabber.
+            .composerHitTarget()
             .accessibilityLabel(String(
                 localized: "story.composer.grabber",
                 defaultValue: "Poignée de la barre d'outils", bundle: .module
