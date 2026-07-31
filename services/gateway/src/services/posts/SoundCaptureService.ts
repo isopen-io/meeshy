@@ -24,8 +24,12 @@ export interface CaptureTrack {
 export interface CaptureContext {
   postId: string;
   authorId: string;
-  /** Seuls les contenus PUBLICS alimentent la bibliothèque. */
-  isPublic: boolean;
+  /**
+   * Le contenu alimente-t-il la bibliothèque ? Calculé par `feedsSoundLibrary`
+   * (PUBLIC ou COMMUNITY, jamais un repost) — surtout pas « le post est
+   * public » : depuis le 2026-07-31 les deux notions ont divergé.
+   */
+  feedsLibrary: boolean;
   tracks: CaptureTrack[];
   viaPostId?: string;
 }
@@ -61,7 +65,7 @@ export class SoundCaptureService {
       // Repasser un contenu public en privé doit LIBÉRER ses usages, pas les
       // figer : sinon publier puis restreindre laisse le compteur gonflé pour
       // toujours, et c'est lui qui trie la découverte.
-      if (!ctx.isPublic) {
+      if (!ctx.feedsLibrary) {
         await this.releasePost(ctx.postId);
         return;
       }
@@ -296,6 +300,33 @@ export class SoundCaptureService {
     }
   }
 
+  /**
+   * Vignette du contenu source, pour le sélecteur de sons.
+   *
+   * Une seule lecture par publication, partagée par toutes les pistes du post.
+   * Jamais bloquante : sans vignette, le client dégrade sur l'avatar de
+   * l'uploadeur.
+   */
+  private async findCover(postId: string): Promise<{ url: string | null; thumbHash: string | null }> {
+    try {
+      const media = await this.prisma.postMedia.findFirst({
+        where: {
+          postId,
+          OR: [{ mimeType: { startsWith: 'image/' } }, { mimeType: { startsWith: 'video/' } }],
+        },
+        orderBy: { order: 'asc' },
+        select: { thumbnailUrl: true, thumbHash: true, fileUrl: true, mimeType: true },
+      });
+      if (!media) return { url: null, thumbHash: null };
+      // Une image sert d'elle-même de vignette ; une vidéo n'a que la sienne.
+      const url = media.thumbnailUrl
+        ?? (media.mimeType.startsWith('image/') ? media.fileUrl : null);
+      return { url: url ?? null, thumbHash: media.thumbHash ?? null };
+    } catch {
+      return { url: null, thumbHash: null };
+    }
+  }
+
   private async captureOwned(ctx: CaptureContext): Promise<void> {
     const owned = ctx.tracks.filter((t) => !t.soundId && t.postMediaId);
     if (owned.length === 0) return;
@@ -310,12 +341,15 @@ export class SoundCaptureService {
       select: { id: true, fileUrl: true, filePath: true, mimeType: true, duration: true, language: true },
     });
     const byId = new Map(medias.map((m) => [m.id, m]));
+    // Lue UNE fois pour toutes les pistes du post, et seulement s'il y a
+    // quelque chose à capturer.
+    const cover = await this.findCover(ctx.postId);
 
     for (const track of owned) {
       const media = byId.get(track.postMediaId!);
       if (!media) continue;
       if (!media.mimeType.startsWith(AUDIO_MIME_PREFIX)) continue;
-      await this.captureOne(ctx, track, media);
+      await this.captureOne(ctx, track, media, cover);
     }
   }
 
@@ -323,6 +357,7 @@ export class SoundCaptureService {
     ctx: CaptureContext,
     track: CaptureTrack,
     media: { id: string; filePath: string; mimeType: string; duration: number | null; language?: string | null },
+    cover: { url: string | null; thumbHash: string | null },
   ): Promise<void> {
     try {
       const absolute = path.isAbsolute(media.filePath)
@@ -376,6 +411,8 @@ export class SoundCaptureService {
           contentHash: hash,
           sourcePostId: ctx.postId,
           canonicalPostMediaId: media.id,
+          coverUrl: cover.url,
+          coverThumbHash: cover.thumbHash,
           mimeType: media.mimeType,
           sourceLanguage: media.language ?? null,
           isPublic: true,

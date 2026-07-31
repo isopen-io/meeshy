@@ -71,16 +71,16 @@ describe('PostService → SoundCaptureService (composition réelle)', () => {
     ]);
     expect(ctx.postId).toBe('post-1');
     expect(ctx.authorId).toBe('user-1');
-    expect(ctx.isPublic).toBe(true);
+    expect(ctx.feedsLibrary).toBe(true);
   });
 
-  it('test_createPost_privateStory_isNotPublicToTheLibrary', async () => {
+  it('test_createPost_privateStory_doesNotFeedTheLibrary', async () => {
     const { spy, captureSounds } = buildCaptureSpy();
     await buildService(spy).createPost(
       { type: 'STORY' as never, visibility: 'PRIVATE' as never, storyEffects: STORY_EFFECTS },
       'user-1',
     );
-    expect(captureSounds.mock.calls[0][0].isPublic).toBe(false);
+    expect(captureSounds.mock.calls[0][0].feedsLibrary).toBe(false);
   });
 
   /**
@@ -89,7 +89,7 @@ describe('PostService → SoundCaptureService (composition réelle)', () => {
    * reposteur avec l'audio d'autrui. La garde de source correspondante survit à
    * un `|| true` ajouté ; celle-ci non.
    */
-  it('test_createPost_repost_isNotPublicToTheLibrary', async () => {
+  it('test_createPost_repost_doesNotFeedTheLibrary', async () => {
     const { spy, captureSounds } = buildCaptureSpy();
     await buildService(spy).createPost(
       {
@@ -98,7 +98,45 @@ describe('PostService → SoundCaptureService (composition réelle)', () => {
       },
       'reposteur',
     );
-    expect(captureSounds.mock.calls[0][0].isPublic).toBe(false);
+    expect(captureSounds.mock.calls[0][0].feedsLibrary).toBe(false);
+  });
+
+
+  /**
+   * Règle produit du 2026-07-31 : un contenu réservé à une COMMUNAUTÉ alimente
+   * lui aussi la bibliothèque. Le son en sort PUBLIC — l'audience du post ne se
+   * propage pas à lui, c'est le principe d'indépendance du modèle.
+   */
+  it('test_createPost_communityStory_feedsTheLibrary', async () => {
+    const { spy, captureSounds } = buildCaptureSpy();
+    await buildService(spy).createPost(
+      { type: 'STORY' as never, visibility: 'COMMUNITY' as never, storyEffects: STORY_EFFECTS },
+      'user-1',
+    );
+    expect(captureSounds.mock.calls[0][0].feedsLibrary).toBe(true);
+  });
+
+  it('test_createPost_friendsStory_doesNotFeedTheLibrary', async () => {
+    const { spy, captureSounds } = buildCaptureSpy();
+    await buildService(spy).createPost(
+      { type: 'STORY' as never, visibility: 'FRIENDS' as never, storyEffects: STORY_EFFECTS },
+      'user-1',
+    );
+    expect(captureSounds.mock.calls[0][0].feedsLibrary).toBe(false);
+  });
+
+  it('test_createPost_communityRepost_stillDoesNotFeedTheLibrary', async () => {
+    // `repostOfId` est rédhibitoire QUELLE QUE SOIT la visibilité : élargir la
+    // règle aux communautés ne doit pas rouvrir le piège d'attribution.
+    const { spy, captureSounds } = buildCaptureSpy();
+    await buildService(spy).createPost(
+      {
+        type: 'STORY' as never, visibility: 'COMMUNITY' as never,
+        repostOfId: 'source-1', storyEffects: STORY_EFFECTS,
+      },
+      'reposteur',
+    );
+    expect(captureSounds.mock.calls[0][0].feedsLibrary).toBe(false);
   });
 
   it('test_createPost_withoutAudio_forwardsAnEmptyTrackList', async () => {

@@ -3034,6 +3034,14 @@ model Sound {
   sourcePostId String? @db.ObjectId
   /// PostMedia d'origine — la lecture iOS ne sait résoudre qu'un postMediaId.
   canonicalPostMediaId String? @db.ObjectId
+  /// Vignette du CONTENU d'origine, dénormalisée à la capture pour le sélecteur
+  /// de sons : le résoudre à la lecture ferait un N+1 sur chaque page de liste.
+  /// Dénormaliser est acceptable ici — c'est un visuel, pas une identité (à
+  /// l'inverse du pseudo, qui doit rester résolu par la relation `uploader`).
+  /// Nul pour un upload manuel, sans post source. Le client dégrade alors sur
+  /// `coverThumbHash`, puis sur l'avatar de l'uploadeur.
+  coverUrl       String?
+  coverThumbHash String?
   /// Nullable : Prisma/MongoDB lève à la LECTURE sur un champ requis absent.
   mimeType    String?
   /// Nullable pour la même raison — les documents hérités n'ont pas ce champ.

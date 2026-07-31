@@ -19,6 +19,7 @@ import { composeStoryContent, storyTextObjectText } from './posts/storyContentCo
 import { storyContentEditRequested } from './posts/storyEditPolicy';
 import { SoundCaptureService } from './posts/SoundCaptureService';
 import { extractCaptureTracks } from './posts/captureTracks';
+import { feedsSoundLibrary } from './posts/soundEligibility';
 import { normalizeLanguageCode } from '@meeshy/shared/utils/language-normalize';
 import { parseSharedPlace, type SharedPlace } from './location/sharedPlace';
 
@@ -229,11 +230,11 @@ export class PostService {
     this.soundCaptureService.captureSounds({
       postId: post.id,
       authorId: post.authorId,
-      // `!data.repostOfId` : `createPost` accepte AUSSI un repost. Sans cette
-      // condition, republier une story par cette voie créerait un `Sound`
-      // crédité au REPOSTEUR — le piège d'attribution que le lot A évite déjà
-      // sur `repostPost`, rouvert par l'autre porte.
-      isPublic: data.visibility === PostVisibility.PUBLIC && !data.repostOfId,
+      // Règle UNIQUE et partagée (PUBLIC ou COMMUNITY, jamais un repost). Elle
+      // vivait dupliquée ici et dans `updatePost`, et la seconde copie avait
+      // déjà été oubliée une fois — c'était la troisième porte du piège
+      // d'attribution.
+      feedsLibrary: feedsSoundLibrary({ visibility: data.visibility, repostOfId: data.repostOfId }),
       tracks: extractCaptureTracks(data.storyEffects),
     }).catch((err: unknown) => {
       log.error('captureSounds (createPost) a échoué', err instanceof Error ? err : new Error(String(err)), { postId: post.id });
@@ -843,7 +844,7 @@ export class PostService {
       this.soundCaptureService.captureSounds({
         postId: updated.id,
         authorId: updated.authorId,
-        isPublic: updated.visibility === PostVisibility.PUBLIC && !updated.repostOfId,
+        feedsLibrary: feedsSoundLibrary({ visibility: updated.visibility, repostOfId: updated.repostOfId }),
         tracks: extractCaptureTracks(data.storyEffects),
       }).catch((err: unknown) => {
         log.error('captureSounds (updatePost) a échoué', err instanceof Error ? err : new Error(String(err)), { postId: updated.id });

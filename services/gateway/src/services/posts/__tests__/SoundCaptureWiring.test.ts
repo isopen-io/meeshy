@@ -62,12 +62,10 @@ describe('PostService — câblage de la capture', () => {
   it('test_createPost_repostPath_doesNotFeedTheLibrary', () => {
     const capture = code.indexOf('this.soundCaptureService.captureSounds');
     const call = code.slice(capture, capture + 400);
-    // Expression ENTIÈRE, de `isPublic:` à la virgule finale. Chercher seulement
-    // `PUBLIC && !data.repostOfId` laissait passer
-    // `isPublic: (… && !data.repostOfId) || true` : le texte survivait à sa
-    // propre neutralisation, la porte grande ouverte, le fichier vert.
-    // Le vrai filet reste `SoundCaptureComposition.test.ts`, qui EXÉCUTE l'appel.
-    expect(call).toContain('isPublic: data.visibility === PostVisibility.PUBLIC && !data.repostOfId,');
+    // La règle est une fonction PARTAGÉE, testée exhaustivement
+    // (`soundEligibility.test.ts`). Cette garde ne vérifie plus que le
+    // câblage : que ce site l'appelle bien avec SES deux entrées.
+    expect(call).toContain('feedsSoundLibrary({ visibility: data.visibility, repostOfId: data.repostOfId })');
   });
 
   /**
@@ -81,7 +79,7 @@ describe('PostService — câblage de la capture', () => {
     expect(start).toBeGreaterThan(-1);
     expect(end).toBeGreaterThan(start);
     expect(code.slice(start, end))
-      .toContain('isPublic: updated.visibility === PostVisibility.PUBLIC && !updated.repostOfId,');
+      .toContain('feedsSoundLibrary({ visibility: updated.visibility, repostOfId: updated.repostOfId })');
   });
 
   /**

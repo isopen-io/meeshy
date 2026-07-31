@@ -236,10 +236,15 @@ services:
       # ce dernier est monté en lecture seule par nginx (static.<domaine>) et
       # servi sans authentification — les sons ne le sont que par la route JWT.
       - UPLOAD_DIR=/app/sounds
-      # Capture de sons : INERTE tant que ce drapeau ne vaut pas 'true'. Le
-      # socle se déploie et se vérifie sans capturer un seul son ; on l'ouvrira
-      # au canary, une fois `prisma db push` joué et le lot B livré.
-      - SOUND_LIBRARY_ENABLED=false
+      # Capture de sons OUVERTE (décision produit du 2026-07-31). Alimentée par
+      # les contenus PUBLIC **et COMMUNITY** — cf. `soundEligibility.ts`.
+      #
+      # PRÉ-REQUIS AVANT DE DÉPLOYER AVEC CETTE VALEUR, dans cet ordre :
+      #   1. sauver /tmp/meeshy-uploads (docker cp) — le conteneur recréé le perd ;
+      #   2. volume `gateway_sounds` monté sur /app/sounds ;
+      #   3. `prisma db push` (index unique, @@index([fileUrl]), coverUrl…).
+      # Ouvrir sans le 2 écrirait les sons dans un répertoire éphémère.
+      - SOUND_LIBRARY_ENABLED=true
       - PUBLIC_URL=${PUBLIC_URL:-https://gate.${DOMAIN:-meeshy.me}}
       - MAX_TRANSLATION_LENGTH=10000
       # Variables d'initialisation des utilisateurs
