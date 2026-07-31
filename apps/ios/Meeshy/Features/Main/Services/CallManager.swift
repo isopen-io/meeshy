@@ -647,11 +647,20 @@ final class CallManager: ObservableObject {
         config.maximumCallGroups = 2
         config.supportedHandleTypes = [.generic]
         config.includesCallsInRecents = true
-        // Custom CallKit icon: bundle a 40x40 PNG named "CallKitIcon" in Assets
-        // to brand the lock-screen call card. Falls back to the default phone
-        // icon if the asset is missing.
-        if let icon = UIImage(named: "CallKitIcon") {
-            config.iconTemplateImageData = icon.pngData()
+        // Custom CallKit icon: a 40x40 pt template PNG named "CallKitIcon".
+        // `iconTemplateImageData` is a TEMPLATE — iOS discards the colour
+        // channels and reads the alpha channel only, so the asset carries an
+        // opaque glyph on a fully transparent background. An opaque PNG would
+        // render as a filled rectangle.
+        //
+        // Never silence a miss here: this branch was guarded by a bare `if let`
+        // against an asset that had never existed, so the call card shipped
+        // without brand identity from the very first build and nothing said so.
+        if let icon = UIImage(named: "CallKitIcon"), let data = icon.pngData() {
+            config.iconTemplateImageData = data
+        } else {
+            Logger.calls.error("[CALLKIT] CallKitIcon asset missing — call UI ships without brand identity")
+            assertionFailure("CallKitIcon asset missing from Assets.xcassets")
         }
         // Phase 1.5 fix — explicit ringtone for incoming calls.
         // CallKit's default `ringtoneSound = nil` falls back to system ringtone,
