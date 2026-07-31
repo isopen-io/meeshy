@@ -154,6 +154,7 @@ struct ProfileUserPostsList: View {
                     card(for: post)
                         .onAppear { viewModel.trackImpression(post.id) }
                 }
+                .onDisappear { Task { await viewModel.flushImpressions() } }
 
                 if viewModel.hasMoreToRender || viewModel.hasMore {
                     // Infinite-scroll sentinel — reveals more cached cards first
@@ -420,11 +421,9 @@ final class ProfileUserPostsViewModel: ObservableObject {
     private let postService: PostServiceProviding
     private let languageProvider: LanguageProviding
 
-    // Impression batching — miroir de FeedView : une impression par APPARITION,
-    // donc une LISTE d'occurrences (pas un Set d'ids déjà vus), envoyée avec ses
-    // répétitions ; le gateway les regroupe.
-    private var pendingImpressions: [String] = []
-    private var impressionTask: Task<Void, Never>?
+    /// Groupement, persistance et flush (sortie d'écran / arrière-plan /
+    /// relance) portés par `ImpressionBatcher`.
+    private lazy var impressions = ImpressionBatcher(source: "profile")
 
     private var cancellables = Set<AnyCancellable>()
 
@@ -675,30 +674,12 @@ final class ProfileUserPostsViewModel: ObservableObject {
     // MARK: - Impressions (batched, source "profile")
 
     func trackImpression(_ postId: String) {
-        pendingImpressions.append(postId)
-        scheduleImpressionFlush()
+        impressions.record(postId)
     }
 
-    private func scheduleImpressionFlush() {
-        impressionTask?.cancel()
-        impressionTask = Task { [weak self] in
-            try? await Task.sleep(nanoseconds: 3_000_000_000)
-            guard !Task.isCancelled else { return }
-            await self?.flushImpressions()
-        }
-    }
-
-    private func flushImpressions() async {
-        let batch = pendingImpressions
-        guard !batch.isEmpty else { return }
-        pendingImpressions.removeAll()
-        do {
-            try await postService.recordImpressions(postIds: batch, source: "profile")
-        } catch {
-            // Remis en tête de file : une impression perdue par un échec réseau
-            // serait sous-comptée sans rien pour la reproduire.
-            pendingImpressions.insert(contentsOf: batch, at: 0)
-            ProfileUserPostsViewModel.logger.debug("impression flush failed (will retry): \(error.localizedDescription)")
-        }
+    /// À appeler quand la liste disparaît : sans ce flush, le lot en cours de
+    /// groupement est perdu.
+    func flushImpressions() async {
+        await impressions.flushNow()
     }
 }

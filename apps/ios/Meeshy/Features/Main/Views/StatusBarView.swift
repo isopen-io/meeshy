@@ -70,6 +70,9 @@ struct StatusBarView: View {
         .popover(item: $selectedPopover) { entry in
             statusPopover(entry)
         }
+        // Sans ce flush, le lot d'impressions en cours de groupement part avec
+        // la vue.
+        .onDisappear { Task { await viewModel.flushImpressions() } }
     }
 
     // MARK: - My Status Pill

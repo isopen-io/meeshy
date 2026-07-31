@@ -20,10 +20,9 @@ class StatusViewModel: ObservableObject {
     private let postService: PostServiceProviding
     private let isOffline: () -> Bool
 
-    /// Occurrences d'apparition en attente d'envoi — une LISTE, pas un Set :
-    /// revoir un mood est une nouvelle impression.
-    private var pendingImpressions: [String] = []
-    private var impressionTask: Task<Void, Never>?
+    /// Groupement, persistance et flush (arrière-plan / relance) portés par
+    /// `ImpressionBatcher`.
+    private lazy var impressions = ImpressionBatcher(source: "status", postService: postService)
 
     /// A mood is "stuck offline" (recoverable as a draft) once it has been
     /// unsent for longer than this — the "pas envoyé dans la minute → offline"
@@ -70,28 +69,13 @@ class StatusViewModel: ObservableObject {
 
     /// Le mood `statusId` est apparu à l'écran.
     func trackImpression(_ statusId: String) {
-        pendingImpressions.append(statusId)
-        scheduleImpressionFlush()
+        impressions.record(statusId)
     }
 
-    private func scheduleImpressionFlush() {
-        impressionTask?.cancel()
-        impressionTask = Task { [weak self] in
-            try? await Task.sleep(nanoseconds: 3_000_000_000)
-            guard !Task.isCancelled else { return }
-            await self?.flushImpressions()
-        }
-    }
-
-    private func flushImpressions() async {
-        let batch = pendingImpressions
-        guard !batch.isEmpty else { return }
-        pendingImpressions.removeAll()
-        do {
-            try await postService.recordImpressions(postIds: batch, source: "status")
-        } catch {
-            pendingImpressions.insert(contentsOf: batch, at: 0)
-        }
+    /// À appeler quand la barre disparaît : sans ce flush, le lot en cours de
+    /// groupement est perdu.
+    func flushImpressions() async {
+        await impressions.flushNow()
     }
 
     /// Le mood `statusId` a été ouvert (popover) — vue unique par utilisateur.

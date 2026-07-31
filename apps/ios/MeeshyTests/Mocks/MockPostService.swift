@@ -156,6 +156,7 @@ final class MockPostService: PostServiceProviding, @unchecked Sendable {
     /// commentaire notifié) : consommée en priorité, une entrée par appel.
     var getCommentsResultsQueue: [Result<PaginatedAPIResponse<[APIPostComment]>, Error>] = []
 
+    var recordImpressionsResult: Result<Void, Error> = .success(())
     var recordImpressionsCallCount = 0
     var lastRecordImpressionPostIds: [String]?
     var lastRecordImpressionsSource: String?
@@ -401,6 +402,7 @@ final class MockPostService: PostServiceProviding, @unchecked Sendable {
         recordImpressionsCallCount += 1
         lastRecordImpressionPostIds = postIds
         lastRecordImpressionsSource = source
+        try recordImpressionsResult.get()
     }
 
     func recordImpression(postId: String, source: String) async throws {
@@ -537,6 +539,7 @@ final class MockPostService: PostServiceProviding, @unchecked Sendable {
 
         recordImpressionsCallCount = 0
         lastRecordImpressionsSource = nil
+        recordImpressionsResult = .success(())
         lastRecordImpressionPostIds = nil
 
         recordImpressionCallCount = 0

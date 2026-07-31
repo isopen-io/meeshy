@@ -27,10 +27,7 @@ struct BookmarksView: View {
     @State private var storyAuthorUserId: String?
     @State private var filter: BookmarkFilter = .all
 
-    /// Occurrences d'apparition en attente — une LISTE, pas un Set : revoir une
-    /// carte en scrollant est une nouvelle impression. Miroir de `FeedView`.
-    @State private var pendingImpressions: [String] = []
-    @State private var impressionFlushTask: Task<Void, Never>?
+    @StateObject private var impressions = ImpressionBatcher(source: "profile")
 
     /// Facette de tri de l'écran. `nonisolated` sur le TYPE : `CaseIterable` et
     /// `Identifiable` sont exercés hors du MainActor par le `ForEach` du picker.
@@ -155,26 +152,13 @@ struct BookmarksView: View {
         .accessibilityLabel(String(localized: "bookmarks.filter.a11y", defaultValue: "Filtrer les favoris", bundle: .main))
     }
 
+    private func trackImpression(postId: String) {
+        impressions.record(postId)
+    }
+
     /// Un réel s'ouvre dans le lecteur immersif, amorcé avec les SEULS réels
     /// enregistrés : y glisser les posts enregistrés donnerait des pages vides
     /// entre deux vidéos.
-    private func trackImpression(postId: String) {
-        pendingImpressions.append(postId)
-        impressionFlushTask?.cancel()
-        impressionFlushTask = Task { @MainActor in
-            try? await Task.sleep(nanoseconds: 3_000_000_000)
-            guard !Task.isCancelled else { return }
-            let batch = pendingImpressions
-            guard !batch.isEmpty else { return }
-            pendingImpressions.removeAll()
-            do {
-                try await PostService.shared.recordImpressions(postIds: batch, source: "profile")
-            } catch {
-                pendingImpressions.insert(contentsOf: batch, at: 0)
-            }
-        }
-    }
-
     private func openBookmark(_ post: FeedPost) {
         HapticFeedback.medium()
         if post.isReel {

@@ -98,12 +98,10 @@ struct FeedView: View {
     @State private var postShareInFlightIds: Set<String> = []
     @State private var postShareDelta: [String: Int] = [:]
 
-    // Impression tracking — une impression par APPARITION à l'écran, donc une
-    // LISTE d'occurrences et non un Set d'ids déjà vus : un aller-retour de
-    // scroll doit recompter. Le lot est envoyé avec ses répétitions ; le
-    // gateway regroupe et incrémente `impressionCount` du bon nombre.
-    @State private var pendingImpressions: [String] = []
-    @State private var impressionFlushTask: Task<Void, Never>?
+    // Impression tracking — une impression par APPARITION à l'écran. Le
+    // groupement, la persistance et le flush (sortie d'écran / arrière-plan /
+    // relance) sont portés par `ImpressionBatcher`.
+    @StateObject private var impressions = ImpressionBatcher(source: "feed")
 
     // Attachment states
     @State var pendingAttachments: [MessageAttachment] = []
@@ -1192,8 +1190,9 @@ struct FeedView: View {
         .onDisappear {
             viewModel.unsubscribeFromSocketEvents()
             viewModel.feedStore?.stopObserving()
-            impressionFlushTask?.cancel()
-            impressionFlushTask = nil
+            // Flush, PAS cancel : annuler ici jetait le lot en cours de
+            // groupement à chaque sortie du feed.
+            Task { await impressions.flushNow() }
         }
         .sheet(isPresented: $showAudioComposer) {
             AudioPostComposerView { audioURL, mimeType, transcription in
@@ -1568,34 +1567,7 @@ struct FeedView: View {
     // MARK: - Impression Tracking
 
     private func trackImpression(postId: String) {
-        pendingImpressions.append(postId)
-        scheduleImpressionFlush()
-    }
-
-    private func scheduleImpressionFlush() {
-        // Debounce via a cancellable Task, NOT Timer.scheduledTimer: a default-mode
-        // run-loop timer does not fire while the feed ScrollView is in tracking
-        // mode, and it was re-armed on every card `onAppear` — so feed-appearance
-        // impressions never flushed (impressionCount only ever moved on Detail
-        // opens, tracking postOpenCount 1:1). Task.sleep fires regardless of
-        // run-loop mode. Mirrors ProfileUserPostsList.scheduleImpressionFlush.
-        impressionFlushTask?.cancel()
-        impressionFlushTask = Task { @MainActor in
-            try? await Task.sleep(nanoseconds: 3_000_000_000)
-            guard !Task.isCancelled else { return }
-            let batch = pendingImpressions
-            guard !batch.isEmpty else { return }
-            pendingImpressions.removeAll()
-            do {
-                try await PostService.shared.recordImpressions(postIds: batch)
-            } catch {
-                // Le lot repart en tête de file : une impression perdue par un
-                // échec réseau serait sous-comptée, et rien ne la reproduira
-                // (la carte est peut-être déjà sortie de l'écran).
-                pendingImpressions.insert(contentsOf: batch, at: 0)
-                FeedView.logger.debug("impression flush failed (will retry): \(error.localizedDescription)")
-            }
-        }
+        impressions.record(postId)
     }
 }
 
