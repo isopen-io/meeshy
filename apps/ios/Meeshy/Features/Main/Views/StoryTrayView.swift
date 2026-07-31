@@ -473,10 +473,18 @@ private struct MyStoryButton: View {
                     storyState: storyState,
                     moodEmoji: myMoodEmoji,
                     onTap: {
-                        if hasMyStory {
-                            onManageStories?()
-                        } else {
-                            viewModel.showStoryComposer = true
+                        // Résolu AU TAP, pas à la construction du corps : lire
+                        // `StoryPublishService.shared` ici n'installe aucune
+                        // dépendance sur cette vue feuille (doctrine « Zero
+                        // Unnecessary Re-render ») tout en voyant toujours
+                        // l'état courant.
+                        switch StoryTrayAvatarTapResolver.action(
+                            hasPublishedStory: hasMyStory,
+                            hasActiveUpload: viewModel.activeUpload != nil,
+                            hasFailedItems: !StoryPublishService.shared.failedItems.isEmpty
+                        ) {
+                        case .manageStories: onManageStories?()
+                        case .createStory:   viewModel.showStoryComposer = true
                         }
                         HapticFeedback.medium()
                     },
@@ -491,6 +499,15 @@ private struct MyStoryButton: View {
                                 onViewMyStory()
                                 HapticFeedback.medium()
                             })
+                        }
+                        // Découplé de `hasMyStory` : un envoi en cours ou une
+                        // publication échouée n'a produit AUCUNE story publiée,
+                        // et c'est précisément ce travail-là qu'on vient gérer.
+                        if StoryTrayAvatarTapResolver.action(
+                            hasPublishedStory: hasMyStory,
+                            hasActiveUpload: viewModel.activeUpload != nil,
+                            hasFailedItems: !StoryPublishService.shared.failedItems.isEmpty
+                        ) == .manageStories {
                             items.append(AvatarContextMenuItem(label: "Gérer mes stories", icon: "rectangle.stack.fill") {
                                 onManageStories?()
                                 HapticFeedback.medium()
@@ -568,11 +585,7 @@ private struct MyStoryButton: View {
                 }
                 .overlay {
                     if let upload = viewModel.activeUpload {
-                        StoryUploadOverlay(
-                            upload: upload,
-                            onRetry: { viewModel.retryUpload() },
-                            onCancel: { viewModel.cancelUpload() }
-                        )
+                        StoryUploadOverlay(upload: upload)
                     }
                 }
 
@@ -607,8 +620,6 @@ private struct MyStoryButton: View {
 
 private struct StoryUploadOverlay: View {
     let upload: StoryViewModel.StoryUploadState
-    let onRetry: () -> Void
-    let onCancel: () -> Void
 
     private var isFailed: Bool {
         if case .failed = upload.phase { return true }
@@ -654,25 +665,17 @@ private struct StoryUploadOverlay: View {
                     .foregroundColor(.white)
             }
         }
-        .onTapGesture {
-            if isFailed { onRetry() }
-        }
-        .contextMenu {
-            if isFailed {
-                Button { onRetry() } label: {
-                    Label(String(localized: "story.tray.retry", defaultValue: "Reessayer", bundle: .main), systemImage: "arrow.clockwise")
-                }
-                Button(role: .destructive) { onCancel() } label: {
-                    Label(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .main), systemImage: "trash")
-                }
-            }
-        }
-        // While `.uploading`/`.publishing`, this overlay must NOT swallow the
-        // tap/long-press meant for the `MeeshyAvatar` underneath (which opens
-        // "Gérer mes stories" via `onManageStories`) — only `.failed` has a
-        // real gesture to offer here (retry). `allowsHitTesting(false)` makes
-        // the whole overlay click-through so both gestures fall to the avatar.
-        .allowsHitTesting(isFailed)
+        // Purement informatif : cet overlay ne prend JAMAIS le geste destiné à
+        // l'avatar dessous, qui ouvre « Mes stories ».
+        //
+        // Il portait auparavant `allowsHitTesting(isFailed)` plus un tap-retry
+        // et un menu contextuel. En échec — exactement quand l'utilisateur a
+        // besoin d'atteindre son travail — le `/!` avalait donc le tap et
+        // rendait la liste inaccessible (user 2026-08-01). Réessayer et
+        // supprimer vivent dans `MyStoriesView`, sur une ligne qui montre en
+        // plus le motif de l'échec : une pastille de 50 pt n'était pas une
+        // surface d'action défendable.
+        .allowsHitTesting(false)
     }
 }
 
