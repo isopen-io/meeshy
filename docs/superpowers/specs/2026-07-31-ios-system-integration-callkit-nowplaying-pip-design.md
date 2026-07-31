@@ -162,27 +162,38 @@ capture de « était-elle en cours » doit être poussée depuis `CallManager` a
 
 Sur échec transitoire retryable, `.ended` tient **12 s** pendant lesquelles l'affordance « Réessayer » est
 vivante ; un tap re-entre dans `startCall` → état actif → `stopAll()`. **Tout délai inférieur à 12 s rejoue
-le flap que le critère 4 interdit**, sur un chemin plus fréquent que le call-waiting.
+le flap que le critère 5 interdit**, sur un chemin plus fréquent que le call-waiting.
 
-La sortie est donc **différée et annulable** : armée à l'entrée dans `.ended`, annulée si un état actif
-revient avant échéance. Le délai est **dérivé de `QualityThresholds`**, jamais gravé — sinon la prochaine
-évolution des constantes désynchronise silencieusement le lot.
+**Décision retenue — s'accrocher à `.idle`, sans réimplémenter aucun délai** *(simplification adoptée à
+l'implémentation, en remplacement du « délai différé et annulable » prescrit ci-dessus)*.
+
+`CallManager` arbitre déjà ces trois fenêtres via son `settleToken` : le settle Task
+(`CallManager.swift:3618-3643`) pose `.idle` après le délai approprié et bail si un nouvel appel a nilé le
+token. Le handoff call-waiting ne passe donc **jamais** par `.idle`, et un tap « Réessayer » dans la fenêtre
+de 12 s non plus. Les trois fenêtres sont couvertes par construction, sans dupliquer une seule constante —
+ce qui supprime du même coup le risque de désynchronisation que la version précédente cherchait à éviter.
+
+**Piège à traiter — `.idle` transitoire.** `resetEndedStateForNewCall` (`CallManager.swift:893`) pose
+`.idle` juste avant de démarrer l'appel suivant. Une reprise synchrone relancerait un vocal une fraction de
+seconde avant que le nouvel appel ne le tue. La reprise est donc **différée d'un tour de runloop et
+revérifiée** (`callState == .idle` encore vrai).
 
 > Correction d'une justification erronée de la v2 : « un appel démarré dans la fenêtre 1,5 s ne repasse
 > jamais par `.idle` » est faux. Le Task de settle (`CallManager.swift:3618-3634`) est gardé par token, et
 > l'appel n°2 a son propre `.ended` et son propre `.idle`. Le vrai argument contre « sortir sur `.idle`
 > seul » est le handoff de 0,5 s et la fenêtre de 12 s.
 
-### `.callEndedShouldResume` : front d'armement, jamais déclencheur
+### `.callEndedShouldResume` : écarté comme déclencheur
 
 `setCallActive` (`MediaSessionCoordinator.swift:95-107`) émet sur le front `isActive` true→false — donc à
 **T0** de l'entrée dans `.ended`, c'est-à-dire au **début** du handoff et de la fenêtre de 12 s, pas à leur
-fin. Ce signal sert **uniquement à armer** le délai annulable. Le consommer comme déclencheur de reprise
-produirait exactement la reprise immédiate que la section précédente interdit.
+fin. Le consommer comme déclencheur de reprise produirait la reprise immédiate que la section précédente
+interdit.
 
-On se branche sur ce canal SDK plutôt que d'ajouter un quatrième mécanisme parallèle — il en existe déjà
-trois : `PlaybackCoordinator.stopAll()`, `setCallActive`, et deux observateurs concurrents
-d'`AVAudioSession.interruptionNotification` (`CallManager.swift:705-716`, `MediaSessionCoordinator.swift:239-248`).
+Avec l'accroche à `.idle`, ce canal n'est plus nécessaire : le signal de reprise est le retour au repos
+lui-même. Aucun quatrième mécanisme parallèle n'est ajouté pour autant — les deux appels
+(`suspendForSystemCall` / `resumeAfterSystemCall`) sont poussés depuis `callState.didSet`, le point de
+propagation unique qui porte déjà `setCallActive` et `stopAll()`.
 
 ### Arbitrage de la double reprise
 

@@ -95,6 +95,12 @@ public final class ConversationAudioCoordinator: ObservableObject {
     var _nowPlayingCancellables = Set<AnyCancellable>()
     // Opaque tokens from MPRemoteCommand.addTarget, kept for future deactivation symmetry.
     var _remoteCommandTokens: [Any] = []
+    /// Gate lue par `pushNowPlayingInfo()`. Sans elle, le premier tick de
+    /// progression republierait la carte que la suspension vient d'effacer.
+    var _isSuspendedBySystemCall = false
+    /// Capturé À L'ENTRÉE de la suspension, avant que `PlaybackCoordinator.stopAll()`
+    /// n'écrase `isPlaying`. Décide si la fin d'appel relance la lecture.
+    private var _wasPlayingBeforeSystemCall = false
 
     private static let log = Logger(subsystem: "me.meeshy.app", category: "audio-coordinator")
 
@@ -146,7 +152,71 @@ public final class ConversationAudioCoordinator: ObservableObject {
         }
         engine.togglePlayPause()
     }
-    public func playNext() { advanceQueue() }
+    public func playNext() {
+        // `advanceQueue()` consomme la tête de file, l'ajoute à
+        // `consumedAttachmentIds` et peut nil-er `activeContext`. Sans cette
+        // garde, un tap « suivant » sur la carte Control Center périmée pendant
+        // un appel DÉTRUISAIT la file — les autres transports étaient gardés,
+        // celui-ci ne l'était pas.
+        guard !CallManager.shared.isCallActiveForAudioGuard else {
+            Self.log.info("playNext() ignored: a CallKit call is active")
+            return
+        }
+        advanceQueue()
+    }
+
+    // MARK: - Suspension pendant un appel système
+
+    /// Suspend la publication vers les surfaces système le temps d'un appel.
+    ///
+    /// À appeler AVANT `PlaybackCoordinator.stopAll()` : celui-ci détruit le
+    /// lecteur (`player = nil`, `isPlaying = false`), donc la capture de « la
+    /// lecture était-elle en cours » doit le précéder. `@Published` émettant en
+    /// `willSet`, un abonné différé par `.receive(on:)` lirait déjà `false` —
+    /// d'où un push synchrone depuis `CallManager` plutôt qu'un abonnement.
+    ///
+    /// La file, l'historique et `activeContext` sont PRÉSERVÉS : c'est ce qui
+    /// rend la reprise possible. La position, elle, est déjà persistée par
+    /// `stop()` et restaurée par `applyResumePositionIfAvailable()`.
+    public func suspendForSystemCall() {
+        guard !_isSuspendedBySystemCall else { return }
+        _isSuspendedBySystemCall = true
+        _wasPlayingBeforeSystemCall = isPlaying
+        clearNowPlayingForSystemCall()
+        setRemoteCommandsEnabled(false)
+    }
+
+    /// Rétablit les surfaces système à la fin d'un appel, et relance la lecture
+    /// si elle était en cours au moment de l'interruption.
+    ///
+    /// La reprise passe par `startCurrentHead()` — un vrai `play(urlString:)`.
+    /// `togglePlayPause()` et `seek(to:)` sont des no-op ici : `stopAll()` a mis
+    /// `player` à nil et les deux gardent dessus.
+    ///
+    /// C'est `CallManager` qui décide QUAND appeler cette méthode (au retour à
+    /// `.idle`, différé d'un tour de runloop) : le coordinateur n'a pas à
+    /// connaître les états d'appel ni leurs fenêtres de settle.
+    public func resumeAfterSystemCall() {
+        guard _isSuspendedBySystemCall else { return }
+        _isSuspendedBySystemCall = false
+        setRemoteCommandsEnabled(true)
+
+        let shouldRestart = _wasPlayingBeforeSystemCall
+        _wasPlayingBeforeSystemCall = false
+
+        guard shouldRestart, activeContext != nil else {
+            pushNowPlayingForSystemCall()
+            return
+        }
+        // Le canvas story consomme le même front de fin d'appel et coupe tout
+        // autre lecteur via `PlaybackCoordinator.willStartPlaying`. S'il a repris,
+        // il est prioritaire — reprendre ici les couperait mutuellement.
+        guard !PlaybackCoordinator.shared.isAnyPlaying else {
+            pushNowPlayingForSystemCall()
+            return
+        }
+        startCurrentHead()
+    }
 
     /// `true` when a prior track is available to jump back to. Drives the
     /// lock-screen `previousTrackCommand` enablement.

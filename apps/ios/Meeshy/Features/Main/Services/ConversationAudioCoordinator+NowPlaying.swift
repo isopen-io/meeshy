@@ -79,6 +79,12 @@ extension ConversationAudioCoordinator {
     // MARK: - NowPlayingInfoCenter
 
     private func pushNowPlayingInfo() {
+        // Un appel est en cours : la carte doit rester absente. Ce gate est
+        // indispensable — les sinks `$currentTime` / `$isPlaying` continuent de
+        // tirer pendant la suspension (`stopAll()` écrit lui-même
+        // `currentTime = 0` / `isPlaying = false`), et republieraient la carte
+        // que `suspendForSystemCall()` vient d'effacer.
+        guard !_isSuspendedBySystemCall else { return }
         guard let context = activeContext else {
             clearNowPlaying()
             return
@@ -118,6 +124,41 @@ extension ConversationAudioCoordinator {
 
     private func clearNowPlaying() {
         MPNowPlayingInfoCenter.default().nowPlayingInfo = nil
+    }
+
+    // MARK: - Ponts pour la suspension d'appel
+    //
+    // `pushNowPlayingInfo` et `clearNowPlaying` sont `private` : visibles dans
+    // CE fichier uniquement, donc inatteignables depuis le corps de la classe.
+    // Ces trois ponts `internal` sont la surface que `suspendForSystemCall()` /
+    // `resumeAfterSystemCall()` consomment.
+
+    func clearNowPlayingForSystemCall() {
+        clearNowPlaying()
+    }
+
+    func pushNowPlayingForSystemCall() {
+        pushNowPlayingInfo()
+    }
+
+    /// Arme ou désarme les transports système.
+    ///
+    /// Bascule `isEnabled` — ne JAMAIS rappeler `installRemoteCommands()` pour
+    /// réarmer : elle est one-shot (`_isNowPlayingActivated`) et ses
+    /// `_remoteCommandTokens` ne sont jamais retirés, donc un second appel
+    /// doublerait les targets et ferait double-déclencher chaque commande.
+    ///
+    /// Le désarmement n'est pas redondant avec les gardes `isCallActiveForAudioGuard` :
+    /// `nextTrackCommand` et `changePlaybackPositionCommand` n'en avaient aucune,
+    /// et la première détruisait la tête de file.
+    func setRemoteCommandsEnabled(_ enabled: Bool) {
+        guard _isNowPlayingActivated else { return }
+        let cc = MPRemoteCommandCenter.shared()
+        cc.playCommand.isEnabled = enabled
+        cc.pauseCommand.isEnabled = enabled
+        cc.nextTrackCommand.isEnabled = enabled
+        cc.previousTrackCommand.isEnabled = enabled
+        cc.changePlaybackPositionCommand.isEnabled = enabled
     }
 
     // MARK: - RemoteCommandCenter

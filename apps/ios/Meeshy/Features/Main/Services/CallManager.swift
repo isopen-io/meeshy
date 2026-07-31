@@ -146,7 +146,33 @@ final class CallManager: ObservableObject {
             // resterait « muet définitivement » au raccrochage : plus rien à réactiver,
             // le prochain tap utilisateur reconfigure proprement la session.
             if active && !oldValue.isActive {
+                // AVANT stopAll() : celui-ci détruit le lecteur (`player = nil`,
+                // `isPlaying = false`), or la suspension doit capturer si la
+                // lecture était en cours pour décider de la reprise. `@Published`
+                // émettant en `willSet`, un abonné différé par `.receive(on:)`
+                // lirait déjà `false` — d'où ce push synchrone.
+                ConversationAudioCoordinator.shared.suspendForSystemCall()
                 PlaybackCoordinator.shared.stopAll()
+            }
+
+            // Retour au repos : rendre les surfaces système au lecteur de vocaux.
+            //
+            // On s'accroche à `.idle` plutôt qu'à un délai maison : c'est déjà
+            // CallManager qui arbitre les trois fenêtres de settle (1,5 s
+            // standard, 12 s retryable, 0,5 s de handoff call-waiting) via son
+            // `settleToken`. Dupliquer ces constantes ici les désynchroniserait
+            // à la première évolution.
+            //
+            // Différé d'un tour de runloop ET revérifié, parce que
+            // `resetEndedStateForNewCall` pose `.idle` TRANSITOIREMENT avant de
+            // démarrer l'appel suivant : reprendre synchroniquement relancerait
+            // un vocal une fraction de seconde avant que le nouvel appel ne le
+            // tue — le flap exact qu'on cherche à éviter.
+            if callState == .idle, oldValue != .idle {
+                Task { @MainActor [weak self] in
+                    guard let self, self.callState == .idle else { return }
+                    ConversationAudioCoordinator.shared.resumeAfterSystemCall()
+                }
             }
 
             // Keep the screen on for the duration of the call (ringing →
