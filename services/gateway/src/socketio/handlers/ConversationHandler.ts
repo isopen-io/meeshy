@@ -153,9 +153,16 @@ export class ConversationHandler {
           logger.warn('unread count fetch failed on join (non-blocking)', { conversationId: normalizedId, error: err });
         }
 
-        // Envoyer les stats de conversation
-        await this.sendConversationStatsToSocket(socket, validated.conversationId).catch(err => {
-          logger.warn('conversation stats broadcast failed (non-blocking)', { conversationId: validated.conversationId, error: err });
+        // Envoyer les stats de conversation. On passe l'id RÉSOLU (`normalizedId`),
+        // comme le room join, le payload joined et l'emit unread ci-dessus — sauf
+        // pour la conversation globale "meeshy", que ConversationStatsService résout
+        // lui-même via le littéral (elle n'a pas de rows Participant : lui donner
+        // l'ObjectId renverrait participantCount:0 / onlineUsers:[]). Passer le brut
+        // `validated.conversationId` pour tout autre identifiant de slug faisait
+        // manquer `findFirst({ id })` → stats vides mises en cache 1h sous la clé slug.
+        const statsConversationId = validated.conversationId === 'meeshy' ? 'meeshy' : normalizedId;
+        await this.sendConversationStatsToSocket(socket, statsConversationId).catch(err => {
+          logger.warn('conversation stats broadcast failed (non-blocking)', { conversationId: statsConversationId, error: err });
         });
       }
     } catch (error) {
