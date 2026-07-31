@@ -79,7 +79,13 @@ settings:
   # la prochaine régénération réécrase le correctif.
   VERSIONING_SYSTEM: apple-generic
   CURRENT_PROJECT_VERSION: "1265"
-  MARKETING_VERSION: "1.0.0"
+  # Alignée sur la version App Store Connect. Passée à 1.0.1 le 2026-07-31 :
+  # la 1.0.0 avait été rejetée (déclaration Age Rating `ageAssurance` à true
+  # sans mécanisme de vérification d'âge dans l'app), et l'enregistrement ASC a
+  # été renommé plutôt que recréé — description et captures sont conservées.
+  # Laisser 1.0.0 ici ferait produire par tout build local un CFBundleShortVersionString
+  # en désaccord avec la version qui attend le binaire.
+  MARKETING_VERSION: "1.0.1"
 
   # Équipe de signature (Automatic). Indispensable pour `meeshy.sh device`
   # (déploiement sur appareil réel) : sans DEVELOPMENT_TEAM, la signature
