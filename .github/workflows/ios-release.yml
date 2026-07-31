@@ -188,7 +188,7 @@ jobs:
             -authenticationKeyID "$ANDP_KEY_ID" \
             -authenticationKeyIssuerID "$ANDP_ISSUER_ID" \
             -allowProvisioningUpdates \
-            DEVELOPMENT_TEAM=D72UK7R5RE CODE_SIGN_STYLE=Automatic SWIFT_COMPILATION_MODE=incremental \
+            DEVELOPMENT_TEAM=D72UK7R5RE CODE_SIGN_STYLE=Automatic \
             "${VERSION_ARGS[@]}"
 
       # The same standalone script Xcode Cloud / the local scheme use — strips

@@ -28,26 +28,30 @@ settings:
   SWIFT_DEFAULT_ACTOR_ISOLATION: MainActor
   SWIFT_UPCOMING_FEATURE_NONISOLATED_NONSENDING_BY_DEFAULT: "YES"
 
-  # ⚠️ RÉGLAGE PROVISOIRE — mesure de wholemodule EN COURS (2026-07-31).
+  # SWIFT_OPTIMIZATION_LEVEL n'est volontairement PAS fixé ici : le défaut
+  # Xcode (-Onone en Debug, -O + wholemodule en Release) est le bon.
   #
-  # Ce qui est ÉTABLI : le `SWIFT_OPTIMIZATION_LEVEL=-Onone` du commit
-  # 2a32f6462 (2026-04-08, « LLVM ERROR in swift-frontend with -O ... on arm64
-  # Release », noté « temporary workaround ») n'est plus nécessaire. Le build
-  # Release 1266 archive en 3 min 31 s avec `-O` + `incremental`, sans erreur.
-  # Quatre mois de binaires non optimisés en production pour un contournement
-  # que personne n'avait re-testé.
+  # Le commit 2a32f6462 (2026-04-08) avait imposé `-Onone` à TOUS les builds de
+  # release pour contourner un « LLVM ERROR in swift-frontend with -O ... on
+  # arm64 Release », en le notant « temporary workaround ». Personne ne l'a
+  # retesté pendant quatre mois — la production a donc tourné sur des binaires
+  # NON optimisés tout ce temps.
   #
-  # Ce qui N'EST PAS établi : que wholemodule (le défaut Release) soit
-  # inutilisable. La seule observation est une borne INFÉRIEURE — >1 h 02 sans
-  # terminer, un cœur à 81 %, sur un build qui recyclait les intermédiaires
-  # d'une archive interrompue. Ce n'est pas une preuve d'échec.
+  # Retesté le 2026-07-31, sur runners CI identiques (workflow
+  # ios-wmo-probe.yml, run 30658055261), le contournement est OBSOLÈTE :
+  #   -O + wholemodule : BUILD SUCCEEDED en 20 min 07 s, 0 LLVM ERROR
+  #   -O + incremental : BUILD SUCCEEDED en 13 min 52 s
+  # `wholemodule` est conservé (défaut Release) : il produit les optimisations
+  # inter-fichiers — spécialisation de génériques, inlining cross-fichier,
+  # dévirtualisation — qu'`incremental` ne peut pas générer. On compile
+  # rarement, les utilisateurs exécutent en permanence : les 6 minutes de plus
+  # sont un bon échange.
   #
-  # Si wholemodule aboutit dans un temps acceptable, c'est LUI qu'il faut :
-  # il produit les optimisations inter-fichiers qu'`incremental` ne peut pas
-  # générer. Dans ce cas, SUPPRIMER cette clé (wholemodule est déjà le défaut
-  # en Release) et retirer `SWIFT_COMPILATION_MODE=incremental` de
-  # .github/workflows/ios-release.yml et apps/ios/fastlane/Fastfile.
-  SWIFT_COMPILATION_MODE: incremental
+  # ⚠️ Piège de mesure : en local, `wholemodule` a semblé ne pas terminer
+  # (>1 h 02 sur un cœur). C'était un artefact de contention — machine chargée
+  # par une autre session et intermédiaires recyclés d'une archive interrompue.
+  # Ne JAMAIS conclure sur les temps de compilation depuis une machine de dev
+  # occupée ; refaire la mesure via ios-wmo-probe.yml.
 
   # Apple-generic versioning — REQUIS par fastlane (get_build_number /
   # increment_build_number / increment_version_number, qui appellent agvtool).

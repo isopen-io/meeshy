@@ -81,7 +81,7 @@ jobs:
             echo ""
             echo "| Secret | Taille | attendue | Empreinte | Verdict |"
             echo "|---|---|---|---|---|"
-          } >> "$GITHUB_STEP_SUMMARY"
+          } | tee -a "$GITHUB_STEP_SUMMARY"
 
           check() {
             local key="$1" blob="$2" name="$3"
@@ -95,26 +95,26 @@ jobs:
             elif [ "$len" -eq 0 ];             then verdict='❌ secret VIDE ou absent'
             else verdict='❌ ne correspond à AUCUNE forme du fichier'
             fi
-            echo "| \`$name\` | $len | ${SIZE[$key]} | \`$sha\` | $verdict |" >> "$GITHUB_STEP_SUMMARY"
+            echo "| \`$name\` | $len | ${SIZE[$key]} | \`$sha\` | $verdict |" | tee -a "$GITHUB_STEP_SUMMARY"
 
             # Le préfixe attendu en base64 d'un blob chiffré par match est
             # « U2FsdGVkX1 » (= "Salted__"). Son absence dit déjà que le secret
             # n'est pas un blob match brut.
             case "$blob" in
               U2FsdGVkX1*) : ;;
-              *) echo "|  ↳ | | | | ⚠️ ne commence pas par \`U2FsdGVkX1\` (Salted__) |" >> "$GITHUB_STEP_SUMMARY" ;;
+              *) echo "|  ↳ | | | | ⚠️ ne commence pas par \`U2FsdGVkX1\` (Salted__) |" | tee -a "$GITHUB_STEP_SUMMARY" ;;
             esac
 
             if opt=$(try_decrypt "$blob" "/tmp/out-$key.bin"); then
               local first
               first=$(head -c 1 "/tmp/out-$key.bin" | xxd -p)
               if [ "$first" = "30" ]; then
-                echo "|  ↳ | | | | 🔓 déchiffré avec \`${opt:-défaut}\`, DER valide |" >> "$GITHUB_STEP_SUMMARY"
+                echo "|  ↳ | | | | 🔓 déchiffré avec \`${opt:-défaut}\`, DER valide |" | tee -a "$GITHUB_STEP_SUMMARY"
               else
-                echo "|  ↳ | | | | ⚠️ « déchiffré » avec \`${opt:-défaut}\` mais 1er octet \`0x$first\` ≠ \`0x30\` → faux positif de dec() |" >> "$GITHUB_STEP_SUMMARY"
+                echo "|  ↳ | | | | ⚠️ « déchiffré » avec \`${opt:-défaut}\` mais 1er octet \`0x$first\` ≠ \`0x30\` → faux positif de dec() |" | tee -a "$GITHUB_STEP_SUMMARY"
               fi
             else
-              echo "|  ↳ | | | | 🔒 déchiffrement impossible (10 combinaisons) |" >> "$GITHUB_STEP_SUMMARY"
+              echo "|  ↳ | | | | 🔒 déchiffrement impossible (10 combinaisons) |" | tee -a "$GITHUB_STEP_SUMMARY"
             fi
             rm -f "/tmp/out-$key.bin"
           }
@@ -134,4 +134,4 @@ jobs:
             echo "  dépôt avec \`gh secret set <NOM> < <fichier>\`, sans ré-encoder."
             echo ""
             echo "_Aucun secret n'a été modifié par ce job._"
-          } >> "$GITHUB_STEP_SUMMARY"
+          } | tee -a "$GITHUB_STEP_SUMMARY"
