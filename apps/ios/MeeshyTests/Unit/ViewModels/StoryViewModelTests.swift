@@ -13,6 +13,11 @@ final class StoryViewModelTests: XCTestCase {
     private var mockSocket: MockSocialSocket!
     private var mockAPI: MockAPIClientForApp!
     private var cancellables: Set<AnyCancellable>!
+    /// Suite jetable : cette suite publie une dizaine de fois, et
+    /// `UserDefaults.standard` est celui de l'app hôte — la préférence
+    /// d'audience écrite ici serait le défaut du composer au lancement suivant.
+    private var defaultsSuiteName: String!
+    private var defaults: UserDefaults!
 
     override func setUp() async throws {
         try await super.setUp()
@@ -30,15 +35,25 @@ final class StoryViewModelTests: XCTestCase {
         mockSocket = MockSocialSocket()
         mockAPI = MockAPIClientForApp()
         cancellables = []
+        defaultsSuiteName = "StoryViewModelTests-\(UUID().uuidString)"
+        defaults = UserDefaults(suiteName: defaultsSuiteName)
         sut = StoryViewModel(
             storyService: mockStoryService,
             postService: mockPostService,
             socialSocket: mockSocket,
-            api: mockAPI
+            api: mockAPI,
+            visibilityStore: StoryVisibilityPreferenceStore(defaults: defaults)
         )
     }
 
     override func tearDown() async throws {
+        // Cette suite publie : sans purge, la queue de publication, les dossiers
+        // médias hors-ligne et le cache du tray restent VISIBLES dans l'app au
+        // lancement suivant (leçon `reference_outbox_db_path_and_test_residue`).
+        await StoryPublishFixtureCleanup.purge(sut, defaults: defaults)
+        defaults.removePersistentDomain(forName: defaultsSuiteName)
+        defaults = nil
+        defaultsSuiteName = nil
         cancellables = nil
         sut = nil
         mockStoryService = nil
@@ -1246,7 +1261,10 @@ final class StoryViewModelTests: XCTestCase {
         XCTAssertFalse(sut.showStoryComposer)
     }
 
-    func test_publishStoryInBackground_blocksSecondPublish() async {
+    /// C5 — composer une 2e story pendant qu'une monte n'est plus interdit.
+    /// L'ancien `test_publishStoryInBackground_blocksSecondPublish` verrouillait
+    /// exactement le rejet silencieux que ce lot supprime.
+    func test_publishStoryInBackground_secondPublishDuringUpload_isStackedNotDropped() async {
         mockAPI.authToken = "token"
         mockPostService.createStoryResult = .success(Self.makeStoryAPIPost())
 
@@ -1256,9 +1274,6 @@ final class StoryViewModelTests: XCTestCase {
             loadedImages: [:],
             loadedVideoURLs: [:]
         )
-
-        let firstId = sut.activeUpload?.id
-
         sut.publishStoryInBackground(
             slides: [StorySlide()],
             slideImages: [:],
@@ -1266,7 +1281,27 @@ final class StoryViewModelTests: XCTestCase {
             loadedVideoURLs: [:]
         )
 
-        XCTAssertEqual(sut.activeUpload?.id, firstId)
+        XCTAssertEqual(sut.activeUploads.count, 2, "La 2e publication est empilée, pas rejetée")
+        XCTAssertEqual(Set(sut.activeUploads.map(\.id)).count, 2, "Deux entrées distinctes")
+    }
+
+    /// Synchrone après les deux taps : l'invariant « une seule monte à la fois »
+    /// est pinné par `StoryUploadQueueTests` (qui suspend le 1er upload) ; ici
+    /// on ne vérifie que l'état de NAISSANCE des entrées.
+    func test_publishStoryInBackground_secondPublish_bothEntriesStartPreparing() async {
+        mockAPI.authToken = "token"
+        mockPostService.createStoryResult = .success(Self.makeStoryAPIPost())
+
+        sut.publishStoryInBackground(
+            slides: [StorySlide()], slideImages: [:], loadedImages: [:], loadedVideoURLs: [:]
+        )
+        sut.publishStoryInBackground(
+            slides: [StorySlide()], slideImages: [:], loadedImages: [:], loadedVideoURLs: [:]
+        )
+
+        // Les deux entrées naissent `.preparing` : leur intent write-ahead
+        // n'est pas encore durable, aucune n'est drainable.
+        XCTAssertEqual(sut.activeUploads.filter { $0.phase == .preparing }.count, 2)
     }
 
     func test_cancelUpload_clearsActiveUpload() async {

@@ -87,7 +87,7 @@ struct MyStoriesView: View {
             Group {
                 if MyStoriesEmptyStateResolver.shouldShowEmptyState(
                     hasStories: !stories.isEmpty,
-                    hasActiveUpload: viewModel.activeUpload != nil,
+                    hasActiveUpload: !viewModel.activeUploads.isEmpty,
                     hasFailedItems: !publishService.failedItems.isEmpty
                 ) {
                     EmptyStateView(
@@ -98,14 +98,19 @@ struct MyStoriesView: View {
                     )
                 } else {
                     List {
-                        if let upload = viewModel.activeUpload {
+                        // C5 — TOUTES les publications en cours/en attente sont
+                        // listées, pas seulement celle mise en avant sur
+                        // l'avatar : c'est la surface où l'on gère la file.
+                        if !viewModel.activeUploads.isEmpty {
                             Section {
-                                ActiveUploadRow(
-                                    upload: upload,
-                                    onRetry: { viewModel.retryUpload() },
-                                    onCancel: { viewModel.cancelUpload() }
-                                )
-                                .listRowBackground(Color.clear)
+                                ForEach(viewModel.activeUploads) { upload in
+                                    ActiveUploadRow(
+                                        upload: upload,
+                                        onRetry: { viewModel.retryUpload(id: upload.id) },
+                                        onCancel: { viewModel.cancelUpload(id: upload.id) }
+                                    )
+                                    .listRowBackground(Color.clear)
+                                }
                             }
                         }
                         if !publishService.failedItems.isEmpty {
@@ -959,10 +964,9 @@ private struct ActiveUploadRow: View {
     let onRetry: () -> Void
     let onCancel: () -> Void
 
-    private var isFailed: Bool {
-        if case .failed = upload.phase { return true }
-        return false
-    }
+    private var isFailed: Bool { upload.phase.isFailed }
+
+    private var isWaiting: Bool { upload.phase.isWaiting }
 
     var body: some View {
         HStack(spacing: 12) {
@@ -977,11 +981,9 @@ private struct ActiveUploadRow: View {
                 )
 
             VStack(alignment: .leading, spacing: 4) {
-                Text(isFailed
-                     ? String(localized: "story.mine.upload.failedTitle", defaultValue: "Échec de la publication")
-                     : String(localized: "story.mine.upload.title", defaultValue: "Publication en cours…"))
+                Text(StoryUploadPresentation.statusTitle(for: upload.phase))
                     .font(MeeshyFont.relative(15, weight: .semibold))
-                if !isFailed {
+                if !isFailed, !isWaiting {
                     Text("\(Int(upload.progress * 100))%")
                         .font(MeeshyFont.relative(12))
                         .foregroundColor(.secondary)
