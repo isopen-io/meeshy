@@ -12,6 +12,7 @@ import {
 import jwt from 'jsonwebtoken';
 import { MetadataManager } from '../../services/attachments/MetadataManager';
 import { ThumbHashGenerator } from '../../services/attachments/ThumbHashGenerator';
+import { uploaderIdOrNull } from '../../services/posts/mediaOwnership';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 
 const logger = enhancedLogger.child({ module: 'TusHandler' });
@@ -192,9 +193,22 @@ export async function registerTusRoutes(fastify: FastifyInstance): Promise<void>
       let recordId: string;
       if (isPostMedia) {
         // Upload destiné à un post/story/status : créer PostMedia directement (postId=null = pending)
+        // Propriétaire de l'upload — la seule chose qui empêchera un tiers de
+        // revendiquer ce média en devinant son id. `null` quand l'identité
+        // n'est pas un utilisateur enregistré (jeton de session anonyme, ou
+        // repli `'anonymous'`) : y écrire ces valeurs créerait un propriétaire
+        // fourre-tout sous lequel N comptes se revendiqueraient mutuellement.
+        const uploaderId = uploaderIdOrNull(userId);
+        if (!uploaderId) {
+          // On ne REFUSE pas en phase 1 — les routes de post et de commentaire
+          // exigent déjà `requiredAuth`, donc ce cas devrait être vide. Cette
+          // trace sert à le VÉRIFIER avant que la phase 2 ne le rende bloquant.
+          logger.warn(`[TUS] PostMedia sans uploadeur identifiable (context=${uploadContext}, userId=${userId})`);
+        }
         const postMedia = await prisma.postMedia.create({
           data: {
             postId: null,
+            uploaderId,
             fileName: storedName,
             originalName: filename,
             mimeType,

@@ -5,6 +5,8 @@ import { authorSelect, commentMediaInclude, NOT_DELETED } from './posts/postIncl
 import { TrackingLinkService } from './TrackingLinkService';
 import { normalizeLanguageCode } from '@meeshy/shared/utils/language-normalize';
 import { parseSharedPlace } from './location/sharedPlace';
+import { claimableMediaWhere, describeClaimShortfall } from './posts/mediaOwnership';
+import { enhancedLogger } from '../utils/logger-enhanced';
 
 export class PostCommentService {
   private readonly trackingLinkService: TrackingLinkService;
@@ -99,9 +101,18 @@ export class PostCommentService {
     });
 
     // Lier le média pending au commentaire + persister la transcription mobile éventuelle.
+    //
+    // La pré-vérification anti-hijack plus haut couvre « le média est déjà
+    // pris ». Elle ne couvre PAS deux choses : à qui il appartient, et le fait
+    // qu'elle vérifie puis agit en deux temps — entre le `findUnique` et cet
+    // écrit, un autre commentaire peut avoir réclamé le même média.
+    //
+    // Porter la condition dans le `where` de l'écriture règle les deux : la
+    // base tranche en une opération. `updateMany` est obligatoire pour ça —
+    // `update` n'accepte qu'un critère unique, pas une clause composée.
     if (mediaId) {
-      await this.prisma.postMedia.update({
-        where: { id: mediaId },
+      const linked = await this.prisma.postMedia.updateMany({
+        where: { id: mediaId, ...claimableMediaWhere(authorId) },
         data: {
           commentId: comment.id,
           ...(mobileTranscription
@@ -115,6 +126,14 @@ export class PostCommentService {
             : {}),
         },
       });
+      const shortfall = describeClaimShortfall([mediaId], linked.count);
+      if (shortfall) {
+        // Le commentaire existe déjà et reste publié : refuser le média sans
+        // trace donnerait un commentaire vide inexplicable.
+        enhancedLogger.warn(`[PostCommentService] createComment: ${shortfall}`, {
+          commentId: comment.id, authorId, mediaId,
+        });
+      }
     }
 
     // Increment counters

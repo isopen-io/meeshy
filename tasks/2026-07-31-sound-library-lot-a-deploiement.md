@@ -263,15 +263,45 @@ totalité des trous de tests :
 **Restent ouverts, et le drapeau ne doit pas s'ouvrir avant :**
 
 21. **Un média non lié peut être revendiqué par n'importe qui.** `createPost` et
-    `updatePost` rattachent les médias par `{ id: { in: mediaIds }, postId: null }`
-    — `PostMedia` n'a **aucun champ propriétaire**. La garde de scope de la
+    `updatePost` rattachaient les médias par `{ id: { in: mediaIds }, postId: null }`
+    — `PostMedia` n'avait **aucun champ propriétaire**. La garde de scope de la
     capture (`postId: ctx.postId`) est donc satisfaite *après coup* : le média
     d'autrui devient celui de l'attaquant juste avant d'être haché et crédité.
     Les ObjectId voisins ne diffèrent que d'un compteur, et les uploads
     abandonnés restent `postId: null` pendant 24 h — la fenêtre n'est pas une
     course de quelques secondes. **Dépasse la bibliothèque de sons** : c'est une
-    primitive de vol de média valable pour tout le pipeline. Correctif propre =
-    un champ propriétaire sur `PostMedia` + backfill.
+    primitive de vol de média valable pour tout le pipeline.
+
+    **PHASE 1 LIVRÉE (2026-07-31).** `PostMedia.uploaderId` existe, le handler
+    d'upload le pose, et les trois sites de rattachement passent par
+    `services/posts/mediaOwnership.ts`. La garde est encore **TOLÉRANTE** —
+    elle accepte un `uploaderId` absent ou nul — donc **le trou n'est pas
+    fermé** : resserrer avant le rattrapage rendrait tout média hérité
+    impossible à rattacher, en silence.
+
+    Correction d'une affirmation antérieure de ce ticket : le site des
+    commentaires n'était pas dépourvu de garde. `PostCommentService.ts:54`
+    vérifiait déjà que le média n'était rattaché à rien. Ce qui lui manquait,
+    c'était le contrôle du propriétaire, et le fait de vérifier puis d'écrire
+    en deux temps — la condition est désormais portée par le `where` de
+    l'écriture, donc la base tranche en une seule opération.
+
+    **Reste à faire pour fermer (phase 2), dans cet ordre :**
+    a. `prisma db push` — champ + index `[uploaderId, postId]` ;
+    b. `bunx tsx scripts/backfill-postmedia-uploader.ts` à blanc, lire le
+       rapport ; puis `--apply` **dans le conteneur du gateway** (depuis un
+       poste, `DATABASE_URL` cible la base locale et le script dira « succès »
+       sans rien toucher) ;
+    c. exiger `unresolvedClaimable == 0`. Le script sort en code 1 sinon. Les
+       médias en attente non résolus sont des orphelins anciens : les purger
+       ou les attribuer à la main ;
+    d. remplacer le `OR` de `claimableMediaWhere` par `uploaderId: ownerId`, et
+       INVERSER le test `PHASE_1_un_media_HERITE_sans_proprietaire_reste_reclamable_par_tous`
+       (`mediaClaimGuard.test.ts`), qui documente exactement la brèche restante ;
+    e. décider du sort des uploads sans uploadeur identifiable — le handler les
+       journalise déjà (`PostMedia sans uploadeur identifiable`). Les routes de
+       post et de commentaire exigeant `requiredAuth`, ce journal devrait rester
+       vide ; le vérifier avant de rendre le cas bloquant.
 22. **`trustProxy` n'est pas posé, et ça dépasse la bibliothèque de sons.**
     `request.ip` reste l'adresse de Traefik pour tout le gateway : le quota
     global de 300 req/min est un seul seau pour la plateforme, et toute

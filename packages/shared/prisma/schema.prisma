@@ -3155,6 +3155,23 @@ model PostMedia {
   /// }
   translations Json?
 
+  /// Propriétaire de l'upload — la SEULE chose qui empêche un tiers de
+  /// revendiquer un média en attente (`postId: null`) dont il a deviné l'id.
+  /// Les ObjectId voisins ne diffèrent que d'un compteur, et un upload
+  /// abandonné reste réclamable jusqu'au nettoyage des orphelins : sans ce
+  /// champ, la garde de rattachement se réduisait à « personne ne l'a pris
+  /// avant moi ».
+  ///
+  /// Nullable UNIQUEMENT pour les lignes héritées, le temps du rattrapage
+  /// (`scripts/backfill-postmedia-uploader.ts`). Toute création nouvelle le
+  /// pose. La garde de rattachement est TOLÉRANTE tant que des `null`
+  /// subsistent — cf. `services/posts/mediaOwnership.ts`.
+  ///
+  /// Pas de relation Prisma : la contrainte utile est la comparaison à
+  /// l'auteur qui réclame, et une cascade sur suppression de compte effacerait
+  /// la propriété au lieu de la conserver.
+  uploaderId   String?  @db.ObjectId
+
   createdAt    DateTime @default(now())
 
   post    Post?        @relation(fields: [postId], references: [id], onDelete: SetNull, onUpdate: Cascade)
@@ -3162,6 +3179,9 @@ model PostMedia {
 
   @@index([postId, order])
   @@index([commentId, order])
+  /// Sert le rattrapage et la garde de revendication (filtre sur uploadeur
+  /// parmi les médias en attente).
+  @@index([uploaderId, postId])
 }
 
 /// Commentaire sur un post (hiérarchique — réponses imbriquées)

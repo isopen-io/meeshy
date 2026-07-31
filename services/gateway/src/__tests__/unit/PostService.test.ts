@@ -68,7 +68,10 @@ function createMockPrisma() {
       deleteMany: jest.fn(),
     },
     postMedia: {
-      updateMany: jest.fn(),
+      // `{ count }` par défaut : le code compare le nombre de médias
+      // effectivement rattachés à celui demandé pour ne jamais écarter un
+      // média en silence. Un mock qui rend `undefined` casserait sur `.count`.
+      updateMany: jest.fn().mockResolvedValue({ count: 2 }),
       findFirst: jest.fn(),
       update: jest.fn(),
       deleteMany: jest.fn(),
@@ -167,11 +170,15 @@ describe('PostService', () => {
 
       await service.createPost({ ...basePostData, mediaIds: ['media-1', 'media-2'] }, 'user-1');
 
-      expect(prisma.postMedia.updateMany).toHaveBeenCalledWith({
-        // `postId: null` : garde de propriété au rattachement (lot A sons).
-        where: { id: { in: ['media-1', 'media-2'] }, postId: null },
-        data: { postId: 'post-1' },
-      });
+      // Garde de rattachement : le média doit être LIBRE (ni post ni
+      // commentaire) ET appartenir à l'auteur — un tiers ne peut plus
+      // s'approprier un média en attente en devinant son id.
+      const claim = prisma.postMedia.updateMany.mock.calls[0][0];
+      expect(claim.where.id).toEqual({ in: ['media-1', 'media-2'] });
+      expect(claim.where.postId).toBeNull();
+      expect(claim.where.commentId).toBeNull();
+      expect(claim.where.OR).toContainEqual({ uploaderId: 'user-1' });
+      expect(claim.data).toEqual({ postId: 'post-1' });
       // findFirst is called to detect audio media for Whisper processing
       expect(prisma.postMedia.findFirst).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -1703,10 +1710,14 @@ describe('PostService', () => {
 
         await service.updatePost('post-1', 'user-1', { mediaIds: ['new-m1', 'new-m2'] });
 
-        expect(prisma.postMedia.updateMany).toHaveBeenCalledWith({
-          where: { id: { in: ['new-m1', 'new-m2'] }, postId: null },
-          data: { postId: 'post-1' },
-        });
+        // Libre ET à l'auteur : `postId: null` seul laissait un tiers
+        // s'approprier le média en attente de quelqu'un d'autre.
+        const claim = prisma.postMedia.updateMany.mock.calls[0][0];
+        expect(claim.where.id).toEqual({ in: ['new-m1', 'new-m2'] });
+        expect(claim.where.postId).toBeNull();
+        expect(claim.where.commentId).toBeNull();
+        expect(claim.where.OR).toContainEqual({ uploaderId: 'user-1' });
+        expect(claim.data).toEqual({ postId: 'post-1' });
       });
 
       it('adding media to a STORY counts as a content edit (engagement reset)', async () => {
@@ -1736,10 +1747,10 @@ describe('PostService', () => {
         expect(prisma.postMedia.deleteMany).toHaveBeenCalledWith({
           where: { id: { in: ['m1'] }, postId: 'post-1' },
         });
-        expect(prisma.postMedia.updateMany).toHaveBeenCalledWith({
-          where: { id: { in: ['new-m1'] }, postId: null },
-          data: { postId: 'post-1' },
-        });
+        const claim = prisma.postMedia.updateMany.mock.calls[0][0];
+        expect(claim.where.id).toEqual({ in: ['new-m1'] });
+        expect(claim.where.OR).toContainEqual({ uploaderId: 'user-1' });
+        expect(claim.data).toEqual({ postId: 'post-1' });
       });
     });
   });

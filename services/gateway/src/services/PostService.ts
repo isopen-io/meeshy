@@ -6,6 +6,7 @@ import { PostReactionService } from './PostReactionService';
 import type { MobileTranscription } from '../routes/posts/types';
 import { PostAudioService } from './posts/PostAudioService';
 import { NOT_DELETED } from './posts/postIncludes';
+import { claimableMediaWhere, describeClaimShortfall } from './posts/mediaOwnership';
 import { buildPostVisibilityOrFilter } from './posts/postVisibility';
 import { getCommunityCoMemberIds } from './posts/communityVisibility';
 import { MediaService } from './MediaService';
@@ -184,12 +185,23 @@ export class PostService {
     // Link pre-uploaded media if any
     // mediaIds contains PostMedia IDs (created directly by TUS handler with postId=null)
     if (data.mediaIds?.length) {
-      await this.prisma.postMedia.updateMany({
-        // Garde de propriété : un id déjà réclamé par un autre post est
-        // silencieusement ignoré — même règle que `updatePost`.
-        where: { id: { in: data.mediaIds }, postId: null },
+      // Garde de propriété : seuls les médias LIBRES et téléversés par l'auteur
+      // (ou hérités, sans propriétaire connu — cf. `mediaOwnership.ts`).
+      const claimed = await this.prisma.postMedia.updateMany({
+        // `userId` — l'identité de la REQUÊTE — et non `post.authorId` relu de
+        // l'objet créé : la garde doit dépendre de qui appelle, pas de ce que
+        // l'écriture précédente a bien voulu renvoyer.
+        where: { id: { in: data.mediaIds }, ...claimableMediaWhere(userId) },
         data: { postId: post.id },
       });
+      const shortfall = describeClaimShortfall(data.mediaIds, claimed.count);
+      if (shortfall) {
+        // Jamais silencieux : un média écarté disparaît de la publication, et
+        // sans cette trace le symptôme est indiscernable d'un vol réussi.
+        enhancedLogger.warn(`[PostService] createPost: ${shortfall}`, {
+          postId: post.id, authorId: userId, requested: data.mediaIds.length,
+        });
+      }
 
       // Locate the first audio PostMedia for transcription processing
       const audioMedia = await this.prisma.postMedia.findFirst({
@@ -779,13 +791,18 @@ export class PostService {
       if (mediaIdsToRemove.length > 0) {
         await tx.postMedia.deleteMany({ where: { id: { in: mediaIdsToRemove }, postId } });
       }
-      // Attach freshly uploaded media (TUS creates PostMedia with postId=null);
-      // an id already claimed by another post is silently ignored.
+      // Attach freshly uploaded media (TUS creates PostMedia with postId=null).
+      // `userId` est déjà vérifié comme auteur du post plus haut : la garde
+      // limite le rattachement à SES propres téléversements.
       if (mediaIdsToAttach.length > 0) {
-        await tx.postMedia.updateMany({
-          where: { id: { in: mediaIdsToAttach }, postId: null },
+        const claimed = await tx.postMedia.updateMany({
+          where: { id: { in: mediaIdsToAttach }, ...claimableMediaWhere(userId) },
           data: { postId },
         });
+        const shortfall = describeClaimShortfall(mediaIdsToAttach, claimed.count);
+        if (shortfall) {
+          enhancedLogger.warn(`[PostService] updatePost: ${shortfall}`, { postId, authorId: userId });
+        }
       }
       if (storyContentEdit) {
         await tx.postView.deleteMany({ where: { postId } });
