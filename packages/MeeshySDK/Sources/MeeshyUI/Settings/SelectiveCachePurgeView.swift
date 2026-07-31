@@ -371,6 +371,16 @@ public struct SelectiveCachePurgeView: View {
                 )
             }
             .disabled(!viewModel.hasSelection || viewModel.isPurging)
+            // Le libellé est dynamique (« Vider — jusqu'à 42 Mo ») : il annonce
+            // le volume, pas la conséquence. Pour l'action la plus destructive
+            // de l'écran, le hint est ce qui dit que c'est définitif — les
+            // en-têtes de type en ont un depuis toujours, ce bouton était le
+            // seul à ne pas en avoir.
+            .accessibilityHint(String(
+                localized: "settings.cache.purge.action.hint",
+                defaultValue: "Supprime définitivement les données sélectionnées ; elles seront retéléchargées à la demande",
+                bundle: .module
+            ))
         }
     }
 

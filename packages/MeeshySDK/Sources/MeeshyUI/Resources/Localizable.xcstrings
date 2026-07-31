@@ -29654,6 +29654,53 @@
         }
       }
     },
+    "settings.cache.purge.action.hint": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "يحذف نهائيًا العناصر المحددة ؛ سيُعاد تنزيلها عند الحاجة"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Löscht die ausgewählten Daten endgültig; sie werden bei Bedarf erneut geladen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Permanently deletes the selected data; it will be downloaded again when needed"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Elimina definitivamente los datos seleccionados; se volverán a descargar cuando sea necesario"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Supprime définitivement les données sélectionnées ; elles seront retéléchargées à la demande"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Elimina definitivamente i dati selezionati; verranno riscaricati quando serve"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Exclui definitivamente os dados selecionados; eles serão baixados novamente quando necessário"
+          }
+        }
+      }
+    },
     "settings.cache.purge.confirm.action": {
       "extractionState": "manual",
       "localizations": {
