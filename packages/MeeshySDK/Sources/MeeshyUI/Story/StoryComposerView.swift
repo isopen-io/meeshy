@@ -79,7 +79,13 @@ public struct StoryComposerView: View {
 
     // MARK: - Publication
 
-    @State var publishTask: Task<Void, Never>?
+    /// La publication n'attend plus rien (C3) : ce loquet n'existe que pour
+    /// qu'un second tap pendant l'animation de dismiss (~0,3 s) ne re-publie
+    /// pas la même story. Il gate aussi les deux autosaves (D1/E1) : une
+    /// publication partie = l'upload possède l'état, un debounce débouché ne
+    /// doit pas re-semer le brouillon déjà publié. Posé UNIQUEMENT si le
+    /// hand-off a été accepté (cf. `publishAllSlides`).
+    @State var didHandOffPublish = false
 
     // MARK: - Canvas viewport (pinch-to-zoom + drag-to-pan when zoomed)
 
@@ -191,13 +197,13 @@ public struct StoryComposerView: View {
         _ originalLanguage: String?,
         _ visibility: String,
         _ visibilityUserIds: [String]
-    ) -> Void
+    ) -> Bool
     public var onPreview: ([StorySlide], [String: UIImage], [String: UIImage], [String: URL], [String: URL]) -> Void
     public var onDismiss: () -> Void
 
     public init(
         onPublishSlide: @escaping (StorySlide, UIImage?, [String: UIImage], [String: URL], String?) async throws -> Void = { _, _, _, _, _ in },
-        onPublishAllInBackground: @escaping ([StorySlide], [String: UIImage], [String: UIImage], [String: URL], [String: URL], String?, String, [String]) -> Void,
+        onPublishAllInBackground: @escaping ([StorySlide], [String: UIImage], [String: UIImage], [String: URL], [String: URL], String?, String, [String]) -> Bool,
         onPreview: @escaping ([StorySlide], [String: UIImage], [String: UIImage], [String: URL], [String: URL]) -> Void,
         onDismiss: @escaping () -> Void
     ) {
@@ -217,7 +223,7 @@ public struct StoryComposerView: View {
     public init(
         viewModel: StoryComposerViewModel,
         onPublishSlide: @escaping (StorySlide, UIImage?, [String: UIImage], [String: URL], String?) async throws -> Void = { _, _, _, _, _ in },
-        onPublishAllInBackground: @escaping ([StorySlide], [String: UIImage], [String: UIImage], [String: URL], [String: URL], String?, String, [String]) -> Void,
+        onPublishAllInBackground: @escaping ([StorySlide], [String: UIImage], [String: UIImage], [String: URL], [String: URL], String?, String, [String]) -> Bool,
         onPreview: @escaping ([StorySlide], [String: UIImage], [String: UIImage], [String: URL], [String: URL]) -> Void = { _, _, _, _, _ in },
         onDismiss: @escaping () -> Void
     ) {

@@ -221,7 +221,7 @@ public struct UnifiedPostComposer: View {
                         await MainActor.run { showStoryComposer = false }
                     }
                 },
-                onPublishAllInBackground: { _, _, _, _, _, _, _, _ in },
+                onPublishAllInBackground: { _, _, _, _, _, _, _, _ in false },
                 onPreview: { _, _, _, _, _ in },
                 onDismiss: { showStoryComposer = false }
             )

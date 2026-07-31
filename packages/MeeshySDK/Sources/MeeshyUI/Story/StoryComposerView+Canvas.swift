@@ -216,8 +216,6 @@ extension StoryComposerView {
         }
         .onDisappear {
             StoryMediaCoordinator.shared.deactivate()
-            publishTask?.cancel()
-            publishTask = nil
             viewModel.stopMemoryObserver()
             // Contrat StoryTimelineEngine : "owner MUST call shutdown()" —
             // libère AVPlayer + observer périodique + AVAudioEngine du mixer.

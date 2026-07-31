@@ -112,7 +112,7 @@ extension StoryComposerView {
     /// autres actions du header, le verre proéminent teinté brand restant le
     /// SEUL marqueur d'action primaire. Le libellé survit en accessibilité.
     var publishButton: some View {
-        let isPublishing = publishTask != nil
+        let isPublishing = didHandOffPublish
         return Button { publishAllSlides() } label: {
             Group {
                 if isPublishing {
