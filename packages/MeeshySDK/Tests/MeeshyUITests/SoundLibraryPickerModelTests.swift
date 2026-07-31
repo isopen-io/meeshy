@@ -30,6 +30,12 @@ final class FakeSoundLibraryService: SoundLibraryServiceProviding, @unchecked Se
         guard let renameResult else { throw URLError(.badServerResponse) }
         return renameResult
     }
+
+    /// La page du son a son propre modèle et ses propres tests
+    /// (`SoundDetailModelTests`) : ici on satisfait le protocole sans plus.
+    func posts(soundId: String, cursor: Date?, limit: Int) async throws -> SoundPostPage {
+        SoundPostPage(posts: [], nextCursor: nil)
+    }
 }
 
 func makeSound(id: String = "s1", title: String = "", usageCount: Int = 0,
@@ -201,6 +207,9 @@ final class SoundLibraryPickerModelTests: XCTestCase {
             func trendingSounds(query: String?, limit: Int) async throws -> [APISound] { [] }
             func rename(soundId: String, title: String) async throws -> APISound {
                 throw URLError(.badURL)
+            }
+            func posts(soundId: String, cursor: Date?, limit: Int) async throws -> SoundPostPage {
+                throw URLError(.notConnectedToInternet)
             }
         }
         let model = SoundLibraryPickerModel(service: Failing())

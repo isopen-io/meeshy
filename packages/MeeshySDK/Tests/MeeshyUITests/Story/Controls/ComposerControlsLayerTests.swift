@@ -67,8 +67,17 @@ final class ComposerControlsLayerTests: XCTestCase {
     private func makeLayer(vm: StoryComposerViewModel) -> ComposerControlsLayer {
         ComposerControlsLayer(
             viewModel: vm,
+            chrome: ComposerChromeContext(
+                machineState: .hidden,
+                isChromeHidden: false,
+                isTextEditing: false,
+                isDrawingActive: false,
+                isDrawingImmersive: false,
+                isViewportZoomed: false,
+                isTimelineVisible: false,
+                isEmptyStatePickerVisible: false
+            ),
             bandStateMachine: .constant(BandStateMachine()),
-            areFabsVisible: .constant(true),
             selectedFilter: .constant(nil),
             fgMediaItem: .constant(nil),
             showAudioDocumentPicker: .constant(false),
@@ -77,7 +86,8 @@ final class ComposerControlsLayerTests: XCTestCase {
             resizableBandHeight: .constant(300),
             bandMinHeight: 160,
             bandMaxHeight: 540,
-            onOpenMediaCrop: { _ in }
+            onOpenMediaCrop: { _ in },
+            onDismissActivePanel: { }
         )
     }
 }

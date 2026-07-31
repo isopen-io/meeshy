@@ -97,7 +97,10 @@ public struct StoryComposerView: View {
 
     // MARK: - UI state
 
-    @State var areFabsVisible: Bool = true
+    /// La visibilité du chrome vit DANS la machine (`isChromeHidden`) : le
+    /// `@State var areFabsVisible` d'avant était une seconde vérité que les
+    /// transitions de panneau ne touchaient pas, d'où un composer sans « Fermer »
+    /// ni « Publier » après un « Retour » (bug terrain 2026-07-31).
     @State var bandStateMachine: BandStateMachine = BandStateMachine()
 
     /// Hauteur (redimensionnable) du panneau DESSIN du band partagé, pilotée par le

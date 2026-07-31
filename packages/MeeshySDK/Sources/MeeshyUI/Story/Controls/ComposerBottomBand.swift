@@ -213,6 +213,13 @@ struct ComposerBottomBand: View {
             .padding(.top, 10)
             .padding(.bottom, 6)
             .frame(maxWidth: .infinity)        // hit-area sur toute la largeur
+            // 5 + 10 + 6 = 21 pt de haut. Porter ce grabber à 44 pt de contact
+            // exigerait d'ALLONGER la band de 23 pt sur chaque panneau — le seul
+            // procédé qui étende réellement le hit-test est d'élargir la boîte
+            // de layout — au risque de tronquer les panneaux déjà plafonnés par
+            // `bandMaxHeight`. Laissé tel quel : il occupe toute la LARGEUR, et
+            // la fermeture reste accessible par le chevron « Retour », le FAB de
+            // l'outil et le tap sur le fond du canvas.
             .contentShape(Rectangle())
             .accessibilityLabel(String(
                 localized: "story.composer.grabber",

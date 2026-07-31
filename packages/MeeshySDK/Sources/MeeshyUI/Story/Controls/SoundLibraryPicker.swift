@@ -24,6 +24,8 @@ public struct SoundLibraryPicker: View {
     @Environment(\.colorScheme) private var colorScheme
     @FocusState private var searchFocused: Bool
     @State private var renameDraft: String = ""
+    /// Son dont on regarde la page. `nil` = aucune page ouverte.
+    @State private var detailSound: APISound?
 
     public init(service: SoundLibraryServiceProviding = SoundLibraryService.shared,
                 onPick: @escaping (APISound) -> Void,
@@ -55,6 +57,19 @@ public struct SoundLibraryPicker: View {
         // Sans ça, fermer la feuille pendant un aperçu laissait le son tourner
         // par-dessus le composer.
         .onDisappear { model.stopPreview() }
+        .sheet(item: $detailSound) { sound in
+            SoundDetailView(
+                sound: sound,
+                onUse: {
+                    // Choisir depuis la page du son doit fermer LES DEUX
+                    // feuilles : rester sur la page après avoir choisi laisserait
+                    // croire que rien ne s'est passé.
+                    detailSound = nil
+                    onPick($0)
+                },
+                onClose: { detailSound = nil }
+            )
+        }
         .alert(String(localized: "story.sound.library.renameTitle",
                       defaultValue: "Nommer ce son", bundle: .module),
                isPresented: Binding(get: { model.renaming != nil },
@@ -141,7 +156,12 @@ public struct SoundLibraryPicker: View {
                         canRename: model.tab == .mine,
                         onTogglePreview: { model.togglePreview(sound) },
                         onRename: { model.beginRename(sound) },
-                        onPick: { model.stopPreview(); onPick(sound) }
+                        onPick: { model.stopPreview(); onPick(sound) },
+                        // Toucher le libellé ouvre la page du son. Le bouton
+                        // « Utiliser » reste distinct : découvrir et choisir
+                        // sont deux intentions, les confondre ferait publier
+                        // par erreur en voulant regarder.
+                        onOpenDetail: { model.stopPreview(); detailSound = sound }
                     )
                     .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
                     .listRowSeparator(.hidden)
@@ -185,26 +205,39 @@ struct SoundLibraryRow: View {
     let onTogglePreview: () -> Void
     let onRename: () -> Void
     let onPick: () -> Void
+    /// Ouvre la page du son — ce qui a été publié avec lui.
+    let onOpenDetail: () -> Void
 
     @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         HStack(spacing: 12) {
             cover
-            VStack(alignment: .leading, spacing: 2) {
-                Text(SoundLibraryPickerModel.displayTitle(for: sound))
-                    .font(.system(size: 15, weight: .semibold))
-                    .lineLimit(1)
-                metadataLine
-                // Gris discret, et seulement dans « Mes sons » sur un son
-                // NOMMÉ : ailleurs la date est déjà le libellé principal.
-                if let date = SoundLibraryPickerModel.secondaryDate(for: sound, isMine: canRename) {
-                    Text(date)
-                        .font(.system(size: 11))
-                        .foregroundStyle(.tertiary)
+            // Le bloc texte ouvre la page du son. Bouton `.plain` et non un
+            // `onTapGesture` : sans lui la zone n'est ni focalisable ni
+            // annoncée comme actionnable par VoiceOver.
+            Button(action: onOpenDetail) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(SoundLibraryPickerModel.displayTitle(for: sound))
+                        .font(.system(size: 15, weight: .semibold))
                         .lineLimit(1)
+                    metadataLine
+                    // Gris discret, et seulement dans « Mes sons » sur un son
+                    // NOMMÉ : ailleurs la date est déjà le libellé principal.
+                    if let date = SoundLibraryPickerModel.secondaryDate(for: sound, isMine: canRename) {
+                        Text(date)
+                            .font(.system(size: 11))
+                            .foregroundStyle(.tertiary)
+                            .lineLimit(1)
+                    }
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .contentShape(Rectangle())
             }
+            .buttonStyle(.plain)
+            .accessibilityHint(String(localized: "story.sound.detail.hint",
+                                      defaultValue: "Voir les publications qui utilisent ce son",
+                                      bundle: .module))
             Spacer(minLength: 8)
             if canRename {
                 Button(action: onRename) {

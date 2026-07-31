@@ -11,7 +11,7 @@ import XCTest
 /// `shouldShowEmptyStateLargePicker` itself is a `StoryComposerView`
 /// computed property reading `@ObservedObject`/`@Binding`/private `@State`
 /// that XCTest cannot host directly, so — mirroring
-/// `ComposerControlsLayer.resolveEffectiveBandState`'s established pattern
+/// `ComposerChromeContext.effectiveBandState`'s established pattern
 /// (see `ComposerControlsLayerEffectiveBandStateTests.swift`) — the pure
 /// decision logic is exercised via `StoryComposerView.resolveShouldShowEmptyStateLargePicker`.
 final class StoryComposerView_ShouldShowEmptyStateLargePickerTests: XCTestCase {

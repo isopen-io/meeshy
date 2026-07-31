@@ -87,6 +87,65 @@ public struct APISound: Codable, Identifiable, Sendable, Equatable {
     }
 }
 
+/// Une publication qui utilise un son, telle que `GET /sounds/:id/posts` la
+/// projette — la « page du son ».
+///
+/// N'expose QUE des publications publiques, non supprimées, non expirées : un
+/// son est public, les contenus qui l'emploient ne le sont pas forcément. Cette
+/// liste est aussi le dénominateur des compteurs affichés sous le son, si bien
+/// qu'un lecteur qui doute peut ouvrir la page et recompter.
+public struct APISoundPost: Codable, Identifiable, Sendable, Equatable {
+    public let id: String
+    public let type: String
+    public let content: String?
+    public let createdAt: Date?
+    public let likeCount: Int
+    public let viewCount: Int
+    public let author: APISoundUploader?
+    public let media: [APISoundPostMedia]
+
+    /// Première vignette exploitable. Le serveur ne renvoie qu'un média par
+    /// publication — inutile d'en demander plus pour une grille.
+    public var thumbnail: APISoundPostMedia? { media.first }
+
+    enum CodingKeys: String, CodingKey {
+        case id, type, content, createdAt, likeCount, viewCount, author, media
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(String.self, forKey: .id)
+        type = try c.decodeIfPresent(String.self, forKey: .type) ?? "POST"
+        content = try c.decodeIfPresent(String.self, forKey: .content)
+        createdAt = try c.decodeIfPresent(Date.self, forKey: .createdAt)
+        likeCount = try c.decodeIfPresent(Int.self, forKey: .likeCount) ?? 0
+        viewCount = try c.decodeIfPresent(Int.self, forKey: .viewCount) ?? 0
+        author = try c.decodeIfPresent(APISoundUploader.self, forKey: .author)
+        media = try c.decodeIfPresent([APISoundPostMedia].self, forKey: .media) ?? []
+    }
+
+    public init(id: String, type: String = "POST", content: String? = nil,
+                createdAt: Date? = nil, likeCount: Int = 0, viewCount: Int = 0,
+                author: APISoundUploader? = nil, media: [APISoundPostMedia] = []) {
+        self.id = id; self.type = type; self.content = content
+        self.createdAt = createdAt; self.likeCount = likeCount; self.viewCount = viewCount
+        self.author = author; self.media = media
+    }
+}
+
+public struct APISoundPostMedia: Codable, Identifiable, Sendable, Equatable {
+    public let id: String
+    public let mimeType: String?
+    public let thumbnailUrl: String?
+    public let thumbHash: String?
+
+    public init(id: String, mimeType: String? = nil,
+                thumbnailUrl: String? = nil, thumbHash: String? = nil) {
+        self.id = id; self.mimeType = mimeType
+        self.thumbnailUrl = thumbnailUrl; self.thumbHash = thumbHash
+    }
+}
+
 public struct APISoundUploader: Codable, Identifiable, Sendable, Equatable {
     public let id: String
     public let username: String
