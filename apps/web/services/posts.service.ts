@@ -69,9 +69,13 @@ export type ImpressionSource =
   | 'search'
   | 'shared_link'
   | 'notification'
-  | 'detail';
+  | 'detail'
+  | 'story'
+  | 'status';
 
-/** Max post ids the gateway accepts per `/posts/impressions/batch` call. */
+/** Max impression OCCURRENCES the gateway accepts per `/posts/impressions/batch`
+ * call. Repeated ids are legitimate (one impression per appearance) and each
+ * consumes a slot — the gateway groups them and increments by the count. */
 const IMPRESSION_BATCH_LIMIT = 50;
 
 export interface FeedFilters {
