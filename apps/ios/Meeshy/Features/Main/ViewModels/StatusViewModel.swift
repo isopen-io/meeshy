@@ -17,7 +17,13 @@ class StatusViewModel: ObservableObject {
     private let socialSocket: SocialSocketProviding
     private let authManager: AuthManaging
     private let offlineQueue: OfflineQueueing
+    private let postService: PostServiceProviding
     private let isOffline: () -> Bool
+
+    /// Occurrences d'apparition en attente d'envoi — une LISTE, pas un Set :
+    /// revoir un mood est une nouvelle impression.
+    private var pendingImpressions: [String] = []
+    private var impressionTask: Task<Void, Never>?
 
     /// A mood is "stuck offline" (recoverable as a draft) once it has been
     /// unsent for longer than this — the "pas envoyé dans la minute → offline"
@@ -40,6 +46,7 @@ class StatusViewModel: ObservableObject {
         socialSocket: SocialSocketProviding = SocialSocketManager.shared,
         authManager: AuthManaging = AuthManager.shared,
         offlineQueue: OfflineQueueing = OfflineQueue.shared,
+        postService: PostServiceProviding = PostService.shared,
         isOffline: @escaping () -> Bool = { NetworkMonitor.shared.isOffline }
     ) {
         self.mode = mode
@@ -47,7 +54,49 @@ class StatusViewModel: ObservableObject {
         self.socialSocket = socialSocket
         self.authManager = authManager
         self.offlineQueue = offlineQueue
+        self.postService = postService
         self.isOffline = isOffline
+    }
+
+    // MARK: - Portée (impressions & vues)
+    //
+    // Un mood EST un post (`PostType.STATUS`) : il porte `impressionCount` et
+    // `viewCount` comme les autres. Aucune surface ne les alimentait — la barre
+    // de moods était le seul contenu du produit dont la portée restait à zéro.
+    //
+    // Même contrat que le feed : une impression par APPARITION du pill, groupée
+    // sur 3 s ; la vue UNIQUE part à l'ouverture du popover (dédupliquée côté
+    // serveur par `PostView`, donc rejouable sans risque).
+
+    /// Le mood `statusId` est apparu à l'écran.
+    func trackImpression(_ statusId: String) {
+        pendingImpressions.append(statusId)
+        scheduleImpressionFlush()
+    }
+
+    private func scheduleImpressionFlush() {
+        impressionTask?.cancel()
+        impressionTask = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: 3_000_000_000)
+            guard !Task.isCancelled else { return }
+            await self?.flushImpressions()
+        }
+    }
+
+    private func flushImpressions() async {
+        let batch = pendingImpressions
+        guard !batch.isEmpty else { return }
+        pendingImpressions.removeAll()
+        do {
+            try await postService.recordImpressions(postIds: batch, source: "status")
+        } catch {
+            pendingImpressions.insert(contentsOf: batch, at: 0)
+        }
+    }
+
+    /// Le mood `statusId` a été ouvert (popover) — vue unique par utilisateur.
+    func markStatusViewed(_ statusId: String) {
+        Task { [postService] in try? await postService.viewPost(postId: statusId, duration: nil) }
     }
 
     // MARK: - Load Statuses

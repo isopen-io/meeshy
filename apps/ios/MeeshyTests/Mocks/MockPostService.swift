@@ -158,6 +158,7 @@ final class MockPostService: PostServiceProviding, @unchecked Sendable {
 
     var recordImpressionsCallCount = 0
     var lastRecordImpressionPostIds: [String]?
+    var lastRecordImpressionsSource: String?
 
     var recordImpressionCallCount = 0
     var lastRecordImpressionPostId: String?
@@ -399,6 +400,7 @@ final class MockPostService: PostServiceProviding, @unchecked Sendable {
     func recordImpressions(postIds: [String], source: String) async throws {
         recordImpressionsCallCount += 1
         lastRecordImpressionPostIds = postIds
+        lastRecordImpressionsSource = source
     }
 
     func recordImpression(postId: String, source: String) async throws {
@@ -534,6 +536,7 @@ final class MockPostService: PostServiceProviding, @unchecked Sendable {
         lastGetCommentsPostId = nil
 
         recordImpressionsCallCount = 0
+        lastRecordImpressionsSource = nil
         lastRecordImpressionPostIds = nil
 
         recordImpressionCallCount = 0

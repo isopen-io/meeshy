@@ -27,6 +27,11 @@ struct BookmarksView: View {
     @State private var storyAuthorUserId: String?
     @State private var filter: BookmarkFilter = .all
 
+    /// Occurrences d'apparition en attente — une LISTE, pas un Set : revoir une
+    /// carte en scrollant est une nouvelle impression. Miroir de `FeedView`.
+    @State private var pendingImpressions: [String] = []
+    @State private var impressionFlushTask: Task<Void, Never>?
+
     /// Facette de tri de l'écran. `nonisolated` sur le TYPE : `CaseIterable` et
     /// `Identifiable` sont exercés hors du MainActor par le `ForEach` du picker.
     nonisolated enum BookmarkFilter: String, CaseIterable, Identifiable {
@@ -87,6 +92,11 @@ struct BookmarksView: View {
                             onViewAuthorStory: { storyAuthorUserId = post.authorId }
                         )
                         .equatable()
+                        // La liste des favoris affiche des posts et des réels
+                        // comme n'importe quelle autre surface : leur apparition
+                        // compte une impression. Elle était la dernière vue de
+                        // contenu à ne rien remonter.
+                        .onAppear { trackImpression(postId: post.id) }
                     }
 
                     if viewModel.isLoading {
@@ -148,6 +158,23 @@ struct BookmarksView: View {
     /// Un réel s'ouvre dans le lecteur immersif, amorcé avec les SEULS réels
     /// enregistrés : y glisser les posts enregistrés donnerait des pages vides
     /// entre deux vidéos.
+    private func trackImpression(postId: String) {
+        pendingImpressions.append(postId)
+        impressionFlushTask?.cancel()
+        impressionFlushTask = Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 3_000_000_000)
+            guard !Task.isCancelled else { return }
+            let batch = pendingImpressions
+            guard !batch.isEmpty else { return }
+            pendingImpressions.removeAll()
+            do {
+                try await PostService.shared.recordImpressions(postIds: batch, source: "profile")
+            } catch {
+                pendingImpressions.insert(contentsOf: batch, at: 0)
+            }
+        }
+    }
+
     private func openBookmark(_ post: FeedPost) {
         HapticFeedback.medium()
         if post.isReel {

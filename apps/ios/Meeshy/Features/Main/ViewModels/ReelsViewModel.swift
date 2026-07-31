@@ -65,11 +65,6 @@ final class ReelsViewModel: ObservableObject {
     @Published private var commentDelta: [String: Int] = [:]
     private var heartInFlight: Set<String> = []
     private var bookmarkInFlight: Set<String> = []
-    /// Reels whose impression (reach) has already been recorded this session —
-    /// one impression per reel per session, mirroring the main feed's
-    /// `recordedImpressionIds`. The reel's TOTAL view (`postOpenCount`) is
-    /// counted separately by the engagement pipeline (full-screen dwell).
-    private var impressionRecordedIds: Set<String> = []
 
     private var nextCursor: String?
     private var hasMore = true
@@ -400,13 +395,13 @@ final class ReelsViewModel: ObservableObject {
     }
 
     func recordView(_ id: String) {
-        // Unique view (viewCount, deduped server-side) — saved, not displayed.
+        // Vue UNIQUE (`viewCount`) — dédupliquée côté serveur par `PostView`
+        // (`@@unique(postId, userId)`) : rejouer l'appel ne la gonfle pas.
         Task { try? await service.viewPost(postId: id, duration: nil) }
-        // Impression (reach) — the reel appeared on screen. Once per reel per
-        // session. `source: "feed"` bumps impressionCount only (the reel's total
-        // view comes from the engagement pipeline, not from this appearance).
-        if impressionRecordedIds.insert(id).inserted {
-            Task { try? await service.recordImpression(postId: id, source: "feed") }
-        }
+        // Impression (portée) — le réel est apparu à l'écran. Comptée à CHAQUE
+        // apparition : revenir sur un réel déjà vu est une nouvelle impression.
+        // La déduplication de session qui vivait ici plafonnait le compteur à 1
+        // par réel et par lancement d'app.
+        Task { try? await service.recordImpression(postId: id, source: "feed") }
     }
 }

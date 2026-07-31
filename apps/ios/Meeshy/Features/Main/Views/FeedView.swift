@@ -98,9 +98,11 @@ struct FeedView: View {
     @State private var postShareInFlightIds: Set<String> = []
     @State private var postShareDelta: [String: Int] = [:]
 
-    // Impression tracking
-    @State private var pendingImpressionIds = Set<String>()
-    @State private var recordedImpressionIds = Set<String>()
+    // Impression tracking — une impression par APPARITION à l'écran, donc une
+    // LISTE d'occurrences et non un Set d'ids déjà vus : un aller-retour de
+    // scroll doit recompter. Le lot est envoyé avec ses répétitions ; le
+    // gateway regroupe et incrémente `impressionCount` du bon nombre.
+    @State private var pendingImpressions: [String] = []
     @State private var impressionFlushTask: Task<Void, Never>?
 
     // Attachment states
@@ -1566,8 +1568,7 @@ struct FeedView: View {
     // MARK: - Impression Tracking
 
     private func trackImpression(postId: String) {
-        guard !recordedImpressionIds.contains(postId) else { return }
-        pendingImpressionIds.insert(postId)
+        pendingImpressions.append(postId)
         scheduleImpressionFlush()
     }
 
@@ -1582,15 +1583,16 @@ struct FeedView: View {
         impressionFlushTask = Task { @MainActor in
             try? await Task.sleep(nanoseconds: 3_000_000_000)
             guard !Task.isCancelled else { return }
-            let batch = Array(pendingImpressionIds)
+            let batch = pendingImpressions
             guard !batch.isEmpty else { return }
-            pendingImpressionIds.subtract(batch)
+            pendingImpressions.removeAll()
             do {
                 try await PostService.shared.recordImpressions(postIds: batch)
-                // Mark recorded ONLY on success so a failed flush leaves the ids
-                // eligible to re-enqueue when the card next appears.
-                recordedImpressionIds.formUnion(batch)
             } catch {
+                // Le lot repart en tête de file : une impression perdue par un
+                // échec réseau serait sous-comptée, et rien ne la reproduira
+                // (la carte est peut-être déjà sortie de l'écran).
+                pendingImpressions.insert(contentsOf: batch, at: 0)
                 FeedView.logger.debug("impression flush failed (will retry): \(error.localizedDescription)")
             }
         }

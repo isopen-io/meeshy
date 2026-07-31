@@ -17,13 +17,15 @@ final class PostDetailViewModelTests: XCTestCase {
     private func makeSUT(
         postService: MockPostService = MockPostService(),
         preferredLanguages: [String] = [],
-        offlineQueue: OfflineQueueing = OfflineQueue.shared
+        offlineQueue: OfflineQueueing = OfflineQueue.shared,
+        socialSocket: MockSocialSocket = MockSocialSocket()
     ) -> (sut: PostDetailViewModel, postService: MockPostService) {
         let languageProvider = MockLanguageProvider(preferredLanguages: preferredLanguages)
         let sut = PostDetailViewModel(
             postService: postService,
             languageProvider: languageProvider,
-            offlineQueue: offlineQueue
+            offlineQueue: offlineQueue,
+            socialSocket: socialSocket
         )
         return (sut, postService)
     }
@@ -711,5 +713,90 @@ final class PostDetailViewModelTests: XCTestCase {
         let (sut, _) = makeSUT(preferredLanguages: [])
 
         XCTAssertEqual(sut.userLanguage, "en")
+    }
+
+
+    // MARK: - Fabriques d'événements socket
+    //
+    // `SocketPostLikedData` / `SocketPostUnlikedData` sont `Decodable` sans init
+    // public : leur init memberwise est internal au SDK. On les construit donc
+    // par décodage, comme le reste des stubs de ce fichier.
+
+    private static func makeLiked(postId: String, userId: String, likeCount: Int) -> SocketPostLikedData {
+        JSONStub.decode("""
+        {"postId":"\(postId)","userId":"\(userId)","emoji":"\u{2764}\u{FE0F}","likeCount":\(likeCount),"reactionSummary":{}}
+        """)
+    }
+
+    private static func makeUnliked(postId: String, userId: String, likeCount: Int) -> SocketPostUnlikedData {
+        JSONStub.decode("""
+        {"postId":"\(postId)","userId":"\(userId)","likeCount":\(likeCount),"reactionSummary":{}}
+        """)
+    }
+
+    // MARK: - Like temps réel (post:liked / post:unliked)
+
+    /// Le détail n'écoutait QUE les commentaires : un like posé depuis le feed,
+    /// depuis le pager de réels ou par un autre utilisateur n'atteignait jamais
+    /// l'écran ouvert, dont le compteur restait figé jusqu'au prochain fetch.
+    func test_postLiked_appliesAbsoluteServerCountToTheDisplayedPost() async {
+        let socket = MockSocialSocket()
+        let mock = MockPostService()
+        mock.getPostResult = .success(Self.makeAPIPost(id: "p1"))
+        let (sut, _) = makeSUT(postService: mock, socialSocket: socket)
+        await sut.loadPost("p1")
+        sut.subscribeToSocket("p1")
+
+        socket.postLiked.send(Self.makeLiked(postId: "p1", userId: "other", likeCount: 17))
+        await Task.yield()
+
+        XCTAssertEqual(sut.post?.likes, 17)
+    }
+
+    func test_postUnliked_appliesAbsoluteServerCountToTheDisplayedPost() async {
+        let socket = MockSocialSocket()
+        let mock = MockPostService()
+        mock.getPostResult = .success(Self.makeAPIPost(id: "p1"))
+        let (sut, _) = makeSUT(postService: mock, socialSocket: socket)
+        await sut.loadPost("p1")
+        sut.subscribeToSocket("p1")
+
+        socket.postUnliked.send(Self.makeUnliked(postId: "p1", userId: "other", likeCount: 4))
+        await Task.yield()
+
+        XCTAssertEqual(sut.post?.likes, 4)
+    }
+
+    /// Un événement portant sur un AUTRE post ne doit pas écraser le compteur
+    /// du post affiché (le filtre par postId est la seule garde).
+    func test_postLiked_forAnotherPost_leavesTheDisplayedPostUntouched() async {
+        let socket = MockSocialSocket()
+        let mock = MockPostService()
+        mock.getPostResult = .success(Self.makeAPIPost(id: "p1"))
+        let (sut, _) = makeSUT(postService: mock, socialSocket: socket)
+        await sut.loadPost("p1")
+        sut.subscribeToSocket("p1")
+        let before = sut.post?.likes
+
+        socket.postLiked.send(Self.makeLiked(postId: "another", userId: "other", likeCount: 999))
+        await Task.yield()
+
+        XCTAssertEqual(sut.post?.likes, before)
+    }
+
+    /// Le like d'un TIERS monte le compteur sans allumer le cœur de
+    /// l'utilisateur courant.
+    func test_postLiked_byAnotherUser_doesNotFlipIsLiked() async {
+        let socket = MockSocialSocket()
+        let mock = MockPostService()
+        mock.getPostResult = .success(Self.makeAPIPost(id: "p1"))
+        let (sut, _) = makeSUT(postService: mock, socialSocket: socket)
+        await sut.loadPost("p1")
+        sut.subscribeToSocket("p1")
+
+        socket.postLiked.send(Self.makeLiked(postId: "p1", userId: "definitely-not-me", likeCount: 17))
+        await Task.yield()
+
+        XCTAssertEqual(sut.post?.isLiked, false)
     }
 }

@@ -36,7 +36,7 @@ class PostDetailViewModel: ObservableObject {
 
     private var commentCursor: String?
     private let postService: PostServiceProviding
-    private let socialSocket = SocialSocketManager.shared
+    private let socialSocket: any SocialSocketProviding
     private let languageProvider: LanguageProviding
     private let offlineQueue: OfflineQueueing
     private var cancellables = Set<AnyCancellable>()
@@ -49,11 +49,13 @@ class PostDetailViewModel: ObservableObject {
     init(
         postService: PostServiceProviding = PostService.shared,
         languageProvider: LanguageProviding = AuthManagerLanguageProvider(),
-        offlineQueue: OfflineQueueing = OfflineQueue.shared
+        offlineQueue: OfflineQueueing = OfflineQueue.shared,
+        socialSocket: any SocialSocketProviding = SocialSocketManager.shared
     ) {
         self.postService = postService
         self.languageProvider = languageProvider
         self.offlineQueue = offlineQueue
+        self.socialSocket = socialSocket
         observePreferredLanguageChanges()
     }
 
@@ -525,6 +527,18 @@ class PostDetailViewModel: ObservableObject {
         }
     }
 
+    /// Applique le compteur ABSOLU du serveur au post affiché. `isLiked` n'est
+    /// réécrit que si l'acteur est l'utilisateur courant : le like d'un tiers
+    /// monte le compteur sans allumer le cœur.
+    private func applyServerLike(likeCount: Int, actorId: String, liked: Bool) {
+        guard var current = post else { return }
+        current.likes = likeCount
+        if actorId == AuthManager.shared.currentUser?.id {
+            current.isLiked = liked
+        }
+        post = current
+    }
+
     /// Restores the loaded post's like state to a captured snapshot. Shared by
     /// the synchronous enqueue-refusal path and the async `.exhausted` observer.
     private func restoreLike(isLiked: Bool, likes: Int) {
@@ -832,6 +846,29 @@ class PostDetailViewModel: ObservableObject {
         guard subscribedPostId != postId else { return }
         subscribedPostId = postId
         socketCancellables.removeAll()
+
+        // Le détail écoutait les commentaires, leurs réactions et les
+        // traductions — mais PAS le like du post lui-même. Un like posé depuis
+        // le feed, depuis le pager de réels ou par un autre utilisateur
+        // n'atteignait donc jamais l'écran ouvert, qui affichait son compteur
+        // figé jusqu'au prochain fetch. `likeCount` est ABSOLU (recalculé par
+        // le gateway depuis `PostReaction`) : on l'écrit tel quel, sans delta.
+        socialSocket.postLiked
+            .receive(on: DispatchQueue.main)
+            .filter { $0.postId == postId }
+            .sink { [weak self] data in
+                self?.applyServerLike(likeCount: data.likeCount, actorId: data.userId, liked: true)
+            }
+            .store(in: &socketCancellables)
+
+        socialSocket.postUnliked
+            .receive(on: DispatchQueue.main)
+            .filter { $0.postId == postId }
+            .sink { [weak self] data in
+                self?.applyServerLike(likeCount: data.likeCount, actorId: data.userId, liked: false)
+            }
+            .store(in: &socketCancellables)
+
         socialSocket.commentAdded
             .receive(on: DispatchQueue.main)
             .filter { $0.postId == postId }

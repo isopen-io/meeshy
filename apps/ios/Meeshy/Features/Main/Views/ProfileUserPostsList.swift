@@ -420,9 +420,10 @@ final class ProfileUserPostsViewModel: ObservableObject {
     private let postService: PostServiceProviding
     private let languageProvider: LanguageProviding
 
-    // Impression batching — mirrors FeedView (dedup per session, 3s flush).
-    private var pendingImpressionIds: Set<String> = []
-    private var recordedImpressionIds: Set<String> = []
+    // Impression batching — miroir de FeedView : une impression par APPARITION,
+    // donc une LISTE d'occurrences (pas un Set d'ids déjà vus), envoyée avec ses
+    // répétitions ; le gateway les regroupe.
+    private var pendingImpressions: [String] = []
     private var impressionTask: Task<Void, Never>?
 
     private var cancellables = Set<AnyCancellable>()
@@ -674,8 +675,7 @@ final class ProfileUserPostsViewModel: ObservableObject {
     // MARK: - Impressions (batched, source "profile")
 
     func trackImpression(_ postId: String) {
-        guard !recordedImpressionIds.contains(postId) else { return }
-        pendingImpressionIds.insert(postId)
+        pendingImpressions.append(postId)
         scheduleImpressionFlush()
     }
 
@@ -689,15 +689,15 @@ final class ProfileUserPostsViewModel: ObservableObject {
     }
 
     private func flushImpressions() async {
-        let batch = Array(pendingImpressionIds)
+        let batch = pendingImpressions
         guard !batch.isEmpty else { return }
-        pendingImpressionIds.subtract(batch)
+        pendingImpressions.removeAll()
         do {
             try await postService.recordImpressions(postIds: batch, source: "profile")
-            // Mark recorded ONLY on success so a failed flush leaves the ids
-            // eligible to re-enqueue when the card next appears.
-            recordedImpressionIds.formUnion(batch)
         } catch {
+            // Remis en tête de file : une impression perdue par un échec réseau
+            // serait sous-comptée sans rien pour la reproduire.
+            pendingImpressions.insert(contentsOf: batch, at: 0)
             ProfileUserPostsViewModel.logger.debug("impression flush failed (will retry): \(error.localizedDescription)")
         }
     }

@@ -52,6 +52,7 @@ struct StatusBarView: View {
                     statusPill(status)
                         .onAppear {
                             Task { await viewModel.loadMoreIfNeeded(currentStatus: status) }
+                            viewModel.trackImpression(status.id)
                         }
                 }
 
@@ -124,6 +125,9 @@ struct StatusBarView: View {
         Button {
             HapticFeedback.light()
             selectedPopover = status
+            // Ouvrir un mood est une VUE (unique par utilisateur, dédupliquée
+            // côté serveur) — le pendant du `viewPost` du détail de post.
+            viewModel.markStatusViewed(status.id)
         } label: {
             HStack(spacing: 6) {
                 Text(status.moodEmoji)
