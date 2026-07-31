@@ -220,12 +220,20 @@ extension StoryCanvasUIView: UITextViewDelegate {
             layer.mask = nil
             return
         }
-        let mask = layer.mask ?? CALayer()
-        mask.backgroundColor = UIColor.white.cgColor
-        mask.frame = CGRect(x: 0,
+        let window = CGRect(x: 0,
                             y: (layer.bounds.height - visibleHeight) / 2,
                             width: layer.bounds.width,
                             height: visibleHeight)
+        // Ré-assigner la MÊME instance en masque la fait passer par un retrait
+        // puis un ré-attachement côté Core Animation, dont le superlayer d'un
+        // masque est déjà la calque masquée : on se contente de recadrer.
+        if let existing = layer.mask {
+            existing.frame = window
+            return
+        }
+        let mask = CALayer()
+        mask.backgroundColor = UIColor.white.cgColor
+        mask.frame = window
         layer.mask = mask
     }
 

@@ -136,20 +136,20 @@ public final class StoryInlineTextEditor: UITextView {
         if shouldScroll { scrollRangeToVisible(selectedRange) }
     }
 
-    /// Taille du CONTENU, mesurée défilement neutralisé : `sizeThatFits` d'un
-    /// `UITextView` défilant renvoie sa frame et non son contenu. Sans cette
-    /// neutralisation, la hauteur se fige au premier clamp et le champ ne
-    /// redescend jamais quand on efface. Le `contentOffset` est restauré —
-    /// couper le défilement le remet à zéro, ce qui ferait sauter la vue à
-    /// chaque frappe.
+    /// Taille du CONTENU. `sizeThatFits` d'un `UITextView` défilant renvoie sa
+    /// FRAME et non son contenu : la hauteur se figerait au premier clamp et le
+    /// champ ne redescendrait jamais quand on efface.
+    ///
+    /// On lit alors `contentSize`, qui porte la mise en page réelle — plutôt
+    /// que de couper le défilement le temps de la mesure. Basculer
+    /// `isScrollEnabled` appelle `invalidateIntrinsicContentSize`, donc
+    /// `setNeedsLayout` : or cette mesure est appelée DEPUIS `layoutSubviews`
+    /// (via `rebuildLayers` → `reapplyInlineEditingIfNeeded`). Chaque passe en
+    /// réarmait une suivante — boucle de layout permanente, UI figée.
     private func measuredSize(fitting constraint: CGSize) -> CGSize {
         guard isScrollEnabled else { return sizeThatFits(constraint) }
-        let savedOffset = contentOffset
-        isScrollEnabled = false
-        let fit = sizeThatFits(constraint)
-        isScrollEnabled = true
-        contentOffset = savedOffset
-        return fit
+        return CGSize(width: min(contentSize.width, constraint.width),
+                      height: contentSize.height)
     }
 
     /// Masque le placeholder dès que le champ contient du texte.
