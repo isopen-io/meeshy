@@ -221,7 +221,7 @@ extension StoryComposerView {
 
     /// D1 — auto-save au passage en background : une story en cours d'édition
     /// survit au kill de l'app. Gates : contenu réel uniquement (jamais un
-    /// composer vide) et pas de publication en vol (`publishTask` actif =
+    /// composer vide) et pas de publication partie (`didHandOffPublish` =
     /// l'upload possède l'état). Un discard explicite postérieur
     /// (`cancelAndDismiss` → `clearAllDrafts`) efface ce qui a été auto-sauvé.
     /// JAMAIS sur onDisappear : le discard fire onDisappear et
@@ -235,7 +235,7 @@ extension StoryComposerView {
         // pendant que la carte de reprise est affichée ne doit pas écraser
         // le draft avec le composer vierge.
         guard !showRestoreDraftAlert else { return }
-        guard composerHasContent, publishTask == nil else { return }
+        guard composerHasContent, !didHandOffPublish else { return }
         persistDraft()
     }
 
@@ -265,7 +265,7 @@ extension StoryComposerView {
         // = mutation → debounce) ne doit JAMAIS écraser le draft qu'on propose
         // justement de reprendre — sinon « Reprendre » restaure du vide.
         guard !showRestoreDraftAlert else { return }
-        guard !draftAutosaveSuspended, composerHasContent, publishTask == nil else { return }
+        guard !draftAutosaveSuspended, composerHasContent, !didHandOffPublish else { return }
         flushOpenTimelineIntoSlide()
         syncCurrentSlideEffects()
         StoryDraftStore.shared.save(slides: viewModel.slides, visibility: visibility)

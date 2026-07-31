@@ -90,6 +90,14 @@ jobs:
         run: |
           set -o pipefail
           start=$(date +%s)
+          # NE PAS terminer ce pipeline par `|| true`. Avec `pipefail`, un
+          # xcodebuild en échec rend TOUT le pipeline non nul, donc `true`
+          # s'exécute — et `true` REMET PIPESTATUS à (0). `${PIPESTATUS[0]}`
+          # relisait alors 0 et la sonde partait verte sur un build cassé
+          # (vécu le 2026-07-31 : trois `error:` visibles dans le journal,
+          # job vert). `set +e` neutralise le `bash -e` du runner sans
+          # exécuter la moindre commande entre le pipeline et sa lecture.
+          set +e
           xcodebuild build \
             -project apps/ios/Meeshy.xcodeproj \
             -scheme Meeshy \
@@ -100,8 +108,9 @@ jobs:
             CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
             SWIFT_OPTIMIZATION_LEVEL=-O \
             SWIFT_COMPILATION_MODE="$MODE" \
-            2>&1 | tee "build-$MODE.log" | grep -E "^\*\*|error:|LLVM ERROR" || true
+            2>&1 | tee "build-$MODE.log" | grep -E "^\*\*|error:|LLVM ERROR"
           status=${PIPESTATUS[0]}
+          set -e
           elapsed=$(( $(date +%s) - start ))
           echo "elapsed=$elapsed" >> "$GITHUB_OUTPUT"
           echo "status=$status"  >> "$GITHUB_OUTPUT"
