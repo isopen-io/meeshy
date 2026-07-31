@@ -266,9 +266,16 @@ public struct StoryComposerView: View {
                 .zIndex(40)
             }
         }
-        .alert(
+        // B5 (arbitrage S2) — feuille d'action contextuelle plutôt qu'alerte
+        // système à 3 boutons centrée : les leaders SOTA (Snapchat/Instagram/
+        // TikTok) présentent un choix de sortie au moment du geste via une
+        // sheet ancrée bas, jamais une alerte modale classique. Même binding,
+        // même titre, mêmes 3 actions/rôles/callbacks — SEULE la présentation
+        // change.
+        .confirmationDialog(
             String(localized: "story.composer.quitWithoutPublishing", defaultValue: "Quitter sans publier ?", bundle: .module),
-            isPresented: $showDiscardAlert
+            isPresented: $showDiscardAlert,
+            titleVisibility: .visible
         ) {
             // `.tint` explicite : le composer hérite de `.preferredColorScheme(.dark)`
             // (StoryViewerView) qui traverse la présentation ; sur iOS 26 l'alerte est

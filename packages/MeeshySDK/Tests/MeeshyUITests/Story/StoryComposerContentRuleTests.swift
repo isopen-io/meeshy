@@ -48,12 +48,44 @@ final class StoryComposerContentRuleTests: XCTestCase {
         XCTAssertFalse(hasContent(slides: [slide], slideImageIds: ["other-slide"]))
     }
 
-    func test_slideWithBackgroundEffect_hasContent() {
+    /// Un fond seul — auto-appliqué à l'ouverture ou choisi explicitement dans
+    /// le panneau Fond — n'a de valeur narrative que combiné à un autre
+    /// élément (texte, média, dessin, sticker, lieu). Aucun leader SOTA ne
+    /// permet de publier un rectangle coloré vide (décision arbitrage S2).
+    func test_slideWithBackgroundAlone_hasNoContent() {
         var slide = StorySlide()
         var effects = StoryEffects()
         effects.background = "FF0000"
         slide.effects = effects
+        XCTAssertFalse(hasContent(slides: [slide]))
+    }
+
+    /// Le fond ne masque pas un contenu réel coexistant sur le même slide.
+    func test_slideWithBackgroundAndText_stillHasContent() {
+        var slide = StorySlide()
+        var effects = StoryEffects()
+        effects.background = "FF0000"
+        slide.content = "Bonjour"
+        slide.effects = effects
         XCTAssertTrue(hasContent(slides: [slide]))
+    }
+
+    /// Un sticker posé sur un slide AUTRE que celui affiché doit être détecté
+    /// — le paramètre global `stickers` ne couvre que le slide courant, donc
+    /// il reste `false` ici pour isoler le scan per-slide.
+    func test_stickerOnNonCurrentSlide_hasContent() {
+        var otherSlide = StorySlide()
+        otherSlide.effects.stickerObjects = [StorySticker(emoji: "🎉")]
+        XCTAssertTrue(hasContent(slides: [StorySlide(), otherSlide], stickers: false))
+    }
+
+    /// Dessin legacy (`drawingData`) posé directement sur un slide, hors du
+    /// paramètre global `drawingData` (isolé à `false` pour prouver que la
+    /// branche per-slide, pas le filet de sécurité, détecte le contenu).
+    func test_legacyDrawingDataOnSlide_hasContent() {
+        var slide = StorySlide()
+        slide.effects.drawingData = Data([0x01, 0x02])
+        XCTAssertTrue(hasContent(slides: [slide], drawingData: false))
     }
 
     func test_slideWithTextObject_hasContent() {

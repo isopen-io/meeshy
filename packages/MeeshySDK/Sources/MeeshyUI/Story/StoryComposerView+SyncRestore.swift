@@ -282,13 +282,57 @@ extension StoryComposerView {
         )
     }
 
+    /// Gate de purge des brouillons fantômes — délègue entièrement à
+    /// `composerHasContent` (Problème 1, `StoryComposerView+Publication.swift`) :
+    /// un brouillon dont le SEUL contenu est un fond (auto-appliqué à
+    /// l'ouverture ou choisi explicitement dans le panneau Fond) ne mérite pas
+    /// la carte de reprise. Les 3 paramètres globaux de `composerHasContent`
+    /// sont figés à `false` : ce gate évalue un draft encore désérialisé, pas
+    /// l'état vivant d'un ViewModel — seuls les champs PAR SLIDE comptent ici.
+    static func shouldOfferDraftResume(slides: [StorySlide], slideImageIds: Set<String>) -> Bool {
+        composerHasContent(
+            slides: slides,
+            slideImageIds: slideImageIds,
+            hasStickerObjects: false,
+            hasDrawingData: false,
+            hasDrawingStrokes: false
+        )
+    }
+
     func checkForDraft() {
         if let stored = StoryDraftStore.shared.load() {
+            // Câblage LÉGER `slideImageIds` via `loadMediaReferences()` — PAS
+            // `loadMedia()` : ce dernier décode chaque bitmap
+            // (`Data(contentsOf:)` + `UIImage(data:)`) de façon SYNCHRONE, un
+            // coût disque+CPU non borné qui bloquerait le thread principal
+            // dans `.onAppear`, avant même l'affichage de la carte — violation
+            // du principe Cache-First (« No spinner when cache has data »).
+            // `loadMediaReferences()` ne fait qu'un `fileExists` par ligne :
+            // suffisant pour évaluer PRÉSENCE d'image, le décodage réel du
+            // cover restant dans la `Task` async ci-dessous, inchangée.
+            let imageRefs = StoryDraftStore.shared.loadMediaReferences()
+                .filter { $0.mediaType == "image" }
+            let slideImageIds = Set(
+                stored.slides.map(\.id).filter { id in
+                    imageRefs.contains { $0.elementId == id || $0.elementId == "slide-bg-\(id)" }
+                }
+            )
+
+            guard Self.shouldOfferDraftResume(slides: stored.slides, slideImageIds: slideImageIds) else {
+                // Brouillon fantôme (fond seul) : purge silencieuse, jamais
+                // de carte — auto-migrant pour tout draft déjà sur disque.
+                clearAllDrafts()
+                return
+            }
+
             draftResumeSlideCount = max(1, stored.slides.count)
             showRestoreDraftAlert = true
             // U4 inc.2 — cover composite du 1er slide, rendu APRÈS l'affichage
             // (la carte dégrade sans image) et SANS muter le ViewModel : le
-            // draft ne s'applique qu'au « Reprendre ».
+            // draft ne s'applique qu'au « Reprendre ». Seul le rendu du
+            // COVER (bitmap complet) reste ici, différé et async — la
+            // décision d'affichage ci-dessus ne dépend elle que des
+            // références légères.
             Task { @MainActor in
                 guard let first = stored.slides.first else { return }
                 let media = StoryDraftStore.shared.loadMedia()
@@ -302,7 +346,16 @@ extension StoryComposerView {
                     size: CGSize(width: 270, height: 480)
                 )
             }
-        } else if UserDefaults.standard.data(forKey: StoryComposerDraft.userDefaultsKey) != nil {
+        } else if let data = UserDefaults.standard.data(forKey: StoryComposerDraft.userDefaultsKey) {
+            // Legacy UserDefaults : décoder AVANT de décider (comme le fait
+            // déjà `restoreDraft()`) — avant ce fix, la simple PRÉSENCE de la
+            // clé suffisait à afficher la carte, y compris pour un blob
+            // indécodable dont le « Reprendre » échouait ensuite en silence.
+            guard let draft = try? JSONDecoder().decode(StoryComposerDraft.self, from: data),
+                  Self.shouldOfferDraftResume(slides: draft.slides, slideImageIds: []) else {
+                UserDefaults.standard.removeObject(forKey: StoryComposerDraft.userDefaultsKey)
+                return
+            }
             showRestoreDraftAlert = true
         }
     }

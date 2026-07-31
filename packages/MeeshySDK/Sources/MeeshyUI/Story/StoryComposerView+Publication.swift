@@ -159,9 +159,29 @@ extension StoryComposerView {
         }
     }
 
-    /// Règle PURE « le composer porte du contenu » — source unique partagée
-    /// par l'alerte de sortie (`handleDismiss`) et l'auto-save de draft au
-    /// passage en background (D1). Testable sans UI.
+    /// Règle PURE « le composer porte du contenu » — SEULE source de vérité,
+    /// partagée par l'alerte de sortie (`handleDismiss`), l'auto-save de
+    /// draft au passage en background (D1), l'autosave débouncé (E1) et le
+    /// gate de purge des brouillons fantômes (`shouldOfferDraftResume`,
+    /// `StoryComposerView+SyncRestore.swift`). `isComposerEmpty`
+    /// (`StoryComposerView+Canvas.swift`) en est la simple négation — deux
+    /// calculs frères divergents ont longtemps coexisté (fond compté ici mais
+    /// pas là, stickers scannés seulement sur le slide courant, dessin legacy
+    /// absent) ; unifiés ici pour de bon.
+    ///
+    /// Le FOND (auto-appliqué à l'ouverture ou choisi explicitement dans le
+    /// panneau Fond) ne compte JAMAIS seul comme contenu — décision produit
+    /// tranchée (arbitrage S2) : une couleur/dégradé n'a de valeur narrative
+    /// que combiné à du texte, un média, un dessin, un sticker ou un lieu.
+    /// Aucun leader SOTA (Snapchat/Instagram/TikTok/WhatsApp) ne permet de
+    /// publier un rectangle coloré vide comme story.
+    ///
+    /// Testable sans UI. Scanne TOUS les slides pour CHAQUE champ (y compris
+    /// stickers et dessin legacy, auparavant limités au slide courant via les
+    /// 3 paramètres globaux ci-dessous). Ces paramètres restent dans la
+    /// signature comme filets de sécurité redondants pour le slide COURANT —
+    /// NE PAS les supprimer en pensant nettoyer du code mort : ils gardent
+    /// 3 tests qui les exercent isolément verts sans rupture d'API.
     static func composerHasContent(
         slides: [StorySlide],
         slideImageIds: Set<String>,
@@ -172,9 +192,10 @@ extension StoryComposerView {
         slides.contains { slide in
             slide.content != nil
                 || slideImageIds.contains(slide.id)
-                || slide.effects.background != nil
                 || !slide.effects.textObjects.isEmpty
                 || !(slide.effects.mediaObjects ?? []).isEmpty
+                || !(slide.effects.stickerObjects ?? []).isEmpty
+                || slide.effects.drawingData != nil
                 || !(slide.effects.drawingStrokes ?? []).isEmpty
                 || !slide.effects.locationObjects.isEmpty
         } || hasStickerObjects || hasDrawingData || hasDrawingStrokes

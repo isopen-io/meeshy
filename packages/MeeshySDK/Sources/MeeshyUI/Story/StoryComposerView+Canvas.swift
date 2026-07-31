@@ -315,15 +315,6 @@ extension StoryComposerView {
     // The current compact toolbar comes back the moment a tool is selected
     // OR any content is added.
 
-    /// True when the entire composer carries no authoring state yet — used
-    /// to decide whether to surface the discovery-mode large picker.
-    ///
-    /// `slide.effects.background` is intentionally NOT in the check because
-    /// it is always auto-populated with a random pastel on composer open
-    /// (see `.onAppear` → `syncCurrentSlideEffects`). The background being
-    /// set therefore tells us nothing about user intent — only explicit
-    /// content additions (text / media / sticker / drawing) flip the slide
-    /// out of empty state.
     /// Un éditeur flottant plein-canvas est ouvert → le band compact standard
     /// est masqué et non-interactif. TEXTE : depuis toujours. DESSIN : en
     /// PLEIN ÉCRAN de tracé uniquement (user 2026-07-11 v2) — le mode liste
@@ -372,20 +363,17 @@ extension StoryComposerView {
         viewModel.canvasChromeScheme
     }
 
-    var isComposerEmpty: Bool {
-        let slidesEmpty = viewModel.slides.allSatisfy { slide in
-            slide.content == nil
-                && viewModel.slideImages[slide.id] == nil
-                && slide.effects.textObjects.isEmpty
-                && (slide.effects.mediaObjects ?? []).isEmpty
-                && (slide.effects.stickerObjects ?? []).isEmpty
-                && slide.effects.drawingData == nil
-                && (slide.effects.drawingStrokes ?? []).isEmpty
-        }
-        return slidesEmpty
-            && viewModel.drawingData == nil
-            && viewModel.drawingStrokes.isEmpty
-    }
+    /// True quand l'entièreté du composer ne porte encore aucun état
+    /// d'authoring — pilote l'affichage du picker géant en mode découverte.
+    ///
+    /// Simple négation de `composerHasContent`
+    /// (`StoryComposerView+Publication.swift`), SEULE source de vérité : ce
+    /// calcul et celui de `handleDismiss`/D1/E1 vivaient auparavant comme
+    /// deux frères indépendants, divergents sur le fond (compté ici, exclu
+    /// là), les stickers (scan per-slide ici, slide courant seulement là) et
+    /// le dessin legacy (absent là). Toute évolution de la règle « contenu »
+    /// se fait désormais À UN SEUL ENDROIT.
+    var isComposerEmpty: Bool { !composerHasContent }
 
     var shouldShowEmptyStateLargePicker: Bool {
         Self.resolveShouldShowEmptyStateLargePicker(
