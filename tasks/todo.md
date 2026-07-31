@@ -86,8 +86,30 @@ d'être vert.
   - ouverture d'une story → le log prod confirme le défaut D1 tel que diagnostiqué :
     `recordStoryImpression failed for 6a6ba6e2… : An unexpected error occurred` (400)
 
-### Reste à faire (hors de mon contrôle)
-Les deux correctifs gateway ne prennent effet **qu'une fois déployés** :
-`source: "story"` continuera de partir en 400 et `POST /notifications/post/:id/read`
-en 404 tant que la prod n'est pas à jour. Le client dégrade proprement (échec
-loggué, marquage local déjà appliqué de façon optimiste).
+### Vérification post-déploiement (2026-07-31, prod à jour)
+
+Les deux correctifs gateway sont **actifs en production** et vérifiés bout en bout
+depuis l'app iPad (build 1265, compte de démo, `gate.meeshy.me`).
+
+| Contrôle | Résultat |
+|---|---|
+| `POST /posts/:id/impression` avec `source:"story"` | `200 {recorded:true}` (était `400`) |
+| même route, `source` inconnu | `400` — la validation n'est pas devenue laxiste |
+| `POST /posts/impressions/batch` avec `source:"story"` | `200 {recorded:1}` |
+| incrément réel du compteur | 18 → 19 (unitaire) → 20 (batch) |
+| `POST /notifications/post/:postId/read` | `200 {count:1}` sur une vraie notif (était `404`) |
+| portée du marquage | la notif ciblée passe `isRead`, l'autre reste non lue |
+
+Bout en bout, ouverture d'une story depuis le carrousel (post `6a6bdf39…`, story
+de `windieNH`, compteurs à zéro et notification `friend_new_story` non lue) :
+- `impressionCount` 0 → 1, `viewCount` 0 → 1
+- la notification passe `isRead` avec un `readAt` à la seconde de l'ouverture
+- **2e ouverture** : `impressionCount` 1 → 2 mais `viewCount` reste 1 —
+  la sémantique demandée (impression à chaque fois, vue dédupliquée par
+  utilisateur) est exactement celle observée
+- après cold start : anneau de story gris (vu, persisté), aucune pastille de
+  conversation, badge cloche à 3 = exactement les 3 non-lues serveur
+
+Note de données : les impressions **passées** ne se rattrapent pas. Une story
+antérieure au déploiement garde la signature du bug (`viewCount:3`,
+`impressionCount:0`) ; seules les nouvelles ouvertures comptent.
