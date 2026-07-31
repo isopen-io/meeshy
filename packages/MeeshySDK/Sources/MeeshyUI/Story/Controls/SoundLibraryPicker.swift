@@ -52,6 +52,9 @@ public struct SoundLibraryPicker: View {
             }
         }
         .task { await model.loadIfNeeded() }
+        // Sans ça, fermer la feuille pendant un aperçu laissait le son tourner
+        // par-dessus le composer.
+        .onDisappear { model.stopPreview() }
         .alert(String(localized: "story.sound.library.renameTitle",
                       defaultValue: "Nommer ce son", bundle: .module),
                isPresented: Binding(get: { model.renaming != nil },
@@ -134,10 +137,11 @@ public struct SoundLibraryPicker: View {
                     SoundLibraryRow(
                         sound: sound,
                         isPlaying: model.previewingId == sound.id,
+                        isPreparing: model.preparingId == sound.id,
                         canRename: model.tab == .mine,
                         onTogglePreview: { model.togglePreview(sound) },
                         onRename: { model.beginRename(sound) },
-                        onPick: { onPick(sound) }
+                        onPick: { model.stopPreview(); onPick(sound) }
                     )
                     .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
                     .listRowSeparator(.hidden)
@@ -175,6 +179,8 @@ public struct SoundLibraryPicker: View {
 struct SoundLibraryRow: View {
     let sound: APISound
     let isPlaying: Bool
+    /// Téléchargement en cours avant lecture.
+    let isPreparing: Bool
     let canRename: Bool
     let onTogglePreview: () -> Void
     let onRename: () -> Void
@@ -189,19 +195,15 @@ struct SoundLibraryRow: View {
                 Text(SoundLibraryPickerModel.displayTitle(for: sound))
                     .font(.system(size: 15, weight: .semibold))
                     .lineLimit(1)
-                HStack(spacing: 6) {
-                    if let author = sound.authorLabel {
-                        Text(author).lineLimit(1)
-                    }
-                    if sound.usageCount > 0 {
-                        Text("·")
-                        Text(String(localized: "story.sound.library.usageCount",
-                                    defaultValue: "\(sound.usageCount) utilisations", bundle: .module))
-                            .lineLimit(1)
-                    }
+                metadataLine
+                // Gris discret, et seulement dans « Mes sons » sur un son
+                // NOMMÉ : ailleurs la date est déjà le libellé principal.
+                if let date = SoundLibraryPickerModel.secondaryDate(for: sound, isMine: canRename) {
+                    Text(date)
+                        .font(.system(size: 11))
+                        .foregroundStyle(.tertiary)
+                        .lineLimit(1)
                 }
-                .font(.system(size: 12))
-                .foregroundStyle(.secondary)
             }
             Spacer(minLength: 8)
             if canRename {
@@ -222,6 +224,66 @@ struct SoundLibraryRow: View {
             .controlSize(.small)
         }
         .contentShape(Rectangle())
+    }
+
+    private var playButtonLabel: String {
+        if isPreparing {
+            return String(localized: "story.sound.library.preparing",
+                          defaultValue: "Préparation…", bundle: .module)
+        }
+        return isPlaying
+            ? String(localized: "story.sound.library.stop", defaultValue: "Arrêter", bundle: .module)
+            : String(localized: "story.sound.library.play", defaultValue: "Écouter", bundle: .module)
+    }
+
+    /// Auteur, publications, lectures — la ligne qui rend une entrée sans titre
+    /// identifiable.
+    ///
+    /// Le crédit s'affiche AUSSI sur ses propres sons : dans « Mes sons » c'est
+    /// redondant, mais c'est ce qui rend les deux onglets lisibles de la même
+    /// façon, et un son emprunté puis retrouvé chez soi garde son auteur visible.
+    ///
+    /// Chiffres en icône + nombre plutôt qu'en toutes lettres : c'est dense, ça
+    /// ne déborde dans aucune des sept langues, et le libellé complet part en
+    /// accessibilité — où il a sa place, contrairement à une ligne de liste.
+    private var metadataLine: some View {
+        HStack(spacing: 8) {
+            if let author = sound.authorLabel {
+                Text(author).lineLimit(1).layoutPriority(1)
+            }
+            if sound.postCount > 0 {
+                Label(sound.postCount.formatted(.number.notation(.compactName)),
+                      systemImage: "rectangle.stack")
+                    .labelStyle(.titleAndIcon)
+            }
+            if sound.playCount > 0 {
+                Label(sound.playCount.formatted(.number.notation(.compactName)),
+                      systemImage: "play.fill")
+                    .labelStyle(.titleAndIcon)
+            }
+        }
+        .font(.system(size: 12))
+        .foregroundStyle(.secondary)
+        .lineLimit(1)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(accessibilitySummary)
+    }
+
+    /// Ce que VoiceOver énonce à la place des icônes. Les pluriels sont portés
+    /// par le catalogue — l'arabe en a six formes, aucune concaténation ne s'en
+    /// sort.
+    private var accessibilitySummary: String {
+        var parts: [String] = []
+        if let author = sound.authorLabel { parts.append(author) }
+        if sound.postCount > 0 {
+            parts.append(String(localized: "story.sound.library.postCount",
+                                defaultValue: "\(sound.postCount) publications", bundle: .module))
+        }
+        if sound.playCount > 0 {
+            parts.append(String(localized: "story.sound.library.playCount",
+                                defaultValue: "\(sound.playCount) lectures", bundle: .module))
+        }
+        return parts.joined(separator: ", ")
     }
 
     /// Cercle porteur du bouton play/stop. Cascade : vignette du contenu →
@@ -248,16 +310,23 @@ struct SoundLibraryRow: View {
             Button(action: onTogglePreview) {
                 ZStack {
                     Circle().fill(Color.black.opacity(0.42))
-                    Image(systemName: isPlaying ? "stop.fill" : "play.fill")
-                        .font(.system(size: 14, weight: .bold))
-                        .foregroundStyle(.white)
+                    if isPreparing {
+                        // Le son n'est pas encore sur le disque : on le
+                        // télécharge avant de jouer. Montrer « stop » ici
+                        // mentirait — il n'y a rien à arrêter.
+                        ProgressView()
+                            .progressViewStyle(.circular)
+                            .tint(.white)
+                    } else {
+                        Image(systemName: isPlaying ? "stop.fill" : "play.fill")
+                            .font(.system(size: 14, weight: .bold))
+                            .foregroundStyle(.white)
+                    }
                 }
                 .frame(width: 48, height: 48)
             }
             .buttonStyle(.plain)
-            .accessibilityLabel(isPlaying
-                ? String(localized: "story.sound.library.stop", defaultValue: "Arrêter", bundle: .module)
-                : String(localized: "story.sound.library.play", defaultValue: "Écouter", bundle: .module))
+            .accessibilityLabel(playButtonLabel)
         }
         .frame(width: 48, height: 48)
     }

@@ -11,15 +11,22 @@ public final class SoundLibraryPickerModel: ObservableObject {
     @Published public private(set) var sounds: [APISound] = []
     @Published public private(set) var isLoading = false
     @Published public private(set) var previewingId: String?
+    /// Son en cours de téléchargement avant lecture. Distinct de `previewingId` :
+    /// la ligne montre une attente, pas un bouton stop qui n'arrête rien encore.
+    @Published public private(set) var preparingId: String?
     @Published public var renaming: APISound?
 
     private let service: SoundLibraryServiceProviding
+    private let preview: SoundPreviewing
+    private var previewTask: Task<Void, Never>?
     private var nextCursor: Date?
     private var loadedOnce = false
     private var cancellables = Set<AnyCancellable>()
 
-    public init(service: SoundLibraryServiceProviding) {
+    public init(service: SoundLibraryServiceProviding,
+                preview: SoundPreviewing = SoundPreviewPlayer()) {
         self.service = service
+        self.preview = preview
         bind()
     }
 
@@ -45,6 +52,12 @@ public final class SoundLibraryPickerModel: ObservableObject {
             .removeDuplicates()
             .sink { [weak self] _ in Task { @MainActor in await self?.reload() } }
             .store(in: &cancellables)
+
+        // Fin naturelle de piste : la ligne doit repasser en « play » toute
+        // seule. Sans ça elle resterait bloquée sur « stop » indéfiniment.
+        preview.finished
+            .sink { [weak self] in self?.previewingId = nil }
+            .store(in: &cancellables)
     }
 
     public var canLoadMore: Bool { tab == .mine && nextCursor != nil && !isLoading }
@@ -69,13 +82,30 @@ public final class SoundLibraryPickerModel: ObservableObject {
     /// titre a été vidé doit retomber sur le libellé par défaut. Sans titre, on
     /// montre la date d'envoi — jamais une chaîne « Son original » venue du
     /// serveur, qui serait en français dans les sept langues.
-    public static func displayTitle(for sound: APISound) -> String {
+    public static func displayTitle(for sound: APISound, now: Date = Date()) -> String {
         if sound.hasAuthoredTitle { return sound.title }
-        if let createdAt = sound.createdAt {
-            return createdAt.formatted(date: .abbreviated, time: .shortened)
-        }
+        if let createdAt = sound.createdAt { return uploadedLabel(createdAt, now: now) }
         return String(localized: "story.sound.library.untitled",
                       defaultValue: "Son original", bundle: .module)
+    }
+
+    /// Date d'envoi en durée écoulée — « il y a 3j », pas un horodatage.
+    ///
+    /// Passe par le formateur canonique du dépôt : réécrire un format ici en
+    /// ferait un septième dialecte, et il est déjà traduit partout.
+    public static func uploadedLabel(_ date: Date, now: Date = Date()) -> String {
+        RelativeTimeFormatter.string(for: date, style: .long, now: now)
+    }
+
+    /// Date à afficher SOUS le titre, en gris discret.
+    ///
+    /// Uniquement dans « Mes sons » et uniquement si le son porte un titre :
+    /// sans titre la date est déjà le libellé principal (la répéter serait
+    /// absurde), et sur « Tendances » la date d'envoi d'un son d'autrui
+    /// n'apprend rien à personne.
+    public static func secondaryDate(for sound: APISound, isMine: Bool, now: Date = Date()) -> String? {
+        guard isMine, sound.hasAuthoredTitle, let createdAt = sound.createdAt else { return nil }
+        return uploadedLabel(createdAt, now: now)
     }
 
     public func loadIfNeeded() async {
@@ -118,8 +148,38 @@ public final class SoundLibraryPickerModel: ObservableObject {
         }
     }
 
+    /// Lance ou coupe l'aperçu. Un seul son s'écoute à la fois.
+    ///
+    /// Annuler la tâche n'annule PAS un téléchargement en cours : il finit dans
+    /// le cache disque (cf. `SoundPreviewPlayer`). Marteler play/stop ne coûte
+    /// donc jamais un second passage réseau sur le même son.
     public func togglePreview(_ sound: APISound) {
-        previewingId = previewingId == sound.id ? nil : sound.id
+        if previewingId == sound.id || preparingId == sound.id {
+            stopPreview()
+            return
+        }
+        previewTask?.cancel()
+        // Un son déjà sur le disque part sans état d'attente : afficher une
+        // roue pour un fichier local serait un clignotement gratuit.
+        let instant = preview.isReadyToPlayInstantly(sound)
+        previewingId = instant ? sound.id : nil
+        preparingId = instant ? nil : sound.id
+
+        previewTask = Task { [weak self] in
+            guard let self else { return }
+            await self.preview.play(sound)
+            guard !Task.isCancelled else { return }
+            self.preparingId = nil
+            self.previewingId = sound.id
+        }
+    }
+
+    public func stopPreview() {
+        previewTask?.cancel()
+        previewTask = nil
+        preparingId = nil
+        previewingId = nil
+        preview.stop()
     }
 
     public func beginRename(_ sound: APISound) {
