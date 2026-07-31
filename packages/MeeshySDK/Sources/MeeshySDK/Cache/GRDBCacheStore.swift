@@ -226,6 +226,31 @@ public actor GRDBCacheStore<Key, Value>: MutableCacheStore
         }
     }
 
+    /// Toutes les clés (dé-namespacées) dont une entrée L2 porte `itemId`.
+    /// Lit `cache_entries`, qui indexe déjà le couple (key, itemId) — inutile de
+    /// désérialiser les payloads pour savoir QUI contient l'item.
+    private nonisolated func l2KeysHolding(itemId: String) -> [String] {
+        let prefix = namespace.isEmpty ? "" : "\(namespace):"
+        do {
+            let keys = try db.read { db in
+                try String.fetchAll(
+                    db,
+                    sql: "SELECT DISTINCT key FROM cache_entries WHERE itemId = ?",
+                    arguments: [itemId]
+                )
+            }
+            return keys.compactMap { key in
+                guard prefix.isEmpty else {
+                    return key.hasPrefix(prefix) ? String(key.dropFirst(prefix.count)) : nil
+                }
+                return key
+            }
+        } catch {
+            logger.error("Failed to list keys holding \(itemId, privacy: .public): \(error.localizedDescription, privacy: .public)")
+            return []
+        }
+    }
+
     public func mergeUpdate(for key: Key, mutate: @Sendable ([Value]) -> [Value]) async {
         let existing: [Value]
         let loadedAt: Date
@@ -712,6 +737,36 @@ public actor GRDBCacheStore<Key, Value>: MutableCacheStore
             // disk — preferable to a silent plaintext leak.
             self.logger.error("Failed to flush dirty key \(keyStr, privacy: .public): \(error.localizedDescription, privacy: .public)")
             return false
+        }
+    }
+}
+
+// MARK: - Patch multi-clés
+
+extension GRDBCacheStore where Key == String {
+
+    /// Applique `mutate` à l'item `itemId` dans **toutes** les clés qui le
+    /// contiennent, en mémoire comme en base.
+    ///
+    /// Un même objet est couramment indexé sous plusieurs clés du même store —
+    /// un post du feed vit sous `main-feed`, sous `<postId>` (écran de détail),
+    /// sous la clé du pager de réels et sous `bookmarks`. `upsertPatch(for:)` ne
+    /// touche qu'une clé : après un like, les autres gardaient l'ancien compteur
+    /// et le ressortaient à la réouverture de l'écran.
+    ///
+    /// Balaie l'union des clés L1 (chargées) et L2 (persistées mais évincées) :
+    /// se limiter à `loadedKeys()` laisserait périmée une clé que le prochain
+    /// démarrage à froid relira depuis GRDB.
+    ///
+    /// Ne crée jamais d'entrée : une clé qui ne contient pas l'item est ignorée.
+    /// La fraîcheur (`lastFetchedAt`) est préservée — elle appartient à `save()`.
+    public func patchEverywhere(itemId: String, mutate: @Sendable (inout Value) -> Void) async {
+        let l1Keys = loadedKeys().filter { key in
+            memoryCache[key]?.items.contains(where: { $0.id == itemId }) ?? false
+        }
+        let keys = Set(l1Keys).union(l2KeysHolding(itemId: itemId))
+        for key in keys {
+            await upsertPatch(for: key, itemId: itemId, mutate: mutate)
         }
     }
 }
