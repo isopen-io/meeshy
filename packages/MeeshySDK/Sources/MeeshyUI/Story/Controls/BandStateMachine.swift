@@ -72,17 +72,30 @@ nonisolated extension StoryToolMode {
 public nonisolated struct BandStateMachine: Equatable, Sendable {
     public private(set) var state: BandState = .hidden
 
+    /// Masquage VOLONTAIRE du chrome (swipe-down sur la barre d'outils, tap sur
+    /// le fond du canvas au repos) : le seul état où l'écran est nu PAR DÉCISION
+    /// de l'utilisateur, toujours réversible d'un tap. Vit ICI et non plus dans
+    /// un `@State` de la vue pour que l'invariant
+    ///
+    ///     INV-1 : isChromeHidden == true ⟹ state == .hidden
+    ///
+    /// soit fermé par construction : c'est sa violation qui produisait un
+    /// composer sans « Fermer » ni « Publier » après un « Retour » (bug terrain
+    /// 2026-07-31 — le drapeau de la vue et l'état de la machine ne se parlaient
+    /// pas, et « Retour » ne touchait que le second).
+    public private(set) var isChromeHidden: Bool = false
+
     public init() {}
 
     public mutating func tapFAB(_ category: BandCategory) {
         switch state {
         case .hidden:
-            state = .toolPanel(StoryToolMode.from(category: category))
+            open(.toolPanel(StoryToolMode.from(category: category)))
         case .toolPanel(let tool):
             if tool.bandCategory == category {
-                state = .hidden
+                open(.hidden)
             } else {
-                state = .toolPanel(StoryToolMode.from(category: category))
+                open(.toolPanel(StoryToolMode.from(category: category)))
             }
         case .formatPanel:
             // Format panel takes precedence — tap on FAB does not interrupt it.
@@ -96,23 +109,18 @@ public nonisolated struct BandStateMachine: Equatable, Sendable {
         case .formatPanel:
             break  // formatPanel takes precedence
         default:
-            state = .toolPanel(StoryToolMode.from(category: category))
+            open(.toolPanel(StoryToolMode.from(category: category)))
         }
     }
 
+    /// Geste nommé par le doigt ; `closeAnyPanel()` est la transition nommée par
+    /// l'intention. Les deux existent à dessein — pas de synonyme mort.
     public mutating func swipeDownOnBand() {
-        switch state {
-        case .hidden:
-            break  // no-op
-        case .toolPanel:
-            state = .hidden
-        case .formatPanel:
-            closeFormatPanel()
-        }
+        closeAnyPanel()
     }
 
     public mutating func openFormatPanel(_ kind: BandElementKind, id: String) {
-        state = .formatPanel(kind, elementId: id)
+        open(.formatPanel(kind, elementId: id))
     }
 
     public mutating func tapTile(_ tool: StoryToolMode) {
@@ -120,29 +128,62 @@ public nonisolated struct BandStateMachine: Equatable, Sendable {
         case .formatPanel:
             break  // formatPanel takes precedence
         default:
-            state = .toolPanel(tool)
+            open(.toolPanel(tool))
         }
     }
 
     public mutating func closeFormatPanel() {
-        switch state {
-        case .formatPanel:
-            state = .hidden
-        default:
-            break
-        }
+        guard case .formatPanel = state else { return }
+        closeAnyPanel()
     }
 
     public mutating func backFromToolPanel() {
-        switch state {
-        case .toolPanel:
-            state = .hidden
-        default:
-            break
-        }
+        guard case .toolPanel = state else { return }
+        closeAnyPanel()
     }
 
     public mutating func reset() {
+        open(.hidden)
+    }
+
+    // MARK: - Sortie canonique
+
+    /// Transition UNIQUE « fermer ce qui est ouvert », partagée par les quatre
+    /// chemins de sortie (chevron « Retour », swipe-down sur le band, grabber
+    /// tiré sous le minimum, tap sur le fond du canvas).
+    ///
+    /// Le chrome est rendu INCONDITIONNELLEMENT, y compris depuis `.hidden` :
+    /// les overrides ViewModel (timeline, dessin) ouvrent un panneau EFFECTIF
+    /// sans faire transiter la machine, donc « préserver un masquage volontaire »
+    /// quand l'état brut est déjà `.hidden` rejouait l'écran nu depuis la tuile
+    /// Timeline d'un composer vierge. Parité exacte avec l'ancien
+    /// `areFabsVisible = true` inconditionnel du grabber.
+    public mutating func closeAnyPanel() {
         state = .hidden
+        isChromeHidden = false
+    }
+
+    // MARK: - Chrome
+
+    /// Masquage volontaire — REFUSÉ tant qu'un panneau est ouvert (INV-1). Sans
+    /// cette garde, quitter le panneau découvrait un écran sans aucune commande.
+    public mutating func hideChrome() {
+        guard state == .hidden else { return }
+        isChromeHidden = true
+    }
+
+    public mutating func showChrome() {
+        isChromeHidden = false
+    }
+
+    public mutating func toggleChrome() {
+        isChromeHidden ? showChrome() : hideChrome()
+    }
+
+    /// Toute transition OUVRANTE efface le masquage volontaire : un panneau qui
+    /// s'ouvre implique que l'utilisateur veut de nouveau voir ses commandes.
+    private mutating func open(_ next: BandState) {
+        state = next
+        isChromeHidden = false
     }
 }

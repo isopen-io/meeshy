@@ -119,9 +119,9 @@ struct BandStateMachineTests {
     }
 
     // MARK: - Timeline is a normal band tool (2026-07-14)
-    // Presented inline via ComposerControlsLayer.resolveEffectiveBandState's
+    // Presented inline via ComposerChromeContext.effectiveBandState's
     // override, exactly like drawing mode. The state machine itself no
-    // longer special-cases it — see ComposerControlsLayerEffectiveBandStateTests.
+    // longer special-cases it — see ComposerChromeContextTests.
 
     @Test("tapFAB(.timeline) from .hidden opens .toolPanel(.timeline)")
     func tapFABTimelineOpensToolPanel() {

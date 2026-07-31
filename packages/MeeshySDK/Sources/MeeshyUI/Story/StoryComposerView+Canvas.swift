@@ -141,7 +141,7 @@ extension StoryComposerView {
                     bandStateMachine.reset()
                 }
                 if oldTool == .drawing {
-                    areFabsVisible = true
+                    bandStateMachine.showChrome()
                 }
             }
             // Switching BETWEEN tabs of an already-open tool sheet (the
@@ -196,8 +196,9 @@ extension StoryComposerView {
         }
         .adaptiveOnChange(of: viewModel.currentSlideIndex) { _, _ in
             viewModel.loadCurrentSlideIntoTimeline()
+            // `reset()` restaure aussi le chrome : changer de slide efface tout,
+            // y compris un masquage volontaire.
             bandStateMachine.reset()
-            areFabsVisible = true
             // A text edit overlay open on the previous slide references an
             // element that does not exist on the new one — close it.
             viewModel.exitTextEditingMode()
@@ -279,8 +280,8 @@ extension StoryComposerView {
             } else {
                 ComposerControlsLayer(
                     viewModel: viewModel,
+                    chrome: chromeContext,
                     bandStateMachine: $bandStateMachine,
-                    areFabsVisible: $areFabsVisible,
                     selectedFilter: $selectedFilter,
                     fgMediaItem: $fgMediaItem,
                     showAudioDocumentPicker: $showAudioDocumentPicker,
@@ -296,6 +297,7 @@ extension StoryComposerView {
                     onBandHeightChange: { measuredBottomBandHeight = $0 },
                     onBandTopYChange: { measuredBandTopY = $0 },
                     onOpenMediaCrop: { id in openMediaEditor(elementId: id) },
+                    onDismissActivePanel: dismissActiveBandPanel,
                     onOpenStickerPicker: { showStickerPicker = true },
                     onOpenLocationPicker: { showLocationPicker = true }
                 )
@@ -324,20 +326,8 @@ extension StoryComposerView {
             || viewModel.isDrawingImmersive
     }
 
-    /// Outil dont le panneau est EFFECTIVEMENT ouvert dans le band — overrides
-    /// dessin/timeline compris. `nil` quand le band est replié ou affiche un
-    /// panneau de format. Même résolution que `ComposerControlsLayer`, dont la
-    /// règle pure est partagée pour éviter deux vérités divergentes.
-    var activeBandTool: StoryToolMode? {
-        let state = ComposerControlsLayer.resolveEffectiveBandState(
-            machineState: bandStateMachine.state,
-            drawingActive: viewModel.drawingEditingMode.isActive,
-            drawingImmersive: viewModel.isDrawingImmersive,
-            timelineVisible: viewModel.isTimelineVisible
-        )
-        if case .toolPanel(let tool) = state { return tool }
-        return nil
-    }
+    // `activeBandTool` a déménagé en `StoryComposerView+Chrome.swift` : il dérive
+    // du contexte de chrome, seule résolution de l'état effectif du band.
 
     /// Hauteur d'ouverture du band pour `tool` : sa hauteur de conception,
     /// clampée dans les bornes du grabber.
@@ -387,7 +377,7 @@ extension StoryComposerView {
 
     /// Résolution pure de `shouldShowEmptyStateLargePicker`, extraite en
     /// `static` pour être testable sans monter la View — même pattern que
-    /// `ComposerControlsLayer.resolveEffectiveBandState`.
+    /// `ComposerChromeContext.effectiveBandState`.
     ///
     /// Le picker grand format n'est montré QUE quand :
     ///  - aucun outil n'est sélectionné côté viewModel,
@@ -468,67 +458,12 @@ extension StoryComposerView {
                 ],
                 spacing: 10
             ) {
-                    largeToolTile(
-                        .media,
-                        icon: "play.rectangle.fill",
-                        title: String(localized: "story.composer.empty.tile.media",
-                                      defaultValue: "Médias",
-                                      bundle: .module),
-                        subtitle: String(localized: "story.composer.empty.tile.media.sub",
-                                         defaultValue: "Photos, vidéos",
-                                         bundle: .module)
-                    )
-                    largeToolTile(
-                        .audio,
-                        icon: "music.note",
-                        title: String(localized: "story.composer.empty.tile.son",
-                                      defaultValue: "Son",
-                                      bundle: .module),
-                        subtitle: String(localized: "story.composer.empty.tile.son.sub",
-                                         defaultValue: "Musique, voix",
-                                         bundle: .module),
-                        specialCategory: .son
-                    )
-                    largeToolTile(
-                        .text,
-                        icon: "textformat",
-                        title: String(localized: "story.composer.empty.tile.text",
-                                      defaultValue: "Texte",
-                                      bundle: .module),
-                        subtitle: String(localized: "story.composer.empty.tile.text.sub",
-                                         defaultValue: "Style, couleur, verre",
-                                         bundle: .module)
-                    )
-                    largeToolTile(
-                        .drawing,
-                        icon: "pencil.tip",
-                        title: String(localized: "story.composer.empty.tile.drawing",
-                                      defaultValue: "Dessin",
-                                      bundle: .module),
-                        subtitle: String(localized: "story.composer.empty.tile.drawing.sub",
-                                         defaultValue: "Pencil et couleurs",
-                                         bundle: .module)
-                    )
-                largeToolTile(
-                    .texture,
-                    icon: "paintpalette.fill",
-                    title: String(localized: "story.tool.texture",
-                                  defaultValue: "Fond",
-                                  bundle: .module),
-                    subtitle: String(localized: "story.background.swatch",
-                                     defaultValue: "Couleur de fond",
-                                     bundle: .module)
-                )
-                largeToolTile(
-                    .timeline,
-                    icon: "clock",
-                    title: String(localized: "story.composer.empty.tile.timeline",
-                                  defaultValue: "Timeline",
-                                  bundle: .module),
-                    subtitle: String(localized: "story.composer.empty.tile.timeline.sub",
-                                     defaultValue: "Montage et durée",
-                                     bundle: .module)
-                )
+                // Même ordre canonique que la barre de FABs : la grille avait le
+                // sien (média, son, texte, dessin, fond, timeline), obligeant à
+                // réapprendre la disposition en passant d'une surface à l'autre.
+                ForEach(StoryToolMode.composerOrder, id: \.rawValue) { tool in
+                    largeToolTile(tool)
+                }
             }
             .padding(.horizontal, 20)
             .padding(.bottom, 8)
@@ -569,15 +504,56 @@ extension StoryComposerView {
         )
     }
 
+    /// Libellés de la grille d'état vide. Les clés du catalogue sont reprises
+    /// VERBATIM de l'ancienne construction manuelle des six tuiles : aucune n'est
+    /// créée, renommée ni orphelinée par le passage à `composerOrder`.
+    func emptyStateTileCopy(for tool: StoryToolMode) -> (title: String, subtitle: String) {
+        switch tool {
+        case .media:
+            return (String(localized: "story.composer.empty.tile.media",
+                           defaultValue: "Médias", bundle: .module),
+                    String(localized: "story.composer.empty.tile.media.sub",
+                           defaultValue: "Photos, vidéos", bundle: .module))
+        case .audio:
+            return (String(localized: "story.composer.empty.tile.son",
+                           defaultValue: "Son", bundle: .module),
+                    String(localized: "story.composer.empty.tile.son.sub",
+                           defaultValue: "Musique, voix", bundle: .module))
+        case .text:
+            return (String(localized: "story.composer.empty.tile.text",
+                           defaultValue: "Texte", bundle: .module),
+                    String(localized: "story.composer.empty.tile.text.sub",
+                           defaultValue: "Style, couleur, verre", bundle: .module))
+        case .drawing:
+            return (String(localized: "story.composer.empty.tile.drawing",
+                           defaultValue: "Dessin", bundle: .module),
+                    String(localized: "story.composer.empty.tile.drawing.sub",
+                           defaultValue: "Pencil et couleurs", bundle: .module))
+        case .texture:
+            return (String(localized: "story.tool.texture",
+                           defaultValue: "Fond", bundle: .module),
+                    String(localized: "story.background.swatch",
+                           defaultValue: "Couleur de fond", bundle: .module))
+        case .timeline:
+            return (String(localized: "story.composer.empty.tile.timeline",
+                           defaultValue: "Timeline", bundle: .module),
+                    String(localized: "story.composer.empty.tile.timeline.sub",
+                           defaultValue: "Montage et durée", bundle: .module))
+        case .filters:
+            // Hors `composerOrder` — jamais rendu. Les clés existantes du chrome
+            // servent de repli plutôt qu'une chaîne vide silencieuse.
+            return (String(localized: "story.tool.filters",
+                           defaultValue: "Effets", bundle: .module), "")
+        }
+    }
+
     @ViewBuilder
-    func largeToolTile(
-        _ tool: StoryToolMode,
-        icon: String,
-        title: String,
-        subtitle: String,
-        specialCategory: BandCategory? = nil
-    ) -> some View {
+    func largeToolTile(_ tool: StoryToolMode) -> some View {
         let accent = tileAccent(for: tool)
+        let icon = tool.symbolName
+        let copy = emptyStateTileCopy(for: tool)
+        let title = copy.title
+        let subtitle = copy.subtitle
         let isSelected = pickerSelectedTool == tool
         let isOtherSelected = pickerSelectedTool != nil && pickerSelectedTool != tool
 
@@ -596,8 +572,8 @@ extension StoryComposerView {
                 // Timeline (2026-07-14) vit dans le band comme les autres
                 // outils — seul `isTimelineVisible` est flippé ici, sans
                 // `selectTool`/`bandStateMachine` (parité avec le FAB et le
-                // bouton overflow) : `ComposerControlsLayer.
-                // resolveEffectiveBandState` force `.toolPanel(.timeline)`
+                // bouton overflow) : `ComposerChromeContext.
+                // effectiveBandState` force `.toolPanel(.timeline)`
                 // tant que la machine reste `.hidden`, et
                 // `shouldShowEmptyStateLargePicker` cède la place au band dès
                 // que `isTimelineVisible` passe à true.
@@ -630,7 +606,9 @@ extension StoryComposerView {
                 // the user had to manually tap a FAB to reveal controls.
                 // (Le dessin s'ouvre lui aussi sur son panneau : la LISTE des
                 // traits — le plein écran n'arrive qu'au choix d'un pinceau.)
-                bandStateMachine.tapFAB(specialCategory ?? tool.bandCategory)
+                // `.audio.bandCategory == .son` : l'ancien `specialCategory` en
+                // paramètre était un doublon de la table de correspondance.
+                bandStateMachine.tapFAB(tool.bandCategory)
                 bandStateMachine.tapTile(tool)
                 pickerSelectedTool = nil
             }
@@ -793,12 +771,21 @@ extension StoryComposerView {
                     // contenu tourné déborde symétriquement et reste TAPPABLE
                     // (directive user 2026-07-14 : les chips pilotent la
                     // manipulation).
-                    CanvasLayerIndicator(layer: manipulationLayer)
-                        .fixedSize()
-                        .rotationEffect(.degrees(-90))
-                        .frame(width: 24, height: 44)
-                        .padding(.leading, 8)
+                    // Montés SEULEMENT là où leur override change réellement la
+                    // couche manipulée (fond ET premier plan peuplés) : sur une
+                    // slide à une seule couche, `resolveManipulationLayer` ignore
+                    // l'override et les chips n'étaient que décoratifs.
+                    if showsCanvasLayerIndicator {
+                        CanvasLayerIndicator(layer: manipulationLayer)
+                            .fixedSize()
+                            .rotationEffect(.degrees(-90))
+                            .frame(width: 24, height: 44)
+                            .padding(.leading, 8)
+                            .transition(.opacity)
+                    }
                 }
+                .animation(.spring(response: 0.3, dampingFraction: 0.85),
+                           value: showsCanvasLayerIndicator)
                 // Contours du canvas : matérialisés en pointillé dès que le
                 // fond ne remplit PAS tout le canvas (mode « fit », ou aucun
                 // média de fond) — directive user 2026-07-14. Le rayon épouse
@@ -1095,11 +1082,11 @@ extension StoryComposerView {
                     break
                 }
             },
-            onBackgroundTapped: {
-                withAnimation(.spring(response: 0.3)) {
-                    areFabsVisible.toggle()
-                }
-            },
+            // Routé par `ComposerChromePolicy.backgroundTapAction` : le toggle
+            // inconditionnel d'avant n'avait aucun effet visible panneau ouvert
+            // (la politique masquait déjà le chrome), puis « Retour » découvrait
+            // un écran sans « Fermer » ni « Publier » (bug terrain 2026-07-31).
+            onBackgroundTapped: { handleCanvasBackgroundTap() },
             onBackgroundTransformChanged: { transform in
                 viewModel.backgroundTransform = StoryComposerViewModel.BackgroundTransform(
                     scale: transform.scale ?? 1.0,
@@ -1393,6 +1380,9 @@ extension StoryComposerView {
                     .foregroundColor(.white)
                     .frame(width: 30, height: 30)
                     .background(Circle().fill(.black.opacity(0.5)))
+                    // Pastille de 30 pt, seule dans son coin : le débord de
+                    // contact la porte à 44 sans toucher au rendu.
+                    .composerHitTarget()
             }
             .padding(.top, showTopBar ? 70 : 16)
             .padding(.trailing, 12)

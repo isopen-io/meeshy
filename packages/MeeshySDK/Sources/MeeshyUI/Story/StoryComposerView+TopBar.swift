@@ -9,21 +9,8 @@ import MeeshySDK
 // MARK: - StoryComposerView + TopBar
 
 extension StoryComposerView {
-    /// C-DIR2 (d)+(c) : le header suit EXACTEMENT les conditions des FABs —
-    /// visible uniquement canvas plein écran au repos (aucun panneau, aucune
-    /// édition texte/dessin, pas de zoom). L'ancienne règle le gardait affiché
-    /// pendant l'édition (`|| activeTool != nil || selectedElementId != nil`),
-    /// à rebours de « n'afficher que l'utile à l'instant t ».
-    var showTopBar: Bool {
-        ComposerChromePolicy.fullChromeVisible(
-            fabsVisible: areFabsVisible,
-            bandHidden: bandStateMachine.state == .hidden,
-            isTextEditing: viewModel.textEditingMode != .inactive,
-            isDrawingActive: viewModel.drawingEditingMode.isActive,
-            isViewportZoomed: viewModel.isCanvasZoomed,
-            isTimelineVisible: viewModel.isTimelineVisible
-        )
-    }
+    // `showTopBar` a déménagé en `StoryComposerView+Chrome.swift` : il lit
+    // désormais le contexte de chrome unique, comme la barre de FABs.
 
     // MARK: - Top Bar (icônes flottantes — directive user 2026-07-10)
 
@@ -60,8 +47,16 @@ extension StoryComposerView {
             // back to material/solid via the adaptiveGlass wrappers). Publish keeps
             // the primary brand tint via prominent glass; overflow (⋯) sits last,
             // right of Publish.
-            AdaptiveGlassContainer(spacing: 6) {
-                HStack(spacing: 6) {
+            // Interstice de LAYOUT ramené à zéro : chaque pastille porte
+            // désormais une boîte de 44 pt qui inclut 4 pt de marge transparente
+            // par côté, si bien que l'écart VISUEL passe de 6 à 8 pt et que deux
+            // cibles voisines sont exactement jointives — jamais chevauchantes,
+            // ce qui aurait laissé SwiftUI arbitrer par ordre de dessin et fait
+            // déclencher « Aperçu » sur un tap au bord de « Publier ». Le
+            // paramètre du conteneur reste une distance d'EFFET (morphing du
+            // verre iOS 26) et suit l'écart visuel réel.
+            AdaptiveGlassContainer(spacing: ComposerControlMetrics.glassBlendSpacing) {
+                HStack(spacing: ComposerControlMetrics.groupSpacing) {
                     visibilityMenu
                     previewButton
                     publishButton
@@ -87,9 +82,10 @@ extension StoryComposerView {
             Image(systemName: "xmark")
                 .font(.system(size: 15, weight: .bold))
                 .glassControlForeground()
-                .frame(width: 36, height: 36)
+                .frame(width: ComposerControlMetrics.visualDiameter,
+                       height: ComposerControlMetrics.visualDiameter)
                 .adaptiveGlass(in: Circle())
-                .contentShape(Circle())
+                .composerHitTarget()
         }
     }
 
@@ -104,9 +100,10 @@ extension StoryComposerView {
             Image(systemName: "play.fill")
                 .font(.system(size: 12, weight: .bold))
                 .glassControlForeground()
-                .frame(width: 36, height: 36)
+                .frame(width: ComposerControlMetrics.visualDiameter,
+                       height: ComposerControlMetrics.visualDiameter)
                 .adaptiveGlass(in: Circle())
-                .contentShape(Circle())
+                .composerHitTarget()
         }
     }
 
@@ -129,9 +126,10 @@ extension StoryComposerView {
                         .foregroundColor(.white)
                 }
             }
-            .frame(width: 36, height: 36)
+            .frame(width: ComposerControlMetrics.visualDiameter,
+                   height: ComposerControlMetrics.visualDiameter)
             .adaptiveGlassProminent(in: Circle(), tint: MeeshyColors.brandPrimary)
-            .contentShape(Circle())
+            .composerHitTarget()
         }
         .disabled(isPublishing)
         .accessibilityLabel(isEditingExistingStory
@@ -163,6 +161,9 @@ extension StoryComposerView {
             .padding(.horizontal, 10)
             .padding(.vertical, 6)
             .adaptiveGlass(in: Capsule(), tint: MeeshyColors.brandPrimary.opacity(0.18))
+            // Capsule d'environ 27 pt de haut (paddings 10/6 sur une police 12) :
+            // le débord de contact la porte à 44 sans changer sa hauteur rendue.
+            .composerHitTarget()
         }
         .sheet(item: $audiencePickerMode) { mode in
             AudienceUserPickerView(mode: mode, initialSelection: visibilityUserIds) { ids in
@@ -180,7 +181,9 @@ extension StoryComposerView {
     /// trajectoire le permet (canUndo/canRedo — C9 Inc.4).
     var historyColumn: some View {
         AdaptiveGlassContainer(spacing: 10) {
-            VStack(spacing: 10) {
+            // Interstice de layout réduit de la marge de contact des deux
+            // pastilles : l'écart VISUEL de 10 pt est conservé à l'identique.
+            VStack(spacing: ComposerControlMetrics.columnSpacing) {
                 if viewModel.canUndoGlobal {
                     historyButton(
                         icon: "arrow.uturn.backward",
@@ -210,9 +213,10 @@ extension StoryComposerView {
             Image(systemName: icon)
                 .font(.system(size: 13, weight: .bold))
                 .glassControlForeground()
-                .frame(width: 36, height: 36)
+                .frame(width: ComposerControlMetrics.visualDiameter,
+                       height: ComposerControlMetrics.visualDiameter)
                 .adaptiveGlass(in: Circle())
-                .contentShape(Circle())
+                .composerHitTarget()
         }
         .transition(.scale.combined(with: .opacity))
         .accessibilityLabel(label)
@@ -279,9 +283,10 @@ extension StoryComposerView {
             Image(systemName: "ellipsis")
                 .font(.system(size: 13, weight: .bold))
                 .glassControlForeground()
-                .frame(width: 36, height: 36)
+                .frame(width: ComposerControlMetrics.visualDiameter,
+                       height: ComposerControlMetrics.visualDiameter)
                 .adaptiveGlass(in: Circle())
-                .contentShape(Circle())
+                .composerHitTarget()
         }
     }
 }

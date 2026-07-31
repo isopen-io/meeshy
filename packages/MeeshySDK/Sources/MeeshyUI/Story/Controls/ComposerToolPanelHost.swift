@@ -132,7 +132,7 @@ struct ComposerToolPanelHost: View {
             HapticFeedback.light()
         } label: {
             HStack(spacing: 4) {
-                Image(systemName: Self.icon(for: other))
+                Image(systemName: other.symbolName)
                     .font(.system(size: 11, weight: .semibold))
                 Text(Self.title(for: other))
                     .font(.system(size: 12, weight: .medium))
@@ -165,18 +165,6 @@ struct ComposerToolPanelHost: View {
     /// en est exclu (filtrage désormais par média via l'éditeur unitaire).
     private var otherTools: [StoryToolMode] {
         StoryToolMode.selectableCases.filter { $0 != tool }
-    }
-
-    private static func icon(for tool: StoryToolMode) -> String {
-        switch tool {
-        case .media:    return "play.rectangle.fill"
-        case .audio:    return "music.note"
-        case .drawing:  return "pencil.tip"
-        case .text:     return "textformat"
-        case .texture:  return "paintpalette.fill"
-        case .filters:  return "camera.filters"
-        case .timeline: return "clock"
-        }
     }
 
     private static func title(for tool: StoryToolMode) -> String {
