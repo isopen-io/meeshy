@@ -578,7 +578,10 @@ extension StoryComposerView {
                 // `shouldShowEmptyStateLargePicker` cède la place au band dès
                 // que `isTimelineVisible` passe à true.
                 if tool == .timeline {
-                    viewModel.isTimelineVisible = true
+                    // Intention UNIQUE d'ouverture (S4) : `openTimeline`
+                    // synchronise machine + flag, comme les 5 autres sites —
+                    // plus de flip solo du flag ViewModel.
+                    bandStateMachine.openTimeline(isTimelineVisible: &viewModel.isTimelineVisible)
                     pickerSelectedTool = nil
                     return
                 }
@@ -851,15 +854,38 @@ extension StoryComposerView {
     /// REPOS (FABs flottants, band `.hidden`) et le dessin immersif restent PLEIN
     /// écran — les FABs/bulles flottent par-dessus. Cf. `StoryCanvasFraming.isCarded`.
     var canvasIsCarded: Bool {
+        Self.resolveCanvasIsCarded(
+            isTextEditing: viewModel.textEditingMode != .inactive,
+            effectiveBandIsHidden: chromeContext.isBandHidden,
+            drawingActive: viewModel.drawingEditingMode.isActive,
+            presentedSystemSheetFraction: presentedSystemSheetFraction
+        )
+    }
+
+    /// Résolution pure de `canvasIsCarded`, extraite en `static` — même
+    /// pattern que `resolveShouldShowEmptyStateLargePicker`. `effectiveBandIsHidden`
+    /// lit l'état RÉSOLU (`ComposerChromeContext.isBandHidden`, S1), jamais
+    /// l'état BRUT de `bandStateMachine.state` : sur les 6 chemins d'ouverture
+    /// Timeline (`BandStateMachineTests.openTimeline*`) la machine peut rester
+    /// `.hidden` tandis que `isTimelineVisible` force le panneau via l'override
+    /// d'`effectiveBandState` — lire l'état brut ici referait carder le canvas
+    /// par coïncidence (le terme `timelineActive` séparé compensait déjà ce
+    /// trou côté `canvasIsCarded`, mais PAS côté `presentedSheetHeight`, cf.
+    /// `resolvePresentedSheetHeight`). Plus besoin de ce terme redondant une
+    /// fois l'état résolu passé directement à `StoryCanvasFraming.isCarded`
+    /// (paramètre `timelineActive` gardé à son défaut `false`).
+    static func resolveCanvasIsCarded(
+        isTextEditing: Bool,
+        effectiveBandIsHidden: Bool,
+        drawingActive: Bool,
+        presentedSystemSheetFraction: CGFloat?
+    ) -> Bool {
         // L'édition texte garde le canvas plein écran, sheet système comprise.
-        guard viewModel.textEditingMode == .inactive else { return false }
-        let bandPresent = bandStateMachine.state != .hidden
-        let drawingActive = viewModel.drawingEditingMode.isActive
+        guard !isTextEditing else { return false }
         if StoryCanvasFraming.isCarded(
-            bandPresent: bandPresent,
+            bandPresent: !effectiveBandIsHidden,
             drawingActive: drawingActive,
-            textActive: false,
-            timelineActive: viewModel.isTimelineVisible
+            textActive: false
         ) {
             return true
         }
@@ -876,9 +902,39 @@ extension StoryComposerView {
     /// canvas (jamais écrasé à zéro → sinon le solver retombe en plein écran = bas de
     /// nouveau masqué). Hors carding → `0`.
     var presentedSheetHeight: CGFloat {
+        Self.resolvePresentedSheetHeight(
+            canvasIsCarded: canvasIsCarded,
+            effectiveBandIsHidden: chromeContext.isBandHidden,
+            measuredBandTopY: measuredBandTopY,
+            measuredBottomBandHeight: measuredBottomBandHeight,
+            composerBandHeight: composerBandHeight,
+            presentedSystemSheetFraction: presentedSystemSheetFraction,
+            composerScreenHeight: composerScreenHeight
+        )
+    }
+
+    /// Résolution pure de `presentedSheetHeight`, extraite en `static` — même
+    /// pattern que `resolveCanvasIsCarded`. AVANT le fix S4, le bloc de
+    /// réserve mesurée restait derrière l'état BRUT
+    /// (`bandStateMachine.state != .hidden`), sans le filet redondant qui
+    /// sauvait `canvasIsCarded` : sur les 6 chemins d'ouverture Timeline la
+    /// machine reste `.hidden` pendant que `effectiveBandIsHidden` (résolu)
+    /// est `false`, donc cette fonction retournait `0` alors que
+    /// `canvasIsCarded == true` — le canvas cardait à une taille trop grande,
+    /// ses contrôles bas passant SOUS le panneau Timeline réellement rendu
+    /// (~392-406pt, bug §0 du rapport terrain 2026-07-30).
+    static func resolvePresentedSheetHeight(
+        canvasIsCarded: Bool,
+        effectiveBandIsHidden: Bool,
+        measuredBandTopY: CGFloat,
+        measuredBottomBandHeight: CGFloat,
+        composerBandHeight: CGFloat,
+        presentedSystemSheetFraction: CGFloat?,
+        composerScreenHeight: CGFloat
+    ) -> CGFloat {
         guard canvasIsCarded else { return 0 }
         var height: CGFloat = 0
-        if bandStateMachine.state != .hidden {
+        if !effectiveBandIsHidden {
             // Réserve = distance du HAUT RÉEL de la band (coord globales,
             // `measuredBandTopY`) au bas de l'écran → le canvas se rétracte
             // EXACTEMENT jusqu'au haut visuellement rendu de la band, jamais

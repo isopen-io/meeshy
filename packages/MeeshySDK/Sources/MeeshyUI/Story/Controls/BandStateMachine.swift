@@ -146,6 +146,29 @@ public nonisolated struct BandStateMachine: Equatable, Sendable {
         open(.hidden)
     }
 
+    /// Intention UNIQUE d'ouverture de la Timeline — les 6 sites d'entrée (FAB
+    /// tap/swipe-up, chip de switch `onTapTile`, tuile empty-state, bouton
+    /// menu ⋯, bouton « Voir dans la Timeline » des lignes média/texte du
+    /// panel) appellent tous CETTE fonction plutôt que de flipper
+    /// `isTimelineVisible` chacun de son côté. Avant elle, chaque site
+    /// exécutait une combinaison différente de mutations — le bouton
+    /// média/texte (`onShowInTimeline`) ne touchait QUE le flag ViewModel,
+    /// jamais la machine, si bien que depuis un panneau déjà ouvert
+    /// (`.toolPanel(.media)`/`.toolPanel(.text)`) la garde
+    /// `machineState == .hidden` d'`effectiveBandState` ne se déclenchait
+    /// JAMAIS : le tap était un clic mort (challenge S4, attaque bloquante
+    /// confirmée). `tapTile` porte déjà la priorité `.formatPanel` et
+    /// l'idempotence ; `showChrome()` est répété ici avec la même
+    /// justification que dans `dismissActiveBandPanel`
+    /// (`StoryComposerView+Chrome.swift`) — l'ouvreur porte lui aussi le
+    /// contrat « jamais d'écran nu », même si `tapTile`/`open()` le respecte
+    /// déjà sur tous les chemins réels.
+    public mutating func openTimeline(isTimelineVisible: inout Bool) {
+        isTimelineVisible = true
+        tapTile(.timeline)
+        showChrome()
+    }
+
     // MARK: - Sortie canonique
 
     /// Transition UNIQUE « fermer ce qui est ouvert », partagée par les quatre

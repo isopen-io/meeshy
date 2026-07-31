@@ -136,17 +136,19 @@ public struct ComposerControlsLayer: View {
                             if cat == .drawing {
                                 viewModel.selectTool(.drawing)
                             } else if cat == .timeline {
-                                // La timeline vit en SHEET — le band n'a aucun
-                                // panneau pour elle (C5 : le FAB ouvrait un band
-                                // vide de hauteur 0, titré sans contenu).
-                                viewModel.isTimelineVisible = true
+                                // Intention UNIQUE d'ouverture (S4) : la machine
+                                // gère `.timeline` comme un outil normal (cf.
+                                // `BandStateMachineTests`) — plus de flip solo
+                                // du flag ViewModel, seule source du bug de
+                                // réservation d'espace du canvas (§0 du rapport).
+                                bandStateMachine.openTimeline(isTimelineVisible: &viewModel.isTimelineVisible)
                             } else {
                                 bandStateMachine.tapFAB(cat)
                             }
                         },
                         onSwipeUp: { cat in
                             if cat == .timeline {
-                                viewModel.isTimelineVisible = true
+                                bandStateMachine.openTimeline(isTimelineVisible: &viewModel.isTimelineVisible)
                             } else {
                                 bandStateMachine.swipeUpOnFAB(cat)
                             }
@@ -198,12 +200,18 @@ public struct ComposerControlsLayer: View {
                     // de l'ère « timeline en sheet » et empêchait le switch-chip
                     // Timeline de fonctionner depuis un AUTRE panneau déjà
                     // ouvert (bug reproduit simulateur : le chip restait sans
-                    // effet, aucun panneau ne changeait). `isTimelineVisible`
-                    // reste nécessaire pour `effectiveBandState` côté
-                    // FAB/bouton top-bar (entrée depuis `.hidden`).
+                    // effet, aucun panneau ne changeait). Passe désormais par
+                    // `openTimeline` (S4, intention UNIQUE d'ouverture partagée
+                    // avec les 5 autres sites) pour `.timeline` — comportement
+                    // strictement identique (`tapTile`/`selectTool` inchangés),
+                    // seule la mutation du flag ViewModel est centralisée.
                     onTapTile: { tool in
-                        viewModel.isTimelineVisible = (tool == .timeline)
-                        bandStateMachine.tapTile(tool)
+                        if tool == .timeline {
+                            bandStateMachine.openTimeline(isTimelineVisible: &viewModel.isTimelineVisible)
+                        } else {
+                            viewModel.isTimelineVisible = false
+                            bandStateMachine.tapTile(tool)
+                        }
                         viewModel.selectTool(tool)
                     },
                     // Les quatre chemins de sortie passent par le MÊME
@@ -244,7 +252,17 @@ public struct ComposerControlsLayer: View {
                         viewModel.deleteElement(id: textId)
                     },
                     onShowInTimeline: {
-                        viewModel.isTimelineVisible = true
+                        // 6e chemin d'ouverture (challenge S4, attaque
+                        // bloquante confirmée) : ce callback est câblé aux
+                        // boutons « Timeline » des lignes média/texte
+                        // (`ComposerToolPanelHost.swift`), atteignables
+                        // uniquement quand un panneau (média/texte) est DÉJÀ
+                        // ouvert — `effectiveBandState` ne force
+                        // `.toolPanel(.timeline)` que depuis `.hidden`, donc
+                        // flipper le flag seul ne changeait RIEN de visible.
+                        // `openTimeline` swappe le panneau comme n'importe
+                        // quel autre outil.
+                        bandStateMachine.openTimeline(isTimelineVisible: &viewModel.isTimelineVisible)
                     },
                     onOpenStickerPicker: onOpenStickerPicker,
                     onOpenLocationPicker: onOpenLocationPicker,

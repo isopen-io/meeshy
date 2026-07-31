@@ -250,7 +250,11 @@ extension StoryComposerView {
                     systemImage: "rectangle.2.swap"
                 )
             }
-            Button { viewModel.isTimelineVisible = true } label: {
+            // Intention UNIQUE d'ouverture (S4) : `openTimeline` synchronise
+            // machine + flag ViewModel, quel que soit l'état d'où le menu est
+            // ouvert (le menu ⋯ n'est visible qu'à `.hidden` aujourd'hui, mais
+            // le seul point de vérité reste la fonction partagée).
+            Button { bandStateMachine.openTimeline(isTimelineVisible: &viewModel.isTimelineVisible) } label: {
                 Label(
                     String(localized: "story.composer.timeline", defaultValue: "Timeline", bundle: .module),
                     systemImage: "clock"
