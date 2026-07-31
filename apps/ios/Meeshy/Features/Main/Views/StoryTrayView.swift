@@ -45,8 +45,10 @@ extension View {
                         visibility: visibility,
                         visibilityUserIds: visibilityUserIds
                     )
-                    // Hors-ligne : le composer reste ouvert, rien n'est perdu.
+                    // Hors-ligne : le composer reste ouvert, rien n'est perdu —
+                    // et le `false` remonté relâche son loquet de publication.
                     if accepted { session.wrappedValue = nil }
+                    return accepted
                 },
                 onDismiss: { session.wrappedValue = nil }
             )
@@ -181,6 +183,7 @@ struct StoryTrayView: View {
         .fullScreenCover(isPresented: $viewModel.showStoryComposer) {
             ZStack {
                 StoryComposerView(
+                    initialVisibility: viewModel.lastComposerVisibility,
                     onPublishAllInBackground: { slides, slideImages, loadedImages, loadedVideoURLs, loadedAudioURLs, originalLanguage, visibility, visibilityUserIds in
                         viewModel.publishStoryInBackground(
                             slides: slides,
@@ -192,6 +195,10 @@ struct StoryTrayView: View {
                             visibility: visibility,
                             visibilityUserIds: visibilityUserIds
                         )
+                        // La création accepte TOUJOURS : hors-ligne, la story
+                        // part en file d'attente au lieu de rester dans le
+                        // composer.
+                        return true
                     },
                     onPreview: { slides, images, loadedImgs, videoURLs, audioURLs in
                         storyPreviewAssets = StoryPreviewAssets(
@@ -497,7 +504,6 @@ private struct MyStoryButton: View {
                             })
                         }
                         items.append(AvatarContextMenuItem(label: "Ajouter une story", icon: "plus.circle.fill") {
-                            guard viewModel.activeUpload == nil else { return }
                             viewModel.showStoryComposer = true
                             HapticFeedback.medium()
                         })
@@ -528,52 +534,54 @@ private struct MyStoryButton: View {
                         .accessibilityLabel(String(localized: "story.tray.a11y.changeMood", defaultValue: "Changer mon mood", bundle: .main))
                     }
                 }
-                .overlay(alignment: .topLeading) {
-                    // Composer entry badge — discoverable affordance for adding
-                    // a new story without going through long-press menu. Hidden
-                    // during an active upload (the upload overlay already
-                    // covers the avatar). The plus sign uses brand gradient
-                    // matching the published `MeeshyColors.brandGradient`.
-                    if viewModel.activeUpload == nil {
-                        Button {
-                            guard viewModel.activeUpload == nil else { return }
-                            viewModel.showStoryComposer = true
-                            HapticFeedback.medium()
-                        } label: {
-                            // User request 2026-07-04 : le (+) était COUPÉ en
-                            // haut du tray — l'offset négatif (-4,-4) le
-                            // faisait déborder du cadre de la cellule, et le
-                            // conteneur scrollable rognait tout dépassement.
-                            // Le badge est désormais ENTIÈREMENT contenu dans
-                            // les bounds de l'avatar (topLeading sans offset,
-                            // 34pt au lieu de 40) : plus rien ne peut être
-                            // rogné, quel que soit le clipping parent.
-                            // Glyphe dans un cercle de dimension FIXE : figé
-                            // (déborderait s'il scalait, doctrine 86i) ; le
-                            // bouton porte le libellé.
-                            Image(systemName: "plus")
-                                .font(.system(size: 19, weight: .bold))
-                                .foregroundStyle(Color.white)
-                                .frame(width: 34, height: 34)
-                                .background(
-                                    Circle()
-                                        .fill(MeeshyColors.brandGradient)
-                                        .overlay(Circle().stroke(theme.backgroundPrimary, lineWidth: 2.5))
-                                )
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel(String(localized: "story.tray.addStory",
-                                                   defaultValue: "Ajouter une story"))
-                    }
-                }
                 .overlay {
-                    if let upload = viewModel.activeUpload {
+                    if let surfaced = StoryUploadPresentation.surfaced(in: viewModel.activeUploads) {
                         StoryUploadOverlay(
-                            upload: upload,
-                            onRetry: { viewModel.retryUpload() },
-                            onCancel: { viewModel.cancelUpload() }
+                            upload: surfaced.upload,
+                            stackedCount: surfaced.stackedCount,
+                            onRetry: { viewModel.retryUpload(id: surfaced.upload.id) },
+                            onCancel: { viewModel.cancelUpload(id: surfaced.upload.id) }
                         )
                     }
+                }
+                // C5 — le badge « + » est appliqué APRÈS l'anneau d'upload,
+                // donc AU-DESSUS : composer une 2e story pendant qu'une monte
+                // n'est plus interdit, et l'anneau en état `.failed`
+                // (`allowsHitTesting(isFailed)`) ne doit pas lui voler le tap.
+                .overlay(alignment: .topLeading) {
+                    // Composer entry badge — discoverable affordance for adding
+                    // a new story without going through long-press menu. Visible
+                    // et tapable EN PERMANENCE, y compris pendant un upload. The
+                    // plus sign uses brand gradient matching the published
+                    // `MeeshyColors.brandGradient`.
+                    Button {
+                        viewModel.showStoryComposer = true
+                        HapticFeedback.medium()
+                    } label: {
+                        // User request 2026-07-04 : le (+) était COUPÉ en
+                        // haut du tray — l'offset négatif (-4,-4) le
+                        // faisait déborder du cadre de la cellule, et le
+                        // conteneur scrollable rognait tout dépassement.
+                        // Le badge est désormais ENTIÈREMENT contenu dans
+                        // les bounds de l'avatar (topLeading sans offset,
+                        // 34pt au lieu de 40) : plus rien ne peut être
+                        // rogné, quel que soit le clipping parent.
+                        // Glyphe dans un cercle de dimension FIXE : figé
+                        // (déborderait s'il scalait, doctrine 86i) ; le
+                        // bouton porte le libellé.
+                        Image(systemName: "plus")
+                            .font(.system(size: 19, weight: .bold))
+                            .foregroundStyle(Color.white)
+                            .frame(width: 34, height: 34)
+                            .background(
+                                Circle()
+                                    .fill(MeeshyColors.brandGradient)
+                                    .overlay(Circle().stroke(theme.backgroundPrimary, lineWidth: 2.5))
+                            )
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(String(localized: "story.tray.addStory",
+                                               defaultValue: "Ajouter une story"))
                 }
 
                 // Story count dots (si plusieurs stories)
@@ -607,12 +615,26 @@ private struct MyStoryButton: View {
 
 private struct StoryUploadOverlay: View {
     let upload: StoryViewModel.StoryUploadState
+    /// Publications empilées derrière celle-ci (C5). > 0 → pastille « +N ».
+    let stackedCount: Int
     let onRetry: () -> Void
     let onCancel: () -> Void
 
-    private var isFailed: Bool {
-        if case .failed = upload.phase { return true }
-        return false
+    private var isFailed: Bool { upload.phase.isFailed }
+
+    /// L'anneau reste à 0 % tant qu'aucun octet n'est parti : la règle
+    /// d'attente vit dans `UploadPhase.isWaiting`, partagée avec la ligne de
+    /// « Mes stories ».
+    private var displayedProgress: Double {
+        upload.phase.isWaiting ? 0 : upload.progress
+    }
+
+    private var a11yLabel: String {
+        StoryUploadPresentation.a11yLabel(
+            for: upload.phase,
+            progress: upload.progress,
+            stackedCount: stackedCount
+        )
     }
 
     var body: some View {
@@ -639,21 +661,40 @@ private struct StoryUploadOverlay: View {
                     .foregroundColor(.white)
             } else {
                 Circle()
-                    .trim(from: 0, to: upload.progress)
+                    .trim(from: 0, to: displayedProgress)
                     .stroke(
                         MeeshyColors.brandGradient,
                         style: StrokeStyle(lineWidth: 3, lineCap: .round)
                     )
                     .frame(width: 50, height: 50)
                     .rotationEffect(.degrees(-90))
-                    .animation(.linear(duration: 0.3), value: upload.progress)
+                    .animation(.linear(duration: 0.3), value: displayedProgress)
 
                 // Texte dans un cercle d'upload de dimension fixe 50×50 : figé (déborderait s'il scalait, doctrine 86i)
-                Text("\(Int(upload.progress * 100))%")
+                Text("\(Int(displayedProgress * 100))%")
                     .font(.system(size: 12, weight: .bold))
                     .foregroundColor(.white)
             }
         }
+        .overlay(alignment: .bottomTrailing) {
+            if stackedCount > 0 {
+                // Glyphe dans un cercle de dimension FIXE 18×18 : police figée
+                // (déborderait s'il scalait, doctrine 86i) ; le libellé
+                // accessible complet vit sur l'overlay.
+                Text("+\(stackedCount)")
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundColor(.white)
+                    .frame(width: 18, height: 18)
+                    .background(
+                        Circle()
+                            .fill(MeeshyColors.indigo600)
+                            .overlay(Circle().stroke(Color.black.opacity(0.35), lineWidth: 1))
+                    )
+                    .accessibilityHidden(true)
+            }
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(a11yLabel)
         .onTapGesture {
             if isFailed { onRetry() }
         }
@@ -871,7 +912,6 @@ struct PinnedStoryTrailBand: View {
 
     private var addStoryButton: some View {
         Button {
-            guard viewModel.activeUpload == nil else { return }
             viewModel.showStoryComposer = true
             HapticFeedback.medium()
         } label: {

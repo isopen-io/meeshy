@@ -113,7 +113,19 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
     @Published var storyGroups: [StoryGroup] = []
     @Published var isLoading = false
     @Published var showStoryComposer = false
-    @Published var activeUpload: StoryUploadState?
+    /// C5 — file LOCALE des publications en cours. Ordre = ordre des taps
+    /// « Publier ». Une seule monte à la fois (`currentUploadId`), mais rien
+    /// n'empêche d'en empiler d'autres : plus aucune exclusion mutuelle à la
+    /// CRÉATION. L'échec de l'une ne bloque pas les suivantes.
+    @Published private(set) var activeUploads: [StoryUploadState] = []
+    /// Vue de compatibilité : l'upload que les surfaces d'avatar mettent en
+    /// avant (un échec l'emporte, sinon la tête de file). `activeUploads` étant
+    /// `@Published`, toutes les vues qui lisent cette propriété calculée
+    /// continuent de se rafraîchir.
+    var activeUpload: StoryUploadState? { StoryUploadPresentation.surfaced(in: activeUploads)?.upload }
+    /// Id de l'upload qui MONTE en ce moment. `nil` = la file peut démarrer le
+    /// suivant.
+    private var currentUploadId: String?
     /// Incrémenté quand une cover de tray vient d'être rendue côté récepteur —
     /// invalide le tray pour que `latestStoryThumbnailURL` relise le cache local.
     @Published private(set) var receiverCoverRenderTick = 0
@@ -124,18 +136,60 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
     private var cancellables = Set<AnyCancellable>()
     private let socialSocket: SocialSocketProviding
     private let api: APIClientProviding
+    private let visibilityStore: StoryVisibilityPreferenceStore
 
     init(
         storyService: StoryServiceProviding = StoryService.shared,
         postService: PostServiceProviding = PostService.shared,
         socialSocket: SocialSocketProviding = SocialSocketManager.shared,
-        api: APIClientProviding = APIClient.shared
+        api: APIClientProviding = APIClient.shared,
+        visibilityStore: StoryVisibilityPreferenceStore = .init()
     ) {
         self.storyService = storyService
         self.postService = postService
         self.socialSocket = socialSocket
         self.api = api
+        self.visibilityStore = visibilityStore
         observeReconnectionForRetry()
+        observeQueueDispositions()
+    }
+
+    /// C6 — dernier mode d'audience choisi, injecté au composer à son
+    /// ouverture. Passe par le VM (et non par un statique global) pour qu'une
+    /// seule instance de magasin — donc une seule suite `UserDefaults` — serve
+    /// l'écriture et la lecture, y compris sous test.
+    var lastComposerVisibility: String { visibilityStore.lastVisibility() }
+
+    /// Depuis S3.4 la queue peut reprendre un item que le VM a relâché : sans
+    /// cet abonnement, un anneau rouge FANTÔME survivrait à une publication
+    /// réussie par le drain de fond. `publishFailed` retire aussi la ligne —
+    /// l'item est alors listé dans `MyStoriesView` via
+    /// `StoryPublishService.failedItems`, une seule affordance et pas deux.
+    private func observeQueueDispositions() {
+        StoryPublishQueue.shared.publishSucceeded.publisher
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] payload in
+                self?.removeActiveUpload(queueId: payload.queueId)
+            }
+            .store(in: &cancellables)
+
+        StoryPublishQueue.shared.publishFailed.publisher
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] payload in
+                self?.removeActiveUpload(queueId: payload.queueId)
+            }
+            .store(in: &cancellables)
+    }
+
+    private func removeActiveUpload(queueId: String) {
+        guard let idx = activeUploads.firstIndex(where: { $0.queueId == queueId }) else { return }
+        let removed = activeUploads.remove(at: idx)
+        if currentUploadId == removed.id {
+            uploadTask?.cancel()
+            uploadTask = nil
+            currentUploadId = nil
+        }
+        drainUploadsIfNeeded()
     }
 
     // MARK: - StoryPublishExecutor conformance (Pilier 22 V3)
@@ -252,9 +306,14 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
                     // Wait a bit so the connection stabilizes and any in-flight
                     // request has a chance to complete first.
                     try? await Task.sleep(nanoseconds: 2_000_000_000)
-                    if case .failed = self.activeUpload?.phase {
-                        self.retryUpload()
+                    // TOUTES les entrées en échec repartent — la file les
+                    // sérialise (une seule monte à la fois) et la revendication
+                    // atomique empêche toute course avec le drain de queue.
+                    let failedIds = self.activeUploads.compactMap { upload -> String? in
+                        if case .failed = upload.phase { return upload.id }
+                        return nil
                     }
+                    for id in failedIds { self.retryUpload(id: id) }
                 }
             }
             .store(in: &cancellables)
@@ -270,6 +329,13 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
         /// un kill le laisse en queue → repris au boot.
         var queueId: String?
         var queueTempStoryId: String?
+        /// E5 — le VM détient-il la revendication de son item en queue ?
+        /// Posée au write-ahead, CONSERVÉE à l'échec dès qu'une slide est
+        /// commise (`releaseQueueClaimIfNothingCommitted`). Un retry ne doit
+        /// re-revendiquer que s'il l'a relâchée : sinon `markInFlight`
+        /// refuserait sa PROPRE revendication et la ligne resterait en
+        /// `.queued`, hors de portée du drain comme du geste « Réessayer ».
+        var ownsQueueClaim: Bool = false
         var progress: Double
         var phase: UploadPhase
 
@@ -277,7 +343,9 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
         let authorName: String
         let authorAvatar: String?
 
-        let slides: [StorySlide]
+        /// Variable pour recevoir les slides ENRICHIES (thumbHashes calculés en
+        /// aval du hand-off) avant que l'upload ne démarre.
+        var slides: [StorySlide]
         let slideImages: [String: UIImage]
         let loadedImages: [String: UIImage]
         let loadedVideoURLs: [String: URL]
@@ -292,7 +360,15 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
         ///     fails at slide 3 leaves slides 1-2 visible to friends as orphans).
         var publishedPostIds: [String] = []
 
-        enum UploadPhase: Sendable {
+        enum UploadPhase: Sendable, Equatable {
+            /// L'entrée existe pour l'UI mais son intent n'est pas encore
+            /// durable : write-ahead et enrichissement thumbHash en cours. La
+            /// drainer publierait des slides sans thumbHash, sans revendication
+            /// et sans `queueId` (l'intent survivrait alors au succès et serait
+            /// republié au boot). JAMAIS drainable.
+            case preparing
+            /// Persistée, revendiquée, enrichie — en attente de son tour.
+            case queued
             case uploading
             case publishing
             case failed(String)
@@ -1086,10 +1162,13 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
         loadedVideoURLs: [String: URL],
         loadedAudioURLs: [String: URL] = [:],
         originalLanguage: String? = nil,
-        visibility: String = "FRIENDS",
+        visibility: String = StoryVisibilityPreferenceStore.fallback,
         visibilityUserIds: [String] = []
     ) {
-        guard activeUpload == nil else { return }
+        // C6 — l'écriture a lieu au hand-off de CRÉATION uniquement (jamais
+        // depuis `updateStoryInBackground` : changer l'audience d'une story
+        // existante n'est pas « mon dernier choix pour une nouvelle story »).
+        visibilityStore.remember(visibility)
 
         // Offline-first: route through StoryPublishQueue instead of TUS so
         // the publish survives a cold start and reconnect. The queue handler
@@ -1121,7 +1200,7 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
             id: UUID().uuidString,
             thumbnailImage: thumbnail,
             progress: 0,
-            phase: .uploading,
+            phase: .preparing,
             authorId: user?.id ?? "",
             authorName: user?.displayName ?? user?.username ?? "",
             authorAvatar: user?.avatar,
@@ -1134,18 +1213,26 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
             visibility: visibility,
             visibilityUserIds: visibilityUserIds
         )
-        activeUpload = upload
+        let uploadId = upload.id
+        activeUploads.append(upload)
         showStoryComposer = false
 
         // E5 — write-ahead : la MÊME persistance que le chemin offline court
-        // AVANT l'upload, marquée in-flight pour que le drain (reconnect) ne
+        // AVANT l'upload, revendiquée pour que le drain (reconnect) ne
         // double-publie pas pendant que l'upload UI tourne. Un kill efface le
         // marqueur volatile → le drain de boot reprend l'item : une story en
-        // cours de publication ne peut plus se perdre. Séquencé (persist PUIS
-        // launch) pour que le succès puisse toujours retirer son intent.
+        // cours de publication ne peut plus se perdre.
+        //
+        // ORDRE STRICT, non négociable : persist → revendication →
+        // enrichissement thumbHash → payload persisté mis à niveau → l'entrée
+        // devient `.queued` → drain. L'entrée reste `.preparing` — donc
+        // structurellement non drainable — tant que ces quatre étapes ne sont
+        // pas passées : un drain déclenché entre-temps par une 2e publication,
+        // une annulation ou un événement de queue partirait sinon avec les
+        // slides BRUTES, sans revendication et sans `queueId`.
         Task { [weak self] in
             guard let self else { return }
-            if let intent = await self.persistPublishIntentToQueue(
+            let intent = await self.persistPublishIntentToQueue(
                 slides: slides,
                 slideImages: slideImages,
                 loadedImages: loadedImages,
@@ -1154,13 +1241,83 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
                 originalLanguage: originalLanguage,
                 visibility: visibility,
                 visibilityUserIds: visibilityUserIds
-            ) {
-                await StoryPublishQueue.shared.markInFlight(intent.queueId)
-                self.activeUpload?.queueId = intent.queueId
-                self.activeUpload?.queueTempStoryId = intent.tempStoryId
+            )
+            // L'item vient d'être créé : personne d'autre ne peut le détenir,
+            // la revendication est donc acquise d'office ici. On enregistre
+            // malgré tout QUI la détient : le retry après commit partiel en
+            // dépend (re-revendiquer sa propre claim serait refusé).
+            var ownsClaim = false
+            if let intent {
+                ownsClaim = await StoryPublishQueue.shared.markInFlight(intent.queueId)
             }
-            self.launchUploadTask()
+            let enriched = await self.enrichSlidesWithThumbHashes(
+                queueId: intent?.queueId,
+                slides: slides,
+                slideImages: slideImages,
+                loadedImages: loadedImages,
+                loadedVideoURLs: loadedVideoURLs
+            )
+            self.mutateUpload(id: uploadId) {
+                $0.slides = enriched
+                $0.queueId = intent?.queueId
+                $0.queueTempStoryId = intent?.tempStoryId
+                $0.ownsQueueClaim = ownsClaim
+                $0.phase = .queued
+            }
+            self.drainUploadsIfNeeded()
         }
+    }
+
+    /// Décision produit : les thumbHashes ne bloquent JAMAIS le retour au feed
+    /// (C3). Ils sont calculés après le hand-off, écrits dans l'intent persisté
+    /// et dans l'état d'upload en mémoire, puis seulement le TUS démarre.
+    ///
+    /// Un kill entre le write-ahead et cette mise à niveau laisse en queue une
+    /// story SANS thumbHash — publiée correctement au drain de boot, seul le
+    /// placeholder flou du lecteur manque. Durabilité > cosmétique.
+    private func enrichSlidesWithThumbHashes(
+        queueId: String?,
+        slides: [StorySlide],
+        slideImages: [String: UIImage],
+        loadedImages: [String: UIImage],
+        loadedVideoURLs: [String: URL]
+    ) async -> [StorySlide] {
+        let enriched = await StoryThumbHashEnricher.enrich(
+            slides: slides,
+            bgImages: slideImages,
+            loadedImages: loadedImages,
+            videoURLs: loadedVideoURLs
+        )
+        guard let queueId else { return enriched }
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        // La mise à niveau du payload PERSISTÉ est best-effort : son échec ne
+        // dit rien des thumbHashes en mémoire, qui restent parfaitement
+        // valides. Retourner les slides brutes priverait la story de son
+        // placeholder flou pour une raison qui ne la concerne pas.
+        guard let payload = try? encoder.encode(enriched) else { return enriched }
+        await StoryPublishQueue.shared.updateSlidesPayload(queueId, payload)
+        return enriched
+    }
+
+    /// Accès indexé sûr à une entrée de la file (no-op si l'id a disparu
+    /// entre-temps : succès, annulation, reprise par le drain de fond). TOUS
+    /// les callbacks de progression/phase passent par là.
+    private func mutateUpload(id: String, _ body: (inout StoryUploadState) -> Void) {
+        guard let idx = activeUploads.firstIndex(where: { $0.id == id }) else { return }
+        body(&activeUploads[idx])
+    }
+
+    /// Démarre l'upload suivant si aucun ne monte. Les uploads se déroulent un
+    /// à la fois, dans l'ordre de publication : le TUS d'une story multi-slides
+    /// sature déjà la bande passante, les paralléliser ne ferait que les
+    /// ralentir tous. Les entrées `.preparing` et `.failed` sont sautées.
+    private func drainUploadsIfNeeded() {
+        guard currentUploadId == nil else { return }
+        guard let next = activeUploads.first(where: { $0.phase == .queued }) else { return }
+        currentUploadId = next.id
+        mutateUpload(id: next.id) { $0.phase = .uploading }
+        launchUploadTask(for: next.id)
     }
 
     /// Persists the in-memory composer state to disk and enqueues the
@@ -1184,7 +1341,7 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
         loadedVideoURLs: [String: URL],
         loadedAudioURLs: [String: URL] = [:],
         originalLanguage: String? = nil,
-        visibility: String = "FRIENDS",
+        visibility: String = StoryVisibilityPreferenceStore.fallback,
         visibilityUserIds: [String] = []
     ) async {
         guard let intent = await persistPublishIntentToQueue(
@@ -1211,6 +1368,22 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
             localized: "story.publish.queue.enqueued",
             defaultValue: "Story enregistrée — publication au retour en ligne"
         ))
+
+        // L'enrichissement est TOUJOURS le dernier maillon avant le premier
+        // octet réseau, et JAMAIS devant un feedback utilisateur. Sur le chemin
+        // en ligne ce feedback est le dismiss (déjà passé) ; ici c'est le
+        // triptyque lignes optimistes + haptic + toast. L'intercaler avant
+        // laisserait le tray VIDE plusieurs secondes (jusqu'à la borne par
+        // vidéo) — exactement le coût que C3 vient d'éliminer ailleurs.
+        // Le cover optimiste vient de `renderComposite`, pas du thumbHash :
+        // repousser l'enrichissement n'a aucun impact visuel.
+        _ = await enrichSlidesWithThumbHashes(
+            queueId: intent.queueId,
+            slides: slides,
+            slideImages: slideImages,
+            loadedImages: loadedImages,
+            loadedVideoURLs: loadedVideoURLs
+        )
     }
 
     /// E5 — cœur de persistance du publish (write-ahead) partagé par les DEUX
@@ -1412,8 +1585,17 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
         }
     }
 
-    private func launchUploadTask() {
-        guard let upload = activeUpload else { return }
+    private func launchUploadTask(for id: String) {
+        // L'état est relu depuis la file : il porte les slides ENRICHIES
+        // (thumbHashes) posées à la fin de la phase `.preparing`.
+        guard let upload = activeUploads.first(where: { $0.id == id }) else {
+            // L'entrée a disparu entre la sélection et le lancement (annulation,
+            // reprise par le drain de fond) : rendre la main, sinon
+            // `currentUploadId` resterait posé et gèlerait la file entière.
+            currentUploadId = nil
+            drainUploadsIfNeeded()
+            return
+        }
 
         uploadTask = Task { [weak self] in
             guard let self else { return }
@@ -1421,13 +1603,13 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
                 _ = try await self.runStoryUpload(
                     upload,
                     onProgress: { [weak self] progress in
-                        self?.activeUpload?.progress = progress
+                        self?.mutateUpload(id: id) { $0.progress = progress }
                     },
                     onPhase: { [weak self] phase in
-                        self?.activeUpload?.phase = phase
+                        self?.mutateUpload(id: id) { $0.phase = phase }
                     },
                     onPublishedSlide: { [weak self] published in
-                        self?.activeUpload?.publishedPostIds.append(published.post.id)
+                        self?.mutateUpload(id: id) { $0.publishedPostIds.append(published.post.id) }
                         self?.insertOrAppendStoryItem(
                             published.item, forAuthor: published.post.author
                         )
@@ -1438,25 +1620,66 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
                 self.cleanupUploadTempFiles(upload)
                 // E5 — l'upload online a abouti : retirer l'intent write-ahead
                 // (queue + dossier médias), sinon le boot suivant re-publierait.
-                if let queueId = self.activeUpload?.queueId {
-                    let tempId = self.activeUpload?.queueTempStoryId
+                let finished = self.activeUploads.first(where: { $0.id == id })
+                if let queueId = finished?.queueId {
+                    let tempId = finished?.queueTempStoryId
                     Task.detached {
                         await StoryPublishQueue.shared.dequeue(queueId)
                         if let tempId { Self.removeOfflineQueueMediaDirectory(tempStoryId: tempId) }
                     }
                 }
-                self.activeUpload = nil
-                self.uploadTask = nil
+                self.activeUploads.removeAll { $0.id == id }
                 HapticFeedback.success()
-                FeedbackToastManager.shared.showSuccess(String(localized: "story.published", defaultValue: "Story published", bundle: .main))
+                FeedbackToastManager.shared.showSuccess(String(localized: "story.published", defaultValue: "Story publiée", bundle: .main))
+                self.releaseUploadSlot(after: id)
             } catch {
                 if !Task.isCancelled {
-                    self.activeUpload?.phase = .failed(error.localizedDescription)
-                    FeedbackToastManager.shared.showError(String(localized: "story.publishError", defaultValue: "Failed to publish story", bundle: .main))
+                    self.mutateUpload(id: id) { $0.phase = .failed(error.localizedDescription) }
+                    FeedbackToastManager.shared.showError(String(localized: "story.publishError", defaultValue: "Échec de la publication de la story", bundle: .main))
                     // Don't cleanup temp files on failure — retry may need them
+                    self.releaseQueueClaimIfNothingCommitted(uploadId: id)
                 }
+                self.releaseUploadSlot(after: id)
             }
         }
+    }
+
+    /// Rend le créneau d'upload à la file — mais UNIQUEMENT s'il nous
+    /// appartient encore. `cancelUpload(id:)` annule la tâche en vol PUIS
+    /// démarre la suivante : le `catch` de la tâche annulée se déroule après,
+    /// et effacer `currentUploadId`/`uploadTask` à cet instant laisserait
+    /// l'upload fraîchement démarré sans propriétaire (un 2e démarrable en
+    /// parallèle) et sans poignée d'annulation.
+    private func releaseUploadSlot(after id: String) {
+        guard currentUploadId == id else { return }
+        currentUploadId = nil
+        uploadTask = nil
+        // L'échec ou l'annulation d'une story ne gèle PAS la file.
+        drainUploadsIfNeeded()
+    }
+
+    /// Relâcher, c'est passer le relais : la queue possède le backoff, le
+    /// budget de 5 tentatives et l'historique d'échec (visible et rejouable
+    /// dans `MyStoriesView`) ; le VM ne garde que l'affordance de retry en
+    /// 1 tap. Sans ce relâchement, l'item restait revendiqué à vie et le drain
+    /// de fond le sautait pour toujours.
+    ///
+    /// MAIS uniquement si RIEN n'a encore été commis côté serveur :
+    /// `executeQueuedPublish` republierait TOUTES les slides du payload
+    /// (`StoryPublishQueueItem` ne porte aucun avancement), donc les amis
+    /// verraient les slides déjà publiées EN DOUBLE — et `cancelUpload` ne
+    /// connaîtrait pas les post ids du second jeu. Dès qu'une slide est
+    /// commise, seul le retry local (qui porte `publishedPostIds`) sait où
+    /// reprendre : la revendication reste au VM.
+    private func releaseQueueClaimIfNothingCommitted(uploadId: String) {
+        guard let upload = activeUploads.first(where: { $0.id == uploadId }),
+              upload.publishedPostIds.isEmpty,
+              let queueId = upload.queueId else { return }
+        // Le drapeau tombe SYNCHRONEMENT : un retry immédiat doit savoir qu'il
+        // lui faut re-revendiquer, sans dépendre de l'ordonnancement du
+        // `Task.detached` qui efface le marqueur côté acteur.
+        mutateUpload(id: uploadId) { $0.ownsQueueClaim = false }
+        Task.detached { await StoryPublishQueue.shared.clearInFlight(queueId) }
     }
 
     // MARK: - Shared Upload Pipeline (UI-driven + queue-driven)
@@ -1714,7 +1937,7 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
         loadedVideoURLs: [String: URL],
         loadedAudioURLs: [String: URL] = [:],
         originalLanguage: String? = nil,
-        visibility: String = "FRIENDS",
+        visibility: String = StoryVisibilityPreferenceStore.fallback,
         visibilityUserIds: [String] = []
     ) -> Bool {
         guard let slide = slides.first else { return false }
@@ -1972,41 +2195,91 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
         )
     }
 
+    /// Retry en 1 tap de l'entrée mise en avant par les surfaces d'avatar.
     func retryUpload() {
-        guard case .failed = activeUpload?.phase else { return }
-        activeUpload?.progress = 0
-        activeUpload?.phase = .uploading
-        launchUploadTask()
+        guard let id = activeUpload?.id else { return }
+        retryUpload(id: id)
     }
 
+    func retryUpload(id: String) {
+        guard let upload = activeUploads.first(where: { $0.id == id }),
+              case .failed(let previousError) = upload.phase else { return }
+        // `.preparing` et NON `.queued` : la re-revendication ci-dessous
+        // traverse un saut d'acteur, et pendant ce vol une ligne `.queued` est
+        // SÉLECTIONNABLE par `drainUploadsIfNeeded()` — qu'un autre upload qui
+        // se termine (ou qu'on annule) déclenche. Elle partirait NUE, en
+        // parallèle du drain de fond qui détient peut-être encore l'item :
+        // exactement la double publication que la phase ferme au premier tap.
+        mutateUpload(id: id) {
+            $0.progress = 0
+            $0.phase = .preparing
+        }
+        // Le VM détient DÉJÀ la revendication (cas nominal du retry après un
+        // commit partiel : elle lui est conservée parce que lui seul sait où
+        // reprendre). Re-revendiquer refuserait sa propre claim et figerait la
+        // ligne — plus aucune affordance ne l'atteindrait. Rien n'est en vol
+        // ici : `.queued` puis drain se suivent sur le même tour de MainActor.
+        guard !upload.ownsQueueClaim, let queueId = upload.queueId else {
+            mutateUpload(id: id) { $0.phase = .queued }
+            drainUploadsIfNeeded()
+            return
+        }
+        Task { [weak self] in
+            guard let self else { return }
+            // Re-revendication ATOMIQUE : si le drain de fond a repris l'item
+            // entre-temps, publier en parallèle dupliquerait la story. On rend
+            // la ligne à son état ROUGE — `.queued` la sortirait de l'overlay
+            // (gestes gatés sur `.failed`) et de la reprise à la reconnexion.
+            guard await StoryPublishQueue.shared.markInFlight(queueId) else {
+                self.mutateUpload(id: id) { $0.phase = .failed(previousError) }
+                return
+            }
+            self.mutateUpload(id: id) {
+                $0.ownsQueueClaim = true
+                $0.phase = .queued
+            }
+            self.drainUploadsIfNeeded()
+        }
+    }
+
+    /// Annulation de l'entrée mise en avant par les surfaces d'avatar.
     func cancelUpload() {
-        if let upload = activeUpload {
-            cleanupUploadTempFiles(upload)
-            // Delete any slides that were committed before the user cancelled —
-            // otherwise a 5-slide story cancelled at slide 3 leaves slides 1-2
-            // visible to friends as orphan stories that don't fit any slideshow.
-            // Fire-and-forget on a detached task; don't block the cancel UX.
-            let orphans = upload.publishedPostIds
-            if !orphans.isEmpty {
-                Task.detached { [storyService = self.storyService] in
-                    for postId in orphans {
-                        try? await storyService.delete(storyId: postId)
-                    }
+        guard let id = activeUpload?.id else { return }
+        cancelUpload(id: id)
+    }
+
+    func cancelUpload(id: String) {
+        guard let upload = activeUploads.first(where: { $0.id == id }) else { return }
+        cleanupUploadTempFiles(upload)
+        // Delete any slides that were committed before the user cancelled —
+        // otherwise a 5-slide story cancelled at slide 3 leaves slides 1-2
+        // visible to friends as orphan stories that don't fit any slideshow.
+        // Fire-and-forget on a detached task; don't block the cancel UX.
+        let orphans = upload.publishedPostIds
+        if !orphans.isEmpty {
+            Task.detached { [storyService = self.storyService] in
+                for postId in orphans {
+                    try? await storyService.delete(storyId: postId)
                 }
             }
         }
         // E5 — annulation EXPLICITE : l'intent write-ahead part avec (sinon la
         // story annulée ressusciterait au prochain boot via le drain de queue).
-        if let queueId = activeUpload?.queueId {
-            let tempId = activeUpload?.queueTempStoryId
+        if let queueId = upload.queueId {
+            let tempId = upload.queueTempStoryId
             Task.detached {
                 await StoryPublishQueue.shared.dequeue(queueId)
                 if let tempId { Self.removeOfflineQueueMediaDirectory(tempStoryId: tempId) }
             }
         }
-        uploadTask?.cancel()
-        uploadTask = nil
-        activeUpload = nil
+        if currentUploadId == id {
+            uploadTask?.cancel()
+            uploadTask = nil
+            currentUploadId = nil
+        }
+        activeUploads.removeAll { $0.id == id }
+        // Annuler la story en vol enchaîne la suivante.
+        drainUploadsIfNeeded()
     }
 
     /// Cleanup temp video/audio files after upload completes.

@@ -202,12 +202,15 @@ struct iPadLeftColumnHeader: View {
                             .foregroundColor(theme.textSecondary)
 
                         if notificationCount > 0 {
-                            Text("\(min(notificationCount, 99))")
-                                // Doctrine 86i : compteur dans une pastille circulaire fixe 16×16 → figé.
-                                .font(MeeshyFont.relative(9, weight: .bold))
+                            Text(NotificationBadge.displayed(notificationCount))
+                                // Doctrine 86i : le compteur reste figé face au Dynamic
+                                // Type, mais la pastille s'élargit — « 99+ » entier.
+                                .font(MeeshyFont.relative(9, weight: NotificationBadge.fontWeight))
                                 .foregroundColor(.white)
-                                .frame(width: 16, height: 16)
-                                .background(Circle().fill(MeeshyColors.error))
+                                .lineLimit(1)
+                                .padding(.horizontal, 5)
+                                .frame(minWidth: 16, minHeight: 16)
+                                .background(Capsule().fill(MeeshyColors.error))
                                 .offset(x: 6, y: -6)
                                 .accessibilityHidden(true)
                         }

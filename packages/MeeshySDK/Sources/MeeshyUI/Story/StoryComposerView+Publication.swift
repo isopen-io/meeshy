@@ -47,116 +47,93 @@ extension StoryComposerView {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
+    /// C3 — le tap « Publier » est ENTIÈREMENT synchrone : plus aucun `await`
+    /// entre le geste et la fermeture du composer. Les thumbHashes, qui
+    /// bloquaient jusqu'ici la main pendant l'extraction des frames vidéo, sont
+    /// calculés EN AVAL par `StoryThumbHashEnricher` — après le hand-off, après
+    /// l'écriture write-ahead, avant le premier octet réseau.
+    ///
+    /// Ordre des invariants strictement préservé : flush timeline → sync des
+    /// effets → snapshot → haptic → hand-off → (si accepté) purge des
+    /// brouillons + suspension d'autosave (E1) + loquet.
     func publishAllSlides() {
-        // Pré-calcul des thumbHashes (image + vidéo) avant le hand-off vers
-        // l'uploader background. La génération vidéo est async via
-        // `AVAssetImageGenerator.image(at:)` (iOS 16+) ; on cap chaque média
-        // à 5s puis on continue avec thumbHash = nil pour ne pas bloquer.
-        publishTask?.cancel()
-        publishTask = Task { @MainActor in
-            // `defer` garantit le reset de @publishTask même si la Task est
-            // annulée mid-flight (handleDismiss / quit pendant le compute des
-            // thumbHashes). Sans ça, `publishTask != nil` reste true et le
-            // bouton publier reste disabled si l'utilisateur réessaye.
-            defer { publishTask = nil }
-            // Publier avec la sheet timeline OUVERTE ne doit pas perdre les
-            // édits en vol — même flush que l'autosave de draft.
-            flushOpenTimelineIntoSlide()
-            syncCurrentSlideEffects()
-            let snapshot = await snapshotAllSlides()
-            guard !Task.isCancelled else { return }
-            clearAllDrafts()
-            // E1 — un debounce d'autosave en vol ne doit pas re-persister le
-            // brouillon d'une story qui vient de partir en publication.
-            draftAutosaveSuspended = true
-            HapticFeedback.success()
-            let mode = PostVisibility(rawValue: visibility) ?? .public
-            let ids = mode.requiresUserSelection ? visibilityUserIds : []
-            onPublishAllInBackground(snapshot.slides, snapshot.bgImages, viewModel.loadedImages, viewModel.loadedVideoURLs, viewModel.loadedAudioURLs, storyLanguage, visibility, ids)
-        }
+        guard !didHandOffPublish else { return }
+        // Publier avec la sheet timeline OUVERTE ne doit pas perdre les
+        // édits en vol — même flush que l'autosave de draft.
+        flushOpenTimelineIntoSlide()
+        syncCurrentSlideEffects()
+        let slides = Self.handoffSlides(
+            viewModel.slides,
+            currentIndex: viewModel.currentSlideIndex,
+            currentEffects: buildEffects()
+        )
+        HapticFeedback.success()
+        let mode = PostVisibility(rawValue: visibility) ?? .public
+        let ids = mode.requiresUserSelection ? visibilityUserIds : []
+        let accepted = onPublishAllInBackground(
+            slides, viewModel.slideImages, viewModel.loadedImages,
+            viewModel.loadedVideoURLs, viewModel.loadedAudioURLs,
+            storyLanguage, visibility, ids
+        )
+        // Tout ce qui est DESTRUCTIF attend de savoir si le hand-off a été
+        // accepté. Un refus (édition hors-ligne, surface inerte) laisse le
+        // composer ouvert : jeter son brouillon et tuer son autosave le
+        // priverait de son filet pour toute la session de composition. Le
+        // loquet suit la même règle — posé sur un refus, il grise le bouton
+        // Publier à vie. Aucun `await` ne sépare le hand-off de ces lignes :
+        // le callback est synchrone, rien ne peut re-persister entre-temps.
+        guard accepted else { return }
+        clearAllDrafts()
+        // E1 — un debounce d'autosave en vol ne doit pas re-persister le
+        // brouillon d'une story qui vient de partir en publication.
+        draftAutosaveSuspended = true
+        // Le loquet n'existe QUE pour qu'un second tap pendant l'animation de
+        // dismiss ne re-publie pas la même story.
+        didHandOffPublish = true
     }
 
+    /// Snapshot remis au callback : une COPIE de `slides` où les effets du
+    /// canvas courant sont rabattus sur la slide courante. Pur et testable
+    /// sans UI — c'est la seule partie décidable de `publishAllSlides()`.
+    ///
+    /// NB : on n'écrit plus `effects.slideDuration` à chaque publish
+    /// depuis la centralisation 2026-05-28. La durée est entièrement
+    /// dérivée from-scratch côté lecteur par
+    /// `StorySlide.computedTotalDuration()` (bg media duration loop /
+    /// texte long / défaut 6s). Le champ `effects.slideDuration` reste
+    /// dans le schema pour compat backend mais le viewer ne le lit
+    /// plus — il est ignoré. Si un jour on veut une vraie surcharge
+    /// explicite par l'auteur, ce sera un champ dédié (ex:
+    /// `effects.authorPinnedDuration`) lu en priorité dans
+    /// `computedTotalDuration`.
+    static func handoffSlides(
+        _ slides: [StorySlide],
+        currentIndex: Int,
+        currentEffects: StoryEffects
+    ) -> [StorySlide] {
+        var copy = slides
+        if currentIndex >= 0, currentIndex < copy.count {
+            copy[currentIndex].effects = currentEffects
+        }
+        return copy
+    }
+
+    /// Seul l'APERÇU passe encore par un enrichissement synchrone au tap : il
+    /// n'y a rien à rendre derrière, l'utilisateur attend explicitement un
+    /// lecteur. Le chemin de publication, lui, ne l'attend plus (C3).
     func snapshotAllSlides() async -> (slides: [StorySlide], bgImages: [String: UIImage]) {
-        var slides = viewModel.slides
-        let idx = viewModel.currentSlideIndex
-        if idx < slides.count {
-            slides[idx].effects = buildEffects()
-        }
-        // NB : on n'écrit plus `effects.slideDuration` à chaque publish
-        // depuis la centralisation 2026-05-28. La durée est entièrement
-        // dérivée from-scratch côté lecteur par
-        // `StorySlide.computedTotalDuration()` (bg media duration loop /
-        // texte long / défaut 6s). Le champ `effects.slideDuration` reste
-        // dans le schema pour compat backend mais le viewer ne le lit
-        // plus — il est ignoré. Si un jour on veut une vraie surcharge
-        // explicite par l'auteur, ce sera un champ dédié (ex:
-        // `effects.authorPinnedDuration`) lu en priorité dans
-        // `computedTotalDuration`.
-        // ThumbHash composite par slide (bg + texte + média + stickers) — sync.
-        for i in slides.indices {
-            let bgImage = viewModel.slideImages[slides[i].id]
-            slides[i].effects.thumbHash = StorySlideRenderer.computeThumbHash(
-                slide: slides[i],
-                bgImage: bgImage,
-                loadedImages: viewModel.loadedImages
-            )
-
-            // ThumbHash per-media foreground.
-            // - Images : sync via `UIImage.toThumbHash()` (~5-15 ms par image).
-            // - Vidéos : on prend d'abord le thumbnail cached dans `loadedImages`
-            //   si présent (issu de `mediaAddedFromPicker`), sinon génération
-            //   async via `AVAssetImageGenerator` (iOS 16+).
-            guard var medias = slides[i].effects.mediaObjects else { continue }
-            var videoJobs: [(j: Int, url: URL)] = []
-
-            for j in medias.indices where medias[j].thumbHash == nil {
-                let mediaId = medias[j].id
-                if let cached = viewModel.loadedImages[mediaId] {
-                    medias[j].thumbHash = cached.toThumbHash()
-                    continue
-                }
-                if medias[j].kind == .video,
-                   let url = viewModel.loadedVideoURLs[mediaId] {
-                    videoJobs.append((j, url))
-                }
-            }
-
-            if !videoJobs.isEmpty {
-                await withTaskGroup(of: (Int, String?).self) { group in
-                    for job in videoJobs {
-                        group.addTask {
-                            let hash = await Self.computeVideoThumbHash(url: job.url)
-                            return (job.j, hash)
-                        }
-                    }
-                    for await (j, hash) in group {
-                        medias[j].thumbHash = hash
-                    }
-                }
-            }
-
-            slides[i].effects.mediaObjects = medias
-        }
-        return (slides, viewModel.slideImages)
-    }
-
-    /// Génère un thumbHash à partir de la première frame d'une vidéo locale.
-    /// Utilise l'API async iOS 16+ d'`AVAssetImageGenerator`. Timeout interne
-    /// implicite (l'extraction d'une frame à t=0.1s d'une vidéo locale
-    /// prend typiquement < 200 ms). Retourne `nil` si l'extraction échoue —
-    /// le placeholder du reader tombera alors sur le fond noir / le bg slide.
-    nonisolated static func computeVideoThumbHash(url: URL) async -> String? {
-        let asset = AVURLAsset(url: url)
-        let generator = AVAssetImageGenerator(asset: asset)
-        generator.appliesPreferredTrackTransform = true
-        generator.maximumSize = CGSize(width: 100, height: 100)
-        let time = CMTime(seconds: 0.1, preferredTimescale: 600)
-        do {
-            let (cgImage, _) = try await generator.image(at: time)
-            return UIImage(cgImage: cgImage).toThumbHash()
-        } catch {
-            return nil
-        }
+        let slides = Self.handoffSlides(
+            viewModel.slides,
+            currentIndex: viewModel.currentSlideIndex,
+            currentEffects: buildEffects()
+        )
+        let enriched = await StoryThumbHashEnricher.enrich(
+            slides: slides,
+            bgImages: viewModel.slideImages,
+            loadedImages: viewModel.loadedImages,
+            videoURLs: viewModel.loadedVideoURLs
+        )
+        return (enriched, viewModel.slideImages)
     }
 
     /// Règle PURE « le composer porte du contenu » — SEULE source de vérité,
@@ -213,7 +190,7 @@ extension StoryComposerView {
 
     func handleDismiss() {
         if composerHasContent { showDiscardAlert = true }
-        else { publishTask?.cancel(); publishTask = nil; clearAllDrafts(); onDismiss() }
+        else { clearAllDrafts(); onDismiss() }
     }
 
     func saveDraftAndDismiss() {
@@ -222,8 +199,6 @@ extension StoryComposerView {
     }
 
     func cancelAndDismiss() {
-        publishTask?.cancel()
-        publishTask = nil
         clearAllDrafts()
         // E1 — le « Quitter » jette le brouillon : suspendre l'autosave pour
         // qu'un debounce en vol ne le re-persiste pas pendant le démontage.
