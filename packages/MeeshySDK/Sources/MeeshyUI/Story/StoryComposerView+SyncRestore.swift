@@ -360,11 +360,26 @@ extension StoryComposerView {
         }
     }
 
+    /// Reprendre un brouillon écrase la visibilité injectée à l'init (rang 2 de
+    /// la chaîne de précédence, cf. `StoryComposerView.visibility`) — mais
+    /// JAMAIS avec un mode qui exige une liste d'utilisateurs :
+    /// `StoryDraftStore.save(slides:visibility:)` ne persiste pas
+    /// `visibilityUserIds`, donc restaurer « Seulement… » rouvrirait un
+    /// sélecteur vide et publierait vers personne. Même règle que le magasin de
+    /// préférences app-side ; reprendre n'est pas publier, la préférence
+    /// mémorisée n'est donc pas réécrite ici.
+    static func restorableVisibility(_ stored: String) -> String {
+        guard let mode = PostVisibility(rawValue: stored), !mode.requiresUserSelection else {
+            return PostVisibility.friends.rawValue
+        }
+        return stored
+    }
+
     func restoreDraft() {
         if let stored = StoryDraftStore.shared.load() {
             viewModel.slides = stored.slides.isEmpty ? [StorySlide()] : stored.slides
             viewModel.currentSlideIndex = 0
-            visibility = stored.visibility
+            visibility = Self.restorableVisibility(stored.visibility)
             // E4 inc.2 — AVANT tout bootstrap timeline : l'undo/redo de
             // chaque slide revit avec le draft, même après un crash dur.
             viewModel.applyPersistedCommandHistory(StoryDraftStore.shared.loadCommandHistoryBlob())
@@ -384,7 +399,7 @@ extension StoryComposerView {
                   let draft = try? JSONDecoder().decode(StoryComposerDraft.self, from: data) {
             viewModel.slides = draft.slides.isEmpty ? [StorySlide()] : draft.slides
             viewModel.currentSlideIndex = 0
-            visibility = draft.visibilityPreference
+            visibility = Self.restorableVisibility(draft.visibilityPreference)
         }
         if let first = viewModel.slides.first {
             restoreCanvas(from: first)

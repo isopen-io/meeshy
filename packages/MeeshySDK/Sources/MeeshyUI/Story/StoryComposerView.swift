@@ -156,12 +156,20 @@ public struct StoryComposerView: View {
     @State var isLoadingMedia = false
     @State var mediaLoadProgress: Double = 0
     @State var mediaLoadLabel: String = ""
-    // Défaut « Contacts » (PostVisibility.friends) : une story est d'abord
-    // partagée avec ses contacts, pas publiquement. L'audience publique reste
-    // un choix explicite via le sélecteur globe. Aligné sur le défaut du VM app
-    // (`StoryViewModel.publishStoryInBackground(visibility: "FRIENDS")`).
-    @State var visibility: String = "FRIENDS"
-    @State var visibilityUserIds: [String] = []
+    // L'audience n'est plus une constante mais le DERNIER CHOIX de
+    // l'utilisateur, injecté par l'app (`initialVisibility`) depuis son magasin
+    // de préférences — le SDK ne connaît pas ce magasin et reste auto-suffisant
+    // via le défaut « Contacts » (`PostVisibility.friends`) : une story est
+    // d'abord partagée avec ses contacts, pas publiquement.
+    //
+    // Chaîne de précédence, du plus fort au plus faible :
+    //   1. `viewModel.editingInitialVisibility` (mode ÉDITION) — à l'init ;
+    //   2. `restoreDraft()` (reprise d'un brouillon) — au tap « Reprendre »,
+    //      filtré par `restorableVisibility(_:)` (+SyncRestore) ;
+    //   3. `initialVisibility` injecté (dernier choix mémorisé, app-side) ;
+    //   4. `PostVisibility.friends`.
+    @State var visibility: String
+    @State var visibilityUserIds: [String]
     @State var audiencePickerMode: PostVisibility?
     @State var lostMediaCount: Int = 0  // > 0 triggers an alert after restoreDraft
 
@@ -202,11 +210,15 @@ public struct StoryComposerView: View {
     public var onDismiss: () -> Void
 
     public init(
+        initialVisibility: String = PostVisibility.friends.rawValue,
+        initialVisibilityUserIds: [String] = [],
         onPublishSlide: @escaping (StorySlide, UIImage?, [String: UIImage], [String: URL], String?) async throws -> Void = { _, _, _, _, _ in },
         onPublishAllInBackground: @escaping ([StorySlide], [String: UIImage], [String: UIImage], [String: URL], [String: URL], String?, String, [String]) -> Bool,
         onPreview: @escaping ([StorySlide], [String: UIImage], [String: UIImage], [String: URL], [String: URL]) -> Void,
         onDismiss: @escaping () -> Void
     ) {
+        self._visibility = State(initialValue: initialVisibility)
+        self._visibilityUserIds = State(initialValue: initialVisibilityUserIds)
         self.onPublishSlide = onPublishSlide
         self.onPublishAllInBackground = onPublishAllInBackground
         self.onPreview = onPreview
@@ -222,20 +234,25 @@ public struct StoryComposerView: View {
     /// not branch through the preview cycle (the slide is already known).
     public init(
         viewModel: StoryComposerViewModel,
+        initialVisibility: String = PostVisibility.friends.rawValue,
+        initialVisibilityUserIds: [String] = [],
         onPublishSlide: @escaping (StorySlide, UIImage?, [String: UIImage], [String: URL], String?) async throws -> Void = { _, _, _, _, _ in },
         onPublishAllInBackground: @escaping ([StorySlide], [String: UIImage], [String: UIImage], [String: URL], [String: URL], String?, String, [String]) -> Bool,
         onPreview: @escaping ([StorySlide], [String: UIImage], [String: UIImage], [String: URL], [String: URL]) -> Void = { _, _, _, _, _ in },
         onDismiss: @escaping () -> Void
     ) {
         self._viewModel = StateObject(wrappedValue: viewModel)
+        self._visibility = State(initialValue: initialVisibility)
+        self._visibilityUserIds = State(initialValue: initialVisibilityUserIds)
         self.onPublishSlide = onPublishSlide
         self.onPublishAllInBackground = onPublishAllInBackground
         self.onPreview = onPreview
         self.onDismiss = onDismiss
-        // Mode édition (`init(editing:)`) : le composer s'ouvre sur la
-        // visibilité ACTUELLE de la story — pas sur le défaut « Contacts ».
-        if let initialVisibility = viewModel.editingInitialVisibility {
-            self._visibility = State(initialValue: initialVisibility)
+        // Mode édition (`init(editing:)`) : PRIORITÉ ABSOLUE — le composer
+        // s'ouvre sur la visibilité ACTUELLE de la story, jamais sur le dernier
+        // choix mémorisé qu'on vient d'injecter juste au-dessus.
+        if let editingVisibility = viewModel.editingInitialVisibility {
+            self._visibility = State(initialValue: editingVisibility)
             self._visibilityUserIds = State(initialValue: viewModel.editingInitialVisibilityUserIds)
         }
     }
