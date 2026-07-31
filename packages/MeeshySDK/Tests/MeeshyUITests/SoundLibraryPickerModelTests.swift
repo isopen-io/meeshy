@@ -55,6 +55,9 @@ final class FakeSoundPreview: SoundPreviewing {
     /// Quand vrai, `play` reste suspendu jusqu'à `release()` — c'est ce qui
     /// rend l'état « préparation » observable.
     var blocksUntilReleased = false
+    /// Simule un échec de lecture : réseau coupé, fichier tronqué, format que
+    /// `AVAudioPlayer` refuse.
+    var playSucceeds = true
 
     private var gate: CheckedContinuation<Void, Never>?
     private(set) var playedIds: [String] = []
@@ -65,10 +68,12 @@ final class FakeSoundPreview: SoundPreviewing {
 
     func isReadyToPlayInstantly(_ sound: APISound) -> Bool { readyInstantly }
 
-    func play(_ sound: APISound) async {
+    @discardableResult
+    func play(_ sound: APISound) async -> Bool {
         playedIds.append(sound.id)
-        guard blocksUntilReleased else { return }
+        guard blocksUntilReleased else { return playSucceeds }
         await withCheckedContinuation { gate = $0 }
+        return playSucceeds
     }
 
     func release() { gate?.resume(); gate = nil }
@@ -354,6 +359,22 @@ final class SoundLibraryPickerModelTests: XCTestCase {
         await Task.yield()
         model.togglePreview(a)
         preview.release()
+        await Task.yield()
+        await Task.yield()
+
+        XCTAssertNil(model.previewingId)
+        XCTAssertNil(model.preparingId)
+    }
+
+    func test_echecDeLecture_neLaissePasLaLigneSurStop() async {
+        // Réseau coupé ou fichier illisible : afficher « stop » pour un son
+        // muet enfermerait l'utilisateur — il n'y a rien à arrêter.
+        let preview = FakeSoundPreview()
+        preview.readyInstantly = true
+        preview.playSucceeds = false
+        let model = makeModel(preview)
+
+        model.togglePreview(makeSound(id: "a"))
         await Task.yield()
         await Task.yield()
 

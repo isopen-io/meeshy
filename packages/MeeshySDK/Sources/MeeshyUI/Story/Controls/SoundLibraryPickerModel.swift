@@ -167,10 +167,12 @@ public final class SoundLibraryPickerModel: ObservableObject {
 
         previewTask = Task { [weak self] in
             guard let self else { return }
-            await self.preview.play(sound)
+            let didStart = await self.preview.play(sound)
             guard !Task.isCancelled else { return }
             self.preparingId = nil
-            self.previewingId = sound.id
+            // Un échec (réseau, fichier illisible) remet la ligne en « play » :
+            // afficher « stop » pour un son muet ne laisserait aucune sortie.
+            self.previewingId = didStart ? sound.id : nil
         }
     }
 

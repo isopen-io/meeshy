@@ -15,8 +15,11 @@ public protocol SoundPreviewing: AnyObject {
     /// « préparation » ou passe directement en lecture.
     func isReadyToPlayInstantly(_ sound: APISound) -> Bool
 
-    /// Joue le son. Rend la main quand la lecture a commencé — ou renonce.
-    func play(_ sound: APISound) async
+    /// Joue le son. Rend `true` seulement si la lecture a RÉELLEMENT démarré.
+    /// Sans ce retour, un téléchargement échoué laissait la ligne afficher
+    /// « stop » pour un son muet, sans aucun moyen d'en sortir.
+    @discardableResult
+    func play(_ sound: APISound) async -> Bool
 
     func stop()
 }
@@ -61,20 +64,28 @@ public final class SoundPreviewPlayer: SoundPreviewing {
         return CacheCoordinator.audioLocalFileURL(for: remote.absoluteString) != nil
     }
 
-    public func play(_ sound: APISound) async {
+    @discardableResult
+    public func play(_ sound: APISound) async -> Bool {
         stop()
-        guard let remote = Self.remoteURL(for: sound) else { return }
+        guard let remote = Self.remoteURL(for: sound) else { return false }
 
         if let local = CacheCoordinator.audioLocalFileURL(for: remote.absoluteString) {
-            player.playLocalFile(url: local)
-            return
+            return started(from: local)
         }
 
-        guard let local = await CacheCoordinator.audioLocalFileURLAwait(for: remote) else { return }
+        guard let local = await CacheCoordinator.audioLocalFileURLAwait(for: remote) else { return false }
         // L'utilisateur a pu changer d'avis pendant le téléchargement. On ne
         // joue plus, mais le fichier EST en cache : rien n'est perdu.
-        guard !Task.isCancelled else { return }
+        guard !Task.isCancelled else { return false }
+        return started(from: local)
+    }
+
+    /// `AudioPlayerManager` échoue en posant `lastError` sans lever : un fichier
+    /// tronqué ou d'un format que `AVAudioPlayer` refuse ressort ici, et c'est
+    /// la seule façon de ne pas l'annoncer comme une lecture en cours.
+    private func started(from local: URL) -> Bool {
         player.playLocalFile(url: local)
+        return player.isPlaying
     }
 
     public func stop() {
