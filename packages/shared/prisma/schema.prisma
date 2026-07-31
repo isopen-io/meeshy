@@ -1140,10 +1140,16 @@ model ConversationReadCursor {
   /// Last message ID that was read
   lastReadMessageId String?   @db.ObjectId
   lastReadAt        DateTime?
+  /// createdAt of `lastReadMessageId` — the chronological key the cursor-advance
+  /// freshness guard orders by (ObjectId hex order is only second-accurate and
+  /// diverges across gateway processes; see MessageReadStatusService).
+  lastReadMessageCreatedAt DateTime?
 
   /// Last message ID that was delivered
   lastDeliveredMessageId String?   @db.ObjectId
   lastDeliveredAt        DateTime?
+  /// createdAt of `lastDeliveredMessageId` — see `lastReadMessageCreatedAt`.
+  lastDeliveredMessageCreatedAt DateTime?
 
   /// Cached unread count (updated on new message or read)
   unreadCount Int @default(0)

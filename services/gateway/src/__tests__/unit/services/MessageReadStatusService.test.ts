@@ -12,7 +12,7 @@
  * @jest-environment node
  */
 
-import { MessageReadStatusService } from '../../../services/MessageReadStatusService';
+import { MessageReadStatusService, buildCursorFreshnessGuard } from '../../../services/MessageReadStatusService';
 
 // Mock the NotificationService import (used dynamically in markMessagesAsRead)
 jest.mock('../../../services/notifications/NotificationService', () => ({
@@ -534,6 +534,140 @@ describe('MessageReadStatusService', () => {
       await service.markMessagesAsReceived(testParticipantId, testConversationId, testMessageId);
 
       expect(row?.lastDeliveredMessageId).toBe(testMessageId2);
+    });
+  });
+
+  describe('buildCursorFreshnessGuard (pure)', () => {
+    const objectIdA = '507f1f77bcf86cd799439010';
+    const createdAt = new Date('2025-01-01T00:00:00.500Z');
+
+    it('orders by createdAt with an ObjectId legacy fallback when a createdAt is known', () => {
+      expect(
+        buildCursorFreshnessGuard({
+          idField: 'lastDeliveredMessageId',
+          createdAtField: 'lastDeliveredMessageCreatedAt',
+          messageId: objectIdA,
+          messageCreatedAt: createdAt,
+        })
+      ).toEqual({
+        OR: [
+          { lastDeliveredMessageCreatedAt: null, lastDeliveredMessageId: null },
+          { lastDeliveredMessageCreatedAt: null, lastDeliveredMessageId: { lt: objectIdA } },
+          { lastDeliveredMessageCreatedAt: { lt: createdAt } },
+        ],
+      });
+    });
+
+    it('falls back to the ObjectId-order guard when createdAt is unresolved', () => {
+      expect(
+        buildCursorFreshnessGuard({
+          idField: 'lastReadMessageId',
+          createdAtField: 'lastReadMessageCreatedAt',
+          messageId: objectIdA,
+          messageCreatedAt: null,
+        })
+      ).toEqual({
+        OR: [{ lastReadMessageId: null }, { lastReadMessageId: { lt: objectIdA } }],
+      });
+    });
+
+    it('returns null (no guard) for non-ObjectId ids', () => {
+      expect(
+        buildCursorFreshnessGuard({
+          idField: 'lastReadMessageId',
+          createdAtField: 'lastReadMessageCreatedAt',
+          messageId: 'not-an-object-id',
+          messageCreatedAt: createdAt,
+        })
+      ).toBeNull();
+    });
+  });
+
+  describe('markMessagesAsReceived — cursor freshness is ordered by message createdAt, not ObjectId string', () => {
+    // A MongoDB ObjectId only encodes creation time to the SECOND; its next 5
+    // bytes are per-process random. Two messages created in the same second on
+    // different gateway processes therefore sort by hex string in an order
+    // unrelated to real recency. The delivered/read cursor must never roll back
+    // to a genuinely OLDER message just because its ObjectId string happens to
+    // sort higher than the message the cursor already records.
+    //
+    // Scenario: `idNewer` was created LATER (createdAt 500ms) but its ObjectId
+    // string sorts BELOW `idOlder` (created earlier, 100ms). Under the old
+    // string-`lt` guard, a late delivery receipt for the older message wins the
+    // comparison `idNewer < idOlder` and rolls the cursor backward. Ordering by
+    // createdAt removes the inversion.
+    const idNewer = '507f1f77bcf86cd799439010';
+    const idOlder = '507f1f77bcf86cd799439999';
+    const tNewer = new Date('2025-01-01T00:00:00.500Z');
+    const tOlder = new Date('2025-01-01T00:00:00.100Z');
+    const createdAtById: Record<string, Date> = { [idNewer]: tNewer, [idOlder]: tOlder };
+
+    const evalClause = (clause: Record<string, any>, row: Record<string, any>): boolean =>
+      Object.entries(clause).every(([field, cond]) => {
+        const current = row[field] ?? null;
+        if (cond === null) return current === null;
+        if (cond && typeof cond === 'object' && 'lt' in cond) {
+          return current !== null && current < cond.lt;
+        }
+        return current === cond;
+      });
+
+    it('does not roll the delivered cursor back to an older same-second message with a higher ObjectId string', async () => {
+      let row: Record<string, any> | null = null;
+
+      mockPrisma.message.findUnique.mockImplementation(async ({ where }: any) => {
+        const createdAt = createdAtById[where.id];
+        return createdAt ? { createdAt } : null;
+      });
+      mockPrisma.conversationReadCursor.findUnique.mockImplementation(async () => row);
+
+      mockPrisma.conversationReadCursor.updateMany.mockImplementation(async ({ where, data }: any) => {
+        if (!row) return { count: 0 };
+        const passes = where.OR ? where.OR.some((clause: any) => evalClause(clause, row!)) : true;
+        if (!passes) return { count: 0 };
+        row = { ...row, ...data };
+        return { count: 1 };
+      });
+      mockPrisma.conversationReadCursor.create.mockImplementation(async ({ data }: any) => {
+        row = { ...data };
+        return row;
+      });
+
+      // The newer message is delivered first (cursor advances to it), then a
+      // late receipt for the older message arrives second.
+      await service.markMessagesAsReceived(testParticipantId, testConversationId, idNewer);
+      await service.markMessagesAsReceived(testParticipantId, testConversationId, idOlder);
+
+      expect(row?.lastDeliveredMessageId).toBe(idNewer);
+    });
+
+    it('still advances the delivered cursor for a genuinely newer same-second message with a lower ObjectId string', async () => {
+      let row: Record<string, any> | null = null;
+
+      mockPrisma.message.findUnique.mockImplementation(async ({ where }: any) => {
+        const createdAt = createdAtById[where.id];
+        return createdAt ? { createdAt } : null;
+      });
+      mockPrisma.conversationReadCursor.findUnique.mockImplementation(async () => row);
+
+      mockPrisma.conversationReadCursor.updateMany.mockImplementation(async ({ where, data }: any) => {
+        if (!row) return { count: 0 };
+        const passes = where.OR ? where.OR.some((clause: any) => evalClause(clause, row!)) : true;
+        if (!passes) return { count: 0 };
+        row = { ...row, ...data };
+        return { count: 1 };
+      });
+      mockPrisma.conversationReadCursor.create.mockImplementation(async ({ data }: any) => {
+        row = { ...data };
+        return row;
+      });
+
+      // The older message is delivered first, then the genuinely newer message
+      // (lower ObjectId string) — the cursor MUST advance to it.
+      await service.markMessagesAsReceived(testParticipantId, testConversationId, idOlder);
+      await service.markMessagesAsReceived(testParticipantId, testConversationId, idNewer);
+
+      expect(row?.lastDeliveredMessageId).toBe(idNewer);
     });
   });
 
