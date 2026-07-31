@@ -1,115 +1,104 @@
-# Lectures & notifications — nettoyage des vues (2026-07-31)
+# Sémantique like / impression / vue — POST, REEL, MOOD (2026-07-31)
 
-## Symptôme rapporté
-« Les vues de conversation ne se nettoient pas — ça part puis ça revient. »
-Plus : ouvrir une conversation doit marquer sa notification lue ; ouvrir une
-story doit incrémenter l'impression à CHAQUE fois, poser le « vu », et marquer
-la notification lue.
+## Demande
+1. Le like d'un réel depuis feed-posts / feed-réels / détail semble incrémenter
+   « des données différentes au lieu de la même donnée ».
+2. Chaque impression de REEL, POST, MOOD depuis **n'importe quelle** vue doit
+   incrémenter `impressionCount`. Arbitrage retenu : **une impression par
+   apparition à l'écran** (déduplication de session retirée).
+3. Ouvrir un réel en détail doit aussi incrémenter `viewCount`, avec un champ de
+   vues **uniques par utilisateur** — à réutiliser s'il existe.
 
-## Causes racines (Phase 1 — investigation)
+## Constats (Phase 1 — investigation)
 
-### D1 — Les impressions de story ne sont JAMAIS enregistrées (HTTP 400)
-`POST /posts/:postId/impression` valide `source` contre l'enum
-`['feed','profile','search','shared_link','notification','detail']`.
-iOS envoie `source: "story"` (`StoryViewModel.recordStoryImpression`).
-Preuve prod : `HTTP 400` + toutes les stories à `impressionCount = 0` malgré
-`viewCount > 0`. Même classe de bug que le fix `reports` (f408b2584).
-Fichier : `services/gateway/src/routes/posts/interactions.ts:333` (+ batch :381).
+### Ce qui est SAIN (le soupçon ne se vérifie pas côté serveur)
+- **Un seul écrivain du like.** `PostReactionService.updatePostReactionSummary`
+  recalcule depuis la table `PostReaction` (`groupBy`) et écrit `reactionSummary`,
+  `reactionCount` ET `likeCount` au **même total**. REST `/posts/:id/like` et le
+  socket `reaction:add` y convergent tous les deux (`PostService.likePost` →
+  `addReaction`). Vérifié en prod : 20/20 posts avec `likeCount == reactionCount`,
+  `reactionSummary` cohérent.
+- **Les vues uniques existent déjà.** `PostView` porte `@@unique([postId, userId])` ;
+  `PostService.recordView` ne crée la ligne qu'à la première vue et n'incrémente
+  `viewCount` qu'alors (auteur exclu, visibilité vérifiée). `viewCount` EST donc
+  le compteur de vues uniques demandé — rien à créer.
+- Le détail appelle bien `viewPost` (`PostDetailView:747`, `:1194`).
 
-### D2 — L'état « lu » des notifications n'est jamais écrit dans le cache
-`NotificationListViewModel.handleReadEvent` / `handleConversationReadEvent` /
-`deleteNotification` ne mutent que le tableau `@Published` en mémoire. Le store
-GRDB `CacheCoordinator.notifications` garde `isRead:false`.
-`loadInitial()` lit le cache d'abord : `.fresh` (< 2 min) → il rend l'instantané
-d'AVANT le marquage → **les notifications lues réapparaissent non lues**.
-Fichier : `packages/MeeshySDK/Sources/MeeshyUI/Notifications/NotificationListView.swift:442-534`.
+### D1 — Le batch d'impressions ignore les occurrences répétées
+`POST /posts/impressions/batch` : `createMany` insère **N** lignes `PostImpression`
+mais `updateMany({ where: { id: { in: capped } } })` incrémente chaque post
+**une seule fois**. Envoyer `["A","A","A"]` crée 3 lignes et ne monte le compteur
+que de 1 → table et compteur dénormalisé divergent. Bloquant pour la sémantique
+« une par apparition ».
+Fichier : `services/gateway/src/routes/posts/interactions.ts:400`.
 
-### D3 — Les instantanés serveur ré-inflatent le non-lu déjà lu localement
-`deltaSyncCore` / `fullSync` écrivent la charge serveur telle quelle dans le
-cache liste (`byId[delta.id] = delta`) — sans la garde « conversation ouverte »
-que `handleUnreadUpdated` applique, et sans frontière de lecture locale. Un
-retour en avant-plan / reconnexion socket pendant que le `markAsRead` est encore
-dans l'outbox rend la pastille.
-Fichier : `packages/MeeshySDK/Sources/MeeshySDK/Sync/ConversationSyncEngine.swift:271,527,1327`.
+### D2 — Le détail n'écoute pas le like du post
+`PostDetailViewModel` s'abonne à `commentAdded`, `commentDeleted`,
+`commentReaction*`, `postTranslationUpdated` — **pas** à `postLiked`/`postUnliked`.
+Un like venu d'une autre surface ou d'un autre utilisateur n'atteint jamais le
+détail ouvert.
+Fichier : `apps/ios/Meeshy/Features/Main/ViewModels/PostDetailViewModel.swift:824`.
 
-### D4 — Ouvrir une story ne marque ses notifications lues qu'à la 1re vue
-Le gateway n'appelle `markPostNotificationsAsRead` que si `isNewView`
-(`/posts/:postId/view`). Or le « vu » iOS est coalescé (binaire) : une 2e
-ouverture ne repart même pas. Une notif de commentaire arrivée APRÈS la 1re vue
-reste non lue pour toujours. Aucune route `/notifications/post/:id/read`.
+### D3 — Le like n'est écrit dans AUCUN cache partagé
+Le même post vit sous plusieurs clés du store `feed` : `main-feed`, `<postId>`
+(détail), la clé reels, `bookmarks`. Or :
+- `PostDetailViewModel.likePost` mute `post` en mémoire, **jamais** `feed.save`
+- `ReelsViewModel.toggleLike` n'a qu'un `likeDelta` mémoire — son protocole
+  `ReelFeedCacheReading` est en **lecture seule**
+- `FeedViewModel` ne persiste que `main-feed`
+→ Le compteur affiché dépend de la clé de cache lue. C'est le « données
+différentes au lieu de la même donnée » rapporté.
 
-### D5 — Le contenu consommé (post/story ouvert) ne marque pas la notif lue
-`NotificationToastManager.handleNewNotification` : la branche `conversationId`
-marque lu côté serveur ; la branche `postId` fait un `return` nu → le serveur a
-incrémenté, le client non → dérive de la cloche. Et le viewer de story ne pose
-même pas `activePostId`.
+### D4 — MOOD/STATUS ne compte ni impression ni vue
+`StatusViewModel` et les vues de statut n'appellent ni `recordImpression` ni
+`viewPost`. Aucune source `status` dans l'enum d'impression.
+
+### D5 — Déduplication de session sur toutes les surfaces sauf story
+`recordedImpressionIds` (FeedView, ProfileUserPostsList), `impressionRecordedIds`
+(ReelsViewModel) : un post revu ne recompte jamais. Contraire à l'arbitrage retenu.
+Le rate limit `impression` (10/min) est trop bas pour la nouvelle sémantique.
 
 ## Plan
 
-- [x] T1 gateway — accepter `story` dans les deux enums d'impression (+ tests)
-- [x] T2 gateway — `POST /notifications/post/:postId/read` (+ tests)
-- [x] T3 SDK — `NotificationService.markPostRead(postId:)`
-- [x] T4 SDK — write-through cache des notifications (lu/lu-par-conv/lu-par-post/types/tout/supprimé)
-- [x] T5 SDK — `onPostOpened` / marquage lu de la branche `activePostId`
-- [x] T6 SDK — réconciliation du non-lu dans `ConversationSyncEngine` (frontière de lecture locale + conversation ouverte)
-- [x] T7 iOS — le viewer de story déclare la story active + marque ses notifs lues
-- [x] T8 vérification — tsc gateway, tests gateway, tests SDK, tests iOS, build iOS, run iPad
+- [x] T1 gateway — batch : incrémenter par occurrence (+ 3 tests)
+- [x] T2 gateway — source `status` dans l'enum d'impression (+ test)
+- [x] T3 gateway — rate limit impression 10 → 30/min (+ test)
+- [x] T4 iOS — retirer la dédup de session (FeedView, ProfileUserPostsList, ReelsViewModel)
+- [x] T5 iOS — MOOD : impression à l'apparition, vue à l'ouverture (+ 3 tests)
+- [x] T6 iOS — `PostDetailViewModel` s'abonne à `postLiked`/`postUnliked` (+ 4 tests)
+- [x] T7 SDK — `GRDBCacheStore.patchEverywhere` + write-through du like dans
+      `CacheCoordinator` (+ 5 + 4 tests)
+- [x] T9 iOS — favoris : dernière surface de contenu sans impression
+- [x] T10 web — même sémantique d'impression + sources `story`/`status` manquantes
+- [x] T8 vérification — tsc, tests gateway, tests SDK/iOS/web, build, run iPad
 
 ## Revue
 
-### Ce qui a été livré (4 commits)
+### Livré (4 commits)
 | Commit | Portée |
 |---|---|
-| `bcdd84228` | gateway — enum d'impression partagée (`story` accepté), route `POST /notifications/post/:postId/read` |
-| `3ddcc3339` | SDK+app — réconciliation du non-lu, write-through cache notifications, `onPostOpened`/`onPostClosed` |
-| `62f355019` | SDK — baseline de `fullSync` (frontière perdue pour les pages 2+) |
-| `d8e99bebf` | SDK+app — portée `.types`, dernier appelant qui court-circuitait le manager |
+| `3e2ac4163` | gateway — incrément par occurrence, source `status`, rate limit 30/min |
+| `6d3cdcb84` | SDK — `patchEverywhere` + write-through du like dans `CacheCoordinator` |
+| `e00439215` | iOS — dédup de session retirée, MOOD et favoris tracés, détail abonné aux likes |
+| `6cdc64306` | web — même sémantique d'impression, enum de sources complété |
 
-### Défaut trouvé pendant l'auto-revue
-`fullSync` persiste sa PREMIÈRE page avant d'avoir les suivantes : le cache est
-alors réduit à cette page. La deuxième écriture confrontait donc les pages 2+ à
-un cache tronqué et perdait leur frontière de lecture — le symptôme d'origine
-survivait au-delà de la première page. Corrigé par une baseline figée avant la
-sync. Le premier test écrit ne prouvait rien (le mock renvoyait les mêmes ids à
-chaque page) ; corrigé, puis **vérifié rouge** (unread 6 au lieu de 0) avant
-d'être vert.
+### Preuves
+- **D1 mesuré en prod** : `POST /posts/impressions/batch` avec `[A,A,A]` répond
+  `recorded:3` mais ne monte `impressionCount` que de 1 (29 → 30). La table
+  `PostImpression` et le compteur dénormalisé divergeaient.
+- **Nouvelle sémantique vérifiée sur iPad** : trois cycles d'apparition du même
+  post donnent 32 → 33 → 34 → 35. Avec la déduplication de session, le compteur
+  restait figé après la première apparition.
+- Tests : 14 951 gateway (2 échecs `magic-link` — flake d'exécution parallèle,
+  verts isolément avec ET sans les changements), 2453 SDK, 89 iOS ciblés, 9 web.
+  Gateway `tsc` 0 erreur. Builds iOS + iPad verts.
 
-### Vérification
-- gateway : `npx tsc --noEmit` → 0 erreur ; 213 tests (notifications + posts) verts
-- SDK : 60 tests ciblés verts (dont 12 nouveaux), suite `MeeshySDKTests` complète verte
-- iOS : 261 tests (`ConversationListViewModelTests`, `StoryViewModelTests`) verts ; build vert
-- iPad (simulateur, compte de démo, prod) :
-  - « Tout lire » → retour → réouverture de la cloche dans la fenêtre fraîche de
-    2 min → **les notifications restent lues** (c'était le chemin qui régressait)
-  - cycle arrière-plan/avant-plan (⇒ delta sync + réconciliation complète) →
-    **aucune pastille ne revient**, l'anneau de story reste « vu »
-  - ouverture d'une story → le log prod confirme le défaut D1 tel que diagnostiqué :
-    `recordStoryImpression failed for 6a6ba6e2… : An unexpected error occurred` (400)
+### Piège de test rencontré
+Le premier test du batch passait sur le code bogué : je sommais les ids répétés
+du `where.id.in`, alors que Prisma **déduplique** un `in`. Corrigé en sommant sur
+`Set(in)` — le test est alors devenu rouge (1 au lieu de 2) avant de passer.
 
-### Vérification post-déploiement (2026-07-31, prod à jour)
-
-Les deux correctifs gateway sont **actifs en production** et vérifiés bout en bout
-depuis l'app iPad (build 1265, compte de démo, `gate.meeshy.me`).
-
-| Contrôle | Résultat |
-|---|---|
-| `POST /posts/:id/impression` avec `source:"story"` | `200 {recorded:true}` (était `400`) |
-| même route, `source` inconnu | `400` — la validation n'est pas devenue laxiste |
-| `POST /posts/impressions/batch` avec `source:"story"` | `200 {recorded:1}` |
-| incrément réel du compteur | 18 → 19 (unitaire) → 20 (batch) |
-| `POST /notifications/post/:postId/read` | `200 {count:1}` sur une vraie notif (était `404`) |
-| portée du marquage | la notif ciblée passe `isRead`, l'autre reste non lue |
-
-Bout en bout, ouverture d'une story depuis le carrousel (post `6a6bdf39…`, story
-de `windieNH`, compteurs à zéro et notification `friend_new_story` non lue) :
-- `impressionCount` 0 → 1, `viewCount` 0 → 1
-- la notification passe `isRead` avec un `readAt` à la seconde de l'ouverture
-- **2e ouverture** : `impressionCount` 1 → 2 mais `viewCount` reste 1 —
-  la sémantique demandée (impression à chaque fois, vue dédupliquée par
-  utilisateur) est exactement celle observée
-- après cold start : anneau de story gris (vu, persisté), aucune pastille de
-  conversation, badge cloche à 3 = exactement les 3 non-lues serveur
-
-Note de données : les impressions **passées** ne se rattrapent pas. Une story
-antérieure au déploiement garde la signature du bug (`viewCount:3`,
-`impressionCount:0`) ; seules les nouvelles ouvertures comptent.
+### Dépend du déploiement
+`source: "status"` répond encore `400` et le batch ne compte encore qu'une
+occurrence par post tant que le gateway n'est pas redéployé. Les clients
+dégradent proprement (échec avalé, aucune UI bloquée).
