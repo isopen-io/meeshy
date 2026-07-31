@@ -107,10 +107,12 @@ public actor DiskCacheStore: ReadableCacheStore {
         case .fresh:
             memoryCache.setObject(CacheBox(data), forKey: fileKey as NSString, cost: data.count)
             fileTimestamps[fileKey] = modDate
+            noteAccess(fileKey: fileKey, atPath: filePath.path, lastKnown: modDate)
             return .fresh([data], age: age)
         case .stale:
             memoryCache.setObject(CacheBox(data), forKey: fileKey as NSString, cost: data.count)
             fileTimestamps[fileKey] = modDate
+            noteAccess(fileKey: fileKey, atPath: filePath.path, lastKnown: modDate)
             return .stale([data], age: age)
         case .expired:
             return .expired
@@ -268,12 +270,58 @@ public actor DiskCacheStore: ReadableCacheStore {
         return memoryCache.object(forKey: fileKey as NSString)?.value
     }
 
+    /// Granularité de la date d'accès : au plus une écriture d'attribut par
+    /// fichier et par jour. Une précision plus fine coûterait un `utimes` à
+    /// chaque apparition de cellule pendant un défilement, pour un gain nul —
+    /// l'éviction raisonne en semaines.
+    static let accessTouchGranularity: TimeInterval = .days(1)
+
+    /// Marque un ACCÈS en rafraîchissant la date de modification du fichier.
+    ///
+    /// Les deux passes d'éviction (`evictExpired`, `evictOverBudget`) trient sur
+    /// `contentModificationDate`. Sans ce rafraîchissement, cette date reste
+    /// celle du TÉLÉCHARGEMENT : un média rouvert chaque semaine se faisait
+    /// évincer avant un média téléchargé la veille et jamais rouvert — l'inverse
+    /// exact d'un LRU, et la façon la plus sûre de re-télécharger précisément ce
+    /// qui sert le plus.
+    ///
+    /// Effet de bord ASSUMÉ : le TTL devient « temps depuis le dernier accès »
+    /// et non « depuis le téléchargement ». C'est la bonne sémantique ici — ce
+    /// store ne contient que des médias immuables à URL stable (images, audio,
+    /// vidéo, vignettes), pour lesquels une entrée encore utilisée n'a aucune
+    /// raison de périmer.
+    private func noteAccess(fileKey: String, atPath path: String, lastKnown: Date) {
+        guard Date().timeIntervalSince(lastKnown) >= Self.accessTouchGranularity else { return }
+        touchModificationDate(atPath: path)
+        fileTimestamps[fileKey] = Date()
+    }
+
     /// Synchronous local file URL check — no actor hop needed.
     /// Returns the file URL if it exists on disk, nil otherwise.
     nonisolated public func cachedFileURL(for key: String) -> URL? {
         let fileKey = Self.fileKey(for: key)
         let filePath = baseDirectory.appendingPathComponent(fileKey)
-        return FileManager.default.fileExists(atPath: filePath.path) ? filePath : nil
+        // `attributesOfItem` lève si le fichier n'existe pas : un seul `stat`
+        // là où `fileExists` + lecture de la date en auraient fait deux.
+        guard let modDate = (try? FileManager.default.attributesOfItem(atPath: filePath.path))?[.modificationDate] as? Date else {
+            return FileManager.default.fileExists(atPath: filePath.path) ? filePath : nil
+        }
+        // Servir depuis le disque EST un accès. C'est même le chemin DOMINANT
+        // pour l'audio et la vidéo (lecture directe du fichier, sans passer par
+        // `load`) : l'oublier ici laisserait tout le média joué hors ligne
+        // vieillir comme s'il n'avait jamais été rouvert.
+        if Date().timeIntervalSince(modDate) >= Self.accessTouchGranularity {
+            let path = filePath.path
+            // On repasse la date LUE SUR LE FICHIER, jamais `fileTimestamps` :
+            // c'est l'attribut du fichier que les deux passes d'éviction
+            // trient. Décider sur le miroir mémoire ferait sauter la mise à
+            // jour dès que les deux divergent, et c'est précisément alors que
+            // l'éviction se tromperait de victime.
+            Task.detached(priority: .utility) { [weak self] in
+                await self?.noteAccess(fileKey: fileKey, atPath: path, lastKnown: modDate)
+            }
+        }
+        return filePath
     }
 
     public func isCached(_ key: String) -> Bool {

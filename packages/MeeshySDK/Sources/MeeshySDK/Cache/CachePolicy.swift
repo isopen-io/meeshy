@@ -60,7 +60,14 @@ extension CachePolicy {
     /// suffisaient à déclencher l'éviction LRU des reels/vidéos de conversation
     /// non épinglés, donc leur re-téléchargement (violation local-first).
     public static let mediaVideo = CachePolicy(ttl: .months(6), staleTTL: nil, maxItemCount: nil, storageLocation: .disk(subdir: "Video", maxBytes: 1_000_000_000))
-    public static let thumbnails = CachePolicy(ttl: .days(7), staleTTL: nil, maxItemCount: nil, storageLocation: .disk(subdir: "Thumbnails", maxBytes: 50_000_000))
+    /// Aligné sur les autres médias : à 7 jours, la vignette d'une photo ou
+    /// d'une vidéo revue au bout de huit jours était RE-TÉLÉCHARGÉE alors que le
+    /// média lui-même était encore en cache — le contrat « un même média ne se
+    /// retélécharge pas pendant six mois » tombait sur son seul aperçu. Une
+    /// vignette est immuable à URL stable : rien ne justifiait un TTL court.
+    /// Budget 150 Mo (au lieu de 50) parce qu'à ce rythme c'est l'éviction LRU,
+    /// et non le TTL, qui redevenait le facteur limitant.
+    public static let thumbnails = CachePolicy(ttl: .months(6), staleTTL: nil, maxItemCount: nil, storageLocation: .disk(subdir: "Thumbnails", maxBytes: 150_000_000))
     /// Fil d'actualité. TTL 7 jours : une fois un post chargé, il reste servable
     /// (et disponible hors-ligne) pendant 7 jours sans nouveau téléchargement du
     /// payload liste — les médias (images 1 an / vidéo-audio 6 mois) ne sont jamais
