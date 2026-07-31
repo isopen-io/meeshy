@@ -302,3 +302,90 @@ describe('GET /sounds/:id/posts', () => {
     expect(prisma.soundUsage.findMany).not.toHaveBeenCalled();
   });
 });
+
+describe('routes /sounds — compteurs affichés', () => {
+  /**
+   * Prisma minimal portant de VRAIS usages, pour prouver que les compteurs
+   * traversent réellement le DTO. Les autres fixtures de ce fichier n'ont pas
+   * de `soundUsage` : `loadSoundStats` y dégrade sur 0/0 et un test qui
+   * attendrait 0 passerait aussi bien sur du code cassé.
+   */
+  function prismaWithUsages(sound: Record<string, unknown>, usages: Array<{ soundId: string; postId: string }>,
+                            posts: Array<{ id: string; viewCount: number }>) {
+    return {
+      sound: {
+        findUnique: jest.fn<() => Promise<unknown>>().mockResolvedValue(sound),
+        findMany: jest.fn<() => Promise<unknown>>().mockResolvedValue([sound]),
+        update: jest.fn<() => Promise<unknown>>().mockResolvedValue({ ...sound, title: 'Nommé' }),
+      },
+      soundUsage: { findMany: jest.fn<() => Promise<unknown>>().mockResolvedValue(usages) },
+      post: { findMany: jest.fn<() => Promise<unknown>>().mockResolvedValue(posts) },
+    };
+  }
+
+  it('test_getSound_exposePostCountEtPlayCount', async () => {
+    const prisma = prismaWithUsages(
+      { ...base, uploaderId: 'user-abc', isPublic: true, mutedAt: null },
+      [{ soundId: ID, postId: 'p1' }, { soundId: ID, postId: 'p2' }],
+      [{ id: 'p1', viewCount: 120 }, { id: 'p2', viewCount: 30 }],
+    );
+    const res = await (await buildApp(prisma)).inject({ method: 'GET', url: `/sounds/${ID}` });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json().data.postCount).toBe(2);
+    expect(res.json().data.playCount).toBe(150);
+  });
+
+  it('test_getSound_publicationMultiPistes_neCompteQuUneFois', async () => {
+    // La régression que le dédoublonnage empêche, vue depuis la route : une
+    // story qui pose le son sur trois diapositives ne vaut PAS 3 × 120 vues.
+    const prisma = prismaWithUsages(
+      { ...base, uploaderId: 'user-abc', isPublic: true, mutedAt: null },
+      [{ soundId: ID, postId: 'p1' }, { soundId: ID, postId: 'p1' }, { soundId: ID, postId: 'p1' }],
+      [{ id: 'p1', viewCount: 120 }],
+    );
+    const res = await (await buildApp(prisma)).inject({ method: 'GET', url: `/sounds/${ID}` });
+
+    expect(res.json().data).toMatchObject({ postCount: 1, playCount: 120 });
+  });
+
+  it('test_getMine_chargeLesCompteursEnUneSeuleRequete', async () => {
+    const prisma = prismaWithUsages(
+      { ...base, createdAt: new Date(), uploaderId: 'user-abc', isPublic: true, mutedAt: null },
+      [{ soundId: ID, postId: 'p1' }], [{ id: 'p1', viewCount: 9 }],
+    );
+    const res = await (await buildApp(prisma)).inject({ method: 'GET', url: '/sounds/mine' });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json().data[0].playCount).toBe(9);
+    // Pas de N+1 : une requête d'usages pour toute la page, pas une par son.
+    expect(prisma.soundUsage.findMany).toHaveBeenCalledTimes(1);
+  });
+
+  it('test_patchSound_renommage_conserveLesCompteurs', async () => {
+    // Le client remplace la ligne EN PLACE avec cette réponse : un DTO sans
+    // compteurs ferait retomber la ligne à 0/0 juste après le renommage.
+    const prisma = prismaWithUsages(
+      { ...base, uploaderId: 'user-abc', isPublic: true, mutedAt: null },
+      [{ soundId: ID, postId: 'p1' }], [{ id: 'p1', viewCount: 77 }],
+    );
+    const res = await (await buildApp(prisma)).inject({
+      method: 'PATCH', url: `/sounds/${ID}`, payload: { title: 'Nommé' } });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json().data).toMatchObject({ title: 'Nommé', postCount: 1, playCount: 77 });
+  });
+
+  it('test_getSound_compteursIndisponibles_rendQuandMemeLeSon', async () => {
+    const prisma = {
+      sound: { findUnique: jest.fn<() => Promise<unknown>>().mockResolvedValue({
+        ...base, uploaderId: 'user-abc', isPublic: true, mutedAt: null }) },
+      soundUsage: { findMany: jest.fn<() => Promise<unknown>>().mockRejectedValue(new Error('mongo down')) },
+      post: { findMany: jest.fn() },
+    };
+    const res = await (await buildApp(prisma)).inject({ method: 'GET', url: `/sounds/${ID}` });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json().data).toMatchObject({ id: ID, postCount: 0, playCount: 0 });
+  });
+});

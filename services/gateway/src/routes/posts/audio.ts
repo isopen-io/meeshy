@@ -7,6 +7,7 @@ import { createHash, randomUUID } from 'crypto';
 import { UnifiedAuthRequest } from '../../middleware/auth';
 import { sendSuccess, sendUnauthorized, sendBadRequest, sendNotFound, sendError } from '../../utils/response';
 import { toDTO, soundUploaderInclude } from './sounds';
+import { loadSoundStats } from '../../services/posts/soundStats';
 import {
   ALLOWED_UPLOAD_MIME as ALLOWED_MIME,
   ALLOWED_AUDIO_EXT,
@@ -158,7 +159,13 @@ export function registerStoryAudioRoutes(
       include: soundUploaderInclude,
     });
 
-    return sendSuccess(reply, audios.map((a) => toDTO(a as unknown as Record<string, unknown>)));
+    // Le tri reste sur `usageCount` (pistes) — c'est un classement interne.
+    // Les compteurs AFFICHÉS sortent d'ailleurs et comptent des publications :
+    // cf. `soundStats.ts` pour pourquoi les deux ne peuvent pas être le même
+    // nombre.
+    const stats = await loadSoundStats(prisma, audios.map((a) => a.id));
+
+    return sendSuccess(reply, audios.map((a) => toDTO(a as unknown as Record<string, unknown>, stats.get(a.id))));
   });
 
   // GET /static/:filename — Serve uploaded story audio files (JWT-protected)
