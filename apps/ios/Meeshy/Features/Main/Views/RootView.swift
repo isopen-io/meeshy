@@ -81,6 +81,30 @@ struct CallPresentationLayer: ViewModifier {
             )) {
                 CallView(callManager: callManager)
             }
+            // C1 — ancre du PiP système pour les modes RÉDUITS. L'unique ancre
+            // vivait dans `CallView`, donc dans le `fullScreenCover` : réduire
+            // l'appel démonte le cover, `pipConfiguredSource` est `weak` et passe
+            // à nil, et plus rien ne reconfigure. Un appel réduit ne pouvait donc
+            // PLUS ouvrir de PiP — alors que le réduire est exactement le geste
+            // qui devrait le préparer.
+            //
+            // Deux gardes, chacune pour une raison distincte :
+            // • `displayMode != .fullScreen` — pendant que le cover est présenté
+            //   (`UIModalPresentationFullScreen`), UIKit détache la hiérarchie
+            //   présentante : une ancre montée ici y serait hors fenêtre, et le
+            //   bouton PiP manuel de `CallView` resterait visible mais inerte.
+            // • PAS de garde sur `isSystemPiPActive` — contrairement à la pilule
+            //   et à la bulle, qui se masquent pendant le PiP. L'ancre doit
+            //   SURVIVRE à la fenêtre flottante : c'est la vue d'où AVKit fait
+            //   émerger puis retourner l'animation.
+            .overlay(alignment: .top) {
+                if callManager.callState.isActive && callManager.displayMode != .fullScreen {
+                    PiPSourceAnchor()
+                        .frame(height: 64)
+                        .padding(.top, MeeshySpacing.sm)
+                        .allowsHitTesting(false)
+                }
+            }
             .overlay(alignment: .top) {
                 FloatingCallPillView(callManager: callManager)
                     .padding(.top, MeeshySpacing.sm)

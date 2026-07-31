@@ -45,6 +45,11 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
     private var localVideoTrack_: RTCVideoTrack?
     private var videoCapturer: RTCCameraVideoCapturer?
     private var videoFilterDelegate: VideoFilterCapturerDelegate?
+    /// C3 — observateurs d'interruption de la session de capture de CET appel.
+    /// Scopés sur `object: capturer.captureSession` : `CameraView` instancie une
+    /// SECONDE `AVCaptureSession` dans le process (composeur story), et un
+    /// `object: nil` couperait la vidéo d'appel sur un événement sans rapport.
+    private var captureInterruptionObservers: [NSObjectProtocol] = []
     /// Génération de session : incrémentée par `disconnect()` ET `configure()`.
     /// Capturée avant l'await non-cancellation-aware de `startCapture` et
     /// re-comparée après : sans ce token, un appel terminé pendant le warm-up
@@ -313,6 +318,11 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
 
         let fps = targetFrameRate(for: format)
         let generation = sessionGeneration
+        // C3 — armé AVANT `startCapture` : une interruption survenant pendant le
+        // warm-up caméra doit être vue. Après les gardes device/format, pour ne
+        // pas s'abonner à une session qu'on s'apprête à abandonner (simulateur
+        // sans caméra : `pickCaptureDevice` throw plus haut).
+        observeCaptureInterruptions(of: capturer.captureSession)
         Logger.webrtc.info("[WEBRTC] capturer.startCapture begin fps=\(fps)")
         try await capturer.startCapture(with: camera, format: format, fps: fps)
         // See `sessionGeneration` doc: this check-and-clear must be serialized
@@ -1175,6 +1185,59 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
         dataChannelPingTask = nil
     }
 
+    // MARK: - Interruption de capture (C3)
+
+    /// Republie les interruptions de la session de capture de CET appel vers le
+    /// delegate, sous forme d'un booléen typé.
+    ///
+    /// Aucune lecture d'`AVCaptureSession.InterruptionReason` : une session
+    /// interrompue ne délivre plus de frames, quelle qu'en soit la raison, et le
+    /// booléen reste donc juste. C'est aussi ce qui met le code à l'abri de la
+    /// croissance de l'énumération (iOS 26 y ajoute
+    /// `.sensitiveContentMitigationActivated`) — il n'y a pas de `switch` à
+    /// tenir à jour, donc pas de `default` à oublier.
+    ///
+    /// La session ne sert QU'À la vidéo ici : WebRTC gère l'audio par
+    /// `RTCAudioSession`, séparément.
+    private func observeCaptureInterruptions(of session: AVCaptureSession) {
+        stopObservingCaptureInterruptions()
+        let center = NotificationCenter.default
+        captureInterruptionObservers = [
+            center.addObserver(
+                forName: AVCaptureSession.wasInterruptedNotification,
+                object: session,
+                queue: .main
+            ) { [weak self] _ in
+                // `Task { @MainActor }` : le bloc d'observation est `@Sendable`,
+                // or `delegate` est un existentiel non-Sendable. On le lit donc
+                // DANS le domaine MainActor plutôt que de le faire traverser —
+                // même idiome que le reste du fichier.
+                Task { @MainActor [weak self] in
+                    guard let self else { return }
+                    Logger.webrtc.info("[WEBRTC] capture session interrupted — peer will be notified")
+                    self.delegate?.webRTCClient(self, didChangeCameraInterruption: true)
+                }
+            },
+            center.addObserver(
+                forName: AVCaptureSession.interruptionEndedNotification,
+                object: session,
+                queue: .main
+            ) { [weak self] _ in
+                Task { @MainActor [weak self] in
+                    guard let self else { return }
+                    Logger.webrtc.info("[WEBRTC] capture session interruption ended")
+                    self.delegate?.webRTCClient(self, didChangeCameraInterruption: false)
+                }
+            }
+        ]
+    }
+
+    private func stopObservingCaptureInterruptions() {
+        let center = NotificationCenter.default
+        captureInterruptionObservers.forEach(center.removeObserver)
+        captureInterruptionObservers = []
+    }
+
     // MARK: - Disconnect
 
     func disconnect() {
@@ -1206,6 +1269,7 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
         audioTransceiver = nil
         videoTransceiver = nil
         videoCapturer = nil
+        stopObservingCaptureInterruptions()
         pendingIceRestart = false
         Logger.webrtc.info("Peer connection disconnected and cleaned up")
     }
