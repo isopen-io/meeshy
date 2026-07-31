@@ -66,28 +66,19 @@ describe('claimableMediaWhere', () => {
     expect(where.commentId).toBeNull();
   });
 
-  it('accepte_le_proprietaire_et_les_lignes_heritees_SANS_proprietaire', () => {
-    // Phase 1 tolérante : resserrer avant le rattrapage rendrait tout média
-    // hérité impossible à rattacher, en silence.
-    expect(claimableMediaWhere(OWNER).OR).toEqual([
-      { uploaderId: OWNER },
-      { uploaderId: null },
-      { uploaderId: { isSet: false } },
-    ]);
+  it('PHASE_2_exige_une_EGALITE_stricte_sur_le_proprietaire', () => {
+    // Plus aucune tolérance : ni `null`, ni champ absent. C'est cette ligne
+    // qui ferme le trou.
+    expect(claimableMediaWhere(OWNER).uploaderId).toBe(OWNER);
+    expect(claimableMediaWhere(OWNER)).not.toHaveProperty('OR');
   });
 
   it('nadmet_PAS_un_autre_uploadeur', () => {
-    // Le cœur du correctif. Ce test doit rester vrai en phase 2, où le `OR`
-    // disparaît au profit d'une égalité stricte.
-    const or = claimableMediaWhere(OWNER).OR;
-    const acceptsOther = or.some(
-      (clause) => (clause as { uploaderId?: unknown }).uploaderId === OTHER,
-    );
-    expect(acceptsOther).toBe(false);
+    expect(claimableMediaWhere(OWNER).uploaderId).not.toBe(OTHER);
   });
 
   it('la_clause_ne_melange_pas_deux_proprietaires', () => {
-    expect(claimableMediaWhere(OTHER).OR[0]).toEqual({ uploaderId: OTHER });
+    expect(claimableMediaWhere(OTHER).uploaderId).toBe(OTHER);
   });
 });
 

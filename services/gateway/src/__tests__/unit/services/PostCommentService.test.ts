@@ -503,7 +503,7 @@ describe('PostCommentService.addComment — media', () => {
     expect(call.where.postId).toBeNull();
     expect(call.where.commentId).toBeNull();
     // Et la garde de propriété : l'auteur du commentaire, pas n'importe qui.
-    expect(call.where.OR).toContainEqual({ uploaderId: 'a1' });
+    expect(call.where.uploaderId).toBe('a1');
     expect(call.data).toEqual(expect.objectContaining({ commentId: 'c-new' }));
     expect(result.media).toHaveLength(1);
     expect(result.media[0].id).toBe('m-1');

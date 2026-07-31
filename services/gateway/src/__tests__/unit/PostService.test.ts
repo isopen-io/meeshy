@@ -177,7 +177,7 @@ describe('PostService', () => {
       expect(claim.where.id).toEqual({ in: ['media-1', 'media-2'] });
       expect(claim.where.postId).toBeNull();
       expect(claim.where.commentId).toBeNull();
-      expect(claim.where.OR).toContainEqual({ uploaderId: 'user-1' });
+      expect(claim.where.uploaderId).toBe('user-1');
       expect(claim.data).toEqual({ postId: 'post-1' });
       // findFirst is called to detect audio media for Whisper processing
       expect(prisma.postMedia.findFirst).toHaveBeenCalledWith(
@@ -1716,7 +1716,7 @@ describe('PostService', () => {
         expect(claim.where.id).toEqual({ in: ['new-m1', 'new-m2'] });
         expect(claim.where.postId).toBeNull();
         expect(claim.where.commentId).toBeNull();
-        expect(claim.where.OR).toContainEqual({ uploaderId: 'user-1' });
+        expect(claim.where.uploaderId).toBe('user-1');
         expect(claim.data).toEqual({ postId: 'post-1' });
       });
 
@@ -1749,7 +1749,7 @@ describe('PostService', () => {
         });
         const claim = prisma.postMedia.updateMany.mock.calls[0][0];
         expect(claim.where.id).toEqual({ in: ['new-m1'] });
-        expect(claim.where.OR).toContainEqual({ uploaderId: 'user-1' });
+        expect(claim.where.uploaderId).toBe('user-1');
         expect(claim.data).toEqual({ postId: 'post-1' });
       });
     });

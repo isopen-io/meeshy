@@ -53,19 +53,22 @@ export function uploaderIdFromFilePath(filePath: string | null | undefined): str
 /**
  * Clause de revendication d'un média encore libre.
  *
- * **PHASE 1 — TOLÉRANTE.** Elle accepte encore un `uploaderId` absent ou nul :
- * les lignes créées avant ce champ n'en ont pas, et resserrer avant le
- * rattrapage rendrait tout média hérité impossible à rattacher — un échec
- * SILENCIEUX (`updateMany` ignore ce qui ne matche pas), donc indiscernable
- * d'une attaque pour qui lit les journaux.
+ * **PHASE 2 — STRICTE (2026-07-31).** Le média doit appartenir à celui qui le
+ * réclame. C'est cette égalité, et elle seule, qui ferme le trou : un tiers ne
+ * peut plus s'approprier un média en attente en devinant son id.
  *
- * Les trois formes du `OR` sont obligatoires : MongoDB distingue un champ
- * ABSENT (`isSet: false`) d'un champ à `null`, et le rattrapage produira l'une
- * ou l'autre selon le chemin.
+ * La phase 1 tolérait `uploaderId` absent ou nul, le temps du rattrapage —
+ * resserrer avant aurait rendu tout média hérité impossible à rattacher, en
+ * SILENCE (`updateMany` ignore ce qui ne matche pas). Le rattrapage a été
+ * appliqué en production le 2026-07-31 : 665 des 666 médias ont un
+ * propriétaire, et le seul restant est un instantané orphelin généré côté
+ * serveur, que personne n'a vocation à rattacher. Le rendre non réclamable est
+ * le comportement voulu.
  *
- * **Phase 2** — une fois vérifié qu'il ne reste aucun média réclamable sans
- * propriétaire : remplacer le `OR` par `uploaderId: ownerId`. C'est cette
- * ligne-là, et elle seule, qui ferme le trou.
+ * Un média sans propriétaire n'est donc plus réclamable par personne. Si ce cas
+ * réapparaît, c'est que le handler d'upload a laissé passer un envoi sans
+ * uploadeur identifiable — il le journalise déjà, et l'écart est signalé par
+ * `describeClaimShortfall` au lieu d'être avalé.
  */
 export function claimableMediaWhere(ownerId: string) {
   return {
@@ -74,11 +77,7 @@ export function claimableMediaWhere(ownerId: string) {
     // testait que `postId`, et un média de commentaire restait donc capturable
     // par un post — les deux champs sont pourtant exclusifs par construction.
     commentId: null,
-    OR: [
-      { uploaderId: ownerId },
-      { uploaderId: null },
-      { uploaderId: { isSet: false } },
-    ],
+    uploaderId: ownerId,
   };
 }
 

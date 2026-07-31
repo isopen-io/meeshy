@@ -286,22 +286,36 @@ totalité des trous de tests :
     en deux temps — la condition est désormais portée par le `where` de
     l'écriture, donc la base tranche en une seule opération.
 
-    **Reste à faire pour fermer (phase 2), dans cet ordre :**
-    a. `prisma db push` — champ + index `[uploaderId, postId]` ;
-    b. `bunx tsx scripts/backfill-postmedia-uploader.ts` à blanc, lire le
-       rapport ; puis `--apply` **dans le conteneur du gateway** (depuis un
-       poste, `DATABASE_URL` cible la base locale et le script dira « succès »
-       sans rien toucher) ;
-    c. exiger `unresolvedClaimable == 0`. Le script sort en code 1 sinon. Les
-       médias en attente non résolus sont des orphelins anciens : les purger
-       ou les attribuer à la main ;
-    d. remplacer le `OR` de `claimableMediaWhere` par `uploaderId: ownerId`, et
-       INVERSER le test `PHASE_1_un_media_HERITE_sans_proprietaire_reste_reclamable_par_tous`
-       (`mediaClaimGuard.test.ts`), qui documente exactement la brèche restante ;
-    e. décider du sort des uploads sans uploadeur identifiable — le handler les
-       journalise déjà (`PostMedia sans uploadeur identifiable`). Les routes de
-       post et de commentaire exigeant `requiredAuth`, ce journal devrait rester
-       vide ; le vérifier avant de rendre le cas bloquant.
+    **RATTRAPAGE PRODUCTION APPLIQUÉ (2026-07-31).** Sauvegarde préalable :
+    `/opt/meeshy/backups/backup-postmedia-20260731-155919` (666 documents).
+    L'entrypoint du conteneur ne lance aucune migration — index créés à la main
+    (`PostMedia_uploaderId_postId_idx`, et `PostMedia_commentId_order_idx` qui
+    manquait alors qu'il est déclaré au schéma depuis longtemps).
+
+    Exposition réelle mesurée, bien au-delà de la fenêtre de 24 h supposée :
+    **263 des 666 médias étaient réclamables par n'importe qui**, dont 227
+    datant de plus de 30 jours (le plus ancien de février). Ces orphelins ne
+    sont jamais purgés.
+
+    Rattrapage : **665/666 ont un propriétaire** — 393 via l'auteur du post,
+    10 via l'auteur du commentaire, 262 via le chemin de stockage. Le seul
+    restant est un instantané généré côté serveur
+    (`snapshots/snapshot_….mp4`), sans segment utilisateur : personne n'a
+    vocation à le rattacher, le rendre non réclamable est le comportement
+    voulu.
+
+    **PHASE 2 APPLIQUÉE (2026-07-31).** `claimableMediaWhere` exige désormais
+    l'égalité stricte `uploaderId: ownerId`. Le trou est fermé : un tiers ne
+    peut plus s'approprier un média en attente en devinant son id. Le test
+    `PHASE_1_…_reste_reclamable_par_tous` a été inversé en
+    `PHASE_2_un_media_SANS_proprietaire_nest_reclamable_par_PERSONNE`.
+
+    **Reste ouvert :** décider du sort des uploads sans uploadeur identifiable.
+    Le handler les journalise (`PostMedia sans uploadeur identifiable`) sans
+    les refuser. Les routes de post et de commentaire exigeant `requiredAuth`,
+    ce journal devrait rester vide — le vérifier en production avant de rendre
+    le cas bloquant. Et les 227 orphelins de plus de 30 jours méritent une
+    purge : rien ne les nettoie aujourd'hui.
 22. **`trustProxy` n'est pas posé, et ça dépasse la bibliothèque de sons.**
     `request.ip` reste l'adresse de Traefik pour tout le gateway : le quota
     global de 300 req/min est un seul seau pour la plateforme, et toute

@@ -23,14 +23,9 @@ interface MediaDoc {
 function matches(doc: MediaDoc, where: ReturnType<typeof claimableMediaWhere>): boolean {
   if (doc.postId !== where.postId) return false;
   if (doc.commentId !== where.commentId) return false;
-  return where.OR.some((clause) => {
-    const expected = (clause as { uploaderId: unknown }).uploaderId;
-    if (expected && typeof expected === 'object' && 'isSet' in (expected as object)) {
-      // `isSet: false` ⟺ la clé est ABSENTE du document.
-      return !('uploaderId' in doc);
-    }
-    return ('uploaderId' in doc ? doc.uploaderId : undefined) === expected;
-  });
+  // Égalité stricte : un champ ABSENT comme un champ à `null` échouent tous
+  // deux, ce qui est exactement le but de la phase 2.
+  return ('uploaderId' in doc ? doc.uploaderId : undefined) === where.uploaderId;
 }
 
 function claimedBy(docs: MediaDoc[], owner: string): string[] {
@@ -65,35 +60,36 @@ describe('garde de revendication — le scénario de vol', () => {
     expect(claimedBy(docs, ALICE)).toEqual([]);
   });
 
-  it('PHASE_1_un_media_HERITE_sans_proprietaire_reste_reclamable_par_tous', () => {
-    // Comportement VOULU et transitoire : resserrer avant le rattrapage
-    // rendrait tout média hérité impossible à rattacher, en silence.
-    // Ce test documente la brèche restante — il devra être INVERSÉ en phase 2.
+  it('PHASE_2_un_media_SANS_proprietaire_nest_reclamable_par_PERSONNE', () => {
+    // Inversion du test de phase 1, qui documentait la brèche transitoire.
+    // Le rattrapage a été appliqué en production : le seul média restant sans
+    // propriétaire est un instantané orphelin généré côté serveur, que
+    // personne n'a vocation à rattacher.
     const absent: MediaDoc = { id: 'herite-absent', postId: null, commentId: null };
     const nul: MediaDoc = { id: 'herite-nul', postId: null, commentId: null, uploaderId: null };
 
-    expect(claimedBy([absent, nul], BOB)).toEqual(['herite-absent', 'herite-nul']);
+    expect(claimedBy([absent, nul], BOB)).toEqual([]);
+    expect(claimedBy([absent, nul], ALICE)).toEqual([]);
   });
 
-  it('les_deux_formes_dabsence_sont_couvertes', () => {
-    // MongoDB distingue un champ ABSENT d'un champ à `null`. N'en couvrir
-    // qu'une aurait laissé la moitié des lignes héritées non rattachables.
+  it('les_deux_formes_dabsence_echouent_pareil', () => {
+    // MongoDB distingue un champ ABSENT d'un champ à `null` ; l'égalité
+    // stricte rejette les deux, sans qu'on ait à les énumérer.
     const absent: MediaDoc = { id: 'a', postId: null, commentId: null };
     const nul: MediaDoc = { id: 'b', postId: null, commentId: null, uploaderId: null };
 
-    expect(claimedBy([absent], ALICE)).toEqual(['a']);
-    expect(claimedBy([nul], ALICE)).toEqual(['b']);
+    expect(claimedBy([absent, nul], ALICE)).toEqual([]);
   });
 
   it('un_lot_mixte_ne_laisse_passer_que_ce_qui_appartient_au_demandeur', () => {
     const docs: MediaDoc[] = [
       { id: 'sien', postId: null, commentId: null, uploaderId: BOB },
       { id: 'autrui', postId: null, commentId: null, uploaderId: ALICE },
-      { id: 'herite', postId: null, commentId: null },
+      { id: 'sans-proprietaire', postId: null, commentId: null },
       { id: 'pris', postId: 'p1', commentId: null, uploaderId: BOB },
     ];
 
-    // « herite » passe encore en phase 1 ; « autrui » et « pris », jamais.
-    expect(claimedBy(docs, BOB)).toEqual(['sien', 'herite']);
+    // SEUL le sien passe. C'est la définition de la phase 2.
+    expect(claimedBy(docs, BOB)).toEqual(['sien']);
   });
 });
