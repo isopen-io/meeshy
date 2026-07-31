@@ -220,7 +220,11 @@ extension StoryCanvasUIView {
                     continue
                 }
                 let mediaId = audio.resolvedPostMediaId(preferredLanguages: languages)
-                guard let remoteURL = resolver?(mediaId) else {
+                // Repli sur `mediaURL` : un son EMPRUNTÉ à la bibliothèque n'a
+                // pas de `postMediaId`, et sans ce repli sa piste était
+                // simplement sautée — la story jouait muette.
+                guard let remoteURL = StoryAudioSourceResolver.remoteURL(
+                    for: audio, preferredLanguages: languages, resolver: resolver) else {
                     os.Logger.storyAudio.error(
                         "FG audio URL not resolved audioId=\(audio.id, privacy: .public) postMediaId=\(mediaId, privacy: .public)"
                     )
@@ -258,7 +262,8 @@ extension StoryCanvasUIView {
                     bgLocalURL = local
                 } else {
                     let mediaId = background.resolvedPostMediaId(preferredLanguages: languages)
-                    if let remoteURL = resolver?(mediaId) {
+                    if let remoteURL = StoryAudioSourceResolver.remoteURL(
+                        for: background, preferredLanguages: languages, resolver: resolver) {
                         bgLocalURL = await Self.cachedAudioFileURL(remote: remoteURL)
                         if bgLocalURL == nil {
                             os.Logger.storyAudio.error(

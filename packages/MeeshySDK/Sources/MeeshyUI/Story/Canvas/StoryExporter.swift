@@ -981,7 +981,11 @@ public enum StoryExporter {
         resolver: (@Sendable (StoryAudioPlayerObject) -> URL?)?
     ) async -> URL? {
         if let url = resolver?(audio) { return url }
-        guard let raw = audio.mediaURL, let remote = URL(string: raw) else { return nil }
+        // `URL(string:)` NU acceptait « /api/v1/static/x.m4a » et rendait une URL
+        // sans schéma, que le cache refusait ensuite sans un mot : un son
+        // emprunté à la bibliothèque s'exportait en silence. La résolution passe
+        // par le point unique, qui recolle l'hôte courant.
+        guard let remote = StoryAudioSourceResolver.playableURL(from: audio.mediaURL) else { return nil }
         if remote.isFileURL {
             return FileManager.default.fileExists(atPath: remote.path) ? remote : nil
         }
