@@ -1,0 +1,134 @@
+name: iOS optimisation probe (-O)
+
+# Mesure comparative des deux modes de compilation Swift en Release, sur des
+# runners identiques, pour trancher une question restée ouverte depuis avril.
+#
+# Contexte — le commit 2a32f6462 (2026-04-08) a posé
+# `SWIFT_OPTIMIZATION_LEVEL=-Onone` sur tous les builds de release pour
+# contourner un « LLVM ERROR in swift-frontend with -O ... on arm64 Release ».
+# Il était explicitement noté « temporary workaround ». Personne ne l'a retesté
+# pendant quatre mois, pendant lesquels la production a tourné sur des binaires
+# NON optimisés.
+#
+# Ce qu'on sait au 2026-07-31 (mesuré en local, build 1266) :
+#   -O + incremental  -> archive en 3 min 31 s, 0 erreur
+#   -O + wholemodule  -> observé >1 h 02 SANS terminer (borne inférieure, sur un
+#                        build qui recyclait des intermédiaires : NON concluant)
+#
+# Ce workflow tranche : deux jobs, même runner, même cache, seul
+# SWIFT_COMPILATION_MODE change. Si `wholemodule` aboutit dans un temps
+# acceptable, c'est LUI qu'il faut garder — il produit les optimisations
+# inter-fichiers (spécialisation de génériques, inlining cross-fichier,
+# dévirtualisation) qu'`incremental` ne peut pas générer.
+#
+# La signature est volontairement DÉSACTIVÉE (CODE_SIGNING_ALLOWED=NO) : la
+# question posée est « le compilateur tient-il ? », pas « sait-on signer ». Cela
+# rend aussi la sonde indépendante de `ios-release.yml`, dont l'étape « Install
+# signing assets » échoue depuis le 2026-07-22.
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'apps/ios/**'
+      - 'packages/MeeshySDK/**'
+      - '.github/workflows/ios-wmo-probe.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ios-opt-probe-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  probe:
+    name: Release build (${{ matrix.mode }})
+    runs-on: macos-15
+    # Large a dessein : un timeout est ici un RÉSULTAT (« wholemodule ne finit
+    # pas »), pas un incident. Ne pas le réduire sans invalider la mesure.
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        mode: [wholemodule, incremental]
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Select Xcode 26.1.1 (Swift 6.2)
+        run: sudo xcode-select -s /Applications/Xcode_26.1.1.app/Contents/Developer || sudo xcode-select -s /Applications/Xcode_26.1.app/Contents/Developer
+
+      - name: Generate Xcode project (XcodeGen)
+        run: |
+          brew install xcodegen
+          cd apps/ios
+          xcodegen generate
+
+      - name: Cache SPM packages
+        uses: actions/cache@v6
+        with:
+          path: |
+            apps/ios/Build/SourcePackages
+            ~/Library/Developer/Xcode/DerivedData/**/SourcePackages
+          key: spm-${{ runner.os }}-${{ hashFiles('apps/ios/Meeshy.xcodeproj/project.pbxproj') }}
+          restore-keys: spm-${{ runner.os }}-
+
+      - name: Decode GoogleService-Info.plist
+        env:
+          GOOGLE_SERVICE_INFO_PLIST_BASE64: ${{ secrets.GOOGLE_SERVICE_INFO_PLIST_BASE64 }}
+        run: printf '%s' "$GOOGLE_SERVICE_INFO_PLIST_BASE64" | base64 --decode > apps/ios/Meeshy/GoogleService-Info.plist
+
+      # SWIFT_COMPILATION_MODE est passé EXPLICITEMENT : project.yml porte
+      # actuellement `incremental`, il faut donc le surcharger pour que le job
+      # `wholemodule` teste réellement wholemodule.
+      - name: Build Release — -O + ${{ matrix.mode }}
+        id: build
+        env:
+          MODE: ${{ matrix.mode }}
+        run: |
+          set -o pipefail
+          start=$(date +%s)
+          xcodebuild build \
+            -project apps/ios/Meeshy.xcodeproj \
+            -scheme Meeshy \
+            -configuration Release \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath apps/ios/Build \
+            -clonedSourcePackagesDirPath apps/ios/SourcePackages \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
+            SWIFT_OPTIMIZATION_LEVEL=-O \
+            SWIFT_COMPILATION_MODE="$MODE" \
+            2>&1 | tee "build-$MODE.log" | grep -E "^\*\*|error:|LLVM ERROR" || true
+          status=${PIPESTATUS[0]}
+          elapsed=$(( $(date +%s) - start ))
+          echo "elapsed=$elapsed" >> "$GITHUB_OUTPUT"
+          echo "status=$status"  >> "$GITHUB_OUTPUT"
+          exit $status
+
+      - name: Report
+        if: always()
+        env:
+          MODE: ${{ matrix.mode }}
+          ELAPSED: ${{ steps.build.outputs.elapsed }}
+          OUTCOME: ${{ steps.build.outcome }}
+        run: |
+          {
+            echo "### -O + \`$MODE\`"
+            echo ""
+            echo "| | |"
+            echo "|---|---|"
+            echo "| Issue | \`$OUTCOME\` |"
+            echo "| Durée | ${ELAPSED:-timeout (>90 min)} s |"
+            echo "| \`LLVM ERROR\` | $(grep -c 'LLVM ERROR' "build-$MODE.log" 2>/dev/null || echo 0) |"
+            echo "| \`error:\` | $(grep -c 'error:' "build-$MODE.log" 2>/dev/null || echo 0) |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload build log
+        if: always()
+        uses: actions/upload-artifact@v5
+        with:
+          name: build-log-${{ matrix.mode }}
+          path: build-${{ matrix.mode }}.log
+          retention-days: 7
