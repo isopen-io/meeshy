@@ -7,29 +7,18 @@ import { createHash, randomUUID } from 'crypto';
 import { UnifiedAuthRequest } from '../../middleware/auth';
 import { sendSuccess, sendUnauthorized, sendBadRequest, sendNotFound, sendError } from '../../utils/response';
 import { toDTO } from './sounds';
+import {
+  ALLOWED_UPLOAD_MIME as ALLOWED_MIME,
+  ALLOWED_AUDIO_EXT,
+  EXT_TO_MIME,
+  staticFileUrl,
+} from '../../services/posts/soundFormats';
 
 // Volume DÉDIÉ, servi uniquement par la route JWT `/static/:filename`.
 // Surtout PAS sous UPLOAD_PATH : tout ce qui s'y trouve est exposé par
 // `GET /attachments/file/*` (sans authentification, download.ts:256) et par le
 // montage nginx en lecture seule sur `static.<domaine>`, en cache immutable un an.
 const UPLOAD_DIR = process.env.UPLOAD_DIR ?? '/app/sounds';
-const ALLOWED_MIME = new Set([
-  'audio/mpeg',
-  'audio/mp4',
-  'audio/wav',
-  'audio/x-m4a',
-  'audio/aac',
-  'audio/ogg',
-]);
-const ALLOWED_AUDIO_EXT = new Set(['.mp3', '.mp4', '.wav', '.m4a', '.aac', '.ogg']);
-const EXT_TO_MIME: Record<string, string> = {
-  '.mp3': 'audio/mpeg',
-  '.mp4': 'audio/mp4',
-  '.wav': 'audio/wav',
-  '.m4a': 'audio/x-m4a',
-  '.aac': 'audio/aac',
-  '.ogg': 'audio/ogg',
-};
 
 const ListQuerySchema = z.object({
   q: z.string().optional(),
@@ -44,6 +33,10 @@ export function registerStoryAudioRoutes(
   // POST /stories/audio — Upload d'un son d'arrière-plan
   fastify.post('/stories/audio', {
     preValidation: [requiredAuth],
+    // La route la plus coûteuse du lot : elle écrit un fichier sans plafond de
+    // durée. Sans limite propre, seul le quota global de 300 req/min la
+    // protégeait — de quoi remplir le volume de sons en une minute.
+    config: { rateLimit: { max: 20, timeWindow: '1 minute' } },
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     const authContext = (request as UnifiedAuthRequest).authContext;
     if (!authContext?.registeredUser) {
@@ -71,7 +64,7 @@ export function registerStoryAudioRoutes(
     const buffer = await data.toBuffer();
     await fs.writeFile(filePath, buffer);
 
-    const fileUrl = `/api/v1/static/${filename}`;
+    const fileUrl = staticFileUrl(filename);
 
     // OBLIGATOIRE : MongoDB traite l'absence comme `null` dans un index unique.
     // Sans `contentHash`, le SECOND upload d'un même utilisateur violerait
@@ -98,6 +91,7 @@ export function registerStoryAudioRoutes(
   // GET /stories/audio — Liste bibliothèque publique (triée par popularité)
   fastify.get('/stories/audio', {
     preValidation: [requiredAuth],
+    config: { rateLimit: { max: 60, timeWindow: '1 minute' } },
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     const parsed = ListQuerySchema.safeParse(request.query);
     if (!parsed.success) {
@@ -124,6 +118,9 @@ export function registerStoryAudioRoutes(
   fastify.get<{ Params: { filename: string } }>('/static/:filename', {
     preValidation: [requiredAuth],
     // already-compressed audio binary — never recompressed (Traefik excludedContentTypes)
+    // Généreux : une story enchaîne plusieurs pistes, et le client ne met en
+    // cache que `private, max-age=3600`.
+    config: { rateLimit: { max: 240, timeWindow: '1 minute' } },
   }, async (request: FastifyRequest<{ Params: { filename: string } }>, reply: FastifyReply) => {
     const { filename } = request.params;
 
@@ -140,10 +137,26 @@ export function registerStoryAudioRoutes(
     // arrête la copie de bibliothèque, pas l'original du post. Le retrait
     // complet suppose de supprimer le média source — lot 2.
     // `mutedAt` doit arrêter la DIFFUSION, pas seulement masquer la métadonnée.
-    const muted = await prisma.sound.findFirst({
-      where: { fileUrl: { endsWith: `/${safeName}` }, mutedAt: { not: null } },
-      select: { id: true },
-    });
+    //
+    // ÉGALITÉ, pas `endsWith` : le suffixe n'est pas indexable et faisait un
+    // SCAN DE COLLECTION à chaque lecture audio. Les deux chemins de création
+    // (upload manuel et capture) écrivent `fileUrl` via `staticFileUrl`, donc
+    // l'URL exacte se reconstruit ici — et `@@index([fileUrl])` la sert.
+    let muted: { id: string } | null = null;
+    try {
+      muted = await prisma.sound.findFirst({
+        where: { fileUrl: staticFileUrl(safeName), mutedAt: { not: null } },
+        select: { id: true },
+      });
+    } catch (err) {
+      // ÉCHEC FERMÉ, et assumé : `mutedAt` est un interrupteur DMCA/modération.
+      // Servir le fichier parce que la base n'a pas répondu diffuserait
+      // précisément ce qu'un ayant droit a fait couper. 503 explicite plutôt
+      // qu'une 500 anonyme — et la route n'est de toute façon atteignable que
+      // si l'authentification a abouti.
+      request.log.error({ err, filename: safeName }, 'static: mute lookup failed');
+      return sendError(reply, 503, 'Sound availability cannot be verified', { code: 'SOUND_LOOKUP_FAILED' });
+    }
     if (muted) {
       return sendError(reply, 410, 'Sound is no longer available', { code: 'SOUND_MUTED' });
     }

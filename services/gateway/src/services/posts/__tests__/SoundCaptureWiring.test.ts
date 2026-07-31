@@ -76,6 +76,19 @@ describe('PostService — câblage de la capture', () => {
   });
 
   /**
+   * Sans ceci, une story supprimée par son auteur gardait ses usages jusqu'au
+   * hard-delete (7 j) et un post non-STORY les gardait POUR TOUJOURS : le
+   * `usageCount` qui trie la découverte n'aurait jamais redescendu.
+   */
+  it('test_deletePost_releasesItsUsages', () => {
+    const start = code.indexOf('async deletePost');
+    const end = code.indexOf('async likePost');
+    expect(start).toBeGreaterThan(-1);
+    expect(end).toBeGreaterThan(start);
+    expect(code.slice(start, end)).toContain('this.soundCaptureService.releasePost(postId)');
+  });
+
+  /**
    * `UpdatePostSchema` a tous ses champs optionnels : un PUT partiel (audience,
    * légende) arrive sans `storyEffects`, et le blob en base n'est alors PAS
    * réécrit. Sans cette garde, la capture recevrait `tracks: []` et

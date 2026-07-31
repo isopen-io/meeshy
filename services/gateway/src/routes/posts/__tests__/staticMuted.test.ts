@@ -130,14 +130,45 @@ describe('GET /static/:filename — mutedAt arrête la diffusion', () => {
 
     await app.inject({ method: 'GET', url: `/static/${FILENAME}` });
 
+    // ÉGALITÉ, pas `endsWith` : le suffixe n'est pas indexable et faisait un
+    // scan de collection à CHAQUE lecture audio. L'URL exacte se reconstruit
+    // parce que les deux chemins de création passent par `staticFileUrl`.
     expect(built.findFirst).toHaveBeenCalledWith(
       expect.objectContaining({
         where: expect.objectContaining({
-          fileUrl: { endsWith: `/${FILENAME}` },
+          fileUrl: `/api/v1/static/${FILENAME}`,
           mutedAt: { not: null },
         }),
       }),
     );
+  });
+
+  /**
+   * `mutedAt` est un interrupteur DMCA/modération : si la base ne répond pas,
+   * servir le fichier diffuserait précisément ce qu'un ayant droit a fait
+   * couper. Échec FERMÉ, et 503 explicite plutôt qu'une 500 anonyme.
+   */
+  it('test_static_databaseUnavailable_failsClosedWith503', async () => {
+    process.env['UPLOAD_DIR'] = uploadDir;
+    jest.resetModules();
+    const { registerStoryAudioRoutes } = await import('../audio');
+    const prisma = {
+      sound: {
+        create: jest.fn(), update: jest.fn(),
+        findMany: jest.fn<() => Promise<unknown[]>>().mockResolvedValue([]),
+        findFirst: jest.fn<() => Promise<unknown>>().mockRejectedValue(new Error('DB down')),
+      },
+    } as unknown as import('@meeshy/shared/prisma/client').PrismaClient;
+    const built: FastifyInstance = Fastify({ logger: false });
+    registerStoryAudioRoutes(built, prisma, buildRequiredAuth());
+    await built.ready();
+    app = built;
+
+    const response = await built.inject({ method: 'GET', url: `/static/${FILENAME}` });
+
+    expect(response.statusCode).toBe(503);
+    expect(response.body).not.toContain('FAKE_AUDIO_BYTES');
+    expect(JSON.parse(response.body).code).toBe('SOUND_LOOKUP_FAILED');
   });
 
   it('test_static_invalidExtension_neverReachesTheDatabase', async () => {

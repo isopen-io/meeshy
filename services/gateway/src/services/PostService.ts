@@ -17,7 +17,8 @@ import { authorSelect, mediaSelect, mediaInclude, postInclude } from './posts/po
 import { remapStoryEffectsMediaIds } from './posts/storyEffectsMediaRemap';
 import { composeStoryContent, storyTextObjectText } from './posts/storyContentComposition';
 import { storyContentEditRequested } from './posts/storyEditPolicy';
-import { SoundCaptureService, type CaptureTrack } from './posts/SoundCaptureService';
+import { SoundCaptureService } from './posts/SoundCaptureService';
+import { extractCaptureTracks } from './posts/captureTracks';
 import { normalizeLanguageCode } from '@meeshy/shared/utils/language-normalize';
 import { parseSharedPlace, type SharedPlace } from './location/sharedPlace';
 
@@ -99,23 +100,6 @@ export class PostService {
     this.postReactionService = postReactionService ?? new PostReactionService(prisma);
     this.trackingLinkService = trackingLinkService ?? new TrackingLinkService(prisma);
     this.soundCaptureService = soundCaptureService ?? new SoundCaptureService(prisma);
-  }
-
-  /** Toutes les pistes audio, pas la première : une story en porte jusqu'à cinq. */
-  private extractCaptureTracks(storyEffects?: Record<string, unknown>): CaptureTrack[] {
-    const raw = storyEffects?.['audioPlayerObjects'];
-    if (!Array.isArray(raw)) return [];
-    return raw
-      .filter((o): o is Record<string, unknown> => typeof o === 'object' && o !== null)
-      .map((o) => ({
-        trackId: String(o['id'] ?? ''),
-        postMediaId: typeof o['postMediaId'] === 'string' && o['postMediaId'] ? o['postMediaId'] : undefined,
-        soundId: typeof o['soundId'] === 'string' && o['soundId'] ? o['soundId'] : undefined,
-        startMs: typeof o['startTime'] === 'number' ? Math.round(o['startTime'] * 1000) : undefined,
-        endMs: typeof o['duration'] === 'number' && typeof o['startTime'] === 'number'
-          ? Math.round((o['startTime'] + o['duration']) * 1000) : undefined,
-      }))
-      .filter((t) => t.trackId && (t.postMediaId || t.soundId));
   }
 
   async createPost(data: {
@@ -250,7 +234,7 @@ export class PostService {
       // crédité au REPOSTEUR — le piège d'attribution que le lot A évite déjà
       // sur `repostPost`, rouvert par l'autre porte.
       isPublic: data.visibility === PostVisibility.PUBLIC && !data.repostOfId,
-      tracks: this.extractCaptureTracks(data.storyEffects),
+      tracks: extractCaptureTracks(data.storyEffects),
     }).catch((err: unknown) => {
       log.error('captureSounds (createPost) a échoué', err instanceof Error ? err : new Error(String(err)), { postId: post.id });
     });
@@ -860,7 +844,7 @@ export class PostService {
         postId: updated.id,
         authorId: updated.authorId,
         isPublic: updated.visibility === PostVisibility.PUBLIC && !updated.repostOfId,
-        tracks: this.extractCaptureTracks(data.storyEffects),
+        tracks: extractCaptureTracks(data.storyEffects),
       }).catch((err: unknown) => {
         log.error('captureSounds (updatePost) a échoué', err instanceof Error ? err : new Error(String(err)), { postId: updated.id });
       });
@@ -895,6 +879,14 @@ export class PostService {
     } catch (err) {
       log.warn('deletePost: tracking link deactivation failed', { postId, err });
     }
+
+    // Les usages meurent avec le post ; le `Sound`, lui, SURVIT.
+    // Sans ceci, une story supprimée par son auteur gardait ses usages jusqu'au
+    // hard-delete (7 j) et un post non-STORY les gardait POUR TOUJOURS — un
+    // `usageCount` gonflé indéfiniment, alors que c'est lui qui trie la
+    // découverte. `releasePost` ne rejette jamais : la suppression n'a pas à
+    // dépendre de la bibliothèque.
+    await this.soundCaptureService.releasePost(postId);
 
     return updated;
   }

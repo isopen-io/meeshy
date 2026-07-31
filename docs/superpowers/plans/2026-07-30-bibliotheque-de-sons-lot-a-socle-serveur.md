@@ -4,6 +4,20 @@
 
 **Version 2** — réécrite après trois revues Opus (justesse mécanique, couverture/sécurité, exécutabilité). La v1 ne compilait pas, ne se commitait pas, et exposait deux IDOR. Les corrections sont signalées par `⚠ v1` là où elles contredisent une lecture naturelle du code.
 
+> **État au 2026-07-31 — plan EXÉCUTÉ, cases laissées vides à dessein.**
+> Le code du lot A est livré et vert. Les cases ne sont pas cochées parce que
+> l'exécution a divergé du plan sur plusieurs points, et qu'une case cochée
+> laisserait croire que le plan décrit ce qui existe. Ce qui fait foi :
+> - le code et ses tests (`services/gateway/src/services/posts/`,
+>   `src/routes/posts/{audio,sounds}.ts`) ;
+> - `tasks/2026-07-31-sound-library-lot-a-deploiement.md` pour ce qui reste à
+>   faire à la main et pour la dette ouverte, tenue à jour à chaque revue.
+>
+> Divergences principales : `usageCount` se **recompte** au lieu de se
+> décrémenter ; le titre est une chaîne neutre et non `« Son original — @pseudo »` ;
+> la capture **refuse** les formats non diffusables ; `deletePost` libère les
+> usages ; `soundFormats.ts` et `captureTracks.ts` n'existaient pas au plan.
+
 **Goal :** faire d'un son original une entité serveur de première classe — capturée automatiquement à la publication d'un contenu public, dédoublonnée, créditée, stockée durablement et exposée par une API autorisée.
 
 **Architecture :** `StoryBackgroundAudio` devient `Sound` via `@@map` (aucune donnée déplacée) ; `SoundUsage` devient la source de vérité des usages. Un service `SoundCaptureService` hache en flux, dédoublonne et crée l'entrée ; il est branché sur la création et l'édition, **pas sur le repost** (voir « Périmètre »). Les fichiers vivent sur un volume dédié servi uniquement par la route Fastify authentifiée.

@@ -164,10 +164,28 @@ SoundUsage(id, soundId, postId, trackId, viaPostId?, startMs?, endMs?, createdAt
 - `startMs`/`endMs` : le segment repris. Partout ailleurs, « utiliser ce son »
   démarre au passage choisi, pas à zéro.
 
-`usageCount` reste (il porte l'index de tri) mais devient un dénormalisé :
-**écrivain unique** = le chemin de capture, écrit dans le même `$transaction`
-que le `SoundUsage`, plus un job de réconciliation horaire qui journalise le
-delta.
+`usageCount` reste (il porte l'index de tri) mais devient un dénormalisé.
+
+**Correction du lot A** — la première rédaction disait « écrivain unique = le
+chemin de capture, plus un job de réconciliation horaire ». Faux sur les deux
+points : trois chemins l'écrivent (capture, édition, purge), et un job horaire
+n'est pas une réconciliation mais un rattrapage périodique de dérives qu'on
+laisse se créer.
+
+La règle retenue est plus simple et sans dérive possible :
+
+- **incrément** dans le même `$transaction` que la création du `SoundUsage` ;
+- **retrait = RECOMPTAGE**, jamais `decrement`. Toute libération d'usages
+  (édition, suppression, expiration) supprime les lignes puis relit
+  `soundUsage.count` pour chaque son touché et écrit la valeur ABSOLUE.
+
+Le décrément aveugle dérivait *définitivement* : un crash entre le `deleteMany`
+et la boucle laissait un compteur trop haut pour toujours, alors que ce compteur
+trie la découverte. Le recomptage est idempotent — rejouer la même purge donne
+le même résultat, et le prochain passage sur un son corrige une dérive
+antérieure. `scripts/reconcile-sound-usage.ts` reste disponible pour auditer
+l'ensemble (à blanc par défaut), mais il rattrape l'existant : il ne fait plus
+partie du fonctionnement nominal.
 
 ## 6. Capture
 
@@ -204,6 +222,13 @@ l'exact contraire de la promesse d'attribution.
 
 Traitement par piste :
 
+0. **Refuser ce qui n'est pas diffusable.** La capture accepte tout `audio/*`
+   mais `GET /static` ne sert que six extensions : capturer un `audio/webm`
+   créerait un `Sound` dont le `fileUrl` renvoie 400 **pour toujours** — une
+   ligne morte à la naissance, invisible côté capture, découverte seulement à
+   la lecture. `services/posts/soundFormats.ts` est la source unique des deux
+   listes ; l'extension du fichier source prime quand elle est servable, sinon
+   celle du MIME (un `.opus` déclaré `audio/ogg` passe : le conteneur est Ogg).
 1. Lire le `PostMedia`, calculer le SHA-256 **en flux**.
 2. Si un `Sound` existe pour `(uploaderId, contentHash)` → enregistrer l'usage.
    L'unicité est garantie par `@@unique([uploaderId, contentHash])`, sans quoi
@@ -213,8 +238,20 @@ Traitement par piste :
    échouer la création de l'index. Backfiller ou filtrer avant de pousser.
 3. Sinon copier vers le stockage de §9, créer le `Sound` puis le `SoundUsage`.
 
-**Le titre** (`title` est non-nullable) : `« Son original — @pseudo »`, dérivé du
-`username` de l'auteur. C'est une décision produit visible, pas un détail.
+**Le titre** (`title` est non-nullable). La première rédaction disait
+`« Son original — @pseudo »`, dérivé du `username`. **Abandonné** : figer un
+pseudo en base le publie à vie, y compris après renommage ou suppression de
+compte. Le lot A écrit une chaîne neutre — `« Son original »` — et fait résoudre
+le crédit à la lecture via la relation `uploader`.
+
+**Ce que le lot A n'a pas livré, et qui rend la promesse creuse en l'état :**
+aucune surface n'expose l'auteur (`toDTO` ne renvoie ni `uploaderId` ni
+`uploader`, et les `include: { uploader }` ont été retirés). Une liste publique
+afficherait donc *N* entrées identiques sans auteur. Deux corollaires à trancher
+avant d'ouvrir le drapeau : exposer un auteur **projeté** (pseudo + avatar, pas
+l'entité `User`), et sortir `« Son original »` de la base — c'est du français
+gravé qui ressortirait tel quel dans les sept langues, alors que ce devrait être
+une clé résolue côté client.
 
 **Pas de troncature.** **Le changement de visibilité n'est pas rétroactif.**
 
@@ -267,8 +304,11 @@ app-side (`StoryViewerView.swift:1062-1080`) : il faut y ajouter le
 téléchargement, le cache disque et l'échec réseau. Même trou à l'export
 (`TimelineExportFlow.swift:51`), sinon un son emprunté produit un MP4 muet.
 
-API, préfixe `/api/v1`, enveloppe `sendSuccess`/`sendError`, pagination sous
-`meta.pagination` (`services/gateway/CLAUDE.md:224-226`), rate limit par route,
+API, préfixe `/api/v1`, enveloppe `sendSuccess`/`sendError`, pagination **à la
+racine** de la réponse — la règle du dépôt disait « sous `meta.pagination` »,
+ce qu'aucune route ne pouvait respecter en utilisant le helper imposé
+(`utils/response.ts:33`) ; documentation corrigée sur la foi du code —, rate
+limit par route,
 et **projection explicite** — les routes actuelles renvoient l'entité Prisma
 brute, ce qui ferait fuiter `contentHash` et `uploaderId` :
 

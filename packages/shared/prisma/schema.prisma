@@ -3049,6 +3049,9 @@ model Sound {
   @@unique([uploaderId, contentHash])
   @@index([usageCount])
   @@index([uploaderId])
+  /// `GET /static/:filename` vérifie `mutedAt` par ÉGALITÉ sur `fileUrl` à
+  /// chaque lecture audio. Sans cet index, chaque écoute scanne la collection.
+  @@index([fileUrl])
   @@map("StoryBackgroundAudio")
 }
 

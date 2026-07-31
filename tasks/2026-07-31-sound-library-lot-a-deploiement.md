@@ -110,6 +110,11 @@ cd packages/shared && bun install && bunx prisma db push --schema=./prisma/schem
 `bun install` d'abord : `prisma/client` est gitignoré, et sans lui `bunx prisma`
 téléchargerait la dernière version au lieu de la 6.19 épinglée.
 
+Ce push pose **quatre** index sur `StoryBackgroundAudio` — dont
+`@@index([fileUrl])`, ajouté après coup : `GET /static/:filename` vérifie
+`mutedAt` par égalité sur `fileUrl` à chaque lecture audio, et sans l'index
+chaque écoute scanne la collection.
+
 `DATABASE_URL` doit être **explicitement** celui de production, jamais celui du
 shell ambiant (voir piège 1).
 
@@ -141,8 +146,9 @@ d'annuler — le script n'a pas de mode revert.
 ### Étape 7 — Ouvrir le drapeau : pas maintenant
 
 `SOUND_LIBRARY_ENABLED` reste à `false` jusqu'à ce que **tout** ceci soit vrai :
-le lot B livré (sans lui, la réinjection serveur du `soundId` n'existe pas), les
-deux bloquants ci-dessous corrigés et vérifiés en staging, et un canary défini.
+le lot B livré (sans lui, la réinjection serveur du `soundId` n'existe pas), la
+dette bloquante purgée (faite — voir plus bas) vérifiée en staging, et un canary
+défini.
 
 Noter que **staging n'est couvert par rien** : `docker-compose.staging.yml` n'a
 ni `UPLOAD_DIR`, ni volume sons, ni drapeau — la nouvelle image y écrira dans un
@@ -170,40 +176,113 @@ Deux bloquants trouvés par la revue comportementale, tous deux dans
 
 ## Dette à reprendre — par gravité
 
-### Corrections attendues avant l'ouverture du drapeau
+### Corrections attendues avant l'ouverture du drapeau — **FAITES**
 
-1. **`deletePost` ne purge aucun usage.** Une story supprimée par son auteur
-   garde ses usages jusqu'au hard-delete (7 j) ; un post non-STORY les garde
-   **pour toujours**. `usageCount` trie la découverte.
-2. **`usageCount` n'a aucune réconciliation.** Trois écrivains, décréments
-   best-effort avalés par des `.catch(() => undefined)`, purge non
-   transactionnelle : un crash entre le `deleteMany` et la boucle laisse une
-   dérive définitive. Il faut un job de recomptage depuis `SoundUsage`.
-3. **`GET /static` fait un scan de collection par lecture audio.** `findFirst`
-   sur `fileUrl endsWith`, suffixe non indexé, sans `try/catch` : une base
-   indisponible transforme toute la diffusion audio en 500 — avant ce lot, cette
-   route ne touchait pas la base. Chercher par `contentHash` avec un index
-   dédié.
-4. **`POST /stories/audio` n'a aucun rate limit** — la route la plus coûteuse du
-   lot, qui écrit un fichier. `GET /stories/audio` et `GET /static` non plus.
-5. **Extensions incohérentes** : la capture accepte tout `audio/*`, la diffusion
-   ne sert que six extensions. Un média `.opus` ou `.webm` produit un `Sound`
-   dont le `fileUrl` renverra 400 pour toujours.
+Les dix premiers points de la revue Fable sont traités. Détail dans le commit de
+suivi ; l'essentiel ci-dessous, parce que les choix comptent plus que le diff.
 
-### Tests à écrire
+1. ~~**`deletePost` ne purge aucun usage.**~~ `deletePost` appelle désormais
+   `SoundCaptureService.releasePost`. Le `Sound`, lui, survit : c'est
+   l'invariant d'indépendance.
+2. ~~**`usageCount` n'a aucune réconciliation.**~~ Le décrément aveugle est
+   remplacé par un **recomptage** depuis `SoundUsage` sur les sons touchés. Un
+   crash en cours de purge ne laisse plus de dérive définitive : la même purge
+   rejouée donne le même compteur. `scripts/reconcile-sound-usage.ts` (à blanc
+   par défaut, `--apply` pour écrire) audite l'ensemble ; c'est une façade mince
+   sur `reconcileUsageCounts`, pas une seconde implémentation.
+3. ~~**`GET /static` fait un scan de collection.**~~ Égalité sur `fileUrl`
+   reconstruite par `staticFileUrl`, plus `@@index([fileUrl])`. L'échec base est
+   **fermé** — 503 explicite : `mutedAt` est un interrupteur DMCA, servir le
+   fichier parce que la base n'a pas répondu diffuserait ce qu'un ayant droit a
+   fait couper.
+4. ~~**Aucun rate limit.**~~ 20/min sur l'upload, 60/min sur la liste, 240/min
+   sur la diffusion (une story enchaîne plusieurs pistes).
+5. ~~**Extensions incohérentes.**~~ `services/posts/soundFormats.ts` est la
+   source unique ; la capture **refuse** ce qui n'est pas servable au lieu de
+   créer un `Sound` mort-né. Un `.opus` déclaré `audio/ogg` passe (conteneur
+   Ogg) ; un `audio/webm` est ignoré et journalisé.
 
-6. **Aucun test n'affirme qu'un emprunt légitime écrit son usage** — seul le
-   refus est couvert. Un `recordBorrowed` qui rejetterait 100 % des `soundId`
-   laisserait la suite verte.
-7. **Le payload de `sound.create` n'est jamais inspecté** : `isPublic: false` en
-   dur, `durationMs` en secondes, `contentHash` absent — tout passerait.
-8. **Le `where` de `/sounds/mine` n'est jamais asserté** : retirer `uploaderId`
-   ferait lister les sons de tout le monde, au vert.
-9. **`extractCaptureTracks` n'a aucun test**, et l'égalité des deux
-   implémentations SHA-256 (capture et upload manuel) n'est pinnée nulle part —
-   c'est pourtant elle qui fait tenir l'index unique.
-10. **`SoundCaptureService.test.ts` ne restaure pas `SOUND_LIBRARY_ENABLED`** :
-    la valeur fuit vers les fichiers suivants du même worker Jest.
+### Tests à écrire — **FAITS**
+
+6. ~~Emprunt légitime non couvert~~ → l'écriture de l'usage **et** l'absence de
+   copie de fichier sont assertées ; le cas « son coupé » aussi.
+7. ~~Payload de `sound.create` jamais inspecté~~ → payload asserté champ par
+   champ, hash recalculé dans le test, présence du fichier vérifiée sur disque.
+8. ~~`where` de `/sounds/mine` jamais asserté~~ → portée `uploaderId` + filtre
+   `mutedAt`, curseur, et non-fuite de `contentHash` sur la liste.
+9. ~~`extractCaptureTracks` sans test~~ → extrait en module pur
+   (`services/posts/captureTracks.ts`), 10 tests dont la coercition refusée et
+   la conversion secondes→millisecondes. L'égalité des deux SHA-256 est pinnée
+   sur un fichier de 200 Kio — un petit fichier n'émet qu'un `data` et rendrait
+   le test tautologique.
+10. ~~`SOUND_LIBRARY_ENABLED` fuit entre fichiers~~ → capturé avant le premier
+    `beforeEach`, restauré en `afterEach`.
+
+**Deux trouvailles en écrivant ces tests**, absentes de la revue :
+
+- `releasePosts` ne rattrapait pas ses erreurs : une panne de la bibliothèque
+  aurait avorté le hard-delete des stories expirées elles-mêmes, qui se seraient
+  accumulées sans limite. Corrigé, et couvert.
+- `ExpiredStoriesCleanupService.sounds.test.ts` était une garde de **source**
+  (`toContain('soundUsage.deleteMany')`) : elle a cassé au premier refactor
+  légitime alors que le comportement était intact. Réécrite en test de
+  comportement — elle couvre en prime le recomptage, invisible à une garde
+  textuelle.
+
+### Ouvert par la revue multi-prisme suivante (correction + sécurité)
+
+**Le drapeau ne doit pas s'ouvrir avant que 21 à 26 soient traités.** 22, 23, 26 et
+27 sont exploitables **drapeau fermé**, puisque l'upload manuel, la liste
+publique et `/static` sont actifs sans lui.
+
+21. **Un média non lié peut être revendiqué par n'importe qui.** `createPost` et
+    `updatePost` rattachent les médias par `{ id: { in: mediaIds }, postId: null }`
+    — `PostMedia` n'a **aucun champ propriétaire**. La garde de scope de la
+    capture (`postId: ctx.postId`) est donc satisfaite *après coup* : le média
+    d'autrui devient celui de l'attaquant juste avant d'être haché et crédité.
+    Les ObjectId voisins ne diffèrent que d'un compteur, et les uploads
+    abandonnés restent `postId: null` pendant 24 h — la fenêtre n'est pas une
+    course de quelques secondes. **Dépasse la bibliothèque de sons** : c'est une
+    primitive de vol de média valable pour tout le pipeline. Correctif propre =
+    un champ propriétaire sur `PostMedia` + backfill.
+22. **`request.ip` est celui de Traefik, pas de l'utilisateur.** Fastify est
+    instancié sans `trustProxy` et le gateway est derrière Traefik sur un réseau
+    Docker : le `keyGenerator` global (`global:${request.ip}`) donne la **même
+    clé à tout le monde**. Poser `trustProxy` change la sémantique de `ip`
+    partout (journalisation, autres limiteurs, spoof de `X-Forwarded-For` si le
+    gateway est joignable directement) — décision à prendre à part, pas en
+    passant.
+23. **`skip` n'existe pas dans `@fastify/rate-limit` v10** ; l'option lue est
+    `allowList`. La clause était donc ignorée : `/health`, `/healthz`, `/ready`
+    subissent le quota global partagé, et un flood fait échouer les sondes.
+    Attention en corrigeant : la clause contenait aussi `isLocalIp(request.ip)`,
+    qui — combiné à 22 — aurait désactivé **tout** le rate limiting. Renommer
+    sans retirer `isLocalIp` serait pire que le bug.
+24. **La libération d'usages ne peut pas être « best-effort » partout.**
+    `SoundUsage.postId` est une chaîne nue : ni relation, ni cascade. Une
+    libération avalée laisse des lignes que plus aucun chemin ne touchera — et
+    `reconcileUsageCounts`, qui recompte *depuis* ces lignes, **confirmerait** le
+    compteur gonflé. Sur la purge horaire, échouer et rejouer coûte une heure ;
+    orphaner coûte l'éternité.
+25. **La suppression de modération contourne `PostService.deletePost`**
+    (`routes/admin/posts.ts` écrit `deletedAt` directement) : un post non-STORY
+    supprimé par un modérateur garde ses usages pour toujours.
+26. **`contentHash` ressort en clair par `fileUrl`.** La copie capturée est
+    nommée `<sha256>.<ext>` et `fileUrl` est dans le DTO : la liste publique
+    publie donc le hash que `toDTO` prétend cacher, et tout compte authentifié
+    teste la possession d'un fichier par `GET /static/<sha256>.m4a` (200/404/410).
+    `/static` ne vérifie ni `isPublic` ni la propriété — seulement `mutedAt`.
+27. **`POST /stories/audio` accepte 4 Go en mémoire** (`request.file()` sans
+    `limits`, puis `toBuffer()`), et prend l'extension du nom de fichier client
+    sans la confronter aux six extensions servies : `song.mpga` en `audio/mpeg`
+    crée une ligne dont le `fileUrl` renverra 400 à vie. Un ré-upload identique
+    viole l'index unique et renvoie 500 non gérée.
+28. **Le recomptage a remplacé un écrit atomique par un lire-puis-écrire.** Un
+    `create` concurrent entre le `count()` et l'`update` est perdu.
+    Contrairement à 24, celui-là est rattrapable par le script.
+29. **`usageCount` compte les PISTES, pas les posts.** 32 pistes pointant le même
+    son dans un seul post comptent 32. Décision sémantique à trancher : « utilisé
+    par N posts » est probablement ce qu'on veut afficher et trier.
 
 ### Décisions produit à trancher par écrit
 
@@ -218,9 +297,10 @@ Deux bloquants trouvés par la revue comportementale, tous deux dans
 14. **Le propriétaire d'un son coupé est aveugle** : `/sounds/mine` filtre
     `mutedAt: null` et `GET /:id` lui renvoie 410. Pour un mécanisme DMCA,
     l'intéressé doit voir que son son est coupé.
-15. **`/app/sounds` n'a ni quota ni ramasse-miettes.** Upload sans limite,
-    fichiers des sons coupés jamais supprimés. À concevoir — la variante inverse
-    (nettoyage d'orphelins trop zélé) a déjà détruit des médias ici.
+15. **`/app/sounds` n'a ni quota ni ramasse-miettes.** Le rate limit borne le
+    débit, pas le volume cumulé : les fichiers des sons coupés ne sont jamais
+    supprimés. À concevoir — la variante inverse (nettoyage d'orphelins trop
+    zélé) a déjà détruit des médias ici.
 16. **Curseur sans clé de départage** : `orderBy: createdAt` seul sur un champ
     non unique saute les lignes partageant le timestamp de la dernière page. La
     capture crée plusieurs sons dans la même milliseconde.

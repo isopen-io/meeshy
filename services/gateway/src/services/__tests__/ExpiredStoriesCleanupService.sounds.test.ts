@@ -1,17 +1,85 @@
-import { describe, it, expect } from '@jest/globals';
-import fs from 'fs';
-import path from 'path';
+import { describe, it, expect, jest } from '@jest/globals';
+import { ExpiredStoriesCleanupService } from '../ExpiredStoriesCleanupService';
+
+/**
+ * v1 était une garde de SOURCE (`code.toContain('soundUsage.deleteMany')`) :
+ * elle a cassé au premier refactor légitime — la purge délègue désormais à
+ * `SoundCaptureService.releasePosts` — alors que le comportement, lui, était
+ * intact. Ancrée sur le comportement, elle survit au déplacement du code et
+ * couvre en prime le recomptage, qu'une garde textuelle ne voyait pas.
+ */
+function buildPrisma(overrides: Record<string, unknown> = {}) {
+  const post = {
+    updateMany: jest.fn<() => Promise<unknown>>().mockResolvedValue({ count: 0 }),
+    // 1er appel : les stories à purger. 2e : leurs reposts.
+    findMany: jest.fn<(args: unknown) => Promise<unknown[]>>()
+      .mockResolvedValueOnce([{ id: 'story-1' }])
+      .mockResolvedValueOnce([{ id: 'repost-1' }]),
+    deleteMany: jest.fn<() => Promise<unknown>>().mockResolvedValue({ count: 1 }),
+  };
+  return {
+    post,
+    postComment: {
+      findMany: jest.fn<() => Promise<unknown[]>>().mockResolvedValue([]),
+      updateMany: jest.fn<() => Promise<unknown>>().mockResolvedValue({ count: 0 }),
+      deleteMany: jest.fn<() => Promise<unknown>>().mockResolvedValue({ count: 0 }),
+    },
+    postMedia: { deleteMany: jest.fn<() => Promise<unknown>>().mockResolvedValue({ count: 0 }) },
+    soundUsage: {
+      findMany: jest.fn<(args: unknown) => Promise<unknown[]>>().mockResolvedValue([{ soundId: 'sound-a' }]),
+      deleteMany: jest.fn<(args: unknown) => Promise<unknown>>().mockResolvedValue({ count: 1 }),
+      count: jest.fn<() => Promise<number>>().mockResolvedValue(4),
+    },
+    sound: { update: jest.fn<(args: unknown) => Promise<unknown>>().mockResolvedValue({}) },
+    ...overrides,
+  } as unknown as import('@meeshy/shared/prisma/client').PrismaClient;
+}
 
 describe('ExpiredStoriesCleanupService — usages de sons', () => {
-  const source = fs.readFileSync(path.join(__dirname, '..', 'ExpiredStoriesCleanupService.ts'), 'utf-8');
-  const code = source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
+  it('test_cleanup_purgesUsagesOfStoriesAndTheirReposts', async () => {
+    const prisma = buildPrisma();
+    await new ExpiredStoriesCleanupService(prisma).cleanup();
 
-  it('test_cleanup_purgesSoundUsage', () => {
-    expect(code).toContain('soundUsage.deleteMany');
+    // Les DEUX : ne purger que `ids` laisserait les usages des reposts
+    // orphelins, à compter pour toujours.
+    expect(prisma.soundUsage.deleteMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { postId: { in: ['story-1', 'repost-1'] } } }),
+    );
   });
 
-  it('test_cleanup_usesAllPostIds_notJustStories', () => {
-    const i = code.indexOf('soundUsage.deleteMany');
-    expect(code.slice(i, i + 200)).toContain('allPostIds');
+  it('test_cleanup_recountsUsageCount_ratherThanDecrementing', async () => {
+    const prisma = buildPrisma();
+    await new ExpiredStoriesCleanupService(prisma).cleanup();
+
+    // Valeur ABSOLUE issue de `soundUsage.count`, jamais un `{ decrement: 1 }` :
+    // un crash au milieu de la purge ne laisse plus de dérive définitive.
+    expect(prisma.sound.update).toHaveBeenCalledWith({
+      where: { id: 'sound-a' }, data: { usageCount: 4 },
+    });
+  });
+
+  it('test_cleanup_noExpiredStory_touchesNoUsage', async () => {
+    const prisma = buildPrisma({
+      post: {
+        updateMany: jest.fn<() => Promise<unknown>>().mockResolvedValue({ count: 0 }),
+        findMany: jest.fn<() => Promise<unknown[]>>().mockResolvedValue([]),
+        deleteMany: jest.fn<() => Promise<unknown>>().mockResolvedValue({ count: 0 }),
+      },
+    });
+    await new ExpiredStoriesCleanupService(prisma).cleanup();
+    expect(prisma.soundUsage.deleteMany).not.toHaveBeenCalled();
+  });
+
+  it('test_cleanup_soundFailure_doesNotAbortTheHardDelete', async () => {
+    // La bibliothèque ne doit jamais empêcher la purge : les stories expirées
+    // s'accumuleraient sans limite.
+    const prisma = buildPrisma({
+      soundUsage: {
+        findMany: jest.fn<() => Promise<unknown[]>>().mockRejectedValue(new Error('DB down')),
+        deleteMany: jest.fn(), count: jest.fn(),
+      },
+    });
+    const result = await new ExpiredStoriesCleanupService(prisma).cleanup();
+    expect(result.hardDeleted).toBe(1);
   });
 });

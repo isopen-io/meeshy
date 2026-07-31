@@ -91,4 +91,41 @@ describe('routes /sounds', () => {
     const res = await (await buildApp(prisma)).inject({ method: 'GET', url: '/sounds/mine?cursor=pas-une-date' });
     expect(res.statusCode).toBe(400);
   });
+
+  /**
+   * Le `where` n'était jamais asserté : retirer `uploaderId` aurait fait lister
+   * les sons de TOUT LE MONDE — y compris les privés — au vert, puisque le seul
+   * test existant se contente de vérifier la forme de la pagination.
+   */
+  it('test_getMine_isScopedToTheCallerAndHidesMutedSounds', async () => {
+    const findMany = jest.fn<(args: unknown) => Promise<unknown[]>>().mockResolvedValue([]);
+    const res = await (await buildApp({ sound: { findMany } }, 'user-abc'))
+      .inject({ method: 'GET', url: '/sounds/mine' });
+    expect(res.statusCode).toBe(200);
+    expect(findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({ uploaderId: 'user-abc', mutedAt: null }),
+    }));
+  });
+
+  it('test_getMine_cursor_filtersOnCreatedAt', async () => {
+    const findMany = jest.fn<(args: unknown) => Promise<unknown[]>>().mockResolvedValue([]);
+    const cursor = '2026-07-30T12:00:00.000Z';
+    await (await buildApp({ sound: { findMany } })).inject({
+      method: 'GET', url: `/sounds/mine?cursor=${encodeURIComponent(cursor)}`,
+    });
+    expect(findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({ createdAt: { lt: new Date(cursor) } }),
+    }));
+  });
+
+  it('test_getMine_neverLeaksContentHashNorUploaderId', async () => {
+    const findMany = jest.fn<(args: unknown) => Promise<unknown[]>>().mockResolvedValue([
+      { ...base, uploaderId: 'user-abc', isPublic: true, mutedAt: null,
+        createdAt: new Date(), contentHash: 'secret-hash' },
+    ]);
+    const res = await (await buildApp({ sound: { findMany } })).inject({ method: 'GET', url: '/sounds/mine' });
+    const body = JSON.stringify(res.json());
+    expect(body).not.toContain('secret-hash');
+    expect(body).not.toContain('uploaderId');
+  });
 });
