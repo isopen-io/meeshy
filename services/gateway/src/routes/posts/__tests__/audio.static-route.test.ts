@@ -79,6 +79,10 @@ async function buildApp(opts: { authenticated?: boolean; uploadDir: string } = {
 // Tests
 // ---------------------------------------------------------------------------
 
+// Sauvegardée AVANT toute écriture : `process.env` est partagé entre fichiers
+// d'un même worker Jest. La supprimer effaçait une valeur qu'on n'avait pas posée.
+const ORIGINAL_UPLOAD_DIR = process.env['UPLOAD_DIR'];
+
 describe('GET /static/:filename — story audio static route', () => {
   let uploadDir: string;
   let app: FastifyInstance;
@@ -90,7 +94,8 @@ describe('GET /static/:filename — story audio static route', () => {
   afterEach(async () => {
     await app?.close();
     await fs.rm(uploadDir, { recursive: true, force: true });
-    delete process.env['UPLOAD_DIR'];
+    if (ORIGINAL_UPLOAD_DIR === undefined) delete process.env['UPLOAD_DIR'];
+    else process.env['UPLOAD_DIR'] = ORIGINAL_UPLOAD_DIR;
   });
 
   it('should_serve_audio_files_from_static_route', async () => {

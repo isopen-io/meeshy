@@ -45,16 +45,21 @@ const DEFAULT_MOCK_FILE = {
 
 function makePrisma(overrides: any = {}) {
   return {
+    // `...overrides` EN PREMIER : placé en dernier, il réécrasait tout l'objet
+    // `sound` fusionné juste au-dessus dès qu'un test passait `{ sound: {...} }`,
+    // ne laissant que la clé surchargée. Les mocks de base disparaissaient en
+    // silence, et la route tombait en 500 sur la première méthode manquante.
+    ...overrides,
     sound: {
       create: jest.fn<any>().mockResolvedValue({ id: 'audio-1', title: 'Test Audio', fileUrl: '/api/v1/static/story_audio_test.mp3', uploader: { username: 'alice' } }),
       findMany: jest.fn<any>().mockResolvedValue([]),
-      // `GET /static/:filename` consulte `mutedAt` avant de servir : `null` =
-      // aucun son coupé. Le cas coupé vit dans routes/posts/__tests__/staticMuted.test.ts.
+      // Deux usages : `GET /static/:filename` consulte `mutedAt` avant de
+      // servir, et `POST /stories/audio` cherche un envoi identique (`null` =
+      // aucun, donc création). Le cas coupé vit dans staticMuted.test.ts.
       findFirst: jest.fn<any>().mockResolvedValue(null),
       update: jest.fn<any>().mockResolvedValue({}),
       ...overrides.sound,
     },
-    ...overrides,
   };
 }
 
@@ -176,7 +181,12 @@ describe('POST /stories/audio — isPublic false', () => {
   });
 });
 
-describe('POST /stories/audio — missing extension defaults to .m4a', () => {
+/**
+ * Le repli n'est plus un `.m4a` aveugle : quand le nom de fichier n'a pas
+ * d'extension servable, elle est dérivée du MIME. Un payload `audio/mpeg`
+ * nommé `.m4a` aurait été servi avec le mauvais `Content-Type`.
+ */
+describe('POST /stories/audio — extension dérivée du MIME quand le nom n’en a pas', () => {
   let app: FastifyInstance;
   const mockCreate = jest.fn<any>().mockResolvedValue({
     id: 'audio-3', title: 'No Ext', fileUrl: '/api/v1/static/story_audio_noext.m4a',
@@ -190,11 +200,12 @@ describe('POST /stories/audio — missing extension defaults to .m4a', () => {
   });
   afterAll(async () => { await app.close(); });
 
-  it('uses .m4a extension when filename has no extension', async () => {
+  it('derives the extension from the MIME type when the filename has none', async () => {
     const res = await app.inject({ method: 'POST', url: '/stories/audio' });
     expect(res.statusCode).toBe(201);
     const call = mockCreate.mock.calls[0][0] as any;
-    expect(call.data.fileUrl).toContain('.m4a');
+    // `DEFAULT_MOCK_FILE` déclare `audio/mpeg` → `.mp3`, pas `.m4a`.
+    expect(call.data.fileUrl).toContain('.mp3');
   });
 });
 
@@ -292,5 +303,93 @@ describe('GET /static/:filename — success', () => {
     const res = await app.inject({ method: 'GET', url: '/static/..%2F..%2Fetc%2Fpasswd.mp3' });
     // Path traversal should be mitigated by path.basename()
     expect(res.statusCode).toBe(200);
+  });
+});
+
+// ─── POST /stories/audio — gardes ajoutées après la revue sécurité ───────────
+
+describe('POST /stories/audio — conteneur non servable', () => {
+  let app: FastifyInstance;
+  const mockCreate = jest.fn<any>().mockResolvedValue({ id: 'x' });
+  beforeAll(async () => {
+    app = await buildApp({
+      // MIME accepté par la liste d'upload, mais `.mpga` n'est pas servable :
+      // avant, la ligne était créée et son `fileUrl` renvoyait 400 À VIE.
+      mockFile: { ...DEFAULT_MOCK_FILE, filename: 'song.mpga', mimetype: 'audio/mpeg' },
+      prismaOverrides: { sound: { create: mockCreate } },
+    });
+  });
+  afterAll(async () => { await app.close(); });
+
+  it('accepts it under the MIME extension rather than creating a dead row', async () => {
+    const res = await app.inject({ method: 'POST', url: '/stories/audio' });
+    expect(res.statusCode).toBe(201);
+    // `.mpga` est remplacé par `.mp3`, l'extension canonique du MIME déclaré.
+    expect((mockCreate.mock.calls[0][0] as any).data.fileUrl).toContain('.mp3');
+  });
+});
+
+describe('POST /stories/audio — conteneur inconnu du MIME et du nom', () => {
+  let app: FastifyInstance;
+  const mockCreate = jest.fn<any>();
+  beforeAll(async () => {
+    app = await buildApp({
+      mockFile: { ...DEFAULT_MOCK_FILE, filename: 'voice.webm', mimetype: 'audio/webm' },
+      prismaOverrides: { sound: { create: mockCreate } },
+    });
+  });
+  afterAll(async () => { await app.close(); });
+
+  it('is rejected before anything is written', async () => {
+    const res = await app.inject({ method: 'POST', url: '/stories/audio' });
+    expect(res.statusCode).toBe(400);
+    expect(mockCreate).not.toHaveBeenCalled();
+  });
+});
+
+describe('POST /stories/audio — ré-envoi du même fichier', () => {
+  let app: FastifyInstance;
+  const mockCreate = jest.fn<any>();
+  const existing = { id: 'deja-la', title: 'Test Audio', fileUrl: '/api/v1/static/x.mp3' };
+  beforeAll(async () => {
+    app = await buildApp({
+      prismaOverrides: {
+        sound: {
+          create: mockCreate,
+          findFirst: jest.fn<any>().mockResolvedValue(existing),
+        },
+      },
+    });
+  });
+  afterAll(async () => { await app.close(); });
+
+  it('is idempotent instead of violating the unique index with a 500', async () => {
+    const res = await app.inject({ method: 'POST', url: '/stories/audio' });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().data.id).toBe('deja-la');
+    expect(mockCreate).not.toHaveBeenCalled();
+  });
+});
+
+describe('POST /stories/audio — fichier trop gros', () => {
+  let app: FastifyInstance;
+  const mockCreate = jest.fn<any>();
+  beforeAll(async () => {
+    app = await buildApp({
+      // `@fastify/multipart` lève quand le plafond est franchi en cours de flux.
+      mockFile: {
+        ...DEFAULT_MOCK_FILE,
+        toBuffer: jest.fn<any>().mockRejectedValue(new Error('request file too large')),
+      },
+      prismaOverrides: { sound: { create: mockCreate } },
+    });
+  });
+  afterAll(async () => { await app.close(); });
+
+  it('returns 413 rather than an anonymous 500', async () => {
+    const res = await app.inject({ method: 'POST', url: '/stories/audio' });
+    expect(res.statusCode).toBe(413);
+    expect(res.json().code).toBe('FILE_TOO_LARGE');
+    expect(mockCreate).not.toHaveBeenCalled();
   });
 });

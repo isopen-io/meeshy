@@ -11,8 +11,13 @@ import {
   ALLOWED_UPLOAD_MIME as ALLOWED_MIME,
   ALLOWED_AUDIO_EXT,
   EXT_TO_MIME,
+  servableExtension,
   staticFileUrl,
 } from '../../services/posts/soundFormats';
+import { createSoundRouteRateLimitConfig } from '../../middleware/rate-limiter';
+
+/** Borne MÉMOIRE, pas une limite de durée : `toBuffer()` matérialise tout. */
+const MAX_UPLOAD_BYTES = 100 * 1024 * 1024;
 
 // Volume DÉDIÉ, servi uniquement par la route JWT `/static/:filename`.
 // Surtout PAS sous UPLOAD_PATH : tout ce qui s'y trouve est exposé par
@@ -36,19 +41,38 @@ export function registerStoryAudioRoutes(
     // La route la plus coûteuse du lot : elle écrit un fichier sans plafond de
     // durée. Sans limite propre, seul le quota global de 300 req/min la
     // protégeait — de quoi remplir le volume de sons en une minute.
-    config: { rateLimit: { max: 20, timeWindow: '1 minute' } },
+    config: { rateLimit: createSoundRouteRateLimitConfig('upload') },
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     const authContext = (request as UnifiedAuthRequest).authContext;
     if (!authContext?.registeredUser) {
       return sendUnauthorized(reply, 'Authentication required', { code: 'UNAUTHORIZED' });
     }
 
-    const data = await request.file();
+    // PLAFOND D'OCTETS OBLIGATOIRE. Le multipart global autorise 4 Go
+    // (server.ts:330) et `toBuffer()` matérialise tout en mémoire : un seul
+    // envoi d'un gigaoctet tuait le conteneur. Ce n'est PAS un plafond de durée
+    // — la directive produit du 2026-07-30 l'interdit — mais une borne mémoire :
+    // 100 Mo laissent passer plusieurs heures de parole.
+    let data;
+    try {
+      data = await request.file({ limits: { fileSize: MAX_UPLOAD_BYTES } });
+    } catch {
+      return sendError(reply, 413, 'Audio file too large (100 MB max)', { code: 'FILE_TOO_LARGE' });
+    }
     if (!data) {
       return sendBadRequest(reply, 'No file provided', { code: 'NO_FILE' });
     }
     if (!ALLOWED_MIME.has(data.mimetype)) {
       return sendBadRequest(reply, 'Invalid audio format. Supported: mp3, mp4, wav, m4a, aac, ogg', { code: 'INVALID_AUDIO_FORMAT' });
+    }
+
+    // MÊME RÈGLE QUE LA CAPTURE : ce qui n'est pas servable n'entre pas. Prendre
+    // l'extension du nom de fichier client sans la confronter aux six servies
+    // laissait `song.mpga` (MIME `audio/mpeg`, accepté ci-dessus) créer une
+    // ligne dont le `fileUrl` renvoie 400 à VIE.
+    const ext = servableExtension(data.mimetype, data.filename || '');
+    if (!ext) {
+      return sendBadRequest(reply, 'Unsupported audio container', { code: 'INVALID_AUDIO_FORMAT' });
     }
 
     const title = String((data.fields['title'] as any)?.value ?? 'Son sans titre').slice(0, 100);
@@ -57,14 +81,14 @@ export function registerStoryAudioRoutes(
     // Aucun plafond de durée (directive produit 2026-07-30).
     const duration = isNaN(durationRaw) ? 0 : durationRaw;
 
-    await fs.mkdir(UPLOAD_DIR, { recursive: true });
-    const ext = path.extname(data.filename || '') || '.m4a';
-    const filename = `story_audio_${randomUUID()}${ext}`;
-    const filePath = path.join(UPLOAD_DIR, filename);
-    const buffer = await data.toBuffer();
-    await fs.writeFile(filePath, buffer);
-
-    const fileUrl = staticFileUrl(filename);
+    let buffer: Buffer;
+    try {
+      buffer = await data.toBuffer();
+    } catch {
+      // Le plafond ci-dessus se déclenche ICI quand la taille n'est connue qu'au
+      // fil du flux — c'est le cas nominal d'un envoi sans `Content-Length`.
+      return sendError(reply, 413, 'Audio file too large (100 MB max)', { code: 'FILE_TOO_LARGE' });
+    }
 
     // OBLIGATOIRE : MongoDB traite l'absence comme `null` dans un index unique.
     // Sans `contentHash`, le SECOND upload d'un même utilisateur violerait
@@ -74,10 +98,23 @@ export function registerStoryAudioRoutes(
     // chemins de création dédoublonnent ensemble, sans relire le disque.
     const contentHash = createHash('sha256').update(buffer).digest('hex');
 
+    // Ré-envoyer le même fichier est IDEMPOTENT, pas une erreur. Avant, le
+    // second envoi violait l'index unique et renvoyait une 500 nue.
+    const existing = await prisma.sound.findFirst({
+      where: { uploaderId: authContext.registeredUser.id, contentHash },
+    });
+    if (existing) {
+      return sendSuccess(reply, toDTO(existing as unknown as Record<string, unknown>));
+    }
+
+    await fs.mkdir(UPLOAD_DIR, { recursive: true });
+    const filename = `story_audio_${randomUUID()}${ext}`;
+    await fs.writeFile(path.join(UPLOAD_DIR, filename), buffer);
+
     const audio = await prisma.sound.create({
       data: {
         uploaderId: authContext.registeredUser.id,
-        fileUrl,
+        fileUrl: staticFileUrl(filename),
         title,
         duration,
         isPublic,
@@ -91,7 +128,7 @@ export function registerStoryAudioRoutes(
   // GET /stories/audio — Liste bibliothèque publique (triée par popularité)
   fastify.get('/stories/audio', {
     preValidation: [requiredAuth],
-    config: { rateLimit: { max: 60, timeWindow: '1 minute' } },
+    config: { rateLimit: createSoundRouteRateLimitConfig('list') },
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     const parsed = ListQuerySchema.safeParse(request.query);
     if (!parsed.success) {
@@ -120,7 +157,7 @@ export function registerStoryAudioRoutes(
     // already-compressed audio binary — never recompressed (Traefik excludedContentTypes)
     // Généreux : une story enchaîne plusieurs pistes, et le client ne met en
     // cache que `private, max-age=3600`.
-    config: { rateLimit: { max: 240, timeWindow: '1 minute' } },
+    config: { rateLimit: createSoundRouteRateLimitConfig('stream') },
   }, async (request: FastifyRequest<{ Params: { filename: string } }>, reply: FastifyReply) => {
     const { filename } = request.params;
 

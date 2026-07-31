@@ -58,7 +58,13 @@ export class SoundCaptureService {
   async captureSounds(ctx: CaptureContext): Promise<void> {
     try {
       if (process.env.SOUND_LIBRARY_ENABLED !== 'true') return;
-      if (!ctx.isPublic) return;
+      // Repasser un contenu public en privé doit LIBÉRER ses usages, pas les
+      // figer : sinon publier puis restreindre laisse le compteur gonflé pour
+      // toujours, et c'est lui qui trie la découverte.
+      if (!ctx.isPublic) {
+        await this.releasePost(ctx.postId);
+        return;
+      }
 
       // Édition : les usages des pistes disparues sont retirés, sinon elles
       // surcomptent pour toujours.
@@ -97,29 +103,37 @@ export class SoundCaptureService {
   /**
    * Variante en lot pour la purge des stories expirées et de leurs reposts.
    *
-   * Ne rejette pas non plus : la purge tourne dans un `try` unique côté
-   * appelant, une exception ici avorterait le hard-delete des posts eux-mêmes
-   * et les laisserait s'accumuler sans limite.
+   * REJETTE, délibérément, à l'inverse de `releasePost`. `SoundUsage.postId` est
+   * une chaîne nue : ni relation, ni cascade (schema.prisma:3063). Avaler
+   * l'erreur ici laisserait la purge supprimer les posts quand même, et les
+   * usages devenus orphelins ne seraient plus atteints par AUCUN chemin — pire,
+   * `reconcileUsageCounts` recompte *depuis* ces lignes et confirmerait le
+   * compteur gonflé au lieu de le corriger.
+   *
+   * Échouer coûte une heure — la passe se rejoue. Orphaner coûte l'éternité.
    */
   async releasePosts(postIds: string[]): Promise<void> {
     if (postIds.length === 0) return;
-    try {
-      await this.releaseUsages({ postId: { in: postIds } });
-    } catch (error) {
-      log.error('releasePosts a échoué — la purge des posts n\'est pas affectée',
-        error instanceof Error ? error : new Error(String(error)), { count: postIds.length });
-    }
+    await this.releaseUsages({ postId: { in: postIds } });
   }
 
   /**
    * Supprime les usages désignés puis RECOMPTE `usageCount` depuis
    * `SoundUsage` pour chaque son touché.
    *
-   * Un recomptage, jamais un `decrement`. Le décrément aveugle dérivait de
-   * façon DÉFINITIVE : un crash entre le `deleteMany` et la boucle laissait un
-   * compteur trop haut pour toujours, et `usageCount` trie la découverte. Le
-   * recomptage est idempotent — rejouer la même purge donne le même résultat,
-   * et le prochain passage sur ce son corrige une dérive antérieure.
+   * Un recomptage, jamais un `decrement` : le décrément était une opération
+   * RELATIVE, donc un rejeu la comptait deux fois et une perte la comptait zéro.
+   * Le recomptage écrit une valeur absolue — rejouer la même purge donne le même
+   * résultat.
+   *
+   * Ce qu'il ne garantit PAS, et il faut le lire tel quel : un crash entre le
+   * `deleteMany` et la boucle laisse encore le compteur trop haut, et rien ne
+   * re-déclenche automatiquement un recomptage sur ces sons. Le rattrapage est
+   * `reconcileUsageCounts`, lancé à la main. Le gain est qu'une dérive est
+   * désormais RATTRAPABLE et détectable, là où le décrément la gravait.
+   *
+   * C'est aussi un lire-puis-écrire, non atomique : un `recordUsage` concurrent
+   * entre le `count` et l'`update` est perdu. Même filet.
    */
   private async releaseUsages(where: Record<string, unknown>): Promise<void> {
     const removed = await this.prisma.soundUsage.findMany({ where: where as never, select: { soundId: true } });
@@ -138,11 +152,75 @@ export class SoundCaptureService {
   }
 
   /**
+   * Supprime les usages dont le post n'existe plus ou est supprimé.
+   *
+   * Nécessaire parce que `releasePost` avale ses erreurs — il le DOIT, la
+   * suppression d'un post par son auteur ne peut pas échouer à cause de la
+   * bibliothèque. Mais `SoundUsage.postId` n'a ni relation ni cascade : un échec
+   * laisse des lignes que rien ne rattrape, et `reconcileUsageCounts` les
+   * compterait comme légitimes. Ce balayage est le filet de ce compromis, et
+   * doit tourner AVANT le recomptage.
+   *
+   * `deletedAt` non nul compte comme supprimé : c'est précisément le cas où
+   * `releasePost` avait échoué.
+   */
+  async sweepOrphanUsages(options: {
+    apply?: boolean;
+    batchSize?: number;
+    onOrphan?: (orphan: { usageId: string; postId: string }) => void;
+  } = {}): Promise<{ examined: number; orphans: number; deleted: number }> {
+    const { apply = false, batchSize = 200, onOrphan } = options;
+    let cursor: string | undefined;
+    let examined = 0;
+    let orphans = 0;
+    let deleted = 0;
+
+    for (;;) {
+      const page = await this.prisma.soundUsage.findMany({
+        take: batchSize,
+        ...(cursor ? { skip: 1, cursor: { id: cursor } } : {}),
+        orderBy: { id: 'asc' },
+        select: { id: true, postId: true, soundId: true },
+      });
+      if (page.length === 0) break;
+      cursor = page[page.length - 1]?.id;
+      examined += page.length;
+
+      const posts = await this.prisma.post.findMany({
+        where: { id: { in: [...new Set(page.map((u) => u.postId))] } },
+        select: { id: true, deletedAt: true },
+      });
+      const alive = new Set(posts.filter((p) => !p.deletedAt).map((p) => p.id));
+
+      const dead = page.filter((u) => !alive.has(u.postId));
+      orphans += dead.length;
+      for (const usage of dead) onOrphan?.({ usageId: usage.id, postId: usage.postId });
+
+      if (apply && dead.length > 0) {
+        const result = await this.prisma.soundUsage.deleteMany({
+          where: { id: { in: dead.map((u) => u.id) } },
+        });
+        deleted += result.count;
+        for (const soundId of new Set(dead.map((u) => u.soundId))) {
+          await this.recountSound(soundId).catch(() => undefined);
+        }
+      }
+
+      if (page.length < batchSize) break;
+    }
+
+    return { examined, orphans, deleted };
+  }
+
+  /**
    * Réconciliation complète — outil d'exploitation, jamais sur un chemin chaud.
    *
    * Parcourt les sons par pages et réaligne ceux dont le compteur ment.
    * IMPLÉMENTATION UNIQUE : `scripts/reconcile-sound-usage.ts` n'est qu'une
    * façade CLI par-dessus, sans quoi le script et le service dériveraient.
+   *
+   * À lancer APRÈS `sweepOrphanUsages` : recompter d'abord confirmerait les
+   * lignes orphelines au lieu de les corriger.
    *
    * N'écrit QUE si `apply` est vrai — un audit doit pouvoir être lancé en
    * production sans rien changer.
@@ -159,8 +237,9 @@ export class SoundCaptureService {
     let fixed = 0;
 
     for (;;) {
-      // Projection MINIMALE : les documents hérités n'ont ni `waveform` ni
-      // `mimeType`, et Prisma/MongoDB lève à la LECTURE sur un champ absent.
+      // Projection MINIMALE à cause de `waveform Float[]` : Prisma/MongoDB lève
+      // à la LECTURE sur un champ REQUIS absent, et les documents hérités n'ont
+      // pas ce tableau. (`mimeType` est nullable, lui : il ne lève pas.)
       const page = await this.prisma.sound.findMany({
         take: batchSize,
         ...(cursor ? { skip: 1, cursor: { id: cursor } } : {}),
@@ -270,13 +349,20 @@ export class SoundCaptureService {
         return;
       }
 
+      // Nom OPAQUE, surtout pas le hash. `fileUrl` est dans le DTO public : le
+      // nommer `<sha256>.<ext>` publiait le `contentHash` que `toDTO` retire
+      // explicitement, et donnait un oracle de possession — `GET /static/<hash
+      // du fichier suspecté>` répondant 200/404. Effet de bord voulu : deux
+      // uploadeurs au même contenu ont désormais deux fichiers distincts, donc
+      // couper le son de l'un ne renvoie plus 410 à l'autre.
+      const filename = `${crypto.randomUUID()}${ext}`;
       await fsp.mkdir(this.soundsDir, { recursive: true });
-      await fsp.copyFile(absolute, path.join(this.soundsDir, `${hash}${ext}`));
+      await fsp.copyFile(absolute, path.join(this.soundsDir, filename));
 
       const sound = await this.prisma.sound.create({
         data: {
           uploaderId: ctx.authorId,
-          fileUrl: staticFileUrl(`${hash}${ext}`),
+          fileUrl: staticFileUrl(filename),
           // Chaîne NEUTRE : le crédit se résout à la lecture via `uploader`.
           title: 'Son original',
           duration: Math.round((media.duration ?? 0) / 1000),

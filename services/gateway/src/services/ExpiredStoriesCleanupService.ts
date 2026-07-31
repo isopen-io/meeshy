@@ -139,8 +139,13 @@ export class ExpiredStoriesCleanupService {
         // `allPostIds` = stories expirées + leurs reposts. Ne PAS utiliser `ids`
         // (stories seules), qui laisserait les usages des reposts orphelins.
         // Délégué : `releasePosts` RECOMPTE `usageCount` depuis `SoundUsage` au
-        // lieu de décrémenter à l'aveugle — un crash en cours de purge ne laisse
-        // plus de dérive définitive du compteur qui trie la découverte.
+        // lieu de décrémenter à l'aveugle.
+        //
+        // Placé AVANT les suppressions de posts, et il REJETTE volontairement :
+        // `SoundUsage.postId` n'a ni relation ni cascade, donc supprimer les
+        // posts après un échec de libération laisserait des usages que plus
+        // aucun chemin n'atteindrait. Le `catch` de cette passe rattrape, la
+        // passe horaire suivante rejoue tout.
         await this.soundCaptureService.releasePosts(allPostIds);
 
         // G7 — PostMedia.post/.comment are `onDelete: SetNull`: without this

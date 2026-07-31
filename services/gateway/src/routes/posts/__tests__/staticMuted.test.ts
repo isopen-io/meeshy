@@ -76,6 +76,11 @@ async function buildApp(uploadDir: string, muted: MutedRow) {
 // Tests
 // ---------------------------------------------------------------------------
 
+// Sauvegardée AVANT toute écriture : `process.env` est partagé entre fichiers
+// d'un même worker Jest, et `SoundCaptureService` lit `UPLOAD_DIR` en défaut de
+// constructeur. La supprimer effaçait une valeur qu'on n'avait pas posée.
+const ORIGINAL_UPLOAD_DIR = process.env['UPLOAD_DIR'];
+
 describe('GET /static/:filename — mutedAt arrête la diffusion', () => {
   const FILENAME = 'story_audio_muted-uuid.m4a';
   let uploadDir: string;
@@ -90,7 +95,8 @@ describe('GET /static/:filename — mutedAt arrête la diffusion', () => {
     await app?.close();
     app = undefined;
     await fs.rm(uploadDir, { recursive: true, force: true });
-    delete process.env['UPLOAD_DIR'];
+    if (ORIGINAL_UPLOAD_DIR === undefined) delete process.env['UPLOAD_DIR'];
+    else process.env['UPLOAD_DIR'] = ORIGINAL_UPLOAD_DIR;
   });
 
   it('test_static_mutedSound_returns410', async () => {

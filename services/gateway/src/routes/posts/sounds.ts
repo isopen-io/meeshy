@@ -2,6 +2,7 @@ import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { z } from 'zod';
 import { UnifiedAuthRequest } from '../../middleware/auth';
+import { createSoundRouteRateLimitConfig } from '../../middleware/rate-limiter';
 import { sendSuccess, sendUnauthorized, sendBadRequest, sendNotFound, sendForbidden, sendError } from '../../utils/response';
 
 const OBJECT_ID = /^[a-f0-9]{24}$/;
@@ -28,7 +29,7 @@ export function toDTO(s: Record<string, unknown>) {
 export function registerSoundRoutes(fastify: FastifyInstance, prisma: PrismaClient, requiredAuth: any) {
   fastify.get('/sounds/mine', {
     preValidation: [requiredAuth],
-    config: { rateLimit: { max: 60, timeWindow: '1 minute' } },
+    config: { rateLimit: createSoundRouteRateLimitConfig('list') },
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     const ctx = (request as UnifiedAuthRequest).authContext;
     if (!ctx?.registeredUser) return sendUnauthorized(reply, 'Authentication required', { code: 'UNAUTHORIZED' });
@@ -55,7 +56,7 @@ export function registerSoundRoutes(fastify: FastifyInstance, prisma: PrismaClie
 
   fastify.get<{ Params: { id: string } }>('/sounds/:id', {
     preValidation: [requiredAuth],
-    config: { rateLimit: { max: 120, timeWindow: '1 minute' } },
+    config: { rateLimit: createSoundRouteRateLimitConfig('detail') },
   }, async (request, reply) => {
     const ctx = (request as unknown as UnifiedAuthRequest).authContext;
     if (!ctx?.registeredUser) return sendUnauthorized(reply, 'Authentication required', { code: 'UNAUTHORIZED' });
@@ -63,19 +64,25 @@ export function registerSoundRoutes(fastify: FastifyInstance, prisma: PrismaClie
 
     const sound = await prisma.sound.findUnique({ where: { id: request.params.id } });
     if (!sound) return sendNotFound(reply, 'Sound not found', { code: 'SOUND_NOT_FOUND' });
+
+    const s = sound as unknown as Record<string, unknown>;
+    const isOwner = s['uploaderId'] === ctx.registeredUser.id;
+    // AUTORISATION D'ABORD, état ensuite. Tester `mutedAt` avant la propriété
+    // laissait un tiers distinguer « inexistant » (404), « privé d'autrui »
+    // (403) et « privé d'autrui ET coupé » (410) : une énumération des sons
+    // modérés d'autres comptes.
+    if (!s['isPublic'] && !isOwner) {
+      return sendForbidden(reply, 'This sound is private', { code: 'SOUND_FORBIDDEN' });
+    }
     if ((sound as { mutedAt?: Date | null }).mutedAt) {
       return sendError(reply, 410, 'Sound is no longer available', { code: 'SOUND_MUTED' });
-    }
-    const s = sound as unknown as Record<string, unknown>;
-    if (!s['isPublic'] && s['uploaderId'] !== ctx.registeredUser.id) {
-      return sendForbidden(reply, 'This sound is private', { code: 'SOUND_FORBIDDEN' });
     }
     return sendSuccess(reply, toDTO(s));
   });
 
   fastify.patch<{ Params: { id: string } }>('/sounds/:id', {
     preValidation: [requiredAuth],
-    config: { rateLimit: { max: 30, timeWindow: '1 minute' } },
+    config: { rateLimit: createSoundRouteRateLimitConfig('patch') },
   }, async (request, reply) => {
     const ctx = (request as unknown as UnifiedAuthRequest).authContext;
     if (!ctx?.registeredUser) return sendUnauthorized(reply, 'Authentication required', { code: 'UNAUTHORIZED' });

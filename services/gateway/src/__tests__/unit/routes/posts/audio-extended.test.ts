@@ -59,12 +59,17 @@ function makeRequiredAuth(authenticated: boolean) {
 
 function makePrisma(overrides: Record<string, any> = {}) {
   return {
+    // `...overrides` EN PREMIER : en dernier il écrasait l'objet `sound` entier.
+    ...overrides,
     sound: {
       create: jest.fn<any>().mockResolvedValue(mockAudio),
       findMany: jest.fn<any>().mockResolvedValue([mockAudio]),
+      // `POST /stories/audio` cherche un envoi identique avant de créer :
+      // `null` = aucun, donc création. Sans ce mock, la route tombe en 500.
+      findFirst: jest.fn<any>().mockResolvedValue(null),
       update: jest.fn<any>().mockResolvedValue({ ...mockAudio, usageCount: 1 }),
+      ...(overrides['sound'] ?? {}),
     },
-    ...overrides,
   } as any;
 }
 

@@ -58,6 +58,10 @@ describe('ExpiredStoriesCleanupService — usages de sons', () => {
     });
   });
 
+  // Note : ce test ne rougit que si les DEUX gardes tombent (`toDelete.length > 0`
+  // côté purge et `postIds.length === 0` côté service). Il documente l'absence
+  // d'effet de bord ; `test_releasePosts_emptyList_touchesNothing` pinne la
+  // seconde garde individuellement.
   it('test_cleanup_noExpiredStory_touchesNoUsage', async () => {
     const prisma = buildPrisma({
       post: {
@@ -70,9 +74,15 @@ describe('ExpiredStoriesCleanupService — usages de sons', () => {
     expect(prisma.soundUsage.deleteMany).not.toHaveBeenCalled();
   });
 
-  it('test_cleanup_soundFailure_doesNotAbortTheHardDelete', async () => {
-    // La bibliothèque ne doit jamais empêcher la purge : les stories expirées
-    // s'accumuleraient sans limite.
+  /**
+   * v1 de ce test affirmait l'inverse — « une panne de la bibliothèque ne doit
+   * pas avorter la purge » — et c'était une erreur de conception de ma part.
+   * `SoundUsage.postId` n'a ni relation ni cascade : supprimer les posts après
+   * un échec de libération laisse des lignes que plus AUCUN chemin n'atteint, et
+   * que `reconcileUsageCounts` confirmerait au lieu de corriger. Échouer coûte
+   * une heure, la passe se rejoue ; orphaner coûte l'éternité.
+   */
+  it('test_cleanup_soundFailure_abortsTheHardDeleteSoItCanRetry', async () => {
     const prisma = buildPrisma({
       soundUsage: {
         findMany: jest.fn<() => Promise<unknown[]>>().mockRejectedValue(new Error('DB down')),
@@ -80,6 +90,9 @@ describe('ExpiredStoriesCleanupService — usages de sons', () => {
       },
     });
     const result = await new ExpiredStoriesCleanupService(prisma).cleanup();
-    expect(result.hardDeleted).toBe(1);
+
+    expect(result.hardDeleted).toBe(0);
+    // Et surtout : les posts sont TOUJOURS là, donc la passe suivante rejouera.
+    expect(prisma.post.deleteMany).not.toHaveBeenCalled();
   });
 });

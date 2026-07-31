@@ -229,11 +229,38 @@ suivi ; l'essentiel ci-dessous, parce que les choix comptent plus que le diff.
   comportement — elle couvre en prime le recomptage, invisible à une garde
   textuelle.
 
-### Ouvert par la revue multi-prisme suivante (correction + sécurité)
+### Ouvert par la revue multi-prisme suivante (correction + sécurité + tests)
 
-**Le drapeau ne doit pas s'ouvrir avant que 21 à 26 soient traités.** 22, 23, 26 et
-27 sont exploitables **drapeau fermé**, puisque l'upload manuel, la liste
-publique et `/static` sont actifs sans lui.
+**Traité dans la foulée** — 22 (partiellement), 23, 24, 25, 26, 27, et la
+totalité des trous de tests :
+
+- Les six limites de débit ont désormais un `keyGenerator` **explicite** par
+  utilisateur (`createSoundRouteRateLimitConfig`). Sans lui elles héritaient du
+  global, clefé sur `request.ip` — l'IP de Traefik, la même pour tous : « 20/min »
+  aurait voulu dire 20/min pour la plateforme entière.
+- `skip` → `allowList` sur le limiteur global, **sans reprendre `isLocalIp`** :
+  derrière Traefik cette clause aurait mis tout le monde en liste blanche et
+  désactivé le rate limiting. Le renommage naïf était pire que le bug.
+- `releasePosts` **rejette** de nouveau ; seul `releasePost` (action
+  utilisateur) avale. `sweepOrphanUsages` rattrape ce que ce compromis laisse
+  passer, et le script le lance AVANT le recomptage.
+- La suppression de modération libère ses usages.
+- Le fichier capturé porte un nom **opaque** : `<sha256>.<ext>` publiait le
+  `contentHash` par `fileUrl`. Effet de bord voulu — deux uploadeurs au même
+  contenu ont deux fichiers, donc couper l'un ne renvoie plus 410 à l'autre
+  (ferme aussi le point 18).
+- `POST /stories/audio` : plafond de 100 Mo (borne **mémoire**, pas de durée —
+  la directive du 2026-07-30 l'interdit), extension validée contre les six
+  servies, et ré-envoi identique devenu **idempotent** au lieu d'une 500.
+- `GET /sounds/:id` teste la propriété AVANT `mutedAt` : l'ordre inverse laissait
+  énumérer les sons modérés d'autrui.
+- Tests : la composition `PostService → SoundCaptureService` est enfin
+  **exécutée** (`tracks: []` passait inaperçu), `reconcileUsageCounts` et
+  `sweepOrphanUsages` sont couverts, le digest SHA-256 est **pinné** (la v1
+  restait verte en MD5), quatre gardes de source contournables sont durcies, et
+  les répertoires temporaires ne fuient plus (802 s'étaient accumulés).
+
+**Restent ouverts, et le drapeau ne doit pas s'ouvrir avant :**
 
 21. **Un média non lié peut être revendiqué par n'importe qui.** `createPost` et
     `updatePost` rattachent les médias par `{ id: { in: mediaIds }, postId: null }`
@@ -245,44 +272,36 @@ publique et `/static` sont actifs sans lui.
     course de quelques secondes. **Dépasse la bibliothèque de sons** : c'est une
     primitive de vol de média valable pour tout le pipeline. Correctif propre =
     un champ propriétaire sur `PostMedia` + backfill.
-22. **`request.ip` est celui de Traefik, pas de l'utilisateur.** Fastify est
-    instancié sans `trustProxy` et le gateway est derrière Traefik sur un réseau
-    Docker : le `keyGenerator` global (`global:${request.ip}`) donne la **même
-    clé à tout le monde**. Poser `trustProxy` change la sémantique de `ip`
-    partout (journalisation, autres limiteurs, spoof de `X-Forwarded-For` si le
-    gateway est joignable directement) — décision à prendre à part, pas en
-    passant.
-23. **`skip` n'existe pas dans `@fastify/rate-limit` v10** ; l'option lue est
-    `allowList`. La clause était donc ignorée : `/health`, `/healthz`, `/ready`
-    subissent le quota global partagé, et un flood fait échouer les sondes.
-    Attention en corrigeant : la clause contenait aussi `isLocalIp(request.ip)`,
-    qui — combiné à 22 — aurait désactivé **tout** le rate limiting. Renommer
-    sans retirer `isLocalIp` serait pire que le bug.
-24. **La libération d'usages ne peut pas être « best-effort » partout.**
-    `SoundUsage.postId` est une chaîne nue : ni relation, ni cascade. Une
-    libération avalée laisse des lignes que plus aucun chemin ne touchera — et
-    `reconcileUsageCounts`, qui recompte *depuis* ces lignes, **confirmerait** le
-    compteur gonflé. Sur la purge horaire, échouer et rejouer coûte une heure ;
-    orphaner coûte l'éternité.
-25. **La suppression de modération contourne `PostService.deletePost`**
-    (`routes/admin/posts.ts` écrit `deletedAt` directement) : un post non-STORY
-    supprimé par un modérateur garde ses usages pour toujours.
-26. **`contentHash` ressort en clair par `fileUrl`.** La copie capturée est
-    nommée `<sha256>.<ext>` et `fileUrl` est dans le DTO : la liste publique
-    publie donc le hash que `toDTO` prétend cacher, et tout compte authentifié
-    teste la possession d'un fichier par `GET /static/<sha256>.m4a` (200/404/410).
-    `/static` ne vérifie ni `isPublic` ni la propriété — seulement `mutedAt`.
-27. **`POST /stories/audio` accepte 4 Go en mémoire** (`request.file()` sans
-    `limits`, puis `toBuffer()`), et prend l'extension du nom de fichier client
-    sans la confronter aux six extensions servies : `song.mpga` en `audio/mpeg`
-    crée une ligne dont le `fileUrl` renverra 400 à vie. Un ré-upload identique
-    viole l'index unique et renvoie 500 non gérée.
-28. **Le recomptage a remplacé un écrit atomique par un lire-puis-écrire.** Un
-    `create` concurrent entre le `count()` et l'`update` est perdu.
-    Contrairement à 24, celui-là est rattrapable par le script.
-29. **`usageCount` compte les PISTES, pas les posts.** 32 pistes pointant le même
+22. **`trustProxy` n'est pas posé, et ça dépasse la bibliothèque de sons.**
+    `request.ip` reste l'adresse de Traefik pour tout le gateway : le quota
+    global de 300 req/min est un seul seau pour la plateforme, et toute
+    journalisation par IP est fausse. Le poser change la sémantique partout et
+    permet le spoof de `X-Forwarded-For` si le gateway est joignable directement
+    sur le réseau Docker — décision à prendre à part, avec la liste des proxies
+    de confiance.
+23. **`/static` n'applique aucune autorisation** — ni `isPublic`, ni propriété,
+    seulement `mutedAt`. Le nom opaque rend le fichier non devinable, ce qui est
+    une atténuation, pas un contrôle d'accès. À trancher avec la question du
+    crédit (point 11).
+24. **La coupure DMCA n'est PAS effective**, et le 503 en échec fermé ne doit pas
+    faire croire l'inverse : un son capturé est une copie du `PostMedia` source,
+    lequel reste servi par `GET /attachments/file/*` (**sans authentification**)
+    et par nginx sur `static.<domaine>` en cache immutable un an. Couper le son
+    ferme une porte sur trois. Le retrait réel suppose de traiter le média
+    source.
+25. **Le recomptage a remplacé un écrit atomique par un lire-puis-écrire.** Un
+    `create` concurrent entre le `count()` et l'`update` est perdu. Rattrapable
+    par le script, contrairement à ce que la libération avalée produisait.
+26. **Course création/suppression immédiate** : `createPost` lance la capture en
+    fire-and-forget alors que `deletePost` attend la libération. Créer puis
+    supprimer aussitôt peut écrire l'usage après la libération. Fenêtre étroite,
+    rattrapée par `sweepOrphanUsages`.
+27. **`usageCount` compte les PISTES, pas les posts.** 32 pistes pointant le même
     son dans un seul post comptent 32. Décision sémantique à trancher : « utilisé
     par N posts » est probablement ce qu'on veut afficher et trier.
+28. **Trous de tests restants** : le chemin nominal de `POST /stories/audio`
+    (upload réel, 413, extension refusée, idempotence) et de `PATCH /sounds/:id`
+    ne sont pas couverts ; `sourceLanguage` n'est jamais exercé non nul.
 
 ### Décisions produit à trancher par écrit
 

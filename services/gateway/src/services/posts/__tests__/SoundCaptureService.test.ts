@@ -47,9 +47,13 @@ describe('SoundCaptureService', () => {
     uploadsRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'uploads-'));
   });
 
-  afterEach(() => {
+  afterEach(async () => {
     if (ORIGINAL_FLAG === undefined) delete process.env.SOUND_LIBRARY_ENABLED;
     else process.env.SOUND_LIBRARY_ENABLED = ORIGINAL_FLAG;
+    // Deux répertoires par test, sinon abandonnés dans $TMPDIR à chaque
+    // exécution — plusieurs centaines s'y étaient déjà accumulés.
+    await fs.rm(soundsDir, { recursive: true, force: true });
+    await fs.rm(uploadsRoot, { recursive: true, force: true });
   });
 
   /** `PostMedia.filePath` est RELATIF à UPLOAD_PATH (tus-handler.ts:129). */
@@ -60,19 +64,55 @@ describe('SoundCaptureService', () => {
     return { id, fileUrl: `/u/${id}.m4a`, filePath: rel, mimeType: 'audio/x-m4a', duration: 1000 };
   }
 
-  it('test_hashFile_sameContent_producesSameDigest', async () => {
-    const a = path.join(soundsDir, 'a'); const b = path.join(soundsDir, 'b');
-    await fs.writeFile(a, 'meeshy'); await fs.writeFile(b, 'meeshy');
-    expect(await SoundCaptureService.hashFile(a)).toBe(await SoundCaptureService.hashFile(b));
+  /**
+   * Digest PINNÉ, pas une comparaison de deux hachages entre eux : hacher deux
+   * fois les mêmes octets avec la même fonction est égal PAR CONSTRUCTION, donc
+   * la v1 de ce test restait verte en passant l'algorithme à MD5. C'est la
+   * valeur SHA-256 qui doit être gravée — l'index `@@unique([uploaderId,
+   * contentHash])` et le dédoublonnage entre les deux chemins en dépendent.
+   */
+  it('test_hashFile_pinsTheSha256Digest', async () => {
+    const file = path.join(soundsDir, 'a');
+    await fs.writeFile(file, 'meeshy');
+    expect(await SoundCaptureService.hashFile(file))
+      .toBe('ecd1c495f1b3378b9beb8b6ebd7347e31baf8d08f48f15ebbad16cbee78a5d10');
   });
 
   it('test_captureSounds_restrictedPost_createsNothing', async () => {
-    const prisma = buildPrisma();
+    // Le média DOIT exister : avec le `postMedia.findMany` vide du mock par
+    // défaut, `sound.create` n'aurait de toute façon jamais été appelé et le
+    // test restait vert même en supprimant la garde `!ctx.isPublic`.
+    const media = await seedMedia('m1');
+    const prisma = buildPrisma({
+      postMedia: { findMany: jest.fn<() => Promise<unknown[]>>().mockResolvedValue([media]) },
+    });
     await new SoundCaptureService(prisma, soundsDir, uploadsRoot).captureSounds({
       postId: 'p1', authorId: 'u1', isPublic: false,
       tracks: [{ trackId: 't1', postMediaId: 'm1' }],
     });
     expect(prisma.sound.create).not.toHaveBeenCalled();
+  });
+
+  it('test_captureSounds_becomingPrivate_releasesItsUsages', async () => {
+    // Publier puis restreindre doit LIBÉRER : sinon le compteur qui trie la
+    // découverte reste gonflé pour toujours.
+    const prisma = buildPrisma({
+      soundUsage: {
+        create: jest.fn(),
+        deleteMany: jest.fn<() => Promise<unknown>>().mockResolvedValue({ count: 1 }),
+        findMany: jest.fn<() => Promise<unknown[]>>().mockResolvedValue([{ soundId: 'sound-a' }]),
+        count: jest.fn<() => Promise<number>>().mockResolvedValue(0),
+      },
+    });
+    await new SoundCaptureService(prisma, soundsDir, uploadsRoot).captureSounds({
+      postId: 'p1', authorId: 'u1', isPublic: false, tracks: [],
+    });
+    expect(prisma.soundUsage.deleteMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { postId: 'p1' } }),
+    );
+    expect(prisma.sound.update).toHaveBeenCalledWith({
+      where: { id: 'sound-a' }, data: { usageCount: 0 },
+    });
   });
 
   it('test_captureSounds_relativeFilePath_isResolvedAgainstUploadsRoot', async () => {
@@ -284,7 +324,13 @@ describe('SoundCaptureService', () => {
       data: expect.objectContaining({
         uploaderId: 'u1',
         contentHash: hash,
-        fileUrl: `/api/v1/static/${hash}.m4a`,
+        // Nom OPAQUE : `fileUrl` est dans le DTO public, le nommer par le hash
+        // publiait le `contentHash` que `toDTO` retire et donnait un oracle de
+        // possession de fichier.
+        fileUrl: expect.stringMatching(/^\/api\/v1\/static\/[0-9a-f-]{36}\.m4a$/),
+        // Chaîne NEUTRE : figer un @pseudo ici le publierait à vie, même après
+        // renommage ou suppression du compte.
+        title: 'Son original',
         // `PostMedia.duration` est en MILLISECONDES (schema.prisma).
         durationMs: 1000,
         // Champ hérité, en secondes.
@@ -295,8 +341,10 @@ describe('SoundCaptureService', () => {
         mimeType: 'audio/x-m4a',
       }),
     }));
-    // Le fichier est bien nommé par son hash dans le volume dédié.
-    await expect(fs.access(path.join(soundsDir, `${hash}.m4a`))).resolves.toBeUndefined();
+
+    const written = await fs.readdir(soundsDir);
+    expect(written).toHaveLength(1);
+    expect(written[0]).not.toContain(hash);
   });
 
   it('test_captureSounds_unservableFormat_capturesNothing', async () => {
@@ -334,9 +382,10 @@ describe('SoundCaptureService', () => {
       postId: 'p1', authorId: 'u1', isPublic: true,
       tracks: [{ trackId: 't1', postMediaId: 'm1' }],
     });
-    const hash = createHash('sha256').update('sans-extension').digest('hex');
     expect(prisma.sound.create).toHaveBeenCalledWith(expect.objectContaining({
-      data: expect.objectContaining({ fileUrl: `/api/v1/static/${hash}.mp3` }),
+      data: expect.objectContaining({
+        fileUrl: expect.stringMatching(/^\/api\/v1\/static\/[0-9a-f-]{36}\.mp3$/),
+      }),
     }));
   });
 
@@ -364,7 +413,116 @@ describe('SoundCaptureService', () => {
     // utilise bien SHA-256 sur le buffer intégral.
     const source = fsSync.readFileSync(
       path.join(__dirname, '..', '..', '..', 'routes', 'posts', 'audio.ts'), 'utf-8');
-    expect(source).toContain("createHash('sha256').update(buffer).digest('hex')");
+    // Commentaires RETIRÉS avant la recherche : sans ce filtre, passer la route
+    // à MD5 en laissant l'ancienne ligne en commentaire au-dessus gardait le
+    // test vert, alors que les deux chemins ne dédoublonnent plus ensemble.
+    const code = source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
+    expect(code).toContain("createHash('sha256').update(buffer).digest('hex')");
+  });
+
+  /**
+   * `reconcileUsageCounts` n'avait AUCUN test : 40 lignes, pagination par
+   * curseur, et un invariant « n'écrit que si `apply` » que rien ne vérifiait.
+   */
+  it('test_reconcileUsageCounts_withoutApply_writesNothing', async () => {
+    const prisma = buildPrisma({
+      sound: {
+        findMany: jest.fn<() => Promise<unknown[]>>()
+          .mockResolvedValueOnce([{ id: 's1', usageCount: 7 }])
+          .mockResolvedValue([]),
+        findFirst: jest.fn(), create: jest.fn(),
+        update: jest.fn<() => Promise<unknown>>().mockResolvedValue({}),
+      },
+      soundUsage: {
+        create: jest.fn(), deleteMany: jest.fn(), findMany: jest.fn(),
+        count: jest.fn<() => Promise<number>>().mockResolvedValue(2),
+      },
+    });
+    const result = await new SoundCaptureService(prisma, soundsDir, uploadsRoot)
+      .reconcileUsageCounts();
+
+    expect(result).toEqual({ examined: 1, drifted: 1, fixed: 0 });
+    expect(prisma.sound.update).not.toHaveBeenCalled();
+  });
+
+  it('test_reconcileUsageCounts_withApply_realignsTheCounter', async () => {
+    const prisma = buildPrisma({
+      sound: {
+        findMany: jest.fn<() => Promise<unknown[]>>()
+          .mockResolvedValueOnce([{ id: 's1', usageCount: 7 }, { id: 's2', usageCount: 2 }])
+          .mockResolvedValue([]),
+        findFirst: jest.fn(), create: jest.fn(),
+        update: jest.fn<() => Promise<unknown>>().mockResolvedValue({}),
+      },
+      soundUsage: {
+        create: jest.fn(), deleteMany: jest.fn(), findMany: jest.fn(),
+        count: jest.fn<() => Promise<number>>().mockResolvedValue(2),
+      },
+    });
+    const result = await new SoundCaptureService(prisma, soundsDir, uploadsRoot)
+      .reconcileUsageCounts({ apply: true });
+
+    // `s2` est déjà juste : on ne le réécrit pas.
+    expect(result).toEqual({ examined: 2, drifted: 1, fixed: 1 });
+    expect(prisma.sound.update).toHaveBeenCalledTimes(1);
+    expect(prisma.sound.update).toHaveBeenCalledWith({
+      where: { id: 's1' }, data: { usageCount: 2 },
+    });
+  });
+
+  /**
+   * Le balayage est le filet de `releasePost`, qui DOIT avaler ses erreurs.
+   * Sans lui, un échec de libération laisse des lignes que `reconcileUsageCounts`
+   * compterait comme légitimes — le compteur gonflé serait « confirmé ».
+   */
+  it('test_sweepOrphanUsages_deletesUsagesOfDeletedPosts', async () => {
+    const prisma = buildPrisma({
+      post: {
+        findMany: jest.fn<() => Promise<unknown[]>>().mockResolvedValue([
+          { id: 'vivant', deletedAt: null },
+          { id: 'soft-supprime', deletedAt: new Date() },
+        ]),
+      },
+      soundUsage: {
+        create: jest.fn(),
+        deleteMany: jest.fn<() => Promise<unknown>>().mockResolvedValue({ count: 2 }),
+        findMany: jest.fn<() => Promise<unknown[]>>()
+          .mockResolvedValueOnce([
+            { id: 'u1', postId: 'vivant', soundId: 's1' },
+            { id: 'u2', postId: 'soft-supprime', soundId: 's1' },
+            { id: 'u3', postId: 'disparu', soundId: 's2' },
+          ])
+          .mockResolvedValue([]),
+        count: jest.fn<() => Promise<number>>().mockResolvedValue(1),
+      },
+    });
+    const result = await new SoundCaptureService(prisma, soundsDir, uploadsRoot)
+      .sweepOrphanUsages({ apply: true });
+
+    // `soft-supprime` compte comme orphelin : c'est précisément le cas où
+    // `releasePost` avait échoué. `disparu` n'est pas revenu du tout.
+    expect(result.orphans).toBe(2);
+    expect(prisma.soundUsage.deleteMany).toHaveBeenCalledWith({
+      where: { id: { in: ['u2', 'u3'] } },
+    });
+  });
+
+  it('test_sweepOrphanUsages_withoutApply_writesNothing', async () => {
+    const prisma = buildPrisma({
+      post: { findMany: jest.fn<() => Promise<unknown[]>>().mockResolvedValue([]) },
+      soundUsage: {
+        create: jest.fn(), deleteMany: jest.fn(), count: jest.fn(),
+        findMany: jest.fn<() => Promise<unknown[]>>()
+          .mockResolvedValueOnce([{ id: 'u1', postId: 'disparu', soundId: 's1' }])
+          .mockResolvedValue([]),
+      },
+    });
+    const result = await new SoundCaptureService(prisma, soundsDir, uploadsRoot)
+      .sweepOrphanUsages();
+
+    expect(result.orphans).toBe(1);
+    expect(result.deleted).toBe(0);
+    expect(prisma.soundUsage.deleteMany).not.toHaveBeenCalled();
   });
 
   it('test_captureSounds_prismaThrows_neverRejects', async () => {

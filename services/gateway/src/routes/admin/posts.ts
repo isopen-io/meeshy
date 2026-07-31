@@ -7,6 +7,7 @@ import { validatePagination } from '../../utils/pagination';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { UnifiedAuthRequest } from '../../middleware/auth';
 import { authorSelect, mediaSelect, NOT_DELETED } from '../../services/posts/postIncludes';
+import { SoundCaptureService } from '../../services/posts/SoundCaptureService';
 
 // Middleware d'autorisation admin
 const requireAdmin = async (request: FastifyRequest, reply: FastifyReply) => {
@@ -549,6 +550,13 @@ export async function adminPostRoutes(fastify: FastifyInstance): Promise<void> {
           deletedAt: new Date()
         }
       });
+
+      // Cette route écrit `deletedAt` SANS passer par `PostService.deletePost`,
+      // qui est le seul endroit où les usages de sons sont libérés. Sans cet
+      // appel, un post non-STORY supprimé par un modérateur garde ses usages
+      // POUR TOUJOURS (aucun hard-delete ne cible les non-stories) et gonfle
+      // indéfiniment le `usageCount` qui trie la découverte.
+      await new SoundCaptureService(fastify.prisma).releasePost(postId);
 
       fastify.log.info({
         action: 'admin_post_delete',

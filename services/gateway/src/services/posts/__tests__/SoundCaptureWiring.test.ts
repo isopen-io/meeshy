@@ -24,6 +24,11 @@ describe('PostService — câblage de la capture', () => {
     const guard = code.indexOf('if (data.mediaIds?.length)');
     const blockEnd = code.indexOf('\n    }', guard);
     expect(code.indexOf('this.soundCaptureService.captureSounds')).toBeGreaterThan(blockEnd);
+    // `indexOf` ne voit que la PREMIÈRE occurrence : ré-encadrer l'appel dans un
+    // SECOND `if (data.mediaIds?.length)` en aval passait inaperçu. Une story
+    // peut réutiliser un média déjà attaché, donc ce gate ne doit exister qu'une
+    // fois dans tout le fichier.
+    expect(code.split('if (data.mediaIds?.length)')).toHaveLength(2);
   });
 
   it('test_captureCall_isNotGatedOnMobileTranscription', () => {
@@ -57,9 +62,12 @@ describe('PostService — câblage de la capture', () => {
   it('test_createPost_repostPath_doesNotFeedTheLibrary', () => {
     const capture = code.indexOf('this.soundCaptureService.captureSounds');
     const call = code.slice(capture, capture + 400);
-    // `&&` explicite : avec un `||`, le texte cherché serait toujours là et la
-    // porte grande ouverte — la garde passerait sur son propre contraire.
-    expect(call).toContain('PostVisibility.PUBLIC && !data.repostOfId');
+    // Expression ENTIÈRE, de `isPublic:` à la virgule finale. Chercher seulement
+    // `PUBLIC && !data.repostOfId` laissait passer
+    // `isPublic: (… && !data.repostOfId) || true` : le texte survivait à sa
+    // propre neutralisation, la porte grande ouverte, le fichier vert.
+    // Le vrai filet reste `SoundCaptureComposition.test.ts`, qui EXÉCUTE l'appel.
+    expect(call).toContain('isPublic: data.visibility === PostVisibility.PUBLIC && !data.repostOfId,');
   });
 
   /**
@@ -72,7 +80,8 @@ describe('PostService — câblage de la capture', () => {
     const end = code.indexOf('async deletePost');
     expect(start).toBeGreaterThan(-1);
     expect(end).toBeGreaterThan(start);
-    expect(code.slice(start, end)).toContain('PostVisibility.PUBLIC && !updated.repostOfId');
+    expect(code.slice(start, end))
+      .toContain('isPublic: updated.visibility === PostVisibility.PUBLIC && !updated.repostOfId,');
   });
 
   /**

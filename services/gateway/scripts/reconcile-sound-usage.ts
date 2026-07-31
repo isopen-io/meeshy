@@ -33,7 +33,21 @@ async function main(): Promise<void> {
   console.log('');
 
   try {
-    const result = await new SoundCaptureService(prisma).reconcileUsageCounts({
+    const service = new SoundCaptureService(prisma);
+
+    // ORDRE IMPOSÉ : balayer les orphelins AVANT de recompter. Recompter
+    // d'abord confirmerait les lignes dont le post n'existe plus, au lieu de
+    // les corriger — c'est le piège exact du compteur « auto-confirmé ».
+    console.log('1/2 — usages dont le post est supprimé ou absent');
+    const swept = await service.sweepOrphanUsages({
+      apply: APPLY,
+      onOrphan: ({ usageId, postId }) => console.log(`  orphelin  ${usageId}  post ${postId}`),
+    });
+    console.log(`  examinés : ${swept.examined} · orphelins : ${swept.orphans} · supprimés : ${swept.deleted}`);
+    console.log('');
+
+    console.log('2/2 — compteurs');
+    const result = await service.reconcileUsageCounts({
       apply: APPLY,
       onDrift: ({ soundId, from, to }) => console.log(`  dérive  ${soundId}  ${from} → ${to}`),
     });
@@ -42,7 +56,7 @@ async function main(): Promise<void> {
     console.log(`examinés  : ${result.examined}`);
     console.log(`en dérive : ${result.drifted}`);
     console.log(`corrigés  : ${result.fixed}`);
-    if (!APPLY && result.drifted > 0) {
+    if (!APPLY && (result.drifted > 0 || swept.orphans > 0)) {
       console.log('');
       console.log('Aucune écriture : relancer avec --apply après lecture de ce résultat.');
     }
