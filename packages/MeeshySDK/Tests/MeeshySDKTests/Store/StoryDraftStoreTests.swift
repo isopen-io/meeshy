@@ -4,6 +4,8 @@ import XCTest
 final class StoryDraftStoreSDKTests: XCTestCase {
 
     private var store: StoryDraftStore!
+    /// Ces suites vérifient le contenu d'UN brouillon : un id fixe suffit.
+    private let draftId = "test-draft"
     private var tempDir: URL!
 
     override func setUp() {
@@ -25,32 +27,32 @@ final class StoryDraftStoreSDKTests: XCTestCase {
     // MARK: - E4 inc.2 : command-history blob (opaque sidecar)
 
     func test_commandHistoryBlob_nilWhenNeverSaved() {
-        XCTAssertNil(store.loadCommandHistoryBlob())
+        XCTAssertNil(store.loadCommandHistoryBlob(draftId: draftId))
     }
 
     func test_commandHistoryBlob_roundTrip() {
         let payload = Data(#"{"slide-1":{"commands":[],"cursor":0}}"#.utf8)
 
-        store.saveCommandHistoryBlob(payload)
+        store.saveCommandHistoryBlob(payload, draftId: draftId)
 
-        XCTAssertEqual(store.loadCommandHistoryBlob(), payload,
+        XCTAssertEqual(store.loadCommandHistoryBlob(draftId: draftId), payload,
                        "The blob is opaque to the core store — bytes in, same bytes out")
     }
 
     func test_commandHistoryBlob_overwrittenByLaterSave() {
-        store.saveCommandHistoryBlob(Data("old-history".utf8))
-        store.saveCommandHistoryBlob(Data("new-history".utf8))
+        store.saveCommandHistoryBlob(Data("old-history".utf8), draftId: draftId)
+        store.saveCommandHistoryBlob(Data("new-history".utf8), draftId: draftId)
 
-        XCTAssertEqual(store.loadCommandHistoryBlob(), Data("new-history".utf8),
+        XCTAssertEqual(store.loadCommandHistoryBlob(draftId: draftId), Data("new-history".utf8),
                        "Each autosave replaces the previous history snapshot")
     }
 
     func test_clear_purgesCommandHistoryBlob() {
-        store.saveCommandHistoryBlob(Data("history".utf8))
+        store.saveCommandHistoryBlob(Data("history".utf8), draftId: draftId)
 
         store.clear()
 
-        XCTAssertNil(store.loadCommandHistoryBlob(),
+        XCTAssertNil(store.loadCommandHistoryBlob(draftId: draftId),
                      "Discarding the draft must discard its undo history with it")
     }
 
@@ -62,14 +64,14 @@ final class StoryDraftStoreSDKTests: XCTestCase {
 
     func test_isEmpty_falseAfterSave() {
         let slide = StorySlide(id: "s1", content: "Hello")
-        store.save(slides: [slide], visibility: "PUBLIC")
+        store.save(draftId: draftId, slides: [slide], visibility: "PUBLIC")
         XCTAssertFalse(store.isEmpty())
     }
 
     // MARK: - load
 
     func test_load_returnsNilWhenEmpty() {
-        XCTAssertNil(store.load())
+        XCTAssertNil(store.load(draftId: draftId))
     }
 
     // MARK: - saveMedia : cycle restore → autosave (constat « Médias indisponibles »)
@@ -81,16 +83,16 @@ final class StoryDraftStoreSDKTests: XCTestCase {
     func test_saveMedia_resaveFromRestoredURL_keepsVideoFile() throws {
         let source = tempDir.appendingPathComponent("clip.mp4")
         try Data("fake-video-bytes".utf8).write(to: source)
-        store.saveMedia(images: [:], videoURLs: ["el-1": source], audioURLs: [:])
+        store.saveMedia(draftId: draftId, images: [:], videoURLs: ["el-1": source], audioURLs: [:])
 
-        let restored = store.loadMedia()
+        let restored = store.loadMedia(draftId: draftId)
         let restoredURL = try XCTUnwrap(restored.videoURLs["el-1"])
 
-        store.saveMedia(images: [:], videoURLs: ["el-1": restoredURL], audioURLs: [:])
+        store.saveMedia(draftId: draftId, images: [:], videoURLs: ["el-1": restoredURL], audioURLs: [:])
 
         XCTAssertTrue(FileManager.default.fileExists(atPath: restoredURL.path),
                       "Re-sauver un média déjà dans le store ne doit pas le détruire")
-        let reloaded = store.loadMedia()
+        let reloaded = store.loadMedia(draftId: draftId)
         XCTAssertNotNil(reloaded.videoURLs["el-1"])
         XCTAssertTrue(reloaded.lostElementIds.isEmpty)
     }
@@ -98,14 +100,14 @@ final class StoryDraftStoreSDKTests: XCTestCase {
     func test_saveMedia_resaveFromRestoredURL_keepsAudioFile() throws {
         let source = tempDir.appendingPathComponent("track.m4a")
         try Data("fake-audio-bytes".utf8).write(to: source)
-        store.saveMedia(images: [:], videoURLs: [:], audioURLs: ["au-1": source])
+        store.saveMedia(draftId: draftId, images: [:], videoURLs: [:], audioURLs: ["au-1": source])
 
-        let restoredURL = try XCTUnwrap(store.loadMedia().audioURLs["au-1"])
+        let restoredURL = try XCTUnwrap(store.loadMedia(draftId: draftId).audioURLs["au-1"])
 
-        store.saveMedia(images: [:], videoURLs: [:], audioURLs: ["au-1": restoredURL])
+        store.saveMedia(draftId: draftId, images: [:], videoURLs: [:], audioURLs: ["au-1": restoredURL])
 
         XCTAssertTrue(FileManager.default.fileExists(atPath: restoredURL.path))
-        XCTAssertTrue(store.loadMedia().lostElementIds.isEmpty)
+        XCTAssertTrue(store.loadMedia(draftId: draftId).lostElementIds.isEmpty)
     }
 
     /// Une source disparue (tmp purgé) ne doit ni détruire la copie encore
@@ -114,15 +116,15 @@ final class StoryDraftStoreSDKTests: XCTestCase {
     func test_saveMedia_missingSource_keepsPreviousCopy() throws {
         let source = tempDir.appendingPathComponent("clip.mp4")
         try Data("fake-video-bytes".utf8).write(to: source)
-        store.saveMedia(images: [:], videoURLs: ["el-1": source], audioURLs: [:])
-        let storedURL = try XCTUnwrap(store.loadMedia().videoURLs["el-1"])
+        store.saveMedia(draftId: draftId, images: [:], videoURLs: ["el-1": source], audioURLs: [:])
+        let storedURL = try XCTUnwrap(store.loadMedia(draftId: draftId).videoURLs["el-1"])
 
         let gone = tempDir.appendingPathComponent("purged.mp4")
-        store.saveMedia(images: [:], videoURLs: ["el-1": gone], audioURLs: [:])
+        store.saveMedia(draftId: draftId, images: [:], videoURLs: ["el-1": gone], audioURLs: [:])
 
         XCTAssertTrue(FileManager.default.fileExists(atPath: storedURL.path),
                       "La copie du store survit quand la nouvelle source n'existe plus")
-        let reloaded = store.loadMedia()
+        let reloaded = store.loadMedia(draftId: draftId)
         XCTAssertNotNil(reloaded.videoURLs["el-1"])
         XCTAssertTrue(reloaded.lostElementIds.isEmpty)
     }
@@ -133,8 +135,8 @@ final class StoryDraftStoreSDKTests: XCTestCase {
         let effects = StoryEffects(background: "00FF00")
         let slide = StorySlide(id: "slide-1", content: "Test content", effects: effects, duration: 10.0)
 
-        store.save(slides: [slide], visibility: "FRIENDS")
-        let result = store.load()
+        store.save(draftId: draftId, slides: [slide], visibility: "FRIENDS")
+        let result = store.load(draftId: draftId)
 
         XCTAssertNotNil(result)
         XCTAssertEqual(result?.slides.count, 1)
@@ -152,8 +154,8 @@ final class StoryDraftStoreSDKTests: XCTestCase {
             StorySlide(id: "c", content: "Third")
         ]
 
-        store.save(slides: slides, visibility: "PUBLIC")
-        let result = store.load()
+        store.save(draftId: draftId, slides: slides, visibility: "PUBLIC")
+        let result = store.load(draftId: draftId)
 
         XCTAssertEqual(result?.slides.count, 3)
         XCTAssertEqual(result?.slides[0].id, "a")
@@ -164,10 +166,10 @@ final class StoryDraftStoreSDKTests: XCTestCase {
     // MARK: - save overwrites
 
     func test_save_overwritesPreviousDraft() {
-        store.save(slides: [StorySlide(id: "old"), StorySlide(id: "old2")], visibility: "PUBLIC")
-        store.save(slides: [StorySlide(id: "new")], visibility: "PRIVATE")
+        store.save(draftId: draftId, slides: [StorySlide(id: "old"), StorySlide(id: "old2")], visibility: "PUBLIC")
+        store.save(draftId: draftId, slides: [StorySlide(id: "new")], visibility: "PRIVATE")
 
-        let result = store.load()
+        let result = store.load(draftId: draftId)
         XCTAssertEqual(result?.slides.count, 1)
         XCTAssertEqual(result?.slides.first?.id, "new")
         XCTAssertEqual(result?.visibility, "PRIVATE")
@@ -176,7 +178,7 @@ final class StoryDraftStoreSDKTests: XCTestCase {
     // MARK: - clear
 
     func test_clear_makesIsEmptyTrue() {
-        store.save(slides: [StorySlide(id: "x")], visibility: "PUBLIC")
+        store.save(draftId: draftId, slides: [StorySlide(id: "x")], visibility: "PUBLIC")
         XCTAssertFalse(store.isEmpty())
 
         store.clear()
@@ -184,17 +186,17 @@ final class StoryDraftStoreSDKTests: XCTestCase {
     }
 
     func test_clear_makesLoadReturnNil() {
-        store.save(slides: [StorySlide(id: "x")], visibility: "PUBLIC")
+        store.save(draftId: draftId, slides: [StorySlide(id: "x")], visibility: "PUBLIC")
         store.clear()
-        XCTAssertNil(store.load())
+        XCTAssertNil(store.load(draftId: draftId))
     }
 
     // MARK: - Visibility default
 
     func test_load_defaultVisibility_isPublic() {
         // Save a slide, then manually delete the meta row to test default
-        store.save(slides: [StorySlide(id: "v1")], visibility: "PUBLIC")
-        let result = store.load()
+        store.save(draftId: draftId, slides: [StorySlide(id: "v1")], visibility: "PUBLIC")
+        let result = store.load(draftId: draftId)
         XCTAssertEqual(result?.visibility, "PUBLIC")
     }
 }

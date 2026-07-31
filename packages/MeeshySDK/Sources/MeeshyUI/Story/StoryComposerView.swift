@@ -264,7 +264,7 @@ public struct StoryComposerView: View {
                         },
                         onDiscard: {
                             showRestoreDraftAlert = false
-                            clearAllDrafts()
+                            clearCurrentDraft()
                         }
                     )
                     .padding(28)

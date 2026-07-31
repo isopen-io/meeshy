@@ -65,7 +65,7 @@ extension StoryComposerView {
             syncCurrentSlideEffects()
             let snapshot = await snapshotAllSlides()
             guard !Task.isCancelled else { return }
-            clearAllDrafts()
+            clearCurrentDraft()
             // E1 — un debounce d'autosave en vol ne doit pas re-persister le
             // brouillon d'une story qui vient de partir en publication.
             draftAutosaveSuspended = true
@@ -213,7 +213,7 @@ extension StoryComposerView {
 
     func handleDismiss() {
         if composerHasContent { showDiscardAlert = true }
-        else { publishTask?.cancel(); publishTask = nil; clearAllDrafts(); onDismiss() }
+        else { publishTask?.cancel(); publishTask = nil; clearCurrentDraft(); onDismiss() }
     }
 
     func saveDraftAndDismiss() {
@@ -224,7 +224,7 @@ extension StoryComposerView {
     func cancelAndDismiss() {
         publishTask?.cancel()
         publishTask = nil
-        clearAllDrafts()
+        clearCurrentDraft()
         // E1 — le « Quitter » jette le brouillon : suspendre l'autosave pour
         // qu'un debounce en vol ne le re-persiste pas pendant le démontage.
         draftAutosaveSuspended = true

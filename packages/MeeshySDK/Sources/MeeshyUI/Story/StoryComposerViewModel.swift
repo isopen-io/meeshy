@@ -393,6 +393,22 @@ public final class StoryComposerViewModel: StoryComposerProviding, ObservableObj
 
     // MARK: - Repost Initializer (Patch B.6)
 
+    // MARK: - Identité de brouillon
+
+    /// Brouillon sous lequel cette session du composer s'autosauvegarde.
+    ///
+    /// Le store était mono-brouillon : commencer une deuxième story écrasait
+    /// silencieusement la première. Chaque session porte désormais son id —
+    /// neuf pour une ardoise vierge, celui du brouillon repris sinon
+    /// (spec 2026-08-01).
+    public private(set) var draftId: String = UUID().uuidString
+
+    /// Rattache la session à un brouillon existant. Appelé AVANT toute
+    /// restauration : l'autosave qui suit doit écrire sous le bon id.
+    public func adoptDraft(id: String) {
+        draftId = id
+    }
+
     /// Default initializer (kept explicit so the convenience init below has a designated
     /// init to delegate to). All stored properties default-initialise, so the body is empty.
     public init() {}

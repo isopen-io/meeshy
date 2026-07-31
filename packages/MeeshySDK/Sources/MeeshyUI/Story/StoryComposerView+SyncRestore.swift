@@ -197,9 +197,10 @@ extension StoryComposerView {
     func persistDraft() {
         flushOpenTimelineIntoSlide()
         syncCurrentSlideEffects()
-        StoryDraftStore.shared.save(slides: viewModel.slides, visibility: visibility)
+        StoryDraftStore.shared.save(draftId: viewModel.draftId, slides: viewModel.slides, visibility: visibility)
         persistCommandHistory()
         StoryDraftStore.shared.saveMedia(
+            draftId: viewModel.draftId,
             images: viewModel.loadedImages,
             videoURLs: viewModel.loadedVideoURLs,
             audioURLs: viewModel.loadedAudioURLs
@@ -211,7 +212,7 @@ extension StoryComposerView {
     /// le blob reflète toujours le DERNIER état, jamais un historique périmé.
     func persistCommandHistory() {
         guard let blob = viewModel.commandHistoryBlobForPersistence() else { return }
-        StoryDraftStore.shared.saveCommandHistoryBlob(blob)
+        StoryDraftStore.shared.saveCommandHistoryBlob(blob, draftId: viewModel.draftId)
     }
 
     func saveDraft() {
@@ -268,7 +269,7 @@ extension StoryComposerView {
         guard !draftAutosaveSuspended, composerHasContent, publishTask == nil else { return }
         flushOpenTimelineIntoSlide()
         syncCurrentSlideEffects()
-        StoryDraftStore.shared.save(slides: viewModel.slides, visibility: visibility)
+        StoryDraftStore.shared.save(draftId: viewModel.draftId, slides: viewModel.slides, visibility: visibility)
         persistCommandHistory()
         let keys = Self.mediaKeysFingerprint(images: viewModel.loadedImages,
                                              videos: viewModel.loadedVideoURLs,
@@ -276,6 +277,7 @@ extension StoryComposerView {
         guard keys != lastAutosavedMediaKeys else { return }
         lastAutosavedMediaKeys = keys
         StoryDraftStore.shared.saveMedia(
+            draftId: viewModel.draftId,
             images: viewModel.loadedImages,
             videoURLs: viewModel.loadedVideoURLs,
             audioURLs: viewModel.loadedAudioURLs
@@ -300,7 +302,7 @@ extension StoryComposerView {
     }
 
     func checkForDraft() {
-        if let stored = StoryDraftStore.shared.load() {
+        if let stored = StoryDraftStore.shared.load(draftId: viewModel.draftId) {
             // Câblage LÉGER `slideImageIds` via `loadMediaReferences()` — PAS
             // `loadMedia()` : ce dernier décode chaque bitmap
             // (`Data(contentsOf:)` + `UIImage(data:)`) de façon SYNCHRONE, un
@@ -310,7 +312,7 @@ extension StoryComposerView {
             // `loadMediaReferences()` ne fait qu'un `fileExists` par ligne :
             // suffisant pour évaluer PRÉSENCE d'image, le décodage réel du
             // cover restant dans la `Task` async ci-dessous, inchangée.
-            let imageRefs = StoryDraftStore.shared.loadMediaReferences()
+            let imageRefs = StoryDraftStore.shared.loadMediaReferences(draftId: viewModel.draftId)
                 .filter { $0.mediaType == "image" }
             let slideImageIds = Set(
                 stored.slides.map(\.id).filter { id in
@@ -321,7 +323,7 @@ extension StoryComposerView {
             guard Self.shouldOfferDraftResume(slides: stored.slides, slideImageIds: slideImageIds) else {
                 // Brouillon fantôme (fond seul) : purge silencieuse, jamais
                 // de carte — auto-migrant pour tout draft déjà sur disque.
-                clearAllDrafts()
+                clearCurrentDraft()
                 return
             }
 
@@ -335,7 +337,7 @@ extension StoryComposerView {
             // références légères.
             Task { @MainActor in
                 guard let first = stored.slides.first else { return }
-                let media = StoryDraftStore.shared.loadMedia()
+                let media = StoryDraftStore.shared.loadMedia(draftId: viewModel.draftId)
                 let bg = media.images[first.id] ?? media.images["slide-bg-\(first.id)"]
                 // 270×480 (9:16) : suffisant pour la carte 108×192 @3x —
                 // `StoryCoverThumbnail.renderSize` est app-side, hors SDK.
@@ -361,14 +363,14 @@ extension StoryComposerView {
     }
 
     func restoreDraft() {
-        if let stored = StoryDraftStore.shared.load() {
+        if let stored = StoryDraftStore.shared.load(draftId: viewModel.draftId) {
             viewModel.slides = stored.slides.isEmpty ? [StorySlide()] : stored.slides
             viewModel.currentSlideIndex = 0
             visibility = stored.visibility
             // E4 inc.2 — AVANT tout bootstrap timeline : l'undo/redo de
             // chaque slide revit avec le draft, même après un crash dur.
-            viewModel.applyPersistedCommandHistory(StoryDraftStore.shared.loadCommandHistoryBlob())
-            let media = StoryDraftStore.shared.loadMedia()
+            viewModel.applyPersistedCommandHistory(StoryDraftStore.shared.loadCommandHistoryBlob(draftId: viewModel.draftId))
+            let media = StoryDraftStore.shared.loadMedia(draftId: viewModel.draftId)
             viewModel.loadedImages.merge(media.images) { _, new in new }
             viewModel.loadedVideoURLs.merge(media.videoURLs) { _, new in new }
             viewModel.loadedAudioURLs.merge(media.audioURLs) { _, new in new }
@@ -377,7 +379,7 @@ extension StoryComposerView {
             // explicitly to the user via an alert. The DB rows are also purged
             // so the next restore doesn't repeat the warning.
             if !media.lostElementIds.isEmpty {
-                StoryDraftStore.shared.purgeLostMedia(media.lostElementIds)
+                StoryDraftStore.shared.purgeLostMedia(media.lostElementIds, draftId: viewModel.draftId)
                 lostMediaCount = media.lostElementIds.count
             }
         } else if let data = UserDefaults.standard.data(forKey: StoryComposerDraft.userDefaultsKey),
@@ -395,8 +397,15 @@ extension StoryComposerView {
         viewModel.seedHistory()
     }
 
-    func clearAllDrafts() {
-        StoryDraftStore.shared.clear()
+    /// Efface le brouillon DE CETTE SESSION — publication réussie, abandon
+    /// explicite, ou composer refermé vide.
+    ///
+    /// Appelait `StoryDraftStore.clear()`, qui vidait toute la table. Anodin
+    /// tant qu'il n'existait qu'un brouillon ; depuis le multi-brouillon
+    /// (spec 2026-08-01) publier UNE story effacerait TOUS les autres
+    /// brouillons de l'utilisateur. `clear()` ne sert plus qu'à la déconnexion.
+    func clearCurrentDraft() {
+        StoryDraftStore.shared.delete(draftId: viewModel.draftId)
         UserDefaults.standard.removeObject(forKey: StoryComposerDraft.userDefaultsKey)
     }
 }
