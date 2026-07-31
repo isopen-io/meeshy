@@ -1,0 +1,137 @@
+name: iOS signing — diagnose
+
+# Pourquoi « Install signing assets » d'ios-release.yml échoue depuis le
+# 2026-07-22 ? Deux hypothèses restaient vivantes après analyse locale :
+#
+#   (a) MATCH_PASSWORD ne déchiffre pas les blobs ;
+#   (b) le CONTENU des secrets MATCH_*_ENC est malformé (les fichiers du dépôt
+#       meeshy-certificates sont DÉJÀ du base64 « U2FsdGVkX1… » : un
+#       `base64 < fichier` de trop au moment de poser le secret les casse).
+#
+# L'échec observé ne discrimine pas : vérifié en local, la fonction dec() du
+# workflow échoue de la même façon sur un contenu correct avec mauvais mot de
+# passe ET sur un contenu malformé. (Attention au piège : AES-CBC n'authentifie
+# pas — un mauvais mot de passe passe le contrôle de padding ~1 fois sur 256,
+# ce qui peut faire croire à tort à un succès sur un essai isolé.)
+#
+# Ce job tranche par EMPREINTE, sans avoir besoin du mot de passe : il compare
+# le sha256 de chaque secret aux empreintes des fichiers du dépôt, calculées en
+# local le 2026-07-31. Il tente ensuite le déchiffrement pour compléter.
+#
+# Ne révèle QUE des tailles et des empreintes tronquées de blobs DÉJÀ CHIFFRÉS,
+# plus la signature DER des deux premiers octets. Aucun contenu, aucun mot de
+# passe. N'écrit rien : les secrets existants sont laissés intacts, c'est
+# volontaire — les écraser détruirait l'état qui permet de conclure.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Compare secret fingerprints against the certificates repo
+        env:
+          MATCH_PASSWORD: ${{ secrets.MATCH_PASSWORD }}
+          MATCH_CERT_ENC: ${{ secrets.MATCH_CERT_ENC }}
+          MATCH_PROFILE_APP_ENC: ${{ secrets.MATCH_PROFILE_APP_ENC }}
+          MATCH_PROFILE_NOTIF_ENC: ${{ secrets.MATCH_PROFILE_NOTIF_ENC }}
+          MATCH_PROFILE_WIDGETS_ENC: ${{ secrets.MATCH_PROFILE_WIDGETS_ENC }}
+        run: |
+          set -uo pipefail
+
+          # Empreintes des fichiers de isopen-io/meeshy-certificates @ 11d8273,
+          # mesurées localement le 2026-07-31. Trois formes par fichier :
+          #   raw    = octet pour octet (ce qu'un secret bien posé doit contenir)
+          #   nonl   = idem sans le saut de ligne final
+          #   dbl    = re-encodé en base64 une fois de trop (l'erreur suspectée)
+          #   size   = taille brute du fichier
+          declare -A RAW NONL DBL SIZE
+          RAW[cert]=00c31e895de6bfb3;  NONL[cert]=d75280782553361e;  DBL[cert]=7b222c0839821868;  SIZE[cert]=2302
+          RAW[app]=f2673cd9d8f2159e;   NONL[app]=4e70961791f55d09;   DBL[app]=ca2fa88607d4ea13;   SIZE[app]=20021
+          RAW[notif]=d928b0fef367bd25; NONL[notif]=c793c0a7c31d27e9; DBL[notif]=6c989ce24c497d62; SIZE[notif]=18699
+          RAW[widgets]=b7ee5242ae50f39d; NONL[widgets]=e066cebcfbc05acc; DBL[widgets]=e19513e3bc25244d; SIZE[widgets]=17028
+
+          PW_RAW="$MATCH_PASSWORD"
+          PW_TRIM="$(printf '%s' "$MATCH_PASSWORD" | tr -d '\r\n')"
+
+          # Copie conforme de dec() (ios-release.yml), plus un contrôle de forme :
+          # un .p12 comme un .mobileprovision (CMS) sont du DER, donc commencent
+          # par l'octet 0x30. Le workflow d'origine ne teste que « non vide ».
+          try_decrypt() {
+            local blob="$1" out="$2" pw opt
+            for pw in "$PW_TRIM" "$PW_RAW"; do
+              for opt in "-md md5" "-md sha256" "-pbkdf2 -md sha256" "-pbkdf2 -md md5" ""; do
+                if printf '%s' "$blob" | openssl aes-256-cbc -d -k "$pw" -a $opt -out "$out" 2>/dev/null && [ -s "$out" ]; then
+                  echo "$opt"; return 0
+                fi
+              done
+            done
+            return 1
+          }
+
+          {
+            echo "## Diagnostic des secrets de signature"
+            echo ""
+            echo "Référence : \`isopen-io/meeshy-certificates\` @ 11d8273"
+            echo ""
+            echo "| Secret | Taille | attendue | Empreinte | Verdict |"
+            echo "|---|---|---|---|---|"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          check() {
+            local key="$1" blob="$2" name="$3"
+            local len sha verdict
+            len=$(printf '%s' "$blob" | wc -c | tr -d ' ')
+            sha=$(printf '%s' "$blob" | sha256sum | cut -c1-16)
+
+            if   [ "$sha" = "${RAW[$key]}" ];  then verdict='✅ identique au fichier'
+            elif [ "$sha" = "${NONL[$key]}" ]; then verdict='✅ fichier sans saut de ligne final'
+            elif [ "$sha" = "${DBL[$key]}" ];  then verdict='❌ **DOUBLE-BASE64** — cause trouvée'
+            elif [ "$len" -eq 0 ];             then verdict='❌ secret VIDE ou absent'
+            else verdict='❌ ne correspond à AUCUNE forme du fichier'
+            fi
+            echo "| \`$name\` | $len | ${SIZE[$key]} | \`$sha\` | $verdict |" >> "$GITHUB_STEP_SUMMARY"
+
+            # Le préfixe attendu en base64 d'un blob chiffré par match est
+            # « U2FsdGVkX1 » (= "Salted__"). Son absence dit déjà que le secret
+            # n'est pas un blob match brut.
+            case "$blob" in
+              U2FsdGVkX1*) : ;;
+              *) echo "|  ↳ | | | | ⚠️ ne commence pas par \`U2FsdGVkX1\` (Salted__) |" >> "$GITHUB_STEP_SUMMARY" ;;
+            esac
+
+            if opt=$(try_decrypt "$blob" "/tmp/out-$key.bin"); then
+              local first
+              first=$(head -c 1 "/tmp/out-$key.bin" | xxd -p)
+              if [ "$first" = "30" ]; then
+                echo "|  ↳ | | | | 🔓 déchiffré avec \`${opt:-défaut}\`, DER valide |" >> "$GITHUB_STEP_SUMMARY"
+              else
+                echo "|  ↳ | | | | ⚠️ « déchiffré » avec \`${opt:-défaut}\` mais 1er octet \`0x$first\` ≠ \`0x30\` → faux positif de dec() |" >> "$GITHUB_STEP_SUMMARY"
+              fi
+            else
+              echo "|  ↳ | | | | 🔒 déchiffrement impossible (10 combinaisons) |" >> "$GITHUB_STEP_SUMMARY"
+            fi
+            rm -f "/tmp/out-$key.bin"
+          }
+
+          check cert    "$MATCH_CERT_ENC"            "MATCH_CERT_ENC"
+          check app     "$MATCH_PROFILE_APP_ENC"     "MATCH_PROFILE_APP_ENC"
+          check notif   "$MATCH_PROFILE_NOTIF_ENC"   "MATCH_PROFILE_NOTIF_ENC"
+          check widgets "$MATCH_PROFILE_WIDGETS_ENC" "MATCH_PROFILE_WIDGETS_ENC"
+
+          {
+            echo ""
+            echo "### Lecture"
+            echo ""
+            echo "- **Empreintes identiques + déchiffrement impossible** → les secrets sont bons,"
+            echo "  c'est \`MATCH_PASSWORD\` qui ne correspond pas : régénérer le matériel via \`match\`."
+            echo "- **Empreintes différentes** → les secrets sont malformés : les reposer depuis le"
+            echo "  dépôt avec \`gh secret set <NOM> < <fichier>\`, sans ré-encoder."
+            echo ""
+            echo "_Aucun secret n'a été modifié par ce job._"
+          } >> "$GITHUB_STEP_SUMMARY"
