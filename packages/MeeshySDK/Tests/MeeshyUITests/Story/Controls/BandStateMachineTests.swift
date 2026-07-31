@@ -166,4 +166,57 @@ struct BandStateMachineTests {
         sm.tapTile(.timeline)
         #expect(sm.state == .toolPanel(.timeline))
     }
+
+    // MARK: - openTimeline: intention UNIQUE d'ouverture (S4)
+    //
+    // Les 6 sites d'ouverture de la Timeline (FAB tap/swipe-up, chip de switch
+    // `onTapTile`, tuile empty-state, bouton menu ⋯, bouton « Voir dans la
+    // Timeline » des lignes média/texte de `ComposerToolPanelHost`)
+    // exécutaient chacun une combinaison DIFFÉRENTE de mutations — certains ne
+    // touchaient QUE `viewModel.isTimelineVisible`, sans jamais appeler la
+    // machine. Depuis un panneau déjà ouvert, `effectiveBandState` ne force
+    // `.toolPanel(.timeline)` QUE si `machineState == .hidden` : flipper le
+    // flag seul y était un clic mort (challenge S4, attaque bloquante confirmée
+    // sur `onShowInTimeline`, câblé aux lignes média/texte du panel — atteint
+    // depuis `.toolPanel(.media)`/`.toolPanel(.text)`, jamais `.hidden`).
+    // `openTimeline` est l'unique fonction que ces 6 sites appellent désormais.
+
+    @Test("openTimeline from .hidden sets isTimelineVisible and opens .toolPanel(.timeline)")
+    func openTimelineFromHidden() {
+        var sm = BandStateMachine()
+        var isTimelineVisible = false
+        sm.openTimeline(isTimelineVisible: &isTimelineVisible)
+        #expect(sm.state == .toolPanel(.timeline))
+        #expect(isTimelineVisible)
+    }
+
+    @Test("openTimeline while another tool panel is open swaps to .toolPanel(.timeline), like tapTile")
+    func openTimelineSwapsOpenPanel() {
+        var sm = BandStateMachine()
+        sm.tapTile(.media)
+        var isTimelineVisible = false
+        sm.openTimeline(isTimelineVisible: &isTimelineVisible)
+        #expect(sm.state == .toolPanel(.timeline))
+        #expect(isTimelineVisible)
+    }
+
+    @Test("openTimeline under .formatPanel leaves the format panel untouched but still flips isTimelineVisible")
+    func openTimelineUnderFormatPanelPreservesPriority() {
+        var sm = BandStateMachine()
+        sm.openFormatPanel(.text, id: "txt-1")
+        var isTimelineVisible = false
+        sm.openTimeline(isTimelineVisible: &isTimelineVisible)
+        #expect(sm.state == .formatPanel(.text, elementId: "txt-1"))
+        #expect(isTimelineVisible)
+    }
+
+    @Test("openTimeline is idempotent when already .toolPanel(.timeline)")
+    func openTimelineIdempotent() {
+        var sm = BandStateMachine()
+        sm.tapTile(.timeline)
+        var isTimelineVisible = true
+        sm.openTimeline(isTimelineVisible: &isTimelineVisible)
+        #expect(sm.state == .toolPanel(.timeline))
+        #expect(isTimelineVisible)
+    }
 }
