@@ -1128,6 +1128,110 @@ export class CallEventsHandler {
   }
 
   /**
+   * Shared body of `call:toggle-audio` / `call:toggle-video` — the two
+   * handlers were ~90-line copies differing only by the `mediaType` literal,
+   * which meant every future fix (auth, rate limit, validation, participant
+   * resolution) had to be applied twice and could silently drift between
+   * audio and video. CVE-002 (rate limiting) / CVE-006 (input validation)
+   * comments below apply identically to both media types.
+   */
+  private async handleMediaToggle(
+    socket: Socket,
+    getUserId: (socketId: string) => string | undefined,
+    data: CallMediaToggleEvent,
+    mediaType: 'audio' | 'video'
+  ): Promise<void> {
+    try {
+      const userId = getUserId(socket.id);
+      if (!userId) {
+        socket.emit(CALL_EVENTS.ERROR, {
+          code: 'NOT_AUTHENTICATED',
+          message: 'User not authenticated',
+          callId: data?.callId
+        } as CallError);
+        return;
+      }
+
+      // CVE-002: Rate limiting check
+      const rateLimitPassed = await checkSocketRateLimit(
+        socket,
+        userId,
+        SOCKET_RATE_LIMITS.MEDIA_TOGGLE,
+        this.rateLimiter,
+        CALL_EVENTS.ERROR
+      );
+      if (!rateLimitPassed) return;
+
+      // CVE-006: Validate input data
+      const validation = validateSocketEvent(socketMediaToggleSchema, data);
+      if (isValidationFailure(validation)) {
+        const { error: validationError, details: validationDetails } = validation;
+        socket.emit(CALL_EVENTS.ERROR, {
+          code: CALL_ERROR_CODES.VALIDATION_ERROR,
+          message: validationError,
+          details: validationDetails ? { issues: validationDetails } : undefined,
+          callId: data?.callId
+        } as CallError);
+        return;
+      }
+
+      logger.info(`📞 Socket: call:toggle-${mediaType}`, {
+        socketId: socket.id,
+        userId,
+        callId: data.callId,
+        enabled: data.enabled
+      });
+
+      // Audit P2-GW-5 — `updateParticipantMedia` queries on
+      // `participantId` (Participant.id ObjectId), NOT userId. Passing
+      // userId here matched nothing and the toggle silently failed.
+      // Resolve to the real participantId before calling the service.
+      const participantId = await this.resolveActiveCallParticipantId(userId, data.callId);
+      if (!participantId) {
+        socket.emit(CALL_EVENTS.ERROR, {
+          code: CALL_ERROR_CODES.NOT_A_PARTICIPANT,
+          message: 'You are not a participant in this call',
+          callId: data?.callId
+        } as CallError);
+        return;
+      }
+      await this.callService.updateParticipantMedia(
+        data.callId,
+        participantId,
+        mediaType,
+        data.enabled
+      );
+
+      // P0-3 — broadcast to the OTHER participants only. The sender already
+      // updated its own state locally and must NOT receive its own echo:
+      // iOS treats any received call:media-toggled as the REMOTE peer's state
+      // (drives the muted indicator / avatar placeholder). `socket.to`
+      // excludes the sender; `io.to` would include it.
+      const toggleEvent: CallMediaToggleEvent = {
+        callId: data.callId,
+        participantId,
+        mediaType,
+        enabled: data.enabled
+      };
+
+      socket.to(ROOMS.call(data.callId)).emit(
+        CALL_EVENTS.MEDIA_TOGGLED,
+        toggleEvent
+      );
+
+      logger.info(`✅ Socket: ${mediaType === 'audio' ? 'Audio' : 'Video'} toggled`, {
+        callId: data.callId,
+        userId,
+        enabled: data.enabled
+      });
+    } catch (error: any) {
+      logger.error(`❌ Socket: Error toggling ${mediaType}`, error);
+
+      socket.emit(CALL_EVENTS.ERROR, { ...this.mapMediaToggleError(error, `Failed to toggle ${mediaType}`), callId: data?.callId } as CallError);
+    }
+  }
+
+  /**
    * Resolve target userId to their socket IDs within a call room
    */
   private async resolveTargetSockets(
@@ -2921,95 +3025,7 @@ export class CallEventsHandler {
      * CVE-006: Added input validation
      */
     socket.on(CALL_EVENTS.TOGGLE_AUDIO, async (data: CallMediaToggleEvent) => {
-      try {
-        const userId = getUserId(socket.id);
-        if (!userId) {
-          socket.emit(CALL_EVENTS.ERROR, {
-            code: 'NOT_AUTHENTICATED',
-            message: 'User not authenticated',
-            callId: data?.callId
-          } as CallError);
-          return;
-        }
-
-        // CVE-002: Rate limiting check
-        const rateLimitPassed = await checkSocketRateLimit(
-          socket,
-          userId,
-          SOCKET_RATE_LIMITS.MEDIA_TOGGLE,
-          this.rateLimiter,
-          CALL_EVENTS.ERROR
-        );
-        if (!rateLimitPassed) return;
-
-        // CVE-006: Validate input data
-        const validation = validateSocketEvent(socketMediaToggleSchema, data);
-        if (isValidationFailure(validation)) {
-          const { error: validationError, details: validationDetails } = validation;
-          socket.emit(CALL_EVENTS.ERROR, {
-            code: CALL_ERROR_CODES.VALIDATION_ERROR,
-            message: validationError,
-            details: validationDetails ? { issues: validationDetails } : undefined,
-            callId: data?.callId
-          } as CallError);
-          return;
-        }
-
-        logger.info('📞 Socket: call:toggle-audio', {
-          socketId: socket.id,
-          userId,
-          callId: data.callId,
-          enabled: data.enabled
-        });
-
-        // Audit P2-GW-5 — `updateParticipantMedia` queries on
-        // `participantId` (Participant.id ObjectId), NOT userId. Passing
-        // userId here matched nothing and the toggle silently failed.
-        // Resolve to the real participantId before calling the service.
-        const audioParticipantId = await this.resolveActiveCallParticipantId(userId, data.callId);
-        if (!audioParticipantId) {
-          socket.emit(CALL_EVENTS.ERROR, {
-            code: CALL_ERROR_CODES.NOT_A_PARTICIPANT,
-            message: 'You are not a participant in this call',
-            callId: data?.callId
-          } as CallError);
-          return;
-        }
-        await this.callService.updateParticipantMedia(
-          data.callId,
-          audioParticipantId,
-          'audio',
-          data.enabled
-        );
-
-        // P0-3 — broadcast to the OTHER participants only, mirroring the video
-        // toggle handler below. The sender already updated its own mic state
-        // locally and must NOT receive its own echo: iOS treats any received
-        // call:media-toggled as the REMOTE peer's state (drives the muted
-        // indicator). `io.to` incorrectly included the sender, corrupting the
-        // sender's own view of the peer's mute state on every self-toggle.
-        const toggleEvent: CallMediaToggleEvent = {
-          callId: data.callId,
-          participantId: audioParticipantId,
-          mediaType: 'audio',
-          enabled: data.enabled
-        };
-
-        socket.to(ROOMS.call(data.callId)).emit(
-          CALL_EVENTS.MEDIA_TOGGLED,
-          toggleEvent
-        );
-
-        logger.info('✅ Socket: Audio toggled', {
-          callId: data.callId,
-          userId,
-          enabled: data.enabled
-        });
-      } catch (error: any) {
-        logger.error('❌ Socket: Error toggling audio', error);
-
-        socket.emit(CALL_EVENTS.ERROR, { ...this.mapMediaToggleError(error, 'Failed to toggle audio'), callId: data?.callId } as CallError);
-      }
+      await this.handleMediaToggle(socket, getUserId, data, 'audio');
     });
 
     /**
@@ -3018,91 +3034,7 @@ export class CallEventsHandler {
      * CVE-006: Added input validation
      */
     socket.on(CALL_EVENTS.TOGGLE_VIDEO, async (data: CallMediaToggleEvent) => {
-      try {
-        const userId = getUserId(socket.id);
-        if (!userId) {
-          socket.emit(CALL_EVENTS.ERROR, {
-            code: 'NOT_AUTHENTICATED',
-            message: 'User not authenticated',
-            callId: data?.callId
-          } as CallError);
-          return;
-        }
-
-        // CVE-002: Rate limiting check
-        const rateLimitPassed = await checkSocketRateLimit(
-          socket,
-          userId,
-          SOCKET_RATE_LIMITS.MEDIA_TOGGLE,
-          this.rateLimiter,
-          CALL_EVENTS.ERROR
-        );
-        if (!rateLimitPassed) return;
-
-        // CVE-006: Validate input data
-        const validation = validateSocketEvent(socketMediaToggleSchema, data);
-        if (isValidationFailure(validation)) {
-          const { error: validationError, details: validationDetails } = validation;
-          socket.emit(CALL_EVENTS.ERROR, {
-            code: CALL_ERROR_CODES.VALIDATION_ERROR,
-            message: validationError,
-            details: validationDetails ? { issues: validationDetails } : undefined,
-            callId: data?.callId
-          } as CallError);
-          return;
-        }
-
-        logger.info('📞 Socket: call:toggle-video', {
-          socketId: socket.id,
-          userId,
-          callId: data.callId,
-          enabled: data.enabled
-        });
-
-        // Audit P2-GW-5 — see audio toggle handler for rationale.
-        const videoParticipantId = await this.resolveActiveCallParticipantId(userId, data.callId);
-        if (!videoParticipantId) {
-          socket.emit(CALL_EVENTS.ERROR, {
-            code: CALL_ERROR_CODES.NOT_A_PARTICIPANT,
-            message: 'You are not a participant in this call',
-            callId: data?.callId
-          } as CallError);
-          return;
-        }
-        await this.callService.updateParticipantMedia(
-          data.callId,
-          videoParticipantId,
-          'video',
-          data.enabled
-        );
-
-        // P0-3 — broadcast to the OTHER participants only. The sender already
-        // updated its own camera state locally and must NOT receive its own echo:
-        // iOS treats any received call:media-toggled as the REMOTE peer's state
-        // (drives the avatar placeholder). `socket.to` excludes the sender;
-        // `io.to` would include it.
-        const toggleEvent: CallMediaToggleEvent = {
-          callId: data.callId,
-          participantId: videoParticipantId,
-          mediaType: 'video',
-          enabled: data.enabled
-        };
-
-        socket.to(ROOMS.call(data.callId)).emit(
-          CALL_EVENTS.MEDIA_TOGGLED,
-          toggleEvent
-        );
-
-        logger.info('✅ Socket: Video toggled', {
-          callId: data.callId,
-          userId,
-          enabled: data.enabled
-        });
-      } catch (error: any) {
-        logger.error('❌ Socket: Error toggling video', error);
-
-        socket.emit(CALL_EVENTS.ERROR, { ...this.mapMediaToggleError(error, 'Failed to toggle video'), callId: data?.callId } as CallError);
-      }
+      await this.handleMediaToggle(socket, getUserId, data, 'video');
     });
 
     /**
@@ -3620,7 +3552,15 @@ export class CallEventsHandler {
         if (!rateLimitPassed) return;
 
         const validation = validateSocketEvent(socketRequestIceServersSchema, data);
-        if (!validation.success) return;
+        if (isValidationFailure(validation)) {
+          socket.emit(CALL_EVENTS.ERROR, {
+            code: CALL_ERROR_CODES.VALIDATION_ERROR,
+            message: validation.error,
+            details: validation.details ? { issues: validation.details } : undefined,
+            callId: data?.callId
+          } as CallError);
+          return;
+        }
 
         // Authorization: socket must be in the call room (joined on call:join).
         if (!socket.rooms.has(ROOMS.call(data.callId))) {
@@ -3689,7 +3629,15 @@ export class CallEventsHandler {
         if (!rateLimitPassed) return;
 
         const validation = validateSocketEvent(socketCallBackgroundedSchema, data);
-        if (!validation.success) return;
+        if (isValidationFailure(validation)) {
+          socket.emit(CALL_EVENTS.ERROR, {
+            code: CALL_ERROR_CODES.VALIDATION_ERROR,
+            message: validation.error,
+            details: validation.details ? { issues: validation.details } : undefined,
+            callId: data?.callId
+          } as CallError);
+          return;
+        }
 
         // Resolve the caller's own participantId rather than trusting the
         // client-supplied one — otherwise a participant could flag a peer's
@@ -3731,7 +3679,15 @@ export class CallEventsHandler {
         if (!rateLimitPassed) return;
 
         const validation = validateSocketEvent(socketCallForegroundedSchema, data);
-        if (!validation.success) return;
+        if (isValidationFailure(validation)) {
+          socket.emit(CALL_EVENTS.ERROR, {
+            code: CALL_ERROR_CODES.VALIDATION_ERROR,
+            message: validation.error,
+            details: validation.details ? { issues: validation.details } : undefined,
+            callId: data?.callId
+          } as CallError);
+          return;
+        }
 
         // Same rationale as call:backgrounded — resolve the caller's own
         // participantId instead of trusting the client-supplied one.
@@ -3770,7 +3726,15 @@ export class CallEventsHandler {
         if (!rateLimitPassed) return;
 
         const validation = validateSocketEvent(socketCallScreenCaptureDetectedSchema, data);
-        if (!validation.success) return;
+        if (isValidationFailure(validation)) {
+          socket.emit(CALL_EVENTS.ERROR, {
+            code: CALL_ERROR_CODES.VALIDATION_ERROR,
+            message: validation.error,
+            details: validation.details ? { issues: validation.details } : undefined,
+            callId: data?.callId
+          } as CallError);
+          return;
+        }
 
         if (!socket.rooms.has(ROOMS.call(data.callId))) {
           return;
@@ -3840,7 +3804,15 @@ export class CallEventsHandler {
         if (!rateLimitPassed) return;
 
         const validation = validateSocketEvent(socketCallAnalyticsSchema, data);
-        if (!validation.success) return;
+        if (isValidationFailure(validation)) {
+          socket.emit(CALL_EVENTS.ERROR, {
+            code: CALL_ERROR_CODES.VALIDATION_ERROR,
+            message: validation.error,
+            details: validation.details ? { issues: validation.details } : undefined,
+            callId: data?.callId
+          } as CallError);
+          return;
+        }
 
         // Authorization — was previously unchecked, letting any authenticated
         // user submit telemetry against an arbitrary callId, then scoped to
