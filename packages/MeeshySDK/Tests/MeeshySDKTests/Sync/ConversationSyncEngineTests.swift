@@ -1455,3 +1455,21 @@ private actor PersistedMessagesCollector {
         batches.append(messages)
     }
 }
+
+/// sync-04 — reset des checkpoints de delta-sync (logout / ré-auth).
+extension ConversationSyncEngineTests {
+
+    func test_resetSyncCheckpoints_removesAllThreeUserDefaultsKeys() {
+        let keys = ["me.meeshy.lastSyncTimestamp", "me.meeshy.lastCleanupDate", "me.meeshy.lastFullReconcileAt"]
+        for key in keys { UserDefaults.standard.set(Date(), forKey: key) }
+
+        engine.resetSyncCheckpoints()
+
+        for key in keys {
+            XCTAssertNil(
+                UserDefaults.standard.object(forKey: key),
+                "\(key) doit être effacé — le compte suivant ne doit pas hériter du watermark de la session sortante"
+            )
+        }
+    }
+}

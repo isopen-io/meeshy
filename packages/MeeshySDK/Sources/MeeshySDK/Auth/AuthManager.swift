@@ -440,6 +440,13 @@ public final class AuthManager: ObservableObject, AuthManaging {
         // contrat de perte assumée que StoryPublishQueue E9). Avant le guard
         // pour couvrir aussi le chemin sans session active.
         await SettingsActionQueue.shared.clearAll()
+        // sync-04 — les watermarks de delta-sync (lastSyncTimestamp /
+        // lastCleanupDate / lastFullReconcileAt) sont per-user en UserDefaults
+        // globaux : sans reset, le compte suivant hérite du checkpoint de la
+        // session sortante et un delta déclenché avant son premier fullSync
+        // persiste une liste PARTIELLE comme fraîche. Avant le guard, même
+        // patron que les purges ci-dessus.
+        ConversationSyncEngine.shared.resetSyncCheckpoints()
         guard let userId = activeUserId else {
             // Idempotent : peut être appelée plusieurs fois sans crash.
             // Garde un état cohérent même quand aucune session n'est active.
@@ -830,6 +837,11 @@ public final class AuthManager: ObservableObject, AuthManaging {
         keychain.delete(forKey: tokenDateUDKey(for: userId), account: nil)
         activeUserId = nil
         currentUser = nil
+        // sync-04 — ce chemin ne passe PAS par logout() mais son flip
+        // isAuthenticated purge quand même les caches (container + app) :
+        // sans ce reset, la ré-auth du MÊME compte hérite d'un checkpoint
+        // pointant après des données purgées = delta partiel servi comme frais.
+        ConversationSyncEngine.shared.resetSyncCheckpoints()
         isAuthenticated = false
         APIClient.shared.authToken = nil
     }
