@@ -257,6 +257,81 @@ final class MessagePersistenceActorTests: XCTestCase {
         XCTAssertEqual(fetched[0].translatedContent, "Hello")
     }
 
+    /// grdb-06 — deux schémas d'id de traduction coexistent (fallback socket
+    /// horodaté vs id serveur stable) : la même (message, langue) peut arriver
+    /// sous deux PK différentes. Le save par PK violait l'index UNIQUE
+    /// idx_trans_msg_lang au lieu de remplacer la row existante.
+    func test_saveTranslation_sameMessageAndLanguageDifferentIds_replacesWithoutThrow() async throws {
+        let fallback = TranslationRecord(
+            id: "m1_en_1700000000", messageLocalId: "m1", messageServerId: nil,
+            targetLanguage: "en", translatedContent: "Hello",
+            translationModel: "nllb-200", confidenceScore: 0.9,
+            sourceLanguage: "fr", receivedAt: Date()
+        )
+        try await actor.saveTranslation(fallback)
+
+        let canonical = TranslationRecord(
+            id: "m1-en", messageLocalId: "m1", messageServerId: "m1",
+            targetLanguage: "en", translatedContent: "Hello v2",
+            translationModel: "nllb-200", confidenceScore: 0.95,
+            sourceLanguage: "fr", receivedAt: Date()
+        )
+        try await actor.saveTranslation(canonical)
+
+        let fetched = try actor.translations(for: "m1")
+        XCTAssertEqual(fetched.count, 1, "une seule row par (message, langue)")
+        XCTAssertEqual(fetched[0].translatedContent, "Hello v2")
+        XCTAssertEqual(fetched[0].id, "m1-en", "l'id est remplacé par celui du dernier écrivain")
+    }
+
+    /// La collision ne doit plus faire lever le db.write entier : avant le fix,
+    /// le throw sur la ligne translations faisait rollback TOUT le batch — un
+    /// message sans rapport avec la collision était droppé collatéralement.
+    func test_upsertFromAPIMessages_translationIdCollision_persistsWholeBatch() async throws {
+        let seeded = TranslationRecord(
+            id: "m1_en_1700000000", messageLocalId: "m1", messageServerId: nil,
+            targetLanguage: "en", translatedContent: "Hello",
+            translationModel: "nllb-200", confidenceScore: 0.9,
+            sourceLanguage: "fr", receivedAt: Date()
+        )
+        try await actor.saveTranslation(seeded)
+
+        let msgA = makeAPIMessage(
+            id: "m1", conversationId: "conv_tr",
+            translations: [[
+                "id": "m1-en", "messageId": "m1", "targetLanguage": "en",
+                "translatedContent": "Hello EN", "translationModel": "nllb-200"
+            ]]
+        )
+        let msgB = makeAPIMessage(id: "m2", conversationId: "conv_tr", content: "Second")
+        try await actor.upsertFromAPIMessages([msgA, msgB])
+
+        let rows = try actor.messages(for: "conv_tr", limit: 10)
+        XCTAssertNotNil(rows.first { $0.localId == "m2" },
+                        "un message sans rapport avec la collision ne doit pas être droppé")
+        let fetched = try actor.translations(for: "m1")
+        XCTAssertEqual(fetched.count, 1)
+        XCTAssertEqual(fetched[0].translatedContent, "Hello EN")
+    }
+
+    /// Verrou de non-régression : des ids stables re-livrés restent idempotents
+    /// après le passage à l'upsert ON CONFLICT.
+    func test_upsertFromAPIMessages_stableTranslationIds_idempotent() async throws {
+        let msg = makeAPIMessage(
+            id: "m3", conversationId: "conv_tr2",
+            translations: [[
+                "id": "m3-en", "messageId": "m3", "targetLanguage": "en",
+                "translatedContent": "Stable", "translationModel": "nllb-200"
+            ]]
+        )
+        try await actor.upsertFromAPIMessages([msg])
+        try await actor.upsertFromAPIMessages([msg])
+
+        let fetched = try actor.translations(for: "m3")
+        XCTAssertEqual(fetched.count, 1)
+        XCTAssertEqual(fetched[0].translatedContent, "Stable")
+    }
+
     // MARK: - Edit / Delete
 
     func test_markEdited_updatesContentAndFlag() async throws {
@@ -764,6 +839,7 @@ final class MessagePersistenceActorTests: XCTestCase {
         clientMessageId: String? = nil,
         isEncrypted: Bool = false,
         attachments: [[String: Any]] = [],
+        translations: [[String: Any]] = [],
         reactionSummary: [String: Int]? = nil,
         currentUserReactions: [String]? = nil,
         metadata: [String: Any]? = nil,
@@ -780,6 +856,7 @@ final class MessagePersistenceActorTests: XCTestCase {
         if let clientMessageId { json["clientMessageId"] = clientMessageId }
         if isEncrypted { json["isEncrypted"] = true }
         if !attachments.isEmpty { json["attachments"] = attachments }
+        if !translations.isEmpty { json["translations"] = translations }
         if let reactionSummary { json["reactionSummary"] = reactionSummary }
         if let currentUserReactions { json["currentUserReactions"] = currentUserReactions }
         if let metadata { json["metadata"] = metadata }
