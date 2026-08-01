@@ -273,11 +273,26 @@ final class ConversationViewModelCacheTests: XCTestCase {
         // .expired/.empty n'appelait QUE le réseau, sans hydrater GRDB).
         let convId = "00000000000000000000c0d4"
         let (sut, pool, messageService) = makeSUTWithSeams(conversationId: convId)
-        let attachmentsJson = Data(
-            """
-            [{"id":"att-audio-1","mimeType":"audio/m4a","transcription":{"text":"bonjour","language":"fr"}}]
-            """.utf8
+        // Fixture encodée par le VRAI type (le décodage synthétisé de
+        // MeeshyMessageAttachment exige fileName/filePath/uploadedBy/… — un
+        // JSON minimal échoue en silence dans le guard try? de l'hydratation).
+        var attachment = MeeshyMessageAttachment(
+            id: "att-audio-1",
+            messageId: nil,
+            fileName: "vocal.m4a",
+            originalName: "vocal.m4a",
+            mimeType: "audio/mp4",
+            fileSize: 1_234,
+            filePath: "",
+            fileUrl: "https://cdn.example/vocal.m4a",
+            duration: 3_000,
+            uploadedBy: "sender"
         )
+        attachment.transcription = try JSONDecoder().decode(
+            MeeshyMessageAttachment.EmbeddedTranscription.self,
+            from: Data(#"{"text":"bonjour","language":"fr"}"#.utf8)
+        )
+        let attachmentsJson = try JSONEncoder().encode([attachment])
         let senderId = otherUserId
         try await pool.write { [attachmentsJson, senderId] db in
             try MessageRecord(
