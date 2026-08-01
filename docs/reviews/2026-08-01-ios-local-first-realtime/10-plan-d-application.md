@@ -35,12 +35,12 @@
 
 Perte de données ou fuite cross-compte actives. Aucune dépendance entre eux ni vers d'autres lots.
 
-- [ ] **outbox-01** (P0/S/f02) — `retryAll()` : sauter tout item avec `localMediaPaths`/`localAudioPaths` (seul le flusher sait uploader) + ajouter `location` au `SendMessageRequest` du handler. *Patch immédiat ; la suppression structurelle de `retryAll` est outbox-07 (lot 12).*
-- [ ] **outbox-02** (P0/S/f02) — `AuthManager.logout()` : ajouter `await SettingsActionQueue.shared.clearAll()` à côté de la purge StoryPublishQueue.
-- [ ] **outbox-03** (P0/S/f02) — Purger `ConversationStateOutbox` (pin/mute/archive/leave/deleteForUser) au logout.
-- [ ] **grdb-01** (P0/S/f01) — `FeedPersistenceActor.clearAllForLogout()` (feed_posts/feed_comments/feed_translations) + `DELETE send_attempts` dans `clearAllMessagesForLogout`, câblés dans `wireOutboxLogoutHook`.
-- [ ] **appgroup-01** (P0/S/f07) — Wipe App Group au logout (UserDefaults suite + dossiers de staging + `WidgetCenter.reloadAllTimelines()`). **NE PAS merger sans appgroup-05** (fiche f07, étape 6 : sans l'état vide explicite, le wipe fait apparaître les conversations fabriquées John Doe). Le complément outbox-11 suit au lot 1.
-- [ ] **appgroup-05** (P2/S/f07) — Supprimer les fallbacks fabriqués John Doe/Jane Smith des widgets (états vides explicites). **Même PR que appgroup-01** — les deux fiches sont indissociables.
+- [x] **outbox-01** (P0/S/f02) — `retryAll()` : sauter tout item avec `localMediaPaths`/`localAudioPaths` (seul le flusher sait uploader) + ajouter `location` au `SendMessageRequest` du handler. *Patch immédiat ; la suppression structurelle de `retryAll` est outbox-07 (lot 12).*
+- [x] **outbox-02** (P0/S/f02) — `AuthManager.logout()` : ajouter `await SettingsActionQueue.shared.clearAll()` à côté de la purge StoryPublishQueue.
+- [x] **outbox-03** (P0/S/f02) — Purger `ConversationStateOutbox` (pin/mute/archive/leave/deleteForUser) au logout.
+- [x] **grdb-01** (P0/S/f01) — `FeedPersistenceActor.clearAllForLogout()` (feed_posts/feed_comments/feed_translations) + `DELETE send_attempts` dans `clearAllMessagesForLogout`, câblés dans `wireOutboxLogoutHook`.
+- [x] **appgroup-01** (P0/S/f07) — Wipe App Group au logout (UserDefaults suite + dossiers de staging + `WidgetCenter.reloadAllTimelines()`). **NE PAS merger sans appgroup-05** (fiche f07, étape 6 : sans l'état vide explicite, le wipe fait apparaître les conversations fabriquées John Doe). Le complément outbox-11 suit au lot 1.
+- [x] **appgroup-05** (P2/S/f07) — Supprimer les fallbacks fabriqués John Doe/Jane Smith des widgets (états vides explicites). **Même PR que appgroup-01** — les deux fiches sont indissociables.
 
 ## Lot 1 — Hygiène cross-compte complémentaire
 
