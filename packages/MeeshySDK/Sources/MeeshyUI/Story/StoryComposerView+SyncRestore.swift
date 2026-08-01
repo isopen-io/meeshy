@@ -197,7 +197,9 @@ extension StoryComposerView {
     func persistDraft() {
         flushOpenTimelineIntoSlide()
         syncCurrentSlideEffects()
-        StoryDraftStore.shared.save(draftId: viewModel.draftId, slides: viewModel.slides, visibility: visibility)
+        StoryDraftStore.shared.save(draftId: viewModel.draftId,
+                                    slides: slidesStampedWithThumbHash(),
+                                    visibility: visibility)
         persistCommandHistory()
         StoryDraftStore.shared.saveMedia(
             draftId: viewModel.draftId,
@@ -205,6 +207,25 @@ extension StoryComposerView {
             videoURLs: viewModel.loadedVideoURLs,
             audioURLs: viewModel.loadedAudioURLs
         )
+    }
+
+    /// Slides estampillées de leur `thumbHash` composite — fond, texte, média,
+    /// dessin et stickers, exactement le même producteur qu'à la publication
+    /// (`StorySlideRenderer.computeThumbHash`).
+    ///
+    /// Le hash n'était composé qu'au publish : un brouillon n'en avait donc
+    /// aucun, et la carte de « Mes stories » n'avait littéralement rien à
+    /// peindre. Le poser dès le PREMIER enregistrement donne au brouillon la
+    /// même vignette que la story qu'il deviendra (directive user 2026-08-01).
+    func slidesStampedWithThumbHash() -> [StorySlide] {
+        viewModel.slides.map { slide in
+            var stamped = slide
+            stamped.effects.thumbHash = StorySlideRenderer.computeThumbHash(
+                slide: slide,
+                bgImage: viewModel.slideImages[slide.id],
+                loadedImages: viewModel.loadedImages)
+            return stamped
+        }
     }
 
     /// E4 inc.2 — l'historique undo/redo accompagne chaque persistance du
@@ -269,7 +290,9 @@ extension StoryComposerView {
         guard !draftAutosaveSuspended, composerHasContent, publishTask == nil else { return }
         flushOpenTimelineIntoSlide()
         syncCurrentSlideEffects()
-        StoryDraftStore.shared.save(draftId: viewModel.draftId, slides: viewModel.slides, visibility: visibility)
+        StoryDraftStore.shared.save(draftId: viewModel.draftId,
+                                    slides: slidesStampedWithThumbHash(),
+                                    visibility: visibility)
         persistCommandHistory()
         let keys = Self.mediaKeysFingerprint(images: viewModel.loadedImages,
                                              videos: viewModel.loadedVideoURLs,

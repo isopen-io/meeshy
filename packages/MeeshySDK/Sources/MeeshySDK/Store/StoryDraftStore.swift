@@ -18,15 +18,26 @@ public struct StoryDraftSummary: Identifiable, Sendable, Equatable {
     /// retombe sur un libellé dérivé du nombre de diapositives.
     public let title: String?
     /// Première image du brouillon encore présente sur disque, pour la vignette.
+    /// Chemin LOCAL : à lire directement, pas à résoudre comme une URL distante.
     public let coverFileURL: URL?
+    /// Fond de la première slide (hex ou `gradient:…`). Toujours présent, là où
+    /// un brouillon n'a ni image ni `thumbHash` — celui-ci n'est composé qu'à
+    /// la publication. C'est donc la seule chose que TOUT brouillon peut montrer.
+    public let backgroundHex: String?
+    /// Composite de toutes les couches, pose des le PREMIER enregistrement du
+    /// brouillon par le composer — meme producteur qu'a la publication.
+    public let thumbHash: String?
 
     public init(id: String, updatedAt: Date, slideCount: Int,
-                title: String?, coverFileURL: URL?) {
+                title: String?, coverFileURL: URL?, backgroundHex: String?,
+                thumbHash: String?) {
         self.id = id
         self.updatedAt = updatedAt
         self.slideCount = slideCount
         self.title = title
         self.coverFileURL = coverFileURL
+        self.backgroundHex = backgroundHex
+        self.thumbHash = thumbHash
     }
 }
 
@@ -663,8 +674,12 @@ public final class StoryDraftStore: @unchecked Sendable {
                         id: id,
                         updatedAt: Date(timeIntervalSince1970: row["updated_at"] ?? 0),
                         slideCount: slideCount,
-                        title: try firstTextTitle(db, draftId: id),
-                        coverFileURL: try coverFileURL(db, draftId: id))
+                        title: try firstSlideEffects(db, draftId: id)?.textObjects
+                            .map { $0.text.trimmingCharacters(in: .whitespacesAndNewlines) }
+                            .first(where: { !$0.isEmpty }),
+                        coverFileURL: try coverFileURL(db, draftId: id),
+                        backgroundHex: try firstSlideEffects(db, draftId: id)?.background,
+                        thumbHash: try firstSlideEffects(db, draftId: id)?.thumbHash)
                 }
             }
         } catch {
@@ -673,8 +688,9 @@ public final class StoryDraftStore: @unchecked Sendable {
         }
     }
 
-    /// Premier texte non vide de la story, dans l'ordre des diapositives.
-    private func firstTextTitle(_ db: Database, draftId: String) throws -> String? {
+    /// Effets de la première diapositive décodable — porte à la fois le titre
+    /// et le fond, d'où un seul décodage pour les deux.
+    private func firstSlideEffects(_ db: Database, draftId: String) throws -> StoryEffects? {
         let blobs = try String.fetchAll(
             db,
             sql: "SELECT effects_json FROM story_draft_slide WHERE draft_id = ? ORDER BY order_index",
@@ -682,10 +698,7 @@ public final class StoryDraftStore: @unchecked Sendable {
         for json in blobs {
             guard let data = json.data(using: .utf8),
                   let effects = try? JSONDecoder().decode(StoryEffects.self, from: data) else { continue }
-            let text = effects.textObjects
-                .map { $0.text.trimmingCharacters(in: .whitespacesAndNewlines) }
-                .first(where: { !$0.isEmpty })
-            if let text { return text }
+            return effects
         }
         return nil
     }

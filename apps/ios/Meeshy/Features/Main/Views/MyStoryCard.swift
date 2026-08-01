@@ -16,6 +16,14 @@ struct MyStoryCardModel: Equatable {
     /// representation cliente de ce que l'auteur a reellement compose.
     /// `thumbnailURL` ne reflete que le media de FOND.
     let thumbHash: String?
+    /// Chemin LOCAL d'une vignette de brouillon. Lu directement depuis le
+    /// disque : `CachedAsyncImage` resout des URL DISTANTES via MeeshyConfig
+    /// et ne sait rien faire d'un `file://`.
+    let localCoverPath: String?
+    /// Fond de slide d'un brouillon. Un brouillon n'a pas de `thumbHash` — il
+    /// n'est compose qu'a la publication — donc sans ce fond la carte n'avait
+    /// litteralement rien a peindre.
+    let backgroundHex: String?
     /// Date affichée sous la carte : publication pour une story, dernière
     /// modification pour un brouillon.
     let date: Date
@@ -88,20 +96,34 @@ struct MyStoryCard: View {
             // Delegue a `MyStoryThumbnailResolver` — reimplementer le choix
             // ici rendait vide toute story SANS media de fond (texte seul,
             // dessin) : elles n'ont pas d'URL, seulement un thumbHash.
-            switch MyStoryThumbnailResolver.resolve(thumbHash: model.thumbHash,
-                                                    remoteURL: model.thumbnailURL) {
-            case .composite(let hash):
-                if let image = UIImage.fromThumbHash(hash) {
-                    Image(uiImage: image).resizable().scaledToFill()
-                } else if let url = model.thumbnailURL, !url.isEmpty {
-                    CachedAsyncImage(url: url) { placeholderFill }
-                } else {
-                    placeholderFill
+            // Le fond de slide d'abord : c'est la seule couche que TOUT
+            // brouillon possede, et elle reste visible sous une vignette
+            // transparente ou pas encore chargee.
+            if let hex = model.backgroundHex {
+                // `storyBackgroundStyle` est le rendu UNIQUE de
+                // `StoryEffects.background` (hex ou « gradient:A:B »), deja
+                // partage par le letterbox du composer et les mini-previews.
+                Rectangle().fill(storyBackgroundStyle(hex))
+            }
+
+            if let path = model.localCoverPath, let image = UIImage(contentsOfFile: path) {
+                Image(uiImage: image).resizable().scaledToFill()
+            } else {
+                switch MyStoryThumbnailResolver.resolve(thumbHash: model.thumbHash,
+                                                        remoteURL: model.thumbnailURL) {
+                case .composite(let hash):
+                    if let image = UIImage.fromThumbHash(hash) {
+                        Image(uiImage: image).resizable().scaledToFill()
+                    } else if let url = model.thumbnailURL, !url.isEmpty {
+                        CachedAsyncImage(url: url) { emptyOrPlaceholder }
+                    } else {
+                        emptyOrPlaceholder
+                    }
+                case .remoteURL(let url):
+                    CachedAsyncImage(url: url) { emptyOrPlaceholder }
+                case .placeholder:
+                    emptyOrPlaceholder
                 }
-            case .remoteURL(let url):
-                CachedAsyncImage(url: url) { placeholderFill }
-            case .placeholder:
-                placeholderFill
             }
 
             if isVeiled {
@@ -121,6 +143,13 @@ struct MyStoryCard: View {
                     .shadow(color: .black.opacity(0.5), radius: 2)
             }
         }
+    }
+
+    /// Rien par-dessus un fond deja peint : l'aplat de repli masquerait la
+    /// couleur reelle du brouillon.
+    @ViewBuilder
+    private var emptyOrPlaceholder: some View {
+        if model.backgroundHex == nil { placeholderFill } else { Color.clear }
     }
 
     private var placeholderFill: some View {
