@@ -7,6 +7,12 @@ import { claimableMediaWhere } from '../mediaOwnership';
  * par la clause produite — plutôt que d'inspecter la forme de l'objet. C'est ce
  * qui distingue « la clause contient bien un `uploaderId` » (vrai même si elle
  * laisse passer le voleur) de « le voleur est effectivement refusé ».
+ *
+ * La sémantique simulée est celle de Prisma sur MongoDB, PROUVÉE en production
+ * le 2026-08-01 : un prédicat `field: null` ne matche qu'un champ PRÉSENT à
+ * `null` — jamais un champ absent du document. Seul `{ isSet: false }` matche
+ * l'absence. Un simulateur qui confond les deux ne peut pas voir l'incident
+ * que ce fichier épingle.
  */
 
 const ALICE = '507f1f77bcf86cd799439011';
@@ -14,22 +20,39 @@ const BOB = '507f1f77bcf86cd799439012';
 
 interface MediaDoc {
   id: string;
-  postId: string | null;
-  commentId: string | null;
+  postId?: string | null;
+  commentId?: string | null;
   uploaderId?: string | null;
 }
 
-/** Applique la clause comme le ferait MongoDB. */
-function matches(doc: MediaDoc, where: ReturnType<typeof claimableMediaWhere>): boolean {
-  if (doc.postId !== where.postId) return false;
-  if (doc.commentId !== where.commentId) return false;
-  // Égalité stricte : un champ ABSENT comme un champ à `null` échouent tous
-  // deux, ce qui est exactement le but de la phase 2.
-  return ('uploaderId' in doc ? doc.uploaderId : undefined) === where.uploaderId;
+type FieldPredicate = string | null | { isSet: boolean };
+
+type WhereShape = {
+  AND?: WhereShape[];
+  OR?: WhereShape[];
+} & Record<string, unknown>;
+
+function fieldMatches(doc: MediaDoc, field: string, predicate: FieldPredicate): boolean {
+  const present = field in doc;
+  const value = (doc as unknown as Record<string, unknown>)[field];
+  if (predicate !== null && typeof predicate === 'object') {
+    return predicate.isSet === present;
+  }
+  if (predicate === null) return present && value === null;
+  return present && value === predicate;
+}
+
+/** Applique la clause comme le ferait MongoDB à travers Prisma. */
+function matches(doc: MediaDoc, where: WhereShape): boolean {
+  return Object.entries(where).every(([key, predicate]) => {
+    if (key === 'AND') return (predicate as WhereShape[]).every((w) => matches(doc, w));
+    if (key === 'OR') return (predicate as WhereShape[]).some((w) => matches(doc, w));
+    return fieldMatches(doc, key, predicate as FieldPredicate);
+  });
 }
 
 function claimedBy(docs: MediaDoc[], owner: string): string[] {
-  const where = claimableMediaWhere(owner);
+  const where = claimableMediaWhere(owner) as WhereShape;
   return docs.filter((d) => matches(d, where)).map((d) => d.id);
 }
 
@@ -60,6 +83,27 @@ describe('garde de revendication — le scénario de vol', () => {
     expect(claimedBy(docs, ALICE)).toEqual([]);
   });
 
+  it('le_media_TUS_reel_sans_champ_commentId_EST_reclamable_par_son_uploadeur', () => {
+    // Reproduction de l'incident prod du 2026-07-31→08-01 : le handler TUS
+    // crée `{ postId: null }` SANS poser `commentId`. Prisma sur MongoDB ne
+    // matche pas un champ ABSENT avec `null` — la clause de phase 2 refusait
+    // donc TOUT média fraîchement téléversé, et chaque publication (réels,
+    // stories) perdait son image en silence.
+    const tusDoc: MediaDoc = { id: 'tus', postId: null, uploaderId: ALICE };
+
+    expect(claimedBy([tusDoc], ALICE)).toEqual(['tus']);
+    expect(claimedBy([tusDoc], BOB)).toEqual([]);
+  });
+
+  it('labsence_des_DEUX_champs_de_rattachement_reste_un_media_libre', () => {
+    // Même robustesse pour `postId` : un writer qui omettrait le champ au lieu
+    // de le poser à `null` ne doit pas rendre le média irréclamable.
+    const bare: MediaDoc = { id: 'bare', uploaderId: ALICE };
+
+    expect(claimedBy([bare], ALICE)).toEqual(['bare']);
+    expect(claimedBy([bare], BOB)).toEqual([]);
+  });
+
   it('PHASE_2_un_media_SANS_proprietaire_nest_reclamable_par_PERSONNE', () => {
     // Inversion du test de phase 1, qui documentait la brèche transitoire.
     // Le rattrapage a été appliqué en production : le seul média restant sans
@@ -84,12 +128,14 @@ describe('garde de revendication — le scénario de vol', () => {
   it('un_lot_mixte_ne_laisse_passer_que_ce_qui_appartient_au_demandeur', () => {
     const docs: MediaDoc[] = [
       { id: 'sien', postId: null, commentId: null, uploaderId: BOB },
+      { id: 'sien-tus', postId: null, uploaderId: BOB },
       { id: 'autrui', postId: null, commentId: null, uploaderId: ALICE },
       { id: 'sans-proprietaire', postId: null, commentId: null },
       { id: 'pris', postId: 'p1', commentId: null, uploaderId: BOB },
     ];
 
-    // SEUL le sien passe. C'est la définition de la phase 2.
-    expect(claimedBy(docs, BOB)).toEqual(['sien']);
+    // SEUL le sien passe — sous ses deux formes de stockage. C'est la
+    // définition de la phase 2, sans l'angle mort de l'incident.
+    expect(claimedBy(docs, BOB)).toEqual(['sien', 'sien-tus']);
   });
 });
