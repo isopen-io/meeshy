@@ -5,14 +5,13 @@ import XCTest
 /// `MyStoriesView` (retry/discard on top of the published stories list).
 final class MyStoriesFailedItemsGuardTests: XCTestCase {
 
+    /// Le fichier principal est lu comme un CORPUS — les gardes cherchent
+    /// dans tous les fichiers de « Mes stories », pour survivre a sa
+    /// decomposition. Tout autre chemin est lu tel quel.
     private func source(_ relativePath: String) throws -> String {
-        let url = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .appendingPathComponent(relativePath)
-        return try String(contentsOf: url, encoding: .utf8)
+        relativePath.hasSuffix("MyStoriesView.swift")
+            ? MyStoriesSourceCorpus.text()
+            : try MyStoriesSourceCorpus.text(of: relativePath)
     }
 
     func test_discardFailedItem_alsoClearsOptimisticPlaceholder() throws {

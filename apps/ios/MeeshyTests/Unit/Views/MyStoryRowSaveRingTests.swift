@@ -99,7 +99,7 @@ final class MyStoryRowCancelActionPresenceGuardTests: XCTestCase {
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .appendingPathComponent("Meeshy/Features/Main/Views/MyStoriesView.swift")
-        return try String(contentsOf: url, encoding: .utf8)
+        return MyStoriesSourceCorpus.text()
     }
 
     /// Copié verbatim depuis `RightToLeftLayoutGuardTests.strippingComments`
