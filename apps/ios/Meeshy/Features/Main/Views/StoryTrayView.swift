@@ -99,6 +99,19 @@ struct StoryTrayView: View {
     @State private var showMyStories = false
     /// Session d'édition d'une story publiée (composer en mode édition).
     @State private var editingStorySession: StoryEditSession?
+    /// Brouillon a reprendre, consomme par le cover du composer. Pose AVANT
+    /// l'ouverture pour que le composer autosauvegarde sous le bon id.
+    @State private var pendingDraftId: String?
+
+    /// VM du composer pour le cover de CRÉATION. Adopte le brouillon à
+    /// reprendre quand il y en a un : sans cette adoption, le composer
+    /// s'autosauvegarderait sous un id neuf et le brouillon repris resterait
+    /// intact à côté, en double.
+    private func makeComposerViewModel() -> StoryComposerViewModel {
+        let composer = StoryComposerViewModel()
+        if let pendingDraftId { composer.adoptDraft(id: pendingDraftId) }
+        return composer
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -155,6 +168,16 @@ struct StoryTrayView: View {
                         )
                     }
                 }
+                ,
+                onResumeDraft: { draftId in
+                    showMyStories = false
+                    // Même pattern anti-course que `onEditStory`.
+                    Task { @MainActor in
+                        try? await Task.sleep(for: .milliseconds(350))
+                        pendingDraftId = draftId
+                        viewModel.showStoryComposer = true
+                    }
+                }
             )
             // Réinjection à travers la frontière de sheet : la sheet interne
             // SharePickerView (« Transférer ») crasherait sur un env object
@@ -178,9 +201,12 @@ struct StoryTrayView: View {
             .presentationDetents([.medium, .large])
             .presentationDragIndicator(.visible)
         }
-        .fullScreenCover(isPresented: $viewModel.showStoryComposer) {
+        .fullScreenCover(isPresented: $viewModel.showStoryComposer, onDismiss: {
+            pendingDraftId = nil
+        }) {
             ZStack {
                 StoryComposerView(
+                    viewModel: makeComposerViewModel(),
                     onPublishAllInBackground: { slides, slideImages, loadedImages, loadedVideoURLs, loadedAudioURLs, originalLanguage, visibility, visibilityUserIds in
                         viewModel.publishStoryInBackground(
                             slides: slides,
@@ -712,6 +738,9 @@ struct PinnedStoryTrailBand: View {
     @State private var showMyStories = false
     /// Session d'édition d'une story publiée (composer en mode édition).
     @State private var editingStorySession: StoryEditSession?
+    /// Brouillon a reprendre, consomme par le cover du composer. Pose AVANT
+    /// l'ouverture pour que le composer autosauvegarde sous le bon id.
+    @State private var pendingDraftId: String?
 
     // Layout-derived: the full trail (120pt + 8 top pad) sits under the 64pt
     // expanded header and is fully hidden behind the 44pt collapsed header after
@@ -809,6 +838,15 @@ struct PinnedStoryTrailBand: View {
                                     story: story,
                                     composer: StoryComposerViewModel(editing: story)
                                 )
+                            }
+                        }
+                        ,
+                        onResumeDraft: { draftId in
+                            showMyStories = false
+                            Task { @MainActor in
+                                try? await Task.sleep(for: .milliseconds(350))
+                                pendingDraftId = draftId
+                                viewModel.showStoryComposer = true
                             }
                         }
                     )

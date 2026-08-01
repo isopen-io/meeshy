@@ -662,6 +662,7 @@
 		BE6F4D54AB2E4AA6FC8FFF3D /* MyStoryCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 629AF3A8631CE0794D4AA254 /* MyStoryCard.swift */; };
 		BE9E7345B04639723531144E /* StoryPlaybackClock.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5397F1302D2D026D5D8AA251 /* StoryPlaybackClock.swift */; };
 		BF2DD7151B7AB257EF54DA30 /* StoryPublishService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 775F426642CE8CEA8A515A49 /* StoryPublishService.swift */; };
+		BF79FBF8A8AE57E90043257A /* StoryDraftsViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 917D6CB905E3CA80C3D64F58 /* StoryDraftsViewModel.swift */; };
 		BFD98C79E5DFB73E9F7B6666 /* BrandSignatureLocalizationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 73AD28A61044AAEAA53E35D4 /* BrandSignatureLocalizationTests.swift */; };
 		BFFB68596B565EBBD51A2EE4 /* AvatarBannerNoRetryWiringTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 255827BF989614127AF1E9EF /* AvatarBannerNoRetryWiringTests.swift */; };
 		C09C943F22BA5067736E16DB /* BubbleQuotedReply.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2F6164D4D41F89DC92F3C9B /* BubbleQuotedReply.swift */; };
@@ -763,6 +764,7 @@
 		DAF183400344AB5966D6D601 /* MultiAttachmentSendPlanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = 05CFD90DB0BEF97F4EE511F7 /* MultiAttachmentSendPlanner.swift */; };
 		DB230663F91D47353B301413 /* ReportMessageSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4FE581474B3BBD56EDAD6E0E /* ReportMessageSheet.swift */; };
 		DB7A2871BECA63AFD769911F /* OnboardingAnimations.swift in Sources */ = {isa = PBXBuildFile; fileRef = 960201E5018B4757DFE12ED0 /* OnboardingAnimations.swift */; };
+		DC200DC2B571BF6C12657CE9 /* MyStoriesTab.swift in Sources */ = {isa = PBXBuildFile; fileRef = 45F85F8B72413C662BEB406D /* MyStoriesTab.swift */; };
 		DCEB03D3F870990E310E9726 /* MessageDayGroupingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9CBB0B649819C59112039A17 /* MessageDayGroupingTests.swift */; };
 		DD1B9F7C1C815D55F4A67186 /* NotificationPayloadHelpersTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AF3403E2E73C0F000D1559FA /* NotificationPayloadHelpersTests.swift */; };
 		DD979DC759582A573BD04730 /* StorySaveProgressRingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8E4112CEA92A41B6BDA53FD /* StorySaveProgressRingTests.swift */; };
@@ -1187,6 +1189,7 @@
 		45748BA9D4C4EDE85874051B /* SharePendingSendConsumerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharePendingSendConsumerTests.swift; sourceTree = "<group>"; };
 		45A244D13EF4B73CDB28E50D /* CallStarterTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallStarterTests.swift; sourceTree = "<group>"; };
 		45DC452286718B2CA7166542 /* CaptionsModeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CaptionsModeTests.swift; sourceTree = "<group>"; };
+		45F85F8B72413C662BEB406D /* MyStoriesTab.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MyStoriesTab.swift; sourceTree = "<group>"; };
 		467B3BA1305D0EA5CEFF3EEE /* Meeshy.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Meeshy.entitlements; sourceTree = "<group>"; };
 		46F810BC30FF467339460377 /* CallReconnectPolicyTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallReconnectPolicyTests.swift; sourceTree = "<group>"; };
 		47145ABE260AD90CE3A3EC52 /* EditHistoryStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditHistoryStore.swift; sourceTree = "<group>"; };
@@ -1449,6 +1452,7 @@
 		914CD2D50F5180EA08B7AC93 /* StoryThumbnailSizingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoryThumbnailSizingTests.swift; sourceTree = "<group>"; };
 		915691845E14E86E1A1F0460 /* EmailVerificationView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EmailVerificationView.swift; sourceTree = "<group>"; };
 		916F8EF6887024AB71CCCE07 /* BubbleEphemeralLifecycle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BubbleEphemeralLifecycle.swift; sourceTree = "<group>"; };
+		917D6CB905E3CA80C3D64F58 /* StoryDraftsViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoryDraftsViewModel.swift; sourceTree = "<group>"; };
 		91B5B03D83B5630A48C32F08 /* AttachmentPreparationServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AttachmentPreparationServiceTests.swift; sourceTree = "<group>"; };
 		91C7FA5E2AAA56B73D545609 /* StoryOpeningParityTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoryOpeningParityTests.swift; sourceTree = "<group>"; };
 		9205BBC58B02B5BC798EB32B /* StoryPlaybackSkipResolver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoryPlaybackSkipResolver.swift; sourceTree = "<group>"; };
@@ -1882,6 +1886,7 @@
 				9A7A6AE0EA22076F1445C2EC /* ReelsViewModel.swift */,
 				5D8D6629A58C18E32000E58D /* SharePickerViewModel.swift */,
 				0DFD2E93148BADA3572E61E0 /* StatusViewModel.swift */,
+				917D6CB905E3CA80C3D64F58 /* StoryDraftsViewModel.swift */,
 				938E084D177C997EE698CDCA /* StoryExportShareViewModel.swift */,
 				B448A2746EAD02E8C20A99BE /* StoryOfflineMediaWriter.swift */,
 				BCD13F0F545B77FBC4022D90 /* StoryViewModel.swift */,
@@ -2614,6 +2619,7 @@
 				CA8F52CA9F8649E69DFA4CA4 /* MessageListViewController.swift */,
 				EDE8B7B94172D69FA4839F82 /* MessageRowEnvelope.swift */,
 				7A160C980B971C7AC2B3C822 /* MyStoriesEmptyStateResolver.swift */,
+				45F85F8B72413C662BEB406D /* MyStoriesTab.swift */,
 				20DB448FBD4B4741B8F33DCB /* MyStoriesView.swift */,
 				8CB815C497D779AC197A96E9 /* MyStoryActionBar.swift */,
 				629AF3A8631CE0794D4AA254 /* MyStoryCard.swift */,
@@ -3644,6 +3650,7 @@
 				58449FA65454A4DD3AD7CDB6 /* Models.swift in Sources */,
 				DAF183400344AB5966D6D601 /* MultiAttachmentSendPlanner.swift in Sources */,
 				A7657AA68F5BFB9EB7BA73AF /* MyStoriesEmptyStateResolver.swift in Sources */,
+				DC200DC2B571BF6C12657CE9 /* MyStoriesTab.swift in Sources */,
 				B866E72E27D574C39917A90F /* MyStoriesView.swift in Sources */,
 				790E0B5B291E66ADD1AFB414 /* MyStoryActionBar.swift in Sources */,
 				BE6F4D54AB2E4AA6FC8FFF3D /* MyStoryCard.swift in Sources */,
@@ -3733,6 +3740,7 @@
 				5DDE6EFD3D1C21B592974879 /* StoryAuthorIdentityCard.swift in Sources */,
 				004F56C2250995F13154D520 /* StoryCanvasAccessibility.swift in Sources */,
 				17BB985402C55FD442D70911 /* StoryContentPresence.swift in Sources */,
+				BF79FBF8A8AE57E90043257A /* StoryDraftsViewModel.swift in Sources */,
 				D5A79ADD26A1C754CE473215 /* StoryExpiredContent.swift in Sources */,
 				4ED17507342722AE6481D718 /* StoryExportPreflight.swift in Sources */,
 				69F8628FE182D91D3130CE1B /* StoryExportShareSheet.swift in Sources */,

@@ -30,6 +30,10 @@ struct MyStoriesView: View {
     /// L'édition remet vues/réactions à zéro côté serveur — la story
     /// « recommence » pour tous, seule la date de publication ne bouge pas.
     let onEditStory: (StoryItem) -> Void
+    /// Reprise d'un brouillon dans le composer, gérée par le tray — même
+    /// raison que `onCreateStory` : un `fullScreenCover` posé sur une sheet
+    /// encore ouverte entre en course avec elle.
+    let onResumeDraft: (String) -> Void
 
     @Environment(\.dismiss) private var dismiss
     @Environment(\.colorScheme) private var colorScheme
@@ -64,6 +68,13 @@ struct MyStoriesView: View {
     @State private var commentTarget: MyStoriesCommentTarget?
     @State private var isResolvingComments = false
 
+    /// Onglet courant. Semé une seule fois à l'apparition par
+    /// `MyStoriesTabResolver` — pas à chaque évaluation du corps, sinon
+    /// publier une story ramènerait l'utilisateur de force sur « Publiées ».
+    @State private var tab: MyStoriesTab = .published
+    @State private var hasSeededTab = false
+    @StateObject private var draftsViewModel = StoryDraftsViewModel()
+
     private var isDark: Bool { colorScheme == .dark }
     private var accentColor: Color {
         Color(hex: DynamicColorGenerator.colorForName(AuthManager.shared.currentUser?.username ?? ""))
@@ -84,77 +95,24 @@ struct MyStoriesView: View {
 
     var body: some View {
         NavigationStack {
-            Group {
-                if MyStoriesEmptyStateResolver.shouldShowEmptyState(
-                    hasStories: !stories.isEmpty,
-                    hasActiveUpload: viewModel.activeUpload != nil,
-                    hasFailedItems: !publishService.failedItems.isEmpty
-                ) {
-                    EmptyStateView(
-                        icon: "rectangle.stack.badge.xmark",
-                        title: String(localized: "story.mine.empty.title", defaultValue: "Aucune story envoyée"),
-                        subtitle: String(localized: "story.mine.empty.subtitle",
-                                         defaultValue: "Vos stories publiées apparaîtront ici tant qu'elles sont actives.")
-                    )
-                } else {
-                    List {
-                        if let upload = viewModel.activeUpload {
-                            Section {
-                                ActiveUploadRow(
-                                    upload: upload,
-                                    onRetry: { viewModel.retryUpload() },
-                                    onCancel: { viewModel.cancelUpload() }
-                                )
-                                .listRowBackground(Color.clear)
-                            }
-                        }
-                        if !publishService.failedItems.isEmpty {
-                            Section(header: Text(String(localized: "story.mine.failed.header", defaultValue: "Échecs de publication"))) {
-                                ForEach(publishService.failedItems) { item in
-                                    FailedStoryRow(item: item, onRetry: { retryFailedItem(item) })
-                                        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                                            Button(role: .destructive) { discardFailedItem(item) } label: {
-                                                Label(String(localized: "common.delete", defaultValue: "Supprimer"), systemImage: "trash")
-                                            }
-                                        }
-                                        .listRowBackground(Color.clear)
-                                }
-                            }
-                        }
-                        ForEach(stories) { story in
-                            MyStoryRow(
-                                story: story,
-                                accentColor: accentColor,
-                                isDark: isDark,
-                                isSelecting: isSelecting,
-                                isSelected: selectedStoryIDs.contains(story.id)
-                            ) {
-                                actionMenu(for: story)
-                            } onTap: {
-                                handleRowTap(story)
-                            } onOpenComments: {
-                                openComments(for: story)
-                            } onOpenViewers: {
-                                viewersStory = story
-                            }
-                            .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                                if !isSelecting {
-                                    Button(role: .destructive) { deleteCandidate = story } label: {
-                                        Label(String(localized: "common.delete", defaultValue: "Supprimer"),
-                                              systemImage: "trash")
-                                    }
-                                }
-                            }
-                            .contextMenu {
-                                if !isSelecting {
-                                    actionMenu(for: story)
-                                }
-                            }
-                            .listRowBackground(Color.clear)
-                        }
+            VStack(spacing: 0) {
+                tabPicker
+                Group {
+                    switch tab {
+                    case .published: publishedTab
+                    case .drafts:    draftsTab
                     }
-                    .listStyle(.plain)
                 }
+            }
+            .task {
+                draftsViewModel.reload()
+                guard !hasSeededTab else { return }
+                hasSeededTab = true
+                tab = MyStoriesTabResolver.initialTab(
+                    hasPublishedStories: !stories.isEmpty,
+                    hasPendingWork: !draftsViewModel.drafts.isEmpty
+                        || viewModel.activeUpload != nil
+                        || !publishService.failedItems.isEmpty)
             }
             .navigationTitle(String(localized: "story.mine.title", defaultValue: "Mes stories"))
             .navigationBarTitleDisplayMode(.inline)
@@ -290,6 +248,215 @@ struct MyStoriesView: View {
         } message: {
             Text(String(localized: "story.mine.delete.selected.message",
                         defaultValue: "Cette action est définitive. Ces stories ne seront plus visibles par personne."))
+        }
+    }
+
+    /// Deux onglets COMPLÈTEMENT distincts (directive user 2026-08-01). Un
+    /// `Picker` segmenté plutôt qu'un `TabView` paginé : le geste horizontal
+    /// d'un `TabView` entre en concurrence avec le balayage de fermeture de la
+    /// sheet, et les deux onglets y seraient instanciés en permanence.
+    private var tabPicker: some View {
+        Picker("", selection: $tab) {
+            ForEach(MyStoriesTab.allCases) { tab in
+                Text(tab.title).tag(tab)
+            }
+        }
+        .pickerStyle(.segmented)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 8)
+    }
+
+    // MARK: - Onglet « Publiées »
+
+    @ViewBuilder
+    private var publishedTab: some View {
+        if MyStoriesTabResolver.shouldShowEmptyState(
+            tab: .published,
+            hasPublishedStories: !stories.isEmpty,
+            hasDrafts: !draftsViewModel.drafts.isEmpty,
+            hasActiveUpload: viewModel.activeUpload != nil,
+            hasFailedItems: !publishService.failedItems.isEmpty
+        ) {
+            EmptyStateView(
+                icon: "rectangle.stack.badge.xmark",
+                title: String(localized: "story.mine.empty.title", defaultValue: "Aucune story envoyée"),
+                subtitle: String(localized: "story.mine.empty.subtitle",
+                                 defaultValue: "Vos stories publiées apparaîtront ici tant qu'elles sont actives.")
+            )
+        } else {
+            publishedGrid
+        }
+    }
+
+    /// Grille verticale, triée par date de publication décroissante.
+    ///
+    /// `LazyVGrid` n'offre PAS de `swipeActions` : la suppression passe par le
+    /// menu « … » et par une action d'accessibilité explicite, sinon le chemin
+    /// VoiceOver du balayage disparaîtrait sans remplaçant.
+    private var publishedGrid: some View {
+        ScrollView {
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 150), spacing: 12)], spacing: 12) {
+                ForEach(stories) { story in
+                    MyStoryCard(
+                        model: publishedCardModel(for: story),
+                        now: Date(),
+                        accentColor: accentColor,
+                        isDark: isDark,
+                        onOpen: { handleRowTap(story) },
+                        onGlyph: { glyph in handlePublishedGlyph(glyph, for: story) },
+                        moreMenu: AnyView(actionMenu(for: story))
+                    )
+                    .accessibilityAction(named: String(localized: "common.delete", defaultValue: "Supprimer")) {
+                        deleteCandidate = story
+                    }
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.bottom, 24)
+        }
+    }
+
+    private func publishedCardModel(for story: StoryItem) -> MyStoryCardModel {
+        MyStoryCardModel(
+            id: story.id,
+            kind: .published,
+            thumbnailURL: story.media.first?.thumbnailUrl ?? story.media.first?.url,
+            date: story.createdAt,
+            expiresAt: story.expiresAt,
+            counts: [
+                .viewsAndReactions: story.viewCount ?? 0,
+                .reactions: story.reactionCount,
+                .comments: story.commentCount,
+            ],
+            title: nil)
+    }
+
+    private func handlePublishedGlyph(_ glyph: MyStoryGlyph, for story: StoryItem) {
+        switch glyph {
+        case .viewsAndReactions: viewersStory = story
+        case .comments:          openComments(for: story)
+        case .reactions, .more, .publish: break
+        }
+    }
+
+    // MARK: - Onglet « Brouillons »
+
+    @ViewBuilder
+    private var draftsTab: some View {
+        if MyStoriesTabResolver.shouldShowEmptyState(
+            tab: .drafts,
+            hasPublishedStories: !stories.isEmpty,
+            hasDrafts: !draftsViewModel.drafts.isEmpty,
+            hasActiveUpload: viewModel.activeUpload != nil,
+            hasFailedItems: !publishService.failedItems.isEmpty
+        ) {
+            EmptyStateView(
+                icon: "square.and.pencil",
+                title: String(localized: "story.mine.drafts.empty.title", defaultValue: "Aucun brouillon"),
+                subtitle: String(localized: "story.mine.drafts.empty.subtitle",
+                                 defaultValue: "Une story fermée sans être publiée vous attend ici.")
+            )
+        } else {
+            draftsContent
+        }
+    }
+
+    private var draftsContent: some View {
+        ScrollView {
+            VStack(spacing: 12) {
+                if let upload = viewModel.activeUpload {
+                    ActiveUploadRow(
+                        upload: upload,
+                        onRetry: { viewModel.retryUpload() },
+                        onCancel: { viewModel.cancelUpload() }
+                    )
+                    .padding(.horizontal, 16)
+                }
+                if !publishService.failedItems.isEmpty {
+                    // Les échecs vivent ici : un onglet « Publiées » ne peut
+                    // pas contenir du non-publié.
+                    sectionHeader(String(localized: "story.mine.failed.header",
+                                         defaultValue: "Échecs de publication"))
+                    ForEach(publishService.failedItems) { item in
+                        FailedStoryRow(item: item, onRetry: { retryFailedItem(item) })
+                            .padding(.horizontal, 16)
+                            .contextMenu {
+                                Button(role: .destructive) { discardFailedItem(item) } label: {
+                                    Label(String(localized: "common.delete", defaultValue: "Supprimer"),
+                                          systemImage: "trash")
+                                }
+                            }
+                    }
+                }
+                if !draftsViewModel.drafts.isEmpty {
+                    sectionHeader(String(localized: "story.mine.drafts.header",
+                                         defaultValue: "Brouillons"))
+                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 150), spacing: 12)], spacing: 12) {
+                        ForEach(draftsViewModel.drafts) { draft in
+                            MyStoryCard(
+                                model: draftCardModel(for: draft),
+                                now: Date(),
+                                accentColor: accentColor,
+                                isDark: isDark,
+                                onOpen: { onResumeDraft(draft.id) },
+                                onGlyph: { glyph in handleDraftGlyph(glyph, for: draft) },
+                                moreMenu: AnyView(draftMenu(for: draft)))
+                        }
+                    }
+                    .padding(.horizontal, 16)
+                }
+            }
+            .padding(.bottom, 24)
+        }
+    }
+
+    private func sectionHeader(_ title: String) -> some View {
+        HStack {
+            Text(title)
+                .font(MeeshyFont.relative(13, weight: .semibold))
+                .foregroundColor(.secondary)
+            Spacer()
+        }
+        .padding(.horizontal, 16)
+    }
+
+    private func draftCardModel(for draft: StoryDraftSummary) -> MyStoryCardModel {
+        MyStoryCardModel(
+            id: draft.id,
+            kind: .draft,
+            thumbnailURL: draft.coverFileURL?.absoluteString,
+            date: draft.updatedAt,
+            expiresAt: nil,
+            counts: [:],
+            title: draft.title)
+    }
+
+    private func handleDraftGlyph(_ glyph: MyStoryGlyph, for draft: StoryDraftSummary) {
+        switch glyph {
+        case .publish: onResumeDraft(draft.id)
+        default:       break
+        }
+    }
+
+    @ViewBuilder
+    private func draftMenu(for draft: StoryDraftSummary) -> some View {
+        ForEach(MyStoryCardPresentation.moreActions(for: .draft), id: \.self) { action in
+            switch action {
+            case .edit:
+                Button {
+                    onResumeDraft(draft.id)
+                } label: {
+                    Label(String(localized: "common.edit", defaultValue: "Modifier"), systemImage: "pencil")
+                }
+            case .delete:
+                Button(role: .destructive) {
+                    draftsViewModel.delete(draft.id)
+                } label: {
+                    Label(String(localized: "common.delete", defaultValue: "Supprimer"), systemImage: "trash")
+                }
+            case .schedule, .share, .viewers:
+                EmptyView()
+            }
         }
     }
 
