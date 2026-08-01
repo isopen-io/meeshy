@@ -373,6 +373,10 @@ public actor CacheCoordinator {
         await video.invalidateAll()
         await thumbnails.invalidateAll()
         await UserColorCache.shared.invalidateAll()
+        // cache-07 — mapping username→displayName construit depuis les
+        // conversations du compte sortant : RAM pure, aucun autre appelant de
+        // clear() — sans cette ligne il survivait au logout ET au switch.
+        UserDisplayNameCache.shared.clear()
         await SearchIndex.shared.clearAll()
         // No translation persist task to cancel — persistence is now incremental
         clearTranslationCacheDB()
