@@ -514,6 +514,16 @@ class PostDetailViewModel: ObservableObject {
         )
         do {
             try await offlineQueue.enqueue(.toggleLikePost, payload: payload, conversationId: nil)
+            // stores-09 — write the optimistic state through to EVERY cache key
+            // holding this post (detail key, feed, bookmarks…), not just RAM.
+            let newLikes = current.likes
+            let postId = current.id
+            Task.detached(priority: .utility) {
+                await CacheCoordinator.shared.feed.patchEverywhere(itemId: postId) {
+                    $0.isLiked = nowLiked
+                    $0.likes = newLikes
+                }
+            }
             // R5 — roll back the optimistic like if the outbox exhausts its
             // retry budget (server permanently rejects). Without this the toggle
             // stays stuck "liked" forever even though the server never accepted it.
@@ -545,6 +555,13 @@ class PostDetailViewModel: ObservableObject {
         guard var current = post else { return }
         current.isLiked = isLiked
         current.likes = likes
+        let postId = current.id
+        Task.detached(priority: .utility) {
+            await CacheCoordinator.shared.feed.patchEverywhere(itemId: postId) {
+                $0.isLiked = isLiked
+                $0.likes = likes
+            }
+        }
         post = current
     }
 

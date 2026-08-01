@@ -421,6 +421,33 @@ final class FeedViewModelTests: XCTestCase {
         XCTAssertEqual(sut.posts[0].likes, 11)
     }
 
+    /// stores-09 — un post du feed peut aussi vivre sous sa clé cache détail
+    /// (ouvert une fois dans PostDetail) : le like optimiste doit patcher
+    /// TOUTES les clés du store, pas seulement "main-feed" via debouncedCacheSave.
+    func test_likePost_postAlsoCachedUnderDetailKey_patchesBothKeys() async {
+        await CacheCoordinator.shared.feed.invalidate(for: "like-detail-test")
+        defer { Task { await CacheCoordinator.shared.feed.invalidate(for: "like-detail-test") } }
+
+        let (sut, api, _, _) = makeSUT()
+        let post = Self.makeAPIPost(id: "like-detail-test", likeCount: 7)
+        api.stub("/posts/feed", result: Self.makePaginatedResponse(posts: [post]))
+        await sut.loadFeed(forceRefresh: true)
+        try? await CacheCoordinator.shared.feed.save([sut.posts[0]], for: "like-detail-test")
+
+        await sut.likePost("like-detail-test")
+
+        var cached: FeedPost?
+        for _ in 0..<50 {
+            let result = await CacheCoordinator.shared.feed.load(for: "like-detail-test")
+            cached = result.snapshot()?.first(where: { $0.id == "like-detail-test" })
+            if cached?.likes == 8 { break }
+            try? await Task.sleep(nanoseconds: 20_000_000)
+        }
+        XCTAssertEqual(cached?.isLiked, true,
+                       "la clé détail doit recevoir le like optimiste via patchEverywhere")
+        XCTAssertEqual(cached?.likes, 8)
+    }
+
     func test_likePost_failure_rollsBackIsLikedAndCount() async {
         // T10b — likePost now routes through the outbox, so "failure" means the
         // enqueue is refused (not a direct API error). Rollback semantics unchanged.

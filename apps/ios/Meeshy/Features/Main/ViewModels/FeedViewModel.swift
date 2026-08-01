@@ -407,6 +407,16 @@ class FeedViewModel: ObservableObject {
             try await offlineQueue.enqueue(.toggleLikePost, payload: payload, conversationId: nil)
             debouncedCacheSave()
 
+            // stores-09 — patch every cache key holding this post (detail key,
+            // bookmarks…), not just "main-feed" via debouncedCacheSave.
+            let newLikes = posts[index].likes
+            Task.detached(priority: .utility) {
+                await CacheCoordinator.shared.feed.patchEverywhere(itemId: postId) {
+                    $0.isLiked = liked
+                    $0.likes = newLikes
+                }
+            }
+
             // Sync optimistic like state to GRDB so the feed cache matches.
             if let persistence = feedPersistence {
                 let count = posts[index].likes
@@ -436,6 +446,12 @@ class FeedViewModel: ObservableObject {
         revert.isLiked = isLiked
         revert.likes = likes
         posts[i] = revert
+        Task.detached(priority: .utility) {
+            await CacheCoordinator.shared.feed.patchEverywhere(itemId: postId) {
+                $0.isLiked = isLiked
+                $0.likes = likes
+            }
+        }
         debouncedCacheSave()
     }
 

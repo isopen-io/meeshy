@@ -483,6 +483,61 @@ final class PostDetailViewModelTests: XCTestCase {
         XCTAssertEqual(sut.post?.likes, initialLikes + 1)
     }
 
+    // MARK: - likePost: write-through vers la clé cache détail (stores-09)
+
+    /// Polls the detail cache key until the fire-and-forget patch task lands
+    /// (or 1 s elapses) — a fixed sleep would flake under CI load.
+    private func waitForCachedLikes(
+        key: String,
+        expected: Int
+    ) async -> FeedPost? {
+        var cached: FeedPost?
+        for _ in 0..<50 {
+            let result = await CacheCoordinator.shared.feed.load(for: key)
+            cached = result.snapshot()?.first(where: { $0.id == key })
+            if cached?.likes == expected { break }
+            try? await Task.sleep(nanoseconds: 20_000_000)
+        }
+        return cached
+    }
+
+    func test_likePost_enqueueSucceeds_writesThroughToDetailCacheKey() async {
+        let queue = MockOfflineQueue()
+        let (sut, mock) = makeSUT(offlineQueue: queue)
+        mock.getPostResult = .success(Self.makeAPIPost(id: "p1"))
+        await sut.loadPost("p1")
+        let initialLikes = sut.post?.likes ?? 0
+
+        await sut.likePost()
+
+        let cached = await waitForCachedLikes(key: "p1", expected: initialLikes + 1)
+        XCTAssertEqual(cached?.isLiked, true,
+                       "le like optimiste doit être écrit sous la clé cache détail, pas seulement en RAM")
+        XCTAssertEqual(cached?.likes, initialLikes + 1)
+    }
+
+    func test_likePost_outboxExhausted_rollsBackCacheKey() async {
+        let queue = MockOfflineQueue()
+        let (sut, mock) = makeSUT(offlineQueue: queue)
+        mock.getPostResult = .success(Self.makeAPIPost(id: "p1"))
+        await sut.loadPost("p1")
+        let initialLikes = sut.post?.likes ?? 0
+
+        await sut.likePost()
+        _ = await waitForCachedLikes(key: "p1", expected: initialLikes + 1)
+
+        guard let payload = queue.enqueueCalls.first?.payload as? ToggleLikePostPayload else {
+            return XCTFail("no toggleLikePost enqueue")
+        }
+        try? await waitForContinuation(in: queue, for: payload.clientMutationId)
+        queue.emitOutcome(.exhausted(cmid: payload.clientMutationId), for: payload.clientMutationId)
+
+        let cached = await waitForCachedLikes(key: "p1", expected: initialLikes)
+        XCTAssertEqual(cached?.isLiked, false,
+                       "le rollback doit aussi restaurer la clé cache détail (valeurs de restauration, pas optimistes)")
+        XCTAssertEqual(cached?.likes, initialLikes)
+    }
+
     func test_sendComment_rollsBack_whenOutcomeExhausted() async {
         let queue = MockOfflineQueue()
         let (sut, mock) = makeSUT(offlineQueue: queue)
