@@ -60,10 +60,15 @@ describe('uploaderIdFromFilePath', () => {
 describe('claimableMediaWhere', () => {
   it('exige_un_media_LIBRE_de_post_ET_de_commentaire', () => {
     const where = claimableMediaWhere(OWNER);
-    expect(where.postId).toBeNull();
-    // `createPost` ne testait que `postId` : un média de commentaire restait
-    // capturable par un post alors que les deux champs sont exclusifs.
-    expect(where.commentId).toBeNull();
+    // « Libre » sous les DEUX formes MongoDB — présent à `null` OU absent du
+    // document : Prisma-Mongo ne matche pas un champ absent avec `null`, et le
+    // handler TUS ne pose pas `commentId`. Sans la branche `isSet: false`,
+    // aucun média fraîchement téléversé n'était réclamable (incident prod
+    // 2026-07-31→08-01).
+    expect(where.AND).toEqual([
+      { OR: [{ postId: null }, { postId: { isSet: false } }] },
+      { OR: [{ commentId: null }, { commentId: { isSet: false } }] },
+    ]);
   });
 
   it('PHASE_2_exige_une_EGALITE_stricte_sur_le_proprietaire', () => {
