@@ -12,7 +12,11 @@ import WebRTC
 
 // MARK: - Video Filter Configuration
 
-struct VideoFilterConfig: Equatable, Sendable {
+// Pur value type lu/écrit depuis la capture-queue ET depuis MainActor : le
+// défaut de module SWIFT_DEFAULT_ACTOR_ISOLATION=MainActor isolerait sa
+// conformance `Equatable` synthétisée, la rendant inutilisable hors MainActor
+// (le bundle de tests, volontairement nonisolated, ne compilait plus).
+nonisolated struct VideoFilterConfig: Equatable, Sendable {
     var temperature: Float = 6500
     var tint: Float = 0
     var brightness: Float = 0
@@ -31,7 +35,7 @@ struct VideoFilterConfig: Equatable, Sendable {
         backgroundBlurEnabled || skinSmoothingEnabled
     }
 
-    nonisolated static let `default` = VideoFilterConfig()
+    static let `default` = VideoFilterConfig()
 }
 
 // MARK: - Filter Presets
