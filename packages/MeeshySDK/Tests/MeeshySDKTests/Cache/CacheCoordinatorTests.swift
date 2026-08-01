@@ -344,6 +344,26 @@ final class CacheCoordinatorTests: XCTestCase {
         XCTAssertNil(cached)
     }
 
+    // MARK: - cache-06 — le trio traduction reste chaud sous memory warning
+
+    func test_evictUnderMemoryPressure_keepsTextTranslationsWarm() async throws {
+        let db = try makeDB()
+        let (sut, _, _) = try makeSUT(db: db)
+        let translation = TranslationData(
+            id: "tr-warm", messageId: "msg-warm", sourceLanguage: "en",
+            targetLanguage: "fr", translatedContent: "Bonjour",
+            translationModel: "nllb-200", confidenceScore: 0.95
+        )
+        await sut.cacheTranslation(TranslationEvent(messageId: "msg-warm", translations: [translation]))
+
+        await sut.evictUnderMemoryPressure()
+
+        let cached = await sut.cachedTranslations(for: "msg-warm")
+        XCTAssertNotNil(cached,
+                        "le trio texte (cap 500 entrées, quelques centaines de Ko) ne doit pas être sacrifié sous pression — chaque bulle retomberait sur l'original (Prisme) et re-solliciterait NLLB")
+        XCTAssertEqual(cached?.first?.translatedContent, "Bonjour")
+    }
+
     // MARK: - cache-02 — la persistance des traductions survit au memory warning
 
     func test_flushAll_afterMemoryPressureEviction_keepsPersistedTranslationRows() async throws {

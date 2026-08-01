@@ -632,9 +632,12 @@ public actor CacheCoordinator {
         await video.evictExpired()
         await thumbnails.evictExpired()
 
-        translationCache.removeAll()
-        translationInsertionOrder.removeAll()
-        translationTimestamps.removeAll()
+        // cache-06 — le trio de traduction TEXTE est plafonné à 500 entrées
+        // (quelques centaines de Ko) : le vider ici ne libère presque rien
+        // face aux NSCache médias évincés ci-dessus, et force un aller ZMQ +
+        // une passe NLLB par message au rendu suivant (bulles retombées sur
+        // l'original — violation du Prisme). On le laisse chaud ; l'éviction
+        // FIFO (evictTranslationCacheIfNeeded) reste le garde-fou de taille.
         transcriptionCache.removeAll()
         audioTranslationCache.removeAll()
 
