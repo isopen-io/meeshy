@@ -552,11 +552,17 @@ struct MeeshyApp: App {
                     let retentionPersistence = MessagePersistenceActor(dbWriter: dependencies.dbPool)
                     Task.detached(priority: .background) {
                         await retentionPersistence.start()
-                        if let count = try? await retentionPersistence.purgeOldMessages() {
+                        do {
+                            let count = try await retentionPersistence.purgeOldMessages()
                             if count > 0 {
                                 Logger(subsystem: "com.meeshy.app", category: "retention")
                                     .info("Purged \(count) messages older than \(MessagePersistenceActor.defaultRetentionMonths) months")
                             }
+                        } catch {
+                            // grdb-02 — le try? avaleur a masqué pendant des
+                            // mois un rollback à 100 % de la rétention.
+                            Logger(subsystem: "com.meeshy.app", category: "retention")
+                                .error("purgeOldMessages failed: \(error.localizedDescription, privacy: .public)")
                         }
                     }
                 }

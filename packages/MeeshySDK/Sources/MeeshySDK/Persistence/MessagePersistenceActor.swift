@@ -2075,8 +2075,12 @@ public actor MessagePersistenceActor {
     public static let defaultRetentionMonths: Int = 6
 
     /// Deletes all message records whose `createdAt` is older than
-    /// `retentionMonths` months from now. Also removes associated rows in
-    /// `message_translations` and `translation_cache` to avoid orphans.
+    /// `retentionMonths` months from now. Also cascades to the child rows
+    /// keyed on those messages — `message_translations`,
+    /// `message_transcriptions`, `message_audio_translations`, `pending_ids`,
+    /// `send_attempts` (grdb-02/grdb-09). `translation_cache` lives in the
+    /// OTHER SQLite file (AppDatabase/meeshy.sqlite, GC au boot par
+    /// `loadTranslationCaches`) and is out of scope here.
     ///
     /// Returns the number of message rows deleted so callers can log it.
     ///
@@ -2103,20 +2107,29 @@ public actor MessagePersistenceActor {
             """, arguments: [cutoff])
 
             if !expiredIds.isEmpty {
-                // Delete associated translation cache entries
+                // grdb-02 — cascade sur la clé RÉELLE (messageLocalId, pas
+                // messageId) et uniquement sur les tables de CETTE base.
                 let placeholders = expiredIds.map { _ in "?" }.joined(separator: ",")
                 try db.execute(
-                    sql: "DELETE FROM translation_cache WHERE messageId IN (\(placeholders))",
+                    sql: "DELETE FROM message_translations WHERE messageLocalId IN (\(placeholders))",
                     arguments: StatementArguments(expiredIds)
                 )
-
-                // Delete message_translations if the table exists
-                if try db.tableExists("message_translations") {
-                    try db.execute(
-                        sql: "DELETE FROM message_translations WHERE messageId IN (\(placeholders))",
-                        arguments: StatementArguments(expiredIds)
-                    )
-                }
+                try db.execute(
+                    sql: "DELETE FROM message_transcriptions WHERE messageLocalId IN (\(placeholders))",
+                    arguments: StatementArguments(expiredIds)
+                )
+                try db.execute(
+                    sql: "DELETE FROM message_audio_translations WHERE messageLocalId IN (\(placeholders))",
+                    arguments: StatementArguments(expiredIds)
+                )
+                try db.execute(
+                    sql: "DELETE FROM pending_ids WHERE localId IN (\(placeholders))",
+                    arguments: StatementArguments(expiredIds)
+                )
+                try db.execute(
+                    sql: "DELETE FROM send_attempts WHERE localId IN (\(placeholders))",
+                    arguments: StatementArguments(expiredIds)
+                )
             }
 
             // Delete the messages themselves
