@@ -98,6 +98,29 @@ final class MeeshyAppOutboxHygieneTests: XCTestCase {
         )
     }
 
+    // MARK: - OfflineQueue retry-send handler (P0 outbox-01 — location dropped)
+
+    private func retrySendHandlerBody(from source: String) -> String? {
+        guard let start = source.range(of: "await OfflineQueue.shared.setRetrySend"),
+              let end = source.range(of: "\n                    }\n", range: start.upperBound..<source.endIndex) else {
+            return nil
+        }
+        return String(source[start.upperBound..<end.lowerBound])
+    }
+
+    func test_setRetrySendBody_includesLocationField() throws {
+        let source = try meeshyAppSource()
+        guard let body = retrySendHandlerBody(from: source) else {
+            XCTFail("Could not locate OfflineQueue.setRetrySend body in MeeshyApp.swift")
+            return
+        }
+        XCTAssertTrue(
+            body.contains("location: item.location"),
+            "The hot-path retry handler must forward `item.location` into SendMessageRequest — " +
+            "otherwise a queued text message with a shared place is replayed without it (silent data loss)."
+        )
+    }
+
     // MARK: - Outbox-flusher boot recovery (P2 — silent try? swallow)
 
     func test_outboxFlusherBootRecovery_doesNotUseSilentTryOptional() throws {

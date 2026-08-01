@@ -305,7 +305,8 @@ struct MeeshyApp: App {
                                 forwardedFromId: item.forwardedFromId,
                                 forwardedFromConversationId: item.forwardedFromConversationId,
                                 attachmentIds: item.attachmentIds,
-                                clientMessageId: item.clientMessageId
+                                clientMessageId: item.clientMessageId,
+                                location: item.location
                             )
                             let response = try await MessageService.shared.send(
                                 conversationId: item.conversationId, request: request

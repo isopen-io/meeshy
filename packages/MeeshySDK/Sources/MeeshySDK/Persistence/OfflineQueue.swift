@@ -2490,6 +2490,16 @@ public actor OfflineQueue {
         var successPayloads: [OfflineRetrySuccess] = []
 
         for (index, item) in items.enumerated() {
+            // Items carrying local files belong exclusively to the
+            // OutboxFlusher — only it knows how to upload them via TUS.
+            // Replaying them here would POST the caption as text-only and
+            // delete the outbox row on success: the files would never be
+            // uploaded (silent media loss).
+            if !(item.localMediaPaths ?? []).isEmpty
+                || !(item.localAudioPaths ?? []).isEmpty
+                || !(item.localAudioPath ?? "").isEmpty {
+                continue
+            }
             if index > 0 {
                 // Brief jitter to avoid a thundering-herd on the gateway when
                 // draining a large backlog — kept short so the user sees their
