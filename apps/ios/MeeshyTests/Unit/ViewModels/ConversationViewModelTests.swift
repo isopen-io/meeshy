@@ -2350,6 +2350,120 @@ final class ConversationViewModelTests: XCTestCase {
         XCTAssertEqual(matching.first?.content, "hello")
     }
 
+    // MARK: - hydratePersistedTranslations (grdb-07)
+
+    /// Un message "own" vit en GRDB sous localId=cid mais ses traductions sont
+    /// persistées sous l'id SERVEUR : filtrer les TranslationRecord sur le seul
+    /// localId ne matchait rien — la traduction disparaissait au cold start.
+    func test_hydratePersistedTranslations_ownMessageKeyedByCid_populatesDictUnderServerId() async throws {
+        let pool = try makeInMemoryPool()
+        let persistence = MessagePersistenceActor(dbWriter: pool)
+
+        let record = MessageRecord(
+            localId: "cid_abc", serverId: "srv1",
+            conversationId: testConversationId,
+            senderId: "current-user",
+            content: "hello", originalLanguage: "en",
+            messageType: "text", messageSource: "user", contentType: "text",
+            state: .sent, retryCount: 0, lastError: nil,
+            isEncrypted: false, encryptionMode: nil, encryptedPayload: nil,
+            replyToId: nil, storyReplyToId: nil,
+            forwardedFromId: nil, forwardedFromConversationId: nil,
+            replyToJson: nil, forwardedFromJson: nil,
+            expiresAt: nil, effectFlags: 0,
+            maxViewOnceCount: nil, viewOnceCount: 0,
+            isEdited: false, editedAt: nil, deletedAt: nil,
+            pinnedAt: nil, pinnedBy: nil,
+            senderName: "Me", senderUsername: "me",
+            senderColor: nil, senderAvatarURL: nil,
+            deliveredCount: 0, readCount: 0,
+            deliveredToAllAt: nil, readByAllAt: nil,
+            createdAt: Date(), sentAt: nil,
+            deliveredAt: nil, readAt: nil, updatedAt: Date(),
+            attachmentsJson: nil, reactionsJson: nil,
+            reactionCount: 0, currentUserReactionsJson: nil,
+            mentionedUsersJson: nil,
+            cachedBubbleWidth: nil, cachedBubbleHeight: nil,
+            cachedLastLineWidth: nil, cachedLineCount: nil,
+            cachedTimestampInline: nil,
+            layoutVersion: 0, layoutMaxWidth: nil,
+            changeVersion: 1
+        )
+        try await persistence.insertOptimistic(record)
+        try await persistence.saveTranslation(TranslationRecord(
+            id: "tr1", messageLocalId: "srv1", messageServerId: "srv1",
+            targetLanguage: "fr", translatedContent: "Bonjour",
+            translationModel: "nllb-200", confidenceScore: 0.9,
+            sourceLanguage: "en", receivedAt: Date()
+        ))
+
+        let viewModel = makeSUT(
+            dependencies: ConversationDependencies(dbPool: pool, persistence: persistence)
+        )
+        mockAuthManager.simulateLoggedIn(user: MeeshyUser(
+            id: testUserId, username: "testuser", systemLanguage: "fr"
+        ))
+        await viewModel.hydratePersistedTranslations()
+
+        XCTAssertNotNil(viewModel.messageTranslations["srv1"],
+                        "la traduction persistée sous l'id serveur doit être réhydratée pour un message own keyé par cid")
+        XCTAssertEqual(viewModel.messageTranslations["srv1"]?.first?.translatedContent, "Bonjour")
+    }
+
+    /// Non-régression : un message reçu (localId == serverId) reste hydraté.
+    func test_hydratePersistedTranslations_receivedMessage_stillHydrated() async throws {
+        let pool = try makeInMemoryPool()
+        let persistence = MessagePersistenceActor(dbWriter: pool)
+
+        let record = MessageRecord(
+            localId: "srv2", serverId: "srv2",
+            conversationId: testConversationId,
+            senderId: "other-user",
+            content: "hi", originalLanguage: "en",
+            messageType: "text", messageSource: "user", contentType: "text",
+            state: .sent, retryCount: 0, lastError: nil,
+            isEncrypted: false, encryptionMode: nil, encryptedPayload: nil,
+            replyToId: nil, storyReplyToId: nil,
+            forwardedFromId: nil, forwardedFromConversationId: nil,
+            replyToJson: nil, forwardedFromJson: nil,
+            expiresAt: nil, effectFlags: 0,
+            maxViewOnceCount: nil, viewOnceCount: 0,
+            isEdited: false, editedAt: nil, deletedAt: nil,
+            pinnedAt: nil, pinnedBy: nil,
+            senderName: "Other", senderUsername: "other",
+            senderColor: nil, senderAvatarURL: nil,
+            deliveredCount: 0, readCount: 0,
+            deliveredToAllAt: nil, readByAllAt: nil,
+            createdAt: Date(), sentAt: nil,
+            deliveredAt: nil, readAt: nil, updatedAt: Date(),
+            attachmentsJson: nil, reactionsJson: nil,
+            reactionCount: 0, currentUserReactionsJson: nil,
+            mentionedUsersJson: nil,
+            cachedBubbleWidth: nil, cachedBubbleHeight: nil,
+            cachedLastLineWidth: nil, cachedLineCount: nil,
+            cachedTimestampInline: nil,
+            layoutVersion: 0, layoutMaxWidth: nil,
+            changeVersion: 1
+        )
+        try await persistence.insertOptimistic(record)
+        try await persistence.saveTranslation(TranslationRecord(
+            id: "tr2", messageLocalId: "srv2", messageServerId: "srv2",
+            targetLanguage: "fr", translatedContent: "Salut",
+            translationModel: "nllb-200", confidenceScore: 0.9,
+            sourceLanguage: "en", receivedAt: Date()
+        ))
+
+        let viewModel = makeSUT(
+            dependencies: ConversationDependencies(dbPool: pool, persistence: persistence)
+        )
+        mockAuthManager.simulateLoggedIn(user: MeeshyUser(
+            id: testUserId, username: "testuser", systemLanguage: "fr"
+        ))
+        await viewModel.hydratePersistedTranslations()
+
+        XCTAssertEqual(viewModel.messageTranslations["srv2"]?.first?.translatedContent, "Salut")
+    }
+
     // MARK: - withSendTimeout (S1 — send-clock latency cap)
 
     func test_withSendTimeout_fastOperation_returnsValue() async throws {

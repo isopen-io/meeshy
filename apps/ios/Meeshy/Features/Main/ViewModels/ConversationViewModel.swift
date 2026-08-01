@@ -4100,16 +4100,19 @@ class ConversationViewModel: ObservableObject {
     /// — d'où l'apparition « en second temps » des données de langue. En
     /// peuplant le dictionnaire en amont, le tout premier rendu applique déjà
     /// le Prisme Linguistique (contenu traduit affiché comme du natif).
-    private func hydratePersistedTranslations() async {
+    func hydratePersistedTranslations() async {
         let convId = conversationId
         let reader = messagePersistence.reader
         let grouped: [String: [TranslationRecord]] = (try? await reader.read { db in
+            // grdb-07 — un message "own" est keyé localId=cid en GRDB mais ses
+            // traductions sont persistées sous l'id SERVEUR : filtrer sur le
+            // seul localId ne matchait rien pour ces messages.
             let localIds = try MessageRecord
                 .filter(Column("conversationId") == convId)
                 .order(Column("createdAt").desc)
                 .limit(80)
                 .fetchAll(db)
-                .map(\.localId)
+                .flatMap { [$0.localId, $0.serverId].compactMap { $0 } }
             guard !localIds.isEmpty else { return [:] }
             let records = try TranslationRecord
                 .filter(localIds.contains(Column("messageLocalId")))
