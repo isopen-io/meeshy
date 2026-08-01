@@ -91,6 +91,20 @@ final class BackgroundTransitionCoordinator: BackgroundTransitioning {
         await withBudget("notifications.syncNow") {
             await NotificationCoordinator.shared.syncNow()
         }
+        // grdb-05 — dernier step, le plus sacrifiable si l'OS expire le
+        // budget. DOIT rester sous CETTE garde beginBackgroundTask :
+        // incremental_vacuum tient un verrou d'écriture sur le fichier SQLite
+        // App Group partagé avec la NSE — un verrou encore tenu à la
+        // suspension est le motif documenté du kill 0xdead10cc.
+        await withBudget("db.maintenance") {
+            let pool = DependencyContainer.shared.dbPool
+            do {
+                try DatabaseMaintenance.runIncrementalVacuum(on: pool)
+                try DatabaseMaintenance.runOptimize(on: pool)
+            } catch {
+                logger.error("Background DB maintenance failed: \(error.localizedDescription, privacy: .public)")
+            }
+        }
 
         endBackgroundTask()
     }

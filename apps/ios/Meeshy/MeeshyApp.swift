@@ -602,20 +602,6 @@ struct MeeshyApp: App {
                         // truncated session at next boot (no network flush here —
                         // background time is too scarce, the resume/boot paths flush).
                         Task { await EngagementTracker.shared.checkpointAll() }
-                        // Compact free pages and refresh query-planner stats on
-                        // every background transition. Runs at background priority
-                        // so the system can defer or kill it under memory pressure.
-                        // Capture dbPool before crossing the actor boundary.
-                        let pool = dependencies.dbPool
-                        Task.detached(priority: .background) {
-                            do {
-                                try DatabaseMaintenance.runIncrementalVacuum(on: pool)
-                                try DatabaseMaintenance.runOptimize(on: pool)
-                            } catch {
-                                Logger(subsystem: "me.meeshy.app", category: "maintenance")
-                                    .error("Background DB maintenance failed: \(error.localizedDescription, privacy: .public)")
-                            }
-                        }
                     case .inactive:
                         break
                     @unknown default:
