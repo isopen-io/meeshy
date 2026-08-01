@@ -321,6 +321,7 @@ struct MyStoriesView: View {
             id: story.id,
             kind: .published,
             thumbnailURL: story.media.first?.thumbnailUrl ?? story.media.first?.url,
+            thumbHash: story.storyEffects?.thumbHash,
             date: story.createdAt,
             expiresAt: story.expiresAt,
             counts: [
@@ -425,6 +426,7 @@ struct MyStoriesView: View {
             id: draft.id,
             kind: .draft,
             thumbnailURL: draft.coverFileURL?.absoluteString,
+            thumbHash: nil,
             date: draft.updatedAt,
             expiresAt: nil,
             counts: [:],

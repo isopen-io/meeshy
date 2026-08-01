@@ -12,6 +12,10 @@ struct MyStoryCardModel: Equatable {
     let id: String
     let kind: MyStoryCardKind
     let thumbnailURL: String?
+    /// Composite de TOUTES les couches (texte, dessin, stickers), seule
+    /// representation cliente de ce que l'auteur a reellement compose.
+    /// `thumbnailURL` ne reflete que le media de FOND.
+    let thumbHash: String?
     /// Date affichée sous la carte : publication pour une story, dernière
     /// modification pour un brouillon.
     let date: Date
@@ -60,12 +64,27 @@ struct MyStoryCard: View {
         .accessibilityElement(children: .contain)
     }
 
+    @ViewBuilder
     private var thumbnail: some View {
         ZStack {
-            CachedAsyncImage(url: model.thumbnailURL) {
-                Rectangle().fill(accentColor.opacity(0.15))
+            // Delegue a `MyStoryThumbnailResolver` — reimplementer le choix
+            // ici rendait vide toute story SANS media de fond (texte seul,
+            // dessin) : elles n'ont pas d'URL, seulement un thumbHash.
+            switch MyStoryThumbnailResolver.resolve(thumbHash: model.thumbHash,
+                                                    remoteURL: model.thumbnailURL) {
+            case .composite(let hash):
+                if let image = UIImage.fromThumbHash(hash) {
+                    Image(uiImage: image).resizable().scaledToFill()
+                } else if let url = model.thumbnailURL, !url.isEmpty {
+                    CachedAsyncImage(url: url) { placeholderFill }
+                } else {
+                    placeholderFill
+                }
+            case .remoteURL(let url):
+                CachedAsyncImage(url: url) { placeholderFill }
+            case .placeholder:
+                placeholderFill
             }
-            .aspectRatio(9 / 16, contentMode: .fill)
 
             if isVeiled {
                 // Le voile couvre la VIGNETTE seule : la bande de glyphes reste
@@ -84,11 +103,21 @@ struct MyStoryCard: View {
                     .shadow(color: .black.opacity(0.5), radius: 2)
             }
         }
+        // Ratio 9:16 impose : sans lui la vignette se dimensionne a son
+        // contenu et la carte s'effondre quand l'image n'est pas encore la.
+        .frame(maxWidth: .infinity)
+        .aspectRatio(9 / 16, contentMode: .fit)
         .clipped()
         .contentShape(Rectangle())
         .onTapGesture(perform: onOpen)
         .accessibilityAddTraits(.isButton)
         .accessibilityLabel(thumbnailAccessibilityLabel)
+    }
+
+    private var placeholderFill: some View {
+        Rectangle()
+            .fill(accentColor.opacity(0.20))
+            .overlay(Image(systemName: "photo").foregroundColor(accentColor))
     }
 
     private var dateLabel: some View {
