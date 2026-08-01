@@ -111,11 +111,18 @@ public struct DraftResumeCard: View {
             // « Recommencer » porte la seule destruction — ranger n'est PAS
             // jeter, et c'est l'hôte qui range sur interaction avec le canvas.
             HStack(spacing: 8) {
+                // `.lineLimit(1)` + `.fixedSize` : les libellés d'action gardent
+                // leur largeur intrinsèque — c'est le titre/sous-titre (lineLimit 1
+                // + Spacer) qui absorbe la compression du bandeau, jamais les
+                // boutons (« Reprendre » cassait en « Re-/pre-/ndr-/e » sur
+                // simulateur FR, vérif phase 5 du 2026-08-01).
                 Button(action: onDiscard) {
                     Text(String(localized: "story.draft.resume.discard",
                                 defaultValue: "Recommencer", bundle: .module))
                         .font(MeeshyFont.relative(14, weight: .semibold))
                         .foregroundStyle(.white.opacity(0.85))
+                        .lineLimit(1)
+                        .fixedSize(horizontal: true, vertical: false)
                         .padding(.horizontal, 14)
                         .frame(minHeight: 44)
                         .contentShape(Capsule())
@@ -126,6 +133,8 @@ public struct DraftResumeCard: View {
                                 defaultValue: "Reprendre", bundle: .module))
                         .font(MeeshyFont.relative(14, weight: .semibold))
                         .foregroundStyle(.white)
+                        .lineLimit(1)
+                        .fixedSize(horizontal: true, vertical: false)
                         .padding(.horizontal, 16)
                         .frame(minHeight: 44)
                         .contentShape(Capsule())
