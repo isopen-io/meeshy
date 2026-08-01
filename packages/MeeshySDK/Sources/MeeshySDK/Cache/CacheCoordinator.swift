@@ -456,6 +456,49 @@ public actor CacheCoordinator {
                 }
             }
             .store(in: &cancellables)
+
+        socialSocket.commentAdded
+            .sink { [weak self] data in
+                guard let self else { return }
+                Task {
+                    await self.feed.patchEverywhere(itemId: data.postId) {
+                        $0.commentCount = data.commentCount
+                    }
+                }
+            }
+            .store(in: &cancellables)
+
+        socialSocket.commentDeleted
+            .sink { [weak self] data in
+                guard let self else { return }
+                Task {
+                    await self.feed.patchEverywhere(itemId: data.postId) {
+                        $0.commentCount = data.commentCount
+                    }
+                }
+            }
+            .store(in: &cancellables)
+
+        // `post:bookmarked` n'est émis QUE vers le bookmarker (événement
+        // personnel côté gateway) : pas de filtre d'acteur nécessaire.
+        socialSocket.postBookmarked
+            .sink { [weak self] data in
+                guard let self else { return }
+                Task {
+                    await self.feed.patchEverywhere(itemId: data.postId) {
+                        $0.isBookmarkedByMe = data.bookmarked
+                        if let count = data.bookmarkCount { $0.bookmarkCount = count }
+                    }
+                }
+            }
+            .store(in: &cancellables)
+
+        socialSocket.postDeleted
+            .sink { [weak self] postId in
+                guard let self else { return }
+                Task { await self.feed.removeEverywhere(itemId: postId) }
+            }
+            .store(in: &cancellables)
     }
 
     /// `isLiked` n'est réécrit que si l'acteur EST l'utilisateur courant : le

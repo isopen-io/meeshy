@@ -85,6 +85,38 @@ final class GRDBCacheStorePatchEverywhereTests: XCTestCase {
         XCTAssertEqual(items?.first?.likes, 1)
     }
 
+    /// Le pendant destructif de `patchEverywhere` : un `post:deleted` doit
+    /// retirer l'item de la clé chargée en L1 ET de la clé évincée qui ne vit
+    /// plus qu'en base — sans rajeunir la fraîcheur au passage.
+    func test_removeEverywhere_itemUnderL1AndEvictedL2Key_removedFromBoth_preservesFreshness() async throws {
+        let db = try makeDB()
+        let writer = try makeStore(db: db)
+        try await writer.save([PatchTestItem(id: "p1", likes: 1)], for: "cold-key")
+        await writer.flushDirtyKeys()
+
+        // Store neuf sur la MÊME base : "cold-key" n'existe qu'en L2.
+        let store = try makeStore(db: db)
+        try await store.save([PatchTestItem(id: "p1", likes: 1),
+                              PatchTestItem(id: "p2", likes: 7)], for: "main-feed")
+        await store.debugRewindFetchTimestamp(by: .minutes(30), for: "main-feed")
+
+        await store.removeEverywhere(itemId: "p1")
+
+        let mainItems = await store.load(for: "main-feed").snapshot()
+        XCTAssertNil(mainItems?.first(where: { $0.id == "p1" }),
+                     "p1 doit être retiré de la clé chargée en mémoire")
+        XCTAssertEqual(mainItems?.first(where: { $0.id == "p2" })?.likes, 7,
+                       "les autres items survivent")
+        let coldItems = await store.load(for: "cold-key").snapshot()
+        XCTAssertNil(coldItems?.first(where: { $0.id == "p1" }),
+                     "p1 doit être retiré de la clé qui ne vit qu'en base")
+
+        let result = await store.load(for: "main-feed")
+        guard case .stale = result else {
+            return XCTFail("l'entrée doit rester .stale après un removeEverywhere, got \(result)")
+        }
+    }
+
     /// La fraîcheur appartient à `save()` : un patch temps réel ne doit pas
     /// faire passer pour fraîche une entrée que le ViewModel devait rafraîchir.
     func test_patchEverywhere_preservesFreshnessTimestamp() async throws {

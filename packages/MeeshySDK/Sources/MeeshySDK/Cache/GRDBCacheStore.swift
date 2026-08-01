@@ -877,6 +877,23 @@ extension GRDBCacheStore where Key == String {
             await upsertPatch(for: key, itemId: itemId, mutate: mutate)
         }
     }
+
+    /// Retire l'item `itemId` de **toutes** les clés qui le contiennent, en
+    /// mémoire comme en base — le pendant destructif de `patchEverywhere`.
+    ///
+    /// Un `post:deleted` reçu pendant que seul le feed est ouvert laissait le
+    /// post fantôme sous sa clé détail et sous `bookmarks` : le prochain cold
+    /// start le ressortait. Même balayage L1 ∪ L2, même préservation de la
+    /// fraîcheur (`update` reprend le `lastFetchedAt` persistant).
+    public func removeEverywhere(itemId: String) async {
+        let l1Keys = loadedKeys().filter { key in
+            memoryCache[key]?.items.contains(where: { $0.id == itemId }) ?? false
+        }
+        let keys = Set(l1Keys).union(l2KeysHolding(itemId: itemId))
+        for key in keys {
+            await update(for: key) { items in items.filter { $0.id != itemId } }
+        }
+    }
 }
 
 // MARK: - Inventaire pour la purge sélective
