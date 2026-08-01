@@ -62,6 +62,31 @@ final class ComposerControlsLayerTests: XCTestCase {
         XCTAssertEqual(vm.currentEffects.mediaObjects?.count ?? 0, 0)
     }
 
+    // MARK: - Gardes de source (D4 — masquer le chrome doit être atteignable
+    // sans geste physique)
+
+    /// `bandStateMachine.hideChrome()` n'était appelable QUE depuis
+    /// `onSwipeDownAny` (un swipe physique sur la rangée de FABs) — invisible
+    /// à VoiceOver, qui intercepte les swipes pour sa propre navigation.
+    /// `fabRestoreHandle` a déjà son action nommée « Afficher les outils » ;
+    /// ce test pin le pendant symétrique « Masquer les outils » sur la
+    /// rangée de FABs elle-même — pas testable via l'arbre SwiftUI en XCTest
+    /// pur (pas de ViewInspector dans ce module, cf. `test_initialState_
+    /// isHidden_andFabsVisible` ci-dessus), garde de source donc.
+    func test_fabRow_exposesHideToolsAccessibilityAction() throws {
+        let code = try ComposerSourceGuard.source("Controls/ComposerControlsLayer.swift")
+        let body = try XCTUnwrap(
+            ComposerSourceGuard.functionBody(named: "public var body: some View", in: code)
+        )
+        XCTAssertTrue(body.contains("story.composer.hideTools"),
+                      "La rangée de FABs doit exposer une action a11y nommée pour masquer le chrome.")
+        // 2 = le swipe existant (`onSwipeDownAny`) + la nouvelle action a11y —
+        // pas 1 : une garde par simple `.contains` passerait déjà sur le seul
+        // swipe et ne détecterait pas une régression qui retirerait l'action.
+        XCTAssertEqual(ComposerSourceGuard.occurrences(of: "bandStateMachine.hideChrome()", in: body), 2,
+                       "L'action a11y doit rejouer le même canal que le swipe existant, EN PLUS de lui.")
+    }
+
     // MARK: - Layer construction helper
 
     private func makeLayer(vm: StoryComposerViewModel) -> ComposerControlsLayer {

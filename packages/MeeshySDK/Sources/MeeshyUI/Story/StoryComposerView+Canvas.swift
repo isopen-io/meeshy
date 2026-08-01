@@ -1306,13 +1306,17 @@ extension StoryComposerView {
                                 .frame(width: 56, height: 56)
                                 .rotationEffect(.degrees(-90))
                                 .animation(.easeInOut(duration: 0.3), value: mediaLoadProgress)
+                            // Doctrine 86i : badge numérique DANS un cercle fixe de
+                            // 56 pt, pas un libellé de lecture — au même titre que
+                            // les glyphes SF Symbols, hors périmètre D3 (scaler le
+                            // ferait déborder du cercle sans bénéfice de lecture).
                             Text("\(Int(mediaLoadProgress * 100))%")
                                 .font(.system(size: 13, weight: .bold, design: .rounded))
                                 .foregroundColor(.white)
                         }
                         if !mediaLoadLabel.isEmpty {
                             Text(mediaLoadLabel)
-                                .font(.system(size: 12, weight: .medium))
+                                .font(MeeshyFont.relative(12, weight: .medium))
                                 .foregroundColor(.white.opacity(0.8))
                         }
                     }

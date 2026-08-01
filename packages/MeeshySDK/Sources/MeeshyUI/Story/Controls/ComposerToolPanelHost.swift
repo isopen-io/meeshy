@@ -110,7 +110,7 @@ struct ComposerToolPanelHost: View {
             HStack(spacing: 4) {
                 Image(systemName: "chevron.backward")
                     .font(.system(size: 14, weight: .semibold))
-                Text(toolTitle).font(.system(size: 14, weight: .semibold))
+                Text(toolTitle).font(MeeshyFont.relative(14, weight: .semibold))
             }
         }
         .foregroundColor(primaryText)
@@ -135,7 +135,7 @@ struct ComposerToolPanelHost: View {
                 Image(systemName: other.symbolName)
                     .font(.system(size: 11, weight: .semibold))
                 Text(Self.title(for: other))
-                    .font(.system(size: 12, weight: .medium))
+                    .font(MeeshyFont.relative(12, weight: .medium))
             }
             .foregroundColor(secondaryText)
             .padding(.horizontal, 10)

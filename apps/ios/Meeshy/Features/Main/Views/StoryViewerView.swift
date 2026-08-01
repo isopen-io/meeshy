@@ -12,21 +12,13 @@ struct SharedContentWrapper: Identifiable {
 }
 
 /// Wrapper used by `StoryViewerView.fullScreenCover(item:)` to drive the
-/// repost-as-story composer launched from the bottom-bar Partager button (C.1).
-/// Carrying both the source `StoryItem` and the original author's handle keeps
-/// the cover identifiable + supplies what `StoryComposerViewModel(reposting:authorHandle:)`
-/// needs without leaking optionals through the binding.
-struct RepostStorySourceWrapper: Identifiable {
-    let id = UUID()
-    let story: StoryItem
-    let authorHandle: String
-}
-
-/// Wrapper used by `StoryViewerView.fullScreenCover(item:)` to drive the
 /// repost-as-post composer launched from the kebab menu's "Editer et republier
-/// en post" action (C.2). Mirrors `RepostStorySourceWrapper` but feeds the
+/// en post" action (C.2). Feeds the
 /// `UnifiedPostComposer(repostingStory:authorHandle:onPublishRepost:onDismiss:)`
-/// init introduced in B.7.
+/// init introduced in B.7 — the sole surviving repost-as-story wrapper (the
+/// share-button-based `RepostStorySourceWrapper` cover was dead code, removed
+/// S6: the share button reposts directly via `PostService.repost`, see
+/// `StoryViewerView+Sidebar.swift`).
 struct RepostPostSourceWrapper: Identifiable {
     let id = UUID()
     let story: StoryItem
@@ -854,36 +846,6 @@ struct StoryViewerView: View {
                 senderName: currentGroup?.username
             )
         }
-        .fullScreenCover(item: $repostStoryComposerSource, onDismiss: { resumeTimer() }) { wrapper in
-            StoryComposerView(
-                viewModel: StoryComposerViewModel(
-                    reposting: wrapper.story,
-                    authorHandle: wrapper.authorHandle
-                ),
-                // Un repost est une CRÉATION : il s'ouvre sur le dernier mode
-                // d'audience choisi, comme le composer du tray.
-                initialVisibility: viewModel.lastComposerVisibility,
-                onPublishSlide: { _, _, _, _, _ in },
-                onPublishAllInBackground: { slides, slideImages, loadedImages, loadedVideoURLs, loadedAudioURLs, originalLanguage, visibility, visibilityUserIds in
-                    viewModel.publishStoryInBackground(
-                        slides: slides,
-                        slideImages: slideImages,
-                        loadedImages: loadedImages,
-                        loadedVideoURLs: loadedVideoURLs,
-                        loadedAudioURLs: loadedAudioURLs,
-                        originalLanguage: originalLanguage,
-                        visibility: visibility,
-                        visibilityUserIds: visibilityUserIds
-                    )
-                    repostStoryComposerSource = nil
-                    return true
-                },
-                onDismiss: { repostStoryComposerSource = nil }
-            )
-            .storyLocationPickerProvided()
-            .storyCameraCaptureProvided()
-            .storyRecentCameraRollProvided()
-        }
         .fullScreenCover(item: $editAndRepostAsPostSource, onDismiss: { resumeTimer() }) { wrapper in
             UnifiedPostComposer(
                 repostingStory: wrapper.story,
@@ -1316,7 +1278,6 @@ struct StoryViewerView: View {
     /// full-screen picker). Drives the heart-button bounce in the sidebar.
     @State private var heartBouncePulse: Int = 0
     @State private var sharedContentWrapper: SharedContentWrapper?
-    @State private var repostStoryComposerSource: RepostStorySourceWrapper?
     @State private var editAndRepostAsPostSource: RepostPostSourceWrapper?
     /// Lieu de la story ouvert plein écran (tap sur une pastille de position).
     @State private var readerFullscreenPlace: StoryReaderPlaceWrapper?
@@ -1439,7 +1400,6 @@ struct StoryViewerView: View {
             isComposerEngaged: $isComposerEngaged,
             hasComposerContent: $hasComposerContent,
             sharedContentWrapper: $sharedContentWrapper,
-            repostStoryComposerSource: $repostStoryComposerSource,
             editAndRepostAsPostSource: $editAndRepostAsPostSource,
             readerFullscreenPlace: $readerFullscreenPlace,
             isPresented: $isPresented,

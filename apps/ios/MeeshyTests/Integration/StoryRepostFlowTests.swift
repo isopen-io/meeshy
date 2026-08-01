@@ -3,7 +3,7 @@ import XCTest
 @testable import MeeshyUI
 @testable import Meeshy
 
-/// Integration tests for the 4 composer-based-story-repost flows (Phase D.1).
+/// Integration tests for the 3 composer-based-story-repost flows (Phase D.1).
 ///
 /// Pragmatic in-process integration: each flow is exercised through its
 /// public/internal contract surface using `MockPostService` for backend
@@ -11,15 +11,22 @@ import XCTest
 /// would otherwise be opaque.
 ///
 /// Flows under test:
-///  1. Share button → `StoryComposerView` in repost mode → publishes a STORY
-///     (verified via `StoryComposerViewModel(reposting:authorHandle:)` state).
-///  2. Kebab "Republier en post" → `PostService.repost(postId:targetType:.post)`
+///  1. Kebab "Republier en post" → `PostService.repost(postId:targetType:.post)`
 ///     direct call (verified via `MockPostService` call tracking).
-///  3. Kebab "Editer et republier en post" → `UnifiedPostComposer` repost-mode
+///  2. Kebab "Editer et republier en post" → `UnifiedPostComposer` repost-mode
 ///     publish callback (verified via internal `triggerPublishForTests`).
-///  4. Feed cell receives a POST whose `repost.type == "STORY"` → renders
+///  3. Feed cell receives a POST whose `repost.type == "STORY"` → renders
 ///     `StoryRepostEmbedCell` (verified via `Mirror` + the documented
 ///     `isStoryRepost` predicate semantics).
+///
+/// A 4th flow — share button → `StoryComposerView` in repost mode — was
+/// removed S6 (`test_flux1_shareButton_opensComposerStory_publishesAsStory`,
+/// dead code cleanup): the share button never opened that composer in
+/// production (`repostStoryComposerSource` was never assigned outside its
+/// own `nil` resets), it calls `PostService.repost` directly instead — see
+/// `StoryViewerView+Sidebar.swift`. The composer-VM contract it exercised
+/// (`StoryComposerViewModel(reposting:authorHandle:)` clone/flatten/badge)
+/// remains covered independently by `StoryComposerViewModelRepostTests`.
 @MainActor
 final class StoryRepostFlowTests: XCTestCase {
 
@@ -106,46 +113,6 @@ final class StoryRepostFlowTests: XCTestCase {
             content: "Mon commentaire",
             repost: repost
         )
-    }
-
-    // MARK: - Flow 1: Share button → StoryComposerView (story repost)
-
-    /// The share button in `StoryViewerView` opens `StoryComposerView` with a
-    /// `StoryComposerViewModel(reposting:authorHandle:)`. The VM must clone the
-    /// active slide, propagate the chain IDs (root-flatten) and inject the
-    /// locked attribution badge — these are the contract guarantees the UI
-    /// layer relies on for a story-as-story repost.
-    func test_flux1_shareButton_opensComposerStory_publishesAsStory() {
-        let story = makeStoryItem(
-            id: "story-1",
-            content: "Original",
-            repostOfId: nil,
-            originalRepostOfId: nil
-        )
-
-        let vm = StoryComposerViewModel(reposting: story, authorHandle: "alice")
-
-        // 1.a — Repost chain IDs are correctly flattened to the root.
-        XCTAssertEqual(vm.repostOfId, "story-1",
-                       "repostOfId points to the immediate parent (the story being shared)")
-        XCTAssertEqual(vm.originalRepostOfId, "story-1",
-                       "originalRepostOfId walks up the chain — root case = source itself")
-
-        // 1.b — Active slide is cloned (single slide, fresh ID, content preserved).
-        XCTAssertEqual(vm.slides.count, 1, "Repost mode clones the active slide only")
-        XCTAssertEqual(vm.slides.first?.content, "Original")
-        XCTAssertNotEqual(vm.slides.first?.id, "story-1",
-                          "Cloned slide has a fresh UUID, never reuses the source id")
-
-        // 1.c — Locked attribution badge is injected at bottom-center (y = 0.92).
-        let texts = vm.currentEffects.textObjects
-        let lockedBadges = texts.filter { $0.isLocked == true }
-        XCTAssertEqual(lockedBadges.count, 1,
-                       "Exactly one locked badge is added — repost attribution cannot be stripped")
-        XCTAssertTrue(lockedBadges.first?.text.contains("@alice") == true,
-                      "Badge mentions the original author handle")
-        XCTAssertEqual(lockedBadges.first?.y ?? 0, 0.92, accuracy: 0.001,
-                       "Badge sits at bottom-center (y = 0.92)")
     }
 
     // MARK: - Flow 2: Kebab "Republier en post" → direct PostService.repost

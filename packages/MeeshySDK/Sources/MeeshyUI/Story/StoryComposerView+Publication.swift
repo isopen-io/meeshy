@@ -85,6 +85,17 @@ extension StoryComposerView {
             currentEffects: buildEffects()
         )
         HapticFeedback.success()
+        // A11y-7 — le haptique n'a pas d'équivalent sonore : contrairement au
+        // succès/échec final (déjà annoncé par `FeedbackToastManager.present`
+        // pour chaque toast), rien n'existe encore à CE point précis du flux
+        // (le hand-off n'a pas encore de toast). VoiceOver doit savoir que le
+        // tap a été pris en compte, que la publication finisse en ligne ou
+        // dans la file offline.
+        AdaptiveAccessibility.announce(String(
+            localized: "story.composer.a11y.publishStarted",
+            defaultValue: "Publication de la story lancée",
+            bundle: .module
+        ))
         let mode = PostVisibility(rawValue: visibility) ?? .public
         let ids = mode.requiresUserSelection ? visibilityUserIds : []
         let accepted = onPublishAllInBackground(

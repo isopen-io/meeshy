@@ -147,7 +147,6 @@ struct StoryActionSidebarView: View {
     @Binding var showExportShareSheet: Bool
     @Binding var isGlobalMutedBinding: Bool
     @Binding var sharedContentWrapper: SharedContentWrapper?
-    @Binding var repostStoryComposerSource: RepostStorySourceWrapper?
     @Binding var isPresented: Bool
 
     let triggerStoryReaction: (String) -> Void
