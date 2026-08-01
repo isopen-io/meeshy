@@ -886,7 +886,11 @@ export class MessageHandler {
         messageTranslations
       );
 
-      // Enrichir avec les détails du forward si applicable
+      // Enrichir avec les détails du forward si applicable. Best-effort : un
+      // échec de ce lookup (DB transient) ne doit JAMAIS avorter le broadcast —
+      // sinon un message déjà persisté ET ACKé « envoyé » ne serait délivré à
+      // personne (ni emit live, ni offline queue), sans retry. Parité avec
+      // `_getMessageTranslations().catch(() => [])` ci-dessus.
       if (message.forwardedFromId) {
         const [originalMsg, originalConv] = await Promise.all([
           this.prisma.message.findUnique({
@@ -907,7 +911,7 @@ export class MessageHandler {
                 select: { id: true, title: true, identifier: true, type: true, avatar: true }
               })
             : Promise.resolve(null)
-        ]);
+        ]).catch(() => [null, null] as const);
         if (originalMsg) (messagePayload as Record<string, unknown>).forwardedFrom = hoistLocationOnto(originalMsg as unknown as Record<string, unknown>);
         if (originalConv) (messagePayload as Record<string, unknown>).forwardedFromConversation = originalConv;
       }
@@ -922,10 +926,11 @@ export class MessageHandler {
         if (fromSnapshot) {
           (messagePayload as Record<string, unknown>).postReplyTo = fromSnapshot;
         } else {
+          // Best-effort : le fallback live ne doit pas gater la délivrance.
           const post = await this.prisma.post.findUnique({
             where: { id: message.storyReplyToId },
             select: POST_REPLY_SNAPSHOT_SELECT,
-          });
+          }).catch(() => null);
           if (post) {
             (messagePayload as Record<string, unknown>).postReplyTo = buildPostReplyTo(post);
           }
@@ -933,7 +938,9 @@ export class MessageHandler {
       }
 
       if (message.content) {
-        const mentionedUsers = await resolveMentionedUsers(this.prisma, [message.content]);
+        // Best-effort : une résolution de mention en échec ne doit pas avorter
+        // le broadcast (cf. `_resolveMentionUserIds` plus bas, même contrat).
+        const mentionedUsers = await resolveMentionedUsers(this.prisma, [message.content]).catch(() => []);
         if (mentionedUsers.length > 0) {
           (messagePayload as Record<string, unknown>).mentionedUsers = mentionedUsers;
         }
