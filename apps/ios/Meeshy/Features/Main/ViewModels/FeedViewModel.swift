@@ -175,6 +175,14 @@ class FeedViewModel: ObservableObject {
                 // than the server head so server-side deletions within the
                 // fetched range still take effect.
                 posts = Self.mergePreservingRealtimeHead(fetched: fetched, existing: posts)
+                // grdb-03 (volet mémoire) — réappliquer les likes encore en
+                // attente d'outbox par-dessus le snapshot serveur périmé.
+                if let persistence = feedPersistence {
+                    let pendingLikes = await persistence.pendingLikeFlags()
+                    if !pendingLikes.isEmpty {
+                        posts = Self.reapplyPendingLikes(posts: posts, pendingLikes: pendingLikes)
+                    }
+                }
                 nextCursor = response.pagination?.nextCursor
                 hasMore = response.pagination?.hasMore ?? false
                 prefetchMedia(around: 0)
@@ -216,6 +224,19 @@ class FeedViewModel: ObservableObject {
     /// newer than the newest fetched post AND absent from the fetched set are
     /// preserved, so server-side deletions inside the fetched range still
     /// apply. Pure + static so it is unit-testable without a live ViewModel.
+    /// grdb-03 — réapplique les likes encore PENDING en outbox par-dessus un
+    /// snapshot serveur périmé (le cœur ne se dé-remplit pas sous les yeux de
+    /// l'utilisateur ; le compteur suit, jamais négatif). Pure, testable.
+    static func reapplyPendingLikes(posts: [FeedPost], pendingLikes: [String: Bool]) -> [FeedPost] {
+        posts.map { post in
+            guard let liked = pendingLikes[post.id], post.isLiked != liked else { return post }
+            var patched = post
+            patched.isLiked = liked
+            patched.likes = max(0, post.likes + (liked ? 1 : -1))
+            return patched
+        }
+    }
+
     static func mergePreservingRealtimeHead(fetched: [FeedPost], existing: [FeedPost]) -> [FeedPost] {
         guard let newestFetched = fetched.first else { return fetched }
         let fetchedIds = Set(fetched.map(\.id))

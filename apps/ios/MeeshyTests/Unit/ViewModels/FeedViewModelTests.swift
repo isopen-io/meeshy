@@ -1671,4 +1671,40 @@ final class FeedViewModelTests: XCTestCase {
         )
     }
 
+
+    // MARK: - grdb-03 — reapplyPendingLikes (volet mémoire)
+
+    func test_reapplyPendingLikes_pendingTrue_setsIsLikedAndBumpsCount() {
+        var post = Self.makeFeedPost(id: "p1", content: "a")
+        post.isLiked = false
+        post.likes = 4
+
+        let result = FeedViewModel.reapplyPendingLikes(posts: [post], pendingLikes: ["p1": true])
+
+        XCTAssertTrue(result[0].isLiked, "le like pending doit rester visible par-dessus le snapshot serveur périmé")
+        XCTAssertEqual(result[0].likes, 5)
+    }
+
+    func test_reapplyPendingLikes_pendingFalse_clearsIsLikedAndClampsCount() {
+        var post = Self.makeFeedPost(id: "p1", content: "a")
+        post.isLiked = true
+        post.likes = 0
+
+        let result = FeedViewModel.reapplyPendingLikes(posts: [post], pendingLikes: ["p1": false])
+
+        XCTAssertFalse(result[0].isLiked)
+        XCTAssertEqual(result[0].likes, 0, "jamais de compteur négatif")
+    }
+
+    func test_reapplyPendingLikes_noPending_identity() {
+        var post = Self.makeFeedPost(id: "p1", content: "a")
+        post.isLiked = false
+        post.likes = 4
+
+        let result = FeedViewModel.reapplyPendingLikes(posts: [post], pendingLikes: [:])
+
+        XCTAssertFalse(result[0].isLiked)
+        XCTAssertEqual(result[0].likes, 4)
+    }
+
 }
