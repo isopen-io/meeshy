@@ -1650,4 +1650,25 @@ final class FeedViewModelTests: XCTestCase {
         ).isEmpty)
     }
 
+
+    // MARK: - cache-03 étape A — le cache main-feed garde les 100 plus RÉCENTS
+
+    func test_debouncedCacheSave_over100AccumulatedPosts_persistsThe100Newest() async throws {
+        await CacheCoordinator.shared.feed.invalidate(for: "main-feed")
+        // Convention : post-1 = le plus RÉCENT, post-140 = le plus ANCIEN
+        // (le tableau posts est newest-first).
+        let seeded = (1...140).map { Self.makeFeedPost(id: "post-\($0)", content: "c\($0)") }
+        let (sut, _, _, _) = makeSUT()
+        sut.posts = seeded
+
+        await sut.likePost("post-1")
+        try? await Task.sleep(for: .seconds(2.2))
+
+        let cached = (await CacheCoordinator.shared.feed.load(for: "main-feed")).snapshot() ?? []
+        XCTAssertEqual(
+            Set(cached.map(\.id)), Set((1...100).map { "post-\($0)" }),
+            "GRDBCacheStore.save trimme par suffix (les plus ANCIENS survivent) : sans prefix(100) app-side, kill+relaunch dans la fenêtre fraîche sert la tranche la plus vieille en .fresh — les posts récents disparaissent de l'écran"
+        )
+    }
+
 }

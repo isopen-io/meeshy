@@ -1264,7 +1264,12 @@ class FeedViewModel: ObservableObject {
         cacheSaveTask = Task {
             try? await Task.sleep(for: .seconds(2))
             guard !Task.isCancelled else { return }
-            try? await CacheCoordinator.shared.feed.save(snapshot, for: "main-feed")
+            // cache-03 étape A — GRDBCacheStore.save() trimme par suffix(max)
+            // (garde les items les PLUS ANCIENS) alors que `posts` est
+            // newest-first : sans ce prefix(100), au-delà de 100 posts
+            // accumulés le cold start sert la tranche la plus vieille en
+            // .fresh. Miroir de ProfileUserPostsList.
+            try? await CacheCoordinator.shared.feed.save(Array(snapshot.prefix(100)), for: "main-feed")
         }
     }
 }
