@@ -505,6 +505,9 @@ public final class AuthManager: ObservableObject, AuthManaging {
         StoryDraftStore.shared.clear()
         await StoryPublishQueue.shared.clearAll()
         await ConversationStore.shared.reset()
+        // stores-10 — les catégories du compte sortant (RAM + snapshot widget)
+        // ne doivent pas survivre au logout.
+        await UserCategoryStore.shared.reset()
         UserPreferencesManager.shared.resetSession()
         FriendshipCache.shared.clear()
         // A5 — le curseur de séquence est per-user : le remettre à zéro évite
