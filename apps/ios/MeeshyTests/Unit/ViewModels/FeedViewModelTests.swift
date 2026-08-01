@@ -1125,6 +1125,43 @@ final class FeedViewModelTests: XCTestCase {
         sut.unsubscribeFromSocketEvents()
     }
 
+    /// rts-01 (garde-fou) — le PREMIER armement ne fetch pas : la vue appelle
+    /// déjà loadFeed() dans son .task si posts.isEmpty, un fetch ici serait
+    /// redondant.
+    func test_subscribeToSocketEvents_firstArm_doesNotFetchFeed() async {
+        let (sut, api, _, _) = makeSUT()
+        let before = api.requestCount
+
+        sut.subscribeToSocketEvents()
+        try? await Task.sleep(for: .milliseconds(300))
+
+        XCTAssertEqual(api.requestCount, before, "le premier arm ne déclenche aucun fetch")
+
+        sut.unsubscribeFromSocketEvents()
+    }
+
+    /// rts-01 — un aller-retour hors du feed SANS coupure réseau : les sinks
+    /// étaient désarmés et la room quittée, tout ce qui s'est passé entre-temps
+    /// est perdu. Le RÉ-armement doit rattraper via un refresh silencieux
+    /// (didReconnect ne couvre que le flap réseau, jamais ce chemin).
+    func test_subscribeToSocketEvents_rearmAfterUnsubscribe_backfillsFeedFromNetwork() async {
+        let (sut, api, _, _) = makeSUT()
+        api.stub("/posts/feed", result: Self.makePaginatedResponse(posts: [Self.makeAPIPost(id: "p-rearm", content: "Backfilled")]))
+
+        sut.subscribeToSocketEvents()
+        sut.unsubscribeFromSocketEvents()
+        let requestsBeforeRearm = api.requestCount
+
+        sut.subscribeToSocketEvents()
+        try? await waitForCondition(timeout: 5.0) { sut.posts.count == 1 }
+
+        XCTAssertEqual(api.requestCount, requestsBeforeRearm + 1,
+                       "le ré-armement rattrape le trou par un refresh réseau")
+        XCTAssertEqual(sut.posts.first?.id, "p-rearm")
+
+        sut.unsubscribeFromSocketEvents()
+    }
+
     // MARK: - Socket.IO: post:created
 
     func test_socketPostCreated_insertsAtIndexZeroAndIncrementsNewPostsCount() async {

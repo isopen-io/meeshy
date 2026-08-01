@@ -40,6 +40,12 @@ class FeedViewModel: ObservableObject {
     private let languageProvider: LanguageProviding
     private var cacheSaveTask: Task<Void, Never>?
     private var isFeedLoadInProgress = false
+    /// rts-01 — distingue le PREMIER armement de `subscribeToSocketEvents()`
+    /// (la vue appelle déjà `loadFeed()` dans son `.task` si `posts.isEmpty`,
+    /// pas de fetch redondant) d'un RÉ-armement après
+    /// `unsubscribeFromSocketEvents()` (room quittée ET sinks désarmés hors
+    /// écran — sans refetch explicite, rien ne rattrape le trou).
+    private var hasSubscribedOnce = false
     /// Tracks postIds whose comments are currently being prefetched, to coalesce
     /// duplicate calls triggered by repeated cell .onAppear events.
     private var prefetchingComments: Set<String> = []
@@ -986,6 +992,8 @@ class FeedViewModel: ObservableObject {
         // `feedStore == nil` du setup). `arm()` est idempotent.
         feedSocketHandler?.arm()
         guard socketCancellables.isEmpty else { return }
+        let isRearm = hasSubscribedOnce
+        hasSubscribedOnce = true
         socialSocket.connect()
         // stores-02 — connect() est un no-op si le socket est déjà connecté :
         // le handler .connect (seul émetteur de feed:subscribe) ne rejoue pas,
@@ -994,6 +1002,14 @@ class FeedViewModel: ObservableObject {
         // jointe = no-op) ; socket pas encore prêt → l'emit est perdu mais
         // rejoué par le handler .connect.
         socialSocket.subscribeFeed()
+        if isRearm {
+            // rts-01 — même chemin que le sink didReconnect ci-dessous, pour
+            // l'aller-retour d'écran SANS coupure réseau (didReconnect ne
+            // couvre que le flap) : gardé par isFeedLoadInProgress, silencieux
+            // (showLoading: posts.isEmpty), et mergePreservingRealtimeHead
+            // protège les posts insérés par un sink pendant le vol.
+            Task { await self.loadFeed(forceRefresh: true) }
+        }
 
         // --- didReconnect → backfill du feed ---
         // Apres un flap reseau, le gateway a oublie nos rooms et des posts ont pu
