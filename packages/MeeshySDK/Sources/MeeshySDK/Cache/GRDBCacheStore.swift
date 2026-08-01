@@ -101,6 +101,10 @@ public actor GRDBCacheStore<Key, Value>: MutableCacheStore, GRDBDirtyFlushing
                 touchKey(key)
                 return .stale(l1.items, age: age)
             case .expired:
+                // cache-05 — même primitive que touchKey/evictL1 : une
+                // mutation locale encore dans la fenêtre debounce serait
+                // perdue si l'entrée franchit son TTL au load suivant.
+                flushDirtyKeyForEviction(key)
                 memoryCache.removeValue(forKey: key)
                 removeFromAccessOrder(key)
             }
