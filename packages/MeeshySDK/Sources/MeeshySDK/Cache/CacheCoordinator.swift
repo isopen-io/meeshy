@@ -608,8 +608,11 @@ public actor CacheCoordinator {
         await feed.flushDirtyKeys(deadline: deadline)
         if let deadline, Date() >= deadline { return }
         await stories.flushDirtyKeys(deadline: deadline)
-        if let deadline, Date() >= deadline { return }
-        persistTranslationCaches()
+        // cache-02 — plus de full-rewrite des traductions ici : la
+        // persistance est INCRÉMENTALE (cacheTranslation →
+        // persistTranslationIncremental). L'ancien snapshot RAM — vide après
+        // un memory warning — détruisait la table entière (deleteAll +
+        // ré-insertion de rien).
     }
 
     public func evictUnderMemoryPressure() async {
@@ -668,34 +671,6 @@ public actor CacheCoordinator {
         }
     }
 
-    private func persistTranslationCaches() {
-        let encoder = JSONEncoder()
-        encoder.dateEncodingStrategy = .iso8601
-        let snapshot = translationCache
-        let timestamps = translationTimestamps
-        do {
-            try db.write { db in
-                try TranslationCacheRecord.deleteAll(db)
-                let now = Date()
-                for (msgId, translations) in snapshot {
-                    let cachedAt = timestamps[msgId] ?? now
-                    for translation in translations {
-                        let data = try encoder.encode(translation)
-                        let record = TranslationCacheRecord(
-                            messageId: msgId,
-                            targetLanguage: translation.targetLanguage,
-                            encodedData: data,
-                            cachedAt: cachedAt
-                        )
-                        try record.save(db)
-                    }
-                }
-            }
-        } catch {
-            logger.error("Failed to persist translation cache to GRDB: \(error)")
-        }
-    }
-
     private func loadTranslationCaches() {
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
@@ -705,6 +680,19 @@ public actor CacheCoordinator {
                 try TranslationCacheRecord
                     .filter(Column("cachedAt") > cutoff)
                     .fetchAll(db)
+            }
+            // cache-02 — GC des rows au-delà du cutoff : le full-rewrite
+            // supprimé assurait accessoirement cette purge ; sans elle la
+            // table croît sans borne. Write séparé et loggé : un échec de GC
+            // ne doit pas empêcher le chargement.
+            do {
+                try db.write { db in
+                    try TranslationCacheRecord
+                        .filter(Column("cachedAt") <= cutoff)
+                        .deleteAll(db)
+                }
+            } catch {
+                logger.error("Failed to GC stale translation cache rows: \(error.localizedDescription, privacy: .public)")
             }
             var loaded: [String: [TranslationData]] = [:]
             var stamps: [String: Date] = [:]
