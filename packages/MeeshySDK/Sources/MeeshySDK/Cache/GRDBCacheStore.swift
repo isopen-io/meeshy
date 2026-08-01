@@ -17,7 +17,18 @@ public enum GRDBCacheError: Error, Sendable {
     case encryptionFailed
 }
 
-public actor GRDBCacheStore<Key, Value>: MutableCacheStore
+/// cache-01 — contrat minimal partagé par les 27 stores GRDB pour que
+/// flushAll/evictUnderMemoryPressure/dirtyCountForTest itèrent une LISTE
+/// unique au lieu d'énumérations divergentes (l'oubli du store notifications
+/// perdait l'état « lu » au kill).
+protocol GRDBDirtyFlushing: Sendable {
+    func flushDirtyKeys(deadline: Date?) async
+    func flushDirtyKeys() async
+    func evictL1() async
+    func dirtyKeyCount() async -> Int
+}
+
+public actor GRDBCacheStore<Key, Value>: MutableCacheStore, GRDBDirtyFlushing
     where Key: Hashable & Sendable & CustomStringConvertible,
           Value: CacheIdentifiable & Codable
 {

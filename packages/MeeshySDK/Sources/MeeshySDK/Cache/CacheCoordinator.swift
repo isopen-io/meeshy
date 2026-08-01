@@ -578,6 +578,20 @@ public actor CacheCoordinator {
         #endif
     }
 
+    /// cache-01 — LA liste des stores GRDB, en criticité décroissante (les
+    /// premiers flushés si la deadline coupe). Toute divergence avec les
+    /// propriétés déclarées en tête de classe est un bug : les énumérations
+    /// explicites de reset()/invalidateAll() restent séparées à dessein.
+    private var allGRDBStores: [any GRDBDirtyFlushing] {
+        [
+            conversations, messages, notifications, feed, stories, participants, profiles,
+            comments, statuses, communities, stats, drafts, callTranscripts, friends,
+            friendRequests, blockedUsers, userSearch, callHistory, timeline,
+            affiliateTokens, shareLinks, trackingLinks, communityLinks,
+            categories, userTags, userPreferences, conversationPreferences
+        ]
+    }
+
     public func flushAll() async {
         await flushAll(deadline: nil)
     }
@@ -596,39 +610,22 @@ public actor CacheCoordinator {
     /// per store) rather than batched into a single global transaction.
     /// Option A in the plan — see the task notes for the trade-off.
     public func flushAll(deadline: Date?) async {
-        if let deadline, Date() >= deadline { return }
-        await conversations.flushDirtyKeys(deadline: deadline)
-        if let deadline, Date() >= deadline { return }
-        await messages.flushDirtyKeys(deadline: deadline)
-        if let deadline, Date() >= deadline { return }
-        await participants.flushDirtyKeys(deadline: deadline)
-        if let deadline, Date() >= deadline { return }
-        await profiles.flushDirtyKeys(deadline: deadline)
-        if let deadline, Date() >= deadline { return }
-        await feed.flushDirtyKeys(deadline: deadline)
-        if let deadline, Date() >= deadline { return }
-        await stories.flushDirtyKeys(deadline: deadline)
-        // cache-02 — plus de full-rewrite des traductions ici : la
-        // persistance est INCRÉMENTALE (cacheTranslation →
-        // persistTranslationIncremental). L'ancien snapshot RAM — vide après
-        // un memory warning — détruisait la table entière (deleteAll +
-        // ré-insertion de rien).
+        // cache-01 — itère TOUS les stores (l'ancienne énumération n'en
+        // couvrait que 6 : l'état « lu » des notifications se perdait au
+        // kill). La persistance des traductions est incrémentale (cache-02).
+        for store in allGRDBStores {
+            if let deadline, Date() >= deadline { return }
+            await store.flushDirtyKeys(deadline: deadline)
+        }
     }
 
     public func evictUnderMemoryPressure() async {
-        await conversations.flushDirtyKeys()
-        await messages.flushDirtyKeys()
-        await participants.flushDirtyKeys()
-        await profiles.flushDirtyKeys()
-        await feed.flushDirtyKeys()
-        await stories.flushDirtyKeys()
-
-        await conversations.evictL1()
-        await messages.evictL1()
-        await participants.evictL1()
-        await profiles.evictL1()
-        await feed.evictL1()
-        await stories.evictL1()
+        for store in allGRDBStores {
+            await store.flushDirtyKeys()
+        }
+        for store in allGRDBStores {
+            await store.evictL1()
+        }
 
         await images.evictExpired()
         await audio.evictExpired()
@@ -831,12 +828,9 @@ public actor CacheCoordinator {
     /// `flushAll(deadline:)` so a test can assert "no work left to do".
     public func dirtyCountForTest() async -> Int {
         var total = 0
-        total += await conversations.dirtyKeyCount()
-        total += await messages.dirtyKeyCount()
-        total += await participants.dirtyKeyCount()
-        total += await profiles.dirtyKeyCount()
-        total += await feed.dirtyKeyCount()
-        total += await stories.dirtyKeyCount()
+        for store in allGRDBStores {
+            total += await store.dirtyKeyCount()
+        }
         return total
     }
 }
