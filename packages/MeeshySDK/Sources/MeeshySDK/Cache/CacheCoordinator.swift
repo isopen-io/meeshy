@@ -383,6 +383,11 @@ public actor CacheCoordinator {
         // Anti cross-user: drop any pending engagement sessions (open or
         // finalized) so user A's dwell/watch never flushes under user B.
         await EngagementOutbox.shared.purgeAll()
+        // media-08 — fractions de lecture et checkpoints TUS ne sont pas
+        // namespacés par userId : sans purge, le compte B hérite des
+        // waveforms teintées et des sessions d'upload en cours du compte A.
+        await TusUploadCheckpointStore.shared.purgeAll()
+        await MainActor.run { MediaConsumptionStore.shared.purgeAll() }
 
         // Reset the search-index backfill flag so the next user's first
         // `start()` re-runs the backfill against their freshly hydrated cache.

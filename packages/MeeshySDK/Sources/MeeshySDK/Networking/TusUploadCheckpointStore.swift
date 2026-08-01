@@ -100,6 +100,18 @@ public actor TusUploadCheckpointStore {
         }
     }
 
+    /// media-08 — purge de logout : tous les checkpoints, sans filtre d'âge
+    /// (miroir de `purgeStale` sans cutoff).
+    public func purgeAll() async {
+        do {
+            try await pool.write { db in
+                try db.execute(sql: "DELETE FROM tus_upload_checkpoint")
+            }
+        } catch {
+            logger.error("purgeAll failed: \(error.localizedDescription, privacy: .public)")
+        }
+    }
+
     // MARK: - Test surface
 
     /// Returns the entire table (for tests / debug). Unbounded — do not
