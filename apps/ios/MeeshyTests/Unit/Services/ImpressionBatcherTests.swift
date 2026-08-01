@@ -173,3 +173,20 @@ final class ImpressionBatcherTests: XCTestCase {
                        "l'occurrence perdue par le réseau doit repartir, pas disparaître")
     }
 }
+
+/// outbox-11 — purge de logout des lots d'impressions persistés.
+extension ImpressionBatcherTests {
+
+    func test_purgeAllPendingImpressions_removesOnlyPrefixedKeys() {
+        defaults.set(["p1"], forKey: "meeshy.impressions.pending.feed")
+        defaults.set(["p2"], forKey: "meeshy.impressions.pending.profile")
+        defaults.set("garder", forKey: "meeshy.unrelated.key")
+
+        ImpressionBatcher.purgeAllPendingImpressions(in: defaults)
+
+        XCTAssertNil(defaults.object(forKey: "meeshy.impressions.pending.feed"))
+        XCTAssertNil(defaults.object(forKey: "meeshy.impressions.pending.profile"))
+        XCTAssertEqual(defaults.string(forKey: "meeshy.unrelated.key"), "garder",
+                       "seules les clés préfixées impressions sont purgées")
+    }
+}

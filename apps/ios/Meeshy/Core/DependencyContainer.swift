@@ -182,6 +182,13 @@ final class DependencyContainer {
                     } catch {
                         containerLogger.error("grdb-01 logout feed purge failed: \(error.localizedDescription, privacy: .public)")
                     }
+                    // outbox-11 — résidus cross-compte hors messages/feed :
+                    // impressions (UserDefaults standard, clés sans userId,
+                    // rejouées dès l'init de chaque surface) et
+                    // PendingStatusQueue. (pending_mark_read App Group est
+                    // couvert par le wipe appgroup-01 — pas de doublon ici.)
+                    await ImpressionBatcher.purgeAllPendingImpressions()
+                    await PendingStatusQueue.shared.clearAll()
                 }
             }
             .store(in: &cancellables)
