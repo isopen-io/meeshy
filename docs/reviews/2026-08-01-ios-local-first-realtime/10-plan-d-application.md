@@ -83,15 +83,15 @@ Le cœur doctrine « jamais d'écran vide si le disque a une donnée ».
 
 ## Lot 4 — Écritures optimistes sans clobber
 
-- [ ] **grdb-03** (P1/M/f01) — Garde anti-clobber outbox dans `FeedPersistenceActor.insertPosts` + `reapplyPendingLikes` côté mémoire (deps : grdb-01).
-- [ ] **outbox-05** (P1/M/f02) — Coalescing `markAsRead` : fusionner (union des `messageIds`) au lieu de latest-wins.
-- [ ] **stores-06** (P2/S/f05) — Persister en L2 les mutations optimistes de prefs (pin/mute/archive/read) au moment où elles s'appliquent.
-- [ ] **stores-09** (P2/S/f05) — Like optimiste write-through vers toutes les clés du cache (réutiliser `patchEverywhere`) (deps : stores-02, lot 5, pour le volet temps réel).
-- [ ] **stores-07** (P2/M/f05) — Étendre `patchEverywhere` : commentCount, bookmark, suppression de post.
-- [ ] **grdb-06** (P2/S/f01) — Upsert `TranslationRecord` sur la clé métier `(messageLocalId, targetLanguage)`.
-- [ ] **grdb-07** (P3/S/f01) — Hydratation des traductions de ses propres messages (filtre localId **et** serverId).
-- [ ] **vm-postdetail-reply-outbox-01** (P2/M/f05) — `sendReply` via l'outbox comme `sendComment` (ajout `effectFlags` au payload).
-- [ ] **outbox-06** (P2/S/f02) — `OutboxFlusher.flush()` : boucler tant qu'il reste des pending au-delà des 50.
+- [x] **grdb-03** (P1/M/f01) — Garde anti-clobber outbox dans `FeedPersistenceActor.insertPosts` + `reapplyPendingLikes` côté mémoire (deps : grdb-01).
+- [x] **outbox-05** (P1/M/f02) — Coalescing `markAsRead` : fusionner (union des `messageIds`) au lieu de latest-wins.
+- [x] **stores-06** (P2/S/f05) — Persister en L2 les mutations optimistes de prefs (pin/mute/archive/read) au moment où elles s'appliquent.
+- [x] **stores-09** (P2/S/f05) — Like optimiste write-through vers toutes les clés du cache (réutiliser `patchEverywhere`) (deps : stores-02, lot 5, pour le volet temps réel).
+- [x] **stores-07** (P2/M/f05) — Étendre `patchEverywhere` : commentCount, bookmark, suppression de post.
+- [x] **grdb-06** (P2/S/f01) — Upsert `TranslationRecord` sur la clé métier `(messageLocalId, targetLanguage)`.
+- [x] **grdb-07** (P3/S/f01) — Hydratation des traductions de ses propres messages (filtre localId **et** serverId).
+- [x] **vm-postdetail-reply-outbox-01** (P2/M/f05) — `sendReply` via l'outbox comme `sendComment` (ajout `effectFlags` au payload).
+- [x] **outbox-06** (P2/S/f02) — `OutboxFlusher.flush()` : boucler tant qu'il reste des pending au-delà des 50.
 
 ## Lot 5 — Temps réel social vivant
 
