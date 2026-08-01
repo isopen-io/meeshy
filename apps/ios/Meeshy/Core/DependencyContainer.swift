@@ -32,7 +32,6 @@ final class DependencyContainer {
     let messagePersistence: MessagePersistenceActor
     let feedPersistence: FeedPersistenceActor
     let thumbnailPrefetcher: ThumbnailPrefetcher
-    let mediaSnapshotStore: MediaSnapshotStore
 
     /// Q3 (P1 hotfix) — Combine subscriptions tenues par le container.
     /// Aujourd'hui : un seul abonnement sur `AuthManager.isAuthenticated` pour
@@ -72,7 +71,6 @@ final class DependencyContainer {
         self.messagePersistence = persistence
         self.feedPersistence = FeedPersistenceActor(dbWriter: pool)
         self.thumbnailPrefetcher = ThumbnailPrefetcher.shared
-        self.mediaSnapshotStore = MediaSnapshotStore.shared
         self.initDiagnostics = diagnostics
 
         Task {

@@ -736,14 +736,6 @@ public actor MessagePersistenceActor {
         try dbWriter.write { db in try translation.save(db) }
     }
 
-    public func saveTranscription(_ transcription: TranscriptionRecord) throws {
-        try dbWriter.write { db in try transcription.save(db) }
-    }
-
-    public func saveAudioTranslation(_ audio: AudioTranslationRecord) throws {
-        try dbWriter.write { db in try audio.save(db) }
-    }
-
     // MARK: - Edit / Delete / Reactions / ViewOnce
 
     // The socket-driven mutators below (`markEdited` / `markDeleted` /

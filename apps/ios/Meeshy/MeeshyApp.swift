@@ -549,9 +549,12 @@ struct MeeshyApp: App {
                     // GRDB on every cold start. The server remains the source of
                     // truth — purged messages can be re-fetched via pagination.
                     // Runs at background priority so it never blocks the UI.
-                    let retentionPersistence = MessagePersistenceActor(dbWriter: dependencies.dbPool)
+                    // grdb-08 — réutilise l'acteur DÉJÀ démarré du container :
+                    // une seconde instance relançait le write worker ET le GC
+                    // outbox exhausted à chaque boot. purgeOldMessages n'a
+                    // aucune dépendance à start().
+                    let retentionPersistence = dependencies.messagePersistence
                     Task.detached(priority: .background) {
-                        await retentionPersistence.start()
                         do {
                             let count = try await retentionPersistence.purgeOldMessages()
                             if count > 0 {
