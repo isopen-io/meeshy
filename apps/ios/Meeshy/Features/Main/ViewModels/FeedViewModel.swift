@@ -468,7 +468,7 @@ class FeedViewModel: ObservableObject {
         if !cachedBookmarks.contains(where: { $0.id == postId }) {
             var updated = cachedBookmarks
             updated.insert(post, at: 0)
-            try? await CacheCoordinator.shared.feed.save(updated, for: bookmarksKey)
+            try? await CacheCoordinator.shared.feed.savePreservingFreshness(updated, for: bookmarksKey)
         }
         FeedbackToastManager.shared.showSuccess(String(localized: "feed.bookmark.success", defaultValue: "Added to bookmarks", bundle: .main))
 
@@ -479,7 +479,7 @@ class FeedViewModel: ObservableObject {
             )
         } catch {
             // Rollback the optimistic cache insertion.
-            try? await CacheCoordinator.shared.feed.save(snapshot, for: bookmarksKey)
+            try? await CacheCoordinator.shared.feed.savePreservingFreshness(snapshot, for: bookmarksKey)
             FeedbackToastManager.shared.showError(String(localized: "feed.bookmark.error", defaultValue: "Error saving bookmark", bundle: .main))
         }
     }
@@ -1269,7 +1269,7 @@ class FeedViewModel: ObservableObject {
             // newest-first : sans ce prefix(100), au-delà de 100 posts
             // accumulés le cold start sert la tranche la plus vieille en
             // .fresh. Miroir de ProfileUserPostsList.
-            try? await CacheCoordinator.shared.feed.save(Array(snapshot.prefix(100)), for: "main-feed")
+            try? await CacheCoordinator.shared.feed.savePreservingFreshness(Array(snapshot.prefix(100)), for: "main-feed")
         }
     }
 }

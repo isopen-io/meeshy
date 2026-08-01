@@ -644,7 +644,7 @@ class PostDetailViewModel: ObservableObject {
         )
         do {
             try await offlineQueue.enqueue(.createComment, payload: payload, conversationId: post.id)
-            try? await CacheCoordinator.shared.comments.save(comments, for: "post-\(post.id)")
+            try? await CacheCoordinator.shared.comments.savePreservingFreshness(comments, for: "post-\(post.id)")
 
             // R5 — roll back the optimistic comment if the outbox exhausts its
             // retry budget (server permanently rejects). The synchronous catch
@@ -691,7 +691,7 @@ class PostDetailViewModel: ObservableObject {
                 comments[idx].replies += 1
             }
             self.post?.commentCount += 1
-            try? await CacheCoordinator.shared.comments.save(comments, for: "post-\(post.id)")
+            try? await CacheCoordinator.shared.comments.savePreservingFreshness(comments, for: "post-\(post.id)")
 
             // Persist reply to GRDB
             if let persistence = feedPersistence,
@@ -772,7 +772,7 @@ class PostDetailViewModel: ObservableObject {
             } else if !comments.contains(where: { $0.id == server.id }) {
                 comments.insert(server, at: 0)
             }
-            try? await CacheCoordinator.shared.comments.save(comments, for: "post-\(post.id)")
+            try? await CacheCoordinator.shared.comments.savePreservingFreshness(comments, for: "post-\(post.id)")
         } catch {
             // Rollback optimiste.
             comments = snapshotComments
@@ -801,7 +801,7 @@ class PostDetailViewModel: ObservableObject {
                 repliesMap[parentId] = existing
                 // Met à jour l'aperçu en cache pour ne pas réafficher la réponse
                 // supprimée à la ré-ouverture du post.
-                try? await CacheCoordinator.shared.comments.save(existing, for: "replies-\(parentId)")
+                try? await CacheCoordinator.shared.comments.savePreservingFreshness(existing, for: "replies-\(parentId)")
             }
             if let idx = comments.firstIndex(where: { $0.id == parentId }), comments[idx].replies > 0 {
                 comments[idx].replies -= 1
@@ -817,7 +817,7 @@ class PostDetailViewModel: ObservableObject {
 
         do {
             try await postService.deleteComment(postId: post.id, commentId: comment.id)
-            try? await CacheCoordinator.shared.comments.save(comments, for: "post-\(post.id)")
+            try? await CacheCoordinator.shared.comments.savePreservingFreshness(comments, for: "post-\(post.id)")
             FeedbackToastManager.shared.showSuccess(String(localized: "feed.comments.deleted", defaultValue: "Commentaire supprimé", bundle: .main))
         } catch {
             comments = snapshotComments
