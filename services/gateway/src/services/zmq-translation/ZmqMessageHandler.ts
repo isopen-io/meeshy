@@ -34,6 +34,7 @@ import type {
   VoiceTranslationFailedEvent,
   StoryTextObjectTranslationCompletedEvent
 } from './types';
+import { extractAudioBinaryFrames } from './utils/binary-frames';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 // Logger dédié pour ZmqMessageHandler
 const logger = enhancedLogger.child({ module: 'ZmqMessageHandler' });
@@ -316,25 +317,12 @@ export class ZmqMessageHandler extends EventEmitter {
     // ═══════════════════════════════════════════════════════════════
     // EXTRACTION DES BINAIRES DEPUIS FRAMES MULTIPART
     // ═══════════════════════════════════════════════════════════════
-    const binaryFramesInfo = (event as any).binaryFrames || {};
-    const audioBinaries: Map<string, Buffer> = new Map();
-    let embeddingBinary: Buffer | null = null;
-
-    // Extraire les audios traduits des frames binaires
-    for (const [key, info] of Object.entries(binaryFramesInfo)) {
-      const frameInfo = info as { index: number; size: number; mimeType?: string };
-      const frameIndex = frameInfo.index - 1; // Les indices dans metadata commencent à 1, array à 0
-
-      if (frameIndex >= 0 && frameIndex < binaryFrames.length) {
-        if (key.startsWith('audio_')) {
-          const language = key.replace('audio_', '');
-          audioBinaries.set(language, binaryFrames[frameIndex]);
-        } else if (key === 'embedding') {
-          embeddingBinary = binaryFrames[frameIndex];
-        }
-      } else {
-        logger.warn(`   ⚠️ Frame index invalide pour ${key}: ${frameIndex}`);
-      }
+    const { audioBinaries, embeddingBinary, invalidFrameKeys } = extractAudioBinaryFrames(
+      (event as any).binaryFrames,
+      binaryFrames
+    );
+    for (const key of invalidFrameKeys) {
+      logger.warn(`   ⚠️ Frame index invalide pour ${key}`);
     }
 
     // Enrichir translatedAudios avec les données binaires
