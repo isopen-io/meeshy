@@ -38,6 +38,23 @@ public actor FeedPersistenceActor {
 
     // MARK: - Post Writes
 
+    /// grdb-01 — purge de logout (miroir du contrat Q3 de
+    /// `MessagePersistenceActor.clearAllMessagesForLogout`). Aucune table feed
+    /// n'est namespacée par userId et le fichier App Group est partagé entre
+    /// comptes : `feed_posts.isLikedByMe` est un flag personnel et la lecture
+    /// prend le top-N par `createdAt` sans scoping — la seule frontière
+    /// safe-by-construction est de tout supprimer. Transaction atomique,
+    /// aucune FK entre ces tables. Câblée depuis
+    /// `DependencyContainer.wireOutboxLogoutHook`.
+    public func clearAllForLogout() throws {
+        try dbWriter.write { db in
+            try db.execute(sql: "DELETE FROM feed_posts")
+            try db.execute(sql: "DELETE FROM feed_comments")
+            try db.execute(sql: "DELETE FROM feed_translations")
+        }
+        postFeedStoreRefresh()
+    }
+
     public func insertPost(_ record: PostRecord) throws {
         try dbWriter.write { db in try record.save(db) }
         postFeedStoreRefresh()

@@ -129,6 +129,7 @@ final class DependencyContainer {
     /// lue par `MessageStore.loadInitialSnapshot`).
     private func wireOutboxLogoutHook() {
         let persistence = messagePersistence
+        let feed = feedPersistence
         AuthManager.shared.$isAuthenticated
             .removeDuplicates()
             .dropFirst()
@@ -140,6 +141,13 @@ final class DependencyContainer {
                         try await persistence.clearAllMessagesForLogout()
                     } catch {
                         containerLogger.error("Q3 logout message purge failed: \(error.localizedDescription, privacy: .public)")
+                    }
+                    // grdb-01 — purge feed indépendante : un échec d'un côté
+                    // ne doit pas empêcher l'autre purge.
+                    do {
+                        try await feed.clearAllForLogout()
+                    } catch {
+                        containerLogger.error("grdb-01 logout feed purge failed: \(error.localizedDescription, privacy: .public)")
                     }
                 }
             }

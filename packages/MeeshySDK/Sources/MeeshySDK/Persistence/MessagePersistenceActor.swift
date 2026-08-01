@@ -177,6 +177,7 @@ public actor MessagePersistenceActor {
             try db.execute(sql: "DELETE FROM pending_ids")
             try db.execute(sql: "DELETE FROM messages")
             try db.execute(sql: "DELETE FROM outbox")
+            try db.execute(sql: "DELETE FROM send_attempts")
         }
     }
 
