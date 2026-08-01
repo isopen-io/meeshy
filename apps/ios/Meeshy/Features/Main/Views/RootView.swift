@@ -716,6 +716,18 @@ struct RootView: View {
             // deep link), iOS retombe sur la transition cover standard.
             .zoomTransitionDestination(sourceID: request.id, in: storyZoomNamespace)
         }
+        // Composer de CRÉATION — monté ici, au niveau racine, comme le viewer
+        // juste au-dessus. Il vivait dans `StoryTrayView`, instanciée par la
+        // liste de conversations ET par la feuille de feed qui la recouvre sans
+        // la démonter : deux trays vivantes observaient le même
+        // `showStoryComposer` et présentaient le même cover en double. Détail
+        // dans `StoryComposerCover`.
+        .storyComposerCover(
+            viewModel: storyViewModel,
+            router: router,
+            conversationListViewModel: conversationViewModel,
+            statusViewModel: statusViewModel
+        )
         // Présentation d'appel (cover plein écran + PiP + pastille + bulle +
         // bannière call-waiting) extraite dans `CallPresentationLayer` : le tick
         // `callDuration` 1 Hz et les stats qualité WebRTC n'invalident plus TOUT

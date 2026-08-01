@@ -36,12 +36,20 @@ public struct StoryComposerView: View {
 
     @State var fgMediaItem: PhotosPickerItem?
 
-    // MARK: - Empty-state picker selection animation
-    //
-    // Briefly latched when the user taps a tile in `emptyStateLargePicker`,
-    // before the selection propagates to `viewModel.selectTool(_:)`. Drives
-    // the highlight + fade-others animation in `largeToolTile`.
-    @State var pickerSelectedTool: StoryToolMode?
+    // MARK: - Amorces de page blanche (S5)
+
+    /// Écran de capture caméra, présenté en plein écran par-dessus le composer.
+    /// La VUE vient de l'app via `\.storyCameraCapture` (AVCaptureSession,
+    /// permissions, écran de refus) — même doctrine que `showLocationPicker`.
+    @State var showCameraCapture = false
+    /// Dernière photo de la pellicule, résolue à l'ouverture par le
+    /// fournisseur app-side. `nil` = aucune vignette (pas d'injection,
+    /// permission refusée ou pellicule vide) → l'amorce retombe sur « Galerie ».
+    @State var recentCameraRollAsset: StoryRecentCameraRollAsset?
+    /// Repli du tap sur « Galerie » quand l'accès en lecture est refusé : le
+    /// `PhotosPicker` système, qui ne consomme aucune permission. Présenté par
+    /// code — la décision n'est connue qu'après la réponse de l'utilisateur.
+    @State var showGalleryPicker = false
 
     // MARK: - Media editor (triggered by edit button on canvas elements)
 
@@ -135,7 +143,9 @@ public struct StoryComposerView: View {
     @State var measuredBandTopY: CGFloat = .greatestFiniteMagnitude
 
     @State var showDiscardAlert = false
-    @State var showRestoreDraftAlert = false
+    /// Visibilité du bandeau ET décision de reprise, séparées : ranger le
+    /// bandeau ne rend pas le magasin écrivable (cf. `DraftResumeState`).
+    @State var draftResume = DraftResumeState()
     /// U4 inc.2 — données de la carte de reprise (cover rendu async depuis
     /// les médias du draft, SANS muter le ViewModel avant le choix user).
     @State var draftResumeCover: UIImage?
@@ -193,9 +203,25 @@ public struct StoryComposerView: View {
     /// MapKit, CoreLocation et du coordinateur de permissions — app-side).
     @Environment(\.storyLocationPicker) var storyLocationPicker
 
+    /// Fabrique de l'écran de capture caméra, injectée par l'app. `nil` = la
+    /// capsule « Caméra » de la page blanche n'est pas rendue (une amorce qui
+    /// ouvre le vide est pire que pas d'amorce).
+    @Environment(\.storyCameraCapture) var storyCameraCapture
+
+    /// Accès en lecture à la dernière photo de la pellicule, injecté par l'app
+    /// (PhotoKit + autorisation limitée restent app-side). `nil` = la vignette
+    /// n'est pas rendue et la galerie reste atteignable par le PhotosPicker.
+    @Environment(\.storyRecentCameraRollAsset) var storyRecentCameraRollAsset
+
     // MARK: - Callbacks (public API preserved)
 
     public var onPublishSlide: (StorySlide, UIImage?, [String: UIImage], [String: URL], String?) async throws -> Void
+    /// Retourne `true` quand le hand-off est ACCEPTÉ, c'est-à-dire quand
+    /// l'hôte ferme réellement le composer. Un `false` (édition hors-ligne,
+    /// surface qui ne publie pas) laisse le composer ouvert ET son bouton
+    /// Publier utilisable : le loquet `didHandOffPublish` n'est posé que sur
+    /// un `true`. Sans ce contrat, une surface qui ne ferme rien condamnait le
+    /// bouton et coupait les deux autosaves définitivement.
     public var onPublishAllInBackground: (
         _ slides: [StorySlide],
         _ slideImages: [String: UIImage],
@@ -250,7 +276,8 @@ public struct StoryComposerView: View {
         self.onDismiss = onDismiss
         // Mode édition (`init(editing:)`) : PRIORITÉ ABSOLUE — le composer
         // s'ouvre sur la visibilité ACTUELLE de la story, jamais sur le dernier
-        // choix mémorisé qu'on vient d'injecter juste au-dessus.
+        // choix mémorisé. Cette réassignation vient donc APRÈS celle du
+        // paramètre injecté (chaîne de précédence, cf. `visibility`).
         if let editingVisibility = viewModel.editingInitialVisibility {
             self._visibility = State(initialValue: editingVisibility)
             self._visibilityUserIds = State(initialValue: viewModel.editingInitialVisibilityUserIds)
@@ -266,29 +293,37 @@ public struct StoryComposerView: View {
 
     public var body: some View {
         sheetModifiers
-        // U4 inc.2 — la reprise de brouillon montre CE QU'ON reprend (carte
-        // cover composite) au lieu de l'ancienne alerte texte nue. Dismissal
-        // explicite uniquement (pas de tap-outside : le brouillon est précieux).
-        .overlay {
-            if showRestoreDraftAlert {
-                ZStack {
-                    Color.black.opacity(0.55).ignoresSafeArea()
-                    DraftResumeCard(
-                        cover: draftResumeCover,
-                        slideCount: draftResumeSlideCount,
-                        updatedAt: nil,
-                        onResume: {
-                            showRestoreDraftAlert = false
-                            restoreDraft()
-                        },
-                        onDiscard: {
-                            showRestoreDraftAlert = false
-                            clearAllDrafts()
-                        }
-                    )
-                    .padding(28)
-                }
-                .transition(.opacity)
+        // U4 inc.2 — la reprise de brouillon montre CE QU'ON reprend (cover
+        // composite) au lieu de l'ancienne alerte texte nue.
+        //
+        // S5 — elle n'est plus MODALE : l'overlay noir à 0,55 d'opacité était le
+        // premier écran rencontré à presque chaque ouverture et interdisait tout
+        // accès au canvas avant d'avoir tranché. Le bandeau se pose désormais en
+        // BAS, le canvas reste interactif derrière, et interagir avec lui le
+        // range sans rien jeter (`ComposerBackgroundTapAction.dismissDraftResume`).
+        // « Recommencer » reste le SEUL discard explicite.
+        .overlay(alignment: .bottom) {
+            if draftResume.isBannerVisible {
+                DraftResumeCard(
+                    cover: draftResumeCover,
+                    slideCount: draftResumeSlideCount,
+                    updatedAt: nil,
+                    onResume: {
+                        draftResume.decide()
+                        restoreDraft()
+                    },
+                    onDiscard: {
+                        draftResume.decide()
+                        clearAllDrafts()
+                    }
+                )
+                .padding(.horizontal, 16)
+                // Dégage le rail de FABs (48 pt + marge + safe area), comme les
+                // amorces de page blanche : le bandeau se pose AU-DESSUS des
+                // outils, il ne les recouvre pas. MÊME constante que les
+                // amorces — deux littéraux jumeaux finissent par diverger.
+                .padding(.bottom, ComposerControlMetrics.bottomOverlayClearance)
+                .transition(.move(edge: .bottom).combined(with: .opacity))
                 .zIndex(40)
             }
         }
@@ -307,7 +342,13 @@ public struct StoryComposerView: View {
             // (StoryViewerView) qui traverse la présentation ; sur iOS 26 l'alerte est
             // dessinée sur verre clair → sans teinte, le label des boutons sans rôle /
             // .cancel devient quasi-blanc et illisible. L'indigo reste lisible partout.
-            if !isEditingExistingStory {
+            // `exitPrompt.offersSave` et non `composerHasContent` : la feuille
+            // s'ouvre désormais aussi pour la story « fond + musique », que le
+            // brouillon ne sait PAS retenir (`StoryDraftStore` ignore la
+            // sélection audio vivante). Lui proposer « Sauvegarder » rendrait un
+            // brouillon muet à la reprise ; il ne reste alors que « Quitter » et
+            // « Annuler ».
+            if !isEditingExistingStory, exitPrompt.offersSave {
                 Button(String(localized: "story.composer.save", defaultValue: "Sauvegarder", bundle: .module)) { saveDraftAndDismiss() }
                     .tint(MeeshyColors.indigo500)
             }
@@ -365,6 +406,14 @@ public struct StoryComposerView: View {
             // (composer vierge ; `restoreDraft()` re-seed après reprise).
             viewModel.seedHistory()
         }
+        // Le bandeau de reprise ne flotte au-dessus de RIEN : dès que le chrome
+        // plein cède la place (panneau d'outil, éditeur texte, dessin, timeline),
+        // il se range. La règle est pure et testée
+        // (`ComposerChromePolicy.rangesDraftResumeBanner`) ; `showTopBar` EST
+        // `fullChromeVisible`, donc son basculement est le seul signal à écouter.
+        .adaptiveOnChange(of: showTopBar) { _, _ in
+            rangeDraftResumeBannerIfNeeded()
+        }
         // D1 — le travail d'édition survit au kill de l'app : auto-save du
         // draft au passage en BACKGROUND (jamais onDisappear — le discard
         // fire onDisappear et re-persisterait un draft explicitement jeté).
@@ -378,11 +427,14 @@ public struct StoryComposerView: View {
             autosaveDraftAfterMutation()
         }
         // C9 Inc.2 — capture débouncée d'une étape d'annulation après chaque
-        // accalmie de mutation. Mêmes gardes que l'autosave : jamais pendant
-        // la décision de reprise (le composer vierge sous la carte ne doit
-        // pas semer d'étapes), ni pendant le démontage post-discard/publish.
+        // accalmie de mutation. Jamais tant que le bandeau de reprise est POSÉ
+        // (le composer vierge dessous ne doit pas semer d'étapes), ni pendant
+        // le démontage post-discard/publish. Le bandeau RANGÉ, en revanche,
+        // laisse l'undo reprendre : l'historique vit en mémoire et n'écrase
+        // aucun brouillon — c'est justement ce qui distingue ce verrou de
+        // celui de l'autosave (`mayOverwriteStoredDraft`).
         .onReceive(viewModel.historyTrigger) { _ in
-            guard !showRestoreDraftAlert, !draftAutosaveSuspended else { return }
+            guard !draftResume.isBannerVisible, !draftAutosaveSuspended else { return }
             viewModel.pushHistorySnapshot()
         }
     }

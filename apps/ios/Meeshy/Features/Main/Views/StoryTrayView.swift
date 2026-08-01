@@ -53,17 +53,10 @@ extension View {
                 onDismiss: { session.wrappedValue = nil }
             )
             .storyLocationPickerProvided()
+            .storyCameraCaptureProvided()
+            .storyRecentCameraRollProvided()
         }
     }
-}
-
-private struct StoryPreviewAssets: Identifiable {
-    let id = UUID()
-    let slides: [StorySlide]
-    let backgroundImages: [String: UIImage]
-    let loadedImages: [String: UIImage]
-    let videoURLs: [String: URL]
-    let audioURLs: [String: URL]
 }
 
 struct StoryTrayView: View {
@@ -87,18 +80,21 @@ struct StoryTrayView: View {
     // un re-render complet du tray. La présence est rafraîchie lors des refreshs naturels.
     private var presenceManager: PresenceManager { PresenceManager.shared }
     @EnvironmentObject private var statusViewModel: StatusViewModel
-    // Captured solely so we can re-inject them onto the `StoryViewerContainer`
-    // / `StoryViewerView` fullScreenCovers below — those covers create a new
-    // presentation hierarchy and the inner SharePickerView sheet would
-    // otherwise crash on a missing `conversationListViewModel`.
+    // Capturés uniquement pour être RÉINJECTÉS sur la sheet « Mes stories » :
+    // une présentation crée une nouvelle hiérarchie, et la sheet interne
+    // `SharePickerView` (« Transférer ») crasherait sur un environment object
+    // manquant. (Le cover du composer, lui, est monté aux racines depuis S5 —
+    // cf. `StoryComposerCover`.)
     @EnvironmentObject private var router: Router
     @EnvironmentObject private var conversationListViewModel: ConversationListViewModel
     @EnvironmentObject private var storyViewerCoordinator: StoryViewerCoordinator
     @State private var selectedProfileUser: ProfileSheetUser?
-    @State private var storyPreviewAssets: StoryPreviewAssets?
     /// Sheet « Mes stories envoyées » (gestion : ouvrir, vues, partager,
     /// republier, supprimer). Directive user 2026-07-14.
     @State private var showMyStories = false
+    /// Intention posée pendant la fermeture de la sheet, exécutée par son
+    /// `onDismiss` — remplace le pari des 350 ms (cf. `StoryTrayActions`).
+    @State private var myStoriesFollowUp = DeferredSheetFollowUp<MyStoriesFollowUp>()
     /// Session d'édition d'une story publiée (composer en mode édition).
     @State private var editingStorySession: StoryEditSession?
 
@@ -118,52 +114,31 @@ struct StoryTrayView: View {
             }
         }
         .frame(height: 120)
-        .sheet(isPresented: $showMyStories) {
-            MyStoriesView(
-                viewModel: viewModel,
-                userId: AuthManager.shared.currentUser?.id ?? "",
-                statusViewModel: statusViewModel,
-                onOpen: { story in
-                    showMyStories = false
-                    let coordinator = storyViewerCoordinator
-                    let uid = AuthManager.shared.currentUser?.id ?? ""
-                    let postId = story.id
-                    // Laisse la sheet se fermer avant le fullScreenCover root
-                    // (le coordinator présente au niveau RootView).
-                    Task { @MainActor in
-                        try? await Task.sleep(for: .milliseconds(350))
-                        coordinator.present(StoryViewerRequest(
-                            id: uid, singleGroup: true, postId: postId))
-                    }
-                },
-                onCreateStory: {
-                    showMyStories = false
-                    // Même pattern anti-course que `onOpen` : un .sheet et un
-                    // .fullScreenCover actifs en même temps depuis le même
-                    // hôte se marchent dessus.
-                    Task { @MainActor in
-                        try? await Task.sleep(for: .milliseconds(350))
-                        viewModel.showStoryComposer = true
-                    }
-                },
-                onEditStory: { story in
-                    showMyStories = false
-                    // Même pattern anti-course : sheet fermée AVANT le cover.
-                    Task { @MainActor in
-                        try? await Task.sleep(for: .milliseconds(350))
-                        editingStorySession = StoryEditSession(
-                            story: story,
-                            composer: StoryComposerViewModel(editing: story)
-                        )
-                    }
+        .myStoriesSheet(
+            isPresented: $showMyStories,
+            followUp: $myStoriesFollowUp,
+            viewModel: viewModel,
+            userId: AuthManager.shared.currentUser?.id ?? "",
+            statusViewModel: statusViewModel,
+            router: router,
+            conversationListViewModel: conversationListViewModel,
+            perform: { action in
+                // Aucun `Task`, aucun `sleep` : `onDismiss` s'exécute APRÈS la
+                // fin réelle du dismiss, la présentation cible est libre.
+                switch action {
+                case .openViewer(let postId):
+                    storyViewerCoordinator.present(StoryViewerRequest(
+                        id: AuthManager.shared.currentUser?.id ?? "",
+                        singleGroup: true, postId: postId))
+                case .createStory:
+                    viewModel.showStoryComposer = true
+                case .editStory(let story):
+                    editingStorySession = StoryEditSession(
+                        story: story,
+                        composer: StoryComposerViewModel(editing: story))
                 }
-            )
-            // Réinjection à travers la frontière de sheet : la sheet interne
-            // SharePickerView (« Transférer ») crasherait sur un env object
-            // manquant — même raison que les fullScreenCovers du viewer.
-            .environmentObject(router)
-            .environmentObject(conversationListViewModel)
-        }
+            }
+        )
         .storyEditComposerCover(session: $editingStorySession, viewModel: viewModel)
         .sheet(item: $selectedProfileUser) { user in
             UserProfileSheet(
@@ -179,69 +154,6 @@ struct StoryTrayView: View {
             )
             .presentationDetents([.medium, .large])
             .presentationDragIndicator(.visible)
-        }
-        .fullScreenCover(isPresented: $viewModel.showStoryComposer) {
-            ZStack {
-                StoryComposerView(
-                    initialVisibility: viewModel.lastComposerVisibility,
-                    onPublishAllInBackground: { slides, slideImages, loadedImages, loadedVideoURLs, loadedAudioURLs, originalLanguage, visibility, visibilityUserIds in
-                        viewModel.publishStoryInBackground(
-                            slides: slides,
-                            slideImages: slideImages,
-                            loadedImages: loadedImages,
-                            loadedVideoURLs: loadedVideoURLs,
-                            loadedAudioURLs: loadedAudioURLs,
-                            originalLanguage: originalLanguage,
-                            visibility: visibility,
-                            visibilityUserIds: visibilityUserIds
-                        )
-                        // La création accepte TOUJOURS : hors-ligne, la story
-                        // part en file d'attente au lieu de rester dans le
-                        // composer.
-                        return true
-                    },
-                    onPreview: { slides, images, loadedImgs, videoURLs, audioURLs in
-                        storyPreviewAssets = StoryPreviewAssets(
-                            slides: slides,
-                            backgroundImages: images,
-                            loadedImages: loadedImgs,
-                            videoURLs: videoURLs,
-                            audioURLs: audioURLs
-                        )
-                    },
-                    onDismiss: {
-                        viewModel.showStoryComposer = false
-                    }
-                )
-                .storyLocationPickerProvided()
-            }
-            .fullScreenCover(item: $storyPreviewAssets, onDismiss: {
-                NotificationCenter.default.post(name: .storyComposerUnmuteCanvas, object: nil)
-            }) { assets in
-                let items = assets.slides.map { $0.toPreviewStoryItem() }
-                let group = StoryGroup(
-                    id: "preview",
-                    username: String(localized: "story.preview.username", defaultValue: "Aperçu", bundle: .main),
-                    avatarColor: MeeshyColors.brandPrimaryHex,
-                    stories: items
-                )
-                StoryViewerView(
-                    viewModel: viewModel,
-                    groups: [group],
-                    currentGroupIndex: 0,
-                    isPresented: Binding(
-                        get: { storyPreviewAssets != nil },
-                        set: { if !$0 { storyPreviewAssets = nil } }
-                    ),
-                    isPreviewMode: true,
-                    preloadedImages: assets.loadedImages.merging(assets.backgroundImages) { fg, _ in fg },
-                    preloadedVideoURLs: assets.videoURLs,
-                    preloadedAudioURLs: assets.audioURLs
-                )
-                .environmentObject(router)
-                .environmentObject(conversationListViewModel)
-                .environmentObject(statusViewModel)
-            }
         }
     }
 
@@ -344,6 +256,12 @@ struct StoryRingCell: View {
     var showsUsername: Bool = true
     let onViewStory: () -> Void
     let onShowProfile: () -> Void
+    /// Entrées de menu SUPPLÉMENTAIRES, propres à un usage précis de la
+    /// cellule. La mini-trail y injecte « Gérer mes stories » sur son PROPRE
+    /// anneau : depuis que le tap y ouvre le viewer, c'est le seul chemin
+    /// restant vers la gestion — et vers l'ÉDITION d'une story publiée — quand
+    /// la grande trail est scrollée hors écran.
+    var contextMenuExtras: [AvatarContextMenuItem] = []
 
     private var theme: ThemeManager { ThemeManager.shared }
     private var presenceManager: PresenceManager { PresenceManager.shared }
@@ -364,13 +282,13 @@ struct StoryRingCell: View {
                     presenceState: presenceManager.presenceState(for: group.id),
                     onMoodTap: statusViewModel.moodTapHandler(for: group.id),
                     contextMenuItems: [
-                        AvatarContextMenuItem(label: "Voir les stories", icon: "play.circle.fill") {
+                        AvatarContextMenuItem(label: StoryTrayCopy.viewStories, icon: "play.circle.fill") {
                             onViewStory()
                         },
-                        AvatarContextMenuItem(label: "Voir le profil", icon: "person.fill") {
+                        AvatarContextMenuItem(label: StoryTrayCopy.viewProfile, icon: "person.fill") {
                             onShowProfile()
                         }
-                    ]
+                    ] + contextMenuExtras
                 )
 
                 // Story count dots (multiple stories indicator) — offset scales
@@ -480,10 +398,11 @@ private struct MyStoryButton: View {
                     storyState: storyState,
                     moodEmoji: myMoodEmoji,
                     onTap: {
-                        if hasMyStory {
-                            onManageStories?()
-                        } else {
-                            viewModel.showStoryComposer = true
+                        // Une seule règle, testable, pour le routage ET pour
+                        // l'annonce VoiceOver (cf. `StoryTrayActionResolver`).
+                        switch StoryTrayActionResolver.avatarTap(hasMyStory: hasMyStory) {
+                        case .viewMyStory:  onViewMyStory()
+                        case .createStory:  viewModel.showStoryComposer = true
                         }
                         HapticFeedback.medium()
                     },
@@ -492,28 +411,42 @@ private struct MyStoryButton: View {
                         HapticFeedback.medium()
                     },
                     contextMenuItems: {
+                        // « Voir ma story » a disparu du menu : le TAP y mène
+                        // désormais directement. La gestion, elle, n'a pas
+                        // d'autre porte — elle reste ici.
                         var items: [AvatarContextMenuItem] = []
                         if hasMyStory {
-                            items.append(AvatarContextMenuItem(label: "Voir ma story", icon: "play.circle.fill") {
-                                onViewMyStory()
-                                HapticFeedback.medium()
-                            })
-                            items.append(AvatarContextMenuItem(label: "Gérer mes stories", icon: "rectangle.stack.fill") {
+                            items.append(AvatarContextMenuItem(label: StoryTrayCopy.manageStories, icon: "rectangle.stack.fill") {
                                 onManageStories?()
                                 HapticFeedback.medium()
                             })
                         }
-                        items.append(AvatarContextMenuItem(label: "Ajouter une story", icon: "plus.circle.fill") {
+                        items.append(AvatarContextMenuItem(label: StoryTrayCopy.addStory, icon: "plus.circle.fill") {
                             viewModel.showStoryComposer = true
                             HapticFeedback.medium()
                         })
-                        items.append(AvatarContextMenuItem(label: "Changer mon mood", icon: "face.smiling.inverse") {
+                        items.append(AvatarContextMenuItem(label: StoryTrayCopy.changeMood, icon: "face.smiling.inverse") {
                             onAddStatus?()
                             HapticFeedback.medium()
                         })
                         return items
                     }()
                 )
+                // Le libellé porte sur la cible RÉELLEMENT tapée — l'avatar — et
+                // sur elle seule. `MeeshyAvatar` s'annonce avec le nom de la
+                // personne (« Moi »), ce qui ne dit rien de la destination ;
+                // `.combine` refait ici un élément unique dont le libellé est
+                // ensuite remplacé. Posé plus haut, sur le `VStack` racine, il
+                // aurait avalé les trois autres cibles du sous-arbre (bouton
+                // mood, badge « + », contrôles d'upload) : sous VoiceOver le
+                // badge « + » aurait cessé d'être un bouton nommé, alors que
+                // c'est justement l'affordance « composer TOUJOURS ».
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel(StoryTrayActionResolver.avatarAccessibilityLabel(hasMyStory: hasMyStory))
+                // Fusionné, l'élément héritait du type de ses enfants (une
+                // image) : VoiceOver annonçait une destination sans dire que
+                // c'était actionnable.
+                .accessibilityAddTraits(.isButton)
                 .overlay(alignment: .bottomTrailing) {
                     if myMoodEmoji == nil {
                         Button {
@@ -607,7 +540,6 @@ private struct MyStoryButton: View {
                 .font(MeeshyFont.relative(10, weight: .semibold))
                 .foregroundColor(theme.textSecondary)
         }
-        .accessibilityLabel(hasMyStory ? String(localized: "story.tray.a11y.myStory", defaultValue: "Ma story", bundle: .main) : String(localized: "story.tray.a11y.changeMood", defaultValue: "Changer mon mood", bundle: .main))
     }
 }
 
@@ -744,10 +676,14 @@ struct PinnedStoryTrailBand: View {
     @EnvironmentObject private var router: Router
     @EnvironmentObject private var conversationListViewModel: ConversationListViewModel
     @State private var selectedProfileUser: ProfileSheetUser?
-    /// Directive user 2026-07-14 : le tap sur son propre anneau ouvre
-    /// toujours la liste de gestion, même depuis le band épinglé replié —
-    /// même comportement que `MyStoryButton` dans la grande trail.
+    /// S5 — le tap sur son propre anneau ouvre désormais le VIEWER (parité avec
+    /// la grande trail). La gestion reste atteignable par appui long
+    /// (`contextMenuExtras`), seul chemin restant vers `MyStoriesView` — et donc
+    /// vers l'édition d'une story publiée — depuis le header replié.
     @State private var showMyStories = false
+    /// Même chaînage déterministe que la grande trail : l'intention est posée
+    /// pendant la fermeture, exécutée par `onDismiss` (cf. `StoryTrayActions`).
+    @State private var myStoriesFollowUp = DeferredSheetFollowUp<MyStoriesFollowUp>()
     /// Session d'édition d'une story publiée (composer en mode édition).
     @State private var editingStorySession: StoryEditSession?
 
@@ -813,46 +749,28 @@ struct PinnedStoryTrailBand: View {
                     .presentationDetents([.medium, .large])
                     .presentationDragIndicator(.visible)
                 }
-                .sheet(isPresented: $showMyStories) {
-                    MyStoriesView(
-                        viewModel: viewModel,
-                        userId: currentUserId,
-                        statusViewModel: statusViewModel,
-                        onOpen: { story in
-                            showMyStories = false
-                            let coordinator = storyViewerCoordinator
-                            let uid = currentUserId
-                            let postId = story.id
-                            // Laisse la sheet se fermer avant le fullScreenCover
-                            // root (le coordinator présente au niveau RootView).
-                            Task { @MainActor in
-                                try? await Task.sleep(for: .milliseconds(350))
-                                coordinator.present(StoryViewerRequest(
-                                    id: uid, singleGroup: true, postId: postId))
-                            }
-                        },
-                        onCreateStory: {
-                            showMyStories = false
-                            Task { @MainActor in
-                                try? await Task.sleep(for: .milliseconds(350))
-                                viewModel.showStoryComposer = true
-                            }
-                        },
-                        onEditStory: { story in
-                            showMyStories = false
-                            // Même pattern anti-course : sheet fermée AVANT le cover.
-                            Task { @MainActor in
-                                try? await Task.sleep(for: .milliseconds(350))
-                                editingStorySession = StoryEditSession(
-                                    story: story,
-                                    composer: StoryComposerViewModel(editing: story)
-                                )
-                            }
+                .myStoriesSheet(
+                    isPresented: $showMyStories,
+                    followUp: $myStoriesFollowUp,
+                    viewModel: viewModel,
+                    userId: currentUserId,
+                    statusViewModel: statusViewModel,
+                    router: router,
+                    conversationListViewModel: conversationListViewModel,
+                    perform: { action in
+                        switch action {
+                        case .openViewer(let postId):
+                            storyViewerCoordinator.present(StoryViewerRequest(
+                                id: currentUserId, singleGroup: true, postId: postId))
+                        case .createStory:
+                            viewModel.showStoryComposer = true
+                        case .editStory(let story):
+                            editingStorySession = StoryEditSession(
+                                story: story,
+                                composer: StoryComposerViewModel(editing: story))
                         }
-                    )
-                    .environmentObject(router)
-                    .environmentObject(conversationListViewModel)
-                }
+                    }
+                )
                 .storyEditComposerCover(session: $editingStorySession, viewModel: viewModel)
         }
     }
@@ -873,8 +791,19 @@ struct PinnedStoryTrailBand: View {
                     StoryRingCell(
                         group: ownGroup,
                         context: .storyTrayCompact,
-                        onViewStory: { showMyStories = true },
-                        onShowProfile: { selectedProfileUser = .from(storyGroup: ownGroup) }
+                        onViewStory: {
+                            // Parité avec la grande trail : le tap ouvre SA
+                            // story, plus la liste de gestion.
+                            storyViewerCoordinator.present(StoryViewerRequest(
+                                id: ownGroup.id, singleGroup: true))
+                        },
+                        onShowProfile: { selectedProfileUser = .from(storyGroup: ownGroup) },
+                        contextMenuExtras: [
+                            AvatarContextMenuItem(
+                                label: StoryTrayCopy.manageStories,
+                                icon: "rectangle.stack.fill"
+                            ) { showMyStories = true }
+                        ]
                     )
                     .zoomTransitionSource(id: ownGroup.id, in: zoomNamespace)
                 }

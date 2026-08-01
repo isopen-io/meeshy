@@ -131,7 +131,11 @@ extension StoryComposerView {
             .adaptiveGlassProminent(in: Circle(), tint: MeeshyColors.brandPrimary)
             .composerHitTarget()
         }
-        .disabled(isPublishing)
+        // `canPublish`, et jamais `composerHasContent` : la story « fond +
+        // musique » ne porte aucun contenu visuel au sens de S2 et doit rester
+        // publiable — les quatre autres consommateurs de `composerHasContent`,
+        // eux, gardent l'arbitrage S2 intact.
+        .disabled(isPublishing || !canPublish)
         .accessibilityLabel(isEditingExistingStory
             ? String(localized: "story.composer.updateStory", defaultValue: "Mettre à jour", bundle: .module)
             : String(localized: "story.composer.publish", defaultValue: "Publier", bundle: .module))

@@ -20,8 +20,21 @@ extension StoryComposerView {
             isDrawingImmersive: viewModel.isDrawingImmersive,
             isViewportZoomed: viewModel.isCanvasZoomed,
             isTimelineVisible: viewModel.isTimelineVisible,
-            isEmptyStatePickerVisible: shouldShowEmptyStateLargePicker,
-            isComposerEmpty: isComposerEmpty
+            isBlankAuthoringSlide: ComposerChromePolicy.isBlankAuthoringSlide(
+                currentSlideIsEmpty: currentSlideIsEmpty,
+                isEditingExistingStory: isEditingExistingStory,
+                isDraftResumePresented: draftResume.isBannerVisible
+            ),
+            isDraftResumePresented: draftResume.isBannerVisible
+        )
+    }
+
+    /// Les amorces de contenu (indice « Touchez pour écrire », capsule Caméra,
+    /// vignette de la dernière photo) ne vivent que sur une page blanche au repos.
+    var offersContentStarters: Bool {
+        ComposerChromePolicy.offersContentStarters(
+            chromeContext,
+            isPartialSystemSheetPresented: presentedSystemSheetFraction != nil
         )
     }
 
@@ -60,6 +73,17 @@ extension StoryComposerView {
         switch ComposerChromePolicy.backgroundTapAction(chromeContext) {
         case .ignore:
             return
+        case .dismissDraftResume:
+            // Le bandeau se range, le brouillon RESTE en magasin : tant que rien
+            // de réel n'est créé, `composerHasContent` ferme l'autosave et la
+            // même offre revient à l'ouverture suivante
+            // (`mayOverwriteStoredDraft`). Seul « Recommencer » le jette.
+            HapticFeedback.light()
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
+                draftResume.hideBanner()
+            }
+        case .startTextComposition:
+            startTextCompositionOnBlankCanvas()
         case .toggleChrome:
             HapticFeedback.light()
             withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
@@ -71,6 +95,32 @@ extension StoryComposerView {
                 dismissActiveBandPanel()
             }
         }
+    }
+
+    /// Applicateur de `ComposerChromePolicy.rangesDraftResumeBanner` : le tap sur
+    /// le canvas n'est pas le seul geste d'authoring, et le bandeau ne doit
+    /// flotter au-dessus d'aucun panneau. Sans haptique — l'utilisateur en reçoit
+    /// déjà une pour l'action qui a ouvert le panneau, deux d'affilée se lisent
+    /// comme un bug.
+    func rangeDraftResumeBannerIfNeeded() {
+        guard ComposerChromePolicy.rangesDraftResumeBanner(chromeContext) else { return }
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
+            draftResume.hideBanner()
+        }
+    }
+
+    /// UNIQUE point d'entrée « écrire sur la page blanche », partagé par le tap
+    /// sur le canvas, le tap sur le letterbox, le tap sur l'indice et le
+    /// swipe-down des amorces (directive user 2026-07-31). Emprunte EXACTEMENT
+    /// le chemin de l'ancienne tuile « Texte » : `addText()` pose l'objet et
+    /// `activeTool = .text`, `enterTextEditingMode` ouvre l'éditeur flottant.
+    /// Un texte laissé vide est auto-supprimé à la sortie
+    /// (`StoryComposerViewModel+TextEditing`) : la page redevient blanche et les
+    /// amorces reviennent — aucun résidu, aucun cul-de-sac.
+    func startTextCompositionOnBlankCanvas() {
+        HapticFeedback.light()
+        guard let text = viewModel.addText() else { return }
+        viewModel.enterTextEditingMode(textId: text.id)
     }
 
     /// UNIQUE applicateur de « fermer le panneau actif », partagé par les quatre

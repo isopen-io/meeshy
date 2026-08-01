@@ -9,10 +9,12 @@ import XCTest
 /// n'avait AUCUN effet visible, puis le « Retour » du panneau découvrait un
 /// écran nu.
 ///
-/// APRÈS (arbitrage 2026-07-31) : trois issues, évaluées sur l'état EFFECTIF.
+/// APRÈS (arbitrage 2026-07-31) : cinq issues, évaluées sur l'état EFFECTIF.
 /// Un éditeur qui POSSÈDE le canvas (texte inline, dessin liste ou immersif,
-/// zoom d'inspection, timeline) garde son tap ; un panneau d'outil se ferme
-/// (« tap hors zone » du standard) ; sinon le chrome bascule (D4).
+/// zoom d'inspection, timeline) garde son tap ; le bandeau de brouillon se range ;
+/// un panneau d'outil se ferme (« tap hors zone » du standard) ; une page blanche
+/// ouvre l'éditeur de texte (S5) ; sinon le chrome bascule (D4).
+/// Les cas propres à S5 sont exercés en détail par `ComposerBlankCanvasPolicyTests`.
 final class ComposerBackgroundTapActionTests: XCTestCase {
 
     private func action(
@@ -23,7 +25,8 @@ final class ComposerBackgroundTapActionTests: XCTestCase {
         isDrawingImmersive: Bool = false,
         isViewportZoomed: Bool = false,
         isTimelineVisible: Bool = false,
-        isEmptyStatePickerVisible: Bool = false
+        isBlankAuthoringSlide: Bool = false,
+        isDraftResumePresented: Bool = false
     ) -> ComposerBackgroundTapAction {
         ComposerChromePolicy.backgroundTapAction(
             ComposerChromeContext(
@@ -34,7 +37,8 @@ final class ComposerBackgroundTapActionTests: XCTestCase {
                 isDrawingImmersive: isDrawingImmersive,
                 isViewportZoomed: isViewportZoomed,
                 isTimelineVisible: isTimelineVisible,
-                isEmptyStatePickerVisible: isEmptyStatePickerVisible
+                isBlankAuthoringSlide: isBlankAuthoringSlide,
+                isDraftResumePresented: isDraftResumePresented
             )
         )
     }
@@ -80,14 +84,13 @@ final class ComposerBackgroundTapActionTests: XCTestCase {
         XCTAssertEqual(action(isViewportZoomed: true), .ignore)
     }
 
-    func test_backgroundTapAction_emptyStatePicker_isIgnored() {
+    func test_backgroundTapAction_blankAuthoringSlide_startsTextComposition() {
         XCTAssertEqual(
-            action(isEmptyStatePickerVisible: true), .ignore,
+            action(isBlankAuthoringSlide: true), .startTextComposition,
             """
-            Composer vierge : le picker géant remplace `ComposerControlsLayer`, donc \
-            la poignée de récupération n'existe PAS dans l'arbre. Masquer le chrome \
-            y produirait un écran sans « Fermer », sans « Publier » et sans affordance \
-            de retour.
+            S5 — la grille d'état vide a disparu : sur une page blanche, toute la \
+            surface du canvas est le bouton « écrire ». Le rail d'outils standard \
+            (et donc la poignée de restauration du chrome) est monté en permanence.
             """
         )
     }

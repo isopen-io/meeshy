@@ -881,6 +881,8 @@ struct StoryViewerView: View {
                 onDismiss: { repostStoryComposerSource = nil }
             )
             .storyLocationPickerProvided()
+            .storyCameraCaptureProvided()
+            .storyRecentCameraRollProvided()
         }
         .fullScreenCover(item: $editAndRepostAsPostSource, onDismiss: { resumeTimer() }) { wrapper in
             UnifiedPostComposer(
@@ -910,6 +912,8 @@ struct StoryViewerView: View {
                 onDismiss: { editAndRepostAsPostSource = nil }
             )
             .storyLocationPickerProvided()
+            .storyCameraCaptureProvided()
+            .storyRecentCameraRollProvided()
         }
     }
 

@@ -8,6 +8,23 @@ import MeeshySDK
 
 // MARK: - StoryComposerView + Publication
 
+/// Ce que la fermeture par la croix doit proposer. Deux questions distinctes,
+/// que l'ancien `guard !composerHasContent` confondait en une : « y a-t-il du
+/// travail à perdre ? » et « le brouillon sait-il le retenir ? ».
+public nonisolated enum ComposerExitPrompt: Equatable, Sendable {
+    /// Rien à perdre : la croix ferme, sans un mot.
+    case leaveSilently
+    /// Il y a du travail en cours. `offersSave` dit si la feuille a le droit de
+    /// proposer « Sauvegarder » — le reste (« Quitter », « Annuler ») est
+    /// toujours offert.
+    case confirm(offersSave: Bool)
+
+    public var offersSave: Bool {
+        if case .confirm(let offersSave) = self { return offersSave }
+        return false
+    }
+}
+
 extension StoryComposerView {
     // MARK: - Pickers
 
@@ -83,7 +100,13 @@ extension StoryComposerView {
         // Publier à vie. Aucun `await` ne sépare le hand-off de ces lignes :
         // le callback est synchrone, rien ne peut re-persister entre-temps.
         guard accepted else { return }
-        clearAllDrafts()
+        // Le brouillon jeté ici est celui de la story qui vient de partir : il
+        // lui appartient. La branche `else` n'est plus celle de la page blanche
+        // (le bouton est gaté par `canPublish`) mais celle de la story
+        // « fond + musique » : rien de VISUEL n'a été composé, donc rien ne
+        // supplante ce que le bandeau venait de proposer. Même règle que la
+        // fermeture par le X : on ne purge que les fantômes.
+        if composerHasContent { clearAllDrafts() } else { clearPhantomDraftsOnly() }
         // E1 — un debounce d'autosave en vol ne doit pas re-persister le
         // brouillon d'une story qui vient de partir en publication.
         draftAutosaveSuspended = true
@@ -140,11 +163,12 @@ extension StoryComposerView {
     /// partagée par l'alerte de sortie (`handleDismiss`), l'auto-save de
     /// draft au passage en background (D1), l'autosave débouncé (E1) et le
     /// gate de purge des brouillons fantômes (`shouldOfferDraftResume`,
-    /// `StoryComposerView+SyncRestore.swift`). `isComposerEmpty`
-    /// (`StoryComposerView+Canvas.swift`) en est la simple négation — deux
-    /// calculs frères divergents ont longtemps coexisté (fond compté ici mais
-    /// pas là, stickers scannés seulement sur le slide courant, dessin legacy
-    /// absent) ; unifiés ici pour de bon.
+    /// `StoryComposerView+SyncRestore.swift`). Un jumeau `isComposerEmpty`
+    /// vivait dans `StoryComposerView+Canvas.swift` et divergeait sur trois
+    /// points (fond compté ici mais pas là, stickers scannés seulement sur le
+    /// slide courant, dessin legacy absent) ; il a été supprimé, sa portée
+    /// slide-scoped reprise par `currentSlideIsEmpty` (négation de
+    /// `slideHasContent`, plus bas dans ce fichier).
     ///
     /// Le FOND (auto-appliqué à l'ouverture ou choisi explicitement dans le
     /// panneau Fond) ne compte JAMAIS seul comme contenu — décision produit
@@ -167,15 +191,59 @@ extension StoryComposerView {
         hasDrawingStrokes: Bool
     ) -> Bool {
         slides.contains { slide in
-            slide.content != nil
-                || slideImageIds.contains(slide.id)
-                || !slide.effects.textObjects.isEmpty
-                || !(slide.effects.mediaObjects ?? []).isEmpty
-                || !(slide.effects.stickerObjects ?? []).isEmpty
-                || slide.effects.drawingData != nil
-                || !(slide.effects.drawingStrokes ?? []).isEmpty
-                || !slide.effects.locationObjects.isEmpty
+            slideHasContent(
+                slide,
+                hasSlideImage: slideImageIds.contains(slide.id),
+                hasStickerObjects: false,
+                hasDrawingData: false,
+                hasDrawingStrokes: false
+            )
         } || hasStickerObjects || hasDrawingData || hasDrawingStrokes
+    }
+
+    /// Même liste de champs, portée d'UNE slide (S5). `composerHasContent`
+    /// répond « y a-t-il de quoi publier » ; la page blanche d'auteur pose
+    /// l'autre question — « la slide que je REGARDE est-elle vierge » — et les
+    /// deux réponses divergent dès la 2ᵉ slide. Une seule primitive porte les
+    /// deux : la liste des champs de contenu ne peut plus dériver entre elles.
+    ///
+    /// Les trois drapeaux globaux (stickers/dessin legacy du slide courant)
+    /// restent des paramètres : le scan multi-slide les neutralise (ils sont
+    /// déjà agrégés par `composerHasContent`), la lecture slide-scoped les
+    /// renseigne.
+    static func slideHasContent(
+        _ slide: StorySlide,
+        hasSlideImage: Bool,
+        hasStickerObjects: Bool,
+        hasDrawingData: Bool,
+        hasDrawingStrokes: Bool
+    ) -> Bool {
+        slide.content != nil
+            || hasSlideImage
+            || slide.effects.textObjects.contains(where: Self.carriesRealText)
+            || !(slide.effects.mediaObjects ?? []).isEmpty
+            || !(slide.effects.stickerObjects ?? []).isEmpty
+            || slide.effects.drawingData != nil
+            || !(slide.effects.drawingStrokes ?? []).isEmpty
+            || !slide.effects.locationObjects.isEmpty
+            || hasStickerObjects || hasDrawingData || hasDrawingStrokes
+    }
+
+    /// Un `StoryTextObject` au texte VIDE n'est pas du contenu — c'est la
+    /// coquille que `addText()` pose pour donner une cible à l'éditeur, et le
+    /// tap sur la page blanche en crée une AVANT la première frappe. La compter
+    /// rendait la slide « remplie » sans la moindre intention, ce qui ouvrait
+    /// `mayOverwriteStoredDraft` : l'autosave débouncé écrasait alors le slot
+    /// unique de `StoryDraftStore` — le brouillon proposé quelques secondes plus
+    /// tôt — puis `exitTextEditingMode` supprimait le fantôme, ne laissant même
+    /// pas trace de ce qui l'avait remplacé.
+    ///
+    /// Même trim que `exitTextEditingMode`, qui fait le ménage à la sortie : les
+    /// deux règles doivent voir la même chose, sinon la fenêtre se rouvre entre
+    /// la saisie d'un espace et la fermeture de l'éditeur. Seule l'intention
+    /// RÉELLE compte — même arbitrage que le fond auto-appliqué (S2).
+    nonisolated static func carriesRealText(_ text: StoryTextObject) -> Bool {
+        !text.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
     var composerHasContent: Bool {
@@ -188,9 +256,106 @@ extension StoryComposerView {
         )
     }
 
+    /// Gate du bouton Publier — et de LUI SEUL.
+    ///
+    /// `composerHasContent` sert QUATRE autres consommateurs (alerte de sortie,
+    /// auto-save au passage en background, autosave débouncé, purge des
+    /// brouillons fantômes) dont l'arbitrage S2 est tranché : l'élargir ici les
+    /// élargirait tous, et rendrait au fond auto-appliqué le statut de contenu
+    /// qu'on venait de lui retirer. Un prédicat DÉDIÉ laisse passer le seul cas
+    /// que le contenu VISUEL ne décrit pas — la story « fond + musique », dont
+    /// l'audio est la matière narrative — sans rouvrir cette porte.
+    nonisolated static func canPublish(hasContent: Bool, carriesAudio: Bool) -> Bool {
+        hasContent || carriesAudio
+    }
+
+    /// L'audio du composer vit à DEUX endroits, et le fond sonore à deux stades :
+    /// `selectedAudioId` tant que la sélection est vivante (elle n'est rabattue
+    /// sur `effects.backgroundAudioId` qu'au hand-off de publication), et les
+    /// lecteurs posés sur le canvas (`audioPlayerObjects`, sons empruntés). Lire
+    /// les slides seules manquerait le cas le plus courant : l'auteur vient de
+    /// choisir sa musique et tape Publier.
+    nonisolated static func composerCarriesAudio(
+        slides: [StorySlide],
+        currentEffects: StoryEffects,
+        backgroundAudioId: String?
+    ) -> Bool {
+        backgroundAudioId != nil
+            || !(currentEffects.audioPlayerObjects ?? []).isEmpty
+            || slides.contains { slide in
+                slide.effects.backgroundAudioId != nil
+                    || !(slide.effects.audioPlayerObjects ?? []).isEmpty
+            }
+    }
+
+    var composerCarriesAudio: Bool {
+        Self.composerCarriesAudio(
+            slides: viewModel.slides,
+            currentEffects: viewModel.currentEffects,
+            backgroundAudioId: selectedAudioId
+        )
+    }
+
+    var canPublish: Bool {
+        Self.canPublish(hasContent: composerHasContent, carriesAudio: composerCarriesAudio)
+    }
+
+    /// Protection de sortie — règle DÉDIÉE, distincte du gate du bouton Publier.
+    ///
+    /// L'alerte s'arme sur tout ce que le bouton Publier accepterait, audio
+    /// compris : une story « fond + musique » est du travail, et la croix la
+    /// jetait sans un mot — `composerHasContent` ne voit que le VISUEL.
+    ///
+    /// « Sauvegarder », lui, reste gaté sur le contenu visuel SEUL, parce que
+    /// c'est tout ce que le brouillon sait retenir : `StoryDraftStore` persiste
+    /// les slides et leurs médias, jamais `selectedAudioId` (un `@State` de la
+    /// vue, rabattu sur `effects.backgroundAudioId` au seul hand-off de
+    /// publication). Offrir de sauvegarder une composition purement sonore
+    /// rendrait un brouillon muet à la reprise — un mensonge d'un tap.
+    ///
+    /// Le formuler ici plutôt que d'appeler `canPublish` garde les deux règles
+    /// libres d'évoluer : le jour où le bouton acceptera un cas de plus, la
+    /// feuille n'offrira pas automatiquement de le sauvegarder.
+    nonisolated static func exitPrompt(hasContent: Bool, carriesAudio: Bool) -> ComposerExitPrompt {
+        guard hasContent || carriesAudio else { return .leaveSilently }
+        return .confirm(offersSave: hasContent)
+    }
+
+    var exitPrompt: ComposerExitPrompt {
+        Self.exitPrompt(hasContent: composerHasContent, carriesAudio: composerCarriesAudio)
+    }
+
+    /// La slide REGARDÉE ne porte aucun contenu d'authoring. Le dessin legacy
+    /// (global au composer) et les stickers du slide courant y entrent : ils
+    /// s'affichent bien sur cette slide-là.
+    var currentSlideIsEmpty: Bool {
+        let slide = viewModel.currentSlide
+        return !Self.slideHasContent(
+            slide,
+            hasSlideImage: viewModel.slideImages[slide.id] != nil,
+            hasStickerObjects: !(viewModel.currentEffects.stickerObjects ?? []).isEmpty,
+            hasDrawingData: viewModel.drawingData != nil,
+            hasDrawingStrokes: !viewModel.drawingStrokes.isEmpty
+        )
+    }
+
+    /// Fermer le composer n'est PAS un discard : c'est la sortie par défaut, sur
+    /// un bouton toujours visible. Elle purgeait pourtant le magasin entier dès
+    /// que le composer était vierge — ce qui, depuis la dé-modalisation du
+    /// bandeau de reprise (S5), détruisait en silence le brouillon qu'on venait
+    /// de proposer : le X est désormais atteignable AVANT toute décision, là où
+    /// le voile plein écran de l'ancienne carte l'interdisait.
+    ///
+    /// Seuls les fantômes tombent (`clearPhantomDraftsOnly`, même règle que
+    /// `checkForDraft()` à l'ouverture). Les discards EXPLICITES restent
+    /// destructifs : « Quitter » (`cancelAndDismiss`) et « Recommencer ».
+    ///
+    /// La condition d'alerte vient d'`exitPrompt`, pas de `composerHasContent` :
+    /// la story « fond + musique » n'a rien de visuel et partait donc en silence.
     func handleDismiss() {
-        if composerHasContent { showDiscardAlert = true }
-        else { clearAllDrafts(); onDismiss() }
+        guard case .leaveSilently = exitPrompt else { showDiscardAlert = true; return }
+        clearPhantomDraftsOnly()
+        onDismiss()
     }
 
     func saveDraftAndDismiss() {

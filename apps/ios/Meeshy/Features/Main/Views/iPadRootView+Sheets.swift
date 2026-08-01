@@ -131,6 +131,17 @@ extension iPadRootView {
                 // Cf. fix sync pill chevauchement 2026-05-27 dans RootView.
                 .environment(\.isStoryViewerPresenting, true)
             }
+            // Composer de CRÉATION — monté au niveau racine, comme le viewer
+            // ci-dessus et comme sur iPhone : `StoryTrayView` est instanciée par
+            // plusieurs hôtes qui observent le même `showStoryComposer`, et
+            // chacun présentait son propre cover. Détail dans
+            // `StoryComposerCover`.
+            .storyComposerCover(
+                viewModel: storyViewModel,
+                router: router,
+                conversationListViewModel: conversationViewModel,
+                statusViewModel: statusViewModel
+            )
             // Lecteur de réels immersif. `ReelsPresenter` est un singleton
             // partagé : toucher un réel (carte du feed, écran Favoris) posait
             // `launch` et SEUL `RootView` (iPhone) le rendait — sur iPad le tap

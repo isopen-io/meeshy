@@ -52,8 +52,17 @@ final class StoryToolModeComposerOrderTests: XCTestCase {
         let fabColumn = try ComposerSourceGuard.source("Controls/ComposerFABColumn.swift")
         XCTAssertTrue(fabColumn.contains("ForEach(StoryToolMode.composerOrder"))
 
-        let canvas = try ComposerSourceGuard.source("StoryComposerView+Canvas.swift")
-        XCTAssertTrue(canvas.contains("ForEach(StoryToolMode.composerOrder"))
+        // S5 — il n'existe plus qu'UNE surface qui énumère les outils : le rail
+        // de FABs. La grille d'état vide, seconde énumération (avec ses propres
+        // sous-titres et son propre chemin d'ouverture Timeline), a disparu avec
+        // l'état vide bloquant. Un compte EXACT, pas un « au moins un » : c'est
+        // le retour d'une DEUXIÈME surface qu'on interdit ici.
+        let enumerations = try ComposerSourceGuard.allStorySources()
+            .filter { $0.code.contains("ForEach(StoryToolMode.composerOrder") }
+        XCTAssertEqual(
+            enumerations.map(\.path), ["Controls/ComposerFABColumn.swift"],
+            "Surfaces énumérant les outils : \(enumerations.map(\.path)). Une seule est autorisée."
+        )
 
         let iconTables = try ComposerSourceGuard.allStorySources()
             .filter { $0.code.contains("func icon(for tool: StoryToolMode)") }

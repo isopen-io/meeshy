@@ -221,6 +221,16 @@ public struct UnifiedPostComposer: View {
                         await MainActor.run { showStoryComposer = false }
                     }
                 },
+                // Surface INERTE au publish, héritée de S3 : `publishAllSlides()`
+                // sort sur `guard accepted`, donc rien ne part et rien n'est
+                // détruit (brouillon conservé, autosave vivante, loquet non
+                // posé). Le bouton « Publier » du composer reste actif — il est
+                // gaté par `canPublish`, pas par ce retour — et son tap ne
+                // produit qu'une haptique de succès trompeuse. Le hand-off slide
+                // par slide (`onPublishSlide`) n'est appelé par AUCUN chemin du
+                // composer : cette surface ne publie pas de story. S6 tranche son
+                // sort ; la corriger ici demanderait un gate produit qui n'est
+                // pas de ce lot.
                 onPublishAllInBackground: { _, _, _, _, _, _, _, _ in false },
                 onPreview: { _, _, _, _, _ in },
                 onDismiss: { showStoryComposer = false }

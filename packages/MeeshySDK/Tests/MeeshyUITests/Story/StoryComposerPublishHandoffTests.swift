@@ -227,14 +227,11 @@ final class StoryComposerPublishHandoffTests: XCTestCase {
         packageRoot.appendingPathComponent("Sources/MeeshyUI/Story/StoryComposerView+SyncRestore.swift")
     }
 
+    /// Même règle de strip que partout ailleurs. La variante locale coupait à la
+    /// première `//` de la ligne, y compris DANS un littéral de chaîne — une URL
+    /// `https://…` écrite en code vivant y perdait sa moitié droite.
     private static func strippedSource(of url: URL) throws -> String {
-        try String(contentsOf: url, encoding: .utf8)
-            .components(separatedBy: "\n")
-            .map { line -> String in
-                guard let range = line.range(of: "//") else { return line }
-                return String(line[line.startIndex..<range.lowerBound])
-            }
-            .joined(separator: "\n")
+        ComposerSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8))
     }
 
     private static func functionBody(named signature: String, in url: URL) throws -> String {
@@ -248,31 +245,15 @@ final class StoryComposerPublishHandoffTests: XCTestCase {
     /// Isole le corps d'une fonction par équilibrage d'accolades, APRÈS retrait
     /// des commentaires : la prose qui explique le fix contient elle-même les
     /// motifs bannis (leçon `feedback_source_guard_tests_must_strip_comments`).
+    ///
+    /// Une seconde implémentation du même algorithme vivait ici jusqu'à ce que
+    /// S5 en extraie la version partagée : deux règles de parsing jumelles,
+    /// c'est deux endroits où corriger le prochain cas limite — et un seul qui
+    /// sera corrigé. Le stripper partagé couvre EN PLUS les commentaires de
+    /// bloc, que la variante locale laissait passer.
     private static func functionBody(named signature: String, in source: String) -> String? {
-        let code = source
-            .components(separatedBy: "\n")
-            .map { line -> String in
-                guard let range = line.range(of: "//") else { return line }
-                return String(line[line.startIndex..<range.lowerBound])
-            }
-            .joined(separator: "\n")
-
-        guard let start = code.range(of: signature) else { return nil }
-        guard let openBrace = code[start.upperBound...].firstIndex(of: "{") else { return nil }
-
-        var depth = 0
-        var index = openBrace
-        while index < code.endIndex {
-            let char = code[index]
-            if char == "{" { depth += 1 }
-            if char == "}" {
-                depth -= 1
-                if depth == 0 {
-                    return String(code[code.index(after: openBrace)..<index])
-                }
-            }
-            index = code.index(after: index)
-        }
-        return nil
+        ComposerSourceGuard.functionBody(
+            named: signature,
+            in: ComposerSourceGuard.stripComments(source))
     }
 }

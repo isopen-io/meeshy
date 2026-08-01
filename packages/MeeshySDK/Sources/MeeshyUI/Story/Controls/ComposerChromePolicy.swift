@@ -19,17 +19,17 @@ public nonisolated struct ComposerChromeContext: Equatable, Sendable {
     public let isDrawingImmersive: Bool
     public let isViewportZoomed: Bool
     public let isTimelineVisible: Bool
-    /// Le picker géant d'état vide remplace `ComposerControlsLayer` dans l'arbre :
-    /// dans cette branche, la poignée de restauration du chrome N'EXISTE PAS.
-    public let isEmptyStatePickerVisible: Bool
-    /// Le slide courant ne porte encore aucun contenu d'authoring
-    /// (`StoryComposerView.isComposerEmpty`, négation de `composerHasContent`).
-    /// Brute et INDÉPENDANTE de `isEmptyStatePickerVisible` : cette dernière bake
-    /// déjà `bandStateIsHidden` au moment de la capture, donc `dismissing(_:)` ne
-    /// peut pas en déduire si le picker DOIT réapparaître une fois le panneau
-    /// refermé (band forcé à `.hidden`) — il lui faut ce signal brut séparément.
-    /// Défaut `false` : sans effet sur tous les appels qui ne le renseignent pas.
-    public let isComposerEmpty: Bool
+    /// La slide COURANTE est une page blanche d'auteur (S5) : aucun contenu sur
+    /// CETTE slide, mode création, aucun bandeau de reprise en attente. SLIDE-scoped
+    /// et non composer-wide : une 2ᵉ slide fraîche derrière une 1ʳᵉ remplie a
+    /// exactement l'apparence de l'écran d'ouverture, donc exactement les mêmes
+    /// affordances — sinon le même geste au même pixel changerait de sens sans
+    /// aucun signal. Composé par `ComposerChromePolicy.isBlankAuthoringSlide`.
+    public let isBlankAuthoringSlide: Bool
+    /// Le bandeau de reprise de brouillon est posé. Il n'est plus MODAL (S5) : le
+    /// canvas reste interactif derrière, et toute interaction avec lui range le
+    /// bandeau — d'où la nécessité de le voir depuis la politique du tap.
+    public let isDraftResumePresented: Bool
 
     public init(
         machineState: BandState,
@@ -39,8 +39,8 @@ public nonisolated struct ComposerChromeContext: Equatable, Sendable {
         isDrawingImmersive: Bool,
         isViewportZoomed: Bool,
         isTimelineVisible: Bool,
-        isEmptyStatePickerVisible: Bool,
-        isComposerEmpty: Bool = false
+        isBlankAuthoringSlide: Bool = false,
+        isDraftResumePresented: Bool = false
     ) {
         self.machineState = machineState
         self.isChromeHidden = isChromeHidden
@@ -49,8 +49,8 @@ public nonisolated struct ComposerChromeContext: Equatable, Sendable {
         self.isDrawingImmersive = isDrawingImmersive
         self.isViewportZoomed = isViewportZoomed
         self.isTimelineVisible = isTimelineVisible
-        self.isEmptyStatePickerVisible = isEmptyStatePickerVisible
-        self.isComposerEmpty = isComposerEmpty
+        self.isBlankAuthoringSlide = isBlankAuthoringSlide
+        self.isDraftResumePresented = isDraftResumePresented
     }
 
     /// État RÉELLEMENT affiché du band — ex-`ComposerControlsLayer.
@@ -85,11 +85,16 @@ public nonisolated struct ComposerChromeContext: Equatable, Sendable {
     }
 }
 
-/// Issue d'un tap sur le fond du canvas — trois cas, aucun implicite.
+/// Issue d'un tap sur le fond du canvas — cinq cas, aucun implicite.
 public nonisolated enum ComposerBackgroundTapAction: Equatable, Sendable {
-    /// Un éditeur possède le canvas (texte inline, dessin, zoom, timeline) ou il
-    /// n'existe aucune affordance de retour (picker d'état vide).
+    /// Un éditeur possède le canvas (texte inline, dessin, zoom, timeline).
     case ignore
+    /// Bandeau de reprise de brouillon posé : le canvas le RANGE (S5). Le
+    /// brouillon n'est pas jeté — seul « Recommencer » le jette.
+    case dismissDraftResume
+    /// Page blanche d'auteur, chrome plein : toute la surface du canvas est le
+    /// bouton « écrire » (S5). Plus généreux qu'un bouton, sans coût de hauteur.
+    case startTextComposition
     /// Rien d'ouvert : masquer / révéler le chrome (critère D4).
     case toggleChrome
     /// Un panneau est ouvert : « tap hors zone » le ferme (standard SOTA).
@@ -127,9 +132,59 @@ public nonisolated enum ComposerChromePolicy {
             && !ctx.isTimelineVisible
     }
 
+    /// La slide REGARDÉE est une page blanche d'auteur : c'est ce prédicat, et
+    /// jamais `composerHasContent` (composer-wide, qui répond « y a-t-il de quoi
+    /// publier » et reste vrai dès qu'une AUTRE slide porte du contenu), qui arme
+    /// les amorces et le tap-pour-écrire. Volontairement SANS terme `activeTool == nil` :
+    /// `addText()` pose `activeTool = .text` et `exitTextEditingMode()` ne le
+    /// remet jamais à `nil`, si bien qu'une saisie annulée sur une page redevenue
+    /// blanche ferait disparaître les amorces À JAMAIS. Les états où un outil est
+    /// réellement en cours sont déjà couverts par `fullChromeVisible`.
+    public static func isBlankAuthoringSlide(
+        currentSlideIsEmpty: Bool,
+        isEditingExistingStory: Bool,
+        isDraftResumePresented: Bool
+    ) -> Bool {
+        currentSlideIsEmpty && !isEditingExistingStory && !isDraftResumePresented
+    }
+
+    /// Les trois amorces (indice « Touchez pour écrire », Caméra, dernière photo)
+    /// ne vivent QUE sur une page blanche au repos.
+    ///
+    /// `isPartialSystemSheetPresented` reste un terme à part : la sheet
+    /// « Transitions » s'ouvre depuis l'overflow SANS ouvrir le band, donc
+    /// `fullChromeVisible` y reste vrai et les amorces dépasseraient au-dessus du
+    /// bord de la sheet (le « fantôme » que l'ancien picker documentait déjà).
+    public static func offersContentStarters(
+        _ ctx: ComposerChromeContext,
+        isPartialSystemSheetPresented: Bool
+    ) -> Bool {
+        ctx.isBlankAuthoringSlide
+            && fullChromeVisible(ctx)
+            && !isPartialSystemSheetPresented
+    }
+
+    /// Le bandeau de reprise n'appartient qu'au canvas AU REPOS — même règle que
+    /// les amorces, et pour la même raison géométrique : posé en overlay bas, il
+    /// se retrouverait AU-DESSUS du panneau d'outil qui vient de s'ouvrir (band
+    /// déployée ≈ 300 pt depuis le bas).
+    ///
+    /// Le tap sur le canvas le range déjà (`.dismissDraftResume`), mais ce n'est
+    /// pas le seul geste d'authoring : taper un FAB, ouvrir le panneau Média,
+    /// insérer une photo ou entrer en édition texte en sont aussi. Cette règle
+    /// les couvre tous d'un seul terme — « le chrome plein n'est plus visible ».
+    /// Ranger n'est toujours pas jeter : le brouillon reste en magasin tant que
+    /// rien de réel ne le supplante (`mayOverwriteStoredDraft`).
+    public static func rangesDraftResumeBanner(_ ctx: ComposerChromeContext) -> Bool {
+        ctx.isDraftResumePresented && !fullChromeVisible(ctx)
+    }
+
     /// Le tap sur le fond n'est émis que si le hit-test du canvas n'a trouvé
     /// AUCUN élément (`StoryCanvasUIView+Gestures`) : aucune désélection n'est
     /// perdue par ce routage.
+    ///
+    /// Ordre NON commutatif — chaque garde protège la suivante :
+    /// éditeurs > bandeau brouillon > panneau ouvert > page blanche > immersion.
     public static func backgroundTapAction(_ ctx: ComposerChromeContext) -> ComposerBackgroundTapAction {
         // Un éditeur possède le canvas : le tap lui appartient (fin d'édition
         // texte, désélection d'un trait, recentrage sous zoom, scrub timeline).
@@ -137,12 +192,17 @@ public nonisolated enum ComposerChromePolicy {
             || ctx.isViewportZoomed || ctx.isTimelineVisible {
             return .ignore
         }
-        // Composer vierge : le picker géant a remplacé la barre d'outils, donc la
-        // poignée de restauration n'est pas montée. Masquer le chrome y laisserait
-        // un écran sans « Fermer », sans « Publier » et sans retour possible.
-        if ctx.isEmptyStatePickerVisible { return .ignore }
-        if ctx.isBandHidden { return .toggleChrome }
-        return .dismissPanel
+        // Bandeau de reprise posé : le canvas est interactif derrière lui, et
+        // c'est justement cette interaction qui le range. Rien n'est jeté.
+        if ctx.isDraftResumePresented { return .dismissDraftResume }
+        // Panneau ouvert (état EFFECTIF : le dessin liste et la timeline forcent
+        // un panneau alors que la machine reste `.hidden`) : le fermer d'abord —
+        // jamais créer un texte par-dessus.
+        if !ctx.isBandHidden { return .dismissPanel }
+        // Page blanche + chrome plein : écrire. Chrome MASQUÉ = surface nue
+        // voulue → on la restaure d'abord (D4, aucun cul-de-sac).
+        if ctx.isBlankAuthoringSlide, !ctx.isChromeHidden { return .startTextComposition }
+        return .toggleChrome
     }
 
     /// Fermeture du panneau actif, QUEL QUE SOIT le chemin. Les trois effacements
@@ -155,19 +215,17 @@ public nonisolated enum ComposerChromePolicy {
         if case .formatPanel = ctx.machineState { clearSelection = true } else { clearSelection = false }
         let clearActiveTool = ctx.isDrawingActive
         let clearTimeline = ctx.isTimelineVisible
-        // Le picker géant réapparaît après ce dismiss SEULEMENT si l'outil actif
-        // est effacé (seule sortie qui vide `activeTool` — quitter Média/Texte/Son
-        // laisse `activeTool` posé, donc `activeToolIsNil` reste faux et le
-        // picker ne revient jamais, cf. `resolveShouldShowEmptyStateLargePicker`)
-        // ET que le composer reste vierge ET qu'aucune timeline ne remplace la
-        // vue. Recopier tel quel `ctx.isEmptyStatePickerVisible` était FAUX par
-        // construction (un panneau ouvert implique `bandStateIsHidden == false`
-        // au moment de la capture, donc ce champ valait toujours `false` en
-        // entrée) : le résultat ne recouvrait jamais le cas réel « sortie d'un
-        // dessin vide sur un composer resté vierge », où le picker DOIT revenir
-        // — sans quoi un tap ultérieur sur le fond du canvas masquerait le chrome
-        // sur un écran où la poignée de restauration n'est plus montée.
-        let willShowEmptyStatePicker = clearActiveTool && ctx.isComposerEmpty && !clearTimeline
+        // Depuis S5 il n'y a plus de picker d'état vide à faire réapparaître : la
+        // barre d'outils standard est montée EN PERMANENCE, donc la poignée de
+        // restauration du chrome existe toujours dans l'arbre. Le seul état qui
+        // survit à la sortie de panneau est la blancheur de la slide — elle
+        // décide du retour des amorces, pas d'un changement de branche d'arbre.
+        //
+        // Le bandeau de reprise, lui, a été rangé à l'OUVERTURE du panneau
+        // (`rangesDraftResumeBanner`, appliqué par `rangeDraftResumeBannerIfNeeded`
+        // dès que le chrome plein disparaît) : le reporter posé décrirait un état
+        // que la vue n'atteint jamais. Ranger n'est pas jeter — le brouillon reste
+        // en magasin et la même offre revient à l'ouverture suivante.
         return ComposerDismissOutcome(
             clearActiveTool: clearActiveTool,
             clearTimeline: clearTimeline,
@@ -180,8 +238,8 @@ public nonisolated enum ComposerChromePolicy {
                 isDrawingImmersive: false,
                 isViewportZoomed: ctx.isViewportZoomed,
                 isTimelineVisible: false,
-                isEmptyStatePickerVisible: willShowEmptyStatePicker,
-                isComposerEmpty: ctx.isComposerEmpty
+                isBlankAuthoringSlide: ctx.isBlankAuthoringSlide,
+                isDraftResumePresented: false
             )
         )
     }

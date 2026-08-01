@@ -74,8 +74,7 @@ final class ComposerControlsLayerTests: XCTestCase {
                 isDrawingActive: false,
                 isDrawingImmersive: false,
                 isViewportZoomed: false,
-                isTimelineVisible: false,
-                isEmptyStatePickerVisible: false
+                isTimelineVisible: false
             ),
             bandStateMachine: .constant(BandStateMachine()),
             selectedFilter: .constant(nil),

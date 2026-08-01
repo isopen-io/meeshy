@@ -22,8 +22,8 @@ final class ComposerPanelDismissalTests: XCTestCase {
         isDrawingImmersive: Bool = false,
         isViewportZoomed: Bool = false,
         isTimelineVisible: Bool = false,
-        isEmptyStatePickerVisible: Bool = false,
-        isComposerEmpty: Bool = false
+        isBlankAuthoringSlide: Bool = false,
+        isDraftResumePresented: Bool = false
     ) -> ComposerChromeContext {
         ComposerChromeContext(
             machineState: machineState,
@@ -33,8 +33,8 @@ final class ComposerPanelDismissalTests: XCTestCase {
             isDrawingImmersive: isDrawingImmersive,
             isViewportZoomed: isViewportZoomed,
             isTimelineVisible: isTimelineVisible,
-            isEmptyStatePickerVisible: isEmptyStatePickerVisible,
-            isComposerEmpty: isComposerEmpty
+            isBlankAuthoringSlide: isBlankAuthoringSlide,
+            isDraftResumePresented: isDraftResumePresented
         )
     }
 
@@ -90,49 +90,52 @@ final class ComposerPanelDismissalTests: XCTestCase {
         )
     }
 
-    // MARK: - `resultingContext.isEmptyStatePickerVisible` — recalcul, pas recopie
+    // MARK: - `resultingContext` — ce qui SURVIT à la sortie de panneau
 
-    /// Reliquat S1 : recopier `ctx.isEmptyStatePickerVisible` était FAUX par
-    /// construction (toujours `false` en entrée, un panneau ouvert impliquant
-    /// `bandStateIsHidden == false` au moment de la capture) — jamais le vrai
-    /// scénario « sortie d'un dessin vide sur un composer resté vierge ». Seule
-    /// la sortie du DESSIN vide `activeTool` (`clearActiveTool`) ; Média/Texte/
-    /// Son le laissent posé, donc leur dismiss ne peut jamais rouvrir le picker.
-    func test_dismissing_fromEmptyDrawingSession_onEmptyComposer_revealsEmptyStatePicker() {
+    /// S5 a supprimé le picker d'état vide : la barre d'outils standard est
+    /// montée en permanence, donc la poignée de restauration du chrome existe
+    /// toujours dans l'arbre et il n'y a plus rien à « faire réapparaître ». Ce
+    /// qui doit survivre, en revanche, c'est la BLANCHEUR de la slide — c'est
+    /// elle qui décide du retour des amorces après la fermeture du panneau.
+    func test_dismissing_onABlankSlide_keepsTheSlideBlankInTheResultingContext() {
         let outcome = ComposerChromePolicy.dismissing(
-            context(isDrawingActive: true, isComposerEmpty: true))
+            context(isDrawingActive: true, isBlankAuthoringSlide: true))
+        XCTAssertTrue(outcome.resultingContext.isBlankAuthoringSlide)
         XCTAssertTrue(
-            outcome.resultingContext.isEmptyStatePickerVisible,
+            ComposerChromePolicy.offersContentStarters(
+                outcome.resultingContext, isPartialSystemSheetPresented: false),
             """
-            Sortir d'une session de dessin qui n'a RIEN produit sur un composer \
-            resté vierge doit rouvrir le picker géant — sinon un tap ultérieur sur \
-            le fond du canvas masquerait le chrome sur un écran sans poignée de \
-            restauration (le bug « écran nu » que ce domaine corrige).
+            Sortir d'une session de dessin qui n'a RIEN produit sur une slide \
+            restée vierge doit ramener les amorces — sinon la page blanche \
+            perdrait définitivement son affordance de départ.
             """
         )
     }
 
-    func test_dismissing_fromNonEmptyDrawingSession_doesNotRevealEmptyStatePicker() {
+    func test_dismissing_onASlideWithContent_offersNoStarters() {
         let outcome = ComposerChromePolicy.dismissing(
-            context(isDrawingActive: true, isComposerEmpty: false))
-        XCTAssertFalse(outcome.resultingContext.isEmptyStatePickerVisible)
+            context(isDrawingActive: true, isBlankAuthoringSlide: false))
+        XCTAssertFalse(
+            ComposerChromePolicy.offersContentStarters(
+                outcome.resultingContext, isPartialSystemSheetPresented: false))
     }
 
-    func test_dismissing_fromToolPanel_onEmptyComposer_neverRevealsEmptyStatePicker() {
+    /// Le bandeau a été RANGÉ à l'ouverture du panneau, pas à sa fermeture :
+    /// `rangeDraftResumeBannerIfNeeded()` (armé par `rangesDraftResumeBanner` dès
+    /// que le chrome plein disparaît) court sur tout geste d'authoring. Recopier
+    /// `ctx.isDraftResumePresented` dans le contexte résultant décrivait donc un
+    /// état que la vue n'atteint jamais — un bandeau flottant au-dessus d'un
+    /// panneau qui vient de se refermer.
+    ///
+    /// Ranger n'est toujours pas jeter : le brouillon reste en magasin
+    /// (`mayOverwriteStoredDraft`) et la même offre revient à l'ouverture
+    /// suivante. Seul « Recommencer » le détruit.
+    func test_dismissing_reportsTheDraftResumeBannerAsRanged() {
         let outcome = ComposerChromePolicy.dismissing(
-            context(machineState: .toolPanel(.media), isComposerEmpty: true))
+            context(machineState: .toolPanel(.media), isDraftResumePresented: true))
         XCTAssertFalse(
-            outcome.resultingContext.isEmptyStatePickerVisible,
-            "Quitter Média/Texte/Son laisse `activeTool` posé : le picker ne revient jamais par ce chemin."
-        )
-    }
-
-    func test_dismissing_fromTimelineOverride_onEmptyComposer_doesNotRevealEmptyStatePicker() {
-        let outcome = ComposerChromePolicy.dismissing(
-            context(isTimelineVisible: true, isComposerEmpty: true))
-        XCTAssertFalse(
-            outcome.resultingContext.isEmptyStatePickerVisible,
-            "La sortie de la timeline n'efface pas `activeTool` : le picker ne revient pas par ce chemin non plus."
+            outcome.resultingContext.isDraftResumePresented,
+            "Le bandeau était déjà rangé quand le panneau s'est ouvert : le maintenir décrirait un état inatteignable."
         )
     }
 

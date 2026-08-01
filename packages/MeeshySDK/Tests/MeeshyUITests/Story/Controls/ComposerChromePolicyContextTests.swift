@@ -29,8 +29,7 @@ final class ComposerChromePolicyContextTests: XCTestCase {
                 isDrawingActive: isDrawingActive,
                 isDrawingImmersive: isDrawingImmersive,
                 isViewportZoomed: isViewportZoomed,
-                isTimelineVisible: isTimelineVisible,
-                isEmptyStatePickerVisible: false
+                isTimelineVisible: isTimelineVisible
             )
         )
     }
