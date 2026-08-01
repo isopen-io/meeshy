@@ -3,6 +3,7 @@ import { PrismaClient, CallEndReason } from '@meeshy/shared/prisma/client';
 import { StatusService } from '../../services/StatusService';
 import { MaintenanceService } from '../../services/MaintenanceService';
 import { CallService } from '../../services/CallService';
+import type { DisconnectParticipation } from '../CallEventsHandler';
 import { hashSessionToken } from '../../utils/session-token';
 import { extractJWTToken, extractSessionToken, type SocketUser } from '../utils/socket-helpers';
 import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
@@ -30,6 +31,20 @@ export interface AuthHandlerDependencies {
    * (rétrocompat).
    */
   emitPresenceSnapshot?: (socket: Socket, userId: string, isAnonymous: boolean) => Promise<void>;
+  /**
+   * CALL-RESILIENCE (Vague 44) — broadcasts PARTICIPANT_LEFT/call:ended for the
+   * anonymous-guest auto-leave below. Injected by MeeshySocketIOManager (owns
+   * `io` and `CallEventsHandler`), curried down to
+   * `CallEventsHandler.broadcastParticipantLeftResult`. Optional so unit tests
+   * constructing AuthHandler directly don't need to stub Socket.IO — leaveCall
+   * itself still runs unconditionally either way, only the broadcast fanout is
+   * skipped when absent.
+   */
+  broadcastCallParticipantLeft?: (opts: {
+    leftSession: Awaited<ReturnType<CallService['leaveCall']>>;
+    participation: DisconnectParticipation;
+    userId: string;
+  }) => Promise<void>;
 }
 
 export class AuthHandler {
@@ -41,6 +56,7 @@ export class AuthHandler {
   private socketToUser: Map<string, string>;
   private userSockets: Map<string, Set<string>>;
   private emitPresenceSnapshot?: (socket: Socket, userId: string, isAnonymous: boolean) => Promise<void>;
+  private broadcastCallParticipantLeft?: AuthHandlerDependencies['broadcastCallParticipantLeft'];
 
   constructor(deps: AuthHandlerDependencies) {
     this.prisma = deps.prisma;
@@ -51,6 +67,7 @@ export class AuthHandler {
     this.socketToUser = deps.socketToUser;
     this.userSockets = deps.userSockets;
     this.emitPresenceSnapshot = deps.emitPresenceSnapshot;
+    this.broadcastCallParticipantLeft = deps.broadcastCallParticipantLeft;
   }
 
   async handleTokenAuthentication(socket: Socket): Promise<void> {
@@ -391,7 +408,7 @@ export class AuthHandler {
 
         for (const participation of activeParticipations) {
           try {
-            await this.callService.leaveCall({
+            const leftSession = await this.callService.leaveCall({
               callId: participation.callSessionId,
               userId: userIdOrToken,
               participantId: participation.participantId,
@@ -402,6 +419,17 @@ export class AuthHandler {
               // this hint, leaveCall() defaults to endReason 'completed',
               // misrecording an involuntary drop as a normal hangup.
               endReasonHint: CallEndReason.connectionLost
+            });
+            // CALL-RESILIENCE (Vague 44) — leaveCall alone never told the other
+            // party the guest left: this loop is the only cleanup path for
+            // anonymous participants (CallEventsHandler's own disconnect flow
+            // is keyed on participant.userId, always null here), and it never
+            // broadcast PARTICIPANT_LEFT/call:ended, leaving the other side's
+            // UI "in call" until CallCleanupService's ~120s GC.
+            await this.broadcastCallParticipantLeft?.({
+              leftSession,
+              participation: participation as unknown as DisconnectParticipation,
+              userId: userIdOrToken
             });
           } catch (error) {
             logger.error('error auto-leaving call on disconnect', { callId: participation.callSessionId, error });

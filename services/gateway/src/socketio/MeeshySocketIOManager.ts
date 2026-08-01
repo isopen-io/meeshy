@@ -317,6 +317,11 @@ export class MeeshySocketIOManager {
       userSockets: this.userSockets,
       emitPresenceSnapshot: (socket, userId, isAnonymous) =>
         this._emitPresenceSnapshot(socket, userId, isAnonymous),
+      // CALL-RESILIENCE (Vague 44) — lets AuthHandler's anonymous-guest
+      // disconnect leave reuse CallEventsHandler's PARTICIPANT_LEFT/
+      // call:ended fanout instead of leaving the other party's UI "in call".
+      broadcastCallParticipantLeft: (opts) =>
+        this.callEventsHandler.broadcastParticipantLeftResult({ io: this.io as SocketIOServer, ...opts }),
     });
 
     this.adminAgentHandler = new AdminAgentHandler({
