@@ -181,6 +181,19 @@ public actor MessagePersistenceActor {
         }
     }
 
+    /// startup-03 — compte des lignes outbox encore éligibles à l'envoi
+    /// (.pending/.inflight). Lu par `DependencyContainer.wireOutboxLogoutHook`
+    /// AVANT `clearAllMessagesForLogout()` pour signaler à l'utilisateur la
+    /// perte de travail quand la purge suit une invalidation de session
+    /// serveur (jamais sur un logout volontaire).
+    public func pendingOutboxCount() async throws -> Int {
+        try await dbWriter.read { db in
+            try OutboxRecord
+                .filter([OutboxStatus.pending.rawValue, OutboxStatus.inflight.rawValue].contains(Column("status")))
+                .fetchCount(db)
+        }
+    }
+
     /// Retention window (days) for terminal `.exhausted` outbox rows. They are
     /// kept briefly so the user can still see / manually retry a permanently
     /// failed mutation, then GC'd — a row that hit `maxAttempts` is otherwise

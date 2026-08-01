@@ -95006,6 +95006,53 @@
           }
         }
       }
+    },
+    "outbox.sessionInvalidated.pendingLost": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تم إلغاء الرسائل غير المُرسلة — يُرجى تسجيل الدخول مجددًا."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nicht gesendete Nachrichten wurden verworfen — bitte melde dich erneut an."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unsent messages were discarded — please sign in again."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Se han descartado los mensajes no enviados: vuelve a iniciar sesión."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Des messages non envoyés ont été annulés — reconnectez-vous."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "I messaggi non inviati sono stati annullati — accedi di nuovo."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mensagens não enviadas foram descartadas — faça login novamente."
+          }
+        }
+      }
     }
   },
   "version": "1.1"

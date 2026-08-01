@@ -103,6 +103,11 @@ public final class AuthManager: ObservableObject, AuthManaging {
     /// direct socket-reconnect chain has existed since the initial
     /// implementation. The publisher pins the contract for future readers.
     public let tokenDidRotate = PassthroughSubject<Void, Never>()
+    /// startup-03 — émis quand la session est invalidée PAR LE SERVEUR
+    /// (`requireReauthentication`), jamais sur un logout volontaire. Permet
+    /// aux hooks de purge de distinguer les deux chemins (ex. signaler la
+    /// perte de messages en attente d'envoi).
+    public let sessionInvalidated = PassthroughSubject<Void, Never>()
 
     // MARK: - Protocol Publisher
 
@@ -832,6 +837,10 @@ public final class AuthManager: ObservableObject, AuthManaging {
     /// to false so the UI can prompt for re-login. The saved account is
     /// preserved — the user just needs to enter their password again.
     private func requireReauthentication(userId: String) {
+        // startup-03 — signal AVANT tout flip pour que le hook outbox
+        // (DependencyContainer) distingue une session invalidée par le
+        // serveur d'un logout volontaire (qui n'émet jamais ce signal).
+        sessionInvalidated.send(())
         keychain.delete(forKey: tokenKey(for: userId), account: nil)
         keychain.delete(forKey: sessionTokenKey(for: userId), account: nil)
         keychain.delete(forKey: tokenDateUDKey(for: userId), account: nil)

@@ -120,6 +120,18 @@ final class DependencyContainer {
 
     // MARK: - Q3 — Outbox session quiesce hook
 
+    /// startup-03 — état armé par `sessionInvalidated` (serveur), consommé au
+    /// flip isAuthenticated : distingue invalidation de session et logout
+    /// volontaire pour le toast de perte.
+    private var sessionWasInvalidated = false
+
+    /// Pure — la perte de messages en attente n'est signalée que quand la
+    /// purge suit une invalidation SERVEUR (jamais un logout volontaire) ET
+    /// qu'il restait des lignes outbox non envoyées.
+    static func shouldSurfaceOutboxLossToast(sessionWasInvalidated: Bool, pendingCount: Int) -> Bool {
+        sessionWasInvalidated && pendingCount > 0
+    }
+
     /// Pattern calqué sur `ConversationAudioCoordinator.wireAuthLogoutHook` :
     /// observe la transition `isAuthenticated true→false` et purge TOUTES les
     /// tables messages on-device (outbox + `messages` autoritaire +
@@ -127,18 +139,39 @@ final class DependencyContainer {
     /// `clearAllMessagesForLogout`). Sans la purge de `messages`, user B verrait
     /// le contenu de user A au prochain login (table non namespacée par userId,
     /// lue par `MessageStore.loadInitialSnapshot`).
+    /// startup-03 — la purge reste INCONDITIONNELLE (invariant anti fuite
+    /// cross-compte Q3) ; quand elle suit une invalidation de session serveur
+    /// avec des envois en attente, l'utilisateur en est informé par un toast.
     private func wireOutboxLogoutHook() {
         let persistence = messagePersistence
         let feed = feedPersistence
+        AuthManager.shared.sessionInvalidated
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in self?.sessionWasInvalidated = true }
+            .store(in: &cancellables)
         AuthManager.shared.$isAuthenticated
             .removeDuplicates()
             .dropFirst()
             .filter { !$0 }
             .receive(on: DispatchQueue.main)
-            .sink { _ in
+            .sink { [weak self] _ in
+                let invalidated = self?.sessionWasInvalidated ?? false
+                self?.sessionWasInvalidated = false
                 Task {
                     do {
+                        let pendingCount = try await persistence.pendingOutboxCount()
                         try await persistence.clearAllMessagesForLogout()
+                        if DependencyContainer.shouldSurfaceOutboxLossToast(
+                            sessionWasInvalidated: invalidated, pendingCount: pendingCount
+                        ) {
+                            await MainActor.run {
+                                FeedbackToastManager.shared.showError(
+                                    String(localized: "outbox.sessionInvalidated.pendingLost",
+                                           defaultValue: "Des messages non envoyés ont été annulés — reconnectez-vous.",
+                                           bundle: .main)
+                                )
+                            }
+                        }
                     } catch {
                         containerLogger.error("Q3 logout message purge failed: \(error.localizedDescription, privacy: .public)")
                     }

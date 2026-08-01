@@ -1784,3 +1784,23 @@ final class MessagePersistenceActorTests: XCTestCase {
             "an exhausted outbox no longer retries — the row is orphaned")
     }
 }
+
+/// startup-03 — compteur des lignes outbox éligibles à l'envoi.
+extension MessagePersistenceActorTests {
+
+    func test_pendingOutboxCount_countsPendingAndInflightOnly() async throws {
+        try await dbQueue.write { db in
+            let now = Date()
+            for (id, status) in [("o-p", "pending"), ("o-i", "inflight"), ("o-e", "exhausted"), ("o-f", "failed")] {
+                try db.execute(
+                    sql: "INSERT INTO outbox (id, kind, conversationId, payload, status, createdAt, updatedAt, nextAttemptAt) VALUES (?, 'sendMessage', 'c1', ?, ?, ?, ?, ?)",
+                    arguments: [id, Data(), status, now, now, now]
+                )
+            }
+        }
+
+        let count = try await actor.pendingOutboxCount()
+
+        XCTAssertEqual(count, 2, "seuls .pending et .inflight comptent comme travail encore éligible à l'envoi")
+    }
+}
