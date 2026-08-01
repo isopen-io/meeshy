@@ -73,13 +73,13 @@ Ordre imposé : cache-02 avant cache-01 (le sort de `persistTranslationCaches` c
 
 Le cœur doctrine « jamais d'écran vide si le disque a une donnée ».
 
-- [ ] **cache-04** (P1/M/f01) — Branche `.expired` de `CacheFirstLoader` : peindre `loadIgnoringExpiry` en `.cachedStale` avant fetch ; `store.save` hors du `do` du fetch. *(Absorbe vm-expired-recovery-01 — les 7 écrans hand-rolled sont listés dans la fiche.)*
-- [ ] **cache-08** (P2/M/f01) — `FriendshipCache` : seed depuis les stores GRDB avant le round-trip réseau (deps : cache-04).
-- [ ] **vm-conv-expired-metadata-01** (P3/S/f05) — Hydrater métadonnées audio/traductions aussi dans la branche `.expired/.empty` de `loadMessages`.
-- [ ] **cache-03** (P1/M/f01) — Trim directionnel : étape A immédiate (`prefix(100)` dans `debouncedCacheSave`) ; étape B `trimDirection` dans `CachePolicy` (absorbe stores-04).
-- [ ] **stores-08** (P2/M/f05) — Saves locaux qui rajeunissent `lastFetchedAt` : introduire `savePreservingFreshness` (mécanisme `flushKeyToL2`) et basculer les 9 sites de mutation locale + fix du chemin L1-miss d'`update()` (deps : aucune — l'option `mergeUpdate`, qui aurait dépendu de cache-03, est rejetée par la fiche).
-- [ ] **vm-bookmarks-pagination-01** (P2/S/f05) — Pagination bookmarks : séparer « premier rendu cache » de « page suivante réseau ».
-- [ ] **vm-search-localname-01** (P3/S/f05) — Titre des résultats messages : résoudre le nom local (cache conversations) au lieu de l'ObjectId.
+- [x] **cache-04** (P1/M/f01) — Branche `.expired` de `CacheFirstLoader` : peindre `loadIgnoringExpiry` en `.cachedStale` avant fetch ; `store.save` hors du `do` du fetch. *(Absorbe vm-expired-recovery-01 — les 7 écrans hand-rolled sont listés dans la fiche.)*
+- [x] **cache-08** (P2/M/f01) — `FriendshipCache` : seed depuis les stores GRDB avant le round-trip réseau (deps : cache-04).
+- [x] **vm-conv-expired-metadata-01** (P3/S/f05) — Hydrater métadonnées audio/traductions aussi dans la branche `.expired/.empty` de `loadMessages`.
+- [x] **cache-03** (P1/M/f01) — Trim directionnel : étape A immédiate (`prefix(100)` dans `debouncedCacheSave`) ; étape B `trimDirection` dans `CachePolicy` (absorbe stores-04).
+- [x] **stores-08** (P2/M/f05) — Saves locaux qui rajeunissent `lastFetchedAt` : introduire `savePreservingFreshness` (mécanisme `flushKeyToL2`) et basculer les 9 sites de mutation locale + fix du chemin L1-miss d'`update()` (deps : aucune — l'option `mergeUpdate`, qui aurait dépendu de cache-03, est rejetée par la fiche).
+- [x] **vm-bookmarks-pagination-01** (P2/S/f05) — Pagination bookmarks : séparer « premier rendu cache » de « page suivante réseau ».
+- [x] **vm-search-localname-01** (P3/S/f05) — Titre des résultats messages : résoudre le nom local (cache conversations) au lieu de l'ObjectId.
 
 ## Lot 4 — Écritures optimistes sans clobber
 
