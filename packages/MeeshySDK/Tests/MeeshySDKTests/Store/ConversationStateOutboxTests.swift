@@ -264,3 +264,52 @@ actor SyncArray<Element: Sendable> {
     func append(_ value: Element) { storage.append(value) }
     func snapshot() -> [Element] { storage }
 }
+
+/// P0 (revue local-first 2026-08-01, fiche outbox-03) — l'outbox d'état de
+/// conversation (pin/mute/archive mais aussi leave/deleteForUser, destructifs)
+/// réhydrate ses rows à chaque boot et est flushée `force: true` sous le token
+/// courant : sans purge au logout, les mutations du compte A sont rejouées
+/// sous le token du compte B.
+extension ConversationStateOutboxTests {
+
+    func test_purgeAll_emptiesPendingAndIndex() async {
+        let outbox = makeOutboxForPurgeTests()
+        _ = await outbox.enqueue(.setPinned(true), for: "conv-1")
+        _ = await outbox.enqueue(.setMuted(true), for: "conv-2")
+        let seeded = await outbox.allPending().count
+        XCTAssertEqual(seeded, 2, "precondition: two pending tasks")
+
+        await outbox.purgeAll()
+
+        let remaining = await outbox.allPending()
+        XCTAssertTrue(remaining.isEmpty, "purgeAll must drop every pending task")
+        // L'index de coalescing doit être vide lui aussi : un ré-enqueue de la
+        // même mutation après purge crée une NOUVELLE tâche (pas d'update d'un
+        // fantôme évacué).
+        let reenqueued = await outbox.enqueue(.setPinned(true), for: "conv-1")
+        XCTAssertNotNil(reenqueued, "re-enqueue after purge must create a fresh task")
+        let after = await outbox.allPending().count
+        XCTAssertEqual(after, 1)
+    }
+
+    func test_purgeAll_deletesRows_rehydrationOnSamePathIsEmpty() async {
+        let path = FileManager.default.temporaryDirectory
+            .appendingPathComponent("outbox-purge-\(UUID().uuidString).db").path
+        let outbox = ConversationStateOutbox(dbPath: path)
+        _ = await outbox.enqueue(.setArchived(true), for: "conv-A")
+
+        await outbox.purgeAll()
+
+        // Une 2e instance sur le MÊME fichier prouve que le DELETE est durable
+        // (la réhydratation au boot ne ressuscite rien).
+        let rehydrated = ConversationStateOutbox(dbPath: path)
+        let pending = await rehydrated.allPending()
+        XCTAssertTrue(pending.isEmpty, "purged rows must not survive a relaunch rehydration")
+    }
+
+    private func makeOutboxForPurgeTests() -> ConversationStateOutbox {
+        let path = FileManager.default.temporaryDirectory
+            .appendingPathComponent("outbox-\(UUID().uuidString).db").path
+        return ConversationStateOutbox(dbPath: path)
+    }
+}
