@@ -1989,8 +1989,38 @@ public actor MessagePersistenceActor {
     }
 
     /// Delete all message records for a conversation (called on 403/access revoked).
+    /// grdb-09 — cascade aux tables enfants scopées sur les messages de la
+    /// conversation : une conversation révoquée ne laisse aucun orphelin.
     public func deleteAll(conversationId: String) async throws {
         try await dbWriter.write { db in
+            let ids = try String.fetchAll(
+                db,
+                sql: "SELECT localId FROM messages WHERE conversationId = ?",
+                arguments: [conversationId]
+            )
+            if !ids.isEmpty {
+                let placeholders = ids.map { _ in "?" }.joined(separator: ",")
+                try db.execute(
+                    sql: "DELETE FROM message_translations WHERE messageLocalId IN (\(placeholders))",
+                    arguments: StatementArguments(ids)
+                )
+                try db.execute(
+                    sql: "DELETE FROM message_transcriptions WHERE messageLocalId IN (\(placeholders))",
+                    arguments: StatementArguments(ids)
+                )
+                try db.execute(
+                    sql: "DELETE FROM message_audio_translations WHERE messageLocalId IN (\(placeholders))",
+                    arguments: StatementArguments(ids)
+                )
+                try db.execute(
+                    sql: "DELETE FROM pending_ids WHERE localId IN (\(placeholders))",
+                    arguments: StatementArguments(ids)
+                )
+                try db.execute(
+                    sql: "DELETE FROM send_attempts WHERE localId IN (\(placeholders))",
+                    arguments: StatementArguments(ids)
+                )
+            }
             _ = try MessageRecord
                 .filter(Column("conversationId") == conversationId)
                 .deleteAll(db)

@@ -67,3 +67,38 @@ final class MessageRetentionPurgeTests: XCTestCase {
         XCTAssertEqual(c, 1)
     }
 }
+
+/// grdb-09 — deleteAll(conversationId:) (révocation 403) doit cascader aux
+/// tables enfants, sinon les orphelins survivent indéfiniment.
+extension MessageRetentionPurgeTests {
+
+    func test_deleteAll_conversationRevoked_removesChildRows() async throws {
+        for (localId, conv) in [("m_rev", "conv_revoked"), ("m_keep", "conv_kept")] {
+            try await actor.insertOptimistic(MessageRecordFactory.make(localId: localId, conversationId: conv))
+            try await dbQueue.write { db in
+                let now = Date()
+                try db.execute(sql: "INSERT INTO message_translations (id, messageLocalId, targetLanguage, translatedContent, translationModel, receivedAt) VALUES (?, ?, 'en','hi','nllb', ?)", arguments: ["t_\(localId)", localId, now])
+                try db.execute(sql: "INSERT INTO message_transcriptions (messageLocalId, language, text, receivedAt) VALUES (?, 'fr','bonjour', ?)", arguments: [localId, now])
+                try db.execute(sql: "INSERT INTO message_audio_translations (id, messageLocalId, targetLanguage, status, receivedAt) VALUES (?, ?, 'en','ready', ?)", arguments: ["a_\(localId)", localId, now])
+                try db.execute(sql: "INSERT INTO pending_ids (localId, serverId, conversationId) VALUES (?, ?, ?)", arguments: [localId, "srv_\(localId)", conv])
+                try db.execute(sql: "INSERT INTO send_attempts (localId, attemptNumber, transport, startedAt, outcome) VALUES (?, 1, 'rest', ?, 'failed')", arguments: [localId, now])
+            }
+        }
+
+        try await actor.deleteAll(conversationId: "conv_revoked")
+
+        for (table, column) in [
+            ("message_translations", "messageLocalId"), ("message_transcriptions", "messageLocalId"),
+            ("message_audio_translations", "messageLocalId"), ("pending_ids", "localId"), ("send_attempts", "localId"),
+        ] {
+            let revoked = try await dbQueue.read { db in
+                try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM \(table) WHERE \(column) = 'm_rev'") ?? -1
+            }
+            XCTAssertEqual(revoked, 0, "\(table) doit être purgée pour la conversation révoquée")
+            let kept = try await dbQueue.read { db in
+                try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM \(table) WHERE \(column) = 'm_keep'") ?? -1
+            }
+            XCTAssertEqual(kept, 1, "\(table) de l'autre conversation survit")
+        }
+    }
+}
