@@ -90,10 +90,33 @@ protocol VideoFilterPipelineProviding {
 // chaque méthode/property serait @MainActor et trap au premier frame livré.
 
 nonisolated final class VideoFilterPipeline: VideoFilterPipelineProviding, @unchecked Sendable {
-    var config = VideoFilterConfig.default
+    // `config` is written from the MainActor (slider drags in VideoFiltersPanel,
+    // CallManager toggles) and read from WebRTC's serial capture queue inside
+    // `process(_:averageBrightness:)` at ~30Hz. Without a lock, a write racing a
+    // read can tear the struct — e.g. pairing a new `backgroundBlurEnabled` with
+    // a stale `backgroundBlurRadius` — producing a visibly glitchy frame.
+    // `isAutoDegraded`/`lastFrameProcessingTime` have the same MainActor-reads/
+    // capture-queue-writes shape (VideoFiltersPanel reads `isAutoDegraded`), so
+    // they share the same lock.
+    private let stateLock = NSLock()
 
-    private(set) var lastFrameProcessingTime: TimeInterval?
-    private(set) var isAutoDegraded = false
+    private var _config = VideoFilterConfig.default
+    var config: VideoFilterConfig {
+        get { stateLock.lock(); defer { stateLock.unlock() }; return _config }
+        set { stateLock.lock(); defer { stateLock.unlock() }; _config = newValue }
+    }
+
+    private var _lastFrameProcessingTime: TimeInterval?
+    private(set) var lastFrameProcessingTime: TimeInterval? {
+        get { stateLock.lock(); defer { stateLock.unlock() }; return _lastFrameProcessingTime }
+        set { stateLock.lock(); defer { stateLock.unlock() }; _lastFrameProcessingTime = newValue }
+    }
+
+    private var _isAutoDegraded = false
+    private(set) var isAutoDegraded: Bool {
+        get { stateLock.lock(); defer { stateLock.unlock() }; return _isAutoDegraded }
+        set { stateLock.lock(); defer { stateLock.unlock() }; _isAutoDegraded = newValue }
+    }
 
     private let context: CIContext
     private let autoDegradeBudgetMs: Double = 25.0
@@ -160,7 +183,11 @@ nonisolated final class VideoFilterPipeline: VideoFilterPipelineProviding, @unch
     }
 
     func process(_ pixelBuffer: CVPixelBuffer, averageBrightness: Float?) -> CVPixelBuffer {
-        guard config.isEnabled else { return pixelBuffer }
+        // Single atomic snapshot: every filter stage below reads this same
+        // struct copy, so a slider drag landing mid-frame can only ever apply
+        // fully-before or fully-after this frame — never a torn mix of fields.
+        let cfg = config
+        guard cfg.isEnabled else { return pixelBuffer }
 
         let start = CACurrentMediaTime()
 
@@ -170,16 +197,16 @@ nonisolated final class VideoFilterPipeline: VideoFilterPipelineProviding, @unch
         // 1. Low-light boost (automatic)
         image = applyLowLightBoost(to: image, averageBrightness: averageBrightness)
         // 2. Colorimetry
-        image = applyTemperatureAndTint(to: image)
-        image = applyColorControls(to: image)
-        image = applyExposure(to: image)
+        image = applyTemperatureAndTint(to: image, config: cfg)
+        image = applyColorControls(to: image, config: cfg)
+        image = applyExposure(to: image, config: cfg)
         // 3. Background blur (if enabled and not auto-degraded)
-        if config.backgroundBlurEnabled && !isAutoDegraded {
-            image = applyBackgroundBlur(to: image, pixelBuffer: pixelBuffer)
+        if cfg.backgroundBlurEnabled && !isAutoDegraded {
+            image = applyBackgroundBlur(to: image, pixelBuffer: pixelBuffer, config: cfg)
         }
         // 4. Skin smoothing (if enabled and not auto-degraded for smoothing)
-        if config.skinSmoothingEnabled && !isSmoothingDegraded {
-            image = applySkinSmoothing(to: image, pixelBuffer: pixelBuffer)
+        if cfg.skinSmoothingEnabled && !isSmoothingDegraded {
+            image = applySkinSmoothing(to: image, pixelBuffer: pixelBuffer, config: cfg)
         }
 
         // PERF-014: render into a pool-allocated output buffer instead of
@@ -277,7 +304,7 @@ nonisolated final class VideoFilterPipeline: VideoFilterPipelineProviding, @unch
 
     // MARK: - Colorimetry Filters
 
-    private func applyTemperatureAndTint(to image: CIImage) -> CIImage {
+    private func applyTemperatureAndTint(to image: CIImage, config: VideoFilterConfig) -> CIImage {
         let neutral = CIVector(x: CGFloat(config.temperature), y: CGFloat(config.tint))
         let target = CIVector(x: 6500, y: 0)
 
@@ -289,7 +316,7 @@ nonisolated final class VideoFilterPipeline: VideoFilterPipelineProviding, @unch
         ])
     }
 
-    private func applyColorControls(to image: CIImage) -> CIImage {
+    private func applyColorControls(to image: CIImage, config: VideoFilterConfig) -> CIImage {
         let hasChanges = config.brightness != 0 || config.contrast != 1.0 || config.saturation != 1.0
         guard hasChanges else { return image }
 
@@ -300,7 +327,7 @@ nonisolated final class VideoFilterPipeline: VideoFilterPipelineProviding, @unch
         ])
     }
 
-    private func applyExposure(to image: CIImage) -> CIImage {
+    private func applyExposure(to image: CIImage, config: VideoFilterConfig) -> CIImage {
         guard config.exposure != 0 else { return image }
 
         return image.applyingFilter("CIExposureAdjust", parameters: [
@@ -334,7 +361,7 @@ nonisolated final class VideoFilterPipeline: VideoFilterPipelineProviding, @unch
 
     // MARK: - Background Blur (§14.2.2)
 
-    private func applyBackgroundBlur(to image: CIImage, pixelBuffer: CVPixelBuffer) -> CIImage {
+    private func applyBackgroundBlur(to image: CIImage, pixelBuffer: CVPixelBuffer, config: VideoFilterConfig) -> CIImage {
         let handler = VNImageRequestHandler(cvPixelBuffer: pixelBuffer, options: [:])
         do {
             try handler.perform([segmentationRequest])
@@ -366,7 +393,7 @@ nonisolated final class VideoFilterPipeline: VideoFilterPipelineProviding, @unch
 
     // MARK: - Skin Smoothing (§14.2.3)
 
-    private func applySkinSmoothing(to image: CIImage, pixelBuffer: CVPixelBuffer) -> CIImage {
+    private func applySkinSmoothing(to image: CIImage, pixelBuffer: CVPixelBuffer, config: VideoFilterConfig) -> CIImage {
         // PERF-013: face detection is not free (~3-4ms per frame on 720p).
         // Faces don't move enough between consecutive frames to justify
         // re-detecting at 30Hz. We re-detect every Nth frame and reuse the

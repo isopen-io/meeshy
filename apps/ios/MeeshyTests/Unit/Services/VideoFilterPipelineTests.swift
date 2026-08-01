@@ -148,4 +148,49 @@ final class VideoFilterPipelineTests: XCTestCase {
         let sut = makeSUT()
         XCTAssertFalse(sut.isAutoDegraded)
     }
+
+    // Regression test for a data race: `config` used to be a plain
+    // unsynchronized `var`, written from the MainActor (slider drags) and read
+    // from WebRTC's capture queue inside `process(_:averageBrightness:)` at
+    // ~30Hz. A write racing a read could tear the struct, observing a mix of
+    // fields that was never actually assigned together (e.g. a new
+    // `backgroundBlurEnabled` paired with a stale `backgroundBlurRadius`).
+    // With the lock in place every read must equal one of the two fully-formed
+    // configs below — never a hybrid.
+    func test_config_concurrentReadWrite_neverObservesTornConfig() {
+        let sut = makeSUT()
+
+        let blurred: VideoFilterConfig = {
+            var c = VideoFilterConfig.default
+            c.isEnabled = true
+            c.backgroundBlurEnabled = true
+            c.backgroundBlurRadius = 5.0
+            return c
+        }()
+        let smoothed: VideoFilterConfig = {
+            var c = VideoFilterConfig.default
+            c.isEnabled = true
+            c.backgroundBlurEnabled = false
+            c.skinSmoothingEnabled = true
+            c.skinSmoothingIntensity = 0.9
+            return c
+        }()
+
+        // `concurrentPerform` runs `iterations` calls across GCD's thread pool
+        // and blocks until every call returns — no manual expectation/queue
+        // plumbing needed. Even-indexed calls write one of the two full
+        // configs; odd-indexed calls read `config` and assert it is always a
+        // complete, previously-assigned generation, never a hybrid of the two.
+        DispatchQueue.concurrentPerform(iterations: 4_000) { index in
+            if index.isMultiple(of: 2) {
+                sut.config = index.isMultiple(of: 4) ? blurred : smoothed
+            } else {
+                let observed = sut.config
+                XCTAssertTrue(
+                    observed == blurred || observed == smoothed || observed == VideoFilterConfig.default,
+                    "Observed a torn config that matches neither assigned generation: \(observed)"
+                )
+            }
+        }
+    }
 }
