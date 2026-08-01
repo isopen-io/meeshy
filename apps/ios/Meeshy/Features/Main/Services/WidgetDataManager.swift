@@ -62,7 +62,10 @@ struct ConversationSnapshotPayload: Codable {
 final class WidgetDataManager: NotificationWidgetSink {
     static let shared = WidgetDataManager()
 
-    private let suiteName = "group.me.meeshy.apps"
+    private let suiteName: String
+    /// Seam de test — en production, les dossiers de staging sont résolus
+    /// depuis les helpers des consumers (App Group réel).
+    private let stagingDirectoriesOverride: [URL]?
     private let conversationsKey = "recent_conversations"
     private let unreadCountKey = "unread_count"
     private let favoritesKey = "favorite_contacts"
@@ -85,7 +88,53 @@ final class WidgetDataManager: NotificationWidgetSink {
         return enc
     }()
 
-    private init() {}
+    private init() {
+        self.suiteName = "group.me.meeshy.apps"
+        self.stagingDirectoriesOverride = nil
+    }
+
+    /// Init de test (fiche appgroup-01) — suite UserDefaults et dossiers de
+    /// staging injectés pour vérifier `wipeAll()` sans toucher l'App Group réel.
+    init(suiteName: String, stagingDirectories: [URL]) {
+        self.suiteName = suiteName
+        self.stagingDirectoriesOverride = stagingDirectories
+    }
+
+    /// appgroup-01 — wipe de logout (exigence `NotificationWidgetSink`).
+    ///
+    /// Purge les clés widget de l'App Group ET les dossiers de staging
+    /// (partages différés, blobs NSE) : le contenu du compte sortant ne doit
+    /// ni rester affiché sur l'écran d'accueil ni être rejoué sous le compte
+    /// suivant. Ne touche PAS `meeshy_api_base_url` (environnement, pas une
+    /// donnée de compte) ni `meeshy_active_user_id` (effacé par son setter au
+    /// logout) ; la base GRDB App Group est purgée par `wireOutboxLogoutHook`.
+    func wipeAll() {
+        if let defaults = sharedDefaults {
+            let accountKeys = [
+                conversationsKey, snapshotsKey, favoritesKey, lastUpdatedKey,
+                unreadCountKey, WidgetActionFlusher.pendingMarkReadKey,
+            ]
+            for key in accountKeys {
+                defaults.removeObject(forKey: key)
+            }
+        }
+        let stagingDirs = stagingDirectoriesOverride ?? [
+            SharePendingSendConsumer.directoryURL(),
+            NSEPendingMessageConsumer.directoryURL(),
+            NSEPendingPostConsumer.directoryURL(),
+        ].compactMap { $0 }
+        for dir in stagingDirs {
+            do {
+                try FileManager.default.removeItem(at: dir)
+            } catch let error as CocoaError where error.code == .fileNoSuchFile {
+                // Rien à purger — état déjà propre.
+                _ = error
+            } catch {
+                Logger.widgetData.error("wipeAll: staging dir \(dir.lastPathComponent, privacy: .public) not removed: \(error.localizedDescription, privacy: .public)")
+            }
+        }
+        reloadTimelines()
+    }
 
     // MARK: - Environnement API
 

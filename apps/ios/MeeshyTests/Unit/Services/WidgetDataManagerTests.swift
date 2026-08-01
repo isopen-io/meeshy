@@ -4,6 +4,50 @@ import XCTest
 @MainActor
 final class WidgetDataManagerTests: XCTestCase {
 
+    // MARK: - appgroup-01 — wipeAll (wipe de logout)
+
+    private func makeWipeSUT() throws -> (WidgetDataManager, UserDefaults, [URL]) {
+        let suite = "group.test.meeshy.widgetwipe.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defaults.removePersistentDomain(forName: suite)
+        let fm = FileManager.default
+        let dirs = try (0..<3).map { i -> URL in
+            let dir = fm.temporaryDirectory.appendingPathComponent("wipe-staging-\(i)-\(UUID().uuidString)", isDirectory: true)
+            try fm.createDirectory(at: dir, withIntermediateDirectories: true)
+            try Data("{}".utf8).write(to: dir.appendingPathComponent("blob.json"))
+            return dir
+        }
+        let sut = WidgetDataManager(suiteName: suite, stagingDirectories: dirs)
+        return (sut, defaults, dirs)
+    }
+
+    func test_wipeAll_removesWidgetKeysAndStagingDirs() throws {
+        let (sut, defaults, dirs) = try makeWipeSUT()
+        let keys = [
+            "recent_conversations", "conversation_snapshots", "favorite_contacts",
+            "widget_last_updated", "unread_count", "pending_mark_read",
+        ]
+        for key in keys { defaults.set(Data("seed".utf8), forKey: key) }
+        // Clés d'ENVIRONNEMENT — le wipe ne doit PAS les toucher.
+        defaults.set("http://localhost:3000", forKey: "meeshy_api_base_url")
+
+        sut.wipeAll()
+
+        for key in keys {
+            XCTAssertNil(defaults.object(forKey: key), "\(key) must be removed by the logout wipe")
+        }
+        XCTAssertEqual(
+            defaults.string(forKey: "meeshy_api_base_url"), "http://localhost:3000",
+            "environment keys are NOT account data — the wipe must leave them alone"
+        )
+        for dir in dirs {
+            XCTAssertFalse(
+                FileManager.default.fileExists(atPath: dir.path),
+                "staging dir \(dir.lastPathComponent) must be removed — its blobs would replay under the next account"
+            )
+        }
+    }
+
     // MARK: - WidgetConversation Data Model
 
     func test_widgetConversation_encodesAndDecodes() throws {
