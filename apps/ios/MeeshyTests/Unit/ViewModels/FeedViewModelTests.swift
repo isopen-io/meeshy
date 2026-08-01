@@ -1108,6 +1108,23 @@ final class FeedViewModelTests: XCTestCase {
         sut.unsubscribeFromSocketEvents()
     }
 
+    /// stores-02 — quitter le feed émet feed:unsubscribe mais le socket reste
+    /// connecté : au retour, connect() early-return et le handler .connect (le
+    /// seul émetteur de feed:subscribe) ne rejoue jamais — la room feed restait
+    /// quittée, plus aucun événement temps réel jusqu'à la prochaine reconnexion.
+    func test_subscribeToSocketEvents_afterUnsubscribe_reemitsFeedSubscribe() {
+        let (sut, _, socket, _) = makeSUT()
+
+        sut.subscribeToSocketEvents()
+        sut.unsubscribeFromSocketEvents()
+        sut.subscribeToSocketEvents()
+
+        XCTAssertEqual(socket.subscribeFeedCallCount, 2,
+                       "Returning to the feed after leaving it must re-emit feed:subscribe even though the socket stays connected")
+
+        sut.unsubscribeFromSocketEvents()
+    }
+
     // MARK: - Socket.IO: post:created
 
     func test_socketPostCreated_insertsAtIndexZeroAndIncrementsNewPostsCount() async {

@@ -987,6 +987,13 @@ class FeedViewModel: ObservableObject {
         feedSocketHandler?.arm()
         guard socketCancellables.isEmpty else { return }
         socialSocket.connect()
+        // stores-02 — connect() est un no-op si le socket est déjà connecté :
+        // le handler .connect (seul émetteur de feed:subscribe) ne rejoue pas,
+        // et la room feed quittée par unsubscribeFromSocketEvents() n'était
+        // jamais rejointe. Émission idempotente (rejoindre une room déjà
+        // jointe = no-op) ; socket pas encore prêt → l'emit est perdu mais
+        // rejoué par le handler .connect.
+        socialSocket.subscribeFeed()
 
         // --- didReconnect → backfill du feed ---
         // Apres un flap reseau, le gateway a oublie nos rooms et des posts ont pu
