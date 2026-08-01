@@ -59,15 +59,15 @@ Ferme le reste du thème « logout = état vierge ». Ordonné : sync-04 d'abord
 
 Ordre imposé : cache-02 avant cache-01 (le sort de `persistTranslationCaches` conditionne la boucle de `flushAll`).
 
-- [ ] **cache-02** (P1/S/f01) — Supprimer le full-rewrite `persistTranslationCaches` (persistance déjà incrémentale) + GC 24 h dans `loadTranslationCaches`.
-- [ ] **cache-01** (P1/S/f01) — `allGRDBStores` (27 stores) partagé par `flushAll`/`dirtyCountForTest`/`evictUnderMemoryPressure` (absorbe startup-06).
-- [ ] **cache-05** (P2/S/f01) — `flushDirtyKeyForEviction(key)` dans la branche `.expired` de `load(for:)`.
-- [ ] **cache-06** (P2/S/f01) — Ne plus vider le trio traduction sous memory warning (deps : cache-02).
-- [ ] **grdb-05** (P2/S/f01) — Vacuum/optimize déplacés sous le `beginBackgroundTask` du `BackgroundTransitionCoordinator`.
-- [ ] **grdb-04** (P2/S/f01) — Bump `changeVersion` dans les `updateAll` des réconciliateurs.
-- [ ] **grdb-02** (P2/S/f01) — Réparer `purgeOldMessages` (mauvaise base + mauvaise colonne + cascade + do/catch loggé).
-- [ ] **grdb-09** (P3/S/f01) — Étendre `deleteAll(conversationId:)` aux tables enfants (deps : grdb-02).
-- [ ] **grdb-08** (P3/S/f01) — Supprimer le code mort (GRDBModels, saveTranscription/Audio, MediaSnapshotStore) + réutiliser `dependencies.messagePersistence` pour la rétention (absorbe startup-09 ; deps : grdb-02).
+- [x] **cache-02** (P1/S/f01) — Supprimer le full-rewrite `persistTranslationCaches` (persistance déjà incrémentale) + GC 24 h dans `loadTranslationCaches`.
+- [x] **cache-01** (P1/S/f01) — `allGRDBStores` (27 stores) partagé par `flushAll`/`dirtyCountForTest`/`evictUnderMemoryPressure` (absorbe startup-06).
+- [x] **cache-05** (P2/S/f01) — `flushDirtyKeyForEviction(key)` dans la branche `.expired` de `load(for:)`.
+- [x] **cache-06** (P2/S/f01) — Ne plus vider le trio traduction sous memory warning (deps : cache-02).
+- [x] **grdb-05** (P2/S/f01) — Vacuum/optimize déplacés sous le `beginBackgroundTask` du `BackgroundTransitionCoordinator`.
+- [x] **grdb-04** (P2/S/f01) — Bump `changeVersion` dans les `updateAll` des réconciliateurs.
+- [x] **grdb-02** (P2/S/f01) — Réparer `purgeOldMessages` (mauvaise base + mauvaise colonne + cascade + do/catch loggé).
+- [x] **grdb-09** (P3/S/f01) — Étendre `deleteAll(conversationId:)` aux tables enfants (deps : grdb-02).
+- [x] **grdb-08** (P3/S/f01) — Supprimer le code mort (GRDBModels, saveTranscription/Audio, MediaSnapshotStore) + réutiliser `dependencies.messagePersistence` pour la rétention (absorbe startup-09 ; deps : grdb-02).
 
 ## Lot 3 — Lecture offline vraie
 
