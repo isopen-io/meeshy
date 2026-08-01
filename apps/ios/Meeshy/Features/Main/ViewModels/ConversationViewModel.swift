@@ -1505,7 +1505,12 @@ class ConversationViewModel: ObservableObject {
                 await MainActor.run { self.isRevalidating = false }
             }
 
-        case .stale:
+        case .stale, .expired, .empty:
+            // vm-conv-expired-metadata-01 — .expired/.empty suivent le même
+            // chemin que .stale : GRDB est TOUJOURS peint d'abord (messages +
+            // traductions + métadonnées audio), le réseau revalide ensuite.
+            // L'ancienne branche réseau-only laissait les bulles sans
+            // transcription/traductions quand le fetch échouait (offline).
             // Surface GRDB data immediately, then revalidate in background.
             // Pré-hydrate les traductions AVANT loadInitial (cf. .fresh).
             // Lectures GRDB indépendantes parallélisées (cf. branche .fresh).
@@ -1530,10 +1535,6 @@ class ConversationViewModel: ObservableObject {
                 }
             }
 
-        case .expired, .empty:
-            // Fetch from API; refreshMessagesFromAPI upserts to GRDB and the store
-            // observation surfaces the result automatically.
-            await refreshMessagesFromAPI()
         }
 
         // If the refresh discovered we no longer have access, the View is
