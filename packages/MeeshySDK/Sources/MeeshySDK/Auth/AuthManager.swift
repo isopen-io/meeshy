@@ -433,6 +433,13 @@ public final class AuthManager: ObservableObject, AuthManaging {
         // jamais laisser de bodies REST (conversations, messages) d'un compte
         // au repos sur disque, quel que soit le chemin de logout emprunté.
         APIClient.shared.clearHTTPCache()
+        // outbox-02 — même règle pour la file settings : elle persiste
+        // endpoint+corps verbatim sans scoping userId et son flush rejoue
+        // sous le token de la session COURANTE — sans purge, un PATCH
+        // /users/me du compte A s'appliquerait au profil du compte B (même
+        // contrat de perte assumée que StoryPublishQueue E9). Avant le guard
+        // pour couvrir aussi le chemin sans session active.
+        await SettingsActionQueue.shared.clearAll()
         guard let userId = activeUserId else {
             // Idempotent : peut être appelée plusieurs fois sans crash.
             // Garde un état cohérent même quand aucune session n'est active.
