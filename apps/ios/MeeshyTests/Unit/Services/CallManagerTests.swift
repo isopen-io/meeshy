@@ -4072,6 +4072,20 @@ final class RetryCallSourceGuardTests: XCTestCase {
             "a retryable failure must use the longer settle window so « Réessayer » " +
             "isn't yanked before the user can tap it.")
     }
+
+    func test_endCallInternal_settleDelayReusesCanRetryCall_notADuplicateExpression() throws {
+        let source = try callManagerSource()
+        guard let body = functionBody(of: "func endCallInternal(reason:", in: source) else {
+            XCTFail("endCallInternal not found"); return
+        }
+        XCTAssertTrue(body.contains("canRetryCall ?"),
+            "the settleDelay branch must reuse `canRetryCall` — by this point `callState` " +
+            "is already `.ended(reason: reason)`, so re-deriving " +
+            "`CallRetryPolicy.isRetryable(reason) && lastOutgoingContext != nil` inline is a " +
+            "byte-for-byte duplicate of canRetryCall that can silently drift from it.")
+        XCTAssertFalse(body.contains("CallRetryPolicy.isRetryable(reason) && lastOutgoingContext != nil"),
+            "the inline duplicate of canRetryCall's condition must be gone.")
+    }
 }
 
 // MARK: - Quality Label Mapping (§gateway connection quality ladder)
