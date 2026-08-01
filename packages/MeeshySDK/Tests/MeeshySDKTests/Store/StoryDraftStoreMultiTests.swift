@@ -127,6 +127,110 @@ final class StoryDraftStoreMultiTests: XCTestCase {
         XCTAssertNil(store.listDrafts().first?.title)
     }
 
+    // MARK: - De quoi peindre une carte de brouillon
+
+    /// Le `thumbHash` n'etait compose qu'a la PUBLICATION : un brouillon n'en
+    /// avait aucun et sa carte n'avait rien a peindre. Le composer l'estampille
+    /// desormais des le premier enregistrement — le resume doit le ressortir.
+    func test_listDrafts_exposesTheThumbHashStampedBySave() {
+        var effects = StoryEffects()
+        effects.thumbHash = "ZmFrZQ=="
+        store.save(draftId: "A",
+                   slides: [StorySlide(id: "s", effects: effects, duration: 5)],
+                   visibility: "PUBLIC")
+
+        XCTAssertEqual(store.listDrafts().first?.thumbHash, "ZmFrZQ==")
+    }
+
+    /// Repli des brouillons ecrits AVANT l'estampillage : le fond de slide est
+    /// la seule couche que tout brouillon possede.
+    func test_listDrafts_withoutThumbHash_stillExposesTheBackground() throws {
+        var effects = StoryEffects()
+        effects.background = "1A1A2E"
+        store.save(draftId: "A",
+                   slides: [StorySlide(id: "s", effects: effects, duration: 5)],
+                   visibility: "PUBLIC")
+
+        let summary = try XCTUnwrap(store.listDrafts().first)
+        XCTAssertNil(summary.thumbHash, "Ce brouillon precede l'estampillage")
+        XCTAssertEqual(summary.backgroundHex, "1A1A2E",
+                       "Sans hash, la carte doit au moins pouvoir peindre le fond")
+    }
+
+    func test_listDrafts_withNeitherHashNorBackground_hasNothingToPaint() throws {
+        store.save(draftId: "A", slides: [slide("s")], visibility: "PUBLIC")
+        let summary = try XCTUnwrap(store.listDrafts().first)
+        XCTAssertNil(summary.thumbHash)
+        XCTAssertNil(summary.backgroundHex)
+    }
+
+    /// Les trois champs se lisent sur la PREMIERE diapositive, pas sur une
+    /// quelconque : c'est elle que la carte represente.
+    func test_listDrafts_readsTheFirstSlideNotAnyOther() throws {
+        var first = StoryEffects()
+        first.background = "111111"
+        first.textObjects = [StoryTextObject(id: "t1", text: "Premiere")]
+        var second = StoryEffects()
+        second.background = "222222"
+        second.textObjects = [StoryTextObject(id: "t2", text: "Seconde")]
+
+        store.save(draftId: "A",
+                   slides: [StorySlide(id: "s1", effects: first, duration: 5),
+                            StorySlide(id: "s2", effects: second, duration: 5)],
+                   visibility: "PUBLIC")
+
+        let summary = try XCTUnwrap(store.listDrafts().first)
+        XCTAssertEqual(summary.backgroundHex, "111111")
+        XCTAssertEqual(summary.title, "Premiere")
+        XCTAssertEqual(summary.slideCount, 2)
+    }
+
+    // MARK: - Reprendre puis completer un brouillon
+
+    /// Le parcours reel : on ecrit, on ferme, on rouvre, on complete, on
+    /// re-enregistre. Rien ne doit se perdre en chemin, et le brouillon ne
+    /// doit jamais se dupliquer — c'est ce que garantit `adoptDraft` cote
+    /// composer, dont depend cette suite.
+    func test_resumingADraft_thenAddingASlide_updatesInPlace() throws {
+        store.save(draftId: "A", slides: [slide("s1")], visibility: "FRIENDS")
+
+        let reopened = try XCTUnwrap(store.load(draftId: "A"))
+        XCTAssertEqual(reopened.slides.map(\.id), ["s1"])
+        XCTAssertEqual(reopened.visibility, "FRIENDS")
+
+        store.save(draftId: "A",
+                   slides: reopened.slides + [slide("s2")],
+                   visibility: reopened.visibility)
+
+        XCTAssertEqual(store.listDrafts().count, 1, "Reprendre ne cree pas un second brouillon")
+        XCTAssertEqual(try XCTUnwrap(store.load(draftId: "A")).slides.map(\.id), ["s1", "s2"])
+    }
+
+    /// Reprendre un brouillon ne doit toucher ni les slides ni les medias des
+    /// autres — le defaut d'origine du store mono, sous sa forme la plus
+    /// couteuse pour l'utilisateur.
+    func test_resumingOneDraft_leavesTheOthersIntact() throws {
+        store.save(draftId: "A", slides: [slide("a1")], visibility: "PUBLIC")
+        store.save(draftId: "B", slides: [slide("b1")], visibility: "PUBLIC")
+        store.saveMedia(draftId: "B", images: ["e": red()], videoURLs: [:], audioURLs: [:])
+
+        store.save(draftId: "A", slides: [slide("a1"), slide("a2")], visibility: "PUBLIC")
+
+        XCTAssertEqual(try XCTUnwrap(store.load(draftId: "B")).slides.map(\.id), ["b1"])
+        XCTAssertNotNil(store.loadMedia(draftId: "B").images["e"])
+    }
+
+    /// Publier consomme le brouillon : il ne doit pas rester dans la liste
+    /// apres coup, sinon l'utilisateur republierait le meme contenu.
+    func test_deletingAfterPublish_leavesTheOtherDraftsAlone() {
+        store.save(draftId: "published", slides: [slide("p")], visibility: "PUBLIC")
+        store.save(draftId: "kept", slides: [slide("k")], visibility: "PUBLIC")
+
+        store.delete(draftId: "published")
+
+        XCTAssertEqual(store.listDrafts().map(\.id), ["kept"])
+    }
+
     // MARK: - Suppression
 
     func test_delete_removesOnlyItsOwnDraftAndMedia() throws {
