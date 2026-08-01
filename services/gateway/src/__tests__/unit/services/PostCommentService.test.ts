@@ -500,8 +500,12 @@ describe('PostCommentService.addComment — media', () => {
     // peuvent plus réclamer le même média tous les deux.
     const call = postMedia.updateMany.mock.calls[0][0];
     expect(call.where.id).toBe('m-1');
-    expect(call.where.postId).toBeNull();
-    expect(call.where.commentId).toBeNull();
+    // Les deux formes MongoDB d'un média libre (null OU champ absent) —
+    // cf. l'incident prod 2026-07-31→08-01 sur `commentId` absent.
+    expect(call.where.AND).toEqual([
+      { OR: [{ postId: null }, { postId: { isSet: false } }] },
+      { OR: [{ commentId: null }, { commentId: { isSet: false } }] },
+    ]);
     // Et la garde de propriété : l'auteur du commentaire, pas n'importe qui.
     expect(call.where.uploaderId).toBe('a1');
     expect(call.data).toEqual(expect.objectContaining({ commentId: 'c-new' }));
