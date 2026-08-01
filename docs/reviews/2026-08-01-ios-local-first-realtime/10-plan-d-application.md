@@ -46,14 +46,14 @@ Perte de données ou fuite cross-compte actives. Aucune dépendance entre eux ni
 
 Ferme le reste du thème « logout = état vierge ». Ordonné : sync-04 d'abord (il conditionne aussi sync-11, lot 6).
 
-- [ ] **sync-04** (P1/S/f04) — `ConversationSyncEngine.resetSyncCheckpoints()` (3 clés UserDefaults) appelé depuis `logout()` **et** `requireReauthentication` (trou de couverture identifié par startup-02).
-- [ ] **startup-03** (P2/S/f08) — `requireReauthentication` : signal `sessionInvalidated` + toast « X messages non envoyés annulés » AVANT la purge — **la purge reste inconditionnelle** (invariant anti fuite cross-compte Q3) ; la rétention par userId est un lot séparé hors périmètre (deps : grdb-01 ; coordination non bloquante avec stores-05).
-- [ ] **cache-07** (P2/S/f01) — `UserDisplayNameCache.shared.clear()` dans `CacheCoordinator.reset()` (couvre logout ET switch).
-- [ ] **stores-10** (P2/M/f05) — `UserCategoryStore` : reset au logout + volet CRUD optimiste (chantier séparé dans la fiche).
-- [ ] **outbox-11** (P3/S/f02) — Purges logout : impressions (UserDefaults standard) + PendingStatusQueue (deps : appgroup-01 pour `pending_mark_read`).
-- [ ] **media-08** (P3/S/f09) — Purger `MediaConsumptionStore` + checkpoints TUS au logout.
-- [ ] **startup-08** (P3/S/f08) — Annuler les BGTasks au logout + garde d'auth dans les handlers (deps : sync-04).
-- [ ] **net-09** (P3/S/f06) — `authToken`/`anonymousSessionToken` : isolation (fenêtre cross-compte au switch).
+- [x] **sync-04** (P1/S/f04) — `ConversationSyncEngine.resetSyncCheckpoints()` (3 clés UserDefaults) appelé depuis `logout()` **et** `requireReauthentication` (trou de couverture identifié par startup-02).
+- [x] **startup-03** (P2/S/f08) — `requireReauthentication` : signal `sessionInvalidated` + toast « X messages non envoyés annulés » AVANT la purge — **la purge reste inconditionnelle** (invariant anti fuite cross-compte Q3) ; la rétention par userId est un lot séparé hors périmètre (deps : grdb-01 ; coordination non bloquante avec stores-05).
+- [x] **cache-07** (P2/S/f01) — `UserDisplayNameCache.shared.clear()` dans `CacheCoordinator.reset()` (couvre logout ET switch).
+- [x] **stores-10** (P2/M/f05) — `UserCategoryStore` : reset au logout + volet CRUD optimiste (chantier séparé dans la fiche).
+- [x] **outbox-11** (P3/S/f02) — Purges logout : impressions (UserDefaults standard) + PendingStatusQueue (deps : appgroup-01 pour `pending_mark_read`).
+- [x] **media-08** (P3/S/f09) — Purger `MediaConsumptionStore` + checkpoints TUS au logout.
+- [x] **startup-08** (P3/S/f08) — Annuler les BGTasks au logout + garde d'auth dans les handlers (deps : sync-04).
+- [x] **net-09** (P3/S/f06) — `authToken`/`anonymousSessionToken` : isolation (fenêtre cross-compte au switch).
 
 ## Lot 2 — Fenêtres de perte au kill/background
 
