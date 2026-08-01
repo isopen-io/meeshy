@@ -657,7 +657,8 @@ class PostDetailViewModel: ObservableObject {
             postId: post.id,
             parentCommentId: nil,
             content: content,
-            location: location
+            location: location,
+            effectFlags: effectFlags
         )
         do {
             try await offlineQueue.enqueue(.createComment, payload: payload, conversationId: post.id)
@@ -679,6 +680,11 @@ class PostDetailViewModel: ObservableObject {
         }
     }
 
+    /// Wave 1 Phase C (fiche vm-postdetail-reply) — une réponse texte transite
+    /// par l'outbox durable comme un commentaire top-level : optimiste
+    /// immédiat keyé cmid, survit au kill de l'app, réconciliée par l'écho
+    /// socket `comment:added`. Rollback multi-champs (repliesMap, compteur du
+    /// parent, commentCount, dépliage) sur refus d'enfilement ou .exhausted.
     func sendReply(_ content: String, effectFlags: Int? = nil, location: SharedPlace? = nil) async {
         guard let post, let parent = replyingTo else { return }
         // Réponse plate à 2 niveaux : répondre à une réponse rattache au MÊME
@@ -686,40 +692,65 @@ class PostDetailViewModel: ObservableObject {
         // la @mention préremplie (cf. `PostDetailView.beginReply`).
         let parentId = parent.parentId ?? parent.id
         replyingTo = nil
+        let cmid = ClientMutationId.generate()
+        let snapshotReplies = repliesMap[parentId] ?? []
+        let snapshotExpanded = expandedThreads.contains(parentId)
+        let snapshotParentReplies = comments.first(where: { $0.id == parentId })?.replies
+        let snapshotCount = self.post?.commentCount ?? 0
+        let currentUser = AuthManager.shared.currentUser
+        let optimistic = FeedComment(
+            id: cmid,
+            author: currentUser?.displayName ?? currentUser?.username ?? "",
+            authorId: currentUser?.id ?? "",
+            authorUsername: currentUser?.username,
+            authorAvatarURL: currentUser?.avatar,
+            content: content,
+            timestamp: Date(),
+            likes: 0,
+            replies: 0,
+            parentId: parentId,
+            effectFlags: effectFlags ?? 0,
+            location: location
+        )
+        var existing = repliesMap[parentId] ?? []
+        existing.insert(optimistic, at: 0)
+        repliesMap[parentId] = existing
+        expandedThreads.insert(parentId)
+        if let idx = comments.firstIndex(where: { $0.id == parentId }) {
+            comments[idx].replies += 1
+        }
+        self.post?.commentCount = snapshotCount + 1
+        let payload = CreateCommentPayload(
+            clientMutationId: cmid,
+            postId: post.id,
+            parentCommentId: parentId,
+            content: content,
+            location: location,
+            effectFlags: effectFlags
+        )
         do {
-            let apiComment = try await postService.addComment(
-                postId: post.id, content: content, parentId: parentId, effectFlags: effectFlags,
-                attachmentIds: nil, mobileTranscription: nil, originalLanguage: nil, location: location
-            )
-            let reply = FeedComment(
-                id: apiComment.id, author: apiComment.author.name, authorId: apiComment.author.id,
-                authorUsername: apiComment.author.username,
-                authorAvatarURL: apiComment.author.avatar,
-                content: apiComment.content, timestamp: apiComment.createdAt,
-                likes: 0, replies: 0,
-                parentId: parentId,
-                effectFlags: apiComment.effectFlags ?? effectFlags ?? 0
-            )
-            var existing = repliesMap[parentId] ?? []
-            existing.insert(reply, at: 0)
-            repliesMap[parentId] = existing
-            expandedThreads.insert(parentId)
-            if let idx = comments.firstIndex(where: { $0.id == parentId }) {
-                comments[idx].replies += 1
-            }
-            self.post?.commentCount += 1
+            try await offlineQueue.enqueue(.createComment, payload: payload, conversationId: post.id)
+            // Une réponse vit sous une clé SÉPARÉE de son parent : persister
+            // les deux, sinon un kill avant flush perd la réponse au cold start.
+            try? await CacheCoordinator.shared.comments.savePreservingFreshness(repliesMap[parentId] ?? [], for: "replies-\(parentId)")
             try? await CacheCoordinator.shared.comments.savePreservingFreshness(comments, for: "post-\(post.id)")
 
-            // Persist reply to GRDB
-            if let persistence = feedPersistence,
-               let record = CommentRecord(from: apiComment, postId: post.id) {
-                let newCount = self.post?.commentCount ?? 0
-                Task.detached(priority: .utility) {
-                    try? await persistence.insertComment(record)
-                    try? await persistence.updateCommentCount(postId: post.id, count: newCount)
+            observeOutcome(cmid: cmid, rollback: { [weak self] in
+                guard let self else { return }
+                self.repliesMap[parentId] = snapshotReplies
+                if !snapshotExpanded { self.expandedThreads.remove(parentId) }
+                if let idx = self.comments.firstIndex(where: { $0.id == parentId }) {
+                    self.comments[idx].replies = snapshotParentReplies ?? self.comments[idx].replies
                 }
-            }
+                self.post?.commentCount = snapshotCount
+            }, toast: String(localized: "feed.comment.replyError", defaultValue: "Error sending reply", bundle: .main))
         } catch {
+            repliesMap[parentId] = snapshotReplies
+            if !snapshotExpanded { expandedThreads.remove(parentId) }
+            if let idx = comments.firstIndex(where: { $0.id == parentId }) {
+                comments[idx].replies = snapshotParentReplies ?? comments[idx].replies
+            }
+            self.post?.commentCount = snapshotCount
             FeedbackToastManager.shared.showError(String(localized: "feed.comment.replyError", defaultValue: "Error sending reply", bundle: .main))
         }
     }

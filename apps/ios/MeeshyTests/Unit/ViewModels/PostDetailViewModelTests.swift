@@ -662,20 +662,26 @@ final class PostDetailViewModelTests: XCTestCase {
     // MARK: - sendReply (flat 2-level threading)
 
     func test_sendReply_toRootComment_usesRootAsParent() async {
-        let (sut, mock) = makeSUT()
+        let queue = MockOfflineQueue()
+        let (sut, mock) = makeSUT(offlineQueue: queue)
         mock.getPostResult = .success(Self.makeAPIPost(id: "p1"))
         await sut.loadPost("p1")
         let root = FeedComment(id: "c1", author: "alice", authorId: "a1", content: "Top", replies: 0)
         sut.comments = [root]
         sut.replyingTo = root
 
-        await sut.sendReply("Coucou")
+        await sut.sendReply("Coucou", effectFlags: 4)
 
-        XCTAssertEqual(mock.lastAddCommentParentId, "c1", "répondre à une racine se rattache à elle")
+        XCTAssertEqual(queue.enqueueCalls.first?.kind, .createComment,
+                       "une réponse texte transite par l'outbox durable, pas par un appel direct")
+        let payload = queue.enqueueCalls.first?.payload as? CreateCommentPayload
+        XCTAssertEqual(payload?.parentCommentId, "c1", "répondre à une racine se rattache à elle")
+        XCTAssertEqual(payload?.effectFlags, 4, "effectFlags survit à l'enfilement")
     }
 
     func test_sendReply_toReply_staysFlatUnderRoot() async {
-        let (sut, mock) = makeSUT()
+        let queue = MockOfflineQueue()
+        let (sut, mock) = makeSUT(offlineQueue: queue)
         mock.getPostResult = .success(Self.makeAPIPost(id: "p1"))
         await sut.loadPost("p1")
         let root = FeedComment(id: "c1", author: "alice", authorId: "a1", content: "Top", replies: 1)
@@ -688,10 +694,50 @@ final class PostDetailViewModelTests: XCTestCase {
         await sut.sendReply("@bob ok")
 
         // … reste plat au niveau 2 : rattaché au MÊME parent racine (c1), pas à r1.
-        XCTAssertEqual(mock.lastAddCommentParentId, "c1")
+        let payload = queue.enqueueCalls.first?.payload as? CreateCommentPayload
+        XCTAssertEqual(payload?.parentCommentId, "c1")
         // La nouvelle réponse s'ajoute sous c1 (et non sous r1, qui ne porte pas de fil).
         XCTAssertEqual(sut.repliesMap["c1"]?.count, 2)
         XCTAssertNil(sut.repliesMap["r1"], "aucun sous-fil créé sous une réponse")
+    }
+
+    /// La réponse optimiste apparaît AVANT toute confirmation réseau, keyée
+    /// par cmid (réconciliée plus tard par l'écho socket comment:added).
+    func test_sendReply_insertsOptimisticReplyInRepliesMap() async {
+        let queue = MockOfflineQueue()
+        let (sut, mock) = makeSUT(offlineQueue: queue)
+        mock.getPostResult = .success(Self.makeAPIPost(id: "p1"))
+        await sut.loadPost("p1")
+        let root = FeedComment(id: "c1", author: "alice", authorId: "a1", content: "Top", replies: 0)
+        sut.comments = [root]
+        sut.replyingTo = root
+
+        await sut.sendReply("Coucou")
+
+        XCTAssertEqual(sut.repliesMap["c1"]?.first?.id.hasPrefix("cmid") ?? false, true,
+                       "la réponse optimiste est keyée par cmid, pas par un id serveur")
+        XCTAssertEqual(sut.comments.first?.replies, 1, "le compteur du parent est incrémenté")
+        XCTAssertTrue(sut.expandedThreads.contains("c1"), "le fil est déplié pour montrer la réponse")
+    }
+
+    func test_sendReply_enqueueRefused_rollsBackOptimistic() async {
+        let queue = MockOfflineQueue()
+        queue.enqueueResult = .failure(NSError(domain: "test", code: 500))
+        let (sut, mock) = makeSUT(offlineQueue: queue)
+        mock.addCommentResult = .failure(NSError(domain: "test", code: 500))
+        mock.getPostResult = .success(Self.makeAPIPost(id: "p1"))
+        await sut.loadPost("p1")
+        let initialCount = sut.post?.commentCount ?? 0
+        let root = FeedComment(id: "c1", author: "alice", authorId: "a1", content: "Top", replies: 0)
+        sut.comments = [root]
+        sut.replyingTo = root
+
+        await sut.sendReply("Coucou")
+
+        XCTAssertEqual(sut.repliesMap["c1"]?.isEmpty ?? true, true,
+                       "l'enfilement refusé doit retirer la réponse optimiste")
+        XCTAssertEqual(sut.comments.first?.replies, 0, "le compteur du parent est restauré")
+        XCTAssertEqual(sut.post?.commentCount, initialCount)
     }
 
     // MARK: - topLevelComments
