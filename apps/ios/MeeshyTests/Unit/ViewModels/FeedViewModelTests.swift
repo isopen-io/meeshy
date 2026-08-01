@@ -1689,9 +1689,15 @@ final class FeedViewModelTests: XCTestCase {
         sut.posts = seeded
 
         await sut.likePost("post-1")
-        try? await Task.sleep(for: .seconds(2.2))
-
-        let cached = (await CacheCoordinator.shared.feed.load(for: "main-feed")).snapshot() ?? []
+        // Poll au lieu d'un sleep fixe : le save débouncé part à 2 s, une
+        // marge de 0,2 s flake sous simulateur chargé (cache encore vide).
+        var cached: [FeedPost] = []
+        let deadline = Date().addingTimeInterval(6)
+        while Date() < deadline {
+            cached = (await CacheCoordinator.shared.feed.load(for: "main-feed")).snapshot() ?? []
+            if cached.count == 100 { break }
+            try? await Task.sleep(for: .milliseconds(100))
+        }
         XCTAssertEqual(
             Set(cached.map(\.id)), Set((1...100).map { "post-\($0)" }),
             "GRDBCacheStore.save trimme par suffix (les plus ANCIENS survivent) : sans prefix(100) app-side, kill+relaunch dans la fenêtre fraîche sert la tranche la plus vieille en .fresh — les posts récents disparaissent de l'écran"
