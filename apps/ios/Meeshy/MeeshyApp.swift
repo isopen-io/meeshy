@@ -728,6 +728,11 @@ struct MeeshyApp: App {
                         // Drop the store subscriptions so an event from user A
                         // can't mutate the store after logout.
                         ConversationStoreSocketBridge.shared.deactivate()
+                        // startup-08 — une BGTask soumise avant le logout ne
+                        // doit pas survivre pour réveiller un appareil
+                        // déconnecté (delta sync 401 en boucle, prefetch sur
+                        // cache vidé).
+                        BackgroundTaskManager.shared.cancelAllScheduled()
                     }
                 }
                 .adaptiveOnChange(of: deepLinkRouter.pendingDeepLink) { _, link in
