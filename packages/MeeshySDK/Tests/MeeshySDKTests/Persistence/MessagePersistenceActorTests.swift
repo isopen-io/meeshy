@@ -625,15 +625,19 @@ final class MessagePersistenceActorTests: XCTestCase {
         await fulfillment(of: [exp], timeout: 1.0)
     }
 
-    func test_updateLayout_postsRefreshWithConversationId() async throws {
+    func test_updateLayout_doesNotPostRefresh() async throws {
+        // grdb-04 — le refresh d'updateLayout était un no-op prouvé
+        // (MessageRecord == ne compare que localId+changeVersion, non bumpé
+        // ici) qui coûtait fetch+compare à CHAQUE écriture de layout.
         let record = MessageRecordFactory.make(localId: "layout_notif", conversationId: "conv_layout")
         try await actor.insertOptimistic(record)
         await drainMainQueueNotifications()
 
         let (exp, observer) = observeRefresh(
             conversationId: "conv_layout",
-            description: "messageStoreShouldRefresh fires for updateLayout"
+            description: "messageStoreShouldRefresh must NOT fire for updateLayout"
         )
+        exp.isInverted = true
         defer { NotificationCenter.default.removeObserver(observer) }
 
         try await actor.updateLayout(
@@ -1704,6 +1708,32 @@ final class MessagePersistenceActorTests: XCTestCase {
             "a 👍 cap of 1 must not suppress a distinct 🎉 reaction")
     }
 
+    // MARK: - Failed-from-outbox reconciliation (grdb-04 changeVersion bump)
+
+    func test_reconcileFailedFromOutbox_flipsState_bumpsChangeVersion() async throws {
+        let record = MessageRecordFactory.make(
+            localId: "stuck_bump_1", conversationId: "conv_stuck_bump", state: .sending, changeVersion: 3
+        )
+        try await actor.insertOptimistic(record)
+        try await dbQueue.write { db in
+            try OutboxRecord(
+                kind: .sendMessage,
+                conversationId: "conv_stuck_bump",
+                messageLocalId: "stuck_bump_1",
+                clientMessageId: "stuck_bump_1",
+                payload: Data(),
+                status: .exhausted
+            ).insert(db)
+        }
+
+        await actor.reconcileFailedFromOutbox(conversationId: "conv_stuck_bump")
+
+        let fetched = try actor.messages(for: "conv_stuck_bump", limit: 10)
+        XCTAssertEqual(fetched[0].state, .failed)
+        XCTAssertEqual(fetched[0].changeVersion, 4,
+            "un flip d'état sans bump changeVersion est invisible au diff O(1) du MessageStore")
+    }
+
     // MARK: - Orphaned sending reconciliation
 
     /// An optimistic row stuck in `.sending` with no serverId, no live outbox
@@ -1758,6 +1788,22 @@ final class MessagePersistenceActorTests: XCTestCase {
         let fetched = try actor.messages(for: "conv_outbox", limit: 10)
         XCTAssertEqual(fetched[0].state, .queued,
             "a live outbox record still owns the retry loop — don't fail its message")
+    }
+
+    func test_reconcileOrphanedSendingRows_orphan_bumpsChangeVersion() async throws {
+        let old = Date().addingTimeInterval(-300)
+        let record = MessageRecordFactory.make(
+            localId: "orphan_bump_1", conversationId: "conv_orphan_bump", state: .sending,
+            createdAt: old, changeVersion: 5
+        )
+        try await actor.insertOptimistic(record)
+
+        await actor.reconcileOrphanedSendingRows(conversationId: "conv_orphan_bump", olderThan: 120)
+
+        let fetched = try actor.messages(for: "conv_orphan_bump", limit: 10)
+        XCTAssertEqual(fetched[0].state, .failed)
+        XCTAssertEqual(fetched[0].changeVersion, 6,
+            "le flip orphelin doit être visible du diff O(1)")
     }
 
     func test_reconcileOrphanedSendingRows_rowWithExhaustedOutbox_flipsToFailed() async throws {

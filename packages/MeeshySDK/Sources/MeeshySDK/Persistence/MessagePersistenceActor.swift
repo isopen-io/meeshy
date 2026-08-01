@@ -451,7 +451,12 @@ public actor MessagePersistenceActor {
             let updated = try MessageRecord
                 .filter(exhaustedLocalIds.contains(Column("localId")))
                 .filter(stuckStates.contains(Column("state")))
-                .updateAll(db, Column("state").set(to: MessageState.failed.rawValue))
+                .updateAll(db,
+                    Column("state").set(to: MessageState.failed.rawValue),
+                    // grdb-04 — invariant : toute écriture visible bump
+                    // changeVersion, sinon le diff O(1) du MessageStore
+                    // (Equatable localId+changeVersion) l'avale.
+                    Column("changeVersion").set(to: Column("changeVersion") + 1))
             return updated > 0
             }
         } catch {
@@ -509,7 +514,9 @@ public actor MessagePersistenceActor {
             guard !orphanIds.isEmpty else { return false }
             let updated = try MessageRecord
                 .filter(orphanIds.contains(Column("localId")))
-                .updateAll(db, Column("state").set(to: MessageState.failed.rawValue))
+                .updateAll(db,
+                    Column("state").set(to: MessageState.failed.rawValue),
+                    Column("changeVersion").set(to: Column("changeVersion") + 1))
             return updated > 0
             }
         } catch {
@@ -1346,11 +1353,11 @@ public actor MessagePersistenceActor {
     public func updateLayout(localId: String, width: Double, height: Double,
                               lastLineWidth: Double, lineCount: Int, timestampInline: Bool,
                               epoch: Int, maxWidth: Double) throws {
-        var affectedConversationId: String?
+        // grdb-04 — pas de bump changeVersion, pas de refresh : le cache de
+        // layout est relu au prochain fetch et un refresh ici était un no-op
+        // prouvé (MessageRecord == ne compare que localId+changeVersion) qui
+        // coûtait fetch+compare à chaque écriture de layout.
         try dbWriter.write { db in
-            affectedConversationId = try MessageRecord
-                .filter(Column("localId") == localId)
-                .fetchOne(db)?.conversationId
             try db.execute(
                 sql: """
                     UPDATE messages SET cachedBubbleWidth = ?, cachedBubbleHeight = ?,
@@ -1360,9 +1367,6 @@ public actor MessagePersistenceActor {
                 arguments: [width, height, lastLineWidth, lineCount, timestampInline,
                            epoch, maxWidth, localId]
             )
-        }
-        if let convId = affectedConversationId {
-            postMessageStoreRefresh(conversationIds: [convId])
         }
     }
 
