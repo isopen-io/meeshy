@@ -632,7 +632,10 @@ class ConversationListViewModel: ObservableObject {
             updated[i].userState = newState
             changed = true
         }
-        if changed { conversations = updated }
+        if changed {
+            conversations = updated
+            schedulePersist()
+        }
     }
 
     private func reloadFromCache() async {
