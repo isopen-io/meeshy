@@ -40,9 +40,7 @@ struct MyStoryActionBar: View, Equatable {
             ForEach(glyphs) { glyph in
                 item(glyph)
             }
-            Spacer(minLength: 0)
         }
-        .padding(.horizontal, 6)
         .padding(.vertical, 4)
     }
 
@@ -74,9 +72,12 @@ struct MyStoryActionBar: View, Equatable {
             }
         }
         .foregroundColor(.secondary)
-        // 44×44 pt : la cible tactile minimale des HIG. Le padding de 8 pt
-        // autour d'un glyphe de 15 pt n'en faisait que 31.
-        .frame(minWidth: 44, minHeight: 44)
+        // Les glyphes se PARTAGENT la largeur de la carte au lieu d'exiger
+        // 44 pt chacun : quatre minimums rigides + espacements + marges
+        // faisaient ~194 pt dans une cellule de ~179, la carte debordait de sa
+        // colonne et mordait sur la voisine (« les tuiles se chevauchent »).
+        // La hauteur de 44 pt tient seule la cible tactile des HIG.
+        .frame(maxWidth: .infinity, minHeight: 44)
         .contentShape(Rectangle())
     }
 }

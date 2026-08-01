@@ -64,8 +64,26 @@ struct MyStoryCard: View {
         .accessibilityElement(children: .contain)
     }
 
-    @ViewBuilder
+    /// `Color.clear` POSE le cadre, le contenu vient en overlay.
+    ///
+    /// L'image etait posee directement dans un `ZStack` : en `scaledToFill()`
+    /// elle DIMENSIONNE la pile, donc la carte prenait la largeur de l'image
+    /// au lieu de celle de la cellule — les tuiles se chevauchaient et le
+    /// `clipShape` de la carte arrivait trop tard. Un cadre neutre d'abord,
+    /// l'image ensuite, le rognage juste apres : la cellule impose sa taille.
     private var thumbnail: some View {
+        Color.clear
+            .aspectRatio(9 / 16, contentMode: .fit)
+            .overlay(thumbnailLayers)
+            .clipped()
+            .contentShape(Rectangle())
+            .onTapGesture(perform: onOpen)
+            .accessibilityAddTraits(.isButton)
+            .accessibilityLabel(thumbnailAccessibilityLabel)
+    }
+
+    @ViewBuilder
+    private var thumbnailLayers: some View {
         ZStack {
             // Delegue a `MyStoryThumbnailResolver` — reimplementer le choix
             // ici rendait vide toute story SANS media de fond (texte seul,
@@ -103,15 +121,6 @@ struct MyStoryCard: View {
                     .shadow(color: .black.opacity(0.5), radius: 2)
             }
         }
-        // Ratio 9:16 impose : sans lui la vignette se dimensionne a son
-        // contenu et la carte s'effondre quand l'image n'est pas encore la.
-        .frame(maxWidth: .infinity)
-        .aspectRatio(9 / 16, contentMode: .fit)
-        .clipped()
-        .contentShape(Rectangle())
-        .onTapGesture(perform: onOpen)
-        .accessibilityAddTraits(.isButton)
-        .accessibilityLabel(thumbnailAccessibilityLabel)
     }
 
     private var placeholderFill: some View {
