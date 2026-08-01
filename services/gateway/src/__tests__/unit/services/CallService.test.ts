@@ -2758,6 +2758,116 @@ describe('CallService - setReapedCallCallback (sweeps GC d\'initiateCall)', () =
 
     expect(result.id).toBe('call-new');
   });
+
+  it('diffuse call:ended au broadcaster pour le callId moissonné par le sweep phantom — sans quoi le pair reste bloqué indéfiniment (aucun autre chemin GC ne rebalaie un call déjà `ended`)', async () => {
+    const staleCallId = 'stale-call-reaped';
+    const staleStartedAt = new Date(Date.now() - 5 * 60_000);
+    mockPrisma.conversation.findUnique.mockResolvedValue(createMockConversation());
+    mockPrisma.participant.findFirst.mockResolvedValue({
+      id: 'participant-123', conversationId: 'conv-123', userId: 'user-123', isActive: true
+    });
+    mockPrisma.callParticipant.findMany.mockResolvedValue([{
+      id: 'stale-part-1',
+      callSessionId: staleCallId,
+      leftAt: null,
+      callSession: {
+        id: staleCallId,
+        startedAt: staleStartedAt,
+        conversationId: 'conv-other',
+        status: CallStatus.active,
+        answeredAt: staleStartedAt
+      }
+    }]);
+    mockPrisma.callSession.findFirst.mockResolvedValue(null);
+    mockPrisma.$transaction
+      .mockImplementationOnce(async (cb: (tx: any) => Promise<any>) => {
+        const tx = {
+          callParticipant: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
+          callSession: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) }
+        };
+        return cb(tx);
+      })
+      .mockImplementationOnce(async (cb: (tx: any) => Promise<any>) => {
+        const tx = {
+          callSession: { create: jest.fn().mockResolvedValue({ id: 'call-123' }) },
+          callParticipant: { create: jest.fn().mockResolvedValue({}) }
+        };
+        return cb(tx);
+      });
+    mockPrisma.callSession.findUnique.mockResolvedValue(createMockCallSession({
+      participants: [createMockParticipant()],
+      initiator: createMockUser(),
+      conversation: createMockConversation()
+    }));
+
+    const broadcasts: Array<{ callId: string; conversationId?: string; endedEvent: any }> = [];
+    callService.setCallEndedBroadcaster((callId, conversationId, endedEvent) => {
+      broadcasts.push({ callId, conversationId, endedEvent });
+    });
+
+    await callService.initiateCall(validInitiateData);
+
+    expect(broadcasts).toHaveLength(1);
+    expect(broadcasts[0].callId).toBe(staleCallId);
+    expect(broadcasts[0].conversationId).toBe('conv-other');
+    expect(broadcasts[0].endedEvent).toMatchObject({
+      callId: staleCallId,
+      reason: CallEndReason.garbageCollected
+    });
+  });
+
+  it('diffuse call:ended au broadcaster pour le callId moissonné par le sweep zombie', async () => {
+    const zombieCall = setupZombieSweep();
+    const broadcasts: Array<{ callId: string; conversationId?: string; endedEvent: any }> = [];
+    callService.setCallEndedBroadcaster((callId, conversationId, endedEvent) => {
+      broadcasts.push({ callId, conversationId, endedEvent });
+    });
+
+    await callService.initiateCall(validInitiateData);
+
+    expect(broadcasts).toHaveLength(1);
+    expect(broadcasts[0].callId).toBe(zombieCall.id);
+    expect(broadcasts[0].conversationId).toBe('conv-123');
+    expect(broadcasts[0].endedEvent).toMatchObject({
+      callId: zombieCall.id,
+      reason: CallEndReason.garbageCollected
+    });
+  });
+
+  it('un broadcaster qui rejette ne bloque JAMAIS initiateCall (fire-and-forget, parité setReapedCallCallback)', async () => {
+    setupZombieSweep();
+    callService.setCallEndedBroadcaster(() => Promise.reject(new Error('boom')));
+
+    const result = await callService.initiateCall(validInitiateData);
+
+    expect(result.id).toBe('call-new');
+  });
+
+  it('sans broadcaster câblé, les sweeps restent silencieux (comportement actuel)', async () => {
+    setupZombieSweep();
+
+    const result = await callService.initiateCall(validInitiateData);
+
+    expect(result.id).toBe('call-new');
+  });
+
+  it('invalide le cache de session de signal (call:signal) pour le callId moissonné par le sweep zombie — invariant documenté dans CallEventsHandler.invalidateSignalSession', async () => {
+    const zombieCall = setupZombieSweep();
+    const invalidated: string[] = [];
+    callService.setSignalCacheInvalidationCallback((callId) => { invalidated.push(callId); });
+
+    await callService.initiateCall(validInitiateData);
+
+    expect(invalidated).toContain(zombieCall.id);
+  });
+
+  it('sans callback d\'invalidation câblé, les sweeps restent silencieux (comportement actuel)', async () => {
+    setupZombieSweep();
+
+    const result = await callService.initiateCall(validInitiateData);
+
+    expect(result.id).toBe('call-new');
+  });
 });
 
 describe('CallService - finalizeCallSummary (chemins terminaux REST end/leave)', () => {

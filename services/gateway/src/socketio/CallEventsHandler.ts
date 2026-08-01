@@ -207,8 +207,13 @@ export class CallEventsHandler {
    * ABSENT from the cached snapshot, never when one is present but stale
    * (already left). Every path that writes `CallParticipant.leftAt` for
    * this call must evict the entry so the very next `call:signal` re-reads.
+   *
+   * Public: also wired in server.ts as `CallService.setSignalCacheInvalidationCallback`
+   * / `CallCleanupService.setSignalCacheInvalidationCallback` — those services
+   * force-end calls (writing `leftAt`) through their own GC/phantom-cleanup
+   * paths, outside any socket handler in this class.
    */
-  private invalidateSignalSession(callId: string): void {
+  invalidateSignalSession(callId: string): void {
     this.signalSessionCache.delete(callId);
   }
 
