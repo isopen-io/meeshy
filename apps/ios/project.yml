@@ -85,7 +85,7 @@ settings:
   # été renommé plutôt que recréé — description et captures sont conservées.
   # Laisser 1.0.0 ici ferait produire par tout build local un CFBundleShortVersionString
   # en désaccord avec la version qui attend le binaire.
-  MARKETING_VERSION: "1.0.1"
+  MARKETING_VERSION: "1.0.2"
 
   # Équipe de signature (Automatic). Indispensable pour `meeshy.sh device`
   # (déploiement sur appareil réel) : sans DEVELOPMENT_TEAM, la signature
