@@ -304,13 +304,16 @@ extension StoryComposerView {
     }
 
     /// Application du gate à l'état vivant de la vue — un seul lieu de lecture
-    /// des cinq termes, pour les deux autosaves.
+    /// des cinq termes, pour les deux autosaves. Le terme de contenu est élargi
+    /// à l'audio : le store SAIT le retenir (rabattement `mergeEffects` à
+    /// chaque sync) — sans lui, une session audio-seule n'écrivait jamais rien
+    /// et un crash ou un passage en background perdait la composition.
     var mayOverwriteStoredDraft: Bool {
         Self.mayOverwriteStoredDraft(
             isEditingExistingStory: isEditingExistingStory,
             draftResume: draftResume,
             isAutosaveSuspended: draftAutosaveSuspended,
-            composerHasContent: composerHasContent,
+            composerHasContent: composerHasContent || composerCarriesAudio,
             didHandOffPublish: didHandOffPublish
         )
     }
@@ -360,11 +363,13 @@ extension StoryComposerView {
         )
     }
 
-    /// Gate de purge des brouillons fantômes — délègue entièrement à
-    /// `composerHasContent` (Problème 1, `StoryComposerView+Publication.swift`) :
+    /// Gate de purge des brouillons fantômes — `composerHasContent` (Problème 1,
+    /// `StoryComposerView+Publication.swift`) élargi de l'audio persisté :
     /// un brouillon dont le SEUL contenu est un fond (auto-appliqué à
     /// l'ouverture ou choisi explicitement dans le panneau Fond) ne mérite pas
-    /// la carte de reprise. Les 3 paramètres globaux de `composerHasContent`
+    /// la carte de reprise, mais « fond + musique » est du travail — le juger
+    /// fantôme le faisait purger par `clearPhantomDraftsOnly` à la première
+    /// fermeture venue. Les 3 paramètres globaux de `composerHasContent`
     /// sont figés à `false` : ce gate évalue un draft encore désérialisé, pas
     /// l'état vivant d'un ViewModel — seuls les champs PAR SLIDE comptent ici.
     static func shouldOfferDraftResume(slides: [StorySlide], slideImageIds: Set<String>) -> Bool {
@@ -374,7 +379,7 @@ extension StoryComposerView {
             hasStickerObjects: false,
             hasDrawingData: false,
             hasDrawingStrokes: false
-        )
+        ) || slidesCarryAudio(slides)
     }
 
     /// Câblage LÉGER de `slideImageIds` via `loadMediaReferences()` — PAS
