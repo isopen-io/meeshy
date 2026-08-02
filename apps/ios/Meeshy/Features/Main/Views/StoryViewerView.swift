@@ -1369,6 +1369,7 @@ struct StoryViewerView: View {
             storyHasAudibleSound: storyHasAudibleSound,
             storyHasTranslatableContent: storyHasTranslatableContent,
             storyHasBackgroundAudio: storyHasBackgroundAudio,
+            headerBackgroundAudioDisplay: headerBackgroundAudioDisplay,
             storyHasAudioTranscript: storyHasAudioTranscript,
             isGlobalMuted: isGlobalMuted,
             availableTranslationLanguages: availableTranslationLanguages,
@@ -1712,6 +1713,28 @@ struct StoryViewerView: View {
             effects: story.storyEffects,
             backgroundAudio: story.backgroundAudio
         )
+    }
+
+    /// Contenu à droite de la note du header (directive user 2026-08-02) :
+    /// un son de BIBLIOTHÈQUE s'annonce par le crédit défilant
+    /// « titre · @pseudo » à la place de la sinusoïde ; une piste PROPRE
+    /// (première publication, même si la capture l'a versée ensuite à la
+    /// bibliothèque) garde la sinusoïde. Même résolveur que la chip du canvas.
+    var headerBackgroundAudioDisplay: AudioChipDisplay { // internal for cross-file access
+        guard let story = currentStory else { return .waveform }
+        let bg = (story.storyEffects?.audioPlayerObjects ?? [])
+            .first(where: { $0.isBackground == true })
+        if let bg, bg.soundId != nil {
+            return AudioChipDisplay.resolve(
+                soundId: bg.soundId, title: bg.name,
+                authorUsername: bg.soundAuthorUsername)
+        }
+        if let entry = story.backgroundAudio {
+            return AudioChipDisplay.resolve(
+                soundId: entry.id, title: entry.title,
+                authorUsername: entry.uploaderName)
+        }
+        return .waveform
     }
 
     /// Probes each foreground video of the current slide for a real audio track.

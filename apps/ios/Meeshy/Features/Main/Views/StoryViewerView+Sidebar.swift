@@ -663,6 +663,9 @@ struct StoryHeaderView: View {
     /// Primitive passée par le parent (règle « Zero Unnecessary Re-render » —
     /// une leaf view ne recalcule pas d'état viewer, elle reçoit un `Bool`).
     let hasBackgroundAudio: Bool
+    /// Ce qui suit la note : crédit défilant (son de bibliothèque) ou onde
+    /// (piste propre). Résolu par le parent — même règle Equatable/primitives.
+    let headerAudioDisplay: AudioChipDisplay
     /// La story porte-t-elle une transcription affichable ? Primitive, même
     /// règle : le header ne consulte pas les `StoryEffects` lui-même.
     let hasAudioTranscript: Bool
@@ -880,8 +883,20 @@ struct StoryHeaderView: View {
                                         // ce header. Pas de câblage de la pause :
                                         // l'appui long qui met la story en pause
                                         // masque déjà tout le chrome, header compris.
-                                        StoryHeaderAudioWaveform()
-                                            .opacity(0.8)
+                                        //
+                                        // Son de BIBLIOTHÈQUE → crédit défilant
+                                        // « titre · @pseudo » à la place de l'onde ;
+                                        // piste propre → onde, comme toujours
+                                        // (directive user 2026-08-02).
+                                        switch headerAudioDisplay {
+                                        case .marquee(let text):
+                                            AudioChipMarquee(text: text)
+                                                .frame(width: 116, height: 14)
+                                                .opacity(0.85)
+                                        case .waveform:
+                                            StoryHeaderAudioWaveform()
+                                                .opacity(0.8)
+                                        }
                                     }
                                 }
                             }

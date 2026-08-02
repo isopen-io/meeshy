@@ -31,9 +31,15 @@ public nonisolated enum AudioChipDisplay: Equatable, Sendable {
 /// Défilement horizontal continu (crédit d'un son de bibliothèque), à la
 /// place de la sinusoïde. Boucle sans couture : le texte est dupliqué et
 /// l'offset repart quand une copie est entièrement sortie du cadre.
-struct AudioChipMarquee: View {
+/// Public : la chip du canvas ET le header du reader (app) le rendent.
+public struct AudioChipMarquee: View {
     let text: String
     let paused: Bool
+
+    public init(text: String, paused: Bool = false) {
+        self.text = text
+        self.paused = paused
+    }
 
     @State private var textWidth: CGFloat = 0
     @State private var offset: CGFloat = 0
@@ -41,7 +47,7 @@ struct AudioChipMarquee: View {
     private let gap: CGFloat = 24
     private let speed: CGFloat = 28   // points / seconde
 
-    var body: some View {
+    public var body: some View {
         GeometryReader { geo in
             let fits = textWidth > 0 && textWidth <= geo.size.width
             Group {
