@@ -61,6 +61,10 @@ export interface StoryMediaObjectData {
   /// W1 inc.2 — timing par élément + keyframes posés par le composer iOS.
   startTime?: number;
   keyframes?: StoryKeyframeData[];
+  /// Fenêtre de SOURCE : où l'on entre dans le fichier. `undefined` ≡ 0.
+  /// À ne pas confondre avec `startTime`, qui dit quand la piste démarre sur
+  /// la timeline.
+  sourceStart?: number;
 }
 
 export interface StoryAudioObjectData {
@@ -71,6 +75,13 @@ export interface StoryAudioObjectData {
   volume: number;
   isBackground?: boolean;
   zIndex?: number;
+  /// Fenêtre TIMELINE : quand la piste joue sur la slide.
+  startTime?: number;
+  duration?: number;
+  loop?: boolean;
+  /// Fenêtre de SOURCE : où l'on entre dans le fichier. `undefined` ≡ 0.
+  sourceStart?: number;
+  intrinsicDuration?: number;
 }
 
 interface StoryData {

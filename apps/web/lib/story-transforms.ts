@@ -123,6 +123,8 @@ function parseMediaObjects(value: unknown): StoryMediaObjectData[] | undefined {
       rotation: typeof r.rotation === 'number' ? r.rotation : 0,
       isBackground: r.isBackground === true,
       zIndex: typeof r.zIndex === 'number' ? r.zIndex : undefined,
+      // Fenêtre de SOURCE : où l'on entre dans le fichier. `undefined` ≡ 0.
+      sourceStart: typeof r.sourceStart === 'number' ? r.sourceStart : undefined,
     });
   }
   return result.length > 0 ? result : undefined;
@@ -143,6 +145,16 @@ function parseAudioObjects(value: unknown): StoryAudioObjectData[] | undefined {
       volume: typeof r.volume === 'number' ? r.volume : 1,
       isBackground: r.isBackground === true,
       zIndex: typeof r.zIndex === 'number' ? r.zIndex : undefined,
+      // Fenêtre TIMELINE : quand la piste joue. Elle n'était pas lue du tout,
+      // donc aucune fenêtre temporelle audio n'atteignait le lecteur web.
+      startTime: typeof r.startTime === 'number' ? r.startTime : undefined,
+      duration: typeof r.duration === 'number' ? r.duration : undefined,
+      // Booléen STRICT : le blob vient du réseau, une chaîne « yes » n'est pas
+      // une boucle.
+      loop: r.loop === true ? true : undefined,
+      // Fenêtre de SOURCE : où l'on entre dans le fichier.
+      sourceStart: typeof r.sourceStart === 'number' ? r.sourceStart : undefined,
+      intrinsicDuration: typeof r.intrinsicDuration === 'number' ? r.intrinsicDuration : undefined,
     });
   }
   return result.length > 0 ? result : undefined;
