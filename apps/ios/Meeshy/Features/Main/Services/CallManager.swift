@@ -2638,20 +2638,6 @@ final class CallManager: ObservableObject {
         webRTCService.addICECandidate(candidate)
     }
 
-    func handleRemoteReject(callId: String) {
-        guard currentCallId == callId else { return }
-        // Audit P2-iOS-6 — was .remoteEnded which Recents displays as
-        // "Ended". The semantically correct CXCallEndedReason for an
-        // explicit decline by the remote is .declinedElsewhere (Recents
-        // shows "Declined" — better UX + analytics).
-        if callUsesCallKit, let uuid = activeCallUUID {
-            callProvider.reportCall(with: uuid, endedAt: Date(), reason: .declinedElsewhere)
-        }
-        endCallInternal(reason: .rejected)
-        HapticFeedback.error()
-        Logger.calls.info("Call rejected by remote: \(callId)")
-    }
-
     func handleRemoteEnd(callId: String, rawReason: String? = nil) {
         // Dedup (idempotence testable — cf. CallReliabilityPolicy.shouldProcessRemoteEnd) :
         // le serveur peut émettre `call:ended` plusieurs fois (CXEndCallAction côté
