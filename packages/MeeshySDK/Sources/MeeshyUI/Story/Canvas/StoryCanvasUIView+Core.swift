@@ -31,6 +31,7 @@ extension StoryCanvasUIView {
         rootLayer.frame = bounds
         itemsContainer.frame = bounds
         editOverlayLayer.frame = bounds
+        inlineEditScrimLayer.frame = bounds
         CATransaction.commit()
         rebuildLayers()
     }

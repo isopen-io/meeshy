@@ -488,14 +488,25 @@ final class GlobalSearchViewModel: ObservableObject {
             limit: 50,
             conversationId: nil
         )) ?? []
+        // vm-search-localname-01 — résoudre le nom/avatar LOCALEMENT depuis le
+        // cache conversations (même motif que searchLocalConversations) : le
+        // placeholder ObjectId n'était remplacé par le merge réseau que si le
+        // réseau répondait — précisément jamais offline.
+        let cachedConvs = await CacheCoordinator.shared.conversations.load(for: "list")
+        let conversationsById: [String: MeeshyConversation]
+        switch cachedConvs {
+        case .fresh(let v, _), .stale(let v, _):
+            conversationsById = Dictionary(uniqueKeysWithValues: v.map { ($0.id, $0) })
+        case .expired, .empty:
+            conversationsById = [:]
+        }
         return records.map { record in
-            GlobalSearchMessageResult(
+            let conv = conversationsById[record.conversationId]
+            return GlobalSearchMessageResult(
                 id: record.localId,
                 conversationId: record.conversationId,
-                // conversationName is not stored in MessageRecord; use conversationId as
-                // placeholder — network results will supply the proper name via merge.
-                conversationName: record.conversationId,
-                conversationAvatar: nil,
+                conversationName: conv?.displayName ?? record.conversationId,
+                conversationAvatar: conv?.avatar ?? conv?.participantAvatarURL,
                 content: record.content ?? "",
                 senderName: record.senderName ?? record.senderUsername ?? "?",
                 senderAvatar: record.senderAvatarURL,

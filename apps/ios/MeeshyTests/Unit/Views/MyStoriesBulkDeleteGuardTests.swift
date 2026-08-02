@@ -5,14 +5,13 @@ import XCTest
 /// Directive user 2026-07-14.
 final class MyStoriesBulkDeleteGuardTests: XCTestCase {
 
+    /// Le fichier principal est lu comme un CORPUS — les gardes cherchent
+    /// dans tous les fichiers de « Mes stories », pour survivre a sa
+    /// decomposition. Tout autre chemin est lu tel quel.
     private func source(_ relativePath: String) throws -> String {
-        let url = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .appendingPathComponent(relativePath)
-        return try String(contentsOf: url, encoding: .utf8)
+        relativePath.hasSuffix("MyStoriesView.swift")
+            ? MyStoriesSourceCorpus.text()
+            : try MyStoriesSourceCorpus.text(of: relativePath)
     }
 
     func test_myStoriesView_neverReadsSelectedIDsRaw_outsideItsOwnDeclarationAndToggle() throws {
@@ -49,26 +48,10 @@ final class MyStoriesBulkDeleteGuardTests: XCTestCase {
         )
     }
 
-    /// L'état de sélection est transmis à VoiceOver via la trait de la ligne
-    /// (même pattern que `NewConversationView`) — le glyphe de sélection
-    /// reste décoratif, jamais porteur de son propre label.
-    func test_myStoryRow_selection_conveyedViaRowTrait_notGlyphLabel() throws {
-        let viewSource = try source("Meeshy/Features/Main/Views/MyStoriesView.swift")
-
-        XCTAssertTrue(
-            viewSource.contains(".accessibilityAddTraits(isSelected ? .isSelected : [])"),
-            "MyStoryRow doit porter .accessibilityAddTraits(isSelected ? .isSelected : []) sur la ligne."
-        )
-        guard let circleRange = viewSource.range(of: "private var selectionCircle: some View {") else {
-            XCTFail("MyStoryRow doit définir selectionCircle")
-            return
-        }
-        let end = viewSource.index(circleRange.lowerBound, offsetBy: 320, limitedBy: viewSource.endIndex)
-            ?? viewSource.endIndex
-        let circleBlock = String(viewSource[circleRange.lowerBound ..< end])
-        XCTAssertTrue(
-            circleBlock.contains(".accessibilityHidden(true)"),
-            "Le glyphe de sélection doit être décoratif (.accessibilityHidden(true)) — l'état est porté par la ligne. Bloc lu: \(circleBlock)"
-        )
-    }
+    // NOTE 2026-08-02 : la garde `test_myStoryRow_selection_conveyedViaRowTrait_
+    // notGlyphLabel` a été retirée avec `MyStoryRow` (vue morte depuis la
+    // migration en grille, 70f74364c) : elle épinglait `selectionCircle` et le
+    // trait `.isSelected` d'une rangée que plus rien ne rendait. La grille
+    // (`MyStoryCard`) ne porte PAS encore d'indicateur visuel/a11y de
+    // sélection — dette consignée, à réintroduire avec la sélection de cartes.
 }

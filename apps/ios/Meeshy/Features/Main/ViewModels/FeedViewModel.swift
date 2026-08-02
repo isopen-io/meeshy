@@ -40,6 +40,12 @@ class FeedViewModel: ObservableObject {
     private let languageProvider: LanguageProviding
     private var cacheSaveTask: Task<Void, Never>?
     private var isFeedLoadInProgress = false
+    /// rts-01 — distingue le PREMIER armement de `subscribeToSocketEvents()`
+    /// (la vue appelle déjà `loadFeed()` dans son `.task` si `posts.isEmpty`,
+    /// pas de fetch redondant) d'un RÉ-armement après
+    /// `unsubscribeFromSocketEvents()` (room quittée ET sinks désarmés hors
+    /// écran — sans refetch explicite, rien ne rattrape le trou).
+    private var hasSubscribedOnce = false
     /// Tracks postIds whose comments are currently being prefetched, to coalesce
     /// duplicate calls triggered by repeated cell .onAppear events.
     private var prefetchingComments: Set<String> = []
@@ -175,6 +181,14 @@ class FeedViewModel: ObservableObject {
                 // than the server head so server-side deletions within the
                 // fetched range still take effect.
                 posts = Self.mergePreservingRealtimeHead(fetched: fetched, existing: posts)
+                // grdb-03 (volet mémoire) — réappliquer les likes encore en
+                // attente d'outbox par-dessus le snapshot serveur périmé.
+                if let persistence = feedPersistence {
+                    let pendingLikes = await persistence.pendingLikeFlags()
+                    if !pendingLikes.isEmpty {
+                        posts = Self.reapplyPendingLikes(posts: posts, pendingLikes: pendingLikes)
+                    }
+                }
                 nextCursor = response.pagination?.nextCursor
                 hasMore = response.pagination?.hasMore ?? false
                 prefetchMedia(around: 0)
@@ -216,6 +230,19 @@ class FeedViewModel: ObservableObject {
     /// newer than the newest fetched post AND absent from the fetched set are
     /// preserved, so server-side deletions inside the fetched range still
     /// apply. Pure + static so it is unit-testable without a live ViewModel.
+    /// grdb-03 — réapplique les likes encore PENDING en outbox par-dessus un
+    /// snapshot serveur périmé (le cœur ne se dé-remplit pas sous les yeux de
+    /// l'utilisateur ; le compteur suit, jamais négatif). Pure, testable.
+    static func reapplyPendingLikes(posts: [FeedPost], pendingLikes: [String: Bool]) -> [FeedPost] {
+        posts.map { post in
+            guard let liked = pendingLikes[post.id], post.isLiked != liked else { return post }
+            var patched = post
+            patched.isLiked = liked
+            patched.likes = max(0, post.likes + (liked ? 1 : -1))
+            return patched
+        }
+    }
+
     static func mergePreservingRealtimeHead(fetched: [FeedPost], existing: [FeedPost]) -> [FeedPost] {
         guard let newestFetched = fetched.first else { return fetched }
         let fetchedIds = Set(fetched.map(\.id))
@@ -386,6 +413,16 @@ class FeedViewModel: ObservableObject {
             try await offlineQueue.enqueue(.toggleLikePost, payload: payload, conversationId: nil)
             debouncedCacheSave()
 
+            // stores-09 — patch every cache key holding this post (detail key,
+            // bookmarks…), not just "main-feed" via debouncedCacheSave.
+            let newLikes = posts[index].likes
+            Task.detached(priority: .utility) {
+                await CacheCoordinator.shared.feed.patchEverywhere(itemId: postId) {
+                    $0.isLiked = liked
+                    $0.likes = newLikes
+                }
+            }
+
             // Sync optimistic like state to GRDB so the feed cache matches.
             if let persistence = feedPersistence {
                 let count = posts[index].likes
@@ -415,6 +452,12 @@ class FeedViewModel: ObservableObject {
         revert.isLiked = isLiked
         revert.likes = likes
         posts[i] = revert
+        Task.detached(priority: .utility) {
+            await CacheCoordinator.shared.feed.patchEverywhere(itemId: postId) {
+                $0.isLiked = isLiked
+                $0.likes = likes
+            }
+        }
         debouncedCacheSave()
     }
 
@@ -468,7 +511,7 @@ class FeedViewModel: ObservableObject {
         if !cachedBookmarks.contains(where: { $0.id == postId }) {
             var updated = cachedBookmarks
             updated.insert(post, at: 0)
-            try? await CacheCoordinator.shared.feed.save(updated, for: bookmarksKey)
+            try? await CacheCoordinator.shared.feed.savePreservingFreshness(updated, for: bookmarksKey)
         }
         FeedbackToastManager.shared.showSuccess(String(localized: "feed.bookmark.success", defaultValue: "Added to bookmarks", bundle: .main))
 
@@ -479,7 +522,7 @@ class FeedViewModel: ObservableObject {
             )
         } catch {
             // Rollback the optimistic cache insertion.
-            try? await CacheCoordinator.shared.feed.save(snapshot, for: bookmarksKey)
+            try? await CacheCoordinator.shared.feed.savePreservingFreshness(snapshot, for: bookmarksKey)
             FeedbackToastManager.shared.showError(String(localized: "feed.bookmark.error", defaultValue: "Error saving bookmark", bundle: .main))
         }
     }
@@ -949,7 +992,24 @@ class FeedViewModel: ObservableObject {
         // `feedStore == nil` du setup). `arm()` est idempotent.
         feedSocketHandler?.arm()
         guard socketCancellables.isEmpty else { return }
+        let isRearm = hasSubscribedOnce
+        hasSubscribedOnce = true
         socialSocket.connect()
+        // stores-02 — connect() est un no-op si le socket est déjà connecté :
+        // le handler .connect (seul émetteur de feed:subscribe) ne rejoue pas,
+        // et la room feed quittée par unsubscribeFromSocketEvents() n'était
+        // jamais rejointe. Émission idempotente (rejoindre une room déjà
+        // jointe = no-op) ; socket pas encore prêt → l'emit est perdu mais
+        // rejoué par le handler .connect.
+        socialSocket.subscribeFeed()
+        if isRearm {
+            // rts-01 — même chemin que le sink didReconnect ci-dessous, pour
+            // l'aller-retour d'écran SANS coupure réseau (didReconnect ne
+            // couvre que le flap) : gardé par isFeedLoadInProgress, silencieux
+            // (showLoading: posts.isEmpty), et mergePreservingRealtimeHead
+            // protège les posts insérés par un sink pendant le vol.
+            Task { await self.loadFeed(forceRefresh: true) }
+        }
 
         // --- didReconnect → backfill du feed ---
         // Apres un flap reseau, le gateway a oublie nos rooms et des posts ont pu
@@ -1264,7 +1324,12 @@ class FeedViewModel: ObservableObject {
         cacheSaveTask = Task {
             try? await Task.sleep(for: .seconds(2))
             guard !Task.isCancelled else { return }
-            try? await CacheCoordinator.shared.feed.save(snapshot, for: "main-feed")
+            // cache-03 étape A — GRDBCacheStore.save() trimme par suffix(max)
+            // (garde les items les PLUS ANCIENS) alors que `posts` est
+            // newest-first : sans ce prefix(100), au-delà de 100 posts
+            // accumulés le cold start sert la tranche la plus vieille en
+            // .fresh. Miroir de ProfileUserPostsList.
+            try? await CacheCoordinator.shared.feed.savePreservingFreshness(Array(snapshot.prefix(100)), for: "main-feed")
         }
     }
 }

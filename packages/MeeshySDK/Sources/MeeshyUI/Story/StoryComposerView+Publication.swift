@@ -117,7 +117,7 @@ extension StoryComposerView {
         // « fond + musique » : rien de VISUEL n'a été composé, donc rien ne
         // supplante ce que le bandeau venait de proposer. Même règle que la
         // fermeture par le X : on ne purge que les fantômes.
-        if composerHasContent { clearAllDrafts() } else { clearPhantomDraftsOnly() }
+        if composerHasContent { clearCurrentDraft() } else { clearPhantomDraftsOnly() }
         // E1 — un debounce d'autosave en vol ne doit pas re-persister le
         // brouillon d'une story qui vient de partir en publication.
         draftAutosaveSuspended = true
@@ -375,7 +375,7 @@ extension StoryComposerView {
     }
 
     func cancelAndDismiss() {
-        clearAllDrafts()
+        clearCurrentDraft()
         // E1 — le « Quitter » jette le brouillon : suspendre l'autosave pour
         // qu'un debounce en vol ne le re-persiste pas pendant le démontage.
         draftAutosaveSuspended = true

@@ -1166,6 +1166,59 @@ final class StoryViewModelTests: XCTestCase {
                        "Alice's group is now fully viewed")
     }
 
+    // MARK: - didReconnect Tests (rts-02)
+
+    /// Après un flap réseau, des stories ont pu être créées/supprimées pendant
+    /// la coupure : le reconnect social doit rattraper le tray par un delta
+    /// depuis le curseur max(updatedAt) des stories affichées.
+    func test_didReconnect_fetchesStoriesDeltaFromTrayCursor() async {
+        let t1 = Date(timeIntervalSinceNow: -600)
+        let t2 = Date(timeIntervalSinceNow: -300)
+        sut.storyGroups = [
+            makeStoryGroup(userId: "u1", stories: [makeStoryItem(id: "s1", updatedAt: t1)]),
+            makeStoryGroup(userId: "u2", stories: [makeStoryItem(id: "s2", updatedAt: t2)]),
+        ]
+        mockStoryService.listResult = .success(Self.makeDeltaResponse())
+        sut.subscribeToSocketEvents()
+
+        mockSocket.didReconnect.send(())
+        try? await Task.sleep(nanoseconds: 100_000_000)
+
+        XCTAssertEqual(mockStoryService.listCallCount, 1,
+                       "le reconnect social déclenche un fetch stories")
+        XCTAssertEqual(mockStoryService.lastListUpdatedSince, t2,
+                       "le curseur delta = max(updatedAt) du tray, calculé au moment de l'événement")
+    }
+
+    /// Un fetch déjà en vol ne doit pas être doublé par le reconnect.
+    func test_didReconnect_whileLoading_skipsFetch() async {
+        sut.storyGroups = [makeStoryGroup(userId: "u1", stories: [makeStoryItem(id: "s1", updatedAt: Date())])]
+        sut.isLoading = true
+        sut.subscribeToSocketEvents()
+
+        mockSocket.didReconnect.send(())
+        try? await Task.sleep(nanoseconds: 100_000_000)
+
+        XCTAssertEqual(mockStoryService.listCallCount, 0,
+                       "un chargement en vol absorbe le rattrapage du reconnect")
+    }
+
+    /// Vérifie le CÂBLAGE didReconnect → fetchStoriesFromNetwork : la purge
+    /// par tombstones est une logique existante déjà testée par ailleurs.
+    func test_didReconnect_deltaWithTombstones_purgesDeletedStories() async {
+        let kept = makeStoryItem(id: "s1", updatedAt: Date())
+        let deleted = makeStoryItem(id: "s2", updatedAt: Date())
+        sut.storyGroups = [makeStoryGroup(userId: "u1", stories: [kept, deleted])]
+        mockStoryService.listResult = .success(Self.makeDeltaResponse(deletedStoryIds: ["s2"]))
+        sut.subscribeToSocketEvents()
+
+        mockSocket.didReconnect.send(())
+        try? await Task.sleep(nanoseconds: 100_000_000)
+
+        XCTAssertEqual(sut.storyGroups.first?.stories.map(\.id), ["s1"],
+                       "la story tombstonée pendant la coupure sort du tray au reconnect")
+    }
+
     // MARK: - Lookup Method Tests
 
     func test_storyGroupForUser_returnsMatchingGroup() {
@@ -1315,8 +1368,11 @@ final class StoryViewModelTests: XCTestCase {
             loadedVideoURLs: [:]
         )
 
-        XCTAssertNotNil(sut.activeUpload)
-        sut.cancelUpload()
+        guard let uploadId = sut.activeUpload?.id else {
+            XCTFail("publishStoryInBackground doit créer une entrée active")
+            return
+        }
+        sut.cancelUpload(id: uploadId)
         XCTAssertNil(sut.activeUpload)
     }
 

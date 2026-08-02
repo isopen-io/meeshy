@@ -104,7 +104,8 @@ extension StoryComposerView {
             // Empty view when `textEditingMode == .inactive`.
             StoryTextEditToolbar(
                 viewModel: viewModel,
-                onControlsTopYChange: { measuredTextToolbarTopY = $0 }
+                onControlsTopYChange: { measuredTextToolbarTopY = $0 },
+                onTopBarBottomYChange: { measuredTextTopBarBottomY = $0 }
             )
                 .padding(.bottom, keyboardHeight)
                 .environment(\.colorScheme, canvasChromeScheme)
@@ -1002,10 +1003,11 @@ extension StoryComposerView {
             onInlineTextEditEnded: { _ in
                 viewModel.exitTextEditingMode()
             },
-            // Plafond de l'édition texte : le canvas garde la dernière ligne
-            // au-dessus des chips de l'outil, quitte à faire déborder un texte
-            // long par le HAUT de l'écran (user 2026-07-30).
+            // Bornes de la ZONE d'édition texte : le canvas y centre le bloc
+            // édité et l'y borne en hauteur, un texte plus long défilant à
+            // l'intérieur (spec 2026-08-01).
             inlineEditFloorGlobalY: measuredTextToolbarTopY,
+            inlineEditCeilingGlobalY: measuredTextTopBarBottomY,
             onManipulationLayerChanged: { layer in
                 manipulationLayer = layer
             },

@@ -549,14 +549,23 @@ struct MeeshyApp: App {
                     // GRDB on every cold start. The server remains the source of
                     // truth — purged messages can be re-fetched via pagination.
                     // Runs at background priority so it never blocks the UI.
-                    let retentionPersistence = MessagePersistenceActor(dbWriter: dependencies.dbPool)
+                    // grdb-08 — réutilise l'acteur DÉJÀ démarré du container :
+                    // une seconde instance relançait le write worker ET le GC
+                    // outbox exhausted à chaque boot. purgeOldMessages n'a
+                    // aucune dépendance à start().
+                    let retentionPersistence = dependencies.messagePersistence
                     Task.detached(priority: .background) {
-                        await retentionPersistence.start()
-                        if let count = try? await retentionPersistence.purgeOldMessages() {
+                        do {
+                            let count = try await retentionPersistence.purgeOldMessages()
                             if count > 0 {
                                 Logger(subsystem: "com.meeshy.app", category: "retention")
                                     .info("Purged \(count) messages older than \(MessagePersistenceActor.defaultRetentionMonths) months")
                             }
+                        } catch {
+                            // grdb-02 — le try? avaleur a masqué pendant des
+                            // mois un rollback à 100 % de la rétention.
+                            Logger(subsystem: "com.meeshy.app", category: "retention")
+                                .error("purgeOldMessages failed: \(error.localizedDescription, privacy: .public)")
                         }
                     }
                 }
@@ -602,20 +611,6 @@ struct MeeshyApp: App {
                         // truncated session at next boot (no network flush here —
                         // background time is too scarce, the resume/boot paths flush).
                         Task { await EngagementTracker.shared.checkpointAll() }
-                        // Compact free pages and refresh query-planner stats on
-                        // every background transition. Runs at background priority
-                        // so the system can defer or kill it under memory pressure.
-                        // Capture dbPool before crossing the actor boundary.
-                        let pool = dependencies.dbPool
-                        Task.detached(priority: .background) {
-                            do {
-                                try DatabaseMaintenance.runIncrementalVacuum(on: pool)
-                                try DatabaseMaintenance.runOptimize(on: pool)
-                            } catch {
-                                Logger(subsystem: "me.meeshy.app", category: "maintenance")
-                                    .error("Background DB maintenance failed: \(error.localizedDescription, privacy: .public)")
-                            }
-                        }
                     case .inactive:
                         break
                     @unknown default:
@@ -728,6 +723,11 @@ struct MeeshyApp: App {
                         // Drop the store subscriptions so an event from user A
                         // can't mutate the store after logout.
                         ConversationStoreSocketBridge.shared.deactivate()
+                        // startup-08 — une BGTask soumise avant le logout ne
+                        // doit pas survivre pour réveiller un appareil
+                        // déconnecté (delta sync 401 en boucle, prefetch sur
+                        // cache vidé).
+                        BackgroundTaskManager.shared.cancelAllScheduled()
                     }
                 }
                 .adaptiveOnChange(of: deepLinkRouter.pendingDeepLink) { _, link in

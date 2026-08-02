@@ -577,20 +577,23 @@ struct OutboxDispatcher: OutboxDispatching {
             /// (`PostService.addComment`), hissée par le gateway depuis
             /// `metadata.location`.
             let location: SharedPlace?
+            let effectFlags: Int?
 
-            enum CodingKeys: String, CodingKey { case content, parentId, location }
+            enum CodingKeys: String, CodingKey { case content, parentId, location, effectFlags }
 
             func encode(to encoder: Encoder) throws {
                 var container = encoder.container(keyedBy: CodingKeys.self)
                 try container.encode(content, forKey: .content)
                 if let parentId { try container.encode(parentId, forKey: .parentId) }
                 try container.encodeIfPresent(location, forKey: .location)
+                try container.encodeIfPresent(effectFlags, forKey: .effectFlags)
             }
         }
         let body = CreateCommentBody(
             content: payload.content,
             parentId: payload.parentCommentId,
-            location: payload.location
+            location: payload.location,
+            effectFlags: payload.effectFlags
         )
         let _: APIResponse<[String: AnyCodable]> = try await APIClient.shared.requestWithHeaders(
             endpoint: "/posts/\(payload.postId)/comments",

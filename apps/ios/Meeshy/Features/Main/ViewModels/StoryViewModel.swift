@@ -113,6 +113,11 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
     @Published var storyGroups: [StoryGroup] = []
     @Published var isLoading = false
     @Published var showStoryComposer = false
+    /// Brouillon à reprendre, consommé par le cover racine du composer
+    /// (`StoryComposerCover`). Posé AVANT `showStoryComposer = true` pour que
+    /// le composer s'ouvre SUR ce brouillon et autosauvegarde sous son id —
+    /// sans adoption, il écrirait sous un id neuf et dupliquerait le brouillon.
+    var pendingDraftId: String?
     /// C5 — file LOCALE des publications en cours. Ordre = ordre des taps
     /// « Publier ». Une seule monte à la fois (`currentUploadId`), mais rien
     /// n'empêche d'en empiler d'autres : plus aucune exclusion mutuelle à la
@@ -200,7 +205,7 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
     ///
     /// Decodes the queued payload, materializes the local media files, and
     /// drives the shared `runStoryUpload` pipeline to completion. Headless:
-    /// no UI mutations on `activeUpload` so the queue path can run from
+    /// no UI mutations on `activeUploads` so the queue path can run from
     /// cold start without ghost banners. Returns the server-assigned post
     /// id of the LAST published slide (the one the queue uses to reconcile
     /// the optimistic `pending_<uuid>` row).
@@ -292,7 +297,7 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
     /// banner remains available; this just removes the friction of having
     /// to tap retry yourself when the network comes back.
     ///
-    /// Note: this only handles uploads still in `activeUpload` (process is
+    /// Note: this only handles uploads still in `activeUploads` (process is
     /// alive). Cross-restart resume is the StoryPublishQueue scope (V2).
     private func observeReconnectionForRetry() {
         MessageSocketManager.shared.$isConnected
@@ -1549,6 +1554,101 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
         }
     }
 
+    // MARK: - Reprise d'un échec de publication (spec 2026-08-01, incrément 5)
+
+    /// Seam injectable (tests) : retrait d'un item de l'historique d'échecs.
+    /// Le chemin réel traverse `StoryPublishService` (queue actor singleton +
+    /// rafraîchissement du `failedItems` publié) — un état global qu'une
+    /// suite de tests ne doit pas muter.
+    var failedItemDiscarder: (StoryPublishQueueItem) async -> Void = { item in
+        await StoryPublishService.shared.discard(item)
+    }
+
+    /// Ouvre le composer de CRÉATION sur un brouillon existant. L'ORDRE est
+    /// l'invariant : `pendingDraftId` est posé AVANT `showStoryComposer`,
+    /// sinon `StoryComposerCover` construit un VM vierge qui autosauvegarde
+    /// sous un id neuf et duplique le brouillon. Seul écrivain app-side de
+    /// `pendingDraftId` (le cover le remet à `nil` au dismiss).
+    func openComposer(resumingDraftId draftId: String) {
+        pendingDraftId = draftId
+        showStoryComposer = true
+    }
+
+    /// Convertit un échec de publication en brouillon ÉDITABLE (« Reprendre »).
+    /// Ordre STRICT — le travail n'est jamais perdu entre deux états :
+    ///   1. décode `slidesPayload` et résout les fichiers de `mediaReferences` ;
+    ///   2. écrit un brouillon NEUF (slides + copies des médias via
+    ///      `saveMedia(draftId:)` → `meeshy_draft_media/<id>/`) puis VÉRIFIE la
+    ///      persistance en relisant le store ;
+    ///   3. seulement ensuite, retire l'item de file et son placeholder
+    ///      optimiste.
+    /// Toute défaillance avant (3) laisse l'item de file INTACT et retourne
+    /// `nil` (le brouillon partiel éventuel est effacé). La présentation du
+    /// composer reste à la charge de l'appelant (la sheet « Mes stories »
+    /// route par son followUp différé → `openComposer(resumingDraftId:)`).
+    func resumeFailedItem(
+        _ item: StoryPublishQueueItem,
+        draftStore: StoryDraftStore = .shared
+    ) async -> String? {
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        guard let slides = try? decoder.decode([StorySlide].self, from: item.slidesPayload),
+              !slides.isEmpty else {
+            Logger.stories.error(
+                "resumeFailedItem: slidesPayload indécodable ou vide pour \(item.id, privacy: .public)")
+            showResumeFailureToast()
+            return nil
+        }
+
+        guard let media = try? loadMediaFromReferences(item.mediaReferences) else {
+            Logger.stories.error(
+                "resumeFailedItem: média manquant/illisible pour \(item.id, privacy: .public) — item conservé")
+            showResumeFailureToast()
+            return nil
+        }
+
+        // `loadMediaFromReferences` (le MÊME validateur que le chemin de
+        // publication de la file) déprefixe les fonds en `slideImages` —
+        // `saveMedia` attend les clés d'ORIGINE, on re-préfixe.
+        let images = media.slideImages.reduce(into: media.loadedImages) { acc, entry in
+            acc["slide-bg-\(entry.key)"] = entry.value
+        }
+
+        let draftId = UUID().uuidString
+        draftStore.save(draftId: draftId, slides: slides, visibility: item.visibility)
+        draftStore.saveMedia(
+            draftId: draftId,
+            images: images,
+            videoURLs: media.loadedVideoURLs,
+            audioURLs: media.loadedAudioURLs
+        )
+
+        // `save`/`saveMedia` sont best-effort (elles loggent au lieu de
+        // throw) : on RELIT le store avant de toucher à l'item de file. Une
+        // copie manquante = brouillon effacé + item conservé, jamais l'inverse.
+        let persistedIds = Set(draftStore.loadMediaReferences(draftId: draftId).map(\.elementId))
+        let expectedIds = Set(item.mediaReferences.map(\.elementId))
+        guard draftStore.listDrafts().contains(where: { $0.id == draftId }),
+              expectedIds.isSubset(of: persistedIds) else {
+            draftStore.delete(draftId: draftId)
+            Logger.stories.error(
+                "resumeFailedItem: persistance du brouillon incomplète pour \(item.id, privacy: .public) — item conservé")
+            showResumeFailureToast()
+            return nil
+        }
+
+        await failedItemDiscarder(item)
+        removeOptimisticStories(tempStoryId: item.tempStoryId)
+        return draftId
+    }
+
+    private func showResumeFailureToast() {
+        FeedbackToastManager.shared.showError(String(
+            localized: "story.mine.failed.resume.error",
+            defaultValue: "Impossible de reprendre cette story",
+            bundle: .main))
+    }
+
     /// Retire toutes les stories optimistes d'un `tempStoryId` (ids préfixés
     /// `tempStoryId#`). Idempotent. Supprime le groupe s'il devient vide.
     /// Persiste le cache pour que le cold-start ne ressuscite pas le pending.
@@ -1694,7 +1794,7 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
 
     /// Headless story upload pipeline shared by:
     ///   1. `launchUploadTask` (composer flow) — wraps progress/phase/published
-    ///       callbacks to drive the `activeUpload` banner and tray prepend.
+    ///       callbacks to drive the `activeUploads` surfaces and tray prepend.
     ///   2. `executeQueuedPublish` (queue flow) — passes no-op callbacks since
     ///       there is no banner to update on cold-start replay.
     ///
@@ -2195,12 +2295,6 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
         )
     }
 
-    /// Retry en 1 tap de l'entrée mise en avant par les surfaces d'avatar.
-    func retryUpload() {
-        guard let id = activeUpload?.id else { return }
-        retryUpload(id: id)
-    }
-
     func retryUpload(id: String) {
         guard let upload = activeUploads.first(where: { $0.id == id }),
               case .failed(let previousError) = upload.phase else { return }
@@ -2240,12 +2334,6 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
             }
             self.drainUploadsIfNeeded()
         }
-    }
-
-    /// Annulation de l'entrée mise en avant par les surfaces d'avatar.
-    func cancelUpload() {
-        guard let id = activeUpload?.id else { return }
-        cancelUpload(id: id)
     }
 
     func cancelUpload(id: String) {
@@ -2418,6 +2506,21 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
         // sinks — les handlers à delta ±1 (`applyPostReactionDelta`,
         // `applyStoryReactionDelta`) compteraient alors double.
         guard socketCancellables.isEmpty else { return }
+
+        // rts-02 — rattrapage du tray au reconnect social : des stories ont pu
+        // être créées ou supprimées pendant la coupure. Le curseur se calcule
+        // au moment de l'ÉVÉNEMENT (pas à l'armement) — insertOrMergeStoryGroups,
+        // la garde isViewed monotone, les tombstones et le fallback full sur
+        // échec du delta garantissent déjà l'idempotence côté
+        // fetchStoriesFromNetwork.
+        socialSocket.didReconnect
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] in
+                guard let self, !self.isLoading else { return }
+                Task { await self.fetchStoriesFromNetwork(deltaSince: Self.deltaSince(for: self.storyGroups)) }
+            }
+            .store(in: &socketCancellables)
+
         socialSocket.storyCreated
             .receive(on: DispatchQueue.main)
             .sink { [weak self] apiPost in

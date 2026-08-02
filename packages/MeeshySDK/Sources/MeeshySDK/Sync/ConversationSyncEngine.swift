@@ -214,6 +214,22 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
         self.fullReconcileInterval = fullReconcileInterval
     }
 
+    // MARK: - Sync Checkpoints (logout / re-auth reset)
+
+    /// sync-04 — efface les trois checkpoints UserDefaults pour que le compte
+    /// suivant (ou une ré-authentification du même compte, dont le cache est
+    /// purgé par ailleurs) reparte de `.distantPast` au lieu d'hériter du
+    /// watermark de la session sortante — sinon un delta déclenché avant le
+    /// premier fullSync réussi persiste une liste PARTIELLE comme fraîche.
+    /// `lastDeltaSyncAt` est remis aussi pour que le tout premier delta ne
+    /// soit pas avalé par le cooldown en mémoire.
+    public func resetSyncCheckpoints() {
+        UserDefaults.standard.removeObject(forKey: syncTimestampKey)
+        UserDefaults.standard.removeObject(forKey: cleanupDateKey)
+        UserDefaults.standard.removeObject(forKey: fullReconcileKey)
+        lastDeltaSyncAt = .distantPast
+    }
+
     // MARK: - Full Sync (cold start)
 
     /// Run a full sync and return whether it completed successfully.

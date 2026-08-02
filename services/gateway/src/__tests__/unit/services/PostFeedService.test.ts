@@ -329,6 +329,70 @@ describe('PostFeedService.getStories', () => {
     expect(JSON.stringify(where)).not.toContain('updatedAt');
   });
 
+  // --- Archive de l'auteur -------------------------------------------------
+  //
+  // Le filtre d'expiration ne connaissait AUCUNE exception d'auteur : mes
+  // propres stories disparaissaient de la réponse dès leur expiration. « Mes
+  // stories » ne pouvait donc pas les lister, et le client ne pouvait pas les
+  // garder — un pull-to-refresh écrase son cache avec la réponse serveur.
+  //
+  // Elles restent renvoyées à leur AUTEUR pendant une fenêtre bornée : sans
+  // borne, la réponse enflerait indéfiniment avec l'ancienneté du compte.
+
+  function expiryClause(where: any) {
+    return where.AND.find(
+      (clause: any) =>
+        Array.isArray(clause.OR) &&
+        clause.OR.some((branch: any) => branch.expiresAt?.gt !== undefined)
+    );
+  }
+
+  it('keeps my own expired stories inside the author archive window', async () => {
+    mockPostFindMany.mockResolvedValue([]);
+
+    const service = new PostFeedService(mockPrisma);
+    await service.getStories('user-1');
+
+    const clause = expiryClause(mockPostFindMany.mock.calls[0][0].where);
+    const authorBranch = clause.OR.find((branch: any) => Array.isArray(branch.AND));
+
+    expect(authorBranch).toBeDefined();
+    expect(authorBranch.AND).toEqual(
+      expect.arrayContaining([{ authorId: 'user-1' }])
+    );
+  });
+
+  it('bounds the author archive to a finite window in the past', async () => {
+    mockPostFindMany.mockResolvedValue([]);
+    const before = Date.now();
+
+    const service = new PostFeedService(mockPrisma);
+    await service.getStories('user-1');
+
+    const clause = expiryClause(mockPostFindMany.mock.calls[0][0].where);
+    const authorBranch = clause.OR.find((branch: any) => Array.isArray(branch.AND));
+    const floor = authorBranch.AND.find((c: any) => c.expiresAt)?.expiresAt?.gt as Date;
+
+    expect(floor).toBeInstanceOf(Date);
+    expect(floor.getTime()).toBeLessThan(before);
+    expect(before - floor.getTime()).toBe(PostFeedService.AUTHOR_ARCHIVE_WINDOW_MS);
+  });
+
+  it('still hides OTHER authors expired stories', async () => {
+    mockPostFindMany.mockResolvedValue([]);
+
+    const service = new PostFeedService(mockPrisma);
+    await service.getStories('user-1');
+
+    const clause = expiryClause(mockPostFindMany.mock.calls[0][0].where);
+    const authorBranches = clause.OR.filter((branch: any) => Array.isArray(branch.AND));
+
+    expect(authorBranches).toHaveLength(1);
+    expect(authorBranches[0].AND).toEqual(
+      expect.arrayContaining([{ authorId: 'user-1' }])
+    );
+  });
+
   // --- Tombstones du delta-sync -------------------------------------------
   //
   // Un delta additif ne peut pas exprimer une disparition : il ne renvoie que

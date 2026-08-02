@@ -101,6 +101,7 @@ nonisolated enum MyStoriesFollowUp {
     case openViewer(postId: String)
     case createStory
     case editStory(StoryItem)
+    case resumeDraft(draftId: String)
 }
 
 // MARK: - Présentation ROOT-LEVEL du composer de création
@@ -141,9 +142,21 @@ struct StoryComposerCover: ViewModifier {
     /// lui rend la main à la fermeture, sans démonter la session d'édition.
     @State private var previewAssets: StoryPreviewAssets?
 
+    /// VM du composer de création. Adopte le brouillon à reprendre quand il y
+    /// en a un : sans cette adoption, le composer s'autosauvegarderait sous un
+    /// id neuf et le brouillon repris resterait intact à côté, en double.
+    private func makeComposerViewModel() -> StoryComposerViewModel {
+        let composer = StoryComposerViewModel()
+        if let draftId = viewModel.pendingDraftId { composer.adoptDraft(id: draftId) }
+        return composer
+    }
+
     func body(content: Content) -> some View {
-        content.fullScreenCover(isPresented: $viewModel.showStoryComposer) {
+        content.fullScreenCover(isPresented: $viewModel.showStoryComposer, onDismiss: {
+            viewModel.pendingDraftId = nil
+        }) {
             StoryComposerView(
+                viewModel: makeComposerViewModel(),
                 initialVisibility: viewModel.lastComposerVisibility,
                 onPublishAllInBackground: { slides, slideImages, loadedImages, loadedVideoURLs, loadedAudioURLs, originalLanguage, visibility, visibilityUserIds in
                     viewModel.publishStoryInBackground(
@@ -264,6 +277,10 @@ extension View {
                 },
                 onEditStory: { story in
                     followUp.wrappedValue.schedule(.editStory(story))
+                    isPresented.wrappedValue = false
+                },
+                onResumeDraft: { draftId in
+                    followUp.wrappedValue.schedule(.resumeDraft(draftId: draftId))
                     isPresented.wrappedValue = false
                 }
             )
