@@ -422,18 +422,28 @@ export function CallManager() {
       // also covering the server-authoritative call:ended path (the majority
       // real-world drop scenario for an already-established call). Read from
       // the store BEFORE reset() wipes currentCall/controls.
+      // Any OTHER end reason clears a stale unconsumed offer left behind by an
+      // earlier failed call on the SAME conversation: that offer is superseded
+      // the moment a later call attempt on this conversation actually resolves
+      // (successfully or not) — otherwise it can resurface, e.g. via
+      // useCallRetryToast on a later visit, prompting a retry for a failure the
+      // user already worked around.
       // …unless a call is WAITING: it is about to be promoted to a fresh
       // incoming ring (below), which is the user's next action. Stacking a
       // « Réessayer » offer for the just-dropped active call behind that ring
-      // is conflicting UI, so the promotion path owns the teardown and no retry
-      // is offered.
-      if (!waitingCall && isRetryableCallFailure(event.reason)) {
-        const { currentCall, controls, offerCallRetry } = useCallStore.getState();
+      // is conflicting UI, so the promotion path owns the teardown and neither
+      // branch below runs.
+      if (!waitingCall) {
+        const { currentCall, controls, offerCallRetry, clearCallRetry } = useCallStore.getState();
         if (currentCall?.conversationId) {
-          offerCallRetry({
-            conversationId: currentCall.conversationId,
-            type: controls.videoEnabled ? 'video' : 'audio',
-          });
+          if (isRetryableCallFailure(event.reason)) {
+            offerCallRetry({
+              conversationId: currentCall.conversationId,
+              type: controls.videoEnabled ? 'video' : 'audio',
+            });
+          } else {
+            clearCallRetry(currentCall.conversationId);
+          }
         }
       }
 

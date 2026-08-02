@@ -3266,3 +3266,46 @@ Candidat « scopé et mécanique » consigné en Vague 45, traité tel quel :
 - **Reste ouvert (inchangé)** : dead code Swift `CallManager.handleRemoteReject` ;
   God-objects `CallManager.swift`/`CallEventsHandler.ts` ; parité iOS/Android
   retry-on-failure.
+
+## Vague 48 — une offre de retry périmée survivait à un appel réussi ultérieur sur la même conversation (web) (2026-08-02)
+
+Point d'entrée : routine calling-feature (agent Cowork non interactif, mandat PHASE 1-12). Branche
+`claude/modest-cori-pddnvp`, à jour sur `origin/main` au démarrage. PR #2470 (Vague 47, suppression du
+dead code Swift `handleRemoteReject`) trouvée ouverte avec CI encore `pending` — pas touchée, sur une
+branche distincte. PR #2458 (parité anon-disconnect, Vague 44/45) confirmée mergée.
+
+- **[MOYEN, web, CONFIRMÉ + CORRIGÉ, TDD]** `pendingRetry` (`call-store.ts:55`, `Record<conversationId,
+  PendingCallRetry>`) n'était écrit que par `offerCallRetry` (posé sur un `call:ended` transitoire —
+  `failed`/`connectionLost`, `CallManager.tsx:430`) et lu/consommé par `useCallRetryToast` **uniquement
+  quand l'utilisateur navigue vers CETTE conversation précise**. `reset()` préserve délibérément la map
+  (commentaire explicite `call-store.ts:562`). Aucun writer ne purgeait une entrée parce qu'un **nouvel
+  appel indépendant sur la même conversation** s'était depuis résolu — `handleCallEnded` ne touchait
+  `pendingRetry` que sur la branche `isRetryableCallFailure(event.reason)`, jamais sur l'`else` implicite.
+  La note « Reste ouvert » de la Vague 41 affirmait qu'un nouvel appel réussi purgeait l'entrée « via les
+  writers existants » — assertion non vérifiée : `grep pendingRetry` sur tout `apps/web` ne montre aucun
+  tel writer.
+- **Impact concret** : A et B en appel sur la conversation Z, coupure réseau → `pendingRetry[Z]` posée
+  pendant que A navigue ailleurs (le toast ne s'affiche donc jamais). B rappelle A sur Z ; A décroche via
+  le CallManager global (monté à `app/layout.tsx`, indépendant de la conversation affichée), l'appel se
+  déroule normalement et se termine `completed` — `pendingRetry[Z]` reste intacte, `isRetryableCallFailure`
+  étant faux sur cette branche. Des jours plus tard, A ouvre enfin la conversation Z : `useCallRetryToast`
+  déclenche un toast « Réessayer ? » pour un échec déjà résolu par un vrai appel réussi entre-temps, dont
+  l'action lance un nouvel appel sortant non sollicité.
+- **Fix** : `handleCallEnded` (`CallManager.tsx:401`) lit désormais `currentCall`/`clearCallRetry` dans
+  tous les cas (pas seulement la branche retryable) ; sur un motif NON transitoire
+  (`completed`/`rejected`/`missed`/`heartbeatTimeout`/`garbageCollected`), il appelle
+  `clearCallRetry(currentCall.conversationId)` — no-op si aucune entrée pour cette conversation
+  (`call-store.ts:522`), donc sans risque sur le chemin déjà couvert. La garde `!waitingCall` existante est
+  conservée pour les deux branches (promotion d'appel en attente : ni offre ni purge, comportement
+  inchangé).
+- **Tests TDD** : RED confirmé (2 nouveaux cas dans `CallManager.callEndedRetry.test.tsx` — l'entrée
+  périmée survivait avant le fix) puis GREEN. Nouveau cas 1 : une offre posée pour `Z`, puis un `call:ended
+  completed` sur `Z` → `pendingRetry` vide. Nouveau cas 2 (isolation) : une offre posée pour une conversation
+  **différente** → intacte après le même `call:ended completed` sur `Z`. Suite calling complète web
+  (`jest --testPathPatterns call`) : 35/35 suites, 374/374 tests verts. `tsc --noEmit` : aucune nouvelle
+  erreur introduite dans les fichiers touchés (bruit préexistant ailleurs, `packages/shared` non buildé
+  dans ce sandbox — non lié).
+- **iOS/Android (lecture seule, aucun changement)** : hors périmètre (aucune toolchain Swift/Kotlin dans ce
+  sandbox) ; changement strictement web (`CallManager.tsx`, tests).
+- **Reste ouvert (inchangé)** : dead code Swift `CallManager.handleRemoteReject` (PR #2470, CI en cours) ;
+  God-objects `CallManager.swift`/`CallEventsHandler.ts` ; parité iOS/Android retry-on-failure.
