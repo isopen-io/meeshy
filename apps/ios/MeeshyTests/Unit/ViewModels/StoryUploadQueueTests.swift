@@ -20,6 +20,10 @@ final class StoryUploadQueueTests: XCTestCase {
     private var mockAPI: MockAPIClientForApp!
     private var defaultsSuiteName: String!
     private var defaults: UserDefaults!
+    /// Brouillons — magasin TEMPORAIRE injecté, jamais le singleton `.shared`
+    /// (base réelle du sandbox app, cf. `StoryDraftsViewModelTests`).
+    private var draftStore: StoryDraftStore!
+    private var draftStoreRoot: URL!
 
     override func setUp() async throws {
         try await super.setUp()
@@ -40,12 +44,20 @@ final class StoryUploadQueueTests: XCTestCase {
         mockAPI = MockAPIClientForApp()
         mockAPI.authToken = "token"
         mockPostService.createStoryResult = .success(Self.makeStoryAPIPost())
+        draftStoreRoot = FileManager.default.temporaryDirectory
+            .appendingPathComponent("StoryUploadQueueTests-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: draftStoreRoot, withIntermediateDirectories: true)
+        draftStore = StoryDraftStore(
+            dbPath: draftStoreRoot.appendingPathComponent("drafts.sqlite").path,
+            mediaDirectory: draftStoreRoot.appendingPathComponent("media")
+        )
         sut = StoryViewModel(
             storyService: mockStoryService,
             postService: mockPostService,
             socialSocket: mockSocket,
             api: mockAPI,
-            visibilityStore: StoryVisibilityPreferenceStore(defaults: defaults)
+            visibilityStore: StoryVisibilityPreferenceStore(defaults: defaults),
+            draftStore: draftStore
         )
     }
 
@@ -62,6 +74,9 @@ final class StoryUploadQueueTests: XCTestCase {
         mockPostService = nil
         mockSocket = nil
         mockAPI = nil
+        draftStore = nil
+        if let draftStoreRoot { try? FileManager.default.removeItem(at: draftStoreRoot) }
+        draftStoreRoot = nil
         try await super.tearDown()
     }
 
@@ -485,12 +500,122 @@ final class StoryUploadQueueTests: XCTestCase {
                        "Éditer une story ne redéfinit pas le défaut des NOUVELLES stories")
     }
 
+    // MARK: - Cycle de vie du brouillon gelé (directive 2026-08-02)
+    //
+    // Le composer gèle son brouillon au hand-off (`pendingPublishAt`, cf.
+    // MeeshySDK) au lieu de le détruire. Ces tests couvrent les trois
+    // consommateurs app-side qui lèvent ce gel : le succès online (le SEUL
+    // qui efface le brouillon), l'annulation (dégel SANS erreur) et
+    // l'édition (succès efface, échec ramène éditable avec son erreur).
+
+    private func seedFrozenDraft(id: String) {
+        draftStore.save(draftId: id, slides: [StorySlide()], visibility: "PUBLIC")
+        draftStore.markPendingPublish(draftId: id)
+    }
+
+    func test_uploadSucceeds_deletesTheFrozenDraft() async {
+        let draftId = "frozen-\(UUID().uuidString)"
+        seedFrozenDraft(id: draftId)
+
+        publish(draftId: draftId)
+
+        await waitUntil("la story est publiée") { [self] in sut.activeUploads.isEmpty }
+        XCTAssertNil(draftStore.load(draftId: draftId),
+                     "Le succès serveur CONFIRMÉ est le seul événement qui efface le brouillon gelé")
+    }
+
+    func test_persistPublishIntentToQueue_propagatesDraftIdToTheQueueItem() async {
+        let draftId = "propagated-\(UUID().uuidString)"
+        seedFrozenDraft(id: draftId)
+        // La story reste en vol assez longtemps pour inspecter la queue.
+        mockPostService.createStoryHangs = true
+
+        publish(draftId: draftId)
+
+        await waitUntil("l'intent write-ahead est persisté") { [self] in
+            await !StoryPublishQueue.shared.pendingItems.isEmpty
+        }
+        let items = await StoryPublishQueue.shared.pendingItems
+        XCTAssertEqual(items.first?.draftId, draftId,
+                       "Le draftId doit voyager jusqu'à l'item persisté — sinon succès/échec ne savent plus quel brouillon lever")
+    }
+
+    func test_cancelUpload_dethawsTheDraftWithoutRecordingAnError() async {
+        let draftId = "cancelled-\(UUID().uuidString)"
+        seedFrozenDraft(id: draftId)
+        mockPostService.createStoryHangs = true
+        let before = mockPostService.createStoryCallCount
+        publish(draftId: draftId)
+        await waitUntil("l'upload est en vol") { [self] in
+            mockPostService.createStoryCallCount - before == 1
+        }
+        let uploadId = try! XCTUnwrap(sut.activeUploads.first?.id)
+
+        sut.cancelUpload(id: uploadId)
+
+        let stored = try! XCTUnwrap(draftStore.load(draftId: draftId),
+                                    "L'annulation ne détruit pas le brouillon — il redevient un brouillon normal")
+        XCTAssertNil(stored.pendingPublishAt, "Dégelé : à nouveau visible/éditable dans les reprises")
+        XCTAssertNil(stored.lastPublishError, "Aucune erreur fabriquée — l'utilisateur a juste changé d'avis")
+    }
+
+    func test_updateStoryInBackground_success_deletesTheFrozenDraft() async {
+        let draftId = "edit-success-\(UUID().uuidString)"
+        seedFrozenDraft(id: draftId)
+        mockPostService.createResult = .success(Self.makeStoryAPIPost())
+
+        _ = sut.updateStoryInBackground(
+            edit: StoryViewModel.StoryEditContext(
+                postId: "post-1", originalMediaIds: [],
+                originalBackgroundMediaId: nil, hydratedBackgroundImage: nil
+            ),
+            slides: [StorySlide()],
+            slideImages: [:],
+            loadedImages: [:],
+            loadedVideoURLs: [:],
+            draftId: draftId
+        )
+
+        await waitUntil("le brouillon d'édition est supprimé") { [self] in
+            draftStore.load(draftId: draftId) == nil
+        }
+        XCTAssertEqual(mockPostService.updateCallCount, 1,
+                       "Précondition : la suppression suit bien un succès serveur, pas un raccourci")
+    }
+
+    func test_updateStoryInBackground_failure_recordsErrorAndDethawsTheDraft() async {
+        let draftId = "edit-failure-\(UUID().uuidString)"
+        seedFrozenDraft(id: draftId)
+        mockPostService.createResult = .failure(URLError(.notConnectedToInternet))
+
+        _ = sut.updateStoryInBackground(
+            edit: StoryViewModel.StoryEditContext(
+                postId: "post-1", originalMediaIds: [],
+                originalBackgroundMediaId: nil, hydratedBackgroundImage: nil
+            ),
+            slides: [StorySlide()],
+            slideImages: [:],
+            loadedImages: [:],
+            loadedVideoURLs: [:],
+            draftId: draftId
+        )
+
+        await waitUntil("l'échec est consommé") { [self] in
+            draftStore.load(draftId: draftId)?.lastPublishError != nil
+        }
+        let stored = try! XCTUnwrap(draftStore.load(draftId: draftId))
+        XCTAssertNil(stored.pendingPublishAt,
+                     "L'édition ne passe pas par la file de retry : l'échec est PERMANENT, le brouillon est dégelé")
+        XCTAssertNotNil(stored.lastPublishError, "L'erreur reste affichable jusqu'à la prochaine tentative")
+    }
+
     // MARK: - Helpers
 
     private func publish(
         slides: [StorySlide] = [StorySlide()],
         slideImages: [UIImage] = [],
-        visibility: String = PostVisibility.friends.rawValue
+        visibility: String = PostVisibility.friends.rawValue,
+        draftId: String? = nil
     ) {
         var images: [String: UIImage] = [:]
         for (idx, image) in slideImages.enumerated() where idx < slides.count {
@@ -501,7 +626,8 @@ final class StoryUploadQueueTests: XCTestCase {
             slideImages: images,
             loadedImages: [:],
             loadedVideoURLs: [:],
-            visibility: visibility
+            visibility: visibility,
+            draftId: draftId
         )
     }
 

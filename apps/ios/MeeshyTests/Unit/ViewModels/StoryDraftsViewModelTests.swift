@@ -61,6 +61,42 @@ final class StoryDraftsViewModelTests: XCTestCase {
         XCTAssertEqual(sut.drafts.map(\.id), [draftId])
     }
 
+    /// Directive 2026-08-02 : un brouillon GELÉ (publication en cours,
+    /// `pendingPublishAt` non nil) ne doit apparaître dans AUCUNE liste de
+    /// reprise — la rouvrir en édition pendant qu'elle voyage vers le serveur
+    /// corromprait le brouillon que le succès/l'échec s'apprête à consommer.
+    func test_reload_excludesDraftsFrozenForAPendingPublish() {
+        let store = makeStore()
+        let editableId = seedDraft(in: store)
+        let frozenId = seedDraft(in: store)
+        store.markPendingPublish(draftId: frozenId)
+        let sut = StoryDraftsViewModel(store: store, observeForeground: false)
+
+        sut.reload()
+
+        XCTAssertEqual(sut.drafts.map(\.id), [editableId],
+                       "Le brouillon gelé reste en magasin (le store l'expose toujours) mais disparaît de CETTE liste")
+        XCTAssertEqual(store.listDrafts().map(\.id).sorted(), [editableId, frozenId].sorted(),
+                       "Le store, lui, continue de rapporter les DEUX — c'est un filtre UI, pas une suppression")
+    }
+
+    /// Un échec PERMANENT lève `pendingPublishAt` (`recordPublishFailure`) :
+    /// le brouillon redevient éditable et doit réapparaître dans la liste.
+    func test_reload_includesADraftAfterItsPendingPublishWasLifted() {
+        let store = makeStore()
+        let draftId = seedDraft(in: store)
+        store.markPendingPublish(draftId: draftId)
+        let sut = StoryDraftsViewModel(store: store, observeForeground: false)
+        sut.reload()
+        XCTAssertTrue(sut.drafts.isEmpty, "Précondition : gelé, donc absent")
+
+        store.recordPublishFailure(draftId: draftId, message: "Serveur injoignable")
+        sut.reload()
+
+        XCTAssertEqual(sut.drafts.map(\.id), [draftId],
+                       "Échec permanent → dégelé → de nouveau proposé à la reprise")
+    }
+
     // MARK: - Retour en avant-plan
 
     func test_foregroundNotification_reloadsDrafts() {
