@@ -118,6 +118,8 @@ final class HardcodedStringsSweepTests: XCTestCase {
         "story.timeline.inspector.volume.automation.caption",
         "story.timeline.inspector.volume.removePoint",
         "voiceProfile.recording.languagePicker",
+        "story.voiceRecorder.fromFiles",
+        "story.voiceRecorder.fromLibrary",
         "media.video.play",
         "community.settings.color",
     ]

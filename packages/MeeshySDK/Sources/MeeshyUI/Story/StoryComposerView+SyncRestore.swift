@@ -72,6 +72,10 @@ extension StoryComposerView {
         // `dismiss()` de la vue app) : le remettre à plat ici garantit qu'il ne
         // survit pas à un reset, quel que soit celui qui a fermé en dernier.
         showCameraCapture = false
+        // Porte différée des chips de la feuille recorder : un reset pendant
+        // qu'un follow-up est en attente ne doit pas rouvrir une sheet fantôme
+        // à la prochaine fermeture de la feuille.
+        recorderFollowUp = nil
     }
 
     func restoreCanvas(from slide: StorySlide) {
