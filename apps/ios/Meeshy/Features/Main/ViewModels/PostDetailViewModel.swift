@@ -895,6 +895,24 @@ class PostDetailViewModel: ObservableObject {
         subscribedPostId = postId
         socketCancellables.removeAll()
 
+        // --- didReconnect → backfill du post + commentaires ---
+        // `SocialSocketManager` re-joint la room du post au `.connect` (le flux
+        // VIVANT reprend), mais les événements émis PENDANT la coupure restent
+        // irréconciliés. Refetch le post (compteurs absolus) + la page 1 des
+        // commentaires ; la dédup par id de `fetchCommentsFromNetwork` rend
+        // l'append idempotent — ne JAMAIS vider `comments` ici (flash-vide).
+        socialSocket.didReconnect
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] in
+                guard let self else { return }
+                Task {
+                    await self.refreshPost(postId)
+                    self.commentCursor = nil
+                    await self.fetchCommentsFromNetwork(postId, cacheKey: "post-\(postId)")
+                }
+            }
+            .store(in: &socketCancellables)
+
         // Le détail écoutait les commentaires, leurs réactions et les
         // traductions — mais PAS le like du post lui-même. Un like posé depuis
         // le feed, depuis le pager de réels ou par un autre utilisateur
