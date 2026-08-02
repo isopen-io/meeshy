@@ -322,6 +322,8 @@ export class MeeshySocketIOManager {
       // call:ended fanout instead of leaving the other party's UI "in call".
       broadcastCallParticipantLeft: (opts) =>
         this.callEventsHandler.broadcastParticipantLeftResult({ io: this.io as SocketIOServer, ...opts }),
+      forceCleanupCallParticipant: (opts) =>
+        this.callEventsHandler.forceCleanupParticipationAfterLeaveFailure({ io: this.io as SocketIOServer, ...opts }),
     });
 
     this.adminAgentHandler = new AdminAgentHandler({

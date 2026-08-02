@@ -45,6 +45,20 @@ export interface AuthHandlerDependencies {
     participation: DisconnectParticipation;
     userId: string;
   }) => Promise<void>;
+  /**
+   * CALL-RESILIENCE — force-cleanup fallback when `leaveCall` rejects for one
+   * of the participations below, curried down to
+   * `CallEventsHandler.forceCleanupParticipationAfterLeaveFailure`. The
+   * registered-user path already had this fallback (a failed leave stamps
+   * `leftAt` directly and force-ends the session); this anonymous path only
+   * logged, so a guest whose leave hit a DB error stayed a zombie participant
+   * until the ~120s GC. Optional, same rationale as the callback above.
+   */
+  forceCleanupCallParticipant?: (opts: {
+    participation: DisconnectParticipation;
+    userId: string;
+    leaveError: unknown;
+  }) => Promise<void>;
 }
 
 export class AuthHandler {
@@ -57,6 +71,7 @@ export class AuthHandler {
   private userSockets: Map<string, Set<string>>;
   private emitPresenceSnapshot?: (socket: Socket, userId: string, isAnonymous: boolean) => Promise<void>;
   private broadcastCallParticipantLeft?: AuthHandlerDependencies['broadcastCallParticipantLeft'];
+  private forceCleanupCallParticipant?: AuthHandlerDependencies['forceCleanupCallParticipant'];
 
   constructor(deps: AuthHandlerDependencies) {
     this.prisma = deps.prisma;
@@ -68,6 +83,7 @@ export class AuthHandler {
     this.userSockets = deps.userSockets;
     this.emitPresenceSnapshot = deps.emitPresenceSnapshot;
     this.broadcastCallParticipantLeft = deps.broadcastCallParticipantLeft;
+    this.forceCleanupCallParticipant = deps.forceCleanupCallParticipant;
   }
 
   async handleTokenAuthentication(socket: Socket): Promise<void> {
@@ -433,6 +449,22 @@ export class AuthHandler {
             });
           } catch (error) {
             logger.error('error auto-leaving call on disconnect', { callId: participation.callSessionId, error });
+            // Parity with the registered-user path: a rejected leaveCall used
+            // to leave this participation open until the ~120s GC. The
+            // fallback itself never rejects, but a missing/failing injection
+            // must not abort the loop over the remaining participations.
+            try {
+              await this.forceCleanupCallParticipant?.({
+                participation: participation as unknown as DisconnectParticipation,
+                userId: userIdOrToken,
+                leaveError: error
+              });
+            } catch (forceError) {
+              logger.error('force cleanup failed after leaveCall error on disconnect', {
+                callId: participation.callSessionId,
+                error: forceError
+              });
+            }
           }
         }
       } catch (error) {
