@@ -353,8 +353,11 @@ describe('registerMessagesAdvancedRoutes', () => {
       const oldDate = new Date(Date.now() - 25 * 60 * 60 * 1000); // 25 hours ago
       prisma.message.findFirst.mockResolvedValue(makeExistingMessage({
         createdAt: oldDate,
-        sender: { id: PART_ID, userId: USER_ID, role: 'USER' },
+        // Realistic Participant.role (never a global-role constant).
+        sender: { id: PART_ID, userId: USER_ID, role: 'member' },
       }));
+      // Bypass keys on the author's GLOBAL role (User.role), not the participant role.
+      prisma.user.findUnique.mockResolvedValue({ role: 'USER' });
 
       const req = makeRequest({
         params: { id: CONV_ID, messageId: MSG_ID },
@@ -370,12 +373,14 @@ describe('registerMessagesAdvancedRoutes', () => {
       );
     });
 
-    it('allows edit when author is MODERATOR and 24h limit exceeded', async () => {
+    it('allows edit when author is a global MODERATOR and 24h limit exceeded', async () => {
       const oldDate = new Date(Date.now() - 25 * 60 * 60 * 1000);
       prisma.message.findFirst.mockResolvedValue(makeExistingMessage({
         createdAt: oldDate,
-        sender: { id: PART_ID, userId: USER_ID, role: 'MODERATOR' },
+        // Realistic: merely a "member" of this conversation; privilege is global.
+        sender: { id: PART_ID, userId: USER_ID, role: 'member' },
       }));
+      prisma.user.findUnique.mockResolvedValue({ role: 'MODERATOR' });
       prisma.message.update.mockResolvedValue({
         id: MSG_ID,
         content: 'New content',
@@ -395,12 +400,13 @@ describe('registerMessagesAdvancedRoutes', () => {
       expect(mockSendSuccess).toHaveBeenCalled();
     });
 
-    it('allows edit when author is ADMIN and 24h limit exceeded', async () => {
+    it('allows edit when author is a global ADMIN and 24h limit exceeded', async () => {
       const oldDate = new Date(Date.now() - 25 * 60 * 60 * 1000);
       prisma.message.findFirst.mockResolvedValue(makeExistingMessage({
         createdAt: oldDate,
-        sender: { id: PART_ID, userId: USER_ID, role: 'ADMIN' },
+        sender: { id: PART_ID, userId: USER_ID, role: 'member' },
       }));
+      prisma.user.findUnique.mockResolvedValue({ role: 'ADMIN' });
       prisma.message.update.mockResolvedValue({
         id: MSG_ID,
         content: 'New content',
