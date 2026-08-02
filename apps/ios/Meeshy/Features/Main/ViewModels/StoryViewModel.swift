@@ -1930,9 +1930,19 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
                     guard !Task.isCancelled else { return newPostIds }
                     let obj = audioObjects[i]
                     guard let audioURL = upload.loadedAudioURLs[obj.id] ?? upload.loadedVideoURLs[obj.id] else {
-                        os.Logger.storyAudio.error(
-                            "publish audio URL missing audioId=\(obj.id, privacy: .public) — clip will be uploaded but unplayable (postMediaId stays empty)"
-                        )
+                        // Son EMPRUNTÉ à la bibliothèque : aucun fichier local à
+                        // uploader, c'est ATTENDU — le clip reste servi par son
+                        // `mediaURL` serveur (repli du reader), `postMediaId`
+                        // vide par contrat. Ne pas crier au média perdu.
+                        if obj.soundId != nil, obj.mediaURL?.isEmpty == false {
+                            os.Logger.storyAudio.info(
+                                "publish audio borrowed from library audioId=\(obj.id, privacy: .public) soundId=\(obj.soundId ?? "", privacy: .public) — served by mediaURL, nothing to upload"
+                            )
+                        } else {
+                            os.Logger.storyAudio.error(
+                                "publish audio URL missing audioId=\(obj.id, privacy: .public) — clip will be uploaded but unplayable (postMediaId stays empty)"
+                            )
+                        }
                         continue
                     }
                     let result = try await uploader.uploadFile(
