@@ -1250,6 +1250,17 @@ extension StoryComposerView {
     /// Bindings vers chaque vidéo foreground (`isBackground == false`, kind
     /// `.video`) de la slide courante — pour le bouton mute. Écrit en retour
     /// dans `viewModel.currentEffects`, ce qui resync la slide et l'aperçu.
+    /// Index de la vidéo de FOND, s'il y en a une.
+    ///
+    /// Pure et statique : la décision se teste sans monter la vue (même patron
+    /// que `presentedCameraCapture(isRequested:provider:)`). Rend le PREMIER
+    /// fond vidéo et non un tableau — le modèle ne contraint pas l'unicité du
+    /// fond, et deux bindings poseraient deux boutons superposés au même coin
+    /// du canvas.
+    nonisolated static func backgroundVideoIndex(in medias: [StoryMediaObject]) -> Int? {
+        medias.firstIndex { $0.isBackground && $0.kind == .video }
+    }
+
     var foregroundVideoBindings: [Binding<StoryMediaObject>] {
         let medias = viewModel.currentEffects.mediaObjects ?? []
         return medias.enumerated().compactMap { idx, obj -> Binding<StoryMediaObject>? in
