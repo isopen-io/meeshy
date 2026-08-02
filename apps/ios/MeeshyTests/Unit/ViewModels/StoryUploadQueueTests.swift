@@ -421,6 +421,16 @@ final class StoryUploadQueueTests: XCTestCase {
     /// preuve sans ce test — et un nettoyage silencieusement cassé rend les
     /// résidus VISIBLES dans l'app au lancement suivant.
     func test_purge_leavesNoPendingStoryInTheTrayCache() async {
+        // `insertOptimisticOfflineStories` garde sur `AuthManager.currentUser`.
+        // Sur le simulateur CI fraîchement provisionné il n'existe JAMAIS de
+        // session keychain — sans seed, la précondition est structurellement
+        // infaisable (le vert local vient de la session que la phase 3 du gate
+        // laisse derrière elle). Même idiome seed/restore que
+        // StoryViewModelTests.
+        let previousUser = AuthManager.shared.currentUser
+        defer { AuthManager.shared.currentUser = previousUser }
+        AuthManager.shared.currentUser = MeeshyUser(id: "me-id", username: "me", displayName: "Moi")
+
         let slide = StorySlide()
         await sut.enqueueStoryForOfflinePublish(
             slides: [slide],
