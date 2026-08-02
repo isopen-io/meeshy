@@ -8,12 +8,17 @@ final class ReelsViewModelTests: XCTestCase {
     // MARK: - Factory
 
     private func makeSUT(
-        cachedReels: [FeedPost] = []
+        cachedReels: [FeedPost] = [],
+        postDeletedEvents: PassthroughSubject<String, Never> = PassthroughSubject()
     ) -> (sut: ReelsViewModel, service: MockPostService, cache: MockReelFeedCache) {
         let service = MockPostService()
         let cache = MockReelFeedCache()
         cache.cachedFeedResult = cachedReels
-        let sut = ReelsViewModel(service: service, cache: cache)
+        let sut = ReelsViewModel(
+            service: service,
+            cache: cache,
+            postDeletedEvents: postDeletedEvents.eraseToAnyPublisher()
+        )
         return (sut, service, cache)
     }
 
