@@ -1013,8 +1013,9 @@ struct StoryCardView: View {
     /// jusqu'à la leaf view, comme `storyHasAudibleSound` juste au-dessus.
     let storyHasBackgroundAudio: Bool
     /// Contenu à droite de la note (crédit défilant d'un son de bibliothèque
-    /// ou onde d'une piste propre) — même règle de descente en primitive.
-    let headerBackgroundAudioDisplay: AudioChipDisplay
+    /// ou onde d'une piste propre) + fenêtre du fond qui arme le compteur de
+    /// temps restant — même règle de descente en primitive Equatable.
+    let headerBackgroundAudioDisplay: AudioChipHeaderModel
     /// Présence d'une transcription affichable — pilote l'entrée « Transcription »
     /// du menu « … ». Même règle de descente en primitive que ci-dessus.
     let storyHasAudioTranscript: Bool

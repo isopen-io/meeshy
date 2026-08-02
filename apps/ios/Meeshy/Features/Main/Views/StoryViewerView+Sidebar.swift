@@ -664,8 +664,9 @@ struct StoryHeaderView: View {
     /// une leaf view ne recalcule pas d'état viewer, elle reçoit un `Bool`).
     let hasBackgroundAudio: Bool
     /// Ce qui suit la note : crédit défilant (son de bibliothèque) ou onde
-    /// (piste propre). Résolu par le parent — même règle Equatable/primitives.
-    let headerAudioDisplay: AudioChipDisplay
+    /// (piste propre), plus la fenêtre du fond qui arme le compteur de temps
+    /// restant. Résolu par le parent — même règle Equatable/primitives.
+    let headerAudioDisplay: AudioChipHeaderModel
     /// La story porte-t-elle une transcription affichable ? Primitive, même
     /// règle : le header ne consulte pas les `StoryEffects` lui-même.
     let hasAudioTranscript: Bool
@@ -885,13 +886,24 @@ struct StoryHeaderView: View {
                                         // masque déjà tout le chrome, header compris.
                                         //
                                         // Son de BIBLIOTHÈQUE → crédit défilant
-                                        // « titre · @pseudo » à la place de l'onde ;
-                                        // piste propre → onde, comme toujours
-                                        // (directive user 2026-08-02).
-                                        switch headerAudioDisplay {
+                                        // « titre · @pseudo · M:SS » à la place de
+                                        // l'onde — le temps restant du fond défile
+                                        // AVEC le texte ; piste propre → onde, comme
+                                        // toujours (directive user 2026-08-02).
+                                        // Hauteur/police passées à l'atome (14/11) au
+                                        // lieu d'écraser son ancien 18 interne ; le
+                                        // compteur observe le playhead DANS l'atome,
+                                        // jamais ici (doctrine du commentaire
+                                        // ci-dessus). Pas de `paused` : le long-press
+                                        // qui met en pause masque tout le chrome, et
+                                        // le temps gèle déjà via le playhead.
+                                        switch headerAudioDisplay.display {
                                         case .marquee(let text):
-                                            AudioChipMarquee(text: text)
-                                                .frame(width: 116, height: 14)
+                                            AudioChipMarquee(text: text,
+                                                             window: headerAudioDisplay.window,
+                                                             height: 14,
+                                                             fontSize: 11)
+                                                .frame(width: 124)
                                                 .opacity(0.85)
                                         case .waveform:
                                             StoryHeaderAudioWaveform()
