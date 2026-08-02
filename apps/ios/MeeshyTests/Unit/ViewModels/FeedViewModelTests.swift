@@ -1745,15 +1745,26 @@ final class FeedViewModelTests: XCTestCase {
         await sut.likePost("post-1")
         // Poll au lieu d'un sleep fixe : le save débouncé part à 2 s, une
         // marge de 0,2 s flake sous simulateur chargé (cache encore vide).
+        //
+        // Poll sur l'ENSEMBLE attendu, pas sur le compte : le store est un
+        // singleton partagé, et le save débouncé d'un test VOISIN (SUT déjà
+        // mort, débounce encore armé) peut atterrir APRÈS notre invalidate.
+        // Dans ce cas on ré-arme NOTRE save pour repasser dernier écrivain —
+        // l'assertion reste celle du comportement (prefix(100) app-side).
         var cached: [FeedPost] = []
-        let deadline = Date().addingTimeInterval(6)
-        while Date() < deadline {
-            cached = (await CacheCoordinator.shared.feed.load(for: "main-feed")).snapshot() ?? []
-            if cached.count == 100 { break }
-            try? await Task.sleep(for: .milliseconds(100))
+        let expected = Set((1...100).map { "post-\($0)" })
+        for attempt in 0 ..< 2 {
+            let deadline = Date().addingTimeInterval(6)
+            while Date() < deadline {
+                cached = (await CacheCoordinator.shared.feed.load(for: "main-feed")).snapshot() ?? []
+                if Set(cached.map(\.id)) == expected { break }
+                try? await Task.sleep(for: .milliseconds(100))
+            }
+            if Set(cached.map(\.id)) == expected { break }
+            await sut.likePost("post-\(attempt + 2)")
         }
         XCTAssertEqual(
-            Set(cached.map(\.id)), Set((1...100).map { "post-\($0)" }),
+            Set(cached.map(\.id)), expected,
             "GRDBCacheStore.save trimme par suffix (les plus ANCIENS survivent) : sans prefix(100) app-side, kill+relaunch dans la fenêtre fraîche sert la tranche la plus vieille en .fresh — les posts récents disparaissent de l'écran"
         )
     }
