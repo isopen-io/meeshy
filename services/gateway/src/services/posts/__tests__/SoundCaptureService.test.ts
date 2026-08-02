@@ -93,6 +93,42 @@ describe('SoundCaptureService', () => {
     expect(prisma.sound.create).not.toHaveBeenCalled();
   });
 
+  // MARK: - Forme d'onde (Sound.waveform n'avait aucun écrivain)
+
+  it('test_captureWritesWaveformOnCreatedSound', async () => {
+    const media = await seedMedia('m1');
+    const prisma = buildPrisma({
+      postMedia: { findMany: jest.fn<() => Promise<unknown[]>>().mockResolvedValue([media]) },
+    });
+    await new SoundCaptureService(prisma, soundsDir, uploadsRoot).captureSounds({
+      postId: 'p1', authorId: 'u1', feedsLibrary: true,
+      tracks: [{ trackId: 't1', postMediaId: 'm1', waveform: [0.1, 0.7, 0.3] }],
+    });
+    expect(prisma.sound.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ waveform: [0.1, 0.7, 0.3] }),
+      }),
+    );
+  });
+
+  it('test_captureWithoutWaveform_writesEmptyArray', async () => {
+    // `Float[]` n'est pas nullable en Prisma : l'absence s'écrit `[]`, ce que
+    // sert déjà toute la bibliothèque existante. Aucun changement de
+    // comportement pour une piste sans échantillons — c'est la garde de
+    // non-régression.
+    const media = await seedMedia('m2');
+    const prisma = buildPrisma({
+      postMedia: { findMany: jest.fn<() => Promise<unknown[]>>().mockResolvedValue([media]) },
+    });
+    await new SoundCaptureService(prisma, soundsDir, uploadsRoot).captureSounds({
+      postId: 'p1', authorId: 'u1', feedsLibrary: true,
+      tracks: [{ trackId: 't1', postMediaId: 'm2' }],
+    });
+    expect(prisma.sound.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ waveform: [] }) }),
+    );
+  });
+
   it('test_captureSounds_becomingPrivate_releasesItsUsages', async () => {
     // Publier puis restreindre doit LIBÉRER : sinon le compteur qui trie la
     // découverte reste gonflé pour toujours.
