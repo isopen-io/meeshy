@@ -3266,3 +3266,17 @@ Candidat « scopé et mécanique » consigné en Vague 45, traité tel quel :
 - **Reste ouvert (inchangé)** : dead code Swift `CallManager.handleRemoteReject` ;
   God-objects `CallManager.swift`/`CallEventsHandler.ts` ; parité iOS/Android
   retry-on-failure.
+
+## Vague 47 — code mort `CallManager.handleRemoteReject` supprimé (2026-08-02)
+
+Consigné « Reste ouvert » depuis la Vague 43. Vérifié avant suppression :
+zéro appelant dans l'app et le SDK ; aucun événement `call:rejected` n'existe
+(ni dans `packages/shared/types/video-call.ts`, ni au gateway) — le signal de
+refus voyage dans `call:ended` avec `rawReason: rejected|declined`, que
+`handleRemoteEnd` route via `CallEndReasonMapper` vers EXACTEMENT le même
+comportement (`.declinedElsewhere` CallKit + `endCallInternal(.rejected)`).
+Aucune garde de source n'ancrait ses fenêtres sur cette fonction (les
+anciennes gardes fragiles de `handleRemoteEnd` avaient déjà été remplacées
+par `CallEndReasonMapperTests`, comportementales).
+- **Reste ouvert (inchangé)** : God-objects `CallManager.swift`/
+  `CallEventsHandler.ts` ; parité iOS/Android retry-on-failure.
