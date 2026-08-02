@@ -143,6 +143,34 @@ final class StoryResumeFailedItemTests: XCTestCase {
         )
     }
 
+    // MARK: - Fidélité d'audience et de langue
+
+    func test_resumeFailedItem_success_preservesAudienceAndLanguage() async throws {
+        let sut = makeSUT()
+        let store = makeDraftStore()
+        let item = StoryPublishQueueItem(
+            visibility: "ONLY",
+            slidesPayload: try makeSlidesPayload(),
+            visibilityUserIds: ["u1", "u2"],
+            originalLanguage: "pt"
+        )
+        sut.failedItemDiscarder = { _ in }
+
+        let draftId = await sut.resumeFailedItem(item, draftStore: store)
+
+        let resolvedId = try XCTUnwrap(draftId)
+        let stored = try XCTUnwrap(store.load(draftId: resolvedId))
+        XCTAssertEqual(stored.visibility, "ONLY")
+        XCTAssertEqual(
+            stored.visibilityUserIds, ["u1", "u2"],
+            "La liste « Seulement… » doit survivre à la reprise — sinon le brouillon repris publierait vers personne"
+        )
+        XCTAssertEqual(
+            stored.originalLanguage, "pt",
+            "La langue d'origine (Prisme Linguistique) doit survivre à la reprise"
+        )
+    }
+
     // MARK: - Payload corrompu : item INTACT
 
     func test_resumeFailedItem_corruptPayload_leavesItemIntact() async {

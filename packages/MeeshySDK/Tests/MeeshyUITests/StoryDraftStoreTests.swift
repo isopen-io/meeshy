@@ -53,6 +53,38 @@ final class StoryDraftStoreTests: XCTestCase {
         XCTAssertEqual(result?.visibility, "PRIVATE")
     }
 
+    // MARK: - Audience & Language Fidelity
+
+    func test_save_load_roundtrip_persistsAudienceAndLanguage() {
+        store.save(draftId: draftId, slides: [StorySlide(id: "s1")], visibility: "CUSTOM",
+                   visibilityUserIds: ["u1", "u2"], originalLanguage: "fr")
+
+        let result = store.load(draftId: draftId)
+
+        XCTAssertEqual(result?.visibilityUserIds, ["u1", "u2"])
+        XCTAssertEqual(result?.originalLanguage, "fr")
+    }
+
+    func test_save_withoutAudienceFields_loadsEmptyAndNil() {
+        store.save(draftId: draftId, slides: [StorySlide(id: "s1")], visibility: "PUBLIC")
+
+        let result = store.load(draftId: draftId)
+
+        XCTAssertEqual(result?.visibilityUserIds, [])
+        XCTAssertNil(result?.originalLanguage)
+    }
+
+    func test_save_overwrite_clearsStaleAudienceFields() {
+        store.save(draftId: draftId, slides: [StorySlide(id: "s1")], visibility: "CUSTOM",
+                   visibilityUserIds: ["u1"], originalLanguage: "en")
+        store.save(draftId: draftId, slides: [StorySlide(id: "s1")], visibility: "PUBLIC")
+
+        let result = store.load(draftId: draftId)
+
+        XCTAssertEqual(result?.visibilityUserIds, [])
+        XCTAssertNil(result?.originalLanguage)
+    }
+
     func test_isEmpty_trueWhenEmpty() {
         XCTAssertTrue(store.isEmpty())
     }

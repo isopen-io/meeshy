@@ -139,4 +139,28 @@ final class MyStoryCardPresentationTests: XCTestCase {
             MyStoryCardPresentation.moreActions(for: .draft, capabilities: .init(scheduling: true))
                 .contains(.schedule))
     }
+
+    // MARK: - Indicateur de sélection (suppression en masse)
+
+    func test_selectionIndicator_outsideSelectionMode_isHidden() {
+        XCTAssertEqual(
+            MyStoryCardPresentation.selectionIndicator(isSelecting: false, isSelected: false),
+            .hidden)
+        XCTAssertEqual(
+            MyStoryCardPresentation.selectionIndicator(isSelecting: false, isSelected: true),
+            .hidden,
+            "Hors mode sélection, aucune pastille — même si un id sélectionné traîne dans l'état"
+        )
+    }
+
+    func test_selectionIndicator_inSelectionMode_reflectsMembership() {
+        XCTAssertEqual(
+            MyStoryCardPresentation.selectionIndicator(isSelecting: true, isSelected: false),
+            .unselected,
+            "En mode sélection, CHAQUE carte affiche sa pastille — sinon taper ne change rien de visible"
+        )
+        XCTAssertEqual(
+            MyStoryCardPresentation.selectionIndicator(isSelecting: true, isSelected: true),
+            .selected)
+    }
 }

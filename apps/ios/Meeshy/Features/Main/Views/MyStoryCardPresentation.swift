@@ -89,7 +89,25 @@ struct MyStoriesCapabilities: Equatable {
 
 // MARK: - Règles de présentation
 
+// MARK: - Indicateur de sélection
+
+/// État visuel de la pastille de sélection en mode suppression en masse.
+/// `hidden` hors mode sélection : la pastille n'existe pas, pas même vide.
+enum MyStorySelectionIndicator: Equatable {
+    case hidden
+    case unselected
+    case selected
+}
+
 enum MyStoryCardPresentation {
+
+    /// La grille de « Mes stories » a un mode sélection (`isSelecting`) mais la
+    /// carte n'affichait AUCUN état : taper une carte ne changeait rien de
+    /// visible. Décision pure — testée sans rendre la vue.
+    static func selectionIndicator(isSelecting: Bool, isSelected: Bool) -> MyStorySelectionIndicator {
+        guard isSelecting else { return .hidden }
+        return isSelected ? .selected : .unselected
+    }
 
     /// Une story périmée garde sa vignette, sous un voile gris. La bande de
     /// glyphes en dessous reste NETTE — c'est par elle qu'on consulte encore

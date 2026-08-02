@@ -102,3 +102,36 @@ du `where.id.in`, alors que Prisma **déduplique** un `in`. Corrigé en sommant 
 `source: "status"` répond encore `400` et le batch ne compte encore qu'une
 occurrence par post tant que le gateway n'est pas redéployé. Les clients
 dégradent proprement (échec avalé, aucune UI bloquée).
+
+---
+
+# Dette brouillons/stories — fidélité de reprise + sélection visible (2026-08-02)
+
+## Demande (dette consignée par la session du 2026-08-02)
+1. `resumeFailedItem` ne reporte pas `visibilityUserIds`/`originalLanguage` —
+   le store de brouillons ne modélisait que `visibility`.
+2. Grille « Mes stories » : mode sélection sans AUCUN indicateur visuel sur
+   les cartes.
+
+## Plan
+- [x] T1 SDK — `StoryDraftStore.save/load` : meta `visibilityUserIds` (JSON)
+      + `originalLanguage`, effacement des clés quand la valeur disparaît
+      (+ 3 tests)
+- [x] T2 SDK — `restorableVisibility(stored:userIds:)` : « Seulement…/Sauf… »
+      survit AVEC sa liste ; `restoreDraft()` restaure audience + langue ;
+      les 2 autosaves persistent les nouveaux champs (+ 4 tests)
+- [x] T3 app — `resumeFailedItem` reporte `visibilityUserIds`/`originalLanguage`
+      (+ 1 test)
+- [x] T4 app — `MyStoryCard` : pastille de sélection (vide/cochée) + anneau
+      accent, état décidé par `MyStoryCardPresentation.selectionIndicator`
+      (+ 2 tests + 1 garde de câblage)
+- [x] T5 — vérification : SDK 38/38 verts (StoryDraftStoreTests 23,
+      StoryComposerPublishHandoffTests 15), build-for-testing app OK,
+      app 26/26 verts (Resume 6, Presentation 17, BulkDeleteGuard 3)
+
+## Revue
+Store : clés meta par brouillon, effacées quand la valeur retombe (pas d'état
+fantôme entre autosaves). Restauration : un mode à sélection ne survit
+qu'accompagné de sa liste — sans elle, repli produit inchangé (Contacts).
+La pastille de sélection est décidée par un helper pur
+(MyStoryCardPresentation.selectionIndicator), la vue ne fait que rendre.

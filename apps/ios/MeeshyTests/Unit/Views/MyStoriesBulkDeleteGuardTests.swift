@@ -27,6 +27,19 @@ final class MyStoriesBulkDeleteGuardTests: XCTestCase {
         )
     }
 
+    func test_publishedGrid_passesSelectionStateToEachCard() throws {
+        let viewSource = try source("Meeshy/Features/Main/Views/MyStoriesView.swift")
+
+        XCTAssertTrue(
+            viewSource.contains("isSelecting: isSelecting"),
+            "La grille publiée doit transmettre le mode sélection à chaque carte — sans lui, taper une carte ne change rien de visible."
+        )
+        XCTAssertTrue(
+            viewSource.contains("isSelected: selectedStoryIDs.contains(story.id)"),
+            "L'appartenance au lot se lit sur selectedStoryIDs (le set FILTRÉ aux stories vivantes), pas selectedIDs brut."
+        )
+    }
+
     func test_bulkDelete_reusesExistingDeleteStory_noNewViewModelMethod() throws {
         let viewSource = try source("Meeshy/Features/Main/Views/MyStoriesView.swift")
 
