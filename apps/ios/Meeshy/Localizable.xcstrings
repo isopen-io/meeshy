@@ -79809,53 +79809,6 @@
         }
       }
     },
-    "story.mine.comments.a11y": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "عرض التعليقات"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Kommentare anzeigen"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Show comments"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Mostrar los comentarios"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Afficher les commentaires"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Mostra i commenti"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Mostrar os comentários"
-          }
-        }
-      }
-    },
     "story.mine.comments.error": {
       "extractionState": "manual",
       "localizations": {
@@ -80937,53 +80890,6 @@
         }
       }
     },
-    "story.mine.row.a11y": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%1$@. %2$lld مشاهدة، %3$lld تفاعل، %4$lld تعليق"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%1$@. %2$lld Aufrufe, %3$lld Reaktionen, %4$lld Kommentare"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%1$@. %2$lld views, %3$lld reactions, %4$lld comments"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%1$@. %2$lld visualizaciones, %3$lld reacciones, %4$lld comentarios"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%1$@. %2$lld vues, %3$lld réactions, %4$lld commentaires"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%1$@. %2$lld visualizzazioni, %3$lld reazioni, %4$lld commenti"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%1$@. %2$lld visualizações, %3$lld reações, %4$lld comentários"
-          }
-        }
-      }
-    },
     "story.mine.save.cancel.a11y": {
       "extractionState": "manual",
       "localizations": {
@@ -81502,53 +81408,6 @@
       }
     },
     "story.mine.viewers": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "قائمة المشاهدات"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Aufrufliste"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Views list"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Lista de vistas"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Listing des vues"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Elenco delle visualizzazioni"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Lista de visualizações"
-          }
-        }
-      }
-    },
-    "story.mine.viewers.a11y": {
       "extractionState": "manual",
       "localizations": {
         "ar": {
