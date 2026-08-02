@@ -293,7 +293,7 @@ export class CallService {
     duration: number
   ): void {
     this.notifyReapedCall(callId);
-    this.signalCacheInvalidator?.(callId);
+    this.invalidateSignalCache(callId);
 
     const broadcaster = this.callEndedBroadcaster;
     if (!broadcaster) {
@@ -351,6 +351,23 @@ export class CallService {
   /** Register the callback bridging this service's GC sweeps to CallEventsHandler's signal-session cache eviction. */
   setSignalCacheInvalidationCallback(callback: (callId: string) => void): void {
     this.signalCacheInvalidator = callback;
+  }
+
+  /**
+   * Bug (parité socket, sibling de broadcastCallEndedIfTerminal) — les routes
+   * REST `DELETE /calls/:id` (end) et `.../participants/:pid` (leave)
+   * appellent endCall()/leaveCall() (qui écrivent `CallParticipant.leftAt`)
+   * mais n'invalidaient jamais le cache de session `call:signal` de
+   * `CallEventsHandler` (TTL 2s). Contrairement aux handlers socket
+   * `call:end`/`call:leave`/`call:force-leave`, qui appellent tous
+   * `invalidateSignalSession` juste après un `leaveCall()`/`endCall()`
+   * réussi — inconditionnellement, PAS seulement quand l'appel devient
+   * terminal (un leave de groupe qui continue écrit quand même `leftAt` pour
+   * le partant). Public pour que les routes REST puissent l'appeler
+   * directement, symétrique à `broadcastCallEndedIfTerminal`.
+   */
+  invalidateSignalCache(callId: string): void {
+    this.signalCacheInvalidator?.(callId);
   }
 
   /**
