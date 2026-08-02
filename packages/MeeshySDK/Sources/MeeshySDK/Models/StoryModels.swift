@@ -909,6 +909,12 @@ public struct StoryAudioPlayerObject: Codable, Identifiable, Sendable {
     /// `postMediaId` reste vide dans ce cas — la résolution de l'URL passe par
     /// `mediaURL`, hydratée depuis le DTO du son.
     public var soundId: String?
+    /// @pseudo de l'uploadeur du son EMPRUNTÉ, gravé au moment du choix dans
+    /// la bibliothèque : le reader et l'export lisent un `StorySlide`
+    /// hors-ligne et ne peuvent pas re-résoudre le crédit à l'affichage.
+    /// `nil` pour une piste propre (soundId nil) et pour les stories publiées
+    /// avant ce champ.
+    public var soundAuthorUsername: String?
 
     enum CodingKeys: String, CodingKey {
         case id, postMediaId, mediaURL, placement, x, y, volume, waveformSamples
@@ -920,6 +926,7 @@ public struct StoryAudioPlayerObject: Codable, Identifiable, Sendable {
         // champ n'est alors ni encodé ni décodé — le son emprunté serait perdu
         // à la publication, en silence.
         case soundId
+        case soundAuthorUsername
     }
 
     public init(id: String = UUID().uuidString, postMediaId: String = "",
@@ -934,8 +941,10 @@ public struct StoryAudioPlayerObject: Codable, Identifiable, Sendable {
                 name: String? = nil,
                 keyframes: [StoryKeyframe]? = nil,
                 mediaURL: String? = nil,
-                soundId: String? = nil) {
+                soundId: String? = nil,
+                soundAuthorUsername: String? = nil) {
         self.soundId = soundId
+        self.soundAuthorUsername = soundAuthorUsername
         self.id = id; self.postMediaId = postMediaId
         self.mediaURL = mediaURL
         self.placement = placement; self.x = x; self.y = y

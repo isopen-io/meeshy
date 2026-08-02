@@ -171,9 +171,22 @@ public struct AudioForegroundChip: View {
         HStack(spacing: 8) {
             muteToggleIcon
                 .frame(width: 18, height: 18)
-            AudioForegroundSineWave(paused: isUserMuted)
-                .frame(width: 54, height: 18)
-                .opacity(isUserMuted ? 0.35 : 1.0)
+            // Son de bibliothèque → crédit défilant « titre · @pseudo » ;
+            // piste propre (première publication) → sinusoïde, comme toujours.
+            switch AudioChipDisplay.resolve(
+                soundId: audioObject.soundId,
+                title: audioObject.name,
+                authorUsername: audioObject.soundAuthorUsername
+            ) {
+            case .marquee(let text):
+                AudioChipMarquee(text: text, paused: isUserMuted)
+                    .frame(width: 92, height: 18)
+                    .opacity(isUserMuted ? 0.55 : 1.0)
+            case .waveform:
+                AudioForegroundSineWave(paused: isUserMuted)
+                    .frame(width: 54, height: 18)
+                    .opacity(isUserMuted ? 0.35 : 1.0)
+            }
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)

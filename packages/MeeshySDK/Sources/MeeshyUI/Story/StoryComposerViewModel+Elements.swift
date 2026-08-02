@@ -462,7 +462,8 @@ extension StoryComposerViewModel {
             // compose à l'affichage, dans la langue du lecteur.
             name: sound.hasAuthoredTitle ? sound.title : nil,
             mediaURL: sound.fileUrl,
-            soundId: sound.id
+            soundId: sound.id,
+            soundAuthorUsername: sound.uploader?.username
         )
         var effects = currentEffects
         var audios = effects.audioPlayerObjects ?? []
