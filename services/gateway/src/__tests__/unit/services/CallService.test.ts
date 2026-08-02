@@ -2990,6 +2990,35 @@ describe('CallService - broadcastCallEndedIfTerminal (call:ended sur chemins RES
   });
 });
 
+describe('CallService - invalidateSignalCache (call:signal cache sur chemins REST end/leave)', () => {
+  let callService: CallService;
+  let mockPrisma: ReturnType<typeof createMockPrisma>;
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockPrisma = createMockPrisma();
+    callService = new CallService(mockPrisma as any, new Date(Date.now() - 24 * 60 * 60 * 1000));
+  });
+
+  // Les routes REST end/leave appellent endCall()/leaveCall() (qui écrivent
+  // CallParticipant.leftAt) mais, contrairement aux handlers socket
+  // call:end/call:leave/call:force-leave, n'invalidaient jamais le cache de
+  // session `call:signal` (TTL 2s) de CallEventsHandler — sibling exact du
+  // trou déjà fermé pour call:ended (broadcastCallEndedIfTerminal ci-dessus).
+  it('délègue au callback d’invalidation avec le callId', () => {
+    const invalidated: string[] = [];
+    callService.setSignalCacheInvalidationCallback((callId) => { invalidated.push(callId); });
+
+    callService.invalidateSignalCache('rest-call-1');
+
+    expect(invalidated).toEqual(['rest-call-1']);
+  });
+
+  it('sans callback câblé, ne throw pas (no-op — parité broadcastCallEndedIfTerminal)', () => {
+    expect(() => callService.invalidateSignalCache('no-callback-call')).not.toThrow();
+  });
+});
+
 describe('CallService - initiateCall phantom cleanup & transaction', () => {
   let callService: CallService;
   let mockPrisma: ReturnType<typeof createMockPrisma>;

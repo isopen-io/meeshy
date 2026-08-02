@@ -3186,3 +3186,60 @@ exactement celui laissé de côté par la Vague 43 : « broadcast manquant sur l
 - **Reste ouvert (inchangé)** : dead code Swift `CallManager.handleRemoteReject` ; God-objects
   `CallManager.swift`/`CallEventsHandler.ts` ; parité iOS/Android retry-on-failure ; PR #2428 (iOS) —
   vérifier si toujours ouverte/mergée par un humain depuis la Vague 43.
+
+## Vague 45 — les routes REST end/leave n'invalidaient jamais le cache de session `call:signal` (2026-08-02)
+
+Point d'entrée : routine calling-feature (agent Cowork non interactif, mandat PHASE 1-12). Branche
+`claude/modest-cori-hfo5vo`, déjà à jour sur `origin/main` au démarrage (0 commit de retard une fois le
+cache `origin/main` local rafraîchi). **1 PR ouverte trouvée au démarrage : #2458** (humain `jcnm`,
+`fix/calls-anon-disconnect-signal-cleanup`) — touche exactement le même invariant
+(`invalidateSignalSession`) mais sur le chemin `AuthHandler.handleDisconnection` (participant anonyme qui
+se déconnecte) + un repli `forceCleanupParticipationAfterLeaveFailure`. Scope de cette vague choisi pour
+ne PAS toucher `AuthHandler.ts`/`CallEventsHandler.broadcastParticipantLeftResult` afin d'éviter toute
+collision avec #2458 encore en CI au démarrage de cette session.
+
+- **[MOYEN, gateway, CONFIRMÉ + CORRIGÉ, TDD]** Sibling exact du trou déjà fermé pour `call:ended`
+  (`CallService.broadcastCallEndedIfTerminal`, commentée « Bug (parité socket) ») mais sur l'invariant
+  **signal cache**, pas broadcast : les deux routes REST `DELETE /calls/:callId` (end) et
+  `DELETE /calls/:callId/participants/:participantId` (leave) appellent `callService.endCall()`/
+  `leaveCall()` — qui écrivent `CallParticipant.leftAt` — puis renvoient la réponse **sans jamais
+  invalider** `CallEventsHandler.signalSessionCache` (TTL 2s, `call:signal`). Les handlers socket
+  `call:end`/`call:leave`/`call:force-leave` appellent tous `this.invalidateSignalSession(...)`
+  inconditionnellement juste après un `leaveCall()`/`endCall()` réussi (vérifié aux 3 sites,
+  `CallEventsHandler.ts:2443/2675/3180`) — **inconditionnellement**, pas seulement quand l'appel devient
+  terminal (`invalidateSignalSession` sur `call:leave` tourne même pour un leave de groupe qui continue).
+  `CallService` possédait déjà le pont exact nécessaire (`signalCacheInvalidator` +
+  `setSignalCacheInvalidationCallback`, câblé server.ts → `CallEventsHandler.invalidateSignalSession`)
+  mais son seul point d'invocation (`notifyReapedCallEnded`) n'est atteint QUE par les 2 sweeps GC internes
+  d'`initiateCall` — jamais par `endCall()`/`leaveCall()` eux-mêmes, donc jamais par leurs appelants REST.
+- **Impact concret** : un utilisateur enregistré qui raccroche via REST (`DELETE /calls/:callId` ou
+  `.../participants/:participantId` — ex. bouton raccrocher web hors chemin socket, ou tout futur client
+  REST-only) laisse la session signalée en cache pendant jusqu'à 2s après son départ réel en DB. Un
+  `call:signal` reçu dans cette fenêtre (ICE/SDP tardif d'un pair encore en train d'émettre) est encore
+  relayé sur la base de l'instantané périmé — exactement le trou que PR #2458 corrige en parallèle pour le
+  chemin `AuthHandler` anonyme, ici sur les 2 routes REST enregistrées.
+- **Fix** : nouvelle méthode publique `CallService.invalidateSignalCache(callId)` — extraction neutre du
+  corps de `notifyReapedCallEnded` (`this.signalCacheInvalidator?.(callId)` factorisé, comportement du
+  sweep GC inchangé), symétrique à `broadcastCallEndedIfTerminal`. Les 2 routes REST l'appellent
+  **inconditionnellement** juste après `endCall()`/`leaveCall()` (PAS gardée sur le statut terminal,
+  contrairement à `broadcastCallEndedIfTerminal` — un leave de groupe non-terminal écrit quand même
+  `leftAt` pour le partant, donc doit quand même invalider).
+- **Tests TDD** : RED confirmé via `git stash` des 2 fichiers source seuls (tests déjà en place) — 5
+  échecs précis (3 assertions routes REST end/leave/leave-non-terminal + 2 nouveaux cas
+  `CallService.invalidateSignalCache`), GREEN après restauration. Nouveau describe
+  `CallService - invalidateSignalCache` (2 cas : délègue au callback, no-op sans callback câblé — miroir
+  exact du describe `broadcastCallEndedIfTerminal`) + 3 assertions routes (`calls-routes.test.ts` : end
+  route, leave route, + 1 cas dédié prouvant l'invalidation même pour un leave non-terminal, contrairement
+  à `broadcastCallEndedIfTerminal`). Suite gateway complète (`jest --config=jest.config.json
+  --coverage=false`, après `npx prisma generate` + `bun run build` de `packages/shared` — cette fois
+  `prisma generate` a réussi directement sans contournement) : 566/566 suites, 15087/15088 tests verts (1
+  skip pré-existant documenté, sans rapport). `tsc --noEmit` gateway : 0 erreur.
+- **iOS/Android (lecture seule, aucun changement)** : hors périmètre (aucune toolchain Swift/Kotlin dans
+  ce sandbox) ; changement strictement gateway, aucun fichier en commun avec PR #2458.
+- **Reste ouvert (inchangé + addition)** : dead code Swift `CallManager.handleRemoteReject` ; God-objects
+  `CallManager.swift`/`CallEventsHandler.ts` ; parité iOS/Android retry-on-failure ; PR #2458 (gateway,
+  humaine) — vérifier statut CI/merge à la prochaine vague ; PR #2428 (iOS) déjà mergée depuis la Vague 43
+  (confirmé cette vague, `merged: true`) ; nettoyage `any`/parsing d'erreur dupliqué dans
+  `CallEventsHandler.ts` (12 occurrences `catch (error: any)` + logique `errorCode`/`message` répétée 3x
+  aux handlers `call:initiate`/`call:join`/`call:end`, viole la règle CLAUDE.md « No `any` types » —
+  candidat scopé et mécanique pour une prochaine vague, non traité ici pour rester chirurgical).
