@@ -310,12 +310,33 @@ totalité des trous de tests :
     `PHASE_1_…_reste_reclamable_par_tous` a été inversé en
     `PHASE_2_un_media_SANS_proprietaire_nest_reclamable_par_PERSONNE`.
 
-    **Reste ouvert :** décider du sort des uploads sans uploadeur identifiable.
-    Le handler les journalise (`PostMedia sans uploadeur identifiable`) sans
-    les refuser. Les routes de post et de commentaire exigeant `requiredAuth`,
-    ce journal devrait rester vide — le vérifier en production avant de rendre
-    le cas bloquant. Et les 227 orphelins de plus de 30 jours méritent une
-    purge : rien ne les nettoie aujourd'hui.
+    **VÉRIFICATION PRODUCTION FAITE (2026-08-02).** Les journaux du conteneur
+    ne remontent qu'au redéploiement du jour — la base a tranché à leur place :
+    3 `PostMedia` sans propriétaire créés depuis le 31/07 (sur 26). Deux sont
+    des instantanés serveur (`snapshots/…`) nés AVEC leur `postId` — jamais en
+    attente, donc jamais réclamables : cas légitime. Le troisième est le cas
+    redouté : jeton indécodable → `2026/07/anonymous/…`, 0 octet,
+    `postId: null` — un orphelin irréclamable à vie que rien ne purge.
+
+    **PHASE 3 APPLIQUÉE (2026-08-02).** Le cas est BLOQUANT : `onUploadCreate`
+    refuse (403) tout upload de contexte post/story/status/comment sans
+    uploadeur identifiable — avant le premier octet ; `onUploadFinish` garde le
+    même refus en défense (uploads créés avant le déploiement), détruit la
+    copie déjà posée et ne crée pas la ligne. Une session ANONYME ne produit
+    JAMAIS de propriétaire, même si son jeton a par hasard la forme d'un
+    ObjectId (`postMediaUploaderOrNull`). La liste des contextes PostMedia est
+    désormais UNIQUE (`isPostMediaUploadContext`), partagée create/finish.
+    Les pièces jointes de MESSAGE (participants anonymes compris) ne passent
+    pas par ces contextes et restent inchangées.
+
+    **Reste ouvert :** les 227 orphelins de plus de 30 jours méritent une
+    purge — rien ne les nettoie aujourd'hui (ATTENTION au précédent
+    avatars/bannières détruits par un cleanup d'orphelins : toute purge doit
+    exclure les chemins non-post). Et le repli `jwt.decode` SANS vérification
+    du handler accepte l'identité d'un jeton infalsifiable expiré comme d'un
+    jeton FORGÉ — l'uploadeur crédité n'est donc authentifié que si
+    `jwt.verify` a réussi ; à trancher (tolérance upload long vs identité
+    certaine).
 22. **`trustProxy` n'est pas posé, et ça dépasse la bibliothèque de sons.**
     `request.ip` reste l'adresse de Traefik pour tout le gateway : le quota
     global de 300 req/min est un seul seau pour la plateforme, et toute
