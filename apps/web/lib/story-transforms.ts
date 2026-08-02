@@ -251,22 +251,37 @@ export function computeStoryDurationMs(effects: Record<string, unknown> | undefi
     ? DEFAULT_STATIC_DURATION_S + (totalWords - LONG_TEXT_THRESHOLD_WORDS) * LONG_TEXT_SECONDS_PER_WORD
     : DEFAULT_STATIC_DURATION_S;
 
-  const target = Math.max(textDur, DEFAULT_STATIC_DURATION_S);
+  // MIROIR EXACT de `StoryEffects.contentDerivedDuration`
+  // (packages/MeeshySDK/Sources/MeeshySDK/Models/StoryModels.swift:1323-1337).
+  // Trois termes, dans cet ordre. Toute divergence se voit à la lecture : la
+  // slide se coupe avant la fin d'un média, ou s'étire au-delà.
 
-  // Background media looped up to the target (or its natural duration if longer).
+  // 1. La plus longue FENÊTRE, tous types confondus. `startTime + duration` et
+  //    non `duration` seule : une vidéo de 4 s posée à 10 s finit à 14 s. Et
+  //    les fenêtres AUDIO comptent autant que les médias — elles n'entraient
+  //    dans aucun terme jusqu'ici.
+  const windowEnd = (o: Record<string, unknown>): number | undefined => {
+    const d = positiveNumber(o.duration);
+    if (d === undefined) return undefined;
+    return (positiveNumber(o.startTime) ?? 0) + d;
+  };
+  const longestData = [...mediaObjects, ...audioObjects]
+    .map(windowEnd)
+    .filter((v): v is number => v !== undefined)
+    .reduce((a, b) => Math.max(a, b), 0);
+
+  // 2. La cible inclut la plus longue fenêtre — sans elle, l'arrondi de boucle
+  //    ci-dessous se calcule sur une cible trop basse.
+  const target = Math.max(textDur, DEFAULT_STATIC_DURATION_S, longestData);
+
+  // 3. Le fond boucle jusqu'à couvrir la cible, en répétitions ENTIÈRES.
   const bgResult = rawMediaDur === undefined
     ? target
     : rawMediaDur >= target
       ? rawMediaDur
       : Math.ceil(target / rawMediaDur) * rawMediaDur;
 
-  // Foreground (non-bg) videos: the slide must at least cover their natural length.
-  const fgMediaMax = mediaObjects
-    .filter((m) => m.isBackground !== true)
-    .map((m) => positiveNumber(m.duration) ?? 0)
-    .reduce((a, b) => Math.max(a, b), 0);
-
-  return Math.round(Math.max(bgResult, fgMediaMax) * 1000);
+  return Math.round(Math.max(bgResult, longestData) * 1000);
 }
 
 export function postToStoryData(post: Post): StoryData {
