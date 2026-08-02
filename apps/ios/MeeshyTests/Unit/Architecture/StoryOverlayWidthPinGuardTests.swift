@@ -34,13 +34,11 @@ final class StoryOverlayWidthPinGuardTests: XCTestCase {
 
     /// Retire les commentaires : plusieurs d'entre eux CITENT le motif
     /// recherché pour expliquer la règle, ce qui ferait passer la garde sur un
-    /// calque qui ne l'applique pas.
+    /// calque qui ne l'applique pas. Délégué au stripper PARTAGÉ — l'ancienne
+    /// coupe au premier `//` tronquait une ligne contenant une URL
+    /// `https://…` et faisait disparaître le code inspecté.
     private func strippingComments(_ source: String) -> [String] {
-        source.split(separator: "\n", omittingEmptySubsequences: false).map { line in
-            let text = String(line)
-            guard let range = text.range(of: "//") else { return text }
-            return String(text[text.startIndex..<range.lowerBound])
-        }
+        AppSourceGuard.strippedLines(source)
     }
 
     /// Un calque flottant se reconnaît à son `.zIndex(…)` : c'est ce qui le

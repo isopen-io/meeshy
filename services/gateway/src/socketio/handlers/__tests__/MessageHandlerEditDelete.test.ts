@@ -344,6 +344,57 @@ describe('MessageHandler — handleMessageEdit', () => {
     expect(callback).toHaveBeenCalledWith(expect.objectContaining({ success: true }));
   });
 
+  it('rejects a non-privileged author editing a message older than the 24h window (parity with REST)', async () => {
+    const twentyFiveHoursAgo = new Date(Date.now() - 25 * 60 * 60 * 1000);
+    (deps.prisma.message.findFirst as jest.Mock<any>).mockResolvedValue(
+      makeMessageRecord({
+        createdAt: twentyFiveHoursAgo,
+        sender: { id: PARTICIPANT_ID, userId: USER_ID, displayName: 'User', avatar: null, role: 'member' },
+      })
+    );
+    (deps.prisma.message.updateMany as jest.Mock<any>).mockResolvedValue({ count: 1 });
+
+    await handler.handleMessageEdit(socket, { messageId: VALID_MSG_ID, content: 'Edited content' }, callback);
+
+    expect(callback).toHaveBeenCalledWith(
+      expect.objectContaining({ success: false, error: expect.stringContaining('24-hour') })
+    );
+    expect(deps.prisma.message.updateMany).not.toHaveBeenCalled();
+    expect(deps.io.to).not.toHaveBeenCalled();
+  });
+
+  it('allows the author to edit a fresh (within 24h) message', async () => {
+    const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000);
+    (deps.prisma.message.findFirst as jest.Mock<any>).mockResolvedValue(
+      makeMessageRecord({
+        createdAt: tenMinutesAgo,
+        sender: { id: PARTICIPANT_ID, userId: USER_ID, displayName: 'User', avatar: null, role: 'member' },
+      })
+    );
+    (deps.prisma.message.updateMany as jest.Mock<any>).mockResolvedValue({ count: 1 });
+
+    await handler.handleMessageEdit(socket, { messageId: VALID_MSG_ID, content: 'Edited content' }, callback);
+
+    expect(callback).toHaveBeenCalledWith(expect.objectContaining({ success: true }));
+    expect(deps.prisma.message.updateMany).toHaveBeenCalled();
+  });
+
+  it('lets a privileged author (ADMIN) edit a message past the 24h window', async () => {
+    const twentyFiveHoursAgo = new Date(Date.now() - 25 * 60 * 60 * 1000);
+    (deps.prisma.message.findFirst as jest.Mock<any>).mockResolvedValue(
+      makeMessageRecord({
+        createdAt: twentyFiveHoursAgo,
+        sender: { id: PARTICIPANT_ID, userId: USER_ID, displayName: 'User', avatar: null, role: 'ADMIN' },
+      })
+    );
+    (deps.prisma.message.updateMany as jest.Mock<any>).mockResolvedValue({ count: 1 });
+
+    await handler.handleMessageEdit(socket, { messageId: VALID_MSG_ID, content: 'Edited content' }, callback);
+
+    expect(callback).toHaveBeenCalledWith(expect.objectContaining({ success: true }));
+    expect(deps.prisma.message.updateMany).toHaveBeenCalled();
+  });
+
   it('updates message in database on success, guarded against a concurrent delete', async () => {
     (deps.prisma.message.findFirst as jest.Mock<any>).mockResolvedValue(makeMessageRecord());
     (deps.prisma.message.updateMany as jest.Mock<any>).mockResolvedValue({ count: 1 });

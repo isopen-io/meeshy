@@ -23,6 +23,7 @@ import { extractCaptureTracks } from './posts/captureTracks';
 import { feedsSoundLibrary } from './posts/soundEligibility';
 import { normalizeLanguageCode } from '@meeshy/shared/utils/language-normalize';
 import { parseSharedPlace, type SharedPlace } from './location/sharedPlace';
+import { quantizeCoordinate, type DiscoverabilityPrecision } from './location/geoDiscoverability';
 
 const log = enhancedLogger.child({ module: 'PostService' });
 
@@ -120,6 +121,13 @@ export class PostService {
     repostOfId?: string;
     /** Lieu partagé — champ dédié, jamais un `metadata` brut. Validé par `parseSharedPlace`. */
     location?: unknown;
+    /**
+     * Découvrabilité géographique — INDÉPENDANTE de `location` ci-dessus.
+     * `unknown` en défense en profondeur (même contrat que `location`) : la
+     * route valide déjà l'énumération via Zod, mais ce service ne doit pas
+     * supposer qu'il n'est jamais appelé autrement. Voir geoDiscoverability.ts.
+     */
+    discoverabilityPrecision?: unknown;
   }, userId: string) {
     const now = new Date();
     let expiresAt: Date | undefined;
@@ -142,6 +150,19 @@ export class PostService {
     // rejet NaN/Infinity, bornage des chaînes). Chiffrement : stockage EN
     // CLAIR dans `metadata.location`, décision assumée — cf. sharedPlace.ts.
     const sharedPlace = parseSharedPlace(data.location);
+
+    // Découvrabilité géographique — champ SÉPARÉ de `metadata.location`
+    // (badge d'affichage, inchangé ci-dessus) : deux opt-in indépendants,
+    // l'un n'implique jamais l'autre. Le client n'envoie JAMAIS geoPoint/
+    // geoPrecision bruts : ils sont TOUJOURS calculés ici, à partir de la
+    // même coordonnée exacte que `sharedPlace`, et seulement quand
+    // `discoverabilityPrecision` est présent ET que la coordonnée est
+    // valide. Absent (ou coordonnée invalide) => les deux champs restent
+    // `null` (spec §2, geoDiscoverability.ts).
+    const geoPoint = sharedPlace && data.discoverabilityPrecision !== undefined
+      ? quantizeCoordinate(sharedPlace.latitude, sharedPlace.longitude, data.discoverabilityPrecision)
+      : null;
+    const geoPrecision = geoPoint ? (data.discoverabilityPrecision as DiscoverabilityPrecision) : null;
 
     let repostOfId: string | undefined;
     let originalRepostOfId: string | undefined;
@@ -177,6 +198,7 @@ export class PostService {
         audioDuration: data.audioDuration,
         expiresAt,
         ...(sharedPlace ? { metadata: { location: sharedPlace } as unknown as Prisma.InputJsonValue } : {}),
+        ...(geoPoint ? { geoPoint: geoPoint as unknown as Prisma.InputJsonValue, geoPrecision } : {}),
         ...(repostOfId !== undefined ? { repostOfId, originalRepostOfId } : {}),
       },
       include: postInclude,

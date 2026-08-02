@@ -430,6 +430,48 @@ describe('POST /posts — invalid body (EXCEPT visibility without userIds)', () 
   });
 });
 
+describe('POST /posts — geo discoverability', () => {
+  it('forwards a valid discoverabilityPrecision to PostService.createPost alongside location', async () => {
+    const app = await buildApp();
+    const res = await app.inject({
+      method: 'POST', url: '/posts',
+      payload: {
+        type: 'POST',
+        content: 'Hello from Paris',
+        location: { latitude: 48.8584, longitude: 2.2945 },
+        discoverabilityPrecision: 'CITY',
+      },
+    });
+    expect(res.statusCode).toBe(201);
+    expect(mockCreatePost).toHaveBeenCalledWith(
+      expect.objectContaining({ discoverabilityPrecision: 'CITY' }),
+      USER_ID,
+    );
+    await app.close();
+  });
+
+  it('returns 400 VALIDATION_ERROR when discoverabilityPrecision is not one of the known tiers', async () => {
+    // Delta, jamais absolu : ce fichier ne réinitialise pas les mocks entre
+    // tests (pas de beforeEach clearAllMocks), donc mockCreatePost porte déjà
+    // les appels des tests précédents.
+    const callsBefore = mockCreatePost.mock.calls.length;
+    const app = await buildApp();
+    const res = await app.inject({
+      method: 'POST', url: '/posts',
+      payload: {
+        type: 'POST',
+        content: 'Hello',
+        location: { latitude: 48.8584, longitude: 2.2945 },
+        discoverabilityPrecision: 'BOGUS',
+      },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().code).toBe('VALIDATION_ERROR');
+    expect(mockCreatePost.mock.calls.length).toBe(callsBefore);
+    await app.close();
+  });
+});
+
 describe('PUT /posts/:postId — 422 business rule violation', () => {
   it('returns 400 with INVALID_POST_UPDATE code when updatePost throws 422', async () => {
     mockUpdatePost.mockRejectedValueOnce(Object.assign(new Error('Cannot change type'), { statusCode: 422 }));
