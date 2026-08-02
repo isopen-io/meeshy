@@ -153,6 +153,23 @@ public actor FeedPersistenceActor {
         postFeedStoreRefresh()
     }
 
+    /// stores-03 — variante pour un like/unlike émis par un TIERS : met à jour
+    /// le compteur ABSOLU sans toucher `isLikedByMe`, qui n'a de sens que pour
+    /// l'utilisateur courant. `FeedSocketHandler` route ici quand `data.userId`
+    /// ne correspond pas à l'utilisateur courant.
+    public func updateLikeCountOnly(postId: String, count: Int) throws {
+        try dbWriter.write { db in
+            try db.execute(
+                sql: """
+                    UPDATE feed_posts SET likeCount = ?,
+                    changeVersion = changeVersion + 1 WHERE id = ?
+                    """,
+                arguments: [count, postId]
+            )
+        }
+        postFeedStoreRefresh()
+    }
+
     public func updateCommentCount(postId: String, count: Int) throws {
         try dbWriter.write { db in
             try db.execute(

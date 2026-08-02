@@ -362,4 +362,42 @@ extension DependencyContainerTests {
             "le compte des lignes en attente doit être lu AVANT la purge — après, il vaut toujours 0 et le toast ne part jamais"
         )
     }
+
+    /// stores-05 volet 1 (le fix lui-même = grdb-01, lot 0) — verrou de
+    /// non-régression : feed.clearAllForLogout() doit vivre dans SON PROPRE
+    /// do/catch, jamais imbriqué dans celui de clearAllMessagesForLogout() —
+    /// sinon un échec de la purge messages empêcherait silencieusement la
+    /// purge feed (posts FRIENDS/ONLY de l'utilisateur précédent visibles
+    /// sous le compte suivant). Source-guard volontaire : jamais de flip
+    /// d'AuthManager.shared dans MeeshyTests (le singleton porte la base App
+    /// Group réelle de la session connectée de la phase 3).
+    func test_wireOutboxLogoutHook_feedPurgeIsIndependentOfMessagePurgeFailure() throws {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()  // Services
+            .deletingLastPathComponent()  // Unit
+            .deletingLastPathComponent()  // MeeshyTests
+            .deletingLastPathComponent()  // ios
+            .appendingPathComponent("Meeshy/Core/DependencyContainer.swift")
+        let source = try String(contentsOf: url, encoding: .utf8)
+        guard let start = source.range(of: "private func wireOutboxLogoutHook()"),
+              let end = source.range(of: "\n    // MARK:", range: start.upperBound..<source.endIndex) else {
+            XCTFail("Could not locate wireOutboxLogoutHook body")
+            return
+        }
+        let body = String(source[start.upperBound..<end.lowerBound])
+        guard let messagePurge = body.range(of: "clearAllMessagesForLogout()"),
+              let feedPurge = body.range(of: "feed.clearAllForLogout()") else {
+            XCTFail("wireOutboxLogoutHook must call both clearAllMessagesForLogout() and feed.clearAllForLogout() — one of them is missing")
+            return
+        }
+        XCTAssertTrue(
+            messagePurge.lowerBound < feedPurge.lowerBound,
+            "l'ordre attendu est purge messages puis purge feed"
+        )
+        let between = String(body[messagePurge.upperBound..<feedPurge.lowerBound])
+        XCTAssertTrue(
+            between.contains("} catch"),
+            "le do/catch de la purge messages doit se FERMER avant feed.clearAllForLogout() — les deux purges doivent être indépendantes"
+        )
+    }
 }

@@ -97,15 +97,15 @@ Le cœur doctrine « jamais d'écran vide si le disque a une donnée ».
 
 Ordre imposé : stores-02 → rts-01 (le re-subscribe conditionne le refetch au retour).
 
-- [ ] **stores-02** (P1/S/f05) — Ré-émettre `feed:subscribe` à chaque retour sur le feed (socket déjà connecté).
-- [ ] **rts-01** (P1/S/f03) — Retour sur le feed : flag `hasSubscribedOnce` → `loadFeed(forceRefresh:)` au ré-armement des sinks + `subscribeFeed()`. **NE PAS lever la garde `posts.isEmpty` du `.task`** — mécanisme alternatif explicitement rejeté par la fiche (étape 6 : la branche `.fresh` reverterait les mutations socket) (absorbe vm-feed-revalidate-01 ; deps : stores-02).
-- [ ] **rts-02** (P1/S/f03) — Brancher le rattrapage stories au `didReconnect` social (l'infra delta+tombstones existe).
-- [ ] **vm-reconnect-stories-detail-01** (P2/S/f05) — Backfill au reconnect pour le détail de post (le volet tray stories est absorbé par rts-02).
-- [ ] **stores-12** (P3/S/f05) — Les 4 sinks feed muets déclenchent `debouncedCacheSave` (absorbe rts-05, désormais doublon rattaché — fichier 03 §Doublons).
-- [ ] **outbox-04** (P1/M/f02) — `flushNow()` après chaque enqueue social (like/post/commentaire en ligne partent immédiatement).
-- [ ] **stores-05** (P1/M/f05) — **Décision d'architecture** pipeline feed GRDB write-only : activer le lecteur OU retirer le pipeline (la fiche instruit les deux options ; absorbe vm-feed-grdb-dead-01). À trancher AVANT stores-03 et vm-feed-actions-rest-01.
-- [ ] **stores-03** (P2/S/f05) — `FeedSocketHandler` : `isLikedByMe` seulement si l'acteur est l'utilisateur courant (deps : stores-05 — si le pipeline est supprimé, cet écart disparaît).
-- [ ] **gwcontract-07** 🔧 (P2/S/f06) — Émettre `post:updated`/`post:deleted` vers la post room (viewers non-amis).
+- [x] **stores-02** (P1/S/f05) — Ré-émettre `feed:subscribe` à chaque retour sur le feed (socket déjà connecté).
+- [x] **rts-01** (P1/S/f03) — Retour sur le feed : flag `hasSubscribedOnce` → `loadFeed(forceRefresh:)` au ré-armement des sinks + `subscribeFeed()`. **NE PAS lever la garde `posts.isEmpty` du `.task`** — mécanisme alternatif explicitement rejeté par la fiche (étape 6 : la branche `.fresh` reverterait les mutations socket) (absorbe vm-feed-revalidate-01 ; deps : stores-02).
+- [x] **rts-02** (P1/S/f03) — Brancher le rattrapage stories au `didReconnect` social (l'infra delta+tombstones existe).
+- [x] **vm-reconnect-stories-detail-01** (P2/S/f05) — Backfill au reconnect pour le détail de post (le volet tray stories est absorbé par rts-02).
+- [x] **stores-12** (P3/S/f05) — Les 4 sinks feed muets déclenchent `debouncedCacheSave` (absorbe rts-05, désormais doublon rattaché — fichier 03 §Doublons).
+- [x] **outbox-04** (P1/M/f02) — `flushNow()` après chaque enqueue social (like/post/commentaire en ligne partent immédiatement).
+- [x] **stores-05** (P1/M/f05) — **Décision d'architecture** pipeline feed GRDB write-only : activer le lecteur OU retirer le pipeline (la fiche instruit les deux options ; absorbe vm-feed-grdb-dead-01). À trancher AVANT stores-03 et vm-feed-actions-rest-01.
+- [x] **stores-03** (P2/S/f05) — `FeedSocketHandler` : `isLikedByMe` seulement si l'acteur est l'utilisateur courant (deps : stores-05 — si le pipeline est supprimé, cet écart disparaît).
+- [x] **gwcontract-07** 🔧 (P2/S/f06) — Émettre `post:updated`/`post:deleted` vers la post room (viewers non-amis).
 
 ## Lot 6 — Rattrapage complet des messages (le grand chantier client+serveur)
 

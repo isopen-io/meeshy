@@ -900,4 +900,51 @@ final class PostDetailViewModelTests: XCTestCase {
 
         XCTAssertEqual(sut.post?.isLiked, false)
     }
+
+    // MARK: - Reconnect (didReconnect) — vm-reconnect-stories-detail-01
+
+    /// La room du post est re-jointe au .connect (le flux VIVANT reprend),
+    /// mais les événements émis PENDANT la coupure restent irréconciliés :
+    /// le reconnect doit refetch le post (compteurs absolus) + la page 1.
+    func test_subscribeToSocket_reconnect_refetchesPostAndCommentsPage1() async {
+        let socket = MockSocialSocket()
+        let mock = MockPostService()
+        mock.getPostResult = .success(Self.makeAPIPost(id: "p1", content: "Fresh"))
+        let (sut, _) = makeSUT(postService: mock, socialSocket: socket)
+        await sut.loadPost("p1")
+        sut.subscribeToSocket("p1")
+        let postsBefore = mock.getPostCallCount
+        let commentsBefore = mock.getCommentsCallCount
+
+        socket.didReconnect.send(())
+        try? await waitForCondition(timeout: 5.0) {
+            mock.getPostCallCount > postsBefore && mock.getCommentsCallCount > commentsBefore
+        }
+
+        XCTAssertEqual(mock.getPostCallCount, postsBefore + 1,
+                       "le reconnect refetch le post pour les compteurs absolus")
+        XCTAssertEqual(mock.getCommentsCallCount, commentsBefore + 1,
+                       "le reconnect refetch la page 1 des commentaires")
+    }
+
+    /// La page 1 refetchée peut recouvrir des commentaires déjà affichés :
+    /// la dédup par id rend l'append idempotent — jamais de flash-vide.
+    func test_subscribeToSocket_reconnect_dedupesExistingComments() async {
+        let socket = MockSocialSocket()
+        let mock = MockPostService()
+        mock.getPostResult = .success(Self.makeAPIPost(id: "p1"))
+        mock.getCommentsResult = .success(Self.makePaginatedComments(comments: [Self.stubComment]))
+        let (sut, _) = makeSUT(postService: mock, socialSocket: socket)
+        await sut.loadPost("p1")
+        await sut.loadComments("p1")
+        sut.subscribeToSocket("p1")
+        XCTAssertEqual(sut.comments.count, 1)
+        let commentsCallsBefore = mock.getCommentsCallCount
+
+        socket.didReconnect.send(())
+        try? await waitForCondition(timeout: 5.0) { mock.getCommentsCallCount > commentsCallsBefore }
+
+        XCTAssertEqual(sut.comments.count, 1,
+                       "même page 1 → dédup par id, pas de doublon ni de flash-vide")
+    }
 }

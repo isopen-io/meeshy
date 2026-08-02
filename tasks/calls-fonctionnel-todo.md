@@ -3133,3 +3133,56 @@ mergée en attendant une vérification humaine.
   (ci-dessus) ; dead code Swift `CallManager.handleRemoteReject` ; God-objects `CallManager.swift`/
   `CallEventsHandler.ts` ; parité iOS/Android retry-on-failure ; PR #2428 (iOS) non mergée en attendant
   une vérification `iOS Tests` manuelle par un humain.
+
+## Vague 44 — broadcast manquant sur le chemin anonyme (le fil laissé ouvert par la Vague 43), corrigé (2026-08-01)
+
+Point d'entrée : routine calling-feature (agent Cowork non interactif, mandat PHASE 1-12). Branche
+`claude/modest-cori-01ebob`, redémarrée depuis `origin/main` à jour (0 PR ouverte trouvée au démarrage —
+`list_pull_requests` state=open vide, donc rien à mergér avant de commencer). Un audit de repository
+(commits récents, `tasks/calls-fonctionnel-todo.md`, `docs/audit-calls-2026-05-11.md` via un agent
+d'exploration dédié) a confirmé que le sujet le plus concret et le mieux scopé restant ouvert était
+exactement celui laissé de côté par la Vague 43 : « broadcast manquant sur le chemin anonyme ».
+
+- **[MOYEN, gateway, CONFIRMÉ + CORRIGÉ, TDD]** Repris et creusé le fil laissé ouvert par la Vague 43 :
+  `AuthHandler.handleDisconnection` — la SEULE route de cleanup d'appel pour les participants anonymes
+  (`CallEventsHandler` ne peut pas les résoudre, sa recherche est indexée sur `participant.userId`,
+  toujours `null` pour un anonyme) — appelait `callService.leaveCall()` puis jetait le résultat sans
+  jamais rien broadcaster. Contrairement à son sibling enregistré
+  (`CallEventsHandler.leaveParticipationAndBroadcast`, chemin de grâce-expiry), aucun `PARTICIPANT_LEFT`
+  ni `call:ended` n'était émis, aucun `postCallSummary` ni `evictCallRoomSockets` ne tournait — confirmé
+  par grep : zéro `io.emit`/`CALL_EVENTS` dans `AuthHandler.ts` avant ce fix.
+- **Impact concret** : un invité anonyme (lien de partage) dont l'app crash ou le réseau tombe pendant un
+  appel voit son départ enregistré correctement en DB (endReason `connectionLost` depuis la Vague 43) mais
+  l'AUTRE partie ne voit jamais que l'appel s'est terminé — son UI reste "en appel" jusqu'au GC
+  `CallCleanupService` (~120s), et le message système "Appel · MM:SS" n'apparaît jamais dans la
+  conversation tant que ce GC ne tourne pas.
+- **Fix** : extraction du volet broadcast (PARTICIPANT_LEFT + `broadcastCallEnded` conditionnel +
+  `postCallSummary` + `handleMissedCall` + `evictCallRoomSockets`) de
+  `CallEventsHandler.leaveParticipationAndBroadcast` en une nouvelle méthode PUBLIQUE
+  `broadcastParticipantLeftResult(opts: {io, leftSession, participation, userId})` — extraction
+  comportementalement neutre, `leaveParticipationAndBroadcast` l'appelle désormais au lieu de dupliquer la
+  logique inline. `AuthHandler` reçoit une nouvelle dépendance optionnelle `broadcastCallParticipantLeft`
+  (même pattern que `emitPresenceSnapshot` : callback pré-curryé par `MeeshySocketIOManager`, qui possède
+  `io` et construit déjà `callEventsHandler` avant `authHandler`) ; la boucle anonyme capture désormais le
+  `leftSession` retourné par `leaveCall()` et invoque `this.broadcastCallParticipantLeft?.({leftSession,
+  participation, userId})` — optionnel pour que les tests unitaires construisant `AuthHandler` directement
+  n'aient pas besoin de stubber Socket.IO ; `leaveCall()` tourne inconditionnellement dans tous les cas,
+  seul le broadcast est skip si le callback est absent. Type `DisconnectParticipation` exporté depuis
+  `CallEventsHandler.ts` (était un `type` interne non exporté) pour être réutilisé par la signature du
+  callback côté `AuthHandler.ts`.
+- **Tests TDD** : 2 nouveaux cas dans `AuthHandler.test.ts` — « broadcasts the participant-left result via
+  the injected callback for an anonymous participant auto-leave » (2 participations actives → 2 appels du
+  callback avec le `leftSession`/`participation`/`userId` exacts par participation, RED avant l'ajout de la
+  dépendance car `broadcastCallParticipantLeft` n'existait pas) et « does not throw when
+  broadcastCallParticipantLeft is not injected » (régression : comportement pré-Vague-44 inchangé quand le
+  callback est absent). Suite `AuthHandler.test.ts` complète : 52/52. Les 25 suites `CallEventsHandler*`
+  (494 tests) restent 100% vertes après l'extraction de `broadcastParticipantLeftResult`, confirmant
+  l'absence de régression comportementale sur le chemin enregistré (grace-expiry) déjà couvert par
+  `CallEventsHandler-restart-resilience.test.ts`/`CallEventsHandler-disconnect.test.ts`. `tsc --noEmit`
+  gateway : 0 erreur avant et après. Suite gateway complète (`bun run test:coverage`) lancée en fin de
+  vague pour confirmation finale — cf. résultat consigné au commit/PR.
+- **iOS/Android (lecture seule, aucun changement)** : hors périmètre (aucune toolchain Swift/Kotlin dans
+  ce sandbox) ; changement strictement gateway.
+- **Reste ouvert (inchangé)** : dead code Swift `CallManager.handleRemoteReject` ; God-objects
+  `CallManager.swift`/`CallEventsHandler.ts` ; parité iOS/Android retry-on-failure ; PR #2428 (iOS) —
+  vérifier si toujours ouverte/mergée par un humain depuis la Vague 43.

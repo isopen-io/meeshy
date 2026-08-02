@@ -39,6 +39,21 @@ final class FeedPersistenceActorTests: XCTestCase {
         XCTAssertTrue(fetched[0].isLikedByMe)
     }
 
+    /// stores-03 — le like d'un TIERS met à jour le compteur absolu sans
+    /// jamais toucher isLikedByMe, qui n'a de sens que pour l'utilisateur
+    /// courant.
+    func test_updateLikeCountOnly_updatesCountButLeavesIsLikedByMeUntouched() async throws {
+        var seeded = PostRecordFactory.make(id: "post_like_only")
+        seeded.isLikedByMe = true
+        try await actor.insertPost(seeded)
+
+        try await actor.updateLikeCountOnly(postId: "post_like_only", count: 9)
+
+        let fetched = try actor.posts(limit: 10)
+        XCTAssertEqual(fetched[0].likeCount, 9)
+        XCTAssertTrue(fetched[0].isLikedByMe, "updateLikeCountOnly ne doit jamais toucher isLikedByMe")
+    }
+
     func test_updatePostReactionSummary_setsAndMergesEmojiCounts() async throws {
         try await actor.insertPost(PostRecordFactory.make(id: "post_rx"))
 

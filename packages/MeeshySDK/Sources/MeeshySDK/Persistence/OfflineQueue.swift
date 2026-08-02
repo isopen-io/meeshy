@@ -545,6 +545,12 @@ public actor OfflineQueue {
     public static let shared = OfflineQueue()
 
     public nonisolated let retrySucceeded = SendablePassthrough<OfflineRetrySuccess>()
+    /// outbox-04 — émis en fin de CHAQUE enqueue qui écrit durablement une
+    /// nouvelle row `.pending` (jamais sur un no-op de coalescing/dédup ni sur
+    /// un échec). `OutboxRetryScheduler.startObservingMutationEnqueued` s'y
+    /// abonne au boot (débounce ~250 ms) pour déclencher un flush immédiat
+    /// sans câbler `flushNow()` dans chaque ViewModel.
+    public nonisolated let mutationEnqueued = SendablePassthrough<Void>()
     /// Wave 1 Task 3.6 — unified terminal-failure signal. `OutboxFlusher`
     /// emits here when a record hits `maxAttempts`, and `OutboxDispatcher`
     /// emits here when it raises a permanent rejection (404/410/409 conflict
@@ -1060,6 +1066,7 @@ public actor OfflineQueue {
         items.append(item)
         logger.info("Enqueued offline message for conversation \(item.conversationId, privacy: .public), queue size: \(self.items.count)")
         await refreshPendingCount()
+        mutationEnqueued.send(())
     }
 
     // MARK: - Non-message mutation enqueue (Wave 1 Task 3.x)
@@ -1180,6 +1187,7 @@ public actor OfflineQueue {
 
         logger.info("Enqueued \(kind.rawValue, privacy: .public) outbox row \(outboxId, privacy: .public)")
         await refreshPendingCount()
+        mutationEnqueued.send(())
         return outboxId
     }
 
@@ -1484,6 +1492,7 @@ public actor OfflineQueue {
         items.append(item)
         logger.info("Enqueued \(sourceAudioURLs.count) audio track(s) for conversation \(conversationId, privacy: .public), message \(clientMessageId, privacy: .public)")
         await refreshPendingCount()
+        mutationEnqueued.send(())
 
         return EnqueueAudiosResult(outboxId: outboxId, localAudioPaths: relativePaths)
     }
@@ -1622,6 +1631,7 @@ public actor OfflineQueue {
         items.append(item)
         logger.info("Enqueued \(sourceMediaURLs.count) media file(s) for conversation \(conversationId, privacy: .public), message \(clientMessageId, privacy: .public)")
         await refreshPendingCount()
+        mutationEnqueued.send(())
 
         return EnqueueMediaResult(outboxId: outboxId, localMediaPaths: relativePaths)
     }
@@ -1865,6 +1875,7 @@ public actor OfflineQueue {
             throw OfflineQueueError.writeFailed(underlying: error)
         }
         await refreshPendingCount()
+        mutationEnqueued.send(())
     }
 
     /// Persists a `deleteMessage` request. If a pending `sendMessage` or
@@ -1999,6 +2010,7 @@ public actor OfflineQueue {
         // dedup catches the duplicate but the optimistic row would flicker.
         items.removeAll { $0.clientMessageId == clientMessageId }
         await refreshPendingCount()
+        mutationEnqueued.send(())
     }
 
     public func dequeue(_ itemId: String) async {
@@ -2241,6 +2253,7 @@ public actor OfflineQueue {
         switch outcome {
         case .inserted:
             logger.info("Enqueued reaction \(action.rawValue, privacy: .public) \(emoji, privacy: .public) for message \(messageId, privacy: .public)")
+            mutationEnqueued.send(())
         case .droppedNew(let matched):
             // Surface the duplicate as a drop so optimistic UI can reconcile
             // (e.g. if the caller had already painted a "pending" badge for

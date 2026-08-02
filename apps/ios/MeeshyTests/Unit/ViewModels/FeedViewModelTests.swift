@@ -1770,6 +1770,95 @@ final class FeedViewModelTests: XCTestCase {
     }
 
 
+    // MARK: - stores-12 — les sinks muets persistent leur mutation
+
+    /// Poll la clé "main-feed" jusqu'à ce que le save débouncé (2 s) atterrisse.
+    private func waitForCachedMainFeedPost(
+        id: String,
+        timeout: TimeInterval = 6,
+        until predicate: @escaping (FeedPost?) -> Bool
+    ) async -> FeedPost? {
+        var cached: FeedPost?
+        let deadline = Date().addingTimeInterval(timeout)
+        while Date() < deadline {
+            cached = (await CacheCoordinator.shared.feed.load(for: "main-feed")).snapshot()?
+                .first(where: { $0.id == id })
+            if predicate(cached) { return cached }
+            try? await Task.sleep(for: .milliseconds(100))
+        }
+        return cached
+    }
+
+    func test_socketCommentAdded_persistsCommentCountToCache() async {
+        await CacheCoordinator.shared.feed.invalidate(for: "main-feed")
+        let (sut, _, socket, _) = makeSUT()
+        sut.posts = [Self.makeFeedPost(id: "cc-post", commentCount: 3)]
+        sut.subscribeToSocketEvents()
+
+        let commentData: SocketCommentAddedData = JSONStub.decode("""
+        {"postId":"cc-post","comment":{"id":"c1","content":"Nice!","createdAt":"2026-01-15T12:00:00.000Z","author":{"id":"a1","username":"bob"}},"commentCount":4}
+        """)
+        socket.commentAdded.send(commentData)
+
+        let cached = await waitForCachedMainFeedPost(id: "cc-post") { $0?.commentCount == 4 }
+        XCTAssertEqual(cached?.commentCount, 4,
+                       "un commentaire socket doit persister le compteur — un kill dans la fenêtre le perdait")
+        sut.unsubscribeFromSocketEvents()
+    }
+
+    func test_socketCommentDeleted_persistsCommentCountToCache() async {
+        await CacheCoordinator.shared.feed.invalidate(for: "main-feed")
+        let (sut, _, socket, _) = makeSUT()
+        sut.posts = [Self.makeFeedPost(id: "cd-post", commentCount: 5)]
+        sut.subscribeToSocketEvents()
+
+        let deletedData: SocketCommentDeletedData = JSONStub.decode("""
+        {"postId":"cd-post","commentId":"c1","commentCount":4}
+        """)
+        socket.commentDeleted.send(deletedData)
+
+        let cached = await waitForCachedMainFeedPost(id: "cd-post") { $0?.commentCount == 4 }
+        XCTAssertEqual(cached?.commentCount, 4)
+        sut.unsubscribeFromSocketEvents()
+    }
+
+    func test_socketPostTranslationUpdated_persistsTranslationToCache() async {
+        await CacheCoordinator.shared.feed.invalidate(for: "main-feed")
+        let (sut, _, socket, _) = makeSUT()
+        sut.posts = [Self.makeFeedPost(id: "tr-post", content: "Hello world")]
+        sut.subscribeToSocketEvents()
+
+        let translationData: SocketPostTranslationUpdatedData = JSONStub.decode("""
+        {"postId":"tr-post","language":"fr","translation":{"text":"Bonjour le monde","translationModel":"nllb-200","confidenceScore":0.95,"createdAt":"2026-01-15T12:00:00.000Z"}}
+        """)
+        socket.postTranslationUpdated.send(translationData)
+
+        let cached = await waitForCachedMainFeedPost(id: "tr-post") { $0?.translations?["fr"] != nil }
+        XCTAssertEqual(cached?.translations?["fr"]?.text, "Bonjour le monde",
+                       "la traduction reçue en temps réel doit survivre au cold start")
+        sut.unsubscribeFromSocketEvents()
+    }
+
+    func test_socketCommentTranslationUpdated_persistsTranslatedContentToCache() async {
+        await CacheCoordinator.shared.feed.invalidate(for: "main-feed")
+        let (sut, _, socket, _) = makeSUT(preferredLanguages: ["fr"])
+        var post = Self.makeFeedPost(id: "ctr-post", content: "Hello")
+        post.comments = [FeedComment(id: "c1", author: "bob", authorId: "a1", content: "Nice", replies: 0)]
+        sut.posts = [post]
+        sut.subscribeToSocketEvents()
+
+        let translationData: SocketCommentTranslationUpdatedData = JSONStub.decode("""
+        {"commentId":"c1","postId":"ctr-post","language":"fr","translation":{"text":"Sympa !","translationModel":"nllb-200","confidenceScore":0.9,"createdAt":"2026-01-15T12:00:00.000Z"}}
+        """)
+        socket.commentTranslationUpdated.send(translationData)
+
+        let cached = await waitForCachedMainFeedPost(id: "ctr-post") {
+            $0?.comments.first(where: { $0.id == "c1" })?.translatedContent != nil
+        }
+        XCTAssertEqual(cached?.comments.first(where: { $0.id == "c1" })?.translatedContent, "Sympa !")
+        sut.unsubscribeFromSocketEvents()
+    }
+
     // MARK: - grdb-03 — reapplyPendingLikes (volet mémoire)
 
     func test_reapplyPendingLikes_pendingTrue_setsIsLikedAndBumpsCount() {

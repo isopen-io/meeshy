@@ -3060,28 +3060,36 @@ export class MessageTranslationService extends EventEmitter {
       this.stats.incrementRequestsSent();
       
       
-      // Attendre la réponse via un événement
+      // Attendre la réponse via un événement.
+      // `zmqClient` est un singleton partagé : les DEUX listeners doivent être
+      // détachés sur CHAQUE issue (succès, erreur, ET timeout). L'ancien code
+      // ne les retirait que sur une réponse au taskId correspondant — le
+      // branchement timeout rejetait sans nettoyer, fuyant deux listeners par
+      // requête expirée (MaxListenersExceededWarning + closures périmées
+      // rappelées à chaque événement de traduction ultérieur). Un unique
+      // `cleanup()` appelé depuis les trois sorties garantit le détachement.
       const response = await new Promise<TranslationResult>((resolve, reject) => {
+        const cleanup = () => {
+          clearTimeout(timeout);
+          this.zmqClient.removeListener('translationCompleted', handleResponse);
+          this.zmqClient.removeListener('translationError', handleError);
+        };
+
         const timeout = setTimeout(() => {
+          cleanup();
           reject(new Error('Timeout waiting for translation response'));
         }, 10000); // 10 secondes de timeout
 
         const handleResponse = (data: any) => {
           if (data.taskId === taskId) {
-            clearTimeout(timeout);
-            this.zmqClient.removeListener('translationCompleted', handleResponse);
-            this.zmqClient.removeListener('translationError', handleError);
-            
-            
+            cleanup();
             resolve(data.result);
           }
         };
 
         const handleError = (data: any) => {
           if (data.taskId === taskId) {
-            clearTimeout(timeout);
-            this.zmqClient.removeListener('translationCompleted', handleResponse);
-            this.zmqClient.removeListener('translationError', handleError);
+            cleanup();
             reject(new Error(`Translation error: ${data.error}`));
           }
         };

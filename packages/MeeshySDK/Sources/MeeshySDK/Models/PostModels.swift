@@ -408,40 +408,7 @@ extension APIPost {
                         location: c.location)
         }
 
-        var repost: RepostContent?
-        if let r = repostOf {
-            let repostMedia: [FeedMedia] = (r.media ?? []).map { m in
-                FeedMedia(
-                    id: m.id, type: m.mediaType, url: m.fileUrl,
-                    thumbnailUrl: m.thumbnailUrl, thumbHash: m.thumbHash,
-                    thumbnailColor: thumbnailColorForMime(m.mimeType),
-                    width: m.width, height: m.height,
-                    duration: m.duration.map { $0 / 1000 },
-                    fileName: m.originalName ?? m.fileName,
-                    fileSize: m.fileSize.map { formatFileSize($0) }
-                )
-            }
-            let repostTranslations: [String: PostTranslation]? = r.translations?.mapValues { entry in
-                PostTranslation(text: entry.text, translationModel: entry.translationModel, confidenceScore: entry.confidenceScore)
-            }
-            repost = RepostContent(id: r.id, author: r.author.name, authorId: r.author.id,
-                                   authorUsername: r.author.username,
-                                   authorAvatarURL: r.author.avatar,
-                                   content: r.content ?? "",
-                                   timestamp: r.createdAt, likes: r.likeCount ?? 0,
-                                   isQuote: r.isQuote ?? false,
-                                   type: r.type,
-                                   originalLanguage: r.originalLanguage,
-                                   audioUrl: r.audioUrl,
-                                   moodEmoji: r.moodEmoji,
-                                   storyEffects: r.storyEffects,
-                                   media: repostMedia,
-                                   translations: repostTranslations,
-                                   originalRepostOfId: r.originalRepostOfId,
-                                   visibility: nil,
-                                   expiresAt: nil,
-                                   location: r.location)
-        }
+        let repost: RepostContent? = repostOf?.toRepostContent()
 
         let postTranslations: [String: PostTranslation]? = translations?.mapValues { entry in
             PostTranslation(text: entry.text, translationModel: entry.translationModel, confidenceScore: entry.confidenceScore)
@@ -496,7 +463,9 @@ extension APIPost {
 
     /// Prisme Linguistique resolution: walk preferred languages in order.
     /// If original is already in a preferred language, return nil (no translation needed).
-    private static func resolveTranslation(
+    /// Internal (pas private) : `PostRecord.toFeedPost` réutilise la MÊME
+    /// règle — jamais de résolution de langue dupliquée (stores-05).
+    static func resolveTranslation(
         translations: [String: APIPostTranslationEntry]?,
         originalLanguage: String?,
         preferredLanguages: [String]
@@ -511,5 +480,44 @@ extension APIPost {
             }
         }
         return nil
+    }
+}
+
+extension APIRepostOf {
+    /// Conversion partagée `APIRepostOf` → `RepostContent` — utilisée par
+    /// `APIPost.toFeedPost` (réseau) ET `PostRecord.toFeedPost` (cache GRDB,
+    /// stores-05) : une seule projection, pas deux qui divergent.
+    func toRepostContent() -> RepostContent {
+        let repostMedia: [FeedMedia] = (media ?? []).map { m in
+            FeedMedia(
+                id: m.id, type: m.mediaType, url: m.fileUrl,
+                thumbnailUrl: m.thumbnailUrl, thumbHash: m.thumbHash,
+                thumbnailColor: thumbnailColorForMime(m.mimeType),
+                width: m.width, height: m.height,
+                duration: m.duration.map { $0 / 1000 },
+                fileName: m.originalName ?? m.fileName,
+                fileSize: m.fileSize.map { formatFileSize($0) }
+            )
+        }
+        let repostTranslations: [String: PostTranslation]? = translations?.mapValues { entry in
+            PostTranslation(text: entry.text, translationModel: entry.translationModel, confidenceScore: entry.confidenceScore)
+        }
+        return RepostContent(id: id, author: author.name, authorId: author.id,
+                             authorUsername: author.username,
+                             authorAvatarURL: author.avatar,
+                             content: content ?? "",
+                             timestamp: createdAt, likes: likeCount ?? 0,
+                             isQuote: isQuote ?? false,
+                             type: type,
+                             originalLanguage: originalLanguage,
+                             audioUrl: audioUrl,
+                             moodEmoji: moodEmoji,
+                             storyEffects: storyEffects,
+                             media: repostMedia,
+                             translations: repostTranslations,
+                             originalRepostOfId: originalRepostOfId,
+                             visibility: nil,
+                             expiresAt: nil,
+                             location: location)
     }
 }

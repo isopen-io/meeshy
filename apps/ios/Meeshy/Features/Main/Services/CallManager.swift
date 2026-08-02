@@ -3722,7 +3722,7 @@ final class CallManager: ObservableObject {
         // has time to tap « Réessayer » (parité web/Android), then auto-dismisses
         // like any other ended call. Tapping retry re-enters startCall, whose
         // resetEndedStateForNewCall nils this token so the pending settle bails.
-        let settleDelay = (CallRetryPolicy.isRetryable(reason) && lastOutgoingContext != nil)
+        let settleDelay = canRetryCall
             ? QualityThresholds.callEndRetryableSettleSeconds
             : QualityThresholds.callEndSettleSeconds
         Task { @MainActor [weak self] in

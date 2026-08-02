@@ -34,7 +34,6 @@ export interface LocationHandlerDependencies {
 }
 
 export class LocationHandler {
-  private io: SocketIOServer;
   private prisma: PrismaClient;
   private connectedUsers: Map<string, SocketUser>;
   private socketToUser: Map<string, string>;
@@ -42,7 +41,6 @@ export class LocationHandler {
   private rateLimiter = getSocketRateLimiter();
 
   constructor(deps: LocationHandlerDependencies) {
-    this.io = deps.io;
     this.prisma = deps.prisma;
     this.connectedUsers = deps.connectedUsers;
     this.socketToUser = deps.socketToUser;
@@ -100,7 +98,12 @@ export class LocationHandler {
       };
 
       callback?.({ success: true, data: eventData });
-      this.io.to(ROOMS.conversation(normalizedId)).emit(SERVER_EVENTS.LOCATION_LIVE_STARTED, eventData);
+      // Diffuser aux AUTRES participants uniquement (socket.to, pas io.to) : le
+      // partageur connaît déjà sa propre session via l'ACK ci-dessus, et les
+      // clients traitent tout LOCATION_LIVE_* reçu comme l'état d'un pair DISTANT
+      // (cf. StatusHandler typing + CallEventsHandler media-toggle). Un self-echo
+      // ferait apparaître le partageur comme un partageur distant sur sa carte.
+      socket.to(ROOMS.conversation(normalizedId)).emit(SERVER_EVENTS.LOCATION_LIVE_STARTED, eventData);
     } catch (error: unknown) {
       logger.error('Error handling location:live-start', error);
       this._sendError(callback, error instanceof Error ? error.message : 'Failed to start live location');
@@ -137,7 +140,9 @@ export class LocationHandler {
         timestamp: new Date(),
       };
 
-      this.io.to(ROOMS.conversation(normalizedId)).emit(SERVER_EVENTS.LOCATION_LIVE_UPDATED, eventData);
+      // Aux autres participants uniquement — le partageur est la source des
+      // updates, un self-echo n'aurait aucune valeur (cf. handleLiveLocationStart).
+      socket.to(ROOMS.conversation(normalizedId)).emit(SERVER_EVENTS.LOCATION_LIVE_UPDATED, eventData);
     } catch (error: unknown) {
       logger.error('Error handling location:live-update', error);
     }
@@ -165,7 +170,8 @@ export class LocationHandler {
         stoppedAt: new Date(),
       };
 
-      this.io.to(ROOMS.conversation(normalizedId)).emit(SERVER_EVENTS.LOCATION_LIVE_STOPPED, eventData);
+      // Aux autres participants uniquement (cf. handleLiveLocationStart).
+      socket.to(ROOMS.conversation(normalizedId)).emit(SERVER_EVENTS.LOCATION_LIVE_STOPPED, eventData);
     } catch (error: unknown) {
       logger.error('Error handling location:live-stop', error);
     }

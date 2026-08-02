@@ -30,7 +30,11 @@ function createMockPrisma() {
 }
 
 function createMockSocket(socketId = 'socket-1') {
-  return { id: socketId } as any;
+  // `socket.to(room).emit(...)` excludes the emitter — the sharer must never
+  // receive its own LOCATION_LIVE_* echo (see LocationHandler broadcast comments).
+  const emit = jest.fn();
+  const to = jest.fn().mockReturnValue({ emit });
+  return { id: socketId, to, emit } as any;
 }
 
 function createConnectedUsers(entries: Array<{ key: string; user: SocketUser }>) {
@@ -129,8 +133,8 @@ describe('LocationHandler', () => {
           durationMinutes: 60,
         }) })
       );
-      expect(mockIO.to).toHaveBeenCalledWith(ROOMS.conversation(NORMALIZED_ID));
-      expect(mockIO.emit).toHaveBeenCalledWith(
+      expect(socket.to).toHaveBeenCalledWith(ROOMS.conversation(NORMALIZED_ID));
+      expect(socket.emit).toHaveBeenCalledWith(
         SERVER_EVENTS.LOCATION_LIVE_STARTED,
         expect.objectContaining({
           conversationId: NORMALIZED_ID,
@@ -139,6 +143,8 @@ describe('LocationHandler', () => {
           username: 'TestUser',
         })
       );
+      // Regression: NEVER broadcast to the whole room (would self-echo the sharer).
+      expect(mockIO.to).not.toHaveBeenCalled();
     });
 
     it('includes expiresAt and startedAt in event data', async () => {
@@ -233,8 +239,8 @@ describe('LocationHandler', () => {
 
       await handler.handleLiveLocationUpdate(socket, validData as any);
 
-      expect(mockIO.to).toHaveBeenCalledWith(ROOMS.conversation(NORMALIZED_ID));
-      expect(mockIO.emit).toHaveBeenCalledWith(
+      expect(socket.to).toHaveBeenCalledWith(ROOMS.conversation(NORMALIZED_ID));
+      expect(socket.emit).toHaveBeenCalledWith(
         SERVER_EVENTS.LOCATION_LIVE_UPDATED,
         expect.objectContaining({
           conversationId: NORMALIZED_ID,
@@ -245,6 +251,8 @@ describe('LocationHandler', () => {
           heading: 90,
         })
       );
+      // Regression: never broadcast to the whole room (would self-echo the sharer).
+      expect(mockIO.to).not.toHaveBeenCalled();
     });
 
     it('silently ignores when user is not authenticated', async () => {
@@ -252,7 +260,7 @@ describe('LocationHandler', () => {
 
       await handler.handleLiveLocationUpdate(socket, validData as any);
 
-      expect(mockIO.to).not.toHaveBeenCalled();
+      expect(socket.to).not.toHaveBeenCalled();
     });
 
     it('silently ignores invalid coordinates', async () => {
@@ -261,7 +269,7 @@ describe('LocationHandler', () => {
 
       await handler.handleLiveLocationUpdate(socket, invalidData as any);
 
-      expect(mockIO.to).not.toHaveBeenCalled();
+      expect(socket.to).not.toHaveBeenCalled();
     });
 
     it('silently ignores when not a participant', async () => {
@@ -270,7 +278,7 @@ describe('LocationHandler', () => {
 
       await handler.handleLiveLocationUpdate(socket, validData as any);
 
-      expect(mockIO.to).not.toHaveBeenCalled();
+      expect(socket.to).not.toHaveBeenCalled();
     });
 
     it('handles errors without throwing', async () => {
@@ -295,8 +303,8 @@ describe('LocationHandler', () => {
 
       await handler.handleLiveLocationStop(socket, validData as any);
 
-      expect(mockIO.to).toHaveBeenCalledWith(ROOMS.conversation(NORMALIZED_ID));
-      expect(mockIO.emit).toHaveBeenCalledWith(
+      expect(socket.to).toHaveBeenCalledWith(ROOMS.conversation(NORMALIZED_ID));
+      expect(socket.emit).toHaveBeenCalledWith(
         SERVER_EVENTS.LOCATION_LIVE_STOPPED,
         expect.objectContaining({
           conversationId: NORMALIZED_ID,
@@ -304,6 +312,8 @@ describe('LocationHandler', () => {
           stoppedAt: expect.any(Date),
         })
       );
+      // Regression: never broadcast to the whole room (would self-echo the sharer).
+      expect(mockIO.to).not.toHaveBeenCalled();
     });
 
     it('silently ignores when user is not authenticated', async () => {
@@ -311,7 +321,7 @@ describe('LocationHandler', () => {
 
       await handler.handleLiveLocationStop(socket, validData as any);
 
-      expect(mockIO.to).not.toHaveBeenCalled();
+      expect(socket.to).not.toHaveBeenCalled();
     });
 
     it('silently ignores when not a participant', async () => {
@@ -320,7 +330,7 @@ describe('LocationHandler', () => {
 
       await handler.handleLiveLocationStop(socket, validData as any);
 
-      expect(mockIO.to).not.toHaveBeenCalled();
+      expect(socket.to).not.toHaveBeenCalled();
     });
 
     it('handles errors without throwing', async () => {
