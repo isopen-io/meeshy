@@ -75,7 +75,7 @@ import type {
  * disconnect handler (`callParticipant.findMany` with `include: callSession`),
  * threaded into the grace-window helpers.
  */
-type DisconnectParticipation = {
+export type DisconnectParticipation = {
   id: string;
   participantId: string;
   callSessionId: string;
@@ -688,6 +688,68 @@ export class CallEventsHandler {
   }
 
   /**
+   * CALL-RESILIENCE (Vague 44) — the broadcast half of
+   * `leaveParticipationAndBroadcast`, extracted and made public so
+   * `AuthHandler`'s anonymous-guest disconnect path (the one case this
+   * handler's own disconnect flow cannot resolve — its participation lookup
+   * is keyed on `participant.userId`, always null for an anonymous guest,
+   * see the `CALL-RESILIENCE` note in `AuthHandler.handleDisconnection`) can
+   * fan out the exact same PARTICIPANT_LEFT/call:ended/postCallSummary/
+   * evictCallRoomSockets sequence after calling `CallService.leaveCall`
+   * itself, instead of leaving the other party's UI "in call" until the
+   * ~120s `CallCleanupService` GC.
+   */
+  async broadcastParticipantLeftResult(opts: {
+    io: SocketIOServer;
+    leftSession: Awaited<ReturnType<CallService['leaveCall']>>;
+    participation: DisconnectParticipation;
+    userId: string;
+  }): Promise<void> {
+    const { io, leftSession, participation, userId } = opts;
+
+    io.to(ROOMS.call(participation.callSessionId)).emit(
+      CALL_EVENTS.PARTICIPANT_LEFT,
+      {
+        callId: participation.callSessionId,
+        participantId: participation.id,
+        mode: participation.callSession.mode
+      } as CallParticipantLeftEvent
+    );
+
+    const dcStatus = leftSession.status as string;
+    if (dcStatus === 'ended' || dcStatus === 'missed') {
+      const dcEndedEvent: CallEndedEvent = {
+        callId: leftSession.id,
+        duration: leftSession.duration || 0,
+        endedBy: userId,
+        reason: (leftSession.endReason || 'completed') as CallEndReason
+      };
+      // CALL-RESILIENCE — use the shared fanout (call + conversation + every
+      // active member's user room), not a narrow two-room emit: a still-ringing
+      // callee has joined neither room yet and would otherwise keep ringing
+      // until its own client-side timeout (see resolveCallEndedRooms).
+      await this.broadcastCallEnded(io, leftSession.id, leftSession.conversationId, dcEndedEvent);
+      await this.postCallSummary(leftSession.id);
+      if (dcStatus === 'missed') {
+        /* istanbul ignore next -- handleMissedCall has its own internal catch and never rejects */
+        this.handleMissedCall(leftSession.id).catch((err) => {
+          logger.error('❌ handleMissedCall failed after disconnect-grace leave', {
+            callId: leftSession.id,
+            err
+          });
+        });
+      }
+
+      // Room-membership leak fix — mirrors the same fix on call:end/
+      // call:leave/call:force-leave: this only evicted THIS socket via
+      // leaveCall(), leaving every other still-joined socket (e.g. a
+      // second device/tab) a member of the now-dead room until its own
+      // disconnect.
+      await this.evictCallRoomSockets(io, participation.callSessionId);
+    }
+  }
+
+  /**
    * CALL-RESILIENCE — the terminal leave+broadcast path shared by an immediate
    * (pre-answer) disconnect and an expired reconnect grace window. Extracted
    * verbatim from the disconnect handler's per-participation loop so both callers
@@ -714,47 +776,7 @@ export class CallEventsHandler {
         endReasonHint: CallEndReason.connectionLost
       });
       this.invalidateSignalSession(participation.callSessionId);
-
-      io.to(ROOMS.call(participation.callSessionId)).emit(
-        CALL_EVENTS.PARTICIPANT_LEFT,
-        {
-          callId: participation.callSessionId,
-          participantId: participation.id,
-          mode: participation.callSession.mode
-        } as CallParticipantLeftEvent
-      );
-
-      const dcStatus = leftSession.status as string;
-      if (dcStatus === 'ended' || dcStatus === 'missed') {
-        const dcEndedEvent: CallEndedEvent = {
-          callId: leftSession.id,
-          duration: leftSession.duration || 0,
-          endedBy: userId,
-          reason: (leftSession.endReason || 'completed') as CallEndReason
-        };
-        // CALL-RESILIENCE — use the shared fanout (call + conversation + every
-        // active member's user room), not a narrow two-room emit: a still-ringing
-        // callee has joined neither room yet and would otherwise keep ringing
-        // until its own client-side timeout (see resolveCallEndedRooms).
-        await this.broadcastCallEnded(io, leftSession.id, leftSession.conversationId, dcEndedEvent);
-        await this.postCallSummary(leftSession.id);
-        if (dcStatus === 'missed') {
-          /* istanbul ignore next -- handleMissedCall has its own internal catch and never rejects */
-          this.handleMissedCall(leftSession.id).catch((err) => {
-            logger.error('❌ handleMissedCall failed after disconnect-grace leave', {
-              callId: leftSession.id,
-              err
-            });
-          });
-        }
-
-        // Room-membership leak fix — mirrors the same fix on call:end/
-        // call:leave/call:force-leave: this only evicted THIS socket via
-        // leaveCall(), leaving every other still-joined socket (e.g. a
-        // second device/tab) a member of the now-dead room until its own
-        // disconnect.
-        await this.evictCallRoomSockets(io, participation.callSessionId);
-      }
+      await this.broadcastParticipantLeftResult({ io, leftSession, participation, userId });
 
       logger.info('✅ Socket: Auto-left call on disconnect', {
         callId: participation.callSessionId,
