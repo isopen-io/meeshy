@@ -85,11 +85,15 @@ public struct APIConversationLastMessage: Decodable, Sendable {
     public let isBlurred: Bool?
     public let isViewOnce: Bool?
     public let expiresAt: Date?
+    /// Position hissée par le gateway (message géolocalisé). Un message
+    /// position-seule a un `content` vide : c'est ce champ qui permet à la
+    /// ligne d'aperçu de composer son libellé côté client.
+    public let location: SharedPlace?
 
     enum CodingKeys: String, CodingKey {
         case id, content, senderId, createdAt, messageType, sender, attachments
         case _count
-        case isBlurred, isViewOnce, expiresAt
+        case isBlurred, isViewOnce, expiresAt, location
     }
 }
 
@@ -330,6 +334,7 @@ extension APIConversation {
             lastMessageIsBlurred: lastMessage?.isBlurred ?? false,
             lastMessageIsViewOnce: lastMessage?.isViewOnce ?? false,
             lastMessageExpiresAt: lastMessage?.expiresAt,
+            lastMessageLocation: lastMessage?.location,
             recentMessages: recentPreviews,
             tags: tags, isAnnouncementChannel: isAnnouncementChannel ?? false,
             defaultWriteRole: defaultWriteRole,

@@ -1651,6 +1651,44 @@ final class ConversationListViewModelTests: XCTestCase {
                        "Le rename d'un groupe doit continuer de se propager via l'event socket")
     }
 
+    // MARK: - conversation:updated : position du dernier message
+
+    func test_conversationUpdatedEvent_bump_carriesLocationToTheRow() async throws {
+        let messageSocket = MockMessageSocket()
+        let (sut, _, _, _, _, _, _) = makeSUT(messageSocket: messageSocket)
+        sut.setConversations([
+            makeConversation(id: "loc1", lastMessageAt: Date(timeIntervalSince1970: 5_000))
+        ])
+
+        let event = makeConversationUpdatedEvent(
+            conversationId: "loc1", lastMessageAt: Date(timeIntervalSince1970: 9_000),
+            lastMessageId: "m-loc", locationName: "Tour Eiffel")
+        messageSocket.conversationUpdated.send(event)
+
+        try await Task.sleep(nanoseconds: 80_000_000)
+
+        XCTAssertEqual(sut.conversations.first?.lastMessageLocation?.name, "Tour Eiffel",
+                       "Un message position-seule a un content vide : la ligne doit recevoir la position pour composer son libellé")
+    }
+
+    func test_conversationUpdatedEvent_bump_withoutLocation_clearsThePreviousPin() async throws {
+        let messageSocket = MockMessageSocket()
+        let (sut, _, _, _, _, _, _) = makeSUT(messageSocket: messageSocket)
+        var conv = makeConversation(id: "loc2", lastMessageAt: Date(timeIntervalSince1970: 5_000))
+        conv.lastMessageLocation = SharedPlace(latitude: 1, longitude: 2, name: "Ancien lieu")
+        sut.setConversations([conv])
+
+        let event = makeConversationUpdatedEvent(
+            conversationId: "loc2", lastMessageAt: Date(timeIntervalSince1970: 9_000),
+            lastMessageId: "m-txt")
+        messageSocket.conversationUpdated.send(event)
+
+        try await Task.sleep(nanoseconds: 80_000_000)
+
+        XCTAssertNil(sut.conversations.first?.lastMessageLocation,
+                     "Un texte qui remplace la position doit EFFACER la pastille du message précédent — c'est l'atomicité de la facette")
+    }
+
     // MARK: - conversation:updated socket event with lastMessageAt
 
     func test_conversationUpdatedEvent_withLastMessageAt_triggersBumpToTop() async throws {
@@ -3028,7 +3066,9 @@ private func makeConversationUpdatedEvent(
     lastMessageAt: Date?,
     title: String? = nil,
     avatar: String? = nil,
-    includeUpdatedBy: Bool = true
+    includeUpdatedBy: Bool = true,
+    lastMessageId: String? = nil,
+    locationName: String? = nil
 ) -> ConversationUpdatedEvent {
     let isoFormatter = ISO8601DateFormatter()
     isoFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
@@ -3041,6 +3081,10 @@ private func makeConversationUpdatedEvent(
     }
     if let title { json["title"] = title }
     if let avatar { json["avatar"] = avatar }
+    if let lastMessageId { json["lastMessageId"] = lastMessageId }
+    if let locationName {
+        json["location"] = ["latitude": 48.858, "longitude": 2.294, "name": locationName]
+    }
     if let lastMessageAt {
         json["lastMessageAt"] = isoFormatter.string(from: lastMessageAt)
     }

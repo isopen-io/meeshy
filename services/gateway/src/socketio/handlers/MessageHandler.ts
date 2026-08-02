@@ -1112,6 +1112,14 @@ export class MessageHandler {
           lastMessageAt: message.createdAt,
           lastMessageId: message.id,
           lastMessagePreview: message.content,
+          // Un message position-seule a un `content` vide : hisser
+          // `metadata.location` (même règle que la liste REST et
+          // emitConversationPreviewUpdate) pour que la ligne d'aperçu du
+          // client compose son libellé — aucun texte de repli côté serveur.
+          ...((): Record<string, unknown> => {
+            const place = sharedPlaceFromMetadata((message as { metadata?: unknown }).metadata);
+            return place ? { location: place } : {};
+          })(),
           senderId: message.senderId,
           updatedAt: new Date().toISOString()
         };

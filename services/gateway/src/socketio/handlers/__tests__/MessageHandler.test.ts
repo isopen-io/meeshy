@@ -738,6 +738,41 @@ describe('MessageHandler', () => {
       }
     });
 
+    it('hisse metadata.location dans le payload conversation:updated — un message position-seule a un content vide, la ligne d\'aperçu doit pouvoir composer son libellé', async () => {
+      const msg = makeMessage({
+        content: '',
+        metadata: { location: { latitude: 48.858, longitude: 2.294, name: 'Tour Eiffel', address: null, category: null } },
+      });
+      await handler.broadcastNewMessage(msg as any, VALID_CONV_ID, socket);
+
+      const updatedPayloads = (deps.io.to as jest.Mock).mock.results
+        .flatMap((r: any) => (r.value?.emit?.mock?.calls ?? []) as [string, Record<string, unknown>][])
+        .filter((c) => c[0] === 'conversation:updated')
+        .map((c) => c[1]);
+
+      expect(updatedPayloads.length).toBeGreaterThan(0);
+      for (const payload of updatedPayloads) {
+        expect(payload.location).toEqual(
+          expect.objectContaining({ latitude: 48.858, longitude: 2.294, name: 'Tour Eiffel' })
+        );
+      }
+    });
+
+    it('sans position, le payload conversation:updated ne porte AUCUNE clé location', async () => {
+      const msg = makeMessage();
+      await handler.broadcastNewMessage(msg as any, VALID_CONV_ID, socket);
+
+      const updatedPayloads = (deps.io.to as jest.Mock).mock.results
+        .flatMap((r: any) => (r.value?.emit?.mock?.calls ?? []) as [string, Record<string, unknown>][])
+        .filter((c) => c[0] === 'conversation:updated')
+        .map((c) => c[1]);
+
+      expect(updatedPayloads.length).toBeGreaterThan(0);
+      for (const payload of updatedPayloads) {
+        expect('location' in payload).toBe(false);
+      }
+    });
+
     it('uses senderSocket.broadcast.to for anonymous user (no userId)', async () => {
       const msg = makeMessage({ sender: { id: PARTICIPANT_ID, userId: null, displayName: 'Anon', type: 'anonymous' } });
       await handler.broadcastNewMessage(msg as any, VALID_CONV_ID, socket);

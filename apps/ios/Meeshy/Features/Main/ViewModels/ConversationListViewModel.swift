@@ -775,10 +775,17 @@ class ConversationListViewModel: ObservableObject {
                     Logger.messages.debug("[conversationUpdated] bump websocket id=\(event.conversationId, privacy: .public)")
                     self.bumpToTop(
                         conversationId: event.conversationId,
-                        facet: .bumped(at: newLastAt, id: event.lastMessageId, preview: event.lastMessagePreview)
+                        facet: .bumped(at: newLastAt, id: event.lastMessageId, preview: event.lastMessagePreview,
+                                       location: event.location)
                     )
                 } else {
-                    if let msgId = event.lastMessageId { self.conversations[index].lastMessageId = msgId }
+                    if let msgId = event.lastMessageId {
+                        self.conversations[index].lastMessageId = msgId
+                        // Écrite AVEC l'id (chemin message-driven) et jamais
+                        // seule : `nil` efface la pastille du message précédent
+                        // quand un texte le remplace au même horodatage.
+                        self.conversations[index].lastMessageLocation = event.location
+                    }
                     if let preview = event.lastMessagePreview {
                         self.conversations[index].lastMessagePreview = preview.meeshyPreviewTruncated
                     }

@@ -279,6 +279,11 @@ struct ThemedConversationRow: View {
         case .standard:
             if let preview = resolvedPreview, !preview.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 parts.append(String(format: String(localized: "accessibility.last_message_preview", bundle: .main), preview))
+            } else if let place = conversation.lastMessageLocation {
+                // Parité avec le visuel : VoiceOver annonce la position que la
+                // ligne affiche, nom du lieu compris quand il existe.
+                parts.append(place.name
+                    ?? String(localized: "conversation.summary.location", defaultValue: "Position", bundle: .main))
             }
         }
         parts.append(RelativeTimeFormatter.shortString(for: conversation.lastMessageAt))
@@ -570,6 +575,20 @@ struct ThemedConversationRow: View {
                 let attachments = conversation.lastMessageAttachments
                 if hasText || !attachments.isEmpty {
                     standardMessageContent(showEphemeralIcon: false)
+                } else if let place = conversation.lastMessageLocation {
+                    // Message position-seule : `content` vide par construction
+                    // (le serveur ne fabrique aucun texte de repli) — la ligne
+                    // compose son libellé depuis la position hissée.
+                    HStack(spacing: 4) {
+                        senderLabel
+                        Image(systemName: "mappin.and.ellipse")
+                            .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .medium))
+                            .foregroundColor(accent)
+                        Text(place.name ?? String(localized: "conversation.summary.location", defaultValue: "Position"))
+                            .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .regular))
+                            .foregroundColor(textSecondary)
+                            .lineLimit(1)
+                    }
                 } else {
                     Text("")
                         .font(MeeshyFont.relative(MeeshyFont.subheadSize))
