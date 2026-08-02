@@ -19,6 +19,7 @@ import { logger } from '../utils/logger';
 import { CALL_EVENTS, CALL_ERROR_CODES, CALL_TERMINAL_STATUSES } from '@meeshy/shared/types/video-call';
 import { ROOMS, CLIENT_EVENTS } from '@meeshy/shared/types/socketio-events';
 import { resolveCallEndedRooms } from '../utils/callEndedFanout';
+import { callErrorMessageOf, parseCallHandlerError } from './utils/call-error-parsing';
 import { buildCallSilentPush, shouldMirrorAnsweredElsewhere } from '../services/call-push-mirroring';
 import { notificationString } from '@meeshy/shared/utils/notification-strings';
 import { resolveUserLanguage } from '@meeshy/shared/utils/conversation-helpers';
@@ -562,9 +563,9 @@ export class CallEventsHandler {
         // (createMissedCallNotifications) was already wired but never
         // called from this path before audit 2026-05-11.
         /* istanbul ignore next -- handleMissedCall has its own internal catch and never rejects */
-        await this.handleMissedCall(callId).catch((err: any) => {
+        await this.handleMissedCall(callId).catch((err: unknown) => {
           logger.error('handleMissedCall failed for ringing timeout', {
-            callId, err: err?.message
+            callId, err: callErrorMessageOf(err, String(err))
           });
         });
 
@@ -1288,7 +1289,7 @@ export class CallEventsHandler {
         userId,
         enabled: data.enabled
       });
-    } catch (error: any) {
+    } catch (error) {
       logger.error(`❌ Socket: Error toggling ${mediaType}`, error);
 
       socket.emit(CALL_EVENTS.ERROR, { ...this.mapMediaToggleError(error, `Failed to toggle ${mediaType}`), callId: data?.callId } as CallError);
@@ -1715,12 +1716,12 @@ export class CallEventsHandler {
         if (!rateLimitPassed) return;
 
         socket.data.appForeground = data?.foreground === true;
-      } catch (err: any) {
+      } catch (err) {
         // Was the one handler in this file with no try/catch — every async
         // Socket.IO listener here must have one (emit() doesn't await
         // rejected promises, so an uncaught throw here becomes an unhandled
         // rejection instead of a logged, contained failure).
-        logger.error('presence:app-state failed', { error: err?.message });
+        logger.error('presence:app-state failed', { error: callErrorMessageOf(err, String(err)) });
       }
     });
 
@@ -1810,8 +1811,8 @@ export class CallEventsHandler {
           socket.emit(CALL_EVENTS.INITIATED, { ...event, iceServers });
           logger.info('📲 Replayed in-progress call:initiated on (re)connect', { callId: c.id, userId });
         }
-      } catch (err: any) {
-        logger.error('call:check-active failed', { error: err?.message });
+      } catch (err) {
+        logger.error('call:check-active failed', { error: callErrorMessageOf(err, String(err)) });
       }
     });
 
@@ -1995,7 +1996,7 @@ export class CallEventsHandler {
           // GW6(c) — appForeground is only trusted on a FRESH socket (see
           // isFreshForegroundSocket): a zombie foreground socket must not
           // suppress the VoIP push (iOS dedups by callId anyway).
-          if (memberSockets.some((s: any) => this.isFreshForegroundSocket(s.data))) {
+          if (memberSockets.some((s) => this.isFreshForegroundSocket(s.data))) {
             foregroundUserIds.add(memberId);
           }
           const memberIceServers = this.callService.generateIceServers(memberId);
@@ -2121,14 +2122,10 @@ export class CallEventsHandler {
             });
           }
         }
-      } catch (error: any) {
+      } catch (error) {
         logger.error('Error initiating call', error);
 
-        const errorMessage = error.message || 'Failed to initiate call';
-        const errorCode = errorMessage.split(':')[0];
-        const message = errorMessage.includes(':')
-          ? errorMessage.split(':').slice(1).join(':').trim()
-          : errorMessage;
+        const { code: errorCode, message } = parseCallHandlerError(error, 'Failed to initiate call');
 
         ack?.({ success: false, error: { code: errorCode, message } });
         socket.emit(CALL_EVENTS.ERROR, { code: errorCode, message } as CallError);
@@ -2341,10 +2338,11 @@ export class CallEventsHandler {
           // (answer sent to nobody). callSession is already in scope from joinCall.
           const senderId = replayOffer.signal.from;
           const senderActive = callSession.participants.some(
-            (p: any) => !p.leftAt && (
-              (p.participant?.userId ?? p.participantId) === senderId ||
-              p.participantId === senderId
-            )
+            (p: { leftAt: Date | null; participantId: string; participant?: { userId?: string | null } | null }) =>
+              !p.leftAt && (
+                (p.participant?.userId ?? p.participantId) === senderId ||
+                p.participantId === senderId
+              )
           );
           if (senderActive) {
             socket.emit(CALL_EVENTS.SIGNAL, replayOffer);
@@ -2375,14 +2373,10 @@ export class CallEventsHandler {
           userId,
           participantId: participant.id
         });
-      } catch (error: any) {
+      } catch (error) {
         logger.error('❌ Socket: Error joining call', error);
 
-        const errorMessage = error.message || 'Failed to join call';
-        const errorCode = errorMessage.split(':')[0];
-        const message = errorMessage.includes(':')
-          ? errorMessage.split(':').slice(1).join(':').trim()
-          : errorMessage;
+        const { code: errorCode, message } = parseCallHandlerError(error, 'Failed to join call');
 
         // Audit gateway (2026-07-28) — this ack previously sent only the bare
         // `message` string despite `errorCode` already being computed above,
@@ -2567,7 +2561,7 @@ export class CallEventsHandler {
             userId
           });
         }
-      } catch (error: any) {
+      } catch (error) {
         logger.error('❌ Socket: Error leaving call', error);
 
         // Sibling-drift fix (Vague 27, mirrors call:end's catch) — if
@@ -2581,11 +2575,7 @@ export class CallEventsHandler {
         const recoveryUserId = getUserId(socket.id) ?? 'unknown';
         await this.forceEndOrphanedCallAfterOptimisticBroadcast(io, data.callId, recoveryUserId);
 
-        const errorMessage = error.message || 'Failed to leave call';
-        const errorCode = errorMessage.split(':')[0];
-        const message = errorMessage.includes(':')
-          ? errorMessage.split(':').slice(1).join(':').trim()
-          : errorMessage;
+        const { code: errorCode, message } = parseCallHandlerError(error, 'Failed to leave call');
 
         socket.emit(CALL_EVENTS.ERROR, {
           code: errorCode,
@@ -2791,11 +2781,11 @@ export class CallEventsHandler {
           userId,
           callsProcessed: activeCalls.length
         });
-      } catch (error: any) {
+      } catch (error) {
         logger.error('❌ Socket: Error force leaving calls', error);
         socket.emit(CALL_EVENTS.ERROR, {
           code: 'FORCE_LEAVE_ERROR',
-          message: error.message || 'Failed to force leave calls'
+          message: callErrorMessageOf(error, 'Failed to force leave calls')
         } as CallError);
       }
     });
@@ -3072,7 +3062,7 @@ export class CallEventsHandler {
           type: data.signal.type,
           targetSockets: targetSocketIds.length
         });
-      } catch (error: any) {
+      } catch (error) {
         logger.error('❌ Socket: Error forwarding signal', error);
 
         socket.emit(CALL_EVENTS.ERROR, {
@@ -3271,13 +3261,9 @@ export class CallEventsHandler {
           duration: callSession.duration,
           reason: endReason
         });
-      } catch (error: any) {
+      } catch (error) {
         logger.error('Error ending call', error);
-        const errorMessage = error.message || 'Failed to end call';
-        const errorCode = errorMessage.split(':')[0];
-        const message = errorMessage.includes(':')
-          ? errorMessage.split(':').slice(1).join(':').trim()
-          : errorMessage;
+        const { code: errorCode, message } = parseCallHandlerError(error, 'Failed to end call');
 
         // The fast-path broadcast may already have told the room the call
         // ended before this failure (e.g. endCall() itself threw). Force the
