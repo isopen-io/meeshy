@@ -2418,6 +2418,21 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
         // sinks — les handlers à delta ±1 (`applyPostReactionDelta`,
         // `applyStoryReactionDelta`) compteraient alors double.
         guard socketCancellables.isEmpty else { return }
+
+        // rts-02 — rattrapage du tray au reconnect social : des stories ont pu
+        // être créées ou supprimées pendant la coupure. Le curseur se calcule
+        // au moment de l'ÉVÉNEMENT (pas à l'armement) — insertOrMergeStoryGroups,
+        // la garde isViewed monotone, les tombstones et le fallback full sur
+        // échec du delta garantissent déjà l'idempotence côté
+        // fetchStoriesFromNetwork.
+        socialSocket.didReconnect
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] in
+                guard let self, !self.isLoading else { return }
+                Task { await self.fetchStoriesFromNetwork(deltaSince: Self.deltaSince(for: self.storyGroups)) }
+            }
+            .store(in: &socketCancellables)
+
         socialSocket.storyCreated
             .receive(on: DispatchQueue.main)
             .sink { [weak self] apiPost in
