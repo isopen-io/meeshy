@@ -4180,6 +4180,82 @@ describe('CallService - markCallAsMissed non-ringing guard', () => {
       data: { activeCallId: null }
     });
   });
+
+  it('invalidates the call:signal session cache on a fresh ringing→missed write — every sibling terminal writer (endCall/leaveCall callers, the REST end/leave routes, the GC zombie sweep) does this, finalizeMissedCallCleanup never did', async () => {
+    // Doc invariant in CallEventsHandler.invalidateSignalSession: "Every path
+    // that writes CallParticipant.leftAt for this call must evict the entry
+    // so the very next call:signal re-reads." finalizeMissedCallCleanup does
+    // write leftAt (assertion above) but, unlike notifyReapedCallEnded (the
+    // GC sweep), never called invalidateSignalCache — its sole caller,
+    // CallEventsHandler.handleMissedCall (reached from the ringing-timeout
+    // handler), never invalidated it either. A stray ICE/SDP call:signal
+    // arriving within the 2s cache TTL after a call times out to "missed"
+    // would still be relayed against the stale pre-leftAt snapshot.
+    const ringingCall = createMockCallSession({
+      status: CallStatus.ringing,
+      participants: [createMockParticipant()],
+      initiator: createMockUser()
+    });
+    const missedCall = {
+      ...ringingCall,
+      status: CallStatus.missed,
+      endedAt: new Date(),
+      participants: [createMockParticipant({ user: createMockUser() })],
+      initiator: createMockUser(),
+      conversation: createMockConversation()
+    };
+    mockPrisma.callSession.findUnique
+      .mockResolvedValueOnce(ringingCall)
+      .mockResolvedValueOnce(missedCall);
+    mockPrisma.callSession.updateMany.mockResolvedValue({ count: 1 });
+    const invalidated: string[] = [];
+    callService.setSignalCacheInvalidationCallback((callId) => { invalidated.push(callId); });
+
+    await callService.markCallAsMissed('call-123');
+
+    expect(invalidated).toContain('call-123');
+  });
+
+  it('invalidates the call:signal session cache even on the idempotent already-missed branch (ringing-timeout race) — mirrors the releaseActiveCallClaim fix above for the same branch', async () => {
+    const missedCall = createMockCallSession({
+      status: CallStatus.missed,
+      endedAt: new Date(),
+      participants: [createMockParticipant({ user: createMockUser() })],
+      initiator: createMockUser(),
+      conversation: createMockConversation()
+    });
+    mockPrisma.callSession.findUnique
+      .mockResolvedValueOnce(missedCall)
+      .mockResolvedValueOnce(missedCall);
+    const invalidated: string[] = [];
+    callService.setSignalCacheInvalidationCallback((callId) => { invalidated.push(callId); });
+
+    await callService.markCallAsMissed('call-123');
+
+    expect(invalidated).toContain('call-123');
+  });
+
+  it('without a callback wired, markCallAsMissed stays silent (comportement actuel — optional callback, matches every other invalidateSignalCache caller)', async () => {
+    const ringingCall = createMockCallSession({
+      status: CallStatus.ringing,
+      participants: [createMockParticipant()],
+      initiator: createMockUser()
+    });
+    const missedCall = {
+      ...ringingCall,
+      status: CallStatus.missed,
+      endedAt: new Date(),
+      participants: [createMockParticipant({ user: createMockUser() })],
+      initiator: createMockUser(),
+      conversation: createMockConversation()
+    };
+    mockPrisma.callSession.findUnique
+      .mockResolvedValueOnce(ringingCall)
+      .mockResolvedValueOnce(missedCall);
+    mockPrisma.callSession.updateMany.mockResolvedValue({ count: 1 });
+
+    await expect(callService.markCallAsMissed('call-123')).resolves.not.toThrow();
+  });
 });
 
 describe('CallService - resolveEndReason private method', () => {

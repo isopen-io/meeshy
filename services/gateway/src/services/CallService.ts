@@ -2229,9 +2229,11 @@ export class CallService {
   /**
    * Shared terminal cleanup for a call resolved to `missed` — stamps any
    * still-open participant rows so `call:signal` stops relaying between them,
-   * clears in-memory heartbeat/ringing-timer state, and releases the
-   * conversation's active-call claim. Safe to call more than once: every
-   * write here is scoped/idempotent.
+   * clears in-memory heartbeat/ringing-timer state, releases the
+   * conversation's active-call claim, and invalidates the `call:signal`
+   * session cache (doc invariant in `CallEventsHandler.invalidateSignalSession`:
+   * every path writing `CallParticipant.leftAt` must evict the entry). Safe
+   * to call more than once: every write here is scoped/idempotent.
    */
   private async finalizeMissedCallCleanup(conversationId: string, callId: string): Promise<void> {
     await this.prisma.callParticipant.updateMany({
@@ -2244,6 +2246,7 @@ export class CallService {
     this.clearHeartbeats(callId);
     this.clearRingingTimeout(callId);
     await this.releaseActiveCallClaim(conversationId, callId);
+    this.invalidateSignalCache(callId);
   }
 
   /**
