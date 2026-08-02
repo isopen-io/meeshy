@@ -42,13 +42,12 @@ final class StoryComposerBlankTextDraftGuardTests: XCTestCase {
     }
 
     /// Reproduit le gate de `autosaveDraftAfterMutation` sur l'état vivant
-    /// simulé : mêmes cinq termes, même fonction pure.
+    /// simulé : mêmes quatre termes, même fonction pure.
     private func autosaveWouldWrite(
         draftResume: DraftResumeState,
         slides: [StorySlide]
     ) -> Bool {
         StoryComposerView.mayOverwriteStoredDraft(
-            isEditingExistingStory: false,
             draftResume: draftResume,
             isAutosaveSuspended: false,
             composerHasContent: StoryComposerView.composerHasContent(

@@ -334,6 +334,10 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
         /// un kill le laisse en queue → repris au boot.
         var queueId: String?
         var queueTempStoryId: String?
+        /// Brouillon d'origine (directive 2026-08-02) : gelé au hand-off, il
+        /// n'est supprimé qu'au SUCCÈS serveur confirmé ; l'annulation le
+        /// dégèle, l'échec permanent le ramène éditable avec son erreur.
+        var draftId: String?
         /// E5 — le VM détient-il la revendication de son item en queue ?
         /// Posée au write-ahead, CONSERVÉE à l'échec dès qu'une slide est
         /// commise (`releaseQueueClaimIfNothingCommitted`). Un retry ne doit
@@ -1168,7 +1172,8 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
         loadedAudioURLs: [String: URL] = [:],
         originalLanguage: String? = nil,
         visibility: String = StoryVisibilityPreferenceStore.fallback,
-        visibilityUserIds: [String] = []
+        visibilityUserIds: [String] = [],
+        draftId: String? = nil
     ) {
         // C6 — l'écriture a lieu au hand-off de CRÉATION uniquement (jamais
         // depuis `updateStoryInBackground` : changer l'audience d'une story
@@ -1190,7 +1195,8 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
                     loadedAudioURLs: loadedAudioURLs,
                     originalLanguage: originalLanguage,
                     visibility: visibility,
-                    visibilityUserIds: visibilityUserIds
+                    visibilityUserIds: visibilityUserIds,
+                    draftId: draftId
                 )
             }
             showStoryComposer = false
@@ -1204,6 +1210,7 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
         let upload = StoryUploadState(
             id: UUID().uuidString,
             thumbnailImage: thumbnail,
+            draftId: draftId,
             progress: 0,
             phase: .preparing,
             authorId: user?.id ?? "",
@@ -1347,7 +1354,8 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
         loadedAudioURLs: [String: URL] = [:],
         originalLanguage: String? = nil,
         visibility: String = StoryVisibilityPreferenceStore.fallback,
-        visibilityUserIds: [String] = []
+        visibilityUserIds: [String] = [],
+        draftId: String? = nil
     ) async {
         guard let intent = await persistPublishIntentToQueue(
             slides: slides,
@@ -1357,7 +1365,8 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
             loadedAudioURLs: loadedAudioURLs,
             originalLanguage: originalLanguage,
             visibility: visibility,
-            visibilityUserIds: visibilityUserIds
+            visibilityUserIds: visibilityUserIds,
+            draftId: draftId
         ) else { return }
 
         insertOptimisticOfflineStories(
@@ -1405,7 +1414,8 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
         loadedAudioURLs: [String: URL],
         originalLanguage: String? = nil,
         visibility: String,
-        visibilityUserIds: [String]
+        visibilityUserIds: [String],
+        draftId: String? = nil
     ) async -> (queueId: String, tempStoryId: String)? {
         // 1. Re-key slide backgrounds.
         let bgImages = Dictionary(

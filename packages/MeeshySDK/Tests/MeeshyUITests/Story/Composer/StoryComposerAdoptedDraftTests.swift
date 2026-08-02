@@ -58,12 +58,28 @@ final class StoryComposerAdoptedDraftTests: XCTestCase {
         )
     }
 
-    func test_openingDraftAction_editMode_shutsTheDraftSystemOff_evenIfAdopted() {
+    /// INVERSION CONSCIENTE (directive user 2026-08-02, point c) : un
+    /// brouillon portant `editingPostId` ROUVRE le mode édition — la session
+    /// est alors à la fois éditante ET adoptée, et c'est le brouillon choisi
+    /// qui doit revivre, pas l'hydratation serveur (qui écraserait le travail
+    /// repris). L'adoption prime.
+    func test_openingDraftAction_adoptedEditSession_restoresTheAdoptedDraft() {
         XCTAssertEqual(
             StoryComposerView.openingDraftAction(
                 isEditingExistingStory: true, isAdoptedDraftSession: true),
-            .hydratedByEditMode,
-            "Le mode édition prime : jamais de brouillon par-dessus une story hydratée."
+            .restoreAdoptedDraft,
+            "Rouvrir un brouillon d'édition doit restaurer CE brouillon, jamais ré-hydrater le serveur par-dessus."
+        )
+    }
+
+    /// Une entrée en édition FRAÎCHE (« Modifier » sur une story publiée)
+    /// reste hydratée depuis la story : le système de brouillons ne s'anime
+    /// qu'ensuite (autosaves porteurs d'`editingPostId`).
+    func test_openingDraftAction_freshEditSession_staysHydratedByEditMode() {
+        XCTAssertEqual(
+            StoryComposerView.openingDraftAction(
+                isEditingExistingStory: true, isAdoptedDraftSession: false),
+            .hydratedByEditMode
         )
     }
 
