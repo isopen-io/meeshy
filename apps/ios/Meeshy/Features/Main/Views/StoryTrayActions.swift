@@ -17,7 +17,7 @@ import MeeshyUI
 /// désormais la story (alignement Instagram) ; la gestion reste accessible par
 /// appui long.
 nonisolated enum MyStoryAvatarAction: Equatable {
-    case viewMyStory
+    case manageStories
     case createStory
 }
 
@@ -56,8 +56,14 @@ nonisolated enum StoryTrayCopy {
 }
 
 nonisolated enum StoryTrayActionResolver {
+    /// SUPERSESSION 2026-08-02 (directive user) : le tap sur l'avatar « Moi »
+    /// ouvre la LISTE « Mes stories » — c'est elle qui porte les onglets
+    /// Publiées / Brouillons, inaccessibles quand le tap lançait la lecture
+    /// directe (direction du 2026-07-31, elle-même une supersession du
+    /// 2026-07-14). La lecture directe reste offerte par « Voir ma story »
+    /// au menu contextuel.
     static func avatarTap(hasMyStory: Bool) -> MyStoryAvatarAction {
-        hasMyStory ? .viewMyStory : .createStory
+        hasMyStory ? .manageStories : .createStory
     }
 
     /// Le libellé VoiceOver DÉCRIT la destination réelle. Il annonçait
@@ -66,8 +72,8 @@ nonisolated enum StoryTrayActionResolver {
     /// peuvent plus diverger.
     static func avatarAccessibilityLabel(hasMyStory: Bool) -> String {
         switch avatarTap(hasMyStory: hasMyStory) {
-        case .viewMyStory:  return StoryTrayCopy.viewMyStory
-        case .createStory:  return StoryTrayCopy.createStory
+        case .manageStories: return StoryTrayCopy.manageStories
+        case .createStory:   return StoryTrayCopy.createStory
         }
     }
 }

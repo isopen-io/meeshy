@@ -404,9 +404,11 @@ private struct MyStoryButton: View {
                     onTap: {
                         // Une seule règle, testable, pour le routage ET pour
                         // l'annonce VoiceOver (cf. `StoryTrayActionResolver`).
+                        // Supersession 2026-08-02 : le tap ouvre la LISTE —
+                        // les onglets Publiées / Brouillons vivent là.
                         switch StoryTrayActionResolver.avatarTap(hasMyStory: hasMyStory) {
-                        case .viewMyStory:  onViewMyStory()
-                        case .createStory:  viewModel.showStoryComposer = true
+                        case .manageStories: onManageStories?()
+                        case .createStory:   viewModel.showStoryComposer = true
                         }
                         HapticFeedback.medium()
                     },
@@ -415,16 +417,21 @@ private struct MyStoryButton: View {
                         HapticFeedback.medium()
                     },
                     contextMenuItems: {
-                        // « Voir ma story » a disparu du menu : le TAP y mène
-                        // désormais directement. La gestion, elle, n'a pas
-                        // d'autre porte — elle reste ici.
+                        // Supersession 2026-08-02 : le TAP ouvre la liste de
+                        // gestion (onglets Publiées / Brouillons) — la lecture
+                        // DIRECTE, elle, retrouve sa porte ici.
                         var items: [AvatarContextMenuItem] = []
-                        // Découplé de `hasMyStory` : un envoi en cours, une
-                        // publication échouée ou un brouillon n'a produit
-                        // AUCUNE story publiée, et c'est précisément ce
-                        // travail-là qu'on vient gérer.
-                        if hasMyStory
-                            || !viewModel.activeUploads.isEmpty
+                        if hasMyStory {
+                            items.append(AvatarContextMenuItem(label: StoryTrayCopy.viewMyStory, icon: "play.circle.fill") {
+                                onViewMyStory()
+                                HapticFeedback.medium()
+                            })
+                        }
+                        // Découplé de `hasMyStory` : un envoi en cours ou une
+                        // publication échouée n'a produit AUCUNE story publiée,
+                        // et c'est précisément ce travail-là qu'on vient gérer.
+                        if !hasMyStory,
+                           !viewModel.activeUploads.isEmpty
                             || !StoryPublishService.shared.failedItems.isEmpty {
                             items.append(AvatarContextMenuItem(label: StoryTrayCopy.manageStories, icon: "rectangle.stack.fill") {
                                 onManageStories?()
@@ -793,10 +800,10 @@ struct PinnedStoryTrailBand: View {
                         group: ownGroup,
                         context: .storyTrayCompact,
                         onViewStory: {
-                            // Parité avec la grande trail : le tap ouvre SA
-                            // story, plus la liste de gestion.
-                            storyViewerCoordinator.present(StoryViewerRequest(
-                                id: ownGroup.id, singleGroup: true))
+                            // Parité avec la grande trail (supersession
+                            // 2026-08-02) : le tap ouvre la LISTE de gestion,
+                            // où vivent les onglets Publiées / Brouillons.
+                            showMyStories = true
                         },
                         onShowProfile: { selectedProfileUser = .from(storyGroup: ownGroup) },
                         contextMenuExtras: [
