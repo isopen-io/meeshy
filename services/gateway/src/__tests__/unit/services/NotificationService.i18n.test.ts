@@ -60,6 +60,14 @@ describe('attachments i18n', () => {
     expect(body).toContain('+1🎵');
     expect(body).toContain('📷 Foto');
   });
+  it('localise l’unité de taille selon la langue (pas de « Mo » français en anglais/allemand)', () => {
+    const en = formatSingleAttachmentLabelI18n('en', { type: 'video', duration: 135000, fileSize: 15_000_000 });
+    expect(en).toContain('14.3 MB');
+    expect(en).not.toContain('Mo');
+    const de = formatSingleAttachmentLabelI18n('de', { type: 'audio', fileSize: 500_000 });
+    expect(de).toContain('488 KB');
+    expect(de).not.toContain('Ko');
+  });
   it('roule Ko → Mo au bord du mébioctet (jamais "1024 Ko")', () => {
     // 1_048_500 o < 1 Mio mais /1024 = 1023.93 → .toFixed(0) rendait "1024 Ko".
     // Le tier doit basculer sur la valeur ARRONDIE, comme formatCallDataSize.

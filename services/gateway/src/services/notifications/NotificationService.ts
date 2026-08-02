@@ -30,7 +30,7 @@ import { isWithinDnd } from '@meeshy/shared/utils/notification-dnd';
 import { MESSAGE_EFFECT_FLAGS } from '@meeshy/shared/types/message-effect-flags';
 import { resolveUserLanguage } from '@meeshy/shared/utils/conversation-helpers';
 import { formatClock } from '@meeshy/shared/utils/duration-format';
-import { notificationString, buildNotificationDisplay, type NotificationStringKey } from '@meeshy/shared/utils/notification-strings';
+import { notificationString, buildNotificationDisplay, formatFileSizeI18n, type NotificationStringKey } from '@meeshy/shared/utils/notification-strings';
 import { notificationLogger, securityLogger } from '../../utils/logger-enhanced';
 import { SecuritySanitizer } from '../../utils/sanitize';
 import { filterMutedRecipients } from './mutedRecipients';
@@ -53,15 +53,6 @@ function pickMetadataString(metadata: unknown, key: string): string {
   if (!metadata || typeof metadata !== 'object' || !(key in metadata)) return '';
   const value = (metadata as Record<string, unknown>)[key];
   return value == null ? '' : String(value);
-}
-
-function formatFileSize(bytes: number): string {
-  if (bytes < 1024) return `${bytes} o`;
-  // Bascule le tier sur la valeur ARRONDIE (comme formatCallDataSize) : sinon
-  // p.ex. 1 048 500 o (< 1 Mio) affiche "1024 Ko" au lieu de "1.0 Mo".
-  const ko = Math.round(bytes / 1024);
-  if (ko < 1024) return `${ko} Ko`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} Mo`;
 }
 
 /**
@@ -355,28 +346,28 @@ export function formatSingleAttachmentLabelI18n(lang: string, params: {
 
   if (params.type === 'audio') {
     if (params.duration) details.push(formatDuration(params.duration));
-    if (params.fileSize) details.push(formatFileSize(params.fileSize));
+    if (params.fileSize) details.push(formatFileSizeI18n(lang, params.fileSize));
     const word = notificationString(lang, 'attachment.audio');
     return details.length > 0 ? `${word} · ${details.join(' · ')}` : word;
   }
 
   if (params.type === 'video') {
     if (params.duration) details.push(formatDuration(params.duration));
-    if (params.fileSize) details.push(formatFileSize(params.fileSize));
+    if (params.fileSize) details.push(formatFileSizeI18n(lang, params.fileSize));
     const word = notificationString(lang, 'attachment.video');
     return details.length > 0 ? `${word} · ${details.join(' · ')}` : word;
   }
 
   if (params.type === 'image') {
     if (params.width && params.height) details.push(`${params.width}×${params.height}`);
-    if (params.fileSize) details.push(formatFileSize(params.fileSize));
+    if (params.fileSize) details.push(formatFileSizeI18n(lang, params.fileSize));
     const word = notificationString(lang, 'attachment.photo');
     return details.length > 0 ? `${word} · ${details.join(' · ')}` : word;
   }
 
   const ext = extractExtension(params.filename);
   const docLabel = ext ? formatDocumentLabel(ext) : notificationString(lang, 'attachment.document');
-  return params.fileSize ? `${docLabel} · ${formatFileSize(params.fileSize)}` : docLabel;
+  return params.fileSize ? `${docLabel} · ${formatFileSizeI18n(lang, params.fileSize)}` : docLabel;
 }
 
 /**
