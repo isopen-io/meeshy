@@ -331,6 +331,21 @@ final class PostServiceTests: XCTestCase {
         XCTAssertEqual(mock.lastRequest?.method, "POST")
     }
 
+    func testCreateWithTypeReelWithoutMediaDegradesToPost() async throws {
+        let post = makePost(id: "reelTyped1")
+        let response = APIResponse(success: true, data: post, error: nil)
+        mock.stub("/posts", result: response)
+
+        _ = try await service.createWithType(.reel, content: "Would-be reel")
+
+        // Règle produit 2026-08-02 : un REEL exige vidéo || audio || >= 2 images.
+        // `createWithType` ne transporte AUCUN média → la composition ne peut pas
+        // qualifier ; le service publie un POST au lieu d'un REEL invalide.
+        XCTAssertEqual(mock.requestCount, 1)
+        XCTAssertEqual(mock.lastRequest?.endpoint, "/posts")
+        XCTAssertEqual(mock.lastRequest?.bodyJSON?["type"] as? String, "POST")
+    }
+
     // MARK: - Error case
 
     func testGetFeedThrowsOnNetworkError() async {

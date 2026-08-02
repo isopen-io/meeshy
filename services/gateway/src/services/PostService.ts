@@ -7,6 +7,7 @@ import type { MobileTranscription } from '../routes/posts/types';
 import { PostAudioService } from './posts/PostAudioService';
 import { NOT_DELETED } from './posts/postIncludes';
 import { claimableMediaWhere, describeClaimShortfall } from './posts/mediaOwnership';
+import { qualifiesAsReel } from './posts/reelComposition';
 import { buildPostVisibilityOrFilter } from './posts/postVisibility';
 import { getCommunityCoMemberIds } from './posts/communityVisibility';
 import { MediaService } from './MediaService';
@@ -183,10 +184,37 @@ export class PostService {
         ?? sourcePost.id;
     }
 
+    // Règle produit (directive user 2026-08-02) : un REEL exige une composition
+    // qualifiante — vidéo || audio || >= 2 images (`qualifiesAsReel`, miroir du
+    // SDK). DÉGRADATION SILENCIEUSE en POST plutôt qu'un 422 : les clients
+    // antérieurs à la règle envoient `type: REEL` dès 1 média (ancienne
+    // doctrine) — rejeter casserait leur publication, alors qu'un reclassement
+    // en POST préserve le contenu. Un REEL sans aucun mediaId (trou
+    // UnifiedPostComposer) retombe aussi sur POST. Les PostMedia sont lus AVANT
+    // `post.create`, avec la MÊME garde de propriété que le rattachement plus
+    // bas, pour classifier exactement ce qui sera réellement attaché.
+    let effectiveType = data.type;
+    if (data.type === PostType.REEL) {
+      const claimableMedia = data.mediaIds?.length
+        ? await this.prisma.postMedia.findMany({
+            where: { id: { in: data.mediaIds }, ...claimableMediaWhere(userId) },
+            select: { mimeType: true },
+          })
+        : [];
+      if (!qualifiesAsReel(claimableMedia)) {
+        effectiveType = PostType.POST;
+        log.info('createPost: REEL non qualifiant dégradé en POST', {
+          authorId: userId,
+          requestedMediaCount: data.mediaIds?.length ?? 0,
+          claimableMediaCount: claimableMedia.length,
+        });
+      }
+    }
+
     const post = await this.prisma.post.create({
       data: {
         authorId: userId,
-        type: data.type,
+        type: effectiveType,
         visibility: data.visibility,
         visibilityUserIds: data.visibilityUserIds ?? [],
         content: data.content,
@@ -681,7 +709,10 @@ export class PostService {
   }) {
     const post = await this.prisma.post.findFirst({
       where: { id: postId, deletedAt: NOT_DELETED },
-      include: { media: { select: { id: true } } },
+      // `mimeType` alimente la règle de composition REEL (`qualifiesAsReel`)
+      // sur la liste FINALE des médias — Prisma `select` : tout champ vérifié
+      // DOIT y figurer.
+      include: { media: { select: { id: true, mimeType: true } } },
     });
 
     if (!post) return null;
@@ -724,14 +755,28 @@ export class PostService {
     const ownMediaIds = new Set(post.media.map((m) => m.id));
     const mediaIdsToRemove = (removeMediaIds ?? []).filter((id) => ownMediaIds.has(id));
     const mediaIdsToAttach = mediaIds ?? [];
-    const remainingMediaCount = post.media.length - mediaIdsToRemove.length + mediaIdsToAttach.length;
     const finalType = requestedType ?? post.type;
+
+    // Liste FINALE des médias après édition : (médias du post − retraits) +
+    // fraîchement téléversés. Les mimeTypes des ajouts sont MATÉRIALISÉS ici,
+    // avec la même garde de propriété que le rattachement dans la transaction,
+    // pour que la règle de composition juge ce qui sera réellement attaché.
+    const removalSet = new Set(mediaIdsToRemove);
+    const attachedMedia = mediaIdsToAttach.length > 0
+      ? await this.prisma.postMedia.findMany({
+          where: { id: { in: mediaIdsToAttach }, ...claimableMediaWhere(userId) },
+          select: { mimeType: true },
+        })
+      : [];
+    const finalMedia = [
+      ...post.media.filter((m) => !removalSet.has(m.id)),
+      ...attachedMedia,
+    ];
 
     // Type switch is limited to POST <-> REEL on the author's OWN original post:
     // never on a repost (it mirrors its source) and never to/from STORY/STATUS
     // (their expiry/lifecycle is not managed by the edit flow). Switching to a
-    // REEL requires media — a text-only reel has nothing to show on the
-    // immersive surface.
+    // REEL requires a qualifying composition — see the guard below.
     if (requestedType !== undefined && requestedType !== post.type) {
       const switchable: PostType[] = [PostType.POST, PostType.REEL];
       if (!switchable.includes(post.type) || !switchable.includes(requestedType)) {
@@ -747,10 +792,19 @@ export class PostService {
       updateData.type = requestedType;
     }
 
-    // A reel must always keep at least one media — whether it is being switched
-    // to REEL or staying a REEL while media is being removed.
-    if (finalType === PostType.REEL && remainingMediaCount === 0) {
-      const err: any = new Error('A reel requires at least one media');
+    // Règle produit (directive user 2026-08-02) : un REEL doit rester
+    // QUALIFIANT — vidéo || audio || >= 2 images (`qualifiesAsReel`) — après
+    // retraits/ajouts, qu'il soit basculé en REEL ou qu'il le reste. Le 422 ne
+    // vaut que quand l'édition TOUCHE le type ou la composition : une édition
+    // de texte seule sur un REEL hérité non conforme (corpus pré-backfill,
+    // ex. 1 image) doit continuer de passer — le backfill
+    // `reclassify-nonqualifying-reels-to-post.ts` reclasse ce corpus.
+    const editTouchesComposition =
+      requestedType !== undefined || mediaIdsToRemove.length > 0 || mediaIdsToAttach.length > 0;
+    if (finalType === PostType.REEL && editTouchesComposition && !qualifiesAsReel(finalMedia)) {
+      // Assertion locale justifiée : porte le `statusCode` que la route
+      // traduit en 422 INVALID_POST_UPDATE — sans élargir le type en `any`.
+      const err = new Error('A reel requires a video, an audio, or at least two images') as Error & { statusCode: number };
       err.statusCode = 422;
       throw err;
     }

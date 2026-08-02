@@ -345,7 +345,13 @@ public final class PostService: PostServiceProviding, @unchecked Sendable {
         case .post:
             return try await create(content: content, type: "POST", visibility: visibility)
         case .reel:
-            return try await create(content: content, type: "REEL", visibility: visibility)
+            // Règle produit 2026-08-02 : un REEL exige une composition
+            // qualifiante (vidéo || audio || >= 2 images —
+            // `ReelComposition.qualifiesAsReel`). Cette surface ne transporte
+            // aucun média : la composition ne peut jamais qualifier, on publie
+            // donc un POST. Les chemins avec médias passent par `create(...,
+            // mediaIds:)` avec `ReelComposition.defaultType` côté appelant.
+            return try await create(content: content, type: "POST", visibility: visibility)
         }
     }
 

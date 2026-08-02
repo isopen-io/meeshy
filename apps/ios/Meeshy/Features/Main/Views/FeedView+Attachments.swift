@@ -205,7 +205,12 @@ extension FeedView {
         composerText = draft.content
         postVisibility = draft.visibility
         // Preserve the original classification: a plain POST that carried media
-        // must stay a POST, while a REEL re-derives from its media as usual.
+        // must stay a POST. A draft saved as REEL is NOT trusted blindly: the
+        // publish paths re-derive the type from the RESTORED attachments via
+        // `ReelComposition.defaultType` (règle produit 2026-08-02 — video ||
+        // audio || >= 2 images), so a stale 1-image "REEL" draft republishes
+        // as a POST. Eligibility can't be checked here — the media below is
+        // restored asynchronously through the preparation pipeline.
         composerForcePlainPost = (draft.type == "POST")
         recoveredPostCmid = draft.clientMutationId
 
@@ -409,7 +414,13 @@ extension FeedView {
             try? FileManager.default.removeItem(at: audioURL)
 
             await viewModel.createPost(
-                type: composerForcePlainPost ? "POST" : "REEL",
+                // Même moteur de classification que les chemins visuels : un
+                // audio qualifie (REEL par défaut), et `forcePlainPost` reste
+                // respecté — plus de "REEL" codé en dur.
+                type: ReelComposition.defaultType(
+                    mimeTypes: [mimeType],
+                    forcePlainPost: composerForcePlainPost
+                ).rawValue,
                 mediaIds: [result.id],
                 originalLanguage: originalLanguage ?? transcription?.language,
                 mobileTranscription: transcription
@@ -715,8 +726,11 @@ struct FeedComposerSheet: View {
     @State private var uploadProgress: UploadQueueProgress?
     @State private var isLoadingMedia = false
     @State private var postVisibility: String = "PUBLIC"
-    /// When the composer carries media, the post defaults to a REEL; the author
-    /// can flip this to keep it a plain POST (out of the reels surface).
+    /// A QUALIFYING composition (video || audio || >= 2 images —
+    /// `ReelComposition.qualifiesAsReel`) defaults to a REEL; the author can
+    /// flip this to keep it a plain POST. A non-qualifying composition (single
+    /// image, documents) is ALWAYS a POST — the toggle hides and
+    /// `defaultType` ignores this flag.
     @State private var forcePlainPost = false
     @State private var showEmojiPicker = false
     @State private var showAudioComposer = false
@@ -735,9 +749,9 @@ struct FeedComposerSheet: View {
         !composerText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !pendingAttachments.isEmpty || pendingPlace != nil
     }
 
-    /// Reel ⇄ Post chip shown when the composer holds media. A media post is a
-    /// reel by default; tapping flips it to a plain post so it stays out of the
-    /// reels surface.
+    /// Reel ⇄ Post chip shown when the composition QUALIFIES as a reel (video
+    /// || audio || >= 2 images). Tapping flips it to a plain post so it stays
+    /// out of the reels surface.
     private var reelTypeToggle: some View {
         Button {
             forcePlainPost.toggle()
@@ -836,7 +850,14 @@ struct FeedComposerSheet: View {
                             .foregroundColor(theme.textMuted)
                         }
                     }
-                    if !pendingAttachments.isEmpty || pendingAudioURL != nil {
+                    // Toggle visible SEULEMENT quand la composition qualifie
+                    // (règle produit 2026-08-02). Retirer une image (2→1) le
+                    // fait disparaître et `defaultType` retombe sur POST —
+                    // aucun REEL 1-image publiable.
+                    if ReelComposition.qualifiesAsReel(
+                        mimeTypes: pendingAttachments.map(\.mimeType)
+                            + (pendingAudioURL != nil ? ["audio/mp4"] : [])
+                    ) {
                         reelTypeToggle
                     }
                     Spacer()
@@ -1550,7 +1571,13 @@ struct FeedComposerSheet: View {
             let result = try await uploader.uploadFile(fileURL: audioURL, mimeType: mimeType, token: token, uploadContext: "post")
             try? FileManager.default.removeItem(at: audioURL)
             await viewModel.createPost(
-                type: forcePlainPost ? "POST" : "REEL",
+                // Même moteur de classification que les chemins visuels : un
+                // audio qualifie (REEL par défaut), et `forcePlainPost` reste
+                // respecté — plus de "REEL" codé en dur.
+                type: ReelComposition.defaultType(
+                    mimeTypes: [mimeType],
+                    forcePlainPost: forcePlainPost
+                ).rawValue,
                 mediaIds: [result.id],
                 originalLanguage: transcription?.language ?? composerLanguage,
                 mobileTranscription: transcription

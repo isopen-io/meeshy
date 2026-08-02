@@ -481,7 +481,7 @@ public struct UnifiedPostComposer: View {
 
     private var publishButton: some View {
         Button {
-            guard !content.isEmpty || selectedType == .story else { return }
+            guard canPublish else { return }
             guard !isPublishing else { return }
             isPublishing = true
             HapticFeedback.success()
@@ -526,7 +526,15 @@ public struct UnifiedPostComposer: View {
 
     private var canPublish: Bool {
         switch selectedType {
-        case .post, .reel: return !content.isEmpty
+        case .post: return !content.isEmpty
+        case .reel:
+            // Règle produit 2026-08-02 : un REEL exige une composition
+            // qualifiante (vidéo || audio || >= 2 images). Ce composer ne porte
+            // qu'UNE image ou UNE vidéo — seule la vidéo peut qualifier ; une
+            // image seule ou du texte seul ne publie jamais un réel. (.reel est
+            // aujourd'hui inatteignable ici — S6 : `lockedType` épingle .post —
+            // mais le prédicat ne doit pas mentir si la surface rouvre.)
+            return selectedVideoURL != nil
         case .status: return moodEmoji != nil
         case .story: return true
         }
