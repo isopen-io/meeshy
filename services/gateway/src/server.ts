@@ -999,11 +999,24 @@ All endpoints are prefixed with \`/api/v1\`. Breaking changes will be introduced
               cleanupManager.getIO(), callId, conversationId, endedEvent
             )
         );
+        // Bug fix (2026-08-01) — initiateCall's own GC sweeps (phantom stale
+        // participations, zombie active call) write `CallParticipant.leftAt`
+        // exactly like every path above, but had no bridge to
+        // CallEventsHandler's `call:signal` session cache: without this, a
+        // `call:signal` for that callId could still relay SDP/ICE for up to
+        // the cache's 2s TTL after the DB already marked the participant gone.
+        cleanupManager.getCallService().setSignalCacheInvalidationCallback(
+          (callId) => callEventsHandler.invalidateSignalSession(callId)
+        );
         // Sibling-drift fix (2026-07-05) — GC-ended calls (the 4th terminal
         // path) also release their qualityDegradedStreaks entries, matching
         // the three paths CallEventsHandler already hooks into itself.
         this.callCleanupService.setQualityStreakCleanupCallback(
           (callId) => callEventsHandler.clearQualityDegradedStreaks(callId)
+        );
+        // Same bridge as CallService's sweeps above, for GC's own forceEndCall.
+        this.callCleanupService.setSignalCacheInvalidationCallback(
+          (callId) => callEventsHandler.invalidateSignalSession(callId)
         );
         // Phantom-ringing safety net — a callee whose VoIP push was
         // delivered but whose socket never joined the call room needs the
