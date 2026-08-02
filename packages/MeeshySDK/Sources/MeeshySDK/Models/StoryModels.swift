@@ -618,6 +618,13 @@ public struct StoryMediaObject: Codable, Identifiable, Sendable {
     public var scale: Double
     public var rotation: Double
     public var volume: Float               // 0.0–1.0
+    /// Niveau mémorisé au moment du mute un-bouton (`toggleMute()`), pour que
+    /// l'unmute RESTAURE le réglage de l'auteur au lieu de forcer 1.0.
+    /// Auteur-local : persiste dans les drafts (Codable) mais n'est jamais
+    /// publié (`StoryEffects.toJSON()` liste ses clés explicitement).
+    /// `nil` dès que `volume > 0` — l'invariant est maintenu par
+    /// `setVolumePreservingMuteMemento(_:)`.
+    public var mutedVolumeMemento: Float?
 
     // NEW — Phase 1 Canvas Fidelity fields
     public var aspectRatio: Double         // figé à la composition (REQUIRED, fallback 1.0 on legacy decode)
@@ -676,7 +683,7 @@ public struct StoryMediaObject: Codable, Identifiable, Sendable {
 
     enum CodingKeys: String, CodingKey {
         case id, postMediaId, mediaURL, mediaType, placement
-        case x, y, scale, rotation, volume
+        case x, y, scale, rotation, volume, mutedVolumeMemento
         case aspectRatio, anchor, intrinsicDuration
         case isBackground, loop, zIndex
         case startTime, duration, fadeIn, fadeOut
@@ -743,6 +750,9 @@ public struct StoryMediaObject: Codable, Identifiable, Sendable {
         scale = try c.decodeIfPresent(Double.self, forKey: .scale) ?? 1.0
         rotation = try c.decodeIfPresent(Double.self, forKey: .rotation) ?? 0
         volume = try c.decodeIfPresent(Float.self, forKey: .volume) ?? 1.0
+        // Rétro-compat : les drafts antérieurs au mute un-bouton n'ont pas la
+        // clé — l'absence se lit « aucun niveau mémorisé ».
+        mutedVolumeMemento = try c.decodeIfPresent(Float.self, forKey: .mutedVolumeMemento)
         // aspectRatio: REQUIRED but falls back to 1.0 for legacy drafts that predate this field
         aspectRatio = try c.decodeIfPresent(Double.self, forKey: .aspectRatio) ?? 1.0
         if let anchorContainer = try? c.nestedContainer(keyedBy: AnchorKeys.self, forKey: .anchor) {
@@ -781,6 +791,7 @@ public struct StoryMediaObject: Codable, Identifiable, Sendable {
         try c.encode(x, forKey: .x); try c.encode(y, forKey: .y)
         try c.encode(scale, forKey: .scale); try c.encode(rotation, forKey: .rotation)
         try c.encode(volume, forKey: .volume)
+        try c.encodeIfPresent(mutedVolumeMemento, forKey: .mutedVolumeMemento)
         try c.encode(aspectRatio, forKey: .aspectRatio)
         var anchorContainer = c.nestedContainer(keyedBy: AnchorKeys.self, forKey: .anchor)
         try anchorContainer.encode(Double(anchor.x), forKey: .x)
@@ -875,6 +886,11 @@ public struct StoryAudioPlayerObject: Codable, Identifiable, Sendable {
     public var x: CGFloat              // normalisé 0–1
     public var y: CGFloat
     public var volume: Float           // 0.0–1.0
+    /// Niveau mémorisé au moment du mute un-bouton — miroir de
+    /// `StoryMediaObject.mutedVolumeMemento` (mêmes invariants, cf. le
+    /// protocole `StoryVolumeCarrying`). Jamais publié : `toJSON()` liste
+    /// ses clés explicitement.
+    public var mutedVolumeMemento: Float?
     public var waveformSamples: [Float] // ~80 samples extraits à la composition
     /// Quand true, ce player audio joue en fond (boucle infinie, pas de UI pill draggable,
     /// ducking automatique quand un audio foreground joue). Un seul audio peut être en
@@ -909,9 +925,16 @@ public struct StoryAudioPlayerObject: Codable, Identifiable, Sendable {
     /// `postMediaId` reste vide dans ce cas — la résolution de l'URL passe par
     /// `mediaURL`, hydratée depuis le DTO du son.
     public var soundId: String?
+    /// @pseudo de l'uploadeur du son EMPRUNTÉ, gravé au moment du choix dans
+    /// la bibliothèque : le reader et l'export lisent un `StorySlide`
+    /// hors-ligne et ne peuvent pas re-résoudre le crédit à l'affichage.
+    /// `nil` pour une piste propre (soundId nil) et pour les stories publiées
+    /// avant ce champ.
+    public var soundAuthorUsername: String?
 
     enum CodingKeys: String, CodingKey {
         case id, postMediaId, mediaURL, placement, x, y, volume, waveformSamples
+        case mutedVolumeMemento
         case isBackground, backgroundAudioVariants, zIndex
         case startTime, duration, loop, fadeIn, fadeOut, sourceLanguage, name
         case keyframes
@@ -920,6 +943,7 @@ public struct StoryAudioPlayerObject: Codable, Identifiable, Sendable {
         // champ n'est alors ni encodé ni décodé — le son emprunté serait perdu
         // à la publication, en silence.
         case soundId
+        case soundAuthorUsername
     }
 
     public init(id: String = UUID().uuidString, postMediaId: String = "",
@@ -934,8 +958,10 @@ public struct StoryAudioPlayerObject: Codable, Identifiable, Sendable {
                 name: String? = nil,
                 keyframes: [StoryKeyframe]? = nil,
                 mediaURL: String? = nil,
-                soundId: String? = nil) {
+                soundId: String? = nil,
+                soundAuthorUsername: String? = nil) {
         self.soundId = soundId
+        self.soundAuthorUsername = soundAuthorUsername
         self.id = id; self.postMediaId = postMediaId
         self.mediaURL = mediaURL
         self.placement = placement; self.x = x; self.y = y
@@ -968,6 +994,54 @@ extension StoryAudioPlayerObject {
         return postMediaId
     }
 }
+
+// MARK: - Mute d'auteur un-bouton (piste vidéo / audio)
+
+/// Piste dont le volume d'auteur est PERSISTÉ dans le modèle et peut être
+/// coupée d'un seul bouton.
+///
+/// Convention unique sur toute la chaîne (composer, timeline, previewer,
+/// reader, export) : **`volume == 0` EST l'état muet persistant** — aucun
+/// booléen séparé (règle CLAUDE.md « no redundant boolean »). Le mémento ne
+/// sert qu'à restaurer le niveau précédent à l'unmute ; son invariant est
+/// `mutedVolumeMemento != nil ⟹ volume == 0`.
+public protocol StoryVolumeCarrying {
+    var volume: Float { get set }
+    var mutedVolumeMemento: Float? { get set }
+}
+
+extension StoryVolumeCarrying {
+    /// `true` quand l'AUTEUR a coupé la piste (volume nul persistant).
+    public var isMuted: Bool { volume <= 0 }
+
+    /// Écrit `volume` en maintenant l'invariant du mémento : passer à 0 depuis
+    /// un niveau audible mémorise ce niveau ; tout niveau audible efface le
+    /// mémento (le réglage manuel prime sur l'historique de mute).
+    public mutating func setVolumePreservingMuteMemento(_ newVolume: Float) {
+        let clamped = max(0, newVolume)
+        if clamped <= 0 {
+            if volume > 0 { mutedVolumeMemento = volume }
+        } else {
+            mutedVolumeMemento = nil
+        }
+        volume = clamped
+    }
+
+    /// Toggle un-bouton : mute → `volume = 0` (niveau mémorisé) ; unmute →
+    /// restaure le mémento, `1.0` en dernier recours (piste créée muette ou
+    /// draft antérieur au mémento).
+    public mutating func toggleMute() {
+        if isMuted {
+            let restored = mutedVolumeMemento ?? 1.0
+            setVolumePreservingMuteMemento(restored > 0 ? restored : 1.0)
+        } else {
+            setVolumePreservingMuteMemento(0)
+        }
+    }
+}
+
+extension StoryMediaObject: StoryVolumeCarrying {}
+extension StoryAudioPlayerObject: StoryVolumeCarrying {}
 
 // MARK: - Story Audio Variant (TTS auto-généré par langue)
 
@@ -3701,7 +3775,11 @@ public struct SetClipPropertyCommand: EditCommand {
                        useNew: Bool) {
         switch property {
         case .volume(let old, let new):
-            media.volume = useNew ? new : old
+            // Via le mémento : muter depuis la timeline (new == 0) mémorise le
+            // niveau courant, et l'undo/redo garde l'invariant
+            // `memento != nil ⟹ volume == 0` — sans quoi un unmute post-undo
+            // restaurerait un niveau périmé.
+            media.setVolumePreservingMuteMemento(useNew ? new : old)
         case .fadeIn(let old, let new):
             media.fadeIn = useNew ? new : old
         case .fadeOut(let old, let new):
@@ -3729,7 +3807,8 @@ public struct SetClipPropertyCommand: EditCommand {
                        useNew: Bool) {
         switch property {
         case .volume(let old, let new):
-            audio.volume = useNew ? new : old
+            // Même invariant de mémento que la branche média — cf. ci-dessus.
+            audio.setVolumePreservingMuteMemento(useNew ? new : old)
         case .fadeIn(let old, let new):
             let val: Double? = useNew ? new : old
             audio.fadeIn = val.map { Float($0) }

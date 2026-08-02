@@ -158,22 +158,15 @@ final class StoryTraySheetChainingTests: XCTestCase {
     func test_thePinnedTrailKeepsAReachableManageEntry() throws {
         let band = try pinnedTrailBandSource()
 
+        // Supersession 2026-08-02 : le tap sur son propre anneau monte la
+        // LISTE, et l'entrée de menu reste — deux chemins vers la même sheet.
         XCTAssertEqual(
-            occurrences(of: "StoryTrayCopy.manageStories", in: band), 1,
-            """
-            Le tap sur son propre anneau de la mini-trail ouvre désormais le \
-            VIEWER : sans un item « Gérer mes stories » en menu contextuel, la \
-            gestion ET l'édition d'une story publiée deviendraient inatteignables \
-            depuis le header replié, et la sheet montée là serait du code mort.
-            """
+            occurrences(of: "showMyStories = true", in: band), 2,
+            "Le tap sur l'anneau « Moi » ET l'entrée de menu montent la sheet de gestion depuis le header replié."
         )
-        XCTAssertEqual(
-            occurrences(of: "showMyStories = true", in: band), 1,
-            "Cette entrée est le SEUL chemin qui monte la sheet depuis le header replié."
-        )
-        // Boucle fermée : le symbole compté ci-dessus EST le libellé « Gérer mes
-        // stories », résolu par le catalogue. Sans ce lien, renommer la constante
-        // vers une autre clé passerait sous la garde.
+        // Boucle fermée : l'entrée de menu porte le libellé « Gérer mes
+        // stories », résolu par le catalogue. Sans ce lien, renommer la
+        // constante vers une autre clé passerait sous la garde.
         let manageStories = try XCTUnwrap(
             block(after: "static var manageStories:", in: try trayActionsSource()))
         XCTAssertTrue(
@@ -182,13 +175,14 @@ final class StoryTraySheetChainingTests: XCTestCase {
         )
     }
 
-    /// Le comportement dont ce fichier hérite de `StoryTrayMyStoryTapGuardTests`
-    /// (dont il INVERSE la promesse) : dans la mini-trail, le tap sur son propre
-    /// anneau ouvre la story, jamais la liste de gestion. Ancré sur la closure
+    /// SUPERSESSION 2026-08-02 (directive user, retour au sens du 14 juillet) :
+    /// dans la mini-trail, le tap sur son propre anneau ouvre la LISTE de
+    /// gestion — c'est elle qui porte les onglets Publiées / Brouillons. La
+    /// lecture directe vit au menu contextuel. Ancré sur la closure
     /// `onViewStory` de l'anneau `ownGroup` et sur elle seule — le même fichier
-    /// porte trois autres `onViewStory` (la propriété d'injection, les anneaux de
-    /// pairs, la grande trail) dont aucun ne répond de cette règle.
-    func test_thePinnedOwnRingTapOpensTheViewerNotTheManageSheet() throws {
+    /// porte trois autres `onViewStory` (la propriété d'injection, les anneaux
+    /// de pairs, la grande trail) dont aucun ne répond de cette règle.
+    func test_thePinnedOwnRingTapOpensTheManageSheetNotTheViewer() throws {
         let ownRing = try XCTUnwrap(
             block(after: "if let ownGroup", in: try pinnedTrailBandSource()),
             "L'anneau « ma story » a disparu de la mini-trail : plus rien à ouvrir d'un tap."
@@ -199,15 +193,12 @@ final class StoryTraySheetChainingTests: XCTestCase {
         )
 
         XCTAssertEqual(
-            occurrences(of: "storyViewerCoordinator.present(", in: tap), 1,
-            "Le tap ouvre SA story par le coordinator — exactement le chemin de la grande trail."
+            occurrences(of: "showMyStories = true", in: tap), 1,
+            "Le tap ouvre la liste de gestion (onglets Publiées / Brouillons)."
         )
         XCTAssertEqual(
-            occurrences(of: "showMyStories", in: tap), 0,
-            """
-            …et jamais la liste de gestion : deux taps et un écran interposé pour \
-            voir sa propre story, c'était la directive du 14 juillet, inversée le 31.
-            """
+            occurrences(of: "storyViewerCoordinator.present(", in: tap), 0,
+            "…et jamais la lecture directe : elle vit au menu contextuel (« Voir ma story »)."
         )
     }
 }

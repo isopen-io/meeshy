@@ -171,9 +171,22 @@ public struct AudioForegroundChip: View {
         HStack(spacing: 8) {
             muteToggleIcon
                 .frame(width: 18, height: 18)
-            AudioForegroundSineWave(paused: isUserMuted)
-                .frame(width: 54, height: 18)
-                .opacity(isUserMuted ? 0.35 : 1.0)
+            // Son de bibliothèque → crédit défilant « titre · @pseudo » ;
+            // piste propre (première publication) → sinusoïde, comme toujours.
+            switch AudioChipDisplay.resolve(
+                soundId: audioObject.soundId,
+                title: audioObject.name,
+                authorUsername: audioObject.soundAuthorUsername
+            ) {
+            case .marquee(let text):
+                AudioChipMarquee(text: text, paused: isUserMuted)
+                    .frame(width: 92, height: 18)
+                    .opacity(isUserMuted ? 0.55 : 1.0)
+            case .waveform:
+                AudioForegroundSineWave(paused: isUserMuted)
+                    .frame(width: 54, height: 18)
+                    .opacity(isUserMuted ? 0.35 : 1.0)
+            }
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
@@ -430,7 +443,9 @@ public struct AudioForegroundReaderOverlay: View {
                     canvasSize: geo.size,
                     mode: .reader,
                     isSelected: false,
-                    isUserMuted: muteRegistry.isMuted(audio.id),
+                    isUserMuted: Self.chipShowsMuted(
+                        viewerMuted: muteRegistry.isMuted(audio.id),
+                        audio: audio),
                     onTap: {
                         HapticFeedback.light()
                         StoryReaderAudioMuteRegistry.shared.toggle(audio.id)
@@ -458,6 +473,19 @@ public struct AudioForegroundReaderOverlay: View {
         Self.visibleAudios(in: foregroundAudios,
                            elapsed: elapsedTime,
                            slideDuration: slideDuration)
+    }
+
+    /// État muet AFFICHÉ par le chip reader — pur, extrait pour tests.
+    ///
+    /// Deux sources de silence coexistent et l'icône doit refléter l'OU des
+    /// deux : le mute du VIEWER (tap sur le chip, per-session, registry) et le
+    /// mute de l'AUTEUR (`volume == 0` persisté au modèle — le mixer tient
+    /// alors la piste à zéro quoi qu'il arrive). Sans la seconde, une piste
+    /// coupée par l'auteur affichait une onde animée « audible » que rien ne
+    /// faisait sonner.
+    public static func chipShowsMuted(viewerMuted: Bool,
+                                      audio: StoryAudioPlayerObject) -> Bool {
+        viewerMuted || audio.isMuted
     }
 
     /// Filtre pur (extrait pour tests).

@@ -657,6 +657,13 @@ public struct StoryTimelineView: View {
                     ? CacheCoordinator.imageLocalFileURL(for: media.postMediaId)
                     : nil,
                 keyframes: media.keyframes ?? [],
+                isMuted: media.isMuted,
+                // Mute UN-BOUTON : vidéos réelles uniquement (une image ou un
+                // clip synthétique n'a rien à couper). Fonctionne aussi sur un
+                // FOND verrouillé — couper le son n'est pas un déplacement.
+                onToggleMute: (media.kind == .video && !isSynthetic)
+                    ? { viewModel.toggleClipMute(id: media.id) }
+                    : nil,
                 onTap: { viewModel.selectClip(id: media.id) },
                 onDoubleTap: { viewModel.inspectClip(id: media.id) },
                 onTrimStartDelta: { delta in
@@ -753,7 +760,8 @@ public struct StoryTimelineView: View {
                 onTrimEndDelta: { delta in
                     viewModel.trimClipEnd(id: audio.id,
                                           deltaTimeSeconds: Float(delta) / Float(geometry.pixelsPerSecond))
-                }
+                },
+                onToggleMute: { viewModel.toggleClipMute(id: audio.id) }
             )
             .equatable()
             if audio.isBackground == true, audio.loop == true {

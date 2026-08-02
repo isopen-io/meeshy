@@ -23,6 +23,9 @@ struct StoryAudioCell: View {
     let onToggleBackground: () -> Void
     let onVolumeChanged: (Float) -> Void
     let onDelete: () -> Void
+    /// Mute un-bouton de la piste — persisté via `volume` (0 = muet) côté VM
+    /// (`toggleAudioMute`), avec restauration du niveau précédent à l'unmute.
+    var onToggleMute: () -> Void = {}
 
     @Environment(\.colorScheme) private var colorScheme
     @StateObject private var waveform = AudioWaveformAnalyzer()
@@ -46,6 +49,7 @@ struct StoryAudioCell: View {
                 .frame(maxWidth: .infinity)
             durationLabel
             toggleBackgroundButton
+            muteButton
             volumeSlider
             deleteButton
         }
@@ -70,6 +74,12 @@ struct StoryAudioCell: View {
             // L'URL peut être résolue après le mount (cache miss → fetch async).
             didStartWaveform = false
             startWaveformIfNeeded()
+        }
+        .adaptiveOnChange(of: audio.volume) { _, newVolume in
+            // Le mute un-bouton (ici ou depuis le chip canvas / la timeline)
+            // écrit le modèle hors du slider — resync le @State local, sinon
+            // la glissière affiche un niveau périmé après le toggle.
+            localVolume = newVolume
         }
         // ⚠ Ne JAMAIS publier `localVolume` à chaque tick du drag (~60 Hz).
         // Le commit final est délégué au callback `onEditingChanged` du
@@ -178,6 +188,26 @@ struct StoryAudioCell: View {
         .accessibilityLabel(isBackground
             ? String(localized: "story.audio.layer.background", defaultValue: "Fond", bundle: .module)
             : String(localized: "story.audio.layer.foreground", defaultValue: "Premier plan", bundle: .module))
+    }
+
+    /// Bouton mute UN TAP — état lu depuis le MODÈLE (`audio.volume <= 0`,
+    /// la persistance du mute d'auteur), pas depuis le @State local du slider.
+    private var muteButton: some View {
+        let muted = audio.isMuted
+        return Button {
+            onToggleMute()
+            HapticFeedback.light()
+        } label: {
+            Image(systemName: muted ? "speaker.slash.fill" : "speaker.wave.2.fill")
+                .font(.system(size: 15, weight: .medium))
+                .foregroundColor(muted ? .red.opacity(0.85) : secondaryText)
+                .frame(width: 28, height: 28)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(muted
+            ? String(localized: "story.audio.track.unmute", defaultValue: "Activer le son de cette piste", bundle: .module)
+            : String(localized: "story.audio.track.mute", defaultValue: "Couper le son de cette piste", bundle: .module))
     }
 
     private var volumeSlider: some View {
