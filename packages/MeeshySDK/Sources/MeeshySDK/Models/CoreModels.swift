@@ -145,6 +145,10 @@ public struct MeeshyConversation: Identifiable, Hashable, Codable, Sendable {
     public var lastMessageIsBlurred: Bool = false
     public var lastMessageIsViewOnce: Bool = false
     public var lastMessageExpiresAt: Date? = nil
+    /// Position du dernier message (hissée par le gateway). Un message
+    /// position-seule a un `lastMessagePreview` vide : la ligne d'aperçu
+    /// compose alors son libellé depuis ce champ (nom du lieu ou « Position »).
+    public var lastMessageLocation: SharedPlace? = nil
     public var recentMessages: [RecentMessagePreview] = []
     /// Display-layer tags (separate concept from `userState.tags`, which
     /// is the wire-format `String[]` from `UserConversationPreferences`).
@@ -301,6 +305,7 @@ public struct MeeshyConversation: Identifiable, Hashable, Codable, Sendable {
                 lastMessageIsBlurred: Bool = false,
                 lastMessageIsViewOnce: Bool = false,
                 lastMessageExpiresAt: Date? = nil,
+                lastMessageLocation: SharedPlace? = nil,
                 recentMessages: [RecentMessagePreview] = [],
                 tags: [MeeshyConversationTag] = [], isAnnouncementChannel: Bool = false, defaultWriteRole: String? = nil, slowModeSeconds: Int? = nil, autoTranslateEnabled: Bool? = nil, isPinned: Bool = false, sectionId: String? = nil,
                 isMuted: Bool = false, mentionsOnly: Bool = false, isArchivedByUser: Bool = false, customName: String? = nil,
@@ -329,6 +334,7 @@ public struct MeeshyConversation: Identifiable, Hashable, Codable, Sendable {
         self.lastMessageIsBlurred = lastMessageIsBlurred
         self.lastMessageIsViewOnce = lastMessageIsViewOnce
         self.lastMessageExpiresAt = lastMessageExpiresAt
+        self.lastMessageLocation = lastMessageLocation
         self.recentMessages = recentMessages
         self.tags = tags
         self.language = language; self.theme = theme
@@ -372,6 +378,7 @@ public struct MeeshyConversation: Identifiable, Hashable, Codable, Sendable {
         case lastMessagePreview, lastMessageTranslations, lastMessageOriginalLanguage
         case lastMessageAttachments, lastMessageAttachmentCount, lastMessageId
         case lastMessageSenderName, lastMessageIsBlurred, lastMessageIsViewOnce, lastMessageExpiresAt
+        case lastMessageLocation
         case recentMessages, tags
         case isAnnouncementChannel, defaultWriteRole, slowModeSeconds, autoTranslateEnabled
         case participantUserId, participantUsername, participantAvatarURL, participantBanner, lastSeenAt
@@ -421,6 +428,7 @@ public struct MeeshyConversation: Identifiable, Hashable, Codable, Sendable {
         self.lastMessageIsBlurred = try c.decodeIfPresent(Bool.self, forKey: .lastMessageIsBlurred) ?? false
         self.lastMessageIsViewOnce = try c.decodeIfPresent(Bool.self, forKey: .lastMessageIsViewOnce) ?? false
         self.lastMessageExpiresAt = try c.decodeIfPresent(Date.self, forKey: .lastMessageExpiresAt)
+        self.lastMessageLocation = try c.decodeIfPresent(SharedPlace.self, forKey: .lastMessageLocation)
         self.recentMessages = try c.decodeIfPresent([RecentMessagePreview].self, forKey: .recentMessages) ?? []
         self.tags = try c.decodeIfPresent([MeeshyConversationTag].self, forKey: .tags) ?? []
 
@@ -507,6 +515,7 @@ public struct MeeshyConversation: Identifiable, Hashable, Codable, Sendable {
         try c.encode(lastMessageIsBlurred, forKey: .lastMessageIsBlurred)
         try c.encode(lastMessageIsViewOnce, forKey: .lastMessageIsViewOnce)
         try c.encodeIfPresent(lastMessageExpiresAt, forKey: .lastMessageExpiresAt)
+        try c.encodeIfPresent(lastMessageLocation, forKey: .lastMessageLocation)
         try c.encode(recentMessages, forKey: .recentMessages)
         try c.encode(tags, forKey: .tags)
 

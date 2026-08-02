@@ -516,6 +516,11 @@ public struct ConversationUpdatedEvent: Decodable, Sendable {
     /// preview without a separate fetch.
     public let lastMessageId: String?
     public let lastMessagePreview: String?
+    /// Position du dernier message, hissée par le chemin message-driven
+    /// (`MessageHandler.ts`) et par `emitConversationPreviewUpdate`. Un message
+    /// position-seule a un `lastMessagePreview` vide — c'est ce champ qui
+    /// permet à la ligne d'aperçu de composer son libellé.
+    public let location: SharedPlace?
     public let senderId: String?
     /// Optional because the gateway's message-driven CONVERSATION_UPDATED
     /// payload (handlers/MessageHandler.ts on every new message) only
@@ -532,6 +537,7 @@ public struct ConversationUpdatedEvent: Decodable, Sendable {
         case conversationId, title, description, avatar, banner
         case defaultWriteRole, isAnnouncementChannel, slowModeSeconds, autoTranslateEnabled
         case lastMessageAt, lastMessageId, lastMessagePreview, senderId, updatedBy, updatedAt
+        case location
     }
 
     public init(from decoder: Decoder) throws {
@@ -548,6 +554,7 @@ public struct ConversationUpdatedEvent: Decodable, Sendable {
         lastMessageAt = try container.decodeIfPresent(Date.self, forKey: .lastMessageAt)
         lastMessageId = try container.decodeIfPresent(String.self, forKey: .lastMessageId)
         lastMessagePreview = try container.decodeIfPresent(String.self, forKey: .lastMessagePreview)
+        location = try container.decodeIfPresent(SharedPlace.self, forKey: .location)
         senderId = try container.decodeIfPresent(String.self, forKey: .senderId)
         updatedBy = try container.decodeIfPresent(SocketEventUser.self, forKey: .updatedBy)
         updatedAt = try container.decode(String.self, forKey: .updatedAt)
@@ -566,6 +573,7 @@ public struct ConversationUpdatedEvent: Decodable, Sendable {
         lastMessageAt: Date? = nil,
         lastMessageId: String? = nil,
         lastMessagePreview: String? = nil,
+        location: SharedPlace? = nil,
         senderId: String? = nil,
         updatedBy: SocketEventUser? = nil,
         updatedAt: String
@@ -582,6 +590,7 @@ public struct ConversationUpdatedEvent: Decodable, Sendable {
         self.lastMessageAt = lastMessageAt
         self.lastMessageId = lastMessageId
         self.lastMessagePreview = lastMessagePreview
+        self.location = location
         self.senderId = senderId
         self.updatedBy = updatedBy
         self.updatedAt = updatedAt
