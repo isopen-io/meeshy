@@ -2878,6 +2878,37 @@ final class ConversationListViewModelTests: XCTestCase {
                       "A mutation applied to the store must reflect into the list via listPublisher")
     }
 
+    // MARK: - mergeUserStateFromStore: persists on real change (stores-06)
+
+    func test_storeUserStateChange_mergedIntoList_schedulesPersist() async throws {
+        let store = Self.makeTestStore()
+        let (sut, _, _, _, _, _, _) = makeSUT(store: store)
+        sut.setConversations([makeConversation(id: "000000000000000000000001", isPinned: false)])
+        await sut.storeHydrationTask?.value
+        sut.persistCallCount = 0
+
+        try await store.apply(.setPinned(true), for: "000000000000000000000001")
+        try? await Task.sleep(nanoseconds: 300_000_000)
+
+        XCTAssertEqual(sut.persistCallCount, 1,
+                       "un changement réel de userState mergé depuis le store doit programmer un persist")
+    }
+
+    func test_storeUserStateEcho_unchangedState_doesNotPersist() async throws {
+        let store = Self.makeTestStore()
+        let (sut, _, _, _, _, _, _) = makeSUT(store: store)
+        sut.setConversations([makeConversation(id: "000000000000000000000001", isPinned: false)])
+        await sut.storeHydrationTask?.value
+        sut.persistCallCount = 0
+
+        let unchanged = sut.conversations.first!
+        await store.hydrateMetadata([unchanged])
+        try? await Task.sleep(nanoseconds: 300_000_000)
+
+        XCTAssertEqual(sut.persistCallCount, 0,
+                       "un écho de snapshot inchangé ne doit pas programmer de persist (guard changed)")
+    }
+
     // MARK: - UserCategoryStore observation (increment 4)
 
     func test_loadCategories_seedsCategoryStore_andReflectsIntoUserCategories() async {

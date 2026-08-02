@@ -45,23 +45,18 @@ extension View {
                         visibility: visibility,
                         visibilityUserIds: visibilityUserIds
                     )
-                    // Hors-ligne : le composer reste ouvert, rien n'est perdu.
+                    // Hors-ligne : le composer reste ouvert, rien n'est perdu —
+                    // et le `false` remonté relâche son loquet de publication.
                     if accepted { session.wrappedValue = nil }
+                    return accepted
                 },
                 onDismiss: { session.wrappedValue = nil }
             )
             .storyLocationPickerProvided()
+            .storyCameraCaptureProvided()
+            .storyRecentCameraRollProvided()
         }
     }
-}
-
-private struct StoryPreviewAssets: Identifiable {
-    let id = UUID()
-    let slides: [StorySlide]
-    let backgroundImages: [String: UIImage]
-    let loadedImages: [String: UIImage]
-    let videoURLs: [String: URL]
-    let audioURLs: [String: URL]
 }
 
 struct StoryTrayView: View {
@@ -85,34 +80,23 @@ struct StoryTrayView: View {
     // un re-render complet du tray. La présence est rafraîchie lors des refreshs naturels.
     private var presenceManager: PresenceManager { PresenceManager.shared }
     @EnvironmentObject private var statusViewModel: StatusViewModel
-    // Captured solely so we can re-inject them onto the `StoryViewerContainer`
-    // / `StoryViewerView` fullScreenCovers below — those covers create a new
-    // presentation hierarchy and the inner SharePickerView sheet would
-    // otherwise crash on a missing `conversationListViewModel`.
+    // Capturés uniquement pour être RÉINJECTÉS sur la sheet « Mes stories » :
+    // une présentation crée une nouvelle hiérarchie, et la sheet interne
+    // `SharePickerView` (« Transférer ») crasherait sur un environment object
+    // manquant. (Le cover du composer, lui, est monté aux racines depuis S5 —
+    // cf. `StoryComposerCover`.)
     @EnvironmentObject private var router: Router
     @EnvironmentObject private var conversationListViewModel: ConversationListViewModel
     @EnvironmentObject private var storyViewerCoordinator: StoryViewerCoordinator
     @State private var selectedProfileUser: ProfileSheetUser?
-    @State private var storyPreviewAssets: StoryPreviewAssets?
     /// Sheet « Mes stories envoyées » (gestion : ouvrir, vues, partager,
     /// republier, supprimer). Directive user 2026-07-14.
     @State private var showMyStories = false
+    /// Intention posée pendant la fermeture de la sheet, exécutée par son
+    /// `onDismiss` — remplace le pari des 350 ms (cf. `StoryTrayActions`).
+    @State private var myStoriesFollowUp = DeferredSheetFollowUp<MyStoriesFollowUp>()
     /// Session d'édition d'une story publiée (composer en mode édition).
     @State private var editingStorySession: StoryEditSession?
-    /// Brouillon a reprendre, consomme par le cover du composer. Pose AVANT
-    /// l'ouverture pour que le composer autosauvegarde sous le bon id.
-    @State private var pendingDraftId: String?
-
-    /// VM du composer pour le cover de CRÉATION. Adopte le brouillon à
-    /// reprendre quand il y en a un : sans cette adoption, le composer
-    /// s'autosauvegarderait sous un id neuf et le brouillon repris resterait
-    /// intact à côté, en double.
-    private func makeComposerViewModel() -> StoryComposerViewModel {
-        let composer = StoryComposerViewModel()
-        if let pendingDraftId { composer.adoptDraft(id: pendingDraftId) }
-        return composer
-    }
-
     var body: some View {
         VStack(spacing: 0) {
             // Cache-first: only show the skeleton row when the carousel
@@ -129,62 +113,36 @@ struct StoryTrayView: View {
             }
         }
         .frame(height: 120)
-        .sheet(isPresented: $showMyStories) {
-            MyStoriesView(
-                viewModel: viewModel,
-                userId: AuthManager.shared.currentUser?.id ?? "",
-                statusViewModel: statusViewModel,
-                onOpen: { story in
-                    showMyStories = false
-                    let coordinator = storyViewerCoordinator
-                    let uid = AuthManager.shared.currentUser?.id ?? ""
-                    let postId = story.id
-                    // Laisse la sheet se fermer avant le fullScreenCover root
-                    // (le coordinator présente au niveau RootView).
-                    Task { @MainActor in
-                        try? await Task.sleep(for: .milliseconds(350))
-                        coordinator.present(StoryViewerRequest(
-                            id: uid, singleGroup: true, postId: postId))
-                    }
-                },
-                onCreateStory: {
-                    showMyStories = false
-                    // Même pattern anti-course que `onOpen` : un .sheet et un
-                    // .fullScreenCover actifs en même temps depuis le même
-                    // hôte se marchent dessus.
-                    Task { @MainActor in
-                        try? await Task.sleep(for: .milliseconds(350))
-                        viewModel.showStoryComposer = true
-                    }
-                },
-                onEditStory: { story in
-                    showMyStories = false
-                    // Même pattern anti-course : sheet fermée AVANT le cover.
-                    Task { @MainActor in
-                        try? await Task.sleep(for: .milliseconds(350))
-                        editingStorySession = StoryEditSession(
-                            story: story,
-                            composer: StoryComposerViewModel(editing: story)
-                        )
-                    }
+        .myStoriesSheet(
+            isPresented: $showMyStories,
+            followUp: $myStoriesFollowUp,
+            viewModel: viewModel,
+            userId: AuthManager.shared.currentUser?.id ?? "",
+            statusViewModel: statusViewModel,
+            router: router,
+            conversationListViewModel: conversationListViewModel,
+            perform: { action in
+                // Aucun `Task`, aucun `sleep` : `onDismiss` s'exécute APRÈS la
+                // fin réelle du dismiss, la présentation cible est libre.
+                switch action {
+                case .openViewer(let postId):
+                    storyViewerCoordinator.present(StoryViewerRequest(
+                        id: AuthManager.shared.currentUser?.id ?? "",
+                        singleGroup: true, postId: postId))
+                case .createStory:
+                    viewModel.showStoryComposer = true
+                case .editStory(let story):
+                    editingStorySession = StoryEditSession(
+                        story: story,
+                        composer: StoryComposerViewModel(editing: story))
+                case .resumeDraft(let draftId):
+                    // La reprise d'un brouillon passe par le cover racine :
+                    // le viewModel porte l'identité du brouillon à adopter.
+                    viewModel.pendingDraftId = draftId
+                    viewModel.showStoryComposer = true
                 }
-                ,
-                onResumeDraft: { draftId in
-                    showMyStories = false
-                    // Même pattern anti-course que `onEditStory`.
-                    Task { @MainActor in
-                        try? await Task.sleep(for: .milliseconds(350))
-                        pendingDraftId = draftId
-                        viewModel.showStoryComposer = true
-                    }
-                }
-            )
-            // Réinjection à travers la frontière de sheet : la sheet interne
-            // SharePickerView (« Transférer ») crasherait sur un env object
-            // manquant — même raison que les fullScreenCovers du viewer.
-            .environmentObject(router)
-            .environmentObject(conversationListViewModel)
-        }
+            }
+        )
         .storyEditComposerCover(session: $editingStorySession, viewModel: viewModel)
         .sheet(item: $selectedProfileUser) { user in
             UserProfileSheet(
@@ -200,67 +158,6 @@ struct StoryTrayView: View {
             )
             .presentationDetents([.medium, .large])
             .presentationDragIndicator(.visible)
-        }
-        .fullScreenCover(isPresented: $viewModel.showStoryComposer, onDismiss: {
-            pendingDraftId = nil
-        }) {
-            ZStack {
-                StoryComposerView(
-                    viewModel: makeComposerViewModel(),
-                    onPublishAllInBackground: { slides, slideImages, loadedImages, loadedVideoURLs, loadedAudioURLs, originalLanguage, visibility, visibilityUserIds in
-                        viewModel.publishStoryInBackground(
-                            slides: slides,
-                            slideImages: slideImages,
-                            loadedImages: loadedImages,
-                            loadedVideoURLs: loadedVideoURLs,
-                            loadedAudioURLs: loadedAudioURLs,
-                            originalLanguage: originalLanguage,
-                            visibility: visibility,
-                            visibilityUserIds: visibilityUserIds
-                        )
-                    },
-                    onPreview: { slides, images, loadedImgs, videoURLs, audioURLs in
-                        storyPreviewAssets = StoryPreviewAssets(
-                            slides: slides,
-                            backgroundImages: images,
-                            loadedImages: loadedImgs,
-                            videoURLs: videoURLs,
-                            audioURLs: audioURLs
-                        )
-                    },
-                    onDismiss: {
-                        viewModel.showStoryComposer = false
-                    }
-                )
-                .storyLocationPickerProvided()
-            }
-            .fullScreenCover(item: $storyPreviewAssets, onDismiss: {
-                NotificationCenter.default.post(name: .storyComposerUnmuteCanvas, object: nil)
-            }) { assets in
-                let items = assets.slides.map { $0.toPreviewStoryItem() }
-                let group = StoryGroup(
-                    id: "preview",
-                    username: String(localized: "story.preview.username", defaultValue: "Aperçu", bundle: .main),
-                    avatarColor: MeeshyColors.brandPrimaryHex,
-                    stories: items
-                )
-                StoryViewerView(
-                    viewModel: viewModel,
-                    groups: [group],
-                    currentGroupIndex: 0,
-                    isPresented: Binding(
-                        get: { storyPreviewAssets != nil },
-                        set: { if !$0 { storyPreviewAssets = nil } }
-                    ),
-                    isPreviewMode: true,
-                    preloadedImages: assets.loadedImages.merging(assets.backgroundImages) { fg, _ in fg },
-                    preloadedVideoURLs: assets.videoURLs,
-                    preloadedAudioURLs: assets.audioURLs
-                )
-                .environmentObject(router)
-                .environmentObject(conversationListViewModel)
-                .environmentObject(statusViewModel)
-            }
         }
     }
 
@@ -363,6 +260,12 @@ struct StoryRingCell: View {
     var showsUsername: Bool = true
     let onViewStory: () -> Void
     let onShowProfile: () -> Void
+    /// Entrées de menu SUPPLÉMENTAIRES, propres à un usage précis de la
+    /// cellule. La mini-trail y injecte « Gérer mes stories » sur son PROPRE
+    /// anneau : depuis que le tap y ouvre le viewer, c'est le seul chemin
+    /// restant vers la gestion — et vers l'ÉDITION d'une story publiée — quand
+    /// la grande trail est scrollée hors écran.
+    var contextMenuExtras: [AvatarContextMenuItem] = []
 
     private var theme: ThemeManager { ThemeManager.shared }
     private var presenceManager: PresenceManager { PresenceManager.shared }
@@ -383,13 +286,13 @@ struct StoryRingCell: View {
                     presenceState: presenceManager.presenceState(for: group.id),
                     onMoodTap: statusViewModel.moodTapHandler(for: group.id),
                     contextMenuItems: [
-                        AvatarContextMenuItem(label: "Voir les stories", icon: "play.circle.fill") {
+                        AvatarContextMenuItem(label: StoryTrayCopy.viewStories, icon: "play.circle.fill") {
                             onViewStory()
                         },
-                        AvatarContextMenuItem(label: "Voir le profil", icon: "person.fill") {
+                        AvatarContextMenuItem(label: StoryTrayCopy.viewProfile, icon: "person.fill") {
                             onShowProfile()
                         }
-                    ]
+                    ] + contextMenuExtras
                 )
 
                 // Story count dots (multiple stories indicator) — offset scales
@@ -499,18 +402,11 @@ private struct MyStoryButton: View {
                     storyState: storyState,
                     moodEmoji: myMoodEmoji,
                     onTap: {
-                        // Résolu AU TAP, pas à la construction du corps : lire
-                        // `StoryPublishService.shared` ici n'installe aucune
-                        // dépendance sur cette vue feuille (doctrine « Zero
-                        // Unnecessary Re-render ») tout en voyant toujours
-                        // l'état courant.
-                        switch StoryTrayAvatarTapResolver.action(
-                            hasPublishedStory: hasMyStory,
-                            hasActiveUpload: viewModel.activeUpload != nil,
-                            hasFailedItems: !StoryPublishService.shared.failedItems.isEmpty
-                        ) {
-                        case .manageStories: onManageStories?()
-                        case .createStory:   viewModel.showStoryComposer = true
+                        // Une seule règle, testable, pour le routage ET pour
+                        // l'annonce VoiceOver (cf. `StoryTrayActionResolver`).
+                        switch StoryTrayActionResolver.avatarTap(hasMyStory: hasMyStory) {
+                        case .viewMyStory:  onViewMyStory()
+                        case .createStory:  viewModel.showStoryComposer = true
                         }
                         HapticFeedback.medium()
                     },
@@ -519,38 +415,48 @@ private struct MyStoryButton: View {
                         HapticFeedback.medium()
                     },
                     contextMenuItems: {
+                        // « Voir ma story » a disparu du menu : le TAP y mène
+                        // désormais directement. La gestion, elle, n'a pas
+                        // d'autre porte — elle reste ici.
                         var items: [AvatarContextMenuItem] = []
-                        if hasMyStory {
-                            items.append(AvatarContextMenuItem(label: "Voir ma story", icon: "play.circle.fill") {
-                                onViewMyStory()
-                                HapticFeedback.medium()
-                            })
-                        }
-                        // Découplé de `hasMyStory` : un envoi en cours ou une
-                        // publication échouée n'a produit AUCUNE story publiée,
-                        // et c'est précisément ce travail-là qu'on vient gérer.
-                        if StoryTrayAvatarTapResolver.action(
-                            hasPublishedStory: hasMyStory,
-                            hasActiveUpload: viewModel.activeUpload != nil,
-                            hasFailedItems: !StoryPublishService.shared.failedItems.isEmpty
-                        ) == .manageStories {
-                            items.append(AvatarContextMenuItem(label: "Gérer mes stories", icon: "rectangle.stack.fill") {
+                        // Découplé de `hasMyStory` : un envoi en cours, une
+                        // publication échouée ou un brouillon n'a produit
+                        // AUCUNE story publiée, et c'est précisément ce
+                        // travail-là qu'on vient gérer.
+                        if hasMyStory
+                            || !viewModel.activeUploads.isEmpty
+                            || !StoryPublishService.shared.failedItems.isEmpty {
+                            items.append(AvatarContextMenuItem(label: StoryTrayCopy.manageStories, icon: "rectangle.stack.fill") {
                                 onManageStories?()
                                 HapticFeedback.medium()
                             })
                         }
-                        items.append(AvatarContextMenuItem(label: "Ajouter une story", icon: "plus.circle.fill") {
-                            guard viewModel.activeUpload == nil else { return }
+                        items.append(AvatarContextMenuItem(label: StoryTrayCopy.addStory, icon: "plus.circle.fill") {
                             viewModel.showStoryComposer = true
                             HapticFeedback.medium()
                         })
-                        items.append(AvatarContextMenuItem(label: "Changer mon mood", icon: "face.smiling.inverse") {
+                        items.append(AvatarContextMenuItem(label: StoryTrayCopy.changeMood, icon: "face.smiling.inverse") {
                             onAddStatus?()
                             HapticFeedback.medium()
                         })
                         return items
                     }()
                 )
+                // Le libellé porte sur la cible RÉELLEMENT tapée — l'avatar — et
+                // sur elle seule. `MeeshyAvatar` s'annonce avec le nom de la
+                // personne (« Moi »), ce qui ne dit rien de la destination ;
+                // `.combine` refait ici un élément unique dont le libellé est
+                // ensuite remplacé. Posé plus haut, sur le `VStack` racine, il
+                // aurait avalé les trois autres cibles du sous-arbre (bouton
+                // mood, badge « + », contrôles d'upload) : sous VoiceOver le
+                // badge « + » aurait cessé d'être un bouton nommé, alors que
+                // c'est justement l'affordance « composer TOUJOURS ».
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel(StoryTrayActionResolver.avatarAccessibilityLabel(hasMyStory: hasMyStory))
+                // Fusionné, l'élément héritait du type de ses enfants (une
+                // image) : VoiceOver annonçait une destination sans dire que
+                // c'était actionnable.
+                .accessibilityAddTraits(.isButton)
                 .overlay(alignment: .bottomTrailing) {
                     if myMoodEmoji == nil {
                         Button {
@@ -571,48 +477,52 @@ private struct MyStoryButton: View {
                         .accessibilityLabel(String(localized: "story.tray.a11y.changeMood", defaultValue: "Changer mon mood", bundle: .main))
                     }
                 }
-                .overlay(alignment: .topLeading) {
-                    // Composer entry badge — discoverable affordance for adding
-                    // a new story without going through long-press menu. Hidden
-                    // during an active upload (the upload overlay already
-                    // covers the avatar). The plus sign uses brand gradient
-                    // matching the published `MeeshyColors.brandGradient`.
-                    if viewModel.activeUpload == nil {
-                        Button {
-                            guard viewModel.activeUpload == nil else { return }
-                            viewModel.showStoryComposer = true
-                            HapticFeedback.medium()
-                        } label: {
-                            // User request 2026-07-04 : le (+) était COUPÉ en
-                            // haut du tray — l'offset négatif (-4,-4) le
-                            // faisait déborder du cadre de la cellule, et le
-                            // conteneur scrollable rognait tout dépassement.
-                            // Le badge est désormais ENTIÈREMENT contenu dans
-                            // les bounds de l'avatar (topLeading sans offset,
-                            // 34pt au lieu de 40) : plus rien ne peut être
-                            // rogné, quel que soit le clipping parent.
-                            // Glyphe dans un cercle de dimension FIXE : figé
-                            // (déborderait s'il scalait, doctrine 86i) ; le
-                            // bouton porte le libellé.
-                            Image(systemName: "plus")
-                                .font(.system(size: 19, weight: .bold))
-                                .foregroundStyle(Color.white)
-                                .frame(width: 34, height: 34)
-                                .background(
-                                    Circle()
-                                        .fill(MeeshyColors.brandGradient)
-                                        .overlay(Circle().stroke(theme.backgroundPrimary, lineWidth: 2.5))
-                                )
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel(String(localized: "story.tray.addStory",
-                                                   defaultValue: "Ajouter une story"))
+                .overlay {
+                    if let surfaced = StoryUploadPresentation.surfaced(in: viewModel.activeUploads) {
+                        StoryUploadOverlay(
+                            upload: surfaced.upload,
+                            stackedCount: surfaced.stackedCount
+                        )
                     }
                 }
-                .overlay {
-                    if let upload = viewModel.activeUpload {
-                        StoryUploadOverlay(upload: upload)
+                // C5 — le badge « + » est appliqué APRÈS l'anneau d'upload,
+                // donc AU-DESSUS : composer une 2e story pendant qu'une monte
+                // n'est plus interdit, et l'anneau en état `.failed`
+                // (`allowsHitTesting(isFailed)`) ne doit pas lui voler le tap.
+                .overlay(alignment: .topLeading) {
+                    // Composer entry badge — discoverable affordance for adding
+                    // a new story without going through long-press menu. Visible
+                    // et tapable EN PERMANENCE, y compris pendant un upload. The
+                    // plus sign uses brand gradient matching the published
+                    // `MeeshyColors.brandGradient`.
+                    Button {
+                        viewModel.showStoryComposer = true
+                        HapticFeedback.medium()
+                    } label: {
+                        // User request 2026-07-04 : le (+) était COUPÉ en
+                        // haut du tray — l'offset négatif (-4,-4) le
+                        // faisait déborder du cadre de la cellule, et le
+                        // conteneur scrollable rognait tout dépassement.
+                        // Le badge est désormais ENTIÈREMENT contenu dans
+                        // les bounds de l'avatar (topLeading sans offset,
+                        // 34pt au lieu de 40) : plus rien ne peut être
+                        // rogné, quel que soit le clipping parent.
+                        // Glyphe dans un cercle de dimension FIXE : figé
+                        // (déborderait s'il scalait, doctrine 86i) ; le
+                        // bouton porte le libellé.
+                        Image(systemName: "plus")
+                            .font(.system(size: 19, weight: .bold))
+                            .foregroundStyle(Color.white)
+                            .frame(width: 34, height: 34)
+                            .background(
+                                Circle()
+                                    .fill(MeeshyColors.brandGradient)
+                                    .overlay(Circle().stroke(theme.backgroundPrimary, lineWidth: 2.5))
+                            )
                     }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(String(localized: "story.tray.addStory",
+                                               defaultValue: "Ajouter une story"))
                 }
 
                 // Story count dots (si plusieurs stories)
@@ -638,7 +548,6 @@ private struct MyStoryButton: View {
                 .font(MeeshyFont.relative(10, weight: .semibold))
                 .foregroundColor(theme.textSecondary)
         }
-        .accessibilityLabel(hasMyStory ? String(localized: "story.tray.a11y.myStory", defaultValue: "Ma story", bundle: .main) : String(localized: "story.tray.a11y.changeMood", defaultValue: "Changer mon mood", bundle: .main))
     }
 }
 
@@ -646,10 +555,24 @@ private struct MyStoryButton: View {
 
 private struct StoryUploadOverlay: View {
     let upload: StoryViewModel.StoryUploadState
+    /// Publications empilées derrière celle-ci (C5). > 0 → pastille « +N ».
+    let stackedCount: Int
 
-    private var isFailed: Bool {
-        if case .failed = upload.phase { return true }
-        return false
+    private var isFailed: Bool { upload.phase.isFailed }
+
+    /// L'anneau reste à 0 % tant qu'aucun octet n'est parti : la règle
+    /// d'attente vit dans `UploadPhase.isWaiting`, partagée avec la ligne de
+    /// « Mes stories ».
+    private var displayedProgress: Double {
+        upload.phase.isWaiting ? 0 : upload.progress
+    }
+
+    private var a11yLabel: String {
+        StoryUploadPresentation.a11yLabel(
+            for: upload.phase,
+            progress: upload.progress,
+            stackedCount: stackedCount
+        )
     }
 
     var body: some View {
@@ -676,31 +599,51 @@ private struct StoryUploadOverlay: View {
                     .foregroundColor(.white)
             } else {
                 Circle()
-                    .trim(from: 0, to: upload.progress)
+                    .trim(from: 0, to: displayedProgress)
                     .stroke(
                         MeeshyColors.brandGradient,
                         style: StrokeStyle(lineWidth: 3, lineCap: .round)
                     )
                     .frame(width: 50, height: 50)
                     .rotationEffect(.degrees(-90))
-                    .animation(.linear(duration: 0.3), value: upload.progress)
+                    .animation(.linear(duration: 0.3), value: displayedProgress)
 
                 // Texte dans un cercle d'upload de dimension fixe 50×50 : figé (déborderait s'il scalait, doctrine 86i)
-                Text("\(Int(upload.progress * 100))%")
+                Text("\(Int(displayedProgress * 100))%")
                     .font(.system(size: 12, weight: .bold))
                     .foregroundColor(.white)
             }
         }
+        .overlay(alignment: .bottomTrailing) {
+            if stackedCount > 0 {
+                // Glyphe dans un cercle de dimension FIXE 18×18 : police figée
+                // (déborderait s'il scalait, doctrine 86i) ; le libellé
+                // accessible complet vit sur l'overlay.
+                Text("+\(stackedCount)")
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundColor(.white)
+                    .frame(width: 18, height: 18)
+                    .background(
+                        Circle()
+                            .fill(MeeshyColors.indigo600)
+                            .overlay(Circle().stroke(Color.black.opacity(0.35), lineWidth: 1))
+                    )
+                    .accessibilityHidden(true)
+            }
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(a11yLabel)
         // Purement informatif : cet overlay ne prend JAMAIS le geste destiné à
-        // l'avatar dessous, qui ouvre « Mes stories ».
+        // l'avatar dessous (directive user 2026-08-01, postérieure au modèle
+        // tap-retry du 2026-07-31 qu'elle remplace).
         //
         // Il portait auparavant `allowsHitTesting(isFailed)` plus un tap-retry
         // et un menu contextuel. En échec — exactement quand l'utilisateur a
         // besoin d'atteindre son travail — le `/!` avalait donc le tap et
-        // rendait la liste inaccessible (user 2026-08-01). Réessayer et
-        // supprimer vivent dans `MyStoriesView`, sur une ligne qui montre en
-        // plus le motif de l'échec : une pastille de 50 pt n'était pas une
-        // surface d'action défendable.
+        // rendait la liste inaccessible. Réessayer et supprimer vivent dans
+        // `MyStoriesView`, sur une ligne qui montre en plus le motif de
+        // l'échec : une pastille de 50 pt n'était pas une surface d'action
+        // défendable.
         .allowsHitTesting(false)
     }
 }
@@ -732,10 +675,14 @@ struct PinnedStoryTrailBand: View {
     @EnvironmentObject private var router: Router
     @EnvironmentObject private var conversationListViewModel: ConversationListViewModel
     @State private var selectedProfileUser: ProfileSheetUser?
-    /// Directive user 2026-07-14 : le tap sur son propre anneau ouvre
-    /// toujours la liste de gestion, même depuis le band épinglé replié —
-    /// même comportement que `MyStoryButton` dans la grande trail.
+    /// S5 — le tap sur son propre anneau ouvre désormais le VIEWER (parité avec
+    /// la grande trail). La gestion reste atteignable par appui long
+    /// (`contextMenuExtras`), seul chemin restant vers `MyStoriesView` — et donc
+    /// vers l'édition d'une story publiée — depuis le header replié.
     @State private var showMyStories = false
+    /// Même chaînage déterministe que la grande trail : l'intention est posée
+    /// pendant la fermeture, exécutée par `onDismiss` (cf. `StoryTrayActions`).
+    @State private var myStoriesFollowUp = DeferredSheetFollowUp<MyStoriesFollowUp>()
     /// Session d'édition d'une story publiée (composer en mode édition).
     @State private var editingStorySession: StoryEditSession?
     /// Brouillon a reprendre, consomme par le cover du composer. Pose AVANT
@@ -804,55 +751,31 @@ struct PinnedStoryTrailBand: View {
                     .presentationDetents([.medium, .large])
                     .presentationDragIndicator(.visible)
                 }
-                .sheet(isPresented: $showMyStories) {
-                    MyStoriesView(
-                        viewModel: viewModel,
-                        userId: currentUserId,
-                        statusViewModel: statusViewModel,
-                        onOpen: { story in
-                            showMyStories = false
-                            let coordinator = storyViewerCoordinator
-                            let uid = currentUserId
-                            let postId = story.id
-                            // Laisse la sheet se fermer avant le fullScreenCover
-                            // root (le coordinator présente au niveau RootView).
-                            Task { @MainActor in
-                                try? await Task.sleep(for: .milliseconds(350))
-                                coordinator.present(StoryViewerRequest(
-                                    id: uid, singleGroup: true, postId: postId))
-                            }
-                        },
-                        onCreateStory: {
-                            showMyStories = false
-                            Task { @MainActor in
-                                try? await Task.sleep(for: .milliseconds(350))
-                                viewModel.showStoryComposer = true
-                            }
-                        },
-                        onEditStory: { story in
-                            showMyStories = false
-                            // Même pattern anti-course : sheet fermée AVANT le cover.
-                            Task { @MainActor in
-                                try? await Task.sleep(for: .milliseconds(350))
-                                editingStorySession = StoryEditSession(
-                                    story: story,
-                                    composer: StoryComposerViewModel(editing: story)
-                                )
-                            }
+                .myStoriesSheet(
+                    isPresented: $showMyStories,
+                    followUp: $myStoriesFollowUp,
+                    viewModel: viewModel,
+                    userId: currentUserId,
+                    statusViewModel: statusViewModel,
+                    router: router,
+                    conversationListViewModel: conversationListViewModel,
+                    perform: { action in
+                        switch action {
+                        case .openViewer(let postId):
+                            storyViewerCoordinator.present(StoryViewerRequest(
+                                id: currentUserId, singleGroup: true, postId: postId))
+                        case .createStory:
+                            viewModel.showStoryComposer = true
+                        case .editStory(let story):
+                            editingStorySession = StoryEditSession(
+                                story: story,
+                                composer: StoryComposerViewModel(editing: story))
+                        case .resumeDraft(let draftId):
+                            viewModel.pendingDraftId = draftId
+                            viewModel.showStoryComposer = true
                         }
-                        ,
-                        onResumeDraft: { draftId in
-                            showMyStories = false
-                            Task { @MainActor in
-                                try? await Task.sleep(for: .milliseconds(350))
-                                pendingDraftId = draftId
-                                viewModel.showStoryComposer = true
-                            }
-                        }
-                    )
-                    .environmentObject(router)
-                    .environmentObject(conversationListViewModel)
-                }
+                    }
+                )
                 .storyEditComposerCover(session: $editingStorySession, viewModel: viewModel)
         }
     }
@@ -873,8 +796,19 @@ struct PinnedStoryTrailBand: View {
                     StoryRingCell(
                         group: ownGroup,
                         context: .storyTrayCompact,
-                        onViewStory: { showMyStories = true },
-                        onShowProfile: { selectedProfileUser = .from(storyGroup: ownGroup) }
+                        onViewStory: {
+                            // Parité avec la grande trail : le tap ouvre SA
+                            // story, plus la liste de gestion.
+                            storyViewerCoordinator.present(StoryViewerRequest(
+                                id: ownGroup.id, singleGroup: true))
+                        },
+                        onShowProfile: { selectedProfileUser = .from(storyGroup: ownGroup) },
+                        contextMenuExtras: [
+                            AvatarContextMenuItem(
+                                label: StoryTrayCopy.manageStories,
+                                icon: "rectangle.stack.fill"
+                            ) { showMyStories = true }
+                        ]
                     )
                     .zoomTransitionSource(id: ownGroup.id, in: zoomNamespace)
                 }
@@ -912,7 +846,6 @@ struct PinnedStoryTrailBand: View {
 
     private var addStoryButton: some View {
         Button {
-            guard viewModel.activeUpload == nil else { return }
             viewModel.showStoryComposer = true
             HapticFeedback.medium()
         } label: {

@@ -371,8 +371,8 @@ struct ThemedConversationRow: View {
     // MARK: - Unread Badge
     private var unreadBadge: some View {
         let badgeColor = MeeshyColors.unreadBadgeBackground(isDark: isDark)
-        return Text("\(min(conversation.userState.unreadCount, 99))")
-            .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .bold))
+        return Text(NotificationBadge.displayed(conversation.userState.unreadCount))
+            .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: NotificationBadge.fontWeight))
             .foregroundColor(.white)
             .padding(.horizontal, 7)
             .padding(.vertical, 4)

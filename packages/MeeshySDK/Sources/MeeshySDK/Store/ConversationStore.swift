@@ -160,9 +160,14 @@ public actor ConversationStore {
     /// jamais évincé) restaient résidents pendant toute la session de
     /// l'utilisateur B. Les publishers per-conv encore détenus par une UI en
     /// cours de teardown deviennent orphelins (plus d'émission) — attendu.
-    public func reset() {
+    public func reset() async {
         conversations.removeAll()
         subjects.removeAll()
+        // outbox-03 — l'outbox SQLite réhydrate ses rows à chaque boot et les
+        // flushe `force: true` sous le token courant : la purge mémoire seule
+        // laissait les mutations de A (dont .leave/.deleteForUser) se rejouer
+        // sous le compte B. Purge via l'outbox INJECTÉ (testabilité).
+        await outbox.purgeAll()
     }
 
     // MARK: - Read

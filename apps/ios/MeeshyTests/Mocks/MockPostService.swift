@@ -32,6 +32,15 @@ final class MockPostService: PostServiceProviding, @unchecked Sendable {
     var repostResult: Result<APIPost, Error> = .success(stubPost)
     var shareResult: Result<Void, Error> = .success(())
     var createStoryResult: Result<APIPost, Error> = .success(stubPost)
+    /// File de résultats pour les scénarios multi-slides (une story = un
+    /// `createStory` par slide) : consommée en priorité, une entrée par appel.
+    /// Même pattern que `getCommentsResultsQueue`.
+    var createStoryResultsQueue: [Result<APIPost, Error>] = []
+    /// Maintient `createStory` EN VOL tant qu'il est levé : indispensable pour
+    /// tester ce qui n'arrive qu'à un upload en cours (annuler la story qui
+    /// monte). L'attente honore l'annulation de tâche — `uploadTask.cancel()`
+    /// en sort par un `CancellationError`, comme un TUS interrompu.
+    var createStoryHangs = false
     var createWithTypeResult: Result<APIPost, Error> = .success(stubPost)
 
     // MARK: - Call Tracking
@@ -95,6 +104,9 @@ final class MockPostService: PostServiceProviding, @unchecked Sendable {
     var lastCreateStoryContent: String?
     var lastCreateStoryRepostOfId: String?
     var lastCreateStoryOriginalLanguage: String?
+    /// Effets de la DERNIÈRE slide envoyée au serveur — sert à prouver que les
+    /// thumbHashes calculés en aval du hand-off arrivent bien avant le TUS.
+    var lastCreateStoryEffects: StoryEffects?
 
     var createWithTypeCallCount = 0
     var lastCreateWithTypeType: PostType?
@@ -307,6 +319,14 @@ final class MockPostService: PostServiceProviding, @unchecked Sendable {
         lastCreateStoryContent = content
         lastCreateStoryRepostOfId = repostOfId
         lastCreateStoryOriginalLanguage = originalLanguage
+        lastCreateStoryEffects = storyEffects
+        while createStoryHangs {
+            try Task.checkCancellation()
+            try await Task.sleep(nanoseconds: 20_000_000)
+        }
+        if !createStoryResultsQueue.isEmpty {
+            return try createStoryResultsQueue.removeFirst().get()
+        }
         return try createStoryResult.get()
     }
 
@@ -488,10 +508,13 @@ final class MockPostService: PostServiceProviding, @unchecked Sendable {
         lastSharePlatform = nil
 
         createStoryResult = .success(stubPost)
+        createStoryResultsQueue = []
+        createStoryHangs = false
         createStoryCallCount = 0
         lastCreateStoryContent = nil
         lastCreateStoryRepostOfId = nil
         lastCreateStoryOriginalLanguage = nil
+        lastCreateStoryEffects = nil
 
         createWithTypeResult = .success(stubPost)
         createWithTypeCallCount = 0

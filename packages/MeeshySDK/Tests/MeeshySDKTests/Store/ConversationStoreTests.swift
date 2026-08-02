@@ -827,3 +827,20 @@ private extension Publisher where Failure == Never {
         return captured
     }
 }
+
+/// P0 (fiche outbox-03) — `reset()` (cascade AuthManager.logout) doit purger
+/// l'outbox INJECTÉ, pas seulement la mémoire du store.
+extension ConversationStoreTests {
+
+    func test_reset_purgesOutboxPending() async throws {
+        let (store, _, _, outbox) = makeStore()
+        _ = await outbox.enqueue(.setPinned(true), for: "conv-reset")
+        let seeded = await outbox.allPending().count
+        XCTAssertEqual(seeded, 1, "precondition: one pending outbox task")
+
+        await store.reset()
+
+        let pending = await outbox.allPending()
+        XCTAssertTrue(pending.isEmpty, "reset() must purge the injected outbox — pending mutations would replay under the next account's token")
+    }
+}

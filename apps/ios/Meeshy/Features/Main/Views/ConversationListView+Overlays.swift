@@ -1024,11 +1024,15 @@ struct ConversationListHeaderOverlay: View {
                                     .foregroundColor(MeeshyColors.indigo500)
 
                                 if iPadNotificationCount > 0 {
-                                    Text("\(min(iPadNotificationCount, 99))")
-                                        .font(.system(size: 9, weight: .bold))
+                                    Text(NotificationBadge.displayed(iPadNotificationCount))
+                                        .font(.system(size: 9, weight: NotificationBadge.fontWeight))
                                         .foregroundColor(.white)
-                                        .frame(width: 16, height: 16)
-                                        .background(Circle().fill(MeeshyColors.error))
+                                        .lineLimit(1)
+                                        // Capsule et non cercle figé : « 99+ » doit
+                                        // s'afficher entier, pas être rogné.
+                                        .padding(.horizontal, 5)
+                                        .frame(minWidth: 16, minHeight: 16)
+                                        .background(Capsule().fill(MeeshyColors.error))
                                         .offset(x: 6, y: -6)
                                 }
                             }

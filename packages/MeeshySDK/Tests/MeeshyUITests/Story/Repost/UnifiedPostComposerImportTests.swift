@@ -7,6 +7,16 @@ import SwiftUI
 @MainActor
 final class UnifiedPostComposerImportTests: XCTestCase {
 
+    /// S6 — minimal fixture used PURELY to satisfy `repostingStory:`'s
+    /// required `StoryItem` argument. The generic (non-repost) init these
+    /// `test_realComposer_importFromStory_*` tests used to build the composer
+    /// with was removed as dead code; `.importFromStory(payload:targetSize:)`
+    /// is an extension method independent of which init constructed the
+    /// composer, so `repostingStory:` is a purely mechanical substitute.
+    private static func makeStoryItem(id: String = "test") -> StoryItem {
+        StoryItem(id: id, content: nil, media: [], storyEffects: nil, createdAt: Date())
+    }
+
     // MARK: - Testable shim (algorithm-level)
 
     func test_importFromStory_shim_countsAllItems() {
@@ -60,7 +70,9 @@ final class UnifiedPostComposerImportTests: XCTestCase {
             sourceStoryItemId: "story-X"
         )
         let composer = UnifiedPostComposer(
-            onPublish: { _, _, _, _, _ in },
+            repostingStory: Self.makeStoryItem(),
+            authorHandle: "test",
+            onPublishRepost: { _, _, _ in },
             onDismiss: { }
         )
         let result = composer.importFromStory(payload, targetSize: CGSize(width: 1080, height: 1080))
@@ -87,7 +99,9 @@ final class UnifiedPostComposerImportTests: XCTestCase {
             sourceStoryItemId: nil
         )
         let composer = UnifiedPostComposer(
-            onPublish: { _, _, _, _, _ in },
+            repostingStory: Self.makeStoryItem(),
+            authorHandle: "test",
+            onPublishRepost: { _, _, _ in },
             onDismiss: { }
         )
         let result = composer.importFromStory(payload, targetSize: CGSize(width: 1080, height: 1080))
@@ -116,7 +130,9 @@ final class UnifiedPostComposerImportTests: XCTestCase {
             sourceStoryItemId: nil
         )
         let composer = UnifiedPostComposer(
-            onPublish: { _, _, _, _, _ in },
+            repostingStory: Self.makeStoryItem(),
+            authorHandle: "test",
+            onPublishRepost: { _, _, _ in },
             onDismiss: { }
         )
         let result = composer.importFromStory(payload, targetSize: CGSize(width: 1080, height: 1080))
@@ -145,7 +161,9 @@ final class UnifiedPostComposerImportTests: XCTestCase {
             sourceStoryItemId: nil
         )
         let composer = UnifiedPostComposer(
-            onPublish: { _, _, _, _, _ in },
+            repostingStory: Self.makeStoryItem(),
+            authorHandle: "test",
+            onPublishRepost: { _, _, _ in },
             onDismiss: { }
         )
         let result = composer.importFromStory(payload, targetSize: CGSize(width: 1080, height: 1080))

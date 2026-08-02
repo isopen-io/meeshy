@@ -19,7 +19,6 @@ final class ComposerChromeContextTests: XCTestCase {
         isDrawingImmersive: Bool = false,
         isViewportZoomed: Bool = false,
         isTimelineVisible: Bool = false,
-        isEmptyStatePickerVisible: Bool = false
     ) -> ComposerChromeContext {
         ComposerChromeContext(
             machineState: machineState,
@@ -28,8 +27,7 @@ final class ComposerChromeContextTests: XCTestCase {
             isDrawingActive: isDrawingActive,
             isDrawingImmersive: isDrawingImmersive,
             isViewportZoomed: isViewportZoomed,
-            isTimelineVisible: isTimelineVisible,
-            isEmptyStatePickerVisible: isEmptyStatePickerVisible
+            isTimelineVisible: isTimelineVisible
         )
     }
 

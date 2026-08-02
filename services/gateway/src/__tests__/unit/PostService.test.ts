@@ -175,8 +175,13 @@ describe('PostService', () => {
       // s'approprier un média en attente en devinant son id.
       const claim = prisma.postMedia.updateMany.mock.calls[0][0];
       expect(claim.where.id).toEqual({ in: ['media-1', 'media-2'] });
-      expect(claim.where.postId).toBeNull();
-      expect(claim.where.commentId).toBeNull();
+      // « Libre » sous les DEUX formes MongoDB — présent à null OU champ
+      // absent : Prisma-Mongo ne matche pas l'absence avec `null`, et le
+      // handler TUS ne pose pas `commentId` (incident prod 2026-07-31→08-01).
+      expect(claim.where.AND).toEqual([
+        { OR: [{ postId: null }, { postId: { isSet: false } }] },
+        { OR: [{ commentId: null }, { commentId: { isSet: false } }] },
+      ]);
       expect(claim.where.uploaderId).toBe('user-1');
       expect(claim.data).toEqual({ postId: 'post-1' });
       // findFirst is called to detect audio media for Whisper processing
@@ -1714,8 +1719,12 @@ describe('PostService', () => {
         // s'approprier le média en attente de quelqu'un d'autre.
         const claim = prisma.postMedia.updateMany.mock.calls[0][0];
         expect(claim.where.id).toEqual({ in: ['new-m1', 'new-m2'] });
-        expect(claim.where.postId).toBeNull();
-        expect(claim.where.commentId).toBeNull();
+        // Les deux formes MongoDB d'un média libre (null OU champ absent) —
+        // cf. l'incident prod 2026-07-31→08-01 sur `commentId` absent.
+        expect(claim.where.AND).toEqual([
+          { OR: [{ postId: null }, { postId: { isSet: false } }] },
+          { OR: [{ commentId: null }, { commentId: { isSet: false } }] },
+        ]);
         expect(claim.where.uploaderId).toBe('user-1');
         expect(claim.data).toEqual({ postId: 'post-1' });
       });

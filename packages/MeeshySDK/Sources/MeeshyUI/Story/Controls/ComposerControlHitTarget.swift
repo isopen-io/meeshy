@@ -33,6 +33,13 @@ public nonisolated enum ComposerControlMetrics {
     /// Interstice de layout de la colonne annuler/rétablir : son écart visuel
     /// de 10 pt est conservé À L'IDENTIQUE (10 − 2 × hitInset).
     public static let columnSpacing: CGFloat = 10 - 2 * hitInset
+
+    /// Dégagement réservé au rail de FABs (48 pt de pastille + marge + safe
+    /// area) sous TOUT ce qui se pose en bas du canvas : les amorces de page
+    /// blanche et le bandeau de reprise de brouillon. La valeur vivait en dur
+    /// dans deux fichiers ; désynchronisées, l'une des deux surfaces recouvre
+    /// les outils qu'elle est censée dégager.
+    public static let bottomOverlayClearance: CGFloat = 96
 }
 
 extension View {

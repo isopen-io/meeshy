@@ -5986,7 +5986,12 @@ final class CallManagerPiPRemoteMuteSourceGuardTests: XCTestCase {
         guard let videoCaseRange = source.range(of: "case \"video\":", range: toggledRange.lowerBound..<source.endIndex) else {
             XCTFail("\"video\" case not found in callMediaToggled handler"); return
         }
-        let body = String(source[videoCaseRange.lowerBound...].prefix(500))
+        // Borné sur la fin réelle du `case "video":` plutôt que sur un nombre de
+        // caractères : une fenêtre fixe se casse dès qu'un commentaire ou une
+        // ligne s'ajoute dans le case, et échoue alors sur un code correct.
+        let rest = source[videoCaseRange.lowerBound...]
+        let caseEnd = rest.range(of: "case \"audio\":")?.lowerBound ?? rest.endIndex
+        let body = String(rest[..<caseEnd])
         XCTAssertTrue(
             body.contains("self.isRemoteVideoEnabled = event.enabled"),
             "The video case must still update isRemoteVideoEnabled (drives the in-app pill's SwiftUI placeholder)"

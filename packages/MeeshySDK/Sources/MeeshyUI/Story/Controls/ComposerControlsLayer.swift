@@ -163,6 +163,24 @@ public struct ComposerControlsLayer: View {
                 // luminance du FOND de la slide, pas le thème de l'app
                 // (capture user 2026-07-11 — indigo sombre sur bleu nuit).
                 .environment(\.colorScheme, viewModel.canvasChromeScheme)
+                // D4 — masquer le chrome n'était atteignable QUE par
+                // `onSwipeDownAny`, un swipe physique sur la rangée de FABs :
+                // VoiceOver intercepte les swipes pour sa propre navigation,
+                // donc ce geste n'existait pour personne naviguant au rotor.
+                // `fabRestoreHandle` (juste en dessous) a déjà son pendant
+                // « Afficher les outils » — celui-ci est le SEUL côté resté
+                // gestuel. Même canal que le swipe (`bandStateMachine
+                // .hideChrome()`), exposé en action nommée sur le conteneur
+                // du chrome plutôt que redécouvert au hasard d'un swipe.
+                .accessibilityAction(named: Text(String(
+                    localized: "story.composer.hideTools",
+                    defaultValue: "Masquer les outils",
+                    bundle: .module
+                ))) {
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
+                        bandStateMachine.hideChrome()
+                    }
+                }
             }
 
             // C3 — état « chrome caché » (barre d'outils masquée par

@@ -54,6 +54,33 @@ enum ComposerSourceGuard {
         return out.sorted { $0.path < $1.path }
     }
 
+    /// Corps d'une fonction, isolé par ÉQUILIBRAGE D'ACCOLADES depuis sa
+    /// signature. Sert aux gardes qui portent sur un COMPTE local (« exactement
+    /// un `removeItem(` ici, zéro ailleurs ») : compter sur le fichier entier
+    /// dirait la mauvaise chose, et ancrer sur un nom de liaison
+    /// (`removeItem(at: sourceURL)`) rend la garde vacuously verte au premier
+    /// renommage — exactement ce que proscrit
+    /// `reference_source_guards_anchor_on_behaviour`.
+    ///
+    /// `signature` est un préfixe (`"func addCapturedMedia("` suffit) : la
+    /// garde n'a pas à réécrire la liste de paramètres qu'elle ne surveille pas.
+    /// Le code est attendu DÉJÀ décommenté (`source(_:)` le fait).
+    static func functionBody(named signature: String, in code: String) -> String? {
+        guard let start = code.range(of: signature),
+              let openBrace = code[start.upperBound...].firstIndex(of: "{") else { return nil }
+        var depth = 0
+        var index = openBrace
+        while index < code.endIndex {
+            if code[index] == "{" { depth += 1 }
+            if code[index] == "}" {
+                depth -= 1
+                if depth == 0 { return String(code[code.index(after: openBrace)..<index]) }
+            }
+            index = code.index(after: index)
+        }
+        return nil
+    }
+
     /// Nombre d'occurrences NON CHEVAUCHANTES de `needle` dans `haystack`.
     static func occurrences(of needle: String, in haystack: String) -> Int {
         guard !needle.isEmpty else { return 0 }

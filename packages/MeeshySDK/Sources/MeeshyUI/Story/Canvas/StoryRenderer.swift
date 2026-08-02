@@ -553,6 +553,28 @@ extension StoryRenderer {
     /// 2. Background image media object (`isBackground == true`, kind == .image`)
     /// 3. `effects.background` hex color string
     /// 4. Fallback: `.solidColor(.black)`
+    /// Clé de routage du fond : ce que `StoryBackgroundLayer.configure` tentera
+    /// d'abord comme URL directe, avant de retomber sur le resolver.
+    ///
+    /// Une URL DISTANTE prime sur le `postMediaId`. L'identifiant n'est pas une
+    /// URL : le layer doit le résoudre via le tableau `media[]` du post — et ce
+    /// tableau revient vide dès qu'un rattachement média↔post a échoué à la
+    /// publication. Constaté en production le 2026-08-01 : deux stories sans
+    /// aucun fond, alors que leur objet portait une `mediaURL` parfaitement
+    /// servable, jamais essayée parce que le `postMediaId` gagnait d'office.
+    ///
+    /// Les `file://` sont exclues quand un identifiant existe : les stories
+    /// publiées avant `sanitizedForServerPublish()` en portent qui pointent vers
+    /// la sandbox de l'AUTEUR, inaccessible à tout autre lecteur. Sans
+    /// identifiant en revanche (composer, média pas encore téléversé), la
+    /// `file://` locale EST la bonne source — c'est la sandbox de celui qui
+    /// regarde.
+    nonisolated static func backgroundRoutingKey(postMediaId: String,
+                                                 mediaURL: String?) -> String {
+        if let url = mediaURL, url.hasPrefix("http") { return url }
+        return postMediaId.isEmpty ? (mediaURL ?? "") : postMediaId
+    }
+
     public static func renderBackground(slide: StorySlide,
                                         languages: [String]) -> StoryBackgroundLayer.Kind {
         // Video background object
@@ -560,9 +582,8 @@ extension StoryRenderer {
             // En composer édition la vidéo locale n'a pas encore de postMediaId
             // serveur ; on utilise alors directement la `mediaURL` (file://…)
             // que `StoryBackgroundLayer.configure` détecte par préfixe.
-            let routingKey = (!bgVideo.postMediaId.isEmpty)
-                ? bgVideo.postMediaId
-                : (bgVideo.mediaURL ?? "")
+            let routingKey = Self.backgroundRoutingKey(postMediaId: bgVideo.postMediaId,
+                                                       mediaURL: bgVideo.mediaURL)
             // `mute` reste à `false` au niveau du renderer : c'est l'état
             // initial souhaité (la vidéo de fond porte de l'audio que le
             // viewer DOIT entendre par défaut). Le mute global de la sidebar
@@ -588,9 +609,8 @@ extension StoryRenderer {
             // (sortie PhotosPicker → temp file), on pousse la file URL dans le
             // champ `postMediaId` pour que `StoryBackgroundLayer.configure`
             // puisse la charger directement sans cache lookup.
-            let routingKey = (!bgImage.postMediaId.isEmpty)
-                ? bgImage.postMediaId
-                : (bgImage.mediaURL ?? "")
+            let routingKey = Self.backgroundRoutingKey(postMediaId: bgImage.postMediaId,
+                                                       mediaURL: bgImage.mediaURL)
             return .image(postMediaId: routingKey,
                           thumbHash: slide.effects.thumbHash)
         }

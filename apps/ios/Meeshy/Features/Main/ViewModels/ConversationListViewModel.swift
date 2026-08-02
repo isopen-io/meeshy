@@ -235,7 +235,7 @@ class ConversationListViewModel: ObservableObject {
             // best-effort. Une defaillance d'ecriture (encryption, disque
             // plein) est loggee par GRDBCacheStore et ne doit pas casser
             // le persist debounce.
-            try? await CacheCoordinator.shared.conversations.save(snapshot, for: "list")
+            try? await CacheCoordinator.shared.conversations.savePreservingFreshness(snapshot, for: "list")
             await CacheCoordinator.shared.conversations.saveCursor(
                 nextCursor: cursor, hasMore: more, for: "list"
             )
@@ -632,7 +632,10 @@ class ConversationListViewModel: ObservableObject {
             updated[i].userState = newState
             changed = true
         }
-        if changed { conversations = updated }
+        if changed {
+            conversations = updated
+            schedulePersist()
+        }
     }
 
     private func reloadFromCache() async {
@@ -1229,7 +1232,7 @@ class ConversationListViewModel: ObservableObject {
     //
     // Cache strategy: Option 1 (blob save) per spec §4.3 recommendation —
     // the entire merged list is persisted as a single JSON blob via
-    // `CacheCoordinator.shared.conversations.save(snapshot, for: "list")`.
+    // `CacheCoordinator.shared.conversations.savePreservingFreshness(snapshot, for: "list")`.
     // Row-per-conversation (Option 2: one `cache_entries` row per id with
     // partial reads via `LIMIT/OFFSET`) is deferred to a future migration
     // if user counts grow beyond ~500 cached conversations. Today's blob
@@ -1340,7 +1343,7 @@ class ConversationListViewModel: ObservableObject {
             persistTask = Task {
                 // try? : Wave 1 Local-First a rendu .save() throwing.
                 // Best-effort persist — l'erreur est loggee en aval.
-                try? await CacheCoordinator.shared.conversations.save(snapshot, for: "list")
+                try? await CacheCoordinator.shared.conversations.savePreservingFreshness(snapshot, for: "list")
                 await CacheCoordinator.shared.conversations.saveCursor(
                     nextCursor: persistedCursor,
                     hasMore: persistedHasMore,

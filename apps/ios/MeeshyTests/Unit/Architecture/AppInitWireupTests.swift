@@ -107,8 +107,7 @@ final class AppInitWireupTests: XCTestCase {
     /// présentation qui oublie l'injection rend le chip « Lieu » invisible : la
     /// pastille redevient inatteignable, sans le moindre signal.
     func test_everyStoryComposerPresentation_injectsTheLocationPicker() throws {
-        for path in ["Meeshy/Features/Main/Views/StoryTrayView.swift",
-                     "Meeshy/Features/Main/Views/StoryViewerView.swift"] {
+        for path in Self.storyComposerPresentationSites {
             let src = try appSource(path)
             let presentations = occurrences(of: "StoryComposerView(", in: src)
                 + occurrences(of: "UnifiedPostComposer(", in: src)
@@ -118,6 +117,69 @@ final class AppInitWireupTests: XCTestCase {
                 injections, presentations,
                 "\(path) : chaque présentation du composer doit injecter le picker de lieu "
                     + "(.storyLocationPickerProvided()) — sinon le chip « Lieu » n'est pas rendu."
+            )
+        }
+    }
+
+    /// S5 — mêmes causes, mêmes effets : la caméra (AVCaptureSession,
+    /// permissions) et la pellicule (PhotoKit) restent app-side, le composer
+    /// SDK expose deux points d'injection. Un site de présentation qui les
+    /// oublie fait disparaître les amorces de la page blanche SANS le moindre
+    /// signal — c'est exactement ce que ce jumeau du garde-fou « Lieu »
+    /// interdit.
+    func test_everyStoryComposerPresentation_injectsTheBlankCanvasStarters() throws {
+        for path in Self.storyComposerPresentationSites {
+            let src = try appSource(path)
+            let presentations = occurrences(of: "StoryComposerView(", in: src)
+                + occurrences(of: "UnifiedPostComposer(", in: src)
+            XCTAssertGreaterThan(presentations, 0, "\(path) ne présente plus de composer de story ?")
+            XCTAssertEqual(
+                occurrences(of: ".storyCameraCaptureProvided()", in: src), presentations,
+                "\(path) : sans injection caméra, l'amorce « Caméra » n'est pas rendue."
+            )
+            XCTAssertEqual(
+                occurrences(of: ".storyRecentCameraRollProvided()", in: src), presentations,
+                "\(path) : sans injection pellicule, la vignette « dernière photo » n'est pas rendue."
+            )
+        }
+    }
+
+    /// Tous les fichiers qui MONTENT un composer de story. `StoryTrayActions`
+    /// s'y est ajouté quand le cover de création est remonté au niveau racine :
+    /// un site oublié par ce garde-fou est un site où les amorces de page
+    /// blanche disparaissent sans le moindre signal.
+    private static let storyComposerPresentationSites = [
+        "Meeshy/Features/Main/Views/StoryTrayView.swift",
+        "Meeshy/Features/Main/Views/StoryTrayActions.swift",
+        "Meeshy/Features/Main/Views/StoryViewerView.swift"
+    ]
+
+    /// R4 — le cover du composer de création n'est monté qu'UNE fois par racine.
+    ///
+    /// `StoryTrayView` le montait, et elle est instanciée par
+    /// `ConversationListView`, `FeedView` et `RootViewComponents` ; sur iPhone la
+    /// feuille de feed recouvre la liste sans la démonter, donc deux trays
+    /// vivantes présentaient le même cover sur le même `@Published`
+    /// (« Attempt to present … which is already presenting »). C'est la course
+    /// que les `Task.sleep(350 ms)` masquaient.
+    func test_theStoryComposerCoverIsMountedOnlyAtTheRoots() throws {
+        let mounts = ["Meeshy/Features/Main/Views/RootView.swift",
+                      "Meeshy/Features/Main/Views/iPadRootView+Sheets.swift"]
+        for path in mounts {
+            XCTAssertEqual(
+                occurrences(of: ".storyComposerCover(", in: try appSource(path)), 1,
+                "\(path) : une racine, un montage."
+            )
+        }
+        for path in ["Meeshy/Features/Main/Views/StoryTrayView.swift",
+                     "Meeshy/Features/Main/Views/RootViewComponents.swift",
+                     "Meeshy/Features/Main/Views/FeedView.swift",
+                     "Meeshy/Features/Main/Views/ConversationListView.swift"] {
+            XCTAssertEqual(
+                occurrences(of: "isPresented: $viewModel.showStoryComposer", in: try appSource(path))
+                    + occurrences(of: "isPresented: $storyViewModel.showStoryComposer", in: try appSource(path)),
+                0,
+                "\(path) : les hôtes DÉCLENCHENT le composer, ils ne le présentent plus."
             )
         }
     }

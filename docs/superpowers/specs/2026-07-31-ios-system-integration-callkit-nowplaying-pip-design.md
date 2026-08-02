@@ -490,6 +490,55 @@ Hors périmètre.
 
 ---
 
+# Écarts d'implémentation — plan 3a livré
+
+Six écarts par rapport au texte ci-dessus, chacun motivé par un fait découvert en écrivant le code.
+
+**C2 · restaurer le mode d'AVANT le PiP, pas forcer `.fullScreen` au retour d'avant-plan.** Le texte
+visait le `foregroundObserver`. Le vrai point de décision est `onStop`, qui posait `.pip`
+inconditionnellement. Mémoriser `displayMode` dans `onStart` et le restaurer couvre le cas plein écran
+**et** un défaut que la spec ne nommait pas : un PiP démarré depuis la **bulle** repartait en pilule, donc
+la bulle disparaissait sans que l'utilisateur ait rien demandé. Ce défaut était latent — C1 le rendait
+atteignable. Conséquence assumée : la croix système ne dégrade plus un appel plein écran en pilule ; on
+revient à l'appel tel qu'on l'avait laissé.
+
+**C6 · teardown différé ÉCARTÉ.** Le texte demandait de différer la libération de `delegate` /
+`pipController` pour que `didStopPictureInPicture` arrive. Inutile et nuisible : sur ce chemin, tout ce que
+`onStop` ferait est déjà fait — `detachSystemPiP()` remet `isSystemPiPActive`, `pipRestoring` et les deux
+`pipConfigured*` au repos. Le faire tirer écraserait au contraire le `.fullScreen` que la restauration
+vient de poser, par `modeAtStart`. On garde donc le teardown synchrone : un chemin de moins, aucune course.
+
+**C3 · le retour en avant-plan est CONSERVÉ comme garde-fou.** Le texte demandait de retirer les deux
+émissions. Seule celle de `didEnterBackground` l'est. La levée sur `willEnterForeground` devient le
+garde-fou du mode de panne que la spec identifie elle-même : `AVCaptureSession.h` documente la fin
+d'interruption comme survenant « when your app comes back to foreground », donc un signal de fin peut ne
+jamais arriver tant que l'app reste en arrière-plan. Sans cette levée, le pair resterait sur l'avatar
+jusqu'à la fin de l'appel.
+
+**C3 · aucune lecture d'`InterruptionReason`.** Une session interrompue ne délivre plus de frames quelle
+qu'en soit la raison : le booléen reste juste sans `switch`. Le `default` non fatal que la spec réclamait
+pour `.sensitiveContentMitigationActivated` devient sans objet — il n'y a rien à tenir à jour.
+
+**C7 · deux sites ne suffisaient pas — il en fallait quatre.** Corriger le prédicat des deux sites audio
+est un **no-op** en l'état : `configureAudioSession()` tourne au setup, où `hasRemoteVideoTrack` est encore
+faux, et `updateAudioSessionModeForCurrentVideoState()` n'est appelé que sur des bascules **locales**. Les
+deux écritures de l'état vidéo distant doivent donc le réinvoquer : réception du track
+(`didReceiveRemoteVideoTrack`) et `call:media-toggled`. Ajouté une garde « mode réellement changé » :
+`setMode` réinitialise les options implicites de la catégorie, et `call:media-toggled` se répète.
+
+**C1 · la seconde ancre vit dans `RootView`, pas dans `CallParticipantVisual`.** Cette dernière rend déjà
+le flux distant dans la pilule et la bulle — une ancre visible et bien dimensionnée, donc meilleure au
+sens d'AVKit. Mais la pilule et la bulle se masquent toutes deux sur `isSystemPiPActive` : l'ancre serait
+**détruite pendant que la fenêtre flotte**, exactement la vue dont AVKit a besoin pour l'animation de
+retour. L'ancre de `RootView` n'est gardée que sur `displayMode != .fullScreen`, jamais sur le PiP actif.
+À réévaluer [appareil] si l'auto-start refuse de partir d'un rect transparent.
+
+**État « PiP non visible » · reporté au plan 3b.** Il n'a pas de producteur tant que les trois sondes C5
+ne sont pas départagées sur appareil. Livrer le consommateur seul serait du code mort — précisément ce que
+`feedback_fabricated_fallback_hides_dead_reads` interdit. 3b livrera producteur et consommateur ensemble.
+
+---
+
 # Découpage
 
 | Plan | Contenu | Dépendances |

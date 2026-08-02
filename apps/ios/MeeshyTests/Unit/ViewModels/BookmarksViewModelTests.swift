@@ -173,4 +173,37 @@ final class BookmarksViewModelTests: XCTestCase {
         XCTAssertEqual(sut.posts[0].id, "b-lang")
         XCTAssertEqual(mock.getBookmarksCallCount, 1)
     }
+
+    // MARK: - vm-bookmarks-pagination-01 — loadMore sépare cache et pagination
+
+    func test_loadMore_afterFreshCacheServe_fetchesNextPageAndAppends() async {
+        let cachedPosts = [Self.makeAPIPost(id: "cached-1"), Self.makeAPIPost(id: "cached-2")]
+            .map { $0.toFeedPost(preferredLanguages: ["fr"]) }
+        try? await CacheCoordinator.shared.feed.save(cachedPosts, for: "bookmarks")
+        let (sut, mock) = makeSUT()
+        mock.getBookmarksResult = .success(Self.makePaginatedPosts(posts: [Self.makeAPIPost(id: "net-3")]))
+
+        await sut.loadBookmarks()
+        XCTAssertEqual(sut.posts.count, 2, "precondition: le cache .fresh est servi sans réseau")
+        XCTAssertEqual(mock.getBookmarksCallCount, 0)
+
+        await sut.loadMore()
+
+        XCTAssertEqual(mock.getBookmarksCallCount, 1,
+                       "le sentinel doit déclencher un fetch réseau — l'ancien chemin re-servait le cache et bloquait la pagination pour la session")
+        XCTAssertEqual(sut.posts.map(\.id), ["cached-1", "cached-2", "net-3"], "la page réseau s'APPEND au cache servi")
+    }
+
+    func test_bookmarksView_sentinel_callsLoadMore() throws {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()  // ViewModels
+            .deletingLastPathComponent()  // Unit
+            .deletingLastPathComponent()  // MeeshyTests
+            .deletingLastPathComponent()  // ios
+            .appendingPathComponent("Meeshy/Features/Main/Views/BookmarksView.swift")
+        let src = try String(contentsOf: url, encoding: .utf8)
+        XCTAssertTrue(src.contains("viewModel.loadMore()"),
+                      "le sentinel de pagination doit appeler loadMore(), pas loadBookmarks() (qui re-sert le cache)")
+    }
+
 }

@@ -373,12 +373,21 @@ public actor CacheCoordinator {
         await video.invalidateAll()
         await thumbnails.invalidateAll()
         await UserColorCache.shared.invalidateAll()
+        // cache-07 — mapping username→displayName construit depuis les
+        // conversations du compte sortant : RAM pure, aucun autre appelant de
+        // clear() — sans cette ligne il survivait au logout ET au switch.
+        UserDisplayNameCache.shared.clear()
         await SearchIndex.shared.clearAll()
         // No translation persist task to cancel — persistence is now incremental
         clearTranslationCacheDB()
         // Anti cross-user: drop any pending engagement sessions (open or
         // finalized) so user A's dwell/watch never flushes under user B.
         await EngagementOutbox.shared.purgeAll()
+        // media-08 — fractions de lecture et checkpoints TUS ne sont pas
+        // namespacés par userId : sans purge, le compte B hérite des
+        // waveforms teintées et des sessions d'upload en cours du compte A.
+        await TusUploadCheckpointStore.shared.purgeAll()
+        await MainActor.run { MediaConsumptionStore.shared.purgeAll() }
 
         // Reset the search-index backfill flag so the next user's first
         // `start()` re-runs the backfill against their freshly hydrated cache.
@@ -445,6 +454,49 @@ public actor CacheCoordinator {
                         actorId: data.userId, liked: false
                     )
                 }
+            }
+            .store(in: &cancellables)
+
+        socialSocket.commentAdded
+            .sink { [weak self] data in
+                guard let self else { return }
+                Task {
+                    await self.feed.patchEverywhere(itemId: data.postId) {
+                        $0.commentCount = data.commentCount
+                    }
+                }
+            }
+            .store(in: &cancellables)
+
+        socialSocket.commentDeleted
+            .sink { [weak self] data in
+                guard let self else { return }
+                Task {
+                    await self.feed.patchEverywhere(itemId: data.postId) {
+                        $0.commentCount = data.commentCount
+                    }
+                }
+            }
+            .store(in: &cancellables)
+
+        // `post:bookmarked` n'est émis QUE vers le bookmarker (événement
+        // personnel côté gateway) : pas de filtre d'acteur nécessaire.
+        socialSocket.postBookmarked
+            .sink { [weak self] data in
+                guard let self else { return }
+                Task {
+                    await self.feed.patchEverywhere(itemId: data.postId) {
+                        $0.isBookmarkedByMe = data.bookmarked
+                        if let count = data.bookmarkCount { $0.bookmarkCount = count }
+                    }
+                }
+            }
+            .store(in: &cancellables)
+
+        socialSocket.postDeleted
+            .sink { [weak self] postId in
+                guard let self else { return }
+                Task { await self.feed.removeEverywhere(itemId: postId) }
             }
             .store(in: &cancellables)
     }
@@ -569,6 +621,20 @@ public actor CacheCoordinator {
         #endif
     }
 
+    /// cache-01 — LA liste des stores GRDB, en criticité décroissante (les
+    /// premiers flushés si la deadline coupe). Toute divergence avec les
+    /// propriétés déclarées en tête de classe est un bug : les énumérations
+    /// explicites de reset()/invalidateAll() restent séparées à dessein.
+    private var allGRDBStores: [any GRDBDirtyFlushing] {
+        [
+            conversations, messages, notifications, feed, stories, participants, profiles,
+            comments, statuses, communities, stats, drafts, callTranscripts, friends,
+            friendRequests, blockedUsers, userSearch, callHistory, timeline,
+            affiliateTokens, shareLinks, trackingLinks, communityLinks,
+            categories, userTags, userPreferences, conversationPreferences
+        ]
+    }
+
     public func flushAll() async {
         await flushAll(deadline: nil)
     }
@@ -587,45 +653,34 @@ public actor CacheCoordinator {
     /// per store) rather than batched into a single global transaction.
     /// Option A in the plan — see the task notes for the trade-off.
     public func flushAll(deadline: Date?) async {
-        if let deadline, Date() >= deadline { return }
-        await conversations.flushDirtyKeys(deadline: deadline)
-        if let deadline, Date() >= deadline { return }
-        await messages.flushDirtyKeys(deadline: deadline)
-        if let deadline, Date() >= deadline { return }
-        await participants.flushDirtyKeys(deadline: deadline)
-        if let deadline, Date() >= deadline { return }
-        await profiles.flushDirtyKeys(deadline: deadline)
-        if let deadline, Date() >= deadline { return }
-        await feed.flushDirtyKeys(deadline: deadline)
-        if let deadline, Date() >= deadline { return }
-        await stories.flushDirtyKeys(deadline: deadline)
-        if let deadline, Date() >= deadline { return }
-        persistTranslationCaches()
+        // cache-01 — itère TOUS les stores (l'ancienne énumération n'en
+        // couvrait que 6 : l'état « lu » des notifications se perdait au
+        // kill). La persistance des traductions est incrémentale (cache-02).
+        for store in allGRDBStores {
+            if let deadline, Date() >= deadline { return }
+            await store.flushDirtyKeys(deadline: deadline)
+        }
     }
 
     public func evictUnderMemoryPressure() async {
-        await conversations.flushDirtyKeys()
-        await messages.flushDirtyKeys()
-        await participants.flushDirtyKeys()
-        await profiles.flushDirtyKeys()
-        await feed.flushDirtyKeys()
-        await stories.flushDirtyKeys()
-
-        await conversations.evictL1()
-        await messages.evictL1()
-        await participants.evictL1()
-        await profiles.evictL1()
-        await feed.evictL1()
-        await stories.evictL1()
+        for store in allGRDBStores {
+            await store.flushDirtyKeys()
+        }
+        for store in allGRDBStores {
+            await store.evictL1()
+        }
 
         await images.evictExpired()
         await audio.evictExpired()
         await video.evictExpired()
         await thumbnails.evictExpired()
 
-        translationCache.removeAll()
-        translationInsertionOrder.removeAll()
-        translationTimestamps.removeAll()
+        // cache-06 — le trio de traduction TEXTE est plafonné à 500 entrées
+        // (quelques centaines de Ko) : le vider ici ne libère presque rien
+        // face aux NSCache médias évincés ci-dessus, et force un aller ZMQ +
+        // une passe NLLB par message au rendu suivant (bulles retombées sur
+        // l'original — violation du Prisme). On le laisse chaud ; l'éviction
+        // FIFO (evictTranslationCacheIfNeeded) reste le garde-fou de taille.
         transcriptionCache.removeAll()
         audioTranslationCache.removeAll()
 
@@ -659,34 +714,6 @@ public actor CacheCoordinator {
         }
     }
 
-    private func persistTranslationCaches() {
-        let encoder = JSONEncoder()
-        encoder.dateEncodingStrategy = .iso8601
-        let snapshot = translationCache
-        let timestamps = translationTimestamps
-        do {
-            try db.write { db in
-                try TranslationCacheRecord.deleteAll(db)
-                let now = Date()
-                for (msgId, translations) in snapshot {
-                    let cachedAt = timestamps[msgId] ?? now
-                    for translation in translations {
-                        let data = try encoder.encode(translation)
-                        let record = TranslationCacheRecord(
-                            messageId: msgId,
-                            targetLanguage: translation.targetLanguage,
-                            encodedData: data,
-                            cachedAt: cachedAt
-                        )
-                        try record.save(db)
-                    }
-                }
-            }
-        } catch {
-            logger.error("Failed to persist translation cache to GRDB: \(error)")
-        }
-    }
-
     private func loadTranslationCaches() {
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
@@ -696,6 +723,19 @@ public actor CacheCoordinator {
                 try TranslationCacheRecord
                     .filter(Column("cachedAt") > cutoff)
                     .fetchAll(db)
+            }
+            // cache-02 — GC des rows au-delà du cutoff : le full-rewrite
+            // supprimé assurait accessoirement cette purge ; sans elle la
+            // table croît sans borne. Write séparé et loggé : un échec de GC
+            // ne doit pas empêcher le chargement.
+            do {
+                try db.write { db in
+                    try TranslationCacheRecord
+                        .filter(Column("cachedAt") <= cutoff)
+                        .deleteAll(db)
+                }
+            } catch {
+                logger.error("Failed to GC stale translation cache rows: \(error.localizedDescription, privacy: .public)")
             }
             var loaded: [String: [TranslationData]] = [:]
             var stamps: [String: Date] = [:]
@@ -834,12 +874,9 @@ public actor CacheCoordinator {
     /// `flushAll(deadline:)` so a test can assert "no work left to do".
     public func dirtyCountForTest() async -> Int {
         var total = 0
-        total += await conversations.dirtyKeyCount()
-        total += await messages.dirtyKeyCount()
-        total += await participants.dirtyKeyCount()
-        total += await profiles.dirtyKeyCount()
-        total += await feed.dirtyKeyCount()
-        total += await stories.dirtyKeyCount()
+        for store in allGRDBStores {
+            total += await store.dirtyKeyCount()
+        }
         return total
     }
 }

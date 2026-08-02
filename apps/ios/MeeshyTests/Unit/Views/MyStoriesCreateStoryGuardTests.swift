@@ -27,24 +27,34 @@ final class MyStoriesCreateStoryGuardTests: XCTestCase {
         )
     }
 
-    func test_storyTrayView_wiresOnCreateStory_closingSheetBeforeComposer() throws {
-        let traySource = try source("Meeshy/Features/Main/Views/StoryTrayView.swift")
+    /// S5 — le câblage a déménagé de `StoryTrayView` vers le modifier partagé
+    /// `myStoriesSheet` (`StoryTrayActions.swift`) : les deux surfaces de trail
+    /// montaient la sheet chacune de son côté, avec leur propre règle de
+    /// chaînage. L'invariant, lui, est inchangé — la sheet se ferme AVANT que
+    /// le composer soit présenté ; c'est simplement `onDismiss` qui l'ordonne
+    /// désormais, au lieu d'un `Task.sleep(350ms)`.
+    func test_storyTrayActions_wiresOnCreateStory_closingSheetBeforeComposer() throws {
+        let actions = try source("Meeshy/Features/Main/Views/StoryTrayActions.swift")
 
-        guard let callbackRange = traySource.range(of: "onCreateStory: {") else {
-            XCTFail("StoryTrayView doit fournir onCreateStory: à MyStoriesView")
+        guard let callbackRange = actions.range(of: "onCreateStory: {") else {
+            XCTFail("Le modifier myStoriesSheet doit fournir onCreateStory: à MyStoriesView")
             return
         }
-        let end = traySource.index(callbackRange.lowerBound, offsetBy: 550, limitedBy: traySource.endIndex)
-            ?? traySource.endIndex
-        let block = String(traySource[callbackRange.lowerBound ..< end])
+        let end = actions.index(callbackRange.lowerBound, offsetBy: 300, limitedBy: actions.endIndex)
+            ?? actions.endIndex
+        let block = String(actions[callbackRange.lowerBound ..< end])
 
         XCTAssertTrue(
-            block.contains("showMyStories = false"),
-            "onCreateStory doit fermer la sheet Mes stories avant de présenter le composer. Bloc lu: \(block)"
+            block.contains("schedule(.createStory)"),
+            "onCreateStory doit ENREGISTRER l'intention, pas l'exécuter. Bloc lu: \(block)"
         )
         XCTAssertTrue(
-            block.contains("viewModel.showStoryComposer = true"),
-            "onCreateStory doit finir par ouvrir le composer. Bloc lu: \(block)"
+            block.contains("isPresented.wrappedValue = false"),
+            "onCreateStory doit refermer la sheet ; `onDismiss` exécutera l'intention. Bloc lu: \(block)"
+        )
+        XCTAssertTrue(
+            actions.contains("sheet(isPresented: isPresented, onDismiss:"),
+            "Le chaînage passe par la primitive déterministe `onDismiss`, jamais par un délai."
         )
     }
 }

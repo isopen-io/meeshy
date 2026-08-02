@@ -859,6 +859,52 @@ describe('MessageHandler', () => {
       await expect(handler.broadcastNewMessage(makeMessage() as any, VALID_CONV_ID)).resolves.toBeUndefined();
     });
 
+    // ── Delivery must survive best-effort enrichment failures ────────────────
+    // The message is persisted and ACKed as "sent" BEFORE broadcastNewMessage
+    // runs. If a non-essential enrichment query (mention resolution, forwarded
+    // message lookup, story-reply post lookup) rejects on a transient DB error
+    // and aborts the whole broadcast, the message is delivered to NOBODY — no
+    // live `message:new`, no offline enqueue — with no retry, because the
+    // sender already saw a success ACK. Silent data loss. Enrichment is
+    // best-effort (cf. `_getMessageTranslations().catch(() => [])`,
+    // `_resolveMentionUserIds` swallowing failures) and must never gate delivery.
+    const messageNewEmits = () => {
+      const toResult: any = (deps.io.to as jest.Mock).mock.results[0]?.value;
+      if (!toResult) return [];
+      return (toResult.emit.mock.calls as [string, unknown][]).filter((c) => c[0] === 'message:new');
+    };
+
+    it('still emits message:new when mention resolution rejects (best-effort enrichment)', async () => {
+      mockResolveMentionedUsers.mockRejectedValue(new Error('mention DB blip'));
+      const msg = makeMessage({ content: '@bob hello' });
+
+      await expect(handler.broadcastNewMessage(msg as any, VALID_CONV_ID, socket)).resolves.toBeUndefined();
+
+      expect(messageNewEmits().length).toBeGreaterThan(0);
+    });
+
+    it('still emits message:new when the forwarded-message lookup rejects (best-effort enrichment)', async () => {
+      (deps.prisma.message.findUnique as jest.Mock<any>).mockImplementation(({ where }: any) => {
+        if (where.id === 'orig-msg') return Promise.reject(new Error('forward lookup DB blip'));
+        return Promise.resolve({ translations: [] });
+      });
+      const msg = makeMessage({ forwardedFromId: 'orig-msg' });
+
+      await expect(handler.broadcastNewMessage(msg as any, VALID_CONV_ID, socket)).resolves.toBeUndefined();
+
+      expect(messageNewEmits().length).toBeGreaterThan(0);
+    });
+
+    it('still emits message:new when the story-reply post lookup rejects (best-effort enrichment)', async () => {
+      mockPostReplyToFromMetadata.mockReturnValue(null);
+      (deps.prisma.post.findUnique as jest.Mock<any>).mockRejectedValue(new Error('post lookup DB blip'));
+      const msg = makeMessage({ storyReplyToId: 'story-1' });
+
+      await expect(handler.broadcastNewMessage(msg as any, VALID_CONV_ID, socket)).resolves.toBeUndefined();
+
+      expect(messageNewEmits().length).toBeGreaterThan(0);
+    });
+
     it('normalizes non-ObjectId conversationId', async () => {
       mockNormalizeConversationId.mockResolvedValue(VALID_CONV_ID);
       const msg = makeMessage({ conversationId: 'my-channel' });

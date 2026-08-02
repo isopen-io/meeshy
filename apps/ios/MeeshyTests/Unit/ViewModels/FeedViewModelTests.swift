@@ -421,6 +421,33 @@ final class FeedViewModelTests: XCTestCase {
         XCTAssertEqual(sut.posts[0].likes, 11)
     }
 
+    /// stores-09 — un post du feed peut aussi vivre sous sa clé cache détail
+    /// (ouvert une fois dans PostDetail) : le like optimiste doit patcher
+    /// TOUTES les clés du store, pas seulement "main-feed" via debouncedCacheSave.
+    func test_likePost_postAlsoCachedUnderDetailKey_patchesBothKeys() async {
+        await CacheCoordinator.shared.feed.invalidate(for: "like-detail-test")
+        defer { Task { await CacheCoordinator.shared.feed.invalidate(for: "like-detail-test") } }
+
+        let (sut, api, _, _) = makeSUT()
+        let post = Self.makeAPIPost(id: "like-detail-test", likeCount: 7)
+        api.stub("/posts/feed", result: Self.makePaginatedResponse(posts: [post]))
+        await sut.loadFeed(forceRefresh: true)
+        try? await CacheCoordinator.shared.feed.save([sut.posts[0]], for: "like-detail-test")
+
+        await sut.likePost("like-detail-test")
+
+        var cached: FeedPost?
+        for _ in 0..<50 {
+            let result = await CacheCoordinator.shared.feed.load(for: "like-detail-test")
+            cached = result.snapshot()?.first(where: { $0.id == "like-detail-test" })
+            if cached?.likes == 8 { break }
+            try? await Task.sleep(nanoseconds: 20_000_000)
+        }
+        XCTAssertEqual(cached?.isLiked, true,
+                       "la clé détail doit recevoir le like optimiste via patchEverywhere")
+        XCTAssertEqual(cached?.likes, 8)
+    }
+
     func test_likePost_failure_rollsBackIsLikedAndCount() async {
         // T10b — likePost now routes through the outbox, so "failure" means the
         // enqueue is refused (not a direct API error). Rollback semantics unchanged.
@@ -1081,6 +1108,60 @@ final class FeedViewModelTests: XCTestCase {
         sut.unsubscribeFromSocketEvents()
     }
 
+    /// stores-02 — quitter le feed émet feed:unsubscribe mais le socket reste
+    /// connecté : au retour, connect() early-return et le handler .connect (le
+    /// seul émetteur de feed:subscribe) ne rejoue jamais — la room feed restait
+    /// quittée, plus aucun événement temps réel jusqu'à la prochaine reconnexion.
+    func test_subscribeToSocketEvents_afterUnsubscribe_reemitsFeedSubscribe() {
+        let (sut, _, socket, _) = makeSUT()
+
+        sut.subscribeToSocketEvents()
+        sut.unsubscribeFromSocketEvents()
+        sut.subscribeToSocketEvents()
+
+        XCTAssertEqual(socket.subscribeFeedCallCount, 2,
+                       "Returning to the feed after leaving it must re-emit feed:subscribe even though the socket stays connected")
+
+        sut.unsubscribeFromSocketEvents()
+    }
+
+    /// rts-01 (garde-fou) — le PREMIER armement ne fetch pas : la vue appelle
+    /// déjà loadFeed() dans son .task si posts.isEmpty, un fetch ici serait
+    /// redondant.
+    func test_subscribeToSocketEvents_firstArm_doesNotFetchFeed() async {
+        let (sut, api, _, _) = makeSUT()
+        let before = api.requestCount
+
+        sut.subscribeToSocketEvents()
+        try? await Task.sleep(for: .milliseconds(300))
+
+        XCTAssertEqual(api.requestCount, before, "le premier arm ne déclenche aucun fetch")
+
+        sut.unsubscribeFromSocketEvents()
+    }
+
+    /// rts-01 — un aller-retour hors du feed SANS coupure réseau : les sinks
+    /// étaient désarmés et la room quittée, tout ce qui s'est passé entre-temps
+    /// est perdu. Le RÉ-armement doit rattraper via un refresh silencieux
+    /// (didReconnect ne couvre que le flap réseau, jamais ce chemin).
+    func test_subscribeToSocketEvents_rearmAfterUnsubscribe_backfillsFeedFromNetwork() async {
+        let (sut, api, _, _) = makeSUT()
+        api.stub("/posts/feed", result: Self.makePaginatedResponse(posts: [Self.makeAPIPost(id: "p-rearm", content: "Backfilled")]))
+
+        sut.subscribeToSocketEvents()
+        sut.unsubscribeFromSocketEvents()
+        let requestsBeforeRearm = api.requestCount
+
+        sut.subscribeToSocketEvents()
+        try? await waitForCondition(timeout: 5.0) { sut.posts.count == 1 }
+
+        XCTAssertEqual(api.requestCount, requestsBeforeRearm + 1,
+                       "le ré-armement rattrape le trou par un refresh réseau")
+        XCTAssertEqual(sut.posts.first?.id, "p-rearm")
+
+        sut.unsubscribeFromSocketEvents()
+    }
+
     // MARK: - Socket.IO: post:created
 
     func test_socketPostCreated_insertsAtIndexZeroAndIncrementsNewPostsCount() async {
@@ -1648,6 +1729,69 @@ final class FeedViewModelTests: XCTestCase {
             originalLanguage: nil, translationKeys: ["fr"],
             preferredLanguages: ["fr"], activeLanguage: "zz"
         ).isEmpty)
+    }
+
+
+    // MARK: - cache-03 étape A — le cache main-feed garde les 100 plus RÉCENTS
+
+    func test_debouncedCacheSave_over100AccumulatedPosts_persistsThe100Newest() async throws {
+        await CacheCoordinator.shared.feed.invalidate(for: "main-feed")
+        // Convention : post-1 = le plus RÉCENT, post-140 = le plus ANCIEN
+        // (le tableau posts est newest-first).
+        let seeded = (1...140).map { Self.makeFeedPost(id: "post-\($0)", content: "c\($0)") }
+        let (sut, _, _, _) = makeSUT()
+        sut.posts = seeded
+
+        await sut.likePost("post-1")
+        // Poll au lieu d'un sleep fixe : le save débouncé part à 2 s, une
+        // marge de 0,2 s flake sous simulateur chargé (cache encore vide).
+        var cached: [FeedPost] = []
+        let deadline = Date().addingTimeInterval(6)
+        while Date() < deadline {
+            cached = (await CacheCoordinator.shared.feed.load(for: "main-feed")).snapshot() ?? []
+            if cached.count == 100 { break }
+            try? await Task.sleep(for: .milliseconds(100))
+        }
+        XCTAssertEqual(
+            Set(cached.map(\.id)), Set((1...100).map { "post-\($0)" }),
+            "GRDBCacheStore.save trimme par suffix (les plus ANCIENS survivent) : sans prefix(100) app-side, kill+relaunch dans la fenêtre fraîche sert la tranche la plus vieille en .fresh — les posts récents disparaissent de l'écran"
+        )
+    }
+
+
+    // MARK: - grdb-03 — reapplyPendingLikes (volet mémoire)
+
+    func test_reapplyPendingLikes_pendingTrue_setsIsLikedAndBumpsCount() {
+        var post = Self.makeFeedPost(id: "p1", content: "a")
+        post.isLiked = false
+        post.likes = 4
+
+        let result = FeedViewModel.reapplyPendingLikes(posts: [post], pendingLikes: ["p1": true])
+
+        XCTAssertTrue(result[0].isLiked, "le like pending doit rester visible par-dessus le snapshot serveur périmé")
+        XCTAssertEqual(result[0].likes, 5)
+    }
+
+    func test_reapplyPendingLikes_pendingFalse_clearsIsLikedAndClampsCount() {
+        var post = Self.makeFeedPost(id: "p1", content: "a")
+        post.isLiked = true
+        post.likes = 0
+
+        let result = FeedViewModel.reapplyPendingLikes(posts: [post], pendingLikes: ["p1": false])
+
+        XCTAssertFalse(result[0].isLiked)
+        XCTAssertEqual(result[0].likes, 0, "jamais de compteur négatif")
+    }
+
+    func test_reapplyPendingLikes_noPending_identity() {
+        var post = Self.makeFeedPost(id: "p1", content: "a")
+        post.isLiked = false
+        post.likes = 4
+
+        let result = FeedViewModel.reapplyPendingLikes(posts: [post], pendingLikes: [:])
+
+        XCTAssertFalse(result[0].isLiked)
+        XCTAssertEqual(result[0].likes, 4)
     }
 
 }

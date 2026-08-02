@@ -142,11 +142,11 @@ platform :ios do
       skip_package_ipa: true,
       # DEVELOPMENT_TEAM pinned to D72UK7R5RE since 2026-07-28 — see the header
       # block in Appfile for every site carrying this value.
-      # SWIFT_COMPILATION_MODE=incremental remplace depuis le 2026-07-31 le
-      # SWIFT_OPTIMIZATION_LEVEL=-Onone hérité du commit 2a32f6462 : c'est la
-      # Whole Module Optimization, pas l'optimisation, qui faisait exploser
-      # swift-frontend. Voir le bloc explicatif dans apps/ios/project.yml.
-      xcargs: "DEVELOPMENT_TEAM=D72UK7R5RE -allowProvisioningUpdates SWIFT_COMPILATION_MODE=incremental CODE_SIGN_STYLE=Automatic"
+      # Plus de SWIFT_OPTIMIZATION_LEVEL=-Onone depuis le 2026-07-31 : le
+      # contournement du commit 2a32f6462 est obsolète, `-O` + wholemodule
+      # (défaut Release) compile en 20 min sans LLVM ERROR — mesuré sur CI,
+      # run 30658055261. Voir le bloc explicatif dans apps/ios/project.yml.
+      xcargs: "DEVELOPMENT_TEAM=D72UK7R5RE -allowProvisioningUpdates CODE_SIGN_STYLE=Automatic"
     )
 
     # Strip embedded framework signatures so the export step re-signs them

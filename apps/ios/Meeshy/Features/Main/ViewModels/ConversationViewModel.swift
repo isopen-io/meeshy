@@ -1505,7 +1505,12 @@ class ConversationViewModel: ObservableObject {
                 await MainActor.run { self.isRevalidating = false }
             }
 
-        case .stale:
+        case .stale, .expired, .empty:
+            // vm-conv-expired-metadata-01 — .expired/.empty suivent le même
+            // chemin que .stale : GRDB est TOUJOURS peint d'abord (messages +
+            // traductions + métadonnées audio), le réseau revalide ensuite.
+            // L'ancienne branche réseau-only laissait les bulles sans
+            // transcription/traductions quand le fetch échouait (offline).
             // Surface GRDB data immediately, then revalidate in background.
             // Pré-hydrate les traductions AVANT loadInitial (cf. .fresh).
             // Lectures GRDB indépendantes parallélisées (cf. branche .fresh).
@@ -1530,10 +1535,6 @@ class ConversationViewModel: ObservableObject {
                 }
             }
 
-        case .expired, .empty:
-            // Fetch from API; refreshMessagesFromAPI upserts to GRDB and the store
-            // observation surfaces the result automatically.
-            await refreshMessagesFromAPI()
         }
 
         // If the refresh discovered we no longer have access, the View is
@@ -4099,16 +4100,19 @@ class ConversationViewModel: ObservableObject {
     /// — d'où l'apparition « en second temps » des données de langue. En
     /// peuplant le dictionnaire en amont, le tout premier rendu applique déjà
     /// le Prisme Linguistique (contenu traduit affiché comme du natif).
-    private func hydratePersistedTranslations() async {
+    func hydratePersistedTranslations() async {
         let convId = conversationId
         let reader = messagePersistence.reader
         let grouped: [String: [TranslationRecord]] = (try? await reader.read { db in
+            // grdb-07 — un message "own" est keyé localId=cid en GRDB mais ses
+            // traductions sont persistées sous l'id SERVEUR : filtrer sur le
+            // seul localId ne matchait rien pour ces messages.
             let localIds = try MessageRecord
                 .filter(Column("conversationId") == convId)
                 .order(Column("createdAt").desc)
                 .limit(80)
                 .fetchAll(db)
-                .map(\.localId)
+                .flatMap { [$0.localId, $0.serverId].compactMap { $0 } }
             guard !localIds.isEmpty else { return [:] }
             let records = try TranslationRecord
                 .filter(localIds.contains(Column("messageLocalId")))

@@ -630,12 +630,30 @@ final class CallManager: ObservableObject {
     private var screenCaptureObserver: NSObjectProtocol?
     private var backgroundObserver: NSObjectProtocol?
     private var foregroundObserver: NSObjectProtocol?
-    /// `true` while the app is in the background during a video call. iOS
-    /// enforces camera suspension in the background (privacy); we set this flag
-    /// and send `call:media-toggled false` so the peer shows our avatar
-    /// placeholder instead of a frozen last frame. Cleared on foreground return
-    /// or call teardown.
-    private var isVideoSuspendedByBackground = false
+    /// C3 — `true` quand la session de capture caméra a été INTERROMPUE par le
+    /// système, donc que le pair doit voir notre avatar plutôt qu'un dernier
+    /// frame figé (`call:media-toggled false`).
+    ///
+    /// Le déclencheur est l'interruption de capture, PAS le passage en
+    /// arrière-plan. La nuance est le correctif : avec un
+    /// `AVPictureInPictureController` actif et
+    /// `isMultitaskingCameraAccessEnabled` posé avant `startRunning`, la caméra
+    /// SURVIT à l'arrière-plan — annoncer « caméra coupée » y était un mensonge,
+    /// et le pair perdait une vidéo qui continuait pourtant d'arriver.
+    ///
+    /// Un prédicat « ne pas émettre si le PiP est actif » ne marcherait pas : il
+    /// serait évalué dans le handler de `didEnterBackgroundNotification`, or
+    /// l'auto-start du PiP est déclenché par cette même transition et
+    /// `willStartPictureInPicture` peut arriver après. Le déclencheur par
+    /// interruption est en revanche auto-corrigeant : si la caméra survit, rien
+    /// n'est posté.
+    ///
+    /// Levé par la fin d'interruption OU par le retour en avant-plan — ce
+    /// dernier est le garde-fou : `AVCaptureSession.h` documente la fin
+    /// d'interruption comme survenant « when your app comes back to
+    /// foreground », donc un signal de fin peut ne jamais arriver tant que l'app
+    /// reste en arrière-plan.
+    private var isVideoSuspendedByCaptureInterruption = false
     /// `true` while CallKit has placed the call on hold (e.g. incoming cellular
     /// call). The user's camera intent (`isVideoEnabled`) is preserved so video
     /// resumes automatically on unhold. Cleared on unhold or call teardown.
@@ -932,7 +950,7 @@ final class CallManager: ObservableObject {
             bubbleVerticalFraction = 0.08
             videoSurvivalController.reset()
             isVideoSuspended = false
-            isVideoSuspendedByBackground = false
+            isVideoSuspendedByCaptureInterruption = false
             isVideoSuspendedByHold = false
             Logger.calls.info("Force-reset .ended → .idle to accept new call")
         }
@@ -2167,6 +2185,15 @@ final class CallManager: ObservableObject {
     private var pipRestoring = false
     private weak var pipConfiguredTrack: AnyObject?
     private weak var pipConfiguredSource: UIView?
+    /// Mode d'affichage en vigueur au démarrage de la fenêtre PiP, restauré à sa
+    /// fermeture. Poser `.pip` inconditionnellement dégradait en pilule un appel
+    /// qui était plein écran (retour dans l'app) ou en bulle (repli manuel).
+    ///
+    /// `nil` = aucune fenêtre n'a démarré. Indispensable :
+    /// `failedToStartPictureInPictureWithError` appelle `onStop` sans qu'`onStart`
+    /// ait tiré, et une valeur persistante y ferait restaurer le mode du PiP
+    /// PRÉCÉDENT.
+    private var pipDisplayModeAtStart: CallDisplayMode?
 
     /// L'UI d'appel doit rendre le layout vidéo dès qu'un flux est visible :
     /// caméra locale active OU vidéo distante reçue (escalade unilatérale du
@@ -2193,16 +2220,26 @@ final class CallManager: ObservableObject {
     func attachSystemPiP(sourceView: UIView) {
         guard canActivateSystemPiP, let track = remoteVideoTrack else { return }
         let trackObject = track as AnyObject
-        // Idempotence : `configure()` reconstruit le controller AVKit. Ne le refaire
-        // que si la sourceView ou le track distant a changé (ce dernier peut être
-        // recréé sur ICE restart / renégociation) — sinon chaque re-render SwiftUI
-        // casserait un PiP en cours.
-        guard pipConfiguredSource !== sourceView || pipConfiguredTrack !== trackObject else { return }
+        // Idempotence : `configure()` reconstruit le controller AVKit — et commence
+        // par `tearDown()`, donc `stopPictureInPicture()`. Deux ancres coexistent
+        // (plein écran + mode réduit) et `PiPSourceAnchor` n'a aucune propriété
+        // stockée : chaque bascule de mode monte une nouvelle vue, donc l'identité
+        // de la sourceView change à chaque fois. Sans le refus pendant un PiP actif,
+        // la bascule tuerait la fenêtre en cours. Cf. `CallPiPPolicy`.
+        guard CallPiPPolicy.shouldReconfigure(
+            isPiPActive: isSystemPiPActive,
+            sourceChanged: pipConfiguredSource !== sourceView,
+            trackChanged: pipConfiguredTrack !== trackObject
+        ) else { return }
         pipConfiguredSource = sourceView
         pipConfiguredTrack = trackObject
         pip.configure(
             sourceView: sourceView, remoteTrack: trackObject, autoStart: true,
-            onStart: { [weak self] in self?.isSystemPiPActive = true },
+            onStart: { [weak self] in
+                guard let self else { return }
+                self.pipDisplayModeAtStart = self.displayMode
+                self.isSystemPiPActive = true
+            },
             onRestoreUI: { [weak self] in
                 self?.pipRestoring = true
                 self?.displayMode = .fullScreen
@@ -2210,15 +2247,21 @@ final class CallManager: ObservableObject {
             onStop: { [weak self] in
                 guard let self else { return }
                 self.isSystemPiPActive = false
-                // Appel terminé pendant le PiP : ne pas forcer .pip (laisser le
-                // panneau de fin d'appel en .fullScreen). detachSystemPiP a déjà
-                // remis les flags au repos dans ce cas.
-                guard self.callState.isActive else { self.pipRestoring = false; return }
-                if self.pipRestoring {
-                    self.pipRestoring = false   // restore : déjà repassé en .fullScreen
-                } else {
-                    self.displayMode = .pip     // croix système → la pilule reprend
-                }
+                let restored = CallPiPPolicy.displayModeAfterStop(
+                    callIsActive: self.callState.isActive,
+                    isRestoringUI: self.pipRestoring,
+                    modeAtStart: self.pipDisplayModeAtStart
+                )
+                self.pipRestoring = false
+                self.pipDisplayModeAtStart = nil
+                // Ré-armement AVANT de toucher `displayMode` : `PiPSourceAnchor`
+                // n'a pas de propriété stockée, `updateUIView` est son unique
+                // déclencheur, et c'est le changement de mode qui le provoque.
+                // Sans ce reset, la garde ci-dessus resterait épinglée sur une
+                // ancre morte et aucun second PiP ne pourrait plus être configuré.
+                self.pipConfiguredSource = nil
+                self.pipConfiguredTrack = nil
+                if let restored { self.displayMode = restored }
             }
         )
         // Aligne le framerate sur l'état thermique courant dès la config (le
@@ -2235,6 +2278,7 @@ final class CallManager: ObservableObject {
         pip.tearDown()
         isSystemPiPActive = false
         pipRestoring = false
+        pipDisplayModeAtStart = nil
         pipConfiguredTrack = nil
         pipConfiguredSource = nil
     }
@@ -3099,13 +3143,13 @@ final class CallManager: ObservableObject {
                 let userId = AuthManager.shared.currentUser?.id ?? ""
                 MessageSocketManager.shared.emitCallBackgrounded(callId: callId, participantId: userId)
                 Logger.calls.info("Call backgrounded")
-                if self.isVideoEnabled {
-                    self.isVideoSuspendedByBackground = true
-                    if !self.isVideoSuspendedByHold && !self.isVideoSuspended {
-                        MessageSocketManager.shared.emitCallToggleVideo(callId: callId, enabled: false)
-                        Logger.calls.info("Video backgrounded — peer notified (avatar placeholder)")
-                    }
-                }
+                // C3 — AUCUNE émission « caméra coupée » ici. Passer en
+                // arrière-plan n'éteint pas la caméra quand un PiP système est
+                // actif : la seule preuve est l'interruption de la session de
+                // capture, republiée par `P2PWebRTCClient` et traitée dans
+                // `webRTCService(_:didChangeCameraInterruption:)`. Ce
+                // déclencheur est auto-corrigeant — si la caméra survit, rien
+                // n'est posté et le pair continue de nous voir.
             }
         }
 
@@ -3119,21 +3163,37 @@ final class CallManager: ObservableObject {
                 let userId = AuthManager.shared.currentUser?.id ?? ""
                 MessageSocketManager.shared.emitCallForegrounded(callId: callId, participantId: userId)
                 Logger.calls.info("Call foregrounded")
-                // Restore the peer's camera-active signal if we suspended it on
-                // background entry. Guard on ALL suspension sources:
-                // • isVideoSuspended — survival controller dropped to audio-only
-                // • isVideoSuspendedByHold — CallKit hold still active (cellular
-                //   pre-emption): foregrounding does NOT lift a hold, so we must
-                //   not falsely signal "camera active" to the peer
-                if self.isVideoSuspendedByBackground {
-                    self.isVideoSuspendedByBackground = false
-                    if self.isVideoEnabled && !self.isVideoSuspended && !self.isVideoSuspendedByHold {
-                        MessageSocketManager.shared.emitCallToggleVideo(callId: callId, enabled: true)
-                        Logger.calls.info("Video foregrounded — peer notified (camera restored)")
-                    }
-                }
+                // C3 — garde-fou. `AVCaptureSession.h` documente la fin
+                // d'interruption comme survenant « when your app comes back to
+                // foreground » : un signal de fin peut donc ne JAMAIS arriver
+                // tant que l'app reste en arrière-plan (PiP rangé sur le bord,
+                // par exemple). Sans cette levée, le pair resterait sur l'avatar
+                // jusqu'à la fin de l'appel — un mode de panne pire que le bug
+                // corrigé. Le retour en avant-plan, lui, garantit la reprise.
+                self.applyCameraSuspension(false, cause: "foreground")
             }
         }
+    }
+
+    /// C3 — unique porte d'entrée du signal `call:toggle-video` lié à la vie de
+    /// la capture caméra. Deux appelants : l'interruption de session (autorité)
+    /// et le retour en avant-plan (garde-fou).
+    ///
+    /// Les gardes de sortie sont celles qui existaient déjà, à l'identique :
+    /// • `isVideoEnabled` — ne pas faire de bruit quand la caméra est éteinte
+    ///   par choix de l'utilisateur ; toutes les émissions du fichier sont
+    ///   gardées ainsi, sinon on désynchronise l'état du pair ;
+    /// • `isVideoSuspended` — le contrôleur de survie a déjà basculé en audio ;
+    /// • `isVideoSuspendedByHold` — CallKit tient l'appel en pause (préemption
+    ///   cellulaire) : revenir en avant-plan ne lève PAS un hold, donc annoncer
+    ///   « caméra active » serait faux.
+    private func applyCameraSuspension(_ suspended: Bool, cause: StaticString) {
+        guard let callId = currentCallId, callState.isActive else { return }
+        guard isVideoSuspendedByCaptureInterruption != suspended else { return }
+        isVideoSuspendedByCaptureInterruption = suspended
+        guard isVideoEnabled, !isVideoSuspended, !isVideoSuspendedByHold else { return }
+        MessageSocketManager.shared.emitCallToggleVideo(callId: callId, enabled: !suspended)
+        Logger.calls.info("Camera \(suspended ? "suspended" : "resumed") (\(cause)) — peer notified")
     }
 
     private func stopBackgroundMonitoring() {
@@ -3210,7 +3270,7 @@ final class CallManager: ObservableObject {
         } else {
             if isVideoSuspendedByHold {
                 isVideoSuspendedByHold = false
-                if isVideoEnabled && !isVideoSuspended && !isVideoSuspendedByBackground {
+                if isVideoEnabled && !isVideoSuspended && !isVideoSuspendedByCaptureInterruption {
                     // Companion fix: without renegotiating here, unhold only flips
                     // the local track/direction back — the peer's negotiated SDP
                     // state (possibly stuck at recvOnly from a hold-time ICE
@@ -3599,7 +3659,7 @@ final class CallManager: ObservableObject {
         isRemoteScreenCapturing = false
         videoSurvivalController.reset()
         isVideoSuspended = false
-        isVideoSuspendedByBackground = false
+        isVideoSuspendedByCaptureInterruption = false
         isVideoSuspendedByHold = false
         // Même rationale que le reset vidéo ci-dessus : `resetEndedStateForNewCall`
         // ne reset la bulle QUE si le nouvel appel arrive dans la fenêtre de
@@ -3609,6 +3669,21 @@ final class CallManager: ObservableObject {
         // réapparaît silencieusement à la position de l'appel PRÉCÉDENT.
         bubbleEdge = .trailing
         bubbleVerticalFraction = 0.08
+        // C6 — l'appel se termine pendant que la fenêtre PiP flotte au-dessus
+        // d'une autre app. La pilule et la bulle se masquent toutes deux dès
+        // `.ended`, et le `fullScreenCover` exige `.fullScreen` : sans ça,
+        // l'utilisateur revient dans une app où l'appel a disparu sans motif.
+        // Posé AVANT `detachSystemPiP()` (qui remet `isSystemPiPActive` à faux)
+        // et avant `.ended` — `shouldPresentFullScreenCover` accepte encore
+        // l'état actif, puis reste vrai par `isEnded` jusqu'au reset `.idle`.
+        // La condition sur le PiP est ce qui évite d'imposer un modal plein
+        // écran à chaque raccrochage depuis la pilule, le flux le plus courant.
+        if CallPiPPolicy.shouldRestoreFullScreenBeforeTeardown(
+            isPiPActive: isSystemPiPActive,
+            currentMode: displayMode
+        ) {
+            displayMode = .fullScreen
+        }
         detachSystemPiP()
         Self.persistCallSummary(stats: lastKnownStats, callId: currentCallId,
                                 duration: callDuration, remote: remoteUsername, reason: reason)
@@ -3681,17 +3756,20 @@ final class CallManager: ObservableObject {
 
     private func configureAudioSession() {
         Logger.calls.info("[AUDIO_SESS] configure begin")
-        let isVideo = isVideoEnabled
+        let videoUIActive = isVideoUIActive
         let configuration = RTCAudioSessionConfiguration.webRTC()
         configuration.category = AVAudioSession.Category.playAndRecord.rawValue
         // CALL-FIX 2026-06-06 (macOS) — on iOS-app-on-Mac the voice-processing I/O unit
         // (engaged by `.voiceChat`/`.videoChat`) faults on the mic uplink ("failed to
         // write uplink microphone input signal (state fault)") → the Mac mic captures
         // silence and the peer hears nothing. `.default` bypasses the voice processor;
-        // WebRTC's own software AEC/NS still runs.
-        configuration.mode = ProcessInfo.processInfo.isiOSAppOnMac
-            ? AVAudioSession.Mode.default.rawValue
-            : (isVideo ? AVAudioSession.Mode.videoChat : AVAudioSession.Mode.voiceChat).rawValue
+        // WebRTC's own software AEC/NS still runs. C7 — le prédicat est
+        // `isVideoUIActive` (caméra locale OU flux distant), pas `isVideoEnabled` :
+        // le PiP système exige `.videoChat`, y compris sur escalade unilatérale.
+        configuration.mode = CallAudioSessionPolicy.mode(
+            videoUIActive: videoUIActive,
+            isiOSAppOnMac: ProcessInfo.processInfo.isiOSAppOnMac
+        ).rawValue
         // PERF-010: use HFP only (not A2DP) — A2DP is output-only and
         // conflicts with the bidirectional voice path (forces the OS to flap
         // between Bluetooth profiles, causing periodic ~200ms audio glitches). HFP
@@ -3747,7 +3825,7 @@ final class CallManager: ObservableObject {
                 applyBestEffortAudioSetting("preferredIOBufferDuration") {
                     try session.session.setPreferredIOBufferDuration(0.02)
                 }
-                Logger.calls.info("RTCAudioSession pre-configured — video: \(isVideo), activeNow=\(activateNow)")
+                Logger.calls.info("RTCAudioSession pre-configured — videoUI: \(videoUIActive), activeNow=\(activateNow)")
             } catch let error as NSError where error.domain == NSCocoaErrorDomain && error.code == 4099 {
                 // "Session deactivation failed" — le call précédent a laissé
                 // AVAudioSession dans un état non-deactivable depuis ce process
@@ -3775,14 +3853,26 @@ final class CallManager: ObservableObject {
     /// `active:` from `callUsesCallKit`); this only ever changes `.mode`.
     private func updateAudioSessionModeForCurrentVideoState() {
         guard !ProcessInfo.processInfo.isiOSAppOnMac else { return }
-        let mode: AVAudioSession.Mode = isVideoEnabled ? .videoChat : .voiceChat
+        // C7 — `isVideoUIActive`, pas `isVideoEnabled`. Un correspondant qui
+        // allume seul sa caméra fait basculer l'UI en layout vidéo et rend le
+        // PiP éligible ; la session doit suivre, sinon elle reste en
+        // `.voiceChat` et `AVPictureInPictureVideoCallViewController` peut
+        // refuser de démarrer. Appelé aussi depuis les deux écritures d'état
+        // vidéo distant (track reçu, `call:media-toggled`).
+        let videoUIActive = isVideoUIActive
+        let mode = CallAudioSessionPolicy.mode(videoUIActive: videoUIActive, isiOSAppOnMac: false)
         audioSessionQueue.sync {
             let session = RTCAudioSession.sharedInstance()
             session.lockForConfiguration()
             defer { session.unlockForConfiguration() }
+            // `call:media-toggled` peut arriver plusieurs fois pour la même
+            // valeur ; `setMode` réinitialise les options implicites de la
+            // catégorie (dont le routage par défaut de `.videoChat`), donc on
+            // n'y touche que si le mode change réellement.
+            guard session.session.mode != mode else { return }
             do {
                 try session.session.setMode(mode)
-                Logger.calls.info("[AUDIO_SESS] mode updated to \(mode.rawValue) for video=\(self.isVideoEnabled)")
+                Logger.calls.info("[AUDIO_SESS] mode updated to \(mode.rawValue) for videoUI=\(videoUIActive)")
             } catch {
                 Logger.calls.error("[AUDIO_SESS] mode update failed: \(error.localizedDescription)")
             }
@@ -4191,7 +4281,7 @@ final class CallManager: ObservableObject {
                     // backgrounded. Compute the effective state from all three sources.
                     if self.isVideoEnabled {
                         let effectiveVideoOn = !self.isVideoSuspended
-                            && !self.isVideoSuspendedByBackground
+                            && !self.isVideoSuspendedByCaptureInterruption
                             && !self.isVideoSuspendedByHold
                         MessageSocketManager.shared.emitCallToggleVideo(callId: callId, enabled: effectiveVideoOn)
                         Logger.calls.info("Socket reconnect — re-syncing video state to peer (effectiveVideoOn=\(effectiveVideoOn))")
@@ -4248,6 +4338,12 @@ final class CallManager: ObservableObject {
                 switch event.mediaType {
                 case "video":
                     self.isRemoteVideoEnabled = event.enabled
+                    // C7 — la caméra du pair fait basculer `isVideoUIActive`, donc
+                    // l'éligibilité au PiP système. `AVPictureInPictureVideoCall-
+                    // ViewController` exige `.videoChat` : sans cette ré-application
+                    // la session reste en `.voiceChat` sur escalade unilatérale et
+                    // le PiP peut refuser de démarrer.
+                    self.updateAudioSessionModeForCurrentVideoState()
                     // System PiP renders the raw remote track directly onto an
                     // AVSampleBufferDisplayLayer (bypassing SwiftUI's declarative
                     // placeholder branch below) — it needs an explicit nudge or
@@ -4862,7 +4958,15 @@ extension CallManager: WebRTCServiceDelegate {
     nonisolated func webRTCService(_ service: WebRTCService, didReceiveRemoteVideoTrack track: Any) {
         Task { @MainActor [weak self] in
             guard let self else { return }
+            let wasVideoUIActive = self.isVideoUIActive
             self.hasRemoteVideoTrack = true
+            // C7 — première arrivée du track distant sur un appel démarré en
+            // audio : `configureAudioSession()` a figé `.voiceChat` au setup, où
+            // `hasRemoteVideoTrack` était encore faux. Sans cette ligne la session
+            // n'est jamais réalignée et le PiP peut refuser de démarrer.
+            if !wasVideoUIActive && self.isVideoUIActive {
+                self.updateAudioSessionModeForCurrentVideoState()
+            }
             // Robustesse — track distant recréé (ICE restart) : ré-attache le
             // renderer PiP au nouveau track sans reconstruire le controller AVKit
             // (no-op si le PiP n'est pas configuré). On relit `remoteVideoTrack`
@@ -4873,6 +4977,16 @@ extension CallManager: WebRTCServiceDelegate {
                 if self.pipConfiguredTrack != nil { self.pipConfiguredTrack = current as AnyObject }
             }
             Logger.calls.info("Remote video track received in CallManager")
+        }
+    }
+
+    /// C3 — la session de capture caméra a été interrompue (ou l'interruption a
+    /// pris fin). C'est le SEUL fait qui prouve que la caméra ne délivre plus :
+    /// le passage en arrière-plan ne l'éteint pas quand un PiP système est actif
+    /// et que la session porte `isMultitaskingCameraAccessEnabled`.
+    nonisolated func webRTCService(_ service: WebRTCService, didChangeCameraInterruption interrupted: Bool) {
+        Task { @MainActor [weak self] in
+            self?.applyCameraSuspension(interrupted, cause: "capture-interruption")
         }
     }
 
@@ -5468,7 +5582,7 @@ extension CallManager: VideoSurvivalActuating {
         // peer. A network-quality recovery must not override either of those signals
         // — the peer would see a false "camera active" even though iOS is either
         // blocking camera access or has suspended capture for the held call.
-        if enabled && (isVideoSuspendedByHold || isVideoSuspendedByBackground) { return false }
+        if enabled && (isVideoSuspendedByHold || isVideoSuspendedByCaptureInterruption) { return false }
 
         let previousToggle = videoToggleTask
         let previousHold = holdVideoTask
@@ -5493,7 +5607,7 @@ extension CallManager: VideoSurvivalActuating {
             // was queued behind a concurrent manual toggle or CallKit hold.
             guard self.isVideoEnabled, self.currentCallId == callId else { return false }
             if case .reconnecting = self.callState { return false }
-            if enabled && (self.isVideoSuspendedByHold || self.isVideoSuspendedByBackground) { return false }
+            if enabled && (self.isVideoSuspendedByHold || self.isVideoSuspendedByCaptureInterruption) { return false }
             return await self.actuateSurvivalVideoSend(enabled: enabled, callId: callId)
         }
         survivalVideoTask = task

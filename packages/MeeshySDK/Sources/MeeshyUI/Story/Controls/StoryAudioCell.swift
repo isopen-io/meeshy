@@ -100,24 +100,61 @@ struct StoryAudioCell: View {
             : String(localized: "story.audio.play", defaultValue: "Lire", bundle: .module))
     }
 
+    // MARK: - Forme d'onde
+
+    /// Barres à largeur FIXE : la largeur intrinsèque de la forme d'onde vaut
+    /// donc `n × (barre + espace)`. Sans borne sur `n`, elle gonflait la
+    /// cellule, puis le `VStack` du panneau, et les rangées de chips —
+    /// centrées dans ce conteneur trop large — débordaient des deux côtés.
+    ///
+    /// `AudioWaveformAnalyzer.analyze` produit 120 barres par défaut, soit
+    /// ~418 pt pour environ 144 disponibles. Le repli n'en produit que 40 :
+    /// la cellule était donc correcte à l'affichage, puis explosait quand
+    /// l'analyse réelle la remplaçait.
+    nonisolated static let maxWaveformBars = 40
+    nonisolated static let waveformBarWidth: CGFloat = 2
+    nonisolated static let waveformBarSpacing: CGFloat = 1.5
+
+    /// Ramène une forme d'onde de longueur quelconque au budget de barres.
+    ///
+    /// Sous-échantillonnage par le MAXIMUM de chaque paquet, et non par saut :
+    /// une crête isolée est ce qui donne son relief à une forme d'onde, et
+    /// piocher un échantillon sur trois la perd.
+    nonisolated static func displayedSamples(_ samples: [Float],
+                                             maxBars: Int = StoryAudioCell.maxWaveformBars) -> [Float] {
+        guard samples.count > maxBars, maxBars > 0 else { return samples }
+        let bucket = Double(samples.count) / Double(maxBars)
+        return (0..<maxBars).map { index in
+            let start = Int(Double(index) * bucket)
+            let end = max(start + 1, Int(Double(index + 1) * bucket))
+            return samples[start ..< min(end, samples.count)].max() ?? 0
+        }
+    }
+
     private var waveformView: some View {
-        let samples: [Float] = {
+        let raw: [Float] = {
             if !waveform.samples.isEmpty { return waveform.samples }
             if !audio.waveformSamples.isEmpty { return audio.waveformSamples }
-            return AudioWaveformAnalyzer.generateFallback(count: 40)
+            return AudioWaveformAnalyzer.generateFallback(count: Self.maxWaveformBars)
         }()
+        let samples = Self.displayedSamples(raw)
         let progress = playback.duration > 0
             ? min(1.0, max(0.0, playback.currentTime / playback.duration))
             : 0
-        return HStack(spacing: 1.5) {
+        return HStack(spacing: Self.waveformBarSpacing) {
             ForEach(Array(samples.enumerated()), id: \.offset) { idx, value in
                 let played = Double(idx) / Double(max(1, samples.count - 1)) <= progress
                 Capsule()
                     .fill(played ? MeeshyColors.indigo500 : secondaryText)
-                    .frame(width: 2, height: max(3, CGFloat(value) * 22))
+                    .frame(width: Self.waveformBarWidth, height: max(3, CGFloat(value) * 22))
             }
         }
         .frame(height: 24)
+        // Ceinture ET bretelles : même bornée, la forme d'onde ne doit jamais
+        // imposer sa largeur au parent. Sur les iPhone les plus étroits, ce
+        // rognage vaut mieux qu'un panneau qui déborde.
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .clipped()
     }
 
     private var durationLabel: some View {

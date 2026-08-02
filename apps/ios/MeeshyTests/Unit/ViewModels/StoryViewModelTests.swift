@@ -13,6 +13,11 @@ final class StoryViewModelTests: XCTestCase {
     private var mockSocket: MockSocialSocket!
     private var mockAPI: MockAPIClientForApp!
     private var cancellables: Set<AnyCancellable>!
+    /// Suite jetable : cette suite publie une dizaine de fois, et
+    /// `UserDefaults.standard` est celui de l'app hôte — la préférence
+    /// d'audience écrite ici serait le défaut du composer au lancement suivant.
+    private var defaultsSuiteName: String!
+    private var defaults: UserDefaults!
 
     override func setUp() async throws {
         try await super.setUp()
@@ -30,15 +35,25 @@ final class StoryViewModelTests: XCTestCase {
         mockSocket = MockSocialSocket()
         mockAPI = MockAPIClientForApp()
         cancellables = []
+        defaultsSuiteName = "StoryViewModelTests-\(UUID().uuidString)"
+        defaults = UserDefaults(suiteName: defaultsSuiteName)
         sut = StoryViewModel(
             storyService: mockStoryService,
             postService: mockPostService,
             socialSocket: mockSocket,
-            api: mockAPI
+            api: mockAPI,
+            visibilityStore: StoryVisibilityPreferenceStore(defaults: defaults)
         )
     }
 
     override func tearDown() async throws {
+        // Cette suite publie : sans purge, la queue de publication, les dossiers
+        // médias hors-ligne et le cache du tray restent VISIBLES dans l'app au
+        // lancement suivant (leçon `reference_outbox_db_path_and_test_residue`).
+        await StoryPublishFixtureCleanup.purge(sut, defaults: defaults)
+        defaults.removePersistentDomain(forName: defaultsSuiteName)
+        defaults = nil
+        defaultsSuiteName = nil
         cancellables = nil
         sut = nil
         mockStoryService = nil
@@ -1151,6 +1166,59 @@ final class StoryViewModelTests: XCTestCase {
                        "Alice's group is now fully viewed")
     }
 
+    // MARK: - didReconnect Tests (rts-02)
+
+    /// Après un flap réseau, des stories ont pu être créées/supprimées pendant
+    /// la coupure : le reconnect social doit rattraper le tray par un delta
+    /// depuis le curseur max(updatedAt) des stories affichées.
+    func test_didReconnect_fetchesStoriesDeltaFromTrayCursor() async {
+        let t1 = Date(timeIntervalSinceNow: -600)
+        let t2 = Date(timeIntervalSinceNow: -300)
+        sut.storyGroups = [
+            makeStoryGroup(userId: "u1", stories: [makeStoryItem(id: "s1", updatedAt: t1)]),
+            makeStoryGroup(userId: "u2", stories: [makeStoryItem(id: "s2", updatedAt: t2)]),
+        ]
+        mockStoryService.listResult = .success(Self.makeDeltaResponse())
+        sut.subscribeToSocketEvents()
+
+        mockSocket.didReconnect.send(())
+        try? await Task.sleep(nanoseconds: 100_000_000)
+
+        XCTAssertEqual(mockStoryService.listCallCount, 1,
+                       "le reconnect social déclenche un fetch stories")
+        XCTAssertEqual(mockStoryService.lastListUpdatedSince, t2,
+                       "le curseur delta = max(updatedAt) du tray, calculé au moment de l'événement")
+    }
+
+    /// Un fetch déjà en vol ne doit pas être doublé par le reconnect.
+    func test_didReconnect_whileLoading_skipsFetch() async {
+        sut.storyGroups = [makeStoryGroup(userId: "u1", stories: [makeStoryItem(id: "s1", updatedAt: Date())])]
+        sut.isLoading = true
+        sut.subscribeToSocketEvents()
+
+        mockSocket.didReconnect.send(())
+        try? await Task.sleep(nanoseconds: 100_000_000)
+
+        XCTAssertEqual(mockStoryService.listCallCount, 0,
+                       "un chargement en vol absorbe le rattrapage du reconnect")
+    }
+
+    /// Vérifie le CÂBLAGE didReconnect → fetchStoriesFromNetwork : la purge
+    /// par tombstones est une logique existante déjà testée par ailleurs.
+    func test_didReconnect_deltaWithTombstones_purgesDeletedStories() async {
+        let kept = makeStoryItem(id: "s1", updatedAt: Date())
+        let deleted = makeStoryItem(id: "s2", updatedAt: Date())
+        sut.storyGroups = [makeStoryGroup(userId: "u1", stories: [kept, deleted])]
+        mockStoryService.listResult = .success(Self.makeDeltaResponse(deletedStoryIds: ["s2"]))
+        sut.subscribeToSocketEvents()
+
+        mockSocket.didReconnect.send(())
+        try? await Task.sleep(nanoseconds: 100_000_000)
+
+        XCTAssertEqual(sut.storyGroups.first?.stories.map(\.id), ["s1"],
+                       "la story tombstonée pendant la coupure sort du tray au reconnect")
+    }
+
     // MARK: - Lookup Method Tests
 
     func test_storyGroupForUser_returnsMatchingGroup() {
@@ -1246,7 +1314,10 @@ final class StoryViewModelTests: XCTestCase {
         XCTAssertFalse(sut.showStoryComposer)
     }
 
-    func test_publishStoryInBackground_blocksSecondPublish() async {
+    /// C5 — composer une 2e story pendant qu'une monte n'est plus interdit.
+    /// L'ancien `test_publishStoryInBackground_blocksSecondPublish` verrouillait
+    /// exactement le rejet silencieux que ce lot supprime.
+    func test_publishStoryInBackground_secondPublishDuringUpload_isStackedNotDropped() async {
         mockAPI.authToken = "token"
         mockPostService.createStoryResult = .success(Self.makeStoryAPIPost())
 
@@ -1256,9 +1327,6 @@ final class StoryViewModelTests: XCTestCase {
             loadedImages: [:],
             loadedVideoURLs: [:]
         )
-
-        let firstId = sut.activeUpload?.id
-
         sut.publishStoryInBackground(
             slides: [StorySlide()],
             slideImages: [:],
@@ -1266,7 +1334,27 @@ final class StoryViewModelTests: XCTestCase {
             loadedVideoURLs: [:]
         )
 
-        XCTAssertEqual(sut.activeUpload?.id, firstId)
+        XCTAssertEqual(sut.activeUploads.count, 2, "La 2e publication est empilée, pas rejetée")
+        XCTAssertEqual(Set(sut.activeUploads.map(\.id)).count, 2, "Deux entrées distinctes")
+    }
+
+    /// Synchrone après les deux taps : l'invariant « une seule monte à la fois »
+    /// est pinné par `StoryUploadQueueTests` (qui suspend le 1er upload) ; ici
+    /// on ne vérifie que l'état de NAISSANCE des entrées.
+    func test_publishStoryInBackground_secondPublish_bothEntriesStartPreparing() async {
+        mockAPI.authToken = "token"
+        mockPostService.createStoryResult = .success(Self.makeStoryAPIPost())
+
+        sut.publishStoryInBackground(
+            slides: [StorySlide()], slideImages: [:], loadedImages: [:], loadedVideoURLs: [:]
+        )
+        sut.publishStoryInBackground(
+            slides: [StorySlide()], slideImages: [:], loadedImages: [:], loadedVideoURLs: [:]
+        )
+
+        // Les deux entrées naissent `.preparing` : leur intent write-ahead
+        // n'est pas encore durable, aucune n'est drainable.
+        XCTAssertEqual(sut.activeUploads.filter { $0.phase == .preparing }.count, 2)
     }
 
     func test_cancelUpload_clearsActiveUpload() async {

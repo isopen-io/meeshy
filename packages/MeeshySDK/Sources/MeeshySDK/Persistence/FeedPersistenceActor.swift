@@ -38,6 +38,23 @@ public actor FeedPersistenceActor {
 
     // MARK: - Post Writes
 
+    /// grdb-01 — purge de logout (miroir du contrat Q3 de
+    /// `MessagePersistenceActor.clearAllMessagesForLogout`). Aucune table feed
+    /// n'est namespacée par userId et le fichier App Group est partagé entre
+    /// comptes : `feed_posts.isLikedByMe` est un flag personnel et la lecture
+    /// prend le top-N par `createdAt` sans scoping — la seule frontière
+    /// safe-by-construction est de tout supprimer. Transaction atomique,
+    /// aucune FK entre ces tables. Câblée depuis
+    /// `DependencyContainer.wireOutboxLogoutHook`.
+    public func clearAllForLogout() throws {
+        try dbWriter.write { db in
+            try db.execute(sql: "DELETE FROM feed_posts")
+            try db.execute(sql: "DELETE FROM feed_comments")
+            try db.execute(sql: "DELETE FROM feed_translations")
+        }
+        postFeedStoreRefresh()
+    }
+
     public func insertPost(_ record: PostRecord) throws {
         try dbWriter.write { db in try record.save(db) }
         postFeedStoreRefresh()
@@ -45,9 +62,82 @@ public actor FeedPersistenceActor {
 
     public func insertPosts(_ records: [PostRecord]) throws {
         try dbWriter.write { db in
-            for record in records { try record.save(db) }
+            // grdb-03 — garde anti-clobber (miroir du pattern
+            // pendingOutboxMessageIds côté messages) : un refresh REST
+            // périmé ne doit pas écraser un like/commentaire optimiste
+            // encore en attente d'outbox.
+            let protected = Self.pendingProtectedPostIds(db)
+            for record in records {
+                var record = record
+                if protected.likes.contains(record.id) || protected.comments.contains(record.id),
+                   let existing = try PostRecord.fetchOne(db, key: record.id) {
+                    if protected.likes.contains(record.id) {
+                        record.isLikedByMe = existing.isLikedByMe
+                        record.likeCount = existing.likeCount
+                        record.reactionSummaryJson = existing.reactionSummaryJson
+                    }
+                    if protected.comments.contains(record.id) {
+                        record.commentCount = existing.commentCount
+                    }
+                }
+                try record.save(db)
+            }
         }
         postFeedStoreRefresh()
+    }
+
+    /// grdb-03 — ids de posts porteurs d'une mutation optimiste PENDING dans
+    /// l'outbox (like → champs de like protégés ; création de commentaire →
+    /// commentCount protégé). Sur échec de lecture/décodage : garde
+    /// désactivée (logger), jamais un insert planté — même contrat que le
+    /// miroir messages.
+    nonisolated private static func pendingProtectedPostIds(_ db: Database) -> (likes: Set<String>, comments: Set<String>) {
+        let decoder = JSONDecoder()
+        var likes = Set<String>()
+        var comments = Set<String>()
+        do {
+            let likeRows = try OutboxRecord
+                .filter(Column("kind") == OutboxKind.toggleLikePost.rawValue)
+                .filter(Column("status") == OutboxStatus.pending.rawValue)
+                .fetchAll(db)
+            for row in likeRows {
+                if let payload = try? decoder.decode(ToggleLikePostPayload.self, from: row.payload) {
+                    likes.insert(payload.postId)
+                }
+            }
+            let commentRows = try OutboxRecord
+                .filter(Column("kind") == OutboxKind.createComment.rawValue)
+                .filter(Column("status") == OutboxStatus.pending.rawValue)
+                .fetchAll(db)
+            for row in commentRows {
+                if let payload = try? decoder.decode(CreateCommentPayload.self, from: row.payload) {
+                    comments.insert(payload.postId)
+                }
+            }
+        } catch {
+            feedPersistenceLog.error("Pending feed-mutation lookup failed — anti-clobber guard disabled: \(error.localizedDescription, privacy: .public)")
+            return ([], [])
+        }
+        return (likes, comments)
+    }
+
+    /// grdb-03 — flags de like PENDING de l'outbox ([postId: liked]) pour la
+    /// réapplication en mémoire après un merge de refresh (volet ViewModel).
+    public func pendingLikeFlags() -> [String: Bool] {
+        (try? dbWriter.read { db -> [String: Bool] in
+            let rows = try OutboxRecord
+                .filter(Column("kind") == OutboxKind.toggleLikePost.rawValue)
+                .filter(Column("status") == OutboxStatus.pending.rawValue)
+                .fetchAll(db)
+            var flags: [String: Bool] = [:]
+            let decoder = JSONDecoder()
+            for row in rows {
+                if let payload = try? decoder.decode(ToggleLikePostPayload.self, from: row.payload) {
+                    flags[payload.postId] = payload.liked
+                }
+            }
+            return flags
+        }) ?? [:]
     }
 
     public func updateLikeCount(postId: String, count: Int, isLikedByMe: Bool) throws {

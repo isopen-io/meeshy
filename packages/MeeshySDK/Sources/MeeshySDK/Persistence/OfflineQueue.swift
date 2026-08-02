@@ -1135,13 +1135,14 @@ public actor OfflineQueue {
 
         do {
             try await pool.write { db in
+                var finalPayload: Data = encoded
                 if shouldCoalesce {
-                    // Latest-state-wins kinds (e.g. `markAsRead`): drop every
-                    // earlier `.pending` / `.failed` row for the same anchor
-                    // before writing the new one. The newer payload always
-                    // supersedes (reading up to msg N also covers 1..N-1) —
-                    // so letting them pile up burns bandwidth and inflates
-                    // the SyncPill rotation with 17 duplicates for 4 convs.
+                    // Latest-state-wins kinds (e.g. `markStoryViewed`): drop
+                    // every earlier `.pending` / `.failed` row for the same
+                    // anchor. `.markAsRead` est l'exception (outbox-05) : ses
+                    // messageIds sont des REÇUS de lecture exacte, pas un état
+                    // à jeter — ils sont fusionnés (union) dans le payload
+                    // survivant avant la suppression des rows périmées.
                     let stale: [OutboxRecord] = try OutboxRecord
                         .filter(Column("kind") == kind.rawValue)
                         .filter(Column("conversationId") == anchor)
@@ -1149,6 +1150,12 @@ public actor OfflineQueue {
                             .contains(Column("status")))
                         .fetchAll(db)
                     if !stale.isEmpty {
+                        if kind == .markAsRead {
+                            finalPayload = Self.mergeMarkAsReadPayloads(
+                                newest: encoded,
+                                stale: stale.map(\.payload)
+                            )
+                        }
                         let staleIds = stale.map(\.id)
                         try OutboxRecord
                             .filter(staleIds.contains(Column("id")))
@@ -1161,7 +1168,7 @@ public actor OfflineQueue {
                     conversationId: anchor,
                     messageLocalId: nil,
                     clientMessageId: cmid,
-                    payload: encoded,
+                    payload: finalPayload,
                     status: .pending,
                     createdAt: now
                 ).insert(db)
@@ -1204,6 +1211,44 @@ public actor OfflineQueue {
         default:
             return false
         }
+    }
+
+    /// outbox-05 — fusionne le payload `.markAsRead` entrant avec toutes les
+    /// rows périmées qu'il remplace, au lieu de jeter leurs `messageIds`
+    /// (reçus de lecture exacte). Décodage tolérant : une row legacy
+    /// indécodable est ignorée, jamais un enqueue planté.
+    private static func mergeMarkAsReadPayloads(newest: Data, stale: [Data]) -> Data {
+        let decoder = JSONDecoder()
+        guard let newestPayload = try? decoder.decode(MarkAsReadPayload.self, from: newest) else {
+            return newest
+        }
+        let staleDecoded = stale.compactMap { try? decoder.decode(MarkAsReadPayload.self, from: $0) }
+
+        let informed = (staleDecoded.map(\.messageIds) + [newestPayload.messageIds]).compactMap { $0 }
+        let mergedMessageIds: [String]?
+        if informed.isEmpty {
+            mergedMessageIds = nil
+        } else {
+            var seen = Set<String>()
+            mergedMessageIds = informed.flatMap { $0 }.filter { seen.insert($0).inserted }
+        }
+
+        var mergedLanguages: [String: String] = [:]
+        for languages in staleDecoded.map(\.messageLanguages) + [newestPayload.messageLanguages] {
+            guard let languages else { continue }
+            mergedLanguages.merge(languages, uniquingKeysWith: { _, new in new })
+        }
+
+        let merged = MarkAsReadPayload(
+            clientMutationId: newestPayload.clientMutationId,
+            conversationId: newestPayload.conversationId,
+            upToMessageId: newestPayload.upToMessageId,
+            messageIds: mergedMessageIds,
+            language: newestPayload.language,
+            messageLanguages: mergedLanguages.isEmpty ? nil : mergedLanguages,
+            caughtUpToMessageId: newestPayload.caughtUpToMessageId
+        )
+        return (try? JSONEncoder().encode(merged)) ?? newest
     }
 
     /// Reads the top-level `clientMutationId` field from a JSON-encoded
@@ -2490,6 +2535,16 @@ public actor OfflineQueue {
         var successPayloads: [OfflineRetrySuccess] = []
 
         for (index, item) in items.enumerated() {
+            // Items carrying local files belong exclusively to the
+            // OutboxFlusher — only it knows how to upload them via TUS.
+            // Replaying them here would POST the caption as text-only and
+            // delete the outbox row on success: the files would never be
+            // uploaded (silent media loss).
+            if !(item.localMediaPaths ?? []).isEmpty
+                || !(item.localAudioPaths ?? []).isEmpty
+                || !(item.localAudioPath ?? "").isEmpty {
+                continue
+            }
             if index > 0 {
                 // Brief jitter to avoid a thundering-herd on the gateway when
                 // draining a large backlog — kept short so the user sees their

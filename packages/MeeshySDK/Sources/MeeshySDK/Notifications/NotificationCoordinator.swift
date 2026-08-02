@@ -22,6 +22,12 @@ public protocol NotificationWidgetSink: AnyObject {
 
     /// Reload widget timelines. Called whenever the coordinator broadcasts a change.
     func reloadTimelines()
+
+    /// appgroup-01 — wipe de logout : purge les clés widget ET les dossiers de
+    /// staging de l'App Group, puis recharge les timelines. Le contenu du
+    /// compte sortant ne doit ni rester affiché sur l'écran d'accueil ni être
+    /// rejoué (partages différés, blobs NSE, mark-read) sous le compte suivant.
+    func wipeAll()
 }
 
 /// Single source of truth that keeps the iOS badge, the home/lock widgets and the
@@ -141,8 +147,13 @@ public final class NotificationCoordinator: ObservableObject {
         inAppNotificationUnread = 0
         let writer = badgeWriter
         Task { await writer.setBadgeCount(0) }
+        // appgroup-01 — wipe App Group complet (clés widget + dossiers de
+        // staging) au lieu du simple unread_count=0 : le contenu du compte
+        // sortant ne doit ni rester affiché sur l'écran d'accueil ni être
+        // rejoué sous le compte suivant. reset() n'est appelé en prod que sur
+        // les chemins de logout, AVANT le flip isAuthenticated.
         appGroupDefaults?.set(0, forKey: Self.unreadCountKey)
-        widgetSink?.publishUnreadCount(0)
+        widgetSink?.wipeAll()
         widgetSink?.reloadTimelines()
         isRunning = false
         logger.info("NotificationCoordinator reset")

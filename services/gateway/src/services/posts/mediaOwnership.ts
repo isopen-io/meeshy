@@ -72,11 +72,20 @@ export function uploaderIdFromFilePath(filePath: string | null | undefined): str
  */
 export function claimableMediaWhere(ownerId: string) {
   return {
-    postId: null,
-    // Un média déjà rattaché à un COMMENTAIRE n'est pas libre. `createPost` ne
-    // testait que `postId`, et un média de commentaire restait donc capturable
-    // par un post — les deux champs sont pourtant exclusifs par construction.
-    commentId: null,
+    // « Libre » couvre les DEUX formes MongoDB : champ présent à `null` ET
+    // champ absent du document. Prisma sur MongoDB ne matche PAS un champ
+    // absent avec `null` — seul `isSet: false` le fait. Le handler TUS crée
+    // ses médias sans poser `commentId` : la clause `commentId: null` seule a
+    // rendu TOUT média fraîchement téléversé irréclamable en production
+    // (2026-07-31→08-01), chaque publication perdant son image en silence.
+    AND: [
+      { OR: [{ postId: null }, { postId: { isSet: false } }] },
+      // Un média déjà rattaché à un COMMENTAIRE n'est pas libre. `createPost`
+      // ne testait que `postId`, et un média de commentaire restait donc
+      // capturable par un post — les deux champs sont pourtant exclusifs par
+      // construction.
+      { OR: [{ commentId: null }, { commentId: { isSet: false } }] },
+    ],
     uploaderId: ownerId,
   };
 }

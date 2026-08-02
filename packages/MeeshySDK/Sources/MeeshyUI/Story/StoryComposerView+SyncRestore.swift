@@ -37,8 +37,14 @@ extension StoryComposerView {
     ///
     /// Scope: covers every `@State` read by `buildEffects()` plus the
     /// transient picker / editor scratch state. Intentionally does NOT
-    /// touch user preferences (`storyLanguage`, `visibility`), the
-    /// in-flight loading indicators, or sheet-presentation booleans.
+    /// touch the in-flight loading indicators, the sheet-presentation
+    /// booleans, ni les deux choix d'AUDIENCE et de LANGUE (`visibility`,
+    /// `visibilityUserIds`, `storyLanguage`). Ces deux-là ne sont plus des
+    /// préférences locales à l'instance : `visibility` est SEMÉE à l'init
+    /// depuis un magasin persistant app-side (cf. `initialVisibility`) et
+    /// peut être réécrite par `restoreDraft()`. Les remettre à zéro ici
+    /// annulerait la chaîne de précédence documentée sur
+    /// `StoryComposerView.visibility`.
     func resetLocalState() {
         // Canvas-local state (read by buildEffects via canvasSyncFingerprint)
         selectedFilter = nil
@@ -62,6 +68,10 @@ extension StoryComposerView {
         editingElementVideo = nil
         confirmedMediaAudioURL = nil
         lostMediaCount = 0
+        // Le cover caméra a DEUX écrivains légitimes (ce binding SDK et le
+        // `dismiss()` de la vue app) : le remettre à plat ici garantit qu'il ne
+        // survit pas à un reset, quel que soit celui qui a fermé en dernier.
+        showCameraCapture = false
     }
 
     func restoreCanvas(from slide: StorySlide) {
@@ -241,24 +251,66 @@ extension StoryComposerView {
         HapticFeedback.light()
     }
 
+    /// Gate UNIQUE de toute écriture SILENCIEUSE par-dessus le brouillon en
+    /// magasin — partagé par l'autosave débouncé et l'autosave de passage en
+    /// background, qui portaient jusqu'ici deux listes de gardes voisines mais
+    /// pas identiques.
+    ///
+    /// Les cinq termes, et pourquoi chacun ferme le magasin :
+    /// - **édition d'une story publiée** : un brouillon semé là serait restauré
+    ///   plus tard comme une NOUVELLE story (perte du lien `editingPostId`) ;
+    /// - **offre de reprise POSÉE** (`isBannerVisible`) : `StoryDraftStore` n'a
+    ///   qu'UN slot et l'utilisateur a les slides proposées sous les yeux —
+    ///   écrire ferait mentir « Reprendre ». Le bandeau RANGÉ, en revanche,
+    ///   rend la main : c'est alors `composerHasContent` qui arbitre — rien de
+    ///   créé, rien d'écrit (le brouillon revient intact à l'ouverture
+    ///   suivante) ; du contenu réel créé, il supplante l'offre ignorée et
+    ///   devient à son tour ce que le kill de l'app ne doit pas emporter (D1).
+    ///   La première version de S5 gardait ici un bit « décision ouverte » qui
+    ///   ne retombait que sur un bouton du bandeau : ranger coupait donc
+    ///   l'autosave pour toute la session, sur le chemin devenu MAJORITAIRE ;
+    /// - **autosave suspendu** : un debounce encore en vol ne doit pas
+    ///   re-persister un brouillon explicitement jeté ou publié ;
+    /// - **composer sans contenu** : aucun brouillon fantôme (le fond pastel
+    ///   auto-appliqué ne compte pas, cf. `composerHasContent`) ;
+    /// - **publication partie** : l'upload possède l'état.
+    ///
+    /// Les écritures EXPLICITES (« Sauvegarder » à la sortie) ne passent PAS
+    /// par ce gate : l'utilisateur les demande, elles ont le droit d'écraser.
+    nonisolated static func mayOverwriteStoredDraft(
+        isEditingExistingStory: Bool,
+        draftResume: DraftResumeState,
+        isAutosaveSuspended: Bool,
+        composerHasContent: Bool,
+        didHandOffPublish: Bool
+    ) -> Bool {
+        !isEditingExistingStory
+            && !draftResume.isBannerVisible
+            && !isAutosaveSuspended
+            && composerHasContent
+            && !didHandOffPublish
+    }
+
     /// D1 — auto-save au passage en background : une story en cours d'édition
-    /// survit au kill de l'app. Gates : contenu réel uniquement (jamais un
-    /// composer vide) et pas de publication en vol (`publishTask` actif =
-    /// l'upload possède l'état). Un discard explicite postérieur
-    /// (`cancelAndDismiss` → `clearAllDrafts`) efface ce qui a été auto-sauvé.
-    /// JAMAIS sur onDisappear : le discard fire onDisappear et
-    /// re-persisterait le draft que l'utilisateur vient de jeter.
+    /// survit au kill de l'app. JAMAIS sur onDisappear : le discard fire
+    /// onDisappear et re-persisterait le draft que l'utilisateur vient de
+    /// jeter. Un discard explicite postérieur (`cancelAndDismiss` →
+    /// `clearAllDrafts`) efface ce qui a été auto-sauvé.
     func autoSaveDraftForBackground() {
-        // Mode édition : le brouillon appartient au flux de CRÉATION — une
-        // session d'édition auto-sauvée serait restaurée plus tard comme une
-        // NOUVELLE story (perte du lien `editingPostId`).
-        guard !isEditingExistingStory else { return }
-        // Même garde que l'autosave débouncé (BUG-3) : backgrounder l'app
-        // pendant que la carte de reprise est affichée ne doit pas écraser
-        // le draft avec le composer vierge.
-        guard !showRestoreDraftAlert else { return }
-        guard composerHasContent, publishTask == nil else { return }
+        guard mayOverwriteStoredDraft else { return }
         persistDraft()
+    }
+
+    /// Application du gate à l'état vivant de la vue — un seul lieu de lecture
+    /// des cinq termes, pour les deux autosaves.
+    var mayOverwriteStoredDraft: Bool {
+        Self.mayOverwriteStoredDraft(
+            isEditingExistingStory: isEditingExistingStory,
+            draftResume: draftResume,
+            isAutosaveSuspended: draftAutosaveSuspended,
+            composerHasContent: composerHasContent,
+            didHandOffPublish: didHandOffPublish
+        )
     }
 
     /// E1 — fingerprint pur des clés média chargées. Gate le `saveMedia`
@@ -279,15 +331,12 @@ extension StoryComposerView {
     /// background + `draftAutosaveSuspended` (un debounce en vol ne doit pas
     /// re-persister un brouillon explicitement jeté/publié).
     func autosaveDraftAfterMutation() {
-        // Mode édition : même règle que `autoSaveDraftForBackground` — jamais
-        // de brouillon semé depuis une session d'édition.
-        guard !isEditingExistingStory else { return }
-        // BUG-3 (user 2026-07-04) : tant que la carte de reprise est affichée,
-        // le composer VIERGE dessous (dont l'onAppear pose déjà le fond pastel
-        // = mutation → debounce) ne doit JAMAIS écraser le draft qu'on propose
-        // justement de reprendre — sinon « Reprendre » restaure du vide.
-        guard !showRestoreDraftAlert else { return }
-        guard !draftAutosaveSuspended, composerHasContent, publishTask == nil else { return }
+        // BUG-3 (user 2026-07-04) et sa suite S5 : le composer VIERGE sous le
+        // bandeau de reprise (dont l'onAppear pose déjà le fond pastel =
+        // mutation → debounce) ne doit JAMAIS écraser le draft qu'on propose
+        // de reprendre — sinon « Reprendre » restaure du vide. Toutes les
+        // gardes vivent dans `mayOverwriteStoredDraft`.
+        guard mayOverwriteStoredDraft else { return }
         flushOpenTimelineIntoSlide()
         syncCurrentSlideEffects()
         StoryDraftStore.shared.save(draftId: viewModel.draftId,
@@ -324,6 +373,75 @@ extension StoryComposerView {
         )
     }
 
+    /// Câblage LÉGER de `slideImageIds` via `loadMediaReferences()` — PAS
+    /// `loadMedia()` : ce dernier décode chaque bitmap (`Data(contentsOf:)` +
+    /// `UIImage(data:)`) de façon SYNCHRONE, un coût disque+CPU non borné qui
+    /// bloquerait le thread principal dans `.onAppear`, avant même l'affichage
+    /// de la carte — violation du principe Cache-First (« No spinner when cache
+    /// has data »). Un `fileExists` par ligne suffit à évaluer la PRÉSENCE d'une
+    /// image ; le décodage réel du cover reste différé et async.
+    static func storedSlideImageIds(_ slides: [StorySlide], store: StoryDraftStore, draftId: String) -> Set<String> {
+        let imageRefs = store.loadMediaReferences(draftId: draftId).filter { $0.mediaType == "image" }
+        let slideIds = slides.map(\.id)
+        return Set(
+            slideIds.filter { (id: String) -> Bool in
+                imageRefs.contains { $0.elementId == id || $0.elementId == "slide-bg-\(id)" }
+            }
+        )
+    }
+
+    /// Le magasin porte-t-il un brouillon que la PROCHAINE ouverture
+    /// proposerait ? C'est mot pour mot la question de `checkForDraft()`, posée
+    /// depuis les chemins DESTRUCTIFS — et la seule façon de tenir la promesse
+    /// écrite dans `DraftResumeState` : ranger n'est pas jeter, donc fermer
+    /// n'est pas jeter non plus.
+    ///
+    /// Les deux magasins sont interrogés dans le même ordre que
+    /// `checkForDraft()` : sans le repli legacy `UserDefaults`, la protection
+    /// dépendrait de la version de l'app qui a écrit le brouillon.
+    static func storedDraftIsRestorable(store: StoryDraftStore, defaults: UserDefaults) -> Bool {
+        // Multi-brouillons : la question devient « au moins UN brouillon
+        // serait-il proposé à la prochaine ouverture ? » — même prédicat que
+        // `checkForDraft()`, appliqué à chaque brouillon du magasin.
+        let anyRestorable = store.listDrafts().contains { summary in
+            guard let stored = store.load(draftId: summary.id) else { return false }
+            return shouldOfferDraftResume(
+                slides: stored.slides,
+                slideImageIds: storedSlideImageIds(stored.slides, store: store, draftId: summary.id)
+            )
+        }
+        if anyRestorable { return true }
+        guard let data = defaults.data(forKey: StoryComposerDraft.userDefaultsKey),
+              let draft = try? JSONDecoder().decode(StoryComposerDraft.self, from: data) else {
+            return false
+        }
+        return shouldOfferDraftResume(slides: draft.slides, slideImageIds: [])
+    }
+
+    /// Purge RÉSERVÉE aux brouillons fantômes — ceux qu'aucune réouverture ne
+    /// proposerait (fond seul, blob legacy indécodable). Un brouillon
+    /// restaurable, lui, survit : il n'a été supplanté par rien, et l'écran qui
+    /// le proposait vient à peine de disparaître.
+    ///
+    /// Rend `true` quand la purge a eu lieu — le call site n'a pas à re-poser la
+    /// question, et le test n'a pas à ré-implémenter la règle.
+    @discardableResult
+    static func clearPhantomDrafts(store: StoryDraftStore, defaults: UserDefaults) -> Bool {
+        guard !storedDraftIsRestorable(store: store, defaults: defaults) else { return false }
+        store.clear()
+        defaults.removeObject(forKey: StoryComposerDraft.userDefaultsKey)
+        return true
+    }
+
+    /// Application aux magasins vivants. Les DEUX sorties non explicites
+    /// l'empruntent : la fermeture par le X (`handleDismiss`) et la publication
+    /// d'un composer sans contenu (`publishAllSlides`). Les discards EXPLICITES
+    /// (« Quitter », « Recommencer ») passent, eux, par `clearAllDrafts()` :
+    /// l'utilisateur les a demandés.
+    func clearPhantomDraftsOnly() {
+        Self.clearPhantomDrafts(store: .shared, defaults: .standard)
+    }
+
     func checkForDraft() {
         if let stored = StoryDraftStore.shared.load(draftId: viewModel.draftId) {
             // Câblage LÉGER `slideImageIds` via `loadMediaReferences()` — PAS
@@ -351,7 +469,7 @@ extension StoryComposerView {
             }
 
             draftResumeSlideCount = max(1, stored.slides.count)
-            showRestoreDraftAlert = true
+            draftResume.offer()
             // U4 inc.2 — cover composite du 1er slide, rendu APRÈS l'affichage
             // (la carte dégrade sans image) et SANS muter le ViewModel : le
             // draft ne s'applique qu'au « Reprendre ». Seul le rendu du
@@ -362,13 +480,14 @@ extension StoryComposerView {
                 guard let first = stored.slides.first else { return }
                 let media = StoryDraftStore.shared.loadMedia(draftId: viewModel.draftId)
                 let bg = media.images[first.id] ?? media.images["slide-bg-\(first.id)"]
-                // 270×480 (9:16) : suffisant pour la carte 108×192 @3x —
-                // `StoryCoverThumbnail.renderSize` est app-side, hors SDK.
+                // La résolution vient du bandeau, seul à connaître son slot
+                // (`DraftResumeCard.coverSize`, 40×68) : le composer rendait
+                // 270×480 pour une carte 108×192 qui a disparu avec la modale.
                 draftResumeCover = StorySlideRenderer.renderComposite(
                     slide: first,
                     bgImage: bg,
                     loadedImages: media.images,
-                    size: CGSize(width: 270, height: 480)
+                    size: DraftResumeCard.coverRenderSize
                 )
             }
         } else if let data = UserDefaults.standard.data(forKey: StoryComposerDraft.userDefaultsKey) {
@@ -381,15 +500,30 @@ extension StoryComposerView {
                 UserDefaults.standard.removeObject(forKey: StoryComposerDraft.userDefaultsKey)
                 return
             }
-            showRestoreDraftAlert = true
+            draftResume.offer()
         }
+    }
+
+    /// Reprendre un brouillon écrase la visibilité injectée à l'init (rang 2 de
+    /// la chaîne de précédence, cf. `StoryComposerView.visibility`) — mais
+    /// JAMAIS avec un mode qui exige une liste d'utilisateurs :
+    /// `StoryDraftStore.save(slides:visibility:)` ne persiste pas
+    /// `visibilityUserIds`, donc restaurer « Seulement… » rouvrirait un
+    /// sélecteur vide et publierait vers personne. Même règle que le magasin de
+    /// préférences app-side ; reprendre n'est pas publier, la préférence
+    /// mémorisée n'est donc pas réécrite ici.
+    static func restorableVisibility(_ stored: String) -> String {
+        guard let mode = PostVisibility(rawValue: stored), !mode.requiresUserSelection else {
+            return PostVisibility.friends.rawValue
+        }
+        return stored
     }
 
     func restoreDraft() {
         if let stored = StoryDraftStore.shared.load(draftId: viewModel.draftId) {
             viewModel.slides = stored.slides.isEmpty ? [StorySlide()] : stored.slides
             viewModel.currentSlideIndex = 0
-            visibility = stored.visibility
+            visibility = Self.restorableVisibility(stored.visibility)
             // E4 inc.2 — AVANT tout bootstrap timeline : l'undo/redo de
             // chaque slide revit avec le draft, même après un crash dur.
             viewModel.applyPersistedCommandHistory(StoryDraftStore.shared.loadCommandHistoryBlob(draftId: viewModel.draftId))
@@ -409,7 +543,7 @@ extension StoryComposerView {
                   let draft = try? JSONDecoder().decode(StoryComposerDraft.self, from: data) {
             viewModel.slides = draft.slides.isEmpty ? [StorySlide()] : draft.slides
             viewModel.currentSlideIndex = 0
-            visibility = draft.visibilityPreference
+            visibility = Self.restorableVisibility(draft.visibilityPreference)
         }
         if let first = viewModel.slides.first {
             restoreCanvas(from: first)

@@ -11,6 +11,13 @@ public struct UnifiedPostComposer: View {
     @State private var content = ""
     @State private var moodEmoji: String? = nil
     @State private var visibility = "PUBLIC"
+    /// Écrite par `storyPlaceholder.onTapGesture` — plus lue par personne
+    /// depuis que S6 a retiré le `.fullScreenCover` mort qui l'affichait
+    /// (`selectedType` ne peut plus jamais valoir `.story` : `typeSelector`,
+    /// seul point capable de le faire varier, a été retiré à la même passe,
+    /// gaté par `lockedType == nil` qui ne vaut plus jamais vrai). Écriture
+    /// morte inoffensive, laissée en l'état — cascade documentée au-dessus de
+    /// `contentArea`.
     @State private var showStoryComposer = false
     @State private var selectedPhotoItem: PhotosPickerItem? = nil
     @State private var selectedImage: UIImage? = nil
@@ -64,30 +71,6 @@ public struct UnifiedPostComposer: View {
     public var onStoryImported: ((RepostImportResult) -> Void)?
 
     // MARK: - Public initializers
-
-    /// Sync-callback init (legacy). Use the `async throws` init below for new
-    /// call sites that need rollback semantics on publish failure.
-    public init(onPublish: @escaping (PostType, String, String?, StoryEffects?, UIImage?) -> Void,
-                onDismiss: @escaping () -> Void) {
-        self.publishHandler = { type, content, mood, effects, image in
-            onPublish(type, content, mood, effects, image)
-        }
-        self.repostPublishHandler = nil
-        self.onDismiss = onDismiss
-        self.lockedType = nil
-        self.repostSourceForTests = nil
-    }
-
-    /// Async-throwing publish init. The Publish button awaits this closure and
-    /// resets `isPublishing` to `false` if it throws, so the user can retry.
-    public init(onPublish: @escaping (PostType, String, String?, StoryEffects?, UIImage?) async throws -> Void,
-                onDismiss: @escaping () -> Void) {
-        self.publishHandler = onPublish
-        self.repostPublishHandler = nil
-        self.onDismiss = onDismiss
-        self.lockedType = nil
-        self.repostSourceForTests = nil
-    }
 
     /// Initializes the composer in repost-as-post mode with an embedded story preview.
     ///
@@ -188,10 +171,6 @@ public struct UnifiedPostComposer: View {
     public var body: some View {
         NavigationView {
             VStack(spacing: 0) {
-                if lockedType == nil {
-                    typeSelector
-                    Divider().overlay(Color.white.opacity(0.1))
-                }
                 contentArea
                 Spacer()
                 bottomBar
@@ -213,19 +192,16 @@ public struct UnifiedPostComposer: View {
                 }
             }
         }
-        .fullScreenCover(isPresented: $showStoryComposer) {
-            StoryComposerView(
-                onPublishSlide: { slide, image, _, _, _ in
-                    Task {
-                        try? await publishHandler(.story, slide.content ?? "", nil, slide.effects, image)
-                        await MainActor.run { showStoryComposer = false }
-                    }
-                },
-                onPublishAllInBackground: { _, _, _, _, _, _, _, _ in },
-                onPreview: { _, _, _, _, _ in },
-                onDismiss: { showStoryComposer = false }
-            )
-        }
+        // S6 — le cover story (`.fullScreenCover(isPresented: $showStoryComposer)`)
+        // a été retiré : SUPPRIMÉ, pas juste documenté comme inerte (S3/S5
+        // l'avaient déjà réduit à un no-op — `onPublishAllInBackground` figé à
+        // `false`, `onPublishSlide` jamais atteint). Sa SEULE porte d'entrée
+        // était `typeSelector` (retiré ci-dessus, gaté par `lockedType == nil`)
+        // et `storyPlaceholder.onTapGesture` (conservé — `contentArea`/
+        // `storyPlaceholder` restent inatteignables en pratique, cf. note sur
+        // `showStoryComposer` ci-dessus). Sans ce cover, ce tap ne fait plus
+        // que poser un `@State` que plus aucune vue ne lit — écriture morte
+        // inoffensive, cohérente avec le reste de la cascade documentée.
         .adaptiveOnChange(of: selectedPhotoItem) { _, newItem in
             loadImage(from: newItem)
         }
@@ -256,49 +232,18 @@ public struct UnifiedPostComposer: View {
         }
     }
 
-    // MARK: - Type Selector
-
-    private var typeSelector: some View {
-        HStack(spacing: 0) {
-            ForEach(PostType.allCases, id: \.self) { type in
-                typeTab(type)
-            }
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 8)
-    }
-
-    private func typeTab(_ type: PostType) -> some View {
-        let isSelected = selectedType == type
-        return Button {
-            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                selectedType = type
-                if type == .story {
-                    showStoryComposer = true
-                }
-            }
-            HapticFeedback.light()
-        } label: {
-            VStack(spacing: 4) {
-                HStack(spacing: 4) {
-                    Image(systemName: type.icon)
-                        .font(.system(size: 14, weight: .medium))
-                    Text(type.displayName)
-                        .font(.system(size: 14, weight: isSelected ? .bold : .medium))
-                }
-                .foregroundColor(isSelected ? Color(hex: "6366F1") : theme.textMuted)
-
-                Rectangle()
-                    .fill(isSelected ? Color(hex: "6366F1") : Color.clear)
-                    .frame(height: 2)
-                    .cornerRadius(1)
-            }
-            .frame(maxWidth: .infinity)
-        }
-    }
-
     // MARK: - Content Area
 
+    /// S6 — `selectedType` is initialized to `.post` and, since the generic
+    /// (non-repost) inits + `typeSelector` were removed, nothing can mutate
+    /// it anymore: both surviving `repostingStory:` inits pin `lockedType`
+    /// (and `selectedType`) to `.post` unconditionally. `.status`/`.story`
+    /// branches below — along with `statusComposer`, `storyPlaceholder`,
+    /// `moodEmojiPicker` — are therefore unreachable in practice, though the
+    /// compiler cannot prove it statically. Deliberately left as compiling
+    /// dead code rather than cascaded away in this pass (mandate was the
+    /// generic init + `typeSelector` + the dead story cover, not a full
+    /// `PostType` surface audit) — flagged here for a dedicated future pass.
     @ViewBuilder
     private var contentArea: some View {
         switch selectedType {

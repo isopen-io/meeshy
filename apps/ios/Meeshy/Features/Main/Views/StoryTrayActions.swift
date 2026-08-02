@@ -1,0 +1,291 @@
+import SwiftUI
+import MeeshySDK
+import MeeshyUI
+
+// MARK: - Ce que la trail de stories déclenche (S5)
+//
+// Orchestration UX produit : app-side par nature (SDK purity). Trois choses y
+// vivent, toutes issues du même constat — « ce que la trail déclenche » était
+// décidé en ligne dans des closures non testables, dupliquées entre la grande
+// trail et la mini-trail épinglée.
+
+/// Destination du tap sur l'avatar « Moi ».
+///
+/// AVANT : la MÊME cible visuelle menait à deux destinations selon un état
+/// invisible, et la destination « avec story » était une LISTE DE GESTION —
+/// 2 taps et un écran interposé pour voir sa propre story. Le tap ouvre
+/// désormais la story (alignement Instagram) ; la gestion reste accessible par
+/// appui long.
+nonisolated enum MyStoryAvatarAction: Equatable {
+    case viewMyStory
+    case createStory
+}
+
+/// Libellés de la trail, résolus par le catalogue `.main`. Ils vivaient comme
+/// des littéraux français bruts dans les menus contextuels : invisibles au
+/// cliquet de complétude, jamais traduits.
+nonisolated enum StoryTrayCopy {
+    static var viewMyStory: String {
+        String(localized: "story.tray.menu.viewMyStory",
+               defaultValue: "Voir ma story", bundle: .main)
+    }
+    static var createStory: String {
+        String(localized: "story.tray.a11y.createStory",
+               defaultValue: "Créer une story", bundle: .main)
+    }
+    static var manageStories: String {
+        String(localized: "story.tray.menu.manage",
+               defaultValue: "Gérer mes stories", bundle: .main)
+    }
+    static var addStory: String {
+        String(localized: "story.tray.addStory",
+               defaultValue: "Ajouter une story", bundle: .main)
+    }
+    static var changeMood: String {
+        String(localized: "story.tray.a11y.changeMood",
+               defaultValue: "Changer mon mood", bundle: .main)
+    }
+    static var viewStories: String {
+        String(localized: "story.tray.menu.viewStories",
+               defaultValue: "Voir les stories", bundle: .main)
+    }
+    static var viewProfile: String {
+        String(localized: "story.tray.menu.profile",
+               defaultValue: "Voir le profil", bundle: .main)
+    }
+}
+
+nonisolated enum StoryTrayActionResolver {
+    static func avatarTap(hasMyStory: Bool) -> MyStoryAvatarAction {
+        hasMyStory ? .viewMyStory : .createStory
+    }
+
+    /// Le libellé VoiceOver DÉCRIT la destination réelle. Il annonçait
+    /// « Changer mon mood » alors que le tap ouvrait le composer : la même
+    /// fonction pure sert désormais au routage et à l'annonce, les deux ne
+    /// peuvent plus diverger.
+    static func avatarAccessibilityLabel(hasMyStory: Bool) -> String {
+        switch avatarTap(hasMyStory: hasMyStory) {
+        case .viewMyStory:  return StoryTrayCopy.viewMyStory
+        case .createStory:  return StoryTrayCopy.createStory
+        }
+    }
+}
+
+// MARK: - Chaînage déterministe de la sheet « Mes stories »
+
+/// Intention posée PENDANT qu'une sheet se ferme, exécutée à la fin réelle du
+/// dismiss. Remplace six `try? await Task.sleep(for: .milliseconds(350))` —
+/// un pari sur la durée d'une animation système, payé par un gel d'un tiers de
+/// seconde à chaque ouverture.
+nonisolated struct DeferredSheetFollowUp<Action> {
+    private var pending: Action?
+
+    init() {}
+
+    /// La dernière intention gagne : deux taps rapides ne doivent pas empiler
+    /// deux présentations.
+    mutating func schedule(_ action: Action) {
+        pending = action
+    }
+
+    /// Retourne ET vide : une intention ne s'exécute jamais deux fois.
+    mutating func consume() -> Action? {
+        defer { pending = nil }
+        return pending
+    }
+}
+
+/// `StoryItem` n'est pas `Equatable` — cet enum ne l'est donc pas non plus.
+nonisolated enum MyStoriesFollowUp {
+    case openViewer(postId: String)
+    case createStory
+    case editStory(StoryItem)
+    case resumeDraft(draftId: String)
+}
+
+// MARK: - Présentation ROOT-LEVEL du composer de création
+
+/// Assets d'aperçu d'une story en cours de composition (« Aperçu » du header) —
+/// rendus par le viewer en mode `isPreviewMode`, sans jamais toucher le réseau.
+struct StoryPreviewAssets: Identifiable {
+    let id = UUID()
+    let slides: [StorySlide]
+    let backgroundImages: [String: UIImage]
+    let loadedImages: [String: UIImage]
+    let videoURLs: [String: URL]
+    let audioURLs: [String: URL]
+}
+
+/// Le composer de CRÉATION se présente au niveau racine, exactement comme le
+/// viewer (`StoryViewerCoordinator`) — et pour la même raison.
+///
+/// Le cover était monté par `StoryTrayView`, elle-même instanciée par
+/// `ConversationListView`, `FeedView` ET `RootViewComponents`. Sur iPhone la
+/// feuille de feed est un OVERLAY : la liste de conversations reste montée
+/// dessous, donc DEUX trays vivantes observent le même `@Published`
+/// `showStoryComposer` et tentent la même présentation au même instant
+/// (« Attempt to present … which is already presenting »). C'est exactement la
+/// course que les `Task.sleep(350 ms)` masquaient ; `onDismiss` en règle la
+/// SÉQUENCE (attendre la fin réelle d'un dismiss), ce montage unique en règle
+/// l'UNICITÉ — les deux sont complémentaires, aucun ne remplace l'autre.
+///
+/// L'état de présentation reste `StoryViewModel.showStoryComposer` : c'est déjà
+/// la source unique lue par les deux racines, le tray, le badge « + » et la
+/// notification `.openStoryComposer`. Seul le point de MONTAGE change.
+struct StoryComposerCover: ViewModifier {
+    @ObservedObject var viewModel: StoryViewModel
+    let router: Router
+    let conversationListViewModel: ConversationListViewModel
+    let statusViewModel: StatusViewModel
+    /// Aperçu monté DANS le cover du composer : il se superpose au composer et
+    /// lui rend la main à la fermeture, sans démonter la session d'édition.
+    @State private var previewAssets: StoryPreviewAssets?
+
+    /// VM du composer de création. Adopte le brouillon à reprendre quand il y
+    /// en a un : sans cette adoption, le composer s'autosauvegarderait sous un
+    /// id neuf et le brouillon repris resterait intact à côté, en double.
+    private func makeComposerViewModel() -> StoryComposerViewModel {
+        let composer = StoryComposerViewModel()
+        if let draftId = viewModel.pendingDraftId { composer.adoptDraft(id: draftId) }
+        return composer
+    }
+
+    func body(content: Content) -> some View {
+        content.fullScreenCover(isPresented: $viewModel.showStoryComposer, onDismiss: {
+            viewModel.pendingDraftId = nil
+        }) {
+            StoryComposerView(
+                viewModel: makeComposerViewModel(),
+                initialVisibility: viewModel.lastComposerVisibility,
+                onPublishAllInBackground: { slides, slideImages, loadedImages, loadedVideoURLs, loadedAudioURLs, originalLanguage, visibility, visibilityUserIds in
+                    viewModel.publishStoryInBackground(
+                        slides: slides,
+                        slideImages: slideImages,
+                        loadedImages: loadedImages,
+                        loadedVideoURLs: loadedVideoURLs,
+                        loadedAudioURLs: loadedAudioURLs,
+                        originalLanguage: originalLanguage,
+                        visibility: visibility,
+                        visibilityUserIds: visibilityUserIds
+                    )
+                    // La création accepte TOUJOURS : hors-ligne, la story part
+                    // en file d'attente au lieu de rester dans le composer.
+                    return true
+                },
+                onPreview: { slides, images, loadedImgs, videoURLs, audioURLs in
+                    previewAssets = StoryPreviewAssets(
+                        slides: slides,
+                        backgroundImages: images,
+                        loadedImages: loadedImgs,
+                        videoURLs: videoURLs,
+                        audioURLs: audioURLs
+                    )
+                },
+                onDismiss: {
+                    viewModel.showStoryComposer = false
+                }
+            )
+            .storyLocationPickerProvided()
+            .storyCameraCaptureProvided()
+            .storyRecentCameraRollProvided()
+            .fullScreenCover(item: $previewAssets, onDismiss: {
+                NotificationCenter.default.post(name: .storyComposerUnmuteCanvas, object: nil)
+            }) { assets in
+                let items = assets.slides.map { $0.toPreviewStoryItem() }
+                let group = StoryGroup(
+                    id: "preview",
+                    username: String(localized: "story.preview.username", defaultValue: "Aperçu", bundle: .main),
+                    avatarColor: MeeshyColors.brandPrimaryHex,
+                    stories: items
+                )
+                StoryViewerView(
+                    viewModel: viewModel,
+                    groups: [group],
+                    currentGroupIndex: 0,
+                    isPresented: Binding(
+                        get: { previewAssets != nil },
+                        set: { if !$0 { previewAssets = nil } }
+                    ),
+                    isPreviewMode: true,
+                    preloadedImages: assets.loadedImages.merging(assets.backgroundImages) { fg, _ in fg },
+                    preloadedVideoURLs: assets.videoURLs,
+                    preloadedAudioURLs: assets.audioURLs
+                )
+                .environmentObject(router)
+                .environmentObject(conversationListViewModel)
+                .environmentObject(statusViewModel)
+            }
+        }
+    }
+}
+
+extension View {
+    /// À n'appeler QUE depuis une racine (RootView / iPadRootView) : deux
+    /// montages simultanés reproduiraient la course décrite sur
+    /// `StoryComposerCover`.
+    func storyComposerCover(
+        viewModel: StoryViewModel,
+        router: Router,
+        conversationListViewModel: ConversationListViewModel,
+        statusViewModel: StatusViewModel
+    ) -> some View {
+        modifier(StoryComposerCover(
+            viewModel: viewModel,
+            router: router,
+            conversationListViewModel: conversationListViewModel,
+            statusViewModel: statusViewModel
+        ))
+    }
+
+    /// Montage UNIQUE de « Mes stories », partagé par la grande trail et la
+    /// mini-trail épinglée (~90 lignes dupliquées auparavant, avec deux règles
+    /// de chaînage distinctes).
+    ///
+    /// `onDismiss` est la primitive SwiftUI prévue pour ce cas exact : elle
+    /// s'exécute après l'ACHÈVEMENT du dismiss, là où 350 ms n'étaient qu'un
+    /// pari. Les trois callbacks n'exécutent donc plus l'action : ils
+    /// l'enregistrent puis referment la sheet.
+    ///
+    /// `router` et `conversationListViewModel` sont réinjectés à travers la
+    /// frontière de sheet : la sheet interne `SharePickerView` (« Transférer »)
+    /// crasherait sinon sur un environment object manquant.
+    func myStoriesSheet(
+        isPresented: Binding<Bool>,
+        followUp: Binding<DeferredSheetFollowUp<MyStoriesFollowUp>>,
+        viewModel: StoryViewModel,
+        userId: String,
+        statusViewModel: StatusViewModel,
+        router: Router,
+        conversationListViewModel: ConversationListViewModel,
+        perform: @escaping (MyStoriesFollowUp) -> Void
+    ) -> some View {
+        sheet(isPresented: isPresented, onDismiss: {
+            if let action = followUp.wrappedValue.consume() { perform(action) }
+        }) {
+            MyStoriesView(
+                viewModel: viewModel,
+                userId: userId,
+                statusViewModel: statusViewModel,
+                onOpen: { story in
+                    followUp.wrappedValue.schedule(.openViewer(postId: story.id))
+                    isPresented.wrappedValue = false
+                },
+                onCreateStory: {
+                    followUp.wrappedValue.schedule(.createStory)
+                    isPresented.wrappedValue = false
+                },
+                onEditStory: { story in
+                    followUp.wrappedValue.schedule(.editStory(story))
+                    isPresented.wrappedValue = false
+                },
+                onResumeDraft: { draftId in
+                    followUp.wrappedValue.schedule(.resumeDraft(draftId: draftId))
+                    isPresented.wrappedValue = false
+                }
+            )
+            .environmentObject(router)
+            .environmentObject(conversationListViewModel)
+        }
+    }
+}

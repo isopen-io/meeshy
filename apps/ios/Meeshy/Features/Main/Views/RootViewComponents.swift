@@ -56,11 +56,13 @@ struct ThemedActionButton: View {
                     .rotationEffect(.degrees(isPressed ? -8 : 0))
 
                 if badge > 0 {
-                    Text("\(min(badge, 99))")
-                        .font(MeeshyFont.relative(9, weight: .bold))
+                    Text(NotificationBadge.displayed(badge))
+                        .font(MeeshyFont.relative(9, weight: NotificationBadge.fontWeight))
                         .foregroundColor(Color(hex: color))
-                        .frame(width: 16, height: 16)
-                        .background(Circle().fill(Color.white))
+                        .lineLimit(1)
+                        .padding(.horizontal, 5)
+                        .frame(minWidth: 16, minHeight: 16)
+                        .background(Capsule().fill(Color.white))
                         .offset(x: size * 0.33, y: -size * 0.33)
                         .pulse(intensity: 0.08)
                 }

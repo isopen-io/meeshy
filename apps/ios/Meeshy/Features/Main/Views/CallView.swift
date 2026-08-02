@@ -1529,21 +1529,6 @@ struct CallView: View {
     /// row when it fits the width, and only falls back to a horizontal scroll on
     /// narrow widths / large Dynamic Type — so the camera-flip and other controls
     /// are evenly centred rather than left-anchored in a scroll view.
-    /// Ancre invisible servant de `sourceView` au PiP système (le rect d'où la
-    /// fenêtre flottante émerge). Enregistrée auprès de `CallManager` à chaque
-    /// apparition/mise à jour ; `attachSystemPiP` est idempotent + auto-gated.
-    private struct PiPSourceAnchor: UIViewRepresentable {
-        func makeUIView(context: Context) -> UIView {
-            let view = UIView()
-            view.backgroundColor = .clear
-            view.isUserInteractionEnabled = false
-            return view
-        }
-        func updateUIView(_ uiView: UIView, context: Context) {
-            CallManager.shared.attachSystemPiP(sourceView: uiView)
-        }
-    }
-
     private var controlBar: some View {
         // Adjacent glass circles must share a container (glass can't sample
         // glass). `AdaptiveGlassContainer` (SDK Compatibility) is a GlassEffect-
