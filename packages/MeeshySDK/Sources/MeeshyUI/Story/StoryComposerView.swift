@@ -61,6 +61,10 @@ public struct StoryComposerView: View {
 
     @State var showAudioDocumentPicker = false
     @State var showVoiceRecorderSheet = false
+    /// Porte à ouvrir APRÈS la fermeture de la feuille d'enregistrement —
+    /// posée par les chips « Fichiers » / « Bibliothèque » de la feuille,
+    /// consommée par son `onDismiss` (séquencement sheet → sheet, cf. +Media).
+    @State var recorderFollowUp: StoryRecorderFollowUp?
     /// Sélecteur de la bibliothèque de sons — « Mes sons » et « Tendances ».
     @State var showSoundLibrary = false
     /// C8 — picker de stickers (bouton « Stickers » du panneau Texte).
