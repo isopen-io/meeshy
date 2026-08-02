@@ -164,6 +164,43 @@ final class FeedPipelineIntegrationTests: XCTestCase {
                        "l'unlike de l'utilisateur courant éteint bien isLikedByMe")
     }
 
+    /// stores-05 (option A — lecteur GRDB activé) : quand le réseau échoue,
+    /// loadMoreIfNeeded relit la suite du feed depuis feed_posts locale au
+    /// lieu d'échouer en silence — pagination offline réelle au-delà du cache
+    /// blob de 100 posts.
+    @MainActor
+    func test_loadMoreIfNeeded_networkFails_fallsBackToLocalFeedStore() async throws {
+        let base = Date()
+        for i in 1...60 {
+            var record = PostRecordFactory.make(id: "post-\(i)")
+            record.createdAt = base.addingTimeInterval(-Double(i))
+            try await feedActor.insertPost(record)
+        }
+        let store = FeedStore(persistence: feedActor)
+        let api = MockAPIClientForApp()
+        let sut = FeedViewModel(
+            api: api,
+            socialSocket: MockSocialSocket(),
+            postService: MockPostService(),
+            languageProvider: MockLanguageProvider(preferredLanguages: []),
+            offlineQueue: MockOfflineQueue()
+        )
+        sut.setupPersistence(
+            store: store,
+            socketHandler: FeedSocketHandler(persistence: feedActor, socialSocket: MockSocialSocket()),
+            persistence: feedActor
+        )
+        sut.posts = (1...50).map { FeedPost(id: "post-\($0)", author: "alice", type: "POST", content: "c\($0)") }
+        api.errorToThrow = APIError.networkError(URLError(.notConnectedToInternet))
+
+        await sut.loadMoreIfNeeded(currentPost: sut.posts[49])
+
+        XCTAssertEqual(sut.posts.count, 60,
+                       "la pagination offline doit relire la suite depuis feed_posts locale")
+        XCTAssertTrue(sut.posts.contains { $0.id == "post-55" })
+        XCTAssertFalse(sut.isLoadingMore)
+    }
+
     @MainActor
     func test_persistComments_seedsInlinePostCommentsIntoGRDB() async throws {
         // A post payload prefetched by the NSE embeds its recent comments (incl.

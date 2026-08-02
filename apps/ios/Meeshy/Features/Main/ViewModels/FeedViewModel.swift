@@ -308,7 +308,19 @@ class FeedViewModel: ObservableObject {
                 }
             }
         } catch {
-            // Silently fail on load more -- user can scroll again
+            // stores-05 (option A — lecteur GRDB activé) : pagination offline.
+            // Relire la suite du feed depuis feed_posts locale au lieu
+            // d'échouer en silence — le mapping PostRecord→FeedPost partage la
+            // résolution Prisme du chemin réseau ; dédup par id, l'ordre
+            // createdAt desc du store prolonge la timeline affichée.
+            if let feedStore {
+                if feedStore.posts.isEmpty { await feedStore.loadInitial() }
+                _ = await feedStore.loadOlder()
+                let preferred = preferredLanguages
+                let mapped = feedStore.posts.map { $0.toFeedPost(preferredLanguages: preferred) }
+                let existingIds = Set(posts.map(\.id))
+                posts.append(contentsOf: mapped.filter { !existingIds.contains($0.id) })
+            }
         }
 
         isLoadingMore = false
