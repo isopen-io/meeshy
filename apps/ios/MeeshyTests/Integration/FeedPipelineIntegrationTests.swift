@@ -110,6 +110,60 @@ final class FeedPipelineIntegrationTests: XCTestCase {
         XCTAssertNil(comment?.reactionSummary["👍"], "sync ACK is authoritative — stale emoji dropped")
     }
 
+    /// stores-03 — le like d'un TIERS reçu par socket montait le compteur ET
+    /// allumait isLikedByMe en GRDB : au prochain cold start via le lecteur
+    /// GRDB, un post liké par n'importe qui s'affichait comme liké par soi.
+    @MainActor
+    func test_handlePostLiked_thirdPartyActor_doesNotFlipIsLikedByMe() async throws {
+        let socket = MockSocialSocket()
+        let handler = FeedSocketHandler(
+            persistence: feedActor,
+            socialSocket: socket,
+            currentUserIdProvider: { "me" }
+        )
+        handler.arm()
+        defer { handler.disarm() }
+
+        try await feedActor.insertPost(PostRecordFactory.make(id: "post_third_party"))
+
+        socket.postLiked.send(SocketPostLikedData(
+            postId: "post_third_party", userId: "someone_else", emoji: "❤️",
+            likeCount: 3, reactionSummary: ["❤️": 3]
+        ))
+
+        try await Task.sleep(for: .milliseconds(150))
+        let fetched = try feedActor.posts(limit: 10).first { $0.id == "post_third_party" }
+        XCTAssertEqual(fetched?.likeCount, 3, "le compteur absolu du serveur est appliqué")
+        XCTAssertFalse(fetched?.isLikedByMe ?? true,
+                       "le like d'un tiers ne doit jamais allumer isLikedByMe")
+    }
+
+    @MainActor
+    func test_handlePostUnliked_currentUserActor_clearsIsLikedByMe() async throws {
+        let socket = MockSocialSocket()
+        let handler = FeedSocketHandler(
+            persistence: feedActor,
+            socialSocket: socket,
+            currentUserIdProvider: { "me" }
+        )
+        handler.arm()
+        defer { handler.disarm() }
+
+        var seeded = PostRecordFactory.make(id: "post_self_unlike")
+        seeded.isLikedByMe = true
+        try await feedActor.insertPost(seeded)
+
+        socket.postUnliked.send(SocketPostUnlikedData(
+            postId: "post_self_unlike", userId: "me", likeCount: 0, reactionSummary: [:]
+        ))
+
+        try await Task.sleep(for: .milliseconds(150))
+        let fetched = try feedActor.posts(limit: 10).first { $0.id == "post_self_unlike" }
+        XCTAssertEqual(fetched?.likeCount, 0)
+        XCTAssertEqual(fetched?.isLikedByMe, false,
+                       "l'unlike de l'utilisateur courant éteint bien isLikedByMe")
+    }
+
     @MainActor
     func test_persistComments_seedsInlinePostCommentsIntoGRDB() async throws {
         // A post payload prefetched by the NSE embeds its recent comments (incl.
