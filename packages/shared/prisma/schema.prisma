@@ -2874,6 +2874,23 @@ model Post {
   /// réécrire le contenu (aperçu vidéo + URL lisible préservés).
   metadata         Json?
 
+  /// Coordonnée de découvrabilité géographique — GeoJSON Point
+  /// `{ type: "Point", coordinates: [lng, lat] }`, déjà quantifiée par le
+  /// serveur à la précision choisie (ou exacte, si demandée). SÉPARÉ de
+  /// `metadata.location` (qui reste dédié à l'affichage — badge/carte sur le
+  /// contenu publié, ne pas toucher) : deux opt-in indépendants, deux usages
+  /// indépendants. `null` pour tout post publié avant cette fonctionnalité
+  /// (aucune rétro-indexation) ainsi que pour tout post dont l'auteur n'a pas
+  /// activé la découvrabilité par proximité.
+  /// Prisma ne sait déclarer aucun index MongoDB `2dsphere` sur un champ —
+  /// cet index est créé via `$runCommandRaw` au bootstrap du gateway
+  /// (`InitService.ensurePostGeoIndex`), pas ici.
+  geoPoint         Json?
+  /// Précision de découvrabilité appliquée à `geoPoint` :
+  /// `"EXACT" | "NEIGHBORHOOD" | "CITY" | "REGION"`. `null` si `geoPoint`
+  /// est `null` (découvrabilité désactivée pour ce post).
+  geoPrecision     String?
+
   // ============================================
   // CONTEXTE
   // ============================================
