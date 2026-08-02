@@ -1173,6 +1173,7 @@ class FeedViewModel: ObservableObject {
                     self.posts[index].comments.insert(feedComment, at: 0)
                 }
                 self.posts[index].commentCount = data.commentCount
+                self.debouncedCacheSave()
             }
             .store(in: &socketCancellables)
 
@@ -1182,6 +1183,7 @@ class FeedViewModel: ObservableObject {
             .sink { [weak self] data in
                 guard let self, let index = self.posts.firstIndex(where: { $0.id == data.postId }) else { return }
                 self.posts[index].commentCount = data.commentCount
+                self.debouncedCacheSave()
             }
             .store(in: &socketCancellables)
 
@@ -1207,6 +1209,7 @@ class FeedViewModel: ObservableObject {
                     }
                 }
                 self.posts[index] = post
+                self.debouncedCacheSave()
             }
             .store(in: &socketCancellables)
 
@@ -1222,6 +1225,7 @@ class FeedViewModel: ObservableObject {
                 if langs.contains(where: { $0.caseInsensitiveCompare(data.language) == .orderedSame }) {
                     if self.posts[postIndex].comments[commentIndex].translatedContent == nil {
                         self.posts[postIndex].comments[commentIndex].translatedContent = data.translation.text
+                        self.debouncedCacheSave()
                     }
                 }
             }
