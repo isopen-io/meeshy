@@ -4078,7 +4078,10 @@ final class RetryCallSourceGuardTests: XCTestCase {
         guard let body = functionBody(of: "func endCallInternal(reason:", in: source) else {
             XCTFail("endCallInternal not found"); return
         }
-        XCTAssertTrue(body.contains("canRetryCall ?"),
+        // Ancré sur l'ASSIGNATION (pas sur « canRetryCall ? » mono-ligne) :
+        // le reformatage multi-ligne du ternaire par f0091d146 a cassé
+        // l'ancienne forme alors que le comportement était intact.
+        XCTAssertTrue(body.contains("let settleDelay = canRetryCall"),
             "the settleDelay branch must reuse `canRetryCall` — by this point `callState` " +
             "is already `.ended(reason: reason)`, so re-deriving " +
             "`CallRetryPolicy.isRetryable(reason) && lastOutgoingContext != nil` inline is a " +
