@@ -148,6 +148,46 @@ describe('CallManager — call:ended retry offer', () => {
     }
   );
 
+  it('clears a stale unconsumed retry offer when a later call on the same conversation resolves normally', () => {
+    // Simulates: an earlier failed call left a « Réessayer » offer unconsumed
+    // (user never revisited the conversation); a brand-new, independent call
+    // on the SAME conversation is answered and completes normally. The stale
+    // offer must not resurface later — it would prompt a retry for a failure
+    // already superseded by a real, successful call.
+    useCallStore.getState().offerCallRetry({ conversationId: CONVERSATION_ID, type: 'audio' });
+
+    const socket = makeFakeSocket();
+    (meeshySocketIOService.getSocket as jest.Mock).mockReturnValue(socket);
+    setActiveCall(true);
+
+    render(<CallManager />);
+
+    act(() => {
+      socket.fire(SERVER_EVENTS.CALL_ENDED, makeCallEndedEvent('completed'));
+    });
+
+    expect(useCallStore.getState().pendingRetry).toEqual({});
+  });
+
+  it('leaves a stale retry offer for a DIFFERENT conversation untouched', () => {
+    const otherConversationId = 'conv-unrelated-2';
+    useCallStore.getState().offerCallRetry({ conversationId: otherConversationId, type: 'video' });
+
+    const socket = makeFakeSocket();
+    (meeshySocketIOService.getSocket as jest.Mock).mockReturnValue(socket);
+    setActiveCall(true);
+
+    render(<CallManager />);
+
+    act(() => {
+      socket.fire(SERVER_EVENTS.CALL_ENDED, makeCallEndedEvent('completed'));
+    });
+
+    expect(useCallStore.getState().pendingRetry).toEqual({
+      [otherConversationId]: { conversationId: otherConversationId, type: 'video' },
+    });
+  });
+
   it('still resets call state and clears the incoming-call banner on a transient-reason end', () => {
     const socket = makeFakeSocket();
     (meeshySocketIOService.getSocket as jest.Mock).mockReturnValue(socket);
