@@ -112,12 +112,14 @@ extension StoryComposerView {
         // le callback est synchrone, rien ne peut re-persister entre-temps.
         guard accepted else { return }
         // Le brouillon jeté ici est celui de la story qui vient de partir : il
-        // lui appartient. La branche `else` n'est plus celle de la page blanche
-        // (le bouton est gaté par `canPublish`) mais celle de la story
-        // « fond + musique » : rien de VISUEL n'a été composé, donc rien ne
-        // supplante ce que le bandeau venait de proposer. Même règle que la
-        // fermeture par le X : on ne purge que les fantômes.
-        if composerHasContent { clearCurrentDraft() } else { clearPhantomDraftsOnly() }
+        // lui appartient. L'audio compte — depuis que l'autosave persiste les
+        // sessions audio-seules, la story « fond + musique » possède SON
+        // brouillon en magasin, et le laisser survivrait en doublon fantôme
+        // d'une story déjà publiée. `clearCurrentDraft` ne touche que l'id de
+        // CETTE session : ce que le bandeau proposait d'autre reste intact.
+        // La branche `else` (page blanche intégrale) est inatteignable par le
+        // bouton (gaté `canPublish`) et ne purge que les fantômes.
+        if composerHasContent || composerCarriesAudio { clearCurrentDraft() } else { clearPhantomDraftsOnly() }
         // E1 — un debounce d'autosave en vol ne doit pas re-persister le
         // brouillon d'une story qui vient de partir en publication.
         draftAutosaveSuspended = true
@@ -293,10 +295,20 @@ extension StoryComposerView {
     ) -> Bool {
         backgroundAudioId != nil
             || !(currentEffects.audioPlayerObjects ?? []).isEmpty
-            || slides.contains { slide in
-                slide.effects.backgroundAudioId != nil
-                    || !(slide.effects.audioPlayerObjects ?? []).isEmpty
-            }
+            || slidesCarryAudio(slides)
+    }
+
+    /// La moitié PERSISTÉE de `composerCarriesAudio` : ce qu'un brouillon
+    /// désérialisé sait dire de son audio (le rabattement `mergeEffects` écrit
+    /// `backgroundAudioId` dans la slide à chaque sync, les lecteurs empruntés
+    /// vivent dans `audioPlayerObjects`). C'est le terme que la purge des
+    /// fantômes et l'offre de reprise doivent lire — un brouillon
+    /// « fond + musique » est du travail, pas un fantôme.
+    nonisolated static func slidesCarryAudio(_ slides: [StorySlide]) -> Bool {
+        slides.contains { slide in
+            slide.effects.backgroundAudioId != nil
+                || !(slide.effects.audioPlayerObjects ?? []).isEmpty
+        }
     }
 
     var composerCarriesAudio: Bool {
@@ -317,19 +329,21 @@ extension StoryComposerView {
     /// compris : une story « fond + musique » est du travail, et la croix la
     /// jetait sans un mot — `composerHasContent` ne voit que le VISUEL.
     ///
-    /// « Sauvegarder », lui, reste gaté sur le contenu visuel SEUL, parce que
-    /// c'est tout ce que le brouillon sait retenir : `StoryDraftStore` persiste
-    /// les slides et leurs médias, jamais `selectedAudioId` (un `@State` de la
-    /// vue, rabattu sur `effects.backgroundAudioId` au seul hand-off de
-    /// publication). Offrir de sauvegarder une composition purement sonore
-    /// rendrait un brouillon muet à la reprise — un mensonge d'un tap.
+    /// « Sauvegarder » s'offre sur le même périmètre : la prémisse historique
+    /// (« le brouillon ne retient pas l'audio, rabattu au seul hand-off de
+    /// publication ») est caduque — `persistDraft()` passe par
+    /// `syncCurrentSlideEffects()` → `mergeEffects` qui écrit
+    /// `backgroundAudioId` dans la slide via le proxy `currentEffects`, et
+    /// `restoreCanvas` re-sème `selectedAudioId` depuis les effets restaurés.
+    /// Sans cette offre, la seule issue d'une session audio-seule était
+    /// « Quitter » — DESTRUCTIVE.
     ///
     /// Le formuler ici plutôt que d'appeler `canPublish` garde les deux règles
     /// libres d'évoluer : le jour où le bouton acceptera un cas de plus, la
     /// feuille n'offrira pas automatiquement de le sauvegarder.
     nonisolated static func exitPrompt(hasContent: Bool, carriesAudio: Bool) -> ComposerExitPrompt {
         guard hasContent || carriesAudio else { return .leaveSilently }
-        return .confirm(offersSave: hasContent)
+        return .confirm(offersSave: hasContent || carriesAudio)
     }
 
     var exitPrompt: ComposerExitPrompt {

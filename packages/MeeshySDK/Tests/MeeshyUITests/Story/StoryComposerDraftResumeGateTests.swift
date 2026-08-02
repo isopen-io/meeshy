@@ -14,6 +14,30 @@ final class StoryComposerDraftResumeGateTests: XCTestCase {
         StoryComposerView.shouldOfferDraftResume(slides: slides, slideImageIds: slideImageIds)
     }
 
+    /// Un brouillon « fond + musique » est du travail : le store persiste
+    /// l'audio rabattu dans les effets (`mergeEffects` → `backgroundAudioId`)
+    /// et `restoreCanvas` restaure la sélection. Le juger fantôme le faisait
+    /// purger par `clearPhantomDraftsOnly` à la première fermeture venue.
+    func test_audioOnlyDraft_backgroundSound_offersResume() {
+        var slide = StorySlide()
+        var effects = StoryEffects()
+        effects.backgroundAudioId = "sound-1"
+        slide.effects = effects
+        XCTAssertTrue(offersResume(slides: [slide]))
+    }
+
+    func test_audioOnlyDraft_borrowedPlayerOnAnySlide_offersResume() {
+        var first = StorySlide()
+        var second = StorySlide()
+        var effects = StoryEffects()
+        effects.audioPlayerObjects = [StoryAudioPlayerObject(
+            id: "player-1", postMediaId: "pm-1", x: 0.5, y: 0.5
+        )]
+        second.effects = effects
+        first.content = nil
+        XCTAssertTrue(offersResume(slides: [first, second]))
+    }
+
     /// Le cas MAJORITAIRE visé par ce domaine : un fond seul (auto-appliqué à
     /// l'ouverture, jamais touché par l'utilisateur) ne doit plus jamais
     /// déclencher la carte de reprise.
