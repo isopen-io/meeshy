@@ -64,30 +64,10 @@ final class RightToLeftLayoutGuardTests: XCTestCase {
 
     /// Retire les commentaires avant d'inspecter : ce fichier-ci, et les
     /// commentaires qui documentent la règle, citent forcément le motif banni.
+    /// Délégué au stripper PARTAGÉ — l'ancienne coupe au premier `//` ignorait
+    /// les littéraux : une URL `https://…` tronquait la ligne inspectée.
     private func strippingComments(_ source: String) -> String {
-        var out = ""
-        var inBlock = false
-        for rawLine in source.split(separator: "\n", omittingEmptySubsequences: false) {
-            var line = String(rawLine)
-            if inBlock {
-                guard let end = line.range(of: "*/") else { continue }
-                line = String(line[end.upperBound...])
-                inBlock = false
-            }
-            while let start = line.range(of: "/*") {
-                if let end = line.range(of: "*/", range: start.upperBound..<line.endIndex) {
-                    line = String(line[..<start.lowerBound]) + String(line[end.upperBound...])
-                } else {
-                    line = String(line[..<start.lowerBound])
-                    inBlock = true
-                }
-            }
-            if let slashes = line.range(of: "//") {
-                line = String(line[..<slashes.lowerBound])
-            }
-            out += line + "\n"
-        }
-        return out
+        AppSourceGuard.stripComments(source)
     }
 
     // MARK: - Chevrons
