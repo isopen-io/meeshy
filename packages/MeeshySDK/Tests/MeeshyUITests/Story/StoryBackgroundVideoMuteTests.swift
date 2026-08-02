@@ -61,4 +61,42 @@ final class StoryBackgroundVideoMuteTests: XCTestCase {
                        "l'unmute restaure le niveau de l'auteur, il ne force pas 1.0")
         XCTAssertNil(bg.mutedVolumeMemento)
     }
+
+    // MARK: - Garde de source du montage
+
+    /// Une vue SwiftUI ne s'inspecte pas : on ancre le câblage sur le texte de
+    /// la source, commentaires retirés — sans ce filtrage, une simple mention
+    /// du nom en prose suffirait à faire passer la garde.
+    ///
+    /// Quatre `deletingLastPathComponent` depuis `Tests/MeeshyUITests/Story/`
+    /// pour atteindre la racine du paquet. Ce nombre se COMPTE depuis le
+    /// fichier réel, il ne se recopie pas : un test un niveau plus bas en
+    /// demanderait cinq, et un compte erroné ne rougit pas — il fait passer la
+    /// garde par son `XCTSkip`.
+    func test_videoMuteOverlay_mountsTheBackgroundButton() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()   // Story
+            .deletingLastPathComponent()   // MeeshyUITests
+            .deletingLastPathComponent()   // Tests
+            .deletingLastPathComponent()   // MeeshySDK
+        let file = root.appendingPathComponent(
+            "Sources/MeeshyUI/Story/StoryComposerView+Canvas.swift")
+        guard let raw = try? String(contentsOf: file, encoding: .utf8) else {
+            throw XCTSkip("source introuvable : \(file.path)")
+        }
+        let code = raw
+            .replacingOccurrences(of: "(?s)/\\*.*?\\*/", with: "", options: .regularExpression)
+            .replacingOccurrences(of: "(?m)//.*$", with: "", options: .regularExpression)
+
+        XCTAssertTrue(code.contains("var backgroundVideoBinding"),
+                      "le binding du fond doit exister")
+
+        // Le binding doit être CONSOMMÉ par l'overlay, pas seulement déclaré.
+        guard let overlayStart = code.range(of: "var videoMuteOverlay")?.lowerBound else {
+            return XCTFail("videoMuteOverlay introuvable")
+        }
+        let overlay = String(code[overlayStart...].prefix(900))
+        XCTAssertTrue(overlay.contains("backgroundVideoBinding"),
+                      "videoMuteOverlay doit monter le bouton du fond")
+    }
 }
