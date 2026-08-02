@@ -318,7 +318,7 @@ public struct StoryComposerView: View {
                     },
                     onDiscard: {
                         draftResume.decide()
-                        clearCurrentDraft()
+                        discardOfferedDraft()
                     }
                 )
                 .padding(.horizontal, 16)
@@ -401,14 +401,24 @@ public struct StoryComposerView: View {
             ))
         }
         .onAppear {
-            // Mode édition : jamais de carte de reprise de brouillon par-dessus
-            // la story hydratée — le brouillon appartient au flux de CRÉATION.
-            if !isEditingExistingStory {
+            switch Self.openingDraftAction(
+                isEditingExistingStory: isEditingExistingStory,
+                isAdoptedDraftSession: viewModel.isAdoptedDraftSession
+            ) {
+            case .restoreAdoptedDraft:
+                // Brouillon CHOISI dans « Mes stories » : restauration directe,
+                // sans bandeau — `restoreDraft()` seed lui-même l'historique.
+                restoreDraft()
+            case .offerDraftResume:
                 checkForDraft()
+                // C9 — trajectoire d'annulation : seed sur l'état d'entrée
+                // (composer vierge ; `restoreDraft()` re-seed après reprise).
+                viewModel.seedHistory()
+            case .hydratedByEditMode:
+                // Jamais de carte de reprise par-dessus la story hydratée —
+                // le brouillon appartient au flux de CRÉATION.
+                viewModel.seedHistory()
             }
-            // C9 — trajectoire d'annulation : seed sur l'état d'entrée
-            // (composer vierge ; `restoreDraft()` re-seed après reprise).
-            viewModel.seedHistory()
         }
         // Le bandeau de reprise ne flotte au-dessus de RIEN : dès que le chrome
         // plein cède la place (panneau d'outil, éditeur texte, dessin, timeline),

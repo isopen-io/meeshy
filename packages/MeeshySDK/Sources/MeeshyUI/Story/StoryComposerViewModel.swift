@@ -403,10 +403,42 @@ public final class StoryComposerViewModel: StoryComposerProviding, ObservableObj
     /// (spec 2026-08-01).
     public private(set) var draftId: String = UUID().uuidString
 
+    /// Vrai quand la session a été rattachée à un brouillon CHOISI par
+    /// l'utilisateur (`adoptDraft(id:)`, tap dans « Mes stories »). Le composer
+    /// restaure alors ce brouillon dès l'ouverture SANS re-proposer le bandeau
+    /// de reprise — l'utilisateur vient de trancher — et « Recommencer » s'en
+    /// détache (`detachFromAdoptedDraft`) au lieu de le détruire.
+    public private(set) var isAdoptedDraftSession = false
+
     /// Rattache la session à un brouillon existant. Appelé AVANT toute
     /// restauration : l'autosave qui suit doit écrire sous le bon id.
     public func adoptDraft(id: String) {
         draftId = id
+        isAdoptedDraftSession = true
+    }
+
+    /// « Recommencer » sur une session adoptée : la session repart sous un id
+    /// NEUF et rend le brouillon choisi, qui reste intact en magasin. Le
+    /// supprimer ici détruirait précisément ce que l'utilisateur venait de
+    /// désigner comme « à reprendre ».
+    public func detachFromAdoptedDraft() {
+        draftId = UUID().uuidString
+        isAdoptedDraftSession = false
+    }
+
+    /// Absorbe les médias d'un brouillon restauré en UNE passe et bump
+    /// `loadedImagesVersion` quand des bitmaps sont arrivés : le canvas ne
+    /// reconstruit son `ComposerImageCacheReader` que sur ce cookie — merger
+    /// `loadedImages` sans lui laissait les images du brouillon repris
+    /// invisibles (même invariant que `registerLoadedImage`).
+    func mergeRestoredMedia(images: [String: UIImage],
+                            videoURLs: [String: URL],
+                            audioURLs: [String: URL]) {
+        loadedImages.merge(images) { _, new in new }
+        loadedVideoURLs.merge(videoURLs) { _, new in new }
+        loadedAudioURLs.merge(audioURLs) { _, new in new }
+        guard !images.isEmpty else { return }
+        loadedImagesVersion &+= 1
     }
 
     /// Default initializer (kept explicit so the convenience init below has a designated

@@ -519,6 +519,49 @@ extension StoryComposerView {
         return stored
     }
 
+    /// B1 (2026-08-02) — copies de SESSION des médias restaurés.
+    ///
+    /// Les URLs remises par `loadMedia` pointent DANS
+    /// `meeshy_draft_media/<draftId>/`, le répertoire que `clearCurrentDraft()`
+    /// supprime au hand-off de publication. Or le write-ahead de la file
+    /// (app-side) court dans une `Task` qui ne démarre qu'APRÈS le retour
+    /// synchrone de `publishAllSlides()` : publier un brouillon repris
+    /// détruisait donc les fichiers AVANT leur copie — story amputée ET
+    /// brouillon perdu. Le composer ne verse dans le ViewModel que des copies
+    /// hors du magasin (clone APFS, quasi gratuit) : détruire le brouillon ne
+    /// peut plus toucher ce que le hand-off a reçu. Une copie qui échoue
+    /// retombe sur l'URL d'origine — pas pire qu'avant, et le média reste
+    /// éditable dans la session.
+    static func sessionSafeMediaURLs(_ urls: [String: URL],
+                                     sessionDirectory: URL,
+                                     fileManager: FileManager = .default) -> [String: URL] {
+        guard !urls.isEmpty else { return urls }
+        do {
+            try fileManager.createDirectory(at: sessionDirectory, withIntermediateDirectories: true)
+        } catch {
+            return urls
+        }
+        return urls.mapValues { source in
+            let destination = sessionDirectory.appendingPathComponent(source.lastPathComponent)
+            try? fileManager.removeItem(at: destination)
+            do {
+                try fileManager.copyItem(at: source, to: destination)
+                return destination
+            } catch {
+                return source
+            }
+        }
+    }
+
+    /// Sous tmp/ : la durée de vie attendue est celle de la session de
+    /// composition, l'OS fait le ménage — comme les fichiers temp des médias
+    /// fraîchement importés.
+    static func sessionMediaDirectory(for draftId: String) -> URL {
+        FileManager.default.temporaryDirectory
+            .appendingPathComponent("meeshy_draft_session", isDirectory: true)
+            .appendingPathComponent(draftId, isDirectory: true)
+    }
+
     func restoreDraft() {
         if let stored = StoryDraftStore.shared.load(draftId: viewModel.draftId) {
             viewModel.slides = stored.slides.isEmpty ? [StorySlide()] : stored.slides
@@ -528,9 +571,12 @@ extension StoryComposerView {
             // chaque slide revit avec le draft, même après un crash dur.
             viewModel.applyPersistedCommandHistory(StoryDraftStore.shared.loadCommandHistoryBlob(draftId: viewModel.draftId))
             let media = StoryDraftStore.shared.loadMedia(draftId: viewModel.draftId)
-            viewModel.loadedImages.merge(media.images) { _, new in new }
-            viewModel.loadedVideoURLs.merge(media.videoURLs) { _, new in new }
-            viewModel.loadedAudioURLs.merge(media.audioURLs) { _, new in new }
+            let sessionDir = Self.sessionMediaDirectory(for: viewModel.draftId)
+            viewModel.mergeRestoredMedia(
+                images: media.images,
+                videoURLs: Self.sessionSafeMediaURLs(media.videoURLs, sessionDirectory: sessionDir),
+                audioURLs: Self.sessionSafeMediaURLs(media.audioURLs, sessionDirectory: sessionDir)
+            )
 
             // Surface lost media (file purged by OS, deleted via Files app, etc.)
             // explicitly to the user via an alert. The DB rows are also purged
@@ -564,5 +610,51 @@ extension StoryComposerView {
     func clearCurrentDraft() {
         StoryDraftStore.shared.delete(draftId: viewModel.draftId)
         UserDefaults.standard.removeObject(forKey: StoryComposerDraft.userDefaultsKey)
+    }
+
+    /// Ce que l'ouverture du composer fait du système de brouillons — décision
+    /// PURE, un seul lieu pour les trois modes de session.
+    nonisolated enum ComposerOpeningDraftAction: Equatable, Sendable {
+        /// Édition d'une story publiée : le système de brouillons est éteint.
+        case hydratedByEditMode
+        /// Brouillon CHOISI (`adoptDraft`) : restauration directe, jamais de
+        /// bandeau — l'utilisateur vient de trancher, une double invite ferait
+        /// douter du tap (et son « Recommencer » détruirait le brouillon
+        /// qu'il venait précisément de désigner).
+        case restoreAdoptedDraft
+        /// Session vierge : découverte PASSIVE d'un brouillon éventuel, offre
+        /// par bandeau (`checkForDraft`).
+        case offerDraftResume
+    }
+
+    nonisolated static func openingDraftAction(
+        isEditingExistingStory: Bool,
+        isAdoptedDraftSession: Bool
+    ) -> ComposerOpeningDraftAction {
+        if isEditingExistingStory { return .hydratedByEditMode }
+        return isAdoptedDraftSession ? .restoreAdoptedDraft : .offerDraftResume
+    }
+
+    /// Ce que « Recommencer » détruit — décision PURE. Une session ADOPTÉE ne
+    /// possède pas le brouillon qu'elle a chargé : elle s'en détache (id neuf,
+    /// le brouillon reste en magasin). Une session vierge jette le brouillon
+    /// qu'elle proposait — le libellé « Recommencer » DIT cette destruction.
+    nonisolated enum ComposerDraftDiscardAction: Equatable, Sendable {
+        case detachFromAdoptedDraft
+        case deleteCurrentDraft
+    }
+
+    nonisolated static func draftDiscardAction(isAdoptedDraftSession: Bool) -> ComposerDraftDiscardAction {
+        isAdoptedDraftSession ? .detachFromAdoptedDraft : .deleteCurrentDraft
+    }
+
+    /// Applicateur unique de la décision « Recommencer » sur l'état vivant.
+    func discardOfferedDraft() {
+        switch Self.draftDiscardAction(isAdoptedDraftSession: viewModel.isAdoptedDraftSession) {
+        case .detachFromAdoptedDraft:
+            viewModel.detachFromAdoptedDraft()
+        case .deleteCurrentDraft:
+            clearCurrentDraft()
+        }
     }
 }
