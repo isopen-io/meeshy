@@ -76,7 +76,7 @@ const STORY_FONT_MAX = 64;
 const STORY_STYLE_MAX = 64;
 const STORY_ARRAY_CAP = 32;             // medias/texts/stickers/audios par slide
 
-const StoryMediaObjectSchema = z.object({
+export const StoryMediaObjectSchema = z.object({
   id: z.string().max(STORY_ID_MAX).optional(),
   postMediaId: z.string().max(STORY_ID_MAX).optional(),
   mediaURL: z.string().max(2048).optional(),
@@ -96,6 +96,12 @@ const StoryMediaObjectSchema = z.object({
   zIndex: z.number().int().min(-1000).max(1000).optional(),
   startTime: z.number().min(0).max(86400).optional(),
   duration: z.number().min(0).max(86400).optional(),
+  // Fenetre de SOURCE — ou l'on entre dans le FICHIER. A ne pas confondre avec
+  // `startTime`, qui dit quand la piste demarre sur la TIMELINE. Bornees comme
+  // leurs freres : le blob vient du client, et le `.passthrough()` ci-dessous
+  // ne valide rien de ce qu'on n'enumere pas ici.
+  sourceStart: z.number().min(0).max(86400).optional(),
+  intrinsicDuration: z.number().min(0).max(86400).optional(),
   fadeIn: z.number().min(0).max(60).optional(),
   fadeOut: z.number().min(0).max(60).optional(),
   sourceLanguage: z.string().max(STORY_LANG_MAX).optional(),
@@ -146,6 +152,11 @@ export const StoryAudioObjectSchema = z.object({
   waveformSamples: z.array(z.number()).max(2048).optional(),
   startTime: z.number().min(0).max(86400).optional(),
   duration: z.number().min(0).max(86400).optional(),
+  // Fenetre de SOURCE — meme semantique que sur `StoryMediaObjectSchema` :
+  // ou l'on entre dans le FICHIER, et non quand la piste demarre sur la
+  // timeline.
+  sourceStart: z.number().min(0).max(86400).optional(),
+  intrinsicDuration: z.number().min(0).max(86400).optional(),
   sourceLanguage: z.string().max(STORY_LANG_MAX).optional(),
   // Le blob `storyEffects` est entierement controle par le client : `soundId`
   // designe une entree de la bibliotheque de sons et sert de cle de lecture
@@ -207,6 +218,17 @@ export const CreatePostSchema = z.object({
   // et bornage des chaînes délégués à `parseSharedPlace`, appelé côté
   // `PostService.createPost`.
   location: z.unknown().optional(),
+  // Découvrabilité géographique — INDÉPENDANTE du badge d'affichage
+  // gouverné par `location` ci-dessus (deux opt-in séparés, voir
+  // docs/superpowers/specs/2026-08-02-post-geolocation-nearby-search-design.md
+  // §2). Le client envoie toujours la coordonnée EXACTE via `location` ; ce
+  // champ ne fait QUE choisir le niveau d'arrondi de grille que le serveur
+  // seul applique avant d'écrire `Post.geoPoint`/`Post.geoPrecision`
+  // (`services/location/geoDiscoverability.ts::quantizeCoordinate`).
+  // Absent => les deux champs restent `null`. Une valeur hors énumération
+  // est rejetée ici (400 VALIDATION_ERROR), même garde que `visibility`
+  // ci-dessus — jamais un `geoPoint`/`geoPrecision` brut, à aucun niveau.
+  discoverabilityPrecision: z.enum(['EXACT', 'NEIGHBORHOOD', 'CITY', 'REGION']).optional(),
 }).refine((data) => {
   if ((data.visibility === 'EXCEPT' || data.visibility === 'ONLY') && (!data.visibilityUserIds || data.visibilityUserIds.length === 0)) {
     return false;

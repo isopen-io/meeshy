@@ -17,6 +17,7 @@ import {
   NOT_MUTED_WHERE,
 } from '../../services/posts/soundFormats';
 import { createSoundRouteRateLimitConfig } from '../../middleware/rate-limiter';
+import { parseWaveformField } from '../../services/posts/waveformSamples';
 
 /** Borne MÉMOIRE, pas une limite de durée : `toBuffer()` matérialise tout. */
 const MAX_UPLOAD_BYTES = 100 * 1024 * 1024;
@@ -83,6 +84,13 @@ export function registerStoryAudioRoutes(
     // Aucun plafond de durée (directive produit 2026-07-30).
     const duration = isNaN(durationRaw) ? 0 : durationRaw;
 
+    // Forme d'onde calculee par le client. La decoder ici imposerait ffmpeg
+    // dans le conteneur gateway pour une donnee purement decorative, que le
+    // client possede deja pour l'afficher. Un champ malforme est IGNORE,
+    // jamais une cause de rejet : on ne fait pas echouer l'envoi d'un fichier
+    // sur un ornement.
+    const waveform = parseWaveformField((data.fields['waveform'] as { value?: unknown } | undefined)?.value);
+
     let buffer: Buffer;
     try {
       buffer = await data.toBuffer();
@@ -127,6 +135,7 @@ export function registerStoryAudioRoutes(
         // retombait sur ses 6 s de texte au lieu de durer tout l'audio
         // (constaté en prod le 2026-08-02 sur « Meeshy Go », 90 s → 6 s).
         durationMs: duration > 0 ? duration * 1000 : null,
+        waveform,
         isPublic,
         contentHash,
       },
