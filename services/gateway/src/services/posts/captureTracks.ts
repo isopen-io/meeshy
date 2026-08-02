@@ -1,4 +1,5 @@
 import type { CaptureTrack } from './SoundCaptureService';
+import { cleanWaveformSamples } from './waveformSamples';
 
 /**
  * Lit les pistes audio d'un blob `storyEffects` produit par le client.
@@ -54,6 +55,7 @@ export function extractCaptureTracks(storyEffects?: Record<string, unknown>): Ca
         soundId: typeof o['soundId'] === 'string' && o['soundId'] ? o['soundId'] : undefined,
         startMs: Math.round(sourceStart * 1000),
         endMs: excerpt === undefined ? undefined : Math.round((sourceStart + excerpt) * 1000),
+        waveform: cleanWaveformSamples(o['waveformSamples']),
       };
     })
     // Une piste sans identifiant, ou qui ne désigne NI un média propre NI un son

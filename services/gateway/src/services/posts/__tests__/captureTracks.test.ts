@@ -129,6 +129,52 @@ describe('extractCaptureTracks', () => {
     expect(track.endMs).toBeUndefined();
   });
 
+  // MARK: - Forme d'onde (Sound.waveform n'avait aucun écrivain)
+
+  it('test_waveformSamples_areCarriedThrough', () => {
+    const [track] = extractCaptureTracks({
+      audioPlayerObjects: [{ id: 't1', postMediaId: 'm1', waveformSamples: [0.1, 0.9, 0.4] }],
+    });
+    expect(track.waveform).toEqual([0.1, 0.9, 0.4]);
+  });
+
+  it('test_waveformSamples_nonArrayOrEmpty_isUndefined', () => {
+    const [a] = extractCaptureTracks({ audioPlayerObjects: [{ id: 't1', postMediaId: 'm1' }] });
+    expect(a.waveform).toBeUndefined();
+    const [b] = extractCaptureTracks({
+      audioPlayerObjects: [{ id: 't1', postMediaId: 'm1', waveformSamples: 'nope' }],
+    });
+    expect(b.waveform).toBeUndefined();
+    const [c] = extractCaptureTracks({
+      audioPlayerObjects: [{ id: 't1', postMediaId: 'm1', waveformSamples: [] }],
+    });
+    expect(c.waveform).toBeUndefined();
+  });
+
+  it('test_waveformSamples_nonNumericEntriesAreDropped', () => {
+    // `Float[]` en Prisma/Mongo n'accepte pas NaN, et le tableau vient du
+    // client.
+    const [track] = extractCaptureTracks({
+      audioPlayerObjects: [{
+        id: 't1', postMediaId: 'm1',
+        waveformSamples: [0.2, 'x', null, Number.NaN, 0.8],
+      }],
+    });
+    expect(track.waveform).toEqual([0.2, 0.8]);
+  });
+
+  it('test_waveformSamples_areCappedAtTheSchemaLimit', () => {
+    // Même plafond que `StoryAudioObjectSchema.waveformSamples` : une piste ne
+    // grave pas un blob de plusieurs Mo dans une colonne Float[].
+    const [track] = extractCaptureTracks({
+      audioPlayerObjects: [{
+        id: 't1', postMediaId: 'm1',
+        waveformSamples: new Array(5000).fill(0.5) as number[],
+      }],
+    });
+    expect(track.waveform).toHaveLength(2048);
+  });
+
   it('test_multipleTracks_areAllReturned', () => {
     // Une story porte jusqu'à cinq pistes : ne garder que la première perdrait
     // silencieusement les sons suivants.

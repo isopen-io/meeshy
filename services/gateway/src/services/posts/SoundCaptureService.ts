@@ -19,6 +19,13 @@ export interface CaptureTrack {
   soundId?: string;
   startMs?: number;
   endMs?: number;
+  /**
+   * Échantillons de forme d'onde calculés par le client. `Sound.waveform`
+   * n'avait AUCUN écrivain : la donnée arrivait ici et était jetée, et toute la
+   * bibliothèque servait un tableau vide. Sans elle, un sélecteur de zone
+   * s'ouvre sur du vide.
+   */
+  waveform?: number[];
 }
 
 export interface CaptureContext {
