@@ -3243,3 +3243,26 @@ collision avec #2458 encore en CI au démarrage de cette session.
   `CallEventsHandler.ts` (12 occurrences `catch (error: any)` + logique `errorCode`/`message` répétée 3x
   aux handlers `call:initiate`/`call:join`/`call:end`, viole la règle CLAUDE.md « No `any` types » —
   candidat scopé et mécanique pour une prochaine vague, non traité ici pour rester chirurgical).
+
+## Vague 46 — zéro `any` dans CallEventsHandler.ts + parsing d'erreur unifié (2026-08-02)
+
+Candidat « scopé et mécanique » consigné en Vague 45, traité tel quel :
+- **Helper extrait** : `socketio/utils/call-error-parsing.ts` —
+  `callErrorMessageOf(error, fallback)` (parité exacte avec l'idiome
+  `error.message || fallback` des catch `any`, objets non-Error à `.message`
+  string compris) + `parseCallHandlerError(error, fallback)` (découpe
+  « CODE: message » au premier deux-points, reste recollé + trim, AUCUNE
+  validation de code — forme historique des 4 catch dupliqués, sur laquelle
+  gatent les clients type web reconnect-rejoin `CALL_ENDED`). 9 tests unitaires.
+- **4 copies remplacées** : call:initiate / call:join / call:leave / call:end.
+- **12 annotations `any` éliminées** : 7 `catch (error: any)` → `catch (error)`,
+  3 catch de log (`err?.message` → `callErrorMessageOf(err, String(err))`),
+  lambda `(s: any)` (inférence RemoteSocket) et `(p: any)` (type structurel
+  participant). `grep ': any'` sur le fichier : 0 occurrence.
+- **Vérifié** : `tsc --noEmit` 0 erreur ; 26 suites / 504 tests verts
+  (`--testPathPatterns 'CallEventsHandler|call-error-parsing'`), dont
+  `CallEventsHandler-error-fallbacks` qui épingle le comportement
+  « valeur jetée sans .message » sur join/leave — inchangé.
+- **Reste ouvert (inchangé)** : dead code Swift `CallManager.handleRemoteReject` ;
+  God-objects `CallManager.swift`/`CallEventsHandler.ts` ; parité iOS/Android
+  retry-on-failure.
