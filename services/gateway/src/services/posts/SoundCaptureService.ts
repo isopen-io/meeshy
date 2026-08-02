@@ -26,6 +26,8 @@ export interface CaptureTrack {
    * s'ouvre sur du vide.
    */
   waveform?: number[];
+  /** L'auteur a lui-même déplacé la fenêtre de source (pas le défaut accepté). */
+  windowAdjusted?: boolean;
 }
 
 export interface CaptureContext {
@@ -290,8 +292,9 @@ export class SoundCaptureService {
 
     const sounds = await this.prisma.sound.findMany({
       where: { id: { in: borrowed.map((t) => t.soundId!) } },
-      select: { id: true, isPublic: true, uploaderId: true, mutedAt: true },
+      select: { id: true, isPublic: true, uploaderId: true, mutedAt: true, durationMs: true },
     });
+    const byId = new Map(sounds.map((s) => [s.id, s]));
     const allowed = new Set(
       sounds
         .filter((s) => !s.mutedAt && (s.isPublic || s.uploaderId === ctx.authorId))
@@ -303,7 +306,15 @@ export class SoundCaptureService {
         log.warn('soundId refusé (privé, coupé ou inexistant)', { postId: ctx.postId, soundId: track.soundId });
         continue;
       }
-      await this.recordUsage(ctx, track.soundId!, track);
+      // La part réellement utilisée ne peut pas dépasser la durée réelle du
+      // son : au-delà, la piste BOUCLE, elle ne consomme pas plus de source.
+      // Seulement quand la durée réelle est connue — un son sans `durationMs`
+      // (fond legacy) laisse `endMs` tel quel plutôt que de le tronquer à 0.
+      const durationMs = byId.get(track.soundId!)?.durationMs;
+      const clamped = durationMs != null && track.endMs !== undefined && track.endMs > durationMs
+        ? { ...track, endMs: durationMs }
+        : track;
+      await this.recordUsage(ctx, track.soundId!, clamped);
     }
   }
 
@@ -440,22 +451,32 @@ export class SoundCaptureService {
     }
   }
 
+  /**
+   * Republier une piste (édition, retentative) doit METTRE À JOUR sa fenêtre,
+   * pas être avalée comme un doublon inerte — sinon `windowAdjustedAt` et un
+   * déplacement de fenêtre après coup ne sont jamais écrits.
+   *
+   * `usageCount` est RECOMPTÉ après coup plutôt qu'incrémenté : `upsert` ne
+   * dit pas s'il a créé ou mis à jour la ligne, et un incrément aveugle
+   * gonflerait le compteur à chaque republication. Même invariant que
+   * `releaseUsages`/`reconcileUsageCounts` — un recomptage est rejouable.
+   */
   private async recordUsage(ctx: CaptureContext, soundId: string, track: CaptureTrack): Promise<void> {
+    const window = {
+      startMs: track.startMs,
+      endMs: track.endMs,
+      windowAdjustedAt: track.windowAdjusted ? new Date() : null,
+    };
     try {
-      await this.prisma.$transaction([
-        this.prisma.soundUsage.create({
-          data: {
-            soundId, postId: ctx.postId, trackId: track.trackId,
-            viaPostId: ctx.viaPostId, startMs: track.startMs, endMs: track.endMs,
-          },
-        }),
-        this.prisma.sound.update({
-          where: { id: soundId },
-          data: { usageCount: { increment: 1 } },
-        }),
-      ]);
-    } catch {
-      // Doublon `(postId, trackId)` = republication idempotente, comportement voulu.
+      await this.prisma.soundUsage.upsert({
+        where: { postId_trackId: { postId: ctx.postId, trackId: track.trackId } },
+        create: { soundId, postId: ctx.postId, trackId: track.trackId, viaPostId: ctx.viaPostId, ...window },
+        update: window,
+      });
+      await this.recountSound(soundId);
+    } catch (error) {
+      log.error('recordUsage a échoué', error instanceof Error ? error : new Error(String(error)),
+        { postId: ctx.postId, trackId: track.trackId });
     }
   }
 }

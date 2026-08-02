@@ -19,7 +19,9 @@ function buildPrisma(overrides: Record<string, unknown> = {}) {
       update: jest.fn<() => Promise<unknown>>().mockResolvedValue({}),
     },
     soundUsage: {
-      create: jest.fn<() => Promise<unknown>>().mockResolvedValue({}),
+      // `create` avalait un doublon `(postId, trackId)` sans jamais mettre à
+      // jour sa fenêtre — remplacé par `upsert` (republication = mise à jour).
+      upsert: jest.fn<() => Promise<unknown>>().mockResolvedValue({}),
       deleteMany: jest.fn<() => Promise<unknown>>().mockResolvedValue({ count: 0 }),
       findMany: jest.fn<() => Promise<unknown[]>>().mockResolvedValue([]),
       // Le recomptage remplace le décrément aveugle : sans ce mock, toute purge
@@ -129,6 +131,94 @@ describe('SoundCaptureService', () => {
     );
   });
 
+  // MARK: - Fenêtre choisie vs défaut accepté, et plafond sur la durée réelle
+
+  /**
+   * Chemin du son EMPRUNTÉ. `recordBorrowed` résout l'autorisation par
+   * `sound.findMany` — PAS `findFirst`. Un mock qui ne peuple que `findFirst`
+   * laisse l'ensemble autorisé vide : la piste meurt sur un `continue`,
+   * `soundUsage` n'est jamais écrit, et l'assertion échoue sans dire pourquoi
+   * (le service ne rejette JAMAIS).
+   */
+  const borrowedPrisma = (durationMs: number | null) => buildPrisma({
+    sound: {
+      findMany: jest.fn<() => Promise<unknown[]>>().mockResolvedValue([
+        { id: 's1', isPublic: true, uploaderId: 'u1', mutedAt: null, durationMs },
+      ]),
+      findFirst: jest.fn<() => Promise<unknown>>().mockResolvedValue(null),
+      create: jest.fn<() => Promise<unknown>>().mockResolvedValue({ id: 's1' }),
+      update: jest.fn<() => Promise<unknown>>().mockResolvedValue({}),
+    },
+  });
+
+  /** Évite `jest.Mock` comme type : le stub `PrismaClient` est `[key: string]: any`. */
+  type UpsertArgs = {
+    create: { startMs?: number; endMs?: number; windowAdjustedAt: Date | null };
+    update: { startMs?: number; endMs?: number; windowAdjustedAt: Date | null };
+  };
+  const upsertCalls = (prisma: unknown): UpsertArgs[] =>
+    (prisma as { soundUsage: { upsert: { mock: { calls: UpsertArgs[][] } } } })
+      .soundUsage.upsert.mock.calls.map((c) => c[0]);
+
+  it('test_recordUsage_stampsWindowAdjustedAtOnlyWhenAuthorMovedIt', async () => {
+    const prisma = borrowedPrisma(90000);
+    await new SoundCaptureService(prisma, soundsDir, uploadsRoot).captureSounds({
+      postId: 'p1', authorId: 'u1', feedsLibrary: true,
+      tracks: [{ trackId: 't1', soundId: 's1', windowAdjusted: true }],
+    });
+    expect(upsertCalls(prisma)[0].create.windowAdjustedAt).toBeInstanceOf(Date);
+  });
+
+  it('test_recordUsage_leavesWindowAdjustedAtNullOnAcceptedDefault', async () => {
+    const prisma = borrowedPrisma(90000);
+    await new SoundCaptureService(prisma, soundsDir, uploadsRoot).captureSounds({
+      postId: 'p1', authorId: 'u1', feedsLibrary: true,
+      tracks: [{ trackId: 't1', soundId: 's1' }],
+    });
+    expect(upsertCalls(prisma)[0].create.windowAdjustedAt).toBeNull();
+  });
+
+  it('test_recordUsage_clampsEndMsToRealSoundDuration', async () => {
+    // Blob sans `intrinsicDuration` (client antérieur, fond legacy) : la
+    // fenêtre timeline de 60 s a produit endMs = 60000, mais le son ne dure
+    // que 12 s. Sans plafond on réécrit l'attribution fausse que ce lot
+    // corrige — et ce plafond exige la base, donc il ne peut pas vivre dans
+    // `extractCaptureTracks`, qui est pure.
+    const prisma = borrowedPrisma(12000);
+    await new SoundCaptureService(prisma, soundsDir, uploadsRoot).captureSounds({
+      postId: 'p1', authorId: 'u1', feedsLibrary: true,
+      tracks: [{ trackId: 't1', soundId: 's1', startMs: 0, endMs: 60000 }],
+    });
+    expect(upsertCalls(prisma)[0].create.endMs).toBe(12000);
+  });
+
+  it('test_recordUsage_unknownSoundDuration_leavesEndMsUntouched', async () => {
+    const prisma = borrowedPrisma(null);
+    await new SoundCaptureService(prisma, soundsDir, uploadsRoot).captureSounds({
+      postId: 'p1', authorId: 'u1', feedsLibrary: true,
+      tracks: [{ trackId: 't1', soundId: 's1', startMs: 0, endMs: 60000 }],
+    });
+    expect(upsertCalls(prisma)[0].create.endMs).toBe(60000);
+  });
+
+  it('test_republication_updatesTheWindow_ratherThanSwallowingIt', async () => {
+    // Le `catch` de doublon rendait la republication INERTE : un auteur qui
+    // déplace sa fenêtre et republie ne modifiait jamais la ligne, donc
+    // `windowAdjustedAt` était inécrivable après la première publication.
+    const prisma = borrowedPrisma(90000);
+    const service = new SoundCaptureService(prisma, soundsDir, uploadsRoot);
+    const base = { postId: 'p1', authorId: 'u1', feedsLibrary: true };
+    await service.captureSounds({ ...base, tracks: [{ trackId: 't1', soundId: 's1', startMs: 0, endMs: 5000 }] });
+    await service.captureSounds({
+      ...base,
+      tracks: [{ trackId: 't1', soundId: 's1', startMs: 12000, endMs: 20000, windowAdjusted: true }],
+    });
+    const second = upsertCalls(prisma)[1];
+    expect(second.update.startMs).toBe(12000);
+    expect(second.update.endMs).toBe(20000);
+    expect(second.update.windowAdjustedAt).toBeInstanceOf(Date);
+  });
+
   it('test_captureSounds_becomingPrivate_releasesItsUsages', async () => {
     // Publier puis restreindre doit LIBÉRER : sinon le compteur qui trie la
     // découverte reste gonflé pour toujours.
@@ -187,7 +277,7 @@ describe('SoundCaptureService', () => {
       postId: 'p1', authorId: 'u1', feedsLibrary: true,
       tracks: [{ trackId: 't1', soundId: '507f1f77bcf86cd799439012' }],
     });
-    expect(prisma.soundUsage.create).not.toHaveBeenCalled();
+    expect(prisma.soundUsage.upsert).not.toHaveBeenCalled();
   });
 
   it('test_captureSounds_threeTracks_capturesAll', async () => {
@@ -313,8 +403,8 @@ describe('SoundCaptureService', () => {
       postId: 'p1', authorId: 'u1', feedsLibrary: true,
       tracks: [{ trackId: 't1', soundId: '507f1f77bcf86cd799439012', startMs: 500, endMs: 3500 }],
     });
-    expect(prisma.soundUsage.create).toHaveBeenCalledWith(expect.objectContaining({
-      data: expect.objectContaining({
+    expect(prisma.soundUsage.upsert).toHaveBeenCalledWith(expect.objectContaining({
+      create: expect.objectContaining({
         soundId: '507f1f77bcf86cd799439012', postId: 'p1', trackId: 't1',
         startMs: 500, endMs: 3500,
       }),
@@ -336,7 +426,7 @@ describe('SoundCaptureService', () => {
       postId: 'p1', authorId: 'u1', feedsLibrary: true,
       tracks: [{ trackId: 't1', soundId: '507f1f77bcf86cd799439012' }],
     });
-    expect(prisma.soundUsage.create).not.toHaveBeenCalled();
+    expect(prisma.soundUsage.upsert).not.toHaveBeenCalled();
   });
 
   /**

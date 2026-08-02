@@ -3097,6 +3097,10 @@ model SoundUsage {
   viaPostId String?  @db.ObjectId
   startMs   Int?
   endMs     Int?
+  /// Horodatage de la dernière fois où l'auteur a lui-même déplacé la fenêtre
+  /// de source (par opposition à avoir accepté la fenêtre par défaut).
+  /// `null` tant qu'aucune republication n'a explicitement ajusté la fenêtre.
+  windowAdjustedAt DateTime?
   createdAt DateTime @default(now())
 
   @@unique([postId, trackId])

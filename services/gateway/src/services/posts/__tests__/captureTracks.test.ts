@@ -163,6 +163,21 @@ describe('extractCaptureTracks', () => {
     expect(track.waveform).toEqual([0.2, 0.8]);
   });
 
+  it('test_windowAdjustedFlag_isCarriedThrough', () => {
+    // Distingue « l'auteur a déplacé sa fenêtre » de « il a accepté le défaut ».
+    const [a] = extractCaptureTracks({
+      audioPlayerObjects: [{ id: 't1', soundId: 's1', windowAdjusted: true }],
+    });
+    expect(a.windowAdjusted).toBe(true);
+    const [b] = extractCaptureTracks({ audioPlayerObjects: [{ id: 't1', soundId: 's1' }] });
+    expect(b.windowAdjusted).toBeUndefined();
+    // Booléen STRICT : le blob vient du client.
+    const [c] = extractCaptureTracks({
+      audioPlayerObjects: [{ id: 't1', soundId: 's1', windowAdjusted: 'yes' }],
+    });
+    expect(c.windowAdjusted).toBeUndefined();
+  });
+
   it('test_waveformSamples_areCappedAtTheSchemaLimit', () => {
     // Même plafond que `StoryAudioObjectSchema.waveformSamples` : une piste ne
     // grave pas un blob de plusieurs Mo dans une colonne Float[].

@@ -56,6 +56,9 @@ export function extractCaptureTracks(storyEffects?: Record<string, unknown>): Ca
         startMs: Math.round(sourceStart * 1000),
         endMs: excerpt === undefined ? undefined : Math.round((sourceStart + excerpt) * 1000),
         waveform: cleanWaveformSamples(o['waveformSamples']),
+        // Distingue « l'auteur a déplacé sa fenêtre » de « il a accepté le
+        // défaut ». Booléen STRICT : le blob vient du client, pas de coercion.
+        windowAdjusted: o['windowAdjusted'] === true ? true : undefined,
       };
     })
     // Une piste sans identifiant, ou qui ne désigne NI un média propre NI un son
