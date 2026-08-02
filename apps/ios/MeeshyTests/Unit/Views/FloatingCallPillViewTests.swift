@@ -320,6 +320,18 @@ final class FloatingCallPillViewTests: XCTestCase {
         )
     }
 
+    func test_formattedDuration_delegatesToCallManager_notLocalReimplementation() throws {
+        let source = try pillSource()
+        XCTAssertTrue(
+            source.contains("callManager.formattedDuration"),
+            "FloatingCallPillView.formattedDuration must delegate to " +
+            "CallManager.formattedDuration (CallManager.formatDuration) instead of " +
+            "reimplementing mm:ss locally — the pill's own reimplementation drops the " +
+            "hours field past 60 minutes (\"125:33\" instead of \"2:05:33\"), unlike " +
+            "every other duration label in CallView which already uses the shared helper."
+        )
+    }
+
     // MARK: - Dynamic Type sizing
 
     func test_pillContent_usesMinHeightNotExactHeight() throws {

@@ -98,7 +98,10 @@ final class StoryComposerPublishHandoffTests: XCTestCase {
             XCTFail("Hand-off introuvable")
             return
         }
-        for destructive in ["clearAllDrafts()", "draftAutosaveSuspended = true"] {
+        // Multi-brouillons (spec 2026-08-01) : la publication acceptée ne jette
+        // que le brouillon de LA story partie (`clearCurrentDraft()`), jamais le
+        // magasin entier — les brouillons voisins survivent.
+        for destructive in ["clearCurrentDraft()", "draftAutosaveSuspended = true"] {
             guard let range = body.range(of: destructive) else {
                 XCTFail("« \(destructive) » a disparu de publishAllSlides()")
                 continue

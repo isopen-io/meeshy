@@ -1129,6 +1129,65 @@ describe('CallCleanupService', () => {
   });
 
   // -------------------------------------------------------------------------
+  // setSignalCacheInvalidationCallback — CallEventsHandler's `call:signal`
+  // relay caches CallSession reads for a 2s TTL and documents (see
+  // `invalidateSignalSession`) that "every path that writes
+  // `CallParticipant.leftAt` for this call must evict the entry". GC's
+  // `forceEndCall` writes `leftAt` but had no bridge to that cache — bridges
+  // it the same way `setQualityStreakCleanupCallback` bridges quality streaks.
+  // -------------------------------------------------------------------------
+  describe('setSignalCacheInvalidationCallback', () => {
+    it('invokes the callback with the callId when a call is force-ended', async () => {
+      const service = new CallCleanupService(prisma as any);
+      const invalidateSignalCache = jest.fn() as MockFn;
+      service.setSignalCacheInvalidationCallback(invalidateSignalCache);
+
+      const staleCall = makeStaleCall(CallStatus.initiated, 130_000, 'call-cache-1');
+      prisma.callSession.findMany
+        .mockResolvedValueOnce([staleCall])
+        .mockResolvedValueOnce([]);
+      prisma.callSession.findUnique.mockResolvedValue({ conversationId: 'conv-cache-1' });
+      setupTransactionPassthrough(prisma);
+
+      await service.runCleanup();
+
+      expect(invalidateSignalCache).toHaveBeenCalledWith('call-cache-1');
+    });
+
+    it('does not invoke the callback when the race guard skips the write (call already transitioned)', async () => {
+      const service = new CallCleanupService(prisma as any);
+      const invalidateSignalCache = jest.fn() as MockFn;
+      service.setSignalCacheInvalidationCallback(invalidateSignalCache);
+
+      const staleCall = makeStaleCall(CallStatus.initiated, 130_000, 'call-cache-race');
+      prisma.callSession.findMany
+        .mockResolvedValueOnce([staleCall])
+        .mockResolvedValueOnce([]);
+      prisma.callSession.findUnique.mockResolvedValue({ conversationId: 'conv-cache-race' });
+      setupTransactionPassthrough(prisma, 0); // already transitioned — no write
+
+      await service.runCleanup();
+
+      expect(invalidateSignalCache).not.toHaveBeenCalled();
+    });
+
+    it('is a no-op (no crash) when no callback was registered', async () => {
+      const service = new CallCleanupService(prisma as any);
+
+      const staleCall = makeStaleCall(CallStatus.initiated, 130_000, 'call-cache-none');
+      prisma.callSession.findMany
+        .mockResolvedValueOnce([staleCall])
+        .mockResolvedValueOnce([]);
+      prisma.callSession.findUnique.mockResolvedValue({ conversationId: 'conv-cache-none' });
+      setupTransactionPassthrough(prisma);
+
+      const result = await service.runCleanup();
+
+      expect(result.cleaned).toBe(1);
+    });
+  });
+
+  // -------------------------------------------------------------------------
   // setMissedCallCancelPushCallback — phantom-ringing safety net: GC tier 1
   // (initiated/ringing > 120s → missed) must send the same `call_cancel`
   // background push as every other missed-call path, or a callee whose VoIP

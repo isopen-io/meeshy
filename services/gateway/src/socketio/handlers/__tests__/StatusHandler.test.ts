@@ -715,6 +715,54 @@ describe('StatusHandler', () => {
         expect.objectContaining({ isTyping: false, conversationId: CONV_ID })
       );
     });
+
+    it('untracks and retracts the indicator when the typing preference flips OFF mid-burst', async () => {
+      // The indicator was ON at typing:start (tracked + broadcast), then the
+      // user disabled it before the matching typing:stop. The stop MUST still
+      // untrack this socket AND retract the indicator peers were shown —
+      // otherwise the activeTypers entry leaks and a phantom "typing…" persists
+      // until the socket disconnects. Gating the whole stop on the live
+      // preference stranded exactly this case.
+      const dbUser = { id: USER_ID, username: 'alice', firstName: null, lastName: null, displayName: 'Alice' };
+      const prisma = makePrisma({ user: { findUnique: jest.fn<any>().mockResolvedValue(dbUser) } });
+      const privacy = {
+        shouldShowTypingIndicator: jest.fn<any>()
+          .mockResolvedValueOnce(true) // typing:start — indicator broadcast
+          .mockResolvedValue(false),   // typing:stop  — preference now OFF
+      };
+      const socket = makeSocket();
+      const handler = makeHandler({ prisma, privacyPreferencesService: privacy });
+
+      await handler.handleTypingStart(socket, { conversationId: CONV_ID });
+      await handler.handleTypingStop(socket, { conversationId: CONV_ID });
+
+      // No leaked tracking entry for the stopping socket.
+      const activeTypers = (handler as any).activeTypers as Map<string, unknown[]>;
+      expect(activeTypers.has(SOCKET_ID)).toBe(false);
+
+      // The retraction reaches peers: start (call 0) + stop (call 1).
+      expect((socket.to as jest.Mock).mock.calls.length).toBe(2);
+      const stopEmit = ((socket.to as jest.Mock).mock.results[1] as any).value.emit as jest.Mock;
+      expect(stopEmit).toHaveBeenCalledWith(
+        SERVER_EVENTS.TYPING_STOP,
+        expect.objectContaining({ isTyping: false, conversationId: CONV_ID })
+      );
+    });
+
+    it('does not broadcast a stop for a socket that was never tracked while the preference is OFF', async () => {
+      // Steady-state privacy OFF: no typing:start was ever broadcast for this
+      // socket, so there is nothing to retract. The stop must stay silent
+      // rather than emit a spurious typing:stop into the room.
+      const privacy = makePrivacyService(false);
+      const dbUser = { id: USER_ID, username: 'bob', firstName: null, lastName: null, displayName: null };
+      const prisma = makePrisma({ user: { findUnique: jest.fn<any>().mockResolvedValue(dbUser) } });
+      const socket = makeSocket();
+      const handler = makeHandler({ prisma, privacyPreferencesService: privacy });
+
+      await handler.handleTypingStop(socket, { conversationId: CONV_ID });
+
+      expect(socket.to).not.toHaveBeenCalled();
+    });
   });
 
   // ── blocking privacy ─────────────────────────────────────────────────────────

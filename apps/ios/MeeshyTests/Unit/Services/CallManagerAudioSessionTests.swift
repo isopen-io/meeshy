@@ -4084,16 +4084,19 @@ final class CallManagerMediaServicesResetMonitoringTests: XCTestCase {
             XCTFail("private init not found in CallManager.swift")
             return
         }
-        // Borné sur la fin réelle de l'init, pas sur un nombre de caractères : la
-        // fenêtre de 3 500 avait été franchie par la croissance du corps (3 649
-        // caractères), et ce test était rouge sur main sans qu'aucun code soit
-        // fautif — un faux négatif qui masquait l'invariant qu'il prétend garder.
-        let afterInit = String(source[initRange.upperBound...])
-        guard let initEnd = afterInit.range(of: "\n    }")?.lowerBound else {
-            XCTFail("Could not find private init boundary")
-            return
-        }
-        let initBody = String(afterInit[..<initEnd])
+        // Slice up to the next member declaration instead of a fixed character
+        // window — a fixed window rots as the init body grows (it already did:
+        // the CallKit icon block pushed the call past the old 3 500-char cut).
+        let endIdx = [
+            source.range(of: "\n    func ", range: initRange.upperBound..<source.endIndex)?.lowerBound,
+            source.range(of: "\n    private func ", range: initRange.upperBound..<source.endIndex)?.lowerBound,
+            source.range(of: "\n    // MARK:", range: initRange.upperBound..<source.endIndex)?.lowerBound,
+        ].compactMap { $0 }.min() ?? source.endIndex
+        // Strip comment lines so a commented-out call cannot satisfy the guard.
+        let initBody = source[initRange.lowerBound ..< endIdx]
+            .split(separator: "\n", omittingEmptySubsequences: false)
+            .filter { !$0.trimmingCharacters(in: .whitespaces).hasPrefix("//") }
+            .joined(separator: "\n")
 
         XCTAssertTrue(
             initBody.contains("startMediaServicesResetMonitoring()"),

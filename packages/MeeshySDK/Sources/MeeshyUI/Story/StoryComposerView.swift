@@ -189,11 +189,15 @@ public struct StoryComposerView: View {
     @State var canvasEditShift: CGFloat = 0
     /// Y (coord GLOBALES écran) du bord supérieur des contrôles de l'outil
     /// texte (chips + panneau déplié, clavier compris), rapporté par
-    /// `StoryTextEditToolbar.onControlsTopYChange`. Le canvas y plafonne le
-    /// texte en cours d'édition : sa dernière ligne reste au-dessus des chips,
-    /// un texte long débordant vers le haut de l'écran (user 2026-07-30).
-    /// `.greatestFiniteMagnitude` = éditeur fermé, aucun plafond.
+    /// `StoryTextEditToolbar.onControlsTopYChange` — borne BASSE de la zone
+    /// d'édition. `.greatestFiniteMagnitude` = éditeur fermé, aucune borne.
     @State var measuredTextToolbarTopY: CGFloat = .greatestFiniteMagnitude
+    /// Y (coord GLOBALES écran) du bord inférieur du bouton « Terminé »,
+    /// rapporté par `StoryTextEditToolbar.onTopBarBottomYChange` — borne HAUTE
+    /// de la zone d'édition. Le canvas centre le texte édité dans cette zone et
+    /// l'y borne en hauteur, un texte plus long défilant à l'intérieur
+    /// (spec 2026-08-01). `.greatestFiniteMagnitude` = éditeur fermé.
+    @State var measuredTextTopBarBottomY: CGFloat = .greatestFiniteMagnitude
     /// Frame naturelle (non décalée) du canvas, mesurée hors `.offset`.
     @State var canvasNaturalFrame: CGRect = .zero
 
@@ -314,7 +318,7 @@ public struct StoryComposerView: View {
                     },
                     onDiscard: {
                         draftResume.decide()
-                        clearAllDrafts()
+                        discardOfferedDraft()
                     }
                 )
                 .padding(.horizontal, 16)
@@ -397,14 +401,24 @@ public struct StoryComposerView: View {
             ))
         }
         .onAppear {
-            // Mode édition : jamais de carte de reprise de brouillon par-dessus
-            // la story hydratée — le brouillon appartient au flux de CRÉATION.
-            if !isEditingExistingStory {
+            switch Self.openingDraftAction(
+                isEditingExistingStory: isEditingExistingStory,
+                isAdoptedDraftSession: viewModel.isAdoptedDraftSession
+            ) {
+            case .restoreAdoptedDraft:
+                // Brouillon CHOISI dans « Mes stories » : restauration directe,
+                // sans bandeau — `restoreDraft()` seed lui-même l'historique.
+                restoreDraft()
+            case .offerDraftResume:
                 checkForDraft()
+                // C9 — trajectoire d'annulation : seed sur l'état d'entrée
+                // (composer vierge ; `restoreDraft()` re-seed après reprise).
+                viewModel.seedHistory()
+            case .hydratedByEditMode:
+                // Jamais de carte de reprise par-dessus la story hydratée —
+                // le brouillon appartient au flux de CRÉATION.
+                viewModel.seedHistory()
             }
-            // C9 — trajectoire d'annulation : seed sur l'état d'entrée
-            // (composer vierge ; `restoreDraft()` re-seed après reprise).
-            viewModel.seedHistory()
         }
         // Le bandeau de reprise ne flotte au-dessus de RIEN : dès que le chrome
         // plein cède la place (panneau d'outil, éditeur texte, dessin, timeline),

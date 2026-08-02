@@ -97,7 +97,6 @@ struct StoryTrayView: View {
     @State private var myStoriesFollowUp = DeferredSheetFollowUp<MyStoriesFollowUp>()
     /// Session d'édition d'une story publiée (composer en mode édition).
     @State private var editingStorySession: StoryEditSession?
-
     var body: some View {
         VStack(spacing: 0) {
             // Cache-first: only show the skeleton row when the carousel
@@ -136,6 +135,11 @@ struct StoryTrayView: View {
                     editingStorySession = StoryEditSession(
                         story: story,
                         composer: StoryComposerViewModel(editing: story))
+                case .resumeDraft(let draftId):
+                    // La reprise passe par le cover racine, via l'UNIQUE
+                    // écrivain (`openComposer(resumingDraftId:)`) : l'id est
+                    // posé AVANT la présentation, garanti par construction.
+                    viewModel.openComposer(resumingDraftId: draftId)
                 }
             }
         )
@@ -415,7 +419,13 @@ private struct MyStoryButton: View {
                         // désormais directement. La gestion, elle, n'a pas
                         // d'autre porte — elle reste ici.
                         var items: [AvatarContextMenuItem] = []
-                        if hasMyStory {
+                        // Découplé de `hasMyStory` : un envoi en cours, une
+                        // publication échouée ou un brouillon n'a produit
+                        // AUCUNE story publiée, et c'est précisément ce
+                        // travail-là qu'on vient gérer.
+                        if hasMyStory
+                            || !viewModel.activeUploads.isEmpty
+                            || !StoryPublishService.shared.failedItems.isEmpty {
                             items.append(AvatarContextMenuItem(label: StoryTrayCopy.manageStories, icon: "rectangle.stack.fill") {
                                 onManageStories?()
                                 HapticFeedback.medium()
@@ -471,9 +481,7 @@ private struct MyStoryButton: View {
                     if let surfaced = StoryUploadPresentation.surfaced(in: viewModel.activeUploads) {
                         StoryUploadOverlay(
                             upload: surfaced.upload,
-                            stackedCount: surfaced.stackedCount,
-                            onRetry: { viewModel.retryUpload(id: surfaced.upload.id) },
-                            onCancel: { viewModel.cancelUpload(id: surfaced.upload.id) }
+                            stackedCount: surfaced.stackedCount
                         )
                     }
                 }
@@ -549,8 +557,6 @@ private struct StoryUploadOverlay: View {
     let upload: StoryViewModel.StoryUploadState
     /// Publications empilées derrière celle-ci (C5). > 0 → pastille « +N ».
     let stackedCount: Int
-    let onRetry: () -> Void
-    let onCancel: () -> Void
 
     private var isFailed: Bool { upload.phase.isFailed }
 
@@ -627,25 +633,18 @@ private struct StoryUploadOverlay: View {
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(a11yLabel)
-        .onTapGesture {
-            if isFailed { onRetry() }
-        }
-        .contextMenu {
-            if isFailed {
-                Button { onRetry() } label: {
-                    Label(String(localized: "story.tray.retry", defaultValue: "Reessayer", bundle: .main), systemImage: "arrow.clockwise")
-                }
-                Button(role: .destructive) { onCancel() } label: {
-                    Label(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .main), systemImage: "trash")
-                }
-            }
-        }
-        // While `.uploading`/`.publishing`, this overlay must NOT swallow the
-        // tap/long-press meant for the `MeeshyAvatar` underneath (which opens
-        // "Gérer mes stories" via `onManageStories`) — only `.failed` has a
-        // real gesture to offer here (retry). `allowsHitTesting(false)` makes
-        // the whole overlay click-through so both gestures fall to the avatar.
-        .allowsHitTesting(isFailed)
+        // Purement informatif : cet overlay ne prend JAMAIS le geste destiné à
+        // l'avatar dessous (directive user 2026-08-01, postérieure au modèle
+        // tap-retry du 2026-07-31 qu'elle remplace).
+        //
+        // Il portait auparavant `allowsHitTesting(isFailed)` plus un tap-retry
+        // et un menu contextuel. En échec — exactement quand l'utilisateur a
+        // besoin d'atteindre son travail — le `/!` avalait donc le tap et
+        // rendait la liste inaccessible. Réessayer et supprimer vivent dans
+        // `MyStoriesView`, sur une ligne qui montre en plus le motif de
+        // l'échec : une pastille de 50 pt n'était pas une surface d'action
+        // défendable.
+        .allowsHitTesting(false)
     }
 }
 
@@ -768,6 +767,8 @@ struct PinnedStoryTrailBand: View {
                             editingStorySession = StoryEditSession(
                                 story: story,
                                 composer: StoryComposerViewModel(editing: story))
+                        case .resumeDraft(let draftId):
+                            viewModel.openComposer(resumingDraftId: draftId)
                         }
                     }
                 )

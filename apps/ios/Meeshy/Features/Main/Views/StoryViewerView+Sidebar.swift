@@ -153,9 +153,8 @@ struct StoryActionSidebarView: View {
     let pauseTimer: () -> Void
     let loadStoryComments: () -> Void
 
-    /// Source de vérité des exports story → photothèque, PARTAGÉE avec la
-    /// ligne « Mes stories » (`MyStoryRow`) : un export lancé depuis l'une des
-    /// deux surfaces progresse sur les deux (Task 7). `@ObservedObject` — pas
+    /// Source de vérité des exports story → photothèque
+    /// (`StoryPhotoSaveService.shared`, Task 7). `@ObservedObject` — pas
     /// une simple lecture de `StoryPhotoSaveService.shared.progress(for:)`
     /// dans `body` — est nécessaire pour que cette vue se redessine quand la
     /// progression change ; `@Published` seul ne déclenche rien sans

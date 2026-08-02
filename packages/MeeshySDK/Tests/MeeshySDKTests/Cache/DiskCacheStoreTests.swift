@@ -275,13 +275,19 @@ final class DiskCacheStoreTests: XCTestCase {
         XCTAssertEqual(result, expected)
     }
 
+    /// `data(for:)` falls back to a REAL network fetch for uncached http(s)
+    /// keys (2026-04-05, unified media layer), so an http(s) key here would
+    /// hit the live network and surface `URLError` on any transport failure.
+    /// The deterministic contract left to protect: a key absent from cache
+    /// that is not fetchable over http(s) throws `DiskCacheError.notCached`.
     func test_data_throwsForMissingKey() async {
         let store = makeStore()
         do {
-            _ = try await store.data(for: "https://example.com/missing.mp3")
+            _ = try await store.data(for: "file:///missing.mp3")
             XCTFail("Expected error to be thrown")
         } catch {
-            XCTAssertTrue(error is DiskCacheStore.DiskCacheError)
+            XCTAssertTrue(error is DiskCacheStore.DiskCacheError,
+                "Expected DiskCacheError.notCached, got \(error)")
         }
     }
 

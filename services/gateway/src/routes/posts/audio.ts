@@ -14,6 +14,7 @@ import {
   EXT_TO_MIME,
   servableExtension,
   staticFileUrl,
+  NOT_MUTED_WHERE,
 } from '../../services/posts/soundFormats';
 import { createSoundRouteRateLimitConfig } from '../../middleware/rate-limiter';
 
@@ -140,16 +141,21 @@ export function registerStoryAudioRoutes(
 
     const { q, limit } = parsed.data;
     // `mutedAt` retire de la DÉCOUVERTE en plus d'arrêter la diffusion.
-    const where: any = { isPublic: true, mutedAt: null };
+    // Composé en AND : le prédicat porte son propre OR, et la recherche
+    // ci-dessous en ajoute un second — deux clés `OR` au même niveau,
+    // la seconde écraserait la première.
+    const where: any = { isPublic: true, AND: [NOT_MUTED_WHERE] };
     if (q) {
       // Titre OU pseudo de l'uploadeur. Un son CAPTURÉ naît sans titre — le
       // libellé « Son original » est composé par le client dans sa langue —
       // donc chercher le titre seul rendrait introuvable tout ce que la
       // bibliothèque produit d'elle-même.
-      where.OR = [
-        { title: { contains: q, mode: 'insensitive' } },
-        { uploader: { username: { contains: q, mode: 'insensitive' } } },
-      ];
+      where.AND.push({
+        OR: [
+          { title: { contains: q, mode: 'insensitive' } },
+          { uploader: { username: { contains: q, mode: 'insensitive' } } },
+        ],
+      });
     }
 
     const audios = await prisma.sound.findMany({

@@ -4,6 +4,8 @@ import XCTest
 final class StoryDraftStoreTests: XCTestCase {
 
     private var store: StoryDraftStore!
+    /// Ces suites vérifient le contenu d'UN brouillon : un id fixe suffit.
+    private let draftId = "test-draft"
     private var tempDir: URL!
 
     override func setUp() {
@@ -28,8 +30,8 @@ final class StoryDraftStoreTests: XCTestCase {
         let effects = StoryEffects(background: "FF0000")
         let slide = StorySlide(id: "s1", content: "Hello", effects: effects, duration: 7.5)
 
-        store.save(slides: [slide], visibility: "FRIENDS")
-        let result = store.load()
+        store.save(draftId: draftId, slides: [slide], visibility: "FRIENDS")
+        let result = store.load(draftId: draftId)
 
         XCTAssertNotNil(result)
         XCTAssertEqual(result?.slides.count, 1)
@@ -43,10 +45,10 @@ final class StoryDraftStoreTests: XCTestCase {
         let s1 = StorySlide(id: "a")
         let s2 = StorySlide(id: "b")
 
-        store.save(slides: [s1, s2], visibility: "PUBLIC")
-        store.save(slides: [s1], visibility: "PRIVATE")
+        store.save(draftId: draftId, slides: [s1, s2], visibility: "PUBLIC")
+        store.save(draftId: draftId, slides: [s1], visibility: "PRIVATE")
 
-        let result = store.load()
+        let result = store.load(draftId: draftId)
         XCTAssertEqual(result?.slides.count, 1)
         XCTAssertEqual(result?.visibility, "PRIVATE")
     }
@@ -56,28 +58,28 @@ final class StoryDraftStoreTests: XCTestCase {
     }
 
     func test_isEmpty_falseAfterSave() {
-        store.save(slides: [StorySlide()], visibility: "PUBLIC")
+        store.save(draftId: draftId, slides: [StorySlide()], visibility: "PUBLIC")
         XCTAssertFalse(store.isEmpty())
     }
 
     func test_clear_removesSlides() {
-        store.save(slides: [StorySlide()], visibility: "PUBLIC")
+        store.save(draftId: draftId, slides: [StorySlide()], visibility: "PUBLIC")
         store.clear()
         XCTAssertTrue(store.isEmpty())
-        XCTAssertNil(store.load())
+        XCTAssertNil(store.load(draftId: draftId))
     }
 
     func test_load_returnsNilWhenEmpty() {
-        XCTAssertNil(store.load())
+        XCTAssertNil(store.load(draftId: draftId))
     }
 
     // MARK: - Media Persistence
 
     func test_saveMedia_image_roundtrip() {
         let image = createTestImage()
-        store.saveMedia(images: ["img-1": image], videoURLs: [:], audioURLs: [:])
+        store.saveMedia(draftId: draftId, images: ["img-1": image], videoURLs: [:], audioURLs: [:])
 
-        let media = store.loadMedia()
+        let media = store.loadMedia(draftId: draftId)
 
         XCTAssertEqual(media.images.count, 1)
         XCTAssertNotNil(media.images["img-1"])
@@ -88,9 +90,9 @@ final class StoryDraftStoreTests: XCTestCase {
     func test_saveMedia_video_roundtrip() {
         let videoURL = createTempFile(name: "test.mp4", content: "fake-video-data")
 
-        store.saveMedia(images: [:], videoURLs: ["vid-1": videoURL], audioURLs: [:])
+        store.saveMedia(draftId: draftId, images: [:], videoURLs: ["vid-1": videoURL], audioURLs: [:])
 
-        let media = store.loadMedia()
+        let media = store.loadMedia(draftId: draftId)
 
         XCTAssertEqual(media.videoURLs.count, 1)
         XCTAssertNotNil(media.videoURLs["vid-1"])
@@ -100,9 +102,9 @@ final class StoryDraftStoreTests: XCTestCase {
     func test_saveMedia_audio_roundtrip() {
         let audioURL = createTempFile(name: "test.m4a", content: "fake-audio-data")
 
-        store.saveMedia(images: [:], videoURLs: [:], audioURLs: ["aud-1": audioURL])
+        store.saveMedia(draftId: draftId, images: [:], videoURLs: [:], audioURLs: ["aud-1": audioURL])
 
-        let media = store.loadMedia()
+        let media = store.loadMedia(draftId: draftId)
 
         XCTAssertEqual(media.audioURLs.count, 1)
         XCTAssertNotNil(media.audioURLs["aud-1"])
@@ -114,13 +116,13 @@ final class StoryDraftStoreTests: XCTestCase {
         let videoURL = createTempFile(name: "clip.mp4", content: "video")
         let audioURL = createTempFile(name: "clip.m4a", content: "audio")
 
-        store.saveMedia(
+        store.saveMedia(draftId: draftId, 
             images: ["img-1": image],
             videoURLs: ["vid-1": videoURL],
             audioURLs: ["aud-1": audioURL]
         )
 
-        let media = store.loadMedia()
+        let media = store.loadMedia(draftId: draftId)
         XCTAssertEqual(media.images.count, 1)
         XCTAssertEqual(media.videoURLs.count, 1)
         XCTAssertEqual(media.audioURLs.count, 1)
@@ -128,12 +130,12 @@ final class StoryDraftStoreTests: XCTestCase {
 
     func test_saveMedia_overwritesPrevious() {
         let img1 = createTestImage()
-        store.saveMedia(images: ["a": img1, "b": img1], videoURLs: [:], audioURLs: [:])
+        store.saveMedia(draftId: draftId, images: ["a": img1, "b": img1], videoURLs: [:], audioURLs: [:])
 
         let img2 = createTestImage()
-        store.saveMedia(images: ["c": img2], videoURLs: [:], audioURLs: [:])
+        store.saveMedia(draftId: draftId, images: ["c": img2], videoURLs: [:], audioURLs: [:])
 
-        let media = store.loadMedia()
+        let media = store.loadMedia(draftId: draftId)
         XCTAssertEqual(media.images.count, 1)
         XCTAssertNotNil(media.images["c"])
         XCTAssertNil(media.images["a"])
@@ -143,20 +145,20 @@ final class StoryDraftStoreTests: XCTestCase {
         let image = createTestImage()
         let videoURL = createTempFile(name: "test.mp4", content: "data")
 
-        store.saveMedia(images: ["img": image], videoURLs: ["vid": videoURL], audioURLs: [:])
+        store.saveMedia(draftId: draftId, images: ["img": image], videoURLs: ["vid": videoURL], audioURLs: [:])
 
-        let mediaBefore = store.loadMedia()
+        let mediaBefore = store.loadMedia(draftId: draftId)
         XCTAssertEqual(mediaBefore.images.count, 1)
 
         store.clear()
 
-        let mediaAfter = store.loadMedia()
+        let mediaAfter = store.loadMedia(draftId: draftId)
         XCTAssertTrue(mediaAfter.images.isEmpty)
         XCTAssertTrue(mediaAfter.videoURLs.isEmpty)
     }
 
     func test_loadMedia_emptyWhenNothingSaved() {
-        let media = store.loadMedia()
+        let media = store.loadMedia(draftId: draftId)
         XCTAssertTrue(media.images.isEmpty)
         XCTAssertTrue(media.videoURLs.isEmpty)
         XCTAssertTrue(media.audioURLs.isEmpty)
@@ -164,10 +166,60 @@ final class StoryDraftStoreTests: XCTestCase {
 
     func test_saveMedia_preservesFileExtension() {
         let movURL = createTempFile(name: "clip.mov", content: "mov-data")
-        store.saveMedia(images: [:], videoURLs: ["v1": movURL], audioURLs: [:])
+        store.saveMedia(draftId: draftId, images: [:], videoURLs: ["v1": movURL], audioURLs: [:])
 
-        let media = store.loadMedia()
+        let media = store.loadMedia(draftId: draftId)
         XCTAssertTrue(media.videoURLs["v1"]?.pathExtension == "mov")
+    }
+
+    // MARK: - Media references (chemin de reprise d'un échec de publication)
+
+    func test_loadMediaReferences_returnsAbsolutePathsForStoredMedia() {
+        let image = createTestImage()
+        let videoURL = createTempFile(name: "ref.mp4", content: "video")
+        let audioURL = createTempFile(name: "ref.m4a", content: "audio")
+        store.saveMedia(draftId: draftId,
+            images: ["img-1": image],
+            videoURLs: ["vid-1": videoURL],
+            audioURLs: ["aud-1": audioURL]
+        )
+
+        let refs = store.loadMediaReferences(draftId: draftId)
+
+        XCTAssertEqual(refs.count, 3)
+        let byElement = Dictionary(uniqueKeysWithValues: refs.map { ($0.elementId, $0) })
+        XCTAssertEqual(byElement["img-1"]?.mediaType, "image")
+        XCTAssertEqual(byElement["vid-1"]?.mediaType, "video")
+        XCTAssertEqual(byElement["aud-1"]?.mediaType, "audio")
+        for ref in refs {
+            XCTAssertTrue(ref.localFilePath.hasPrefix("/"), "Chemin absolu attendu pour la file de publication")
+            XCTAssertTrue(FileManager.default.fileExists(atPath: ref.localFilePath),
+                          "Chaque référence pointe un fichier encore présent")
+        }
+    }
+
+    func test_loadMediaReferences_filtersRowsWhoseFileDisappeared() {
+        let image = createTestImage()
+        let videoURL = createTempFile(name: "gone.mp4", content: "video")
+        store.saveMedia(draftId: draftId,
+            images: ["img-keep": image],
+            videoURLs: ["vid-gone": videoURL],
+            audioURLs: [:]
+        )
+        let mediaDir = tempDir.appendingPathComponent("media").appendingPathComponent(draftId)
+        let files = (try? FileManager.default.contentsOfDirectory(at: mediaDir, includingPropertiesForKeys: nil)) ?? []
+        for url in files where url.pathExtension == "mp4" {
+            try? FileManager.default.removeItem(at: url)
+        }
+
+        let refs = store.loadMediaReferences(draftId: draftId)
+
+        XCTAssertEqual(refs.map(\.elementId), ["img-keep"],
+                       "Une ligne dont le fichier a disparu ne doit pas produire de référence morte")
+    }
+
+    func test_loadMediaReferences_emptyForUnknownDraft() {
+        XCTAssertTrue(store.loadMediaReferences(draftId: "never-saved").isEmpty)
     }
 
     // MARK: - Lost media (Pilier 21 SOTA audit)
@@ -175,26 +227,27 @@ final class StoryDraftStoreTests: XCTestCase {
     func test_loadMedia_returnsLostElementIds_whenFilesDisappear() {
         let image = createTestImage()
         let videoURL = createTempFile(name: "v.mp4", content: "video-data")
-        store.saveMedia(
+        store.saveMedia(draftId: draftId, 
             images: ["img-keep": image],
             videoURLs: ["vid-disappear": videoURL],
             audioURLs: [:]
         )
 
         // Sanity check: both are loadable initially
-        let before = store.loadMedia()
+        let before = store.loadMedia(draftId: draftId)
         XCTAssertEqual(before.images.count, 1)
         XCTAssertEqual(before.videoURLs.count, 1)
         XCTAssertTrue(before.lostElementIds.isEmpty)
 
         // Simulate OS purge / external deletion of the video file
-        let mediaDir = tempDir.appendingPathComponent("media")
+        // Les médias vivent désormais dans le sous-répertoire DU BROUILLON.
+        let mediaDir = tempDir.appendingPathComponent("media").appendingPathComponent(draftId)
         let videoFiles = (try? FileManager.default.contentsOfDirectory(at: mediaDir, includingPropertiesForKeys: nil)) ?? []
         for url in videoFiles where url.pathExtension == "mp4" {
             try? FileManager.default.removeItem(at: url)
         }
 
-        let after = store.loadMedia()
+        let after = store.loadMedia(draftId: draftId)
         XCTAssertEqual(after.images.count, 1, "image survived")
         XCTAssertTrue(after.videoURLs.isEmpty, "video file was removed")
         XCTAssertEqual(after.lostElementIds, ["vid-disappear"], "video element flagged as lost")
@@ -203,37 +256,38 @@ final class StoryDraftStoreTests: XCTestCase {
     func test_purgeLostMedia_removesOrphanRows() {
         let image = createTestImage()
         let videoURL = createTempFile(name: "v.mp4", content: "data")
-        store.saveMedia(
+        store.saveMedia(draftId: draftId, 
             images: ["img-keep": image],
             videoURLs: ["vid-orphan": videoURL],
             audioURLs: [:]
         )
 
         // Remove the video file from disk (DB row remains pointing to ghost)
-        let mediaDir = tempDir.appendingPathComponent("media")
+        // Les médias vivent désormais dans le sous-répertoire DU BROUILLON.
+        let mediaDir = tempDir.appendingPathComponent("media").appendingPathComponent(draftId)
         let files = (try? FileManager.default.contentsOfDirectory(at: mediaDir, includingPropertiesForKeys: nil)) ?? []
         for url in files where url.pathExtension == "mp4" {
             try? FileManager.default.removeItem(at: url)
         }
 
-        let lost = store.loadMedia().lostElementIds
+        let lost = store.loadMedia(draftId: draftId).lostElementIds
         XCTAssertEqual(lost, ["vid-orphan"])
 
-        store.purgeLostMedia(lost)
+        store.purgeLostMedia(lost, draftId: draftId)
 
         // Re-load: the lost row is gone, so lostElementIds is empty.
-        let final = store.loadMedia()
+        let final = store.loadMedia(draftId: draftId)
         XCTAssertTrue(final.lostElementIds.isEmpty)
         XCTAssertEqual(final.images.count, 1)
     }
 
     func test_purgeLostMedia_emptySetIsNoOp() {
         let image = createTestImage()
-        store.saveMedia(images: ["img": image], videoURLs: [:], audioURLs: [:])
+        store.saveMedia(draftId: draftId, images: ["img": image], videoURLs: [:], audioURLs: [:])
 
-        store.purgeLostMedia([])
+        store.purgeLostMedia([], draftId: draftId)
 
-        let media = store.loadMedia()
+        let media = store.loadMedia(draftId: draftId)
         XCTAssertEqual(media.images.count, 1, "valid media untouched by empty purge")
     }
 

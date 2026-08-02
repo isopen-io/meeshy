@@ -564,6 +564,40 @@ describe('MessageHandler', () => {
       expect(mockValidateMessageLength).not.toHaveBeenCalled();
     });
 
+    // Parity with handleMessageSend (text path): a view-once / blurred /
+    // expiring photo is the canonical use case for message effects, and this
+    // WebSocket path is the PRIMARY attachment-send surface. The effect fields
+    // must reach messagingService.handleMessage so MessageProcessor.saveMessage
+    // can recompose effectFlags and persist the media as ephemeral — otherwise
+    // the "view-once" photo is stored re-openable forever.
+    it('forwards message-effect fields (view-once / blurred / expiring) to messagingService', async () => {
+      const expiresAt = new Date(Date.now() + 86_400_000).toISOString();
+      mockValidateSocketEvent.mockReturnValue({
+        success: true,
+        data: {
+          ...validAttachData(),
+          isViewOnce: true,
+          isBlurred: true,
+          expiresAt,
+          effectFlags: 3,
+          maxViewOnceCount: 1,
+        },
+      });
+
+      await handler.handleMessageSendWithAttachments(socket, validAttachData(), callback);
+
+      expect(deps.messagingService.handleMessage).toHaveBeenCalledWith(
+        expect.objectContaining({
+          isViewOnce: true,
+          isBlurred: true,
+          expiresAt: expect.any(Date),
+          effectFlags: 3,
+          maxViewOnceCount: 1,
+        }),
+        PARTICIPANT_ID,
+      );
+    });
+
     it('returns USER_BLOCKED error for blocked DM', async () => {
       (deps.prisma.conversation.findUnique as jest.Mock<any>).mockResolvedValue({
         type: 'direct',
