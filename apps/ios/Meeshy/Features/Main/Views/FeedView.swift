@@ -61,8 +61,11 @@ struct FeedView: View {
     @State var composerText = ""
     @State private var expandedComments: Set<String> = []
     @State var postVisibility: String = "PUBLIC"
-    /// Media posts default to a REEL; the author can force a plain POST via the
-    /// composer's Réel⇄Post toggle, keeping it out of the reels surface.
+    /// A QUALIFYING composition (video || audio || >= 2 images —
+    /// `ReelComposition.qualifiesAsReel`) defaults to a REEL; the author can
+    /// force a plain POST via the composer's Réel⇄Post toggle. A non-qualifying
+    /// composition (single image, documents) is ALWAYS a POST — the toggle
+    /// hides and `defaultType` ignores this flag.
     @State var composerForcePlainPost = false
     @State private var showAudioComposer = false
     @State var composerLanguage: String = DefaultComposerLanguage.resolve()
@@ -1325,9 +1328,15 @@ struct FeedView: View {
                         }
                     }
 
-                    // Réel ⇄ Post toggle — media posts default to a reel; the
-                    // author can force a plain post to keep it out of reels.
-                    if !pendingAttachments.isEmpty || pendingAudioURL != nil {
+                    // Réel ⇄ Post toggle — shown ONLY when the current
+                    // composition qualifies as a reel (video || audio || >= 2
+                    // images). Removing an image (2→1) de-qualifies: the toggle
+                    // disappears and `ReelComposition.defaultType` publishes a
+                    // POST regardless of this flag — no 1-image REEL possible.
+                    if ReelComposition.qualifiesAsReel(
+                        mimeTypes: pendingAttachments.map(\.mimeType)
+                            + (pendingAudioURL != nil ? ["audio/mp4"] : [])
+                    ) {
                         Button {
                             composerForcePlainPost.toggle()
                             HapticFeedback.light()
@@ -1542,7 +1551,6 @@ struct FeedView: View {
                     originalContent: post.content,
                     originalLanguage: post.originalLanguage,
                     originalType: post.type,
-                    canBeReel: post.hasMedia,
                     media: post.media.map { EditablePostMedia($0) },
                     originalLocation: post.location,
                     isRepost: post.repost != nil,
