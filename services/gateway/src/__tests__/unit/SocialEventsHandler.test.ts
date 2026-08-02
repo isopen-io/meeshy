@@ -164,14 +164,56 @@ describe('SocialEventsHandler', () => {
     });
   });
 
+  describe('broadcastPostUpdated', () => {
+    it('should emit POST_UPDATED to friend feeds, the author feed AND the post room in a single dedup emit', async () => {
+      const post = createMockPost({ id: 'post-77' });
+
+      await handler.broadcastPostUpdated(post, AUTHOR_ID);
+
+      expect(mockIO.to).toHaveBeenCalledTimes(1);
+      const rooms = mockIO.to.mock.calls[0][0] as string[];
+      expect(rooms).toEqual(
+        expect.arrayContaining([
+          ROOMS.feed(FRIEND_1),
+          ROOMS.feed(FRIEND_2),
+          ROOMS.feed(AUTHOR_ID),
+          ROOMS.post('post-77'),
+        ]),
+      );
+      expect(mockIO.emit).toHaveBeenCalledTimes(1);
+      expect(mockIO.emit).toHaveBeenCalledWith(SERVER_EVENTS.POST_UPDATED, { post });
+    });
+
+    it('keeps the visibility-filtered feed rooms for a PRIVATE post (post room still reached)', async () => {
+      const post = createMockPost({ id: 'post-priv', visibility: 'PRIVATE' });
+
+      await handler.broadcastPostUpdated(post, AUTHOR_ID);
+
+      const rooms = mockIO.to.mock.calls[0][0] as string[];
+      expect(rooms).toContain(ROOMS.feed(AUTHOR_ID));
+      expect(rooms).not.toContain(ROOMS.feed(FRIEND_1));
+      expect(rooms).not.toContain(ROOMS.feed(FRIEND_2));
+      expect(rooms).toContain(ROOMS.post('post-priv'));
+    });
+  });
+
   describe('broadcastPostDeleted', () => {
-    it('should emit POST_DELETED to friends and author with postId and authorId', async () => {
+    it('should emit POST_DELETED to friends, author AND the post room in a single dedup emit', async () => {
       await handler.broadcastPostDeleted('post-99', AUTHOR_ID);
 
-      expect(mockIO.to).toHaveBeenCalledTimes(3);
-      expect(mockIO.to).toHaveBeenCalledWith(ROOMS.feed(FRIEND_1));
-      expect(mockIO.to).toHaveBeenCalledWith(ROOMS.feed(FRIEND_2));
-      expect(mockIO.to).toHaveBeenCalledWith(ROOMS.feed(AUTHOR_ID));
+      // gwcontract-07 — UN SEUL emit sur l'union feed rooms + post room, comme
+      // broadcastPostLiked. Plus de boucle "un .to() par destinataire".
+      expect(mockIO.to).toHaveBeenCalledTimes(1);
+      const rooms = mockIO.to.mock.calls[0][0] as string[];
+      expect(rooms).toEqual(
+        expect.arrayContaining([
+          ROOMS.feed(FRIEND_1),
+          ROOMS.feed(FRIEND_2),
+          ROOMS.feed(AUTHOR_ID),
+          ROOMS.post('post-99'),
+        ]),
+      );
+      expect(mockIO.emit).toHaveBeenCalledTimes(1);
       expect(mockIO.emit).toHaveBeenCalledWith(SERVER_EVENTS.POST_DELETED, {
         postId: 'post-99',
         authorId: AUTHOR_ID,
