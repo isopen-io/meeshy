@@ -37,11 +37,7 @@ final class ReduceMotionComplianceTests: XCTestCase {
     /// describes the *code* and not the line breaks a formatter happened to
     /// choose — a multi-line ternary must read the same as a one-line one.
     private func codeLines(_ source: String) -> String {
-        let withoutComments = source
-            .split(separator: "\n", omittingEmptySubsequences: false)
-            .filter { !$0.trimmingCharacters(in: .whitespaces).hasPrefix("//") }
-            .joined(separator: "\n")
-        return withoutComments
+        AppSourceGuard.stripComments(source)
             .split(whereSeparator: { $0.isWhitespace })
             .joined(separator: " ")
     }
