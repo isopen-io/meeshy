@@ -65,7 +65,7 @@ Dès qu'une piste est étirée, `repeatStartTimes` retourne `[]`.
 
 ### 2.4 Le lecteur ne s'arrête jamais à la fin de sa fenêtre
 
-`scheduleEntry` (`ReaderAudioMixer.swift:403`) et `rescheduleLoopedEntry` (`:414`)
+`scheduleEntry` (`ReaderAudioMixer.swift:385`) et `rescheduleLoopedEntry` (`:412`)
 appellent `scheduleFile` : fichier entier depuis 0, ré-armement sans compteur de
 passes. `entry.duration` n'ancre qu'un fondu (`:434`).
 
@@ -152,9 +152,25 @@ C'est la correction la plus importante de cette révision.
 Grandeur commune, à utiliser partout où l'on parle de répétition :
 
 ```
-tilingEnd = isBackground ? slideDuration : (startTime + duration)
+tilingEnd = estUnFond ? slideDuration : (startTime + duration)
 loopCount = (tilingEnd − startTime) / excerptDuration
 ```
+
+**`estUnFond` est le prédicat du RENDU, pas le champ `isBackground`.** Le code
+en vigueur est `isSynthetic || media.isBackground == true`
+(`StoryTimelineView.swift:630`) : un fond **synthétique** — celui que le § 4.4
+décrit comme synthétisé depuis les champs legacy (`StoryModels.swift:1844`) —
+peut porter `isBackground` faux ou nul tout en étant un fond. Le classer
+avant-plan donne `tilingEnd = startTime + duration`, donc `t` démarre déjà à la
+borne, donc **zéro tuile** : le bug du 2026-07-17, rejoué par la règle censée
+l'éviter.
+
+Conséquence de conception : **`tilingEnd` est calculé par l'APPELANT et passé
+tel quel**, jamais redérivé par le consommateur. Les deux sites d'appel
+(`StoryTimelineView.swift:701` vidéo, `:768` audio) connaissent déjà
+`isImmovableBackground` et `audio.isBackground` ; `LoopRepeatOverlay`, lui, ne
+reçoit ni l'un ni l'autre et ne pourrait pas trancher — `min` des deux candidats
+donne toujours la branche fond, `max` toujours la branche slide.
 
 **Ignorer cette distinction régresse le bug du 2026-07-17** : paver jusqu'à
 `startTime + duration` sur un fond donne `t < startTime + duration` faux d'emblée
@@ -204,6 +220,18 @@ public var sourceStart: Double?         // nil ≡ 0
 public var sourceStart: Float?          // nil ≡ hérite de la piste
 public var intrinsicDuration: Float?
 ```
+
+`StoryAudioVariant` est à `StoryModels.swift:1048-1061`. **Deux sites** : son
+`CodingKeys` explicite (`:1053-1055`) et son init mémberwise (`:1057-1060`).
+
+**Le geste d'édition s'applique à la piste, jamais à la variante.** Sans cette
+règle, un auteur qui écoute la variante française et tire la poignée gauche
+verrait son geste calculé contre la durée du fichier français puis écrit sur la
+piste — et la variante, portant son propre `sourceStart` non-nil, l'emporterait
+à la résolution : le geste serait silencieusement jeté sur la langue même qu'il
+écoutait. Les champs de variante sont donc **en lecture seule côté composer**,
+peuplés à la génération des variantes, et le clamp du § 8.3 utilise toujours
+l'`intrinsicDuration` de la **piste**.
 
 La résolution par langue tourne **déjà** en production
 (`resolvedPostMediaId(preferredLanguages:)`, `StoryModels.swift:984-995`, appelée
@@ -284,12 +312,11 @@ public nonisolated enum SourceWindowResolver {
                                        duration: Float,
                                        sourceDuration: Float?) -> Float
 
-    /// `(tilingEnd − startTime) / excerptDuration`, borné à 1 par le bas.
-    public static func loopCount(sourceStart: Float,
-                                 startTime: Float,
-                                 tilingEnd: Float,
-                                 sourceDuration: Float?,
-                                 duration: Float) -> Float
+    /// `span / excerptDuration`, borné à 1 par le bas, où `span` vaut
+    /// `tilingEnd − startTime` (§ 3.1). Deux paramètres et non cinq : toute
+    /// version qui reprend `sourceStart`, `duration` ET `tilingEnd` autorise
+    /// des combinaisons incohérentes que l'appelant seul peut éviter.
+    public static func loopCount(span: Float, excerptDuration: Float) -> Float
 
     /// Combinateur PUR du ripple trim in (§ 8.3). Extrait ici et non laissé
     /// dans `applyWindow` (privée, `@MainActor`) pour que le test 4 existe.
@@ -361,7 +388,7 @@ seule : la boucle existe déjà au lecteur et à l'export.
 
 | Site | Après |
 |---|---|
-| `ReaderAudioMixer.Entry` (`:535-551`) et `BackgroundEntry` (`:553+`) | reçoivent `sourceStart` et `excerptDuration` — sans quoi les modifications ci-dessous sont inécrivables |
+| `ReaderAudioMixer.Entry` (`:535-551`) et `BackgroundEntry` (`:553+`) | reçoivent **trois** champs : `sourceStart`, `excerptDuration` et `totalFrames`. Deux ne suffisent pas : le total dépend de `tilingEnd`, donc de `slideDuration` pour un fond, et **aucune des deux structures ne porte `slideDuration`** — elle n'atteint le mixer qu'en paramètre d'appel (`:714`, utilisée `:734`) |
 | `scheduleEntry` (`:385`) | `scheduleSegment(startingFrame:frameCount:)` sur l'extrait |
 | `rescheduleLoopedEntry` (`:412`) | ré-arme le **même** extrait, et **s'arrête** quand le total joué atteint la fenêtre |
 | `scheduleBackgroundFile` (`:662`) | idem |
@@ -428,12 +455,14 @@ branches.
 Trois changements :
 
 1. `nativeDuration` → `excerptDuration`.
-2. La vue reçoit **`duration` en plus de `slideDuration`** (signature `:11-17`) et
-   pave jusqu'à `tilingEnd` (§ 3.1) : `slideDuration` pour un fond,
-   `startTime + duration` pour un avant-plan. Sans le premier cas, on régresse le
-   bug du 2026-07-17 ; sans le second, un clip d'avant-plan bouclé sur `[0, 4]`
-   d'une slide de 20 s pave jusqu'à 20 s, et un extrait au plancher sur 60 s
-   produit ~199 tuiles.
+2. `slideDuration` est **remplacé par `tilingEnd`** (signature `:11-17`, boucle
+   `:43-51`), calculé par l'appelant (§ 3.1) et passé tel quel. Surtout **pas**
+   `duration` en plus de `slideDuration` : la vue ne reçoit pas le prédicat de
+   fond, donc elle ne peut pas choisir entre les deux candidats — `min` donne
+   toujours la branche fond, `max` toujours la branche slide. Sans le premier
+   point on régresse le bug du 2026-07-17 ; sans le second, un clip
+   d'avant-plan bouclé sur `[0, 4]` d'une slide de 20 s pave jusqu'à 20 s, et un
+   extrait au plancher sur 60 s produit ~199 tuiles.
 3. La vue devient `Equatable` et le badge sort en sous-vue à entrées primitives —
    sinon le `ForEach` (`:59`) reconstruit tout le tableau à chaque frame de
    glissement.
@@ -476,8 +505,8 @@ accessible sur la barre du clip.
 │   ──└────────┘────────────    │
 │    0:00    0:12       1:30    │
 │                               │
-│  Piste 8,0 s · extrait 5,3 s  │
-│  ×2 tours                     │
+│  Piste 12,0 s · extrait 4,0 s │
+│  ×3 tours                     │
 │                               │
 │  [ Annuler ]       [ Poser ]  │
 └───────────────────────────────┘
@@ -514,8 +543,10 @@ gain).
 La feuille prend des paramètres opaques et rend une fenêtre : test du grain passé
 (`packages/MeeshySDK/CLAUDE.md:34-39`) → SDK. Ce lot ne déplace pas le composer,
 qui vit dans `MeeshyUI/Story/` en écart avec la ligne « ViewModels → APP »
-(`:31`) — l'exception est **inscrite dans `packages/MeeshySDK/decisions.md`**,
-sinon la prochaine session rejoue l'arbitrage.
+(`:31`) — l'exception **doit être inscrite** dans
+`packages/MeeshySDK/decisions.md` par le lot J, sinon la prochaine session
+rejoue l'arbitrage. Elle n'y figure pas aujourd'hui : c'est du travail à faire,
+pas un acquis.
 
 ### 8.3 Les poignées — ripple trim in
 
@@ -530,10 +561,20 @@ sinon la prochaine session rejoue l'arbitrage.
 résolu = ClipWindowResolver.resolve(.setStart(current.start + δ), from: current,
                                     maximumDuration: limite(§5.3))
 δ₁ = résolu.start − current.start
-s' = resolveSourceStart(sourceStart + δ₁, sourceDuration)
-δ₂ = s' − sourceStart
+s'  = resolveSourceStart(sourceStart + δ₁, sourceDuration)
+
+// La source ne bride le geste QUE si elle est connue et que la piste ne
+// boucle pas. Une piste bouclée remplit la tête comme la queue par
+// répétition, et une source inconnue n'autorise aucun clamp : dans ces deux
+// cas le doigt est suivi exactement, ce qui préserve le geste actuel.
+δ₂ = (isLooping || sourceDuration == nil) ? δ₁ : (s' − sourceStart)
+
 start = current.start + δ₂ ; duration = current.end − start ; sourceStart = s'
 ```
+
+Cette garde vaut pour **les deux signes de δ**. La version qui ne la portait
+que dans la prose, sous le pseudocode, rendait le pseudocode faux plutôt
+qu'incomplet : une implémentation littérale bridait une piste bouclée.
 
 **Le clip se déplace donc moins que le doigt quand la source mord.** L'ordre n'est
 pas commutatif : le clamp de source gagne, la fenêtre timeline est recalculée
@@ -592,8 +633,21 @@ endMs   = round((sourceStart + excerptDuration) × 1000)
 ```
 
 Quand `intrinsicDuration` est absent du blob (client antérieur, fond synthétisé),
-`endMs = startMs + min(duration, durée du Sound en base)` — sans quoi une piste
-bouclée réécrirait une attribution fausse, le bug même que ce paragraphe corrige.
+`endMs` est plafonné à la durée réelle du son. **Ce plafond ne peut pas vivre
+dans `extractCaptureTracks`**, qui est pure et sans base (`captureTracks.ts:15`,
+docstring `:6`) : il vit dans `SoundCaptureService.recordUsage`. Et il ne
+s'applique qu'aux sons **empruntés** — pour une piste à média propre, le `Sound`
+n'existe pas encore au moment du calcul, puisqu'il est créé *à partir* de cette
+piste.
+
+**La republication doit mettre à jour la ligne.** `recordUsage` enveloppe
+aujourd'hui `soundUsage.create` dans un `catch` qui avale le doublon
+`(postId, trackId)` au nom de l'idempotence (`SoundCaptureService.ts:445-447`).
+Conséquence : un auteur qui déplace sa fenêtre et republie ne modifie **jamais**
+`startMs`/`endMs`, et le `windowAdjustedAt` du § 9.2 devient inécrivable après
+la première publication — ce qui détruit l'argument qui le justifie. L'écriture
+passe donc en `upsert` sur `@@unique([postId, trackId])`, et l'incrément de
+`usageCount` reste conditionné à la création réelle.
 
 Les lignes existantes portent des coordonnées de timeline et sont inexploitables ;
 on ne les migre pas (rien ne les lit), on cesse d'en produire de fausses.
@@ -710,10 +764,14 @@ seam manquant est désormais **prescrit**, et c'est ce qui rend la liste réelle
 | 17 | Localisation : clé dans 7 locales avec pluriels ; format numérique localisé | registre propre, **pas** `LocalizedStringsBacklogTests.requiredLocales` (5 locales) |
 | 18 | Mute du fond vidéo ; `CanvasEditMuteLivePropagationTests` reste vert | — |
 
-**Piège de chemin** : les gardes de source de `Tests/MeeshyUITests/Story/` comptent
-**quatre** `deletingLastPathComponent`. Les tests timeline vivent dans
-`Tests/MeeshyUITests/Timeline/`, à la **même** profondeur — donc quatre aussi. Un
-compte erroné ne rougit pas : il fait passer la garde par son `XCTSkip`.
+**Piège de chemin** : le nombre de `deletingLastPathComponent` d'une garde de
+source dépend de la profondeur du **fichier de test**, pas du dépôt. **Ne jamais
+recopier un nombre : le compter depuis le fichier réel jusqu'à la racine du
+paquet.** Quatre depuis `Tests/MeeshyUITests/Story/`, mais **cinq** depuis
+`Tests/MeeshyUITests/Timeline/ViewModel/` ou `.../Timeline/Track/`, où
+atterriront la plupart des tests de ce lot — `Timeline/` ne contient que deux
+fichiers à sa racine, tout le reste est un niveau plus bas. Un compte erroné ne
+rougit pas : il fait passer la garde par son `XCTSkip`.
 
 ## 13. Journal des décisions écartées
 
@@ -732,6 +790,12 @@ compte erroné ne rougit pas : il fait passer la garde par son `XCTSkip`.
 | « Cesser d'écrire `duration` dans `addBorrowedSound` » | Cassait `effectiveClipDuration`, l'extension de slide et la période de boucle du fond. |
 | Invoquer « no redundant boolean + timestamp » contre `sourceEnd` | La règle vise les paires booléen+horodatage, et le dépôt ships `SoundUsage.startMs`/`endMs`. |
 | « Rien à faire côté serveur » | `captureTracks.ts` écrit des coordonnées de timeline, et `Sound.waveform` n'a aucun écrivain. |
+| `tilingEnd` dérivé du champ `isBackground` seul | Un fond **synthétique** porte `isBackground` faux ; le prédicat du rendu est `isSynthetic \|\| isBackground == true` (`StoryTimelineView.swift:630`). Le classer avant-plan redonne zéro tuile — le bug du 2026-07-17, rejoué par la règle censée l'éviter. |
+| `LoopRepeatOverlay` recevant `duration` **et** `slideDuration` | La vue n'a pas le prédicat de fond, donc ne peut pas choisir : `min` donne toujours la branche fond, `max` toujours la branche slide. `tilingEnd` est calculé par l'appelant. |
+| Clamp de `endMs` par la durée en base dans `extractCaptureTracks` | La fonction est pure et sans base ; et pour une piste à média propre, le `Sound` n'existe pas encore — il est créé *à partir* d'elle. Le clamp vit dans `recordUsage` et ne vaut que pour les sons empruntés. |
+| Garder `soundUsage.create` avec son `catch` de doublon | Une republication ne mettrait jamais à jour `startMs`/`endMs`, donc `windowAdjustedAt` serait inécrivable après la première publication (`SoundCaptureService.ts:445-447`). |
+| Le ripple dans le lot E | Après le lot D la source est connue, donc le ripple se déclenche avant que les moteurs jouent l'extrait : geste dégradé, bénéfice absent. Déplacé au lot F. |
+| `loopCount` à cinq paramètres | `sourceStart`, `duration` et `tilingEnd` ensemble autorisent des combinaisons incohérentes. Deux suffisent : `span` et `excerptDuration`. |
 | `Sound.bpm` seul | Sans `beatOffsetMs` (phase du premier temps) aucune aimantation n'est possible, et déclarer un champ nullable n'évite aucune passe rétroactive — seule l'analyse **à la capture** l'évite. Hors lot (§ 14.2). |
 
 ## 14. Décisions
@@ -766,8 +830,8 @@ n'est dans aucun état pire qu'avant.
 | **K — Mute du fond** (§ 8.4) | bouton + binding optionnel unique | Aucune interaction avec la fenêtre de source. Ouvre la série et valide le pipeline de PR. |
 | **C — Résolveur** (§ 5) | `SourceWindowResolver` dans `MeeshySDK`, sans appelant | Tests purs ; aucun site de production touché. |
 | **D — Modèle** (§ 4) | trois types, `CodingKeys`, inits, écrivains d'`intrinsicDuration`, `resolvedSource`, Android | Champs écrits, personne ne les lit ⟹ comportement identique. |
-| **E — Édition** (§ 4.5, § 5.3 *audio seul*, § 8.3) | ripple, `TrimClipCommand`, `SetClipPropertyCommand`, plafond conditionnel audio, tolérance de pile | Le modèle enregistre, les moteurs ignorent encore ⟹ lecture identique. |
-| **F — Moteurs audio** (§ 6.1) | `ReaderAudioMixer` ×6, `AudioMixer` ; ferme § 2.4 et § 2.5 | Sur une story legacy, `sourceStart = 0` ⟹ identique. |
+| **E — Commandes** (§ 4.5, § 5.3 *audio seul*) | `TrimClipCommand` porte `sourceStart`, `SetClipPropertyCommand.sourceStart`, plafond conditionnel audio, tolérance de pile. **Sans le ripple.** | Le modèle enregistre, les moteurs ignorent encore ⟹ lecture identique. |
+| **F — Moteurs audio + ripple** (§ 6.1, § 8.3) | `ReaderAudioMixer` ×6, `AudioMixer` ; ferme § 2.4 et § 2.5. **Le ripple vient ICI**, pas au lot E : après le lot D, `addBorrowedSound` écrit `intrinsicDuration`, donc la source est connue et le ripple se déclencherait — la poignée gauche se déplacerait moins que le doigt **sans qu'aucun moteur ne joue encore l'extrait**. Geste dégradé, bénéfice absent : strictement pire qu'aujourd'hui, ce que le critère de ce tableau interdit. | Sur une story legacy, `sourceStart = 0` ⟹ identique. |
 | **G — Moteurs vidéo** (§ 6.2) + levée du plafond vidéo | 9 sites, **dont le câblage `media.loop`** | Le câblage et la levée **doivent être dans ce même lot** (§ 5.3). |
 | **H — Export et découpe** (§ 6.3, § 6.4) | `insertTimeRange`, boucle non réservée au fond, `SplitClipCommand` | Le test 9 (parité) va ici. |
 | **I — Timeline UI + localisation** (§ 7, § 11) | overlay borné par `tilingEnd`, badge entier accessible, clés ×7 | La localisation est **inséparable** : le cliquet fait rougir toute clé sans ses 7 traductions. |

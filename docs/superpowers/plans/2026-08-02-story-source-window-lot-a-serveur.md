@@ -810,6 +810,21 @@ Dans `SoundCaptureService.test.ts`, avec le montage réel du fichier (`buildPris
     expect((create.mock.calls[0][0] as { data: { endMs: number } }).data.endMs).toBe(12000);
   });
 
+  it('test_republication_updatesTheWindow_ratherThanSwallowingIt', async () => {
+    // Le `catch` de doublon rendait la republication inerte : un auteur qui
+    // deplace sa fenetre et republie ne modifiait jamais la ligne.
+    const prisma = borrowedPrisma(90000);
+    const service = new SoundCaptureService(prisma, soundsDir, uploadsRoot);
+    const ctx = { postId: 'p1', authorId: 'u1', feedsLibrary: true };
+    await service.captureSounds({ ...ctx, tracks: [{ trackId: 't1', soundId: 's1', startMs: 0, endMs: 5000 }] });
+    await service.captureSounds({ ...ctx, tracks: [{ trackId: 't1', soundId: 's1', startMs: 12000, endMs: 20000, windowAdjusted: true }] });
+
+    const upsert = prisma.soundUsage.upsert as unknown as jest.Mock;
+    const second = upsert.mock.calls[1][0] as { update: { startMs: number; endMs: number } };
+    expect(second.update.startMs).toBe(12000);
+    expect(second.update.endMs).toBe(20000);
+  });
+
   it('test_recordUsage_unknownSoundDuration_leavesEndMsUntouched', async () => {
     const prisma = borrowedPrisma(null);
     await new SoundCaptureService(prisma, soundsDir, uploadsRoot).captureSounds({
@@ -856,7 +871,18 @@ Dans `captureTracks.ts`, dans le `return { … }` :
         windowAdjusted: o['windowAdjusted'] === true ? true : undefined,
 ```
 
-Dans `recordUsage` (`SoundCaptureService.ts:434-438`), remplacer le `data:` du `soundUsage.create` par :
+**`create` devient `upsert`.** Le `create` actuel est enveloppé dans un `catch`
+qui avale le doublon `(postId, trackId)` au nom de l'idempotence
+(`SoundCaptureService.ts:445-447`). Conséquence : un auteur qui déplace sa
+fenêtre et republie ne modifie **jamais** `startMs`/`endMs`, et
+`windowAdjustedAt` devient inécrivable après la première publication — ce qui
+détruit l'argument qui le justifie. L'`upsert` porte sur
+`@@unique([postId, trackId])`, et **l'incrément de `usageCount` reste dans la
+branche création uniquement** : le rejouer sur une mise à jour gonflerait le
+compteur à chaque republication.
+
+Dans `recordUsage` (`SoundCaptureService.ts:431-448`), le `data:` de la branche
+de création — et le `update:` de l'upsert — portent :
 
 ```ts
           data: {
