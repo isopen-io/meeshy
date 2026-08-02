@@ -482,6 +482,18 @@ export class MessageHandler {
         storyReplyToId: validated.storyReplyToId,
         forwardedFromId: validated.forwardedFromId,
         forwardedFromConversationId: validated.forwardedFromConversationId,
+        // Effets de message — parité avec `handleMessageSend` (path texte) et
+        // POST /messages. Le bitfield final `effectFlags` est recomposé par
+        // `MessageProcessor.saveMessage` depuis `isBlurred` / `expiresAt` /
+        // `isViewOnce`, donc on transmet les champs bruts. Sans cette
+        // propagation, une photo view-once / floutée / éphémère envoyée sur ce
+        // path (le PRINCIPAL pour les pièces jointes) serait persistée comme un
+        // média normal, rouvrable indéfiniment.
+        isBlurred: validated.isBlurred,
+        expiresAt: validated.expiresAt ? new Date(validated.expiresAt) : undefined,
+        effectFlags: validated.effectFlags,
+        isViewOnce: validated.isViewOnce,
+        maxViewOnceCount: validated.maxViewOnceCount,
         isAnonymous,
         // Aligner avec GatewayMessage: attachments are passed as IDs for linking
         attachmentIds: validated.attachmentIds,
