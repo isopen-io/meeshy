@@ -71,6 +71,20 @@ export function servableExtension(mimeType: string | null | undefined, filePath:
 }
 
 /**
+ * Prédicat Prisma-Mongo « son non coupé », à composer dans un `AND`.
+ *
+ * `mutedAt: null` seul ne matche PAS un champ ABSENT (MongoDB distingue
+ * null et « jamais posé », Prisma aussi) : or les DEUX chemins de création
+ * (upload manuel, capture) ne posent jamais `mutedAt`. Chaque son
+ * disparaissait donc de « Mes sons » et de la liste publique dès sa
+ * naissance — constaté en production le 2026-08-02, aucun test unitaire ne
+ * pouvait le voir (Prisma y est mocké, la sémantique Mongo n'y existe pas).
+ */
+export const NOT_MUTED_WHERE = {
+  OR: [{ mutedAt: null }, { mutedAt: { isSet: false } }],
+};
+
+/**
  * Préfixe des URL servies par `GET /static/:filename`.
  *
  * Partagé pour que la recherche « ce fichier est-il coupé ? » soit une ÉGALITÉ

@@ -5,6 +5,7 @@ import { UnifiedAuthRequest } from '../../middleware/auth';
 import { createSoundRouteRateLimitConfig } from '../../middleware/rate-limiter';
 import { authorSelect, NOT_DELETED } from '../../services/posts/postIncludes';
 import { loadSoundStats, EMPTY_SOUND_STATS, type SoundStats } from '../../services/posts/soundStats';
+import { NOT_MUTED_WHERE } from '../../services/posts/soundFormats';
 import { sendSuccess, sendUnauthorized, sendBadRequest, sendNotFound, sendForbidden, sendError } from '../../utils/response';
 
 const OBJECT_ID = /^[a-f0-9]{24}$/;
@@ -87,7 +88,8 @@ export function registerSoundRoutes(fastify: FastifyInstance, prisma: PrismaClie
 
     const rows = await prisma.sound.findMany({
       where: {
-        uploaderId: ctx.registeredUser.id, mutedAt: null,
+        uploaderId: ctx.registeredUser.id,
+        AND: [NOT_MUTED_WHERE],
         ...(cursor ? { createdAt: { lt: new Date(cursor) } } : {}),
       },
       orderBy: { createdAt: 'desc' },

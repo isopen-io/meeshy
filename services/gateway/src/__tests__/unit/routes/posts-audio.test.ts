@@ -246,8 +246,12 @@ describe('GET /stories/audio — with results and search', () => {
     expect(res.statusCode).toBe(200);
     // La clause est passée d'un `title` nu à un `OR` titre/pseudo : un son
     // capturé naît sans titre, le chercher par titre seul le rendait invisible.
+    // L'OR de recherche vit dans le AND, à côté du prédicat NOT_MUTED_WHERE —
+    // deux OR au même niveau, le second écraserait le premier.
     expect(mockFindMany).toHaveBeenCalledWith(expect.objectContaining({
-      where: expect.objectContaining({ OR: expect.any(Array) }),
+      where: expect.objectContaining({
+        AND: expect.arrayContaining([expect.objectContaining({ OR: expect.any(Array) })]),
+      }),
     }));
   });
 });
@@ -412,13 +416,16 @@ describe('GET /stories/audio — recherche', () => {
   it('matches the uploader username as well as the title', async () => {
     await app.inject({ method: 'GET', url: '/stories/audio?q=alice' });
     const where = (findMany.mock.calls[0][0] as any).where;
-    expect(where.OR).toEqual([
+    expect(where.AND[1].OR).toEqual([
       { title: { contains: 'alice', mode: 'insensitive' } },
       { uploader: { username: { contains: 'alice', mode: 'insensitive' } } },
     ]);
-    // La découverte reste bornée aux sons publics et non coupés.
+    // La découverte reste bornée aux sons publics et non coupés — forme
+    // isSet-safe : `mutedAt: null` seul ne matche pas un champ ABSENT en
+    // Prisma-Mongo, or aucun chemin de création ne pose `mutedAt` (prod
+    // 2026-08-02 : bibliothèque entière invisible).
     expect(where.isPublic).toBe(true);
-    expect(where.mutedAt).toBeNull();
+    expect(where.AND[0]).toEqual({ OR: [{ mutedAt: null }, { mutedAt: { isSet: false } }] });
   });
 
   it('includes the uploader so the list can credit an author', async () => {
