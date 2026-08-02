@@ -185,6 +185,52 @@ final class StoryDraftStoreMultiTests: XCTestCase {
         XCTAssertEqual(summary.slideCount, 2)
     }
 
+    // MARK: - Vignette (coverFileURL)
+
+    /// La vignette représente la PREMIÈRE diapositive par position. Les ids
+    /// sont choisis pour que l'ordre des slides CONTREDISE l'ordre d'index de
+    /// la table média : un `LIMIT 1` sans ORDER BY suit le second et élit la
+    /// mauvaise image.
+    func test_listDrafts_cover_followsSlideOrder_notInsertionOrder() throws {
+        store.save(draftId: "A", slides: [slide("zeta"), slide("alpha")], visibility: "PUBLIC")
+        try insertImageRow(draftId: "A", elementId: "zeta", fileName: "zeta.jpg")
+        try insertImageRow(draftId: "A", elementId: "alpha", fileName: "alpha.jpg")
+        try writeImageFile(draftId: "A", named: "zeta.jpg")
+        try writeImageFile(draftId: "A", named: "alpha.jpg")
+
+        let cover = try XCTUnwrap(store.listDrafts().first?.coverFileURL)
+        XCTAssertEqual(cover.lastPathComponent, "zeta.jpg",
+                       "La vignette suit la position de la slide, pas l'ordre de la table")
+
+        let secondInstance = StoryDraftStore(dbPath: dbPath, mediaDirectory: mediaDir)
+        XCTAssertEqual(secondInstance.listDrafts().first?.coverFileURL, cover,
+                       "Deux instances du store élisent la même vignette")
+    }
+
+    /// Quand le fichier élu manque sur disque, la vignette retombe sur la
+    /// prochaine image encore présente — pas sur nil alors qu'une image existe.
+    func test_listDrafts_cover_fallsBackToTheNextImage_whenTheElectedFileIsMissing() throws {
+        store.save(draftId: "A", slides: [slide("s1"), slide("s2")], visibility: "PUBLIC")
+        try insertImageRow(draftId: "A", elementId: "s1", fileName: "s1.jpg")
+        try insertImageRow(draftId: "A", elementId: "s2", fileName: "s2.jpg")
+        try writeImageFile(draftId: "A", named: "s2.jpg")
+
+        XCTAssertEqual(store.listDrafts().first?.coverFileURL?.lastPathComponent, "s2.jpg",
+                       "La perte du fichier élu ne doit pas priver le brouillon de vignette")
+    }
+
+    /// Les éléments qui ne correspondent à aucune slide (médias posés DANS une
+    /// slide) s'ordonnent de façon stable, pas au gré du rowid.
+    func test_listDrafts_cover_unlinkedElements_useAStableOrder() throws {
+        store.save(draftId: "A", slides: [slide("s")], visibility: "PUBLIC")
+        try insertImageRow(draftId: "A", elementId: "zz", fileName: "zz.jpg")
+        try insertImageRow(draftId: "A", elementId: "aa", fileName: "aa.jpg")
+        try writeImageFile(draftId: "A", named: "zz.jpg")
+        try writeImageFile(draftId: "A", named: "aa.jpg")
+
+        XCTAssertEqual(store.listDrafts().first?.coverFileURL?.lastPathComponent, "aa.jpg")
+    }
+
     // MARK: - Reprendre puis completer un brouillon
 
     /// Le parcours reel : on ecrit, on ferme, on rouvre, on complete, on
@@ -284,6 +330,23 @@ final class StoryDraftStoreMultiTests: XCTestCase {
                         "Les fichiers médias suivent le brouillon dans son sous-répertoire")
     }
 
+    /// La migration copie TOUTES les meta, pas seulement `visibility` : perdre
+    /// `command_history` en chemin, c'est perdre l'undo du brouillon repris.
+    func test_migration_copiesCommandHistoryWithTheDraft() throws {
+        let legacyDir = tempDir.appendingPathComponent("legacy-meta")
+        let legacyDB = legacyDir.appendingPathComponent("legacy.db").path
+        let legacyMedia = legacyDir.appendingPathComponent("media")
+        try FileManager.default.createDirectory(at: legacyMedia, withIntermediateDirectories: true)
+        try seedLegacyDatabase(at: legacyDB, mediaDir: legacyMedia)
+
+        let migrated = StoryDraftStore(dbPath: legacyDB, mediaDirectory: legacyMedia)
+        let id = try XCTUnwrap(migrated.listDrafts().first?.id)
+
+        XCTAssertEqual(migrated.loadCommandHistoryBlob(draftId: id), legacyCommandHistory,
+                       "L'historique undo/redo suit le brouillon migré")
+        XCTAssertEqual(migrated.load(draftId: id)?.visibility, "FRIENDS")
+    }
+
     func test_migration_isIdempotent() throws {
         let legacyDir = tempDir.appendingPathComponent("legacy2")
         let legacyDB = legacyDir.appendingPathComponent("legacy.db").path
@@ -309,6 +372,27 @@ final class StoryDraftStoreMultiTests: XCTestCase {
             UIColor.red.setFill()
             ctx.fill(CGRect(x: 0, y: 0, width: 4, height: 4))
         }
+    }
+
+    private let legacyCommandHistory = Data("legacy-history".utf8)
+
+    /// Pose une ligne média directement en base : c'est le seul moyen de
+    /// contrôler l'ordre des rowid, que `saveMedia` (dictionnaires) rendrait
+    /// non déterministe — précisément ce que ces tests verrouillent.
+    private func insertImageRow(draftId: String, elementId: String, fileName: String) throws {
+        let queue = try DatabaseQueue(path: dbPath)
+        try queue.write { db in
+            try db.execute(
+                sql: "INSERT INTO story_draft_media (draft_id, element_id, media_type, file_name) VALUES (?, ?, 'image', ?)",
+                arguments: [draftId, elementId, fileName])
+        }
+    }
+
+    private func writeImageFile(draftId: String, named fileName: String) throws {
+        let dir = mediaDir.appendingPathComponent(draftId)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let data = try XCTUnwrap(red().jpegData(compressionQuality: 0.85))
+        try data.write(to: dir.appendingPathComponent(fileName))
     }
 
     /// Reproduit le schéma MONO d'origine, tel qu'il existe sur les appareils
@@ -338,6 +422,9 @@ final class StoryDraftStoreMultiTests: XCTestCase {
                             String(data: effects, encoding: .utf8)!,
                             Date().timeIntervalSince1970])
             try db.execute(sql: "INSERT INTO story_draft_meta (key, value) VALUES ('visibility', 'FRIENDS')")
+            try db.execute(
+                sql: "INSERT INTO story_draft_meta (key, value) VALUES ('command_history', ?)",
+                arguments: [legacyCommandHistory.base64EncodedString()])
             try db.execute(
                 sql: "INSERT INTO story_draft_media (element_id, media_type, file_name) VALUES (?, 'image', ?)",
                 arguments: ["legacy-element", "legacy-element.jpg"])

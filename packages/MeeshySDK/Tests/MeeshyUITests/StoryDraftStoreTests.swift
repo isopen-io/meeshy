@@ -172,6 +172,56 @@ final class StoryDraftStoreTests: XCTestCase {
         XCTAssertTrue(media.videoURLs["v1"]?.pathExtension == "mov")
     }
 
+    // MARK: - Media references (chemin de reprise d'un échec de publication)
+
+    func test_loadMediaReferences_returnsAbsolutePathsForStoredMedia() {
+        let image = createTestImage()
+        let videoURL = createTempFile(name: "ref.mp4", content: "video")
+        let audioURL = createTempFile(name: "ref.m4a", content: "audio")
+        store.saveMedia(draftId: draftId,
+            images: ["img-1": image],
+            videoURLs: ["vid-1": videoURL],
+            audioURLs: ["aud-1": audioURL]
+        )
+
+        let refs = store.loadMediaReferences(draftId: draftId)
+
+        XCTAssertEqual(refs.count, 3)
+        let byElement = Dictionary(uniqueKeysWithValues: refs.map { ($0.elementId, $0) })
+        XCTAssertEqual(byElement["img-1"]?.mediaType, "image")
+        XCTAssertEqual(byElement["vid-1"]?.mediaType, "video")
+        XCTAssertEqual(byElement["aud-1"]?.mediaType, "audio")
+        for ref in refs {
+            XCTAssertTrue(ref.localFilePath.hasPrefix("/"), "Chemin absolu attendu pour la file de publication")
+            XCTAssertTrue(FileManager.default.fileExists(atPath: ref.localFilePath),
+                          "Chaque référence pointe un fichier encore présent")
+        }
+    }
+
+    func test_loadMediaReferences_filtersRowsWhoseFileDisappeared() {
+        let image = createTestImage()
+        let videoURL = createTempFile(name: "gone.mp4", content: "video")
+        store.saveMedia(draftId: draftId,
+            images: ["img-keep": image],
+            videoURLs: ["vid-gone": videoURL],
+            audioURLs: [:]
+        )
+        let mediaDir = tempDir.appendingPathComponent("media").appendingPathComponent(draftId)
+        let files = (try? FileManager.default.contentsOfDirectory(at: mediaDir, includingPropertiesForKeys: nil)) ?? []
+        for url in files where url.pathExtension == "mp4" {
+            try? FileManager.default.removeItem(at: url)
+        }
+
+        let refs = store.loadMediaReferences(draftId: draftId)
+
+        XCTAssertEqual(refs.map(\.elementId), ["img-keep"],
+                       "Une ligne dont le fichier a disparu ne doit pas produire de référence morte")
+    }
+
+    func test_loadMediaReferences_emptyForUnknownDraft() {
+        XCTAssertTrue(store.loadMediaReferences(draftId: "never-saved").isEmpty)
+    }
+
     // MARK: - Lost media (Pilier 21 SOTA audit)
 
     func test_loadMedia_returnsLostElementIds_whenFilesDisappear() {

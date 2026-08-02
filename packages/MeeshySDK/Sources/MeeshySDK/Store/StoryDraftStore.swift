@@ -49,23 +49,67 @@ public struct StoryDraftSummary: Identifiable, Sendable, Equatable {
 public final class StoryDraftStore: @unchecked Sendable {
     public static let shared = StoryDraftStore()
 
+    /// Dernier échec de persistance rencontré par le store. Les écritures ne
+    /// jettent pas (aucun appelant n'est en position de traiter une erreur
+    /// SQLite au milieu d'un autosave) : sans ce témoin, un brouillon jamais
+    /// écrit était indiscernable d'un brouillon écrit.
+    public struct PersistFailure: Sendable, Equatable {
+        /// Nom de l'opération : `save`, `saveMedia`, `delete`, `clear`,
+        /// `open-database`, `create-schema`.
+        public let operation: String
+        public let message: String
+        public let occurredAt: Date
+
+        public init(operation: String, message: String, occurredAt: Date) {
+            self.operation = operation
+            self.message = message
+            self.occurredAt = occurredAt
+        }
+    }
+
     private let db: DatabaseQueue
     /// RACINE des médias. Chaque brouillon a son sous-répertoire : deux
     /// brouillons peuvent porter le même `element_id` (duplication, reprise
     /// d'un échec de publication) et écraseraient sinon leurs fichiers.
     private let mediaRoot: URL
 
+    private let failureLock = NSLock()
+    private var storedFailure: PersistFailure?
+
+    public var lastPersistFailure: PersistFailure? {
+        failureLock.lock()
+        defer { failureLock.unlock() }
+        return storedFailure
+    }
+
+    /// À appeler une fois l'échec remonté à l'utilisateur.
+    public func clearPersistFailure() {
+        failureLock.lock()
+        defer { failureLock.unlock() }
+        storedFailure = nil
+    }
+
+    private func recordFailure(_ operation: String, message: String) {
+        failureLock.lock()
+        defer { failureLock.unlock() }
+        storedFailure = PersistFailure(operation: operation, message: message, occurredAt: Date())
+    }
+
     private init() {
         let dir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
         let path = dir.appendingPathComponent("meeshy_story_draft.db").path
         mediaRoot = dir.appendingPathComponent("meeshy_draft_media")
-        db = Self.makeQueue(path: path)
+        let opened = Self.makeQueue(path: path)
+        db = opened.queue
+        storedFailure = opened.failure
         createSchemaOrLog()
     }
 
     public init(dbPath: String, mediaDirectory: URL) {
         mediaRoot = mediaDirectory
-        db = Self.makeQueue(path: dbPath)
+        let opened = Self.makeQueue(path: dbPath)
+        db = opened.queue
+        storedFailure = opened.failure
         createSchemaOrLog()
     }
 
@@ -76,23 +120,28 @@ public final class StoryDraftStore: @unchecked Sendable {
             try createSchema()
         } catch {
             Logger.cache.fault("[StoryDraftStore] Schema creation failed — drafts cannot be saved or restored: \(error.localizedDescription, privacy: .public)")
+            recordFailure("create-schema", message: error.localizedDescription)
         }
     }
 
     /// Never-throwing queue builder. Falls back to an in-memory queue if the
     /// requested file cannot be opened — drafts are ephemeral in that case,
     /// but the app is not crashed. An OOM on in-memory creation would be
-    /// handled by the OS anyway.
-    private static func makeQueue(path: String) -> DatabaseQueue {
+    /// handled by the OS anyway. Le repli est RENDU au constructeur : muet, il
+    /// laissait croire à une persistance qui n'existait pas.
+    private static func makeQueue(path: String) -> (queue: DatabaseQueue, failure: PersistFailure?) {
         do {
-            return try DatabaseQueue(path: path)
+            return (try DatabaseQueue(path: path), nil)
         } catch {
             Logger.cache.warning("[StoryDraftStore] Disk queue unavailable at \(path), falling back to in-memory: \(error.localizedDescription, privacy: .public)")
-        }
-        do {
-            return try DatabaseQueue()
-        } catch {
-            fatalError("[StoryDraftStore] Cannot create in-memory GRDB queue — out of memory: \(error)")
+            do {
+                let failure = PersistFailure(operation: "open-database",
+                                             message: error.localizedDescription,
+                                             occurredAt: Date())
+                return (try DatabaseQueue(), failure)
+            } catch {
+                fatalError("[StoryDraftStore] Cannot create in-memory GRDB queue — out of memory: \(error)")
+            }
         }
     }
 
@@ -266,7 +315,8 @@ public final class StoryDraftStore: @unchecked Sendable {
 
     // MARK: - Upsert
 
-    public func save(draftId: String, slides: [StorySlide], visibility: String) {
+    @discardableResult
+    public func save(draftId: String, slides: [StorySlide], visibility: String) -> Bool {
         let now = Date().timeIntervalSince1970
         do {
             try db.write { db in
@@ -312,32 +362,31 @@ public final class StoryDraftStore: @unchecked Sendable {
                     arguments: [draftId, visibility, now, now]
                 )
             }
+            return true
         } catch {
             Logger.cache.error("[StoryDraftStore] Erreur save: \(error.localizedDescription)")
+            recordFailure("save", message: error.localizedDescription)
+            return false
         }
     }
 
     // MARK: - Save Media
 
     #if canImport(UIKit)
+    /// Écrit les fichiers D'ABORD, puis remplace les lignes en UNE seule
+    /// transaction. Le DELETE et l'INSERT vivaient dans deux transactions
+    /// séparées avec l'I/O fichier entre les deux : une mort du process
+    /// pendant la copie laissait la table durablement vide — perte totale des
+    /// médias du brouillon, que `checkForDraft` achevait en supprimant tout.
+    @discardableResult
     public func saveMedia(
         draftId: String,
         images: [String: UIImage],
         videoURLs: [String: URL],
         audioURLs: [String: URL]
-    ) {
+    ) -> Bool {
         ensureMediaDir(for: draftId)
         let dir = mediaDir(for: draftId)
-
-        do {
-            try db.write { db in
-                try db.execute(sql: "DELETE FROM story_draft_media WHERE draft_id = ?",
-                               arguments: [draftId])
-            }
-        } catch {
-            Logger.cache.error("[StoryDraftStore] Erreur clearing media table: \(error.localizedDescription)")
-            return
-        }
 
         var entries: [(String, String, String)] = []
 
@@ -373,6 +422,8 @@ public final class StoryDraftStore: @unchecked Sendable {
 
         do {
             try db.write { db in
+                try db.execute(sql: "DELETE FROM story_draft_media WHERE draft_id = ?",
+                               arguments: [draftId])
                 for (elementId, mediaType, fileName) in entries {
                     try db.execute(
                         sql: "INSERT OR REPLACE INTO story_draft_media (draft_id, element_id, media_type, file_name) VALUES (?, ?, ?, ?)",
@@ -382,6 +433,34 @@ public final class StoryDraftStore: @unchecked Sendable {
             }
         } catch {
             Logger.cache.error("[StoryDraftStore] Erreur saveMedia: \(error.localizedDescription)")
+            recordFailure("saveMedia", message: error.localizedDescription)
+            return false
+        }
+
+        reconcileMediaDirectory(draftId: draftId, keeping: Set(entries.map { $0.2 }))
+        return true
+    }
+
+    /// Aligne le répertoire du brouillon sur les lignes qui viennent d'être
+    /// écrites : un élément retiré de la composition laissait sinon son
+    /// fichier s'accumuler jusqu'au `delete`.
+    ///
+    /// Ne balaye QUE le sous-répertoire de CE brouillon, et seulement après une
+    /// transaction réussie — un balayage plus large est exactement ce qui a
+    /// détruit des médias par le passé.
+    private func reconcileMediaDirectory(draftId: String, keeping fileNames: Set<String>) {
+        let dir = mediaDir(for: draftId)
+        let fm = FileManager.default
+        guard let existing = try? fm.contentsOfDirectory(
+            at: dir, includingPropertiesForKeys: [.isDirectoryKey]) else { return }
+        for url in existing {
+            let isDirectory = (try? url.resourceValues(forKeys: [.isDirectoryKey]))?.isDirectory ?? false
+            guard !isDirectory, !fileNames.contains(url.lastPathComponent) else { continue }
+            do {
+                try fm.removeItem(at: url)
+            } catch {
+                Logger.cache.error("[StoryDraftStore] Média orphelin non supprimé (\(url.lastPathComponent, privacy: .public)): \(error.localizedDescription, privacy: .public)")
+            }
         }
     }
     /// Copies `source` into the store at `dest`. Returns `true` when `dest`
@@ -565,7 +644,11 @@ public final class StoryDraftStore: @unchecked Sendable {
                       let effects = JSONDecoder().decodeOrLog(StoryEffects.self, from: effectsData,
                                                               field: "story slide effects",
                                                               id: id, logger: Logger.cache) else {
-                    return StorySlide(id: id, content: content)
+                    // Effets illisibles : les colonnes qui, elles, sont lisibles
+                    // doivent survivre — les amputer perdait le média et la
+                    // durée d'une slide seulement partiellement corrompue.
+                    return StorySlide(id: id, mediaURL: mediaURL, content: content,
+                                      duration: duration)
                 }
                 return StorySlide(id: id, mediaURL: mediaURL, content: content,
                                   effects: effects, duration: duration)
@@ -621,8 +704,11 @@ public final class StoryDraftStore: @unchecked Sendable {
     }
 
     /// Efface TOUS les brouillons — déconnexion uniquement.
-    public func clear() {
-        removeMediaDir(mediaRoot)
+    ///
+    /// Les lignes partent AVANT les fichiers : détruire les médias d'abord
+    /// laissait, sur échec SQLite, des brouillons listables mais amputés.
+    @discardableResult
+    public func clear() -> Bool {
         do {
             try db.write { db in
                 try db.execute(sql: "DELETE FROM story_draft_slide")
@@ -632,12 +718,16 @@ public final class StoryDraftStore: @unchecked Sendable {
             }
         } catch {
             Logger.cache.error("[StoryDraftStore] Erreur clear: \(error.localizedDescription)")
+            recordFailure("clear", message: error.localizedDescription)
+            return false
         }
+        removeMediaDir(mediaRoot)
+        return true
     }
 
     /// Efface UN brouillon et son sous-répertoire de médias. Idempotent.
-    public func delete(draftId: String) {
-        removeMediaDir(mediaDir(for: draftId))
+    @discardableResult
+    public func delete(draftId: String) -> Bool {
         do {
             try db.write { db in
                 for table in ["story_draft_slide", "story_draft_meta", "story_draft_media"] {
@@ -647,7 +737,11 @@ public final class StoryDraftStore: @unchecked Sendable {
             }
         } catch {
             Logger.cache.error("[StoryDraftStore] Erreur delete: \(error.localizedDescription)")
+            recordFailure("delete", message: error.localizedDescription)
+            return false
         }
+        removeMediaDir(mediaDir(for: draftId))
+        return true
     }
 
     // MARK: - Inventaire
@@ -703,14 +797,30 @@ public final class StoryDraftStore: @unchecked Sendable {
         return nil
     }
 
+    /// Vignette du brouillon : la première image DANS L'ORDRE DES SLIDES dont
+    /// le fichier existe encore.
+    ///
+    /// Un `LIMIT 1` sans `ORDER BY` élisait une ligne arbitraire — la carte
+    /// changeait d'image d'une ouverture à l'autre, et n'en montrait aucune
+    /// quand LE fichier élu manquait alors qu'une autre image était là. Les
+    /// éléments qui ne correspondent à aucune slide (médias posés dans une
+    /// slide) passent après, départagés par `element_id` pour rester stables.
     private func coverFileURL(_ db: Database, draftId: String) throws -> URL? {
-        let fileName = try String.fetchOne(
+        let fileNames = try String.fetchAll(
             db,
-            sql: "SELECT file_name FROM story_draft_media WHERE draft_id = ? AND media_type = 'image' LIMIT 1",
+            sql: """
+            SELECT m.file_name
+            FROM story_draft_media m
+            LEFT JOIN story_draft_slide s ON s.draft_id = m.draft_id AND s.id = m.element_id
+            WHERE m.draft_id = ? AND m.media_type = 'image'
+            ORDER BY (s.order_index IS NULL), s.order_index, m.element_id
+            """,
             arguments: [draftId])
-        guard let fileName else { return nil }
-        let url = mediaDir(for: draftId).appendingPathComponent(fileName)
-        return FileManager.default.fileExists(atPath: url.path) ? url : nil
+        let dir = mediaDir(for: draftId)
+        return fileNames
+            .lazy
+            .map { dir.appendingPathComponent($0) }
+            .first { FileManager.default.fileExists(atPath: $0.path) }
     }
 
     /// `true` quand AUCUN brouillon n'existe.

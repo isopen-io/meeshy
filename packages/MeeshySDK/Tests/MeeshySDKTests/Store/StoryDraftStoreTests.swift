@@ -1,4 +1,5 @@
 import XCTest
+import GRDB
 @testable import MeeshySDK
 
 final class StoryDraftStoreSDKTests: XCTestCase {
@@ -7,13 +8,14 @@ final class StoryDraftStoreSDKTests: XCTestCase {
     /// Ces suites vérifient le contenu d'UN brouillon : un id fixe suffit.
     private let draftId = "test-draft"
     private var tempDir: URL!
+    private var dbPath: String!
 
     override func setUp() {
         super.setUp()
         tempDir = FileManager.default.temporaryDirectory
             .appendingPathComponent("StoryDraftStoreSDKTests-\(UUID().uuidString)")
         try? FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
-        let dbPath = tempDir.appendingPathComponent("test.db").path
+        dbPath = tempDir.appendingPathComponent("test.db").path
         let mediaDir = tempDir.appendingPathComponent("media")
         store = StoryDraftStore(dbPath: dbPath, mediaDirectory: mediaDir)
     }
@@ -129,6 +131,35 @@ final class StoryDraftStoreSDKTests: XCTestCase {
         XCTAssertTrue(reloaded.lostElementIds.isEmpty)
     }
 
+    /// L'invariant transactionnel de `saveMedia` : le DELETE et l'INSERT
+    /// doivent tomber dans la MÊME transaction, posée APRÈS l'I/O fichier.
+    /// Quand cette transaction échoue (ou que le process meurt entre les
+    /// copies), les anciennes lignes restent lisibles — deux transactions
+    /// séparées laissaient la table durablement vide, et `checkForDraft`
+    /// supprimait alors tout le brouillon.
+    func test_saveMedia_failedTransaction_keepsPreviousMediaReadable() throws {
+        let v1 = tempDir.appendingPathComponent("v1.mp4")
+        try Data("first-clip".utf8).write(to: v1)
+        store.saveMedia(draftId: draftId, images: [:], videoURLs: ["keep": v1], audioURLs: [:])
+        let keptURL = try XCTUnwrap(store.loadMedia(draftId: draftId).videoURLs["keep"])
+
+        try installTrigger("""
+            CREATE TRIGGER test_block_media_insert BEFORE INSERT ON story_draft_media
+            WHEN NEW.element_id = 'boom'
+            BEGIN SELECT RAISE(ABORT, 'blocked by test'); END
+            """)
+        let v2 = tempDir.appendingPathComponent("v2.mp4")
+        try Data("second-clip".utf8).write(to: v2)
+        store.saveMedia(draftId: draftId, images: [:], videoURLs: ["boom": v2], audioURLs: [:])
+
+        let reloaded = store.loadMedia(draftId: draftId)
+        XCTAssertNotNil(reloaded.videoURLs["keep"],
+                        "La transaction avortée doit laisser les anciennes lignes en place")
+        XCTAssertTrue(reloaded.lostElementIds.isEmpty)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: keptURL.path),
+                      "Un échec de transaction ne doit pas non plus balayer les anciens fichiers")
+    }
+
     // MARK: - save + load round-trip
 
     func test_save_load_roundTrip_preservesSlideData() {
@@ -198,5 +229,165 @@ final class StoryDraftStoreSDKTests: XCTestCase {
         store.save(draftId: draftId, slides: [StorySlide(id: "v1")], visibility: "PUBLIC")
         let result = store.load(draftId: draftId)
         XCTAssertEqual(result?.visibility, "PUBLIC")
+    }
+
+    // MARK: - Signal d'échec de persistance
+
+    /// `save` et `saveMedia` avalaient TOUT (catch → log) : l'appelant croyait
+    /// le brouillon écrit alors que rien n'avait été persisté. Le signal doit
+    /// exister au niveau du store, sans rien casser des appelants existants.
+    func test_save_succeeds_reportsNoPersistFailure() {
+        XCTAssertTrue(store.save(draftId: draftId, slides: [StorySlide(id: "s1")], visibility: "PUBLIC"))
+        XCTAssertNil(store.lastPersistFailure)
+    }
+
+    func test_save_whenTheWriteIsRejected_reportsFailure() throws {
+        try installTrigger(blockSlideInsertTrigger)
+
+        XCTAssertFalse(store.save(draftId: draftId, slides: [StorySlide(id: "s1")], visibility: "PUBLIC"),
+                       "Un enregistrement rejeté ne doit pas se déclarer réussi")
+        XCTAssertEqual(store.lastPersistFailure?.operation, "save")
+    }
+
+    func test_saveMedia_succeeds_reportsNoPersistFailure() throws {
+        let clip = tempDir.appendingPathComponent("ok.mp4")
+        try Data("bytes".utf8).write(to: clip)
+
+        XCTAssertTrue(store.saveMedia(draftId: draftId, images: [:], videoURLs: ["el": clip], audioURLs: [:]))
+        XCTAssertNil(store.lastPersistFailure)
+    }
+
+    func test_saveMedia_whenTheTransactionIsRejected_reportsFailure() throws {
+        let clip = tempDir.appendingPathComponent("boom.mp4")
+        try Data("bytes".utf8).write(to: clip)
+        try installTrigger("""
+            CREATE TRIGGER test_block_any_media_insert BEFORE INSERT ON story_draft_media
+            BEGIN SELECT RAISE(ABORT, 'blocked by test'); END
+            """)
+
+        XCTAssertFalse(store.saveMedia(draftId: draftId, images: [:], videoURLs: ["el": clip], audioURLs: [:]))
+        XCTAssertEqual(store.lastPersistFailure?.operation, "saveMedia")
+    }
+
+    /// Le repli silencieux sur une base EN MÉMOIRE rendait les brouillons
+    /// éphémères sans que rien ne le dise : l'utilisateur perdait tout au
+    /// redémarrage en croyant ses brouillons sauvés.
+    func test_init_whenTheDatabaseCannotBeOpened_reportsFailure() {
+        let unopenable = tempDir.appendingPathComponent("absent-dir/nested.db").path
+
+        let fallback = StoryDraftStore(dbPath: unopenable,
+                                       mediaDirectory: tempDir.appendingPathComponent("media2"))
+
+        XCTAssertEqual(fallback.lastPersistFailure?.operation, "open-database",
+                       "Un store qui retombe en mémoire doit le signaler")
+    }
+
+    // MARK: - Ordre lignes → fichiers sur delete/clear
+
+    /// Les lignes DB partent AVANT les fichiers : un échec SQLite laisse un
+    /// brouillon complet et listable, pas un brouillon amputé de ses médias.
+    func test_delete_whenRowDeletionFails_keepsFilesAndRows() throws {
+        let clip = tempDir.appendingPathComponent("clip.mp4")
+        try Data("clip-bytes".utf8).write(to: clip)
+        store.save(draftId: draftId, slides: [StorySlide(id: "s1")], visibility: "PUBLIC")
+        store.saveMedia(draftId: draftId, images: [:], videoURLs: ["el": clip], audioURLs: [:])
+        try installTrigger(blockSlideDeletionTrigger)
+
+        store.delete(draftId: draftId)
+
+        XCTAssertNotNil(store.load(draftId: draftId),
+                        "Les lignes survivent à la transaction avortée")
+        let media = store.loadMedia(draftId: draftId)
+        XCTAssertNotNil(media.videoURLs["el"],
+                        "Les fichiers ne doivent partir qu'APRÈS les lignes")
+        XCTAssertTrue(media.lostElementIds.isEmpty)
+    }
+
+    func test_clear_whenRowDeletionFails_keepsFilesAndRows() throws {
+        let clip = tempDir.appendingPathComponent("clip.mp4")
+        try Data("clip-bytes".utf8).write(to: clip)
+        store.save(draftId: draftId, slides: [StorySlide(id: "s1")], visibility: "PUBLIC")
+        store.saveMedia(draftId: draftId, images: [:], videoURLs: ["el": clip], audioURLs: [:])
+        try installTrigger(blockSlideDeletionTrigger)
+
+        store.clear()
+
+        XCTAssertNotNil(store.load(draftId: draftId))
+        XCTAssertTrue(store.loadMedia(draftId: draftId).lostElementIds.isEmpty)
+        XCTAssertNotNil(store.loadMedia(draftId: draftId).videoURLs["el"])
+    }
+
+    // MARK: - Chemin dégradé de load
+
+    /// Des effets indécodables ne doivent pas amputer la slide des colonnes
+    /// présentes en base : `media_url` et `duration` survivent au repli.
+    func test_load_corruptEffectsJSON_preservesMediaURLAndDuration() throws {
+        let queue = try DatabaseQueue(path: dbPath)
+        try queue.write { db in
+            try db.execute(sql: """
+                INSERT INTO story_draft_slide (draft_id, id, order_index, content, effects_json, media_url, duration, updated_at)
+                VALUES (?, 's1', 0, 'txt', '{not-json', 'https://cdn.example/x.mp4', 9.5, 1)
+                """, arguments: [draftId])
+        }
+
+        let result = try XCTUnwrap(store.load(draftId: draftId))
+        let slide = try XCTUnwrap(result.slides.first)
+
+        XCTAssertEqual(slide.id, "s1")
+        XCTAssertEqual(slide.content, "txt")
+        XCTAssertEqual(slide.mediaURL, "https://cdn.example/x.mp4",
+                       "Le repli sur effets corrompus ne doit pas perdre le média")
+        XCTAssertEqual(slide.duration, 9.5, accuracy: 0.01)
+    }
+
+    // MARK: - Réconciliation du répertoire média
+
+    /// Un élément retiré de la composition ne doit pas laisser son fichier
+    /// s'accumuler jusqu'au delete — mais la réconciliation ne balaye QUE le
+    /// sous-répertoire du brouillon concerné : les autres brouillons gardent
+    /// leurs médias (le bug historique de destruction était un balayage racine).
+    func test_saveMedia_droppedElement_removesItsFileButSparesOtherDrafts() throws {
+        let other = tempDir.appendingPathComponent("other.mp4")
+        try Data("other-bytes".utf8).write(to: other)
+        store.saveMedia(draftId: "other-draft", images: [:], videoURLs: ["z": other], audioURLs: [:])
+        let otherURL = try XCTUnwrap(store.loadMedia(draftId: "other-draft").videoURLs["z"])
+
+        let v1 = tempDir.appendingPathComponent("v1.mp4")
+        try Data("first".utf8).write(to: v1)
+        store.saveMedia(draftId: draftId, images: [:], videoURLs: ["e1": v1], audioURLs: [:])
+        let droppedURL = try XCTUnwrap(store.loadMedia(draftId: draftId).videoURLs["e1"])
+
+        let v2 = tempDir.appendingPathComponent("v2.mp4")
+        try Data("second".utf8).write(to: v2)
+        store.saveMedia(draftId: draftId, images: [:], videoURLs: ["e2": v2], audioURLs: [:])
+
+        XCTAssertFalse(FileManager.default.fileExists(atPath: droppedURL.path),
+                       "Le fichier d'un élément supprimé ne doit pas s'accumuler")
+        XCTAssertNotNil(store.loadMedia(draftId: draftId).videoURLs["e2"])
+        XCTAssertTrue(FileManager.default.fileExists(atPath: otherURL.path),
+                      "La réconciliation ne doit jamais toucher un autre brouillon")
+    }
+
+    // MARK: - Harnais
+
+    private var blockSlideDeletionTrigger: String {
+        """
+        CREATE TRIGGER test_block_slide_delete BEFORE DELETE ON story_draft_slide
+        WHEN OLD.draft_id = '\(draftId)'
+        BEGIN SELECT RAISE(ABORT, 'blocked by test'); END
+        """
+    }
+
+    private var blockSlideInsertTrigger: String {
+        """
+        CREATE TRIGGER test_block_slide_insert BEFORE INSERT ON story_draft_slide
+        WHEN NEW.draft_id = '\(draftId)'
+        BEGIN SELECT RAISE(ABORT, 'blocked by test'); END
+        """
+    }
+
+    private func installTrigger(_ sql: String) throws {
+        let queue = try DatabaseQueue(path: dbPath)
+        try queue.write { db in try db.execute(sql: sql) }
     }
 }
