@@ -619,7 +619,8 @@ export class MessageHandler {
           senderId: true,
           content: true,
           originalLanguage: true,
-          sender: { select: { id: true, userId: true, displayName: true, avatar: true } },
+          createdAt: true,
+          sender: { select: { id: true, userId: true, displayName: true, avatar: true, role: true } },
           attachments: { select: attachmentMediaSelect },
         },
       });
@@ -627,6 +628,26 @@ export class MessageHandler {
       if (!message) {
         this._sendGenericError(callback, 'Message not found or you are not authorized to edit it', socket);
         return;
+      }
+
+      // Fenêtre d'édition — parité stricte avec la route REST
+      // (`routes/conversations/messages-advanced.ts` : « 24 heures max pour les
+      // utilisateurs normaux »). Le transport socket est le chemin d'édition
+      // PRIMAIRE : sans cette garde il contournait ENTIÈREMENT la fenêtre que
+      // REST impose — un client pouvait éditer un message arbitrairement ancien
+      // via `message:edit`. L'auteur au-delà de 24h est bloqué, sauf privilège
+      // MODERATOR/ADMIN/BIGBOSS (mêmes constantes que REST). Un `createdAt`
+      // absent (Date invalide → NaN) ne bloque jamais : `NaN > window` est faux.
+      const messageAgeMs = Date.now() - new Date(message.createdAt).getTime();
+      const EDIT_WINDOW_MS = 24 * 60 * 60 * 1000;
+      if (messageAgeMs > EDIT_WINDOW_MS) {
+        const senderRole = message.sender?.role;
+        const hasEditPrivilege =
+          senderRole === 'MODERATOR' || senderRole === 'ADMIN' || senderRole === 'BIGBOSS';
+        if (!hasEditPrivilege) {
+          this._sendGenericError(callback, 'You can no longer edit this message (24-hour limit exceeded)', socket);
+          return;
+        }
       }
 
       const hasAttachments = message.attachments && message.attachments.length > 0;
