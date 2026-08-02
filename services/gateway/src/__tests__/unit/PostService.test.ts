@@ -73,6 +73,9 @@ function createMockPrisma() {
       // média en silence. Un mock qui rend `undefined` casserait sur `.count`.
       updateMany: jest.fn().mockResolvedValue({ count: 2 }),
       findFirst: jest.fn(),
+      // `[]` par défaut : la règle de composition REEL (`qualifiesAsReel`)
+      // matérialise les mimeTypes des médias à classifier via findMany.
+      findMany: jest.fn().mockResolvedValue([]),
       update: jest.fn(),
       deleteMany: jest.fn(),
     },
@@ -1446,8 +1449,9 @@ describe('PostService', () => {
       expect(prisma.post.update).not.toHaveBeenCalled();
     });
 
-    it('switches a POST to a REEL when it carries media', async () => {
-      prisma.post.findFirst.mockResolvedValue(makePost({ authorId: 'user-1', type: 'POST', media: [{ id: 'm1' }] }));
+    it('switches a POST to a REEL when it carries a qualifying composition (video)', async () => {
+      // Règle produit 2026-08-02 : video || audio || >= 2 images.
+      prisma.post.findFirst.mockResolvedValue(makePost({ authorId: 'user-1', type: 'POST', media: [{ id: 'm1', mimeType: 'video/mp4' }] }));
       prisma.post.update.mockResolvedValue(makePost({ type: 'REEL' }));
 
       await service.updatePost('post-1', 'user-1', { type: PostType.REEL });
@@ -1542,8 +1546,9 @@ describe('PostService', () => {
       expect(prisma.post.update).not.toHaveBeenCalled();
     });
 
-    it('allows removing media from a REEL that keeps at least one', async () => {
-      prisma.post.findFirst.mockResolvedValue(makePost({ authorId: 'user-1', type: 'REEL', media: [{ id: 'm1' }, { id: 'm2' }] }));
+    it('allows removing media from a REEL whose remaining composition still qualifies', async () => {
+      // Retirer l'image laisse la vidéo — la composition reste qualifiante.
+      prisma.post.findFirst.mockResolvedValue(makePost({ authorId: 'user-1', type: 'REEL', media: [{ id: 'm1', mimeType: 'image/jpeg' }, { id: 'm2', mimeType: 'video/mp4' }] }));
       prisma.post.update.mockResolvedValue(makePost({ type: 'REEL' }));
 
       await service.updatePost('post-1', 'user-1', { removeMediaIds: ['m1'] });
@@ -1747,9 +1752,12 @@ describe('PostService', () => {
         expect(prisma.post.update.mock.calls[0][0].data).not.toHaveProperty('mediaIds');
       });
 
-      it('REEL: newly added media counts toward the at-least-one-media rule', async () => {
-        prisma.post.findFirst.mockResolvedValue(makePost({ authorId: 'user-1', type: 'REEL', media: [{ id: 'm1' }] }));
+      it('REEL: newly added media counts toward the composition rule', async () => {
+        prisma.post.findFirst.mockResolvedValue(makePost({ authorId: 'user-1', type: 'REEL', media: [{ id: 'm1', mimeType: 'video/mp4' }] }));
         prisma.post.update.mockResolvedValue(makePost({ type: 'REEL' }));
+        // Le média fraîchement téléversé est matérialisé (mimeType) pour la
+        // règle de composition : la vidéo ajoutée garde le REEL qualifiant.
+        prisma.postMedia.findMany.mockResolvedValue([{ mimeType: 'video/quicktime' }]);
 
         await service.updatePost('post-1', 'user-1', { removeMediaIds: ['m1'], mediaIds: ['new-m1'] });
 
