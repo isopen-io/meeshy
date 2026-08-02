@@ -1181,8 +1181,10 @@ extension StoryComposerView {
                         },
                         onToggleMute: {
                             HapticFeedback.light()
+                            // Un-bouton : mute → volume 0 (niveau mémorisé),
+                            // unmute → restaure le niveau quitté (pas 1.0 forcé).
                             var obj = binding.wrappedValue
-                            obj.volume = obj.volume > 0 ? 0 : 1
+                            obj.toggleMute()
                             binding.wrappedValue = obj
                         }
                     )
@@ -1226,8 +1228,9 @@ extension StoryComposerView {
 
         return Button {
             HapticFeedback.light()
+            // Un-bouton : mémento de restauration (cf. StoryVolumeCarrying).
             var obj = binding.wrappedValue
-            obj.volume = obj.volume > 0 ? 0 : 1
+            obj.toggleMute()
             binding.wrappedValue = obj
         } label: {
             Image(systemName: muted ? "speaker.slash.fill" : "speaker.wave.2.fill")

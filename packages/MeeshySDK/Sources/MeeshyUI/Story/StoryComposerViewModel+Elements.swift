@@ -662,12 +662,38 @@ extension StoryComposerViewModel {
     }
 
     /// Volume d'un audio (clamp [0, 1]). No-op si l'id ne match aucun audio.
+    /// Passe par le mémento : glisser le slider à 0 vaut mute un-bouton, et
+    /// l'unmute suivant restaurera le niveau quitté.
     func setAudioVolume(audioId: String, volume: Float) {
         var effects = currentEffects
         guard var audios = effects.audioPlayerObjects,
               let i = audios.firstIndex(where: { $0.id == audioId }) else { return }
-        audios[i].volume = max(0, min(1, volume))
+        audios[i].setVolumePreservingMuteMemento(min(1, volume))
         effects.audioPlayerObjects = audios
+        currentEffects = effects
+    }
+
+    /// Mute un-bouton d'une piste AUDIO (chip canvas, cellule du panneau Son).
+    /// Persisté via `volume` (0 = muet) + mémento de restauration — le reader
+    /// d'un autre utilisateur n'entend donc jamais une piste mutée par l'auteur.
+    func toggleAudioMute(id: String) {
+        var effects = currentEffects
+        guard var audios = effects.audioPlayerObjects,
+              let i = audios.firstIndex(where: { $0.id == id }) else { return }
+        audios[i].toggleMute()
+        effects.audioPlayerObjects = audios
+        currentEffects = effects
+    }
+
+    /// Mute un-bouton d'une piste VIDÉO (bouton canvas, rangée du panneau
+    /// Médias). No-op pour une image — rien à couper.
+    func toggleMediaMute(id: String) {
+        var effects = currentEffects
+        guard var medias = effects.mediaObjects,
+              let i = medias.firstIndex(where: { $0.id == id }),
+              medias[i].kind == .video else { return }
+        medias[i].toggleMute()
+        effects.mediaObjects = medias
         currentEffects = effects
     }
 

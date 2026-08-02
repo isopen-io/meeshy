@@ -53,6 +53,10 @@ public struct AudioClipBar: View, Equatable {
     /// Points d'automation du clip — seule leur composante `volume` est
     /// tracée, en lecture seule. L'édition passe par la fiche.
     public let keyframes: [StoryKeyframe]
+    /// Mute UN-BOUTON de la piste. Non-nil → le badge haut-parleur devient un
+    /// bouton TOUJOURS visible (toggle) ; nil → comportement historique, badge
+    /// d'état affiché seulement quand la piste est coupée.
+    public let onToggleMute: (() -> Void)?
 
     /// Forme d'onde auto-extraite (état interne, hors `==`).
     @State private var loadedSamples: [Float] = []
@@ -85,7 +89,8 @@ public struct AudioClipBar: View, Equatable {
         onMoveDelta: @escaping (CGFloat) -> Void,
         onMoveEnded: @escaping () -> Void = {},
         onTrimStartDelta: @escaping (CGFloat) -> Void = { _ in },
-        onTrimEndDelta: @escaping (CGFloat) -> Void = { _ in }
+        onTrimEndDelta: @escaping (CGFloat) -> Void = { _ in },
+        onToggleMute: (() -> Void)? = nil
     ) {
         self.clipId = clipId; self.title = title
         self.startTime = startTime; self.duration = duration
@@ -100,6 +105,7 @@ public struct AudioClipBar: View, Equatable {
         self.onMoveEnded = onMoveEnded
         self.onTrimStartDelta = onTrimStartDelta
         self.onTrimEndDelta = onTrimEndDelta
+        self.onToggleMute = onToggleMute
     }
 
     public var accessibilityComposed: String {
@@ -121,7 +127,11 @@ public struct AudioClipBar: View, Equatable {
             WaveformStrip(samples: effectiveSamples, tint: Color.white.opacity(0.85))
             volumeCurve
             titleOverlay
-            if isMuted { muteBadge }
+            if onToggleMute != nil {
+                muteToggleButton
+            } else if isMuted {
+                muteBadge
+            }
             if isSelected {
                 RoundedRectangle(cornerRadius: 6).stroke(MeeshyColors.indigo400, lineWidth: 2)
                     .allowsHitTesting(false)
@@ -204,6 +214,27 @@ public struct AudioClipBar: View, Equatable {
                                    tint: MeeshyColors.warning)
             }
         }
+    }
+
+    /// Bouton mute UN TAP, toujours visible sur le bord traînant du clip.
+    /// `.onTapGesture` (pas `Button`) : un tap enfant prime sur les taps du
+    /// conteneur, et le drag haute-priorité du clip (minimumDistance 4) laisse
+    /// passer un tap immobile — même recette que `ClipTrimHandles`.
+    private var muteToggleButton: some View {
+        Image(systemName: isMuted ? "speaker.slash.fill" : "speaker.wave.2.fill")
+            .font(.caption2)
+            .padding(5)
+            .background(Circle().fill(Color.black.opacity(isMuted ? 0.75 : 0.45)))
+            .foregroundStyle(isMuted ? MeeshyColors.error : Color.white)
+            .padding(3)
+            .contentShape(Rectangle().inset(by: -6))
+            .onTapGesture { onToggleMute?() }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
+            .accessibilityElement()
+            .accessibilityAddTraits(.isButton)
+            .accessibilityLabel(isMuted
+                ? String(localized: "story.audio.track.unmute", defaultValue: "Activer le son de cette piste", bundle: .module)
+                : String(localized: "story.audio.track.mute", defaultValue: "Couper le son de cette piste", bundle: .module))
     }
 
     private var muteBadge: some View {

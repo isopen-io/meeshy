@@ -22,6 +22,7 @@ public struct VideoClipBar: View, Equatable {
             && lhs.frames.count == rhs.frames.count
             && lhs.videoURL == rhs.videoURL
             && lhs.imageURL == rhs.imageURL
+            && lhs.isMuted == rhs.isMuted
             && VolumeCurveOverlay.volumeSignature(lhs.keyframes)
                 == VolumeCurveOverlay.volumeSignature(rhs.keyframes)
     }
@@ -50,6 +51,13 @@ public struct VideoClipBar: View, Equatable {
     /// Points d'automation du clip — seule leur composante `volume` est
     /// tracée, en lecture seule. L'édition passe par la fiche.
     public let keyframes: [StoryKeyframe]
+    /// Piste coupée par l'auteur (`media.volume <= 0` — la persistance du
+    /// mute). Pilote l'icône du bouton mute et le badge d'état.
+    public let isMuted: Bool
+    /// Mute UN-BOUTON de la piste vidéo. Non-nil → bouton haut-parleur visible
+    /// en bas-droite (le haut-droite porte déjà le cadenas des fonds) ; nil →
+    /// aucun bouton (clips image / fonds synthétiques, rien à couper).
+    public let onToggleMute: (() -> Void)?
     public let onTap: () -> Void
     public let onDoubleTap: () -> Void
     public let onTrimStartDelta: (CGFloat) -> Void
@@ -112,6 +120,8 @@ public struct VideoClipBar: View, Equatable {
         videoURL: URL? = nil,
         imageURL: URL? = nil,
         keyframes: [StoryKeyframe] = [],
+        isMuted: Bool = false,
+        onToggleMute: (() -> Void)? = nil,
         onTap: @escaping () -> Void,
         onDoubleTap: @escaping () -> Void,
         onTrimStartDelta: @escaping (CGFloat) -> Void,
@@ -134,6 +144,8 @@ public struct VideoClipBar: View, Equatable {
         self.videoURL = videoURL
         self.imageURL = imageURL
         self.keyframes = keyframes
+        self.isMuted = isMuted
+        self.onToggleMute = onToggleMute
         self.onTap = onTap
         self.onDoubleTap = onDoubleTap
         self.onTrimStartDelta = onTrimStartDelta
@@ -151,6 +163,7 @@ public struct VideoClipBar: View, Equatable {
             volumeCurve
             titleLabel
             if isLocked { lockBadge }
+            if onToggleMute != nil { muteToggleButton }
             if isSelected { selectionHalo }
             if ClipTrimHandles.shouldShow(isSelected: isSelected, isLocked: isLocked) {
                 ClipTrimHandles(laneHeight: laneHeight,
@@ -243,6 +256,27 @@ public struct VideoClipBar: View, Equatable {
             }
             .allowsHitTesting(false)
         }
+    }
+
+    /// Bouton mute UN TAP en BAS-droite (le haut-droite porte le cadenas des
+    /// fonds). `.onTapGesture` plutôt que `Button` : un tap enfant prime sur
+    /// les taps du conteneur, et le drag haute-priorité (minimumDistance 4)
+    /// laisse passer un tap immobile — même recette que `ClipTrimHandles`.
+    private var muteToggleButton: some View {
+        Image(systemName: isMuted ? "speaker.slash.fill" : "speaker.wave.2.fill")
+            .font(.caption2)
+            .padding(5)
+            .background(Circle().fill(Color.black.opacity(isMuted ? 0.75 : 0.45)))
+            .foregroundStyle(isMuted ? MeeshyColors.error : Color.white)
+            .padding(3)
+            .contentShape(Rectangle().inset(by: -6))
+            .onTapGesture { onToggleMute?() }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
+            .accessibilityElement()
+            .accessibilityAddTraits(.isButton)
+            .accessibilityLabel(isMuted
+                ? String(localized: "story.video.unmute", defaultValue: "Activer le son de la vidéo", bundle: .module)
+                : String(localized: "story.video.mute", defaultValue: "Couper le son de la vidéo", bundle: .module))
     }
 
     private var lockBadge: some View {
