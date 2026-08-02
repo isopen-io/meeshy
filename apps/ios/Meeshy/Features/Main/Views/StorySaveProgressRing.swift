@@ -3,11 +3,11 @@ import MeeshyUI
 
 // MARK: - StorySaveProgressRing
 
-/// Anneau de progression d'une sauvegarde de story vers la photothèque.
-/// Partagé par la ligne « Mes stories » (`MyStoryRow.saveRing(progress:)`) et
-/// le rail d'actions du reader (`StoryActionSidebarView`) : une seule
-/// définition, sinon les deux rendus divergeraient dès la première retouche
-/// (épaisseur, arrondi, sens de rotation).
+/// Anneau de progression d'une sauvegarde de story vers la photothèque,
+/// rendu par le rail d'actions du reader (`StoryActionSidebarView`). Une
+/// seule définition pour toute surface future — l'ancienne ligne « Mes
+/// stories » (`MyStoryRow`, supprimée avec la migration en grille) le
+/// partageait déjà.
 struct StorySaveProgressRing: View {
     let progress: Double
     var tint: Color
@@ -15,9 +15,9 @@ struct StorySaveProgressRing: View {
     /// `false` dès que l'écriture photothèque a commencé — voir
     /// `StoryPhotoSaveService.isCancellable(storyId:)`.
     ///
-    /// La DÉCISION de rendu vit ici, pas chez les deux appelants : la ligne
-    /// « Mes stories » et le rail du reader ne transmettent que le booléen du
-    /// service, sinon les deux surfaces divergeraient au premier ajustement.
+    /// La DÉCISION de rendu vit ici, pas chez l'appelant : le rail du reader
+    /// ne transmet que le booléen du service — toute surface future fera de
+    /// même, sinon les rendus divergeraient au premier ajustement.
     var isCancellable: Bool = true
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion

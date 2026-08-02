@@ -136,10 +136,10 @@ struct StoryTrayView: View {
                         story: story,
                         composer: StoryComposerViewModel(editing: story))
                 case .resumeDraft(let draftId):
-                    // La reprise d'un brouillon passe par le cover racine :
-                    // le viewModel porte l'identité du brouillon à adopter.
-                    viewModel.pendingDraftId = draftId
-                    viewModel.showStoryComposer = true
+                    // La reprise passe par le cover racine, via l'UNIQUE
+                    // écrivain (`openComposer(resumingDraftId:)`) : l'id est
+                    // posé AVANT la présentation, garanti par construction.
+                    viewModel.openComposer(resumingDraftId: draftId)
                 }
             }
         )
@@ -685,9 +685,6 @@ struct PinnedStoryTrailBand: View {
     @State private var myStoriesFollowUp = DeferredSheetFollowUp<MyStoriesFollowUp>()
     /// Session d'édition d'une story publiée (composer en mode édition).
     @State private var editingStorySession: StoryEditSession?
-    /// Brouillon a reprendre, consomme par le cover du composer. Pose AVANT
-    /// l'ouverture pour que le composer autosauvegarde sous le bon id.
-    @State private var pendingDraftId: String?
 
     // Layout-derived: the full trail (120pt + 8 top pad) sits under the 64pt
     // expanded header and is fully hidden behind the 44pt collapsed header after
@@ -771,8 +768,7 @@ struct PinnedStoryTrailBand: View {
                                 story: story,
                                 composer: StoryComposerViewModel(editing: story))
                         case .resumeDraft(let draftId):
-                            viewModel.pendingDraftId = draftId
-                            viewModel.showStoryComposer = true
+                            viewModel.openComposer(resumingDraftId: draftId)
                         }
                     }
                 )

@@ -43,9 +43,10 @@ struct MyStoriesView: View {
     @EnvironmentObject private var router: Router
     @EnvironmentObject private var conversationListViewModel: ConversationListViewModel
 
-    /// Surfaces `activeUpload`'s failure history so it can be listed
-    /// alongside published stories with a direct retry — the tray badge
-    /// (`StoryUploadOverlay`) only shows the SINGLE current attempt.
+    /// Surfaces the failed-publish history (`failedItems`) in the drafts tab
+    /// with resume/retry/discard — the tray badge (`StoryUploadOverlay`) is
+    /// purely informative (`allowsHitTesting(false)`, directive 2026-08-01) :
+    /// this panel is the ONLY action surface for failed publishes.
     @StateObject private var publishService = StoryPublishService.shared
 
     @State private var viewersStory: StoryItem?
@@ -62,6 +63,15 @@ struct MyStoriesView: View {
     @State private var isSelecting = false
     @State private var selectedIDs: Set<String> = []
     @State private var isBulkDeleteConfirming = false
+
+    /// I9/I10 — TOUTE suppression confirme (copies : `MyStoriesDeleteConfirmation`).
+    /// Un brouillon est le dernier état local du travail ; un échec de
+    /// publication en est la DERNIÈRE copie (médias locaux inclus).
+    @State private var draftDeleteCandidate: StoryDraftSummary?
+    @State private var failedDeleteCandidate: StoryPublishQueueItem?
+    /// Reprise d'un échec en cours — verrouille les boutons « Reprendre »
+    /// le temps de la copie des médias (une seule reprise à la fois).
+    @State private var isResumingFailedItem = false
 
     /// Cible de la sheet de commentaires (celle des posts, réutilisée telle
     /// quelle — jamais l'overlay incrusté du reader, hors périmètre).
@@ -223,7 +233,7 @@ struct MyStoriesView: View {
             }
         }
         .alert(
-            String(localized: "story.mine.delete.title", defaultValue: "Supprimer la story ?"),
+            MyStoriesDeleteConfirmation.title(for: .publishedStory),
             isPresented: Binding(get: { deleteCandidate != nil }, set: { if !$0 { deleteCandidate = nil } })
         ) {
             Button(String(localized: "common.cancel", defaultValue: "Annuler"), role: .cancel) {
@@ -234,8 +244,35 @@ struct MyStoriesView: View {
                 deleteCandidate = nil
             }
         } message: {
-            Text(String(localized: "story.mine.delete.message",
-                        defaultValue: "Cette action est définitive. La story ne sera plus visible par personne."))
+            Text(MyStoriesDeleteConfirmation.message(for: .publishedStory))
+        }
+        .alert(
+            MyStoriesDeleteConfirmation.title(for: .draft),
+            isPresented: Binding(get: { draftDeleteCandidate != nil }, set: { if !$0 { draftDeleteCandidate = nil } })
+        ) {
+            Button(String(localized: "common.cancel", defaultValue: "Annuler"), role: .cancel) {
+                draftDeleteCandidate = nil
+            }
+            Button(String(localized: "common.delete", defaultValue: "Supprimer"), role: .destructive) {
+                if let draft = draftDeleteCandidate { draftsViewModel.delete(draft.id) }
+                draftDeleteCandidate = nil
+            }
+        } message: {
+            Text(MyStoriesDeleteConfirmation.message(for: .draft))
+        }
+        .alert(
+            MyStoriesDeleteConfirmation.title(for: .failedItem),
+            isPresented: Binding(get: { failedDeleteCandidate != nil }, set: { if !$0 { failedDeleteCandidate = nil } })
+        ) {
+            Button(String(localized: "common.cancel", defaultValue: "Annuler"), role: .cancel) {
+                failedDeleteCandidate = nil
+            }
+            Button(String(localized: "common.delete", defaultValue: "Supprimer"), role: .destructive) {
+                if let item = failedDeleteCandidate { discardFailedItem(item) }
+                failedDeleteCandidate = nil
+            }
+        } message: {
+            Text(MyStoriesDeleteConfirmation.message(for: .failedItem))
         }
         .alert(
             String(localized: "story.mine.delete.selected.title", defaultValue: "Supprimer les stories sélectionnées ?"),
@@ -384,13 +421,27 @@ struct MyStoriesView: View {
                     sectionHeader(String(localized: "story.mine.failed.header",
                                          defaultValue: "Échecs de publication"))
                     ForEach(publishService.failedItems) { item in
-                        FailedStoryRow(item: item, onRetry: { retryFailedItem(item) })
+                        FailedStoryRow(
+                            item: item,
+                            isResuming: isResumingFailedItem,
+                            onResume: { resumeFailedItem(item) },
+                            onRetry: { retryFailedItem(item) }
+                        )
                             .padding(.horizontal, 16)
                             .contextMenu {
-                                Button(role: .destructive) { discardFailedItem(item) } label: {
+                                Button { resumeFailedItem(item) } label: {
+                                    Label(Self.resumeActionTitle, systemImage: "square.and.pencil")
+                                }
+                                Button(role: .destructive) { failedDeleteCandidate = item } label: {
                                     Label(String(localized: "common.delete", defaultValue: "Supprimer"),
                                           systemImage: "trash")
                                 }
+                            }
+                            .accessibilityAction(named: Self.resumeActionTitle) {
+                                resumeFailedItem(item)
+                            }
+                            .accessibilityAction(named: String(localized: "common.delete", defaultValue: "Supprimer")) {
+                                failedDeleteCandidate = item
                             }
                     }
                 }
@@ -407,6 +458,9 @@ struct MyStoriesView: View {
                                 onOpen: { onResumeDraft(draft.id) },
                                 onGlyph: { glyph in handleDraftGlyph(glyph, for: draft) },
                                 moreMenu: AnyView(draftMenu(for: draft)))
+                            .accessibilityAction(named: String(localized: "common.delete", defaultValue: "Supprimer")) {
+                                draftDeleteCandidate = draft
+                            }
                         }
                     }
                     .padding(.horizontal, 16)
@@ -459,7 +513,7 @@ struct MyStoriesView: View {
                 }
             case .delete:
                 Button(role: .destructive) {
-                    draftsViewModel.delete(draft.id)
+                    draftDeleteCandidate = draft
                 } label: {
                     Label(String(localized: "common.delete", defaultValue: "Supprimer"), systemImage: "trash")
                 }
@@ -698,6 +752,31 @@ struct MyStoriesView: View {
 
     // MARK: - Failed publish history actions
 
+    /// Libellé unique de « Reprendre » (bouton de ligne, menu contextuel,
+    /// action VoiceOver) — trois surfaces, une seule chaîne.
+    static var resumeActionTitle: String {
+        String(localized: "story.mine.failed.resume", defaultValue: "Reprendre")
+    }
+
+    /// Incrément 5 — « Reprendre » : convertit l'échec en brouillon éditable
+    /// (orchestration dans `StoryViewModel.resumeFailedItem` : médias copiés
+    /// et persistance VÉRIFIÉE avant tout retrait de l'item), puis route vers
+    /// le composer par le MÊME chemin différé que les brouillons
+    /// (`onResumeDraft` → followUp de la sheet → `openComposer(resumingDraftId:)`)
+    /// — un fullScreenCover posé pendant que la sheet est encore ouverte
+    /// entrerait en course avec elle.
+    private func resumeFailedItem(_ item: StoryPublishQueueItem) {
+        guard !isResumingFailedItem else { return }
+        isResumingFailedItem = true
+        Task {
+            if let draftId = await viewModel.resumeFailedItem(item) {
+                draftsViewModel.reload()
+                onResumeDraft(draftId)
+            }
+            isResumingFailedItem = false
+        }
+    }
+
     private func retryFailedItem(_ item: StoryPublishQueueItem) {
         Task {
             await StoryPublishService.shared.retry(item)
@@ -713,30 +792,6 @@ struct MyStoriesView: View {
             await StoryPublishService.shared.discard(item)
         }
         viewModel.removeOptimisticStories(tempStoryId: item.tempStoryId)
-    }
-}
-
-// MARK: - Row accessibility
-
-/// Composition du libellé VoiceOver de la ligne.
-///
-/// La ligne est `.accessibilityElement(children: .ignore)` : l'anneau de
-/// progression, posé en enfant, serait invisible au rotor. Sa valeur remonte
-/// donc ici, en suffixe du libellé de la ligne.
-enum MyStoryRowAccessibility {
-
-    static func label(base: String, saveProgress: Double?) -> String {
-        guard let saveProgress else { return base }
-        // Même fonction pure que celle qui alimente le chiffre affiché dans
-        // l'anneau (`StorySaveProgressRing.percent(_:)`) — pas une seconde
-        // formule de clamp/arrondi qui pourrait diverger silencieusement
-        // (revue Task 7, finding Minor).
-        let percent = StorySaveProgressRing.percent(saveProgress)
-        let suffix = String(
-            localized: "story.mine.save.progress.a11y",
-            defaultValue: "Enregistrement \(percent) %"
-        )
-        return "\(base) \(suffix)"
     }
 }
 
@@ -806,330 +861,13 @@ enum StoryVisibilityMenuResolver {
     }
 }
 
-// MARK: - Row
-
-private struct MyStoryRow<MenuContent: View>: View {
-    let story: StoryItem
-    let accentColor: Color
-    let isDark: Bool
-    let isSelecting: Bool
-    let isSelected: Bool
-    @ObservedObject var saveService: StoryPhotoSaveService
-    let menuContent: () -> MenuContent
-    let onTap: () -> Void
-    let onOpenComments: () -> Void
-    let onOpenViewers: () -> Void
-
-    init(story: StoryItem, accentColor: Color, isDark: Bool,
-         isSelecting: Bool = false, isSelected: Bool = false,
-         saveService: StoryPhotoSaveService = .shared,
-         @ViewBuilder menuContent: @escaping () -> MenuContent,
-         onTap: @escaping () -> Void,
-         onOpenComments: @escaping () -> Void,
-         onOpenViewers: @escaping () -> Void) {
-        self.story = story
-        self.accentColor = accentColor
-        self.isDark = isDark
-        self.isSelecting = isSelecting
-        self.isSelected = isSelected
-        self.saveService = saveService
-        self.menuContent = menuContent
-        self.onTap = onTap
-        self.onOpenComments = onOpenComments
-        self.onOpenViewers = onOpenViewers
-    }
-
-    /// URL brute (résolue en interne par `CachedAsyncImage` via `MeeshyConfig`).
-    private var thumbnailURLString: String? {
-        story.media.first?.thumbnailUrl ?? story.media.first?.url
-    }
-
-    var body: some View {
-        HStack(spacing: 12) {
-            // Zone principale = Button « ouvrir » (ou toggle en sélection).
-            // Un `.onTapGesture` posé sur toute la ligne interceptait AUSSI le
-            // tap destiné au Menu « … » (le viewer s'ouvrait à la place du
-            // menu) — le Button borne la zone tappable au contenu, le Menu
-            // reste seul maître de son ellipsis.
-            Button(action: onTap) {
-                HStack(spacing: 12) {
-                    if isSelecting {
-                        selectionCircle
-                    }
-                    thumbnail
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(story.timeAgo)
-                            .font(MeeshyFont.relative(15, weight: .semibold))
-                            .foregroundColor(isDark ? .white : MeeshyColors.indigo950)
-                        // Cœur UNIQUEMENT si au moins une réaction — jamais de
-                        // « 0 » décoratif sous l'heure (directive 2026-07-29).
-                        // Le compteur de vues a migré vers le bouton œil dédié,
-                        // à gauche du bouton commentaires.
-                        if story.reactionCount > 0 {
-                            metric(icon: "heart.fill", value: story.reactionCount)
-                        }
-                    }
-                    Spacer()
-                }
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            // Icône vues + compteur, immédiatement à gauche du bouton
-            // commentaires (même patron visuel) — ouvre le « Listing des
-            // vues » (`StoryViewersSheet`, la même sheet que l'entrée du menu
-            // `⋯`). Masquée du rotor : l'accès VoiceOver passe par une action
-            // de ligne (cf. .accessibilityActions ci-dessous).
-            if !isSelecting {
-                Button {
-                    onOpenViewers()
-                } label: {
-                    HStack(spacing: 3) {
-                        Image(systemName: "eye")
-                            .font(.system(size: 15, weight: .semibold))
-                        if (story.viewCount ?? 0) > 0 {
-                            Text("\(story.viewCount ?? 0)")
-                                .font(MeeshyFont.relative(12, weight: .medium))
-                        }
-                    }
-                    .foregroundColor(.secondary)
-                    .padding(8)
-                    .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .accessibilityHidden(true)
-            }
-            // Icône commentaire + compteur, immédiatement à gauche de
-            // l'anneau/« … » — ouvre `CommentsSheetView` (celle des posts) sur
-            // les commentaires de la story. Masquée du rotor comme le reste de
-            // cette zone : la ligne compose déjà son propre libellé
-            // (children: .ignore), l'accès VoiceOver passe par une action de
-            // ligne (cf. .accessibilityActions ci-dessous).
-            if !isSelecting {
-                Button {
-                    onOpenComments()
-                } label: {
-                    HStack(spacing: 3) {
-                        Image(systemName: "bubble.left")
-                            .font(.system(size: 15, weight: .semibold))
-                        if story.commentCount > 0 {
-                            Text("\(story.commentCount)")
-                                .font(MeeshyFont.relative(12, weight: .medium))
-                        }
-                    }
-                    .foregroundColor(.secondary)
-                    .padding(8)
-                    .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .accessibilityHidden(true)
-            }
-            if !isSelecting {
-                if let progress = saveService.progress(for: story.id) {
-                    saveRing(progress: progress)
-                } else {
-                    // « … » ouvre le MÊME menu d'actions que le long-press
-                    // (Partager, Enregistrer, Transférer, Republier, Supprimer) —
-                    // un tap suffit (bug : l'affordance était décorative). VoiceOver
-                    // garde ses chemins existants (`.contextMenu` + `.swipeActions`
-                    // de la ligne) : le glyphe reste masqué du rotor, la ligne
-                    // compose déjà son propre libellé (children: .ignore).
-                    Menu {
-                        menuContent()
-                    } label: {
-                        Image(systemName: "ellipsis")
-                            .font(.system(size: 16, weight: .semibold))
-                            .foregroundColor(.secondary)
-                            .padding(8)
-                            .contentShape(Rectangle())
-                    }
-                    .accessibilityHidden(true)
-                }
-            }
-        }
-        .padding(.vertical, 4)
-        // VoiceOver : la ligne empile un tampon temporel + trois compteurs nus
-        // (12 / 5 / 3) sans contexte. On la compose en UN élément labellisé —
-        // « il y a 2h. 12 vues, 5 réactions, 3 commentaires » — plutôt que de
-        // laisser lire trois nombres orphelins. La coche reste transmise via la
-        // trait `.isSelected` de la ligne (même pattern que NewConversationView).
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(rowAccessibilityLabel)
-        .accessibilityAddTraits(.isButton)
-        .accessibilityAddTraits(isSelected ? .isSelected : [])
-        // `.accessibilityActions` est TOUJOURS attaché (jamais posé derrière
-        // un `if/else` au niveau de la vue) : SwiftUI ne démonte donc jamais
-        // la ligne entière (vignette, bouton d'ouverture, élément
-        // d'accessibilité) quand un job démarre ou se termine — seul le
-        // contenu du ViewBuilder varie, exactement comme un `Menu { if … }`
-        // qui n'ajoute pas d'entrée quand sa condition est fausse. Round 1
-        // conditionnait `body` lui-même (if/else autour de toute la ligne) :
-        // deux types de vue concrets différents selon la branche, donc
-        // démontage/remontage complet à chaque bascule — régression
-        // d'identité de vue relevée en revue. Finding Task 3, round 2.
-        .accessibilityActions {
-            // Même condition que le tap de l'anneau : proposer « Annuler
-            // l'enregistrement » quand l'écriture photothèque a déjà commencé
-            // annoncerait une action que le service refuse — voir
-            // `StoryPhotoSaveService.isCancellable(storyId:)`.
-            if saveService.isCancellable(storyId: story.id) {
-                Button(String(
-                    localized: "story.mine.save.cancel.a11y",
-                    defaultValue: "Annuler l'enregistrement"
-                )) {
-                    saveService.cancel(storyId: story.id)
-                }
-            }
-            // Même visibilité que les boutons (masqués du rotor, `if !isSelecting`
-            // ci-dessus) : le contenu du builder varie, le modifier lui-même
-            // reste TOUJOURS attaché — jamais de if/else autour de body.
-            if !isSelecting {
-                Button(String(
-                    localized: "story.mine.viewers.a11y",
-                    defaultValue: "Listing des vues"
-                )) {
-                    onOpenViewers()
-                }
-                Button(String(
-                    localized: "story.mine.comments.a11y",
-                    defaultValue: "Afficher les commentaires"
-                )) {
-                    onOpenComments()
-                }
-            }
-        }
-    }
-
-    /// Libellé VoiceOver composé : tampon temporel + les trois compteurs
-    /// d'engagement rendus visuellement par des icônes muettes, plus la
-    /// progression de sauvegarde quand un export est en vol.
-    private var rowAccessibilityLabel: String {
-        let base = String(
-            localized: "story.mine.row.a11y",
-            defaultValue: "\(story.timeAgo). \(story.viewCount ?? 0) vues, \(story.reactionCount) réactions, \(story.commentCount) commentaires"
-        )
-        return MyStoryRowAccessibility.label(base: base, saveProgress: saveService.progress(for: story.id))
-    }
-
-    private var selectionCircle: some View {
-        Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
-            .font(MeeshyFont.relative(22))
-            .foregroundColor(isSelected ? accentColor : Color.secondary.opacity(0.4))
-            .accessibilityHidden(true)
-    }
-
-    /// Anneau de progression de la sauvegarde photothèque, à la place du « … ».
-    /// Tap = annulation. Masqué du rotor : la valeur et l'action d'annulation
-    /// remontent sur la LIGNE (children: .ignore l'avalerait sinon).
-    ///
-    /// Le dessin lui-même est délégué à `StorySaveProgressRing` — partagé
-    /// avec le rail d'actions du reader (`StoryActionSidebarView`) — pour que
-    /// les deux surfaces ne divergent jamais (épaisseur, arrondi, sens de
-    /// rotation).
-    ///
-    /// Le tap cesse d'être actif dès que l'écriture photothèque a commencé
-    /// (`isCancellable(storyId:)`) : `PHPhotoLibrary.performChanges` n'est pas
-    /// annulable, et un tap y affichait « Export annulé » sur une vidéo qui
-    /// atterrissait quand même.
-    ///
-    /// Le MÊME booléen pilote le rendu de l'anneau (`isCancellable:`) et le
-    /// `.disabled` du bouton : `.buttonStyle(.plain)` + `.disabled` ne changent
-    /// rien visuellement sur des `Shape` à couleur explicite, donc le
-    /// basculement serait autrement totalement muet.
-    private func saveRing(progress: Double) -> some View {
-        let canCancel = saveService.isCancellable(storyId: story.id)
-        return Button {
-            HapticFeedback.medium()
-            saveService.cancel(storyId: story.id)
-        } label: {
-            StorySaveProgressRing(progress: progress, tint: accentColor, isCancellable: canCancel)
-                .padding(8)
-                .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .disabled(!canCancel)
-        .accessibilityHidden(true)
-    }
-
-    /// Cascade : composite ThumbHash (inclut texte/dessin/stickers, seule
-    /// représentation client du VRAI contenu composé — cf.
-    /// `MyStoryThumbnailResolver`) → miniature brute du média de fond
-    /// (stories legacy sans thumbHash) → icône générique (story vide).
-    @ViewBuilder
-    private var thumbnail: some View {
-        let width = StoryThumbnailSizing.width(forAspectRatio: story.media.first?.aspectRatio)
-        let shape = RoundedRectangle(cornerRadius: 10, style: .continuous)
-        Group {
-            switch MyStoryThumbnailResolver.resolve(thumbHash: story.storyEffects?.thumbHash, remoteURL: thumbnailURLString) {
-            case .composite(let hash):
-                if let img = UIImage.fromThumbHash(hash) {
-                    Image(uiImage: img)
-                        .resizable()
-                        .scaledToFill()
-                } else if let urlString = thumbnailURLString, !urlString.isEmpty {
-                    CachedAsyncImage(url: urlString, targetSize: CGSize(width: width, height: 64)) {
-                        shape.fill(accentColor.opacity(0.25))
-                    }
-                } else {
-                    shape.fill(accentColor.opacity(0.25))
-                        .overlay(Image(systemName: "photo").foregroundColor(accentColor))
-                }
-            case .remoteURL(let urlString):
-                CachedAsyncImage(url: urlString, targetSize: CGSize(width: width, height: 64)) {
-                    shape.fill(accentColor.opacity(0.25))
-                }
-            case .placeholder:
-                shape.fill(accentColor.opacity(0.25))
-                    .overlay(Image(systemName: "photo").foregroundColor(accentColor))
-            }
-        }
-        .frame(width: width, height: 64)
-        .clipShape(shape)
-        .overlay(textObjectsOverlay(width: width))
-        .overlay(shape.stroke(accentColor.opacity(0.3), lineWidth: 1))
-    }
-
-    /// Le texte composé n'est PAS visible dans le composite ThumbHash (résolution
-    /// ~18×32px — les glyphes se noient dans le flou, cf. `MyStoryThumbnailResolver`
-    /// doc). Contrairement au média de fond, le texte ne nécessite aucun chargement
-    /// réseau : on le rejoue directement depuis `storyEffects.textObjects`, même
-    /// positionnement normalisé que `SlideMiniPreview.textItem` (composer), à cette
-    /// échelle miniature.
-    @ViewBuilder
-    private func textObjectsOverlay(width: CGFloat) -> some View {
-        let size = CGSize(width: width, height: 64)
-        ForEach(story.storyEffects?.textObjects ?? []) { text in
-            let fontSize = max(3, CGFloat(text.fontSize) * width / CGFloat(CanvasGeometry.designWidth))
-            // FIGÉ à dessein : rendu miniature fidèle du texte composé de la
-            // story, mis à l'échelle proportionnellement à la largeur du
-            // thumbnail (64pt). Un scaling Dynamic Type casserait la fidélité
-            // visuelle du composite — ce n'est pas un libellé lisible mais un
-            // aperçu graphique (cf. MyStoryThumbnailResolver).
-            Text(text.text)
-                .font(.system(size: fontSize, weight: .semibold))
-                .foregroundColor(Color(hex: text.textColor ?? "FFFFFF"))
-                .lineLimit(1)
-                .shadow(color: .black.opacity(0.6), radius: 1)
-                .position(x: CGFloat(text.x) * size.width, y: CGFloat(text.y) * size.height)
-        }
-    }
-
-    @ViewBuilder
-    private func metric(icon: String, value: Int) -> some View {
-        HStack(spacing: 3) {
-            Image(systemName: icon).font(MeeshyFont.relative(11))
-            Text("\(value)").font(MeeshyFont.relative(13, weight: .medium))
-        }
-        .foregroundColor(.secondary)
-    }
-}
-
 // MARK: - Active Upload Row
 
 /// Same `StoryViewModel.StoryUploadState` the tray's `StoryUploadOverlay`
-/// renders as a circular badge, shown here as a list row so it sits directly
-/// above the failed-items history and the published stories — reachable even
-/// while the badge's own tap is mid-upload (see `StoryUploadOverlay`'s
-/// `.allowsHitTesting(isFailed)`).
+/// renders as a circular badge, shown here as a list row. The badge is
+/// purely informative (`.allowsHitTesting(false)`, directive 2026-08-01) —
+/// this row is the ONLY surface carrying retry/cancel for an in-flight or
+/// failed upload attempt.
 private struct ActiveUploadRow: View {
     let upload: StoryViewModel.StoryUploadState
     let onRetry: () -> Void
@@ -1187,11 +925,18 @@ private struct ActiveUploadRow: View {
 
 /// One entry in the permanently-failed publish history
 /// (`StoryPublishService.failedItems`). No rich thumbnail for the MVP — the
-/// local media backing `item` is preserved on disk (so retry can reuse it)
-/// but decoding a preview frame from it is a separate feature; a generic
-/// warning glyph keeps this scoped to the retry/discard behavior requested.
+/// local media backing `item` is preserved on disk but decoding a preview
+/// frame from it is a separate feature.
+///
+/// « Reprendre » (incrément 5) est l'action PRIMAIRE : convertir l'échec en
+/// brouillon éditable est le seul chemin qui débloque un rejet serveur
+/// déterministe (4xx) — rejouer le payload identique ré-échouera. Le retry
+/// reste disponible en action secondaire (icône seule) pour les échecs
+/// transitoires (réseau).
 private struct FailedStoryRow: View {
     let item: StoryPublishQueueItem
+    let isResuming: Bool
+    let onResume: () -> Void
     let onRetry: () -> Void
 
     private var relativeTime: String {
@@ -1223,11 +968,19 @@ private struct FailedStoryRow: View {
 
             Spacer()
 
+            Button(action: onResume) {
+                Label(MyStoriesView.resumeActionTitle, systemImage: "square.and.pencil")
+                    .font(MeeshyFont.relative(13, weight: .semibold))
+            }
+            .buttonStyle(.borderedProminent)
+            .disabled(isResuming)
+
             Button(action: onRetry) {
-                Label(String(localized: "story.tray.retry", defaultValue: "Reessayer", bundle: .main), systemImage: "arrow.clockwise")
+                Image(systemName: "arrow.clockwise")
                     .font(MeeshyFont.relative(13, weight: .semibold))
             }
             .buttonStyle(.bordered)
+            .accessibilityLabel(String(localized: "story.tray.retry", defaultValue: "Reessayer", bundle: .main))
         }
         .padding(.vertical, 4)
         .accessibilityElement(children: .combine)

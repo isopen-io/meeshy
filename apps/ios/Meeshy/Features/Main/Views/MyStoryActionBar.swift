@@ -6,8 +6,9 @@ import SwiftUI
 /// donc dans une boucle. Elle ne porte AUCUN `@ObservedObject` sur un
 /// singleton, et ses actions sont des DONNÉES (`[MyStoryGlyph]`) plutôt que
 /// des closures — c'est ce qui rend la conformance `Equatable` possible, là
-/// où `MyStoryRow`, générique sur son `MenuContent` et porteuse de quatre
-/// closures, ne pouvait structurellement pas l'obtenir.
+/// où l'ancienne rangée liste (`MyStoryRow`, supprimée avec la migration en
+/// grille), générique sur son `MenuContent` et porteuse de quatre closures,
+/// ne pouvait structurellement pas l'obtenir.
 ///
 /// La closure d'émission est ignorée par le `==` : deux barres aux mêmes
 /// données rendent la même chose, quelle que soit l'identité de la closure.

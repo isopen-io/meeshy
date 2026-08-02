@@ -1368,8 +1368,11 @@ final class StoryViewModelTests: XCTestCase {
             loadedVideoURLs: [:]
         )
 
-        XCTAssertNotNil(sut.activeUpload)
-        sut.cancelUpload()
+        guard let uploadId = sut.activeUpload?.id else {
+            XCTFail("publishStoryInBackground doit créer une entrée active")
+            return
+        }
+        sut.cancelUpload(id: uploadId)
         XCTAssertNil(sut.activeUpload)
     }
 

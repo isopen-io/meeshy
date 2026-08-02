@@ -1,4 +1,4 @@
-/// Pure source-selection helper for `MyStoryRow` thumbnails. The row's
+/// Pure source-selection helper for `MyStoryCard`/`MyStoryThumbnail`. The card's
 /// `thumbnailUrl` only ever reflects the raw background media — it never
 /// includes text, drawing, or stickers baked on top. `storyEffects.thumbHash`
 /// is a composite of every layer (cf. StoryReaderLoadingOverlay, which

@@ -27,6 +27,7 @@ enum MyStoriesSourceCorpus {
         "Meeshy/Features/Main/Views/MyStoryActionBar.swift",
         "Meeshy/Features/Main/Views/MyStoryThumbnail.swift",
         "Meeshy/Features/Main/Views/MyStoryCardPresentation.swift",
+        "Meeshy/Features/Main/Views/MyStoriesDeleteConfirmation.swift",
     ]
 
     /// Racine `apps/ios/`, dérivée du chemin de ce fichier
