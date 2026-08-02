@@ -421,6 +421,11 @@ struct MeeshyApp: App {
                         // backoff timer armed, so without this it waits for an
                         // incidental lifecycle event.
                         await OutboxRetryScheduler.shared.startObservingNetworkReconnect()
+                        // outbox-04 — wake the flusher immediately after any
+                        // social mutation is enqueued online (like/post/
+                        // comment), instead of leaving it `.pending` until the
+                        // next incidental lifecycle event.
+                        await OutboxRetryScheduler.shared.startObservingMutationEnqueued()
                     }
 
                     // Engagement outbox boot: recover orphan .open sessions

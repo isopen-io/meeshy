@@ -1183,6 +1183,7 @@ final class OutboxRetryScheduler {
     static let shared = OutboxRetryScheduler()
     private var timer: Task<Void, Never>?
     private var networkCancellable: AnyCancellable?
+    private var mutationCancellable: AnyCancellable?
     private init() {}
 
     /// Réveille le flusher à chaque transition réseau offline→online.
@@ -1204,6 +1205,22 @@ final class OutboxRetryScheduler {
             .removeDuplicates()
             .dropFirst()            // ignore la valeur courante rejouée à l'abonnement
             .filter { $0 }          // uniquement offline→online
+            .sink { _ in Task { @MainActor in await flush() } }
+    }
+
+    /// outbox-04 — réveille le flusher juste après une mutation sociale
+    /// enfilée EN LIGNE (like/post/commentaire) : sans ce trigger la row
+    /// reste `.pending` jusqu'au prochain événement de cycle de vie incident
+    /// (reconnect, boot, foreground). Débounce 250 ms : une rafale (double-tap
+    /// like, commentaires d'affilée) ne déclenche qu'un seul flush groupé.
+    /// Publisher + flush injectés pour la testabilité — même pattern que
+    /// `startObservingNetworkReconnect`.
+    func startObservingMutationEnqueued(
+        mutationPublisher: AnyPublisher<Void, Never> = OfflineQueue.shared.mutationEnqueued.publisher,
+        flush: @escaping @MainActor () async -> Void = { await OutboxFlushTrigger.flushNow() }
+    ) {
+        mutationCancellable = mutationPublisher
+            .debounce(for: .milliseconds(250), scheduler: DispatchQueue.main)
             .sink { _ in Task { @MainActor in await flush() } }
     }
 
