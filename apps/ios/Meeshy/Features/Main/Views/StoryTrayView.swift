@@ -27,7 +27,7 @@ extension View {
         fullScreenCover(item: session) { current in
             StoryComposerView(
                 viewModel: current.composer,
-                onPublishAllInBackground: { slides, slideImages, loadedImages, loadedVideoURLs, loadedAudioURLs, originalLanguage, visibility, visibilityUserIds in
+                onPublishAllInBackground: { slides, slideImages, loadedImages, loadedVideoURLs, loadedAudioURLs, originalLanguage, visibility, visibilityUserIds, draftId in
                     let edit = StoryViewModel.StoryEditContext(
                         postId: current.composer.editingPostId ?? current.story.id,
                         originalMediaIds: current.composer.editingOriginalMediaIds,
@@ -43,7 +43,8 @@ extension View {
                         loadedAudioURLs: loadedAudioURLs,
                         originalLanguage: originalLanguage,
                         visibility: visibility,
-                        visibilityUserIds: visibilityUserIds
+                        visibilityUserIds: visibilityUserIds,
+                        draftId: draftId
                     )
                     // Hors-ligne : le composer reste ouvert, rien n'est perdu —
                     // et le `false` remonté relâche son loquet de publication.
