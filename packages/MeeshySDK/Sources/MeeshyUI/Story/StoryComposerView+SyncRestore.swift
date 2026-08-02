@@ -209,7 +209,9 @@ extension StoryComposerView {
         syncCurrentSlideEffects()
         StoryDraftStore.shared.save(draftId: viewModel.draftId,
                                     slides: slidesStampedWithThumbHash(),
-                                    visibility: visibility)
+                                    visibility: visibility,
+                                    visibilityUserIds: visibilityUserIds,
+                                    originalLanguage: storyLanguage)
         persistCommandHistory()
         StoryDraftStore.shared.saveMedia(
             draftId: viewModel.draftId,
@@ -341,7 +343,9 @@ extension StoryComposerView {
         syncCurrentSlideEffects()
         StoryDraftStore.shared.save(draftId: viewModel.draftId,
                                     slides: slidesStampedWithThumbHash(),
-                                    visibility: visibility)
+                                    visibility: visibility,
+                                    visibilityUserIds: visibilityUserIds,
+                                    originalLanguage: storyLanguage)
         persistCommandHistory()
         let keys = Self.mediaKeysFingerprint(images: viewModel.loadedImages,
                                              videos: viewModel.loadedVideoURLs,
@@ -505,15 +509,17 @@ extension StoryComposerView {
     }
 
     /// Reprendre un brouillon écrase la visibilité injectée à l'init (rang 2 de
-    /// la chaîne de précédence, cf. `StoryComposerView.visibility`) — mais
-    /// JAMAIS avec un mode qui exige une liste d'utilisateurs :
-    /// `StoryDraftStore.save(slides:visibility:)` ne persiste pas
-    /// `visibilityUserIds`, donc restaurer « Seulement… » rouvrirait un
-    /// sélecteur vide et publierait vers personne. Même règle que le magasin de
-    /// préférences app-side ; reprendre n'est pas publier, la préférence
+    /// la chaîne de précédence, cf. `StoryComposerView.visibility`) — mais un
+    /// mode qui exige une liste d'utilisateurs (« Seulement…/Sauf… ») ne
+    /// survit QU'ACCOMPAGNÉ de sa liste persistée : sans elle, le restaurer
+    /// rouvrirait un sélecteur vide et publierait vers personne, d'où le repli
+    /// vers le défaut produit. Reprendre n'est pas publier, la préférence
     /// mémorisée n'est donc pas réécrite ici.
-    static func restorableVisibility(_ stored: String) -> String {
-        guard let mode = PostVisibility(rawValue: stored), !mode.requiresUserSelection else {
+    static func restorableVisibility(_ stored: String, userIds: [String] = []) -> String {
+        guard let mode = PostVisibility(rawValue: stored) else {
+            return PostVisibility.friends.rawValue
+        }
+        guard !mode.requiresUserSelection || !userIds.isEmpty else {
             return PostVisibility.friends.rawValue
         }
         return stored
@@ -566,7 +572,15 @@ extension StoryComposerView {
         if let stored = StoryDraftStore.shared.load(draftId: viewModel.draftId) {
             viewModel.slides = stored.slides.isEmpty ? [StorySlide()] : stored.slides
             viewModel.currentSlideIndex = 0
-            visibility = Self.restorableVisibility(stored.visibility)
+            visibility = Self.restorableVisibility(stored.visibility, userIds: stored.visibilityUserIds)
+            // L'audience et la langue revivent avec le brouillon. Les ids sont
+            // posés même après un repli de mode : `publishAllSlides` ne les
+            // transmet que pour un mode à sélection, et repasser sur
+            // « Seulement… » retrouve la liste choisie à l'époque.
+            visibilityUserIds = stored.visibilityUserIds
+            if let storedLanguage = stored.originalLanguage {
+                storyLanguage = storedLanguage
+            }
             // E4 inc.2 — AVANT tout bootstrap timeline : l'undo/redo de
             // chaque slide revit avec le draft, même après un crash dur.
             viewModel.applyPersistedCommandHistory(StoryDraftStore.shared.loadCommandHistoryBlob(draftId: viewModel.draftId))

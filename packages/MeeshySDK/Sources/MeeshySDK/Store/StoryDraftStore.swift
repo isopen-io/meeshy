@@ -316,7 +316,11 @@ public final class StoryDraftStore: @unchecked Sendable {
     // MARK: - Upsert
 
     @discardableResult
-    public func save(draftId: String, slides: [StorySlide], visibility: String) -> Bool {
+    public func save(draftId: String,
+                     slides: [StorySlide],
+                     visibility: String,
+                     visibilityUserIds: [String] = [],
+                     originalLanguage: String? = nil) -> Bool {
         let now = Date().timeIntervalSince1970
         do {
             try db.write { db in
@@ -349,6 +353,35 @@ public final class StoryDraftStore: @unchecked Sendable {
                     sql: "INSERT OR REPLACE INTO story_draft_meta (draft_id, key, value) VALUES (?, 'visibility', ?)",
                     arguments: [draftId, visibility]
                 )
+                // Fidélité d'audience et de langue : une valeur absente EFFACE
+                // la clé — un autosave qui revient à « tout le monde » ne doit
+                // pas laisser traîner l'ancienne liste « Seulement… ».
+                if visibilityUserIds.isEmpty {
+                    try db.execute(
+                        sql: "DELETE FROM story_draft_meta WHERE draft_id = ? AND key = 'visibilityUserIds'",
+                        arguments: [draftId]
+                    )
+                } else if let idsData = JSONEncoder().encodeOrLog(visibilityUserIds,
+                                                                  field: "story draft visibilityUserIds",
+                                                                  id: draftId,
+                                                                  logger: Logger.cache),
+                          let idsJSON = String(data: idsData, encoding: .utf8) {
+                    try db.execute(
+                        sql: "INSERT OR REPLACE INTO story_draft_meta (draft_id, key, value) VALUES (?, 'visibilityUserIds', ?)",
+                        arguments: [draftId, idsJSON]
+                    )
+                }
+                if let originalLanguage {
+                    try db.execute(
+                        sql: "INSERT OR REPLACE INTO story_draft_meta (draft_id, key, value) VALUES (?, 'originalLanguage', ?)",
+                        arguments: [draftId, originalLanguage]
+                    )
+                } else {
+                    try db.execute(
+                        sql: "DELETE FROM story_draft_meta WHERE draft_id = ? AND key = 'originalLanguage'",
+                        arguments: [draftId]
+                    )
+                }
                 // `created_at` n'est posé qu'à la première écriture : le
                 // `COALESCE` sur la ligne existante évite de rajeunir un
                 // brouillon à chaque autosave.
@@ -625,7 +658,10 @@ public final class StoryDraftStore: @unchecked Sendable {
 
     // MARK: - Load
 
-    public func load(draftId: String) -> (slides: [StorySlide], visibility: String)? {
+    public func load(draftId: String) -> (slides: [StorySlide],
+                                          visibility: String,
+                                          visibilityUserIds: [String],
+                                          originalLanguage: String?)? {
         do {
             let rows = try db.read { db in
                 try Row.fetchAll(db,
@@ -654,13 +690,31 @@ public final class StoryDraftStore: @unchecked Sendable {
                                   effects: effects, duration: duration)
             }
 
-            let visibility = try db.read { db in
-                try String.fetchOne(db,
-                                    sql: "SELECT value FROM story_draft_meta WHERE draft_id = ? AND key = 'visibility'",
-                                    arguments: [draftId])
-            } ?? "PUBLIC"
+            let meta = try db.read { db in
+                let visibility = try String.fetchOne(
+                    db,
+                    sql: "SELECT value FROM story_draft_meta WHERE draft_id = ? AND key = 'visibility'",
+                    arguments: [draftId]) ?? "PUBLIC"
+                let idsJSON = try String.fetchOne(
+                    db,
+                    sql: "SELECT value FROM story_draft_meta WHERE draft_id = ? AND key = 'visibilityUserIds'",
+                    arguments: [draftId])
+                let originalLanguage = try String.fetchOne(
+                    db,
+                    sql: "SELECT value FROM story_draft_meta WHERE draft_id = ? AND key = 'originalLanguage'",
+                    arguments: [draftId])
+                return (visibility: visibility, idsJSON: idsJSON, originalLanguage: originalLanguage)
+            }
+            let visibilityUserIds = meta.idsJSON
+                .flatMap { $0.data(using: .utf8) }
+                .flatMap { JSONDecoder().decodeOrLog([String].self, from: $0,
+                                                     field: "story draft visibilityUserIds",
+                                                     id: draftId, logger: Logger.cache) } ?? []
 
-            return (slides: slides, visibility: visibility)
+            return (slides: slides,
+                    visibility: meta.visibility,
+                    visibilityUserIds: visibilityUserIds,
+                    originalLanguage: meta.originalLanguage)
         } catch {
             Logger.cache.error("[StoryDraftStore] Erreur load: \(error.localizedDescription)")
             return nil

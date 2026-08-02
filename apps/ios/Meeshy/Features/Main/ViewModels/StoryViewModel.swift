@@ -1615,7 +1615,11 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
         }
 
         let draftId = UUID().uuidString
-        draftStore.save(draftId: draftId, slides: slides, visibility: item.visibility)
+        draftStore.save(draftId: draftId,
+                        slides: slides,
+                        visibility: item.visibility,
+                        visibilityUserIds: item.visibilityUserIds ?? [],
+                        originalLanguage: item.originalLanguage)
         draftStore.saveMedia(
             draftId: draftId,
             images: images,

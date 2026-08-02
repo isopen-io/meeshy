@@ -341,7 +341,9 @@ struct MyStoriesView: View {
                         isDark: isDark,
                         onOpen: { handleRowTap(story) },
                         onGlyph: { glyph in handlePublishedGlyph(glyph, for: story) },
-                        moreMenu: AnyView(actionMenu(for: story))
+                        moreMenu: AnyView(actionMenu(for: story)),
+                        isSelecting: isSelecting,
+                        isSelected: selectedStoryIDs.contains(story.id)
                     )
                     .accessibilityAction(named: String(localized: "common.delete", defaultValue: "Supprimer")) {
                         deleteCandidate = story

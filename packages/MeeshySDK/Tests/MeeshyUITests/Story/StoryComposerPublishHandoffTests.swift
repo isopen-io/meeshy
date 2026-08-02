@@ -158,12 +158,52 @@ final class StoryComposerPublishHandoffTests: XCTestCase {
                 StoryComposerView.restorableVisibility(stored.rawValue),
                 PostVisibility.friends.rawValue,
                 """
-                `StoryDraftStore.save(slides:visibility:)` ne persiste PAS \
-                `visibilityUserIds` : restaurer « \(stored.rawValue) » publierait vers \
+                Sans liste persistée, restaurer « \(stored.rawValue) » publierait vers \
                 une liste VIDE ou rouvrirait un sélecteur à l'ouverture.
                 """
             )
         }
+    }
+
+    func test_restoreDraft_visibilityRequiringUserSelection_survivesWithPersistedIds() {
+        for stored in [PostVisibility.only, .except] {
+            XCTAssertEqual(
+                StoryComposerView.restorableVisibility(stored.rawValue, userIds: ["u1", "u2"]),
+                stored.rawValue,
+                "Le store persiste `visibilityUserIds` : « \(stored.rawValue) » repris avec sa liste survit tel quel"
+            )
+        }
+        XCTAssertEqual(
+            StoryComposerView.restorableVisibility("MODE_INCONNU", userIds: ["u1"]),
+            PostVisibility.friends.rawValue,
+            "Une liste persistée ne sauve pas un mode illisible"
+        )
+    }
+
+    func test_restoreDraft_restoresAudienceIdsAndLanguage() throws {
+        let body = try Self.functionBody(named: "func restoreDraft()", in: Self.syncRestoreSourceURL)
+        XCTAssertTrue(
+            body.contains("visibilityUserIds = stored.visibilityUserIds"),
+            "La liste d'audience du brouillon doit revivre avec lui"
+        )
+        XCTAssertTrue(
+            body.contains("storyLanguage = storedLanguage"),
+            "La langue d'origine du brouillon doit revivre avec lui"
+        )
+    }
+
+    func test_autosave_persistsAudienceAndLanguage() throws {
+        let code = try Self.strippedSource(of: Self.syncRestoreSourceURL)
+        let idsWrites = code.components(separatedBy: "visibilityUserIds: visibilityUserIds").count - 1
+        XCTAssertGreaterThanOrEqual(
+            idsWrites, 2,
+            "Les DEUX écritures de brouillon (persistDraft + autosave débouncé) doivent persister la liste d'audience"
+        )
+        let langWrites = code.components(separatedBy: "originalLanguage: storyLanguage").count - 1
+        XCTAssertGreaterThanOrEqual(
+            langWrites, 2,
+            "Les DEUX écritures de brouillon doivent persister la langue de la story"
+        )
     }
 
     func test_restoreDraft_visibility_overridesInjectedInitialVisibility() throws {

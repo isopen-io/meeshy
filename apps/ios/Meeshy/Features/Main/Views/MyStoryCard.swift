@@ -43,11 +43,19 @@ struct MyStoryCard: View {
     let onOpen: () -> Void
     let onGlyph: (MyStoryGlyph) -> Void
     let moreMenu: AnyView?
+    /// Mode sélection de la grille (suppression en masse). Défauts `false` :
+    /// l'onglet brouillons et les previews restent hors sélection sans bruit.
+    var isSelecting: Bool = false
+    var isSelected: Bool = false
 
     @Environment(\.locale) private var locale
 
     private var isVeiled: Bool {
         MyStoryCardPresentation.isVeiled(expiresAt: model.expiresAt, now: now)
+    }
+
+    private var selectionIndicator: MyStorySelectionIndicator {
+        MyStoryCardPresentation.selectionIndicator(isSelecting: isSelecting, isSelected: isSelected)
     }
 
     var body: some View {
@@ -67,6 +75,11 @@ struct MyStoryCard: View {
                 .fill(isDark ? Color.white.opacity(0.06) : Color.black.opacity(0.04))
         )
         .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .strokeBorder(accentColor, lineWidth: 2.5)
+                .opacity(selectionIndicator == .selected ? 1 : 0)
+        )
         // La carte compose son propre libellé : sans cela VoiceOver énonce une
         // vignette muette suivie de compteurs nus.
         .accessibilityElement(children: .contain)
@@ -84,10 +97,39 @@ struct MyStoryCard: View {
             .aspectRatio(9 / 16, contentMode: .fit)
             .overlay(thumbnailLayers)
             .clipped()
+            .overlay(alignment: .topTrailing) { selectionBadge }
             .contentShape(Rectangle())
             .onTapGesture(perform: onOpen)
             .accessibilityAddTraits(.isButton)
+            .accessibilityAddTraits(selectionIndicator == .selected ? .isSelected : [])
             .accessibilityLabel(thumbnailAccessibilityLabel)
+    }
+
+    /// Pastille de sélection — cercle vide (à sélectionner) ou plein avec
+    /// coche (dans le lot). Rien hors mode sélection.
+    @ViewBuilder
+    private var selectionBadge: some View {
+        switch selectionIndicator {
+        case .hidden:
+            EmptyView()
+        case .unselected:
+            Circle()
+                .strokeBorder(Color.white, lineWidth: 2)
+                .background(Circle().fill(Color.black.opacity(0.25)))
+                .frame(width: 22, height: 22)
+                .shadow(color: .black.opacity(0.35), radius: 2)
+                .padding(6)
+        case .selected:
+            ZStack {
+                Circle().fill(accentColor)
+                Image(systemName: "checkmark")
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundColor(.white)
+            }
+            .frame(width: 22, height: 22)
+            .shadow(color: .black.opacity(0.35), radius: 2)
+            .padding(6)
+        }
     }
 
     @ViewBuilder
