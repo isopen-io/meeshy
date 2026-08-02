@@ -120,6 +120,13 @@ export function registerStoryAudioRoutes(
         fileUrl: staticFileUrl(filename),
         title,
         duration,
+        // `duration` (secondes) est DÉPRÉCIÉ mais reste écrit pour les
+        // lecteurs existants ; `durationMs` est ce que sert le DTO. Ne
+        // l'écrire qu'ici et pas là rendait la durée nulle côté client :
+        // le composer créait une piste SANS fenêtre temporelle et la story
+        // retombait sur ses 6 s de texte au lieu de durer tout l'audio
+        // (constaté en prod le 2026-08-02 sur « Meeshy Go », 90 s → 6 s).
+        durationMs: duration > 0 ? duration * 1000 : null,
         isPublic,
         contentHash,
       },

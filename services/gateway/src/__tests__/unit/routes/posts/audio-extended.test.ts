@@ -203,6 +203,17 @@ describe('POST /stories/audio — success with title, isPublic, duration (lines 
     expect(body.success).toBe(true);
     expect(prisma.sound.create).toHaveBeenCalled();
   });
+
+  it('persists durationMs — the field the DTO serves — not only the deprecated seconds', async () => {
+    // `duration` (secondes) est DÉPRÉCIÉ ; `durationMs` est CE QUE LIT toDTO.
+    // N'écrire que les secondes rendait durationSeconds nul côté client : la
+    // piste posée sur une story n'avait aucune fenêtre temporelle et la story
+    // durait 6 s sous un audio de 90 s (prod 2026-08-02, « Meeshy Go »).
+    await app.inject({ method: 'POST', url: '/stories/audio' });
+    expect(prisma.sound.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ duration: 45, durationMs: 45000 }),
+    }));
+  });
 });
 
 // ─── POST /stories/audio — success with isPublic=false (line 58) ─────────────
