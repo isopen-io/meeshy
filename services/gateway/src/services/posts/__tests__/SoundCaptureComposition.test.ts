@@ -66,8 +66,10 @@ describe('PostService → SoundCaptureService (composition réelle)', () => {
     // Les DEUX pistes, converties en millisecondes — pas un tableau vide, pas
     // seulement la première.
     expect(ctx.tracks).toEqual([
-      { trackId: 'track-a', postMediaId: 'media-a', soundId: undefined, startMs: 2000, endMs: 6000 },
-      { trackId: 'track-b', postMediaId: undefined, soundId: '507f1f77bcf86cd799439011', startMs: undefined, endMs: undefined },
+      // Coordonnées de SOURCE : `startTime: 2` est la position sur la TIMELINE
+      // et n'entre plus dans `SoundUsage`. Sans `sourceStart`, l'entrée est 0.
+      { trackId: 'track-a', postMediaId: 'media-a', soundId: undefined, startMs: 0, endMs: 4000 },
+      { trackId: 'track-b', postMediaId: undefined, soundId: '507f1f77bcf86cd799439011', startMs: 0, endMs: undefined },
     ]);
     expect(ctx.postId).toBe('post-1');
     expect(ctx.authorId).toBe('user-1');

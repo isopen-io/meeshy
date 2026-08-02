@@ -280,6 +280,96 @@ describe('PostService', () => {
   });
 
   // -----------------------------------------------------------------------
+  // createPost — geo discoverability (INDÉPENDANTE de metadata.location)
+  // -----------------------------------------------------------------------
+
+  describe('createPost — geo discoverability', () => {
+    const basePostData = { type: PostType.POST, visibility: PostVisibility.PUBLIC };
+    const place = { latitude: 48.8584, longitude: 2.2945, name: 'Tour Eiffel', address: null, category: null };
+
+    it('persists geoPoint/geoPrecision when discoverabilityPrecision is provided with a valid location', async () => {
+      prisma.post.create.mockImplementation(async (args: any) => makePost({ id: 'geo-1', ...args.data }));
+
+      await service.createPost({
+        ...basePostData,
+        location: place,
+        discoverabilityPrecision: 'CITY',
+      }, 'user-1');
+
+      const createCall = prisma.post.create.mock.calls[0][0];
+      // CITY arrondit à 0.1° (~10km) — cf. geoDiscoverability.ts.
+      expect(createCall.data.geoPoint).toEqual({ type: 'Point', coordinates: [2.3, 48.9] });
+      expect(createCall.data.geoPrecision).toBe('CITY');
+    });
+
+    it('quantizes EXACT precision to the unrounded coordinate', async () => {
+      prisma.post.create.mockImplementation(async (args: any) => makePost({ id: 'geo-2', ...args.data }));
+
+      await service.createPost({
+        ...basePostData,
+        location: place,
+        discoverabilityPrecision: 'EXACT',
+      }, 'user-1');
+
+      const createCall = prisma.post.create.mock.calls[0][0];
+      expect(createCall.data.geoPoint).toEqual({ type: 'Point', coordinates: [2.2945, 48.8584] });
+      expect(createCall.data.geoPrecision).toBe('EXACT');
+    });
+
+    it('leaves geoPoint/geoPrecision null when discoverabilityPrecision is absent, even with a valid location', async () => {
+      prisma.post.create.mockImplementation(async (args: any) => makePost({ id: 'geo-3', ...args.data }));
+
+      await service.createPost({ ...basePostData, location: place }, 'user-1');
+
+      const createCall = prisma.post.create.mock.calls[0][0];
+      expect(createCall.data.geoPoint).toBeUndefined();
+      expect(createCall.data.geoPrecision).toBeUndefined();
+    });
+
+    it('leaves geoPoint/geoPrecision null when discoverabilityPrecision is provided but location is absent', async () => {
+      prisma.post.create.mockImplementation(async (args: any) => makePost({ id: 'geo-4', ...args.data }));
+
+      await service.createPost({ ...basePostData, discoverabilityPrecision: 'CITY' }, 'user-1');
+
+      const createCall = prisma.post.create.mock.calls[0][0];
+      expect(createCall.data.geoPoint).toBeUndefined();
+      expect(createCall.data.geoPrecision).toBeUndefined();
+    });
+
+    it('ignores a client-supplied geoPoint/geoPrecision passthrough — the server always recomputes its own', async () => {
+      prisma.post.create.mockImplementation(async (args: any) => makePost({ id: 'geo-5', ...args.data }));
+
+      await service.createPost({
+        ...basePostData,
+        // Un attaquant qui contournerait le schéma Zod de la route et
+        // fournirait ces champs directement au service ne doit jamais les
+        // voir atterrir tels quels dans l'écriture Prisma — même garde que
+        // `metadata` (cf. sharedPlace.ts).
+        geoPoint: { type: 'Point', coordinates: [999, 999] },
+        geoPrecision: 'EXACT',
+      } as any, 'user-1');
+
+      const createCall = prisma.post.create.mock.calls[0][0];
+      expect(createCall.data.geoPoint).toBeUndefined();
+      expect(createCall.data.geoPrecision).toBeUndefined();
+    });
+
+    it('does not persist geoPoint/geoPrecision when the location coordinates are invalid, even with a valid precision', async () => {
+      prisma.post.create.mockImplementation(async (args: any) => makePost({ id: 'geo-6', ...args.data }));
+
+      await service.createPost({
+        ...basePostData,
+        location: { latitude: 999, longitude: 2.2945, name: null, address: null, category: null },
+        discoverabilityPrecision: 'CITY',
+      }, 'user-1');
+
+      const createCall = prisma.post.create.mock.calls[0][0];
+      expect(createCall.data.geoPoint).toBeUndefined();
+      expect(createCall.data.geoPrecision).toBeUndefined();
+    });
+  });
+
+  // -----------------------------------------------------------------------
   // createPost with repostOfId
   // -----------------------------------------------------------------------
 
