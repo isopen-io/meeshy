@@ -75,7 +75,7 @@ import type {
  * disconnect handler (`callParticipant.findMany` with `include: callSession`),
  * threaded into the grace-window helpers.
  */
-type DisconnectParticipation = {
+export type DisconnectParticipation = {
   id: string;
   participantId: string;
   callSessionId: string;
@@ -685,6 +685,24 @@ export class CallEventsHandler {
     } catch (error) {
       logger.error('📞 Error handling disconnect grace expiry', { callId, error });
     }
+  }
+
+  /**
+   * External-caller entry point for `leaveParticipationAndBroadcast` —
+   * AuthHandler's anonymous-disconnect cleanup finds its own active
+   * participations directly (it can't route through this handler's own
+   * disconnect flow, which is keyed on `participant.userId` and has no
+   * anonymous entry), but still needs the same leaveCall + participant-left/
+   * call-ended broadcast + summary + room-eviction side effects every other
+   * terminal path gets — otherwise the remote peer's UI never learns the
+   * anonymous participant left until CallCleanupService's GC sweep.
+   */
+  async notifyExternalParticipantLeave(
+    io: SocketIOServer,
+    participation: DisconnectParticipation,
+    userId: string
+  ): Promise<void> {
+    await this.leaveParticipationAndBroadcast({ io, participation, userId });
   }
 
   /**

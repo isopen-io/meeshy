@@ -439,6 +439,95 @@ describe('AuthHandler', () => {
       expect(socketToUser.has('socket-123')).toBe(false);
     });
 
+    it('should delegate to notifyParticipantLeftOnDisconnect (broadcast participant-left/call-ended) instead of calling leaveCall directly, when the callback is wired', async () => {
+      // Vague 44 — without this callback, an anonymous participant's disconnect
+      // updated the DB via leaveCall but never broadcast participant-left/
+      // call-ended to the remaining participant, who stayed "in call" until
+      // CallCleanupService's ~120s GC. MeeshySocketIOManager wires this to
+      // CallEventsHandler.notifyExternalParticipantLeave in production.
+      (mockPrisma.callParticipant.findMany as jest.Mock).mockResolvedValue([
+        {
+          id: 'call-participant-a',
+          callSessionId: 'call-1',
+          participantId: 'participant-a',
+          callSession: { mode: 'audio', conversationId: 'conv-1', status: 'active' }
+        }
+      ]);
+      const notifyParticipantLeftOnDisconnect = jest.fn().mockResolvedValue(undefined);
+
+      authHandler = new AuthHandler({
+        prisma: mockPrisma,
+        statusService: mockStatusService,
+        maintenanceService: mockMaintenanceService,
+        callService: mockCallService,
+        connectedUsers,
+        socketToUser,
+        userSockets,
+        notifyParticipantLeftOnDisconnect
+      });
+
+      socketToUser.set('socket-123', 'anon-123');
+      connectedUsers.set('anon-123', {
+        id: 'anon-123',
+        socketId: 'socket-123',
+        isAnonymous: true,
+        language: 'en'
+      });
+      userSockets.set('anon-123', new Set(['socket-123']));
+
+      await authHandler.handleDisconnection(createMockSocket());
+
+      expect(notifyParticipantLeftOnDisconnect).toHaveBeenCalledWith(
+        expect.objectContaining({
+          id: 'call-participant-a',
+          callSessionId: 'call-1',
+          participantId: 'participant-a',
+          callSession: { mode: 'audio', conversationId: 'conv-1', status: 'active' }
+        }),
+        'anon-123'
+      );
+      // Delegated entirely to the callback — calling leaveCall here too would
+      // double-process the same leave (notifyExternalParticipantLeave already
+      // calls it internally).
+      expect(mockCallService.leaveCall).not.toHaveBeenCalled();
+      expect(connectedUsers.has('anon-123')).toBe(false);
+    });
+
+    it('should still clean maps and continue to the next participation when notifyParticipantLeftOnDisconnect throws', async () => {
+      (mockPrisma.callParticipant.findMany as jest.Mock).mockResolvedValue([
+        { id: 'cp-a', callSessionId: 'call-1', participantId: 'participant-a', callSession: { mode: 'audio', conversationId: 'conv-1', status: 'active' } },
+        { id: 'cp-b', callSessionId: 'call-2', participantId: 'participant-b', callSession: { mode: 'video', conversationId: 'conv-2', status: 'active' } }
+      ]);
+      const notifyParticipantLeftOnDisconnect = jest.fn().mockRejectedValueOnce(new Error('broadcast failed'))
+        .mockResolvedValueOnce(undefined);
+
+      authHandler = new AuthHandler({
+        prisma: mockPrisma,
+        statusService: mockStatusService,
+        maintenanceService: mockMaintenanceService,
+        callService: mockCallService,
+        connectedUsers,
+        socketToUser,
+        userSockets,
+        notifyParticipantLeftOnDisconnect
+      });
+
+      socketToUser.set('socket-123', 'anon-123');
+      connectedUsers.set('anon-123', {
+        id: 'anon-123',
+        socketId: 'socket-123',
+        isAnonymous: true,
+        language: 'en'
+      });
+      userSockets.set('anon-123', new Set(['socket-123']));
+
+      await authHandler.handleDisconnection(createMockSocket());
+
+      expect(notifyParticipantLeftOnDisconnect).toHaveBeenCalledTimes(2);
+      expect(connectedUsers.has('anon-123')).toBe(false);
+      expect(socketToUser.has('socket-123')).toBe(false);
+    });
+
     it('should not call leaveCall when there are no active call participations', async () => {
       (mockPrisma.callParticipant.findMany as jest.Mock).mockResolvedValue([]);
 

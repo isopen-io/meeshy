@@ -317,6 +317,16 @@ export class MeeshySocketIOManager {
       userSockets: this.userSockets,
       emitPresenceSnapshot: (socket, userId, isAnonymous) =>
         this._emitPresenceSnapshot(socket, userId, isAnonymous),
+      // Vague 44 — an anonymous participant's disconnect cleanup found its own
+      // active call participations (CallEventsHandler's own disconnect handler
+      // can't, being keyed on participant.userId) but only ever called
+      // leaveCall() directly, silently skipping the participant-left/call-ended
+      // broadcast every other terminal path gets. The remote peer's UI stayed
+      // "in call" until CallCleanupService's ~120s GC. Delegating to
+      // CallEventsHandler gives this path the same broadcast + summary +
+      // room-eviction side effects.
+      notifyParticipantLeftOnDisconnect: (participation, userId) =>
+        this.callEventsHandler.notifyExternalParticipantLeave(this.io as SocketIOServer, participation, userId),
     });
 
     this.adminAgentHandler = new AdminAgentHandler({
