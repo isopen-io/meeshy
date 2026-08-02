@@ -172,7 +172,7 @@ function makeHarness() {
   const prisma = makePrisma();
   const handler = new CallEventsHandler(prisma);
   handler.setupCallEvents(socket as any, io as any, () => USER_A);
-  return { handler, handlers, directEmit };
+  return { handler, handlers, directEmit, io };
 }
 
 async function primeCache(handlers: Record<string, (...args: any[]) => any>) {
@@ -256,6 +256,33 @@ describe('CallEventsHandler — signalSessionCache invalidated on leave/end', ()
     await handlers['call:end']({ callId: CALL_ID, reason: 'completed' }, jest.fn<any>());
 
     expect(mockForceEndOrphanedCallSession).toHaveBeenCalledWith(CALL_ID, 'completed');
+    expect((handler as any).signalSessionCache.has(CALL_ID)).toBe(false);
+  });
+
+  it("the anonymous-guest disconnect fanout (AuthHandler → broadcastParticipantLeftResult) evicts the cached session", async () => {
+    // AuthHandler.handleDisconnection is the ONLY cleanup path for anonymous
+    // participants (this handler's own disconnect flow is keyed on
+    // participant.userId, always null for a guest). It calls
+    // CallService.leaveCall — which writes leftAt — then fans out through
+    // broadcastParticipantLeftResult. Every other leftAt-writing path above
+    // evicts the cache; this one did not, leaving up to 2s in which a reaped
+    // call's ICE/SDP still relays off the stale snapshot.
+    const { handler, handlers, io } = makeHarness();
+    await primeCache(handlers);
+    expect((handler as any).signalSessionCache.has(CALL_ID)).toBe(true);
+
+    await handler.broadcastParticipantLeftResult({
+      io: io as any,
+      leftSession: makeEndedSession() as any,
+      participation: {
+        id: 'cp-anon',
+        participantId: 'p-anon',
+        callSessionId: CALL_ID,
+        callSession: { mode: 'p2p', conversationId: CONV_ID, status: 'ended' },
+      } as any,
+      userId: 'anon-guest',
+    });
+
     expect((handler as any).signalSessionCache.has(CALL_ID)).toBe(false);
   });
 

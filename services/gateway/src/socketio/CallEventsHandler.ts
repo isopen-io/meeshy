@@ -712,6 +712,14 @@ export class CallEventsHandler {
   }): Promise<void> {
     const { io, leftSession, participation, userId } = opts;
 
+    // Invariant "every path that writes leftAt evicts the signal cache" (see
+    // invalidateSignalSession). Held here rather than in the private caller
+    // below so the anonymous-guest path — AuthHandler's disconnect cleanup,
+    // which runs leaveCall itself and enters through this public method — gets
+    // it too. Without it, that call's ICE/SDP kept relaying off the stale 2s
+    // snapshot after the DB already stamped leftAt.
+    this.invalidateSignalSession(participation.callSessionId);
+
     io.to(ROOMS.call(participation.callSessionId)).emit(
       CALL_EVENTS.PARTICIPANT_LEFT,
       {
@@ -780,7 +788,8 @@ export class CallEventsHandler {
         // forceEndOrphanedCallSession.
         endReasonHint: CallEndReason.connectionLost
       });
-      this.invalidateSignalSession(participation.callSessionId);
+      // Cache eviction now lives inside broadcastParticipantLeftResult, so
+      // both this caller and AuthHandler's anonymous path get it.
       await this.broadcastParticipantLeftResult({ io, leftSession, participation, userId });
 
       logger.info('✅ Socket: Auto-left call on disconnect', {
@@ -788,102 +797,130 @@ export class CallEventsHandler {
         userId
       });
     } catch (leaveError) {
-      // IMPORTANT FIX: Force cleanup even if leaveCall fails
-      // This prevents zombie calls when DB errors or validation fails
-      logger.error('❌ Socket: Error in leaveCall, forcing direct cleanup', {
-        callId: participation.callSessionId,
-        userId,
-        error: leaveError
+      await this.forceCleanupParticipationAfterLeaveFailure({ io, participation, userId, leaveError });
+    }
+  }
+
+  /**
+   * CALL-RESILIENCE — the force-cleanup fallback for a participation whose
+   * `leaveCall` rejected (DB error, validation): stamp `leftAt` directly,
+   * force-end the session when it was the last participant, and fan out the
+   * same participant-left/call-ended/summary/room-eviction sequence. Without
+   * it a failed leave leaves a zombie participant until the ~120s
+   * `CallCleanupService` GC.
+   *
+   * Public for the same reason as `broadcastParticipantLeftResult`:
+   * `AuthHandler`s anonymous-guest disconnect path runs `leaveCall` itself
+   * (this handler cannot resolve anonymous participations — its lookup is
+   * keyed on `participant.userId`) and only logged when it threw, so a guest
+   * whose leave hit a DB error stayed a zombie while a registered user in the
+   * exact same situation was force-cleaned.
+   *
+   * Never rejects — an unusable fallback must not abort the caller’s loop
+   * over the remaining participations.
+   */
+  async forceCleanupParticipationAfterLeaveFailure(opts: {
+    io: SocketIOServer;
+    participation: DisconnectParticipation;
+    userId: string;
+    leaveError: unknown;
+  }): Promise<void> {
+    const { io, participation, userId, leaveError } = opts;
+    // IMPORTANT FIX: Force cleanup even if leaveCall fails
+    // This prevents zombie calls when DB errors or validation fails
+    logger.error('❌ Socket: Error in leaveCall, forcing direct cleanup', {
+      callId: participation.callSessionId,
+      userId,
+      error: leaveError
+    });
+
+    try {
+      const now = new Date();
+      this.invalidateSignalSession(participation.callSessionId);
+
+      // Audit C5 (2026-07-02) — `{leftAt: null}` alone misses Mongo docs
+      // whose leftAt field was never written (pre-C5 participants).
+      const remainingParticipants = await this.prisma.$transaction(async (tx) => {
+        await tx.callParticipant.update({
+          where: { id: participation.id },
+          data: { leftAt: now }
+        });
+        return tx.callParticipant.count({
+          where: {
+            callSessionId: participation.callSessionId,
+            OR: [{ leftAt: null }, { leftAt: { isSet: false } }]
+          }
+        });
       });
 
-      try {
-        const now = new Date();
-        this.invalidateSignalSession(participation.callSessionId);
+      io.to(ROOMS.call(participation.callSessionId)).emit(
+        CALL_EVENTS.PARTICIPANT_LEFT,
+        {
+          callId: participation.callSessionId,
+          participantId: participation.id,
+          mode: participation.callSession.mode
+        } as CallParticipantLeftEvent
+      );
 
-        // Audit C5 (2026-07-02) — `{leftAt: null}` alone misses Mongo docs
-        // whose leftAt field was never written (pre-C5 participants).
-        const remainingParticipants = await this.prisma.$transaction(async (tx) => {
-          await tx.callParticipant.update({
-            where: { id: participation.id },
-            data: { leftAt: now }
-          });
-          return tx.callParticipant.count({
-            where: {
-              callSessionId: participation.callSessionId,
-              OR: [{ leftAt: null }, { leftAt: { isSet: false } }]
-            }
-          });
-        });
-
-        io.to(ROOMS.call(participation.callSessionId)).emit(
-          CALL_EVENTS.PARTICIPANT_LEFT,
-          {
-            callId: participation.callSessionId,
-            participantId: participation.id,
-            mode: participation.callSession.mode
-          } as CallParticipantLeftEvent
+      if (remainingParticipants === 0) {
+        // Terminal write protocol (see CallCleanupService.forceEndCall):
+        // status-guarded + version-bumped, so this can never silently
+        // clobber — or be clobbered by — a concurrent version-guarded
+        // writer. Previously this did a raw, unguarded `callSession.update`
+        // with no version bump and no endReason, which could stomp a call
+        // another path had already resolved to missed/rejected/failed.
+        const forceEnded = await this.callService.forceEndOrphanedCallSession(
+          participation.callSessionId,
+          CallEndReason.connectionLost
         );
 
-        if (remainingParticipants === 0) {
-          // Terminal write protocol (see CallCleanupService.forceEndCall):
-          // status-guarded + version-bumped, so this can never silently
-          // clobber — or be clobbered by — a concurrent version-guarded
-          // writer. Previously this did a raw, unguarded `callSession.update`
-          // with no version bump and no endReason, which could stomp a call
-          // another path had already resolved to missed/rejected/failed.
-          const forceEnded = await this.callService.forceEndOrphanedCallSession(
+        if (forceEnded) {
+          logger.info('✅ Socket: Force-ended call after disconnect error', {
+            callId: participation.callSessionId,
+            duration: forceEnded.duration,
+            status: forceEnded.status
+          });
+
+          const dcForceEndedEvent: CallEndedEvent = {
+            callId: participation.callSessionId,
+            duration: forceEnded.duration,
+            endedBy: userId,
+            reason: forceEnded.endReason
+          };
+          await this.broadcastCallEnded(
+            io,
             participation.callSessionId,
-            CallEndReason.connectionLost
+            participation.callSession.conversationId,
+            dcForceEndedEvent
           );
-
-          if (forceEnded) {
-            logger.info('✅ Socket: Force-ended call after disconnect error', {
-              callId: participation.callSessionId,
-              duration: forceEnded.duration,
-              status: forceEnded.status
-            });
-
-            const dcForceEndedEvent: CallEndedEvent = {
-              callId: participation.callSessionId,
-              duration: forceEnded.duration,
-              endedBy: userId,
-              reason: forceEnded.endReason
-            };
-            await this.broadcastCallEnded(
-              io,
-              participation.callSessionId,
-              participation.callSession.conversationId,
-              dcForceEndedEvent
-            );
-            await this.postCallSummary(participation.callSessionId);
-            if (forceEnded.status === CallStatus.missed) {
-              /* istanbul ignore next -- handleMissedCall has its own internal catch and never rejects */
-              this.handleMissedCall(participation.callSessionId).catch((err) => {
-                logger.error('❌ handleMissedCall failed after force-cleanup on disconnect error', {
-                  callId: participation.callSessionId,
-                  err
-                });
+          await this.postCallSummary(participation.callSessionId);
+          if (forceEnded.status === CallStatus.missed) {
+            /* istanbul ignore next -- handleMissedCall has its own internal catch and never rejects */
+            this.handleMissedCall(participation.callSessionId).catch((err) => {
+              logger.error('❌ handleMissedCall failed after force-cleanup on disconnect error', {
+                callId: participation.callSessionId,
+                err
               });
-            }
-
-            // Room-membership leak fix — same reasoning as the happy path
-            // above: this force-cleanup branch also terminates the call
-            // session and must evict every remaining socket from its room.
-            await this.evictCallRoomSockets(io, participation.callSessionId);
+            });
           }
-        }
 
-        logger.info('✅ Socket: Force cleanup successful on disconnect', {
-          callId: participation.callSessionId,
-          userId
-        });
-      } catch (forceError) {
-        logger.error('❌ Socket: Force cleanup also failed', {
-          callId: participation.callSessionId,
-          userId,
-          error: forceError
-        });
+          // Room-membership leak fix — same reasoning as the happy path
+          // above: this force-cleanup branch also terminates the call
+          // session and must evict every remaining socket from its room.
+          await this.evictCallRoomSockets(io, participation.callSessionId);
+        }
       }
+
+      logger.info('✅ Socket: Force cleanup successful on disconnect', {
+        callId: participation.callSessionId,
+        userId
+      });
+    } catch (forceError) {
+      logger.error('❌ Socket: Force cleanup also failed', {
+        callId: participation.callSessionId,
+        userId,
+        error: forceError
+      });
     }
   }
 
