@@ -636,14 +636,27 @@ export class MessageHandler {
       // PRIMAIRE : sans cette garde il contournait ENTIÈREMENT la fenêtre que
       // REST impose — un client pouvait éditer un message arbitrairement ancien
       // via `message:edit`. L'auteur au-delà de 24h est bloqué, sauf privilège
-      // MODERATOR/ADMIN/BIGBOSS (mêmes constantes que REST). Un `createdAt`
-      // absent (Date invalide → NaN) ne bloque jamais : `NaN > window` est faux.
+      // MODERATOR/ADMIN/BIGBOSS. Un `createdAt` absent (Date invalide → NaN) ne
+      // bloque jamais : `NaN > window` est faux.
       const messageAgeMs = Date.now() - new Date(message.createdAt).getTime();
       const EDIT_WINDOW_MS = 24 * 60 * 60 * 1000;
       if (messageAgeMs > EDIT_WINDOW_MS) {
-        const senderRole = message.sender?.role;
+        // The bypass is a GLOBAL-role privilege (User.role: ADMIN/BIGBOSS/
+        // MODERATOR), NOT the conversation-scoped Participant.role that
+        // `message.sender.role` exposes (only ever admin/moderator/member,
+        // lowercase — see schema.prisma). Comparing that lowercase participant
+        // role to the uppercase global constants never matched, so the bypass
+        // was dead code and every privileged author was wrongly blocked past
+        // 24h. Mirror handleMessageDelete's lazy global-role lookup — the editor
+        // IS the author here (the message query filters `sender: { userId }`),
+        // so the lookup keys on `userId`. Kept lazy: only fires past the window.
+        const authorRecord = await this.prisma.user.findUnique({
+          where: { id: userId },
+          select: { role: true },
+        });
+        const globalRole = authorRecord?.role;
         const hasEditPrivilege =
-          senderRole === 'MODERATOR' || senderRole === 'ADMIN' || senderRole === 'BIGBOSS';
+          globalRole === 'MODERATOR' || globalRole === 'ADMIN' || globalRole === 'BIGBOSS';
         if (!hasEditPrivilege) {
           this._sendGenericError(callback, 'You can no longer edit this message (24-hour limit exceeded)', socket);
           return;
