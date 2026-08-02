@@ -78,7 +78,7 @@ settings:
   # --strategy max-build` et écrit ICI **et** dans le pbxproj — les deux, sinon
   # la prochaine régénération réécrase le correctif.
   VERSIONING_SYSTEM: apple-generic
-  CURRENT_PROJECT_VERSION: "1266"
+  CURRENT_PROJECT_VERSION: "1268"
   # Alignée sur la version App Store Connect. Passée à 1.0.1 le 2026-07-31 :
   # la 1.0.0 avait été rejetée (déclaration Age Rating `ageAssurance` à true
   # sans mécanisme de vérification d'âge dans l'app), et l'enregistrement ASC a
