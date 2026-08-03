@@ -362,7 +362,8 @@ export class ReactionService {
     emoji: string,
     action: 'add' | 'remove',
     participantId: string,
-    conversationId: string
+    conversationId: string,
+    userId: string
   ): Promise<ReactionUpdateEvent> {
     const aggregation = await this.getEmojiAggregation(
       messageId,
@@ -374,6 +375,7 @@ export class ReactionService {
       messageId,
       conversationId,
       participantId,
+      userId,
       emoji,
       action,
       aggregation,

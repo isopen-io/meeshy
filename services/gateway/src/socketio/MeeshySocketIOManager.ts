@@ -2546,7 +2546,8 @@ export class MeeshySocketIOManager {
         reaction.emoji,
         'add',
         participant.id,
-        reaction.conversationId
+        reaction.conversationId,
+        reaction.asUserId
       );
 
       const message = await this.prisma.message.findUnique({
@@ -2564,7 +2565,8 @@ export class MeeshySocketIOManager {
             removedEmoji,
             'remove',
             participant.id,
-            normalizedConversationId
+            normalizedConversationId,
+            reaction.asUserId
           );
           this.io.to(ROOMS.conversation(normalizedConversationId)).emit(SERVER_EVENTS.REACTION_REMOVED, removeEvent);
         }

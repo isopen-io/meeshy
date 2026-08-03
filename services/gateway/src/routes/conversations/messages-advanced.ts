@@ -1126,6 +1126,7 @@ export function registerMessagesAdvancedRoutes(
           'add',
           currentParticipant.id,
           conversationId,
+          userId,
         );
 
         if (socketIOHandler) {
@@ -1141,6 +1142,7 @@ export function registerMessagesAdvancedRoutes(
                 'remove',
                 currentParticipant.id,
                 conversationId,
+                userId,
               );
               io.to(ROOMS.conversation(conversationId)).emit(SERVER_EVENTS.REACTION_REMOVED, removeEvent);
             }
@@ -1284,6 +1286,7 @@ export function registerMessagesAdvancedRoutes(
           'remove',
           currentParticipant.id,
           conversationId,
+          userId,
         );
 
         if (socketIOHandler) {
