@@ -192,7 +192,8 @@ export default async function reactionRoutes(fastify: FastifyInstance) {
         emoji,
         'add',
         participantId,
-        message?.conversationId ?? messageId
+        message?.conversationId ?? messageId,
+        userId
       );
 
       // Broadcast via Socket.IO à tous les participants de la conversation
@@ -210,7 +211,8 @@ export default async function reactionRoutes(fastify: FastifyInstance) {
                 removedEmoji,
                 'remove',
                 participantId,
-                message.conversationId
+                message.conversationId,
+                userId
               );
               io.to(ROOMS.conversation(message.conversationId)).emit(
                 SERVER_EVENTS.REACTION_REMOVED,
@@ -376,7 +378,8 @@ export default async function reactionRoutes(fastify: FastifyInstance) {
         decodedEmoji,
         'remove',
         removeParticipantId,
-        message?.conversationId ?? messageId
+        message?.conversationId ?? messageId,
+        userId
       );
 
       // Broadcast via Socket.IO

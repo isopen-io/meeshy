@@ -774,6 +774,13 @@ export interface ReactionUpdateEventData {
   readonly messageId: string;
   readonly conversationId: string;
   readonly participantId: string;
+  /**
+   * User.id du réacteur (distinct de `participantId`, un Participant.id scopé
+   * conversation). Requis pour que les autres appareils du même utilisateur
+   * reconnaissent leur propre réaction — un Participant.id n'égale jamais un
+   * User.id. Toujours émis ; optionnel pour la compat des payloads rejoués.
+   */
+  readonly userId?: string;
   readonly emoji: string;
   readonly action: 'add' | 'remove';
   readonly aggregation: {

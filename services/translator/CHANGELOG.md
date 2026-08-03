@@ -1,5 +1,19 @@
 # @meeshy/translator
 
+## 1.20.0
+
+### Minor Changes
+
+- Changements automatiques détectés :
+
+  - methodes tus explicites au lieu de fastify.all — QUERY exclu
+  - aligne fastify agent sur ^5.11.0 — copie unique, augmentation @fastify/jwt restaurée
+  - correct stale grpcio-tools guard comment post #2515
+  - revert typescript 7.0.2 vers 6.0.3 — ts-jest incompatible TS 7
+  - pinch-to-resize PiP bulle d'appel + fix long-press
+  - keyGenerator explicite pour ROUTE_RATE_LIMITS calls (#2529)
+  - resolve early-dedup senderId to User.id, not Participant.id (#2509)
+
 ## 1.19.1
 
 ### Patch Changes

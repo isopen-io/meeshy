@@ -406,9 +406,15 @@ export function useReactionsQuery({
           newReactions = [...old.reactions, event.aggregation];
         }
 
-        // Mettre à jour userReactions si c'est nous
+        // Mettre à jour userReactions si c'est nous. On compare le User.id du
+        // réacteur (`event.userId`), PAS `event.participantId` : ce dernier est un
+        // Participant.id scopé conversation, jamais égal à un User.id (ObjectIds de
+        // collections distinctes). Comparer participantId à currentUserId (un
+        // User.id) échouait toujours — sur un 2e appareil du même utilisateur la
+        // réaction n'était pas surlignée et un tap la ré-ajoutait au lieu de la
+        // retirer. Aligné sur le chemin réaction de post (use-post-socket-cache-sync).
         let newUserReactions = old.userReactions;
-        if (event.participantId && event.participantId === currentUserId) {
+        if (event.userId && event.userId === currentUserId) {
           if (!old.userReactions.includes(event.emoji)) {
             newUserReactions = [...old.userReactions, event.emoji];
           }
@@ -439,9 +445,11 @@ export function useReactionsQuery({
           );
         }
 
-        // Mettre à jour userReactions si c'est nous
+        // Mettre à jour userReactions si c'est nous (User.id du réacteur, pas
+        // participantId — cf. handleReactionAdded). Un écho de retrait émis par un
+        // autre appareil du même utilisateur doit retirer l'emoji de userReactions.
         let newUserReactions = old.userReactions;
-        if (event.participantId && event.participantId === currentUserId) {
+        if (event.userId && event.userId === currentUserId) {
           newUserReactions = old.userReactions.filter(e => e !== event.emoji);
         }
 

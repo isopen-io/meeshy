@@ -239,7 +239,7 @@ describe('ReactionHandler', () => {
       await new Promise(resolve => setImmediate(resolve));
 
       expect(callback).toHaveBeenCalledWith(expect.objectContaining({ success: true }));
-      expect(createUpdateEvent).toHaveBeenCalledWith(MESSAGE_ID, '👍', 'remove', PARTICIPANT_ID, expect.any(String));
+      expect(createUpdateEvent).toHaveBeenCalledWith(MESSAGE_ID, '👍', 'remove', PARTICIPANT_ID, expect.any(String), USER_ID);
       const emitted = io._emit.mock.calls.map((c: any[]) => ({ event: c[0], payload: c[1] }));
       expect(emitted).toEqual(expect.arrayContaining([
         expect.objectContaining({ event: 'reaction:removed', payload: expect.objectContaining({ emoji: '👍' }) }),

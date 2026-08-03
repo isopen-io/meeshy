@@ -453,9 +453,29 @@ public struct MeeshyUser: Codable, Identifiable, Sendable {
             return reduced
         }
 
+        // Alias ISO 639-1 DÉPRÉCIÉ (`iw`/`in`/`ji`) : réduit vers le code canonique
+        // courant, re-validé contre les codes supportés (comme le chemin 3-lettres).
+        // La JVM normalise `he→iw`, `id→in`, `yi→ji` ; un client Android émet donc
+        // `iw` sur une locale hébraïque, qui verbatim ne matcherait aucune trad `he`.
+        // Miroir de `LEGACY_ISO_639_1` (language-normalize.ts, TS SSOT).
+        if let legacy = Self.legacyISO6391Map[primary] {
+            return LanguageData.supportedCodeSet.contains(legacy) ? legacy : nil
+        }
+
         // Code 2-lettres inconnu : conservé (comportement historique).
         return primary
     }
+
+    /// Table de réduction des codes ISO 639-1 DÉPRÉCIÉS vers leur code canonique
+    /// courant (miroir de `LEGACY_ISO_639_1` dans
+    /// `packages/shared/utils/language-normalize.ts`). `iw`/`in`/`ji` sont les
+    /// anciens codes de l'hébreu/indonésien/yiddish, encore émis par la JVM
+    /// (`java.util.Locale.getLanguage()` : `he→iw`, `id→in`, `yi→ji`). Chaque cible
+    /// est re-validée contre les codes supportés. Toute évolution DOIT toucher les
+    /// deux sites (TS + Swift).
+    private static let legacyISO6391Map: [String: String] = [
+        "iw": "he", "in": "id", "ji": "yi"
+    ]
 
     /// Table de réduction ISO 639-2/639-3 → ISO 639-1 (miroir de `ISO_639_3_TO_1`
     /// dans `packages/shared/utils/language-normalize.ts`). Couvre les variantes

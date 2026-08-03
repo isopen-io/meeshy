@@ -311,12 +311,22 @@ export async function registerTusRoutes(fastify: FastifyInstance): Promise<void>
     (_request: any, _payload: any, done: (err: null) => void) => done(null)
   );
 
-  fastify.all('/api/v1/uploads', (req, reply) => {
-    tusServer.handle(req.raw, reply.raw);
+  const TUS_METHODS = ['GET', 'HEAD', 'POST', 'PATCH', 'DELETE', 'OPTIONS'] as const;
+
+  fastify.route({
+    method: [...TUS_METHODS],
+    url: '/api/v1/uploads',
+    handler: (req, reply) => {
+      tusServer.handle(req.raw, reply.raw);
+    },
   });
 
-  fastify.all('/api/v1/uploads/*', (req, reply) => {
-    tusServer.handle(req.raw, reply.raw);
+  fastify.route({
+    method: [...TUS_METHODS],
+    url: '/api/v1/uploads/*',
+    handler: (req, reply) => {
+      tusServer.handle(req.raw, reply.raw);
+    },
   });
 
   logger.info('[TUS] Resumable upload routes registered at /api/v1/uploads/*');
