@@ -6044,6 +6044,10 @@ final class CallManagerBubblePositionTests: XCTestCase {
         XCTAssertEqual(CallManager.shared.bubbleVerticalFraction, 0.08, accuracy: 0.0001)
     }
 
+    func test_bubbleSizeTier_defaultsToCircle() {
+        XCTAssertEqual(CallManager.shared.bubbleSizeTier, .circle)
+    }
+
     /// `resetEndedStateForNewCall` is private and touches live singleton/CallKit
     /// state — exercising it end-to-end would require mocking WebRTC/CallKit far
     /// beyond this feature's scope. Source-guard instead (same technique as
