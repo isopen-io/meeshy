@@ -54,7 +54,16 @@ numpy>=1.21.0,<1.24.0
 # `uv pip compile requirements.txt` (+ torch==2.6.0 en tête) avant de les élargir.
 accelerate==1.14.0
 datasets==5.0.1
-# sentencepiece: version gérée par ESPnet (0.1.97 pour espnet 202412)
+# sentencepiece: version gérée par ESPnet (0.1.97 pour espnet 202412). Aucun
+# wheel cp311/cp312 n'existe pour 0.1.97 sur PyPI (toutes plateformes confondues,
+# vérifié via l'API PyPI) : le build compile TOUJOURS depuis les sources sur
+# Python 3.11 (image translator), y compris sur amd64 natif où g++ s'en sort.
+# Sous QEMU arm64 (émulation), la même compilation échoue de façon
+# déterministe ("Relocations in generic ELF (EM: 62)" / collect2 exit 1) — cf.
+# docker.yml (déjà restreint à amd64 pour translator) et release.yml
+# (job "Build translator" → step "Determine build platforms").
+# NE PAS bumper sentencepiece isolément : espnet==202412 l'épingle en dur à
+# ==0.1.97 (metadata PyPI d'espnet) ; un uv pip compile confirmerait le conflit.
 huggingface_hub==1.24.0
 safetensors==0.8.0
 peft==0.19.1
