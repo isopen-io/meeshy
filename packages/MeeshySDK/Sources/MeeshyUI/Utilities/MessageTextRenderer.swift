@@ -39,6 +39,7 @@ public enum MessageTextRenderer {
         color: Color,
         mentionColor: Color? = nil,
         accentColor: Color? = nil,
+        hashtagColor: Color? = nil,
         mentionDisplayNames: [String: String]? = nil,
         highlightTerm: String? = nil,
         trackedLinks: [String: String]? = nil
@@ -46,7 +47,7 @@ public enum MessageTextRenderer {
         guard !text.isEmpty else { return Text("") }
         let segments = parse(text, mentionDisplayNames: mentionDisplayNames)
         let ranges = highlightTerm.flatMap { highlightRanges(in: text, term: $0) } ?? []
-        return buildText(segments, fontSize: fontSize, color: color, mentionColor: mentionColor, accentColor: accentColor, mentionDisplayNames: mentionDisplayNames, highlightRanges: ranges, fullText: text, trackedLinks: trackedLinks)
+        return buildText(segments, fontSize: fontSize, color: color, mentionColor: mentionColor, accentColor: accentColor, hashtagColor: hashtagColor, mentionDisplayNames: mentionDisplayNames, highlightRanges: ranges, fullText: text, trackedLinks: trackedLinks)
     }
 
     // MARK: - Tracked-link resolution
@@ -133,12 +134,13 @@ public enum MessageTextRenderer {
         case mentionLink(display: String, url: URL, username: String)
         case meeshyTokenLink(display: String, url: URL, token: String)
         case urlLink(display: String, url: URL)
+        case hashtagLink(display: String, url: URL, tag: String)
     }
 
     // MARK: - Rule Definitions
 
     private enum RuleKind {
-        case bold, italic, strikethrough, underline, meeshyLink, mention, url
+        case bold, italic, strikethrough, underline, meeshyLink, mention, url, hashtag
         case displayNameMention(username: String)
     }
 
@@ -150,6 +152,16 @@ public enum MessageTextRenderer {
         pattern: #"(?<![a-zA-Z0-9])@([a-zA-Z0-9_]{1,30})"#
     )
 
+    // `#` + 1-50 caractères Unicode lettre/chiffre/underscore. PAS de tiret
+    // (convention hashtag). Frontière gauche : ni mot ni `/` — exclut aussi
+    // bien "C#paris" qu'un fragment d'URL "exemple.com/#section". MÊME
+    // classe de caractères que le service gateway (HashtagService.ts) —
+    // SSOT dupliquée consciemment, comme MENTION_HANDLE_CHARS l'est déjà
+    // entre mention-parser.ts et son miroir Swift.
+    private static let hashtagRegex = try! NSRegularExpression(
+        pattern: #"(?<![\p{L}\p{N}_/])#([\p{L}\p{N}_]{1,50})"#
+    )
+
     /// Priority-ordered rules. First match at any position wins.
     /// Bold must precede italic so `**` is consumed before `*`.
     private static let rules: [(regex: NSRegularExpression, kind: RuleKind)] = [
@@ -159,6 +171,7 @@ public enum MessageTextRenderer {
         (try! NSRegularExpression(pattern: #"(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)"#), .italic),
         (meeshyLinkRegex, .meeshyLink),
         (mentionRegex, .mention),
+        (hashtagRegex, .hashtag),
     ]
 
     /// Pure-regex URL matcher that replaces `NSDataDetector` for HTTP(S) link
@@ -245,14 +258,17 @@ public enum MessageTextRenderer {
     private static func hasInlineSyntax(_ text: String) -> Bool {
         for scalar in text.unicodeScalars {
             switch scalar {
-            case "*", "~", "_", "@": return true
+            case "*", "~", "_", "@", "#": return true
             default: continue
             }
         }
         return text.contains("http") || text.contains("m+")
     }
 
-    private static func parse(_ text: String, inherited: Styles = [], mentionDisplayNames: [String: String]? = nil) -> [Segment] {
+    // `internal` (pas `private`) — même précédent que `resolvedLinkURL` : accès
+    // direct depuis les tests via `@testable import`, sans exposer publiquement
+    // un détail d'implémentation hors du module.
+    static func parse(_ text: String, inherited: Styles = [], mentionDisplayNames: [String: String]? = nil) -> [Segment] {
         let ns = text as NSString
         let length = ns.length
         guard length > 0 else { return [] }
@@ -351,6 +367,13 @@ public enum MessageTextRenderer {
                     segments.append(.mentionLink(display: display, url: url, username: username))
                 }
 
+            case .hashtag:
+                let tag = ns.substring(with: match.range(at: 1))
+                let display = ns.substring(with: match.range)
+                if let url = URL(string: "https://meeshy.me/hashtag/\(tag.lowercased())") {
+                    segments.append(.hashtagLink(display: display, url: url, tag: tag.lowercased()))
+                }
+
             case .url:
                 // `match.url` is only populated by `NSDataDetector`. Our pure
                 // regex returns plain `NSTextCheckingResult` values where
@@ -378,6 +401,7 @@ public enum MessageTextRenderer {
         color: Color,
         mentionColor: Color?,
         accentColor: Color?,
+        hashtagColor: Color? = nil,
         mentionDisplayNames: [String: String]?,
         highlightRanges: [NSRange] = [],
         fullText: String = "",
@@ -413,6 +437,17 @@ public enum MessageTextRenderer {
                 attr.underlineStyle = .single
                 if let mentionColor {
                     attr.foregroundColor = mentionColor
+                }
+                charOffset += display.count
+                result.append(attr)
+
+            case .hashtagLink(let display, let url, _):
+                var attr = AttributedString(display)
+                attr.link = url
+                attr.font = .system(size: fontSize, weight: .semibold)
+                attr.underlineStyle = .single
+                if let hashtagColor {
+                    attr.foregroundColor = hashtagColor
                 }
                 charOffset += display.count
                 result.append(attr)
