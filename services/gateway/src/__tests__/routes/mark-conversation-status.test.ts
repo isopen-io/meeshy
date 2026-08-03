@@ -265,14 +265,41 @@ describe('broadcastReadStatusUpdate — CONVERSATION_UNREAD_UPDATED badge reset'
 
     expect(response.statusCode).toBe(200);
     // Badge reset must still fire — it syncs the reader's OWN devices, not discloses to peers.
+    // The count is sourced from the real post-mark getUnreadCount (mirrors the
+    // showReadReceipts=true sibling test above), not a hardcoded value.
     expect(mockTo2).toHaveBeenCalledWith('user:user-1');
     expect(mockEmit2).toHaveBeenCalledWith('conversation:unread-updated', {
       conversationId: CONVERSATION_ID,
-      unreadCount: 0,
+      unreadCount: expect.any(Number),
     });
     // read-status:updated (peer disclosure) must NOT fire when showReadReceipts=false —
     // neither the legacy name nor the dual-emitted message:read-status-updated.
     expect(mockEmit2).not.toHaveBeenCalledWith('read-status:updated', expect.anything());
     expect(mockEmit2).not.toHaveBeenCalledWith('message:read-status-updated', expect.anything());
+  });
+
+  // Exact-read (spec 2026-07-24-read-exactness-design.md): a partial read reports only
+  // a subset of messageIds (no caughtUpToMessageId), so the cursor advances only over the
+  // contiguous read prefix and messages legitimately remain unread. The opted-out badge
+  // reset previously hardcoded unreadCount: 0, wrongly clearing the reader's badge across
+  // their devices. It must emit the REAL remaining unread, like the opted-in path does.
+  it('mark-as-read badge reset reflects the real remaining unread on a partial read, not 0 (showReadReceipts=false)', async () => {
+    mockShouldShowReadReceipts.mockResolvedValue(false);
+    mockPrisma.message.findMany.mockResolvedValue([]);
+    // Post-mark getUnreadCount resolves a nonzero remainder (partial read left messages unread).
+    mockPrisma.message.count.mockResolvedValue(3);
+
+    const response = await app2.inject({
+      method: 'POST',
+      url: `/conversations/${CONVERSATION_ID}/mark-as-read`,
+      payload: { messageIds: [LATEST_MESSAGE_ID] },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(mockTo2).toHaveBeenCalledWith('user:user-1');
+    expect(mockEmit2).toHaveBeenCalledWith('conversation:unread-updated', {
+      conversationId: CONVERSATION_ID,
+      unreadCount: 3,
+    });
   });
 });
