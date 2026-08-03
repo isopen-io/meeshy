@@ -1,5 +1,14 @@
 # @meeshy/web
 
+## 1.20.0
+
+### Minor Changes
+
+- Changements automatiques détectés :
+
+  - My Stories grid + publish-time cover use pixel-perfect renderer
+  - pixel-perfect story cover rendering (StoryStaticSnapshot)
+
 ## 1.19.0
 
 ### Minor Changes
