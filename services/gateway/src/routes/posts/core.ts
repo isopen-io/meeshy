@@ -8,6 +8,7 @@ import { PostTranslationService } from '../../services/posts/PostTranslationServ
 import { CreatePostSchema, UpdatePostSchema, TranslatePostSchema, PostParams } from './types';
 import { sendSuccess, sendUnauthorized, sendBadRequest, sendNotFound, sendForbidden, sendInternalError, sendError } from '../../utils/response';
 import { resolveMentionedUsers, MentionService } from '../../services/MentionService';
+import { HashtagService } from '../../services/HashtagService';
 import { createPostRouteRateLimitConfig } from '../../middleware/rate-limiter';
 import { withMutationLog } from '../../utils/withMutationLog';
 import { SecuritySanitizer } from '../../utils/sanitize.js';
@@ -46,6 +47,7 @@ export function registerCoreRoutes(
 ) {
   const postService = new PostService(prisma);
   const mentionService = new MentionService(prisma);
+  const hashtagService = new HashtagService(prisma);
 
   // POST /posts — Create a new post
   //
@@ -179,6 +181,15 @@ export function registerCoreRoutes(
               });
             }
           }
+        }
+      }
+
+      if (postContent) {
+        const hashtags = hashtagService.extractHashtags(postContent);
+        if (hashtags.length > 0) {
+          hashtagService.createPostHashtags((post as any).id as string, hashtags).catch((err: unknown) => {
+            fastify.log.error(`[POST /posts] hashtag persist failed: ${err}`);
+          });
         }
       }
 
@@ -324,6 +335,18 @@ export function registerCoreRoutes(
             }
           }
         }
+      }
+
+      {
+        const editHashtags = editedContent ? hashtagService.extractHashtags(editedContent) : [];
+        if (editHashtags.length > 0) {
+          hashtagService.createPostHashtags(postId, editHashtags).catch((err: unknown) => {
+            fastify.log.error(`[PUT /posts/:postId] hashtag persist failed: ${err}`);
+          });
+        }
+        hashtagService.reconcileRemovedHashtags(postId, editHashtags.map((h) => h.tag)).catch((err: unknown) => {
+          fastify.log.error(`[PUT /posts/:postId] hashtag reconcile failed: ${err}`);
+        });
       }
 
       // Broadcast post edits. Each type has its own event so clients can listen narrowly:
