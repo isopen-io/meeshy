@@ -1717,24 +1717,37 @@ struct StoryViewerView: View {
 
     /// Contenu à droite de la note du header (directive user 2026-08-02) :
     /// un son de BIBLIOTHÈQUE s'annonce par le crédit défilant
-    /// « titre · @pseudo » à la place de la sinusoïde ; une piste PROPRE
-    /// (première publication, même si la capture l'a versée ensuite à la
-    /// bibliothèque) garde la sinusoïde. Même résolveur que la chip du canvas.
-    var headerBackgroundAudioDisplay: AudioChipDisplay { // internal for cross-file access
-        guard let story = currentStory else { return .waveform }
+    /// « titre · @pseudo · M:SS » à la place de la sinusoïde ; une piste
+    /// PROPRE (première publication, même si la capture l'a versée ensuite à
+    /// la bibliothèque) garde la sinusoïde. Même résolveur que la chip du
+    /// canvas ; la fenêtre du FOND (fin = fin de slide) arme le compteur de
+    /// temps restant — primitives Equatable descendues en `let`, jamais le
+    /// `BackgroundEntry` privé du mixer.
+    var headerBackgroundAudioDisplay: AudioChipHeaderModel { // internal for cross-file access
+        guard let story = currentStory else { return AudioChipHeaderModel(display: .waveform) }
         let bg = (story.storyEffects?.audioPlayerObjects ?? [])
             .first(where: { $0.isBackground == true })
         if let bg, bg.soundId != nil {
-            return AudioChipDisplay.resolve(
-                soundId: bg.soundId, title: bg.name,
-                authorUsername: bg.soundAuthorUsername)
+            return AudioChipHeaderModel(
+                display: AudioChipDisplay.resolve(
+                    soundId: bg.soundId, title: bg.name,
+                    authorUsername: bg.soundAuthorUsername),
+                window: AudioChipPlaybackWindow(
+                    startTime: bg.startTime.map(TimeInterval.init),
+                    duration: bg.duration.map(TimeInterval.init),
+                    isBackground: true,
+                    slideDuration: currentSlideDuration))
         }
         if let entry = story.backgroundAudio {
-            return AudioChipDisplay.resolve(
-                soundId: entry.id, title: entry.title,
-                authorUsername: entry.uploaderName)
+            return AudioChipHeaderModel(
+                display: AudioChipDisplay.resolve(
+                    soundId: entry.id, title: entry.title,
+                    authorUsername: entry.uploaderName),
+                window: AudioChipPlaybackWindow(
+                    isBackground: true,
+                    slideDuration: currentSlideDuration))
         }
-        return .waveform
+        return AudioChipHeaderModel(display: .waveform)
     }
 
     /// Probes each foreground video of the current slide for a real audio track.

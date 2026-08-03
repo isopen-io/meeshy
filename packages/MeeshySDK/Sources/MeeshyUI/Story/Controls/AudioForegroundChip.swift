@@ -118,6 +118,11 @@ public struct AudioForegroundChip: View {
     /// Tap sur l'icône (mode `.composer`) → coupe / réactive le son de cette
     /// piste. Le composer persiste via le `volume` du modèle (0 = muet).
     public let onToggleMute: () -> Void
+    /// Durée de la slide, fournie par le READER (l'overlay la possède) —
+    /// arme le compte à rebours « · M:SS » du crédit défilant. Le composer
+    /// n'en passe pas : son canvas `.edit` n'alimente pas le playhead, un
+    /// compteur y serait un chiffre mort.
+    public let slideDuration: TimeInterval?
 
     @GestureState private var dragOffset: CGSize = .zero
     @Environment(\.colorScheme) private var colorScheme
@@ -127,6 +132,7 @@ public struct AudioForegroundChip: View {
                 mode: Mode = .composer,
                 isSelected: Bool = false,
                 isUserMuted: Bool = false,
+                slideDuration: TimeInterval? = nil,
                 onDragEnd: @escaping () -> Void = {},
                 onTap: @escaping () -> Void = {},
                 onToggleMute: @escaping () -> Void = {}) {
@@ -135,6 +141,7 @@ public struct AudioForegroundChip: View {
         self.mode = mode
         self.isSelected = isSelected
         self.isUserMuted = isUserMuted
+        self.slideDuration = slideDuration
         self.onDragEnd = onDragEnd
         self.onTap = onTap
         self.onToggleMute = onToggleMute
@@ -171,16 +178,20 @@ public struct AudioForegroundChip: View {
         HStack(spacing: 8) {
             muteToggleIcon
                 .frame(width: 18, height: 18)
-            // Son de bibliothèque → crédit défilant « titre · @pseudo » ;
+            // Son de bibliothèque → crédit défilant « titre · @pseudo · M:SS » ;
             // piste propre (première publication) → sinusoïde, comme toujours.
+            // Le compteur ne s'arme qu'au reader (slideDuration fourni) — le
+            // frame s'élargit alors juste assez pour loger « · M:SS ».
             switch AudioChipDisplay.resolve(
                 soundId: audioObject.soundId,
                 title: audioObject.name,
                 authorUsername: audioObject.soundAuthorUsername
             ) {
             case .marquee(let text):
-                AudioChipMarquee(text: text, paused: isUserMuted)
-                    .frame(width: 92, height: 18)
+                AudioChipMarquee(text: text,
+                                 paused: isUserMuted,
+                                 window: readerPlaybackWindow)
+                    .frame(width: readerPlaybackWindow == nil ? 92 : 124, height: 18)
                     .opacity(isUserMuted ? 0.55 : 1.0)
             case .waveform:
                 AudioForegroundSineWave(paused: isUserMuted)
@@ -231,6 +242,19 @@ public struct AudioForegroundChip: View {
 
     private var iconName: String {
         isUserMuted ? "waveform.slash" : "waveform"
+    }
+
+    /// Fenêtre du secteur pour le compteur du marquee — mêmes primitives et
+    /// même fin de fenêtre que `AudioForegroundReaderOverlay.visibleAudios`
+    /// (le compteur atteint 0:00 exactement quand la chip disparaît).
+    /// `nil` hors reader : pas de compteur.
+    private var readerPlaybackWindow: AudioChipPlaybackWindow? {
+        guard let slideDuration else { return nil }
+        return AudioChipPlaybackWindow(
+            startTime: audioObject.startTime.map(TimeInterval.init),
+            duration: audioObject.duration.map(TimeInterval.init),
+            isBackground: audioObject.isBackground == true,
+            slideDuration: slideDuration)
     }
 
     private var strokeColor: Color {
@@ -446,6 +470,7 @@ public struct AudioForegroundReaderOverlay: View {
                     isUserMuted: Self.chipShowsMuted(
                         viewerMuted: muteRegistry.isMuted(audio.id),
                         audio: audio),
+                    slideDuration: slideDuration,
                     onTap: {
                         HapticFeedback.light()
                         StoryReaderAudioMuteRegistry.shared.toggle(audio.id)

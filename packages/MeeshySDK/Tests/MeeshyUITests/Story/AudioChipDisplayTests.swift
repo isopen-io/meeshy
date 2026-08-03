@@ -64,6 +64,178 @@ final class AudioChipDisplayTests: XCTestCase {
     }
 }
 
+/// Temps restant du secteur audio (directive user 2026-08-02, itération 2) :
+/// le contenu défilant se termine par « · M:SS », le temps restant avant la
+/// fin de lecture du secteur choisi. La fin de fenêtre est le miroir EXACT de
+/// `AudioForegroundReaderOverlay.visibleAudios` : un fond joue jusqu'à la fin
+/// de la slide, un foreground jusqu'à `start + duration` (ou fin de slide
+/// sans durée propre). Sans fin résoluble → `nil`, et le marquee n'affiche
+/// AUCUN segment temps.
+final class AudioChipRemainingTimeMathTests: XCTestCase {
+
+    func test_remainingSeconds_background_countsDownToSlideEnd() {
+        XCTAssertEqual(
+            AudioChipDisplay.remainingSeconds(
+                elapsed: 2, startTime: nil, duration: 4, slideDuration: 10, isBackground: true),
+            8,
+            "le fond joue toute la slide : sa fin = fin de slide, jamais sa durée intrinsèque"
+        )
+    }
+
+    func test_remainingSeconds_foreground_withDuration_countsDownToWindowEnd() {
+        XCTAssertEqual(
+            AudioChipDisplay.remainingSeconds(
+                elapsed: 6, startTime: 3, duration: 5, slideDuration: 30, isBackground: false),
+            2
+        )
+    }
+
+    func test_remainingSeconds_foreground_withoutDuration_fallsBackToSlideEnd() {
+        XCTAssertEqual(
+            AudioChipDisplay.remainingSeconds(
+                elapsed: 4, startTime: 3, duration: nil, slideDuration: 10, isBackground: false),
+            6,
+            "miroir de visibleAudios : duration nil → la fenêtre court jusqu'à la fin de slide"
+        )
+    }
+
+    func test_remainingSeconds_noResolvableEnd_returnsNil() {
+        XCTAssertNil(AudioChipDisplay.remainingSeconds(
+            elapsed: 1, startTime: 0, duration: nil, slideDuration: nil, isBackground: false))
+        XCTAssertNil(AudioChipDisplay.remainingSeconds(
+            elapsed: 1, startTime: nil, duration: nil, slideDuration: nil, isBackground: true))
+    }
+
+    func test_remainingSeconds_pastEnd_clampsToZero() {
+        XCTAssertEqual(
+            AudioChipDisplay.remainingSeconds(
+                elapsed: 12, startTime: nil, duration: nil, slideDuration: 10, isBackground: true),
+            0
+        )
+    }
+
+    func test_countdownTotalSeconds_foreground_isWindowLength() {
+        XCTAssertEqual(
+            AudioChipDisplay.countdownTotalSeconds(
+                startTime: 3, duration: 5, slideDuration: 30, isBackground: false),
+            5
+        )
+        XCTAssertEqual(
+            AudioChipDisplay.countdownTotalSeconds(
+                startTime: nil, duration: nil, slideDuration: 10, isBackground: true),
+            10
+        )
+    }
+
+    func test_countdownTotalSeconds_noResolvableEnd_returnsNil() {
+        XCTAssertNil(AudioChipDisplay.countdownTotalSeconds(
+            startTime: nil, duration: nil, slideDuration: nil, isBackground: false))
+    }
+
+    func test_minuteDigits_underTenMinutes_isOne() {
+        XCTAssertEqual(AudioChipDisplay.minuteDigits(forTotal: 599.9), 1)
+    }
+
+    func test_minuteDigits_tenMinutesOrMore_isTwo() {
+        XCTAssertEqual(AudioChipDisplay.minuteDigits(forTotal: 600), 2)
+    }
+
+    func test_formatRemaining_zero_rendersZeroZero() {
+        XCTAssertEqual(AudioChipDisplay.formatRemaining(0, minuteDigits: 1), "0:00")
+    }
+
+    func test_formatRemaining_fractionalSeconds_ceilsToNextSecond() {
+        XCTAssertEqual(AudioChipDisplay.formatRemaining(0.4, minuteDigits: 1), "0:01",
+                       "« 0:01 » tant que la lecture n'est pas réellement finie")
+        XCTAssertEqual(AudioChipDisplay.formatRemaining(59.2, minuteDigits: 1), "1:00")
+    }
+
+    func test_formatRemaining_twoDigitTrack_padsMinutes() {
+        XCTAssertEqual(AudioChipDisplay.formatRemaining(65, minuteDigits: 2), "01:05")
+    }
+
+    func test_formatRemaining_overflowingSingleDigitTrack_clampsToNineFiftyNine() {
+        XCTAssertEqual(AudioChipDisplay.formatRemaining(3600, minuteDigits: 1), "9:59",
+                       "UNE chasse par piste, constante : plutôt saturer que déformer la largeur")
+    }
+
+    func test_formatRemaining_negative_clampsToZero() {
+        XCTAssertEqual(AudioChipDisplay.formatRemaining(-5, minuteDigits: 1), "0:00")
+    }
+}
+
+/// Défilement EN CERCLE sans coupure (directive user 2026-08-02, itération 2) :
+/// l'offset du marquee est une fonction PURE du temps — modulo sur un cycle
+/// `largeur contenu + gap` — pilotée par un `TimelineView(.animation)` interne
+/// à l'atome (patron `AudioForegroundSineWave`). La pause gèle l'offset ; la
+/// reprise dérive une epoch pour repartir exactement où le texte s'était
+/// arrêté.
+final class AudioChipMarqueeScrollMathTests: XCTestCase {
+
+    private let cycle: CGFloat = 140   // largeur contenu + gap
+    private let speed: CGFloat = 28    // points / seconde → période = 5 s
+
+    func test_scrollOffset_isPeriodicOverOneCycle() {
+        let period = TimeInterval(cycle / speed)
+        for t: TimeInterval in [0, 0.37, 1.2, 4.99, 12.345] {
+            XCTAssertEqual(
+                AudioChipMarquee.scrollOffset(elapsed: t + period, cycle: cycle, speed: speed),
+                AudioChipMarquee.scrollOffset(elapsed: t, cycle: cycle, speed: speed),
+                accuracy: 0.0001,
+                "le défilement recommence sans coupure : offset(t + cycle/vitesse) == offset(t)"
+            )
+        }
+    }
+
+    func test_scrollOffset_staysWithinOneCycleBand() {
+        for t in stride(from: 0.0, through: 20.0, by: 0.1) {
+            let offset = AudioChipMarquee.scrollOffset(elapsed: t, cycle: cycle, speed: speed)
+            XCTAssertLessThanOrEqual(offset, 0)
+            XCTAssertGreaterThan(offset, -cycle)
+        }
+    }
+
+    func test_scrollOffset_frameSteps_neverJumpMoreThanOneStepOrWrapSeamlessly() {
+        let dt = 1.0 / 30.0
+        let step = speed * CGFloat(dt)
+        var previous = AudioChipMarquee.scrollOffset(elapsed: 0, cycle: cycle, speed: speed)
+        for frame in 1...600 {
+            let current = AudioChipMarquee.scrollOffset(
+                elapsed: TimeInterval(frame) * dt, cycle: cycle, speed: speed)
+            let delta = current - previous
+            let isPlainStep = abs(delta + step) < 0.001
+            let isSeamlessWrap = abs(delta + step - cycle) < 0.001
+            XCTAssertTrue(isPlainStep || isSeamlessWrap,
+                          "saut inattendu au frame \(frame) : delta \(delta)")
+            previous = current
+        }
+    }
+
+    func test_scrollOffset_degenerateCycle_returnsZero() {
+        XCTAssertEqual(AudioChipMarquee.scrollOffset(elapsed: 5, cycle: 0, speed: speed), 0)
+        XCTAssertEqual(AudioChipMarquee.scrollOffset(elapsed: 5, cycle: -10, speed: speed), 0)
+    }
+
+    func test_scrollOffset_negativeElapsed_normalizesIntoBand() {
+        let offset = AudioChipMarquee.scrollOffset(elapsed: -0.5, cycle: cycle, speed: speed)
+        XCTAssertLessThanOrEqual(offset, 0)
+        XCTAssertGreaterThan(offset, -cycle)
+    }
+
+    func test_resumeEpoch_resumesExactlyAtFrozenOffset() {
+        let frozen: CGFloat = -37.5
+        let resumeDate = Date(timeIntervalSinceReferenceDate: 1_000)
+        let epoch = AudioChipMarquee.resumeEpoch(at: resumeDate, frozenOffset: frozen, speed: speed)
+        XCTAssertEqual(
+            AudioChipMarquee.scrollOffset(
+                elapsed: resumeDate.timeIntervalSince(epoch), cycle: cycle, speed: speed),
+            frozen,
+            accuracy: 0.0001,
+            "la reprise post-pause (dé-mute) repart exactement où le défilement s'était gelé"
+        )
+    }
+}
+
 /// Le choix d'un son de bibliothèque grave l'auteur dans la piste : le
 /// reader et l'export lisent un `StorySlide` hors-ligne, ils ne peuvent pas
 /// re-résoudre le crédit au moment de l'affichage.
