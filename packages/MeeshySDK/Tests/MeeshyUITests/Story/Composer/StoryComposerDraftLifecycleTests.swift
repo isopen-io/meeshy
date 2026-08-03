@@ -91,14 +91,15 @@ final class StoryComposerDraftLifecycleTests: XCTestCase {
                       "Sortie vierge → `listDrafts()` est vide (spec incrément 3).")
     }
 
-    // MARK: - Publication acceptée → SEUL le brouillon publié disparaît
+    // MARK: - Publication CONFIRMÉE → SEUL le brouillon publié disparaît
 
-    /// Le geste destructif du publish est `clearCurrentDraft()` →
-    /// `delete(draftId: viewModel.draftId)` : appliqué à l'id de session, il ne
-    /// touche aucun voisin. (Le câblage exact — destruction gatée sur
-    /// `accepted`, `clearCurrentDraft` et jamais une purge globale — est ancré
-    /// par `StoryComposerPublishHandoffTests`.)
-    func test_publishAccepted_deletesOnlyThePublishedStoryDraft() throws {
+    /// Directive 2026-08-02 : la destruction n'appartient plus au hand-off
+    /// (qui GÈLE le brouillon — cf. `StoryComposerPublishHandoffTests`) mais
+    /// aux consommateurs de SUCCÈS serveur (`StoryDraftStore.shared.delete`
+    /// depuis le chemin online, la file et l'édition). Le geste reste
+    /// `delete(draftId:)` : appliqué à l'id de LA story publiée, il ne touche
+    /// aucun voisin.
+    func test_publishConfirmed_deletesOnlyThePublishedStoryDraft() throws {
         let store = makeStore()
         store.save(draftId: "publiee", slides: [contentSlide("La story qui part")], visibility: "PUBLIC")
         store.save(draftId: "voisin", slides: [contentSlide("Celle de demain")], visibility: "FRIENDS")

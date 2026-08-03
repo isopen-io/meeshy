@@ -267,10 +267,10 @@ extension StoryComposerView {
 
             Divider()
 
-            if !isEditingExistingStory {
-                Button { saveDraft() } label: {
-                    Label(String(localized: "story.composer.saveDraft", defaultValue: "Sauvegarder le brouillon", bundle: .module), systemImage: "square.and.arrow.down")
-                }
+            // 2026-08-02 (point c) : « Sauvegarder » s'offre AUSSI en édition —
+            // le brouillon porte `editingPostId` et rouvre le mode édition.
+            Button { saveDraft() } label: {
+                Label(String(localized: "story.composer.saveDraft", defaultValue: "Sauvegarder le brouillon", bundle: .module), systemImage: "square.and.arrow.down")
             }
             Divider()
             Button(role: .destructive) {

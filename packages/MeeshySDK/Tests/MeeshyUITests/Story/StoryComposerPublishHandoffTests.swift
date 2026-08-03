@@ -90,28 +90,39 @@ final class StoryComposerPublishHandoffTests: XCTestCase {
         )
     }
 
-    func test_publishAllSlides_destroysTheDraftOnlyWhenTheHandoffIsAccepted() throws {
+    /// Directive user 2026-08-02 (SUPPLANTE la spec 2026-08-01) : une story ne
+    /// quitte le brouillon QUE définitivement publiée. `accepted` signifie
+    /// seulement « accepté en file » — le hand-off ne détruit donc PLUS le
+    /// brouillon : il le GÈLE (`freezeCurrentDraftForPublish` → persistance
+    /// légère + `pendingPublishAt`). Seul le succès serveur confirmé supprime
+    /// le brouillon ; l'échec permanent le ramène éditable avec son erreur.
+    func test_publishAllSlides_freezesTheDraftInsteadOfDestroyingIt_onlyWhenAccepted() throws {
         let body = try Self.functionBody(named: "func publishAllSlides()",
                                          in: Self.publicationSourceURL)
+
+        XCTAssertFalse(
+            body.contains("clearCurrentDraft()"),
+            """
+            Le hand-off ne détruit plus le brouillon : « accepté en file » n'est pas \
+            « publié ». La suppression n'appartient qu'aux consommateurs de SUCCÈS serveur.
+            """
+        )
 
         guard let callRange = body.range(of: "onPublishAllInBackground(") else {
             XCTFail("Hand-off introuvable")
             return
         }
-        // Multi-brouillons (spec 2026-08-01) : la publication acceptée ne jette
-        // que le brouillon de LA story partie (`clearCurrentDraft()`), jamais le
-        // magasin entier — les brouillons voisins survivent.
-        for destructive in ["clearCurrentDraft()", "draftAutosaveSuspended = true"] {
-            guard let range = body.range(of: destructive) else {
-                XCTFail("« \(destructive) » a disparu de publishAllSlides()")
+        for gated in ["freezeCurrentDraftForPublish()", "draftAutosaveSuspended = true"] {
+            guard let range = body.range(of: gated) else {
+                XCTFail("« \(gated) » a disparu de publishAllSlides()")
                 continue
             }
             XCTAssertTrue(
                 callRange.lowerBound < range.lowerBound,
                 """
-                « \(destructive) » s'exécute AVANT de savoir si le hand-off est accepté : \
+                « \(gated) » s'exécute AVANT de savoir si le hand-off est accepté : \
                 sur un refus (édition hors-ligne, surface inerte) le composer reste ouvert \
-                avec son brouillon déjà jeté et son autosave morte pour la session.
+                avec un brouillon gelé à tort et son autosave morte pour la session.
                 """
             )
         }

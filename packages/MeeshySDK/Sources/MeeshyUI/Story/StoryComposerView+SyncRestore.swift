@@ -215,7 +215,8 @@ extension StoryComposerView {
                                     slides: slidesStampedWithThumbHash(),
                                     visibility: visibility,
                                     visibilityUserIds: visibilityUserIds,
-                                    originalLanguage: storyLanguage)
+                                    originalLanguage: storyLanguage,
+                                    editingPostId: viewModel.editingPostId)
         persistCommandHistory()
         StoryDraftStore.shared.saveMedia(
             draftId: viewModel.draftId,
@@ -262,9 +263,11 @@ extension StoryComposerView {
     /// background, qui portaient jusqu'ici deux listes de gardes voisines mais
     /// pas identiques.
     ///
-    /// Les cinq termes, et pourquoi chacun ferme le magasin :
-    /// - **édition d'une story publiée** : un brouillon semé là serait restauré
-    ///   plus tard comme une NOUVELLE story (perte du lien `editingPostId`) ;
+    /// Les quatre termes, et pourquoi chacun ferme le magasin (le terme
+    /// « édition d'une story publiée » a été RETIRÉ le 2026-08-02 : le
+    /// brouillon persiste désormais `editingPostId`, sa réouverture rouvre le
+    /// mode édition — la prémisse « restauré comme une NOUVELLE story » ne
+    /// tient plus, et une story mise en édition doit revenir en brouillon) :
     /// - **offre de reprise POSÉE** (`isBannerVisible`) : `StoryDraftStore` n'a
     ///   qu'UN slot et l'utilisateur a les slides proposées sous les yeux —
     ///   écrire ferait mentir « Reprendre ». Le bandeau RANGÉ, en revanche,
@@ -284,14 +287,12 @@ extension StoryComposerView {
     /// Les écritures EXPLICITES (« Sauvegarder » à la sortie) ne passent PAS
     /// par ce gate : l'utilisateur les demande, elles ont le droit d'écraser.
     nonisolated static func mayOverwriteStoredDraft(
-        isEditingExistingStory: Bool,
         draftResume: DraftResumeState,
         isAutosaveSuspended: Bool,
         composerHasContent: Bool,
         didHandOffPublish: Bool
     ) -> Bool {
-        !isEditingExistingStory
-            && !draftResume.isBannerVisible
+        !draftResume.isBannerVisible
             && !isAutosaveSuspended
             && composerHasContent
             && !didHandOffPublish
@@ -308,13 +309,12 @@ extension StoryComposerView {
     }
 
     /// Application du gate à l'état vivant de la vue — un seul lieu de lecture
-    /// des cinq termes, pour les deux autosaves. Le terme de contenu est élargi
+    /// des quatre termes, pour les deux autosaves. Le terme de contenu est élargi
     /// à l'audio : le store SAIT le retenir (rabattement `mergeEffects` à
     /// chaque sync) — sans lui, une session audio-seule n'écrivait jamais rien
     /// et un crash ou un passage en background perdait la composition.
     var mayOverwriteStoredDraft: Bool {
         Self.mayOverwriteStoredDraft(
-            isEditingExistingStory: isEditingExistingStory,
             draftResume: draftResume,
             isAutosaveSuspended: draftAutosaveSuspended,
             composerHasContent: composerHasContent || composerCarriesAudio,
@@ -352,7 +352,8 @@ extension StoryComposerView {
                                     slides: slidesStampedWithThumbHash(),
                                     visibility: visibility,
                                     visibilityUserIds: visibilityUserIds,
-                                    originalLanguage: storyLanguage)
+                                    originalLanguage: storyLanguage,
+                                    editingPostId: viewModel.editingPostId)
         persistCommandHistory()
         let keys = Self.mediaKeysFingerprint(images: viewModel.loadedImages,
                                              videos: viewModel.loadedVideoURLs,
@@ -635,10 +636,39 @@ extension StoryComposerView {
         UserDefaults.standard.removeObject(forKey: StoryComposerDraft.userDefaultsKey)
     }
 
+    /// Gel du brouillon au hand-off de publication (directive 2026-08-02) :
+    /// la story ne QUITTE plus le brouillon au tap « Publier » — `accepted`
+    /// signifie seulement « accepté en file ». Le brouillon est (re)persisté
+    /// LÉGER (JSON seulement : slides estampillées + audience + langue + lien
+    /// d'édition — jamais `saveMedia`, trop lourd pour le chemin synchrone C3 ;
+    /// les copies de médias restent celles du dernier autosave, et l'échec
+    /// permanent les réécrit de toute façon depuis l'item de file), puis
+    /// marqué `pendingPublishAt` : gelé, il n'apparaît plus dans les reprises
+    /// tant que la file travaille. Seul le SUCCÈS serveur confirmé le
+    /// supprimera ; l'échec permanent le rendra éditable avec son erreur.
+    /// Le slot legacy UserDefaults est absorbé au passage — même destin que
+    /// dans l'ancien `clearCurrentDraft`, mais son contenu vit désormais dans
+    /// le brouillon gelé.
+    func freezeCurrentDraftForPublish() {
+        StoryDraftStore.shared.save(draftId: viewModel.draftId,
+                                    slides: slidesStampedWithThumbHash(),
+                                    visibility: visibility,
+                                    visibilityUserIds: visibilityUserIds,
+                                    originalLanguage: storyLanguage,
+                                    editingPostId: viewModel.editingPostId)
+        persistCommandHistory()
+        StoryDraftStore.shared.markPendingPublish(draftId: viewModel.draftId)
+        UserDefaults.standard.removeObject(forKey: StoryComposerDraft.userDefaultsKey)
+    }
+
     /// Ce que l'ouverture du composer fait du système de brouillons — décision
     /// PURE, un seul lieu pour les trois modes de session.
     nonisolated enum ComposerOpeningDraftAction: Equatable, Sendable {
-        /// Édition d'une story publiée : le système de brouillons est éteint.
+        /// Entrée en édition FRAÎCHE d'une story publiée : le canvas est
+        /// hydraté depuis la story serveur. Le système de brouillons n'est
+        /// plus éteint pour autant (2026-08-02) : les autosaves qui suivent
+        /// portent `editingPostId`, et le brouillon d'édition ainsi semé
+        /// rouvre le mode édition à la reprise (session ADOPTÉE).
         case hydratedByEditMode
         /// Brouillon CHOISI (`adoptDraft`) : restauration directe, jamais de
         /// bandeau — l'utilisateur vient de trancher, une double invite ferait
@@ -654,8 +684,13 @@ extension StoryComposerView {
         isEditingExistingStory: Bool,
         isAdoptedDraftSession: Bool
     ) -> ComposerOpeningDraftAction {
-        if isEditingExistingStory { return .hydratedByEditMode }
-        return isAdoptedDraftSession ? .restoreAdoptedDraft : .offerDraftResume
+        // L'ADOPTION prime (2026-08-02, point c) : un brouillon portant
+        // `editingPostId` rouvre le mode édition en session adoptée — c'est
+        // le brouillon choisi qui doit revivre, pas l'hydratation serveur
+        // qui écraserait le travail repris. Une entrée en édition FRAÎCHE
+        // (« Modifier », jamais adoptée) reste hydratée depuis la story.
+        if isAdoptedDraftSession { return .restoreAdoptedDraft }
+        return isEditingExistingStory ? .hydratedByEditMode : .offerDraftResume
     }
 
     /// Ce que « Recommencer » détruit — décision PURE. Une session ADOPTÉE ne

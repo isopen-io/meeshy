@@ -164,7 +164,7 @@ struct StoryComposerCover: ViewModifier {
             StoryComposerView(
                 viewModel: makeComposerViewModel(),
                 initialVisibility: viewModel.lastComposerVisibility,
-                onPublishAllInBackground: { slides, slideImages, loadedImages, loadedVideoURLs, loadedAudioURLs, originalLanguage, visibility, visibilityUserIds in
+                onPublishAllInBackground: { slides, slideImages, loadedImages, loadedVideoURLs, loadedAudioURLs, originalLanguage, visibility, visibilityUserIds, draftId in
                     viewModel.publishStoryInBackground(
                         slides: slides,
                         slideImages: slideImages,
@@ -173,7 +173,8 @@ struct StoryComposerCover: ViewModifier {
                         loadedAudioURLs: loadedAudioURLs,
                         originalLanguage: originalLanguage,
                         visibility: visibility,
-                        visibilityUserIds: visibilityUserIds
+                        visibilityUserIds: visibilityUserIds,
+                        draftId: draftId
                     )
                     // La création accepte TOUJOURS : hors-ligne, la story part
                     // en file d'attente au lieu de rester dans le composer.

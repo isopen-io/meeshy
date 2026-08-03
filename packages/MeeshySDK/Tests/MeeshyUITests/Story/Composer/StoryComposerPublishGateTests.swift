@@ -210,6 +210,23 @@ final class StoryComposerPublishGateTests: XCTestCase {
         )
     }
 
+    /// Directive 2026-08-02 (point c) : une story mise en ÉDITION revient en
+    /// brouillon. Le terme `isEditingExistingStory` qui éteignait l'autosave
+    /// en édition a été retiré — le brouillon d'édition porte `editingPostId`
+    /// et sa réouverture rouvre le mode édition, la prémisse « restauré comme
+    /// une NOUVELLE story » ne tient plus. Cette garde interdit la
+    /// réintroduction du terme.
+    func test_theAutosaveGateNoLongerShutsOffForEditSessions() throws {
+        let code = try ComposerSourceGuard.source("StoryComposerView+SyncRestore.swift")
+        let body = try XCTUnwrap(
+            ComposerSourceGuard.functionBody(named: "var mayOverwriteStoredDraft:", in: code))
+
+        XCTAssertFalse(
+            body.contains("isEditingExistingStory"),
+            "L'édition autosauvegarde comme toute session : son brouillon porte editingPostId."
+        )
+    }
+
     /// Le gate ne vaut que s'il est POSÉ. Ancré sur le corps de `publishButton`
     /// et sur lui seul : compter `.disabled(` dans le fichier entier dirait la
     /// mauvaise chose (le header en porte plusieurs).

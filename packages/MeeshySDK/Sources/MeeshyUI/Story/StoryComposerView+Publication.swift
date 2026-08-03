@@ -71,8 +71,9 @@ extension StoryComposerView {
     /// l'écriture write-ahead, avant le premier octet réseau.
     ///
     /// Ordre des invariants strictement préservé : flush timeline → sync des
-    /// effets → snapshot → haptic → hand-off → (si accepté) purge des
-    /// brouillons + suspension d'autosave (E1) + loquet.
+    /// effets → snapshot → haptic → hand-off → (si accepté) GEL du brouillon
+    /// (directive 2026-08-02 : il survit, marqué `pendingPublishAt`) +
+    /// suspension d'autosave (E1) + loquet.
     func publishAllSlides() {
         guard !didHandOffPublish else { return }
         // Publier avec la sheet timeline OUVERTE ne doit pas perdre les
@@ -101,25 +102,24 @@ extension StoryComposerView {
         let accepted = onPublishAllInBackground(
             slides, viewModel.slideImages, viewModel.loadedImages,
             viewModel.loadedVideoURLs, viewModel.loadedAudioURLs,
-            storyLanguage, visibility, ids
+            storyLanguage, visibility, ids, viewModel.draftId
         )
-        // Tout ce qui est DESTRUCTIF attend de savoir si le hand-off a été
-        // accepté. Un refus (édition hors-ligne, surface inerte) laisse le
-        // composer ouvert : jeter son brouillon et tuer son autosave le
+        // Tout ce qui engage le brouillon attend de savoir si le hand-off a
+        // été accepté. Un refus (édition hors-ligne, surface inerte) laisse le
+        // composer ouvert : geler son brouillon et tuer son autosave le
         // priverait de son filet pour toute la session de composition. Le
         // loquet suit la même règle — posé sur un refus, il grise le bouton
         // Publier à vie. Aucun `await` ne sépare le hand-off de ces lignes :
         // le callback est synchrone, rien ne peut re-persister entre-temps.
         guard accepted else { return }
-        // Le brouillon jeté ici est celui de la story qui vient de partir : il
-        // lui appartient. L'audio compte — depuis que l'autosave persiste les
-        // sessions audio-seules, la story « fond + musique » possède SON
-        // brouillon en magasin, et le laisser survivrait en doublon fantôme
-        // d'une story déjà publiée. `clearCurrentDraft` ne touche que l'id de
-        // CETTE session : ce que le bandeau proposait d'autre reste intact.
+        // Directive 2026-08-02 : `accepted` = « accepté en file », jamais
+        // « publié ». Le brouillon de CETTE session SURVIT donc au hand-off —
+        // gelé (`pendingPublishAt`) pour ne pas rouvrir une double publication
+        // pendant que la file travaille. Seul le succès serveur confirmé le
+        // supprimera ; l'échec permanent le ramènera éditable avec son erreur.
         // La branche `else` (page blanche intégrale) est inatteignable par le
         // bouton (gaté `canPublish`) et ne purge que les fantômes.
-        if composerHasContent || composerCarriesAudio { clearCurrentDraft() } else { clearPhantomDraftsOnly() }
+        if composerHasContent || composerCarriesAudio { freezeCurrentDraftForPublish() } else { clearPhantomDraftsOnly() }
         // E1 — un debounce d'autosave en vol ne doit pas re-persister le
         // brouillon d'une story qui vient de partir en publication.
         draftAutosaveSuspended = true

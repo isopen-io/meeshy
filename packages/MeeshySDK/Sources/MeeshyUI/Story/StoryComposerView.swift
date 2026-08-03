@@ -238,7 +238,8 @@ public struct StoryComposerView: View {
         _ loadedAudioURLs: [String: URL],
         _ originalLanguage: String?,
         _ visibility: String,
-        _ visibilityUserIds: [String]
+        _ visibilityUserIds: [String],
+        _ draftId: String
     ) -> Bool
     public var onPreview: ([StorySlide], [String: UIImage], [String: UIImage], [String: URL], [String: URL]) -> Void
     public var onDismiss: () -> Void
@@ -247,7 +248,7 @@ public struct StoryComposerView: View {
         initialVisibility: String = PostVisibility.friends.rawValue,
         initialVisibilityUserIds: [String] = [],
         onPublishSlide: @escaping (StorySlide, UIImage?, [String: UIImage], [String: URL], String?) async throws -> Void = { _, _, _, _, _ in },
-        onPublishAllInBackground: @escaping ([StorySlide], [String: UIImage], [String: UIImage], [String: URL], [String: URL], String?, String, [String]) -> Bool,
+        onPublishAllInBackground: @escaping ([StorySlide], [String: UIImage], [String: UIImage], [String: URL], [String: URL], String?, String, [String], String) -> Bool,
         onPreview: @escaping ([StorySlide], [String: UIImage], [String: UIImage], [String: URL], [String: URL]) -> Void,
         onDismiss: @escaping () -> Void
     ) {
@@ -271,7 +272,7 @@ public struct StoryComposerView: View {
         initialVisibility: String = PostVisibility.friends.rawValue,
         initialVisibilityUserIds: [String] = [],
         onPublishSlide: @escaping (StorySlide, UIImage?, [String: UIImage], [String: URL], String?) async throws -> Void = { _, _, _, _, _ in },
-        onPublishAllInBackground: @escaping ([StorySlide], [String: UIImage], [String: UIImage], [String: URL], [String: URL], String?, String, [String]) -> Bool,
+        onPublishAllInBackground: @escaping ([StorySlide], [String: UIImage], [String: UIImage], [String: URL], [String: URL], String?, String, [String], String) -> Bool,
         onPreview: @escaping ([StorySlide], [String: UIImage], [String: UIImage], [String: URL], [String: URL]) -> Void = { _, _, _, _, _ in },
         onDismiss: @escaping () -> Void
     ) {
@@ -350,13 +351,10 @@ public struct StoryComposerView: View {
             // (StoryViewerView) qui traverse la présentation ; sur iOS 26 l'alerte est
             // dessinée sur verre clair → sans teinte, le label des boutons sans rôle /
             // .cancel devient quasi-blanc et illisible. L'indigo reste lisible partout.
-            // `exitPrompt.offersSave` et non `composerHasContent` : la feuille
-            // s'ouvre désormais aussi pour la story « fond + musique », que le
-            // brouillon ne sait PAS retenir (`StoryDraftStore` ignore la
-            // sélection audio vivante). Lui proposer « Sauvegarder » rendrait un
-            // brouillon muet à la reprise ; il ne reste alors que « Quitter » et
-            // « Annuler ».
-            if !isEditingExistingStory, exitPrompt.offersSave {
+            // `exitPrompt.offersSave` est la SEULE condition (2026-08-02) :
+            // l'édition a droit à « Sauvegarder » elle aussi — son brouillon
+            // porte `editingPostId` et rouvre le mode édition à la reprise.
+            if exitPrompt.offersSave {
                 Button(String(localized: "story.composer.save", defaultValue: "Sauvegarder", bundle: .module)) { saveDraftAndDismiss() }
                     .tint(MeeshyColors.indigo500)
             }

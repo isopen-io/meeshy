@@ -142,19 +142,27 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
     private let socialSocket: SocialSocketProviding
     private let api: APIClientProviding
     private let visibilityStore: StoryVisibilityPreferenceStore
+    /// Cycle de vie de publication du brouillon (directive 2026-08-02) :
+    /// succès online (`launchUploadTask`), annulation (`cancelUpload`) et
+    /// édition (`runStoryUpdate`) y écrivent. Propriété injectable — même
+    /// raison que les autres dépendances de ce VM — pour que les tests
+    /// n'exercent jamais le singleton `.shared` (base réelle du sandbox app).
+    private let draftStore: StoryDraftStore
 
     init(
         storyService: StoryServiceProviding = StoryService.shared,
         postService: PostServiceProviding = PostService.shared,
         socialSocket: SocialSocketProviding = SocialSocketManager.shared,
         api: APIClientProviding = APIClient.shared,
-        visibilityStore: StoryVisibilityPreferenceStore = .init()
+        visibilityStore: StoryVisibilityPreferenceStore = .init(),
+        draftStore: StoryDraftStore = .shared
     ) {
         self.storyService = storyService
         self.postService = postService
         self.socialSocket = socialSocket
         self.api = api
         self.visibilityStore = visibilityStore
+        self.draftStore = draftStore
         observeReconnectionForRetry()
         observeQueueDispositions()
     }
@@ -334,6 +342,10 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
         /// un kill le laisse en queue → repris au boot.
         var queueId: String?
         var queueTempStoryId: String?
+        /// Brouillon d'origine (directive 2026-08-02) : gelé au hand-off, il
+        /// n'est supprimé qu'au SUCCÈS serveur confirmé ; l'annulation le
+        /// dégèle, l'échec permanent le ramène éditable avec son erreur.
+        var draftId: String?
         /// E5 — le VM détient-il la revendication de son item en queue ?
         /// Posée au write-ahead, CONSERVÉE à l'échec dès qu'une slide est
         /// commise (`releaseQueueClaimIfNothingCommitted`). Un retry ne doit
@@ -1168,7 +1180,8 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
         loadedAudioURLs: [String: URL] = [:],
         originalLanguage: String? = nil,
         visibility: String = StoryVisibilityPreferenceStore.fallback,
-        visibilityUserIds: [String] = []
+        visibilityUserIds: [String] = [],
+        draftId: String? = nil
     ) {
         // C6 — l'écriture a lieu au hand-off de CRÉATION uniquement (jamais
         // depuis `updateStoryInBackground` : changer l'audience d'une story
@@ -1190,7 +1203,8 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
                     loadedAudioURLs: loadedAudioURLs,
                     originalLanguage: originalLanguage,
                     visibility: visibility,
-                    visibilityUserIds: visibilityUserIds
+                    visibilityUserIds: visibilityUserIds,
+                    draftId: draftId
                 )
             }
             showStoryComposer = false
@@ -1204,6 +1218,7 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
         let upload = StoryUploadState(
             id: UUID().uuidString,
             thumbnailImage: thumbnail,
+            draftId: draftId,
             progress: 0,
             phase: .preparing,
             authorId: user?.id ?? "",
@@ -1347,7 +1362,8 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
         loadedAudioURLs: [String: URL] = [:],
         originalLanguage: String? = nil,
         visibility: String = StoryVisibilityPreferenceStore.fallback,
-        visibilityUserIds: [String] = []
+        visibilityUserIds: [String] = [],
+        draftId: String? = nil
     ) async {
         guard let intent = await persistPublishIntentToQueue(
             slides: slides,
@@ -1357,7 +1373,8 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
             loadedAudioURLs: loadedAudioURLs,
             originalLanguage: originalLanguage,
             visibility: visibility,
-            visibilityUserIds: visibilityUserIds
+            visibilityUserIds: visibilityUserIds,
+            draftId: draftId
         ) else { return }
 
         insertOptimisticOfflineStories(
@@ -1405,7 +1422,8 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
         loadedAudioURLs: [String: URL],
         originalLanguage: String? = nil,
         visibility: String,
-        visibilityUserIds: [String]
+        visibilityUserIds: [String],
+        draftId: String? = nil
     ) async -> (queueId: String, tempStoryId: String)? {
         // 1. Re-key slide backgrounds.
         let bgImages = Dictionary(
@@ -1474,7 +1492,8 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
             mediaReferences: mediaReferences,
             tempStoryId: tempStoryId,
             visibilityUserIds: visibilityUserIds,
-            originalLanguage: originalLanguage
+            originalLanguage: originalLanguage,
+            draftId: draftId
         )
         _ = await StoryPublishQueue.shared.enqueue(item)
         return (queueId: item.id, tempStoryId: tempStoryId)
@@ -1731,6 +1750,15 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
                         await StoryPublishQueue.shared.dequeue(queueId)
                         if let tempId { Self.removeOfflineQueueMediaDirectory(tempStoryId: tempId) }
                     }
+                }
+                // Directive 2026-08-02 : succès serveur CONFIRMÉ — seul
+                // événement qui efface le brouillon gelé au hand-off. Ce
+                // chemin (upload online, piloté par `launchUploadTask`) ne
+                // passe pas par `publishSucceeded` (silencieux, cf. `dequeue`) :
+                // c'est donc ici, et pas dans `StoryPublishService`, que ce
+                // succès-là doit être consommé.
+                if let draftId = finished?.draftId {
+                    self.draftStore.delete(draftId: draftId)
                 }
                 self.activeUploads.removeAll { $0.id == id }
                 HapticFeedback.success()
@@ -2052,7 +2080,8 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
         loadedAudioURLs: [String: URL] = [:],
         originalLanguage: String? = nil,
         visibility: String = StoryVisibilityPreferenceStore.fallback,
-        visibilityUserIds: [String] = []
+        visibilityUserIds: [String] = [],
+        draftId: String? = nil
     ) -> Bool {
         guard let slide = slides.first else { return false }
         if NetworkMonitor.shared.isOffline {
@@ -2066,7 +2095,8 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
                 edit: edit, slide: slide, slideImages: slideImages,
                 loadedImages: loadedImages, loadedVideoURLs: loadedVideoURLs,
                 loadedAudioURLs: loadedAudioURLs, originalLanguage: originalLanguage,
-                visibility: visibility, visibilityUserIds: visibilityUserIds
+                visibility: visibility, visibilityUserIds: visibilityUserIds,
+                draftId: draftId
             )
         }
         return true
@@ -2085,7 +2115,8 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
         loadedAudioURLs: [String: URL],
         originalLanguage: String?,
         visibility: String,
-        visibilityUserIds: [String]
+        visibilityUserIds: [String],
+        draftId: String? = nil
     ) async {
         do {
             let serverOrigin = MeeshyConfig.shared.serverOrigin
@@ -2235,10 +2266,22 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
             HapticFeedback.success()
             FeedbackToastManager.shared.showSuccess(String(
                 localized: "story.edit.success", defaultValue: "Story mise à jour", bundle: .main))
+            // Directive 2026-08-02 : succès serveur CONFIRMÉ — le brouillon
+            // d'édition (gelé par `freezeCurrentDraftForPublish` au hand-off)
+            // n'a plus de raison d'être : la story qu'il modifiait est à jour.
+            if let draftId {
+                draftStore.delete(draftId: draftId)
+            }
         } catch {
             Logger.messages.error("[StoryVM] Story update failed: \(error.localizedDescription)")
             FeedbackToastManager.shared.showError(String(
                 localized: "story.edit.error", defaultValue: "Échec de la mise à jour de la story", bundle: .main))
+            // Échec PERMANENT (l'édition ne passe pas par la file de retry) :
+            // le brouillon revient éditable, avec son erreur affichable —
+            // sinon il resterait gelé à vie, invisible des reprises.
+            if let draftId {
+                draftStore.recordPublishFailure(draftId: draftId, message: error.localizedDescription)
+            }
         }
     }
 
@@ -2353,6 +2396,13 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
     func cancelUpload(id: String) {
         guard let upload = activeUploads.first(where: { $0.id == id }) else { return }
         cleanupUploadTempFiles(upload)
+        // Annulation EXPLICITE d'une publication en attente : dégèle le
+        // brouillon (retire `pendingPublishAt`) sans lui fabriquer d'erreur —
+        // il n'y a pas eu d'échec, l'utilisateur a juste changé d'avis. Il
+        // redevient visible/éditable dans les reprises.
+        if let draftId = upload.draftId {
+            draftStore.clearPendingPublish(draftId: draftId)
+        }
         // Delete any slides that were committed before the user cancelled —
         // otherwise a 5-slide story cancelled at slide 3 leaves slides 1-2
         // visible to friends as orphan stories that don't fit any slideshow.

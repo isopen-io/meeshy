@@ -27,10 +27,25 @@ public struct StoryDraftSummary: Identifiable, Sendable, Equatable {
     /// Composite de toutes les couches, pose des le PREMIER enregistrement du
     /// brouillon par le composer — meme producteur qu'a la publication.
     public let thumbHash: String?
+    /// Non-nil : une publication est EN COURS pour ce brouillon (gelé —
+    /// exclu des reprises tant que la file/l'upload travaille). Levé au
+    /// succès (le brouillon disparaît), à l'échec permanent (il redevient
+    /// éditable, avec `lastPublishError`) ou à l'annulation.
+    public let pendingPublishAt: Date?
+    /// Dernier échec PERMANENT de publication : la story est revenue en
+    /// brouillon pour amélioration, l'erreur reste affichable jusqu'à la
+    /// prochaine tentative (`markPendingPublish` la supplante).
+    public let lastPublishError: String?
+    /// Non-nil : ce brouillon ÉDITE une story déjà publiée — la réouverture
+    /// doit rouvrir le mode édition (`PUT /posts/:id`), jamais la création.
+    public let editingPostId: String?
 
     public init(id: String, updatedAt: Date, slideCount: Int,
                 title: String?, coverFileURL: URL?, backgroundHex: String?,
-                thumbHash: String?) {
+                thumbHash: String?,
+                pendingPublishAt: Date? = nil,
+                lastPublishError: String? = nil,
+                editingPostId: String? = nil) {
         self.id = id
         self.updatedAt = updatedAt
         self.slideCount = slideCount
@@ -38,6 +53,9 @@ public struct StoryDraftSummary: Identifiable, Sendable, Equatable {
         self.coverFileURL = coverFileURL
         self.backgroundHex = backgroundHex
         self.thumbHash = thumbHash
+        self.pendingPublishAt = pendingPublishAt
+        self.lastPublishError = lastPublishError
+        self.editingPostId = editingPostId
     }
 }
 
@@ -320,7 +338,8 @@ public final class StoryDraftStore: @unchecked Sendable {
                      slides: [StorySlide],
                      visibility: String,
                      visibilityUserIds: [String] = [],
-                     originalLanguage: String? = nil) -> Bool {
+                     originalLanguage: String? = nil,
+                     editingPostId: String? = nil) -> Bool {
         let now = Date().timeIntervalSince1970
         do {
             try db.write { db in
@@ -379,6 +398,23 @@ public final class StoryDraftStore: @unchecked Sendable {
                 } else {
                     try db.execute(
                         sql: "DELETE FROM story_draft_meta WHERE draft_id = ? AND key = 'originalLanguage'",
+                        arguments: [draftId]
+                    )
+                }
+                // Lien vers la story publiée qu'une session d'ÉDITION modifie.
+                // Même fidélité que l'audience et la langue : absent = effacé
+                // (un brouillon redevenu création ne garde pas le lien). Les
+                // marqueurs `pendingPublishAt`/`lastPublishError`, eux, ne
+                // passent PAS par `save` — ils ont leurs écrivains dédiés et
+                // survivent aux autosaves.
+                if let editingPostId {
+                    try db.execute(
+                        sql: "INSERT OR REPLACE INTO story_draft_meta (draft_id, key, value) VALUES (?, 'editingPostId', ?)",
+                        arguments: [draftId, editingPostId]
+                    )
+                } else {
+                    try db.execute(
+                        sql: "DELETE FROM story_draft_meta WHERE draft_id = ? AND key = 'editingPostId'",
                         arguments: [draftId]
                     )
                 }
@@ -661,7 +697,10 @@ public final class StoryDraftStore: @unchecked Sendable {
     public func load(draftId: String) -> (slides: [StorySlide],
                                           visibility: String,
                                           visibilityUserIds: [String],
-                                          originalLanguage: String?)? {
+                                          originalLanguage: String?,
+                                          editingPostId: String?,
+                                          pendingPublishAt: Date?,
+                                          lastPublishError: String?)? {
         do {
             let rows = try db.read { db in
                 try Row.fetchAll(db,
@@ -691,19 +730,15 @@ public final class StoryDraftStore: @unchecked Sendable {
             }
 
             let meta = try db.read { db in
-                let visibility = try String.fetchOne(
-                    db,
-                    sql: "SELECT value FROM story_draft_meta WHERE draft_id = ? AND key = 'visibility'",
-                    arguments: [draftId]) ?? "PUBLIC"
-                let idsJSON = try String.fetchOne(
-                    db,
-                    sql: "SELECT value FROM story_draft_meta WHERE draft_id = ? AND key = 'visibilityUserIds'",
-                    arguments: [draftId])
-                let originalLanguage = try String.fetchOne(
-                    db,
-                    sql: "SELECT value FROM story_draft_meta WHERE draft_id = ? AND key = 'originalLanguage'",
-                    arguments: [draftId])
-                return (visibility: visibility, idsJSON: idsJSON, originalLanguage: originalLanguage)
+                let visibility = try Self.metaValue(db, draftId: draftId, key: "visibility") ?? "PUBLIC"
+                let idsJSON = try Self.metaValue(db, draftId: draftId, key: "visibilityUserIds")
+                let originalLanguage = try Self.metaValue(db, draftId: draftId, key: "originalLanguage")
+                let editingPostId = try Self.metaValue(db, draftId: draftId, key: "editingPostId")
+                let pendingPublishAt = try Self.metaValue(db, draftId: draftId, key: "pendingPublishAt")
+                let lastPublishError = try Self.metaValue(db, draftId: draftId, key: "lastPublishError")
+                return (visibility: visibility, idsJSON: idsJSON,
+                        originalLanguage: originalLanguage, editingPostId: editingPostId,
+                        pendingPublishAt: pendingPublishAt, lastPublishError: lastPublishError)
             }
             let visibilityUserIds = meta.idsJSON
                 .flatMap { $0.data(using: .utf8) }
@@ -714,7 +749,10 @@ public final class StoryDraftStore: @unchecked Sendable {
             return (slides: slides,
                     visibility: meta.visibility,
                     visibilityUserIds: visibilityUserIds,
-                    originalLanguage: meta.originalLanguage)
+                    originalLanguage: meta.originalLanguage,
+                    editingPostId: meta.editingPostId,
+                    pendingPublishAt: Self.dateFromMeta(meta.pendingPublishAt),
+                    lastPublishError: meta.lastPublishError)
         } catch {
             Logger.cache.error("[StoryDraftStore] Erreur load: \(error.localizedDescription)")
             return nil
@@ -798,6 +836,94 @@ public final class StoryDraftStore: @unchecked Sendable {
         return true
     }
 
+    // MARK: - Cycle de vie de publication (2026-08-02)
+
+    private static func metaValue(_ db: Database, draftId: String, key: String) throws -> String? {
+        try String.fetchOne(
+            db,
+            sql: "SELECT value FROM story_draft_meta WHERE draft_id = ? AND key = ?",
+            arguments: [draftId, key])
+    }
+
+    private static func dateFromMeta(_ raw: String?) -> Date? {
+        raw.flatMap(Double.init).map(Date.init(timeIntervalSince1970:))
+    }
+
+    /// Gèle le brouillon : une publication vient de partir pour lui. La
+    /// nouvelle tentative SUPPLANTE l'erreur précédente — l'utilisateur vient
+    /// de republier, l'ancien échec est caduc.
+    @discardableResult
+    public func markPendingPublish(draftId: String, at date: Date = Date()) -> Bool {
+        do {
+            try db.write { db in
+                try db.execute(
+                    sql: "INSERT OR REPLACE INTO story_draft_meta (draft_id, key, value) VALUES (?, 'pendingPublishAt', ?)",
+                    arguments: [draftId, String(date.timeIntervalSince1970)])
+                try db.execute(
+                    sql: "DELETE FROM story_draft_meta WHERE draft_id = ? AND key = 'lastPublishError'",
+                    arguments: [draftId])
+            }
+            return true
+        } catch {
+            Logger.cache.error("[StoryDraftStore] Erreur markPendingPublish: \(error.localizedDescription)")
+            recordFailure("mark-pending-publish", message: error.localizedDescription)
+            return false
+        }
+    }
+
+    /// Échec PERMANENT : la story revient en brouillon pour amélioration,
+    /// avec son erreur affichable. Lève le gel de publication.
+    @discardableResult
+    public func recordPublishFailure(draftId: String, message: String) -> Bool {
+        do {
+            try db.write { db in
+                try db.execute(
+                    sql: "DELETE FROM story_draft_meta WHERE draft_id = ? AND key = 'pendingPublishAt'",
+                    arguments: [draftId])
+                try db.execute(
+                    sql: "INSERT OR REPLACE INTO story_draft_meta (draft_id, key, value) VALUES (?, 'lastPublishError', ?)",
+                    arguments: [draftId, message])
+            }
+            return true
+        } catch {
+            Logger.cache.error("[StoryDraftStore] Erreur recordPublishFailure: \(error.localizedDescription)")
+            recordFailure("record-publish-failure", message: error.localizedDescription)
+            return false
+        }
+    }
+
+    /// Lève le gel SANS poser d'erreur — annulation utilisateur, ou
+    /// réconciliation d'un marqueur orphelin (crash entre le succès de la
+    /// file et la suppression du brouillon).
+    @discardableResult
+    public func clearPendingPublish(draftId: String) -> Bool {
+        do {
+            try db.write { db in
+                try db.execute(
+                    sql: "DELETE FROM story_draft_meta WHERE draft_id = ? AND key = 'pendingPublishAt'",
+                    arguments: [draftId])
+            }
+            return true
+        } catch {
+            Logger.cache.error("[StoryDraftStore] Erreur clearPendingPublish: \(error.localizedDescription)")
+            recordFailure("clear-pending-publish", message: error.localizedDescription)
+            return false
+        }
+    }
+
+    /// Accès LÉGER au lien d'édition d'un brouillon (routage de réouverture) :
+    /// une seule ligne de meta, jamais les slides.
+    public func draftEditingPostId(_ draftId: String) -> String? {
+        do {
+            return try db.read { db in
+                try Self.metaValue(db, draftId: draftId, key: "editingPostId")
+            }
+        } catch {
+            Logger.cache.error("[StoryDraftStore] Erreur draftEditingPostId: \(error.localizedDescription)")
+            return nil
+        }
+    }
+
     // MARK: - Inventaire
 
     /// Tous les brouillons, du plus récemment modifié au plus ancien.
@@ -827,7 +953,11 @@ public final class StoryDraftStore: @unchecked Sendable {
                             .first(where: { !$0.isEmpty }),
                         coverFileURL: try coverFileURL(db, draftId: id),
                         backgroundHex: try firstSlideEffects(db, draftId: id)?.background,
-                        thumbHash: try firstSlideEffects(db, draftId: id)?.thumbHash)
+                        thumbHash: try firstSlideEffects(db, draftId: id)?.thumbHash,
+                        pendingPublishAt: Self.dateFromMeta(
+                            try Self.metaValue(db, draftId: id, key: "pendingPublishAt")),
+                        lastPublishError: try Self.metaValue(db, draftId: id, key: "lastPublishError"),
+                        editingPostId: try Self.metaValue(db, draftId: id, key: "editingPostId"))
                 }
             }
         } catch {

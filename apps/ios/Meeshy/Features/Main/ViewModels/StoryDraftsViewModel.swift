@@ -25,8 +25,15 @@ final class StoryDraftsViewModel: ObservableObject {
             .store(in: &cancellables)
     }
 
+    /// Filtre les brouillons GELÉS (`pendingPublishAt` non nil, directive
+    /// 2026-08-02) : une publication est en cours pour eux, ils ne doivent
+    /// apparaître dans AUCUNE liste de reprise tant que la file travaille —
+    /// les rouvrir en édition pendant qu'ils voyagent vers le serveur
+    /// corromprait le brouillon que le succès/l'échec s'apprête à consommer.
+    /// `StoryDraftStore.listDrafts()` continue de les EXPOSER (le store est
+    /// la source de vérité brute) ; c'est ce consommateur UI qui les cache.
     func reload() {
-        drafts = store.listDrafts()
+        drafts = store.listDrafts().filter { $0.pendingPublishAt == nil }
     }
 
     /// Supprime un brouillon et son sous-répertoire de médias, puis rafraîchit
