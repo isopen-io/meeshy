@@ -3323,3 +3323,72 @@ branche distincte. PR #2458 (parité anon-disconnect, Vague 44/45) confirmée me
   sandbox) ; changement strictement web (`CallManager.tsx`, tests).
 - **Reste ouvert (inchangé)** : dead code Swift `CallManager.handleRemoteReject` (PR #2470, CI en cours) ;
   God-objects `CallManager.swift`/`CallEventsHandler.ts` ; parité iOS/Android retry-on-failure.
+
+## Vague 49 — `markCallAsMissed` n'invalidait jamais le cache de session `call:signal` (2026-08-02)
+
+Point d'entrée : routine calling-feature (agent Cowork non interactif, mandat PHASE 1-12). Branche
+`claude/modest-cori-cicy3x`, redémarrée depuis `origin/main` à jour (0 PR ouverte trouvée au démarrage —
+`list_pull_requests` state=open : 2 PR, aucune sur le sujet calls). Un audit dédié (agent d'exploration,
+lecture seule) a cartographié l'intégralité de la stack d'appel iOS/SDK/gateway et confirmé le constat des
+Vagues précédentes : `CallManager.swift` (5663 lignes) et `CallEventsHandler.ts` (4152 lignes) restent des
+god-objects trop volumineux pour un refactor sûr en une seule passe, zéro toolchain Swift/Kotlin disponible
+dans ce sandbox (donc tout travail iOS/Android reste hors de portée de vérification locale), et le code
+appel est déjà exceptionnellement propre (zéro TODO/FIXME, zéro force-unwrap/`as!`/`try!`, zéro `as any`
+côté gateway). Retour au grain scopé/mécanique qui a produit les Vagues 40-48 : chercher un chemin de
+terminaison d'appel qui a été oublié par l'invariant documenté d'invalidation du cache signal.
+
+- **[MOYEN, gateway, CONFIRMÉ + CORRIGÉ, TDD]** `CallEventsHandler.invalidateSignalSession` documente
+  l'invariant : « Every path that writes `CallParticipant.leftAt` for this call must evict the entry so the
+  very next `call:signal` re-reads. » Vérifié par grep de tous les appelants : `call:leave`/`call:end`/
+  `call:force-leave` (CallEventsHandler.ts, 3 sites), le chemin de déconnexion avec grâce
+  (`leaveParticipationAndBroadcast`, Vague 44), le fallback `forceCleanupParticipationAfterLeaveFailure`, le
+  chemin d'erreur `force-end orphaned call`, les 2 routes REST end/leave (Vague 45), et le sweep GC zombie
+  (`CallService.notifyReapedCallEnded`, via `invalidateSignalCache`) — **8 sites au total** — respectent
+  tous l'invariant. `CallService.finalizeMissedCallCleanup` — le cleanup partagé de `markCallAsMissed`,
+  atteint par (a) le watchdog `buildRingingTimeoutHandler` (60s sans réponse) qui stampe `leftAt` sur les
+  participants encore ouverts, et (b) `CallEventsHandler.handleMissedCall` (appelé après un `call:leave` qui
+  résout `missed`) — **ne l'a jamais respecté**, ni en interne (contrairement à `notifyReapedCallEnded`, qui
+  s'auto-invalide), ni via son unique appelant (`handleMissedCall`, contrairement aux handlers socket
+  `call:leave`/`call:end`/`call:force-leave` qui invalident juste avant de l'appeler pour leur PROPRE
+  écriture — mais pas pour celle, secondaire, de `finalizeMissedCallCleanup` sur d'autres participants
+  restés ouverts).
+- **Impact concret** : un appel qui expire côté serveur (60s sans réponse, ou un `call:leave` qui bascule
+  l'appel à `missed`) stampe `leftAt` sur les lignes `CallParticipant` encore ouvertes sans jamais purger le
+  cache signal (TTL 2s). Un `call:signal` (SDP/ICE) tardif reçu dans cette fenêtre — un appelant encore en
+  train d'émettre une offre au moment précis où la sonnerie expire — continue d'être relayé sur la base de
+  l'instantané périmé (participants pas encore marqués `leftAt`) au lieu d'être rejeté, exactement le trou
+  déjà fermé pour les chemins `call:end`/`call:leave`/`call:force-leave`/REST/GC.
+- **Fix** : une ligne — `finalizeMissedCallCleanup` appelle désormais `this.invalidateSignalCache(callId)`
+  (méthode publique déjà existante depuis la Vague 45, extraction déjà faite de `notifyReapedCallEnded`),
+  juste après `releaseActiveCallClaim`, symétrique à ce dernier. Couvre les DEUX chemins d'entrée
+  (ringing-timeout ET handleMissedCall-après-leave) sans dupliquer l'appel à chaque site — cohérent avec le
+  commentaire déjà présent sur la méthode (« Safe to call more than once: every write here is
+  scoped/idempotent »), donc aucun risque de double-invalidation avec les invalidations déjà faites en amont
+  par les handlers socket appelants.
+- **Tests TDD** : RED confirmé (2 nouveaux cas dans `describe('CallService - markCallAsMissed non-ringing
+  guard')`, le describe qui contient déjà la régression jumelle 2026-07-02 pour `releaseActiveCallClaim` sur
+  ces mêmes deux branches — écriture fraîche `ringing→missed` et branche idempotente déjà-missed) puis
+  GREEN. Cas 1 : écriture fraîche → `signalCacheInvalidator` appelé avec le `callId`. Cas 2 : branche
+  idempotente (le ringing-timeout a déjà gagné la course, `finalizeMissedCallCleanup` tourne quand même) →
+  invalidation également. Cas 3 (garde de régression) : sans callback câblé, `markCallAsMissed` reste
+  silencieux (comportement actuel préservé, optionnel comme tous les autres appelants
+  d'`invalidateSignalCache`). Suite `CallService.test.ts` complète : 210/210 verts. Suite gateway complète
+  filtrée sur `Call` (44 suites, `CallEventsHandler*`/`CallService*`/`CallCleanupService*`/`calls-routes`/
+  `call-*`) : 1085/1085 verts — aucune régression sur les 8 sites d'invalidation déjà corrects. `tsc
+  --noEmit` gateway : 0 erreur. Suite gateway complète (`bun run test:coverage`) lancée en fin de vague pour
+  confirmation finale — cf. résultat consigné au commit/PR.
+- **iOS/Android (lecture seule, aucun changement)** : hors périmètre (aucune toolchain Swift/Kotlin dans ce
+  sandbox) ; changement strictement gateway (`CallService.ts`, tests).
+- **Reste ouvert (inchangé)** : dead code Swift `CallManager.handleRemoteReject` (PR #2470 — à vérifier
+  mergée) ; God-objects `CallManager.swift`/`CallEventsHandler.ts` (candidats d'extraction identifiés par
+  l'audit de cette vague : helpers d'émission socket MARK « Socket Emit Helpers » et proxy délégué CallKit
+  déjà en `extension` séparée — angle plus sûr que réintroduire l'acteur `CallEventQueue` explicitement
+  abandonné en 2026-06) ; parité iOS/Android retry-on-failure — **probablement déjà résolue** (vérifié cette
+  vague : `CallManager.swift` a `canRetryCall`/`retryCall()` avec commentaire « Parité web/Android
+  retry-on-failure », PR #2428 déjà mergée depuis la Vague 43 ; Android a `CallRetryPolicy.kt` +
+  `CallUiState.canRetry` + wiring `CallScreen.kt` — cette note « reste ouvert » semble stale et recopiée
+  sans revérification depuis la Vague 40, à confirmer/clore lors d'une prochaine vague dédiée à l'audit du
+  fichier todo lui-même) ; couverture E2E iOS des écrans d'appel entrant/sortant relativement fine (unit
+  tests profonds sur `CallManager`/policies, peu de XCUITest bout-en-bout) ; test de contrat cross-platform
+  signal (`CALL_EVENTS` partagé iOS/web/Android) limité à un fichier de 52 lignes — à renforcer avant tout
+  changement de protocole de signalisation.
