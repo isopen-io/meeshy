@@ -1039,6 +1039,9 @@ struct RootView: View {
                 router.push(.links)
             }
 
+        case .hashtag(let tag):
+            router.push(.hashtagResults(tag: tag))
+
         case .magicLink:
             break
         }

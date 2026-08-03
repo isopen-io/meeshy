@@ -320,6 +320,9 @@ final class Router: ObservableObject {
                 // reserved for cold launch / push notification dispatch.
                 push(.postDetail(postId))
 
+            case .hashtag(let tag):
+                push(.hashtagResults(tag: tag))
+
             case .external:
                 break
             }

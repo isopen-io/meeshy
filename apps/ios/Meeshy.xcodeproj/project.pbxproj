@@ -161,6 +161,7 @@
 		31BC0654EE9E6733984EFF45 /* MessagePipelineIntegrationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0712928AD7CC1A57C0E2F184 /* MessagePipelineIntegrationTests.swift */; };
 		321B86366B378A2FA47F3EE7 /* StoryOfflineMediaWriter.swift in Sources */ = {isa = PBXBuildFile; fileRef = B448A2746EAD02E8C20A99BE /* StoryOfflineMediaWriter.swift */; };
 		330F29EF354F40CF270E659D /* MessageReactionsDetailViewTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F138DE4F320CD58D8B471318 /* MessageReactionsDetailViewTests.swift */; };
+		33545A22809F86054974E1CE /* DeepLinkRouterHashtagTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7D804DF21808394C1157C6E /* DeepLinkRouterHashtagTests.swift */; };
 		3355922F3204F4EDD9BED7A5 /* CallManagerAudioSessionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F51D4D2B86C6649AF8F566DE /* CallManagerAudioSessionTests.swift */; };
 		33926A034B7580D789EC357C /* BubbleSwipeResistance.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9BEE03BD57A3FD466AF0E95E /* BubbleSwipeResistance.swift */; };
 		339C79209CA3D95A6C81D71E /* MessageDayLabelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 44FD2C7B55066F51949BB28D /* MessageDayLabelTests.swift */; };
@@ -1613,6 +1614,7 @@
 		B717ED6B03E6AC4058DAD577 /* VoiceProfileManageViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceProfileManageViewModel.swift; sourceTree = "<group>"; };
 		B71A3E7DB25BA2FD3C249E9E /* MockAttachmentUploader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockAttachmentUploader.swift; sourceTree = "<group>"; };
 		B799C8B49283B170EC88C394 /* OnboardingRecapStepAccessibilityTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingRecapStepAccessibilityTests.swift; sourceTree = "<group>"; };
+		B7D804DF21808394C1157C6E /* DeepLinkRouterHashtagTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeepLinkRouterHashtagTests.swift; sourceTree = "<group>"; };
 		B803946083E6625AC8A3912C /* VideoFiltersPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoFiltersPanel.swift; sourceTree = "<group>"; };
 		B8051E2AB72CC70F9D0FF5BD /* ReelAudioBackdrop.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReelAudioBackdrop.swift; sourceTree = "<group>"; };
 		B84504CD9B6405BEBE32E76E /* CameraCaptureSaveRuntimeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraCaptureSaveRuntimeTests.swift; sourceTree = "<group>"; };
@@ -2805,6 +2807,7 @@
 		9AC063369BA9538D33BB4CA7 /* Navigation */ = {
 			isa = PBXGroup;
 			children = (
+				B7D804DF21808394C1157C6E /* DeepLinkRouterHashtagTests.swift */,
 				9F349230ACD79DFC5BA70F37 /* DeepLinkTests.swift */,
 				58018494E1F1770602EACF6A /* NavigationStateRestorationTests.swift */,
 				B3DB2491EA18B3414BE023A1 /* NotificationContentRouterTests.swift */,
@@ -4038,6 +4041,7 @@
 				B873ACD4F6F9C251D63FD448 /* ConversationViewModelTests.swift in Sources */,
 				48F020D5D48B96B5579BEEE9 /* CrashDiagnosticsManagerTests.swift in Sources */,
 				60B2F7A2E0749C34A3242AF9 /* DarkFrameDetectorTests.swift in Sources */,
+				33545A22809F86054974E1CE /* DeepLinkRouterHashtagTests.swift in Sources */,
 				A923E45E80A2F6509F45EB77 /* DeepLinkRouterTrackedDestinationTests.swift in Sources */,
 				D369B873BA92F642F6DA23DE /* DeepLinkTests.swift in Sources */,
 				948CBBE0C339871A8874C121 /* DependencyContainerTests.swift in Sources */,
