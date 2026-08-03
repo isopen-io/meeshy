@@ -397,4 +397,43 @@ final class CallParticipantVisualTests: XCTestCase {
             "already refreshes and re-feeds the cache; this component serves cached data only."
         )
     }
+
+    func test_circularInit_derivesSquareFrameAndHalfRadius() throws {
+        let src = try source()
+        XCTAssertTrue(
+            src.contains("init(diameter: CGFloat, callManager: CallManager)"),
+            "The circular convenience initializer must stay so existing call sites " +
+            "(pill 44pt, bubble circle tier) keep compiling unchanged."
+        )
+        XCTAssertTrue(
+            src.contains("self.cornerRadius = diameter / 2"),
+            "The circular initializer must derive cornerRadius from the diameter so " +
+            "RoundedRectangle(cornerRadius:) renders a perfect circle, matching the " +
+            "previous Circle()-clipped behavior exactly."
+        )
+    }
+
+    func test_clipsWithRoundedRectangle_notFixedCircle() throws {
+        let src = try source()
+        XCTAssertTrue(
+            src.contains("RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)"),
+            "The video clip shape must be a RoundedRectangle driven by the instance's " +
+            "cornerRadius (not a fixed Circle()) so CallBubbleView's rectangle PiP tiers " +
+            "can reuse this component."
+        )
+        XCTAssertFalse(
+            src.contains(".clipShape(Circle())"),
+            "The fixed Circle() clip must be gone — it can no longer represent the " +
+            "rectangle PiP tiers."
+        )
+    }
+
+    func test_avatarFallback_sizedFromSmallerDimension() throws {
+        let src = try source()
+        XCTAssertTrue(
+            src.contains("size: min(width, height)"),
+            "The avatar fallback must size itself from the smaller dimension so it never " +
+            "stretches out of its circular aspect at a rectangle PiP tier."
+        )
+    }
 }
