@@ -53,7 +53,7 @@ numpy>=1.21.0,<1.24.0
 # conflit "numpy>=2.2.6,<2.3.0 vs numpy<2.0.0"). Revalider ces pins avec
 # `uv pip compile requirements.txt` (+ torch==2.6.0 en tête) avant de les élargir.
 accelerate==1.14.0
-datasets==5.0.0
+datasets==5.0.1
 # sentencepiece: version gérée par ESPnet (0.1.97 pour espnet 202412)
 huggingface_hub==1.24.0
 safetensors==0.8.0
