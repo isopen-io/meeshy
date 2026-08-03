@@ -42,7 +42,7 @@
     "@signalapp/libsignal-client": "^0.99.2",
     "@tus/file-store": "^2.1.0",
     "@tus/server": "^2.4.3",
-    "axios": "^1.18.1",
+    "axios": "^1.19.0",
     "bcrypt": "^6.0.0",
     "bcryptjs": "^3.0.3",
     "dompurify": "^3.4.12",
