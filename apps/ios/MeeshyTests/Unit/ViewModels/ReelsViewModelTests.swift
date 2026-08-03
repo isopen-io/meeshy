@@ -1,4 +1,5 @@
 import XCTest
+import Combine
 @testable import Meeshy
 import MeeshySDK
 
@@ -8,12 +9,17 @@ final class ReelsViewModelTests: XCTestCase {
     // MARK: - Factory
 
     private func makeSUT(
-        cachedReels: [FeedPost] = []
+        cachedReels: [FeedPost] = [],
+        postDeletedEvents: PassthroughSubject<String, Never> = PassthroughSubject()
     ) -> (sut: ReelsViewModel, service: MockPostService, cache: MockReelFeedCache) {
         let service = MockPostService()
         let cache = MockReelFeedCache()
         cache.cachedFeedResult = cachedReels
-        let sut = ReelsViewModel(service: service, cache: cache)
+        let sut = ReelsViewModel(
+            service: service,
+            cache: cache,
+            postDeletedEvents: postDeletedEvents.eraseToAnyPublisher()
+        )
         return (sut, service, cache)
     }
 
@@ -191,6 +197,82 @@ final class ReelsViewModelTests: XCTestCase {
 
         XCTAssertEqual(service.getReelsCallCount, 2, "pagination must retry after a transient failure, not stay stuck")
         XCTAssertEqual(sut.reels.map(\.id), ["r1", "r2", "r3"])
+    }
+
+    // MARK: - Real-time deletion (`post:deleted` — mirrors FeedViewModel's live removal)
+
+    func test_postDeleted_nonCurrentReel_removesItAndKeepsCurrentIdUnchanged() async {
+        let events = PassthroughSubject<String, Never>()
+        let (sut, _, _) = makeSUT(postDeletedEvents: events)
+        sut.seed(
+            posts: [Self.makeReel(id: "r1"), Self.makeReel(id: "r2"), Self.makeReel(id: "r3")],
+            startId: "r2"
+        )
+
+        events.send("r1")
+        try? await waitForCondition { sut.reels.map(\.id) == ["r2", "r3"] }
+
+        XCTAssertEqual(sut.reels.map(\.id), ["r2", "r3"])
+        XCTAssertEqual(sut.currentId, "r2", "deleting a reel other than the current one must not move the cursor")
+    }
+
+    func test_postDeleted_currentReel_advancesCurrentIdToTheReelThatTakesItsPlace() async {
+        let events = PassthroughSubject<String, Never>()
+        let (sut, _, _) = makeSUT(postDeletedEvents: events)
+        sut.seed(
+            posts: [Self.makeReel(id: "r1"), Self.makeReel(id: "r2"), Self.makeReel(id: "r3")],
+            startId: "r2"
+        )
+
+        // r2 (current) is deleted — r3 slides into r2's old slot, so the
+        // viewer lands on the next reel instead of a dangling id.
+        events.send("r2")
+        try? await waitForCondition { sut.reels.map(\.id) == ["r1", "r3"] }
+
+        XCTAssertEqual(sut.reels.map(\.id), ["r1", "r3"])
+        XCTAssertEqual(sut.currentId, "r3")
+    }
+
+    func test_postDeleted_currentReelIsLast_fallsBackToThePreviousReel() async {
+        let events = PassthroughSubject<String, Never>()
+        let (sut, _, _) = makeSUT(postDeletedEvents: events)
+        sut.seed(posts: [Self.makeReel(id: "r1"), Self.makeReel(id: "r2")], startId: "r2")
+
+        // r2 is both current AND last — nothing slides into its slot, so the
+        // pager must fall back to the previous reel instead of going nil.
+        events.send("r2")
+        try? await waitForCondition { sut.reels.map(\.id) == ["r1"] }
+
+        XCTAssertEqual(sut.reels.map(\.id), ["r1"])
+        XCTAssertEqual(sut.currentId, "r1")
+    }
+
+    func test_postDeleted_onlyReel_emptiesThePagerAndClearsCurrentId() async {
+        let events = PassthroughSubject<String, Never>()
+        let (sut, _, _) = makeSUT(postDeletedEvents: events)
+        sut.seed(posts: [Self.makeReel(id: "r1")], startId: "r1")
+
+        events.send("r1")
+        try? await waitForCondition { sut.reels.isEmpty }
+
+        XCTAssertTrue(sut.reels.isEmpty)
+        XCTAssertNil(sut.currentId, "no reel left means no current reel — the view shows its empty state")
+    }
+
+    func test_postDeleted_unknownReelId_isANoOp() async {
+        let events = PassthroughSubject<String, Never>()
+        let (sut, _, _) = makeSUT(postDeletedEvents: events)
+        sut.seed(posts: [Self.makeReel(id: "r1"), Self.makeReel(id: "r2")], startId: "r1")
+
+        events.send("not-in-the-pager")
+        // No matching id: nothing to poll for (the list never changes), so
+        // give the Combine delivery a fixed beat to run before asserting the
+        // list and cursor are untouched. `waitForCondition` isn't usable here
+        // — it XCTFails when its condition never turns true.
+        try? await Task.sleep(nanoseconds: 200_000_000)
+
+        XCTAssertEqual(sut.reels.map(\.id), ["r1", "r2"])
+        XCTAssertEqual(sut.currentId, "r1")
     }
 }
 

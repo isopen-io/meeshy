@@ -135,8 +135,8 @@ extension UniversalComposerBar {
     /// Albums en haut, exactement le picker que le composer de story ouvre.
     ///
     /// Le geste est directionnel et reprend la grammaire de la feuille système :
-    /// tirer vers le HAUT agrandit (on passe de l'aperçu de 8 vignettes à toute
-    /// la photothèque), tirer vers le BAS referme le panneau. Sans la branche
+    /// tirer vers le HAUT agrandit (on passe de l'échantillon de 19 vignettes à
+    /// toute la photothèque), tirer vers le BAS referme le panneau. Sans la branche
     /// « bas », la poignée avalerait le drag et casserait le swipe-to-dismiss
     /// que le geste global de `expandedComposer` assure partout ailleurs.
     ///
@@ -199,16 +199,39 @@ extension UniversalComposerBar {
     }
 
     /// Point unique d'ouverture de la photothèque système, partagé par la tuile
-    /// « + » du strip, la poignée et l'action VoiceOver. `fire` referme d'abord
-    /// le panneau, sinon la feuille se présenterait par-dessus un clavier de
-    /// substitution encore monté.
+    /// « + » du strip, la poignée et l'action VoiceOver.
+    ///
+    /// Le panneau s'étire vers le haut pendant le délai qui précède la
+    /// présentation, au lieu de se refermer vers le bas : la feuille système
+    /// prolonge alors le geste au lieu de le contredire (cf.
+    /// `ComposerLibraryHandoff`). Il est ensuite retiré SOUS la feuille qui
+    /// monte — au retour du picker le composer est propre, exactement comme
+    /// avec l'ancien chemin `fire(_:)`.
+    ///
+    /// Reduce Motion garde le chemin direct : l'étirement est une animation
+    /// décorative, pas une information.
     func openFullPhotoLibrary(preselecting ids: [String]) {
-        fire {
+        let present: () -> Void = {
             if let onPhotoLibraryPreselecting {
                 onPhotoLibraryPreselecting(ids)
             } else {
                 onPhotoLibrary?()
             }
+        }
+        guard !reduceMotion else {
+            fire(present)
+            return
+        }
+        // Deux déclencheurs (poignée puis tuile « + ») ne doivent pas empiler
+        // deux présentations sur un seul étirement.
+        guard !isExpandingToLibrary else { return }
+        withAnimation(.spring(response: 0.32, dampingFraction: 0.82)) {
+            isExpandingToLibrary = true
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + ComposerLibraryHandoff.expandDelay) {
+            present()
+            closeAttachMenu()
+            isExpandingToLibrary = false
         }
     }
 
@@ -386,6 +409,30 @@ extension UniversalComposerBar {
     // MARK: - Clipboard Content Handling
 
     func handleClipboardCheck(_ newText: String) {
+        // Collage d'une URL `file://` → pièce jointe, pas du texte. Delta
+        // HONNÊTE, distinct de l'expression historique ci-dessous (qui compte
+        // le double de la croissance réelle et dont le seuil ne doit pas
+        // bouger) : seule une INSERTION assez grande pour contenir
+        // « file:// » déclenche la détection — un utilisateur qui tape ces
+        // caractères un par un n'a jamais une insertion de cette taille.
+        let insertedCount = newText.count - text.count
+        if insertedCount >= "file://".count, newText.contains("file://") {
+            let (cleaned, urls) = FileURLPasteDetector.detect(in: newText)
+            if !urls.isEmpty {
+                // Le champ garde le texte débarrassé des URLs ; les fichiers
+                // partent par `onIngest`, comme un dépôt.
+                DispatchQueue.main.async {
+                    text = cleaned
+                }
+                ingestPastedFileURLs(urls)
+                HapticFeedback.medium()
+                // Pas de tuile presse-papier pour un collage de fichiers :
+                // la spec exige « une pièce jointe — pas du texte, pas une
+                // tuile presse-papier ».
+                return
+            }
+        }
+
         // Detect if a paste of 2000+ chars just happened
         let delta = newText.count - (text.count - (newText.count - text.count))
         if newText.count > 2000 && delta > 500 {

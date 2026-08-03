@@ -119,7 +119,7 @@ struct AffiliateCreateView: View {
                         .font(MeeshyFont.relative(16, weight: .semibold))
                         .accessibilityHidden(true)
                 }
-                Text(String(localized: "affiliate.create.button", defaultValue: "Creer le lien", bundle: .main))
+                Text(String(localized: "affiliate.create.button", defaultValue: "Créer le lien", bundle: .main))
                     .font(MeeshyFont.relative(15, weight: .semibold))
             }
             .foregroundColor(.white)
@@ -134,7 +134,7 @@ struct AffiliateCreateView: View {
                     )
             )
         }
-        .accessibilityLabel(String(localized: "affiliate.create.button", defaultValue: "Creer le lien", bundle: .main))
+        .accessibilityLabel(String(localized: "affiliate.create.button", defaultValue: "Créer le lien", bundle: .main))
         // While the request is in flight the glyph becomes a bare `ProgressView`:
         // a sighted user sees a spinner, a VoiceOver user hears only "dimmed" and
         // cannot tell whether the tap registered. Carry the transient state as a
@@ -165,7 +165,7 @@ struct AffiliateCreateView: View {
             onCreate?(token)
             dismiss()
         } catch {
-            let message = String(localized: "affiliate.create.error", defaultValue: "Erreur lors de la creation", bundle: .main)
+            let message = String(localized: "affiliate.create.error", defaultValue: "Erreur lors de la création", bundle: .main)
             errorMessage = message
             HapticFeedback.error()
             // The error surfaces inside the form, far from the focused button, so

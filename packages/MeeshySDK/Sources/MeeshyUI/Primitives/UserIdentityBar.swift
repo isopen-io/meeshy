@@ -364,7 +364,7 @@ public struct UserIdentityBar: View {
             }
             .foregroundColor(readColor)
             .frame(width: 17)
-            .accessibilityLabel("Read")
+            .accessibilityLabel(String(localized: "userIdentity.read", defaultValue: "Lu", bundle: .module))
         case .failed:
             Image(systemName: "exclamationmark.circle.fill")
                 .font(.system(size: 10))

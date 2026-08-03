@@ -623,6 +623,25 @@ describe('registerCoreRoutes', () => {
       expect(body.data[0].lastMessage.content).toBe('salut ✋');
     });
 
+    it('Lot 3 : lastMessage geolocalise restitue `location` (et le contenu vide n est PAS fabrique cote serveur)', async () => {
+      const GEO = { latitude: 48.8566, longitude: 2.3522, name: 'Tour Eiffel', address: null, category: null };
+      const geoLastMessage = { ...makeLastMessage(''), metadata: { location: GEO } };
+      const conv = makeConversation({ messages: [geoLastMessage] });
+      prisma.conversation.findMany.mockResolvedValue([conv]);
+
+      const req = makeRequest({ query: {} });
+      const reply = makeReply();
+
+      await getListHandler(fastify)(req, reply);
+
+      const lastMessage = reply._body.data[0].lastMessage;
+      expect(lastMessage.location).toMatchObject({ latitude: 48.8566, name: 'Tour Eiffel' });
+      // Constat, pas une exigence : un message géolocalisé sans légende a un
+      // `content` vide aujourd'hui. Le hoist de `location` ne fabrique aucun
+      // texte de repli — au client de décider comment rendre "" + location.
+      expect(lastMessage.content).toBe('');
+    });
+
     it('does not split a surrogate pair at the truncation boundary', async () => {
       const conv = makeConversation({ messages: [makeLastMessage('a'.repeat(299) + '😀😀😀')] });
       prisma.conversation.findMany.mockResolvedValue([conv]);

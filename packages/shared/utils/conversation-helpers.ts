@@ -209,14 +209,20 @@ type LanguageResolvable = {
 }
 
 export function resolveParticipantLanguage(participant: LanguageResolvable): string {
-  // Le fallback (langue déclarée par le call site) est lowercased comme les
-  // niveaux in-app de resolveUserLanguagesOrdered : le docstring promet la
-  // « même normalisation de casse que resolveUserLanguage » pour TOUS les
-  // chemins de retour. Un fallback en casse haute ('FR') manquerait les
-  // traductions indexées en minuscules exactement comme une préférence in-app
-  // non-lowercased (violation du Prisme). `.toLowerCase()` est un no-op sur un
-  // code déjà canonique — parité stricte, zéro régression.
-  const fallback = participant.language.toLowerCase()
+  // Le fallback (langue déclarée par le call site) est normalisé comme les
+  // niveaux de resolveUserLanguagesOrdered : le docstring promet la « même
+  // normalisation que resolveUserLanguage » pour TOUS les chemins de retour.
+  // Ces niveaux réduisent la casse ET les sous-tags région/script via
+  // normalizeLanguageCode ('it-IT' → 'it', 'FR' → 'fr') : un fallback laissé
+  // région-taggé ('pt-BR' → 'pt-br') ou en casse haute manquerait les
+  // traductions indexées en minuscules 2/3-lettres exactement comme une
+  // préférence in-app non normalisée (violation du Prisme). Le repli
+  // `?? .toLowerCase()` préserve le fallback terminal (jamais `undefined`) pour
+  // les codes que normalizeLanguageCode ne sait pas réduire — parité stricte
+  // avec le contrat normalizeLanguageForDedup, zéro régression sur les codes
+  // déjà canoniques.
+  const fallback =
+    normalizeLanguageCode(participant.language) ?? participant.language.toLowerCase()
   if (participant.type !== 'user' || !participant.user) {
     return fallback
   }

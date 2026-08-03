@@ -16,6 +16,26 @@ import { withMutationLog } from '../../utils/withMutationLog';
 import { resolveFrontendBaseUrl } from '../../services/TrackingLinkService';
 import { validatePagination } from '../../utils/pagination';
 
+/**
+ * Surfaces qui peuvent produire une impression. Déclaré UNE fois et partagé par
+ * la route unitaire et la route batch : les deux enums avaient divergé du client
+ * — iOS envoie `story` à chaque slide de story révélé
+ * (`StoryViewModel.recordStoryImpression`), valeur absente des deux listes, donc
+ * 400 systématique et `impressionCount` figé à 0 sur toutes les stories malgré
+ * des vues réelles. Toute nouvelle surface cliente s'ajoute ICI, pas dans un
+ * seul des deux schémas.
+ */
+const IMPRESSION_SOURCES = [
+  'feed',
+  'profile',
+  'search',
+  'shared_link',
+  'notification',
+  'detail',
+  'story',
+  'status',
+] as const;
+
 export function registerInteractionRoutes(
   fastify: FastifyInstance,
   prisma: PrismaClient,
@@ -336,7 +356,7 @@ export function registerInteractionRoutes(
       body: {
         type: 'object',
         properties: {
-          source: { type: 'string', enum: ['feed', 'profile', 'search', 'shared_link', 'notification', 'detail'] }
+          source: { type: 'string', enum: [...IMPRESSION_SOURCES] }
         }
       }
     },
@@ -386,7 +406,7 @@ export function registerInteractionRoutes(
         required: ['postIds'],
         properties: {
           postIds: { type: 'array', items: { type: 'string' } },
-          source: { type: 'string', enum: ['feed', 'profile', 'search', 'shared_link', 'notification', 'detail'] }
+          source: { type: 'string', enum: [...IMPRESSION_SOURCES] }
         }
       }
     },
@@ -415,10 +435,30 @@ export function registerInteractionRoutes(
         }))
       });
 
-      await prisma.post.updateMany({
-        where: { id: { in: capped } },
-        data: { impressionCount: { increment: 1 } }
-      });
+      // Une impression par APPARITION : le même post peut légitimement revenir
+      // plusieurs fois dans un lot (aller-retour de scroll). `createMany` insère
+      // bien une ligne par occurrence, mais `updateMany({ id: { in: [...] } })`
+      // n'incrémente chaque post qu'UNE fois — le `in` est dédupliqué côté base.
+      // On regroupe donc par nombre d'occurrences : un `updateMany` par valeur
+      // d'incrément distincte (en pratique 1 à 3), et non un par post.
+      const occurrences = capped.reduce<Map<string, number>>((acc, postId: string) => {
+        acc.set(postId, (acc.get(postId) ?? 0) + 1);
+        return acc;
+      }, new Map());
+
+      const idsByIncrement = [...occurrences].reduce<Map<number, string[]>>((acc, [postId, count]) => {
+        acc.set(count, [...(acc.get(count) ?? []), postId]);
+        return acc;
+      }, new Map());
+
+      await Promise.all(
+        [...idsByIncrement].map(([increment, ids]) =>
+          prisma.post.updateMany({
+            where: { id: { in: ids } },
+            data: { impressionCount: { increment } }
+          })
+        )
+      );
 
       return sendSuccess(reply, { recorded: capped.length });
     } catch (error) {

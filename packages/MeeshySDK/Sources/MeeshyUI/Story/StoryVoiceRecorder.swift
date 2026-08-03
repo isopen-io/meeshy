@@ -12,6 +12,12 @@ public struct StoryVoiceRecorder<Recorder: AudioRecordingProviding>: View {
     /// Hands back the recorded file together with the language the user tagged
     /// it with, so the downstream audio editor (transcription) opens pre-set.
     public var onRecordComplete: (URL, String) -> Void
+    /// Portes vers les autres sources d'audio (import Fichiers, bibliothèque de
+    /// sons), rendues en chips sous le header. `nil` = pas de chip — le
+    /// recorder reste un pur enregistreur pour les call sites qui n'offrent
+    /// pas ces flux. Closures opaques : le composant ignore ce qu'elles ouvrent.
+    var onImportAudioFile: (() -> Void)?
+    var onOpenSoundLibrary: (() -> Void)?
 
     // `@StateObject` (et non `@ObservedObject`) : le call site (sheet +Media)
     // crée le recorder inline via l'init de convenance — en observed, chaque
@@ -31,9 +37,13 @@ public struct StoryVoiceRecorder<Recorder: AudioRecordingProviding>: View {
 
     public init(recorder: @autoclosure @escaping () -> Recorder,
                 preferredLanguage: String = "fr",
+                onImportAudioFile: (() -> Void)? = nil,
+                onOpenSoundLibrary: (() -> Void)? = nil,
                 onRecordComplete: @escaping (URL, String) -> Void) {
         self._recorder = StateObject(wrappedValue: recorder())
         self._selectedLanguage = State(initialValue: preferredLanguage)
+        self.onImportAudioFile = onImportAudioFile
+        self.onOpenSoundLibrary = onOpenSoundLibrary
         self.onRecordComplete = onRecordComplete
     }
 
@@ -69,6 +79,14 @@ public struct StoryVoiceRecorder<Recorder: AudioRecordingProviding>: View {
                 Spacer()
             }
             .padding(.bottom, 12)
+
+            if !recorder.isRecording {
+                StoryVoiceRecorderSourceChips(
+                    onImportAudioFile: onImportAudioFile,
+                    onOpenSoundLibrary: onOpenSoundLibrary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.bottom, 8)
+            }
 
             VStack(spacing: 20) {
                 if let error = errorMessage {
@@ -293,13 +311,54 @@ public struct StoryVoiceRecorder<Recorder: AudioRecordingProviding>: View {
     }
 }
 
+// MARK: - Source chips (Fichiers / Bibliothèque)
+
+/// Rangée d'accès aux sources d'audio alternatives, montée par le recorder
+/// hors enregistrement. Chaque chip n'existe que si SA closure est fournie ;
+/// sans aucune closure la rangée n'a aucune surface (absence structurelle) —
+/// les call sites qui ne passent rien rendent le recorder à l'identique.
+struct StoryVoiceRecorderSourceChips: View {
+    var onImportAudioFile: (() -> Void)?
+    var onOpenSoundLibrary: (() -> Void)?
+
+    var body: some View {
+        if onImportAudioFile != nil || onOpenSoundLibrary != nil {
+            HStack(spacing: 8) {
+                if let onImportAudioFile {
+                    chip(icon: "folder.fill",
+                         text: String(localized: "story.voiceRecorder.fromFiles", defaultValue: "Fichiers", bundle: .module),
+                         action: onImportAudioFile)
+                }
+                if let onOpenSoundLibrary {
+                    chip(icon: "music.note.list",
+                         text: String(localized: "story.voiceRecorder.fromLibrary", defaultValue: "Bibliothèque", bundle: .module),
+                         action: onOpenSoundLibrary)
+                }
+            }
+        }
+    }
+
+    private func chip(icon: String, text: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            MediaPillLabel(icon: icon, text: text)
+                .frame(minHeight: 44)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+}
+
 // MARK: - Backward-compatible convenience init (uses DefaultSDKAudioRecorder)
 
 extension StoryVoiceRecorder where Recorder == DefaultSDKAudioRecorder {
     public init(preferredLanguage: String = "fr",
+                onImportAudioFile: (() -> Void)? = nil,
+                onOpenSoundLibrary: (() -> Void)? = nil,
                 onRecordComplete: @escaping (URL, String) -> Void) {
         self.init(recorder: DefaultSDKAudioRecorder(),
                   preferredLanguage: preferredLanguage,
+                  onImportAudioFile: onImportAudioFile,
+                  onOpenSoundLibrary: onOpenSoundLibrary,
                   onRecordComplete: onRecordComplete)
     }
 }

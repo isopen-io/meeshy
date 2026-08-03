@@ -17,7 +17,12 @@ class StatusViewModel: ObservableObject {
     private let socialSocket: SocialSocketProviding
     private let authManager: AuthManaging
     private let offlineQueue: OfflineQueueing
+    private let postService: PostServiceProviding
     private let isOffline: () -> Bool
+
+    /// Groupement, persistance et flush (arrière-plan / relance) portés par
+    /// `ImpressionBatcher`.
+    private lazy var impressions = ImpressionBatcher(source: "status", postService: postService)
 
     /// A mood is "stuck offline" (recoverable as a draft) once it has been
     /// unsent for longer than this — the "pas envoyé dans la minute → offline"
@@ -40,6 +45,7 @@ class StatusViewModel: ObservableObject {
         socialSocket: SocialSocketProviding = SocialSocketManager.shared,
         authManager: AuthManaging = AuthManager.shared,
         offlineQueue: OfflineQueueing = OfflineQueue.shared,
+        postService: PostServiceProviding = PostService.shared,
         isOffline: @escaping () -> Bool = { NetworkMonitor.shared.isOffline }
     ) {
         self.mode = mode
@@ -47,7 +53,34 @@ class StatusViewModel: ObservableObject {
         self.socialSocket = socialSocket
         self.authManager = authManager
         self.offlineQueue = offlineQueue
+        self.postService = postService
         self.isOffline = isOffline
+    }
+
+    // MARK: - Portée (impressions & vues)
+    //
+    // Un mood EST un post (`PostType.STATUS`) : il porte `impressionCount` et
+    // `viewCount` comme les autres. Aucune surface ne les alimentait — la barre
+    // de moods était le seul contenu du produit dont la portée restait à zéro.
+    //
+    // Même contrat que le feed : une impression par APPARITION du pill, groupée
+    // sur 3 s ; la vue UNIQUE part à l'ouverture du popover (dédupliquée côté
+    // serveur par `PostView`, donc rejouable sans risque).
+
+    /// Le mood `statusId` est apparu à l'écran.
+    func trackImpression(_ statusId: String) {
+        impressions.record(statusId)
+    }
+
+    /// À appeler quand la barre disparaît : sans ce flush, le lot en cours de
+    /// groupement est perdu.
+    func flushImpressions() async {
+        await impressions.flushNow()
+    }
+
+    /// Le mood `statusId` a été ouvert (popover) — vue unique par utilisateur.
+    func markStatusViewed(_ statusId: String) {
+        Task { [postService] in try? await postService.viewPost(postId: statusId, duration: nil) }
     }
 
     // MARK: - Load Statuses
@@ -162,6 +195,7 @@ class StatusViewModel: ObservableObject {
                 content: content ?? "",
                 attachmentIds: [],
                 visibility: visibility,
+                originalLanguage: DefaultComposerLanguage.resolve(),
                 type: "STATUS",
                 moodEmoji: emoji,
                 visibilityUserIds: visibilityUserIds
@@ -176,7 +210,7 @@ class StatusViewModel: ObservableObject {
         }
 
         do {
-            let post = try await statusService.create(moodEmoji: emoji, content: content, visibility: visibility, visibilityUserIds: visibilityUserIds, viaUsername: viaUsername, audioUrl: audioUrl, repostOfId: repostOfId)
+            let post = try await statusService.create(moodEmoji: emoji, content: content, originalLanguage: DefaultComposerLanguage.resolve(), visibility: visibility, visibilityUserIds: visibilityUserIds, viaUsername: viaUsername, audioUrl: audioUrl, repostOfId: repostOfId)
 
             if let entry = post.toStatusEntry() {
                 myStatus = entry

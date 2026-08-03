@@ -95,13 +95,68 @@ async function withRetry<T>(
   throw lastError;
 }
 
-// MongoDB ObjectId hex strings are chronologically sortable (leading 4 bytes
-// = creation timestamp), so a `lt` filter in the cursor-advance guard
-// approximates message recency without an extra query. Only applied when the
-// candidate id looks like a real ObjectId — non-conforming ids (tests, legacy
-// data) skip the guard so behavior is unchanged for callers that don't use
-// ObjectIds (matches the field's pre-atomic-guard behavior).
+// A MongoDB ObjectId hex string is chronologically sortable only to the SECOND
+// (leading 4 bytes = creation timestamp); its next 5 bytes are per-process
+// random. Two messages created in the same second on DIFFERENT gateway
+// processes therefore sort by string in an order unrelated to real recency, so
+// the cursor-advance freshness guard orders by the message's `createdAt`
+// (millisecond precision) instead — see `buildCursorFreshnessGuard`. Only
+// applied when the candidate id looks like a real ObjectId — non-conforming ids
+// (tests, legacy data) skip the guard so behavior is unchanged for callers that
+// don't use ObjectIds (matches the field's pre-atomic-guard behavior).
 const OBJECT_ID_RE = /^[0-9a-f]{24}$/i;
+
+type CursorIdField = "lastDeliveredMessageId" | "lastReadMessageId";
+type CursorCreatedAtField =
+  | "lastDeliveredMessageCreatedAt"
+  | "lastReadMessageCreatedAt";
+
+const CREATED_AT_FIELD_FOR: Record<CursorIdField, CursorCreatedAtField> = {
+  lastDeliveredMessageId: "lastDeliveredMessageCreatedAt",
+  lastReadMessageId: "lastReadMessageCreatedAt",
+};
+
+/**
+ * Builds the `OR` half of the cursor-advance `updateMany` WHERE — the atomic
+ * freshness guard that decides whether an incoming receipt is newer than what
+ * the cursor already records. Ordering is by the message's `createdAt`, NOT its
+ * ObjectId hex order (which is only second-accurate and diverges across gateway
+ * processes; see `OBJECT_ID_RE`).
+ *
+ * Returns `null` when no guard applies (the caller then matches on
+ * participant+conversation alone):
+ *   - non-ObjectId ids (tests / legacy data), preserving the historical
+ *     pre-guard behavior;
+ *   - an ObjectId whose message could not be resolved to a `createdAt`, which
+ *     falls back to the historical ObjectId-order guard rather than dropping it.
+ */
+export function buildCursorFreshnessGuard(params: {
+  idField: CursorIdField;
+  createdAtField: CursorCreatedAtField;
+  messageId: string;
+  messageCreatedAt: Date | null;
+}): { OR: Array<Record<string, unknown>> } | null {
+  const { idField, createdAtField, messageId, messageCreatedAt } = params;
+  if (!OBJECT_ID_RE.test(messageId)) return null;
+
+  if (!messageCreatedAt) {
+    return { OR: [{ [idField]: null }, { [idField]: { lt: messageId } }] };
+  }
+
+  return {
+    OR: [
+      // Brand-new cursor: nothing recorded yet.
+      { [createdAtField]: null, [idField]: null },
+      // Legacy cursor written before createdAt was tracked: fall back to the
+      // ObjectId order it was recorded under, until this advance upgrades it.
+      { [createdAtField]: null, [idField]: { lt: messageId } },
+      // The recorded message is strictly older (correct to the millisecond). A
+      // same-instant sibling from another process is left for the next later
+      // receipt to carry — a transient stall, never a rollback.
+      { [createdAtField]: { lt: messageCreatedAt } },
+    ],
+  };
+}
 
 export class MessageReadStatusService {
   /**
@@ -465,16 +520,36 @@ export class MessageReadStatusService {
   }): Promise<boolean> {
     const { participantId, conversationId, messageId, now, idField, atField, resetUnreadCount, cursorExists } = params;
 
+    const createdAtField = CREATED_AT_FIELD_FOR[idField];
+
+    // Resolve the incoming message's createdAt — the chronological key the guard
+    // orders by. Best-effort: if it can't be read (message deleted between send
+    // and receipt, or a non-ObjectId test id), buildCursorFreshnessGuard falls
+    // back to the historical ObjectId-order guard.
+    let messageCreatedAt: Date | null = null;
+    if (OBJECT_ID_RE.test(messageId)) {
+      try {
+        const message = await this.prisma.message.findUnique({
+          where: { id: messageId },
+          select: { createdAt: true },
+        });
+        messageCreatedAt = message?.createdAt ?? null;
+      } catch {
+        messageCreatedAt = null;
+      }
+    }
+
     const guardWhere = {
       participantId,
       conversationId,
-      ...(OBJECT_ID_RE.test(messageId)
-        ? { OR: [{ [idField]: null }, { [idField]: { lt: messageId } }] }
-        : {}),
+      ...(buildCursorFreshnessGuard({ idField, createdAtField, messageId, messageCreatedAt }) ?? {}),
     };
     const advanceData = {
       [idField]: messageId,
       [atField]: now,
+      // Never overwrite a recorded createdAt with null — write-forward only, so
+      // an unresolved incoming createdAt can't erase the guard's ordering key.
+      ...(messageCreatedAt ? { [createdAtField]: messageCreatedAt } : {}),
       ...(resetUnreadCount ? { unreadCount: 0 } : {}),
       version: { increment: 1 },
     };
@@ -493,6 +568,7 @@ export class MessageReadStatusService {
           conversationId,
           [idField]: messageId,
           [atField]: now,
+          ...(messageCreatedAt ? { [createdAtField]: messageCreatedAt } : {}),
           unreadCount: 0,
           version: 0,
         },
@@ -658,6 +734,12 @@ export class MessageReadStatusService {
       readonly language?: string | null;
       /** Exceptions par message — cf. `freezeMessageStatus`. */
       readonly messageLanguages?: Readonly<Record<string, string>>;
+      /**
+       * Message le plus récent, ATTEINT par le lecteur. Fait sauter le curseur
+       * de non-lus jusque-là — donc vide le badge — sans figer un seul `readAt`
+       * de plus. Cf. `MarkReadBodySchema.caughtUpToMessageId`.
+       */
+      readonly caughtUpToMessageId?: string;
     }
   ): Promise<number> {
     // Hoisted so the catch below can release the dedup key when the write
@@ -755,7 +837,7 @@ export class MessageReadStatusService {
 
         // `null` = le message suivant immédiatement le curseur n'a pas été vu.
         // Le curseur ne bouge pas : sauter au bas d'une conversation ne doit
-        // pas vider le badge de non-lus de ce qui a été survolé.
+        // pas figer un `readAt` sur ce qui a été survolé.
         if (cursorTarget) {
           await this._advanceCursor({
             participantId,
@@ -766,6 +848,25 @@ export class MessageReadStatusService {
             idField: "lastReadMessageId",
             atField: "lastReadAt",
             resetUnreadCount: false,
+          });
+        }
+
+        // Rattrapage : le lecteur a ATTEINT le dernier message. Le curseur
+        // saute jusque-là et le badge tombe, sans qu'aucun `readAt`
+        // supplémentaire n'ait été figé au-dessus — les accusés de lecture
+        // restent le reflet exact de ce qui a été affiché. Après l'avance par
+        // préfixe contigu, jamais avant : la garde de fraîcheur de
+        // `_advanceCursor` ignorerait alors la seconde comme périmée.
+        if (options?.caughtUpToMessageId) {
+          await this._advanceCursor({
+            participantId,
+            conversationId,
+            messageId: options.caughtUpToMessageId,
+            now,
+            cursorExists: cursorExists || cursorTarget != null,
+            idField: "lastReadMessageId",
+            atField: "lastReadAt",
+            resetUnreadCount: true,
           });
         }
       } else {

@@ -17,7 +17,10 @@ final class WidgetActionFlusher {
     static let shared = WidgetActionFlusher()
 
     private let suiteName = "group.me.meeshy.apps"
-    private let pendingMarkReadKey = "pending_mark_read"
+    /// Exposée pour le wipe de logout (appgroup-01) — une seule définition de
+    /// la clé, pas de duplication de littéral.
+    nonisolated static let pendingMarkReadKey = "pending_mark_read"
+    private var pendingMarkReadKey: String { Self.pendingMarkReadKey }
 
     private lazy var sharedDefaults: UserDefaults? = {
         UserDefaults(suiteName: suiteName)

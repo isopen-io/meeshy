@@ -62,10 +62,20 @@ function createMockPrisma() {
       create: jest.fn(),
       update: jest.fn(),
       count: jest.fn(),
+      deleteMany: jest.fn(),
+    },
+    postImpression: {
+      deleteMany: jest.fn(),
     },
     postMedia: {
-      updateMany: jest.fn(),
+      // `{ count }` par défaut : le code compare le nombre de médias
+      // effectivement rattachés à celui demandé pour ne jamais écarter un
+      // média en silence. Un mock qui rend `undefined` casserait sur `.count`.
+      updateMany: jest.fn().mockResolvedValue({ count: 2 }),
       findFirst: jest.fn(),
+      // `[]` par défaut : la règle de composition REEL (`qualifiesAsReel`)
+      // matérialise les mimeTypes des médias à classifier via findMany.
+      findMany: jest.fn().mockResolvedValue([]),
       update: jest.fn(),
       deleteMany: jest.fn(),
     },
@@ -74,6 +84,7 @@ function createMockPrisma() {
     },
     postReaction: {
       findMany: jest.fn(),
+      deleteMany: jest.fn(),
     },
     friendRequest: {
       findMany: jest.fn(),
@@ -162,10 +173,20 @@ describe('PostService', () => {
 
       await service.createPost({ ...basePostData, mediaIds: ['media-1', 'media-2'] }, 'user-1');
 
-      expect(prisma.postMedia.updateMany).toHaveBeenCalledWith({
-        where: { id: { in: ['media-1', 'media-2'] } },
-        data: { postId: 'post-1' },
-      });
+      // Garde de rattachement : le média doit être LIBRE (ni post ni
+      // commentaire) ET appartenir à l'auteur — un tiers ne peut plus
+      // s'approprier un média en attente en devinant son id.
+      const claim = prisma.postMedia.updateMany.mock.calls[0][0];
+      expect(claim.where.id).toEqual({ in: ['media-1', 'media-2'] });
+      // « Libre » sous les DEUX formes MongoDB — présent à null OU champ
+      // absent : Prisma-Mongo ne matche pas l'absence avec `null`, et le
+      // handler TUS ne pose pas `commentId` (incident prod 2026-07-31→08-01).
+      expect(claim.where.AND).toEqual([
+        { OR: [{ postId: null }, { postId: { isSet: false } }] },
+        { OR: [{ commentId: null }, { commentId: { isSet: false } }] },
+      ]);
+      expect(claim.where.uploaderId).toBe('user-1');
+      expect(claim.data).toEqual({ postId: 'post-1' });
       // findFirst is called to detect audio media for Whisper processing
       expect(prisma.postMedia.findFirst).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -258,6 +279,96 @@ describe('PostService', () => {
       );
       // No audio media → no transcription update
       expect(prisma.postMedia.update).not.toHaveBeenCalled();
+    });
+  });
+
+  // -----------------------------------------------------------------------
+  // createPost — geo discoverability (INDÉPENDANTE de metadata.location)
+  // -----------------------------------------------------------------------
+
+  describe('createPost — geo discoverability', () => {
+    const basePostData = { type: PostType.POST, visibility: PostVisibility.PUBLIC };
+    const place = { latitude: 48.8584, longitude: 2.2945, name: 'Tour Eiffel', address: null, category: null };
+
+    it('persists geoPoint/geoPrecision when discoverabilityPrecision is provided with a valid location', async () => {
+      prisma.post.create.mockImplementation(async (args: any) => makePost({ id: 'geo-1', ...args.data }));
+
+      await service.createPost({
+        ...basePostData,
+        location: place,
+        discoverabilityPrecision: 'CITY',
+      }, 'user-1');
+
+      const createCall = prisma.post.create.mock.calls[0][0];
+      // CITY arrondit à 0.1° (~10km) — cf. geoDiscoverability.ts.
+      expect(createCall.data.geoPoint).toEqual({ type: 'Point', coordinates: [2.3, 48.9] });
+      expect(createCall.data.geoPrecision).toBe('CITY');
+    });
+
+    it('quantizes EXACT precision to the unrounded coordinate', async () => {
+      prisma.post.create.mockImplementation(async (args: any) => makePost({ id: 'geo-2', ...args.data }));
+
+      await service.createPost({
+        ...basePostData,
+        location: place,
+        discoverabilityPrecision: 'EXACT',
+      }, 'user-1');
+
+      const createCall = prisma.post.create.mock.calls[0][0];
+      expect(createCall.data.geoPoint).toEqual({ type: 'Point', coordinates: [2.2945, 48.8584] });
+      expect(createCall.data.geoPrecision).toBe('EXACT');
+    });
+
+    it('leaves geoPoint/geoPrecision null when discoverabilityPrecision is absent, even with a valid location', async () => {
+      prisma.post.create.mockImplementation(async (args: any) => makePost({ id: 'geo-3', ...args.data }));
+
+      await service.createPost({ ...basePostData, location: place }, 'user-1');
+
+      const createCall = prisma.post.create.mock.calls[0][0];
+      expect(createCall.data.geoPoint).toBeUndefined();
+      expect(createCall.data.geoPrecision).toBeUndefined();
+    });
+
+    it('leaves geoPoint/geoPrecision null when discoverabilityPrecision is provided but location is absent', async () => {
+      prisma.post.create.mockImplementation(async (args: any) => makePost({ id: 'geo-4', ...args.data }));
+
+      await service.createPost({ ...basePostData, discoverabilityPrecision: 'CITY' }, 'user-1');
+
+      const createCall = prisma.post.create.mock.calls[0][0];
+      expect(createCall.data.geoPoint).toBeUndefined();
+      expect(createCall.data.geoPrecision).toBeUndefined();
+    });
+
+    it('ignores a client-supplied geoPoint/geoPrecision passthrough — the server always recomputes its own', async () => {
+      prisma.post.create.mockImplementation(async (args: any) => makePost({ id: 'geo-5', ...args.data }));
+
+      await service.createPost({
+        ...basePostData,
+        // Un attaquant qui contournerait le schéma Zod de la route et
+        // fournirait ces champs directement au service ne doit jamais les
+        // voir atterrir tels quels dans l'écriture Prisma — même garde que
+        // `metadata` (cf. sharedPlace.ts).
+        geoPoint: { type: 'Point', coordinates: [999, 999] },
+        geoPrecision: 'EXACT',
+      } as any, 'user-1');
+
+      const createCall = prisma.post.create.mock.calls[0][0];
+      expect(createCall.data.geoPoint).toBeUndefined();
+      expect(createCall.data.geoPrecision).toBeUndefined();
+    });
+
+    it('does not persist geoPoint/geoPrecision when the location coordinates are invalid, even with a valid precision', async () => {
+      prisma.post.create.mockImplementation(async (args: any) => makePost({ id: 'geo-6', ...args.data }));
+
+      await service.createPost({
+        ...basePostData,
+        location: { latitude: 999, longitude: 2.2945, name: null, address: null, category: null },
+        discoverabilityPrecision: 'CITY',
+      }, 'user-1');
+
+      const createCall = prisma.post.create.mock.calls[0][0];
+      expect(createCall.data.geoPoint).toBeUndefined();
+      expect(createCall.data.geoPrecision).toBeUndefined();
     });
   });
 
@@ -1428,8 +1539,9 @@ describe('PostService', () => {
       expect(prisma.post.update).not.toHaveBeenCalled();
     });
 
-    it('switches a POST to a REEL when it carries media', async () => {
-      prisma.post.findFirst.mockResolvedValue(makePost({ authorId: 'user-1', type: 'POST', media: [{ id: 'm1' }] }));
+    it('switches a POST to a REEL when it carries a qualifying composition (video)', async () => {
+      // Règle produit 2026-08-02 : video || audio || >= 2 images.
+      prisma.post.findFirst.mockResolvedValue(makePost({ authorId: 'user-1', type: 'POST', media: [{ id: 'm1', mimeType: 'video/mp4' }] }));
       prisma.post.update.mockResolvedValue(makePost({ type: 'REEL' }));
 
       await service.updatePost('post-1', 'user-1', { type: PostType.REEL });
@@ -1460,6 +1572,61 @@ describe('PostService', () => {
       expect(prisma.postMedia.deleteMany).not.toHaveBeenCalled();
     });
 
+    it('writes metadata.location on edit and preserves the other metadata blocks', async () => {
+      // Le lieu à l'édition passe par le MÊME contrat qu'à la création :
+      // écrit dans metadata.location, sans clobber postReplyTo/trackingLinks.
+      prisma.post.findFirst.mockResolvedValue(makePost({
+        authorId: 'user-1', type: 'POST', media: [],
+        metadata: { postReplyTo: { id: 'other' } },
+      }));
+      prisma.post.update.mockResolvedValue(makePost());
+      const place = { latitude: 48.8584, longitude: 2.2945, name: 'Tour Eiffel', address: null, category: null };
+
+      await service.updatePost('post-1', 'user-1', { location: place });
+
+      expect(prisma.post.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            metadata: { postReplyTo: { id: 'other' }, location: place },
+          }),
+        }),
+      );
+    });
+
+    it('removes metadata.location when location is null, keeping the other blocks', async () => {
+      prisma.post.findFirst.mockResolvedValue(makePost({
+        authorId: 'user-1', type: 'POST', media: [],
+        metadata: {
+          postReplyTo: { id: 'other' },
+          location: { latitude: 1, longitude: 2, name: null, address: null, category: null },
+        },
+      }));
+      prisma.post.update.mockResolvedValue(makePost());
+
+      await service.updatePost('post-1', 'user-1', { location: null });
+
+      expect(prisma.post.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            metadata: { postReplyTo: { id: 'other' } },
+          }),
+        }),
+      );
+    });
+
+    it('leaves metadata untouched when location is absent from the edit', async () => {
+      prisma.post.findFirst.mockResolvedValue(makePost({
+        authorId: 'user-1', type: 'POST', media: [],
+        metadata: { location: { latitude: 1, longitude: 2, name: null, address: null, category: null } },
+      }));
+      prisma.post.update.mockResolvedValue(makePost());
+
+      await service.updatePost('post-1', 'user-1', { content: 'x' });
+
+      const updateArg = prisma.post.update.mock.calls[0][0];
+      expect(updateArg.data.metadata).toBeUndefined();
+    });
+
     it('rejects removing the last media of a REEL (422) and deletes nothing', async () => {
       prisma.post.findFirst.mockResolvedValue(makePost({ authorId: 'user-1', type: 'REEL', media: [{ id: 'm1' }] }));
 
@@ -1469,8 +1636,9 @@ describe('PostService', () => {
       expect(prisma.post.update).not.toHaveBeenCalled();
     });
 
-    it('allows removing media from a REEL that keeps at least one', async () => {
-      prisma.post.findFirst.mockResolvedValue(makePost({ authorId: 'user-1', type: 'REEL', media: [{ id: 'm1' }, { id: 'm2' }] }));
+    it('allows removing media from a REEL whose remaining composition still qualifies', async () => {
+      // Retirer l'image laisse la vidéo — la composition reste qualifiante.
+      prisma.post.findFirst.mockResolvedValue(makePost({ authorId: 'user-1', type: 'REEL', media: [{ id: 'm1', mimeType: 'image/jpeg' }, { id: 'm2', mimeType: 'video/mp4' }] }));
       prisma.post.update.mockResolvedValue(makePost({ type: 'REEL' }));
 
       await service.updatePost('post-1', 'user-1', { removeMediaIds: ['m1'] });
@@ -1547,6 +1715,150 @@ describe('PostService', () => {
       const call = prisma.post.update.mock.calls[0][0];
       expect(call.data.originalLanguage).toBe('en');
       expect(call.data.translations).toEqual({});
+    });
+
+    // -----------------------------------------------------------------------
+    // Story edit — engagement reset (directive 2026-07-29)
+    //
+    // Editing a published STORY's content restarts its life: views, reactions
+    // and impressions are wiped (rows + denormalized counters + embedded JSON)
+    // so every viewer sees it as new again. The publication date never moves:
+    // createdAt/expiresAt are NOT part of the update payload.
+    // -----------------------------------------------------------------------
+
+    describe('STORY content edit — engagement reset', () => {
+      it('wipes views, reactions and impressions when storyEffects change', async () => {
+        prisma.post.findFirst.mockResolvedValue(makePost({ authorId: 'user-1', type: 'STORY', media: [] }));
+        prisma.post.update.mockResolvedValue(makePost({ type: 'STORY' }));
+
+        await service.updatePost('post-1', 'user-1', { storyEffects: { background: { kind: 'color' } } });
+
+        expect(prisma.postView.deleteMany).toHaveBeenCalledWith({ where: { postId: 'post-1' } });
+        expect(prisma.postReaction.deleteMany).toHaveBeenCalledWith({ where: { postId: 'post-1' } });
+        expect(prisma.postImpression.deleteMany).toHaveBeenCalledWith({ where: { postId: 'post-1' } });
+        expect(prisma.post.update).toHaveBeenCalledWith(
+          expect.objectContaining({
+            data: expect.objectContaining({
+              viewCount: 0,
+              impressionCount: 0,
+              reactionCount: 0,
+              likeCount: 0,
+              reactionSummary: {},
+              reactions: [],
+              storyViews: [],
+              isEdited: true,
+              contentEditedAt: expect.any(Date),
+            }),
+          }),
+        );
+      });
+
+      it('wipes stale translations on a content edit even without language change', async () => {
+        prisma.post.findFirst.mockResolvedValue(makePost({ authorId: 'user-1', type: 'STORY', originalLanguage: 'fr', media: [] }));
+        prisma.post.update.mockResolvedValue(makePost({ type: 'STORY' }));
+
+        await service.updatePost('post-1', 'user-1', { content: 'nouveau texte' });
+
+        expect(prisma.post.update).toHaveBeenCalledWith(
+          expect.objectContaining({ data: expect.objectContaining({ translations: {} }) }),
+        );
+      });
+
+      it('never touches createdAt or expiresAt (publication date is immutable)', async () => {
+        prisma.post.findFirst.mockResolvedValue(makePost({ authorId: 'user-1', type: 'STORY', media: [] }));
+        prisma.post.update.mockResolvedValue(makePost({ type: 'STORY' }));
+
+        await service.updatePost('post-1', 'user-1', { content: 'edited', storyEffects: {} });
+
+        const dataArg = prisma.post.update.mock.calls[0][0].data;
+        expect(dataArg).not.toHaveProperty('createdAt');
+        expect(dataArg).not.toHaveProperty('expiresAt');
+      });
+
+      it('does NOT reset engagement on a visibility-only STORY update', async () => {
+        prisma.post.findFirst.mockResolvedValue(makePost({ authorId: 'user-1', type: 'STORY', media: [] }));
+        prisma.post.update.mockResolvedValue(makePost({ type: 'STORY' }));
+
+        await service.updatePost('post-1', 'user-1', { visibility: PostVisibility.FRIENDS, visibilityUserIds: [] });
+
+        expect(prisma.postView.deleteMany).not.toHaveBeenCalled();
+        expect(prisma.postReaction.deleteMany).not.toHaveBeenCalled();
+        expect(prisma.postImpression.deleteMany).not.toHaveBeenCalled();
+        const dataArg = prisma.post.update.mock.calls[0][0].data;
+        expect(dataArg).not.toHaveProperty('viewCount');
+        expect(dataArg).not.toHaveProperty('translations');
+        expect(dataArg).not.toHaveProperty('contentEditedAt');
+      });
+
+      it('does NOT reset engagement when a non-STORY post is edited', async () => {
+        prisma.post.findFirst.mockResolvedValue(makePost({ authorId: 'user-1', type: 'POST', media: [] }));
+        prisma.post.update.mockResolvedValue(makePost());
+
+        await service.updatePost('post-1', 'user-1', { content: 'edited post' });
+
+        expect(prisma.postView.deleteMany).not.toHaveBeenCalled();
+        expect(prisma.postReaction.deleteMany).not.toHaveBeenCalled();
+        const dataArg = prisma.post.update.mock.calls[0][0].data;
+        expect(dataArg).not.toHaveProperty('viewCount');
+      });
+    });
+
+    describe('mediaIds — attach pre-uploaded media on update', () => {
+      it('attaches only PENDING media (postId null) to the post', async () => {
+        prisma.post.findFirst.mockResolvedValue(makePost({ authorId: 'user-1', type: 'STORY', media: [] }));
+        prisma.post.update.mockResolvedValue(makePost({ type: 'STORY' }));
+
+        await service.updatePost('post-1', 'user-1', { mediaIds: ['new-m1', 'new-m2'] });
+
+        // Libre ET à l'auteur : `postId: null` seul laissait un tiers
+        // s'approprier le média en attente de quelqu'un d'autre.
+        const claim = prisma.postMedia.updateMany.mock.calls[0][0];
+        expect(claim.where.id).toEqual({ in: ['new-m1', 'new-m2'] });
+        // Les deux formes MongoDB d'un média libre (null OU champ absent) —
+        // cf. l'incident prod 2026-07-31→08-01 sur `commentId` absent.
+        expect(claim.where.AND).toEqual([
+          { OR: [{ postId: null }, { postId: { isSet: false } }] },
+          { OR: [{ commentId: null }, { commentId: { isSet: false } }] },
+        ]);
+        expect(claim.where.uploaderId).toBe('user-1');
+        expect(claim.data).toEqual({ postId: 'post-1' });
+      });
+
+      it('adding media to a STORY counts as a content edit (engagement reset)', async () => {
+        prisma.post.findFirst.mockResolvedValue(makePost({ authorId: 'user-1', type: 'STORY', media: [] }));
+        prisma.post.update.mockResolvedValue(makePost({ type: 'STORY' }));
+
+        await service.updatePost('post-1', 'user-1', { mediaIds: ['new-m1'] });
+
+        expect(prisma.postView.deleteMany).toHaveBeenCalledWith({ where: { postId: 'post-1' } });
+      });
+
+      it('never writes mediaIds as a scalar field on the post', async () => {
+        prisma.post.findFirst.mockResolvedValue(makePost({ authorId: 'user-1', type: 'STORY', media: [] }));
+        prisma.post.update.mockResolvedValue(makePost({ type: 'STORY' }));
+
+        await service.updatePost('post-1', 'user-1', { mediaIds: ['new-m1'] });
+
+        expect(prisma.post.update.mock.calls[0][0].data).not.toHaveProperty('mediaIds');
+      });
+
+      it('REEL: newly added media counts toward the composition rule', async () => {
+        prisma.post.findFirst.mockResolvedValue(makePost({ authorId: 'user-1', type: 'REEL', media: [{ id: 'm1', mimeType: 'video/mp4' }] }));
+        prisma.post.update.mockResolvedValue(makePost({ type: 'REEL' }));
+        // Le média fraîchement téléversé est matérialisé (mimeType) pour la
+        // règle de composition : la vidéo ajoutée garde le REEL qualifiant.
+        prisma.postMedia.findMany.mockResolvedValue([{ mimeType: 'video/quicktime' }]);
+
+        await service.updatePost('post-1', 'user-1', { removeMediaIds: ['m1'], mediaIds: ['new-m1'] });
+
+        expect(prisma.postMedia.deleteMany).toHaveBeenCalledWith({
+          where: { id: { in: ['m1'] }, postId: 'post-1' },
+        });
+        const claim = prisma.postMedia.updateMany.mock.calls[0][0];
+        expect(claim.where.id).toEqual({ in: ['new-m1'] });
+        expect(claim.where.uploaderId).toBe('user-1');
+        expect(claim.data).toEqual({ postId: 'post-1' });
+      });
     });
   });
 

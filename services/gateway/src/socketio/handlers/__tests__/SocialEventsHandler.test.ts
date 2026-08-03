@@ -110,6 +110,20 @@ function makeIo() {
   };
 }
 
+/**
+ * L'ensemble des rooms réellement atteintes par `io.to(...)`, quelle que soit
+ * la FORME des appels : `io.to(room)` répété (emitToFriends) ou un unique
+ * `io.to([room, ...])` dédoublonné (emitToFeedsAndPostRoom). Lire le 1er
+ * argument sans aplatir rendait ces assertions sensibles à l'enveloppe et non
+ * au signal — la bascule de broadcastPostUpdated/Deleted sur l'emit batché
+ * (106ede865) les a fait échouer alors que les rooms visées étaient correctes.
+ */
+function emittedRooms(io: ReturnType<typeof makeIo>): unknown[] {
+  return (io.to as jest.Mock<any>).mock.calls.flatMap(([r]: [unknown]) =>
+    Array.isArray(r) ? r : [r]
+  );
+}
+
 function buildHandler(overrides: {
   prisma?: PrismaClient;
   io?: ReturnType<typeof makeIo>;
@@ -227,7 +241,7 @@ describe('SocialEventsHandler', () => {
 
       await handler.broadcastPostDeleted(POST_ID, AUTHOR_ID);
 
-      const roomsEmittedTo = (io.to as jest.Mock<any>).mock.calls.map(([r]: [unknown]) => r);
+      const roomsEmittedTo = emittedRooms(io);
       expect(roomsEmittedTo).toContain(`feed:${FRIEND_ID_1}`);
       expect(roomsEmittedTo).toContain(`feed:${FRIEND_ID_2}`);
     });
@@ -242,7 +256,7 @@ describe('SocialEventsHandler', () => {
 
       await handler.broadcastPostCreated(post, AUTHOR_ID);
 
-      const rooms = (io.to as jest.Mock<any>).mock.calls.map(([r]: [unknown]) => r);
+      const rooms = emittedRooms(io);
       expect(rooms).toContain(`feed:${FRIEND_ID_1}`);
       expect(rooms).toContain(`feed:${FRIEND_ID_2}`);
       expect(rooms).toContain(`feed:${AUTHOR_ID}`);
@@ -267,7 +281,7 @@ describe('SocialEventsHandler', () => {
 
       await handler.broadcastPostCreated(post, AUTHOR_ID);
 
-      const rooms = (io.to as jest.Mock<any>).mock.calls.map(([r]: [unknown]) => r);
+      const rooms = emittedRooms(io);
       expect(rooms).not.toContain(`feed:${FRIEND_ID_1}`);
       expect(rooms).toContain(`feed:${AUTHOR_ID}`);
     });
@@ -278,7 +292,7 @@ describe('SocialEventsHandler', () => {
 
       await handler.broadcastPostCreated(post, AUTHOR_ID);
 
-      const rooms = (io.to as jest.Mock<any>).mock.calls.map(([r]: [unknown]) => r);
+      const rooms = emittedRooms(io);
       expect(rooms).not.toContain(`feed:${FRIEND_ID_1}`);
       expect(rooms).toContain(`feed:${FRIEND_ID_2}`);
     });
@@ -289,7 +303,7 @@ describe('SocialEventsHandler', () => {
 
       await handler.broadcastPostCreated(post, AUTHOR_ID);
 
-      const rooms = (io.to as jest.Mock<any>).mock.calls.map(([r]: [unknown]) => r);
+      const rooms = emittedRooms(io);
       expect(rooms).not.toContain(`feed:${FRIEND_ID_1}`);
       expect(rooms).toContain(`feed:${FRIEND_ID_2}`);
     });
@@ -366,7 +380,7 @@ describe('SocialEventsHandler', () => {
 
       await handler.broadcastStoryCreated(story, AUTHOR_ID);
 
-      const rooms = (io.to as jest.Mock<any>).mock.calls.map(([r]: [unknown]) => r);
+      const rooms = emittedRooms(io);
       expect(rooms).toContain(`feed:${FRIEND_ID_1}`);
       expect(rooms).toContain(`feed:${AUTHOR_ID}`);
     });
@@ -377,7 +391,7 @@ describe('SocialEventsHandler', () => {
 
       await handler.broadcastStoryCreated(story, AUTHOR_ID);
 
-      const rooms = (io.to as jest.Mock<any>).mock.calls.map(([r]: [unknown]) => r);
+      const rooms = emittedRooms(io);
       expect(rooms).not.toContain(`feed:${FRIEND_ID_1}`);
       expect(rooms).toContain(`feed:${AUTHOR_ID}`);
     });
@@ -431,7 +445,7 @@ describe('SocialEventsHandler', () => {
 
       await handler.broadcastStoryDeleted(STORY_ID, AUTHOR_ID);
 
-      const rooms = (io.to as jest.Mock<any>).mock.calls.map(([r]: [unknown]) => r);
+      const rooms = emittedRooms(io);
       expect(rooms).toContain(`feed:${FRIEND_ID_1}`);
       expect(rooms).toContain(`feed:${FRIEND_ID_2}`);
     });
@@ -446,7 +460,7 @@ describe('SocialEventsHandler', () => {
 
       await handler.broadcastStatusCreated(status, AUTHOR_ID);
 
-      const rooms = (io.to as jest.Mock<any>).mock.calls.map(([r]: [unknown]) => r);
+      const rooms = emittedRooms(io);
       expect(rooms).toContain(`feed:${FRIEND_ID_1}`);
     });
   });
@@ -488,7 +502,7 @@ describe('SocialEventsHandler', () => {
 
       await handler.broadcastCommentAdded(comment, AUTHOR_ID, 'PUBLIC', []);
 
-      const rooms = (io.to as jest.Mock<any>).mock.calls.map(([r]: [unknown]) => r);
+      const rooms = emittedRooms(io);
       expect(rooms.some((r: string[]) => Array.isArray(r) ? r.some((v: string) => v.includes('feed:') || v.includes('post:')) : (r as unknown as string).includes('feed:') || (r as unknown as string).includes('post:'))).toBe(true);
     });
   });
@@ -512,7 +526,7 @@ describe('SocialEventsHandler', () => {
 
       await handler.broadcastPostUpdated(post, AUTHOR_ID);
 
-      const rooms = (io.to as jest.Mock<any>).mock.calls.map(([r]: [unknown]) => r);
+      const rooms = emittedRooms(io);
       expect(rooms).toContain(`feed:${FRIEND_ID_1}`);
       expect(rooms).toContain(`feed:${AUTHOR_ID}`);
     });
@@ -525,7 +539,7 @@ describe('SocialEventsHandler', () => {
 
       await handler.broadcastStoryUpdated(story, AUTHOR_ID);
 
-      const rooms = (io.to as jest.Mock<any>).mock.calls.map(([r]: [unknown]) => r);
+      const rooms = emittedRooms(io);
       expect(rooms).toContain(`feed:${FRIEND_ID_1}`);
       expect(rooms).toContain(`feed:${AUTHOR_ID}`);
     });
@@ -536,7 +550,7 @@ describe('SocialEventsHandler', () => {
 
       await handler.broadcastStoryUpdated(story, AUTHOR_ID);
 
-      const rooms = (io.to as jest.Mock<any>).mock.calls.map(([r]: [unknown]) => r);
+      const rooms = emittedRooms(io);
       expect(rooms).not.toContain(`feed:${FRIEND_ID_1}`);
       expect(rooms).toContain(`feed:${AUTHOR_ID}`);
     });
@@ -549,7 +563,7 @@ describe('SocialEventsHandler', () => {
 
       await handler.broadcastStatusUpdated(status, AUTHOR_ID);
 
-      const rooms = (io.to as jest.Mock<any>).mock.calls.map(([r]: [unknown]) => r);
+      const rooms = emittedRooms(io);
       expect(rooms).toContain(`feed:${FRIEND_ID_1}`);
     });
   });
@@ -571,7 +585,7 @@ describe('SocialEventsHandler', () => {
 
       await handler.broadcastStatusDeleted(STATUS_ID, AUTHOR_ID, 'PRIVATE', []);
 
-      const rooms = (io.to as jest.Mock<any>).mock.calls.map(([r]: [unknown]) => r);
+      const rooms = emittedRooms(io);
       expect(rooms).not.toContain(`feed:${FRIEND_ID_1}`);
       expect(rooms).toContain(`feed:${AUTHOR_ID}`);
     });
@@ -584,7 +598,7 @@ describe('SocialEventsHandler', () => {
 
       await handler.broadcastPostTranslationUpdated(data, AUTHOR_ID);
 
-      const rooms = (io.to as jest.Mock<any>).mock.calls.map(([r]: [unknown]) => r);
+      const rooms = emittedRooms(io);
       expect(rooms).toContain(`feed:${FRIEND_ID_1}`);
       expect(rooms).toContain(`feed:${AUTHOR_ID}`);
     });
@@ -597,7 +611,7 @@ describe('SocialEventsHandler', () => {
 
       await handler.broadcastCommentDeleted(data, AUTHOR_ID, 'PUBLIC', []);
 
-      const allRoomArgs = (io.to as jest.Mock<any>).mock.calls.map(([r]: [unknown]) => r).flat();
+      const allRoomArgs = emittedRooms(io);
       expect(allRoomArgs.some((r: string) => r.includes('feed:') || r.includes('post:'))).toBe(true);
     });
   });
@@ -609,7 +623,7 @@ describe('SocialEventsHandler', () => {
 
       await handler.broadcastCommentTranslationUpdated(data, AUTHOR_ID, 'PUBLIC', []);
 
-      const allRoomArgs = (io.to as jest.Mock<any>).mock.calls.map(([r]: [unknown]) => r).flat();
+      const allRoomArgs = emittedRooms(io);
       expect(allRoomArgs.some((r: string) => r.includes('post:'))).toBe(true);
     });
   });
@@ -621,7 +635,7 @@ describe('SocialEventsHandler', () => {
 
       await handler.broadcastCommentMediaUpdated(data, AUTHOR_ID, 'PUBLIC', []);
 
-      const allRoomArgs = (io.to as jest.Mock<any>).mock.calls.map(([r]: [unknown]) => r).flat();
+      const allRoomArgs = emittedRooms(io);
       expect(allRoomArgs.some((r: string) => r.includes('post:'))).toBe(true);
     });
   });
@@ -634,7 +648,7 @@ describe('SocialEventsHandler', () => {
 
       await handler.broadcastPostReposted(data, AUTHOR_ID);
 
-      const rooms = (io.to as jest.Mock<any>).mock.calls.map(([r]: [unknown]) => r);
+      const rooms = emittedRooms(io);
       expect(rooms).toContain(`feed:${FRIEND_ID_1}`);
     });
   });
@@ -646,7 +660,7 @@ describe('SocialEventsHandler', () => {
 
       await handler.broadcastPostCreated(post, AUTHOR_ID);
 
-      const rooms = (io.to as jest.Mock<any>).mock.calls.map(([r]: [unknown]) => r);
+      const rooms = emittedRooms(io);
       expect(rooms).toContain(`feed:${FRIEND_ID_1}`);
       expect(rooms).toContain(`feed:${FRIEND_ID_2}`);
     });
@@ -689,7 +703,7 @@ describe('SocialEventsHandler', () => {
 
       await handler.broadcastPostCreated(post, AUTHOR_ID);
 
-      const rooms = (io.to as jest.Mock<any>).mock.calls.map(([r]: [unknown]) => r);
+      const rooms = emittedRooms(io);
       expect(rooms).toContain(`feed:${AUTHOR_ID}`);
     });
 
@@ -699,7 +713,7 @@ describe('SocialEventsHandler', () => {
 
       await handler.broadcastPostCreated(post, AUTHOR_ID);
 
-      const rooms = (io.to as jest.Mock<any>).mock.calls.map(([r]: [unknown]) => r);
+      const rooms = emittedRooms(io);
       expect(rooms).toContain(`feed:${AUTHOR_ID}`);
     });
 
@@ -709,7 +723,7 @@ describe('SocialEventsHandler', () => {
 
       await handler.broadcastPostUpdated(post, AUTHOR_ID);
 
-      const rooms = (io.to as jest.Mock<any>).mock.calls.map(([r]: [unknown]) => r);
+      const rooms = emittedRooms(io);
       expect(rooms).toContain(`feed:${AUTHOR_ID}`);
     });
 
@@ -719,7 +733,7 @@ describe('SocialEventsHandler', () => {
 
       await handler.broadcastPostUpdated(post, AUTHOR_ID);
 
-      const rooms = (io.to as jest.Mock<any>).mock.calls.map(([r]: [unknown]) => r);
+      const rooms = emittedRooms(io);
       expect(rooms).toContain(`feed:${AUTHOR_ID}`);
     });
 
@@ -729,7 +743,7 @@ describe('SocialEventsHandler', () => {
 
       await handler.broadcastPostReposted(data, AUTHOR_ID);
 
-      const rooms = (io.to as jest.Mock<any>).mock.calls.map(([r]: [unknown]) => r);
+      const rooms = emittedRooms(io);
       expect(rooms).toContain(`feed:${AUTHOR_ID}`);
     });
 
@@ -739,7 +753,7 @@ describe('SocialEventsHandler', () => {
 
       await handler.broadcastStoryUpdated(story, AUTHOR_ID);
 
-      const rooms = (io.to as jest.Mock<any>).mock.calls.map(([r]: [unknown]) => r);
+      const rooms = emittedRooms(io);
       expect(rooms).toContain(`feed:${AUTHOR_ID}`);
     });
 
@@ -749,7 +763,7 @@ describe('SocialEventsHandler', () => {
 
       await handler.broadcastStatusUpdated(status, AUTHOR_ID);
 
-      const rooms = (io.to as jest.Mock<any>).mock.calls.map(([r]: [unknown]) => r);
+      const rooms = emittedRooms(io);
       expect(rooms).toContain(`feed:${AUTHOR_ID}`);
     });
   });

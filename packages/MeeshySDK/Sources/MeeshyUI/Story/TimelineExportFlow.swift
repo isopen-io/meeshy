@@ -88,46 +88,43 @@ struct SystemTimelineStoryExporter: TimelineStoryExporting {
             progressTrampoline = nil
         }
 
+        // Emballage de marque composé DANS le bake — même atome
+        // (`StoryExportBranding`) que `StoryVideoExportService.prepareExport`,
+        // sans quoi la même story se terminerait sur le logo Meeshy depuis
+        // « Mes stories » et sur sa dernière frame depuis le composer timeline.
+        //
+        // La carte de fin est due INDÉPENDAMMENT de l'interlude (revue finale,
+        // items 1 et 2) : elle ne dépend d'aucune identité, donc l'absence de
+        // session — ou une résolution trop lente — ne doit pas la faire
+        // disparaître. `makePlan` porte cet invariant.
+        //
+        // `outro: nil` = fermeture sur le LOGO SEUL, sans identité d'auteur :
+        // c'est ce que ce chemin produisait déjà. Divergence volontaire avec le
+        // partage / Photos, préservée telle quelle.
+        let renderSize = StoryExportIntroSizing.renderSize(for: slide)
+
         try await StoryExporter.export(
             slide,
             to: outputURL,
             watermark: watermark,
+            // Volontairement `nil` : composer la marque dans le bake est
+            // fonctionnellement équivalent mais mesuré 5 à 20× plus lent —
+            // voir `tasks/todo-story-export-single-pass.md`.
+            branding: nil,
             audioResolver: audioResolver,
             progress: progressTrampoline
         )
 
-        let renderSize = StoryExportIntroSizing.renderSize(for: slide)
-        var current = outputURL
-
-        // Interlude d'identité — seulement quand une identité a été résolue.
-        if let intro {
-            do {
-                let branded = try await StoryExportIntro.prepend(
-                    to: current,
-                    content: intro,
-                    renderSize: renderSize
-                )
-                removeTemporaryFile(at: current, reason: "pré-interlude")
-                current = branded
-            } catch {
-                timelineExportLogger.warning("interlude de marque ignoré pour \(slide.id, privacy: .public) — \(error.localizedDescription, privacy: .public)")
-            }
-        }
-
-        // Carte de fin de marque — appliquée INDÉPENDAMMENT de l'interlude
-        // (revue finale, item 1 + item 2) : elle ne dépend d'aucune identité,
-        // donc l'absence de session (ou une résolution d'identité trop lente)
-        // ne doit pas la faire disparaître. Même enchaînement, même atome
-        // (`StoryExportOutro`) que `StoryVideoExportService.prepareExport` —
-        // sans quoi la même story se terminait sur le logo Meeshy depuis
-        // « Mes stories » et sur sa dernière frame depuis le composer timeline.
+        // `outro: nil` = fermeture sur le LOGO SEUL, sans identité d'auteur :
+        // divergence volontaire avec partage / Photos, préservée telle quelle.
         do {
-            let finalURL = try await StoryExportOutro.append(to: current, renderSize: renderSize)
-            removeTemporaryFile(at: current, reason: "pré-carte-de-fin")
+            let finalURL = try await StoryExportBranding.wrap(
+                storyURL: outputURL, intro: intro, outro: nil, renderSize: renderSize)
+            removeTemporaryFile(at: outputURL, reason: "pré-emballage-de-marque")
             return finalURL
         } catch {
-            timelineExportLogger.warning("carte de fin ignorée pour \(slide.id, privacy: .public) — \(error.localizedDescription, privacy: .public)")
-            return current
+            timelineExportLogger.warning("emballage de marque ignoré pour \(slide.id, privacy: .public) — \(error.localizedDescription, privacy: .public)")
+            return outputURL
         }
     }
 

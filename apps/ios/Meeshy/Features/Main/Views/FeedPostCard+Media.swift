@@ -255,10 +255,10 @@ extension FeedPostCard {
         HapticFeedback.light()
     }
 
-    // Check if media should be compact (audio, document, location)
+    // Check if media should be compact (audio, document)
     func mediaIsCompact(_ media: FeedMedia) -> Bool {
         switch media.type {
-        case .audio, .document, .location:
+        case .audio, .document:
             return true
         default:
             return false
@@ -276,8 +276,6 @@ extension FeedPostCard {
             audioMediaView(media)
         case .document:
             documentMediaView(media)
-        case .location:
-            locationMediaView(media)
         }
     }
 
@@ -384,60 +382,6 @@ extension FeedPostCard {
         )
     }
 
-    func locationMediaView(_ media: FeedMedia) -> some View {
-        let theme = ThemeManager.shared
-        return HStack(spacing: 14) {
-            // Map placeholder
-            ZStack {
-                RoundedRectangle(cornerRadius: 10)
-                    .fill(
-                        LinearGradient(
-                            colors: [Color(hex: media.thumbnailColor).opacity(0.3), Color(hex: media.thumbnailColor).opacity(0.1)],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-                    .frame(width: 64, height: 64)
-
-                // Glyphe dans un cadre de dimension fixe 64×64 : figé (déborderait s'il scalait, doctrine 86i) ; le nom du lieu porte le sens
-                Image(systemName: "mappin.circle.fill")
-                    .font(.system(size: 28))
-                    .foregroundColor(Color(hex: media.thumbnailColor))
-                    .accessibilityHidden(true)
-            }
-
-            // Location info
-            VStack(alignment: .leading, spacing: 4) {
-                Text(media.locationName ?? String(localized: "feed.post.detail.location", defaultValue: "Location", bundle: .main))
-                    .font(MeeshyFont.relative(14, weight: .semibold))
-                    .foregroundColor(theme.textPrimary)
-                    .lineLimit(2)
-
-                if let lat = media.latitude, let lon = media.longitude {
-                    Text(String(format: "%.4f, %.4f", lat, lon))
-                        .font(MeeshyFont.relative(11))
-                        .foregroundColor(theme.textMuted)
-                }
-            }
-
-            Spacer()
-
-            // Open in maps (glyphe d'affordance décoratif)
-            Image(systemName: "arrow.up.right.circle.fill")
-                .font(MeeshyFont.relative(28))
-                .foregroundColor(Color(hex: media.thumbnailColor))
-                .accessibilityHidden(true)
-        }
-        .padding(14)
-        .background(
-            RoundedRectangle(cornerRadius: 12)
-                .fill(theme.mode.isDark ? Color.white.opacity(0.05) : Color.black.opacity(0.03))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 12)
-                        .stroke(Color(hex: media.thumbnailColor).opacity(0.3), lineWidth: 1)
-                )
-        )
-    }
 }
 
 // MARK: - Feed video cell (fills the card width, aspect-ratio driven height)

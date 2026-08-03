@@ -203,3 +203,58 @@ describe('GET threads — service error', () => {
     await app.close();
   });
 });
+
+// ─── Lot 1 : le message affiché en entier restitue sa position ────────────────
+// (racine du thread ET replyTo imbriqué — les deux affichent une vraie bulle).
+
+describe('GET threads — position hoist', () => {
+  it('restitue `location` sur le message racine géolocalisé ET sur son replyTo imbriqué', async () => {
+    const GEO = { latitude: 48.8566, longitude: 2.3522, name: 'Tour Eiffel', address: null, category: null };
+    const geoParent = {
+      ...mockParentMessage,
+      metadata: { location: GEO },
+      replyTo: {
+        id: 'quoted-1',
+        content: 'quoted message',
+        originalLanguage: 'en',
+        createdAt: new Date(),
+        senderId: 'part-2',
+        validatedMentions: [],
+        metadata: { location: { ...GEO, name: 'Louvre' } },
+        sender: null,
+        attachments: [],
+      },
+    };
+    const prisma = makePrisma({
+      message: {
+        findFirst: jest.fn<any>().mockResolvedValue(geoParent),
+        findMany: jest.fn<any>().mockResolvedValue([]),
+      },
+    });
+    const app = await buildApp({ prisma });
+    const res = await app.inject({ method: 'GET', url: `/conversations/${CONV_ID}/threads/${MSG_ID}` });
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body.data.parent.location).toMatchObject({ latitude: 48.8566, name: 'Tour Eiffel' });
+    expect(body.data.parent.replyTo.location).toMatchObject({ name: 'Louvre' });
+    await app.close();
+  });
+
+  it('restitue `location` sur une réponse géolocalisée du fil', async () => {
+    const GEO = { latitude: 40.7128, longitude: -74.006, name: 'Times Square', address: null, category: null };
+    const geoReply = { ...mockReplyMessage, metadata: { location: GEO } };
+    const prisma = makePrisma({
+      message: {
+        findFirst: jest.fn<any>().mockResolvedValue(mockParentMessage),
+        findMany: jest.fn<any>()
+          .mockResolvedValueOnce([geoReply])
+          .mockResolvedValueOnce([]),
+      },
+    });
+    const app = await buildApp({ prisma });
+    const res = await app.inject({ method: 'GET', url: `/conversations/${CONV_ID}/threads/${MSG_ID}` });
+    const body = res.json();
+    expect(body.data.replies[0].location).toMatchObject({ name: 'Times Square' });
+    await app.close();
+  });
+});

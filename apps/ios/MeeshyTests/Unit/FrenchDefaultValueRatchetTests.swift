@@ -1,0 +1,158 @@
+import XCTest
+@testable import Meeshy
+
+/// **Une clé au `defaultValue` français absente du catalogue s'affiche en
+/// français, quelle que soit la langue de l'interface.**
+///
+/// C'est l'origine du mélange de langues signalé le 2026-07-29 : l'interface
+/// tournait en anglais, `root.pending_stories` rendait bien « Pending stories »
+/// — mais « Story enfin publiée » sortait du `defaultValue` d'une clé jamais
+/// entrée au catalogue. Le catalogue a `sourceLanguage: fr`, donc écrire le
+/// `defaultValue` en français est la bonne convention ; ce qui manque, c'est
+/// l'entrée traduite.
+///
+/// `LocalizationConsistencyTests` ne voit pas ces clés : il exempte
+/// explicitement les appels porteurs d'un `defaultValue`. C'est par ce trou que
+/// les 488 sont passées.
+///
+/// **Cliquet, pas interdiction.** La dette est portée par
+/// `FrenchDefaultValueDebt.json`. Ce test échoue si :
+/// - une clé NEUVE apparaît avec un `defaultValue` français sans entrée au
+///   catalogue (la dette ne peut pas grandir) ;
+/// - une clé de la liste a été traduite sans être retirée de la liste (la dette
+///   doit être tenue à jour quand elle diminue).
+///
+/// Traduire une clé = l'ajouter au catalogue dans les 7 langues, puis la
+/// retirer de ce fichier. La liste ne peut que RÉTRÉCIR.
+///
+/// **La dette est à ZÉRO depuis le 2026-07-29** : les 488 clés d'origine ont
+/// toutes été portées au catalogue en 7 langues. Le fichier reste — vide — car
+/// c'est lui qui donne au cliquet son point de comparaison : liste vide =
+/// aucune tolérance, toute nouvelle clé française hors catalogue échoue
+/// immédiatement. Le remplir de nouveau serait une régression, pas un usage.
+///
+/// Un corollaire non couvert ici : une clé PRÉSENTE au catalogue peut quand
+/// même mal s'afficher si le type de son placeholder (`%@` vs `%lld`) ne
+/// correspond pas à l'argument interpolé au site d'appel. C'est l'objet de
+/// `InterpolatedLocalizationSubstitutionTests`.
+final class FrenchDefaultValueRatchetTests: XCTestCase {
+
+    private var iosRoot: URL {
+        URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+    }
+
+    /// Marqueurs de français : un accent, ou un mot-outil que l'anglais
+    /// n'emploie pas. Volontairement conservateur — mieux vaut manquer une
+    /// chaîne que bloquer une contribution sur un faux positif.
+    private static let frenchMarkers = try! NSRegularExpression(
+        pattern: "[éèêëàâçùûôîïœÉÈÀÇ]|\\b(le|la|les|des|une|aux|pour|avec|sans|dans|est|sont|vous|votre|vos|cette|aucun|aucune|nouveau|nouvelle|Envoyer|Annuler|Modifier|Supprimer|Ajouter|Fermer|Retour|Suivant|Terminer|Chargement|Erreur)\\b",
+        options: [.caseInsensitive]
+    )
+
+    private func isFrench(_ value: String) -> Bool {
+        let range = NSRange(value.startIndex..., in: value)
+        return Self.frenchMarkers.firstMatch(in: value, range: range) != nil
+    }
+
+    /// Clés utilisées en code avec un `defaultValue`, mais absentes du catalogue.
+    private func untranslatedFrenchKeys() throws -> Set<String> {
+        let catalogURL = iosRoot.appendingPathComponent("Meeshy/Localizable.xcstrings")
+        let data = try Data(contentsOf: catalogURL)
+        let catalogued = Set(
+            ((try JSONSerialization.jsonObject(with: data) as? [String: Any])?["strings"]
+                as? [String: Any] ?? [:]).keys
+        )
+
+        let pattern = try NSRegularExpression(
+            pattern: #"String\(\s*localized:\s*"([A-Za-z0-9_][A-Za-z0-9_.]*)"\s*,\s*defaultValue:\s*"((?:[^"\\]|\\.)*)""#
+        )
+
+        var offenders: Set<String> = []
+        let sources = FileManager.default.enumerator(
+            at: iosRoot.appendingPathComponent("Meeshy"), includingPropertiesForKeys: nil
+        )
+        while let url = sources?.nextObject() as? URL {
+            guard url.pathExtension == "swift",
+                  let text = try? String(contentsOf: url, encoding: .utf8) else { continue }
+            let range = NSRange(text.startIndex..., in: text)
+            for match in pattern.matches(in: text, range: range) {
+                guard let keyRange = Range(match.range(at: 1), in: text),
+                      let valueRange = Range(match.range(at: 2), in: text) else { continue }
+                let key = String(text[keyRange])
+                guard !catalogued.contains(key), isFrench(String(text[valueRange])) else { continue }
+                offenders.insert(key)
+            }
+        }
+        return offenders
+    }
+
+    private var debtURL: URL {
+        iosRoot.appendingPathComponent("MeeshyTests/Resources/FrenchDefaultValueDebt.json")
+    }
+
+    private func frozenDebt() throws -> Set<String> {
+        let list = try JSONDecoder().decode([String].self, from: Data(contentsOf: debtURL))
+        return Set(list)
+    }
+
+    /// Réenregistre la liste depuis l'état RÉEL du dépôt :
+    ///
+    ///     TEST_RUNNER_MEESHY_RECORD_FR_DEBT=1 xcodebuild test … \
+    ///       -only-testing:MeeshyTests/FrenchDefaultValueRatchetTests
+    ///
+    /// Le préfixe `TEST_RUNNER_` est obligatoire : `xcodebuild` ne transmet au
+    /// processus de test que les variables ainsi préfixées, et retire le
+    /// préfixe au passage — d'où la lecture de `MEESHY_RECORD_FR_DEBT` ici.
+    ///
+    /// Ce mode existe parce que la liste doit être produite par la MÊME logique
+    /// que celle qui la vérifie. Une liste générée par un script séparé diverge
+    /// au premier détail — un accent absent d'un site d'appel, un mot-outil de
+    /// plus dans l'heuristique — et le cliquet se met alors à signaler des
+    /// écarts qui n'existent pas.
+    ///
+    /// Le mode n'assouplit rien : il ne s'active que sur demande explicite, et
+    /// le test échoue quand même pour signaler que la liste a bougé.
+    private func recordDebtIfRequested(_ offenders: Set<String>) throws -> Bool {
+        guard ProcessInfo.processInfo.environment["MEESHY_RECORD_FR_DEBT"] == "1" else { return false }
+        let data = try JSONSerialization.data(
+            withJSONObject: offenders.sorted(),
+            options: [.prettyPrinted, .withoutEscapingSlashes]
+        )
+        try data.write(to: debtURL)
+        XCTFail("Liste réenregistrée (\(offenders.count) clés). Relancez sans MEESHY_RECORD_FR_DEBT.")
+        return true
+    }
+
+    func test_noNewFrenchDefaultValueEscapesTheCatalogue() throws {
+        let offenders = try untranslatedFrenchKeys()
+        guard try !recordDebtIfRequested(offenders) else { return }
+        let debt = try frozenDebt()
+
+        let added = offenders.subtracting(debt).sorted()
+        XCTAssertTrue(
+            added.isEmpty,
+            "Ces clés NEUVES portent un `defaultValue` français sans entrée au catalogue : " +
+            "elles s'afficheront en français même quand l'interface est dans une autre " +
+            "langue. Ajoutez-les à Localizable.xcstrings dans les 7 langues.\n" +
+            added.joined(separator: "\n")
+        )
+    }
+
+    func test_translatedKeysAreRemovedFromTheDebtList() throws {
+        let offenders = try untranslatedFrenchKeys()
+        let debt = try frozenDebt()
+
+        let settled = debt.subtracting(offenders).sorted()
+        XCTAssertTrue(
+            settled.isEmpty,
+            "Ces clés sont désormais traduites : retirez-les de " +
+            "MeeshyTests/Resources/FrenchDefaultValueDebt.json. La liste ne doit que " +
+            "rétrécir — la laisser grossir de clés réglées ferait perdre au cliquet " +
+            "sa capacité à détecter une régression.\n" +
+            settled.joined(separator: "\n")
+        )
+    }
+}

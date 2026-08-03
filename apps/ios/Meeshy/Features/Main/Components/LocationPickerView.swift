@@ -2,12 +2,17 @@ import SwiftUI
 import Combine
 import MapKit
 import CoreLocation
+import MeeshySDK
 import MeeshyUI
 import os
 
 struct LocationPickerView: View {
     let accentColor: String
-    let onSelect: (CLLocationCoordinate2D, String?) -> Void
+    /// Émet un lieu COMPLET (coordonnées + nom + adresse + catégorie POI),
+    /// pas de simples coordonnées nues : c'est ce que jetait l'ancienne
+    /// signature `(CLLocationCoordinate2D, String?) -> Void` aux quatre call
+    /// sites, dont un littéral `{ coordinate, _ in }`.
+    let onSelect: (SharedPlace) -> Void
     @Environment(\.dismiss) private var dismiss
     private var theme: ThemeManager { ThemeManager.shared }
     @Environment(\.colorScheme) private var colorScheme
@@ -44,11 +49,14 @@ struct LocationPickerView: View {
                 }
             }
             .onAppear { viewModel.requestPermission() }
-            .onReceive(viewModel.$userLocation.compactMap { $0 }) { loc in
-                // iOS 17 keeps `.userLocation(fallback:)` inside the adaptive
-                // map, so it self-centers. iOS 16 has no such mode — recenter
-                // explicitly on the first fix only.
-                guard !didCenterOnUser, !Platform.isIOS17OrLater else { return }
+            .onReceive(viewModel.userLocationUpdates) { loc in
+                // The adaptive map opens on a fixed neutral region on EVERY OS
+                // version now — `.userLocation(fallback: .automatic)` resolved
+                // synchronously on the main thread inside `updateUIView` and
+                // could re-enter itself through `onMapCameraChange`, freezing
+                // the picker (see `AdaptiveMapInitialRegion` in the SDK). So
+                // every version recenters explicitly on the first fix only.
+                guard !didCenterOnUser else { return }
                 didCenterOnUser = true
                 mapTarget = MapTarget(center: loc, latitudinalMeters: 1000, longitudinalMeters: 1000)
             }
@@ -160,6 +168,14 @@ struct LocationPickerView: View {
                 Button {
                     let coord = item.placemark.coordinate
                     viewModel.updateSelectedLocation(coord)
+                    // Après `updateSelectedLocation` (qui les remet à `nil`) :
+                    // MapKit connaît déjà le nom et la catégorie POI du
+                    // résultat choisi, inutile d'attendre le géocodage inverse.
+                    viewModel.selectedName = item.name
+                    // `pointOfInterestCategory` vit sur `MKMapItem` lui-même
+                    // depuis iOS 13 — PAS sur `MKPlacemark`/`CLPlacemark`, qui
+                    // ne l'expose pas.
+                    viewModel.selectedCategory = item.pointOfInterestCategory?.rawValue
                     viewModel.reverseGeocode(coord)
                     mapTarget = MapTarget(
                         center: coord,
@@ -286,8 +302,10 @@ struct LocationPickerView: View {
                 }
 
                 Button {
-                    guard let coord = viewModel.selectedCoordinate else { return }
-                    onSelect(coord, viewModel.addressString)
+                    guard let place = viewModel.selectedPlace else { return }
+                    Logger(subsystem: "me.meeshy.app", category: "location")
+                        .info("breadcrumb.selection hasName=\(place.name != nil, privacy: .public)")
+                    onSelect(place)
                     HapticFeedback.success()
                     dismiss()
                 } label: {
@@ -328,28 +346,91 @@ struct LocationPickerView: View {
 
 // MARK: - Location Picker Model
 
-@MainActor
-final class LocationPickerModel: NSObject, ObservableObject, CLLocationManagerDelegate {
-    @Published var selectedCoordinate: CLLocationCoordinate2D?
-    @Published var addressString: String?
-    @Published var isGeocoding = false
-    @Published var searchResults: [MKMapItem] = []
-    @Published var userLocation: CLLocationCoordinate2D?
+/// `nonisolated` sur le TYPE + `@unchecked Sendable`.
+///
+/// Le target app compile avec `SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor` :
+/// une classe `@MainActor` sans `deinit` écrite reçoit une deinit ISOLÉE
+/// (SE-0466). Sur iOS < 26 cette deinit passe par le shim de rétro-déploiement
+/// `swift_task_deinitOnExecutorMainActorBackDeploy`, qui libère DEUX FOIS le
+/// scope task-local et tue le processus. Le picker étant une sheet, ce chemin
+/// est exercé à CHAQUE fermeture. Même signature que le crash `ScrollOffsetRelay`.
+///
+/// `@unchecked Sendable` est requis parce que les fermetures de delegate et de
+/// complétion capturent `self` depuis un contexte nonisolated. Ce n'est pas une
+/// échappatoire : l'invariant est vérifié — le modèle naît dans un `@StateObject`
+/// (donc sur le main), `CLLocationManager` créé sur le main rappelle sur le main,
+/// `CLGeocoder` et `MKLocalSearch` documentent une complétion sur le main, et
+/// toute écriture de propriété publiée est faite depuis le main (les fermetures
+/// de complétion repassent explicitement par `Task { @MainActor }`).
+/// `objectWillChange` n'est donc jamais émis hors du main. Même patron que
+/// `PiPVideoRenderer`.
+nonisolated final class LocationPickerModel: NSObject, ObservableObject, CLLocationManagerDelegate, @unchecked Sendable {
+    /// `willSet { objectWillChange.send() }` PLUTÔT que `@Published` : le
+    /// compilateur refuse `nonisolated` sur une propriété enveloppée
+    /// (« 'nonisolated' is not supported on properties with property wrappers »),
+    /// et l'annotation doit vivre sur le TYPE pour désisoler la deinit. C'est
+    /// exactement ce que `@Published` fait — publier avant l'écriture.
+    var selectedCoordinate: CLLocationCoordinate2D? { willSet { objectWillChange.send() } }
+    var addressString: String? { willSet { objectWillChange.send() } }
+    /// Nom du POI choisi depuis un résultat de recherche MapKit. `nil` pour un
+    /// point posé à la main (déplacement de la carte) — seule l'adresse
+    /// géocodée est alors disponible.
+    var selectedName: String? { willSet { objectWillChange.send() } }
+    /// Catégorie MapKit du POI (`MKPointOfInterestCategory.rawValue`).
+    var selectedCategory: String? { willSet { objectWillChange.send() } }
+    var isGeocoding = false { willSet { objectWillChange.send() } }
+    var searchResults: [MKMapItem] = [] { willSet { objectWillChange.send() } }
+    var userLocation: CLLocationCoordinate2D? {
+        willSet {
+            objectWillChange.send()
+            if let newValue { userLocationUpdates.send(newValue) }
+        }
+    }
+    /// Remplaçant explicite de la projection `$userLocation`, que le dépliage
+    /// des `@Published` supprime. La vue en a besoin pour recentrer la carte sur
+    /// le PREMIER relevé seulement (iOS 16 n'a pas de mode `.userLocation`) :
+    /// `objectWillChange` ne peut pas la servir, il tire avant l'écriture et ne
+    /// porte pas la valeur.
+    let userLocationUpdates = PassthroughSubject<CLLocationCoordinate2D, Never>()
     /// Statut d'autorisation, publié pour que la vue puisse expliquer un refus
     /// au lieu de laisser l'utilisateur attendre un relevé qui ne viendra pas.
-    @Published private(set) var authorization: CLAuthorizationStatus = .notDetermined
+    private(set) var authorization: CLAuthorizationStatus = .notDetermined {
+        willSet { objectWillChange.send() }
+    }
 
     var isLocationRefused: Bool {
         authorization == .denied || authorization == .restricted
     }
 
+    /// Lieu complet prêt à être partagé, ou `nil` tant qu'aucun point n'est
+    /// choisi. Le nom vient d'un résultat de recherche ; pour un point posé à
+    /// la main il reste `nil` et seule l'adresse géocodée est disponible.
+    var selectedPlace: SharedPlace? {
+        guard let coordinate = selectedCoordinate else { return nil }
+        return SharedPlace(latitude: coordinate.latitude, longitude: coordinate.longitude,
+                           name: selectedName, address: addressString, category: selectedCategory)
+    }
+
     private let manager = CLLocationManager()
     private let geocoder = CLGeocoder()
     private var geocodeTask: Task<Void, Never>?
+    private let log = Logger(subsystem: "me.meeshy.app", category: "location")
+
+    /// Garde contre deux relevés concurrents. À l'ouverture d'un picker déjà
+    /// autorisé, `requestPermission()` et le callback d'autorisation initial
+    /// tiraient chacun un `requestLocation()` : CoreLocation annulait alors la
+    /// première requête et répondait `kCLErrorLocationUnknown`, laissant l'UI
+    /// attendre un relevé qui n'arriverait jamais.
+    private var isAwaitingFix = false
+
+    private func requestFixIfIdle() {
+        guard !isAwaitingFix else { return }
+        isAwaitingFix = true
+        manager.requestLocation()
+    }
 
     override init() {
         super.init()
-        manager.delegate = self
         manager.desiredAccuracy = kCLLocationAccuracyBest
         authorization = manager.authorizationStatus
     }
@@ -357,29 +438,67 @@ final class LocationPickerModel: NSObject, ObservableObject, CLLocationManagerDe
     /// Appelé à l'ouverture du picker — c'est-à-dire APRÈS le tap explicite sur
     /// « Localisation » dans le composer, le bon moment pour demander.
     ///
+    /// Le delegate est câblé ici et non dans `init()` : CoreLocation émet un
+    /// callback d'autorisation dès l'assignation, et le recevoir avant que
+    /// SwiftUI ait installé le `@StateObject` publie une modification en
+    /// plein cycle de rendu. `if manager.delegate == nil` rend le câblage
+    /// idempotent puisque `requestPermission()` peut être rappelé.
+    ///
     /// `requestLocation()` n'est plus lancé tant que l'autorisation n'est pas
     /// acquise : l'appeler sur un statut refusé ne produisait qu'un
     /// `didFailWithError` silencieux. Sur un octroi,
     /// `locationManagerDidChangeAuthorization` déclenche le relevé.
     func requestPermission() {
+        if manager.delegate == nil { manager.delegate = self }
         authorization = manager.authorizationStatus
+        log.info("breadcrumb.request status=\(self.authorization.rawValue, privacy: .public)")
         switch authorization {
         case .notDetermined:
             manager.requestWhenInUseAuthorization()
         case .authorizedWhenInUse, .authorizedAlways:
-            manager.requestLocation()
+            requestFixIfIdle()
         default:
             break
         }
     }
 
     func updateSelectedLocation(_ coordinate: CLLocationCoordinate2D) {
+        // Idempotence : sans cette garde, un callback caméra qui republie la
+        // MÊME coordonnée (`onMapCameraChange` peut ré-émettre avec un centre
+        // identique à la dérive flottante près) écrit `selectedCoordinate`,
+        // ce qui tire `objectWillChange`, ce qui re-rend `mapView` →
+        // `ModernInteractiveMap.body`, ce qui fait rappeler `updateUIView`
+        // par SwiftUI — un chemin de ré-entrance dans MapKit qui gèle le
+        // main thread. Preuve par process sampling (2026-07-30) : deux
+        // occurrences imbriquées de
+        // `-[MKMapView _performActionAsIfGoingToDefaultLocation:]` sur la
+        // même pile.
+        if let current = selectedCoordinate, CoordinateEquivalence.isApproximatelyEqual(current, coordinate) {
+            return
+        }
         selectedCoordinate = coordinate
+        // Déplacer la carte après avoir choisi un POI ne doit pas conserver le
+        // nom d'un point qu'on a quitté — sinon un point posé à la main
+        // hériterait du nom du dernier résultat de recherche sélectionné.
+        //
+        // Le nettoyage est CONDITIONNEL : `willSet` publie à chaque
+        // affectation, sans comparer. Écrire `nil` sur une valeur déjà `nil`
+        // tirait donc deux `objectWillChange` de plus par mise à jour — trois
+        // émissions pour un seul point choisi, donc trois re-renders de la
+        // carte au lieu d'un. C'est exactement le chemin de ré-entrance
+        // MapKit que la garde d'idempotence ci-dessus ferme ; le laisser
+        // ouvert ici l'aurait rouvert en trois exemplaires.
+        if selectedName != nil { selectedName = nil }
+        if selectedCategory != nil { selectedCategory = nil }
         geocodeTask?.cancel()
-        geocodeTask = Task {
+        // Hop `@MainActor` explicite : le type est désormais nonisolated, donc
+        // ce `Task` n'hérite plus du main actor comme avant. Le géocodage écrit
+        // `isGeocoding`/`addressString`, donc `objectWillChange` — SwiftUI exige
+        // que ces émissions restent sur le main.
+        geocodeTask = Task { @MainActor [weak self] in
             try? await Task.sleep(nanoseconds: 300_000_000)
             guard !Task.isCancelled else { return }
-            reverseGeocode(coordinate)
+            self?.reverseGeocode(coordinate)
         }
     }
 
@@ -426,10 +545,14 @@ final class LocationPickerModel: NSObject, ObservableObject, CLLocationManagerDe
     }
 
     func centerOnUser() {
-        manager.requestLocation()
+        requestFixIfIdle()
     }
 
-    nonisolated func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
+    // Les trois callbacks de delegate ne portent plus `nonisolated` : le TYPE
+    // entier l'est désormais, l'annotation par méthode serait redondante.
+    func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
+        isAwaitingFix = false
+        log.info("breadcrumb.fix count=\(locations.count, privacy: .public)")
         guard let loc = locations.last else { return }
         Task { @MainActor [weak self] in
             guard let self else { return }
@@ -441,25 +564,44 @@ final class LocationPickerModel: NSObject, ObservableObject, CLLocationManagerDe
         }
     }
 
-    nonisolated func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
+    func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
         // A silent no-op here swallows denied permissions, airplane mode and
         // transient CoreLocation errors. Log so we can diagnose why the
         // picker never surfaces a result, and clear the pending geocoding
         // state so the UI does not spin forever.
-        Logger(subsystem: "me.meeshy.app", category: "location")
-            .error("Location manager failed: \(error.localizedDescription, privacy: .public)")
+        isAwaitingFix = false
+        log.error("breadcrumb.failure \(error.localizedDescription, privacy: .public)")
         Task { @MainActor [weak self] in
             self?.isGeocoding = false
         }
     }
 
-    nonisolated func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
+    func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
         let status = manager.authorizationStatus
+        log.info("breadcrumb.authorization status=\(status.rawValue, privacy: .public)")
         Task { @MainActor [weak self] in
             self?.authorization = status
         }
         if status == .authorizedWhenInUse || status == .authorizedAlways {
-            manager.requestLocation()
+            requestFixIfIdle()
         }
+    }
+}
+
+// MARK: - Injection dans le composer de story (SDK)
+
+extension View {
+    /// Fournit au composer de story (`StoryComposerView`, côté SDK) la fabrique
+    /// de CE picker. Le composer expose un point d'injection plutôt qu'un import
+    /// direct : `LocationPickerView` dépend de MapKit, CoreLocation et de
+    /// `MediaPermissionCoordinator` — de l'orchestration UX produit, donc
+    /// app-side (SDK purity). Sans cet appel, le chip « Lieu » du panneau Texte
+    /// n'est pas rendu.
+    func storyLocationPickerProvided(
+        accentColor: String = MeeshyColors.brandPrimaryHex
+    ) -> some View {
+        environment(\.storyLocationPicker, StoryLocationPickerProvider { onSelect in
+            AnyView(LocationPickerView(accentColor: accentColor, onSelect: onSelect))
+        })
     }
 }

@@ -34,6 +34,7 @@ import { buildCursorPaginationMeta } from '../../utils/pagination';
 import { sendWithETag } from '../../utils/etag';
 import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
 import { SecuritySanitizer } from '../../utils/sanitize.js';
+import { sharedPlaceFromMetadata } from '../../services/location/sharedPlace';
 
 const logger = enhancedLogger.child({ module: 'conversations/core' });
 
@@ -417,6 +418,10 @@ export function registerCoreRoutes(
               isViewOnce: true,
               effectFlags: true,
               expiresAt: true,
+              // Lot 3 : aperçu de conversation — sans `metadata`, un dernier
+              // message géolocalisé n'affiche jamais sa position dans la
+              // liste des conversations.
+              metadata: true,
               sender: {
                 select: {
                   id: true,
@@ -611,9 +616,16 @@ export function registerCoreRoutes(
               ? presenceChecker?.isOnline(sender.userId ?? sender.id)
               : undefined;
             const senderVis = sender?.userId ? presenceVis.get(sender.userId) : undefined;
+            // Lot 3 : hisser metadata.location en `location` top-level. Un
+            // message géolocalisé SANS légende a un `content` vide — hisser
+            // la position ne fabrique aucun texte de repli ; c'est au client
+            // de décider comment rendre l'aperçu (ex. via `messageType` ou la
+            // seule présence de `location`), pas au serveur.
+            const place = sharedPlaceFromMetadata((msg as { metadata?: unknown }).metadata);
             return {
               ...msg,
               content: truncateMessagePreview(msg.content),
+              ...(place ? { location: place } : {}),
               sender: sender ? {
                 ...sender,
                 username: sender.user?.username ?? sender.username ?? null,

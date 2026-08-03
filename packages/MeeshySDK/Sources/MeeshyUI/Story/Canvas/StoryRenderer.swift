@@ -54,6 +54,16 @@ extension StoryTextObject: RenderableItem {}
 extension StoryMediaObject: RenderableItem {}
 extension StorySticker: RenderableItem {}
 
+/// La pastille de lieu est hors timeline par design (voir doc `StoryLocationObject`
+/// dans MeeshySDK) : `nil` pour les quatre champs de timing en fait un item
+/// `isStatic` toujours visible, jamais gouverné par une fenêtre de lecture.
+extension StoryLocationObject: RenderableItem {
+    public var startTime: Double? { nil }
+    public var duration: Double? { nil }
+    public var fadeIn: Double? { nil }
+    public var fadeOut: Double? { nil }
+}
+
 extension RenderableItem {
     /// A static item has no timing windows, no fades, no keyframes — its rendered
     /// representation never changes during a slide, so it's a good rasterization
@@ -153,7 +163,8 @@ public enum StoryRenderer {
                                              geometry: geometry,
                                              mode: mode,
                                              resolver: resolver,
-                                             imageCache: imageCache)
+                                             imageCache: imageCache,
+                                             renderScale: contentsScale)
                         return mediaLayer
                     }
                     : nil
@@ -166,7 +177,8 @@ public enum StoryRenderer {
                                mode: mode,
                                languages: languages,
                                resolver: resolver,
-                               imageCache: imageCache)
+                               imageCache: imageCache,
+                               contentsScale: contentsScale)
                 }
             } else {
                 layer = renderItem(item,
@@ -175,7 +187,8 @@ public enum StoryRenderer {
                                    mode: mode,
                                    languages: languages,
                                    resolver: resolver,
-                                   imageCache: imageCache)
+                                   imageCache: imageCache,
+                                   contentsScale: contentsScale)
             }
 
             // Feed glass-style text layers with a backdrop snapshot when the
@@ -325,6 +338,8 @@ public enum StoryRenderer {
             data = try? encoder.encode(media)
         } else if let sticker = item as? StorySticker {
             data = try? encoder.encode(sticker)
+        } else if let location = item as? StoryLocationObject {
+            data = try? encoder.encode(location)
         } else {
             data = nil
         }
@@ -383,6 +398,11 @@ public enum StoryRenderer {
         let foregroundMedias = (slide.effects.mediaObjects ?? []).filter { $0.isBackground == false }
         items.append(contentsOf: foregroundMedias)
         items.append(contentsOf: slide.effects.stickerObjects ?? [])
+        // Pastilles de lieu : doivent traverser le cycle collectItems → cache
+        // pour que `editContentHash` les couvre, sinon le rendu reste figé
+        // sur l'ancienne `place`/position après édition (le hash ne change
+        // pas donc `StoryLocationLayer` ne se re-dessine pas).
+        items.append(contentsOf: slide.locationObjects)
         return items
     }
 
@@ -408,14 +428,16 @@ public enum StoryRenderer {
                                    mode: RenderMode,
                                    languages: [String] = [],
                                    resolver: (@Sendable (String) -> URL?)? = nil,
-                                   imageCache: ImageCacheReader? = nil) -> CALayer {
+                                   imageCache: ImageCacheReader? = nil,
+                                   contentsScale: CGFloat = UIScreen.main.scale) -> CALayer {
         if let media = item as? StoryMediaObject {
             let layer = StoryMediaLayer()
             layer.configure(with: media,
                             geometry: geometry,
                             mode: mode,
                             resolver: resolver,
-                            imageCache: imageCache)
+                            imageCache: imageCache,
+                            renderScale: contentsScale)
             // Keyframe overrides for media objects (position, scale, opacity)
             if mode == .play, let kfs = media.keyframes, !kfs.isEmpty {
                 applyKeyframeOverrides(kfs,
@@ -436,7 +458,8 @@ public enum StoryRenderer {
                 : text.text
             var displayObj = text
             displayObj.text = displayText
-            layer.configure(with: displayObj, geometry: geometry, mode: mode)
+            layer.configure(with: displayObj, geometry: geometry, mode: mode,
+                            renderScale: contentsScale)
             // Snapshot fadeIn/fadeOut envelope at the current playhead. Applied
             // before keyframe overrides so that an explicit keyframe `opacity`
             // wins over the fade envelope (keyframes are authored explicitly,
@@ -454,9 +477,16 @@ public enum StoryRenderer {
             }
             return layer
         }
+        if let location = item as? StoryLocationObject {
+            let layer = StoryLocationLayer()
+            layer.configure(with: location, geometry: geometry, mode: mode,
+                            renderScale: contentsScale)
+            return layer
+        }
         if let sticker = item as? StorySticker {
             let layer = StoryStickerLayer()
-            layer.configure(with: sticker, geometry: geometry, mode: mode)
+            layer.configure(with: sticker, geometry: geometry, mode: mode,
+                            renderScale: contentsScale)
             // Snapshot fadeIn/fadeOut envelope at the current playhead.
             // StorySticker has no `keyframes` field (per StoryModels.swift),
             // so fades are the only animation channel for stickers.
@@ -523,6 +553,28 @@ extension StoryRenderer {
     /// 2. Background image media object (`isBackground == true`, kind == .image`)
     /// 3. `effects.background` hex color string
     /// 4. Fallback: `.solidColor(.black)`
+    /// Clé de routage du fond : ce que `StoryBackgroundLayer.configure` tentera
+    /// d'abord comme URL directe, avant de retomber sur le resolver.
+    ///
+    /// Une URL DISTANTE prime sur le `postMediaId`. L'identifiant n'est pas une
+    /// URL : le layer doit le résoudre via le tableau `media[]` du post — et ce
+    /// tableau revient vide dès qu'un rattachement média↔post a échoué à la
+    /// publication. Constaté en production le 2026-08-01 : deux stories sans
+    /// aucun fond, alors que leur objet portait une `mediaURL` parfaitement
+    /// servable, jamais essayée parce que le `postMediaId` gagnait d'office.
+    ///
+    /// Les `file://` sont exclues quand un identifiant existe : les stories
+    /// publiées avant `sanitizedForServerPublish()` en portent qui pointent vers
+    /// la sandbox de l'AUTEUR, inaccessible à tout autre lecteur. Sans
+    /// identifiant en revanche (composer, média pas encore téléversé), la
+    /// `file://` locale EST la bonne source — c'est la sandbox de celui qui
+    /// regarde.
+    nonisolated static func backgroundRoutingKey(postMediaId: String,
+                                                 mediaURL: String?) -> String {
+        if let url = mediaURL, url.hasPrefix("http") { return url }
+        return postMediaId.isEmpty ? (mediaURL ?? "") : postMediaId
+    }
+
     public static func renderBackground(slide: StorySlide,
                                         languages: [String]) -> StoryBackgroundLayer.Kind {
         // Video background object
@@ -530,9 +582,8 @@ extension StoryRenderer {
             // En composer édition la vidéo locale n'a pas encore de postMediaId
             // serveur ; on utilise alors directement la `mediaURL` (file://…)
             // que `StoryBackgroundLayer.configure` détecte par préfixe.
-            let routingKey = (!bgVideo.postMediaId.isEmpty)
-                ? bgVideo.postMediaId
-                : (bgVideo.mediaURL ?? "")
+            let routingKey = Self.backgroundRoutingKey(postMediaId: bgVideo.postMediaId,
+                                                       mediaURL: bgVideo.mediaURL)
             // `mute` reste à `false` au niveau du renderer : c'est l'état
             // initial souhaité (la vidéo de fond porte de l'audio que le
             // viewer DOIT entendre par défaut). Le mute global de la sidebar
@@ -558,9 +609,8 @@ extension StoryRenderer {
             // (sortie PhotosPicker → temp file), on pousse la file URL dans le
             // champ `postMediaId` pour que `StoryBackgroundLayer.configure`
             // puisse la charger directement sans cache lookup.
-            let routingKey = (!bgImage.postMediaId.isEmpty)
-                ? bgImage.postMediaId
-                : (bgImage.mediaURL ?? "")
+            let routingKey = Self.backgroundRoutingKey(postMediaId: bgImage.postMediaId,
+                                                       mediaURL: bgImage.mediaURL)
             return .image(postMediaId: routingKey,
                           thumbHash: slide.effects.thumbHash)
         }

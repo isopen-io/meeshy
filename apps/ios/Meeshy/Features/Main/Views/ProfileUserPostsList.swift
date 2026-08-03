@@ -154,6 +154,7 @@ struct ProfileUserPostsList: View {
                     card(for: post)
                         .onAppear { viewModel.trackImpression(post.id) }
                 }
+                .onDisappear { Task { await viewModel.flushImpressions() } }
 
                 if viewModel.hasMoreToRender || viewModel.hasMore {
                     // Infinite-scroll sentinel — reveals more cached cards first
@@ -420,10 +421,9 @@ final class ProfileUserPostsViewModel: ObservableObject {
     private let postService: PostServiceProviding
     private let languageProvider: LanguageProviding
 
-    // Impression batching — mirrors FeedView (dedup per session, 3s flush).
-    private var pendingImpressionIds: Set<String> = []
-    private var recordedImpressionIds: Set<String> = []
-    private var impressionTask: Task<Void, Never>?
+    /// Groupement, persistance et flush (sortie d'écran / arrière-plan /
+    /// relance) portés par `ImpressionBatcher`.
+    private lazy var impressions = ImpressionBatcher(source: "profile")
 
     private var cancellables = Set<AnyCancellable>()
 
@@ -674,31 +674,12 @@ final class ProfileUserPostsViewModel: ObservableObject {
     // MARK: - Impressions (batched, source "profile")
 
     func trackImpression(_ postId: String) {
-        guard !recordedImpressionIds.contains(postId) else { return }
-        pendingImpressionIds.insert(postId)
-        scheduleImpressionFlush()
+        impressions.record(postId)
     }
 
-    private func scheduleImpressionFlush() {
-        impressionTask?.cancel()
-        impressionTask = Task { [weak self] in
-            try? await Task.sleep(nanoseconds: 3_000_000_000)
-            guard !Task.isCancelled else { return }
-            await self?.flushImpressions()
-        }
-    }
-
-    private func flushImpressions() async {
-        let batch = Array(pendingImpressionIds)
-        guard !batch.isEmpty else { return }
-        pendingImpressionIds.subtract(batch)
-        do {
-            try await postService.recordImpressions(postIds: batch, source: "profile")
-            // Mark recorded ONLY on success so a failed flush leaves the ids
-            // eligible to re-enqueue when the card next appears.
-            recordedImpressionIds.formUnion(batch)
-        } catch {
-            ProfileUserPostsViewModel.logger.debug("impression flush failed (will retry): \(error.localizedDescription)")
-        }
+    /// À appeler quand la liste disparaît : sans ce flush, le lot en cours de
+    /// groupement est perdu.
+    func flushImpressions() async {
+        await impressions.flushNow()
     }
 }

@@ -147,16 +147,14 @@ struct StoryActionSidebarView: View {
     @Binding var showExportShareSheet: Bool
     @Binding var isGlobalMutedBinding: Bool
     @Binding var sharedContentWrapper: SharedContentWrapper?
-    @Binding var repostStoryComposerSource: RepostStorySourceWrapper?
     @Binding var isPresented: Bool
 
     let triggerStoryReaction: (String) -> Void
     let pauseTimer: () -> Void
     let loadStoryComments: () -> Void
 
-    /// Source de vérité des exports story → photothèque, PARTAGÉE avec la
-    /// ligne « Mes stories » (`MyStoryRow`) : un export lancé depuis l'une des
-    /// deux surfaces progresse sur les deux (Task 7). `@ObservedObject` — pas
+    /// Source de vérité des exports story → photothèque
+    /// (`StoryPhotoSaveService.shared`, Task 7). `@ObservedObject` — pas
     /// une simple lecture de `StoryPhotoSaveService.shared.progress(for:)`
     /// dans `body` — est nécessaire pour que cette vue se redessine quand la
     /// progression change ; `@Published` seul ne déclenche rien sans
@@ -665,6 +663,10 @@ struct StoryHeaderView: View {
     /// Primitive passée par le parent (règle « Zero Unnecessary Re-render » —
     /// une leaf view ne recalcule pas d'état viewer, elle reçoit un `Bool`).
     let hasBackgroundAudio: Bool
+    /// Ce qui suit la note : crédit défilant (son de bibliothèque) ou onde
+    /// (piste propre), plus la fenêtre du fond qui arme le compteur de temps
+    /// restant. Résolu par le parent — même règle Equatable/primitives.
+    let headerAudioDisplay: AudioChipHeaderModel
     /// La story porte-t-elle une transcription affichable ? Primitive, même
     /// règle : le header ne consulte pas les `StoryEffects` lui-même.
     let hasAudioTranscript: Bool
@@ -712,7 +714,6 @@ struct StoryHeaderView: View {
     }
 
     let makeStoryExternalShareURL: (String) -> URL?
-    let storyTimeRemaining: (Date) -> String
     let deleteCurrentStory: () -> Void
     let repostAsPostDirect: () -> Void
     let pauseTimer: () -> Void
@@ -818,7 +819,13 @@ struct StoryHeaderView: View {
 
                         VStack(alignment: .leading, spacing: 2) {
                             HStack(spacing: 5) {
-                                Text(group.username)
+                                // Nom borné à 16 caractères comme dans les bulles de
+                                // conversation (directive user 2026-07-30) : au-delà,
+                                // un pseudo long poussait l'attribution de repost et
+                                // la méta hors du header. `lineLimit(1)` reste, mais
+                                // en dernier recours seulement — la borne est posée
+                                // à la source.
+                                Text(DisplayName.truncated(group.username))
                                     .font(MeeshyFont.relative(15, weight: .bold))
                                     .foregroundColor(.white)
                                     .lineLimit(1)
@@ -842,6 +849,18 @@ struct StoryHeaderView: View {
 
                             if let story = currentStory {
                                 HStack(spacing: 4) {
+                                    // Horloge accolée à l'HEURE DE PUBLICATION —
+                                    // elle qualifie la date affichée, elle ne parle
+                                    // plus d'expiration. Le compte à rebours
+                                    // « Expire dans Xh » a été retiré du header
+                                    // (directive user 2026-07-30) : la durée de vie
+                                    // d'une story est une constante produit, pas une
+                                    // information à relire à chaque slide.
+                                    Image(systemName: "clock")
+                                        .font(MeeshyFont.relative(9, weight: .semibold))
+                                        .foregroundColor(.white.opacity(0.6))
+                                        .accessibilityHidden(true)
+
                                     Text(story.timeAgo)
                                         .font(MeeshyFont.relative(12, weight: .medium))
                                         .foregroundColor(.white.opacity(0.75))
@@ -850,22 +869,46 @@ struct StoryHeaderView: View {
                                     // PRÉSENCE d'un audio de fond sur la story — pas
                                     // son état de lecture (ni mute, ni timing de la
                                     // timeline). Directive user 2026-07-13.
+                                    // L'onde qui la suit, elle, dit que ça joue
+                                    // (directive user 2026-07-30).
                                     if hasBackgroundAudio {
                                         Image(systemName: "music.note")
                                             .font(MeeshyFont.relative(10, weight: .semibold))
                                             .foregroundColor(.white.opacity(0.7))
                                             .accessibilityLabel(String(localized: "story.viewer.a11y.backgroundAudio", defaultValue: "Audio de fond", bundle: .main))
-                                    }
 
-                                    if let expiresAt = story.expiresAt, expiresAt.timeIntervalSinceNow > 0 {
-                                        Text("\u{00B7}")
-                                            .foregroundColor(.white.opacity(0.4))
-                                        Image(systemName: "clock")
-                                            .font(MeeshyFont.relative(9, weight: .semibold))
-                                            .foregroundColor(.white.opacity(0.5))
-                                        Text(storyTimeRemaining(expiresAt))
-                                            .font(MeeshyFont.relative(12, weight: .medium))
-                                            .foregroundColor(.white.opacity(0.55))
+                                        // Le header est reconstruit à chaque tick de
+                                        // la barre de progression : l'animation vit
+                                        // dans un `TimelineView` interne à l'atome,
+                                        // donc elle ne redéclenche jamais le rendu de
+                                        // ce header. Pas de câblage de la pause :
+                                        // l'appui long qui met la story en pause
+                                        // masque déjà tout le chrome, header compris.
+                                        //
+                                        // Son de BIBLIOTHÈQUE → crédit défilant
+                                        // « titre · @pseudo · M:SS » à la place de
+                                        // l'onde — le temps restant du fond défile
+                                        // AVEC le texte ; piste propre → onde, comme
+                                        // toujours (directive user 2026-08-02).
+                                        // Hauteur/police passées à l'atome (14/11) au
+                                        // lieu d'écraser son ancien 18 interne ; le
+                                        // compteur observe le playhead DANS l'atome,
+                                        // jamais ici (doctrine du commentaire
+                                        // ci-dessus). Pas de `paused` : le long-press
+                                        // qui met en pause masque tout le chrome, et
+                                        // le temps gèle déjà via le playhead.
+                                        switch headerAudioDisplay.display {
+                                        case .marquee(let text):
+                                            AudioChipMarquee(text: text,
+                                                             window: headerAudioDisplay.window,
+                                                             height: 14,
+                                                             fontSize: 11)
+                                                .frame(width: 124)
+                                                .opacity(0.85)
+                                        case .waveform:
+                                            StoryHeaderAudioWaveform()
+                                                .opacity(0.8)
+                                        }
                                     }
                                 }
                             }

@@ -2,6 +2,7 @@ import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { createUnifiedAuthMiddleware, UnifiedAuthRequest } from '../middleware/auth.js';
 import { AttachmentService } from '../services/attachments/index.js';
 import { attachmentMediaSelect, attachmentFullSelect, attachmentForwardPreviewSelect } from '../services/attachments/attachmentIncludes';
+import { hoistLocationOnto } from '../services/location/sharedPlace';
 import { MessageTranslationService } from '../services/message-translation/MessageTranslationService';
 import { transformTranslationsToArray, type MessageTranslationJSON } from '../utils/translation-transformer';
 import { SERVER_EVENTS, ROOMS, type SocketIOMessage } from '@meeshy/shared/types/socketio-events';
@@ -70,6 +71,13 @@ export default async function messageRoutes(fastify: FastifyInstance) {
         200: {
           description: 'Message details',
           type: 'object',
+          // Le schéma ne liste qu'un sous-ensemble illustratif des champs
+          // (déjà le cas avant ce correctif — metadata/messageType/etc. n'y
+          // figuraient pas non plus). `additionalProperties: true` empêche
+          // fast-json-stringify de tronquer silencieusement tout champ non
+          // listé ici — dont le `location` hissé par hoistLocationOnto —
+          // à la sérialisation de la réponse.
+          additionalProperties: true,
           properties: {
             id: { type: 'string' },
             content: { type: 'string' },
@@ -139,6 +147,10 @@ export default async function messageRoutes(fastify: FastifyInstance) {
           isEncrypted: true,
           encryptionMode: true,
           translations: true,
+          // Rappel projet : tout champ lu doit figurer dans le select. Sans
+          // `metadata` ici, un message géolocalisé affiché en entier (bulle
+          // complète, cette route) ne montrait jamais sa position.
+          metadata: true,
           sender: {
             select: {
               id: true,
@@ -180,7 +192,10 @@ export default async function messageRoutes(fastify: FastifyInstance) {
 
       // Retourner le message avec les champs dénormalisés (deliveredCount, readCount, etc.)
       // Les détails des statuts sont disponibles via GET /messages/:messageId/status-details
-      return sendSuccess(reply, {
+      // hoistLocationOnto hisse metadata.location en champ top-level `location`
+      // — Lot 1 : ce message est affiché en entier, sans hoist la position
+      // resterait invisible même si elle a bien été validée à l'écriture.
+      return sendSuccess(reply, hoistLocationOnto({
         ...message,
         // Les compteurs sont déjà dans message via les champs dénormalisés
         statusSummary: {
@@ -189,7 +204,7 @@ export default async function messageRoutes(fastify: FastifyInstance) {
           deliveredToAllAt: (message as any).deliveredToAllAt,
           readByAllAt: (message as any).readByAllAt
         }
-      });
+      } as unknown as Record<string, unknown>));
 
     } catch (error) {
       logger.error('Error fetching message', error as Error);

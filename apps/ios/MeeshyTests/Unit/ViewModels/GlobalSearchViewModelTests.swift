@@ -203,6 +203,36 @@ final class GlobalSearchViewModelTests: XCTestCase {
         XCTAssertEqual(sut.messageResults.first?.content, "hello fts world")
     }
 
+    // MARK: - vm-search-localname-01 — nom local résolu depuis le cache
+
+    func test_searchMessages_localResult_hydratesConversationNameFromCache() async throws {
+        let pool = try DatabaseQueue()
+        try MessageDatabaseMigrations.runAll(on: pool)
+        try await pool.write { db in
+            try SearchTestMessageRecordFactory.make(
+                localId: "local-name-1",
+                conversationId: "conv-hydrate",
+                content: "hello naming world"
+            ).insert(db)
+        }
+        try? await CacheCoordinator.shared.conversations.save(
+            [MeeshyConversation(id: "conv-hydrate", identifier: "conv-hydrate", type: .group, title: "Alice & Bob")],
+            for: "list"
+        )
+        let searchService = MessageSearchService(reader: pool)
+        let (sut, mockAPI, mockUserService, mockAuthManager) = try makeSUT(searchService: searchService)
+        mockAPI.errorToThrow = URLError(.notConnectedToInternet)
+        mockUserService.searchUsersResult = .failure(URLError(.notConnectedToInternet))
+        mockAuthManager.simulateLoggedIn(user: makeCurrentUser())
+
+        await sut.performSearch(query: "naming")
+
+        XCTAssertEqual(
+            sut.messageResults.first?.conversationName, "Alice & Bob",
+            "offline, le titre du résultat doit venir du cache conversations — pas l'ObjectId brut"
+        )
+    }
+
     func test_searchMessages_mergesLocalAndRemoteResults_deduplicatesById() async throws {
         // Arrange: in-memory DB with one message already matching
         let pool = try DatabaseQueue()

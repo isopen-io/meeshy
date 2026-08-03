@@ -146,6 +146,15 @@ public enum StorySlideRenderer {
                 }
             }
 
+            // 5b. Pastilles de lieu — même source de vérité que le canvas et
+            //     l'export : on configure une `StoryLocationLayer` puis on la
+            //     rend dans le contexte. Redessiner le badge à la main ici
+            //     rejouerait la divergence déjà payée sur les stickers (taille
+            //     codée en dur, `baseSize` ignoré).
+            for location in slide.locationObjects {
+                drawLocationObject(location, in: size, ctx: cgCtx)
+            }
+
             // 6. Drawing layer — TOPMOST (modern strokes preferred, legacy PKDrawing
             // fallback). Mirrors `StoryRenderer` where the drawing overlay sits at
             // zPosition 9999 above every item (text/media/stickers). Without this
@@ -359,6 +368,27 @@ public enum StorySlideRenderer {
         ctx.clip()
         image.draw(in: drawRect)
         ctx.restoreGState()
+    }
+
+    /// Dessine la pastille de lieu en DÉLÉGUANT à `StoryLocationLayer` — la
+    /// calque du canvas et de l'export : métriques, palette et libellé
+    /// (`place.name` → `address` → « Ici ») restent définis une seule fois.
+    /// `render(in:)` ignore `position`/`anchorPoint`/`transform` du layer, donc
+    /// l'ancrage et la rotation sont appliqués ici au CTM, comme pour les
+    /// textes et les médias.
+    private static func drawLocationObject(_ location: StoryLocationObject, in size: CGSize, ctx: CGContext) {
+        let layer = StoryLocationLayer()
+        layer.configure(with: location, geometry: CanvasGeometry(renderSize: size), mode: .play)
+        let box = layer.bounds.size
+        guard box.width > 0, box.height > 0 else { return }
+        let center = layer.position
+        drawRotated(location.rotation, around: center, in: ctx) {
+            ctx.saveGState()
+            ctx.translateBy(x: center.x - box.width * location.anchor.x,
+                            y: center.y - box.height * location.anchor.y)
+            layer.render(in: ctx)
+            ctx.restoreGState()
+        }
     }
 
     private static func drawSticker(_ sticker: StorySticker, in size: CGSize, ctx: CGContext) {

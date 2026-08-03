@@ -463,6 +463,8 @@ struct ReelPageView: View {
 
     @State private var descriptionExpanded = false
     @State private var audioFullscreen: AudioFullscreenSource?
+    /// Lieu du réel ouvert plein écran (tap sur le sticker de position).
+    @State private var reelFullscreenPlace: BubbleFullscreenPlace?
     /// Prisme: the language the viewer explicitly picked via a flag / the
     /// translate toggle. `nil` = the auto-resolved preferred translation.
     @State private var selectedLanguage: String?
@@ -637,6 +639,16 @@ struct ReelPageView: View {
             if !callActive { startActiveAudioIfNeeded() }
         }
         .audioFullscreenCover($audioFullscreen, accentColor: reel.authorColor)
+        .fullScreenCover(item: $reelFullscreenPlace) { item in
+            LocationFullscreenView(
+                latitude: item.place.latitude,
+                longitude: item.place.longitude,
+                placeName: item.place.name,
+                address: item.place.address,
+                accentColor: reel.authorColor,
+                senderName: reel.author
+            )
+        }
     }
 
     // MARK: Audio open-autostart (WS3.1)
@@ -854,6 +866,14 @@ struct ReelPageView: View {
                         .onTapGesture {
                             withAnimation(.easeInOut(duration: 0.2)) { descriptionExpanded.toggle() }
                         }
+                }
+            }
+
+            // Indicateur de position type sticker (constat user 2026-07-30) —
+            // même pill que la story/le feed, cliquable → carte plein écran.
+            if let place = reel.location {
+                FeedPostLocationSticker(place: place) {
+                    reelFullscreenPlace = BubbleFullscreenPlace(place: place)
                 }
             }
 
@@ -1364,7 +1384,7 @@ final class ReelPlayerLayerView: UIView {
 /// Not yet wired into `mediaLayer` (which still shows `primaryReelMedia`): it is
 /// the tested foundation for the deferred images+audio mixed-media composition.
 enum ReelMediaLayout: Equatable {
-    /// No playable/visual media (documents / locations only, or empty).
+    /// No playable/visual media (documents only, or empty).
     case empty
     /// A single video drives the reel — video wins over every other kind.
     case video(FeedMedia)
@@ -1376,7 +1396,7 @@ enum ReelMediaLayout: Equatable {
     case imagesWithAudio(images: [FeedMedia], audios: [FeedMedia])
 
     /// Classifies `media` into a layout. Video has top priority; otherwise the
-    /// presence of images and/or audios decides. Documents/locations are ignored
+    /// presence of images and/or audios decides. Documents are ignored
     /// (never a reel surface), so a post carrying only those resolves to `.empty`.
     static func resolve(media: [FeedMedia]) -> ReelMediaLayout {
         if let video = media.first(where: { $0.type == .video }) { return .video(video) }

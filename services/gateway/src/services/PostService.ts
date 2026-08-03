@@ -6,6 +6,8 @@ import { PostReactionService } from './PostReactionService';
 import type { MobileTranscription } from '../routes/posts/types';
 import { PostAudioService } from './posts/PostAudioService';
 import { NOT_DELETED } from './posts/postIncludes';
+import { claimableMediaWhere, describeClaimShortfall } from './posts/mediaOwnership';
+import { qualifiesAsReel } from './posts/reelComposition';
 import { buildPostVisibilityOrFilter } from './posts/postVisibility';
 import { getCommunityCoMemberIds } from './posts/communityVisibility';
 import { MediaService } from './MediaService';
@@ -16,7 +18,13 @@ import { ZMQSingleton } from './ZmqSingleton';
 import { authorSelect, mediaSelect, mediaInclude, postInclude } from './posts/postIncludes';
 import { remapStoryEffectsMediaIds } from './posts/storyEffectsMediaRemap';
 import { composeStoryContent, storyTextObjectText } from './posts/storyContentComposition';
+import { storyContentEditRequested } from './posts/storyEditPolicy';
+import { SoundCaptureService } from './posts/SoundCaptureService';
+import { extractCaptureTracks } from './posts/captureTracks';
+import { feedsSoundLibrary } from './posts/soundEligibility';
 import { normalizeLanguageCode } from '@meeshy/shared/utils/language-normalize';
+import { parseSharedPlace, type SharedPlace } from './location/sharedPlace';
+import { quantizeCoordinate, type DiscoverabilityPrecision } from './location/geoDiscoverability';
 
 const log = enhancedLogger.child({ module: 'PostService' });
 
@@ -66,6 +74,7 @@ function detectLanguage(text: string): string {
 export class PostService {
   private readonly postReactionService: PostReactionService;
   private readonly trackingLinkService: TrackingLinkService;
+  private readonly soundCaptureService: SoundCaptureService;
 
   constructor(
     private readonly prisma: PrismaClient,
@@ -87,9 +96,14 @@ export class PostService {
     // `/l/<token>`), partagée avec messages/stories/commentaires. Injectable
     // pour les tests ; défaut = instance câblée sur le même prisma.
     trackingLinkService?: TrackingLinkService,
+    // Bibliothèque de sons — capture des pistes audio originales à la
+    // publication d'un contenu public. Injectable pour les tests ; défaut =
+    // instance câblée sur le même prisma.
+    soundCaptureService?: SoundCaptureService,
   ) {
     this.postReactionService = postReactionService ?? new PostReactionService(prisma);
     this.trackingLinkService = trackingLinkService ?? new TrackingLinkService(prisma);
+    this.soundCaptureService = soundCaptureService ?? new SoundCaptureService(prisma);
   }
 
   async createPost(data: {
@@ -106,6 +120,15 @@ export class PostService {
     mediaIds?: string[];
     mobileTranscription?: MobileTranscription;
     repostOfId?: string;
+    /** Lieu partagé — champ dédié, jamais un `metadata` brut. Validé par `parseSharedPlace`. */
+    location?: unknown;
+    /**
+     * Découvrabilité géographique — INDÉPENDANTE de `location` ci-dessus.
+     * `unknown` en défense en profondeur (même contrat que `location`) : la
+     * route valide déjà l'énumération via Zod, mais ce service ne doit pas
+     * supposer qu'il n'est jamais appelé autrement. Voir geoDiscoverability.ts.
+     */
+    discoverabilityPrecision?: unknown;
   }, userId: string) {
     const now = new Date();
     let expiresAt: Date | undefined;
@@ -123,6 +146,24 @@ export class PostService {
     const originalLanguage = data.originalLanguage
       ? (normalizeLanguageCode(data.originalLanguage) ?? data.originalLanguage)
       : (data.content ? detectLanguage(data.content) : undefined);
+
+    // Lieu partagé : validation stricte des coordonnées côté serveur (bornes,
+    // rejet NaN/Infinity, bornage des chaînes). Chiffrement : stockage EN
+    // CLAIR dans `metadata.location`, décision assumée — cf. sharedPlace.ts.
+    const sharedPlace = parseSharedPlace(data.location);
+
+    // Découvrabilité géographique — champ SÉPARÉ de `metadata.location`
+    // (badge d'affichage, inchangé ci-dessus) : deux opt-in indépendants,
+    // l'un n'implique jamais l'autre. Le client n'envoie JAMAIS geoPoint/
+    // geoPrecision bruts : ils sont TOUJOURS calculés ici, à partir de la
+    // même coordonnée exacte que `sharedPlace`, et seulement quand
+    // `discoverabilityPrecision` est présent ET que la coordonnée est
+    // valide. Absent (ou coordonnée invalide) => les deux champs restent
+    // `null` (spec §2, geoDiscoverability.ts).
+    const geoPoint = sharedPlace && data.discoverabilityPrecision !== undefined
+      ? quantizeCoordinate(sharedPlace.latitude, sharedPlace.longitude, data.discoverabilityPrecision)
+      : null;
+    const geoPrecision = geoPoint ? (data.discoverabilityPrecision as DiscoverabilityPrecision) : null;
 
     let repostOfId: string | undefined;
     let originalRepostOfId: string | undefined;
@@ -143,10 +184,37 @@ export class PostService {
         ?? sourcePost.id;
     }
 
+    // Règle produit (directive user 2026-08-02) : un REEL exige une composition
+    // qualifiante — vidéo || audio || >= 2 images (`qualifiesAsReel`, miroir du
+    // SDK). DÉGRADATION SILENCIEUSE en POST plutôt qu'un 422 : les clients
+    // antérieurs à la règle envoient `type: REEL` dès 1 média (ancienne
+    // doctrine) — rejeter casserait leur publication, alors qu'un reclassement
+    // en POST préserve le contenu. Un REEL sans aucun mediaId (trou
+    // UnifiedPostComposer) retombe aussi sur POST. Les PostMedia sont lus AVANT
+    // `post.create`, avec la MÊME garde de propriété que le rattachement plus
+    // bas, pour classifier exactement ce qui sera réellement attaché.
+    let effectiveType = data.type;
+    if (data.type === PostType.REEL) {
+      const claimableMedia = data.mediaIds?.length
+        ? await this.prisma.postMedia.findMany({
+            where: { id: { in: data.mediaIds }, ...claimableMediaWhere(userId) },
+            select: { mimeType: true },
+          })
+        : [];
+      if (!qualifiesAsReel(claimableMedia)) {
+        effectiveType = PostType.POST;
+        log.info('createPost: REEL non qualifiant dégradé en POST', {
+          authorId: userId,
+          requestedMediaCount: data.mediaIds?.length ?? 0,
+          claimableMediaCount: claimableMedia.length,
+        });
+      }
+    }
+
     const post = await this.prisma.post.create({
       data: {
         authorId: userId,
-        type: data.type,
+        type: effectiveType,
         visibility: data.visibility,
         visibilityUserIds: data.visibilityUserIds ?? [],
         content: data.content,
@@ -157,6 +225,8 @@ export class PostService {
         audioUrl: data.audioUrl,
         audioDuration: data.audioDuration,
         expiresAt,
+        ...(sharedPlace ? { metadata: { location: sharedPlace } as unknown as Prisma.InputJsonValue } : {}),
+        ...(geoPoint ? { geoPoint: geoPoint as unknown as Prisma.InputJsonValue, geoPrecision } : {}),
         ...(repostOfId !== undefined ? { repostOfId, originalRepostOfId } : {}),
       },
       include: postInclude,
@@ -165,10 +235,23 @@ export class PostService {
     // Link pre-uploaded media if any
     // mediaIds contains PostMedia IDs (created directly by TUS handler with postId=null)
     if (data.mediaIds?.length) {
-      await this.prisma.postMedia.updateMany({
-        where: { id: { in: data.mediaIds } },
+      // Garde de propriété : seuls les médias LIBRES et téléversés par l'auteur
+      // (ou hérités, sans propriétaire connu — cf. `mediaOwnership.ts`).
+      const claimed = await this.prisma.postMedia.updateMany({
+        // `userId` — l'identité de la REQUÊTE — et non `post.authorId` relu de
+        // l'objet créé : la garde doit dépendre de qui appelle, pas de ce que
+        // l'écriture précédente a bien voulu renvoyer.
+        where: { id: { in: data.mediaIds }, ...claimableMediaWhere(userId) },
         data: { postId: post.id },
       });
+      const shortfall = describeClaimShortfall(data.mediaIds, claimed.count);
+      if (shortfall) {
+        // Jamais silencieux : un média écarté disparaît de la publication, et
+        // sans cette trace le symptôme est indiscernable d'un vol réussi.
+        enhancedLogger.warn(`[PostService] createPost: ${shortfall}`, {
+          postId: post.id, authorId: userId, requested: data.mediaIds.length,
+        });
+      }
 
       // Locate the first audio PostMedia for transcription processing
       const audioMedia = await this.prisma.postMedia.findFirst({
@@ -202,6 +285,22 @@ export class PostService {
         });
       }
     }
+
+    // Bibliothèque de sons : capture des pistes audio du blob storyEffects.
+    // HORS de la garde médias — une story peut réutiliser un média déjà attaché
+    // — et fire-and-forget : publier ne dépend jamais de la bibliothèque.
+    this.soundCaptureService.captureSounds({
+      postId: post.id,
+      authorId: post.authorId,
+      // Règle UNIQUE et partagée (PUBLIC ou COMMUNITY, jamais un repost). Elle
+      // vivait dupliquée ici et dans `updatePost`, et la seconde copie avait
+      // déjà été oubliée une fois — c'était la troisième porte du piège
+      // d'attribution.
+      feedsLibrary: feedsSoundLibrary({ visibility: data.visibility, repostOfId: data.repostOfId }),
+      tracks: extractCaptureTracks(data.storyEffects),
+    }).catch((err: unknown) => {
+      log.error('captureSounds (createPost) a échoué', err instanceof Error ? err : new Error(String(err)), { postId: post.id });
+    });
 
     // Déclencher la traduction Prisme pour les stories avec texte (fire-and-forget)
     if (data.type === PostType.STORY && data.content) {
@@ -603,10 +702,17 @@ export class PostService {
     originalLanguage?: string;
     type?: PostType;
     removeMediaIds?: string[];
+    mediaIds?: string[];
+    /// Tri-état : `undefined` = inchangé, `null` = retirer, objet = remplacer.
+    /// Déjà validé par `parseSharedPlace` côté route — jamais un bloc client brut.
+    location?: SharedPlace | null;
   }) {
     const post = await this.prisma.post.findFirst({
       where: { id: postId, deletedAt: NOT_DELETED },
-      include: { media: { select: { id: true } } },
+      // `mimeType` alimente la règle de composition REEL (`qualifiesAsReel`)
+      // sur la liste FINALE des médias — Prisma `select` : tout champ vérifié
+      // DOIT y figurer.
+      include: { media: { select: { id: true, mimeType: true } } },
     });
 
     if (!post) return null;
@@ -616,7 +722,7 @@ export class PostService {
 
     // The edit-only fields are handled explicitly below; keep them out of the
     // blind spread so they are never written unconditionally.
-    const { type: requestedType, originalLanguage: requestedLanguage, removeMediaIds, ...rest } = data;
+    const { type: requestedType, originalLanguage: requestedLanguage, removeMediaIds, mediaIds, location: locationUpdate, ...rest } = data;
 
     const updateData: any = {
       ...rest,
@@ -628,18 +734,49 @@ export class PostService {
       updateData.visibilityUserIds = data.visibilityUserIds;
     }
 
+    // Lieu à l'édition : merge NON destructif de metadata — les autres blocs
+    // à autorité serveur (postReplyTo, trackingLinks…) sont préservés.
+    // `null` retire le bloc, un objet le remplace, absent ne touche à rien.
+    if (locationUpdate !== undefined) {
+      const baseMetadata: Record<string, unknown> =
+        post.metadata && typeof post.metadata === 'object' && !Array.isArray(post.metadata)
+          ? { ...(post.metadata as Record<string, unknown>) }
+          : {};
+      if (locationUpdate === null) {
+        delete baseMetadata['location'];
+      } else {
+        baseMetadata['location'] = locationUpdate as unknown as Record<string, unknown>;
+      }
+      updateData.metadata = baseMetadata;
+    }
+
     // Only remove media that actually belongs to this post — an id pointing at
     // another post's media is silently ignored (never cross-deletes).
     const ownMediaIds = new Set(post.media.map((m) => m.id));
     const mediaIdsToRemove = (removeMediaIds ?? []).filter((id) => ownMediaIds.has(id));
-    const remainingMediaCount = post.media.length - mediaIdsToRemove.length;
+    const mediaIdsToAttach = mediaIds ?? [];
     const finalType = requestedType ?? post.type;
+
+    // Liste FINALE des médias après édition : (médias du post − retraits) +
+    // fraîchement téléversés. Les mimeTypes des ajouts sont MATÉRIALISÉS ici,
+    // avec la même garde de propriété que le rattachement dans la transaction,
+    // pour que la règle de composition juge ce qui sera réellement attaché.
+    const removalSet = new Set(mediaIdsToRemove);
+    const attachedMedia = mediaIdsToAttach.length > 0
+      ? await this.prisma.postMedia.findMany({
+          where: { id: { in: mediaIdsToAttach }, ...claimableMediaWhere(userId) },
+          select: { mimeType: true },
+        })
+      : [];
+    const finalMedia = [
+      ...post.media.filter((m) => !removalSet.has(m.id)),
+      ...attachedMedia,
+    ];
 
     // Type switch is limited to POST <-> REEL on the author's OWN original post:
     // never on a repost (it mirrors its source) and never to/from STORY/STATUS
     // (their expiry/lifecycle is not managed by the edit flow). Switching to a
-    // REEL requires media — a text-only reel has nothing to show on the
-    // immersive surface.
+    // REEL requires a qualifying composition — see the guard below.
     if (requestedType !== undefined && requestedType !== post.type) {
       const switchable: PostType[] = [PostType.POST, PostType.REEL];
       if (!switchable.includes(post.type) || !switchable.includes(requestedType)) {
@@ -655,10 +792,19 @@ export class PostService {
       updateData.type = requestedType;
     }
 
-    // A reel must always keep at least one media — whether it is being switched
-    // to REEL or staying a REEL while media is being removed.
-    if (finalType === PostType.REEL && remainingMediaCount === 0) {
-      const err: any = new Error('A reel requires at least one media');
+    // Règle produit (directive user 2026-08-02) : un REEL doit rester
+    // QUALIFIANT — vidéo || audio || >= 2 images (`qualifiesAsReel`) — après
+    // retraits/ajouts, qu'il soit basculé en REEL ou qu'il le reste. Le 422 ne
+    // vaut que quand l'édition TOUCHE le type ou la composition : une édition
+    // de texte seule sur un REEL hérité non conforme (corpus pré-backfill,
+    // ex. 1 image) doit continuer de passer — le backfill
+    // `reclassify-nonqualifying-reels-to-post.ts` reclasse ce corpus.
+    const editTouchesComposition =
+      requestedType !== undefined || mediaIdsToRemove.length > 0 || mediaIdsToAttach.length > 0;
+    if (finalType === PostType.REEL && editTouchesComposition && !qualifiesAsReel(finalMedia)) {
+      // Assertion locale justifiée : porte le `statusCode` que la route
+      // traduit en 422 INVALID_POST_UPDATE — sans élargir le type en `any`.
+      const err = new Error('A reel requires a video, an audio, or at least two images') as Error & { statusCode: number };
       err.statusCode = 422;
       throw err;
     }
@@ -680,9 +826,64 @@ export class PostService {
       updateData.translations = {};
     }
 
+    // Editing a published story's CONTENT restarts its life (directive
+    // 2026-07-29): views, reactions and impressions are wiped — rows,
+    // denormalized counters AND embedded JSON mirrors — so every viewer sees
+    // the story as new again. The publication date never moves: createdAt and
+    // expiresAt are absent from updateData. Metadata-only updates (visibility)
+    // leave engagement untouched. Same predicate as the route's broadcast flag.
+    const editedTextObjects = Array.isArray((data.storyEffects as Record<string, unknown> | undefined)?.textObjects)
+      ? ((data.storyEffects as Record<string, unknown>).textObjects as StoryTextObjectRaw[])
+      : undefined;
+    const storyContentEdit = post.type === PostType.STORY && storyContentEditRequested(data);
+    if (storyContentEdit) {
+      // `updatedAt` bouge sur CHAQUE écriture (compteurs de vues inclus) —
+      // ce champ dédié est le SEUL horodatage fiable pour que les clients
+      // fassent céder leur garde « viewed monotone » après cette édition.
+      updateData.contentEditedAt = new Date();
+      updateData.viewCount = 0;
+      updateData.impressionCount = 0;
+      updateData.reactionCount = 0;
+      updateData.likeCount = 0;
+      updateData.reactionSummary = {};
+      updateData.reactions = [];
+      updateData.storyViews = [];
+      // Text changed → the existing translations describe the OLD content.
+      // (languageChanged already wiped them with the new source language.)
+      if (!languageChanged) {
+        updateData.translations = {};
+      }
+      // Keep the search index in sync when the composition carries the text
+      // (same rule as createPost: content mirrors the textObjects).
+      if (data.content === undefined && editedTextObjects?.length) {
+        const searchContent = composeStoryContent(editedTextObjects);
+        if (searchContent) {
+          updateData.content = searchContent;
+        }
+      }
+    }
+
     const updated = await this.prisma.$transaction(async (tx) => {
       if (mediaIdsToRemove.length > 0) {
         await tx.postMedia.deleteMany({ where: { id: { in: mediaIdsToRemove }, postId } });
+      }
+      // Attach freshly uploaded media (TUS creates PostMedia with postId=null).
+      // `userId` est déjà vérifié comme auteur du post plus haut : la garde
+      // limite le rattachement à SES propres téléversements.
+      if (mediaIdsToAttach.length > 0) {
+        const claimed = await tx.postMedia.updateMany({
+          where: { id: { in: mediaIdsToAttach }, ...claimableMediaWhere(userId) },
+          data: { postId },
+        });
+        const shortfall = describeClaimShortfall(mediaIdsToAttach, claimed.count);
+        if (shortfall) {
+          enhancedLogger.warn(`[PostService] updatePost: ${shortfall}`, { postId, authorId: userId });
+        }
+      }
+      if (storyContentEdit) {
+        await tx.postView.deleteMany({ where: { postId } });
+        await tx.postReaction.deleteMany({ where: { postId } });
+        await tx.postImpression.deleteMany({ where: { postId } });
       }
       return tx.post.update({
         where: { id: postId },
@@ -698,6 +899,49 @@ export class PostService {
           log.error('triggerStoryTextTranslation failed on update', err instanceof Error ? err : new Error(String(err)));
         });
       }
+    }
+
+    // Re-run the Prisme pipeline over the edited story text — mirrors
+    // createPost. Fire-and-forget; clients re-hydrate as ZMQ results land.
+    // The languageChanged branch above already covers the plain-content case
+    // with an explicit source override, so only fill the gaps here.
+    if (storyContentEdit) {
+      if (!languageChanged && data.content) {
+        this.triggerStoryTextTranslation(postId, data.content, userId, post.originalLanguage ?? undefined)
+          .catch((err: unknown) => {
+            log.error('triggerStoryTextTranslation failed on story edit', err instanceof Error ? err : new Error(String(err)));
+          });
+      }
+      if (editedTextObjects?.length) {
+        this.triggerStoryTextObjectTranslation(postId, editedTextObjects, userId).catch((err: unknown) => {
+          log.error('triggerStoryTextObjectTranslation failed on story edit', err instanceof Error ? err : new Error(String(err)));
+        });
+      }
+    }
+
+    // Édition : même contrat qu'à la création. Le service retire aussi les
+    // usages des pistes disparues, sinon elles surcompteraient pour toujours.
+    //
+    // GARDE 1 — `storyEffects` ABSENT ≠ « plus aucune piste ». `UpdatePostSchema`
+    // a tous ses champs optionnels : un changement d'audience ou une retouche de
+    // légende arrive ici sans `storyEffects`, et le blob en base n'est alors pas
+    // réécrit. Appeler la capture avec `tracks: []` ferait supprimer TOUS les
+    // usages d'une story qui joue toujours son audio, en faussant `usageCount`.
+    // Une édition qui n'exprime rien sur les pistes ne doit rien décider.
+    //
+    // GARDE 2 — `!updated.repostOfId` : troisième porte du piège d'attribution.
+    // `repostPost` snapshotte les médias de la source SOUS le reposteur ; un PUT
+    // sur le repost passerait donc le scope `postId` et créerait un `Sound`
+    // crédité au reposteur avec l'audio d'autrui.
+    if (data.storyEffects !== undefined) {
+      this.soundCaptureService.captureSounds({
+        postId: updated.id,
+        authorId: updated.authorId,
+        feedsLibrary: feedsSoundLibrary({ visibility: updated.visibility, repostOfId: updated.repostOfId }),
+        tracks: extractCaptureTracks(data.storyEffects),
+      }).catch((err: unknown) => {
+        log.error('captureSounds (updatePost) a échoué', err instanceof Error ? err : new Error(String(err)), { postId: updated.id });
+      });
     }
 
     return updated;
@@ -729,6 +973,14 @@ export class PostService {
     } catch (err) {
       log.warn('deletePost: tracking link deactivation failed', { postId, err });
     }
+
+    // Les usages meurent avec le post ; le `Sound`, lui, SURVIT.
+    // Sans ceci, une story supprimée par son auteur gardait ses usages jusqu'au
+    // hard-delete (7 j) et un post non-STORY les gardait POUR TOUJOURS — un
+    // `usageCount` gonflé indéfiniment, alors que c'est lui qui trie la
+    // découverte. `releasePost` ne rejette jamais : la suppression n'a pas à
+    // dépendre de la bibliothèque.
+    await this.soundCaptureService.releasePost(postId);
 
     return updated;
   }

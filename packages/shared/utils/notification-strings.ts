@@ -495,6 +495,37 @@ export function normalizeNotificationLanguage(code?: string | null): Notificatio
   return SUPPORTED.has(base) ? (base as NotificationLanguage) : 'fr';
 }
 
+type ByteUnits = { readonly b: string; readonly kb: string; readonly mb: string };
+
+/**
+ * Unités d’octets par langue. Le français emploie la notation « octet »
+ * (o / Ko / Mo) ; toutes les autres langues du catalogue utilisent la notation
+ * B / KB / MB, universellement lisible dans un contexte technique. Sans cette
+ * localisation, une notification anglaise/allemande affichait « 15.0 Mo » —
+ * mot localisé (Video / Foto…) mais unité de taille restée française.
+ */
+const FRENCH_BYTE_UNITS: ByteUnits = { b: 'o', kb: 'Ko', mb: 'Mo' };
+const DEFAULT_BYTE_UNITS: ByteUnits = { b: 'B', kb: 'KB', mb: 'MB' };
+
+/**
+ * Formate une taille de fichier en octets vers un libellé court localisé.
+ *
+ * La langue est normalisée via {@link normalizeNotificationLanguage} (parité
+ * stricte avec {@link notificationString}), donc `'fr-FR'` → `'fr'`, `'en-US'`
+ * → `'en'`, une langue hors catalogue → `'fr'`.
+ *
+ * Le palier bascule sur la valeur ARRONDIE (comme `formatCallDataSize`) : sinon
+ * 1 048 500 o (< 1 Mio, mais /1024 = 1023,93) afficherait « 1024 Ko » au lieu de
+ * « 1.0 Mo ».
+ */
+export function formatFileSizeI18n(lang: string | null | undefined, bytes: number): string {
+  const units = normalizeNotificationLanguage(lang) === 'fr' ? FRENCH_BYTE_UNITS : DEFAULT_BYTE_UNITS;
+  if (bytes < 1024) return `${bytes} ${units.b}`;
+  const kb = Math.round(bytes / 1024);
+  if (kb < 1024) return `${kb} ${units.kb}`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} ${units.mb}`;
+}
+
 function interpolate(template: string, tokens: Record<string, string>): string {
   return template.replace(/\{(\w+)\}/g, (_, k: string) => {
     const v = tokens[k];

@@ -65,11 +65,6 @@ final class ReelsViewModel: ObservableObject {
     @Published private var commentDelta: [String: Int] = [:]
     private var heartInFlight: Set<String> = []
     private var bookmarkInFlight: Set<String> = []
-    /// Reels whose impression (reach) has already been recorded this session —
-    /// one impression per reel per session, mirroring the main feed's
-    /// `recordedImpressionIds`. The reel's TOTAL view (`postOpenCount`) is
-    /// counted separately by the engagement pipeline (full-screen dwell).
-    private var impressionRecordedIds: Set<String> = []
 
     private var nextCursor: String?
     private var hasMore = true
@@ -88,12 +83,14 @@ final class ReelsViewModel: ObservableObject {
 
     init(
         service: PostServiceProviding = PostService.shared,
-        cache: ReelFeedCacheReading = CacheCoordinatorReelFeedCache()
+        cache: ReelFeedCacheReading = CacheCoordinatorReelFeedCache(),
+        postDeletedEvents: AnyPublisher<String, Never> = SocialSocketManager.shared.postDeleted.eraseToAnyPublisher()
     ) {
         self.service = service
         self.cache = cache
         subscribeToLikeEvents()
         subscribeToBookmarkEvents()
+        subscribeToPostDeletedEvents(postDeletedEvents)
     }
 
     /// S'abonne à l'événement CANONIQUE absolu `post:liked`/`post:unliked` (le ❤️
@@ -145,6 +142,30 @@ final class ReelsViewModel: ObservableObject {
                 bookmarkDelta[postId] = nil
             }
         }
+    }
+
+    /// S'abonne à `post:deleted` (miroir de `FeedViewModel` : même événement,
+    /// même retrait en direct). Contrairement au like/bookmark, ce flux est
+    /// injecté en paramètre plutôt que lu sur `SocialSocketManager.shared`
+    /// directement — la valeur par défaut couvre l'usage réel, l'injection
+    /// permet aux tests de piloter l'événement sans mocker tout `SocialSocketProviding`.
+    private func subscribeToPostDeletedEvents(_ events: AnyPublisher<String, Never>) {
+        events
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] postId in self?.removeDeletedReel(postId) }
+            .store(in: &cancellables)
+    }
+
+    /// Retire un reel supprimé (temps réel) du pager. Si c'était le reel
+    /// COURANT, `currentId` avance vers celui qui prend sa place à l'index
+    /// (le suivant), ou recule d'un cran s'il n'y a plus rien après lui ;
+    /// `nil` si le pager devient vide (la vue affiche alors l'état vide).
+    private func removeDeletedReel(_ postId: String) {
+        guard let index = reels.firstIndex(where: { $0.id == postId }) else { return }
+        let wasCurrent = currentId == postId
+        reels.remove(at: index)
+        guard wasCurrent else { return }
+        currentId = reels.isEmpty ? nil : reels[min(index, reels.count - 1)].id
     }
 
     /// À appeler quand le viewer se ferme : quitte la post room du réel actif.
@@ -400,13 +421,13 @@ final class ReelsViewModel: ObservableObject {
     }
 
     func recordView(_ id: String) {
-        // Unique view (viewCount, deduped server-side) — saved, not displayed.
+        // Vue UNIQUE (`viewCount`) — dédupliquée côté serveur par `PostView`
+        // (`@@unique(postId, userId)`) : rejouer l'appel ne la gonfle pas.
         Task { try? await service.viewPost(postId: id, duration: nil) }
-        // Impression (reach) — the reel appeared on screen. Once per reel per
-        // session. `source: "feed"` bumps impressionCount only (the reel's total
-        // view comes from the engagement pipeline, not from this appearance).
-        if impressionRecordedIds.insert(id).inserted {
-            Task { try? await service.recordImpression(postId: id, source: "feed") }
-        }
+        // Impression (portée) — le réel est apparu à l'écran. Comptée à CHAQUE
+        // apparition : revenir sur un réel déjà vu est une nouvelle impression.
+        // La déduplication de session qui vivait ici plafonnait le compteur à 1
+        // par réel et par lancement d'app.
+        Task { try? await service.recordImpression(postId: id, source: "feed") }
     }
 }

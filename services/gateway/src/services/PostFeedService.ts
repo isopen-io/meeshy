@@ -11,6 +11,7 @@ import {
 import type { CacheStore } from './CacheStore';
 import { getCommunityCoMemberIds, isActiveCommunityMember } from './posts/communityVisibility';
 import { enhancedLogger } from '../utils/logger-enhanced';
+import { hoistLocationDeep } from './location/sharedPlace';
 
 const logger = enhancedLogger.child({ module: 'PostFeedService' });
 
@@ -76,6 +77,12 @@ const INTEREST_BOOKMARK_SAMPLE = 50;  // derniers bookmarks analysés
 const INTEREST_NORMALIZER = Math.log10(1 + 20); // sature l'affinité d'intérêt à ~20 engagements
 
 export class PostFeedService {
+  /// Fenêtre pendant laquelle un auteur continue de recevoir SES stories
+  /// expirées, pour que « Mes stories » puisse les archiver. Sept jours : au
+  /// -delà, une story n'est plus un contenu qu'on republie ou dont on relit
+  /// les vues, et la réponse doit rester bornée.
+  static readonly AUTHOR_ARCHIVE_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
+
   constructor(
     private readonly prisma: PrismaClient,
     private readonly cache?: CacheStore
@@ -228,7 +235,7 @@ export class PostFeedService {
     const repostedIds = new Set(userReposts.map((r) => r.repostOfId).filter(Boolean) as string[]);
 
     return {
-      items: items.map((s) => ({
+      items: items.map((s) => hoistLocationDeep({
         ...this.enrichWithLikeStatus(s.post, userReactionsMap.get(s.post.id) ?? []),
         currentUserReactions: userReactionsMap.get(s.post.id) ?? [],
         isBookmarkedByMe: bookmarkedIds.has(s.post.id),
@@ -257,12 +264,30 @@ export class PostFeedService {
     const allContactIds = [...new Set([...friendIds, ...dmContactIds])];
     const visibilityFilter = this.buildVisibilityFilter(userId, allContactIds, communityCoMemberIds);
 
+    // Archive de l'AUTEUR : mes propres stories restent renvoyées après leur
+    // expiration, pour que « Mes stories » puisse les lister (vignette voilée).
+    // Sans cette exception, le serveur ne les renvoyait jamais et le client ne
+    // pouvait pas les garder non plus — un pull-to-refresh écrase son cache
+    // avec la réponse serveur (`StoryViewModel.storyGroups = groups`).
+    //
+    // Bornée : sans plancher, la réponse enflerait indéfiniment avec
+    // l'ancienneté du compte. Les stories des AUTRES restent filtrées à leur
+    // expiration, comme avant.
+    const authorArchiveFloor = new Date(now.getTime() - PostFeedService.AUTHOR_ARCHIVE_WINDOW_MS);
+
     const where: any = {
       deletedAt: NOT_DELETED,
       type: PostType.STORY,
       AND: [
         visibilityFilter,
-        { OR: [{ expiresAt: { isSet: false } }, { expiresAt: { equals: null } }, { expiresAt: { gt: now } }] },
+        {
+          OR: [
+            { expiresAt: { isSet: false } },
+            { expiresAt: { equals: null } },
+            { expiresAt: { gt: now } },
+            { AND: [{ authorId: userId }, { expiresAt: { gt: authorArchiveFloor } }] },
+          ],
+        },
       ],
     };
 
@@ -369,7 +394,10 @@ export class PostFeedService {
       userReactionsMap.set(r.postId, list);
     }
 
-    const items = stories.map((s) => ({
+    // hoistLocationDeep est un no-op sûr sur la projection tray (ni `metadata`
+    // ni `comments` sélectionnés — cf. trayStorySelect) : elle ne rend de
+    // toute façon pas de badge de lieu (anneaux + miniature seuls).
+    const items = stories.map((s) => hoistLocationDeep({
       ...this.enrichWithLikeStatus(s, userReactionsMap.get(s.id) ?? []),
       isViewedByMe: viewedSet.has(s.id),
       currentUserReactions: userReactionsMap.get(s.id) ?? [],
@@ -428,7 +456,7 @@ export class PostFeedService {
     });
 
     const hasMore = statuses.length > limit;
-    const items = hasMore ? statuses.slice(0, limit) : statuses;
+    const items = (hasMore ? statuses.slice(0, limit) : statuses).map(hoistLocationDeep);
     const nextCursor = hasMore && items.length > 0
       ? encodeCursor(items[items.length - 1].createdAt, items[items.length - 1].id)
       : null;
@@ -468,7 +496,7 @@ export class PostFeedService {
     });
 
     const hasMore = statuses.length > limit;
-    const items = hasMore ? statuses.slice(0, limit) : statuses;
+    const items = (hasMore ? statuses.slice(0, limit) : statuses).map(hoistLocationDeep);
     const nextCursor = hasMore && items.length > 0
       ? encodeCursor(items[items.length - 1].createdAt, items[items.length - 1].id)
       : null;
@@ -623,7 +651,7 @@ export class PostFeedService {
       userReactionsMap.set(r.postId, list);
     }
     const bookmarkedIds = new Set(userBookmarks.map((b) => b.postId));
-    return items.map((p) => ({
+    return items.map((p) => hoistLocationDeep({
       ...this.enrichWithLikeStatus(p, userReactionsMap.get(p.id) ?? []),
       currentUserReactions: userReactionsMap.get(p.id) ?? [],
       isBookmarkedByMe: bookmarkedIds.has(p.id),
@@ -765,7 +793,7 @@ export class PostFeedService {
 
     if (!viewerUserId || items.length === 0) {
       return {
-        items: items.map((p) => ({ ...p, currentUserReactions: [] as string[] })),
+        items: items.map((p) => hoistLocationDeep({ ...p, currentUserReactions: [] as string[] })),
         nextCursor,
         hasMore,
       };
@@ -784,7 +812,7 @@ export class PostFeedService {
     }
 
     return {
-      items: items.map((p) => ({
+      items: items.map((p) => hoistLocationDeep({
         ...this.enrichWithLikeStatus(p, userReactionsMap.get(p.id) ?? []),
         currentUserReactions: userReactionsMap.get(p.id) ?? [],
       })),
@@ -831,7 +859,7 @@ export class PostFeedService {
 
     if (!viewerUserId || items.length === 0) {
       return {
-        items: items.map((p) => ({ ...p, currentUserReactions: [] as string[] })),
+        items: items.map((p) => hoistLocationDeep({ ...p, currentUserReactions: [] as string[] })),
         nextCursor,
         hasMore,
       };
@@ -850,7 +878,7 @@ export class PostFeedService {
     }
 
     return {
-      items: items.map((p) => ({
+      items: items.map((p) => hoistLocationDeep({
         ...this.enrichWithLikeStatus(p, communityReactionsMap.get(p.id) ?? []),
         currentUserReactions: communityReactionsMap.get(p.id) ?? [],
       })),
@@ -904,7 +932,7 @@ export class PostFeedService {
     }
 
     return {
-      items: posts.map((p) => ({ ...p, currentUserReactions: bookmarkReactionsMap.get(p.id) ?? [] })),
+      items: posts.map((p) => hoistLocationDeep({ ...p, currentUserReactions: bookmarkReactionsMap.get(p.id) ?? [] })),
       nextCursor,
       hasMore,
     };

@@ -318,3 +318,86 @@ final class DependencyContainerTests: XCTestCase {
         }
     }
 }
+
+/// startup-03 — décision pure du toast de perte + séquencement du hook.
+/// NE JAMAIS tester ce hook en flippant `AuthManager.shared.isAuthenticated`
+/// depuis MeeshyTests : `DependencyContainer.shared` est le singleton RÉEL
+/// branché sur la base App Group de la session de la phase 3.
+extension DependencyContainerTests {
+
+    func test_shouldSurfaceOutboxLossToast_invalidatedWithPendingRows_returnsTrue() {
+        XCTAssertTrue(DependencyContainer.shouldSurfaceOutboxLossToast(sessionWasInvalidated: true, pendingCount: 3))
+    }
+
+    func test_shouldSurfaceOutboxLossToast_voluntaryLogoutWithPendingRows_returnsFalse() {
+        XCTAssertFalse(DependencyContainer.shouldSurfaceOutboxLossToast(sessionWasInvalidated: false, pendingCount: 3),
+                       "un logout volontaire ne signale rien — la perte est assumée (contrat E9/Q3)")
+    }
+
+    func test_shouldSurfaceOutboxLossToast_invalidatedWithNoPendingRows_returnsFalse() {
+        XCTAssertFalse(DependencyContainer.shouldSurfaceOutboxLossToast(sessionWasInvalidated: true, pendingCount: 0))
+    }
+
+    func test_wireOutboxLogoutHook_countsPendingBeforePurging() throws {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()  // Services
+            .deletingLastPathComponent()  // Unit
+            .deletingLastPathComponent()  // MeeshyTests
+            .deletingLastPathComponent()  // ios
+            .appendingPathComponent("Meeshy/Core/DependencyContainer.swift")
+        let source = try String(contentsOf: url, encoding: .utf8)
+        guard let start = source.range(of: "private func wireOutboxLogoutHook()"),
+              let end = source.range(of: "\n    // MARK:", range: start.upperBound..<source.endIndex) else {
+            XCTFail("Could not locate wireOutboxLogoutHook body")
+            return
+        }
+        let body = String(source[start.upperBound..<end.lowerBound])
+        guard let countPos = body.range(of: "pendingOutboxCount()"),
+              let purgePos = body.range(of: "clearAllMessagesForLogout()") else {
+            XCTFail("wireOutboxLogoutHook must read pendingOutboxCount() and call clearAllMessagesForLogout() — one of them is missing")
+            return
+        }
+        XCTAssertTrue(
+            countPos.lowerBound < purgePos.lowerBound,
+            "le compte des lignes en attente doit être lu AVANT la purge — après, il vaut toujours 0 et le toast ne part jamais"
+        )
+    }
+
+    /// stores-05 volet 1 (le fix lui-même = grdb-01, lot 0) — verrou de
+    /// non-régression : feed.clearAllForLogout() doit vivre dans SON PROPRE
+    /// do/catch, jamais imbriqué dans celui de clearAllMessagesForLogout() —
+    /// sinon un échec de la purge messages empêcherait silencieusement la
+    /// purge feed (posts FRIENDS/ONLY de l'utilisateur précédent visibles
+    /// sous le compte suivant). Source-guard volontaire : jamais de flip
+    /// d'AuthManager.shared dans MeeshyTests (le singleton porte la base App
+    /// Group réelle de la session connectée de la phase 3).
+    func test_wireOutboxLogoutHook_feedPurgeIsIndependentOfMessagePurgeFailure() throws {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()  // Services
+            .deletingLastPathComponent()  // Unit
+            .deletingLastPathComponent()  // MeeshyTests
+            .deletingLastPathComponent()  // ios
+            .appendingPathComponent("Meeshy/Core/DependencyContainer.swift")
+        let source = try String(contentsOf: url, encoding: .utf8)
+        guard let start = source.range(of: "private func wireOutboxLogoutHook()"),
+              let end = source.range(of: "\n    // MARK:", range: start.upperBound..<source.endIndex) else {
+            XCTFail("Could not locate wireOutboxLogoutHook body")
+            return
+        }
+        let body = String(source[start.upperBound..<end.lowerBound])
+        guard let messagePurge = body.range(of: "clearAllMessagesForLogout()"),
+              let feedPurge = body.range(of: "feed.clearAllForLogout()") else {
+            XCTFail("wireOutboxLogoutHook must call both clearAllMessagesForLogout() and feed.clearAllForLogout() — one of them is missing")
+            return
+        }
+        XCTAssertTrue(
+            messagePurge.lowerBound < feedPurge.lowerBound,
+            "l'ordre attendu est purge messages puis purge feed"
+        )
+        let between = String(body[messagePurge.upperBound..<feedPurge.lowerBound])
+        XCTAssertTrue(
+            between.contains("} catch"),
+            "le do/catch de la purge messages doit se FERMER avant feed.clearAllForLogout() — les deux purges doivent être indépendantes"
+        )
+    }
+}

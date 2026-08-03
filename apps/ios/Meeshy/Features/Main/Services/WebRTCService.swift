@@ -17,11 +17,16 @@ protocol WebRTCServiceDelegate: AnyObject {
     /// percentage (0–100) — reported to the gateway so the call-summary message
     /// can surface "data spent · network quality" and drive loss alerts.
     func webRTCService(_ service: WebRTCService, didCollectStats stats: CallStats, level: VideoQualityLevel, packetLossPercent: Double)
+    /// C3 — la caméra locale a cessé (ou repris) de délivrer des frames, sur
+    /// interruption de l'`AVCaptureSession`. Seul fait probant : le passage en
+    /// arrière-plan n'éteint PAS la caméra quand un PiP système est actif.
+    func webRTCService(_ service: WebRTCService, didChangeCameraInterruption interrupted: Bool)
 }
 
 extension WebRTCServiceDelegate {
     // Optional by default — only CallManager needs the stats tick.
     func webRTCService(_ service: WebRTCService, didCollectStats stats: CallStats, level: VideoQualityLevel, packetLossPercent: Double) {}
+    func webRTCService(_ service: WebRTCService, didChangeCameraInterruption interrupted: Bool) {}
 }
 
 // MARK: - WebRTC Service
@@ -613,6 +618,13 @@ extension WebRTCService: WebRTCClientDelegate {
         Task { @MainActor [weak self] in
             guard let self else { return }
             self.delegate?.webRTCService(self, didReceiveTranscriptionData: data)
+        }
+    }
+
+    nonisolated func webRTCClient(_ client: any WebRTCClientProviding, didChangeCameraInterruption interrupted: Bool) {
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            self.delegate?.webRTCService(self, didChangeCameraInterruption: interrupted)
         }
     }
 }

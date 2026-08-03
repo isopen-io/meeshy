@@ -4072,6 +4072,23 @@ final class RetryCallSourceGuardTests: XCTestCase {
             "a retryable failure must use the longer settle window so « Réessayer » " +
             "isn't yanked before the user can tap it.")
     }
+
+    func test_endCallInternal_settleDelayReusesCanRetryCall_notADuplicateExpression() throws {
+        let source = try callManagerSource()
+        guard let body = functionBody(of: "func endCallInternal(reason:", in: source) else {
+            XCTFail("endCallInternal not found"); return
+        }
+        // Ancré sur l'ASSIGNATION (pas sur « canRetryCall ? » mono-ligne) :
+        // le reformatage multi-ligne du ternaire par f0091d146 a cassé
+        // l'ancienne forme alors que le comportement était intact.
+        XCTAssertTrue(body.contains("let settleDelay = canRetryCall"),
+            "the settleDelay branch must reuse `canRetryCall` — by this point `callState` " +
+            "is already `.ended(reason: reason)`, so re-deriving " +
+            "`CallRetryPolicy.isRetryable(reason) && lastOutgoingContext != nil` inline is a " +
+            "byte-for-byte duplicate of canRetryCall that can silently drift from it.")
+        XCTAssertFalse(body.contains("CallRetryPolicy.isRetryable(reason) && lastOutgoingContext != nil"),
+            "the inline duplicate of canRetryCall's condition must be gone.")
+    }
 }
 
 // MARK: - Quality Label Mapping (§gateway connection quality ladder)
@@ -5986,7 +6003,12 @@ final class CallManagerPiPRemoteMuteSourceGuardTests: XCTestCase {
         guard let videoCaseRange = source.range(of: "case \"video\":", range: toggledRange.lowerBound..<source.endIndex) else {
             XCTFail("\"video\" case not found in callMediaToggled handler"); return
         }
-        let body = String(source[videoCaseRange.lowerBound...].prefix(500))
+        // Borné sur la fin réelle du `case "video":` plutôt que sur un nombre de
+        // caractères : une fenêtre fixe se casse dès qu'un commentaire ou une
+        // ligne s'ajoute dans le case, et échoue alors sur un code correct.
+        let rest = source[videoCaseRange.lowerBound...]
+        let caseEnd = rest.range(of: "case \"audio\":")?.lowerBound ?? rest.endIndex
+        let body = String(rest[..<caseEnd])
         XCTAssertTrue(
             body.contains("self.isRemoteVideoEnabled = event.enabled"),
             "The video case must still update isRemoteVideoEnabled (drives the in-app pill's SwiftUI placeholder)"

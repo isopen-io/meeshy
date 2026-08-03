@@ -235,6 +235,19 @@ describe('UpdatePostSchema', () => {
     const result = UpdatePostSchema.safeParse({ type: 'REEL' });
     expect(result.success).toBe(true);
   });
+
+  // L'édition de story rattache des médias fraîchement uploadés — même
+  // contrat que CreatePostSchema (borné à 10).
+  it('accepts mediaIds to attach newly uploaded media', () => {
+    const result = UpdatePostSchema.safeParse({ mediaIds: ['media-1', 'media-2'] });
+    expect(result.success).toBe(true);
+  });
+
+  it('rejects mediaIds beyond 10 entries', () => {
+    const mediaIds = Array.from({ length: 11 }, (_, i) => `media-${i}`);
+    const result = UpdatePostSchema.safeParse({ mediaIds });
+    expect(result.success).toBe(false);
+  });
 });
 
 // ─── StoryEffectsSchema ───────────────────────────────────────────────────────

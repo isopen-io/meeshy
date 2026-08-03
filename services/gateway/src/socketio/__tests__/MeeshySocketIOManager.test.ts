@@ -189,7 +189,6 @@ jest.mock('../handlers/SocialEventsHandler', () => ({
 
 jest.mock('../handlers/LocationHandler', () => ({
   LocationHandler: jest.fn().mockImplementation(() => ({
-    handleLocationShare: jest.fn().mockResolvedValue(undefined),
     handleLiveLocationStart: jest.fn().mockResolvedValue(undefined),
     handleLiveLocationUpdate: jest.fn().mockResolvedValue(undefined),
     handleLiveLocationStop: jest.fn().mockResolvedValue(undefined),
@@ -930,7 +929,6 @@ describe('MeeshySocketIOManager', () => {
       expect(registeredEvents).toContain(CLIENT_EVENTS.HEARTBEAT);
       expect(registeredEvents).toContain(CLIENT_EVENTS.REACTION_ADD);
       expect(registeredEvents).toContain(CLIENT_EVENTS.REACTION_REMOVE);
-      expect(registeredEvents).toContain(CLIENT_EVENTS.LOCATION_SHARE);
       expect(registeredEvents).toContain('disconnect');
     });
 
@@ -2239,6 +2237,22 @@ describe('MeeshySocketIOManager', () => {
       prisma.participant.findMany.mockRejectedValue(new Error('DB fail'));
       await expect((manager as any)._emitPresenceSnapshot(socket, 'user-err', false)).resolves.not.toThrow();
     });
+
+    it('still replays the offline delivery queue when the presence-snapshot build throws (delivery must not depend on the cosmetic snapshot)', async () => {
+      // A transient Mongo hiccup on the presence-snapshot contacts query must NOT
+      // skip the offline-queue replay: _drainPendingMessages is the sole reconnect
+      // trigger that redelivers queued messages + their delivered receipts. Gating
+      // it behind the snapshot build stranded them until the next clean reconnect.
+      const socket = makeSocket('sock-ps-drain-onerror');
+      prisma.participant.findMany.mockRejectedValue(new Error('transient Mongo hiccup'));
+      const drainSpy = jest.spyOn(manager as any, '_drainPendingMessages').mockResolvedValue(undefined);
+      const unreadSpy = jest.spyOn(manager as any, '_emitUnreadCountsSnapshot').mockResolvedValue(undefined);
+
+      await (manager as any)._emitPresenceSnapshot(socket, 'user-drain-onerror', false);
+
+      expect(drainSpy).toHaveBeenCalledWith('user-drain-onerror', false);
+      expect(unreadSpy).toHaveBeenCalledWith(socket, 'user-drain-onerror');
+    });
   });
 
   // -------------------------------------------------------------------------
@@ -3215,13 +3229,6 @@ describe('MeeshySocketIOManager', () => {
   });
 
   describe('LOCATION event handlers', () => {
-    it('LOCATION_SHARE invokes locationHandler.handleLocationShare', async () => {
-      const socket = makeSocket('sock-ls1');
-      triggerConnection(socket);
-      const cb = jest.fn();
-      await socket._handlers[CLIENT_EVENTS.LOCATION_SHARE]({ lat: 1, lon: 2 }, cb);
-    });
-
     it('LOCATION_LIVE_START invokes locationHandler.handleLiveLocationStart', async () => {
       const socket = makeSocket('sock-lls1');
       triggerConnection(socket);

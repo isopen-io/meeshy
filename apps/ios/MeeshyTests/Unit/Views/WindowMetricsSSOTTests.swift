@@ -39,10 +39,7 @@ final class WindowMetricsSSOTTests: XCTestCase {
     /// name the banned APIs to explain *why* they are banned, and a guard that
     /// trips on its own rationale is a guard nobody keeps.
     private func codeLines(_ source: String) -> String {
-        source
-            .split(separator: "\n", omittingEmptySubsequences: false)
-            .filter { !$0.trimmingCharacters(in: .whitespaces).hasPrefix("//") }
-            .joined(separator: "\n")
+        AppSourceGuard.stripComments(source)
     }
 
     private static let deviceLayout = "Meeshy/Core/DeviceLayout.swift"

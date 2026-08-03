@@ -430,6 +430,48 @@ describe('POST /posts — invalid body (EXCEPT visibility without userIds)', () 
   });
 });
 
+describe('POST /posts — geo discoverability', () => {
+  it('forwards a valid discoverabilityPrecision to PostService.createPost alongside location', async () => {
+    const app = await buildApp();
+    const res = await app.inject({
+      method: 'POST', url: '/posts',
+      payload: {
+        type: 'POST',
+        content: 'Hello from Paris',
+        location: { latitude: 48.8584, longitude: 2.2945 },
+        discoverabilityPrecision: 'CITY',
+      },
+    });
+    expect(res.statusCode).toBe(201);
+    expect(mockCreatePost).toHaveBeenCalledWith(
+      expect.objectContaining({ discoverabilityPrecision: 'CITY' }),
+      USER_ID,
+    );
+    await app.close();
+  });
+
+  it('returns 400 VALIDATION_ERROR when discoverabilityPrecision is not one of the known tiers', async () => {
+    // Delta, jamais absolu : ce fichier ne réinitialise pas les mocks entre
+    // tests (pas de beforeEach clearAllMocks), donc mockCreatePost porte déjà
+    // les appels des tests précédents.
+    const callsBefore = mockCreatePost.mock.calls.length;
+    const app = await buildApp();
+    const res = await app.inject({
+      method: 'POST', url: '/posts',
+      payload: {
+        type: 'POST',
+        content: 'Hello',
+        location: { latitude: 48.8584, longitude: 2.2945 },
+        discoverabilityPrecision: 'BOGUS',
+      },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().code).toBe('VALIDATION_ERROR');
+    expect(mockCreatePost.mock.calls.length).toBe(callsBefore);
+    await app.close();
+  });
+});
+
 describe('PUT /posts/:postId — 422 business rule violation', () => {
   it('returns 400 with INVALID_POST_UPDATE code when updatePost throws 422', async () => {
     mockUpdatePost.mockRejectedValueOnce(Object.assign(new Error('Cannot change type'), { statusCode: 422 }));
@@ -453,6 +495,42 @@ describe('PUT /posts/:postId — STORY type broadcasts story updated', () => {
       payload: { content: 'Updated story content' },
     });
     expect(res.statusCode).toBe(200);
+    await app.close();
+  });
+
+  // Directive 2026-07-29 : une édition de CONTENU (content / storyEffects /
+  // mediaIds) remet l'engagement à zéro côté service — le broadcast doit le
+  // dire aux clients (engagementReset: true) pour qu'ils repassent la story
+  // en « non vue ». Une mise à jour de visibilité seule ne le fait PAS.
+  it('flags engagementReset: true on a content edit broadcast', async () => {
+    mockUpdatePost.mockResolvedValueOnce({ id: POST_ID, content: 'Updated story', type: 'STORY' });
+    const app = await buildApp({ withSocialEvents: true });
+    await app.inject({
+      method: 'PUT', url: `/posts/${POST_ID}`,
+      payload: { content: 'Updated story content' },
+    });
+    const se = (app as any).socialEvents;
+    expect(se.broadcastStoryUpdated).toHaveBeenCalledWith(
+      expect.objectContaining({ id: POST_ID }),
+      USER_ID,
+      { engagementReset: true },
+    );
+    await app.close();
+  });
+
+  it('flags engagementReset: false on a visibility-only update broadcast', async () => {
+    mockUpdatePost.mockResolvedValueOnce({ id: POST_ID, type: 'STORY', visibility: 'FRIENDS' });
+    const app = await buildApp({ withSocialEvents: true });
+    await app.inject({
+      method: 'PUT', url: `/posts/${POST_ID}`,
+      payload: { visibility: 'FRIENDS' },
+    });
+    const se = (app as any).socialEvents;
+    expect(se.broadcastStoryUpdated).toHaveBeenCalledWith(
+      expect.objectContaining({ id: POST_ID }),
+      USER_ID,
+      { engagementReset: false },
+    );
     await app.close();
   });
 });

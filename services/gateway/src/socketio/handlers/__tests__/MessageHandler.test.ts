@@ -564,6 +564,40 @@ describe('MessageHandler', () => {
       expect(mockValidateMessageLength).not.toHaveBeenCalled();
     });
 
+    // Parity with handleMessageSend (text path): a view-once / blurred /
+    // expiring photo is the canonical use case for message effects, and this
+    // WebSocket path is the PRIMARY attachment-send surface. The effect fields
+    // must reach messagingService.handleMessage so MessageProcessor.saveMessage
+    // can recompose effectFlags and persist the media as ephemeral — otherwise
+    // the "view-once" photo is stored re-openable forever.
+    it('forwards message-effect fields (view-once / blurred / expiring) to messagingService', async () => {
+      const expiresAt = new Date(Date.now() + 86_400_000).toISOString();
+      mockValidateSocketEvent.mockReturnValue({
+        success: true,
+        data: {
+          ...validAttachData(),
+          isViewOnce: true,
+          isBlurred: true,
+          expiresAt,
+          effectFlags: 3,
+          maxViewOnceCount: 1,
+        },
+      });
+
+      await handler.handleMessageSendWithAttachments(socket, validAttachData(), callback);
+
+      expect(deps.messagingService.handleMessage).toHaveBeenCalledWith(
+        expect.objectContaining({
+          isViewOnce: true,
+          isBlurred: true,
+          expiresAt: expect.any(Date),
+          effectFlags: 3,
+          maxViewOnceCount: 1,
+        }),
+        PARTICIPANT_ID,
+      );
+    });
+
     it('returns USER_BLOCKED error for blocked DM', async () => {
       (deps.prisma.conversation.findUnique as jest.Mock<any>).mockResolvedValue({
         type: 'direct',
@@ -704,6 +738,41 @@ describe('MessageHandler', () => {
       }
     });
 
+    it('hisse metadata.location dans le payload conversation:updated — un message position-seule a un content vide, la ligne d\'aperçu doit pouvoir composer son libellé', async () => {
+      const msg = makeMessage({
+        content: '',
+        metadata: { location: { latitude: 48.858, longitude: 2.294, name: 'Tour Eiffel', address: null, category: null } },
+      });
+      await handler.broadcastNewMessage(msg as any, VALID_CONV_ID, socket);
+
+      const updatedPayloads = (deps.io.to as jest.Mock).mock.results
+        .flatMap((r: any) => (r.value?.emit?.mock?.calls ?? []) as [string, Record<string, unknown>][])
+        .filter((c) => c[0] === 'conversation:updated')
+        .map((c) => c[1]);
+
+      expect(updatedPayloads.length).toBeGreaterThan(0);
+      for (const payload of updatedPayloads) {
+        expect(payload.location).toEqual(
+          expect.objectContaining({ latitude: 48.858, longitude: 2.294, name: 'Tour Eiffel' })
+        );
+      }
+    });
+
+    it('sans position, le payload conversation:updated ne porte AUCUNE clé location', async () => {
+      const msg = makeMessage();
+      await handler.broadcastNewMessage(msg as any, VALID_CONV_ID, socket);
+
+      const updatedPayloads = (deps.io.to as jest.Mock).mock.results
+        .flatMap((r: any) => (r.value?.emit?.mock?.calls ?? []) as [string, Record<string, unknown>][])
+        .filter((c) => c[0] === 'conversation:updated')
+        .map((c) => c[1]);
+
+      expect(updatedPayloads.length).toBeGreaterThan(0);
+      for (const payload of updatedPayloads) {
+        expect('location' in payload).toBe(false);
+      }
+    });
+
     it('uses senderSocket.broadcast.to for anonymous user (no userId)', async () => {
       const msg = makeMessage({ sender: { id: PARTICIPANT_ID, userId: null, displayName: 'Anon', type: 'anonymous' } });
       await handler.broadcastNewMessage(msg as any, VALID_CONV_ID, socket);
@@ -730,6 +799,39 @@ describe('MessageHandler', () => {
       expect(deps.prisma.message.findUnique).toHaveBeenCalledWith(
         expect.objectContaining({ where: { id: 'orig-msg' } })
       );
+    });
+
+    it('Lot 2 : forwardedFrom geolocalise restitue `location` sur le payload message:new', async () => {
+      const GEO = { latitude: 48.8566, longitude: 2.3522, name: 'Tour Eiffel', address: null, category: null };
+      (deps.prisma.message.findUnique as jest.Mock<any>).mockImplementation(({ where }: any) => {
+        if (where.id === 'orig-msg') {
+          return Promise.resolve({ id: 'orig-msg', content: 'original', sender: null, attachments: [], metadata: { location: GEO } });
+        }
+        return Promise.resolve({ translations: [] });
+      });
+      const msg = makeMessage({ forwardedFromId: 'orig-msg', translations: null });
+
+      await handler.broadcastNewMessage(msg as any, VALID_CONV_ID, socket);
+
+      const toResult: any = (deps.io.to as jest.Mock).mock.results[0]?.value;
+      const payload = (toResult.emit.mock.calls as [string, { forwardedFrom?: { location?: unknown } }][])
+        .find((c) => c[0] === 'message:new')?.[1];
+      expect(payload?.forwardedFrom?.location).toMatchObject({ latitude: 48.8566, name: 'Tour Eiffel' });
+    });
+
+    it('Lot 2 : replyTo geolocalise restitue `location` sur le payload message:new (chemin socket nominal)', async () => {
+      const GEO = { latitude: 40.7128, longitude: -74.006, name: 'Times Square', address: null, category: null };
+      const msg = makeMessage({
+        replyToId: 'reply-1',
+        replyTo: { id: 'reply-1', content: 'quoted', metadata: { location: GEO }, sender: null },
+      });
+
+      await handler.broadcastNewMessage(msg as any, VALID_CONV_ID, socket);
+
+      const toResult: any = (deps.io.to as jest.Mock).mock.results[0]?.value;
+      const payload = (toResult.emit.mock.calls as [string, { replyTo?: { location?: unknown } }][])
+        .find((c) => c[0] === 'message:new')?.[1];
+      expect(payload?.replyTo?.location).toMatchObject({ name: 'Times Square' });
     });
 
     it('attaches snapshot postReplyTo when storyReplyToId present and snapshot found', async () => {
@@ -824,6 +926,52 @@ describe('MessageHandler', () => {
       mockNormalizeConversationId.mockRejectedValue(new Error('DB down'));
 
       await expect(handler.broadcastNewMessage(makeMessage() as any, VALID_CONV_ID)).resolves.toBeUndefined();
+    });
+
+    // ── Delivery must survive best-effort enrichment failures ────────────────
+    // The message is persisted and ACKed as "sent" BEFORE broadcastNewMessage
+    // runs. If a non-essential enrichment query (mention resolution, forwarded
+    // message lookup, story-reply post lookup) rejects on a transient DB error
+    // and aborts the whole broadcast, the message is delivered to NOBODY — no
+    // live `message:new`, no offline enqueue — with no retry, because the
+    // sender already saw a success ACK. Silent data loss. Enrichment is
+    // best-effort (cf. `_getMessageTranslations().catch(() => [])`,
+    // `_resolveMentionUserIds` swallowing failures) and must never gate delivery.
+    const messageNewEmits = () => {
+      const toResult: any = (deps.io.to as jest.Mock).mock.results[0]?.value;
+      if (!toResult) return [];
+      return (toResult.emit.mock.calls as [string, unknown][]).filter((c) => c[0] === 'message:new');
+    };
+
+    it('still emits message:new when mention resolution rejects (best-effort enrichment)', async () => {
+      mockResolveMentionedUsers.mockRejectedValue(new Error('mention DB blip'));
+      const msg = makeMessage({ content: '@bob hello' });
+
+      await expect(handler.broadcastNewMessage(msg as any, VALID_CONV_ID, socket)).resolves.toBeUndefined();
+
+      expect(messageNewEmits().length).toBeGreaterThan(0);
+    });
+
+    it('still emits message:new when the forwarded-message lookup rejects (best-effort enrichment)', async () => {
+      (deps.prisma.message.findUnique as jest.Mock<any>).mockImplementation(({ where }: any) => {
+        if (where.id === 'orig-msg') return Promise.reject(new Error('forward lookup DB blip'));
+        return Promise.resolve({ translations: [] });
+      });
+      const msg = makeMessage({ forwardedFromId: 'orig-msg' });
+
+      await expect(handler.broadcastNewMessage(msg as any, VALID_CONV_ID, socket)).resolves.toBeUndefined();
+
+      expect(messageNewEmits().length).toBeGreaterThan(0);
+    });
+
+    it('still emits message:new when the story-reply post lookup rejects (best-effort enrichment)', async () => {
+      mockPostReplyToFromMetadata.mockReturnValue(null);
+      (deps.prisma.post.findUnique as jest.Mock<any>).mockRejectedValue(new Error('post lookup DB blip'));
+      const msg = makeMessage({ storyReplyToId: 'story-1' });
+
+      await expect(handler.broadcastNewMessage(msg as any, VALID_CONV_ID, socket)).resolves.toBeUndefined();
+
+      expect(messageNewEmits().length).toBeGreaterThan(0);
     });
 
     it('normalizes non-ObjectId conversationId', async () => {

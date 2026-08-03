@@ -18,6 +18,13 @@ struct FriendRequestListView: View {
     private var isDark: Bool { colorScheme == .dark }
     private var theme: ThemeManager { ThemeManager.shared }
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.isPresented) private var isPresented
+    @Environment(\.meeshyPanelDismiss) private var panelDismiss
+    /// Retour operant dans les trois contextes de presentation : pile iPhone,
+    /// panneau droit iPad (ni pile ni modale — d'ou l'inertie historique), sheet.
+    private var back: PanelBackAction {
+        PanelBackAction(isPresented: isPresented, dismiss: dismiss, panelDismiss: panelDismiss)
+    }
     @EnvironmentObject private var statusViewModel: StatusViewModel
 
     var body: some View {
@@ -29,22 +36,17 @@ struct FriendRequestListView: View {
         .task {
             await viewModel.loadReceived()
             // Screen consulted → friend-request notifications should no
-            // longer read as unread. Fire-and-forget, logged rather than
-            // silently swallowed: a failure here only means a stale badge
-            // count, never a data-loss risk, but it's still worth a trace.
+            // longer read as unread. Passe par le manager (et non le service) :
+            // lui seul écrit aussi le cache durable et publie vers les vues —
+            // l'appel direct laissait `isRead:false` dans le store GRDB, donc
+            // les lignes repartaient non lues à la réouverture de la cloche.
             Task {
-                do {
-                    try await NotificationService.shared.markRead(types: [
-                        "friend_request", "contact_request",
-                        "friend_accepted", "contact_accepted"
-                    ])
-                } catch {
-                    Logger(subsystem: "me.meeshy.app", category: "friend-requests")
-                        .error("markRead(friend_request types) failed: \(error.localizedDescription, privacy: .public)")
-                }
+                await NotificationToastManager.shared.markRead(types: [
+                    "friend_request", "contact_request",
+                    "friend_accepted", "contact_accepted"
+                ])
             }
         }
-        .withStatusBubble()
     }
 
     // MARK: - Header
@@ -52,7 +54,7 @@ struct FriendRequestListView: View {
     private var header: some View {
         HStack {
             Button {
-                dismiss()
+                back()
             } label: {
                 Image(systemName: "chevron.backward")
                     .font(.callout.weight(.semibold))
@@ -125,7 +127,7 @@ struct FriendRequestListView: View {
         AdaptiveContentUnavailableView(
             String(localized: "friends.requests.empty.title", defaultValue: "Aucune demande", bundle: .main),
             systemImage: "person.2.slash",
-            description: Text(String(localized: "friends.requests.empty.subtitle", defaultValue: "Les demandes d'amis apparaitront ici", bundle: .main))
+            description: Text(String(localized: "friends.requests.empty.subtitle", defaultValue: "Les demandes d'amis apparaîtront ici", bundle: .main))
         )
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }

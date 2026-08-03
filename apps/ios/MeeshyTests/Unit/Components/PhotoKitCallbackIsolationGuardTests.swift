@@ -86,6 +86,46 @@ final class PhotoKitCallbackIsolationGuardTests: XCTestCase {
         )
     }
 
+    /// La bande d'échantillons rendait des vignettes DÉFINITIVEMENT floues :
+    /// `deliveryMode = .fastFormat` livre un rendu dégradé que PhotoKit ne
+    /// remplace JAMAIS par une meilleure version (contrairement à
+    /// `.opportunistic`, qui rappelle avec la version nette).
+    ///
+    /// L'invariant que `.fastFormat` protégeait ici n'est pas la vitesse mais le
+    /// callback UNIQUE : `withCheckedContinuation` plante si on le reprend deux
+    /// fois. Or `.highQualityFormat` est mono-callback lui aussi — c'est déjà ce
+    /// que font `preview(for:)` et `resolveImage(_:)` dans le même fichier. Seul
+    /// `.opportunistic` rappelle plusieurs fois : c'est LUI qui est interdit
+    /// ici, pas la qualité. La sûreté de la continuation ne coûte donc rien.
+    ///
+    /// Test de COMPORTEMENT sur l'objet réellement construit, pas un comptage de
+    /// mots dans le source : une garde textuelle ne prouverait pas que ces
+    /// options sont celles que la requête reçoit.
+    func test_recentMediaStrip_thumbnailOptions_askFullQualityAndStaySingleCallback() {
+        let options = RecentMediaStripModel.thumbnailRequestOptions()
+
+        XCTAssertEqual(
+            options.deliveryMode, .highQualityFormat,
+            "`.fastFormat` rend une vignette dégradée définitive — la bande d'échantillons reste floue pour toujours"
+        )
+        XCTAssertNotEqual(
+            options.deliveryMode, .opportunistic,
+            "`.opportunistic` rappelle plusieurs fois et reprendrait deux fois la continuation"
+        )
+        XCTAssertEqual(
+            options.resizeMode, .exact,
+            "`.fast` renvoie une taille seulement « proche de » la cible, ce qui rajoute un rééchantillonnage par-dessus"
+        )
+        XCTAssertTrue(
+            options.isNetworkAccessAllowed,
+            "Une photo iCloud non téléchargée localement doit pouvoir descendre, sinon la cellule reste vide"
+        )
+        XCTAssertFalse(
+            options.isSynchronous,
+            "La requête doit rester asynchrone : synchrone et pleine qualité bloquerait le main pendant le décodage"
+        )
+    }
+
     /// Le correctif jumeau déjà en place côté transcription : s'il régresse, le
     /// même crash revient sur la queue TCC.
     func test_callTranscription_requestPermission_keepsItsSendableCompletion() throws {

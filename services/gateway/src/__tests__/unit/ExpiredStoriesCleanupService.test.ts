@@ -60,6 +60,19 @@ function makeFakePrisma(opts: { storyIds: string[]; repostIds: string[]; comment
         return { count: 0 };
       }),
     },
+    // Le hard-delete purge aussi les usages de sons (le Sound, lui, survit).
+    // Sans ces doubles, l'accès à `prisma.soundUsage` lève et le try/catch de
+    // la passe avale l'erreur : postMedia.deleteMany n'est jamais atteint.
+    soundUsage: {
+      findMany: jest.fn(async () => [] as { soundId: string }[]),
+      deleteMany: jest.fn(async () => {
+        calls.push('soundUsage.deleteMany');
+        return { count: 0 };
+      }),
+    },
+    sound: {
+      update: jest.fn(async () => ({})),
+    },
     postComment: {
       findMany: jest.fn(async (args: any) => {
         return state.comments
@@ -103,6 +116,13 @@ function makeSimplePrisma() {
     },
     postMedia: {
       deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }),
+    },
+    soundUsage: {
+      findMany: jest.fn<any>().mockResolvedValue([]),
+      deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }),
+    },
+    sound: {
+      update: jest.fn<any>().mockResolvedValue({}),
     },
   };
 }

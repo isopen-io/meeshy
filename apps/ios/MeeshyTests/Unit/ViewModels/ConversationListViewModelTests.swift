@@ -1517,7 +1517,7 @@ final class ConversationListViewModelTests: XCTestCase {
         ])
 
         let newer = Date(timeIntervalSince1970: 9_000)
-        sut.bumpToTop(conversationId: "third", newLastMessageAt: newer)
+        sut.bumpToTop(conversationId: "third", facet: .bumped(at: newer))
 
         XCTAssertEqual(sut.conversations.first?.id, "third")
         XCTAssertEqual(sut.conversations.first?.lastMessageAt.timeIntervalSinceReferenceDate ?? 0,
@@ -1533,7 +1533,7 @@ final class ConversationListViewModelTests: XCTestCase {
         })
         let originalSnapshot = sut.conversations.map(\.id)
 
-        sut.bumpToTop(conversationId: "ghost", newLastMessageAt: Date())
+        sut.bumpToTop(conversationId: "ghost", facet: .bumped(at: Date()))
 
         XCTAssertEqual(sut.conversations.map(\.id), originalSnapshot,
                        "bumpToTop on unknown id must leave the list untouched")
@@ -1572,7 +1572,7 @@ final class ConversationListViewModelTests: XCTestCase {
         conv.lastMessageOriginalLanguage = "fr"
         sut.setConversations([conv])
 
-        sut.bumpToTop(conversationId: "conv1", newLastMessageAt: Date(timeIntervalSince1970: 9_000))
+        sut.bumpToTop(conversationId: "conv1", facet: .bumped(at: Date(timeIntervalSince1970: 9_000)))
 
         let bumped = sut.conversations[0]
         XCTAssertNil(bumped.lastMessageSenderName, "stale author must not survive the bump")
@@ -1584,6 +1584,30 @@ final class ConversationListViewModelTests: XCTestCase {
         XCTAssertNil(bumped.lastMessagePreview, "stale preview text must not survive the bump — an unattributed old text is worse than a blank row")
         XCTAssertNil(bumped.lastMessageTranslations, "stale translations must not survive the bump — resolvedLastMessagePreview would otherwise surface a stale translated string even with lastMessagePreview cleared")
         XCTAssertNil(bumped.lastMessageOriginalLanguage)
+    }
+
+    /// `conversation:updated` transporte l'identifiant et le texte du nouveau
+    /// dernier message. Ils étaient posés sur la ligne PUIS effacés une ligne
+    /// plus bas par la remise à neutre du bump : la ligne restait muette
+    /// jusqu'à la synchro suivante alors que le gateway venait d'envoyer le
+    /// texte. Ce que l'appelant SAIT doit traverser le bump.
+    func test_bumpToTop_facetCarryingPreview_survivesTheReset() async {
+        let (sut, _, _, _, _, _, _) = makeSUT()
+        var conv = makeConversation(id: "conv1", lastMessageAt: Date(timeIntervalSince1970: 1_000))
+        conv.lastMessageSenderName = "Alice"
+        conv.lastMessageIsViewOnce = true
+        sut.setConversations([conv])
+
+        sut.bumpToTop(
+            conversationId: "conv1",
+            facet: .bumped(at: Date(timeIntervalSince1970: 9_000), id: "msg-9", preview: "Nouveau message")
+        )
+
+        let bumped = sut.conversations[0]
+        XCTAssertEqual(bumped.lastMessageId, "msg-9")
+        XCTAssertEqual(bumped.lastMessagePreview, "Nouveau message")
+        XCTAssertFalse(bumped.lastMessageIsViewOnce, "les champs NON portés par la facette restent remis à neutre")
+        XCTAssertNil(bumped.lastMessageSenderName)
     }
 
     // MARK: - conversation:updated socket event — graft du titre
@@ -1625,6 +1649,44 @@ final class ConversationListViewModelTests: XCTestCase {
 
         XCTAssertEqual(sut.conversations.first?.title, "Nouveau nom",
                        "Le rename d'un groupe doit continuer de se propager via l'event socket")
+    }
+
+    // MARK: - conversation:updated : position du dernier message
+
+    func test_conversationUpdatedEvent_bump_carriesLocationToTheRow() async throws {
+        let messageSocket = MockMessageSocket()
+        let (sut, _, _, _, _, _, _) = makeSUT(messageSocket: messageSocket)
+        sut.setConversations([
+            makeConversation(id: "loc1", lastMessageAt: Date(timeIntervalSince1970: 5_000))
+        ])
+
+        let event = makeConversationUpdatedEvent(
+            conversationId: "loc1", lastMessageAt: Date(timeIntervalSince1970: 9_000),
+            lastMessageId: "m-loc", locationName: "Tour Eiffel")
+        messageSocket.conversationUpdated.send(event)
+
+        try await Task.sleep(nanoseconds: 80_000_000)
+
+        XCTAssertEqual(sut.conversations.first?.lastMessageLocation?.name, "Tour Eiffel",
+                       "Un message position-seule a un content vide : la ligne doit recevoir la position pour composer son libellé")
+    }
+
+    func test_conversationUpdatedEvent_bump_withoutLocation_clearsThePreviousPin() async throws {
+        let messageSocket = MockMessageSocket()
+        let (sut, _, _, _, _, _, _) = makeSUT(messageSocket: messageSocket)
+        var conv = makeConversation(id: "loc2", lastMessageAt: Date(timeIntervalSince1970: 5_000))
+        conv.lastMessageLocation = SharedPlace(latitude: 1, longitude: 2, name: "Ancien lieu")
+        sut.setConversations([conv])
+
+        let event = makeConversationUpdatedEvent(
+            conversationId: "loc2", lastMessageAt: Date(timeIntervalSince1970: 9_000),
+            lastMessageId: "m-txt")
+        messageSocket.conversationUpdated.send(event)
+
+        try await Task.sleep(nanoseconds: 80_000_000)
+
+        XCTAssertNil(sut.conversations.first?.lastMessageLocation,
+                     "Un texte qui remplace la position doit EFFACER la pastille du message précédent — c'est l'atomicité de la facette")
     }
 
     // MARK: - conversation:updated socket event with lastMessageAt
@@ -2854,6 +2916,37 @@ final class ConversationListViewModelTests: XCTestCase {
                       "A mutation applied to the store must reflect into the list via listPublisher")
     }
 
+    // MARK: - mergeUserStateFromStore: persists on real change (stores-06)
+
+    func test_storeUserStateChange_mergedIntoList_schedulesPersist() async throws {
+        let store = Self.makeTestStore()
+        let (sut, _, _, _, _, _, _) = makeSUT(store: store)
+        sut.setConversations([makeConversation(id: "000000000000000000000001", isPinned: false)])
+        await sut.storeHydrationTask?.value
+        sut.persistCallCount = 0
+
+        try await store.apply(.setPinned(true), for: "000000000000000000000001")
+        try? await Task.sleep(nanoseconds: 300_000_000)
+
+        XCTAssertEqual(sut.persistCallCount, 1,
+                       "un changement réel de userState mergé depuis le store doit programmer un persist")
+    }
+
+    func test_storeUserStateEcho_unchangedState_doesNotPersist() async throws {
+        let store = Self.makeTestStore()
+        let (sut, _, _, _, _, _, _) = makeSUT(store: store)
+        sut.setConversations([makeConversation(id: "000000000000000000000001", isPinned: false)])
+        await sut.storeHydrationTask?.value
+        sut.persistCallCount = 0
+
+        let unchanged = sut.conversations.first!
+        await store.hydrateMetadata([unchanged])
+        try? await Task.sleep(nanoseconds: 300_000_000)
+
+        XCTAssertEqual(sut.persistCallCount, 0,
+                       "un écho de snapshot inchangé ne doit pas programmer de persist (guard changed)")
+    }
+
     // MARK: - UserCategoryStore observation (increment 4)
 
     func test_loadCategories_seedsCategoryStore_andReflectsIntoUserCategories() async {
@@ -2973,7 +3066,9 @@ private func makeConversationUpdatedEvent(
     lastMessageAt: Date?,
     title: String? = nil,
     avatar: String? = nil,
-    includeUpdatedBy: Bool = true
+    includeUpdatedBy: Bool = true,
+    lastMessageId: String? = nil,
+    locationName: String? = nil
 ) -> ConversationUpdatedEvent {
     let isoFormatter = ISO8601DateFormatter()
     isoFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
@@ -2986,6 +3081,10 @@ private func makeConversationUpdatedEvent(
     }
     if let title { json["title"] = title }
     if let avatar { json["avatar"] = avatar }
+    if let lastMessageId { json["lastMessageId"] = lastMessageId }
+    if let locationName {
+        json["location"] = ["latitude": 48.858, "longitude": 2.294, "name": locationName]
+    }
     if let lastMessageAt {
         json["lastMessageAt"] = isoFormatter.string(from: lastMessageAt)
     }

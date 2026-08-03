@@ -104,6 +104,8 @@ struct ReelFeedCard: View, Equatable {
     // from the reposted reel so the card shows the original content, not blank.
     private var media: FeedMedia? { post.primaryReelDisplayMedia }
     private var accentHex: String { post.authorColor }
+    /// Lieu du réel ouvert plein écran (tap sur le sticker de position).
+    @State private var reelCardFullscreenPlace: BubbleFullscreenPlace?
 
     /// Non-nil when this card displays a REPUBLISHED reel: the outer post has no
     /// media (content sourced from the reposted reel). Drives author attribution
@@ -150,6 +152,16 @@ struct ReelFeedCard: View, Equatable {
         .reportReelFrame(id: post.id, kind: kind)
         .accessibilityElement(children: .contain)
         .accessibilityLabel(String(localized: "feed.reel.card.a11y", defaultValue: "Réel de \(displayAuthor)", bundle: .main))
+        .fullScreenCover(item: $reelCardFullscreenPlace) { item in
+            LocationFullscreenView(
+                latitude: item.place.latitude,
+                longitude: item.place.longitude,
+                placeName: item.place.name,
+                address: item.place.address,
+                accentColor: accentHex,
+                senderName: displayAuthor
+            )
+        }
     }
 
     // Largeur de contenu du feed (le GeometryReader donne la vraie ; estimation
@@ -240,6 +252,14 @@ struct ReelFeedCard: View, Equatable {
                     .foregroundColor(.white)
                     .lineLimit(2)
                     .shadow(color: .black.opacity(0.4), radius: 2, y: 1)
+            }
+            // Indicateur de position type sticker (constat user 2026-07-30) —
+            // cliquable, il gagne sur le tap-média de la carte (Button >
+            // onTapGesture). Même pill que story/feed/player.
+            if let place = post.location {
+                FeedPostLocationSticker(place: place) {
+                    reelCardFullscreenPlace = BubbleFullscreenPlace(place: place)
+                }
             }
             actionsRow
         }

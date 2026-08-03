@@ -77,6 +77,19 @@ public nonisolated enum StoryVolumeResolver {
         isDucking ? clamp(volume * StoryVolume.duckingFactor) : volume
     }
 
+    /// `true` quand l'atténuation s'applique à CE clip.
+    ///
+    /// Le contexte de la slide ne suffit pas : l'auteur peut la couper clip par
+    /// clip (`StoryMediaObject.isDuckingDisabled`). Un dialogue filmé est le cas
+    /// qui l'exige — c'est la musique qui doit passer dessous, pas la voix.
+    ///
+    /// `nil` vaut « atténuation active » : aucune story publiée ne porte le
+    /// champ, et lire son absence comme une désactivation annulerait le
+    /// bénéfice rétroactif que le ducking tire d'être un simple multiplicateur.
+    public static func isDucking(slideDucks: Bool, isDuckingDisabled: Bool?) -> Bool {
+        slideDucks && !(isDuckingDisabled ?? false)
+    }
+
     private static func clamp(_ v: Float) -> Float {
         min(StoryVolume.maxGain, max(0, v))
     }

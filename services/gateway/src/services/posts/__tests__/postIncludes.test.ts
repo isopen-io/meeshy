@@ -143,6 +143,14 @@ describe('posts/postIncludes — canonical shared selects', () => {
       );
     });
 
+    it('selects metadata so a geotagged comment keeps its location in the embedded preview', () => {
+      // Sans `metadata` ici, un commentaire portant `metadata.location` montre sa
+      // position dans la liste complète (GET .../comments) mais PAS dans l'aperçu
+      // des 3 commentaires embarqué sur le post lui-même — la position "disparaît"
+      // selon la surface consultée.
+      expect(commentsPreviewInclude.select.metadata).toBe(true);
+    });
+
     it('embeds the comment media preview so a comment attachment survives reload', () => {
       // The comments-with-media bug: a comment attachment (image/video/audio,
       // incl. its transcription + per-language TTS variants) showed live (via
@@ -173,6 +181,13 @@ describe('posts/postIncludes — canonical shared selects', () => {
       expect(repostOfInclude.select.media).toBe(mediaInclude);
     });
 
+    it('selects metadata so a geotagged original keeps its location on the repost', () => {
+      // Sans `metadata` ici, `hoistLocationDeep` n'a rien à hisser sur
+      // `repostOf` : le repost perd la position de l'original (lot 2,
+      // clos 2026-07-30). Même porte que `commentsPreviewInclude.metadata`.
+      expect(repostOfInclude.select.metadata).toBe(true);
+    });
+
     it('exposes the full set of repost preview fields', () => {
       expect(Object.keys(repostOfInclude.select).sort()).toEqual(
         [
@@ -190,6 +205,7 @@ describe('posts/postIncludes — canonical shared selects', () => {
           'createdAt',
           'likeCount',
           'commentCount',
+          'metadata',
         ].sort(),
       );
     });

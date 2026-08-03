@@ -188,7 +188,7 @@ public struct CodeViewerView: View {
                 HStack(spacing: 4) {
                     Image(systemName: "ellipsis")
                         .font(.system(size: 8))
-                    Text("\(totalLines - 10) lignes de plus")
+                    Text(String(localized: "media.code.more_lines", defaultValue: "\(totalLines - 10) lignes de plus", bundle: .module))
                         .font(.system(size: 9, weight: .medium))
                 }
                 .foregroundColor(langColor.opacity(0.7))

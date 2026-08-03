@@ -34,7 +34,9 @@ public protocol ConversationSyncEngineProviding: AnyObject, Sendable {
     func startSocketRelay() async
     func stopSocketRelay() async
     func markConversationReadLocally(_ conversationId: String) async
-    func updateConversationAfterSend(conversationId: String, messagePreview: String, messageAt: Date, senderName: String?) async
+    /// Efface la frontière de lecture locale (geste « marquer comme non lu »).
+    func markConversationUnreadLocally(_ conversationId: String) async
+    func updateConversationAfterSend(_ facet: LastMessageFacet, conversationId: String) async
 
     /// Declare which conversation is currently visible to the user.
     /// While set, the engine will:
@@ -212,6 +214,22 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
         self.fullReconcileInterval = fullReconcileInterval
     }
 
+    // MARK: - Sync Checkpoints (logout / re-auth reset)
+
+    /// sync-04 — efface les trois checkpoints UserDefaults pour que le compte
+    /// suivant (ou une ré-authentification du même compte, dont le cache est
+    /// purgé par ailleurs) reparte de `.distantPast` au lieu d'hériter du
+    /// watermark de la session sortante — sinon un delta déclenché avant le
+    /// premier fullSync réussi persiste une liste PARTIELLE comme fraîche.
+    /// `lastDeltaSyncAt` est remis aussi pour que le tout premier delta ne
+    /// soit pas avalé par le cooldown en mémoire.
+    public func resetSyncCheckpoints() {
+        UserDefaults.standard.removeObject(forKey: syncTimestampKey)
+        UserDefaults.standard.removeObject(forKey: cleanupDateKey)
+        UserDefaults.standard.removeObject(forKey: fullReconcileKey)
+        lastDeltaSyncAt = .distantPast
+    }
+
     // MARK: - Full Sync (cold start)
 
     /// Run a full sync and return whether it completed successfully.
@@ -276,6 +294,10 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
         let pageSize = 100
         let userId = await currentUserId()
         let service = self.conversationService
+        // Figée AVANT la première écriture : `saveSorted(firstPage)` remplace le
+        // cache par la seule page 1, et sans cette baseline les pages suivantes
+        // n'auraient plus d'homologue local où retrouver leur frontière de lecture.
+        let baseline = await cache.conversations.load(for: "list").snapshot() ?? []
 
         // Fetch the first page to show something on screen as fast as
         // possible, then fan out to the remaining pages in parallel. On
@@ -291,7 +313,7 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
             firstPage = (await Self.mapConversationsOffMain(response.data, userId: userId))
             firstPageReturnedCount = response.data.count
             totalCount = response.pagination?.total
-            await saveSorted(firstPage, to: "list")
+            await saveSorted(firstPage, to: "list", baseline: baseline)
             await SearchIndex.shared.indexConversations(firstPage)
             _conversationsDidChange.send()
         } catch {
@@ -427,7 +449,7 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
                 succeeded = recoveredAll
             }
 
-            await saveSorted(merged, to: "list")
+            await saveSorted(merged, to: "list", baseline: baseline)
             await SearchIndex.shared.indexConversations(merged)
             _conversationsDidChange.send()
         }
@@ -458,7 +480,7 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
                 let newItems = page.filter { !existingIds.contains($0.id) }
                 merged.append(contentsOf: newItems)
                 if !newItems.isEmpty {
-                    await saveSorted(merged, to: "list")
+                    await saveSorted(merged, to: "list", baseline: baseline)
                     await SearchIndex.shared.indexConversations(newItems)
                     _conversationsDidChange.send()
                 }
@@ -569,7 +591,7 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
                 await cache.messages.invalidate(for: removedId)
             }
 
-            await saveSorted(merged, to: "list")
+            await saveSorted(merged, to: "list", baseline: existing)
             await SearchIndex.shared.indexConversations(deltaConversations.filter { $0.isActive })
             _conversationsDidChange.send()
 
@@ -900,11 +922,23 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
         await apiMessagePersistor?([apiMessage])
         _messagesDidChange.send(msg.conversationId)
 
-        // Preserve the existing author when the broadcast payload omits the
-        // sender envelope (can happen for lightweight socket echoes). Falling
-        // back to `nil` would otherwise wipe the preview author for the whole
-        // list row until the next full sync.
-        let resolvedSenderName = msg.senderName ?? msg.senderUsername
+        // Facette COMPLÈTE du nouveau dernier message. Les onze champs
+        // `lastMessage*` décrivent un seul message : n'en écrire que trois
+        // laissait la ligne mélanger le texte du nouveau message avec la pièce
+        // jointe, l'expiration et le drapeau « vue unique » de l'ANCIEN — un
+        // texte tout neuf résumé « Vue unique » parce que la photo précédente
+        // l'était. Cf. `LastMessageFacet`.
+        //
+        // Changement assumé : quand un écho socket allégé omet l'enveloppe
+        // expéditeur, l'auteur devient `nil` au lieu de conserver le précédent.
+        // Garder l'ancien collait le nom d'Alice sous le message de Bob — la
+        // ligne était FAUSSE, pas incomplète, et rien ne la corrigeait. Ne pas
+        // « restaurer » ce repli.
+        let facet = LastMessageFacet(
+            message: msg,
+            preview: msg.content,
+            translations: Self.previewTranslations(from: apiMessage)
+        )
 
         // Snapshot the cached list to decide whether the conversation
         // already exists. The `update` mutate closure is sync +
@@ -921,12 +955,7 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
                     // regress the row to older content/position once a
                     // newer message has already been applied.
                     guard msg.createdAt > updated[idx].lastMessageAt else { return updated }
-                    updated[idx].lastMessagePreview = msg.content.meeshyPreviewTruncated
-                    updated[idx].lastMessageId = msg.id
-                    if let resolvedSenderName, !resolvedSenderName.isEmpty {
-                        updated[idx].lastMessageSenderName = resolvedSenderName
-                    }
-                    updated[idx].lastMessageAt = msg.createdAt
+                    updated[idx].applyLastMessage(facet)
                     let conv = updated.remove(at: idx)
                     updated.insert(conv, at: 0)
                 }
@@ -1288,21 +1317,30 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
         _messagesDidChange.send(event.conversationId)
     }
 
-    public func updateConversationAfterSend(conversationId: String, messagePreview: String, messageAt: Date, senderName: String?) async {
+    /// `[langue: contenu]` du message, prêt pour le Prisme de la ligne de liste.
+    /// Les codes sont minusculés — `resolvedLastMessagePreview` résout en
+    /// minuscules et une clé « FR » ne serait jamais trouvée.
+    static func previewTranslations(from apiMessage: APIMessage) -> [String: String]? {
+        guard let translations = apiMessage.translations, !translations.isEmpty else { return nil }
+        return Dictionary(
+            translations.map { ($0.targetLanguage.lowercased(), $0.translatedContent) },
+            uniquingKeysWith: { _, latest in latest }
+        )
+    }
+
+    /// Applique la facette du message qu'on vient d'envoyer, AVANT tout écho
+    /// serveur. La ligne montre donc immédiatement l'auteur, la pièce jointe et
+    /// les effets du message réellement envoyé — et non ceux du précédent.
+    public func updateConversationAfterSend(_ facet: LastMessageFacet, conversationId: String) async {
         await cache.conversations.update(for: "list") { conversations in
             var updated = conversations
             if let idx = updated.firstIndex(where: { $0.id == conversationId }) {
-                updated[idx].lastMessagePreview = messagePreview.meeshyPreviewTruncated
-                updated[idx].lastMessageAt = messageAt
-                // Propagate the author so the conversation list renders
-                // "You: <preview>" in groups immediately — previously this
-                // field kept the prior sender until the socket broadcast
-                // echoed back, producing a confusing "Alice: <your msg>"
-                // for a second or two after every send.
-                if let senderName, !senderName.isEmpty {
-                    updated[idx].lastMessageSenderName = senderName
-                }
+                updated[idx].applyLastMessage(facet)
                 updated[idx].userState.unreadCount = 0
+                // Envoyer, c'est avoir lu : la frontière avance au-delà du
+                // message qu'on vient de poser, sinon `reconcileUnread` la
+                // trouverait périmée face au nouveau `lastMessageAt`.
+                updated[idx].userState.lastReadAt = Date()
                 let conv = updated.remove(at: idx)
                 updated.insert(conv, at: 0)
             }
@@ -1317,6 +1355,31 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
             var updated = conversations
             if let idx = updated.firstIndex(where: { $0.id == conversationId }) {
                 updated[idx].userState.unreadCount = 0
+                // Frontière de lecture locale — lue par `reconcileUnread` pour
+                // qu'un instantané serveur en retard sur l'accusé de lecture
+                // (outbox encore pleine, hors-ligne, 429) ne rallume pas la
+                // pastille.
+                updated[idx].userState.lastReadAt = Date()
+            }
+            return updated
+        }
+        _conversationsDidChange.send()
+        await recomputeTotalUnread()
+    }
+
+    /// Symétrique de `markConversationReadLocally` : « marquer comme non lu »
+    /// EFFACE la frontière de lecture, sinon `reconcileUnread` ramènerait le
+    /// compteur à 0 au prochain instantané et le geste serait sans effet.
+    public func markConversationUnreadLocally(_ conversationId: String) async {
+        await cache.conversations.update(for: "list") { conversations in
+            var updated = conversations
+            if let idx = updated.firstIndex(where: { $0.id == conversationId }) {
+                updated[idx].userState.lastReadAt = nil
+                if updated[idx].userState.unreadCount == 0 {
+                    // Le serveur reste autoritatif sur le compte exact ; on pose
+                    // localement ≥ 1 pour que la pastille apparaisse tout de suite.
+                    updated[idx].userState.unreadCount = 1
+                }
             }
             return updated
         }
@@ -1341,8 +1404,38 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
     /// grouping pipeline. Backend pagination is not guaranteed to be timestamp-
     /// sorted (interleaved deltas, parallel page merges, server-side tweaks),
     /// so the engine must enforce the order rather than trust the network.
-    private func saveSorted(_ items: [MeeshyConversation], to cacheKey: String) async {
-        let sorted = items.sorted { $0.lastMessageAt > $1.lastMessageAt }
+    /// - Parameter baseline: instantané cache pris AVANT le début de la sync.
+    ///   Indispensable pour `fullSync`, qui persiste sa première page avant
+    ///   d'avoir les suivantes : sans baseline figée, la deuxième écriture
+    ///   confronterait les pages 2+ à un cache réduit à la page 1, et leurs
+    ///   frontières de lecture — introuvables — seraient silencieusement
+    ///   perdues. `nil` relit le cache (appelants à écriture unique).
+    private func saveSorted(
+        _ items: [MeeshyConversation],
+        to cacheKey: String,
+        baseline: [MeeshyConversation]? = nil
+    ) async {
+        // Chokepoint UNIQUE de toute écriture liste dérivée du serveur (fullSync
+        // ×3, deltaSync ×1) : on y réconcilie le non-lu AVANT de persister, sinon
+        // un instantané serveur en retard sur un `markAsRead` encore dans
+        // l'outbox rallume la pastille (« ça part puis ça revient »).
+        let reconciled: [MeeshyConversation]
+        if cacheKey == "list" {
+            let existing: [MeeshyConversation]
+            if let baseline {
+                existing = baseline
+            } else {
+                existing = await cache.conversations.load(for: cacheKey).snapshot() ?? []
+            }
+            reconciled = Self.reconcileUnread(
+                incoming: items,
+                existing: existing,
+                openConversationId: currentlyOpenConversationId
+            )
+        } else {
+            reconciled = items
+        }
+        let sorted = reconciled.sorted { $0.lastMessageAt > $1.lastMessageAt }
         do {
             try await cache.conversations.save(sorted, for: cacheKey)
         } catch {
@@ -1350,6 +1443,70 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
         }
         if cacheKey == "list" {
             await recomputeTotalUnread()
+        }
+    }
+
+    // MARK: - Réconciliation du non-lu
+
+    /// Réconcilie un instantané serveur avec la frontière de lecture LOCALE.
+    ///
+    /// Le gateway ne renvoie jamais `lastReadAt` (`APIConversation.toConversation`
+    /// ne le mappe pas) : ce champ est donc une frontière purement locale, posée
+    /// par `markConversationReadLocally` et par l'entrée dans une conversation,
+    /// et qui survit au round-trip GRDB. Deux règles, dans cet ordre :
+    ///
+    /// 1. **Conversation ouverte** → 0. L'utilisateur la REGARDE ; tout compteur
+    ///    non nul est un mensonge visuel. Même gate que `handleUnreadUpdated`,
+    ///    qui l'appliquait déjà aux broadcasts socket mais pas aux syncs REST.
+    /// 2. **Lecture locale postérieure au dernier message connu du serveur** → 0.
+    ///    Le compteur serveur est en retard (accusé de lecture encore dans
+    ///    l'outbox, hors-ligne, 429…). Dès qu'un message VRAIMENT plus récent
+    ///    arrive, `lastMessageAt` repasse devant la frontière et le compteur
+    ///    serveur reprend la main — la règle se répare donc toute seule et ne
+    ///    peut pas masquer durablement un vrai non-lu.
+    ///
+    /// La frontière locale est toujours préservée (le serveur ne la porte pas),
+    /// ce qui laisse `markAsUnread` — qui l'efface — survivre au prochain sync.
+    nonisolated static func reconcileUnread(
+        incoming: MeeshyConversation,
+        local: MeeshyConversation?,
+        openConversationId: String?,
+        now: Date = Date()
+    ) -> MeeshyConversation {
+        var result = incoming
+        // La frontière ne voyage que localement : la reprendre du cache est la
+        // seule façon qu'elle traverse l'écrasement par l'instantané serveur.
+        result.userState.lastReadAt = local?.userState.lastReadAt ?? incoming.userState.lastReadAt
+
+        if incoming.id == openConversationId {
+            result.userState.unreadCount = 0
+            result.userState.lastReadAt = max(result.userState.lastReadAt ?? .distantPast, now)
+            return result
+        }
+
+        if let frontier = result.userState.lastReadAt, frontier >= incoming.lastMessageAt {
+            result.userState.unreadCount = 0
+        }
+        return result
+    }
+
+    /// Variante par lot — applique la règle ci-dessus à chaque ligne entrante en
+    /// la confrontant à son homologue en cache.
+    nonisolated static func reconcileUnread(
+        incoming: [MeeshyConversation],
+        existing: [MeeshyConversation],
+        openConversationId: String?,
+        now: Date = Date()
+    ) -> [MeeshyConversation] {
+        guard !incoming.isEmpty else { return incoming }
+        let localById = Dictionary(existing.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        return incoming.map {
+            reconcileUnread(
+                incoming: $0,
+                local: localById[$0.id],
+                openConversationId: openConversationId,
+                now: now
+            )
         }
     }
 
@@ -1401,6 +1558,10 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
                 var updated = conversations
                 if let idx = updated.firstIndex(where: { $0.id == id }) {
                     updated[idx].userState.unreadCount = 0
+                    // Frontière de lecture : sans elle, le prochain instantané
+                    // serveur (delta au retour en avant-plan, reconnexion socket)
+                    // ré-injecterait le compteur d'AVANT l'ouverture.
+                    updated[idx].userState.lastReadAt = Date()
                 }
                 return updated
             }

@@ -32,7 +32,6 @@ final class DependencyContainer {
     let messagePersistence: MessagePersistenceActor
     let feedPersistence: FeedPersistenceActor
     let thumbnailPrefetcher: ThumbnailPrefetcher
-    let mediaSnapshotStore: MediaSnapshotStore
 
     /// Q3 (P1 hotfix) — Combine subscriptions tenues par le container.
     /// Aujourd'hui : un seul abonnement sur `AuthManager.isAuthenticated` pour
@@ -72,7 +71,6 @@ final class DependencyContainer {
         self.messagePersistence = persistence
         self.feedPersistence = FeedPersistenceActor(dbWriter: pool)
         self.thumbnailPrefetcher = ThumbnailPrefetcher.shared
-        self.mediaSnapshotStore = MediaSnapshotStore.shared
         self.initDiagnostics = diagnostics
 
         Task {
@@ -120,6 +118,18 @@ final class DependencyContainer {
 
     // MARK: - Q3 — Outbox session quiesce hook
 
+    /// startup-03 — état armé par `sessionInvalidated` (serveur), consommé au
+    /// flip isAuthenticated : distingue invalidation de session et logout
+    /// volontaire pour le toast de perte.
+    private var sessionWasInvalidated = false
+
+    /// Pure — la perte de messages en attente n'est signalée que quand la
+    /// purge suit une invalidation SERVEUR (jamais un logout volontaire) ET
+    /// qu'il restait des lignes outbox non envoyées.
+    static func shouldSurfaceOutboxLossToast(sessionWasInvalidated: Bool, pendingCount: Int) -> Bool {
+        sessionWasInvalidated && pendingCount > 0
+    }
+
     /// Pattern calqué sur `ConversationAudioCoordinator.wireAuthLogoutHook` :
     /// observe la transition `isAuthenticated true→false` et purge TOUTES les
     /// tables messages on-device (outbox + `messages` autoritaire +
@@ -127,20 +137,56 @@ final class DependencyContainer {
     /// `clearAllMessagesForLogout`). Sans la purge de `messages`, user B verrait
     /// le contenu de user A au prochain login (table non namespacée par userId,
     /// lue par `MessageStore.loadInitialSnapshot`).
+    /// startup-03 — la purge reste INCONDITIONNELLE (invariant anti fuite
+    /// cross-compte Q3) ; quand elle suit une invalidation de session serveur
+    /// avec des envois en attente, l'utilisateur en est informé par un toast.
     private func wireOutboxLogoutHook() {
         let persistence = messagePersistence
+        let feed = feedPersistence
+        AuthManager.shared.sessionInvalidated
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in self?.sessionWasInvalidated = true }
+            .store(in: &cancellables)
         AuthManager.shared.$isAuthenticated
             .removeDuplicates()
             .dropFirst()
             .filter { !$0 }
             .receive(on: DispatchQueue.main)
-            .sink { _ in
+            .sink { [weak self] _ in
+                let invalidated = self?.sessionWasInvalidated ?? false
+                self?.sessionWasInvalidated = false
                 Task {
                     do {
+                        let pendingCount = try await persistence.pendingOutboxCount()
                         try await persistence.clearAllMessagesForLogout()
+                        if DependencyContainer.shouldSurfaceOutboxLossToast(
+                            sessionWasInvalidated: invalidated, pendingCount: pendingCount
+                        ) {
+                            await MainActor.run {
+                                FeedbackToastManager.shared.showError(
+                                    String(localized: "outbox.sessionInvalidated.pendingLost",
+                                           defaultValue: "Des messages non envoyés ont été annulés — reconnectez-vous.",
+                                           bundle: .main)
+                                )
+                            }
+                        }
                     } catch {
                         containerLogger.error("Q3 logout message purge failed: \(error.localizedDescription, privacy: .public)")
                     }
+                    // grdb-01 — purge feed indépendante : un échec d'un côté
+                    // ne doit pas empêcher l'autre purge.
+                    do {
+                        try await feed.clearAllForLogout()
+                    } catch {
+                        containerLogger.error("grdb-01 logout feed purge failed: \(error.localizedDescription, privacy: .public)")
+                    }
+                    // outbox-11 — résidus cross-compte hors messages/feed :
+                    // impressions (UserDefaults standard, clés sans userId,
+                    // rejouées dès l'init de chaque surface) et
+                    // PendingStatusQueue. (pending_mark_read App Group est
+                    // couvert par le wipe appgroup-01 — pas de doublon ici.)
+                    await ImpressionBatcher.purgeAllPendingImpressions()
+                    await PendingStatusQueue.shared.clearAll()
                 }
             }
             .store(in: &cancellables)

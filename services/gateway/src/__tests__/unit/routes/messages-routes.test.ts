@@ -1575,6 +1575,49 @@ describe('GET /conversations/:id/pinned-messages', () => {
     await getHandler_()(makeRequest(), reply);
     expect(mockSendInternalError).toHaveBeenCalled();
   });
+
+  it('restitue `location` sur un message épinglé géolocalisé', async () => {
+    // Lot 1 : un message épinglé est une bulle complète — sans le hoist,
+    // l'épingle affiche tout SAUF la position qu'elle était censée fixer.
+    const geoPinnedMsg = {
+      id: MSG_ID,
+      conversationId: CONV_ID,
+      senderId: PART_ID,
+      content: '',
+      originalLanguage: 'fr',
+      messageType: 'text',
+      editedAt: null,
+      deletedAt: null,
+      replyToId: null,
+      forwardedFromId: null,
+      forwardedFromConversationId: null,
+      pinnedAt: new Date(),
+      pinnedBy: USER_ID,
+      isViewOnce: false,
+      isBlurred: false,
+      expiresAt: null,
+      effectFlags: 0,
+      translations: null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      metadata: { location: { latitude: 48.8566, longitude: 2.3522, name: 'Tour Eiffel', address: null, category: null } },
+      sender: {
+        id: PART_ID,
+        userId: USER_ID,
+        displayName: 'Alice',
+        avatar: null,
+        type: 'member',
+        user: { id: USER_ID, username: 'alice', firstName: 'Alice', lastName: 'Smith', displayName: 'Alice', avatar: null, isOnline: false },
+      },
+      attachments: [],
+      _count: { reactions: 0, replies: 0 },
+    };
+    prisma.message.findMany.mockResolvedValue([geoPinnedMsg]);
+    prisma.message.count.mockResolvedValue(1);
+    const reply = makeReply();
+    await getHandler_()(makeRequest(), reply);
+    expect(reply._body.data[0].location).toMatchObject({ latitude: 48.8566, name: 'Tour Eiffel' });
+  });
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -1818,6 +1861,36 @@ describe('GET /conversations/:id/messages/search', () => {
     await getHandler_()(makeSearchReq(), reply);
     expect(mockSendInternalError).toHaveBeenCalled();
   });
+
+  it('restitue `location` sur un resultat de recherche geolocalise', async () => {
+    // Lot 1 : un resultat de recherche est une bulle complete elle aussi —
+    // sans le hoist, le message trouve n'affiche jamais sa position.
+    const geoMatch = {
+      id: MSG_ID,
+      conversationId: CONV_ID,
+      content: 'hello world',
+      originalLanguage: 'fr',
+      messageType: 'text',
+      translations: null,
+      createdAt: new Date(),
+      senderId: PART_ID,
+      metadata: { location: { latitude: 48.8566, longitude: 2.3522, name: 'Tour Eiffel', address: null, category: null } },
+      sender: {
+        id: PART_ID,
+        userId: USER_ID,
+        displayName: 'Alice',
+        avatar: null,
+        type: 'member',
+        user: { id: USER_ID, username: 'alice', displayName: 'Alice', avatar: null, isOnline: true },
+      },
+    };
+    prisma.message.findMany
+      .mockResolvedValueOnce([geoMatch]) // content matches
+      .mockResolvedValueOnce([]); // translation candidates
+    const reply = makeReply();
+    await getHandler_()(makeSearchReq('hello'), reply);
+    expect(reply._body.data[0].location).toMatchObject({ latitude: 48.8566, name: 'Tour Eiffel' });
+  });
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -1952,6 +2025,34 @@ describe('GET /conversations/:id/messages — coverage extension', () => {
     expect(replyTo.sender.username).toBe('bob_user');
   });
 
+  it('Lot 2 : replyTo geolocalise restitue `location` (hoist sur l objet cite, pas la racine)', async () => {
+    const GEO = { latitude: 48.8566, longitude: 2.3522, name: 'Tour Eiffel', address: null, category: null };
+    const msg = makeMessage({
+      replyTo: {
+        id: 'reply-msg-id',
+        content: 'original reply',
+        originalLanguage: 'fr',
+        metadata: { location: GEO },
+        sender: {
+          id: PART_ID,
+          displayName: 'Bob',
+          avatar: null,
+          username: null,
+          user: { username: 'bob_user', displayName: 'Bob Full', avatar: null },
+        },
+      },
+    });
+    prisma.message.findMany.mockResolvedValue([msg]);
+    prisma.message.count.mockResolvedValue(1);
+    const reply = makeReply();
+    await getMessagesHandler()(makeRequest(), reply);
+    const replyTo = reply._body.data[0].replyTo;
+    expect(replyTo.location).toMatchObject({ latitude: 48.8566, name: 'Tour Eiffel' });
+    // La racine elle-même n'est pas géolocalisée ici — le hoist ne doit pas
+    // fabriquer une position sur le message qui cite.
+    expect(reply._body.data[0].location).toBeUndefined();
+  });
+
   it('forwarded message enrichment: adds forwardedFrom and forwardedFromConversation', async () => {
     const msg = makeMessage({ forwardedFromId: 'fwd-msg-id', forwardedFromConversationId: 'fwd-conv-id' });
     const forwardedMsg = {
@@ -1978,6 +2079,30 @@ describe('GET /conversations/:id/messages — coverage extension', () => {
     expect(result.forwardedFrom.sender.username).toBe('orig_bob');
     expect(result.forwardedFromConversation).toBeDefined();
     expect(result.forwardedFromConversation.title).toBe('Original Convo');
+  });
+
+  it('Lot 2 : message transfere geolocalise restitue `location` sur forwardedFrom', async () => {
+    const GEO = { latitude: 40.7128, longitude: -74.006, name: 'Times Square', address: null, category: null };
+    const msg = makeMessage({ forwardedFromId: 'fwd-msg-id' });
+    const forwardedMsg = {
+      id: 'fwd-msg-id',
+      content: 'original content',
+      messageType: 'text',
+      createdAt: new Date('2024-01-01'),
+      senderId: 'orig-part-id',
+      conversationId: 'fwd-conv-id',
+      metadata: { location: GEO },
+      sender: { id: 'orig-part-id', userId: 'orig-user-id', displayName: 'Original Bob', avatar: null, user: { username: 'orig_bob' } },
+      attachments: [],
+    };
+    prisma.message.findMany
+      .mockResolvedValueOnce([msg])
+      .mockResolvedValueOnce([forwardedMsg]);
+    prisma.message.count.mockResolvedValue(1);
+    const reply = makeReply();
+    await getMessagesHandler()(makeRequest(), reply);
+    const result = reply._body.data[0];
+    expect(result.forwardedFrom.location).toMatchObject({ name: 'Times Square' });
   });
 
   it('markMessagesAsReceived error: caught in fire-and-forget, handler still succeeds', async () => {
@@ -2247,6 +2372,48 @@ describe('POST /conversations/:id/mark-unread — coverage extension', () => {
     await getHandler_()(makeRequest(), reply);
     expect(prisma.conversationReadCursor.upsert).not.toHaveBeenCalled();
     expect(mockSendSuccess).toHaveBeenCalledWith(reply, { unreadCount: 0 });
+  });
+
+  it('race guard orders by createdAt, not ObjectId string: an older message whose ObjectId sorts HIGHER than the cursor is still stale', async () => {
+    // The cursor points at a message read concurrently that is genuinely NEWER
+    // (createdAt later) but whose ObjectId string sorts BELOW latestMessage's —
+    // the same-second cross-process inversion. Ordering by ObjectId string would
+    // (wrongly) treat latestMessage as fresh and rewind past the fresher read;
+    // ordering by createdAt correctly detects it as stale and skips the rewind.
+    const CURSOR_MSG_ID = '507f1f77bcf86cd799439010'; // sorts below latestMessage
+    prisma.participant.findFirst
+      .mockResolvedValueOnce({ id: PART_ID }) // currentParticipant
+      .mockResolvedValueOnce({ id: PART_ID }); // participantForCursor
+    prisma.message.findFirst
+      .mockResolvedValueOnce({ id: '507f1f77bcf86cd799439999', createdAt: new Date('2024-06-10T00:00:00.100Z') }) // latestMessage: older, higher ObjectId
+      .mockResolvedValueOnce({ id: 'prev-msg-id', createdAt: new Date('2024-06-09') }); // previousMessage
+    prisma.conversationReadCursor.findUnique.mockResolvedValueOnce({
+      lastReadMessageId: CURSOR_MSG_ID,
+      lastReadMessageCreatedAt: new Date('2024-06-10T00:00:00.500Z') // newer than latestMessage
+    });
+    const reply = makeReply();
+    await getHandler_()(makeRequest(), reply);
+    expect(prisma.conversationReadCursor.upsert).not.toHaveBeenCalled();
+    expect(mockSendSuccess).toHaveBeenCalledWith(reply, { unreadCount: 0 });
+  });
+
+  it('rewind writes lastReadMessageCreatedAt alongside lastReadMessageId (keeps the cursor pair consistent)', async () => {
+    const prevCreatedAt = new Date('2024-06-09T12:00:00Z');
+    prisma.participant.findFirst
+      .mockResolvedValueOnce({ id: PART_ID })
+      .mockResolvedValueOnce({ id: PART_ID });
+    prisma.message.findFirst
+      .mockResolvedValueOnce({ id: MSG_ID, createdAt: new Date('2024-06-10') }) // latestMessage
+      .mockResolvedValueOnce({ id: 'prev-msg-id', createdAt: prevCreatedAt }); // previousMessage
+    prisma.conversationReadCursor.findUnique.mockResolvedValueOnce({ lastReadMessageId: MSG_ID });
+    const reply = makeReply();
+    await getHandler_()(makeRequest(), reply);
+    expect(prisma.conversationReadCursor.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        create: expect.objectContaining({ lastReadMessageId: 'prev-msg-id', lastReadMessageCreatedAt: prevCreatedAt }),
+        update: expect.objectContaining({ lastReadMessageId: 'prev-msg-id', lastReadMessageCreatedAt: prevCreatedAt })
+      })
+    );
   });
 
   it('cursor already exactly at latestMessage (not stale) → proceeds with the rewind as normal', async () => {

@@ -2,7 +2,6 @@ import SwiftUI
 import Combine
 import os
 import PhotosUI
-import CoreLocation
 import AVFoundation
 import Contacts
 import MeeshySDK
@@ -151,6 +150,10 @@ struct ConversationComposerState {
     var isUploading = false
     var uploadProgress: UploadQueueProgress? = nil
     var showLocationPicker = false
+    /// Lieu choisi via le picker, en attente d'envoi. `SharedPlace` porte le
+    /// nom et l'adresse — `MessageAttachment.location` ne les portait pas et
+    /// n'est plus le véhicule (Task 11/12, 2026-07-29).
+    var pendingPlace: SharedPlace? = nil
     
     // Language (source language for outgoing messages).
     // Resolved via DefaultComposerLanguage: keyboard layout > "fr" fallback.
@@ -680,7 +683,6 @@ struct ConversationView: View {
                         .environmentObject(statusViewModel)
                 }
             }
-            .withStatusBubble()
     }
 
     private var bodyWithCovers: some View {
@@ -1472,34 +1474,25 @@ struct ConversationView: View {
     private var isAnonymous: Bool { anonymousSession != nil }
 
     @ViewBuilder
+    // Enfants en AnyView : le type structurel du tuple (branches anonymous /
+    // typing / bande + searchBar) gonflait le mangled name de
+    // `floatingHeaderSection` ET celui de `bodyContent` au point que leur
+    // décodage récursif au 1er rendu SUR DEVICE débordait la pile du main
+    // thread (dump segv du 2026-07-30 21:12, `__swift_instantiate…` dans la
+    // closure du VStack). Même famille que expandedHeaderMidContent — couper
+    // au niveau des ENFANTS du type décodé (leçon 5cdde93c4).
     private var floatingHeaderSection: some View {
         VStack {
             if isAnonymous {
-                anonymousHeaderBar
+                AnyView(anonymousHeaderBar)
             } else if isTyping {
-                HStack(spacing: MeeshySpacing.sm) {
-                    ThemedBackButton(color: accentColor, unreadCount: viewModel.otherConversationsUnread) { HapticFeedback.light(); router.pop() }
-                    Spacer()
-                    ThemedAvatarButton(
-                        name: conversation?.name ?? "?", color: accentColor, secondaryColor: secondaryColor,
-                        isExpanded: false, storyState: headerStoryRingState,
-                        avatarURL: conversation?.type == .direct ? conversation?.participantAvatarURL : conversation?.avatar,
-                        presenceState: headerPresenceState,
-                        moodEmoji: headerMoodEmoji
-                    ) {
-                        isTyping = false
-                        withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) { composerState.showOptions = true }
-                    }
-                }
-                .padding(.horizontal, MeeshySpacing.lg)
-                .padding(.top, MeeshySpacing.sm)
-                .transition(.opacity)
+                AnyView(typingHeaderBar)
             } else {
                 expandedHeaderBand
             }
 
             if headerState.showSearch {
-                searchBar.transition(.move(edge: .top).combined(with: .opacity))
+                AnyView(searchBar.transition(.move(edge: .top).combined(with: .opacity)))
             }
 
             Spacer()
@@ -1508,6 +1501,26 @@ struct ConversationView: View {
         .animation(.spring(response: 0.35, dampingFraction: 0.8), value: composerState.showOptions)
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: isTyping)
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: headerState.showSearch)
+    }
+
+    private var typingHeaderBar: some View {
+        HStack(spacing: MeeshySpacing.sm) {
+            ThemedBackButton(color: accentColor, unreadCount: viewModel.otherConversationsUnread) { HapticFeedback.light(); router.pop() }
+            Spacer()
+            ThemedAvatarButton(
+                name: conversation?.name ?? "?", color: accentColor, secondaryColor: secondaryColor,
+                isExpanded: false, storyState: headerStoryRingState,
+                avatarURL: conversation?.type == .direct ? conversation?.participantAvatarURL : conversation?.avatar,
+                presenceState: headerPresenceState,
+                moodEmoji: headerMoodEmoji
+            ) {
+                isTyping = false
+                withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) { composerState.showOptions = true }
+            }
+        }
+        .padding(.horizontal, MeeshySpacing.lg)
+        .padding(.top, MeeshySpacing.sm)
+        .transition(.opacity)
     }
 
     @ViewBuilder
@@ -1657,21 +1670,23 @@ struct ConversationView: View {
         }
     }
 
-    private var expandedHeaderSearchButton: some View {
-        Button {
+    // AnyView + label extrait en struct NOMINALE : casse la récursion de type
+    // du bouton lui-même (crash stack-overflow du décodeur de métadonnées Swift
+    // au 1er rendu SUR DEVICE, .ips du 2026-07-30 dans
+    // `expandedHeaderSearchButton.getter`). Leçon 5cdde93c4 : couper au niveau
+    // du type qui est décodé — le type structurel (opaques
+    // `adaptiveGlass`/`meeshyTapTarget`, 2 branches #available chacun) reste
+    // scopé au body de `HeaderSearchGlyph`, le Button devient trivial.
+    private var expandedHeaderSearchButton: AnyView {
+        AnyView(Button {
             withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { headerState.showSearch = true }
             isSearchFocused = true
         } label: {
-            Image(systemName: "magnifyingglass")
-                .font(MeeshyFont.relative(13, weight: .semibold))
-                .foregroundStyle(LinearGradient(colors: [Color(hex: accentColor), Color(hex: secondaryColor)], startPoint: .topLeading, endPoint: .bottomTrailing))
-                .frame(width: 28, height: 28)
-                .adaptiveGlass(in: Circle(), tint: Color(hex: accentColor).opacity(0.25))
-                .meeshyTapTarget()
+            HeaderSearchGlyph(accentColor: accentColor, secondaryColor: secondaryColor)
         }
         .accessibilityLabel(String(localized: "conversation.view.search_in_conversation", bundle: .main))
         .accessibilityHint(String(localized: "accessibility.search.hint", bundle: .main))
-        .accessibilityIdentifier("conversation.header.search")
+        .accessibilityIdentifier("conversation.header.search"))
     }
 
     private var expandedHeaderBackground: AnyView {
@@ -1949,5 +1964,26 @@ struct ConversationView: View {
                 Label(String(localized: "common.delete", defaultValue: "Supprimer", bundle: .main), systemImage: "trash")
             }
         }
+    }
+}
+
+// MARK: - Header Search Glyph (extracted struct to keep the Button's type trivial)
+
+/// Struct NOMINALE : le type structurel du glyphe (opaques `adaptiveGlass` +
+/// `meeshyTapTarget`, chacun portant ses 2 branches #available) reste scopé à
+/// ce body au lieu de gonfler le mangled name du Button parent — dont le
+/// décodage récursif débordait la pile du main thread au 1er rendu SUR DEVICE
+/// (.ips 2026-07-30, `expandedHeaderSearchButton.getter`).
+private struct HeaderSearchGlyph: View {
+    let accentColor: String
+    let secondaryColor: String
+
+    var body: some View {
+        Image(systemName: "magnifyingglass")
+            .font(MeeshyFont.relative(13, weight: .semibold))
+            .foregroundStyle(LinearGradient(colors: [Color(hex: accentColor), Color(hex: secondaryColor)], startPoint: .topLeading, endPoint: .bottomTrailing))
+            .frame(width: 28, height: 28)
+            .adaptiveGlass(in: Circle(), tint: Color(hex: accentColor).opacity(0.25))
+            .meeshyTapTarget()
     }
 }

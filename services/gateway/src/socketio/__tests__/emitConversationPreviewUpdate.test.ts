@@ -86,6 +86,20 @@ describe('emitConversationPreviewUpdate', () => {
     expect(emitted[0].payload.updatedBy).toEqual({ id: 'user-editor' });
   });
 
+  it('Lot 3 : restitue `location` quand le dernier message est geolocalise (et un contenu vide n est pas fabrique)', async () => {
+    const GEO = { latitude: 48.8566, longitude: 2.3522, name: 'Tour Eiffel', address: null, category: null };
+    const emitted: Emitted[] = [];
+    const geoLatest: any = { ...latest, content: '', metadata: { location: GEO } };
+    const prisma = makePrisma([{ userId: 'user-A' }], geoLatest);
+
+    await emitConversationPreviewUpdate(prisma, makeIo(emitted), 'conv-1', 'user-editor');
+
+    expect(emitted[0].payload.location).toMatchObject({ latitude: 48.8566, name: 'Tour Eiffel' });
+    // Constat, pas une exigence : content vide reste vide, aucun texte de
+    // repli fabriqué côté serveur — au client de décider du rendu.
+    expect(emitted[0].payload.lastMessagePreview).toBe('');
+  });
+
   it('is a no-op when the Socket.IO layer is unavailable', async () => {
     const prisma = makePrisma([{ userId: 'user-A' }], latest);
     await expect(emitConversationPreviewUpdate(prisma, null, 'conv-1', 'user-editor')).resolves.toBeUndefined();

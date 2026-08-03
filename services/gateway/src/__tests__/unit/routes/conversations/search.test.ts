@@ -191,6 +191,42 @@ describe('GET /conversations/search — conversation with last message', () => {
   });
 });
 
+describe('GET /conversations/search — lastMessage geolocalise', () => {
+  it('Lot 3 : restitue `location` sur lastMessage (metadata fetche mais jete par le mapping manuel avant correctif)', async () => {
+    const GEO = { latitude: 48.8566, longitude: 2.3522, name: 'Tour Eiffel', address: null, category: null };
+    const convWithGeoMessage = {
+      ...mockConversation,
+      messages: [
+        {
+          id: 'msg-geo-1',
+          content: '',
+          senderId: 'part-1',
+          messageType: 'text',
+          createdAt: new Date(),
+          metadata: { location: GEO },
+          sender: {
+            id: 'part-1',
+            userId: USER_ID,
+            displayName: 'Alice',
+            avatar: null,
+            user: { id: USER_ID, username: 'alice', displayName: 'Alice Smith', avatar: null, isOnline: true },
+          },
+          attachments: [],
+          _count: { attachments: 0 },
+        },
+      ],
+    };
+    const prisma = makePrisma({
+      conversation: { findMany: jest.fn<any>().mockResolvedValue([convWithGeoMessage]) },
+    });
+    const app = await buildApp({ prisma });
+    const res = await app.inject({ method: 'GET', url: '/conversations/search?q=hello' });
+    const body = res.json();
+    expect(body.data[0].lastMessage.location).toMatchObject({ latitude: 48.8566, name: 'Tour Eiffel' });
+    await app.close();
+  });
+});
+
 describe('GET /conversations/search — direct conversation without title', () => {
   it('returns 200 with null title for direct conversation with no title', async () => {
     const directConv = {

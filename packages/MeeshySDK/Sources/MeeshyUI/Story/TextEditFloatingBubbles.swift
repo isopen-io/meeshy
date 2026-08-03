@@ -75,10 +75,25 @@ struct TextEditFloatingBubbles: View {
             Text(code)
                 .font(.system(size: 12, weight: .bold))
                 .glassControlForeground()
-        case .symbol(let name, let emphasis):
-            Image(systemName: name)
-                .font(.system(size: 14, weight: StoryTextEditTopBar.strokeWeight(emphasis)))
-                .glassControlForeground()
+        case .symbol(let name, let emphasis, let tint):
+            symbolIndicator(name: name, emphasis: emphasis, tint: tint)
+        }
+    }
+
+    /// Un symbole teinté par la couleur que l'outil applique. L'ombre portée
+    /// garde le glyphe lisible quand cette couleur est claire et que le verre
+    /// de la bulle l'est aussi — même remède que le liseré pointillé du
+    /// canvas, qui flotte lui aussi sur un fond quelconque.
+    @ViewBuilder
+    private func symbolIndicator(name: String, emphasis: Int, tint: String?) -> some View {
+        let glyph = Image(systemName: name)
+            .font(.system(size: 14, weight: StoryTextEditTopBar.strokeWeight(emphasis)))
+        if let tint {
+            glyph
+                .foregroundStyle(Color(hex: tint))
+                .shadow(color: .black.opacity(0.35), radius: 1)
+        } else {
+            glyph.glassControlForeground()
         }
     }
 

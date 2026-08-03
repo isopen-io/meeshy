@@ -300,6 +300,12 @@ class ConversationViewModel: ObservableObject {
     /// successful load so older messages are ready before the user reaches them.
     var isCurrentlyNearBottom: Bool = true
 
+    /// Dernier message dont l'affichage a fait « rattraper » la conversation.
+    /// Rendu obsolète tout seul dès qu'un message plus récent arrive — la
+    /// comparaison se fait sur le message le plus récent du moment.
+    /// Cf. `caughtUpMessageId(seen:)`.
+    private var lastCaughtUpMessageId: String?
+
     /// Detailed reaction data for a specific message (used by reaction detail sheet)
     @Published var reactionDetails: [ReactionGroup] = []
     @Published var isLoadingReactions = false
@@ -1499,7 +1505,12 @@ class ConversationViewModel: ObservableObject {
                 await MainActor.run { self.isRevalidating = false }
             }
 
-        case .stale:
+        case .stale, .expired, .empty:
+            // vm-conv-expired-metadata-01 — .expired/.empty suivent le même
+            // chemin que .stale : GRDB est TOUJOURS peint d'abord (messages +
+            // traductions + métadonnées audio), le réseau revalide ensuite.
+            // L'ancienne branche réseau-only laissait les bulles sans
+            // transcription/traductions quand le fetch échouait (offline).
             // Surface GRDB data immediately, then revalidate in background.
             // Pré-hydrate les traductions AVANT loadInitial (cf. .fresh).
             // Lectures GRDB indépendantes parallélisées (cf. branche .fresh).
@@ -1524,10 +1535,6 @@ class ConversationViewModel: ObservableObject {
                 }
             }
 
-        case .expired, .empty:
-            // Fetch from API; refreshMessagesFromAPI upserts to GRDB and the store
-            // observation surfaces the result automatically.
-            await refreshMessagesFromAPI()
         }
 
         // If the refresh discovered we no longer have access, the View is
@@ -2146,14 +2153,19 @@ class ConversationViewModel: ObservableObject {
         replyToId: String?,
         storyReplyToId: String?,
         forwardedFromId: String?,
-        attachmentIds: [String]?
+        attachmentIds: [String]?,
+        location: SharedPlace? = nil
     ) -> String {
         [
             content,
             replyToId ?? "",
             storyReplyToId ?? "",
             forwardedFromId ?? "",
-            (attachmentIds ?? []).sorted().joined(separator: ",")
+            (attachmentIds ?? []).sorted().joined(separator: ","),
+            // Deux messages « lieu seul » rapprochés ont le MÊME texte (vide) :
+            // sans les coordonnées dans la clé, l'envoi de deux lieux distincts
+            // coup sur coup serait dédupliqué à tort.
+            location.map { "\($0.latitude),\($0.longitude)" } ?? ""
         ].joined(separator: "\u{1F}")
     }
 
@@ -2199,13 +2211,20 @@ class ConversationViewModel: ObservableObject {
             await self?.persistMessagesUsingServerIds()
         }
         let sentSenderName = authManager.currentUser?.displayName ?? authManager.currentUser?.username
-        Task {
-            await ConversationSyncEngine.shared.updateConversationAfterSend(
-                conversationId: convId,
-                messagePreview: msgContent,
-                messageAt: msgTime,
-                senderName: sentSenderName
+        // Facette relue sur la ligne optimiste : elle porte les pièces jointes et
+        // les effets réellement envoyés. Recomposer une facette « texte nu » ici
+        // effacerait de la liste la photo qu'on vient d'envoyer, une seconde
+        // après que l'insert optimiste l'y a mise.
+        let ackedFacet = messages.first(where: { $0.id == tempId }).map {
+            LastMessageFacet(
+                message: $0,
+                preview: Self.optimisticListPreview(text: msgContent, messageType: $0.messageType, location: $0.location),
+                id: serverId,
+                at: msgTime
             )
+        } ?? LastMessageFacet(id: serverId, preview: msgContent.meeshyPreviewTruncated, senderName: sentSenderName, at: msgTime)
+        Task {
+            await ConversationSyncEngine.shared.updateConversationAfterSend(ackedFacet, conversationId: convId)
         }
 
         if ephemeralDuration != nil { ephemeralDuration = nil }
@@ -2222,9 +2241,20 @@ class ConversationViewModel: ObservableObject {
     /// compute it for a `Task.detached`.
     nonisolated static func optimisticListPreview(text: String,
                                                   messageType: Message.MessageType,
+                                                  location: SharedPlace? = nil,
                                                   bundle: Bundle = .main,
                                                   locale: Locale = .current) -> String {
         if !text.isEmpty { return text }
+        // Message porteur d'un lieu sans texte : « 📍 <nom, à défaut adresse,
+        // à défaut Position> ». Sans cette branche, l'aperçu d'un message
+        // « lieu seul » (content vide, messageType .text) serait vide — la clé
+        // `media.summary.location` n'était atteinte que par le type de pièce
+        // jointe, jamais par `message.location` (lot 2, spec 2026-07-30).
+        if let location {
+            if let name = location.name, !name.isEmpty { return "📍 \(name)" }
+            if let address = location.address, !address.isEmpty { return "📍 \(address)" }
+            return String(localized: "media.summary.location", defaultValue: "📍 Position", bundle: bundle, locale: locale)
+        }
         switch messageType {
         case .image: return String(localized: "media.summary.photo", defaultValue: "📷 Photo", bundle: bundle, locale: locale)
         case .video: return String(localized: "media.summary.video", defaultValue: "🎥 Vidéo", bundle: bundle, locale: locale)
@@ -2236,10 +2266,13 @@ class ConversationViewModel: ObservableObject {
     }
 
     @discardableResult
-    func sendMessage(content: String, replyToId: String? = nil, storyReplyToId: String? = nil, storyReplyReference: ReplyReference? = nil, forwardedFromId: String? = nil, forwardedFromConversationId: String? = nil, attachmentIds: [String]? = nil, localAttachments: [MeeshyMessageAttachment]? = nil, expiresAt: Date? = nil, isViewOnce: Bool? = nil, maxViewOnceCount: Int? = nil, isBlurred: Bool? = nil, originalLanguage: String? = nil, existingTempId: String? = nil) async -> Bool {
+    func sendMessage(content: String, replyToId: String? = nil, storyReplyToId: String? = nil, storyReplyReference: ReplyReference? = nil, forwardedFromId: String? = nil, forwardedFromConversationId: String? = nil, attachmentIds: [String]? = nil, localAttachments: [MeeshyMessageAttachment]? = nil, expiresAt: Date? = nil, isViewOnce: Bool? = nil, maxViewOnceCount: Int? = nil, isBlurred: Bool? = nil, originalLanguage: String? = nil, existingTempId: String? = nil, location: SharedPlace? = nil) async -> Bool {
         let text = content.trimmingCharacters(in: .whitespacesAndNewlines)
         Logger.messages.info("SendFlow enter convId=\(self.conversationId, privacy: .public) textLen=\(text.count, privacy: .public) attachmentIds=\((attachmentIds ?? []).count, privacy: .public) existingTempId=\(existingTempId ?? "nil", privacy: .public) isSending=\(self.isSending, privacy: .public)")
-        guard !text.isEmpty || !(attachmentIds ?? []).isEmpty else {
+        // Garde partagé avec le composer (`SendEligibility`) : un message
+        // « lieu seul » — texte vide, aucune pièce jointe, `location` non nil —
+        // est un envoi valide (lot 2, spec 2026-07-30).
+        guard SendEligibility.canSend(text: text, attachmentIds: attachmentIds ?? [], location: location) else {
             Logger.messages.error("SendFlow EARLY-RETURN guard=emptyContent convId=\(self.conversationId, privacy: .public)")
             return false
         }
@@ -2277,7 +2310,7 @@ class ConversationViewModel: ObservableObject {
         // (`existingTempId != nil`) are a deliberate re-send and bypass the
         // debounce (the gateway dedups them by clientMessageId).
         if existingTempId == nil {
-            let dedupKey = Self.sendDedupKey(content: text, replyToId: replyToId, storyReplyToId: storyReplyToId, forwardedFromId: forwardedFromId, attachmentIds: attachmentIds)
+            let dedupKey = Self.sendDedupKey(content: text, replyToId: replyToId, storyReplyToId: storyReplyToId, forwardedFromId: forwardedFromId, attachmentIds: attachmentIds, location: location)
             if let last = lastAcceptedSend, last.key == dedupKey, Date().timeIntervalSince(last.at) < Self.duplicateSendDebounce {
                 Logger.messages.error("SendFlow BLOCKED guard=duplicate-debounce convId=\(self.conversationId, privacy: .public) textLen=\(text.count, privacy: .public) — identical message re-fired within \(Self.duplicateSendDebounce, privacy: .public)s; deduped")
                 return false
@@ -2317,8 +2350,16 @@ class ConversationViewModel: ObservableObject {
                 forwardedFromId: forwardedFromId,
                 forwardedFromConversationId: forwardedFromConversationId,
                 attachmentIds: attachmentIds,
-                attachmentKinds: offlineKinds
+                attachmentKinds: offlineKinds,
+                location: location
             )
+            // Lieu partagé encodé pour la colonne `locationJson` du record
+            // optimiste : une écriture GRDB concurrente déclenche
+            // `messagesDidChange` et effacerait un lieu qui ne vivrait
+            // qu'en mémoire.
+            let offlineLocationJson: String? = location
+                .flatMap { JSONEncoder().encodeOrLog($0, field: "locationJson", id: offlineClientMessageId) }
+                .flatMap { String(data: $0, encoding: .utf8) }
 
             let offlineTempId = queueItem.tempId
             let offlineMessage = Message(
@@ -2333,7 +2374,8 @@ class ConversationViewModel: ObservableObject {
                 createdAt: Date(),
                 updatedAt: Date(),
                 deliveryStatus: .sending,
-                isMe: true
+                isMe: true,
+                location: location
             )
             // Persist offline message to GRDB; store observation surfaces the row
             // automatically — no direct messages.append needed.
@@ -2367,7 +2409,8 @@ class ConversationViewModel: ObservableObject {
                 cachedLastLineWidth: nil, cachedLineCount: nil,
                 cachedTimestampInline: nil,
                 layoutVersion: 0, layoutMaxWidth: nil,
-                changeVersion: 0
+                changeVersion: 0,
+                locationJson: offlineLocationJson
             )
 
             // `insertOptimistic` is a synchronous actor-isolated throw (no
@@ -2398,16 +2441,12 @@ class ConversationViewModel: ObservableObject {
             // just-typed message — with the correct author name — even before
             // the network returns. Without this the preview keeps the previous
             // author/content while the user waits for connectivity.
-            let previewContent = text
-            let previewAt = offlineMessage.createdAt
-            let senderName = authManager.currentUser?.displayName ?? authManager.currentUser?.username
+            let offlineFacet = LastMessageFacet(
+                message: offlineMessage,
+                preview: Self.optimisticListPreview(text: text, messageType: .text, location: location)
+            )
             Task {
-                await ConversationSyncEngine.shared.updateConversationAfterSend(
-                    conversationId: convId,
-                    messagePreview: previewContent,
-                    messageAt: previewAt,
-                    senderName: senderName
-                )
+                await ConversationSyncEngine.shared.updateConversationAfterSend(offlineFacet, conversationId: convId)
             }
 
             // AWAITED enqueue (Bug 1 fix). If the outbox write throws, flip
@@ -2477,6 +2516,14 @@ class ConversationViewModel: ObservableObject {
         // GRDB optimistic insert — the store observation surfaces the row in `messages`
         // automatically (Task 1.5: no direct messages.append here).
         if existingTempId == nil {
+            // Lieu partagé encodé pour la colonne `locationJson` du record
+            // optimiste : écrit EN BASE, pas seulement dans le `Message` en
+            // mémoire — une écriture GRDB concurrente déclenche
+            // `messagesDidChange` et effacerait une valeur purement mémoire.
+            // Les transports, eux, portent le `SharedPlace` tel quel.
+            let optimisticLocationJson: String? = location
+                .flatMap { JSONEncoder().encodeOrLog($0, field: "locationJson", id: tempId) }
+                .flatMap { String(data: $0, encoding: .utf8) }
             let persistence = messagePersistence
             let optimisticRecord = MessageRecord(
                 localId: tempId, serverId: nil,
@@ -2509,7 +2556,8 @@ class ConversationViewModel: ObservableObject {
                 cachedLastLineWidth: nil, cachedLineCount: nil,
                 cachedTimestampInline: nil,
                 layoutVersion: 0, layoutMaxWidth: nil,
-                changeVersion: 0
+                changeVersion: 0,
+                locationJson: optimisticLocationJson
             )
             Logger.messages.info("SendFlow insertOptimistic START tempId=\(tempId, privacy: .public) convId=\(self.conversationId, privacy: .public)")
             do {
@@ -2523,10 +2571,19 @@ class ConversationViewModel: ObservableObject {
                 // appear/reorder in the list until its ACK. finalizeSuccessfulSend
                 // refreshes it with the server timestamp at ACK time.
                 await ConversationSyncEngine.shared.updateConversationAfterSend(
-                    conversationId: conversationId,
-                    messagePreview: Self.optimisticListPreview(text: text, messageType: optimisticMessageType),
-                    messageAt: optimisticRecord.createdAt,
-                    senderName: authManager.currentUser?.displayName ?? authManager.currentUser?.username
+                    LastMessageFacet(
+                        id: tempId,
+                        preview: Self.optimisticListPreview(text: text, messageType: optimisticMessageType, location: location),
+                        senderName: authManager.currentUser?.displayName ?? authManager.currentUser?.username,
+                        at: optimisticRecord.createdAt,
+                        attachments: resolvedAttachments,
+                        attachmentCount: resolvedAttachments.count,
+                        isBlurred: resolvedBlur ?? false,
+                        isViewOnce: resolvedIsViewOnce,
+                        expiresAt: resolvedExpiresAt,
+                        originalLanguage: optimisticRecord.originalLanguage
+                    ),
+                    conversationId: conversationId
                 )
             } catch {
                 Logger.messages.error("SendFlow insertOptimistic FAILED tempId=\(tempId, privacy: .public) error=\(error.localizedDescription, privacy: .public)")
@@ -2582,7 +2639,8 @@ class ConversationViewModel: ObservableObject {
                 effectFlags: pendingEffects.hasAnyEffect ? pendingEffects.flags.rawValue : nil,
                 isEncrypted: isEncrypted ? true : nil,
                 encryptionMode: encryptionMode,
-                clientMessageId: tempId
+                clientMessageId: tempId,
+                location: location
             )
 
             // WebSocket-first send (re-enabled 2026-06-11). On a persistent
@@ -2613,7 +2671,11 @@ class ConversationViewModel: ObservableObject {
                     storyReplyToId: storyReplyToId,
                     originalLanguage: originalLanguage ?? Self.composeLanguage(for: content, preferred: preferredLanguages),
                     isEncrypted: false,
-                    clientMessageId: tempId
+                    clientMessageId: tempId,
+                    // Le canal socket accepte le lieu (MessageHandler.ts) : le
+                    // socket-first RESTE éligible pour un message porteur de
+                    // lieu — pas d'ajout à la liste d'inéligibilité ci-dessus.
+                    location: location
                 ) {
                     await recordSendAttempt(tempId, transport: .socketFirst, startedAt: socketFirstStartedAt, outcome: .success)
                     await finalizeSuccessfulSend(
@@ -2703,7 +2765,8 @@ class ConversationViewModel: ObservableObject {
                     storyReplyToId: storyReplyToId,
                     originalLanguage: originalLanguage ?? Self.composeLanguage(for: content, preferred: preferredLanguages),
                     isEncrypted: isEncrypted,
-                    clientMessageId: tempId
+                    clientMessageId: tempId,
+                    location: location
                 )
                 await recordSendAttempt(
                     tempId,
@@ -2746,7 +2809,8 @@ class ConversationViewModel: ObservableObject {
                 originalLanguage: originalLanguage ?? Self.composeLanguage(for: content, preferred: preferredLanguages),
                 replyToId: replyToId,
                 attachmentIds: attachmentIds,
-                attachmentKinds: retryKinds
+                attachmentKinds: retryKinds,
+                location: location
             )
 
             // AWAITED enqueue (Bug 1 fix — online retry path, B2 2026-05-27).
@@ -2991,8 +3055,15 @@ class ConversationViewModel: ObservableObject {
         let attachmentCount = attachments.count
         // Captured for the conversation-list optimistic update below (computed on
         // the MainActor before the detached insert).
-        let listPreview = Self.optimisticListPreview(text: content, messageType: messageType)
-        let listSenderName = authManager.currentUser?.displayName ?? authManager.currentUser?.username
+        let listFacet = LastMessageFacet(
+            id: tempId,
+            preview: Self.optimisticListPreview(text: content, messageType: messageType),
+            senderName: authManager.currentUser?.displayName ?? authManager.currentUser?.username,
+            at: now,
+            attachments: attachments,
+            attachmentCount: attachments.count,
+            originalLanguage: resolvedOriginalLanguage
+        )
         Task.detached(priority: .userInitiated) {
             do {
                 try await persistence.insertOptimistic(record)
@@ -3000,12 +3071,7 @@ class ConversationViewModel: ObservableObject {
                 // Local-first: surface the media message in the conversation list
                 // immediately (preview + bump to top), before any server ACK —
                 // the media path previously never updated the list optimistically.
-                await ConversationSyncEngine.shared.updateConversationAfterSend(
-                    conversationId: recordConversationId,
-                    messagePreview: listPreview,
-                    messageAt: now,
-                    senderName: listSenderName
-                )
+                await ConversationSyncEngine.shared.updateConversationAfterSend(listFacet, conversationId: recordConversationId)
             } catch {
                 Logger.messages.error("SendFlow insertOptimisticMedia FAILED tempId=\(tempId, privacy: .public) error=\(error.localizedDescription, privacy: .public)")
             }
@@ -3518,15 +3584,17 @@ class ConversationViewModel: ObservableObject {
     ///   « appelant non informé » et laisse le gateway sur son repli
     ///   historique par fenêtre temporelle, qui sur-déclare.
     ///
-    ///   Le badge local n'est vidé que pour un appel non informé : rapporter
-    ///   dix messages sur deux cents ne signifie pas que la conversation est
-    ///   lue, et le remettre à zéro afficherait un mensonge que le serveur
-    ///   corrigerait aussitôt — un clignotement pour rien.
+    ///   Rapporter dix messages sur deux cents ne veut pas dire que la
+    ///   conversation est lue — le badge ne tombe donc PAS sur un lot
+    ///   quelconque. Il tombe quand le lot contient le message le PLUS RÉCENT :
+    ///   à cet instant l'utilisateur n'a plus de retard, et c'est exactement ce
+    ///   que compte le badge.
     ///
     ///   Voir `docs/superpowers/specs/2026-07-24-read-exactness-design.md`.
     func markAsRead(messageIds: [String]? = nil) {
         let convId = conversationId
-        if messageIds == nil {
+        let caughtUpId = caughtUpMessageId(seen: messageIds)
+        if messageIds == nil || caughtUpId != nil {
             // 1. Update cache immediately (local-first) — survives reloadFromCache()
             Task { await ConversationSyncEngine.shared.markConversationReadLocally(convId) }
             // 2. Notify ConversationListViewModel to clear badge in current @Published state
@@ -3554,7 +3622,8 @@ class ConversationViewModel: ObservableObject {
                 upToMessageId: lastMessageId,
                 messageIds: messageIds,
                 language: languages?.language,
-                messageLanguages: languages?.exceptions
+                messageLanguages: languages?.exceptions,
+                caughtUpToMessageId: caughtUpId
             )
             do {
                 try await OfflineQueue.shared.enqueue(.markAsRead, payload: payload, conversationId: convId)
@@ -3570,6 +3639,46 @@ class ConversationViewModel: ObservableObject {
                 ))
             }
         }
+    }
+
+    /// Identifiant SERVEUR du message le plus récent, quand le lecteur vient
+    /// de l'atteindre — donc quand la conversation n'a plus de retard.
+    ///
+    /// Trois conditions, toutes nécessaires :
+    /// - la fenêtre chargée est bien au SOMMET (`!hasNewerMessages`) : après un
+    ///   saut vers un message cité, le bas de l'écran n'est pas le bas de la
+    ///   conversation, et croire l'inverse viderait un badge encore dû ;
+    /// - l'appelant est INFORMÉ (`seen != nil`) : un appel aveugle laisse le
+    ///   gateway sur son repli par fenêtre, qui vide déjà le compteur ;
+    /// - le lot contient le dernier message connu du serveur.
+    ///
+    /// Le repli sur `lastCaughtUpMessageId` rend le rattrapage COLLANT :
+    /// remonter dans l'historique après avoir touché le bas ne remet pas la
+    /// conversation en retard tant qu'aucun message plus récent n'est arrivé.
+    /// Sans lui, un lot ultérieur portant des messages anciens supplanterait
+    /// dans l'outbox (coalescence par conversation) celui qui portait le
+    /// rattrapage, et le badge repartirait au prochain sync.
+    private func caughtUpMessageId(seen: [String]?) -> String? {
+        guard let seen, !hasNewerMessages else { return nil }
+        // Le message le plus récent que le SERVEUR connaît : une bulle
+        // optimiste qu'on vient d'envoyer ne porte pas encore d'ObjectId, et
+        // l'annoncer comme borne de curseur ferait rejeter le corps entier.
+        guard let newest = messages.reversed().lazy
+            .map({ self.serverId(for: $0.id) })
+            .first(where: { Self.isServerMessageId($0) })
+        else { return nil }
+
+        if seen.contains(newest) {
+            lastCaughtUpMessageId = newest
+            return newest
+        }
+        return lastCaughtUpMessageId == newest ? newest : nil
+    }
+
+    /// Un ObjectId MongoDB : 24 caractères hexadécimaux. Le gateway valide le
+    /// corps de `mark-read` avec ce format et rejette tout le lot sinon.
+    nonisolated static func isServerMessageId(_ id: String) -> Bool {
+        id.count == 24 && id.allSatisfy(\.isHexDigit)
     }
 
     /// Server-side delivery confirmation. Fully delegated to the command
@@ -3991,16 +4100,19 @@ class ConversationViewModel: ObservableObject {
     /// — d'où l'apparition « en second temps » des données de langue. En
     /// peuplant le dictionnaire en amont, le tout premier rendu applique déjà
     /// le Prisme Linguistique (contenu traduit affiché comme du natif).
-    private func hydratePersistedTranslations() async {
+    func hydratePersistedTranslations() async {
         let convId = conversationId
         let reader = messagePersistence.reader
         let grouped: [String: [TranslationRecord]] = (try? await reader.read { db in
+            // grdb-07 — un message "own" est keyé localId=cid en GRDB mais ses
+            // traductions sont persistées sous l'id SERVEUR : filtrer sur le
+            // seul localId ne matchait rien pour ces messages.
             let localIds = try MessageRecord
                 .filter(Column("conversationId") == convId)
                 .order(Column("createdAt").desc)
                 .limit(80)
                 .fetchAll(db)
-                .map(\.localId)
+                .flatMap { [$0.localId, $0.serverId].compactMap { $0 } }
             guard !localIds.isEmpty else { return [:] }
             let records = try TranslationRecord
                 .filter(localIds.contains(Column("messageLocalId")))
@@ -4354,14 +4466,6 @@ class ConversationViewModel: ObservableObject {
     }
 
     // MARK: - Location Sharing
-
-    func shareLocation(latitude: Double, longitude: Double, placeName: String? = nil, address: String? = nil) {
-        LocationService.shared.shareLocation(
-            conversationId: conversationId,
-            latitude: latitude, longitude: longitude,
-            placeName: placeName, address: address
-        )
-    }
 
     func startLiveLocation(latitude: Double, longitude: Double, durationMinutes: Int) {
         LocationService.shared.startLiveLocation(

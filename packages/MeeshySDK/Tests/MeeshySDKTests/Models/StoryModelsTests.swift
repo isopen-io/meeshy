@@ -454,7 +454,7 @@ final class StoryModelsTests: XCTestCase {
                 id: rid, type: "STORY", content: nil, originalLanguage: nil, translations: nil,
                 storyEffects: nil, audioUrl: nil, moodEmoji: nil, originalRepostOfId: nil,
                 author: author, media: repostMedia, createdAt: Date(), likeCount: nil,
-                commentCount: nil, isQuote: nil
+                commentCount: nil, isQuote: nil, location: nil
             )
         }
         return APIPost(

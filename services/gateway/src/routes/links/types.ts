@@ -75,7 +75,13 @@ export const sendMessageSchema = z.object({
     .default('fr')
     .transform((v) => normalizeLanguageCode(v) ?? v),
   messageType: z.string().default('text'),
-  attachments: z.array(z.string()).optional()
+  attachments: z.array(z.string()).optional(),
+  // Lieu partagé — champ dédié, jamais un `metadata` brut (cf.
+  // services/location/sharedPlace.ts). Ce chemin (message via lien de
+  // partage / participant anonyme) CONTOURNE MessagingService.handleMessage :
+  // la validation via `parseSharedPlace` est donc appelée directement dans
+  // ce module (routes/links/messages.ts), pas dans MessageProcessor.
+  location: z.unknown().optional()
 }).refine((data) => {
   return (data.content && data.content.trim().length > 0) || (data.attachments && data.attachments.length > 0);
 }, {
@@ -240,7 +246,12 @@ export const sendMessageBodySchema = {
     content: { type: 'string', maxLength: 1000, description: 'Message content (required unless attachments provided)' },
     originalLanguage: { type: 'string', default: 'fr', description: 'Message language code' },
     messageType: { type: 'string', default: 'text', description: 'Message type' },
-    attachments: { type: 'array', items: { type: 'string' }, description: 'Attachment IDs' }
+    attachments: { type: 'array', items: { type: 'string' }, description: 'Attachment IDs' },
+    location: {
+      type: 'object',
+      additionalProperties: true,
+      description: 'Lieu partagé (latitude, longitude, name?, address?, category?) — validé serveur',
+    }
   }
 } as const;
 

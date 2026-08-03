@@ -95,10 +95,10 @@ public struct MeeshyVideoEditorView: View {
                 set: { if !$0 { viewModel.discardRecovery() } }
             )
         ) {
-            Button("Restaurer") { viewModel.acceptRecovery() }
-            Button("Recommencer", role: .cancel) { viewModel.discardRecovery() }
+            Button(String(localized: "videoEditor.resume.restore", defaultValue: "Restaurer", bundle: .module)) { viewModel.acceptRecovery() }
+            Button(String(localized: "videoEditor.resume.restart", defaultValue: "Recommencer", bundle: .module), role: .cancel) { viewModel.discardRecovery() }
         } message: {
-            Text("Une session d'édition non terminée a été retrouvée pour cette vidéo.")
+            Text(String(localized: "videoEditor.resume.message", defaultValue: "Une session d'édition non terminée a été retrouvée pour cette vidéo.", bundle: .module))
         }
     }
 
@@ -134,7 +134,7 @@ public struct MeeshyVideoEditorView: View {
                 HStack(spacing: 5) {
                     Image(systemName: "checkmark")
                         .font(.system(size: 12, weight: .bold))
-                    Text("Terminer")
+                    Text(String(localized: "videoEditor.finish", defaultValue: "Terminer", bundle: .module))
                         .font(.system(size: 14, weight: .bold))
                 }
                 .foregroundStyle(.white)
@@ -166,7 +166,7 @@ public struct MeeshyVideoEditorView: View {
                 } label: {
                     HStack(spacing: 4) {
                         Image(systemName: "arrow.counterclockwise")
-                        Text("Réinitialiser")
+                        Text(String(localized: "videoEditor.reset", defaultValue: "Réinitialiser", bundle: .module))
                     }
                     .font(.system(size: 11, weight: .semibold))
                     .foregroundStyle(theme.textSecondary)
@@ -265,7 +265,7 @@ public struct MeeshyVideoEditorView: View {
                     Image(systemName: "exclamationmark.triangle.fill")
                         .font(.system(size: 34))
                         .foregroundStyle(theme.warning)
-                    Text("Export impossible")
+                    Text(String(localized: "videoEditor.export.failed", defaultValue: "Export impossible", bundle: .module))
                         .font(.system(size: 16, weight: .bold))
                         .foregroundStyle(theme.textPrimary)
                     Text(message)

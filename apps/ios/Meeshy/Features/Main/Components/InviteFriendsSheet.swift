@@ -60,7 +60,7 @@ struct InviteFriendsSheet: View {
     }
 
     private var defaultInviteMessage: String {
-        String(localized: "invite.defaultMessage", defaultValue: "Rejoins moi pour echanger sans filtre ni barriere...")
+        String(localized: "invite.defaultMessage", defaultValue: "Rejoins-moi pour échanger sans filtre ni barrière...")
     }
 
     private var defaultLinkName: String {

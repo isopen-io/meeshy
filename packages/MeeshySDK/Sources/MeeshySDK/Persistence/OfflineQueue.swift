@@ -53,6 +53,13 @@ public struct OfflineQueueItem: Codable, Identifiable, Sendable {
     /// so on-disk rows written before this field existed keep decoding without
     /// migration (S7b — durable offline media, parity with `localAudioPaths`).
     public let localMediaPaths: [String]?
+    /// Lieu partagé attaché au message (Lot 2 — chaîne d'écriture du lieu).
+    /// Rejoué tel quel par le dispatcher sous la clé `location` du corps REST.
+    /// `nil` pour un message sans lieu ET pour les lignes écrites avant ce
+    /// champ — décodé en `decodeIfPresent` pour que les payloads déjà sur le
+    /// disque des utilisateurs continuent à décoder sans migration (même
+    /// convention que `attachmentKinds` / `localAudioPaths`).
+    public let location: SharedPlace?
     public let createdAt: Date
 
     public init(
@@ -67,7 +74,8 @@ public struct OfflineQueueItem: Codable, Identifiable, Sendable {
         attachmentKinds: [String]? = nil,
         localAudioPath: String? = nil,
         localAudioPaths: [String]? = nil,
-        localMediaPaths: [String]? = nil
+        localMediaPaths: [String]? = nil,
+        location: SharedPlace? = nil
     ) {
         self.id = UUID().uuidString
         self.clientMessageId = clientMessageId ?? ClientMessageId.generate()
@@ -82,6 +90,7 @@ public struct OfflineQueueItem: Codable, Identifiable, Sendable {
         self.localAudioPath = localAudioPath
         self.localAudioPaths = localAudioPaths
         self.localMediaPaths = localMediaPaths
+        self.location = location
         self.createdAt = Date()
     }
 
@@ -101,6 +110,7 @@ public struct OfflineQueueItem: Codable, Identifiable, Sendable {
         localAudioPath: String?,
         localAudioPaths: [String]? = nil,
         localMediaPaths: [String]? = nil,
+        location: SharedPlace? = nil,
         createdAt: Date
     ) {
         self.id = id
@@ -116,6 +126,7 @@ public struct OfflineQueueItem: Codable, Identifiable, Sendable {
         self.localAudioPath = localAudioPath
         self.localAudioPaths = localAudioPaths
         self.localMediaPaths = localMediaPaths
+        self.location = location
         self.createdAt = createdAt
     }
 
@@ -133,6 +144,7 @@ public struct OfflineQueueItem: Codable, Identifiable, Sendable {
         case localAudioPath
         case localAudioPaths
         case localMediaPaths
+        case location
         case createdAt
     }
 
@@ -151,6 +163,8 @@ public struct OfflineQueueItem: Codable, Identifiable, Sendable {
         self.localAudioPath = try c.decodeIfPresent(String.self, forKey: .localAudioPath) ?? nil
         self.localAudioPaths = try c.decodeIfPresent([String].self, forKey: .localAudioPaths) ?? nil
         self.localMediaPaths = try c.decodeIfPresent([String].self, forKey: .localMediaPaths) ?? nil
+        // Clé absente des lignes écrites avant ce champ → nil, jamais d'échec.
+        self.location = try c.decodeIfPresent(SharedPlace.self, forKey: .location)
         self.createdAt = try c.decode(Date.self, forKey: .createdAt)
     }
 
@@ -169,6 +183,7 @@ public struct OfflineQueueItem: Codable, Identifiable, Sendable {
         try c.encodeIfPresent(localAudioPath, forKey: .localAudioPath)
         try c.encodeIfPresent(localAudioPaths, forKey: .localAudioPaths)
         try c.encodeIfPresent(localMediaPaths, forKey: .localMediaPaths)
+        try c.encodeIfPresent(location, forKey: .location)
         try c.encode(createdAt, forKey: .createdAt)
     }
 }
@@ -407,13 +422,18 @@ public protocol OfflineQueueing: Sendable {
     /// ViewModels can route offline media posts through an injected (mockable)
     /// queue, like the generic `enqueue`.
     @discardableResult
+    /// `location` fait partie de l'exigence : une valeur par défaut sur
+    /// l'implémentation concrète ne satisfait PAS une exigence de protocole en
+    /// Swift, et les appelants (`FeedViewModel.createOfflineMediaPost`) passent
+    /// la position à travers ce protocole.
     func enqueuePostMedia(
         sourceMediaURLs: [URL],
         clientMutationId: String,
         content: String?,
         visibility: String,
         originalLanguage: String?,
-        type: String?
+        type: String?,
+        location: SharedPlace?
     ) async throws -> OfflineQueue.EnqueueMediaResult
 
     /// Draft recovery — returns the most recent unsent `.createPost` row whose
@@ -525,6 +545,12 @@ public actor OfflineQueue {
     public static let shared = OfflineQueue()
 
     public nonisolated let retrySucceeded = SendablePassthrough<OfflineRetrySuccess>()
+    /// outbox-04 — émis en fin de CHAQUE enqueue qui écrit durablement une
+    /// nouvelle row `.pending` (jamais sur un no-op de coalescing/dédup ni sur
+    /// un échec). `OutboxRetryScheduler.startObservingMutationEnqueued` s'y
+    /// abonne au boot (débounce ~250 ms) pour déclencher un flush immédiat
+    /// sans câbler `flushNow()` dans chaque ViewModel.
+    public nonisolated let mutationEnqueued = SendablePassthrough<Void>()
     /// Wave 1 Task 3.6 — unified terminal-failure signal. `OutboxFlusher`
     /// emits here when a record hits `maxAttempts`, and `OutboxDispatcher`
     /// emits here when it raises a permanent rejection (404/410/409 conflict
@@ -1040,6 +1066,7 @@ public actor OfflineQueue {
         items.append(item)
         logger.info("Enqueued offline message for conversation \(item.conversationId, privacy: .public), queue size: \(self.items.count)")
         await refreshPendingCount()
+        mutationEnqueued.send(())
     }
 
     // MARK: - Non-message mutation enqueue (Wave 1 Task 3.x)
@@ -1115,13 +1142,14 @@ public actor OfflineQueue {
 
         do {
             try await pool.write { db in
+                var finalPayload: Data = encoded
                 if shouldCoalesce {
-                    // Latest-state-wins kinds (e.g. `markAsRead`): drop every
-                    // earlier `.pending` / `.failed` row for the same anchor
-                    // before writing the new one. The newer payload always
-                    // supersedes (reading up to msg N also covers 1..N-1) —
-                    // so letting them pile up burns bandwidth and inflates
-                    // the SyncPill rotation with 17 duplicates for 4 convs.
+                    // Latest-state-wins kinds (e.g. `markStoryViewed`): drop
+                    // every earlier `.pending` / `.failed` row for the same
+                    // anchor. `.markAsRead` est l'exception (outbox-05) : ses
+                    // messageIds sont des REÇUS de lecture exacte, pas un état
+                    // à jeter — ils sont fusionnés (union) dans le payload
+                    // survivant avant la suppression des rows périmées.
                     let stale: [OutboxRecord] = try OutboxRecord
                         .filter(Column("kind") == kind.rawValue)
                         .filter(Column("conversationId") == anchor)
@@ -1129,6 +1157,12 @@ public actor OfflineQueue {
                             .contains(Column("status")))
                         .fetchAll(db)
                     if !stale.isEmpty {
+                        if kind == .markAsRead {
+                            finalPayload = Self.mergeMarkAsReadPayloads(
+                                newest: encoded,
+                                stale: stale.map(\.payload)
+                            )
+                        }
                         let staleIds = stale.map(\.id)
                         try OutboxRecord
                             .filter(staleIds.contains(Column("id")))
@@ -1141,7 +1175,7 @@ public actor OfflineQueue {
                     conversationId: anchor,
                     messageLocalId: nil,
                     clientMessageId: cmid,
-                    payload: encoded,
+                    payload: finalPayload,
                     status: .pending,
                     createdAt: now
                 ).insert(db)
@@ -1153,6 +1187,7 @@ public actor OfflineQueue {
 
         logger.info("Enqueued \(kind.rawValue, privacy: .public) outbox row \(outboxId, privacy: .public)")
         await refreshPendingCount()
+        mutationEnqueued.send(())
         return outboxId
     }
 
@@ -1184,6 +1219,44 @@ public actor OfflineQueue {
         default:
             return false
         }
+    }
+
+    /// outbox-05 — fusionne le payload `.markAsRead` entrant avec toutes les
+    /// rows périmées qu'il remplace, au lieu de jeter leurs `messageIds`
+    /// (reçus de lecture exacte). Décodage tolérant : une row legacy
+    /// indécodable est ignorée, jamais un enqueue planté.
+    private static func mergeMarkAsReadPayloads(newest: Data, stale: [Data]) -> Data {
+        let decoder = JSONDecoder()
+        guard let newestPayload = try? decoder.decode(MarkAsReadPayload.self, from: newest) else {
+            return newest
+        }
+        let staleDecoded = stale.compactMap { try? decoder.decode(MarkAsReadPayload.self, from: $0) }
+
+        let informed = (staleDecoded.map(\.messageIds) + [newestPayload.messageIds]).compactMap { $0 }
+        let mergedMessageIds: [String]?
+        if informed.isEmpty {
+            mergedMessageIds = nil
+        } else {
+            var seen = Set<String>()
+            mergedMessageIds = informed.flatMap { $0 }.filter { seen.insert($0).inserted }
+        }
+
+        var mergedLanguages: [String: String] = [:]
+        for languages in staleDecoded.map(\.messageLanguages) + [newestPayload.messageLanguages] {
+            guard let languages else { continue }
+            mergedLanguages.merge(languages, uniquingKeysWith: { _, new in new })
+        }
+
+        let merged = MarkAsReadPayload(
+            clientMutationId: newestPayload.clientMutationId,
+            conversationId: newestPayload.conversationId,
+            upToMessageId: newestPayload.upToMessageId,
+            messageIds: mergedMessageIds,
+            language: newestPayload.language,
+            messageLanguages: mergedLanguages.isEmpty ? nil : mergedLanguages,
+            caughtUpToMessageId: newestPayload.caughtUpToMessageId
+        )
+        return (try? JSONEncoder().encode(merged)) ?? newest
     }
 
     /// Reads the top-level `clientMutationId` field from a JSON-encoded
@@ -1419,6 +1492,7 @@ public actor OfflineQueue {
         items.append(item)
         logger.info("Enqueued \(sourceAudioURLs.count) audio track(s) for conversation \(conversationId, privacy: .public), message \(clientMessageId, privacy: .public)")
         await refreshPendingCount()
+        mutationEnqueued.send(())
 
         return EnqueueAudiosResult(outboxId: outboxId, localAudioPaths: relativePaths)
     }
@@ -1557,6 +1631,7 @@ public actor OfflineQueue {
         items.append(item)
         logger.info("Enqueued \(sourceMediaURLs.count) media file(s) for conversation \(conversationId, privacy: .public), message \(clientMessageId, privacy: .public)")
         await refreshPendingCount()
+        mutationEnqueued.send(())
 
         return EnqueueMediaResult(outboxId: outboxId, localMediaPaths: relativePaths)
     }
@@ -1592,7 +1667,8 @@ public actor OfflineQueue {
         content: String?,
         visibility: String,
         originalLanguage: String? = nil,
-        type: String? = nil
+        type: String? = nil,
+        location: SharedPlace? = nil
     ) async throws -> EnqueueMediaResult {
         guard let pool = outboxPool else { throw EnqueueMediaError.poolNotConfigured }
 
@@ -1607,7 +1683,8 @@ public actor OfflineQueue {
             visibility: visibility,
             originalLanguage: originalLanguage,
             localMediaPaths: relativePaths,
-            type: type
+            type: type,
+            location: location
         )
 
         // Phase A — write-ahead INSERT of the `.createPost` row (referencing the
@@ -1730,6 +1807,9 @@ public actor OfflineQueue {
                         localAudioPath: item.localAudioPath,
                         localAudioPaths: item.localAudioPaths,
                         localMediaPaths: item.localMediaPaths,
+                        // L'édition ne porte que le texte : le lieu du send en
+                        // attente est conservé, pas silencieusement perdu.
+                        location: item.location,
                         createdAt: item.createdAt
                     )
                     let mergedPayload: Data
@@ -1795,6 +1875,7 @@ public actor OfflineQueue {
             throw OfflineQueueError.writeFailed(underlying: error)
         }
         await refreshPendingCount()
+        mutationEnqueued.send(())
     }
 
     /// Persists a `deleteMessage` request. If a pending `sendMessage` or
@@ -1929,6 +2010,7 @@ public actor OfflineQueue {
         // dedup catches the duplicate but the optimistic row would flicker.
         items.removeAll { $0.clientMessageId == clientMessageId }
         await refreshPendingCount()
+        mutationEnqueued.send(())
     }
 
     public func dequeue(_ itemId: String) async {
@@ -2171,6 +2253,7 @@ public actor OfflineQueue {
         switch outcome {
         case .inserted:
             logger.info("Enqueued reaction \(action.rawValue, privacy: .public) \(emoji, privacy: .public) for message \(messageId, privacy: .public)")
+            mutationEnqueued.send(())
         case .droppedNew(let matched):
             // Surface the duplicate as a drop so optimistic UI can reconcile
             // (e.g. if the caller had already painted a "pending" badge for
@@ -2465,6 +2548,16 @@ public actor OfflineQueue {
         var successPayloads: [OfflineRetrySuccess] = []
 
         for (index, item) in items.enumerated() {
+            // Items carrying local files belong exclusively to the
+            // OutboxFlusher — only it knows how to upload them via TUS.
+            // Replaying them here would POST the caption as text-only and
+            // delete the outbox row on success: the files would never be
+            // uploaded (silent media loss).
+            if !(item.localMediaPaths ?? []).isEmpty
+                || !(item.localAudioPaths ?? []).isEmpty
+                || !(item.localAudioPath ?? "").isEmpty {
+                continue
+            }
             if index > 0 {
                 // Brief jitter to avoid a thundering-herd on the gateway when
                 // draining a large backlog — kept short so the user sees their

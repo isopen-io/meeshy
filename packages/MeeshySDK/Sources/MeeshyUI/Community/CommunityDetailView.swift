@@ -12,6 +12,9 @@ public struct CommunityDetailView: View {
     public var onOpenMembers: ((String) -> Void)? = nil
     public var onInvite: ((String) -> Void)? = nil
     public var onDismiss: (() -> Void)? = nil
+    /// Création d'un post de communauté, fournie par l'hôte. `nil` ⇒ l'état vide
+    /// du feed n'affiche AUCUN bouton (plutôt qu'un bouton inerte).
+    public var onCreatePost: (() -> Void)? = nil
 
     @State private var showLeaveConfirm = false
     @State private var showAddChannel = false
@@ -26,13 +29,15 @@ public struct CommunityDetailView: View {
                 onOpenSettings: ((MeeshyCommunity) -> Void)? = nil,
                 onOpenMembers: ((String) -> Void)? = nil,
                 onInvite: ((String) -> Void)? = nil,
-                onDismiss: (() -> Void)? = nil) {
+                onDismiss: (() -> Void)? = nil,
+                onCreatePost: (() -> Void)? = nil) {
         _viewModel = StateObject(wrappedValue: CommunityDetailViewModel(communityId: communityId))
         self.onSelectConversation = onSelectConversation
         self.onOpenSettings = onOpenSettings
         self.onOpenMembers = onOpenMembers
         self.onInvite = onInvite
         self.onDismiss = onDismiss
+        self.onCreatePost = onCreatePost
     }
 
     public var body: some View {
@@ -451,14 +456,19 @@ public struct CommunityDetailView: View {
     private var postsSection: some View {
         // Placeholder for Community Posts / Stories
         VStack(spacing: 8) {
+            // Le libellé + l'action ne sont posés QUE si l'hôte sait créer un
+            // post de communauté. `EmptyStateView` masque son bouton quand
+            // `onAction` est nil : l'état vide reste informatif au lieu
+            // d'exposer un « Créer un post » dont l'action était un `// To do`
+            // vide — un bouton qui ne menait nulle part.
             EmptyStateView(
                 icon: "photo.on.rectangle.angled",
                 title: String(localized: "community.detail.posts.empty.title", defaultValue: "No Posts Yet", bundle: .module),
                 subtitle: String(localized: "community.detail.posts.empty.subtitle", defaultValue: "Community feed will appear here", bundle: .module),
-                actionLabel: String(localized: "community.detail.posts.empty.action", defaultValue: "Créer un post", bundle: .module),
-                onAction: { 
-                    // To do: Show post creator
-                }
+                actionLabel: onCreatePost == nil
+                    ? nil
+                    : String(localized: "community.detail.posts.empty.action", defaultValue: "Créer un post", bundle: .module),
+                onAction: onCreatePost
             )
             .frame(height: 200)
         }

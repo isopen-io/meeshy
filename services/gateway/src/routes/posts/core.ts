@@ -3,6 +3,7 @@ import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import type { Post } from '@meeshy/shared/types/post';
 import { UnifiedAuthRequest } from '../../middleware/auth';
 import { PostService } from '../../services/PostService';
+import { storyContentEditRequested } from '../../services/posts/storyEditPolicy';
 import { PostTranslationService } from '../../services/posts/PostTranslationService';
 import { CreatePostSchema, UpdatePostSchema, TranslatePostSchema, PostParams } from './types';
 import { sendSuccess, sendUnauthorized, sendBadRequest, sendNotFound, sendForbidden, sendInternalError, sendError } from '../../utils/response';
@@ -10,6 +11,7 @@ import { resolveMentionedUsers, MentionService } from '../../services/MentionSer
 import { createPostRouteRateLimitConfig } from '../../middleware/rate-limiter';
 import { withMutationLog } from '../../utils/withMutationLog';
 import { SecuritySanitizer } from '../../utils/sanitize.js';
+import { hoistLocationDeep, parseSharedPlace, type SharedPlace } from '../../services/location/sharedPlace';
 
 /**
  * Hisse `metadata.trackingLinks` ([{ url, token }]) en top-level sur le payload
@@ -26,6 +28,16 @@ function hoistTrackingLinks<T extends Record<string, unknown>>(post: T): T {
   }
   return post;
 }
+
+/**
+ * Hisse `metadata.location` en top-level `location`, sur le post ET sur
+ * chaque commentaire de son aperçu embarqué (`post.comments`) — voir
+ * `hoistLocationDeep` (services/location/sharedPlace.ts). Appliqué à la fois
+ * à la réponse REST et au payload socket (contrairement à `trackingLinks`,
+ * qui ne hissait jusqu'ici que le payload socket, et qui ne descend pas dans
+ * `comments`). No-op si rien ne porte de lieu.
+ */
+const hoistLocation = hoistLocationDeep;
 
 export function registerCoreRoutes(
   fastify: FastifyInstance,
@@ -80,7 +92,7 @@ export function registerCoreRoutes(
       const socialEvents = fastify.socialEvents;
       if (socialEvents) {
         const postType = parsed.data.type ?? 'POST';
-        const broadcastPost = hoistTrackingLinks(post) as unknown as Post;
+        const broadcastPost = hoistLocation(hoistTrackingLinks(post)) as unknown as Post;
         if (postType === 'STORY') {
           socialEvents.broadcastStoryCreated(broadcastPost, authContext.registeredUser.id).catch((err) => fastify.log.warn({ err }, '[POST /posts]: broadcast story created failed'));
         } else if (postType === 'STATUS') {
@@ -188,7 +200,7 @@ export function registerCoreRoutes(
         });
       }
 
-      return sendSuccess(reply, post, { statusCode: 201, meta: { mentionedUsers } });
+      return sendSuccess(reply, hoistLocation(post as unknown as Record<string, unknown>), { statusCode: 201, meta: { mentionedUsers } });
     } catch (error) {
       fastify.log.error(`[POST /posts] Error: ${error}`);
       return sendInternalError(reply, 'Internal server error', { code: 'INTERNAL_ERROR' });
@@ -223,7 +235,7 @@ export function registerCoreRoutes(
         ? await resolveMentionedUsers(prisma, contentStrings)
         : [];
 
-      return sendSuccess(reply, post, { meta: { mentionedUsers } });
+      return sendSuccess(reply, hoistLocation(post as unknown as Record<string, unknown>), { meta: { mentionedUsers } });
     } catch (error) {
       fastify.log.error(`[GET /posts/:postId] Error: ${error}`);
       return sendInternalError(reply, 'Internal server error', { code: 'INTERNAL_ERROR' });
@@ -248,9 +260,26 @@ export function registerCoreRoutes(
         return sendBadRequest(reply, 'Invalid request', { code: 'VALIDATION_ERROR' });
       }
 
-      const sanitizedUpdateData = parsed.data.content !== undefined
+      // Lieu à l'édition — tri-état : absent = inchangé, null = retrait,
+      // objet = remplacement validé par le MÊME parseSharedPlace que la
+      // création (jamais de passthrough du bloc client vers metadata).
+      let locationUpdate: SharedPlace | null | undefined;
+      if (parsed.data.location !== undefined) {
+        if (parsed.data.location === null) {
+          locationUpdate = null;
+        } else {
+          const place = parseSharedPlace(parsed.data.location);
+          if (!place) {
+            return sendBadRequest(reply, 'Invalid location', { code: 'INVALID_LOCATION' });
+          }
+          locationUpdate = place;
+        }
+      }
+
+      const baseUpdateData = parsed.data.content !== undefined
         ? { ...parsed.data, content: SecuritySanitizer.sanitizeText(parsed.data.content) }
         : parsed.data;
+      const sanitizedUpdateData = { ...baseUpdateData, location: locationUpdate };
       const post = await postService.updatePost(postId, authContext.registeredUser.id, sanitizedUpdateData);
       if (!post) {
         return sendNotFound(reply, 'Post not found', { code: 'POST_NOT_FOUND' });
@@ -304,16 +333,26 @@ export function registerCoreRoutes(
       const socialEvents = fastify.socialEvents;
       if (socialEvents) {
         const updatedPostType = (post as any).type as string;
+        // Second chemin d'enrichissement (le premier est la création
+        // ci-dessus) : le lieu — posé à la création OU modifié/retiré par
+        // l'édition (tri-état `location`, merge metadata dans `updatePost`)
+        // — doit rester visible sur CE broadcast aussi, sinon un post modifié
+        // après coup (visibilité, contenu…) republierait sans sa position.
+        const broadcastPost = hoistLocation(post as unknown as Record<string, unknown>) as unknown as Post;
         if (updatedPostType === 'STORY') {
-          socialEvents.broadcastStoryUpdated(post as any, authContext.registeredUser.id).catch((err) => fastify.log.warn({ err }, '[PUT /posts/:postId]: broadcast story updated failed'));
+          // Même prédicat que le reset d'engagement du service — les deux ne
+          // peuvent pas diverger sur un même payload.
+          socialEvents.broadcastStoryUpdated(broadcastPost, authContext.registeredUser.id, {
+            engagementReset: storyContentEditRequested(parsed.data),
+          }).catch((err) => fastify.log.warn({ err }, '[PUT /posts/:postId]: broadcast story updated failed'));
         } else if (updatedPostType === 'STATUS') {
-          socialEvents.broadcastStatusUpdated(post as any, authContext.registeredUser.id).catch((err) => fastify.log.warn({ err }, '[PUT /posts/:postId]: broadcast status updated failed'));
+          socialEvents.broadcastStatusUpdated(broadcastPost, authContext.registeredUser.id).catch((err) => fastify.log.warn({ err }, '[PUT /posts/:postId]: broadcast status updated failed'));
         } else {
-          socialEvents.broadcastPostUpdated(post as any, authContext.registeredUser.id).catch((err) => fastify.log.warn({ err }, '[PUT /posts/:postId]: broadcast post updated failed'));
+          socialEvents.broadcastPostUpdated(broadcastPost, authContext.registeredUser.id).catch((err) => fastify.log.warn({ err }, '[PUT /posts/:postId]: broadcast post updated failed'));
         }
       }
 
-      return sendSuccess(reply, post, { meta: { mentionedUsers: updateMentionedUsers } });
+      return sendSuccess(reply, hoistLocation(post as unknown as Record<string, unknown>), { meta: { mentionedUsers: updateMentionedUsers } });
     } catch (error) {
       if (error instanceof Error && error.message === 'FORBIDDEN') {
         return sendForbidden(reply, 'Not authorized to edit this post', { code: 'FORBIDDEN' });

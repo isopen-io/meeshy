@@ -12,14 +12,17 @@ import os
 final class FeedSocketHandler {
     private let persistence: FeedPersistenceActor
     private let socialSocket: SocialSocketProviding
+    private let currentUserIdProvider: @MainActor () -> String?
     private var cancellables = Set<AnyCancellable>()
 
     init(
         persistence: FeedPersistenceActor,
-        socialSocket: SocialSocketProviding = SocialSocketManager.shared
+        socialSocket: SocialSocketProviding = SocialSocketManager.shared,
+        currentUserIdProvider: @MainActor @escaping () -> String? = { AuthManager.shared.currentUser?.id }
     ) {
         self.persistence = persistence
         self.socialSocket = socialSocket
+        self.currentUserIdProvider = currentUserIdProvider
     }
 
     // MARK: - Lifecycle
@@ -155,20 +158,28 @@ final class FeedSocketHandler {
         try? await persistence.insertPost(record)
     }
 
+    // stores-03 — isLikedByMe n'a de sens que pour l'utilisateur courant : le
+    // like d'un TIERS ne porte que le compteur absolu (miroir des gates des
+    // trois consommateurs RAM : CacheCoordinator.applyPostLike, FeedViewModel,
+    // PostDetailViewModel.applyServerLike).
     private func handlePostLiked(_ data: SocketPostLikedData) async {
-        try? await persistence.updateLikeCount(
-            postId: data.postId,
-            count: data.likeCount,
-            isLikedByMe: true
-        )
+        if data.userId == currentUserIdProvider() {
+            try? await persistence.updateLikeCount(
+                postId: data.postId, count: data.likeCount, isLikedByMe: true
+            )
+        } else {
+            try? await persistence.updateLikeCountOnly(postId: data.postId, count: data.likeCount)
+        }
     }
 
     private func handlePostUnliked(_ data: SocketPostUnlikedData) async {
-        try? await persistence.updateLikeCount(
-            postId: data.postId,
-            count: data.likeCount,
-            isLikedByMe: false
-        )
+        if data.userId == currentUserIdProvider() {
+            try? await persistence.updateLikeCount(
+                postId: data.postId, count: data.likeCount, isLikedByMe: false
+            )
+        } else {
+            try? await persistence.updateLikeCountOnly(postId: data.postId, count: data.likeCount)
+        }
     }
 
     // MARK: - Comment Handlers
@@ -268,7 +279,11 @@ extension PostRecord {
             translationsJson: Self.encode(post.translations),
             createdAt: post.createdAt,
             updatedAt: post.updatedAt,
-            changeVersion: 0
+            changeVersion: 0,
+            // Sans ce hissage, une position affichée juste après l'envoi
+            // disparaît au prochain chargement du cache : `locationJson`
+            // resterait nil pour toujours (Task 16).
+            locationJson: Self.encode(post.location).flatMap { String(data: $0, encoding: .utf8) }
         )
     }
 
@@ -298,7 +313,11 @@ extension CommentRecord {
             replyCount: comment.replyCount ?? 0,
             effectFlags: comment.effectFlags ?? 0,
             createdAt: comment.createdAt,
-            changeVersion: 0
+            changeVersion: 0,
+            // Même hissage que sur PostRecord : sans lui, la position d'un
+            // commentaire disparaît au prochain chargement du cache (Task 16).
+            locationJson: comment.location.flatMap { try? JSONEncoder().encode($0) }
+                .flatMap { String(data: $0, encoding: .utf8) }
         )
     }
 }

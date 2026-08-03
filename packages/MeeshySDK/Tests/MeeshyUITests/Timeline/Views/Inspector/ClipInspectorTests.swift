@@ -110,9 +110,11 @@ final class ClipInspectorTests: XCTestCase {
     // section `details` est absorbée par `timing`, dont les trois valeurs sont
     // devenues des champs saisissables.
 
-    func test_visibleSections_foregroundVideo_showsEverything() {
+    /// Depuis le 2026-07-29 la fiche ne redit plus ce qu'un geste fait déjà :
+    /// début/fin/durée se règlent sur la piste, le plan au canvas.
+    func test_visibleSections_foregroundVideo_showsWhatNoGestureProduces() {
         let sections = ClipInspector.visibleSections(kind: .video, isBackground: false)
-        XCTAssertEqual(sections, [.header, .timing, .transform, .volume, .animation, .toggles, .actions])
+        XCTAssertEqual(sections, [.header, .volume, .animation, .toggles, .actions])
     }
 
     func test_sectionEnum_hasNoDetailsCase() {
@@ -132,7 +134,7 @@ final class ClipInspectorTests: XCTestCase {
     /// réellement sur elle (`setClipBackground` la traite).
     func test_visibleSections_imageKeepsItsBackgroundToggle() {
         let sections = ClipInspector.visibleSections(kind: .image, isBackground: false)
-        XCTAssertEqual(sections, [.header, .timing, .transform, .animation, .toggles, .actions])
+        XCTAssertEqual(sections, [.header, .animation, .toggles, .actions])
     }
 
     /// Le TEXTE, lui, la perd : `setClipLoop` ET `setClipBackground` l'ignorent
@@ -140,7 +142,7 @@ final class ClipInspectorTests: XCTestCase {
     /// interrupteurs morts — on ne montre plus un contrôle qui ne fait rien.
     func test_visibleSections_textDropsItsDeadTogglesRow() {
         let sections = ClipInspector.visibleSections(kind: .text, isBackground: false)
-        XCTAssertEqual(sections, [.header, .timing, .transform, .animation, .actions])
+        XCTAssertEqual(sections, [.header, .animation, .actions])
     }
 
     // Un FOND couvre toute la slide : début/durée sont ignorés par le moteur —

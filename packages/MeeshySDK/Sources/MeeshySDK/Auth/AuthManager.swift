@@ -103,6 +103,11 @@ public final class AuthManager: ObservableObject, AuthManaging {
     /// direct socket-reconnect chain has existed since the initial
     /// implementation. The publisher pins the contract for future readers.
     public let tokenDidRotate = PassthroughSubject<Void, Never>()
+    /// startup-03 — émis quand la session est invalidée PAR LE SERVEUR
+    /// (`requireReauthentication`), jamais sur un logout volontaire. Permet
+    /// aux hooks de purge de distinguer les deux chemins (ex. signaler la
+    /// perte de messages en attente d'envoi).
+    public let sessionInvalidated = PassthroughSubject<Void, Never>()
 
     // MARK: - Protocol Publisher
 
@@ -129,6 +134,11 @@ public final class AuthManager: ObservableObject, AuthManaging {
 
     /// Prevents concurrent refresh loops when APIClient fires multiple 401s.
     private var tokenRefreshTask: Task<String, Error>?
+
+    /// Throttle gate for `refreshCurrentUserProfile()` — foreground transitions
+    /// can fire in quick succession (Control Center, app-switcher peek); this
+    /// keeps each one from re-hitting `/auth/me`.
+    private var lastProfileRefreshAt: Date?
 
     #if DEBUG
     /// Tâche d'arrière-plan lancée par `handleUnauthorized()`, retenue pour que
@@ -428,6 +438,20 @@ public final class AuthManager: ObservableObject, AuthManaging {
         // jamais laisser de bodies REST (conversations, messages) d'un compte
         // au repos sur disque, quel que soit le chemin de logout emprunté.
         APIClient.shared.clearHTTPCache()
+        // outbox-02 — même règle pour la file settings : elle persiste
+        // endpoint+corps verbatim sans scoping userId et son flush rejoue
+        // sous le token de la session COURANTE — sans purge, un PATCH
+        // /users/me du compte A s'appliquerait au profil du compte B (même
+        // contrat de perte assumée que StoryPublishQueue E9). Avant le guard
+        // pour couvrir aussi le chemin sans session active.
+        await SettingsActionQueue.shared.clearAll()
+        // sync-04 — les watermarks de delta-sync (lastSyncTimestamp /
+        // lastCleanupDate / lastFullReconcileAt) sont per-user en UserDefaults
+        // globaux : sans reset, le compte suivant hérite du checkpoint de la
+        // session sortante et un delta déclenché avant son premier fullSync
+        // persiste une liste PARTIELLE comme fraîche. Avant le guard, même
+        // patron que les purges ci-dessus.
+        ConversationSyncEngine.shared.resetSyncCheckpoints()
         guard let userId = activeUserId else {
             // Idempotent : peut être appelée plusieurs fois sans crash.
             // Garde un état cohérent même quand aucune session n'est active.
@@ -481,6 +505,9 @@ public final class AuthManager: ObservableObject, AuthManaging {
         StoryDraftStore.shared.clear()
         await StoryPublishQueue.shared.clearAll()
         await ConversationStore.shared.reset()
+        // stores-10 — les catégories du compte sortant (RAM + snapshot widget)
+        // ne doivent pas survivre au logout.
+        await UserCategoryStore.shared.reset()
         UserPreferencesManager.shared.resetSession()
         FriendshipCache.shared.clear()
         // A5 — le curseur de séquence est per-user : le remettre à zéro évite
@@ -662,6 +689,37 @@ public final class AuthManager: ObservableObject, AuthManaging {
         }
     }
 
+    /// Revalidates `currentUser` against `/auth/me` on scene foreground so a
+    /// profile edit made from another device (avatar, displayName…) reaches
+    /// this device without waiting for a cold start. Throttled to once per
+    /// 60s and a no-op when not authenticated. Shares the exact error
+    /// semantics of the `checkExistingSession` background revalidation: a
+    /// dead account (`isActive == false`) or an auth failure surfaces
+    /// re-authentication, any other error is transient and leaves the
+    /// session untouched.
+    public func refreshCurrentUserProfile() async {
+        guard isAuthenticated, let userId = activeUserId else { return }
+        if let lastProfileRefreshAt, Date().timeIntervalSince(lastProfileRefreshAt) < 60 {
+            return
+        }
+        lastProfileRefreshAt = Date()
+
+        do {
+            let user = try await authService.me()
+            updateUserAfterRevalidation(user, userId: userId)
+        } catch let error as MeeshyError {
+            switch error {
+            case .auth:
+                requireReauthentication(userId: userId)
+            case .network, .server, .message, .media, .forbidden, .unknown:
+                // Transient — keep session, retry on next foreground / launch.
+                break
+            }
+        } catch {
+            // Cancellation / unknown — preserve session.
+        }
+    }
+
     // MARK: - Handle 401 (called from APIClient during active session)
 
     public func handleUnauthorized() {
@@ -782,11 +840,20 @@ public final class AuthManager: ObservableObject, AuthManaging {
     /// to false so the UI can prompt for re-login. The saved account is
     /// preserved — the user just needs to enter their password again.
     private func requireReauthentication(userId: String) {
+        // startup-03 — signal AVANT tout flip pour que le hook outbox
+        // (DependencyContainer) distingue une session invalidée par le
+        // serveur d'un logout volontaire (qui n'émet jamais ce signal).
+        sessionInvalidated.send(())
         keychain.delete(forKey: tokenKey(for: userId), account: nil)
         keychain.delete(forKey: sessionTokenKey(for: userId), account: nil)
         keychain.delete(forKey: tokenDateUDKey(for: userId), account: nil)
         activeUserId = nil
         currentUser = nil
+        // sync-04 — ce chemin ne passe PAS par logout() mais son flip
+        // isAuthenticated purge quand même les caches (container + app) :
+        // sans ce reset, la ré-auth du MÊME compte hérite d'un checkpoint
+        // pointant après des données purgées = delta partiel servi comme frais.
+        ConversationSyncEngine.shared.resetSyncCheckpoints()
         isAuthenticated = false
         APIClient.shared.authToken = nil
     }

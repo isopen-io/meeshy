@@ -7,6 +7,7 @@ import { attachmentMediaSelect } from '../../services/attachments/attachmentIncl
 import { sendSuccess, sendNotFound, sendForbidden, sendInternalError } from '../../utils/response';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { enhancedLogger } from '../../utils/logger-enhanced';
+import { hoistLocationOnto } from '../../services/location/sharedPlace';
 
 const logger = enhancedLogger.child({ module: 'ThreadsRoute' });
 
@@ -30,6 +31,10 @@ const threadMessageSelect = {
   validatedMentions: true,
   createdAt: true,
   updatedAt: true,
+  // Lot 1 : le fil affiche une bulle complète pour la racine ET pour le
+  // message cité (replyTo) — sans `metadata`, un message géolocalisé perd
+  // sa position dans ce thread alors qu'il la restitue ailleurs.
+  metadata: true,
   sender: {
     select: {
       id: true,
@@ -62,6 +67,8 @@ const threadMessageSelect = {
       createdAt: true,
       senderId: true,
       validatedMentions: true,
+      // Même rappel que ci-dessus, sur le message CITÉ cette fois.
+      metadata: true,
       sender: {
         select: {
           id: true,
@@ -103,6 +110,21 @@ const threadMessageSelect = {
   }
 };
 
+/**
+ * Hisse `metadata.location` sur un message de fil ET sur son `replyTo`
+ * imbriqué (le message cité). Les deux affichent une vraie bulle complète —
+ * un hoist qui ne porterait que sur la racine laisserait la citation sans
+ * position, comme si le message cité n'en avait jamais eu.
+ */
+function hoistThreadMessageLocation<T extends Record<string, unknown>>(message: T): T {
+  const hoisted = hoistLocationOnto(message);
+  const replyTo = (hoisted as { replyTo?: unknown }).replyTo;
+  if (replyTo && typeof replyTo === 'object' && !Array.isArray(replyTo)) {
+    return { ...hoisted, replyTo: hoistLocationOnto(replyTo as Record<string, unknown>) } as T;
+  }
+  return hoisted;
+}
+
 export function registerThreadsRoutes(
   fastify: FastifyInstance,
   prisma: PrismaClient,
@@ -126,7 +148,12 @@ export function registerThreadsRoutes(
           type: 'object',
           properties: {
             success: { type: 'boolean', example: true },
-            data: { type: 'object' }
+            // Pas de sous-schéma pour `data` (forme récursive libre :
+            // message + replyTo + replies[]) — `additionalProperties: true`
+            // évite que fast-json-stringify le sérialise comme `{}` faute de
+            // `properties` déclarées, ce qui aurait aussi bien tronqué le
+            // hoist `location` en silence.
+            data: { type: 'object', additionalProperties: true }
           }
         },
         400: errorResponseSchema,
@@ -165,8 +192,8 @@ export function registerThreadsRoutes(
       const replies = await collectThreadReplies(prisma, conversationId, messageId);
 
       return sendSuccess(reply, {
-        parent,
-        replies,
+        parent: hoistThreadMessageLocation(parent as unknown as Record<string, unknown>),
+        replies: replies.map((m) => hoistThreadMessageLocation(m as unknown as Record<string, unknown>)),
         totalCount: replies.length
       });
     } catch (error) {

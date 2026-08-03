@@ -152,7 +152,9 @@ internal struct _InlineOverlayControls: View {
             .overlay(Circle().stroke(Color.white.opacity(0.18), lineWidth: 0.5))
             .shadow(color: accent.opacity(0.35), radius: 10, y: 3)
         }
-        .accessibilityLabel(manager.isPlaying ? "Pause" : "Play")
+        .accessibilityLabel(manager.isPlaying
+            ? String(localized: "media.video.pause", defaultValue: "Pause", bundle: .module)
+            : String(localized: "media.video.play", defaultValue: "Lire la vidéo", bundle: .module))
     }
 
     /// Cross-fade entre `play.fill` et `pause.fill`. Gestion versionnée

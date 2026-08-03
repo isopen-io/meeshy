@@ -152,37 +152,71 @@ struct RepostContentReelClassificationTests {
     }
 }
 
-@Suite("ReelComposition (creation-time default type)")
+@Suite("ReelComposition (creation-time qualification, règle produit 2026-08-02)")
 struct ReelCompositionTests {
 
-    @Test("any media kind suggests a reel")
-    func suggests() {
-        #expect(ReelComposition.suggestsReel(mediaKinds: [.video]))
-        #expect(ReelComposition.suggestsReel(mediaKinds: [.image]))
-        #expect(ReelComposition.suggestsReel(mediaKinds: [.image, .image]))
-        #expect(ReelComposition.suggestsReel(mediaKinds: [.audio]))
-        #expect(ReelComposition.suggestsReel(mediaKinds: [.audio, .image]))
+    // MARK: - qualifiesAsReel(mediaKinds:) — video || audio || >= 2 images
+
+    @Test("a video, an audio, or at least two images qualifies as a reel")
+    func qualifies() {
+        #expect(ReelComposition.qualifiesAsReel(mediaKinds: [.video]))
+        #expect(ReelComposition.qualifiesAsReel(mediaKinds: [.audio]))
+        #expect(ReelComposition.qualifiesAsReel(mediaKinds: [.image, .image]))
+        #expect(ReelComposition.qualifiesAsReel(mediaKinds: [.image, .image, .image]))
+        #expect(ReelComposition.qualifiesAsReel(mediaKinds: [.audio, .image]))
+        #expect(ReelComposition.qualifiesAsReel(mediaKinds: [.video, .image]))
     }
 
-    @Test("no media or only non-reel media does not suggest a reel")
-    func doesNotSuggest() {
-        #expect(ReelComposition.suggestsReel(mediaKinds: []) == false)
-        #expect(ReelComposition.suggestsReel(mediaKinds: [.document]) == false)
-        #expect(ReelComposition.suggestsReel(mediaKinds: [.location]) == false)
+    @Test("a single image does NOT qualify — the 2→1 removal trap")
+    func singleImageDoesNotQualify() {
+        #expect(ReelComposition.qualifiesAsReel(mediaKinds: [.image]) == false)
+        #expect(ReelComposition.qualifiesAsReel(mediaKinds: [.image, .document]) == false)
     }
 
-    @Test("media posts default to REEL")
+    @Test("no media or only non-reel media never qualifies")
+    func doesNotQualify() {
+        #expect(ReelComposition.qualifiesAsReel(mediaKinds: []) == false)
+        #expect(ReelComposition.qualifiesAsReel(mediaKinds: [.document]) == false)
+        #expect(ReelComposition.qualifiesAsReel(mediaKinds: [.document, .document]) == false)
+    }
+
+    // MARK: - qualifiesAsReel(mimeTypes:) — same rule from MIME strings
+
+    @Test("MIME variant mirrors the kinds variant")
+    func mimeMirrorsKinds() {
+        #expect(ReelComposition.qualifiesAsReel(mimeTypes: ["video/mp4"]))
+        #expect(ReelComposition.qualifiesAsReel(mimeTypes: ["audio/mp4"]))
+        #expect(ReelComposition.qualifiesAsReel(mimeTypes: ["image/jpeg", "image/png"]))
+        #expect(ReelComposition.qualifiesAsReel(mimeTypes: ["audio/mpeg", "image/heic"]))
+        #expect(ReelComposition.qualifiesAsReel(mimeTypes: ["image/jpeg"]) == false)
+        #expect(ReelComposition.qualifiesAsReel(mimeTypes: ["application/pdf"]) == false)
+        #expect(ReelComposition.qualifiesAsReel(mimeTypes: []) == false)
+        #expect(ReelComposition.qualifiesAsReel(mimeTypes: ["IMAGE/JPEG", "Image/PNG"])) // case-insensitive
+    }
+
+    // MARK: - defaultType
+
+    @Test("qualifying compositions default to REEL")
     func defaultsToReel() {
         #expect(ReelComposition.defaultType(mediaKinds: [.video]) == .reel)
-        #expect(ReelComposition.defaultType(mediaKinds: [.image, .audio]) == .reel)
+        #expect(ReelComposition.defaultType(mediaKinds: [.audio]) == .reel)
+        #expect(ReelComposition.defaultType(mediaKinds: [.image, .image]) == .reel)
+        #expect(ReelComposition.defaultType(mimeTypes: ["audio/mp4"]) == .reel)
+    }
+
+    @Test("a single image defaults to POST even without forcePlainPost")
+    func singleImageDefaultsToPost() {
+        #expect(ReelComposition.defaultType(mediaKinds: [.image]) == .post)
+        #expect(ReelComposition.defaultType(mimeTypes: ["image/jpeg"]) == .post)
     }
 
     @Test("forcing a plain post overrides the reel default")
     func forcePlainPost() {
         #expect(ReelComposition.defaultType(mediaKinds: [.video], forcePlainPost: true) == .post)
+        #expect(ReelComposition.defaultType(mimeTypes: ["audio/mp4"], forcePlainPost: true) == .post)
     }
 
-    @Test("text-only posts default to POST")
+    @Test("text-only or document-only posts default to POST")
     func textDefaultsToPost() {
         #expect(ReelComposition.defaultType(mediaKinds: []) == .post)
         #expect(ReelComposition.defaultType(mediaKinds: [.document]) == .post)

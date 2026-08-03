@@ -16,6 +16,72 @@ annulables et la persistance déjà en place.
 
 **Spec :** `docs/superpowers/specs/2026-07-28-story-clip-volume-automation-design.md`
 
+## État au 2026-07-28 — le chantier A est CLOS
+
+Les 13 tâches sont livrées, ainsi que les deux points qui restaient ouverts en fin de
+journée. Deux écarts au plan, corrigés à l'exécution et signalés ici parce que le texte
+des tâches les porte encore :
+
+- `TimelineProject.mutateKeyframes` est `fileprivate`, pas `internal` — la Task 2 se
+  teste à travers `AddKeyframeCommand.apply(to:)`.
+- La garde de source de la Task 5 remonte de `Tests/MeeshyUITests/Story/` : **quatre**
+  `deletingLastPathComponent`, pas trois.
+
+Deux défauts absents du plan ont été trouvés en chemin : `StoryMediaLayer` relisait
+`media?.volume` à chaque ré-attache et aurait écrasé l'automation ; et
+`mutateKeyframes` REFUSAIT explicitement les clips audio — le vrai verrou de
+l'automation sonore.
+
+### Les deux points restants, réglés
+
+1. **Le drapeau `isDuckingDisabled`** (spec A2) est livré, avec sa bascule dans la
+   fiche : `StoryMediaObject.isDuckingDisabled` optionnel, un cas
+   `SetClipPropertyCommand.isDuckingDisabled` pour l'annulation, et
+   `StoryVolumeResolver.isDucking(slideDucks:isDuckingDisabled:)` comme décision par
+   clip. L'absence du champ vaut « atténuation active » : la lire autrement
+   annulerait le bénéfice rétroactif du ducking sur les stories publiées.
+   L'interrupteur n'apparaît que sur une VIDÉO d'une slide portant un audio de FOND —
+   ailleurs il ne changerait rien à ce qu'on entend.
+
+2. **Étape 8 de la Task 13 — la cohabitation dans 52 pt se juge au rendu**, contre ce
+   que ce plan affirmait. `VideoLaneCohabitationSnapshotTests` monte la vraie barre
+   dans une fenêtre, avec une vidéo qui a réellement du son, et lit les pixels.
+   Verdict : **les trois calques cohabitent**, aucune hauteur de piste à augmenter,
+   aucun élément à retirer.
+
+   Deux conditions non négociables pour ce harnais : la barre doit être montée dans une
+   FENÊTRE (`loadedWaveform` vient d'une `.task` qu'un `ImageRenderer` ne déclenche
+   jamais — on photographierait une piste sans onde), et les marges de sécurité doivent
+   être neutralisées (`safeAreaRegions = []`), sans quoi la piste descend et le cadrage
+   n'existe nulle part dans l'application.
+
+### Un défaut trouvé hors plan : l'export ne duckait pas
+
+Le spec liste l'export parmi les trois surfaces du ducking ; seule la lecture
+l'appliquait. Dans le fichier produit, la musique repassait donc sous la piste de la
+vidéo — le défaut même que ce chantier existe pour corriger. `volumeRamps` prend
+désormais `isDucking`, et l'atténuation multiplie chaque niveau APRÈS le plafond.
+
+Son déclencheur est plus étroit que celui du lecteur, à dessein : `composeAudioLanes`
+n'exporte que les `audioPlayerObjects` réels, jamais l'audio de fond LEGACY que
+`resolvedBackgroundAudio` sait synthétiser.
+
+### Deux constats visuels à arbitrer
+
+- **La courbe barre le titre** quand le volume est à mi-course. Le titre est centré
+  verticalement, alors que le commentaire de `waveformBand` le suppose en haut. Aucune
+  correction n'est évidente : monter le titre déplacerait la collision sur le niveau
+  NOMINAL, qui est la valeur par défaut.
+- **L'échelle dB aplatit la forme d'onde.** Avec un plancher à −60 dB, une dynamique
+  musicale ordinaire (0,15 → 0,95 d'amplitude) se traduit par des barres de hauteurs
+  très proches. C'est le comportement voulu de la Task A6, pas un défaut — mais la
+  waveform informe alors moins qu'on ne l'imagine en lisant le plan.
+
+⚠️ Le gate PNG de `ClipInspectorSnapshotTests` **n'a pas réagi** à l'ajout du bloc
+d'automation, alors qu'une mesure de hauteur prouve qu'il est monté
+(`ClipInspectorVolumeSectionMountedTests`). Ne pas s'appuyer sur ces références pour
+valider une évolution de cette fiche.
+
 **Pile :** Swift 6 / SwiftUI / AVFoundation (iOS) · TypeScript / Zod / Jest (gateway)
 
 ## Contraintes globales

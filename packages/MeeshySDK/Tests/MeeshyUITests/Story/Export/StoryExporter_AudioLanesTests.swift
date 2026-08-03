@@ -137,6 +137,87 @@ final class StoryExporter_AudioLanesTests: XCTestCase {
         XCTAssertEqual(params.count, 1, "fadeIn/fadeOut → ramps de volume dans le mix")
     }
 
+    // MARK: - Repli sans resolver (chemins « Partager » / « Enregistrer »)
+
+    /// Le resolver est une OPTIMISATION du composer (fichiers locaux pas encore
+    /// uploadés), jamais la condition d'existence de l'audio. Une story relue
+    /// depuis la liste porte ses URLs dans `mediaURL` : sans ce repli, les
+    /// chemins qui n'ont pas de resolver à offrir exportaient un MP4 muet.
+    func test_composeAudioLanes_noResolver_fallsBackToMediaURL() async throws {
+        let url = try Self.makeAudioFile(seconds: 2.0)
+        defer { try? FileManager.default.removeItem(at: url) }
+        var audio = StoryAudioPlayerObject(id: "au-1", postMediaId: "pm-1", volume: 0.5)
+        audio.mediaURL = url.absoluteString
+        let slide = Self.makeSlide(audios: [audio], duration: 4)
+        let composition = AVMutableComposition()
+
+        let params = try await StoryExporter.composeAudioLanes(
+            slide: slide,
+            composition: composition,
+            totalDuration: CMTime(seconds: 4, preferredTimescale: 600),
+            resolver: nil
+        )
+
+        XCTAssertEqual(composition.tracks(withMediaType: .audio).count, 1,
+                       "Sans resolver, `mediaURL` doit porter la piste")
+        let segment = try XCTUnwrap(
+            composition.tracks(withMediaType: .audio).first?.segments.first(where: { !$0.isEmpty }))
+        XCTAssertEqual(segment.timeMapping.target.duration.seconds, 2.0, accuracy: 0.05)
+        XCTAssertEqual(params.count, 1, "volume 0.5 ≠ nominal → params de mix requis")
+    }
+
+    /// Le resolver garde la priorité : le composer sert des fichiers locaux plus
+    /// frais que l'URL distante persistée.
+    func test_composeAudioLanes_resolverWins_overMediaURL() async throws {
+        let resolved = try Self.makeAudioFile(seconds: 2.0)
+        let stale = try Self.makeAudioFile(seconds: 1.0)
+        defer {
+            try? FileManager.default.removeItem(at: resolved)
+            try? FileManager.default.removeItem(at: stale)
+        }
+        var audio = StoryAudioPlayerObject(id: "au-1", postMediaId: "pm-1")
+        audio.mediaURL = stale.absoluteString
+        let slide = Self.makeSlide(audios: [audio], duration: 4)
+        let composition = AVMutableComposition()
+
+        _ = try await StoryExporter.composeAudioLanes(
+            slide: slide,
+            composition: composition,
+            totalDuration: CMTime(seconds: 4, preferredTimescale: 600),
+            resolver: { _ in resolved }
+        )
+
+        let segment = try XCTUnwrap(
+            composition.tracks(withMediaType: .audio).first?.segments.first(where: { !$0.isEmpty }))
+        XCTAssertEqual(segment.timeMapping.target.duration.seconds, 2.0, accuracy: 0.05,
+                       "L'URL du resolver (2 s) prime sur `mediaURL` (1 s)")
+    }
+
+    /// LE test du bug utilisateur : « j'ai enregistré la story et il n'y a plus
+    /// d'audio ». `StoryExporter.export` appelé SANS resolver — exactement ce que
+    /// font « Partager » et « Enregistrer dans Photos » — doit produire un MP4
+    /// qui porte la piste audio de la story.
+    func test_export_withoutResolver_bakesAudioLaneIntoMP4() async throws {
+        let audioURL = try Self.makeAudioFile(seconds: 2.0)
+        let outputURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("lane-export-\(UUID().uuidString).mp4")
+        defer {
+            try? FileManager.default.removeItem(at: audioURL)
+            try? FileManager.default.removeItem(at: outputURL)
+        }
+        var audio = StoryAudioPlayerObject(id: "au-1", postMediaId: "pm-1", volume: 0.8)
+        audio.mediaURL = audioURL.absoluteString
+        let slide = Self.makeSlide(audios: [audio], duration: 2)
+
+        try await StoryExporter.export(slide, to: outputURL)
+
+        let tracks = try await AVURLAsset(url: outputURL).loadTracks(withMediaType: .audio)
+        XCTAssertEqual(tracks.count, 1,
+                       "Un export sans resolver doit rester sonore — c'est le bug « story enregistrée muette »")
+        let duration = try await XCTUnwrap(tracks.first).load(.timeRange).duration.seconds
+        XCTAssertGreaterThan(duration, 0.5, "La piste audio ne doit pas être vide")
+    }
+
     // MARK: - Fixtures
 
     private static func makeSlide(audios: [StoryAudioPlayerObject],

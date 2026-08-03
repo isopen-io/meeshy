@@ -93,7 +93,9 @@ platform :ios do
       app_identifier: [
         "me.meeshy.app",
         "me.meeshy.app.notification-service",
-        "me.meeshy.app.widgets"
+        "me.meeshy.app.widgets",
+        # Ajouté 2026-07-28 avec le ré-embarquement de MeeshyShareExtension.
+        "me.meeshy.app.share-extension"
       ],
       api_key: api_key,
       # readonly skips the Dev Portal round-trip and just installs the certs/profiles
@@ -140,7 +142,11 @@ platform :ios do
       skip_package_ipa: true,
       # DEVELOPMENT_TEAM pinned to D72UK7R5RE since 2026-07-28 — see the header
       # block in Appfile for every site carrying this value.
-      xcargs: "DEVELOPMENT_TEAM=D72UK7R5RE -allowProvisioningUpdates SWIFT_OPTIMIZATION_LEVEL=-Onone CODE_SIGN_STYLE=Automatic"
+      # Plus de SWIFT_OPTIMIZATION_LEVEL=-Onone depuis le 2026-07-31 : le
+      # contournement du commit 2a32f6462 est obsolète, `-O` + wholemodule
+      # (défaut Release) compile en 20 min sans LLVM ERROR — mesuré sur CI,
+      # run 30658055261. Voir le bloc explicatif dans apps/ios/project.yml.
+      xcargs: "DEVELOPMENT_TEAM=D72UK7R5RE -allowProvisioningUpdates CODE_SIGN_STYLE=Automatic"
     )
 
     # Strip embedded framework signatures so the export step re-signs them
@@ -308,7 +314,9 @@ platform :ios do
       app_identifier: [
         "me.meeshy.app",
         "me.meeshy.app.notification-service",
-        "me.meeshy.app.widgets"
+        "me.meeshy.app.widgets",
+        # Ajouté 2026-07-28 avec le ré-embarquement de MeeshyShareExtension.
+        "me.meeshy.app.share-extension"
       ],
       api_key: api_key,
       force: true,

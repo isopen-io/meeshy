@@ -49,10 +49,15 @@ struct PostDetailView: View {
     @State private var fullscreenMediaId: String? = nil
     @State private var showFullscreenGallery = false
     @State private var audioFullscreen: AudioFullscreenSource?
+    /// Lieu du post ouvert plein écran (sticker / carte de la page Detail).
+    @State private var detailFullscreenPlace: BubbleFullscreenPlace?
     @State private var composerLanguage: String = DefaultComposerLanguage.resolve()
     @State private var commentBlurEnabled: Bool = false
     @State private var commentEffects: MessageEffects = .none
     @State private var composerFocusTrigger: Bool = false
+    /// Focus réel du champ du composer — pilote l'insertion d'un texte déposé
+    /// (au curseur quand le champ a le focus, sinon à la fin).
+    @State private var composerIsFocused: Bool = false
     /// Section de commentaire actuellement surlignée (cible d'une notification).
     @State private var highlightedCommentId: String? = nil
     /// Garde-fou : ne défile vers la cible qu'une seule fois (les commentaires
@@ -73,6 +78,11 @@ struct PostDetailView: View {
     @State private var showCommentPhotoPicker: Bool = false
     @State private var commentPhotoItems: [PhotosPickerItem] = []
     @State private var showCommentFilePicker: Bool = false
+    @State private var showCommentLocationPicker: Bool = false
+    /// Lieu choisi via le picker, en attente d'envoi — transporté jusqu'au
+    /// commentaire à l'envoi (contrairement à `FeedCommentsSheet`, dont le
+    /// transport arrive dans une tâche ultérieure du plan).
+    @State private var pendingPlace: SharedPlace? = nil
     @StateObject private var audioRecorder = AudioRecorderManager()
     @State private var isTextExpanded = false
     @State private var headerScrollOffset: CGFloat = 0
@@ -395,6 +405,29 @@ struct PostDetailView: View {
                 .padding(.top, 8)
         }
 
+        // Lieu attaché au post (constat user 2026-07-30) : même paire de
+        // rendus que la card du feed — carte pleine largeur + texte overlay
+        // quand la position est le seul visuel, sinon sticker compact.
+        if let place = post.location {
+            Group {
+                if !post.hasMedia && post.repost == nil {
+                    // Pas de texte en overlay ici : la page Detail rend déjà le
+                    // texte complet dans sa `textZone` — la carte est le visuel.
+                    FeedPostLocationMapCard(
+                        place: place,
+                        overlayText: nil,
+                        onOpen: { detailFullscreenPlace = BubbleFullscreenPlace(place: place) }
+                    )
+                } else {
+                    FeedPostLocationSticker(place: place) {
+                        detailFullscreenPlace = BubbleFullscreenPlace(place: place)
+                    }
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.top, 8)
+        }
+
         // Repost embed
         //
         // STORY qui reposte une STORY : le canvas principal ci-dessus rend
@@ -702,8 +735,11 @@ struct PostDetailView: View {
             SocialSocketManager.shared.joinPostRoom(postId: postId)
             // Anti-spam banner: declare this post as "currently visible" so
             // NotificationToastManager can drop in-app banners about it (the user
-            // already sees the content live).
-            NotificationToastManager.shared.activePostId = postId
+            // already sees the content live). `onPostOpened` fait DAVANTAGE que
+            // l'ancienne affectation nue de `activePostId` : il marque aussi les
+            // notifications de ce post comme lues (cache local + serveur), le
+            // contenu étant consommé.
+            NotificationToastManager.shared.onPostOpened(postId)
             // Record view when post detail is opened.
             // - viewPost → vue UNIQUE (viewCount, dédupliquée, sauvegardée non affichée)
             // - registerDetailOpen → vue TOTALE (postOpenCount, chaque ouverture) + impression,
@@ -717,9 +753,7 @@ struct PostDetailView: View {
         }
         .onDisappear {
             SocialSocketManager.shared.leavePostRoom(postId: postId)
-            if NotificationToastManager.shared.activePostId == postId {
-                NotificationToastManager.shared.activePostId = nil
-            }
+            NotificationToastManager.shared.onPostClosed(postId)
         }
         .trackEngagement(postId: postId, contentType: .post, surface: .detail)
         .adaptiveOnChange(of: viewModel.post) { _, updatedPost in
@@ -820,15 +854,27 @@ struct PostDetailView: View {
                     originalContent: post.content,
                     originalLanguage: post.originalLanguage,
                     originalType: post.type,
-                    canBeReel: post.hasMedia,
                     media: post.media.map { EditablePostMedia($0) },
+                    originalLocation: post.location,
                     isRepost: post.repost != nil,
                     onSave: { draft in
-                        await viewModel.updatePost(content: draft.content, language: draft.language, type: draft.type, removeMediaIds: draft.removeMediaIds.isEmpty ? nil : draft.removeMediaIds)
+                        await viewModel.updatePost(content: draft.content, language: draft.language, type: draft.type, removeMediaIds: draft.removeMediaIds.isEmpty ? nil : draft.removeMediaIds, location: draft.location)
                     },
                     onDismiss: { isEditing = false }
                 )
             }
+        }
+        .fullScreenCover(item: $detailFullscreenPlace) { item in
+            // Même surface plein écran que la bulle et la card feed :
+            // carte + « Ouvrir dans Plans » / « Itinéraire ».
+            LocationFullscreenView(
+                latitude: item.place.latitude,
+                longitude: item.place.longitude,
+                placeName: item.place.name,
+                address: item.place.address,
+                accentColor: accentColor,
+                senderName: displayPost?.author
+            )
         }
         .fullScreenCover(isPresented: $showFullscreenGallery) {
             if let post = displayPost {
@@ -1352,6 +1398,16 @@ struct PostDetailView: View {
                     .padding(.bottom, 8)
             }
 
+            // Lieu du post SOURCE — sticker cliquable, même surface plein
+            // écran que le lieu du post porteur.
+            if let place = repost.location {
+                FeedPostLocationSticker(place: place) {
+                    detailFullscreenPlace = BubbleFullscreenPlace(place: place)
+                }
+                .padding(.horizontal, 12)
+                .padding(.bottom, 8)
+            }
+
             // Audio URL (legacy story audio)
             if let audioUrl = repost.audioUrl, !audioUrl.isEmpty, !isStoryRepost {
                 let repostAudio = MeeshyMessageAttachment(
@@ -1649,7 +1705,6 @@ struct PostDetailView: View {
         let visualMedia = mediaList.filter { $0.type == .image || $0.type == .video }
         let audioMedia = mediaList.filter { $0.type == .audio }
         let docMedia = mediaList.filter { $0.type == .document }
-        let locMedia = mediaList.filter { $0.type == .location }
 
         VStack(spacing: 8) {
             // Single media
@@ -1667,10 +1722,6 @@ struct PostDetailView: View {
                 }
                 // Documents
                 ForEach(docMedia) { media in
-                    detailSingleMedia(media, isPrimaryVideo: false)
-                }
-                // Locations
-                ForEach(locMedia) { media in
                     detailSingleMedia(media, isPrimaryVideo: false)
                 }
             }
@@ -1805,36 +1856,6 @@ struct PostDetailView: View {
             .accessibilityElement(children: .combine)
             .accessibilityLabel(String(format: String(localized: "a11y.post.media.document", defaultValue: "Document : %@", bundle: .main), media.fileName ?? String(localized: "feed.post.detail.document", defaultValue: "Document", bundle: .main)))
 
-        case .location:
-            HStack(spacing: 14) {
-                ZStack {
-                    RoundedRectangle(cornerRadius: 10)
-                        .fill(Color(hex: media.thumbnailColor).opacity(0.2))
-                        .frame(width: 64, height: 64)
-                    Image(systemName: "mappin.circle.fill")
-                        .font(.title2)
-                        .foregroundColor(Color(hex: media.thumbnailColor))
-                }
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(media.locationName ?? String(localized: "feed.post.detail.location", defaultValue: "Location", bundle: .main))
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundColor(theme.textPrimary)
-                    if let lat = media.latitude, let lon = media.longitude {
-                        Text(String(format: "%.4f, %.4f", lat, lon))
-                            .font(.caption2)
-                            .foregroundColor(theme.textMuted)
-                    }
-                }
-                Spacer()
-            }
-            .padding(14)
-            .background(
-                RoundedRectangle(cornerRadius: 12)
-                    .fill(theme.mode.isDark ? Color.white.opacity(0.05) : Color.black.opacity(0.03))
-                    .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color(hex: media.thumbnailColor).opacity(0.3), lineWidth: 1))
-            )
-            .accessibilityElement(children: .combine)
-            .accessibilityLabel(String(format: String(localized: "a11y.post.media.location", defaultValue: "Position : %@", bundle: .main), media.locationName ?? String(localized: "feed.post.detail.location", defaultValue: "Location", bundle: .main)))
         }
     }
 
@@ -2016,19 +2037,22 @@ struct PostDetailView: View {
         UniversalComposerBar(
             style: .light,
             mode: .comment,
+            onIngest: { ingests in handleComposerIngest(ingests) },
             accentColor: accentColor,
             forceShowAttachment: true,
             forceShowVoice: true,
             selectedLanguage: composerLanguage,
             onLanguageChange: { composerLanguage = $0 },
+            onFocusChange: { composerIsFocused = $0 },
             onSendMessage: { text, attachments, _ in submitComment(text: text, attachments: attachments) },
+            onLocationRequest: { showCommentLocationPicker = true },
             textBinding: $composerText,
             replyBanner: replyBannerView,
-            customAttachmentsPreview: commentAttachments.isEmpty
+            customAttachmentsPreview: (commentAttachments.isEmpty && pendingPlace == nil)
                 ? nil
-                : AnyView(CommentAttachmentsTray(attachments: commentAttachments) { id in
+                : AnyView(CommentAttachmentsTray(attachments: commentAttachments, onRemove: { id in
                     commentAttachments.removeAll { $0.id == id }
-                  }),
+                  }, place: pendingPlace, onRemovePlace: { pendingPlace = nil })),
             onTextChange: { text in
                 mentionController.handleQuery(in: text)
                 CommentDraftStore.shared.save(postId: postId, text: text)
@@ -2040,7 +2064,7 @@ struct PostDetailView: View {
             externalIsRecording: audioRecorder.isRecording,
             externalRecordingDuration: audioRecorder.duration,
             externalAudioLevels: audioRecorder.audioLevels,
-            externalHasContent: !commentAttachments.isEmpty || audioRecorder.isRecording,
+            externalHasContent: !commentAttachments.isEmpty || audioRecorder.isRecording || pendingPlace != nil,
             onPhotoLibrary: { showCommentPhotoPicker = true },
             onFilePicker: { showCommentFilePicker = true },
             isBlurEnabled: $commentBlurEnabled,
@@ -2061,6 +2085,12 @@ struct PostDetailView: View {
         ) { result in
             if case .success(let urls) = result {
                 commentAttachments = CommentComposerStaging.fileAttachments(from: urls)
+            }
+        }
+        .sheet(isPresented: $showCommentLocationPicker) {
+            LocationPickerView(accentColor: accentColor) { place in
+                pendingPlace = place
+                showCommentLocationPicker = false
             }
         }
         .adaptiveOnChange(of: commentPhotoItems) { _, items in
@@ -2097,11 +2127,33 @@ struct PostDetailView: View {
 
     // MARK: - Comment send + voice (parity with feed/reels composer)
 
+    /// Dépôt / collage arrivé par la bande du composer (`onIngest`) : textes
+    /// fusionnés en UNE insertion (au curseur si le champ a le focus, sinon à
+    /// la fin), fichiers routés vers le staging commentaire existant
+    /// (spec 2026-07-30, lot 1).
+    private func handleComposerIngest(_ ingests: [ComposerIngest]) {
+        if let block = CommentComposerIngestion.mergedText(from: ingests) {
+            if !(composerIsFocused && CommentComposerIngestion.insertAtCursor(block)) {
+                composerText += block
+            }
+        }
+        CommentComposerIngestion.stageFiles(
+            CommentComposerIngestion.files(from: ingests),
+            accentColor: accentColor
+        ) { staged in
+            withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
+                commentAttachments.append(contentsOf: staged)
+            }
+        }
+    }
+
     private func submitComment(text: String, attachments: [ComposerAttachment]) {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         let media = CommentComposerStaging.firstPendingMedia(in: attachments)
         commentAttachments.removeAll()
-        guard !trimmed.isEmpty || media != nil else { return }
+        let place = pendingPlace
+        pendingPlace = nil
+        guard !trimmed.isEmpty || media != nil || place != nil else { return }
         let effects = commentEffects
         let blur = commentBlurEnabled
         commentEffects = .none
@@ -2112,11 +2164,11 @@ struct PostDetailView: View {
         let effectFlags = flags > 0 ? Int(flags) : nil
         Task {
             if let media {
-                await viewModel.submitCommentWithMedia(trimmed, effectFlags: effectFlags, parentId: parentId, pendingMedia: media)
+                await viewModel.submitCommentWithMedia(trimmed, effectFlags: effectFlags, parentId: parentId, pendingMedia: media, location: place)
             } else if parentId != nil {
-                await viewModel.sendReply(trimmed, effectFlags: effectFlags)
+                await viewModel.sendReply(trimmed, effectFlags: effectFlags, location: place)
             } else {
-                await viewModel.sendComment(trimmed, effectFlags: effectFlags)
+                await viewModel.sendComment(trimmed, effectFlags: effectFlags, location: place)
             }
         }
     }

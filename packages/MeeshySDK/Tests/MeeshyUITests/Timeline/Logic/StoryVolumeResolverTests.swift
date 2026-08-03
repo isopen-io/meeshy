@@ -81,4 +81,32 @@ final class StoryVolumeResolverTests: XCTestCase {
         let v = StoryVolumeResolver.ducked(2.0, isDucking: true)
         XCTAssertEqual(v, 2.0 * StoryVolume.duckingFactor, accuracy: 0.0001)
     }
+
+    // MARK: - Bascule par clip
+
+    /// Le contexte de la slide ne décide plus seul : l'auteur peut couper
+    /// l'atténuation clip par clip.
+    func test_duckingGate_clipCanOptOut() {
+        XCTAssertFalse(StoryVolumeResolver.isDucking(slideDucks: true,
+                                                     isDuckingDisabled: true))
+    }
+
+    func test_duckingGate_appliesWhenNotDisabled() {
+        XCTAssertTrue(StoryVolumeResolver.isDucking(slideDucks: true,
+                                                    isDuckingDisabled: false))
+    }
+
+    /// L'absence du champ vaut « atténuation active » : le lire comme une
+    /// désactivation annulerait le bénéfice rétroactif du ducking sur les
+    /// stories déjà publiées.
+    func test_duckingGate_nilMeansEnabled() {
+        XCTAssertTrue(StoryVolumeResolver.isDucking(slideDucks: true,
+                                                    isDuckingDisabled: nil))
+    }
+
+    /// Couper l'atténuation d'un clip ne la crée pas là où elle n'existait pas.
+    func test_duckingGate_slideContextStillWins() {
+        XCTAssertFalse(StoryVolumeResolver.isDucking(slideDucks: false,
+                                                     isDuckingDisabled: false))
+    }
 }

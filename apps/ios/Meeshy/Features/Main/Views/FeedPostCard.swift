@@ -78,6 +78,8 @@ struct FeedPostCard: View {
     @State var fullscreenMediaId: String? = nil
     @State var showFullscreenGallery = false
     @State private var isTextExpanded = false
+    /// Lieu du post ouvert plein écran (tap sur le sticker ou la carte).
+    @State private var fullscreenPlace: BubbleFullscreenPlace?
 
     var accentColor: String { post.authorColor }
     private var topComments: [FeedComment] { Array(post.comments.sorted { $0.likes > $1.likes }.prefix(3)) }
@@ -169,6 +171,12 @@ struct FeedPostCard: View {
         activeDisplayLangCode
             ?? post.resolvedLanguageCode(preferredLanguages: AuthManager.shared.currentUser?.preferredContentLanguages ?? [])
             ?? "fr"
+    }
+
+    /// Post « position seule » : aucun média visuel, aucun repost — la carte
+    /// devient le visuel principal et le texte part en overlay dessus.
+    private var isLocationOnlyPost: Bool {
+        post.location != nil && !post.hasMedia && post.repost == nil
     }
 
     private var effectiveContent: String {
@@ -280,8 +288,13 @@ struct FeedPostCard: View {
                     // Le corps passe par `MessageTextRenderer` pour rendre les URLs
                     // cliquables + trackées (`/l/<token>`) tout en gardant `onTapPost`
                     // sur le texte non-lien (priorité au lien = défaut SwiftUI).
+                    // Post « position seule » : le texte part EN OVERLAY sur la
+                    // carte (`FeedPostLocationMapCard` plus bas) — le bloc texte
+                    // standard serait un doublon (directive user 2026-07-30).
                     let truncation = truncatedContent
-                    if isTextExpanded {
+                    if isLocationOnlyPost {
+                        EmptyView()
+                    } else if isTextExpanded {
                         MessageTextRenderer.render(effectiveContent, color: theme.textPrimary, accentColor: postLinkTint, trackedLinks: post.trackedLinkMap.isEmpty ? nil : post.trackedLinkMap)
                             .lineLimit(nil)
                             .tint(postLinkTint)
@@ -428,6 +441,23 @@ struct FeedPostCard: View {
                     }
                 }
 
+                // Lieu attaché au post (constat user 2026-07-30) : carte pleine
+                // largeur + texte en overlay quand la position est le seul
+                // contenu visuel, sinon sticker compact — cliquables tous deux.
+                if let place = post.location {
+                    if isLocationOnlyPost {
+                        FeedPostLocationMapCard(
+                            place: place,
+                            overlayText: effectiveContent.isEmpty ? nil : effectiveContent,
+                            onOpen: { fullscreenPlace = BubbleFullscreenPlace(place: place) }
+                        )
+                    } else {
+                        FeedPostLocationSticker(place: place) {
+                            fullscreenPlace = BubbleFullscreenPlace(place: place)
+                        }
+                    }
+                }
+
                 // Actions bar (not inside the tap target)
                 actionsBar
             }
@@ -495,6 +525,18 @@ struct FeedPostCard: View {
             .presentationDetents([.large, .medium])
             .presentationDragIndicator(.visible)
         }
+        .fullScreenCover(item: $fullscreenPlace) { item in
+            // Même surface plein écran que la bulle de message : carte +
+            // « Ouvrir dans Plans » / « Itinéraire » (`LocationFullscreenView`).
+            LocationFullscreenView(
+                latitude: item.place.latitude,
+                longitude: item.place.longitude,
+                placeName: item.place.name,
+                address: item.place.address,
+                accentColor: accentColor,
+                senderName: post.author
+            )
+        }
         .fullScreenCover(isPresented: $showFullscreenGallery) {
             let attachments = post.media
                 .filter { $0.type == .image || $0.type == .video }
@@ -514,7 +556,6 @@ struct FeedPostCard: View {
             )
         }
         .audioFullscreenCover($audioFullscreen, accentColor: accentColor)
-        .withStatusBubble()
     }
 
     // MARK: - Author Header
@@ -750,6 +791,15 @@ struct FeedPostCard: View {
                     repostMediaPreview(mediaModel)
                 }
 
+                // Lieu du post SOURCE — le sticker (Button) gagne sur le Button
+                // englobant du quote block, donc le tap ouvre la carte et non
+                // l'original (même règle que le sticker de la card réel).
+                if let place = repost.location {
+                    FeedPostLocationSticker(place: place) {
+                        fullscreenPlace = BubbleFullscreenPlace(place: place)
+                    }
+                }
+
                 // Original stats
                 HStack(spacing: 12) {
                     HStack(spacing: 4) {
@@ -838,6 +888,11 @@ struct FeedPostCard: View {
                         .contentTransition(.numericText())
                 }
             }
+            // Cible tactile 44x44 (HIG) : les glyphes font 17-18 pt, la zone
+            // de hit se limitait au tracé — le marque-page (icone fine, sans
+            // compteur) ratait un tap sur deux a l'usage.
+            .frame(minWidth: 44, minHeight: 44)
+            .contentShape(Rectangle())
             .disabled(isHeartInFlight)
             .animation(.easeOut(duration: 0.2), value: effectiveIsLiked)
             .accessibilityLabel(String(localized: "a11y.feed.post.like", defaultValue: "Aimer", bundle: .main))
@@ -862,6 +917,11 @@ struct FeedPostCard: View {
                 }
                 .foregroundColor(showCommentsSheet ? theme.accentText(accentColor) : theme.textSecondary)
             }
+            // Cible tactile 44x44 (HIG) : les glyphes font 17-18 pt, la zone
+            // de hit se limitait au tracé — le marque-page (icone fine, sans
+            // compteur) ratait un tap sur deux a l'usage.
+            .frame(minWidth: 44, minHeight: 44)
+            .contentShape(Rectangle())
             .accessibilityLabel(String(localized: "feed.post.comments_count", defaultValue: "\(post.commentCount) commentaires", bundle: .main))
             .accessibilityHint(String(localized: "feed.post.comments.hint", defaultValue: "Ouvre les commentaires", bundle: .main))
 
@@ -895,6 +955,11 @@ struct FeedPostCard: View {
                 .animation(.spring(response: 0.35, dampingFraction: 0.55), value: isReposted)
                 .animation(.spring(response: 0.3, dampingFraction: 0.6), value: isRepostInFlight)
             }
+            // Cible tactile 44x44 (HIG) : les glyphes font 17-18 pt, la zone
+            // de hit se limitait au tracé — le marque-page (icone fine, sans
+            // compteur) ratait un tap sur deux a l'usage.
+            .frame(minWidth: 44, minHeight: 44)
+            .contentShape(Rectangle())
             .disabled(isRepostInFlight)
             .accessibilityLabel(String(localized: "feed.post.repost", defaultValue: "Repartager", bundle: .main))
             .accessibilityValue(String(format: String(localized: "a11y.feed.post.repost.value", defaultValue: "%d repartages", bundle: .main), displayRepostCount ?? post.repostCount))
@@ -936,6 +1001,11 @@ struct FeedPostCard: View {
                 .animation(.spring(response: 0.35, dampingFraction: 0.55), value: isBookmarked)
                 .animation(.spring(response: 0.3, dampingFraction: 0.6), value: isBookmarkInFlight)
             }
+            // Cible tactile 44x44 (HIG) : les glyphes font 17-18 pt, la zone
+            // de hit se limitait au tracé — le marque-page (icone fine, sans
+            // compteur) ratait un tap sur deux a l'usage.
+            .frame(minWidth: 44, minHeight: 44)
+            .contentShape(Rectangle())
             .disabled(isBookmarkInFlight)
             .accessibilityLabel(String(localized: "feed.post.save", defaultValue: "Enregistrer", bundle: .main))
             .accessibilityValue(String(format: String(localized: "a11y.feed.post.save.value", defaultValue: "%d enregistrements", bundle: .main), displayBookmarkCount ?? post.bookmarkCount))
@@ -970,6 +1040,11 @@ struct FeedPostCard: View {
                 .foregroundColor(theme.textSecondary)
                 .animation(.easeInOut(duration: 0.2), value: isShareInFlight)
             }
+            // Cible tactile 44x44 (HIG) : les glyphes font 17-18 pt, la zone
+            // de hit se limitait au tracé — le marque-page (icone fine, sans
+            // compteur) ratait un tap sur deux a l'usage.
+            .frame(minWidth: 44, minHeight: 44)
+            .contentShape(Rectangle())
             .disabled(isShareInFlight)
             .accessibilityLabel(String(localized: "feed.post.share", defaultValue: "Partager", bundle: .main))
             .accessibilityValue(String(format: String(localized: "a11y.feed.post.share.value", defaultValue: "%d partages", bundle: .main), displayShareCount ?? post.shareCount))
@@ -1107,6 +1182,15 @@ struct FeedPostCard: View {
                             authorColor: comment.authorColor,
                             sentAt: comment.timestamp
                         )
+                        .padding(.top, 2)
+                    }
+
+                    // Lieu attaché au commentaire — sticker cliquable (même
+                    // véhicule SharedPlace que le post porteur).
+                    if let place = comment.location {
+                        FeedPostLocationSticker(place: place) {
+                            fullscreenPlace = BubbleFullscreenPlace(place: place)
+                        }
                         .padding(.top, 2)
                     }
 

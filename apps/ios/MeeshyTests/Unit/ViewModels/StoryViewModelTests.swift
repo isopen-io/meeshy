@@ -13,6 +13,11 @@ final class StoryViewModelTests: XCTestCase {
     private var mockSocket: MockSocialSocket!
     private var mockAPI: MockAPIClientForApp!
     private var cancellables: Set<AnyCancellable>!
+    /// Suite jetable : cette suite publie une dizaine de fois, et
+    /// `UserDefaults.standard` est celui de l'app hôte — la préférence
+    /// d'audience écrite ici serait le défaut du composer au lancement suivant.
+    private var defaultsSuiteName: String!
+    private var defaults: UserDefaults!
 
     override func setUp() async throws {
         try await super.setUp()
@@ -30,15 +35,25 @@ final class StoryViewModelTests: XCTestCase {
         mockSocket = MockSocialSocket()
         mockAPI = MockAPIClientForApp()
         cancellables = []
+        defaultsSuiteName = "StoryViewModelTests-\(UUID().uuidString)"
+        defaults = UserDefaults(suiteName: defaultsSuiteName)
         sut = StoryViewModel(
             storyService: mockStoryService,
             postService: mockPostService,
             socialSocket: mockSocket,
-            api: mockAPI
+            api: mockAPI,
+            visibilityStore: StoryVisibilityPreferenceStore(defaults: defaults)
         )
     }
 
     override func tearDown() async throws {
+        // Cette suite publie : sans purge, la queue de publication, les dossiers
+        // médias hors-ligne et le cache du tray restent VISIBLES dans l'app au
+        // lancement suivant (leçon `reference_outbox_db_path_and_test_residue`).
+        await StoryPublishFixtureCleanup.purge(sut, defaults: defaults)
+        defaults.removePersistentDomain(forName: defaultsSuiteName)
+        defaults = nil
+        defaultsSuiteName = nil
         cancellables = nil
         sut = nil
         mockStoryService = nil
@@ -1151,6 +1166,59 @@ final class StoryViewModelTests: XCTestCase {
                        "Alice's group is now fully viewed")
     }
 
+    // MARK: - didReconnect Tests (rts-02)
+
+    /// Après un flap réseau, des stories ont pu être créées/supprimées pendant
+    /// la coupure : le reconnect social doit rattraper le tray par un delta
+    /// depuis le curseur max(updatedAt) des stories affichées.
+    func test_didReconnect_fetchesStoriesDeltaFromTrayCursor() async {
+        let t1 = Date(timeIntervalSinceNow: -600)
+        let t2 = Date(timeIntervalSinceNow: -300)
+        sut.storyGroups = [
+            makeStoryGroup(userId: "u1", stories: [makeStoryItem(id: "s1", updatedAt: t1)]),
+            makeStoryGroup(userId: "u2", stories: [makeStoryItem(id: "s2", updatedAt: t2)]),
+        ]
+        mockStoryService.listResult = .success(Self.makeDeltaResponse())
+        sut.subscribeToSocketEvents()
+
+        mockSocket.didReconnect.send(())
+        try? await Task.sleep(nanoseconds: 100_000_000)
+
+        XCTAssertEqual(mockStoryService.listCallCount, 1,
+                       "le reconnect social déclenche un fetch stories")
+        XCTAssertEqual(mockStoryService.lastListUpdatedSince, t2,
+                       "le curseur delta = max(updatedAt) du tray, calculé au moment de l'événement")
+    }
+
+    /// Un fetch déjà en vol ne doit pas être doublé par le reconnect.
+    func test_didReconnect_whileLoading_skipsFetch() async {
+        sut.storyGroups = [makeStoryGroup(userId: "u1", stories: [makeStoryItem(id: "s1", updatedAt: Date())])]
+        sut.isLoading = true
+        sut.subscribeToSocketEvents()
+
+        mockSocket.didReconnect.send(())
+        try? await Task.sleep(nanoseconds: 100_000_000)
+
+        XCTAssertEqual(mockStoryService.listCallCount, 0,
+                       "un chargement en vol absorbe le rattrapage du reconnect")
+    }
+
+    /// Vérifie le CÂBLAGE didReconnect → fetchStoriesFromNetwork : la purge
+    /// par tombstones est une logique existante déjà testée par ailleurs.
+    func test_didReconnect_deltaWithTombstones_purgesDeletedStories() async {
+        let kept = makeStoryItem(id: "s1", updatedAt: Date())
+        let deleted = makeStoryItem(id: "s2", updatedAt: Date())
+        sut.storyGroups = [makeStoryGroup(userId: "u1", stories: [kept, deleted])]
+        mockStoryService.listResult = .success(Self.makeDeltaResponse(deletedStoryIds: ["s2"]))
+        sut.subscribeToSocketEvents()
+
+        mockSocket.didReconnect.send(())
+        try? await Task.sleep(nanoseconds: 100_000_000)
+
+        XCTAssertEqual(sut.storyGroups.first?.stories.map(\.id), ["s1"],
+                       "la story tombstonée pendant la coupure sort du tray au reconnect")
+    }
+
     // MARK: - Lookup Method Tests
 
     func test_storyGroupForUser_returnsMatchingGroup() {
@@ -1246,7 +1314,10 @@ final class StoryViewModelTests: XCTestCase {
         XCTAssertFalse(sut.showStoryComposer)
     }
 
-    func test_publishStoryInBackground_blocksSecondPublish() async {
+    /// C5 — composer une 2e story pendant qu'une monte n'est plus interdit.
+    /// L'ancien `test_publishStoryInBackground_blocksSecondPublish` verrouillait
+    /// exactement le rejet silencieux que ce lot supprime.
+    func test_publishStoryInBackground_secondPublishDuringUpload_isStackedNotDropped() async {
         mockAPI.authToken = "token"
         mockPostService.createStoryResult = .success(Self.makeStoryAPIPost())
 
@@ -1256,9 +1327,6 @@ final class StoryViewModelTests: XCTestCase {
             loadedImages: [:],
             loadedVideoURLs: [:]
         )
-
-        let firstId = sut.activeUpload?.id
-
         sut.publishStoryInBackground(
             slides: [StorySlide()],
             slideImages: [:],
@@ -1266,7 +1334,27 @@ final class StoryViewModelTests: XCTestCase {
             loadedVideoURLs: [:]
         )
 
-        XCTAssertEqual(sut.activeUpload?.id, firstId)
+        XCTAssertEqual(sut.activeUploads.count, 2, "La 2e publication est empilée, pas rejetée")
+        XCTAssertEqual(Set(sut.activeUploads.map(\.id)).count, 2, "Deux entrées distinctes")
+    }
+
+    /// Synchrone après les deux taps : l'invariant « une seule monte à la fois »
+    /// est pinné par `StoryUploadQueueTests` (qui suspend le 1er upload) ; ici
+    /// on ne vérifie que l'état de NAISSANCE des entrées.
+    func test_publishStoryInBackground_secondPublish_bothEntriesStartPreparing() async {
+        mockAPI.authToken = "token"
+        mockPostService.createStoryResult = .success(Self.makeStoryAPIPost())
+
+        sut.publishStoryInBackground(
+            slides: [StorySlide()], slideImages: [:], loadedImages: [:], loadedVideoURLs: [:]
+        )
+        sut.publishStoryInBackground(
+            slides: [StorySlide()], slideImages: [:], loadedImages: [:], loadedVideoURLs: [:]
+        )
+
+        // Les deux entrées naissent `.preparing` : leur intent write-ahead
+        // n'est pas encore durable, aucune n'est drainable.
+        XCTAssertEqual(sut.activeUploads.filter { $0.phase == .preparing }.count, 2)
     }
 
     func test_cancelUpload_clearsActiveUpload() async {
@@ -1280,8 +1368,11 @@ final class StoryViewModelTests: XCTestCase {
             loadedVideoURLs: [:]
         )
 
-        XCTAssertNotNil(sut.activeUpload)
-        sut.cancelUpload()
+        guard let uploadId = sut.activeUpload?.id else {
+            XCTFail("publishStoryInBackground doit créer une entrée active")
+            return
+        }
+        sut.cancelUpload(id: uploadId)
         XCTAssertNil(sut.activeUpload)
     }
 
@@ -1720,7 +1811,7 @@ final class StoryViewModelTests: XCTestCase {
         let local = URL(fileURLWithPath: "/tmp/story-cover.jpg")
         let resolved = StoryCoverThumbnail.preferredCoverURLString(
             localCover: local, serverThumbnailUrl: "https://cdn/x.jpg",
-            mediaUrl: "https://cdn/raw.mp4", avatarURL: "https://cdn/avatar.png")
+            mediaUrl: "https://cdn/raw.mp4", mediaIsImage: false, avatarURL: "https://cdn/avatar.png")
         XCTAssertEqual(resolved, local.absoluteString,
                        "local composite (captures text/drawing) must win over the server thumbnail")
     }
@@ -1730,19 +1821,126 @@ final class StoryViewModelTests: XCTestCase {
         XCTAssertEqual(
             StoryCoverThumbnail.preferredCoverURLString(
                 localCover: nil, serverThumbnailUrl: "https://cdn/thumb.jpg",
-                mediaUrl: "https://cdn/raw.mp4", avatarURL: "av"),
+                mediaUrl: "https://cdn/raw.mp4", mediaIsImage: false, avatarURL: "av"),
             "https://cdn/thumb.jpg")
-        // empty server thumb is skipped → media url
+        // empty server thumb is skipped → image media url
         XCTAssertEqual(
             StoryCoverThumbnail.preferredCoverURLString(
                 localCover: nil, serverThumbnailUrl: "",
-                mediaUrl: "https://cdn/raw.mp4", avatarURL: "av"),
-            "https://cdn/raw.mp4")
+                mediaUrl: "https://cdn/raw.jpg", mediaIsImage: true, avatarURL: "av"),
+            "https://cdn/raw.jpg")
         // nothing but avatar
         XCTAssertEqual(
             StoryCoverThumbnail.preferredCoverURLString(
-                localCover: nil, serverThumbnailUrl: nil, mediaUrl: nil, avatarURL: "av"),
+                localCover: nil, serverThumbnailUrl: nil, mediaUrl: nil, mediaIsImage: false, avatarURL: "av"),
             "av")
+    }
+
+    func test_preferredCoverURL_videoWithoutThumbnail_skipsMediaURL_fallsBackToAvatar() {
+        // A video mediaUrl is never decodable by CachedAvatarImage — must not be
+        // used as the tray cover, even when there is no server thumbnail.
+        XCTAssertEqual(
+            StoryCoverThumbnail.preferredCoverURLString(
+                localCover: nil, serverThumbnailUrl: nil,
+                mediaUrl: "https://cdn/raw.mp4", mediaIsImage: false, avatarURL: "https://cdn/avatar.png"),
+            "https://cdn/avatar.png",
+            "video without a thumbnail must fall through to the avatar, never the raw mp4 URL")
+    }
+
+    func test_preferredCoverURL_imageWithoutThumbnail_usesMediaURL() {
+        XCTAssertEqual(
+            StoryCoverThumbnail.preferredCoverURLString(
+                localCover: nil, serverThumbnailUrl: nil,
+                mediaUrl: "https://cdn/raw.jpg", mediaIsImage: true, avatarURL: "https://cdn/avatar.png"),
+            "https://cdn/raw.jpg",
+            "image without a thumbnail can safely use the raw (decodable) media URL")
+    }
+
+    // MARK: - ReceiverCoverPlan (aperçu à la volée côté récepteur)
+
+    private func makeReceiverStory(
+        id: String = "recv-1",
+        media: [FeedMedia] = [],
+        effects: StoryEffects?
+    ) -> StoryItem {
+        StoryItem(
+            id: id,
+            content: "story",
+            media: media,
+            storyEffects: effects,
+            createdAt: Date(),
+            expiresAt: Date().addingTimeInterval(72000),
+            isViewed: false
+        )
+    }
+
+    func test_receiverCoverPlan_textOnColoredBackground_isRenderableWithoutAnyImage() {
+        var fx = StoryEffects()
+        fx.background = "FF5733"
+        let plan = StoryCoverThumbnail.receiverCoverPlan(
+            for: makeReceiverStory(media: [FeedMedia(id: "m-audio", type: .audio, url: "https://cdn/voice.m4a")], effects: fx))
+
+        XCTAssertNotNil(plan, "texte/fond coloré + audio : la composition est dérivable sans aucune image")
+        XCTAssertNil(plan?.legacyBackgroundURL)
+        XCTAssertEqual(plan?.imageURLsByObjectId, [:])
+        XCTAssertEqual(plan?.requiredObjectIds, [])
+    }
+
+    func test_receiverCoverPlan_modernImageBackground_requiresItsImage() {
+        var fx = StoryEffects()
+        var bg = StoryMediaObject(id: "obj-bg", mediaURL: "https://cdn/bg.jpg", kind: .image, aspectRatio: 1.0)
+        bg.isBackground = true
+        fx.mediaObjects = [bg]
+        let plan = StoryCoverThumbnail.receiverCoverPlan(for: makeReceiverStory(effects: fx))
+
+        XCTAssertEqual(plan?.imageURLsByObjectId["obj-bg"], "https://cdn/bg.jpg")
+        XCTAssertEqual(plan?.requiredObjectIds, ["obj-bg"],
+                       "le fond moderne est la couche dominante : sans son image, pas de cover")
+    }
+
+    func test_receiverCoverPlan_videoBackground_isNotRenderable() {
+        var fx = StoryEffects()
+        var bg = StoryMediaObject(id: "obj-bg", mediaURL: "https://cdn/bg.mp4", kind: .video, aspectRatio: 1.0)
+        bg.isBackground = true
+        fx.mediaObjects = [bg]
+        XCTAssertNil(StoryCoverThumbnail.receiverCoverPlan(for: makeReceiverStory(effects: fx)),
+                     "fond vidéo : pas de poster frame côté récepteur — laisser la chaîne existante décider")
+
+        var colorFx = StoryEffects()
+        colorFx.background = "112233"
+        XCTAssertNil(
+            StoryCoverThumbnail.receiverCoverPlan(
+                for: makeReceiverStory(media: [FeedMedia(id: "m-v", type: .video, url: "https://cdn/raw.mp4")], effects: colorFx)),
+            "fond legacy vidéo : idem, jamais de cover sans la couche dominante")
+    }
+
+    func test_receiverCoverPlan_legacyImageBackground_fillsBgImageSlot() {
+        var fx = StoryEffects()
+        fx.background = "000000"
+        let plan = StoryCoverThumbnail.receiverCoverPlan(
+            for: makeReceiverStory(media: [FeedMedia(id: "m-bg", type: .image, url: "https://cdn/legacy.jpg")], effects: fx))
+
+        XCTAssertEqual(plan?.legacyBackgroundURL, "https://cdn/legacy.jpg")
+        XCTAssertEqual(plan?.requiredObjectIds, [])
+    }
+
+    func test_receiverCoverPlan_withoutEffects_isNil() {
+        XCTAssertNil(StoryCoverThumbnail.receiverCoverPlan(for: makeReceiverStory(effects: nil)))
+    }
+
+    func test_receiverCoverCandidates_skipLastStoriesAlreadyCovered() {
+        let coveredLast = makeStoryItem(id: "covered-last")
+        let uncoveredLast = makeStoryItem(id: "uncovered-last")
+        let groups = [
+            makeStoryGroup(userId: "u1", stories: [makeStoryItem(id: "u1-old"), coveredLast]),
+            makeStoryGroup(userId: "u2", username: "bob", stories: [uncoveredLast])
+        ]
+
+        let candidates = StoryCoverThumbnail.receiverCoverCandidates(
+            groups: groups, hasLocalCover: { $0 == "covered-last" })
+
+        XCTAssertEqual(candidates.map(\.id), ["uncovered-last"],
+                       "seule la DERNIÈRE story de chaque groupe compte, et jamais celles déjà couvertes")
     }
 
     // MARK: - mediaURLStrings (prefetch dedup — extraction pure)
@@ -1871,5 +2069,99 @@ final class StoryViewModelTests: XCTestCase {
                       "la story optimiste en attente survit au refetch réseau")
         XCTAssertTrue(allIds.contains("s-other"),
                       "les stories serveur sont bien chargées en parallèle")
+    }
+
+    // MARK: - Garde « viewed monotone » raffinée (édition de story, 2026-07-29)
+    //
+    // Une fois vue localement, une story reste vue même si le serveur (laggé)
+    // dit le contraire — SAUF quand son contenu a été édité APRÈS la vue
+    // locale : le serveur a alors volontairement effacé les vues (reset
+    // d'engagement) et la story redevient légitimement non-vue.
+
+    func test_shouldKeepLocalViewed_noContentEdit_keepsViewed() {
+        XCTAssertTrue(StoryViewModel.shouldKeepLocalViewed(
+            localViewedAt: Date(), contentEditedAt: nil))
+        XCTAssertTrue(StoryViewModel.shouldKeepLocalViewed(
+            localViewedAt: nil, contentEditedAt: nil))
+    }
+
+    func test_shouldKeepLocalViewed_editAfterLocalView_yieldsToServer() {
+        let viewedAt = Date(timeIntervalSinceNow: -3600)
+        let editedAt = Date()
+        XCTAssertFalse(StoryViewModel.shouldKeepLocalViewed(
+            localViewedAt: viewedAt, contentEditedAt: editedAt),
+            "Édition postérieure à la vue → la story redevient non-vue")
+    }
+
+    func test_shouldKeepLocalViewed_viewAfterEdit_keepsViewed() {
+        let editedAt = Date(timeIntervalSinceNow: -3600)
+        let viewedAt = Date()
+        XCTAssertTrue(StoryViewModel.shouldKeepLocalViewed(
+            localViewedAt: viewedAt, contentEditedAt: editedAt),
+            "Une vue POSTÉRIEURE à l'édition reste acquise (re-vue de la nouvelle version)")
+    }
+
+    func test_shouldKeepLocalViewed_editedButNoLocalTimestamp_yieldsToServer() {
+        XCTAssertFalse(StoryViewModel.shouldKeepLocalViewed(
+            localViewedAt: nil, contentEditedAt: Date(timeIntervalSinceNow: -60)),
+            "Vue sans horodatage (cache legacy) : impossible de prouver qu'elle est postérieure à l'édition → la vérité serveur gagne")
+    }
+
+    func test_insertOrMergeStoryGroups_replacing_contentEditedAfterView_resetsViewed() {
+        let viewedAt = Date(timeIntervalSinceNow: -3600)
+        var local = makeStoryItem(id: "s-edit")
+        local.isViewed = true
+        local.viewedAt = viewedAt
+        sut.storyGroups = [makeStoryGroup(userId: "author-1", username: "alice", stories: [local])]
+
+        var incoming = makeStoryItem(id: "s-edit")
+        incoming.isViewed = false
+        incoming.contentEditedAt = Date()
+        sut.insertOrMergeStoryGroups(
+            [makeStoryGroup(userId: "author-1", username: "alice", stories: [incoming])],
+            replacingExisting: true
+        )
+
+        XCTAssertEqual(sut.storyGroups.first?.stories.first?.isViewed, false,
+                       "Le reset d'engagement fait céder la monotonie : la story redevient non-vue")
+    }
+
+    func test_insertOrMergeStoryGroups_replacing_noContentEdit_staysViewed() {
+        var local = makeStoryItem(id: "s-lag")
+        local.isViewed = true
+        local.viewedAt = Date()
+        sut.storyGroups = [makeStoryGroup(userId: "author-1", username: "alice", stories: [local])]
+
+        var incoming = makeStoryItem(id: "s-lag")
+        incoming.isViewed = false
+        sut.insertOrMergeStoryGroups(
+            [makeStoryGroup(userId: "author-1", username: "alice", stories: [incoming])],
+            replacingExisting: true
+        )
+
+        XCTAssertEqual(sut.storyGroups.first?.stories.first?.isViewed, true,
+                       "Sans édition de contenu, le lag serveur ne dévisse jamais l'état vu local")
+    }
+
+    func test_insertOrMergeStoryGroups_replacing_ownStory_neverResetsViewed() {
+        let previous = AuthManager.shared.currentUser
+        defer { AuthManager.shared.currentUser = previous }
+        AuthManager.shared.currentUser = MeeshyUser(id: "me-id", username: "me", displayName: "Moi")
+
+        var local = makeStoryItem(id: "s-mine")
+        local.isViewed = true
+        local.viewedAt = Date(timeIntervalSinceNow: -3600)
+        sut.storyGroups = [makeStoryGroup(userId: "me-id", username: "Moi", stories: [local])]
+
+        var incoming = makeStoryItem(id: "s-mine")
+        incoming.isViewed = false
+        incoming.contentEditedAt = Date()
+        sut.insertOrMergeStoryGroups(
+            [makeStoryGroup(userId: "me-id", username: "Moi", stories: [incoming])],
+            replacingExisting: true
+        )
+
+        XCTAssertEqual(sut.storyGroups.first?.stories.first?.isViewed, true,
+                       "L'état « vu » de ses PROPRES stories est client-only (recordView exclut l'auteur) — jamais dévissé")
     }
 }

@@ -14,10 +14,14 @@ import XCTest
 final class AudioFullscreenTouchTargetTests: XCTestCase {
 
     private func source() throws -> String {
+        // Four hops, not three: the first drops the test file itself, and only the
+        // fourth lands on apps/ios. Three left the path at apps/ios/MeeshyTests, so
+        // every read threw NSFileReadNoSuchFile and every test in here errored out.
         let url = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()   // Views
-            .deletingLastPathComponent()   // Unit
-            .deletingLastPathComponent()   // MeeshyTests
+            .deletingLastPathComponent()   // …/Unit/Views
+            .deletingLastPathComponent()   // …/Unit
+            .deletingLastPathComponent()   // …/MeeshyTests
+            .deletingLastPathComponent()   // …/apps/ios
             .appendingPathComponent("Meeshy/Features/Main/Views/AudioFullscreenView.swift")
         return try String(contentsOf: url, encoding: .utf8)
     }

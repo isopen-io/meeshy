@@ -36,7 +36,7 @@ class PostDetailViewModel: ObservableObject {
 
     private var commentCursor: String?
     private let postService: PostServiceProviding
-    private let socialSocket = SocialSocketManager.shared
+    private let socialSocket: any SocialSocketProviding
     private let languageProvider: LanguageProviding
     private let offlineQueue: OfflineQueueing
     private var cancellables = Set<AnyCancellable>()
@@ -49,11 +49,13 @@ class PostDetailViewModel: ObservableObject {
     init(
         postService: PostServiceProviding = PostService.shared,
         languageProvider: LanguageProviding = AuthManagerLanguageProvider(),
-        offlineQueue: OfflineQueueing = OfflineQueue.shared
+        offlineQueue: OfflineQueueing = OfflineQueue.shared,
+        socialSocket: any SocialSocketProviding = SocialSocketManager.shared
     ) {
         self.postService = postService
         self.languageProvider = languageProvider
         self.offlineQueue = offlineQueue
+        self.socialSocket = socialSocket
         observePreferredLanguageChanges()
     }
 
@@ -235,7 +237,8 @@ class PostDetailViewModel: ObservableObject {
                         parentId: c.parentId,
                         originalLanguage: c.originalLanguage, translatedContent: translatedContent,
                         currentUserReactions: c.currentUserReactions,
-                        media: (c.media ?? []).map { $0.toFeedMedia() }
+                        media: (c.media ?? []).map { $0.toFeedMedia() },
+                        location: c.location
                     )
                 }
             }.value
@@ -388,7 +391,8 @@ class PostDetailViewModel: ObservableObject {
                     parentId: parentId,
                     originalLanguage: c.originalLanguage, translatedContent: translated,
                     currentUserReactions: c.currentUserReactions,
-                    media: (c.media ?? []).map { $0.toFeedMedia() }
+                    media: (c.media ?? []).map { $0.toFeedMedia() },
+                    location: c.location
                 )
             }
         }.value
@@ -510,6 +514,16 @@ class PostDetailViewModel: ObservableObject {
         )
         do {
             try await offlineQueue.enqueue(.toggleLikePost, payload: payload, conversationId: nil)
+            // stores-09 — write the optimistic state through to EVERY cache key
+            // holding this post (detail key, feed, bookmarks…), not just RAM.
+            let newLikes = current.likes
+            let postId = current.id
+            Task.detached(priority: .utility) {
+                await CacheCoordinator.shared.feed.patchEverywhere(itemId: postId) {
+                    $0.isLiked = nowLiked
+                    $0.likes = newLikes
+                }
+            }
             // R5 — roll back the optimistic like if the outbox exhausts its
             // retry budget (server permanently rejects). Without this the toggle
             // stays stuck "liked" forever even though the server never accepted it.
@@ -523,12 +537,31 @@ class PostDetailViewModel: ObservableObject {
         }
     }
 
+    /// Applique le compteur ABSOLU du serveur au post affiché. `isLiked` n'est
+    /// réécrit que si l'acteur est l'utilisateur courant : le like d'un tiers
+    /// monte le compteur sans allumer le cœur.
+    private func applyServerLike(likeCount: Int, actorId: String, liked: Bool) {
+        guard var current = post else { return }
+        current.likes = likeCount
+        if actorId == AuthManager.shared.currentUser?.id {
+            current.isLiked = liked
+        }
+        post = current
+    }
+
     /// Restores the loaded post's like state to a captured snapshot. Shared by
     /// the synchronous enqueue-refusal path and the async `.exhausted` observer.
     private func restoreLike(isLiked: Bool, likes: Int) {
         guard var current = post else { return }
         current.isLiked = isLiked
         current.likes = likes
+        let postId = current.id
+        Task.detached(priority: .utility) {
+            await CacheCoordinator.shared.feed.patchEverywhere(itemId: postId) {
+                $0.isLiked = isLiked
+                $0.likes = likes
+            }
+        }
         post = current
     }
 
@@ -559,15 +592,20 @@ class PostDetailViewModel: ObservableObject {
     /// Updates the loaded post's body content. Optimistic UX mirrors
     /// FeedViewModel.updatePost: flip the in-memory post immediately, clear
     /// translations so the bubble re-renders, rollback on API failure.
-    func updatePost(content: String, language: String? = nil, type: String? = nil, removeMediaIds: [String]? = nil) async {
+    func updatePost(content: String, language: String? = nil, type: String? = nil, removeMediaIds: [String]? = nil, location: PostLocationUpdate? = nil) async {
         guard let snapshot = post else { return }
         var optimistic = snapshot
         optimistic.content = content
         optimistic.translatedContent = nil
         optimistic.translations = nil
+        switch location {
+        case .set(let place): optimistic.location = place
+        case .remove: optimistic.location = nil
+        case nil: break
+        }
         self.post = optimistic
         do {
-            let updated = try await postService.update(postId: snapshot.id, content: content, visibility: nil, visibilityUserIds: nil, moodEmoji: nil, originalLanguage: language, type: type, removeMediaIds: removeMediaIds)
+            let updated = try await postService.update(postId: snapshot.id, content: content, visibility: nil, visibilityUserIds: nil, moodEmoji: nil, originalLanguage: language, type: type, removeMediaIds: removeMediaIds, storyEffects: nil, mediaIds: nil, location: location)
             self.post = updated.toFeedPost(preferredLanguages: preferredLanguages)
             FeedbackToastManager.shared.showSuccess(String(localized: "Post modifie", defaultValue: "Post modifie"))
         } catch {
@@ -593,7 +631,7 @@ class PostDetailViewModel: ObservableObject {
     /// while it's pending the optimistic id (`cmid`) is shown in the
     /// list — when the server response arrives, the socket
     /// `comment:added` broadcast reconciles via the normal path.
-    func sendComment(_ content: String, effectFlags: Int? = nil) async {
+    func sendComment(_ content: String, effectFlags: Int? = nil, location: SharedPlace? = nil) async {
         guard let post else { return }
         let cmid = ClientMutationId.generate()
         let snapshot = comments
@@ -609,7 +647,8 @@ class PostDetailViewModel: ObservableObject {
             timestamp: Date(),
             likes: 0,
             replies: 0,
-            effectFlags: effectFlags ?? 0
+            effectFlags: effectFlags ?? 0,
+            location: location
         )
         comments.insert(optimistic, at: 0)
         self.post?.commentCount = snapshotCount + 1
@@ -617,11 +656,13 @@ class PostDetailViewModel: ObservableObject {
             clientMutationId: cmid,
             postId: post.id,
             parentCommentId: nil,
-            content: content
+            content: content,
+            location: location,
+            effectFlags: effectFlags
         )
         do {
             try await offlineQueue.enqueue(.createComment, payload: payload, conversationId: post.id)
-            try? await CacheCoordinator.shared.comments.save(comments, for: "post-\(post.id)")
+            try? await CacheCoordinator.shared.comments.savePreservingFreshness(comments, for: "post-\(post.id)")
 
             // R5 — roll back the optimistic comment if the outbox exhausts its
             // retry budget (server permanently rejects). The synchronous catch
@@ -639,44 +680,77 @@ class PostDetailViewModel: ObservableObject {
         }
     }
 
-    func sendReply(_ content: String, effectFlags: Int? = nil) async {
+    /// Wave 1 Phase C (fiche vm-postdetail-reply) — une réponse texte transite
+    /// par l'outbox durable comme un commentaire top-level : optimiste
+    /// immédiat keyé cmid, survit au kill de l'app, réconciliée par l'écho
+    /// socket `comment:added`. Rollback multi-champs (repliesMap, compteur du
+    /// parent, commentCount, dépliage) sur refus d'enfilement ou .exhausted.
+    func sendReply(_ content: String, effectFlags: Int? = nil, location: SharedPlace? = nil) async {
         guard let post, let parent = replyingTo else { return }
         // Réponse plate à 2 niveaux : répondre à une réponse rattache au MÊME
         // parent racine pour rester au niveau 2 ; l'auteur ciblé est notifié via
         // la @mention préremplie (cf. `PostDetailView.beginReply`).
         let parentId = parent.parentId ?? parent.id
         replyingTo = nil
+        let cmid = ClientMutationId.generate()
+        let snapshotReplies = repliesMap[parentId] ?? []
+        let snapshotExpanded = expandedThreads.contains(parentId)
+        let snapshotParentReplies = comments.first(where: { $0.id == parentId })?.replies
+        let snapshotCount = self.post?.commentCount ?? 0
+        let currentUser = AuthManager.shared.currentUser
+        let optimistic = FeedComment(
+            id: cmid,
+            author: currentUser?.displayName ?? currentUser?.username ?? "",
+            authorId: currentUser?.id ?? "",
+            authorUsername: currentUser?.username,
+            authorAvatarURL: currentUser?.avatar,
+            content: content,
+            timestamp: Date(),
+            likes: 0,
+            replies: 0,
+            parentId: parentId,
+            effectFlags: effectFlags ?? 0,
+            location: location
+        )
+        var existing = repliesMap[parentId] ?? []
+        existing.insert(optimistic, at: 0)
+        repliesMap[parentId] = existing
+        expandedThreads.insert(parentId)
+        if let idx = comments.firstIndex(where: { $0.id == parentId }) {
+            comments[idx].replies += 1
+        }
+        self.post?.commentCount = snapshotCount + 1
+        let payload = CreateCommentPayload(
+            clientMutationId: cmid,
+            postId: post.id,
+            parentCommentId: parentId,
+            content: content,
+            location: location,
+            effectFlags: effectFlags
+        )
         do {
-            let apiComment = try await postService.addComment(postId: post.id, content: content, parentId: parentId, effectFlags: effectFlags)
-            let reply = FeedComment(
-                id: apiComment.id, author: apiComment.author.name, authorId: apiComment.author.id,
-                authorUsername: apiComment.author.username,
-                authorAvatarURL: apiComment.author.avatar,
-                content: apiComment.content, timestamp: apiComment.createdAt,
-                likes: 0, replies: 0,
-                parentId: parentId,
-                effectFlags: apiComment.effectFlags ?? effectFlags ?? 0
-            )
-            var existing = repliesMap[parentId] ?? []
-            existing.insert(reply, at: 0)
-            repliesMap[parentId] = existing
-            expandedThreads.insert(parentId)
-            if let idx = comments.firstIndex(where: { $0.id == parentId }) {
-                comments[idx].replies += 1
-            }
-            self.post?.commentCount += 1
-            try? await CacheCoordinator.shared.comments.save(comments, for: "post-\(post.id)")
+            try await offlineQueue.enqueue(.createComment, payload: payload, conversationId: post.id)
+            // Une réponse vit sous une clé SÉPARÉE de son parent : persister
+            // les deux, sinon un kill avant flush perd la réponse au cold start.
+            try? await CacheCoordinator.shared.comments.savePreservingFreshness(repliesMap[parentId] ?? [], for: "replies-\(parentId)")
+            try? await CacheCoordinator.shared.comments.savePreservingFreshness(comments, for: "post-\(post.id)")
 
-            // Persist reply to GRDB
-            if let persistence = feedPersistence,
-               let record = CommentRecord(from: apiComment, postId: post.id) {
-                let newCount = self.post?.commentCount ?? 0
-                Task.detached(priority: .utility) {
-                    try? await persistence.insertComment(record)
-                    try? await persistence.updateCommentCount(postId: post.id, count: newCount)
+            observeOutcome(cmid: cmid, rollback: { [weak self] in
+                guard let self else { return }
+                self.repliesMap[parentId] = snapshotReplies
+                if !snapshotExpanded { self.expandedThreads.remove(parentId) }
+                if let idx = self.comments.firstIndex(where: { $0.id == parentId }) {
+                    self.comments[idx].replies = snapshotParentReplies ?? self.comments[idx].replies
                 }
-            }
+                self.post?.commentCount = snapshotCount
+            }, toast: String(localized: "feed.comment.replyError", defaultValue: "Error sending reply", bundle: .main))
         } catch {
+            repliesMap[parentId] = snapshotReplies
+            if !snapshotExpanded { expandedThreads.remove(parentId) }
+            if let idx = comments.firstIndex(where: { $0.id == parentId }) {
+                comments[idx].replies = snapshotParentReplies ?? comments[idx].replies
+            }
+            self.post?.commentCount = snapshotCount
             FeedbackToastManager.shared.showError(String(localized: "feed.comment.replyError", defaultValue: "Error sending reply", bundle: .main))
         }
     }
@@ -690,7 +764,7 @@ class PostDetailViewModel: ObservableObject {
     /// l'OfflineQueue, un commentaire média DOIT passer en direct (l'upload du fichier
     /// exige le réseau). Optimistic-first avec le média local, puis upload TUS
     /// (`uploadContext=comment`) → `addComment(attachmentIds:)`, réconcilie/rollback.
-    func submitCommentWithMedia(_ content: String, effectFlags: Int?, parentId: String?, pendingMedia: PendingCommentMedia) async {
+    func submitCommentWithMedia(_ content: String, effectFlags: Int?, parentId: String?, pendingMedia: PendingCommentMedia, location: SharedPlace? = nil) async {
         guard let post else { return }
         if parentId != nil { replyingTo = nil }
         let tempId = "tmp_\(UUID().uuidString)"
@@ -725,7 +799,7 @@ class PostDetailViewModel: ObservableObject {
             let apiComment = try await postService.addComment(
                 postId: post.id, content: content, parentId: parentId, effectFlags: effectFlags,
                 attachmentIds: [attachmentId], mobileTranscription: pendingMedia.mobileTranscription,
-                originalLanguage: nil
+                originalLanguage: nil, location: location
             )
             let server = FeedComment(
                 id: apiComment.id, author: apiComment.author.name, authorId: apiComment.author.id,
@@ -746,7 +820,7 @@ class PostDetailViewModel: ObservableObject {
             } else if !comments.contains(where: { $0.id == server.id }) {
                 comments.insert(server, at: 0)
             }
-            try? await CacheCoordinator.shared.comments.save(comments, for: "post-\(post.id)")
+            try? await CacheCoordinator.shared.comments.savePreservingFreshness(comments, for: "post-\(post.id)")
         } catch {
             // Rollback optimiste.
             comments = snapshotComments
@@ -775,7 +849,7 @@ class PostDetailViewModel: ObservableObject {
                 repliesMap[parentId] = existing
                 // Met à jour l'aperçu en cache pour ne pas réafficher la réponse
                 // supprimée à la ré-ouverture du post.
-                try? await CacheCoordinator.shared.comments.save(existing, for: "replies-\(parentId)")
+                try? await CacheCoordinator.shared.comments.savePreservingFreshness(existing, for: "replies-\(parentId)")
             }
             if let idx = comments.firstIndex(where: { $0.id == parentId }), comments[idx].replies > 0 {
                 comments[idx].replies -= 1
@@ -791,7 +865,7 @@ class PostDetailViewModel: ObservableObject {
 
         do {
             try await postService.deleteComment(postId: post.id, commentId: comment.id)
-            try? await CacheCoordinator.shared.comments.save(comments, for: "post-\(post.id)")
+            try? await CacheCoordinator.shared.comments.savePreservingFreshness(comments, for: "post-\(post.id)")
             FeedbackToastManager.shared.showSuccess(String(localized: "feed.comments.deleted", defaultValue: "Commentaire supprimé", bundle: .main))
         } catch {
             comments = snapshotComments
@@ -820,6 +894,47 @@ class PostDetailViewModel: ObservableObject {
         guard subscribedPostId != postId else { return }
         subscribedPostId = postId
         socketCancellables.removeAll()
+
+        // --- didReconnect → backfill du post + commentaires ---
+        // `SocialSocketManager` re-joint la room du post au `.connect` (le flux
+        // VIVANT reprend), mais les événements émis PENDANT la coupure restent
+        // irréconciliés. Refetch le post (compteurs absolus) + la page 1 des
+        // commentaires ; la dédup par id de `fetchCommentsFromNetwork` rend
+        // l'append idempotent — ne JAMAIS vider `comments` ici (flash-vide).
+        socialSocket.didReconnect
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] in
+                guard let self else { return }
+                Task {
+                    await self.refreshPost(postId)
+                    self.commentCursor = nil
+                    await self.fetchCommentsFromNetwork(postId, cacheKey: "post-\(postId)")
+                }
+            }
+            .store(in: &socketCancellables)
+
+        // Le détail écoutait les commentaires, leurs réactions et les
+        // traductions — mais PAS le like du post lui-même. Un like posé depuis
+        // le feed, depuis le pager de réels ou par un autre utilisateur
+        // n'atteignait donc jamais l'écran ouvert, qui affichait son compteur
+        // figé jusqu'au prochain fetch. `likeCount` est ABSOLU (recalculé par
+        // le gateway depuis `PostReaction`) : on l'écrit tel quel, sans delta.
+        socialSocket.postLiked
+            .receive(on: DispatchQueue.main)
+            .filter { $0.postId == postId }
+            .sink { [weak self] data in
+                self?.applyServerLike(likeCount: data.likeCount, actorId: data.userId, liked: true)
+            }
+            .store(in: &socketCancellables)
+
+        socialSocket.postUnliked
+            .receive(on: DispatchQueue.main)
+            .filter { $0.postId == postId }
+            .sink { [weak self] data in
+                self?.applyServerLike(likeCount: data.likeCount, actorId: data.userId, liked: false)
+            }
+            .store(in: &socketCancellables)
+
         socialSocket.commentAdded
             .receive(on: DispatchQueue.main)
             .filter { $0.postId == postId }

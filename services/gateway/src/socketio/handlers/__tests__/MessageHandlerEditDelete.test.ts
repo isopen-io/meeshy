@@ -344,6 +344,100 @@ describe('MessageHandler — handleMessageEdit', () => {
     expect(callback).toHaveBeenCalledWith(expect.objectContaining({ success: true }));
   });
 
+  it('rejects a non-privileged author editing a message older than the 24h window (parity with REST)', async () => {
+    const twentyFiveHoursAgo = new Date(Date.now() - 25 * 60 * 60 * 1000);
+    (deps.prisma.message.findFirst as jest.Mock<any>).mockResolvedValue(
+      makeMessageRecord({
+        createdAt: twentyFiveHoursAgo,
+        // Realistic Participant.role — never a global-role constant.
+        sender: { id: PARTICIPANT_ID, userId: USER_ID, displayName: 'User', avatar: null, role: 'member' },
+      })
+    );
+    // The bypass reads the author's GLOBAL role (User.role), not the participant role.
+    (deps.prisma.user.findUnique as jest.Mock<any>).mockResolvedValue({ role: 'USER' });
+    (deps.prisma.message.updateMany as jest.Mock<any>).mockResolvedValue({ count: 1 });
+
+    await handler.handleMessageEdit(socket, { messageId: VALID_MSG_ID, content: 'Edited content' }, callback);
+
+    expect(callback).toHaveBeenCalledWith(
+      expect.objectContaining({ success: false, error: expect.stringContaining('24-hour') })
+    );
+    expect(deps.prisma.message.updateMany).not.toHaveBeenCalled();
+    expect(deps.io.to).not.toHaveBeenCalled();
+  });
+
+  it('rejects a global-ADMIN author whose message is fresh via the normal path (bypass irrelevant within 24h)', async () => {
+    const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000);
+    (deps.prisma.message.findFirst as jest.Mock<any>).mockResolvedValue(
+      makeMessageRecord({
+        createdAt: tenMinutesAgo,
+        sender: { id: PARTICIPANT_ID, userId: USER_ID, displayName: 'User', avatar: null, role: 'member' },
+      })
+    );
+    (deps.prisma.message.updateMany as jest.Mock<any>).mockResolvedValue({ count: 1 });
+
+    await handler.handleMessageEdit(socket, { messageId: VALID_MSG_ID, content: 'Edited content' }, callback);
+
+    // Within the window, no global-role lookup is needed — the edit just succeeds.
+    expect(callback).toHaveBeenCalledWith(expect.objectContaining({ success: true }));
+    expect(deps.prisma.user.findUnique).not.toHaveBeenCalled();
+  });
+
+  it('allows the author to edit a fresh (within 24h) message', async () => {
+    const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000);
+    (deps.prisma.message.findFirst as jest.Mock<any>).mockResolvedValue(
+      makeMessageRecord({
+        createdAt: tenMinutesAgo,
+        sender: { id: PARTICIPANT_ID, userId: USER_ID, displayName: 'User', avatar: null, role: 'member' },
+      })
+    );
+    (deps.prisma.message.updateMany as jest.Mock<any>).mockResolvedValue({ count: 1 });
+
+    await handler.handleMessageEdit(socket, { messageId: VALID_MSG_ID, content: 'Edited content' }, callback);
+
+    expect(callback).toHaveBeenCalledWith(expect.objectContaining({ success: true }));
+    expect(deps.prisma.message.updateMany).toHaveBeenCalled();
+  });
+
+  it('lets a global-ADMIN author edit a message past the 24h window (bypass keys on User.role, not Participant.role)', async () => {
+    const twentyFiveHoursAgo = new Date(Date.now() - 25 * 60 * 60 * 1000);
+    (deps.prisma.message.findFirst as jest.Mock<any>).mockResolvedValue(
+      makeMessageRecord({
+        createdAt: twentyFiveHoursAgo,
+        // Realistic: the ADMIN is merely a "member" of THIS conversation. The
+        // bypass must come from their global User.role, not this participant role.
+        sender: { id: PARTICIPANT_ID, userId: USER_ID, displayName: 'User', avatar: null, role: 'member' },
+      })
+    );
+    (deps.prisma.user.findUnique as jest.Mock<any>).mockResolvedValue({ role: 'ADMIN' });
+    (deps.prisma.message.updateMany as jest.Mock<any>).mockResolvedValue({ count: 1 });
+
+    await handler.handleMessageEdit(socket, { messageId: VALID_MSG_ID, content: 'Edited content' }, callback);
+
+    expect(deps.prisma.user.findUnique).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: USER_ID }, select: { role: true } })
+    );
+    expect(callback).toHaveBeenCalledWith(expect.objectContaining({ success: true }));
+    expect(deps.prisma.message.updateMany).toHaveBeenCalled();
+  });
+
+  it('lets a global-BIGBOSS author edit a message past the 24h window', async () => {
+    const twentyFiveHoursAgo = new Date(Date.now() - 25 * 60 * 60 * 1000);
+    (deps.prisma.message.findFirst as jest.Mock<any>).mockResolvedValue(
+      makeMessageRecord({
+        createdAt: twentyFiveHoursAgo,
+        sender: { id: PARTICIPANT_ID, userId: USER_ID, displayName: 'User', avatar: null, role: 'member' },
+      })
+    );
+    (deps.prisma.user.findUnique as jest.Mock<any>).mockResolvedValue({ role: 'BIGBOSS' });
+    (deps.prisma.message.updateMany as jest.Mock<any>).mockResolvedValue({ count: 1 });
+
+    await handler.handleMessageEdit(socket, { messageId: VALID_MSG_ID, content: 'Edited content' }, callback);
+
+    expect(callback).toHaveBeenCalledWith(expect.objectContaining({ success: true }));
+    expect(deps.prisma.message.updateMany).toHaveBeenCalled();
+  });
+
   it('updates message in database on success, guarded against a concurrent delete', async () => {
     (deps.prisma.message.findFirst as jest.Mock<any>).mockResolvedValue(makeMessageRecord());
     (deps.prisma.message.updateMany as jest.Mock<any>).mockResolvedValue({ count: 1 });

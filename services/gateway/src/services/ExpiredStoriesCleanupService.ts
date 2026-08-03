@@ -1,5 +1,6 @@
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { enhancedLogger } from '../utils/logger-enhanced';
+import { SoundCaptureService } from './posts/SoundCaptureService';
 
 const log = enhancedLogger.child({ module: 'ExpiredStoriesCleanupService' });
 
@@ -22,11 +23,14 @@ export class ExpiredStoriesCleanupService {
   private interval: ReturnType<typeof setInterval> | null = null;
   private softDeleteRetentionMs: number;
   private hardDeleteAgeMs: number;
+  /** Seul propriétaire de la logique d'usages : la purge ne la réimplémente pas. */
+  private soundCaptureService: SoundCaptureService;
 
   constructor(
     private prisma: PrismaClient,
     options: { softDeleteRetentionMs?: number; hardDeleteAgeMs?: number } = {},
   ) {
+    this.soundCaptureService = new SoundCaptureService(prisma);
     // 6h soft-delete window: clients holding stale `StoryItem` refs from cache
     // can still resolve them while their own TTL is valid; new fetchers will
     // see the post as deleted.
@@ -130,6 +134,19 @@ export class ExpiredStoriesCleanupService {
         await this.prisma.postComment.deleteMany({
           where: { postId: { in: allPostIds } },
         });
+
+        // Les usages meurent avec le post ; le Sound, lui, SURVIT.
+        // `allPostIds` = stories expirées + leurs reposts. Ne PAS utiliser `ids`
+        // (stories seules), qui laisserait les usages des reposts orphelins.
+        // Délégué : `releasePosts` RECOMPTE `usageCount` depuis `SoundUsage` au
+        // lieu de décrémenter à l'aveugle.
+        //
+        // Placé AVANT les suppressions de posts, et il REJETTE volontairement :
+        // `SoundUsage.postId` n'a ni relation ni cascade, donc supprimer les
+        // posts après un échec de libération laisserait des usages que plus
+        // aucun chemin n'atteindrait. Le `catch` de cette passe rattrape, la
+        // passe horaire suivante rejoue tout.
+        await this.soundCaptureService.releasePosts(allPostIds);
 
         // G7 — PostMedia.post/.comment are `onDelete: SetNull`: without this
         // explicit purge every hard-deleted story left its media rows

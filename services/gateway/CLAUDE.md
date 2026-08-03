@@ -222,7 +222,11 @@ Client sends `If-None-Match`, gateway responds 304 if unchanged.
 
 ### Response Format
 ALL routes MUST use `sendSuccess()`/`sendError()` from `utils/response.ts`.
-Pagination under `meta.pagination`, NOT top-level.
+Pagination is emitted at the ROOT of the response, NOT under `meta` — both
+`sendSuccess` (`utils/response.ts:33`) and `sendPaginatedSuccess` (`:56`) assign
+`pagination` as a top-level key, and the iOS/web decoders read it there. This
+line used to state the opposite, which no route could satisfy while using the
+mandated helper.
 Errors under `error: { code, message }`, NOT `error: "string"`.
 
 ### Language Resolution

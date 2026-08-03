@@ -48,4 +48,15 @@ final class CallBubbleViewMiniMenuWiringTests: XCTestCase {
         let body = try body(of: "private var hangupButton", upTo: "\n    // MARK:", in: source)
         XCTAssertTrue(body.contains("callManager.endCall()"))
     }
+
+    func test_hangupButton_hasAccessibilityHint() throws {
+        let source = try callBubbleViewSource()
+        let body = try body(of: "private var hangupButton", upTo: "\n    // MARK:", in: source)
+        XCTAssertTrue(
+            body.contains(".accessibilityHint("),
+            "The mini-menu's hang-up button must carry an accessibility hint — " +
+            "FloatingCallPillView's hangupButton already has one (call.end.hint); " +
+            "this bubble variant must not regress behind it for VoiceOver users."
+        )
+    }
 }

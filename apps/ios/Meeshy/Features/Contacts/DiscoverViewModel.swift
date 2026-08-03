@@ -240,7 +240,7 @@ final class DiscoverViewModel: ObservableObject {
             contactMatches = try await contactSync.findFriendsFromContacts()
             hasImportedContacts = true
             if contactMatches.isEmpty {
-                FeedbackToastManager.shared.show(String(localized: "contacts.discover.import.none", defaultValue: "Aucun de tes contacts n'est encore sur Meeshy — invite-les!", bundle: .main), type: .success)
+                FeedbackToastManager.shared.show(String(localized: "contacts.discover.import.none", defaultValue: "Aucun de tes contacts n'est encore sur Meeshy — invite-les !", bundle: .main), type: .success)
             } else {
                 HapticFeedback.success()
             }

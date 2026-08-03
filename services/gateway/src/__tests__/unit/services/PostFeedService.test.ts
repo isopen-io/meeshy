@@ -7,7 +7,7 @@
  * @jest-environment node
  */
 
-import { describe, it, expect, beforeEach } from '@jest/globals';
+import { describe, it, expect, beforeEach, jest } from '@jest/globals';
 import { PostFeedService } from '../../../services/PostFeedService';
 import { decodeCursor, encodeCursor } from '../../../routes/posts/types';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
@@ -327,6 +327,70 @@ describe('PostFeedService.getStories', () => {
 
     const where = mockPostFindMany.mock.calls[0][0].where;
     expect(JSON.stringify(where)).not.toContain('updatedAt');
+  });
+
+  // --- Archive de l'auteur -------------------------------------------------
+  //
+  // Le filtre d'expiration ne connaissait AUCUNE exception d'auteur : mes
+  // propres stories disparaissaient de la réponse dès leur expiration. « Mes
+  // stories » ne pouvait donc pas les lister, et le client ne pouvait pas les
+  // garder — un pull-to-refresh écrase son cache avec la réponse serveur.
+  //
+  // Elles restent renvoyées à leur AUTEUR pendant une fenêtre bornée : sans
+  // borne, la réponse enflerait indéfiniment avec l'ancienneté du compte.
+
+  function expiryClause(where: any) {
+    return where.AND.find(
+      (clause: any) =>
+        Array.isArray(clause.OR) &&
+        clause.OR.some((branch: any) => branch.expiresAt?.gt !== undefined)
+    );
+  }
+
+  it('keeps my own expired stories inside the author archive window', async () => {
+    mockPostFindMany.mockResolvedValue([]);
+
+    const service = new PostFeedService(mockPrisma);
+    await service.getStories('user-1');
+
+    const clause = expiryClause(mockPostFindMany.mock.calls[0][0].where);
+    const authorBranch = clause.OR.find((branch: any) => Array.isArray(branch.AND));
+
+    expect(authorBranch).toBeDefined();
+    expect(authorBranch.AND).toEqual(
+      expect.arrayContaining([{ authorId: 'user-1' }])
+    );
+  });
+
+  it('bounds the author archive to a finite window in the past', async () => {
+    mockPostFindMany.mockResolvedValue([]);
+    const before = Date.now();
+
+    const service = new PostFeedService(mockPrisma);
+    await service.getStories('user-1');
+
+    const clause = expiryClause(mockPostFindMany.mock.calls[0][0].where);
+    const authorBranch = clause.OR.find((branch: any) => Array.isArray(branch.AND));
+    const floor = authorBranch.AND.find((c: any) => c.expiresAt)?.expiresAt?.gt as Date;
+
+    expect(floor).toBeInstanceOf(Date);
+    expect(floor.getTime()).toBeLessThan(before);
+    expect(before - floor.getTime()).toBe(PostFeedService.AUTHOR_ARCHIVE_WINDOW_MS);
+  });
+
+  it('still hides OTHER authors expired stories', async () => {
+    mockPostFindMany.mockResolvedValue([]);
+
+    const service = new PostFeedService(mockPrisma);
+    await service.getStories('user-1');
+
+    const clause = expiryClause(mockPostFindMany.mock.calls[0][0].where);
+    const authorBranches = clause.OR.filter((branch: any) => Array.isArray(branch.AND));
+
+    expect(authorBranches).toHaveLength(1);
+    expect(authorBranches[0].AND).toEqual(
+      expect.arrayContaining([{ authorId: 'user-1' }])
+    );
   });
 
   // --- Tombstones du delta-sync -------------------------------------------
@@ -952,5 +1016,114 @@ describe('PostFeedService.getReels — chronological cursor', () => {
     expect(result.hasMore).toBe(false);
     expect(result.nextCursor).toBeNull();
     expect(result.items).toHaveLength(2);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Partage de position — hoist `metadata.location` → `location` top-level.
+//
+// Un test PAR SURFACE, délibérément séparé : une seule assertion générique
+// sur « le feed » aurait laissé passer les cinq autres méthodes sans hoist
+// (c'est exactement ainsi que ce trou est né — core.ts/comments.ts hissaient
+// déjà la position, mais aucune des 8 surfaces de PostFeedService ne le
+// faisait). Chaque test ci-dessous appelle une méthode DIFFÉRENTE.
+// ---------------------------------------------------------------------------
+
+const GEOTAG = { latitude: 48.8566, longitude: 2.3522, name: 'Tour Eiffel', address: null, category: null };
+
+function makeGeotaggedPost(id: string, overrides: Record<string, unknown> = {}) {
+  return makePost(id, { metadata: { location: GEOTAG }, ...overrides });
+}
+
+describe('PostFeedService — hoist de position par surface', () => {
+  it('getFeed restitue `location` sur un post géolocalisé', async () => {
+    mockPostFindMany.mockResolvedValue([makeGeotaggedPost('geo-feed-1')]);
+    mockPostReactionFindMany.mockResolvedValue([]);
+
+    const service = new PostFeedService(mockPrisma);
+    const result = await service.getFeed('user-1');
+
+    expect((result.items[0] as any).location).toMatchObject({ latitude: 48.8566, name: 'Tour Eiffel' });
+  });
+
+  it('getStories (corps complet) restitue `location` sur une story géolocalisée', async () => {
+    mockPostFindMany.mockResolvedValue([makeGeotaggedPost('geo-story-1', { type: 'STORY' })]);
+    mockPostViewFindMany.mockResolvedValue([]);
+    mockPostReactionFindMany.mockResolvedValue([]);
+
+    const service = new PostFeedService(mockPrisma);
+    const result = await service.getStories('user-1');
+
+    expect((result.items[0] as any).location).toMatchObject({ latitude: 48.8566 });
+  });
+
+  it('getReels restitue `location` sur un reel géolocalisé', async () => {
+    mockPostFindMany.mockResolvedValue([makeGeotaggedPost('geo-reel-1', { type: 'REEL' })]);
+    mockPostReactionFindMany.mockResolvedValue([]);
+    mockPostBookmarkFindMany.mockResolvedValue([]);
+
+    const service = new PostFeedService(mockPrisma);
+    const result = await service.getReels('user-1');
+
+    expect((result.items[0] as any).location).toMatchObject({ latitude: 48.8566 });
+  });
+
+  it('getStatuses restitue `location` sur un statut géolocalisé', async () => {
+    mockPostFindMany.mockResolvedValue([makeGeotaggedPost('geo-status-1', { type: 'STATUS' })]);
+
+    const service = new PostFeedService(mockPrisma);
+    const result = await service.getStatuses('user-1');
+
+    expect((result.items[0] as any).location).toMatchObject({ latitude: 48.8566 });
+  });
+
+  it('getDiscoverStatuses restitue `location` sur un statut public géolocalisé', async () => {
+    mockPostFindMany.mockResolvedValue([makeGeotaggedPost('geo-discover-1', { type: 'STATUS', visibility: 'PUBLIC' })]);
+
+    const service = new PostFeedService(mockPrisma);
+    const result = await service.getDiscoverStatuses('user-1');
+
+    expect((result.items[0] as any).location).toMatchObject({ latitude: 48.8566 });
+  });
+
+  it('getUserPosts restitue `location` (viewer anonyme ET authentifié)', async () => {
+    mockPostFindMany.mockResolvedValue([makeGeotaggedPost('geo-userposts-1')]);
+
+    const service = new PostFeedService(mockPrisma);
+    const anonymous = await service.getUserPosts('author-1', undefined);
+    expect((anonymous.items[0] as any).location).toMatchObject({ latitude: 48.8566 });
+
+    mockPostReactionFindMany.mockResolvedValue([]);
+    const authenticated = await service.getUserPosts('author-1', 'viewer-1');
+    expect((authenticated.items[0] as any).location).toMatchObject({ latitude: 48.8566 });
+  });
+
+  it('getCommunityFeed restitue `location` (viewer anonyme ET authentifié)', async () => {
+    mockPostFindMany.mockResolvedValue([makeGeotaggedPost('geo-community-1')]);
+
+    const service = new PostFeedService(mockPrisma);
+    const anonymous = await service.getCommunityFeed('community-1', undefined);
+    expect((anonymous.items[0] as any).location).toMatchObject({ latitude: 48.8566 });
+
+    mockPostReactionFindMany.mockResolvedValue([]);
+    const authenticated = await service.getCommunityFeed('community-1', 'viewer-1');
+    expect((authenticated.items[0] as any).location).toMatchObject({ latitude: 48.8566 });
+  });
+
+  it('getBookmarks restitue `location` sur un post geolocalise mis en favori', async () => {
+    const post = makeGeotaggedPost('geo-bookmark-1');
+    mockPostBookmarkFindMany.mockResolvedValue([{ post, createdAt: new Date(), id: 'bk-geo-1' }]);
+    mockPostReactionFindMany.mockResolvedValue([]);
+
+    const service = new PostFeedService(mockPrisma);
+    const result = await service.getBookmarks('user-1');
+
+    expect((result.items[0] as any).location).toMatchObject({ latitude: 48.8566 });
+  });
+
+  it("n'ajoute aucun champ `location` quand le post ne porte aucun lieu", () => {
+    // Garde de non-régression : hoistLocationDeep ne doit rien inventer.
+    const plain = makePost('plain-1');
+    expect((plain as any).location).toBeUndefined();
   });
 });

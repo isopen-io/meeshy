@@ -139,6 +139,14 @@ export interface Post {
   readonly shareCount: number;
   readonly isPinned: boolean;
   readonly isEdited: boolean;
+  /**
+   * Horodatage de la dernière édition de CONTENU (texte / storyEffects /
+   * médias) — distinct de `updatedAt` qui bouge sur chaque écriture
+   * (compteurs inclus). null/absent = jamais édité en contenu. Les clients
+   * s'en servent pour céder la garde « viewed monotone » après une édition
+   * de story (reset d'engagement).
+   */
+  readonly contentEditedAt?: string | Date | null;
   readonly deletedAt?: string | Date | null;
   readonly isQuote?: boolean;
   readonly repostOfId?: string | null;
@@ -229,6 +237,13 @@ export interface StoryCreatedEventData {
 
 export interface StoryUpdatedEventData {
   readonly story: Post;
+  /**
+   * true when the edit was a CONTENT edit that wiped the story's engagement
+   * (views, reactions, impressions) server-side — clients must mark the story
+   * unseen again for every viewer. Absent/false on metadata-only updates
+   * (visibility changes). The publication date (createdAt) never moves.
+   */
+  readonly engagementReset?: boolean;
 }
 
 export interface StoryDeletedEventData {

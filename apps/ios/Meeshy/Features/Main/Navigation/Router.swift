@@ -28,7 +28,6 @@ enum Route: Hashable {
     case bookmarks
     case starredMessages
     case friendRequests
-    case editProfile
     /// Phase G — destination for story-related notifications. The screen
     /// resolves the underlying story (cache-first, network-revalidate) and
     /// dispatches to the active-story bridge or the expired empty state.
@@ -102,8 +101,6 @@ extension Route {
             return String(localized: "route.title.starred", defaultValue: "Starred messages", bundle: .main)
         case .friendRequests:
             return String(localized: "route.title.friend_requests", defaultValue: "Friend requests", bundle: .main)
-        case .editProfile:
-            return String(localized: "route.title.edit_profile", defaultValue: "Edit profile", bundle: .main)
         case .storyNotificationTarget:
             return String(localized: "route.title.story", defaultValue: "Story", bundle: .main)
         }

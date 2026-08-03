@@ -51,6 +51,14 @@ public final class StoryCanvasUIView: UIView {
             // against the new slide. Geometry-only changes (`layoutSubviews`)
             // already invalidate via `lastCapturedSize`.
             slideContentRevision &+= 1
+            // L'audio ne se re-planifie que sur un changement de COMPOSITION.
+            // Cf. `slideAudioRevision` : sans ce diff, taper une lettre suffisait
+            // à repartir de zéro.
+            let fingerprint = Self.structureFingerprint(of: slide)
+            if fingerprint != slideStructureFingerprint {
+                slideStructureFingerprint = fingerprint
+                slideAudioRevision &+= 1
+            }
             rebuildLayers()
             // Slide content (incl. audio model) changed — reload the mixer and
             // restart playback so the new slide's audio is heard. No-op outside
@@ -144,7 +152,7 @@ public final class StoryCanvasUIView: UIView {
     /// Classifies an item that was hit by a gesture so the parent can route to
     /// the correct editor (text panel vs media editor sheet vs sticker UX).
     public enum CanvasItemKind: Sendable, Equatable {
-        case text, media, sticker
+        case text, media, sticker, location
     }
 
     /// Called when the user single-taps an item on the canvas. Used by the
@@ -221,12 +229,53 @@ public final class StoryCanvasUIView: UIView {
     /// `internal` (not private) so test seams can introspect transform during live drag tests.
     internal let backgroundLayer = StoryBackgroundLayer()
 
-    /// Monotonic counter incremented whenever `slide` is reassigned (semantic
-    /// content revision). Drives the foreground `StoryRendererCache` signature
-    /// and the audio mixer key; in `.play` it stays stable between display-link
-    /// ticks (only `currentTime` advances). Also used in tests to assert a
-    /// mutation triggers a predictable number of `didSet`s.
+    /// Compteur monotone des RÉASSIGNATIONS de `slide` — une par `didSet`
+    /// effectif. Il ne pilote plus l'ordonnancement audio (cf.
+    /// `slideAudioRevision`) : il ne sert qu'à prouver, en test, qu'une
+    /// mutation ne déclenche qu'un seul `didSet` (donc un seul
+    /// `rebuildLayers()`).
     internal var slideContentRevision: UInt64 = 0
+
+    /// Empreinte STRUCTURELLE de la slide : identités TRIÉES des objets
+    /// qu'elle porte, plus le rôle fond / premier plan des médias et des
+    /// audios. Deux slides de même empreinte ne diffèrent que par des
+    /// VALEURS — texte tapé, position, échelle, rotation, couleur, z-index —
+    /// jamais par leur composition.
+    internal var slideStructureFingerprint: String = ""
+
+    /// Jeton d'ordonnancement de l'AUDIO. Incrémenté UNIQUEMENT quand
+    /// `slideStructureFingerprint` change, c'est-à-dire à l'ajout ou à la
+    /// suppression d'un objet (ou au basculement fond ⇄ premier plan d'un
+    /// média / audio, qui change réellement la composition sonore).
+    ///
+    /// Il remplace `slideContentRevision` dans `currentSlideKey` et dans la
+    /// garde de `reconfigureAudioForPlayback()`. Avec l'ancien compteur, TOUTE
+    /// mutation — une lettre tapée dans un texte, un déplacement d'élément —
+    /// produisait une nouvelle clé de slide : `ReaderAudioMixer.play` ne
+    /// reconnaissait plus la passe en cours et RE-SCHEDULAIT tout depuis
+    /// l'origine, donc la musique / la voix de fond repartait à zéro à chaque
+    /// frappe (constat user 2026-07-30). Désormais éditer ou bouger un objet
+    /// laisse la clé intacte → `play()` se contente de reprendre le transport.
+    internal var slideAudioRevision: UInt64 = 0
+
+    /// Empreinte structurelle pure et testable — sans SwiftUI ni UIKit.
+    ///
+    /// Le tri rend l'empreinte insensible à l'ORDRE : remonter un élément au
+    /// premier plan (`bringForegroundToFront`) réordonne les tableaux mais ne
+    /// change pas la composition, et ne doit donc pas relancer le son.
+    nonisolated static func structureFingerprint(of slide: StorySlide) -> String {
+        let effects = slide.effects
+        var parts: [String] = []
+        parts.append(contentsOf: effects.textObjects.map { "t:\($0.id)" })
+        parts.append(contentsOf: (effects.mediaObjects ?? [])
+            .map { "m:\($0.id):\($0.isBackground ? 1 : 0)" })
+        parts.append(contentsOf: (effects.stickerObjects ?? []).map { "s:\($0.id)" })
+        parts.append(contentsOf: slide.locationObjects.map { "l:\($0.id)" })
+        parts.append(contentsOf: (effects.audioPlayerObjects ?? [])
+            .map { "a:\($0.id):\($0.isBackground == true ? 1 : 0)" })
+        parts.append("bga:\(effects.backgroundAudioId ?? "-")")
+        return parts.sorted().joined(separator: "|")
+    }
 
     /// Monotonic token bumped by `invalidateImageCache()` when the composer's
     /// in-memory image cache changes (an in-place image edit bumped
@@ -416,11 +465,14 @@ public final class StoryCanvasUIView: UIView {
     /// Reflects the current mute state driven by `setReaderContext` or
     /// `.storyComposerMuteCanvas` / `.storyComposerUnmuteCanvas` notifications.
     public internal(set) var isAudioMuted: Bool = false
-    /// `slideContentRevision` the `audioMixer` was last configured against.
-    /// Lets `reconfigureAudioForPlayback()` skip the (expensive) AVAudioFile
-    /// reload when the slide content hasn't changed — `rebuildLayers()` runs
-    /// every display-link tick in `.play` mode, but the audio model only
-    /// changes when `slide` itself is reassigned.
+    /// `slideAudioRevision` contre laquelle `audioMixer` a été configuré la
+    /// dernière fois. Permet à `reconfigureAudioForPlayback()` de sauter le
+    /// rechargement (coûteux) des `AVAudioFile` tant que la COMPOSITION de la
+    /// slide n'a pas bougé — `rebuildLayers()` tourne à chaque tick de
+    /// display-link en `.play` et à chaque frappe en `.edit`, alors que le
+    /// modèle audio, lui, ne change qu'à l'ajout/retrait d'un objet.
+    /// `nil` = garde levée : la prochaine passe reconfigure et re-planifie
+    /// (changement de contexte / de langue, entrée-sortie de preview timeline).
     var lastAudioConfigRevision: UInt64?
 
     /// `true` while this view holds a balanced `.playback` claim on the shared
@@ -494,6 +546,46 @@ public final class StoryCanvasUIView: UIView {
     /// Notifié quand l'édition se termine (textId).
     public var onInlineTextEditEnded: ((String) -> Void)?
 
+    /// Y (coordonnées ÉCRAN) du bord supérieur des contrôleurs de l'outil
+    /// texte — chips flottantes, panneau déplié, clavier. Le texte en cours
+    /// d'édition ne descend JAMAIS sous cette ligne : sa dernière ligne reste
+    /// au-dessus des chips, et un texte long déborde vers le HAUT de l'écran
+    /// (directive user 2026-07-30). Posé par le composer, qui mesure la rangée
+    /// réellement rendue — même patron que `onBandTopYChange` pour la band.
+    ///
+    /// `.greatestFiniteMagnitude` (défaut) = aucun plafond connu : le texte
+    /// reste centré comme avant. La conversion écran → canvas est faite par
+    /// `convert(_:from: nil)`, donc elle absorbe le `scaleEffect`/`offset` que
+    /// SwiftUI applique au conteneur.
+    public var inlineEditFloorGlobalY: CGFloat = .greatestFiniteMagnitude {
+        didSet {
+            guard oldValue != inlineEditFloorGlobalY, inlineEditingTextId != nil else { return }
+            reapplyInlineEditingIfNeeded()
+        }
+    }
+
+    /// Y (coordonnées ÉCRAN) du bord INFÉRIEUR du bouton « Terminé », posé sous
+    /// l'encoche. Symétrique de `inlineEditFloorGlobalY` : les deux bornent la
+    /// ZONE d'édition, dans laquelle le bloc édité se centre (spec 2026-08-01).
+    ///
+    /// `.greatestFiniteMagnitude` (défaut) = aucune zone connue : le texte reste
+    /// centré sur le canvas et grandit librement, comportement d'origine.
+    public var inlineEditCeilingGlobalY: CGFloat = .greatestFiniteMagnitude {
+        didSet {
+            guard oldValue != inlineEditCeilingGlobalY, inlineEditingTextId != nil else { return }
+            reapplyInlineEditingIfNeeded()
+        }
+    }
+
+    /// Ombrage posé sur TOUT le canvas pendant l'édition d'un texte en place :
+    /// les autres textes et éléments reculent, le texte édité — dont les
+    /// glyphes sont peints par `inlineEditor`, une sous-VUE donc au-dessus de
+    /// cette calque — reste net (directive user 2026-08-01).
+    ///
+    /// Une `CALayer` nue n'intercepte aucun toucher : le tap « ailleurs » qui
+    /// sort de l'édition continue d'atteindre le canvas.
+    let inlineEditScrimLayer = CALayer()
+
     /// Notifié lors d'un tap sur le fond (zone vide) du canvas.
     public var onBackgroundTapped: (() -> Void)?
 
@@ -532,12 +624,26 @@ public final class StoryCanvasUIView: UIView {
         self.mode = mode
         self.backgroundMediaObjectId = slide.effects.mediaObjects?
             .first(where: { $0.isBackground })?.id
+        // Semé ici : `didSet` ne tire pas sur l'initialisation d'une propriété
+        // stockée. Sans ce seed, la PREMIÈRE mutation venue (une lettre tapée)
+        // comparerait la composition réelle à l'empreinte vide et relancerait
+        // le son une fois — exactement ce que cette révision doit éviter.
+        self.slideStructureFingerprint = Self.structureFingerprint(of: slide)
         super.init(frame: .zero)
         layer.addSublayer(rootLayer)
         rootLayer.insertSublayer(backgroundLayer, at: 0)
         rootLayer.addSublayer(itemsContainer)
         rootLayer.addSublayer(editOverlayLayer)
         editOverlayLayer.zPosition = 10_000  // always on top
+        // `insertSublayer(_:above:)` plutôt qu'un `addSublayer` : l'ordre doit
+        // rester déterministe quel que soit le moment où `inlineEditor` devient
+        // sous-vue (première ouverture, ré-ouverture, bascule texte A → B), sa
+        // calque étant alors ajoutée en fin de liste, donc au-dessus du scrim.
+        inlineEditScrimLayer.backgroundColor = UIColor.black
+            .withAlphaComponent(Self.inlineEditScrimAlpha).cgColor
+        inlineEditScrimLayer.opacity = 0
+        inlineEditScrimLayer.isHidden = true
+        layer.insertSublayer(inlineEditScrimLayer, above: rootLayer)
         // `.clear` au lieu de `.black` : pendant les transitions (1st mount,
         // drop d'un élément foreground qui déclenche `slide.didSet → rebuildLayers`,
         // lancement preview / viewer avec un canvas fraîchement instancié)

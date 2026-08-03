@@ -294,6 +294,43 @@ describe('ConversationHandler', () => {
       expect(spy).toHaveBeenCalledWith(socket, CONV_ID);
     });
 
+    it('passes the resolved ObjectId (not the raw identifier) to the stats call on an identifier join', async () => {
+      // A join by conversation identifier/slug ("team-alpha") is resolved to its
+      // ObjectId for the room, membership check, joined payload and unread emit —
+      // the stats call must use the same resolved id. ConversationStatsService only
+      // resolves the "meeshy" literal itself; handing it any OTHER raw identifier
+      // makes findFirst({ id }) miss → empty stats cached under the identifier key.
+      const participant = { id: 'part-1', bannedAt: null, leftAt: null, isActive: true };
+      const prisma = makePrisma(participant);
+      const socket = makeSocket();
+      const handler = makeHandler({ prisma });
+      mockValidateSocketEvent.mockReturnValue({ success: true, data: { conversationId: 'team-alpha' } });
+      mockNormalizeConversationId.mockResolvedValue(CONV_ID);
+      const spy = jest.spyOn(handler, 'sendConversationStatsToSocket').mockResolvedValue(undefined);
+
+      await handler.handleConversationJoin(socket, { conversationId: 'team-alpha' });
+
+      expect(spy).toHaveBeenCalledWith(socket, CONV_ID);
+    });
+
+    it('preserves the "meeshy" literal (not its ObjectId) for the global conversation stats', async () => {
+      // Contract pin: ConversationStatsService re-derives the global flag from the
+      // "meeshy" literal (the global conversation has no Participant rows), so the
+      // stats call must keep "meeshy" verbatim even though it resolves to an ObjectId
+      // everywhere else. Guards against a naive "always pass normalizedId" over-fix.
+      const participant = { id: 'part-1', bannedAt: null, leftAt: null, isActive: true };
+      const prisma = makePrisma(participant);
+      const socket = makeSocket();
+      const handler = makeHandler({ prisma });
+      mockValidateSocketEvent.mockReturnValue({ success: true, data: { conversationId: 'meeshy' } });
+      mockNormalizeConversationId.mockResolvedValue(CONV_ID);
+      const spy = jest.spyOn(handler, 'sendConversationStatsToSocket').mockResolvedValue(undefined);
+
+      await handler.handleConversationJoin(socket, { conversationId: 'meeshy' });
+
+      expect(spy).toHaveBeenCalledWith(socket, 'meeshy');
+    });
+
     it('emits CONVERSATION_UNREAD_UPDATED with unread count after successful join', async () => {
       const participant = { id: 'part-1', bannedAt: null, leftAt: null, isActive: true };
       const prisma = makePrisma(participant);

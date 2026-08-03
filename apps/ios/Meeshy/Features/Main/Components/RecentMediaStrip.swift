@@ -2,6 +2,7 @@ import SwiftUI
 import Photos
 import AVFoundation
 import UIKit
+import MeeshySDK
 import MeeshyUI
 
 // ============================================================================
@@ -187,15 +188,38 @@ final class RecentMediaStripModel: NSObject, ObservableObject, PHPhotoLibraryCha
     //
     // Same fix, same reason as `CallTranscriptionService.requestPermission()`.
 
-    /// Square thumbnail for a cell. `.fastFormat` guarantees a single callback,
-    /// which keeps the continuation safe (multi-callback modes would resume it
-    /// more than once).
-    func thumbnail(for asset: PHAsset, size: CGSize) async -> UIImage? {
+    /// Options des vignettes de la bande d'échantillons.
+    ///
+    /// `nonisolated static` pour être vérifiable telle quelle par un test, sans
+    /// photothèque ni contexte d'acteur : c'est le comportement des réglages qui
+    /// doit être verrouillé, pas leur présence dans le fichier.
+    ///
+    /// `.highQualityFormat` et NON `.fastFormat`. L'invariant que `.fastFormat`
+    /// protégeait est le callback UNIQUE — `withCheckedContinuation` plante si
+    /// on le reprend deux fois — et non la vitesse. Or `.highQualityFormat` est
+    /// mono-callback lui aussi : c'est déjà ce que font `preview(for:)` et
+    /// `resolveImage(_:)` juste en dessous. Seul `.opportunistic` (le défaut)
+    /// rappelle plusieurs fois. `.fastFormat` livrait un rendu dégradé que
+    /// PhotoKit ne remplace JAMAIS par une meilleure version, donc la bande
+    /// restait floue pour toujours — un prix payé pour une sûreté qui ne le
+    /// demandait pas.
+    ///
+    /// `.exact` et non `.fast` : `.fast` rend une taille seulement « proche de »
+    /// la cible, ce qui ajoute un rééchantillonnage par-dessus le rendu.
+    nonisolated static func thumbnailRequestOptions() -> PHImageRequestOptions {
         let options = PHImageRequestOptions()
-        options.deliveryMode = .fastFormat
-        options.resizeMode = .fast
+        options.deliveryMode = .highQualityFormat
+        options.resizeMode = .exact
         options.isNetworkAccessAllowed = true
         options.isSynchronous = false
+        return options
+    }
+
+    /// Square thumbnail for a cell. La taille demandée est déjà en PIXELS
+    /// (`cell * displayScale`, côté `RecentMediaCell`) : demander des points
+    /// rendrait une image au tiers de la résolution sur un écran 3x.
+    func thumbnail(for asset: PHAsset, size: CGSize) async -> UIImage? {
+        let options = Self.thumbnailRequestOptions()
         return await withCheckedContinuation { (continuation: CheckedContinuation<ImageBox, Never>) in
             let completion: @Sendable (UIImage?, [AnyHashable: Any]?) -> Void = { image, _ in
                 continuation.resume(returning: ImageBox(image: image))
@@ -305,10 +329,13 @@ final class RecentMediaStripModel: NSObject, ObservableObject, PHPhotoLibraryCha
 // MARK: - RecentMediaStrip
 // ============================================================================
 
-/// Two-row grid (four per row) of recent photos/videos shown beneath the
+/// Two-row strip of the 19 most recent photos/videos, shown beneath the
 /// attachment carousel. Tapping a thumbnail hands the resolved media to
-/// `onSelect`; the trailing 8th tile opens the full photo library via
-/// `onOpenLibrary`.
+/// `onSelect`.
+///
+/// La tuile « ouvrir la photothèque » (`onOpenLibrary`) est la PREMIÈRE cellule,
+/// avant la première image : la sortie vers la photothèque complète doit être
+/// atteignable sans faire défiler l'échantillon jusqu'au bout.
 struct RecentMediaStrip: View {
     let accentColor: String
     /// Opens the full photo library. Receives the asset identifiers currently
@@ -358,10 +385,18 @@ struct RecentMediaStrip: View {
         max(40, ((width - hPadding * 2) - spacing * CGFloat(columns - 1)) / CGFloat(columns))
     }
 
-    /// Compact reads as two rows of four (seven thumbnails + the trailing library
-    /// tile). Regular shows a fuller, scrollable grid.
-    private var compactSamples: [PHAsset] { Array(model.assets.prefix((columns * 2) - 1)) }
-    private var regularSamples: [PHAsset] { Array(model.assets.prefix((columns * 6) - 1)) }
+    /// Échantillon de tête : 19 médias. Avec la tuile « ouvrir la photothèque »
+    /// EN PREMIER, la bande compte 20 cellules — exactement 10 colonnes de deux
+    /// rangées sur iPhone, 5 rangées de quatre sur iPad. Aucun reste boiteux.
+    ///
+    /// `nonisolated static` pour être vérifiable telle quelle par un test, sans
+    /// photothèque ni contexte d'acteur — même précédent que
+    /// `RecentMediaStripModel.thumbnailRequestOptions()`.
+    nonisolated static let headSampleCount = 19
+
+    /// Les deux dispositions montrent le même échantillon de tête ; seule la
+    /// géométrie change (bande horizontale iPhone / grille verticale iPad).
+    private var samples: [PHAsset] { Array(model.assets.prefix(Self.headSampleCount)) }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -487,10 +522,10 @@ struct RecentMediaStrip: View {
             let cols = Array(repeating: GridItem(.fixed(c), spacing: spacing), count: columns)
             ScrollView(.vertical, showsIndicators: false) {
                 LazyVGrid(columns: cols, alignment: .leading, spacing: spacing) {
-                    ForEach(regularSamples, id: \.localIdentifier) { asset in
+                    openLibraryTile(c)
+                    ForEach(samples, id: \.localIdentifier) { asset in
                         cellView(asset, size: c)
                     }
-                    openLibraryTile(c)
                 }
                 .padding(.horizontal, hPadding)
                 .padding(.vertical, 10)
@@ -507,10 +542,10 @@ struct RecentMediaStrip: View {
         ]
         return ScrollView(.horizontal, showsIndicators: false) {
             LazyHGrid(rows: rows, spacing: spacing) {
-                ForEach(compactSamples, id: \.localIdentifier) { asset in
+                openLibraryTile(c)
+                ForEach(samples, id: \.localIdentifier) { asset in
                     cellView(asset, size: c)
                 }
-                openLibraryTile(c)
             }
             .padding(.horizontal, hPadding)
             .padding(.vertical, 6)
@@ -819,7 +854,14 @@ private struct RecentMediaCell: View {
 /// Preview shown on long-press of a recent-media cell, via the system
 /// context-menu preview, sized to the asset's real aspect ratio. Photos render
 /// full quality; videos show their poster frame instantly, then start looping
-/// muted playback as soon as the player item resolves.
+/// playback AVEC LE SON as soon as the player item resolves.
+///
+/// Le son n'est pas qu'un `isMuted = false` : sans catégorie `.playback` posée,
+/// l'aperçu reste muet dès que l'interrupteur Silence est enclenché (catégorie
+/// par défaut `.soloAmbient`). La session passe donc par la source UNIQUE
+/// call-aware du SDK, comme `SharedAVPlayerManager.play()` — pendant un appel
+/// VoIP elle est un no-op, l'aperçu joue alors sous la session de l'appel et le
+/// micro reste intact.
 private struct RecentMediaPreview: View {
     let asset: PHAsset
     let model: RecentMediaStripModel
@@ -856,17 +898,26 @@ private struct RecentMediaPreview: View {
             guard asset.mediaType == .video,
                   let item = await model.videoPlayerItem(for: asset) else { return }
             let queue = AVQueuePlayer()
-            queue.isMuted = true
             queue.allowsExternalPlayback = false
             queue.preventsDisplaySleepDuringVideoPlayback = false
+            // L'aperçu sonne : les autres lecteurs de l'app se taisent d'abord.
+            // AVANT d'armer la session — `stopAll()` passe par
+            // `SharedAVPlayerManager.stop()`, qui désactive la session ; l'ordre
+            // inverse la désarmerait juste après l'avoir posée.
+            PlaybackCoordinator.shared.stopAll()
+            MediaSessionCoordinator.shared.activatePlaybackSync(options: [.duckOthers])
             looper = AVPlayerLooper(player: queue, templateItem: item)
             player = queue
             queue.play()
         }
+        // Le looper est démonté AVANT le player : il garde des observateurs KVO
+        // dessus, et l'ordre inverse risque un callback sur un player en cours
+        // de désallocation (même règle que `AttachmentQuickLookPreview`).
         .onDisappear {
             player?.pause()
-            player = nil
             looper = nil
+            player = nil
+            MediaSessionCoordinator.shared.deactivatePlaybackSync()
         }
     }
 }

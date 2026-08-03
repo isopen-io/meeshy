@@ -609,6 +609,48 @@ final class ConversationViewModelTests: XCTestCase {
         XCTAssertEqual(preview(.location), "📍 Position")
     }
 
+    func test_optimisticListPreview_lieuSeul_composeNomPuisAdressePuisPosition() throws {
+        // Lot 2 (spec 2026-07-30) : un message « lieu seul » a un `content`
+        // vide et un messageType .text — sans la branche `location`, son
+        // aperçu de conversation serait vide. « 📍 <nom, à défaut adresse,
+        // à défaut Position> ». Table française fixée : on juge le code, pas
+        // la langue du simulateur.
+        let path = try XCTUnwrap(Bundle.main.path(forResource: "fr", ofType: "lproj"))
+        let fr = try XCTUnwrap(Bundle(path: path))
+        let loc = Locale(identifier: "fr")
+        func preview(_ place: SharedPlace?) -> String {
+            ConversationViewModel.optimisticListPreview(
+                text: "", messageType: .text, location: place, bundle: fr, locale: loc)
+        }
+
+        let nomEtAdresse = SharedPlace(latitude: 48.85, longitude: 2.35,
+                                       name: "Café de Flore",
+                                       address: "172 boulevard Saint-Germain, Paris")
+        XCTAssertEqual(preview(nomEtAdresse), "📍 Café de Flore", "le nom prime sur l'adresse")
+
+        let adresseSeule = SharedPlace(latitude: 48.85, longitude: 2.35,
+                                       name: nil,
+                                       address: "172 boulevard Saint-Germain, Paris")
+        XCTAssertEqual(preview(adresseSeule), "📍 172 boulevard Saint-Germain, Paris")
+
+        let nomVide = SharedPlace(latitude: 48.85, longitude: 2.35, name: "", address: "")
+        XCTAssertEqual(preview(nomVide), "📍 Position",
+                       "nom et adresse vides → libellé localisé de repli")
+
+        let pointBrut = SharedPlace(latitude: 48.85, longitude: 2.35)
+        XCTAssertEqual(preview(pointBrut), "📍 Position")
+    }
+
+    func test_optimisticListPreview_texteAvecLieu_prefereLeTexte() {
+        // Un message qui porte texte ET lieu montre le texte en aperçu — le
+        // lieu n'écrase jamais une légende.
+        let place = SharedPlace(latitude: 48.85, longitude: 2.35, name: "Café de Flore")
+        XCTAssertEqual(
+            ConversationViewModel.optimisticListPreview(text: "On se voit ici ?", messageType: .text, location: place),
+            "On se voit ici ?"
+        )
+    }
+
     func test_sendMessage_restAndSocketBothFail_returnsFalse() async {
         mockMessageService.sendResult = .failure(NSError(domain: "test", code: 500))
         mockMessageSocket.sendViaSocketFallbackResult = nil
@@ -1479,6 +1521,80 @@ final class ConversationViewModelTests: XCTestCase {
         wait(for: [expectation], timeout: 1.0)
     }
 
+    // MARK: - Rattrapage : le badge tombe à l'arrivée sur le dernier message
+
+    /// Identifiants d'aspect serveur (24 hex) : le corps de `mark-read` est
+    /// validé sur ce format, un `cid_…` ferait rejeter tout le lot.
+    private static let idOldest = "aaaaaaaaaaaaaaaaaaaaaaa1"
+    private static let idNewest = "aaaaaaaaaaaaaaaaaaaaaaa2"
+
+    /// Le lot vu contient le message le PLUS RÉCENT : l'utilisateur n'a plus de
+    /// retard, le badge doit tomber sans attendre l'aller-retour serveur.
+    func test_markAsRead_seenBatchContainsNewestMessage_clearsBadgeImmediately() {
+        let sut = makeSUT()
+        sut.messages = [
+            makeMessage(id: Self.idOldest, content: "A"),
+            makeMessage(id: Self.idNewest, content: "B")
+        ]
+        let expectedId = testConversationId
+        let cleared = expectation(forNotification: .conversationMarkedRead, object: nil) { notification in
+            (notification.object as? String) == expectedId
+        }
+
+        sut.markAsRead(messageIds: [Self.idNewest])
+
+        wait(for: [cleared], timeout: 1.0)
+    }
+
+    /// Rapporter dix messages sur deux cents ne veut PAS dire que la
+    /// conversation est lue : tant que le dernier message n'a pas été atteint,
+    /// le badge reste. Le vider afficherait un chiffre que le serveur
+    /// corrigerait aussitôt.
+    func test_markAsRead_seenBatchWithoutNewestMessage_leavesBadgeAlone() {
+        let sut = makeSUT()
+        sut.messages = [
+            makeMessage(id: Self.idOldest, content: "A"),
+            makeMessage(id: Self.idNewest, content: "B")
+        ]
+        let expectedId = testConversationId
+        let cleared = expectation(forNotification: .conversationMarkedRead, object: nil) { notification in
+            (notification.object as? String) == expectedId
+        }
+        cleared.isInverted = true
+
+        sut.markAsRead(messageIds: [Self.idOldest])
+
+        wait(for: [cleared], timeout: 0.5)
+    }
+
+    /// Après un saut vers un message cité, le bas de l'écran n'est PAS le bas de
+    /// la conversation. Traiter le dernier message chargé comme le plus récent
+    /// viderait un badge encore dû.
+    func test_markAsRead_windowNotAtTip_doesNotClearBadge() {
+        let sut = makeSUT()
+        sut.messages = [makeMessage(id: Self.idNewest, content: "B")]
+        sut.hasNewerMessages = true
+        let expectedId = testConversationId
+        let cleared = expectation(forNotification: .conversationMarkedRead, object: nil) { notification in
+            (notification.object as? String) == expectedId
+        }
+        cleared.isInverted = true
+
+        sut.markAsRead(messageIds: [Self.idNewest])
+
+        wait(for: [cleared], timeout: 0.5)
+    }
+
+    /// Une bulle optimiste qu'on vient d'envoyer ne porte pas encore d'ObjectId.
+    /// L'annoncer comme borne de curseur ferait rejeter le corps entier par le
+    /// gateway ; c'est le dernier message CONNU DU SERVEUR qui fait foi.
+    func test_isServerMessageId_rejectsOptimisticClientIds() {
+        XCTAssertTrue(ConversationViewModel.isServerMessageId(Self.idNewest))
+        XCTAssertFalse(ConversationViewModel.isServerMessageId("cid_9f1c2d3e-4a5b-4c6d-8e9f-0a1b2c3d4e5f"))
+        XCTAssertFalse(ConversationViewModel.isServerMessageId(""))
+        XCTAssertFalse(ConversationViewModel.isServerMessageId("zzzzzzzzzzzzzzzzzzzzzzzz"))
+    }
+
     // MARK: - messageIndex Tests
 
     func test_messageIndex_returnsCorrectIndex() {
@@ -2234,6 +2350,120 @@ final class ConversationViewModelTests: XCTestCase {
         XCTAssertEqual(matching.first?.content, "hello")
     }
 
+    // MARK: - hydratePersistedTranslations (grdb-07)
+
+    /// Un message "own" vit en GRDB sous localId=cid mais ses traductions sont
+    /// persistées sous l'id SERVEUR : filtrer les TranslationRecord sur le seul
+    /// localId ne matchait rien — la traduction disparaissait au cold start.
+    func test_hydratePersistedTranslations_ownMessageKeyedByCid_populatesDictUnderServerId() async throws {
+        let pool = try makeInMemoryPool()
+        let persistence = MessagePersistenceActor(dbWriter: pool)
+
+        let record = MessageRecord(
+            localId: "cid_abc", serverId: "srv1",
+            conversationId: testConversationId,
+            senderId: "current-user",
+            content: "hello", originalLanguage: "en",
+            messageType: "text", messageSource: "user", contentType: "text",
+            state: .sent, retryCount: 0, lastError: nil,
+            isEncrypted: false, encryptionMode: nil, encryptedPayload: nil,
+            replyToId: nil, storyReplyToId: nil,
+            forwardedFromId: nil, forwardedFromConversationId: nil,
+            replyToJson: nil, forwardedFromJson: nil,
+            expiresAt: nil, effectFlags: 0,
+            maxViewOnceCount: nil, viewOnceCount: 0,
+            isEdited: false, editedAt: nil, deletedAt: nil,
+            pinnedAt: nil, pinnedBy: nil,
+            senderName: "Me", senderUsername: "me",
+            senderColor: nil, senderAvatarURL: nil,
+            deliveredCount: 0, readCount: 0,
+            deliveredToAllAt: nil, readByAllAt: nil,
+            createdAt: Date(), sentAt: nil,
+            deliveredAt: nil, readAt: nil, updatedAt: Date(),
+            attachmentsJson: nil, reactionsJson: nil,
+            reactionCount: 0, currentUserReactionsJson: nil,
+            mentionedUsersJson: nil,
+            cachedBubbleWidth: nil, cachedBubbleHeight: nil,
+            cachedLastLineWidth: nil, cachedLineCount: nil,
+            cachedTimestampInline: nil,
+            layoutVersion: 0, layoutMaxWidth: nil,
+            changeVersion: 1
+        )
+        try await persistence.insertOptimistic(record)
+        try await persistence.saveTranslation(TranslationRecord(
+            id: "tr1", messageLocalId: "srv1", messageServerId: "srv1",
+            targetLanguage: "fr", translatedContent: "Bonjour",
+            translationModel: "nllb-200", confidenceScore: 0.9,
+            sourceLanguage: "en", receivedAt: Date()
+        ))
+
+        let viewModel = makeSUT(
+            dependencies: ConversationDependencies(dbPool: pool, persistence: persistence)
+        )
+        mockAuthManager.simulateLoggedIn(user: MeeshyUser(
+            id: testUserId, username: "testuser", systemLanguage: "fr"
+        ))
+        await viewModel.hydratePersistedTranslations()
+
+        XCTAssertNotNil(viewModel.messageTranslations["srv1"],
+                        "la traduction persistée sous l'id serveur doit être réhydratée pour un message own keyé par cid")
+        XCTAssertEqual(viewModel.messageTranslations["srv1"]?.first?.translatedContent, "Bonjour")
+    }
+
+    /// Non-régression : un message reçu (localId == serverId) reste hydraté.
+    func test_hydratePersistedTranslations_receivedMessage_stillHydrated() async throws {
+        let pool = try makeInMemoryPool()
+        let persistence = MessagePersistenceActor(dbWriter: pool)
+
+        let record = MessageRecord(
+            localId: "srv2", serverId: "srv2",
+            conversationId: testConversationId,
+            senderId: "other-user",
+            content: "hi", originalLanguage: "en",
+            messageType: "text", messageSource: "user", contentType: "text",
+            state: .sent, retryCount: 0, lastError: nil,
+            isEncrypted: false, encryptionMode: nil, encryptedPayload: nil,
+            replyToId: nil, storyReplyToId: nil,
+            forwardedFromId: nil, forwardedFromConversationId: nil,
+            replyToJson: nil, forwardedFromJson: nil,
+            expiresAt: nil, effectFlags: 0,
+            maxViewOnceCount: nil, viewOnceCount: 0,
+            isEdited: false, editedAt: nil, deletedAt: nil,
+            pinnedAt: nil, pinnedBy: nil,
+            senderName: "Other", senderUsername: "other",
+            senderColor: nil, senderAvatarURL: nil,
+            deliveredCount: 0, readCount: 0,
+            deliveredToAllAt: nil, readByAllAt: nil,
+            createdAt: Date(), sentAt: nil,
+            deliveredAt: nil, readAt: nil, updatedAt: Date(),
+            attachmentsJson: nil, reactionsJson: nil,
+            reactionCount: 0, currentUserReactionsJson: nil,
+            mentionedUsersJson: nil,
+            cachedBubbleWidth: nil, cachedBubbleHeight: nil,
+            cachedLastLineWidth: nil, cachedLineCount: nil,
+            cachedTimestampInline: nil,
+            layoutVersion: 0, layoutMaxWidth: nil,
+            changeVersion: 1
+        )
+        try await persistence.insertOptimistic(record)
+        try await persistence.saveTranslation(TranslationRecord(
+            id: "tr2", messageLocalId: "srv2", messageServerId: "srv2",
+            targetLanguage: "fr", translatedContent: "Salut",
+            translationModel: "nllb-200", confidenceScore: 0.9,
+            sourceLanguage: "en", receivedAt: Date()
+        ))
+
+        let viewModel = makeSUT(
+            dependencies: ConversationDependencies(dbPool: pool, persistence: persistence)
+        )
+        mockAuthManager.simulateLoggedIn(user: MeeshyUser(
+            id: testUserId, username: "testuser", systemLanguage: "fr"
+        ))
+        await viewModel.hydratePersistedTranslations()
+
+        XCTAssertEqual(viewModel.messageTranslations["srv2"]?.first?.translatedContent, "Salut")
+    }
+
     // MARK: - withSendTimeout (S1 — send-clock latency cap)
 
     func test_withSendTimeout_fastOperation_returnsValue() async throws {
@@ -2419,7 +2649,14 @@ final class ConversationViewModelTests: XCTestCase {
         await sut.joinOngoingCall(makeLiveCallSummary())
 
         XCTAssertTrue(spy.rejoinCalls.isEmpty)
-        XCTAssertEqual(FeedbackToastManager.shared.currentToast?.message, "L'appel est terminé")
+        // Résolu depuis la MÊME clé/valeur-par-défaut/bundle que le site d'appel
+        // (`ConversationViewModel.joinOngoingCall`) — un littéral français en dur
+        // ne teste plus que la langue du simulateur (cf. `CallsViewModelTests`,
+        // même patron).
+        XCTAssertEqual(
+            FeedbackToastManager.shared.currentToast?.message,
+            String(localized: "bubble.call.join.ended", defaultValue: "L'appel est terminé", bundle: .main)
+        )
     }
 
     func test_joinOngoingCall_staleSessionDifferentCallId_treatedAsEnded() async {

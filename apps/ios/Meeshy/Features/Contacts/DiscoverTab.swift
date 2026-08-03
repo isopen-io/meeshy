@@ -159,7 +159,7 @@ struct DiscoverTab: View {
             )
         }
         .disabled(viewModel.isImportingContacts)
-        .accessibilityLabel(String(localized: "contacts.discover.import.a11y", defaultValue: "Retrouver mes contacts qui sont deja sur Meeshy", bundle: .main))
+        .accessibilityLabel(String(localized: "contacts.discover.import.a11y", defaultValue: "Retrouver mes contacts qui sont déjà sur Meeshy", bundle: .main))
     }
 
     // MARK: - Contact Matches Section

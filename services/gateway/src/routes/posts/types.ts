@@ -76,7 +76,7 @@ const STORY_FONT_MAX = 64;
 const STORY_STYLE_MAX = 64;
 const STORY_ARRAY_CAP = 32;             // medias/texts/stickers/audios par slide
 
-const StoryMediaObjectSchema = z.object({
+export const StoryMediaObjectSchema = z.object({
   id: z.string().max(STORY_ID_MAX).optional(),
   postMediaId: z.string().max(STORY_ID_MAX).optional(),
   mediaURL: z.string().max(2048).optional(),
@@ -96,6 +96,12 @@ const StoryMediaObjectSchema = z.object({
   zIndex: z.number().int().min(-1000).max(1000).optional(),
   startTime: z.number().min(0).max(86400).optional(),
   duration: z.number().min(0).max(86400).optional(),
+  // Fenetre de SOURCE — ou l'on entre dans le FICHIER. A ne pas confondre avec
+  // `startTime`, qui dit quand la piste demarre sur la TIMELINE. Bornees comme
+  // leurs freres : le blob vient du client, et le `.passthrough()` ci-dessous
+  // ne valide rien de ce qu'on n'enumere pas ici.
+  sourceStart: z.number().min(0).max(86400).optional(),
+  intrinsicDuration: z.number().min(0).max(86400).optional(),
   fadeIn: z.number().min(0).max(60).optional(),
   fadeOut: z.number().min(0).max(60).optional(),
   sourceLanguage: z.string().max(STORY_LANG_MAX).optional(),
@@ -136,7 +142,7 @@ const StoryStickerObjectSchema = z.object({
   zIndex: z.number().int().min(-1000).max(1000).optional(),
 }).passthrough();
 
-const StoryAudioObjectSchema = z.object({
+export const StoryAudioObjectSchema = z.object({
   id: z.string().max(STORY_ID_MAX).optional(),
   postMediaId: z.string().max(STORY_ID_MAX).optional(),
   placement: z.string().max(32).optional(),
@@ -146,7 +152,20 @@ const StoryAudioObjectSchema = z.object({
   waveformSamples: z.array(z.number()).max(2048).optional(),
   startTime: z.number().min(0).max(86400).optional(),
   duration: z.number().min(0).max(86400).optional(),
+  // Fenetre de SOURCE — meme semantique que sur `StoryMediaObjectSchema` :
+  // ou l'on entre dans le FICHIER, et non quand la piste demarre sur la
+  // timeline.
+  sourceStart: z.number().min(0).max(86400).optional(),
+  intrinsicDuration: z.number().min(0).max(86400).optional(),
   sourceLanguage: z.string().max(STORY_LANG_MAX).optional(),
+  // Le blob `storyEffects` est entierement controle par le client : `soundId`
+  // designe une entree de la bibliotheque de sons et sert de cle de lecture
+  // cote serveur. Sans forme ObjectId stricte il devient un vecteur d'injection
+  // (chemin, operateur Mongo) avant meme la garde d'autorisation.
+  soundId: z.string().regex(/^[a-f0-9]{24}$/).optional(),
+  mediaURL: z.string().max(2048).optional(),
+  keyframes: z.array(z.unknown()).max(STORY_ARRAY_CAP).optional(),
+  backgroundAudioVariants: z.array(z.unknown()).max(STORY_ARRAY_CAP).optional(),
 }).passthrough();
 
 /// Taille max sérialisée JSON acceptée pour `storyEffects` : 256 KB. Couvre
@@ -194,6 +213,22 @@ export const CreatePostSchema = z.object({
   mobileTranscription: MobileTranscriptionSchema.optional(),
   // Repost source ID (for StoryComposer publishing a repost via POST /posts)
   repostOfId: z.string().optional(),
+  // Lieu partagé — champ dédié, JAMAIS un `metadata` brut (cf.
+  // services/location/sharedPlace.ts). Validation stricte des coordonnées
+  // et bornage des chaînes délégués à `parseSharedPlace`, appelé côté
+  // `PostService.createPost`.
+  location: z.unknown().optional(),
+  // Découvrabilité géographique — INDÉPENDANTE du badge d'affichage
+  // gouverné par `location` ci-dessus (deux opt-in séparés, voir
+  // docs/superpowers/specs/2026-08-02-post-geolocation-nearby-search-design.md
+  // §2). Le client envoie toujours la coordonnée EXACTE via `location` ; ce
+  // champ ne fait QUE choisir le niveau d'arrondi de grille que le serveur
+  // seul applique avant d'écrire `Post.geoPoint`/`Post.geoPrecision`
+  // (`services/location/geoDiscoverability.ts::quantizeCoordinate`).
+  // Absent => les deux champs restent `null`. Une valeur hors énumération
+  // est rejetée ici (400 VALIDATION_ERROR), même garde que `visibility`
+  // ci-dessus — jamais un `geoPoint`/`geoPrecision` brut, à aucun niveau.
+  discoverabilityPrecision: z.enum(['EXACT', 'NEIGHBORHOOD', 'CITY', 'REGION']).optional(),
 }).refine((data) => {
   if ((data.visibility === 'EXCEPT' || data.visibility === 'ONLY') && (!data.visibilityUserIds || data.visibilityUserIds.length === 0)) {
     return false;
@@ -268,6 +303,14 @@ export const UpdatePostSchema = z.object({
   // Ids of attached media (PostMedia) to detach during the edit. Only media
   // belonging to this post is removed; a reel must keep at least one media.
   removeMediaIds: z.array(z.string()).max(50).optional(),
+  // Ids of freshly uploaded media (PostMedia created by TUS with postId=null)
+  // to attach during the edit — same contract and bound as CreatePostSchema.
+  // On a STORY this counts as a content edit (engagement reset).
+  mediaIds: z.array(z.string()).max(10).optional(),
+  // Lieu partagé — tri-état : clé ABSENTE = inchangé, `null` = retrait,
+  // objet = remplacement (validé par parseSharedPlace côté route, comme à
+  // la création). Écrit/effacé dans metadata.location par le service.
+  location: z.unknown().optional(),
 }).refine((data) => {
   if ((data.visibility === 'EXCEPT' || data.visibility === 'ONLY') && (!data.visibilityUserIds || data.visibilityUserIds.length === 0)) {
     return false;
@@ -292,6 +335,8 @@ export const CreateCommentSchema = z.object({
   /// Transcription Whisper produite côté mobile pour un média audio (évite la
   /// re-transcription serveur). Même structure que pour les posts.
   mobileTranscription: MobileTranscriptionSchema.optional(),
+  /// Lieu partagé — même contrat que CreatePostSchema ci-dessus.
+  location: z.unknown().optional(),
 }).refine(
   (data) => (data.content?.trim().length ?? 0) > 0 || (data.attachmentIds?.length ?? 0) > 0,
   { message: 'A comment must have text content or an attached media' },

@@ -97,13 +97,16 @@ jobs:
           set -euo pipefail
           printf '%s' "$ASC_KEY_CONTENT" | base64 --decode > "$RUNNER_TEMP/AuthKey.p8"
           umask 077
+          # ANDP résout $ANDP_CONFIG_DIR/ → ./.andp/ → ~/.andp/ et REJETTE un
+          # secrets.yml resté à la racine (erreur config_misplaced).
+          mkdir -p apps/ios/.andp
           {
             echo "accounts:"; echo "  primary:"; echo "    asc_api:"
             echo "      key_id: \"$ANDP_KEY_ID\""
             echo "      issuer_id: \"$ANDP_ISSUER_ID\""
             echo "      key_content: |"
             sed 's/^/        /' "$RUNNER_TEMP/AuthKey.p8"
-          } > apps/ios/secrets.yml
+          } > apps/ios/.andp/secrets.yml
 
       # Signing WITHOUT fastlane and WITHOUT cloning the cert repo: the
       # match-encrypted Apple Distribution cert + App Store profiles are provided
@@ -185,7 +188,7 @@ jobs:
             -authenticationKeyID "$ANDP_KEY_ID" \
             -authenticationKeyIssuerID "$ANDP_ISSUER_ID" \
             -allowProvisioningUpdates \
-            DEVELOPMENT_TEAM=D72UK7R5RE CODE_SIGN_STYLE=Automatic SWIFT_OPTIMIZATION_LEVEL=-Onone \
+            DEVELOPMENT_TEAM=D72UK7R5RE CODE_SIGN_STYLE=Automatic \
             "${VERSION_ARGS[@]}"
 
       # The same standalone script Xcode Cloud / the local scheme use — strips
@@ -245,13 +248,17 @@ jobs:
           PEM="$(printf '%s' "$ASC_KEY_CONTENT" | base64 --decode)"
           while IFS= read -r line; do [ -n "$line" ] && echo "::add-mask::$line"; done <<< "$PEM"
           umask 077
+          # ANDP résout $ANDP_CONFIG_DIR/ → ./.andp/ → ~/.andp/ et REJETTE un
+          # secrets.yml resté à la racine (erreur config_misplaced). Cf. le bloc
+          # équivalent dans apps/ios/meeshy.sh.
+          mkdir -p .andp
           {
             echo "accounts:"; echo "  primary:"; echo "    asc_api:"
             echo "      key_id: \"$ASC_KEY_ID\""
             echo "      issuer_id: \"$ASC_ISSUER_ID\""
             echo "      key_content: |"
             printf '%s\n' "$PEM" | sed 's/^/        /'
-          } > secrets.yml
+          } > .andp/secrets.yml
       - name: Verify then release to TestFlight
         env:
           GROUP: ${{ inputs.group }}
@@ -295,13 +302,17 @@ jobs:
           PEM="$(printf '%s' "$ASC_KEY_CONTENT" | base64 --decode)"
           while IFS= read -r line; do [ -n "$line" ] && echo "::add-mask::$line"; done <<< "$PEM"
           umask 077
+          # ANDP résout $ANDP_CONFIG_DIR/ → ./.andp/ → ~/.andp/ et REJETTE un
+          # secrets.yml resté à la racine (erreur config_misplaced). Cf. le bloc
+          # équivalent dans apps/ios/meeshy.sh.
+          mkdir -p .andp
           {
             echo "accounts:"; echo "  primary:"; echo "    asc_api:"
             echo "      key_id: \"$ASC_KEY_ID\""
             echo "      issuer_id: \"$ASC_ISSUER_ID\""
             echo "      key_content: |"
             printf '%s\n' "$PEM" | sed 's/^/        /'
-          } > secrets.yml
+          } > .andp/secrets.yml
           # Declare export compliance (standard/exempt encryption). allow_submit
           # is left false on purpose: the release advances to the approval gate
           # and WAITS — it never auto-submits.
@@ -379,13 +390,17 @@ jobs:
           PEM="$(printf '%s' "$ASC_KEY_CONTENT" | base64 --decode)"
           while IFS= read -r line; do [ -n "$line" ] && echo "::add-mask::$line"; done <<< "$PEM"
           umask 077
+          # ANDP résout $ANDP_CONFIG_DIR/ → ./.andp/ → ~/.andp/ et REJETTE un
+          # secrets.yml resté à la racine (erreur config_misplaced). Cf. le bloc
+          # équivalent dans apps/ios/meeshy.sh.
+          mkdir -p .andp
           {
             echo "accounts:"; echo "  primary:"; echo "    asc_api:"
             echo "      key_id: \"$ASC_KEY_ID\""
             echo "      issuer_id: \"$ASC_ISSUER_ID\""
             echo "      key_content: |"
             printf '%s\n' "$PEM" | sed 's/^/        /'
-          } > secrets.yml
+          } > .andp/secrets.yml
           printf 'compliance:\n  uses_non_exempt_encryption: false\n' > andp.yml
       - name: Approve and submit for review
         env:

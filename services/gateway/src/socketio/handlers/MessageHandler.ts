@@ -19,6 +19,7 @@ import {
   postReplyToFromMetadata,
   POST_REPLY_SNAPSHOT_SELECT,
 } from '../../services/messaging/postReplySnapshot';
+import { sharedPlaceFromMetadata, hoistLocationOnto } from '../../services/location/sharedPlace';
 import { StatusService } from '../../services/StatusService';
 import { NotificationService } from '../../services/notifications/NotificationService';
 import { MessageTranslationService } from '../../services/message-translation/MessageTranslationService';
@@ -164,6 +165,7 @@ export class MessageHandler {
       forwardedFromId?: string;
       forwardedFromConversationId?: string;
       encryptedPayload?: unknown;
+      location?: unknown;
     },
     callback?: (response: SocketIOResponse<{ messageId: string }>) => void
   ): Promise<void> {
@@ -282,6 +284,9 @@ export class MessageHandler {
         isViewOnce: validated.isViewOnce,
         maxViewOnceCount: validated.maxViewOnceCount,
         isAnonymous,
+        // Lieu partagé — champ dédié transmis tel quel ; validé et écrit
+        // dans `metadata.location` par `MessageProcessor.saveMessage`.
+        location: validated.location,
         metadata: {
           source: 'websocket',
           socketId: socket.id,
@@ -360,6 +365,7 @@ export class MessageHandler {
       replyToId?: string;
       forwardedFromId?: string;
       forwardedFromConversationId?: string;
+      location?: unknown;
     },
     callback?: (response: SocketIOResponse<{ messageId: string }>) => void
   ): Promise<void> {
@@ -476,9 +482,23 @@ export class MessageHandler {
         storyReplyToId: validated.storyReplyToId,
         forwardedFromId: validated.forwardedFromId,
         forwardedFromConversationId: validated.forwardedFromConversationId,
+        // Effets de message — parité avec `handleMessageSend` (path texte) et
+        // POST /messages. Le bitfield final `effectFlags` est recomposé par
+        // `MessageProcessor.saveMessage` depuis `isBlurred` / `expiresAt` /
+        // `isViewOnce`, donc on transmet les champs bruts. Sans cette
+        // propagation, une photo view-once / floutée / éphémère envoyée sur ce
+        // path (le PRINCIPAL pour les pièces jointes) serait persistée comme un
+        // média normal, rouvrable indéfiniment.
+        isBlurred: validated.isBlurred,
+        expiresAt: validated.expiresAt ? new Date(validated.expiresAt) : undefined,
+        effectFlags: validated.effectFlags,
+        isViewOnce: validated.isViewOnce,
+        maxViewOnceCount: validated.maxViewOnceCount,
         isAnonymous,
         // Aligner avec GatewayMessage: attachments are passed as IDs for linking
         attachmentIds: validated.attachmentIds,
+        // Lieu partagé — même contrat que handleMessageSend ci-dessus.
+        location: validated.location,
         metadata: {
           source: 'websocket',
           socketId: socket.id,
@@ -599,7 +619,8 @@ export class MessageHandler {
           senderId: true,
           content: true,
           originalLanguage: true,
-          sender: { select: { id: true, userId: true, displayName: true, avatar: true } },
+          createdAt: true,
+          sender: { select: { id: true, userId: true, displayName: true, avatar: true, role: true } },
           attachments: { select: attachmentMediaSelect },
         },
       });
@@ -607,6 +628,39 @@ export class MessageHandler {
       if (!message) {
         this._sendGenericError(callback, 'Message not found or you are not authorized to edit it', socket);
         return;
+      }
+
+      // Fenêtre d'édition — parité stricte avec la route REST
+      // (`routes/conversations/messages-advanced.ts` : « 24 heures max pour les
+      // utilisateurs normaux »). Le transport socket est le chemin d'édition
+      // PRIMAIRE : sans cette garde il contournait ENTIÈREMENT la fenêtre que
+      // REST impose — un client pouvait éditer un message arbitrairement ancien
+      // via `message:edit`. L'auteur au-delà de 24h est bloqué, sauf privilège
+      // MODERATOR/ADMIN/BIGBOSS. Un `createdAt` absent (Date invalide → NaN) ne
+      // bloque jamais : `NaN > window` est faux.
+      const messageAgeMs = Date.now() - new Date(message.createdAt).getTime();
+      const EDIT_WINDOW_MS = 24 * 60 * 60 * 1000;
+      if (messageAgeMs > EDIT_WINDOW_MS) {
+        // The bypass is a GLOBAL-role privilege (User.role: ADMIN/BIGBOSS/
+        // MODERATOR), NOT the conversation-scoped Participant.role that
+        // `message.sender.role` exposes (only ever admin/moderator/member,
+        // lowercase — see schema.prisma). Comparing that lowercase participant
+        // role to the uppercase global constants never matched, so the bypass
+        // was dead code and every privileged author was wrongly blocked past
+        // 24h. Mirror handleMessageDelete's lazy global-role lookup — the editor
+        // IS the author here (the message query filters `sender: { userId }`),
+        // so the lookup keys on `userId`. Kept lazy: only fires past the window.
+        const authorRecord = await this.prisma.user.findUnique({
+          where: { id: userId },
+          select: { role: true },
+        });
+        const globalRole = authorRecord?.role;
+        const hasEditPrivilege =
+          globalRole === 'MODERATOR' || globalRole === 'ADMIN' || globalRole === 'BIGBOSS';
+        if (!hasEditPrivilege) {
+          this._sendGenericError(callback, 'You can no longer edit this message (24-hour limit exceeded)', socket);
+          return;
+        }
       }
 
       const hasAttachments = message.attachments && message.attachments.length > 0;
@@ -878,13 +932,21 @@ export class MessageHandler {
         messageTranslations
       );
 
-      // Enrichir avec les détails du forward si applicable
+      // Enrichir avec les détails du forward si applicable. Best-effort : un
+      // échec de ce lookup (DB transient) ne doit JAMAIS avorter le broadcast —
+      // sinon un message déjà persisté ET ACKé « envoyé » ne serait délivré à
+      // personne (ni emit live, ni offline queue), sans retry. Parité avec
+      // `_getMessageTranslations().catch(() => [])` ci-dessus.
       if (message.forwardedFromId) {
         const [originalMsg, originalConv] = await Promise.all([
           this.prisma.message.findUnique({
             where: { id: message.forwardedFromId },
             select: {
               id: true, content: true, senderId: true, messageType: true, createdAt: true,
+              // Lot 2 : message transféré (objet imbriqué) — sans `metadata`,
+              // un message géolocalisé transféré n'affiche jamais sa
+              // position sur le chemin socket (parité avec le chemin REST).
+              metadata: true,
               sender: { select: { id: true, userId: true, displayName: true, avatar: true, type: true } },
               attachments: { select: attachmentForwardPreviewSelect, take: 1 }
             }
@@ -895,8 +957,8 @@ export class MessageHandler {
                 select: { id: true, title: true, identifier: true, type: true, avatar: true }
               })
             : Promise.resolve(null)
-        ]);
-        if (originalMsg) (messagePayload as Record<string, unknown>).forwardedFrom = originalMsg;
+        ]).catch(() => [null, null] as const);
+        if (originalMsg) (messagePayload as Record<string, unknown>).forwardedFrom = hoistLocationOnto(originalMsg as unknown as Record<string, unknown>);
         if (originalConv) (messagePayload as Record<string, unknown>).forwardedFromConversation = originalConv;
       }
 
@@ -910,10 +972,11 @@ export class MessageHandler {
         if (fromSnapshot) {
           (messagePayload as Record<string, unknown>).postReplyTo = fromSnapshot;
         } else {
+          // Best-effort : le fallback live ne doit pas gater la délivrance.
           const post = await this.prisma.post.findUnique({
             where: { id: message.storyReplyToId },
             select: POST_REPLY_SNAPSHOT_SELECT,
-          });
+          }).catch(() => null);
           if (post) {
             (messagePayload as Record<string, unknown>).postReplyTo = buildPostReplyTo(post);
           }
@@ -921,7 +984,9 @@ export class MessageHandler {
       }
 
       if (message.content) {
-        const mentionedUsers = await resolveMentionedUsers(this.prisma, [message.content]);
+        // Best-effort : une résolution de mention en échec ne doit pas avorter
+        // le broadcast (cf. `_resolveMentionUserIds` plus bas, même contrat).
+        const mentionedUsers = await resolveMentionedUsers(this.prisma, [message.content]).catch(() => []);
         if (mentionedUsers.length > 0) {
           (messagePayload as Record<string, unknown>).mentionedUsers = mentionedUsers;
         }
@@ -937,6 +1002,16 @@ export class MessageHandler {
         if (Array.isArray(tl) && tl.length > 0) {
           (messagePayload as Record<string, unknown>).trackingLinks = tl;
         }
+      }
+
+      // Lieu partagé : hisser `metadata.location` en top-level `location` —
+      // même miroir que `postReplyTo`/`trackingLinks` ci-dessus.
+      // `_buildMessagePayload` n'embarque pas `metadata`, donc sans ce hoist
+      // le destinataire ne voit la position qu'après rechargement (relecture
+      // REST, qui hisse aussi `location` — cf. routes/conversations/messages.ts).
+      const place = sharedPlaceFromMetadata(message.metadata);
+      if (place) {
+        (messagePayload as Record<string, unknown>).location = place;
       }
 
       const room = ROOMS.conversation(normalizedId);
@@ -1071,6 +1146,14 @@ export class MessageHandler {
           lastMessageAt: message.createdAt,
           lastMessageId: message.id,
           lastMessagePreview: message.content,
+          // Un message position-seule a un `content` vide : hisser
+          // `metadata.location` (même règle que la liste REST et
+          // emitConversationPreviewUpdate) pour que la ligne d'aperçu du
+          // client compose son libellé — aucun texte de repli côté serveur.
+          ...((): Record<string, unknown> => {
+            const place = sharedPlaceFromMetadata((message as { metadata?: unknown }).metadata);
+            return place ? { location: place } : {};
+          })(),
           senderId: message.senderId,
           updatedAt: new Date().toISOString()
         };
@@ -1498,7 +1581,17 @@ export class MessageHandler {
       } : undefined,
       attachments: this._serializeAttachmentsField(message),
       replyToId: message.replyToId,
-      replyTo: message.replyTo,
+      // Lot 2 : `MessageProcessor.saveMessage` récupère déjà `metadata` du
+      // message CITÉ (include, pas select restrictif), donc la donnée brute
+      // voyageait déjà — mais sans ce hoist elle restait invisible sous
+      // `replyTo.metadata.location` au lieu de `replyTo.location`.
+      // DUPLICATION CONNUE avec MeeshySocketIOManager._broadcastNewMessage
+      // (son bloc `replyTo`, qui reconstruit/aplatit le sender à la main) —
+      // voir le commentaire à cet endroit précis. Tout champ ajouté ici doit
+      // y être répliqué à la main, et inversement.
+      replyTo: message.replyTo
+        ? hoistLocationOnto(message.replyTo as unknown as Record<string, unknown>)
+        : message.replyTo,
       // Réponse à un post : `postReplyTo` (snapshot figé) est ajouté par
       // `broadcastNewMessage` après ce build, en miroir de `forwardedFrom`.
       storyReplyToId: message.storyReplyToId || undefined,

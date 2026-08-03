@@ -101,6 +101,52 @@ public final class TimelineViewModel: ObservableObject {
     /// baseline.
     private var slideDurationBeforeDrag: Float?
 
+    /// Durée voulue par l'AUTEUR — ce que pose « +10 s ». `nil` = la durée
+    /// dérive du contenu, comme toujours.
+    ///
+    /// Champ SÉPARÉ, et c'est tout l'enjeu : la version précédente du bouton
+    /// écrivait directement `project.slideDuration`, que le premier
+    /// `recomputeSlideDuration()` venu écrasait — rien ne distinguait une
+    /// valeur posée par l'auteur d'un reste de calcul. C'est ce défaut, et non
+    /// le bouton, qui avait motivé son retrait le 2026-07-27.
+    ///
+    /// Traité comme un PLANCHER, pas comme une autorité : un contenu plus long
+    /// que la demande l'emporte toujours. « +10 s » n'a jamais servi à rogner.
+    public private(set) var authoredSlideDuration: Float?
+
+    /// Retrouve la durée d'auteur d'un projet entrant : tout ce qui dépasse la
+    /// durée dérivée du contenu ne peut venir que d'un réglage explicite —
+    /// `TimelineProject(from:)` lit `computedTotalDuration()`, qui donne la
+    /// priorité au pin `effects.timelineDuration`.
+    nonisolated static func authoredDuration(in project: TimelineProject) -> Float? {
+        let derived = Float(StoryEffects.contentDerivedDuration(
+            mediaObjects: project.mediaObjects,
+            audioPlayerObjects: project.audioPlayerObjects,
+            textObjects: project.textObjects
+        ))
+        return project.slideDuration - derived > 0.05 ? project.slideDuration : nil
+    }
+
+    /// Prolonge la timeline d'un pas fixe, plafonné à `ClipWindowResolver.maximumEnd`.
+    ///
+    /// Passe par la pile de commandes comme toute autre édition : un appui de
+    /// trop se retire avec « Annuler », et deux appuis se retirent un par un.
+    public func extendSlideDuration(by seconds: Float = TimelineOperationsBar.extendStepSeconds) {
+        let target = min(ClipWindowResolver.maximumEnd, project.slideDuration + seconds)
+        guard target - project.slideDuration > 0.05 else { return }
+        let command = SetSlideDurationCommand(oldDuration: project.slideDuration,
+                                              newDuration: target,
+                                              oldAuthoredDuration: authoredSlideDuration)
+        do {
+            try command.apply(to: &project)
+            commandStack.push(.setSlideDuration(command))
+            authoredSlideDuration = target
+            scheduleEngineReconfigure()
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
     @Published public internal(set) var showOfflineQueuedConfirmation: Bool = false
     /// True between `beginScrub()` and `endScrub()` — flipped by the playhead
     /// gesture so `scrub(to:)` can choose a sub-50ms tolerance during the drag
@@ -166,6 +212,10 @@ public final class TimelineViewModel: ObservableObject {
         self.project = project
         self.pendingMediaURLs = mediaURLs
         self.pendingImages = images
+        // Une durée déjà épinglée sur la slide est une demande d'auteur : la
+        // perdre au bootstrap ferait retomber la timeline sur le contenu à la
+        // première édition, exactement comme avant le correctif.
+        self.authoredSlideDuration = Self.authoredDuration(in: project)
 
         // Cancel any in-flight bootstrap before reassigning so we don't race
         // two configure() calls on the same engine.
@@ -270,8 +320,8 @@ public final class TimelineViewModel: ObservableObject {
         // Tolérance adaptée au zoom (~8pt de doigt). L'engine figé à 0.06s était
         // trop serré pour un aimant perceptible ; le magnet doit accrocher dès
         // qu'un bord approche visuellement celui d'un autre.
-        let pixelsPerSecond = max(1, Float(50.0 * zoomScale))
-        let magnetEngine = SnapEngine(toleranceSeconds: 8.0 / pixelsPerSecond)
+        let magnetEngine = SnapEngine(
+            toleranceSeconds: TimelineGeometry(zoomScale: zoomScale).dragSnapToleranceSeconds)
         let snapResult = magnetEngine.snap(rawTime: rawTime,
                                            candidates: snapCandidates + magnetCandidates,
                                            disabled: !isSnapEnabled)
@@ -425,11 +475,15 @@ public final class TimelineViewModel: ObservableObject {
     ///   toast est là pour expliquer un effet de bord subi ; le faire sonner
     ///   sur une restauration explicitement demandée n'apprendrait rien.
     func recomputeSlideDuration(announcing: Bool = true) {
-        let auto = Float(StoryEffects.contentDerivedDuration(
+        let derived = Float(StoryEffects.contentDerivedDuration(
             mediaObjects: project.mediaObjects,
             audioPlayerObjects: project.audioPlayerObjects,
             textObjects: project.textObjects
         ))
+        // La demande de l'auteur fait PLANCHER : sans elle, « +10 s » ne
+        // survivait pas à l'édition suivante. Un contenu plus long l'emporte
+        // quand même — le bouton allonge, il n'a jamais rogné.
+        let auto = max(derived, authoredSlideDuration ?? 0)
         let liveValueBeforeThisCall = project.slideDuration
         if abs(auto - liveValueBeforeThisCall) > 0.05 {
             project.slideDuration = auto
@@ -476,6 +530,12 @@ public final class TimelineViewModel: ObservableObject {
         guard let command = commandStack.undo() else { return }
         do {
             try command.underlying.revert(from: &project)
+            // La durée d'AUTEUR ne vit pas dans le projet : sans cette reprise,
+            // `recomputeSlideDuration` juste en dessous la relirait et
+            // restaurerait la longueur qu'on vient d'annuler.
+            if case .setSlideDuration(let c) = command {
+                authoredSlideDuration = c.oldAuthoredDuration
+            }
             scheduleEngineReconfigure()
             recomputeSlideDuration(announcing: false)
         } catch {
@@ -487,6 +547,9 @@ public final class TimelineViewModel: ObservableObject {
         guard let command = commandStack.redo() else { return }
         do {
             try command.underlying.apply(to: &project)
+            if case .setSlideDuration(let c) = command {
+                authoredSlideDuration = c.newDuration
+            }
             scheduleEngineReconfigure()
             recomputeSlideDuration(announcing: false)
         } catch {

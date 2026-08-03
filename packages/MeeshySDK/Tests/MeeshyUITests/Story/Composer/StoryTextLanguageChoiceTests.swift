@@ -8,49 +8,33 @@ import XCTest
 /// Une langue source fausse ne se voit pas à l'écriture : le texte s'affiche
 /// normalement. Elle se paie à la traduction — le moteur part de la mauvaise
 /// langue, et le texte ressort inchangé ou incompréhensible. D'où un choix
-/// explicite plutôt qu'une déduction silencieuse.
+/// explicite plutôt qu'une déduction silencieuse. Depuis la directive
+/// 2026-07-30 le défaut n'est plus deviné du tout : tout texte démarre en
+/// français (`StoryComposerViewModel.defaultSourceLanguage`) et seule la
+/// pastille langue le change.
 @MainActor
 final class StoryTextLanguageChoiceTests: XCTestCase {
 
-    private func user(system: String?, regional: String? = nil) -> MeeshyUser {
-        MeeshyUser(id: "u-test", username: "test",
-                   systemLanguage: system, regionalLanguage: regional)
-    }
+    // MARK: - Normalisation des codes de langue (pivot Voice)
 
-    // MARK: - Langue proposée par défaut
-
-    /// Le clavier PRINCIPAL de l'auteur est un bien meilleur indice de la
-    /// langue d'écriture que sa langue de LECTURE : un francophone qui a réglé
-    /// l'app en anglais écrit toujours en français.
-    func test_suggestedLanguage_prefersTheKeyboardOverTheReadingPreference() {
+    /// `normalisedWritingLanguage` reste le pivot de déduplication des
+    /// transcriptions Voice : deux transcriptions `pt-BR` et `pt` doivent se
+    /// fusionner sous la même clé.
+    func test_normalisedWritingLanguage_reducesRegionalCodes() {
         XCTAssertEqual(
-            StoryComposerViewModel.resolveComposerSourceLanguage(
-                user: user(system: "en", regional: "en"), keyboardLanguage: "fr-FR"),
-            "fr")
+            StoryComposerViewModel.normalisedWritingLanguage("pt-BR"), "pt")
+        XCTAssertEqual(
+            StoryComposerViewModel.normalisedWritingLanguage("fr-FR"), "fr")
     }
 
     /// Le clavier emoji annonce `emoji` comme langue primaire, la dictée
-    /// `dictation` : les prendre au mot produirait une story dont la langue
-    /// source est « emoji » — intraduisible et absente du sélecteur.
-    func test_suggestedLanguage_ignoresNonLanguageInputModes() {
-        XCTAssertEqual(StoryComposerViewModel.resolveComposerSourceLanguage(
-            user: user(system: "es"), keyboardLanguage: "emoji"), "es")
-        XCTAssertEqual(StoryComposerViewModel.resolveComposerSourceLanguage(
-            user: user(system: "de"), keyboardLanguage: "dictation"), "de")
-    }
-
-    func test_suggestedLanguage_normalisesRegionalKeyboardCodes() {
-        XCTAssertEqual(StoryComposerViewModel.resolveComposerSourceLanguage(
-            user: user(system: "fr"), keyboardLanguage: "pt-BR"), "pt")
-    }
-
-    func test_suggestedLanguage_withoutKeyboard_keepsThePreferenceChain() {
-        XCTAssertEqual(StoryComposerViewModel.resolveComposerSourceLanguage(
-            user: user(system: "en", regional: "fr"), keyboardLanguage: nil), "en")
-        XCTAssertEqual(StoryComposerViewModel.resolveComposerSourceLanguage(
-            user: user(system: nil, regional: "fr"), keyboardLanguage: nil), "fr")
-        XCTAssertEqual(StoryComposerViewModel.resolveComposerSourceLanguage(
-            user: nil, keyboardLanguage: nil), "fr")
+    /// `dictation` : les prendre au mot produirait une clé de langue
+    /// « emoji » — intraduisible et absente du sélecteur.
+    func test_normalisedWritingLanguage_rejectsNonLanguageInputModes() {
+        XCTAssertNil(StoryComposerViewModel.normalisedWritingLanguage("emoji"))
+        XCTAssertNil(StoryComposerViewModel.normalisedWritingLanguage("dictation"))
+        XCTAssertNil(StoryComposerViewModel.normalisedWritingLanguage("  "))
+        XCTAssertNil(StoryComposerViewModel.normalisedWritingLanguage(nil))
     }
 
     // MARK: - Choix explicite de l'auteur

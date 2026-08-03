@@ -672,25 +672,34 @@ struct StoryComposerBarView: View {
     /// `parentId` non-nil quand l'utilisateur répond à un commentaire (via
     /// `replyingToStoryComment` set par l'overlay). Sinon nil → commentaire
     /// top-level sur la story. `pendingMedia` non-nil = commentaire avec UN média.
-    let sendComment: (_ text: String, _ effectFlags: Int?, _ parentId: String?, _ pendingMedia: PendingCommentMedia?) -> Void
+    /// `place` non-nil = un lieu a été choisi via le picker et voyage jusqu'à
+    /// l'envoi, exactement comme n'importe quel autre message/commentaire.
+    let sendComment: (_ text: String, _ effectFlags: Int?, _ parentId: String?, _ pendingMedia: PendingCommentMedia?, _ place: SharedPlace?) -> Void
 
     // Comment attachments + real voice capture (parity with feed/reels composer).
     @State private var commentAttachments: [ComposerAttachment] = []
     @State private var showCommentPhotoPicker: Bool = false
     @State private var commentPhotoItems: [PhotosPickerItem] = []
     @State private var showCommentFilePicker: Bool = false
+    @State private var showCommentLocationPicker: Bool = false
+    @State private var pendingPlace: SharedPlace? = nil
+    /// Focus réel du champ du composer — pilote l'insertion d'un texte déposé
+    /// (au curseur quand le champ a le focus, sinon à la fin via `emojiToInject`).
+    @State private var composerIsFocused: Bool = false
     @StateObject private var audioRecorder = AudioRecorderManager()
 
     var body: some View {
         UniversalComposerBar(
             style: .dark,
             mode: .comment,
+            onIngest: { ingests in handleComposerIngest(ingests) },
             accentColor: replyingToStoryComment?.authorColor ?? accentColor,
             forceShowAttachment: true,
             forceShowVoice: true,
             selectedLanguage: composerLanguage,
             onLanguageChange: { composerLanguage = $0 },
             onFocusChange: { focused in
+                composerIsFocused = focused
                 if focused {
                     isComposerEngaged = true
                     // Keyboard opening → dismiss emoji panel
@@ -707,6 +716,7 @@ struct StoryComposerBarView: View {
                 }
             },
             onSendMessage: { text, attachments, _ in submitStoryComment(text: text, attachments: attachments) },
+            onLocationRequest: { showCommentLocationPicker = true },
             replyBanner: replyingToStoryComment.map { reply in
                 AnyView(
                     HStack(spacing: 8) {
@@ -756,11 +766,11 @@ struct StoryComposerBarView: View {
                     )
                 )
             },
-            customAttachmentsPreview: commentAttachments.isEmpty
+            customAttachmentsPreview: (commentAttachments.isEmpty && pendingPlace == nil)
                 ? nil
-                : AnyView(CommentAttachmentsTray(attachments: commentAttachments) { id in
+                : AnyView(CommentAttachmentsTray(attachments: commentAttachments, onRemove: { id in
                     commentAttachments.removeAll { $0.id == id }
-                  }),
+                  }, place: pendingPlace, onRemovePlace: { pendingPlace = nil })),
             onStartRecording: { audioRecorder.startRecording(); HapticFeedback.medium() },
             onStopRecordingToAttachment: { stopRecordingToAttachment() },
             onSendRecording: { if stopRecordingToAttachment() { submitStoryComment(text: "", attachments: commentAttachments) } },
@@ -768,7 +778,7 @@ struct StoryComposerBarView: View {
             externalIsRecording: audioRecorder.isRecording,
             externalRecordingDuration: audioRecorder.duration,
             externalAudioLevels: audioRecorder.audioLevels,
-            externalHasContent: !commentAttachments.isEmpty || audioRecorder.isRecording,
+            externalHasContent: !commentAttachments.isEmpty || audioRecorder.isRecording || pendingPlace != nil,
             onPhotoLibrary: { showCommentPhotoPicker = true },
             onFilePicker: { showCommentFilePicker = true },
             onShowAttachments: {
@@ -834,6 +844,12 @@ struct StoryComposerBarView: View {
                 commentAttachments = CommentComposerStaging.fileAttachments(from: urls)
             }
         }
+        .sheet(isPresented: $showCommentLocationPicker) {
+            LocationPickerView(accentColor: accentColor) { place in
+                pendingPlace = place
+                showCommentLocationPicker = false
+            }
+        }
         .adaptiveOnChange(of: commentPhotoItems) { _, items in
             Task {
                 commentAttachments = await CommentComposerStaging.photoAttachments(from: items)
@@ -842,13 +858,43 @@ struct StoryComposerBarView: View {
         }
     }
 
+    /// Dépôt / collage arrivé par la bande du composer (`onIngest`). Un dépôt
+    /// est une interaction utilisateur : il engage le composer
+    /// (`isComposerEngaged`), ce qui met le minuteur de story en pause via
+    /// `shouldPauseTimer` — exactement comme la saisie le fait déjà par le
+    /// focus ; le tap sur la story (`dismissComposer`) le relâche. Textes
+    /// fusionnés en UNE insertion (au curseur si focus ; sinon en fin de champ
+    /// via le canal `injectedEmoji` — cette surface n'a pas de binding texte),
+    /// fichiers routés vers le staging commentaire existant (spec 2026-07-30).
+    private func handleComposerIngest(_ ingests: [ComposerIngest]) {
+        isComposerEngaged = true
+        if let block = CommentComposerIngestion.mergedText(from: ingests) {
+            if !(composerIsFocused && CommentComposerIngestion.insertAtCursor(block)) {
+                emojiToInject = block
+            }
+        }
+        CommentComposerIngestion.stageFiles(
+            CommentComposerIngestion.files(from: ingests),
+            accentColor: accentColor
+        ) { staged in
+            withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
+                commentAttachments.append(contentsOf: staged)
+            }
+        }
+    }
+
     /// Construit le média éventuel (un seul) + appelle le `sendComment` injecté avec
     /// le pendingMedia. Capture `parentId` AVANT de clear le reply context.
+    /// Une réponse à une story part comme un message : elle porte donc le lieu
+    /// choisi exactement comme n'importe quel autre message (une story est un
+    /// post de type STORY côté gateway — même route `/posts/:id/comments`).
     private func submitStoryComment(text: String, attachments: [ComposerAttachment]) {
         let media = CommentComposerStaging.firstPendingMedia(in: attachments)
         commentAttachments.removeAll()
+        let place = pendingPlace
+        pendingPlace = nil
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty || media != nil else { return }
+        guard !trimmed.isEmpty || media != nil || place != nil else { return }
         let effects = commentEffects
         let blur = commentBlurEnabled
         commentEffects = .none
@@ -861,7 +907,7 @@ struct StoryComposerBarView: View {
         // à l'ouverture de la réponse (cf. makeStoryCommentRow).
         let parentId = replyingToStoryComment?.parentId ?? replyingToStoryComment?.id
         replyingToStoryComment = nil
-        sendComment(trimmed, effectFlags, parentId, media)
+        sendComment(trimmed, effectFlags, parentId, media, place)
     }
 
     @discardableResult
@@ -966,6 +1012,10 @@ struct StoryCardView: View {
     /// (`StoryViewerView.storyHasBackgroundAudio`) et descendue en `let`
     /// jusqu'à la leaf view, comme `storyHasAudibleSound` juste au-dessus.
     let storyHasBackgroundAudio: Bool
+    /// Contenu à droite de la note (crédit défilant d'un son de bibliothèque
+    /// ou onde d'une piste propre) + fenêtre du fond qui arme le compteur de
+    /// temps restant — même règle de descente en primitive Equatable.
+    let headerBackgroundAudioDisplay: AudioChipHeaderModel
     /// Présence d'une transcription affichable — pilote l'entrée « Transcription »
     /// du menu « … ». Même règle de descente en primitive que ci-dessus.
     let storyHasAudioTranscript: Bool
@@ -1009,8 +1059,9 @@ struct StoryCardView: View {
     @Binding var isComposerEngaged: Bool
     @Binding var hasComposerContent: Bool
     @Binding var sharedContentWrapper: SharedContentWrapper?
-    @Binding var repostStoryComposerSource: RepostStorySourceWrapper?
     @Binding var editAndRepostAsPostSource: RepostPostSourceWrapper?
+    /// Lieu ouvert plein écran au tap d'une pastille de position (Layer 6.6).
+    @Binding var readerFullscreenPlace: StoryReaderPlaceWrapper?
     @Binding var isPresented: Bool
     @Binding var selectedProfileUser: ProfileSheetUser?
     @Binding var showReportSheet: Bool
@@ -1096,11 +1147,10 @@ struct StoryCardView: View {
     let dismissComposer: () -> Void
     let goToPrevious: () -> Void
     let goToNext: () -> Void
-    let sendComment: (_ text: String, _ effectFlags: Int?, _ parentId: String?, _ pendingMedia: PendingCommentMedia?) -> Void
+    let sendComment: (_ text: String, _ effectFlags: Int?, _ parentId: String?, _ pendingMedia: PendingCommentMedia?, _ place: SharedPlace?) -> Void
     let makeStoryCommentRow: (FeedComment, String) -> StoryCommentRowView
     let toggleStoryCommentThread: (String) async -> Void
     let makeStoryExternalShareURL: (String) -> URL?
-    let storyTimeRemaining: (Date) -> String
     let deleteCurrentStory: () -> Void
     let repostAsPostDirect: () -> Void
     let dismissViewer: () -> Void
@@ -1484,6 +1534,17 @@ struct StoryCardView: View {
             }
 
             // === Background audio badge ===
+            //
+            // Le canvas ne porte plus de chip « note + onde » pour l'audio de
+            // FOND (directive user 2026-07-30) : depuis que le header affiche la
+            // note musicale suivie de l'onde animée, ce chip répétait la même
+            // information au milieu de l'image. Les chips du canvas restent
+            // réservés aux pistes FOREGROUND, qui ont chacune leur fenêtre de
+            // lecture et leur mute propre (`AudioForegroundReaderOverlay`).
+            //
+            // Seule survit la carte d'une piste de BIBLIOTHÈQUE : elle titre le
+            // morceau et crédite son auteur — une attribution que le header, qui
+            // ne dit que la présence, ne porte pas.
             if let audio = currentStory?.backgroundAudio {
                 VStack {
                     Spacer()
@@ -1593,6 +1654,29 @@ struct StoryCardView: View {
                 .allowsHitTesting(!isComposerEngaged)
             }
 
+            // === Layer 6.6: Location badge tap targets ===
+            // Au-dessus du gesture overlay (même règle que les chips audio) :
+            // le tap d'une pastille de lieu ouvre la carte au lieu de
+            // naviguer. Réplique le cadrage EXACT du canvas visible (frame
+            // `canvasFitSize` + scale/offset carte, même ressort) pour que
+            // les cibles tombent sur les badges dessinés par
+            // `StoryLocationLayer` — la zone vient de `badgeFrame`, la mesure
+            // partagée avec le rendu.
+            if let story = currentStory,
+               let locations = story.storyEffects?.locationObjects,
+               !locations.isEmpty {
+                StoryLocationReaderTapOverlay(locations: locations, onTap: { place in
+                    HapticFeedback.light()
+                    pauseTimer()
+                    readerFullscreenPlace = StoryReaderPlaceWrapper(place: place)
+                })
+                .frame(width: canvasFitSize.width, height: canvasFitSize.height)
+                .scaleEffect(readerCanvasFraming.scale)
+                .offset(y: readerCanvasFraming.offset.height)
+                .animation(.spring(response: 0.42, dampingFraction: 0.84), value: canvasIsExpanded)
+                .allowsHitTesting(!isComposerEngaged)
+            }
+
             // === Layer 7: Top UI (progress bars + header) — ABOVE gesture overlay for hit testing ===
             // min 59pt accounts for Dynamic Island when .statusBarHidden() zeroes safeAreaInsets
             VStack(spacing: 0) {
@@ -1609,13 +1693,13 @@ struct StoryCardView: View {
                     currentStory: currentStory,
                     isOwnStory: isOwnStory,
                     hasBackgroundAudio: storyHasBackgroundAudio,
+                    headerAudioDisplay: headerBackgroundAudioDisplay,
                     hasAudioTranscript: storyHasAudioTranscript,
                     showAudioTranscript: $showAudioTranscript,
                     selectedProfileUser: $selectedProfileUser,
                     editAndRepostAsPostSource: $editAndRepostAsPostSource,
                     showReportSheet: $showReportSheet,
                     makeStoryExternalShareURL: makeStoryExternalShareURL,
-                    storyTimeRemaining: storyTimeRemaining,
                     deleteCurrentStory: deleteCurrentStory,
                     repostAsPostDirect: repostAsPostDirect,
                     pauseTimer: pauseTimer,
@@ -1709,7 +1793,6 @@ struct StoryCardView: View {
                     showExportShareSheet: $showExportShareSheet,
                     isGlobalMutedBinding: $isGlobalMutedBinding,
                     sharedContentWrapper: $sharedContentWrapper,
-                    repostStoryComposerSource: $repostStoryComposerSource,
                     isPresented: $isPresented,
                     triggerStoryReaction: triggerStoryReaction,
                     pauseTimer: pauseTimer,
@@ -2142,6 +2225,12 @@ struct StoryCardView: View {
                 .overlay(Capsule().fill(Color.black.opacity(0.35)))
         )
     }
+
+    // Le chip « note + onde » d'une piste de fond ENREGISTRÉE/IMPORTÉE a été
+    // retiré du canvas (directive user 2026-07-30) : le header du reader porte
+    // désormais ce même signal — note musicale puis onde animée — juste après
+    // l'heure de publication. Une piste de fond sans entrée bibliothèque n'a
+    // donc plus rien à afficher au milieu de l'image.
 
     // Le badge de langue courante vit désormais dans le rail (accolé à « Abc »),
     // plus dans le canvas — voir `StoryActionSidebarView.displayedLanguageCode`.

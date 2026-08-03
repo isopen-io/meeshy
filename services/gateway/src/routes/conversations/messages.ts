@@ -9,6 +9,7 @@ import {
   postReplyToFromMetadata,
   POST_REPLY_SNAPSHOT_SELECT,
 } from '../../services/messaging/postReplySnapshot';
+import { sharedPlaceFromMetadata, hoistLocationOnto } from '../../services/location/sharedPlace';
 import { TrackingLinkService } from '../../services/TrackingLinkService';
 import { AttachmentService } from '../../services/attachments';
 import { attachmentMediaSelect, attachmentFullSelect, attachmentForwardPreviewSelect } from '../../services/attachments/attachmentIncludes';
@@ -48,21 +49,28 @@ import { getPresenceVisibilityService } from '../../services/PresenceVisibilityS
 
 import { CLIENT_MESSAGE_ID_REGEX } from '@meeshy/shared/utils/client-message-id';
 
-// Mirrors MessageReadStatusService's isStaleCursorMessageId (MongoDB ObjectId
-// hex strings sort chronologically). Duplicated rather than imported: several
-// test suites `jest.mock('../../services/MessageReadStatusService', ...)`
-// with a factory that only exports `MessageReadStatusService`, so a named
-// import of this helper resolves to `undefined` under those mocks.
+// Mirrors the cursor-advance freshness guard in MessageReadStatusService. It
+// orders by the message's `createdAt` (millisecond precision, stable across
+// gateway processes); ObjectId hex order is only second-accurate and its next 5
+// bytes are per-process random, so it can invert real recency for same-second
+// messages from different nodes. The ObjectId comparison is kept only as a
+// fallback for legacy cursors written before `lastReadMessageCreatedAt` existed.
 const OBJECT_ID_RE = /^[0-9a-f]{24}$/i;
-function isStaleCursorMessageId(
-  candidateMessageId: string,
-  currentCursorMessageId: string | null | undefined
-): boolean {
-  if (!currentCursorMessageId) return false;
-  if (!OBJECT_ID_RE.test(candidateMessageId) || !OBJECT_ID_RE.test(currentCursorMessageId)) {
+function isStaleCursorMessageId(params: {
+  candidateMessageId: string;
+  candidateCreatedAt: Date;
+  cursorMessageId: string | null | undefined;
+  cursorMessageCreatedAt: Date | null | undefined;
+}): boolean {
+  const { candidateMessageId, candidateCreatedAt, cursorMessageId, cursorMessageCreatedAt } = params;
+  if (!cursorMessageId) return false;
+  if (cursorMessageCreatedAt) {
+    return candidateCreatedAt < cursorMessageCreatedAt;
+  }
+  if (!OBJECT_ID_RE.test(candidateMessageId) || !OBJECT_ID_RE.test(cursorMessageId)) {
     return false;
   }
-  return candidateMessageId.toLowerCase() < currentCursorMessageId.toLowerCase();
+  return candidateMessageId.toLowerCase() < cursorMessageId.toLowerCase();
 }
 
 /**
@@ -126,6 +134,10 @@ export const SendMessageBodySchema = z.object({
   isViewOnce: z.boolean().optional(),
   maxViewOnceCount: z.number().int().optional(),
   mentionedUserIds: z.array(z.string()).optional(),
+  // Lieu partagé — champ dédié, JAMAIS un `metadata` brut (cf.
+  // services/location/sharedPlace.ts). Validation stricte déléguée à
+  // `parseSharedPlace`, appelé côté `MessageProcessor.saveMessage`.
+  location: z.unknown().optional(),
 }).refine(
   (data) =>
     (data.content?.trim().length ?? 0) > 0 ||
@@ -807,6 +819,10 @@ export function registerMessagesRoutes(
             createdAt: true,
             senderId: true,
             validatedMentions: true,
+            // Lot 2 : le message CITÉ est un objet imbriqué, pas la racine —
+            // le hoist doit porter sur `replyTo` lui-même, pas seulement sur
+            // le message qui cite.
+            metadata: true,
             sender: {
               select: {
                 id: true,
@@ -1212,7 +1228,10 @@ export function registerMessagesRoutes(
         }
         if (includeReplies && message.replyTo) {
           const replySender = (message as any).replyTo.sender;
-          mappedMessage.replyTo = {
+          // Lot 2 : hoistLocationOnto hisse metadata.location du message CITÉ
+          // — sans lui, une citation d'un message géolocalisé n'affiche
+          // jamais sa position, même si la liste principale la restitue.
+          mappedMessage.replyTo = hoistLocationOnto({
             ...message.replyTo,
             originalLanguage: message.replyTo.originalLanguage || 'fr',
             sender: replySender ? {
@@ -1221,7 +1240,7 @@ export function registerMessagesRoutes(
               displayName: resolveParticipantDisplayName(replySender),
               avatar: resolveParticipantAvatar(replySender),
             } : null,
-          };
+          });
         }
 
         return mappedMessage;
@@ -1246,6 +1265,10 @@ export function registerMessagesRoutes(
             conversationId: true,
             messageType: true,
             createdAt: true,
+            // Lot 2 : le message d'ORIGINE transféré est un objet imbriqué —
+            // sans `metadata`, un message géolocalisé transféré n'affiche
+            // jamais sa position dans l'aperçu de transfert.
+            metadata: true,
             sender: {
               select: { id: true, userId: true, displayName: true, avatar: true, user: { select: { username: true } } }
             },
@@ -1275,6 +1298,10 @@ export function registerMessagesRoutes(
           if (msg.forwardedFromId) {
             const original = forwardedMap.get(msg.forwardedFromId);
             if (original) {
+              // Lot 2 : la position du message TRANSFÉRÉ (l'objet imbriqué),
+              // pas celle de `msg` lui-même — sans elle, un message transféré
+              // géolocalisé n'affiche jamais sa position dans l'aperçu.
+              const forwardedPlace = sharedPlaceFromMetadata((original as { metadata?: unknown }).metadata);
               msg.forwardedFrom = {
                 id: original.id,
                 content: original.content,
@@ -1286,7 +1313,8 @@ export function registerMessagesRoutes(
                   displayName: resolveParticipantDisplayName(original.sender as any),
                   avatar: resolveParticipantAvatar(original.sender as any),
                 } : null,
-                attachments: original.attachments
+                attachments: original.attachments,
+                ...(forwardedPlace ? { location: forwardedPlace } : {}),
               };
             }
           }
@@ -1336,6 +1364,14 @@ export function registerMessagesRoutes(
           if (!post) continue; // post supprimé sans snapshot → citation absente
           m.postReplyTo = buildPostReplyTo(post);
         }
+      }
+
+      // Lieu partagé : hisser `metadata.location` en top-level `location` —
+      // même miroir que `postReplyTo` ci-dessus, mais sur TOUT message
+      // (contrairement à postReplyTo, indépendant de `storyReplyToId`).
+      for (const m of mappedMessages) {
+        const place = sharedPlaceFromMetadata(m.metadata);
+        if (place) m.location = place;
       }
 
       // Marquer les messages comme "reçus" — EFFET DE BORD (statut de livraison
@@ -1523,6 +1559,7 @@ export function registerMessagesRoutes(
       let reportedMessageIds: readonly string[] | undefined;
       let reportedLanguage: string | undefined;
       let reportedMessageLanguages: Readonly<Record<string, string>> | undefined;
+      let caughtUpToMessageId: string | undefined;
       if (request.body !== undefined && request.body !== null) {
         const bodyResult = MarkReadBodySchema.safeParse(request.body);
         if (!bodyResult.success) {
@@ -1531,6 +1568,7 @@ export function registerMessagesRoutes(
         reportedMessageIds = bodyResult.data.messageIds;
         reportedLanguage = bodyResult.data.language;
         reportedMessageLanguages = bodyResult.data.messageLanguages;
+        caughtUpToMessageId = bodyResult.data.caughtUpToMessageId;
       }
 
       const { MessageReadStatusService } = await import('../../services/MessageReadStatusService');
@@ -1540,7 +1578,7 @@ export function registerMessagesRoutes(
       // Le raccourci « 0 non-lu → ne rien faire » ne vaut que SANS ids
       // rapportés : le curseur peut buter sur un trou et annoncer 0 alors que
       // le client vient d'afficher des messages situés après ce trou.
-      if (unreadCount === 0 && !reportedMessageIds) {
+      if (unreadCount === 0 && !reportedMessageIds && !caughtUpToMessageId) {
         return sendSuccess(reply, { markedCount: 0 });
       }
 
@@ -1551,11 +1589,12 @@ export function registerMessagesRoutes(
         currentParticipant.id,
         conversationId,
         undefined,
-        reportedMessageIds || reportedLanguage || reportedMessageLanguages
+        reportedMessageIds || reportedLanguage || reportedMessageLanguages || caughtUpToMessageId
           ? {
               messageIds: reportedMessageIds,
               language: reportedLanguage,
-              messageLanguages: reportedMessageLanguages
+              messageLanguages: reportedMessageLanguages,
+              caughtUpToMessageId
             }
           : undefined
       );
@@ -1607,7 +1646,12 @@ export function registerMessagesRoutes(
           isBlurred: { type: 'boolean' },
           expiresAt: { type: 'string', format: 'date-time' },
           effectFlags: { type: 'integer', description: 'Bitfield for message effects' },
-          mentionedUserIds: { type: 'array', items: { type: 'string' } }
+          mentionedUserIds: { type: 'array', items: { type: 'string' } },
+          location: {
+            type: 'object',
+            additionalProperties: true,
+            description: 'Lieu partagé (latitude, longitude, name?, address?, category?) — validé serveur',
+          }
         }
       },
       response: {
@@ -1661,7 +1705,8 @@ export function registerMessagesRoutes(
         expiresAt,
         isViewOnce,
         maxViewOnceCount,
-        mentionedUserIds
+        mentionedUserIds,
+        location
       } = bodyResult.data as SendMessageBody;
 
       // Resolve identifier (e.g. "meeshy") → ObjectId, same as GET route
@@ -1754,6 +1799,9 @@ export function registerMessagesRoutes(
         effectFlags,
         isViewOnce,
         maxViewOnceCount,
+        // Lieu partagé — champ dédié transmis tel quel ; validé et écrit
+        // dans `metadata.location` par `MessageProcessor.saveMessage`.
+        location,
         encryptedPayload: isEncrypted ? {
           ciphertext: encryptedContent!,
           mode: encryptionMode as any,
@@ -1961,7 +2009,7 @@ export function registerMessagesRoutes(
           createdAt: { lt: latestMessage.createdAt }
         },
         orderBy: { createdAt: 'desc' },
-        select: { id: true }
+        select: { id: true, createdAt: true }
       });
 
       // Update the cursor: set lastReadAt before the latest message
@@ -1984,10 +2032,15 @@ export function registerMessagesRoutes(
         where: {
           conversation_participant_cursor: { participantId: participantForCursor.id, conversationId }
         },
-        select: { lastReadMessageId: true }
+        select: { lastReadMessageId: true, lastReadMessageCreatedAt: true }
       });
 
-      if (isStaleCursorMessageId(latestMessage.id, currentCursor?.lastReadMessageId)) {
+      if (isStaleCursorMessageId({
+        candidateMessageId: latestMessage.id,
+        candidateCreatedAt: latestMessage.createdAt,
+        cursorMessageId: currentCursor?.lastReadMessageId,
+        cursorMessageCreatedAt: currentCursor?.lastReadMessageCreatedAt
+      })) {
         logger.info(
           `[MARK-UNREAD] Ignoring stale mark-unread for user ${userId} in conversation ${conversationId}: cursor already advanced past message ${latestMessage.id}`
         );
@@ -2002,12 +2055,18 @@ export function registerMessagesRoutes(
           participantId: participantForCursor.id,
           conversationId,
           lastReadMessageId: previousMessage?.id || null,
+          // Keep the (id, createdAt) pair consistent so the cursor-advance
+          // freshness guard in MessageReadStatusService stays correct — a stale
+          // createdAt left pointing at a newer message would wrongly reject
+          // later legitimate read advances.
+          lastReadMessageCreatedAt: previousMessage?.createdAt ?? null,
           lastReadAt: lastReadAt,
           unreadCount: 1,
           version: 0
         },
         update: {
           lastReadMessageId: previousMessage?.id || null,
+          lastReadMessageCreatedAt: previousMessage?.createdAt ?? null,
           lastReadAt: lastReadAt,
           unreadCount: 1,
           version: { increment: 1 }
@@ -2290,6 +2349,10 @@ export function registerMessagesRoutes(
           translations: true,
           createdAt: true,
           updatedAt: true,
+          // Lot 1 : un message épinglé est une bulle complète — sans
+          // `metadata`, un message géolocalisé épinglé n'affiche jamais sa
+          // position alors que la liste complète la restitue déjà.
+          metadata: true,
           sender: {
             select: {
               id: true,
@@ -2331,6 +2394,7 @@ export function registerMessagesRoutes(
 
       const formattedMessages = pinnedMessages.map((message: any) => {
         const sender = message.sender;
+        const place = sharedPlaceFromMetadata(message.metadata);
         return {
           id: message.id,
           conversationId: message.conversationId,
@@ -2368,7 +2432,10 @@ export function registerMessagesRoutes(
           } : null,
           attachments: message.attachments || [],
           reactionCount: message._count?.reactions ?? 0,
-          replyCount: message._count?.replies ?? 0
+          replyCount: message._count?.replies ?? 0,
+          // Lot 1 : hisser metadata.location en champ top-level `location`,
+          // même miroir que la liste complète des messages.
+          ...(place ? { location: place } : {})
         };
       });
 
@@ -2590,6 +2657,10 @@ export function registerMessagesRoutes(
         translations: true,
         createdAt: true,
         senderId: true,
+        // Lot 1 : un résultat de recherche est une bulle complète elle
+        // aussi — sans `metadata`, un message géolocalisé trouvé par
+        // recherche n'affiche jamais sa position.
+        metadata: true,
         sender: {
           // `sender` is a `Participant`, which has no `username`/`isOnline` of
           // its own — those live on the related `User`. Selecting `username`
@@ -2667,7 +2738,9 @@ export function registerMessagesRoutes(
       // `user` relation) so the userMinimalSchema serializer keeps them.
       const mappedResults = results.map((msg: any) => {
         const sender = msg.sender;
-        return {
+        // Lot 1 : hoistLocationOnto hisse metadata.location en `location`
+        // top-level — un résultat de recherche géolocalisé le perdait sinon.
+        return hoistLocationOnto({
           ...msg,
           sender: sender ? {
             id: sender.id,
@@ -2682,7 +2755,7 @@ export function registerMessagesRoutes(
           translations: msg.translations
             ? transformTranslationsToArray(msg.id, msg.translations as Record<string, any>)
             : undefined
-        };
+        });
       });
 
       // NOTE: Cannot use sendSuccess() — response includes a top-level `cursorPagination`

@@ -106,7 +106,7 @@ public struct MeeshyForgotPasswordView: View {
                     .font(.title3.weight(.bold))
                     .foregroundStyle(theme.textPrimary)
 
-                Text("Si un compte existe avec \(email), un lien de reinitialisation a ete envoye.")
+                Text(String(localized: "auth.forgot.sent_message", defaultValue: "Si un compte existe avec \(email), un lien de réinitialisation a été envoyé.", bundle: .module))
                     .multilineTextAlignment(.center)
                     .foregroundStyle(.secondary)
                     .padding(.horizontal, 24)

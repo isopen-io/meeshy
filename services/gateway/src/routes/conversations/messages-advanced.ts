@@ -133,7 +133,7 @@ export function registerMessagesAdvancedRoutes(
         },
         include: {
           sender: {
-            select: { id: true, userId: true, role: true }
+            select: { id: true, userId: true }
           },
           attachments: { select: { id: true } }
         }
@@ -149,9 +149,21 @@ export function registerMessagesAdvancedRoutes(
       const twentyFourHoursInMs = 24 * 60 * 60 * 1000; // 24 heures en millisecondes
 
       if (isAuthor && messageAge > twentyFourHoursInMs) {
-        // Vérifier si l'utilisateur a des privilèges spéciaux
-        const userRole = existingMessage.sender.role;
-        const hasSpecialPrivileges = userRole === 'MODERATOR' || userRole === 'ADMIN' || userRole === 'BIGBOSS';
+        // Le privilège de contournement de la fenêtre 24h est un rôle GLOBAL
+        // (User.role : ADMIN/BIGBOSS/MODERATOR), PAS le rôle de conversation
+        // (Participant.role : admin/moderator/member, minuscules) qu'expose
+        // `existingMessage.sender.role`. Comparer ce rôle participant minuscule
+        // aux constantes globales majuscules ne matchait jamais — le bypass
+        // était du code mort et tout auteur privilégié était bloqué à tort au-
+        // delà de 24h. Parité avec le chemin socket (`handleMessageEdit`) et
+        // `handleMessageDelete` : on lit le rôle global de l'auteur (== userId).
+        const authorRecord = await prisma.user.findUnique({
+          where: { id: userId },
+          select: { role: true },
+        });
+        const authorGlobalRole = authorRecord?.role;
+        const hasSpecialPrivileges =
+          authorGlobalRole === 'MODERATOR' || authorGlobalRole === 'ADMIN' || authorGlobalRole === 'BIGBOSS';
 
         if (!hasSpecialPrivileges) {
           return sendForbidden(reply, 'You can no longer edit this message (24-hour limit exceeded)');

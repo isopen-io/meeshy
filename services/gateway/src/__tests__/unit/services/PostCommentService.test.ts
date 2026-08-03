@@ -488,16 +488,27 @@ describe('PostCommentService.addComment — media', () => {
   it('links the pending media to the new comment via commentId and returns it', async () => {
     const postMedia = makePostMediaMock();
     postMedia.findUnique.mockResolvedValue({ id: 'm-1', postId: null, commentId: null });
-    postMedia.update.mockResolvedValue({});
+    postMedia.updateMany.mockResolvedValue({ count: 1 });
     postMedia.findMany.mockResolvedValue([{ id: 'm-1', mimeType: 'image/jpeg', fileUrl: 'http://x/m-1' }]);
     const prisma = buildPrismaForAdd(postMedia);
 
     const service = new PostCommentService(prisma, noopTrackingLinks);
     const result: any = await service.addComment('post-1', 'a1', 'hi', undefined, 0, 'fr', 'm-1');
 
-    expect(postMedia.update).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { id: 'm-1' }, data: expect.objectContaining({ commentId: 'c-new' }) }),
-    );
+    // La condition est portée par l'ÉCRITURE et non par une lecture préalable :
+    // la base tranche en une opération, donc deux commentaires concurrents ne
+    // peuvent plus réclamer le même média tous les deux.
+    const call = postMedia.updateMany.mock.calls[0][0];
+    expect(call.where.id).toBe('m-1');
+    // Les deux formes MongoDB d'un média libre (null OU champ absent) —
+    // cf. l'incident prod 2026-07-31→08-01 sur `commentId` absent.
+    expect(call.where.AND).toEqual([
+      { OR: [{ postId: null }, { postId: { isSet: false } }] },
+      { OR: [{ commentId: null }, { commentId: { isSet: false } }] },
+    ]);
+    // Et la garde de propriété : l'auteur du commentaire, pas n'importe qui.
+    expect(call.where.uploaderId).toBe('a1');
+    expect(call.data).toEqual(expect.objectContaining({ commentId: 'c-new' }));
     expect(result.media).toHaveLength(1);
     expect(result.media[0].id).toBe('m-1');
   });
@@ -505,7 +516,7 @@ describe('PostCommentService.addComment — media', () => {
   it('persists the mobile transcription on the linked audio media', async () => {
     const postMedia = makePostMediaMock();
     postMedia.findUnique.mockResolvedValue({ id: 'm-2', postId: null, commentId: null });
-    postMedia.update.mockResolvedValue({});
+    postMedia.updateMany.mockResolvedValue({ count: 1 });
     postMedia.findMany.mockResolvedValue([{ id: 'm-2', mimeType: 'audio/mp4', fileUrl: 'http://x/m-2' }]);
     const prisma = buildPrismaForAdd(postMedia);
 
@@ -514,7 +525,7 @@ describe('PostCommentService.addComment — media', () => {
       text: 'bonjour', language: 'fr', segments: [],
     } as any);
 
-    const data = postMedia.update.mock.calls[0][0].data;
+    const data = postMedia.updateMany.mock.calls[0][0].data;
     expect(data.commentId).toBe('c-new');
     expect(data.transcription).toEqual(expect.objectContaining({ text: 'bonjour', source: 'mobile' }));
   });

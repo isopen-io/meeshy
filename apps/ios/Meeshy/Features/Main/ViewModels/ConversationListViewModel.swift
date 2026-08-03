@@ -235,7 +235,7 @@ class ConversationListViewModel: ObservableObject {
             // best-effort. Une defaillance d'ecriture (encryption, disque
             // plein) est loggee par GRDBCacheStore et ne doit pas casser
             // le persist debounce.
-            try? await CacheCoordinator.shared.conversations.save(snapshot, for: "list")
+            try? await CacheCoordinator.shared.conversations.savePreservingFreshness(snapshot, for: "list")
             await CacheCoordinator.shared.conversations.saveCursor(
                 nextCursor: cursor, hasMore: more, for: "list"
             )
@@ -261,44 +261,20 @@ class ConversationListViewModel: ObservableObject {
 
     /// Bump a conversation to position 0 with a refreshed lastMessageAt.
     /// Used by the socket relay when CONVERSATION_UPDATED carries a newer
-    /// lastMessageAt, and by the push-notification path (neither carries
-    /// the new message's content). No-op when the id isn't currently
-    /// loaded so the engine's full-row prepend in handleNewMessage stays
-    /// the source of truth for unknown conversations.
+    /// lastMessageAt, and by the push-notification path. No-op when the id
+    /// isn't currently loaded so the engine's full-row prepend in
+    /// handleNewMessage stays the source of truth for unknown conversations.
     ///
-    /// The row's last-message COMPANION fields (sender name, attachments,
-    /// ephemeral flags, preview text + translations) are reset to neutral
-    /// defaults rather than left as whatever the PREVIOUS message carried:
-    /// neither caller has the new message's actual sender/attachments/
-    /// flags/text, so leaving the old ones in place renders a wrong
-    /// author, a phantom attachment icon, or a brand-new text message
-    /// summarized as "View once" because the stale `lastMessageIsViewOnce`
-    /// flag survived the bump. `lastMessagePreview` gets the same
-    /// treatment: an unattributed stale text (no sender label, since
-    /// that's now nil too) is exactly as wrong as the other companion
-    /// fields — and `lastMessageTranslations`/`lastMessageOriginalLanguage`
-    /// must go with it, or `resolvedLastMessagePreview` (Prisme
-    /// Linguistique) would resurface a stale TRANSLATED string for a
-    /// viewer whose preferred language happens to match a leftover
-    /// translation key, even with the raw preview cleared. A blank
-    /// companion state is corrected on the next real sync (delta sync,
-    /// per-row prefetch, or opening the conversation); a WRONG one isn't.
-    func bumpToTop(conversationId: String, newLastMessageAt: Date) {
+    /// `facet` porte ce que l'appelant sait RÉELLEMENT du nouveau dernier
+    /// message. Les champs qu'il ne connaît pas sont remis à neutre plutôt que
+    /// laissés à ceux du message PRÉCÉDENT — cf. `LastMessageFacet.bumped`.
+    func bumpToTop(conversationId: String, facet: LastMessageFacet) {
         guard let idx = convIndex(for: conversationId) else {
             Logger.messages.warning("[bumpToTop] conversation introuvable id=\(conversationId, privacy: .public)")
             return
         }
         var updated = conversations[idx]
-        updated.lastMessageAt = newLastMessageAt
-        updated.lastMessageSenderName = nil
-        updated.lastMessageAttachments = []
-        updated.lastMessageAttachmentCount = 0
-        updated.lastMessageIsBlurred = false
-        updated.lastMessageIsViewOnce = false
-        updated.lastMessageExpiresAt = nil
-        updated.lastMessagePreview = nil
-        updated.lastMessageTranslations = nil
-        updated.lastMessageOriginalLanguage = nil
+        updated.applyLastMessage(facet)
         conversations.remove(at: idx)
         conversations.insert(updated, at: 0)
         schedulePersist()
@@ -656,7 +632,10 @@ class ConversationListViewModel: ObservableObject {
             updated[i].userState = newState
             changed = true
         }
-        if changed { conversations = updated }
+        if changed {
+            conversations = updated
+            schedulePersist()
+        }
     }
 
     private func reloadFromCache() async {
@@ -779,23 +758,37 @@ class ConversationListViewModel: ObservableObject {
                 if let autoTranslate = event.autoTranslateEnabled {
                     self.conversations[index].autoTranslateEnabled = autoTranslate
                 }
-                // Message-driven bump also carries the new preview text so
-                // the row shows the latest message without waiting for the
-                // next full sync (lastMessageTranslations arrive separately).
-                if let msgId = event.lastMessageId { self.conversations[index].lastMessageId = msgId }
-                if let preview = event.lastMessagePreview { self.conversations[index].lastMessagePreview = preview.meeshyPreviewTruncated }
-
                 // Bump the row to the top when the gateway tells us a new
                 // message advanced lastMessageAt. We compare strictly
                 // greater-than so a re-broadcast of the same timestamp
                 // (e.g. metadata-only update echoed back to the user
                 // room) doesn't pointlessly reshuffle the list and
                 // trigger a re-render of every cell behind it.
+                //
+                // L'identifiant et le texte que porte l'événement voyagent DANS
+                // la facette. Les poser sur la ligne avant l'appel les faisait
+                // effacer par la remise à neutre du bump une ligne plus bas :
+                // la ligne restait muette jusqu'à la synchro suivante alors même
+                // que le gateway venait d'envoyer le texte.
                 if let newLastAt = event.lastMessageAt,
                    newLastAt > self.conversations[index].lastMessageAt {
                     Logger.messages.debug("[conversationUpdated] bump websocket id=\(event.conversationId, privacy: .public)")
-                    self.bumpToTop(conversationId: event.conversationId, newLastMessageAt: newLastAt)
+                    self.bumpToTop(
+                        conversationId: event.conversationId,
+                        facet: .bumped(at: newLastAt, id: event.lastMessageId, preview: event.lastMessagePreview,
+                                       location: event.location)
+                    )
                 } else {
+                    if let msgId = event.lastMessageId {
+                        self.conversations[index].lastMessageId = msgId
+                        // Écrite AVEC l'id (chemin message-driven) et jamais
+                        // seule : `nil` efface la pastille du message précédent
+                        // quand un texte le remplace au même horodatage.
+                        self.conversations[index].lastMessageLocation = event.location
+                    }
+                    if let preview = event.lastMessagePreview {
+                        self.conversations[index].lastMessagePreview = preview.meeshyPreviewTruncated
+                    }
                     // Metadata-only mutation (rename, avatar swap, broadcast
                     // toggle) still needs to land in L2 so a cold restart
                     // doesn't show the pre-event title for a frame. bumpToTop
@@ -905,7 +898,7 @@ class ConversationListViewModel: ObservableObject {
             .sink { [weak self] conversationId in
                 guard let self else { return }
                 if self.convIndex(for: conversationId) != nil {
-                    self.bumpToTop(conversationId: conversationId, newLastMessageAt: self.dateProvider())
+                    self.bumpToTop(conversationId: conversationId, facet: .bumped(at: self.dateProvider()))
                 } else {
                     self.fetchAndPrependMissingConversation(id: conversationId, source: .pushNotification)
                 }
@@ -1246,7 +1239,7 @@ class ConversationListViewModel: ObservableObject {
     //
     // Cache strategy: Option 1 (blob save) per spec §4.3 recommendation —
     // the entire merged list is persisted as a single JSON blob via
-    // `CacheCoordinator.shared.conversations.save(snapshot, for: "list")`.
+    // `CacheCoordinator.shared.conversations.savePreservingFreshness(snapshot, for: "list")`.
     // Row-per-conversation (Option 2: one `cache_entries` row per id with
     // partial reads via `LIMIT/OFFSET`) is deferred to a future migration
     // if user counts grow beyond ~500 cached conversations. Today's blob
@@ -1357,7 +1350,7 @@ class ConversationListViewModel: ObservableObject {
             persistTask = Task {
                 // try? : Wave 1 Local-First a rendu .save() throwing.
                 // Best-effort persist — l'erreur est loggee en aval.
-                try? await CacheCoordinator.shared.conversations.save(snapshot, for: "list")
+                try? await CacheCoordinator.shared.conversations.savePreservingFreshness(snapshot, for: "list")
                 await CacheCoordinator.shared.conversations.saveCursor(
                     nextCursor: persistedCursor,
                     hasMore: persistedHasMore,
@@ -1544,6 +1537,10 @@ class ConversationListViewModel: ObservableObject {
 
     func markAsUnread(conversationId: String) async {
         guard convIndex(for: conversationId) != nil else { return }
+        // Efface la frontière de lecture locale dans le cache : sans ça,
+        // `ConversationSyncEngine.reconcileUnread` reclamperait le compteur à 0
+        // au prochain instantané serveur et le geste serait sans effet.
+        await syncEngine.markConversationUnreadLocally(conversationId)
         // Store sets unreadCount ≥ 1 optimistically + dispatches markUnread.
         try? await store.apply(.markAsUnread, for: conversationId)
     }

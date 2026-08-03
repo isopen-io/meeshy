@@ -90,11 +90,56 @@ public struct TimelineInspectorHost: View {
         return !StoryComposerViewModel.isSyntheticTimelineClipId(id)
     }
 
+    /// Extrait les points d'automation du volume d'un jeu de keyframes, en
+    /// temps ABSOLU.
+    ///
+    /// Les points sans volume — position, échelle, opacité — sont écartés :
+    /// ils ne décrivent pas la courbe et les lister reviendrait à proposer de
+    /// retirer un point qui ne règle aucun son.
+    public static func volumePoints(
+        keyframes: [StoryKeyframe]?,
+        clipStart: Float
+    ) -> [ClipInspector.ClipSnapshot.VolumePoint] {
+        (keyframes ?? []).compactMap { kf in
+            guard let volume = kf.volume else { return nil }
+            return ClipInspector.ClipSnapshot.VolumePoint(
+                id: kf.id, absoluteTime: clipStart + kf.time, volume: volume
+            )
+        }
+    }
+
+    /// `true` quand la slide porte un audio de FOND — la seule situation où
+    /// l'atténuation automatique a quelque chose à atténuer.
+    ///
+    /// Sans lui, la fiche proposerait de couper une atténuation qui ne se
+    /// déclenche jamais.
+    public static func hasBackgroundAudio(project: TimelineProject) -> Bool {
+        project.audioPlayerObjects.contains { $0.isBackground == true }
+    }
+
+    /// Fenêtre ANNONCÉE d'un clip, début et durée.
+    ///
+    /// Un clip permanent (`duration == nil`) court de son début jusqu'à la fin
+    /// de la slide : c'est ce que la piste dessine
+    /// (`TimelineGeometry.effectiveClipDuration`, même appel) et ce que le trim
+    /// au doigt matérialise au premier geste. La fiche lisait `duration ?? 0`
+    /// et annonçait « DÉBUT 0,0 · FIN 0,0 · DURÉE 0,0 » sur un texte de 16 s —
+    /// trois valeurs fausses, et un piège : un appui sur « + » de la durée
+    /// ramenait le clip à 0,1 s au lieu de l'allonger.
+    private static func window(startTime: Float,
+                               duration: Float?,
+                               slideDuration: Float) -> (start: Float, duration: Float) {
+        (startTime, TimelineGeometry.effectiveClipDuration(startTime: startTime,
+                                                           duration: duration,
+                                                           slideDuration: slideDuration))
+    }
+
     /// Pure mapping from the current timeline selection to a `ClipSnapshot`.
     /// Returns `nil` when no clip is selected or when the selected id matches
     /// neither a media clip nor an audio player object.
     public static func resolveClipSnapshot(viewModel: TimelineViewModel) -> ClipInspector.ClipSnapshot? {
         guard let id = viewModel.selection.selectedClipId else { return nil }
+        let slideDuration = viewModel.project.slideDuration
         if let media = viewModel.project.mediaObjects.first(where: { $0.id == id }) {
             // Media objects only carry image/video — audio lives in
             // `audioPlayerObjects`. An unrecognized mediaType (forward-compat)
@@ -107,12 +152,15 @@ public struct TimelineInspectorHost: View {
                 case .none:         return .video
                 }
             }()
+            let win = window(startTime: Float(media.startTime ?? 0),
+                             duration: media.duration.map { Float($0) },
+                             slideDuration: slideDuration)
             return ClipInspector.ClipSnapshot(
                 id: media.id,
                 displayName: media.postMediaId,
                 kind: kind,
-                startTime: Float(media.startTime ?? 0),
-                duration: Float(media.duration ?? 0),
+                startTime: win.start,
+                duration: win.duration,
                 volume: media.volume,
                 fadeInDuration: Float(media.fadeIn ?? 0),
                 fadeOutDuration: Float(media.fadeOut ?? 0),
@@ -120,22 +168,31 @@ public struct TimelineInspectorHost: View {
                 isBackground: media.isBackground,
                 name: media.name,
                 transform: ClipTransform(x: media.x, y: media.y, scale: media.scale,
-                                         rotation: media.rotation, zIndex: media.zIndex)
+                                         rotation: media.rotation, zIndex: media.zIndex),
+                volumeKeyframes: volumePoints(keyframes: media.keyframes,
+                                              clipStart: Float(media.startTime ?? 0)),
+                isDuckingDisabled: media.isDuckingDisabled ?? false,
+                slideHasBackgroundAudio: hasBackgroundAudio(project: viewModel.project)
             )
         }
         if let audio = viewModel.project.audioPlayerObjects.first(where: { $0.id == id }) {
+            let win = window(startTime: audio.startTime ?? 0,
+                             duration: audio.duration,
+                             slideDuration: slideDuration)
             return ClipInspector.ClipSnapshot(
                 id: audio.id,
                 displayName: audio.postMediaId,
                 kind: .audio,
-                startTime: audio.startTime ?? 0,
-                duration: audio.duration ?? 0,
+                startTime: win.start,
+                duration: win.duration,
                 volume: audio.volume,
                 fadeInDuration: audio.fadeIn ?? 0,
                 fadeOutDuration: audio.fadeOut ?? 0,
                 isLooping: audio.loop ?? false,
                 isBackground: audio.isBackground ?? false,
-                name: audio.name
+                name: audio.name,
+                volumeKeyframes: volumePoints(keyframes: audio.keyframes,
+                                              clipStart: audio.startTime ?? 0)
             )
         }
         // Le texte a aussi un début/durée/fondu (et un nom) éditables — sans
@@ -143,12 +200,15 @@ public struct TimelineInspectorHost: View {
         // Pas de volume ni de boucle pour le texte (slider masqué via
         // hasAudioAffordances(.text) == false).
         if let text = viewModel.project.textObjects.first(where: { $0.id == id }) {
+            let win = window(startTime: Float(text.startTime ?? 0),
+                             duration: text.duration.map { Float($0) },
+                             slideDuration: slideDuration)
             return ClipInspector.ClipSnapshot(
                 id: text.id,
                 displayName: text.text,
                 kind: .text,
-                startTime: Float(text.startTime ?? 0),
-                duration: Float(text.duration ?? 0),
+                startTime: win.start,
+                duration: win.duration,
                 volume: 1.0,
                 fadeInDuration: Float(text.fadeIn ?? 0),
                 fadeOutDuration: Float(text.fadeOut ?? 0),
@@ -165,12 +225,15 @@ public struct TimelineInspectorHost: View {
         // inatteignables alors que le view model les gère tous.
         // Pas de nom persisté sur `StorySticker` — l'emoji EST son identité.
         if let sticker = viewModel.project.stickerObjects.first(where: { $0.id == id }) {
+            let win = window(startTime: Float(sticker.startTime ?? 0),
+                             duration: sticker.duration.map { Float($0) },
+                             slideDuration: slideDuration)
             return ClipInspector.ClipSnapshot(
                 id: sticker.id,
                 displayName: sticker.emoji,
                 kind: .sticker,
-                startTime: Float(sticker.startTime ?? 0),
-                duration: Float(sticker.duration ?? 0),
+                startTime: win.start,
+                duration: win.duration,
                 volume: 1.0,
                 fadeInDuration: Float(sticker.fadeIn ?? 0),
                 fadeOutDuration: Float(sticker.fadeOut ?? 0),
@@ -358,6 +421,16 @@ public struct TimelineInspectorHost: View {
             },
             onTransformChanged: { [viewModel] field in
                 viewModel.setClipTransform(id: clipId, field: field)
+            },
+            playheadTime: viewModel.currentTime,
+            onAddVolumePoint: { [viewModel] volume in
+                viewModel.addKeyframeAtPlayhead(volume: volume)
+            },
+            onRemoveVolumePoint: { [viewModel] keyframeId in
+                viewModel.deleteKeyframe(clipId: clipId, keyframeId: keyframeId)
+            },
+            onDuckingDisabledChanged: { [viewModel] isDisabled in
+                viewModel.setClipDuckingDisabled(id: clipId, isDisabled: isDisabled)
             }
         )
         .padding(presentation == .popover ? 12 : 0)

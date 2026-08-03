@@ -8,12 +8,21 @@ import MeeshyUI
 struct CommentAttachmentsTray: View {
     let attachments: [ComposerAttachment]
     let onRemove: (String) -> Void
+    /// Lieu partagé en attente d'envoi. Pas un `ComposerAttachment` :
+    /// `SharedPlace` porte le nom et l'adresse, l'attachement ne les portait
+    /// pas et n'est plus le véhicule (Task 11/12, 2026-07-29). `nil` par
+    /// défaut pour les hôtes qui ne câblent pas encore le partage de position.
+    var place: SharedPlace? = nil
+    var onRemovePlace: (() -> Void)? = nil
 
     private var theme: ThemeManager { ThemeManager.shared }
 
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
+                if let place {
+                    placeChip(place)
+                }
                 ForEach(attachments) { attachment in
                     HStack(spacing: 6) {
                         Image(systemName: icon(for: attachment.type))
@@ -71,6 +80,45 @@ struct CommentAttachmentsTray: View {
         }
         if let url = attachment.url { try? FileManager.default.removeItem(at: url) }
     }
+
+    /// Même gabarit de chip que les pièces jointes ci-dessus, pour un lieu.
+    private func placeChip(_ place: SharedPlace) -> some View {
+        HStack(spacing: 6) {
+            Image(systemName: "location.fill")
+                .font(.caption)
+                .foregroundColor(MeeshyColors.success)
+                .accessibilityHidden(true)
+            Text(place.name ?? String(localized: "attachment.label.location", defaultValue: "Location", bundle: .main))
+                .font(.caption.weight(.medium))
+                .lineLimit(1)
+                .frame(maxWidth: 120)
+            Button {
+                HapticFeedback.light()
+                withAnimation(.spring(response: 0.25, dampingFraction: 0.7)) {
+                    onRemovePlace?()
+                }
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.caption2.weight(.bold))
+                    .foregroundColor(theme.textMuted)
+                    .frame(width: 18, height: 18)
+                    .background(Circle().fill(theme.textMuted.opacity(0.15)))
+            }
+            .accessibilityHidden(true)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+        .background(
+            Capsule()
+                .fill(theme.inputBackground)
+                .overlay(Capsule().stroke(theme.textMuted.opacity(0.2), lineWidth: 0.5))
+        )
+        .foregroundColor(theme.textPrimary)
+        .accessibilityElement(children: .combine)
+        .accessibilityAction(named: Text(String(localized: "composer.a11y.removeAttachment", defaultValue: "Retirer la pi\u{00E8}ce jointe", bundle: .main))) {
+            onRemovePlace?()
+        }
+    }
 }
 
 /// Rendu inline du média unique d'un commentaire (image / vidéo / audio), avec
@@ -121,7 +169,7 @@ struct CommentMediaView: View {
             videoView
         case .audio:
             audioView
-        case .document, .location:
+        case .document:
             // Hors périmètre commentaire (image/vidéo/audio) — fallback discret.
             EmptyView()
         }

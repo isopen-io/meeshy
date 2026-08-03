@@ -10,6 +10,7 @@ import { resolveMentionedUsers, MentionService } from '../../services/MentionSer
 import { createPostRouteRateLimitConfig } from '../../middleware/rate-limiter';
 import { withMutationLog } from '../../utils/withMutationLog';
 import { SecuritySanitizer } from '../../utils/sanitize.js';
+import { hoistLocationOnto } from '../../services/location/sharedPlace';
 
 /**
  * Hisse `metadata.trackingLinks` ([{ url, token }]) en top-level sur le payload
@@ -24,6 +25,17 @@ function hoistCommentTrackingLinks<T extends Record<string, unknown>>(comment: T
     return { ...comment, trackingLinks: tl } as T;
   }
   return comment;
+}
+
+/**
+ * Hisse `metadata.location` en top-level `location` sur un commentaire —
+ * appliqué à la liste (GET), aux réponses (GET replies) ET à la réponse de
+ * création (POST), en plus du payload socket. Source UNIQUE partagée avec
+ * `core.ts` (via `hoistLocationDeep`, qui l'applique aussi aux commentaires
+ * embarqués dans un post) — pas de copie locale de la logique de hoist.
+ */
+function hoistCommentLocation<T extends Record<string, unknown>>(comment: T): T {
+  return hoistLocationOnto(comment);
 }
 
 export function registerCommentRoutes(
@@ -56,7 +68,7 @@ export function registerCommentRoutes(
         : [];
 
       reply.header('Cache-Control', 'private, no-cache');
-      return sendSuccess(reply, result.items, {
+      return sendSuccess(reply, result.items.map((c) => hoistCommentLocation(c as unknown as Record<string, unknown>)), {
         pagination: { limit, hasMore: result.hasMore, nextCursor: result.nextCursor },
         meta: { mentionedUsers },
       });
@@ -88,7 +100,7 @@ export function registerCommentRoutes(
         : [];
 
       reply.header('Cache-Control', 'private, no-cache');
-      return sendSuccess(reply, result.items, {
+      return sendSuccess(reply, result.items.map((r) => hoistCommentLocation(r as unknown as Record<string, unknown>)), {
         pagination: { limit, hasMore: result.hasMore, nextCursor: result.nextCursor },
         meta: { mentionedUsers: replyMentionedUsers },
       });
@@ -133,6 +145,7 @@ export function registerCommentRoutes(
             // Un seul média par commentaire : on lie le premier id du tableau.
             parsed.data.attachmentIds?.[0],
             parsed.data.mobileTranscription,
+            parsed.data.location,
           );
           if (!c) throw new Error('POST_NOT_FOUND');
           return c as CommentResult & { id: string };
@@ -159,7 +172,7 @@ export function registerCommentRoutes(
       if (socialEvents && post) {
         socialEvents.broadcastCommentAdded({
           postId,
-          comment: hoistCommentTrackingLinks(comment as unknown as Record<string, unknown>) as unknown as typeof comment,
+          comment: hoistCommentLocation(hoistCommentTrackingLinks(comment as unknown as Record<string, unknown>)) as unknown as typeof comment,
           commentCount: post.commentCount,
         }, post.authorId, post.visibility, post.visibilityUserIds ?? []).catch((err) => fastify.log.warn({ err }, '[POST /posts/:postId/comments]: broadcast comment added failed'));
       }
@@ -299,7 +312,7 @@ export function registerCommentRoutes(
         ? await resolveMentionedUsers(prisma, [parsed.data.content])
         : [];
 
-      return sendSuccess(reply, comment, { statusCode: 201, meta: { mentionedUsers: newCommentMentionedUsers } });
+      return sendSuccess(reply, hoistCommentLocation(comment as unknown as Record<string, unknown>), { statusCode: 201, meta: { mentionedUsers: newCommentMentionedUsers } });
     } catch (error) {
       if (error instanceof Error && error.message === 'PARENT_NOT_FOUND') {
         return sendNotFound(reply, 'Parent comment not found', { code: 'COMMENT_NOT_FOUND' });

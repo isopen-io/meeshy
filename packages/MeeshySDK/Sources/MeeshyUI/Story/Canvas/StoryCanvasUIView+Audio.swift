@@ -11,13 +11,19 @@ import MeeshySDK
 // MARK: - StoryCanvasUIView + Audio
 
 extension StoryCanvasUIView {
-    /// Stable identifier for the current slide content + language resolution.
-    /// Drives `ReaderAudioMixer`'s idempotence guard: a re-render replays with
-    /// the same key (no echo) while a genuine content change re-schedules
-    /// against a fresh key (RC4.6).
+    /// Identifiant stable de la COMPOSITION de la slide + de la résolution de
+    /// langue. Il alimente la garde d'idempotence de `ReaderAudioMixer` : à clé
+    /// égale, `play(originHost:slideKey:)` reprend le transport sans
+    /// re-planifier (donc sans écho ni retour à zéro) ; à clé neuve il
+    /// re-planifie toute la passe (RC4.6).
+    ///
+    /// La clé est indexée sur `slideAudioRevision` — l'ajout/suppression d'un
+    /// objet — et NON sur `slideContentRevision`, qui compte toutes les
+    /// réassignations de `slide`. Éditer ou déplacer un objet garde donc la
+    /// même clé, et le son de fond continue sans coupure.
     var currentSlideKey: String {
         let langs = readerContext.preferredLanguages.joined(separator: ",")
-        return "\(slide.id)#\(slideContentRevision)#\(langs)"
+        return "\(slide.id)#\(slideAudioRevision)#\(langs)"
     }
 
     /// Materialises the slide's `t = 0` as a host-time. When the playhead is
@@ -151,9 +157,10 @@ extension StoryCanvasUIView {
     /// `audioMixer` so the subsequent `startAudioPlayback()` actually emits
     /// sound. No-op outside `.play` mode (the composer never plays while
     /// editing) and skipped
-    /// when the slide content hasn't changed since the last configure pass —
-    /// `configure(audios:urls:)` tears down prior clips, so repeated calls are
-    /// safe but reload AVAudioFiles, which we avoid on every display-link tick.
+    /// when the slide COMPOSITION hasn't changed since the last configure pass
+    /// (`slideAudioRevision`) — `configure(audios:urls:)` tears down prior
+    /// clips, so repeated calls are safe but reload AVAudioFiles AND restart
+    /// the slide from zero: unacceptable on a display-link tick or a keystroke.
     ///
     /// URL resolution: `ReaderAudioMixer` keys the `urls` dict by the audio
     /// object's `id`, but `StoryReaderContext.postMediaURLResolver` maps a
@@ -164,8 +171,13 @@ extension StoryCanvasUIView {
         // les clips audio en `.edit`. Le prefetcher hors-écran (`.edit` sans le
         // flag) reste silencieux.
         guard mode == .play || (mode == .edit && playsAudioInEditMode) else { return }
-        guard lastAudioConfigRevision != slideContentRevision else { return }
-        lastAudioConfigRevision = slideContentRevision
+        // Gate sur la COMPOSITION : `configure(audios:urls:)` démonte les clips
+        // en place et recharge les `AVAudioFile`, donc un pass par frappe
+        // clavier relançait le son. Seuls un ajout/retrait d'objet, un
+        // changement de langue ou un reset explicite (timeline, changement de
+        // contexte) franchissent cette garde.
+        guard lastAudioConfigRevision != slideAudioRevision else { return }
+        lastAudioConfigRevision = slideAudioRevision
 
         let effects = slide.effects
         let languages = readerContext.preferredLanguages
@@ -208,7 +220,11 @@ extension StoryCanvasUIView {
                     continue
                 }
                 let mediaId = audio.resolvedPostMediaId(preferredLanguages: languages)
-                guard let remoteURL = resolver?(mediaId) else {
+                // Repli sur `mediaURL` : un son EMPRUNTÉ à la bibliothèque n'a
+                // pas de `postMediaId`, et sans ce repli sa piste était
+                // simplement sautée — la story jouait muette.
+                guard let remoteURL = StoryAudioSourceResolver.remoteURL(
+                    for: audio, preferredLanguages: languages, resolver: resolver) else {
                     os.Logger.storyAudio.error(
                         "FG audio URL not resolved audioId=\(audio.id, privacy: .public) postMediaId=\(mediaId, privacy: .public)"
                     )
@@ -246,7 +262,8 @@ extension StoryCanvasUIView {
                     bgLocalURL = local
                 } else {
                     let mediaId = background.resolvedPostMediaId(preferredLanguages: languages)
-                    if let remoteURL = resolver?(mediaId) {
+                    if let remoteURL = StoryAudioSourceResolver.remoteURL(
+                        for: background, preferredLanguages: languages, resolver: resolver) {
                         bgLocalURL = await Self.cachedAudioFileURL(remote: remoteURL)
                         if bgLocalURL == nil {
                             os.Logger.storyAudio.error(

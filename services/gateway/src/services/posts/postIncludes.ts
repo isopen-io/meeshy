@@ -137,6 +137,12 @@ export const commentsPreviewInclude = Prisma.validator<Prisma.Post$commentsArgs>
     likeCount: true,
     replyCount: true,
     createdAt: true,
+    // Rappel projet : tout champ lu par un resolver doit figurer dans son
+    // `select`. Sans `metadata` ici, un commentaire portant un lieu partagé
+    // (`metadata.location`) l'affiche dans la liste complète des commentaires
+    // mais pas dans cet aperçu embarqué sur le post — la position semble
+    // disparaître selon la surface consultée par le client.
+    metadata: true,
     author: { select: authorSelect },
     // A comment's single media (image/video/audio + Prisme transcription/TTS).
     // Without this the feed/reels comments sheet — which reads top-level
@@ -174,6 +180,10 @@ export const repostOfInclude = Prisma.validator<Prisma.Post$repostOfArgs>()({
     createdAt: true,
     likeCount: true,
     commentCount: true,
+    // `metadata.location` du post SOURCE — sans ce select, `hoistLocationDeep`
+    // n'a rien à hisser sur `repostOf` et un repost perd la position de
+    // l'original (même porte que `commentsPreviewInclude.metadata`).
+    metadata: true,
   },
 });
 
@@ -195,6 +205,7 @@ export const trayStorySelect = Prisma.validator<Prisma.PostSelect>()({
   visibility: true,
   createdAt: true,
   updatedAt: true,
+  contentEditedAt: true,
   expiresAt: true,
   originalRepostOfId: true,
   viewCount: true,

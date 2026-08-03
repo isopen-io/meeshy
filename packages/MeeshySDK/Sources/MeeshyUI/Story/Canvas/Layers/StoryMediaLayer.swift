@@ -217,7 +217,8 @@ public final class StoryMediaLayer: CALayer {
                           geometry: CanvasGeometry,
                           mode: RenderMode,
                           resolver: (@Sendable (String) -> URL?)? = nil,
-                          imageCache: ImageCacheReader? = nil) {
+                          imageCache: ImageCacheReader? = nil,
+                          renderScale: CGFloat = UIScreen.main.scale) {
         self.media = media
         // Niveau de BASE repris du modèle. L'automation du canvas réécrira
         // `volume` au tick suivant si la slide en porte une ; sans cette ligne,
@@ -246,7 +247,7 @@ public final class StoryMediaLayer: CALayer {
         anchorPoint = media.anchor
         transform = CATransform3DMakeRotation(CGFloat(media.rotation) * .pi / 180, 0, 0, 1)
         zPosition = CGFloat(media.zIndex)
-        contentsScale = UIScreen.main.scale
+        contentsScale = renderScale
         name = media.id
 
         // Coins arrondis du média (image ET vidéo). `masksToBounds` clippe le
@@ -268,7 +269,7 @@ public final class StoryMediaLayer: CALayer {
         // Videos cannot be rasterized (their AVPlayerLayer keeps changing).
         let staticImage = media.kind == .image && media.isStatic
         shouldRasterize = mode == .play && staticImage
-        if shouldRasterize { rasterizationScale = UIScreen.main.scale }
+        if shouldRasterize { rasterizationScale = renderScale }
     }
 
     /// Poses a decoded video frame as this layer's `contents` for the MP4 export

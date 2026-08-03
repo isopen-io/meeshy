@@ -940,7 +940,7 @@ extension StoryViewerView {
 
     // MARK: - Actions
 
-    func sendComment(text: String, effectFlags: Int? = nil, parentId: String? = nil, pendingMedia: PendingCommentMedia? = nil) {
+    func sendComment(text: String, effectFlags: Int? = nil, parentId: String? = nil, pendingMedia: PendingCommentMedia? = nil, location: SharedPlace? = nil) {
         guard (!text.isEmpty || pendingMedia != nil), let story = currentStory else { return }
         EngagementTracker.shared.recordAction(.commented, surface: .storyViewer)
 
@@ -961,7 +961,8 @@ extension StoryViewerView {
             parentId: parentId,
             effectFlags: effectFlags ?? 0,
             originalLanguage: composerLanguage,
-            media: pendingMedia.map { [$0.optimistic] } ?? []
+            media: pendingMedia.map { [$0.optimistic] } ?? [],
+            location: location
         )
 
         if let parentId {
@@ -1008,7 +1009,8 @@ extension StoryViewerView {
                     effectFlags: effectFlags,
                     parentId: parentId,
                     attachmentIds: attachmentIds,
-                    mobileTranscription: pendingMedia?.mobileTranscription
+                    mobileTranscription: pendingMedia?.mobileTranscription,
+                    location: location
                 )
             } catch {
                 // Le POST direct a échoué — le plus souvent parce qu'on est
@@ -1031,7 +1033,8 @@ extension StoryViewerView {
                             clientMutationId: cmid,
                             postId: story.id,
                             parentCommentId: parentId,
-                            content: text
+                            content: text,
+                            location: location
                         ),
                         conversationId: story.id
                     )
@@ -1149,20 +1152,11 @@ extension StoryViewerView {
         return (priorReactions, priorCount)
     }
 
-    // MARK: - Story Time Remaining
-
-    func storyTimeRemaining(_ expiresAt: Date) -> String {
-        let seconds = Int(expiresAt.timeIntervalSinceNow)
-        if seconds <= 0 {
-            return String(localized: "story.viewer.expiresNow", defaultValue: "Expire bientôt", bundle: .main)
-        }
-        let hours = seconds / 3600
-        let minutes = (seconds % 3600) / 60
-        if hours > 0 {
-            return String(localized: "story.viewer.expiresInHours", defaultValue: "Expire dans \(hours)h", bundle: .main)
-        }
-        return String(localized: "story.viewer.expiresInMinutes", defaultValue: "Expire dans \(minutes)min", bundle: .main)
-    }
+    // Le compte à rebours d'expiration a quitté le header du reader (directive
+    // user 2026-07-30) : il n'existe plus de surface qui l'affiche, donc plus
+    // de formateur. `story.expiresAt` reste la source de vérité côté logique
+    // (`isExpired(at:)` pilote la sélection de slide et le bandeau « Story
+    // expirée ») — c'est seulement la relecture permanente du chrono qui part.
 
     // MARK: - Delete Story
 
@@ -1226,6 +1220,11 @@ extension StoryViewerView {
             // C3 : ce slide vient d'être affiché → 1 impression (source "story") pour CE
             // post-slide, en plus de la vue unique. Chaque changement de slide en émet une.
             viewModel.recordStoryImpression(storyId: story.id)
+            // Contenu consommé → ses notifications ne doivent plus être non lues,
+            // ET toute notification qui arrive PENDANT la lecture naît consommée
+            // (`activePostId`). Idempotent : le manager ignore une story déjà
+            // déclarée active et coalesce les appels serveur.
+            NotificationToastManager.shared.onPostOpened(story.id)
         }
     }
 
@@ -2087,7 +2086,8 @@ extension StoryViewerView {
                 parentId: parentId,
                 originalLanguage: c.originalLanguage, translatedContent: translated,
                 currentUserReactions: c.currentUserReactions,
-                media: (c.media ?? []).map { $0.toFeedMedia() }
+                media: (c.media ?? []).map { $0.toFeedMedia() },
+                location: c.location
             )
         }
     }
@@ -2185,7 +2185,8 @@ extension StoryViewerView {
             originalLanguage: data.comment.originalLanguage,
             translatedContent: translatedContent,
             currentUserReactions: data.comment.currentUserReactions,
-            media: (data.comment.media ?? []).map { $0.toFeedMedia() }
+            media: (data.comment.media ?? []).map { $0.toFeedMedia() },
+            location: data.comment.location
         )
 
         let result = Self.applyingStoryCommentAdded(
@@ -2401,7 +2402,8 @@ extension StoryViewerView {
                     parentId: c.parentId,
                     originalLanguage: c.originalLanguage, translatedContent: translated,
                     currentUserReactions: c.currentUserReactions,
-                    media: (c.media ?? []).map { $0.toFeedMedia() }
+                    media: (c.media ?? []).map { $0.toFeedMedia() },
+                    location: c.location
                 )
             }
             storyComments = comments
@@ -2451,7 +2453,8 @@ extension StoryViewerView {
                         translations: c.translations, originalLanguage: c.originalLanguage, preferredLanguages: langs
                     ),
                     currentUserReactions: c.currentUserReactions,
-                    media: (c.media ?? []).map { $0.toFeedMedia() }
+                    media: (c.media ?? []).map { $0.toFeedMedia() },
+                    location: c.location
                 )
             }
             let existing = Set(storyComments.map(\.id))
@@ -2550,6 +2553,8 @@ struct StoryCommentRowView: View, Equatable {
     var isInFlight: Bool = false
     let onReply: () -> Void
     let onToggleLike: () -> Void
+    /// Lieu du commentaire ouvert plein écran (tap sur le sticker).
+    @State private var rowFullscreenPlace: BubbleFullscreenPlace?
 
     static func == (lhs: Self, rhs: Self) -> Bool {
         lhs.comment.id == rhs.comment.id &&
@@ -2611,6 +2616,14 @@ struct StoryCommentRowView: View, Equatable {
                     )
                     .padding(.top, 2)
                 }
+                // Lieu attaché au commentaire — sticker cliquable, même surface
+                // plein écran que les autres rows de commentaires.
+                if let place = comment.location {
+                    FeedPostLocationSticker(place: place) {
+                        rowFullscreenPlace = BubbleFullscreenPlace(place: place)
+                    }
+                    .padding(.top, 2)
+                }
                 actionRow
             }
 
@@ -2618,6 +2631,16 @@ struct StoryCommentRowView: View, Equatable {
         }
         .padding(.vertical, 8)
         .padding(.trailing, 12)
+        .fullScreenCover(item: $rowFullscreenPlace) { item in
+            LocationFullscreenView(
+                latitude: item.place.latitude,
+                longitude: item.place.longitude,
+                placeName: item.place.name,
+                address: item.place.address,
+                accentColor: comment.authorColor,
+                senderName: comment.author
+            )
+        }
     }
 
     @ViewBuilder

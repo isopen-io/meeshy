@@ -91,6 +91,20 @@ final class BackgroundTransitionCoordinator: BackgroundTransitioning {
         await withBudget("notifications.syncNow") {
             await NotificationCoordinator.shared.syncNow()
         }
+        // grdb-05 — dernier step, le plus sacrifiable si l'OS expire le
+        // budget. DOIT rester sous CETTE garde beginBackgroundTask :
+        // incremental_vacuum tient un verrou d'écriture sur le fichier SQLite
+        // App Group partagé avec la NSE — un verrou encore tenu à la
+        // suspension est le motif documenté du kill 0xdead10cc.
+        await withBudget("db.maintenance") {
+            let pool = DependencyContainer.shared.dbPool
+            do {
+                try DatabaseMaintenance.runIncrementalVacuum(on: pool)
+                try DatabaseMaintenance.runOptimize(on: pool)
+            } catch {
+                logger.error("Background DB maintenance failed: \(error.localizedDescription, privacy: .public)")
+            }
+        }
 
         endBackgroundTask()
     }
@@ -104,6 +118,14 @@ final class BackgroundTransitionCoordinator: BackgroundTransitioning {
         }
         await withBudget("nse.consumePendingPosts") {
             await NSEPendingPostConsumer.shared.consumeAll()
+        }
+        // Partages que l'extension n'a pas pu envoyer (hors-ligne, jeton
+        // périmé) : ils rejoignent l'outbox, qui les rejouera. Republier
+        // l'environnement au passage garde l'extension alignée si l'utilisateur
+        // a changé de gateway pendant la session.
+        await withBudget("share.consumePendingSends") {
+            WidgetDataManager.shared.publishAPIBaseURL()
+            await SharePendingSendConsumer.shared.consumeAll()
         }
         await withBudget("sockets.resume") {
             // CALL-FIX 2026-06-05 — if a call kept the sockets alive (see the

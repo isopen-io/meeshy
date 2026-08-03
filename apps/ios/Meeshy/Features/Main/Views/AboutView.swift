@@ -150,7 +150,7 @@ struct AboutView: View {
             sectionHeader(title: String(localized: "about.section.description", defaultValue: "Description", bundle: .main), icon: "text.quote", color: MeeshyColors.indigo600Hex)
 
             VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
-                Text(String(localized: "about.description.body", defaultValue: "Meeshy est une plateforme de messagerie en temps reel haute performance avec traduction multilingue, clonage vocal et chiffrement de bout en bout.", bundle: .main))
+                Text(String(localized: "about.description.body", defaultValue: "Meeshy est une plateforme de messagerie en temps réel haute performance avec traduction multilingue, clonage vocal et chiffrement de bout en bout.", bundle: .main))
                     .font(MeeshyFont.relative(14, weight: .regular))
                     .foregroundColor(theme.textPrimary)
                     .lineSpacing(4)

@@ -516,6 +516,11 @@ public struct ConversationUpdatedEvent: Decodable, Sendable {
     /// preview without a separate fetch.
     public let lastMessageId: String?
     public let lastMessagePreview: String?
+    /// Position du dernier message, hissée par le chemin message-driven
+    /// (`MessageHandler.ts`) et par `emitConversationPreviewUpdate`. Un message
+    /// position-seule a un `lastMessagePreview` vide — c'est ce champ qui
+    /// permet à la ligne d'aperçu de composer son libellé.
+    public let location: SharedPlace?
     public let senderId: String?
     /// Optional because the gateway's message-driven CONVERSATION_UPDATED
     /// payload (handlers/MessageHandler.ts on every new message) only
@@ -532,6 +537,7 @@ public struct ConversationUpdatedEvent: Decodable, Sendable {
         case conversationId, title, description, avatar, banner
         case defaultWriteRole, isAnnouncementChannel, slowModeSeconds, autoTranslateEnabled
         case lastMessageAt, lastMessageId, lastMessagePreview, senderId, updatedBy, updatedAt
+        case location
     }
 
     public init(from decoder: Decoder) throws {
@@ -548,6 +554,7 @@ public struct ConversationUpdatedEvent: Decodable, Sendable {
         lastMessageAt = try container.decodeIfPresent(Date.self, forKey: .lastMessageAt)
         lastMessageId = try container.decodeIfPresent(String.self, forKey: .lastMessageId)
         lastMessagePreview = try container.decodeIfPresent(String.self, forKey: .lastMessagePreview)
+        location = try container.decodeIfPresent(SharedPlace.self, forKey: .location)
         senderId = try container.decodeIfPresent(String.self, forKey: .senderId)
         updatedBy = try container.decodeIfPresent(SocketEventUser.self, forKey: .updatedBy)
         updatedAt = try container.decode(String.self, forKey: .updatedAt)
@@ -566,6 +573,7 @@ public struct ConversationUpdatedEvent: Decodable, Sendable {
         lastMessageAt: Date? = nil,
         lastMessageId: String? = nil,
         lastMessagePreview: String? = nil,
+        location: SharedPlace? = nil,
         senderId: String? = nil,
         updatedBy: SocketEventUser? = nil,
         updatedAt: String
@@ -582,6 +590,7 @@ public struct ConversationUpdatedEvent: Decodable, Sendable {
         self.lastMessageAt = lastMessageAt
         self.lastMessageId = lastMessageId
         self.lastMessagePreview = lastMessagePreview
+        self.location = location
         self.senderId = senderId
         self.updatedBy = updatedBy
         self.updatedAt = updatedAt
@@ -1116,7 +1125,6 @@ public protocol MessageSocketProviding: Sendable {
     var userPreferencesConversationUpdated: PassthroughSubject<UserPreferencesConversationUpdatedSocketEvent, Never> { get }
     var conversationStatsReceived: PassthroughSubject<ConversationStatsEvent, Never> { get }
     var messageConsumed: PassthroughSubject<MessageConsumedEvent, Never> { get }
-    var locationShared: PassthroughSubject<LocationSharedEvent, Never> { get }
     var liveLocationStarted: PassthroughSubject<LiveLocationStartedEvent, Never> { get }
     var liveLocationUpdated: PassthroughSubject<LiveLocationUpdatedEvent, Never> { get }
     var liveLocationStopped: PassthroughSubject<LiveLocationStoppedEvent, Never> { get }
@@ -1177,12 +1185,15 @@ public protocol MessageSocketProviding: Sendable {
     func emitTypingStart(conversationId: String)
     func emitTypingStop(conversationId: String)
     func requestTranslation(messageId: String, targetLanguage: String)
-    func emitLocationShare(payload: LocationSharePayload)
     func emitLiveLocationStart(payload: LiveLocationStartPayload)
     func emitLiveLocationUpdate(payload: LiveLocationUpdatePayload)
     func emitLiveLocationStop(conversationId: String)
     func sendWithAttachments(conversationId: String, content: String?, attachmentIds: [String], replyToId: String?, storyReplyToId: String?, originalLanguage: String?, isEncrypted: Bool, clientMessageId: String?)
-    func sendViaSocketFallback(conversationId: String, content: String?, attachmentIds: [String], replyToId: String?, storyReplyToId: String?, originalLanguage: String?, isEncrypted: Bool, clientMessageId: String) async -> MessageSocketManager.SendMessageAck?
+    /// `location` fait partie de l'exigence : une valeur par défaut sur
+    /// l'implémentation concrète ne satisfait PAS une exigence de protocole en
+    /// Swift. Le shim de compatibilité source (sans `location`) vit dans
+    /// l'extension « Protocol Default-Arg Convenience » ci-dessous.
+    func sendViaSocketFallback(conversationId: String, content: String?, attachmentIds: [String], replyToId: String?, storyReplyToId: String?, originalLanguage: String?, isEncrypted: Bool, clientMessageId: String, location: SharedPlace?) async -> MessageSocketManager.SendMessageAck?
     func emitCallInitiate(conversationId: String, isVideo: Bool) async throws -> MessageSocketManager.CallInitiateAck
     func emitCallJoin(callId: String)
     func emitCallLeave(callId: String)
@@ -1272,6 +1283,32 @@ public extension MessageSocketProviding {
             clientMessageId: nil
         )
     }
+
+    /// Shim de compatibilité source pour les appelants antérieurs au lieu
+    /// partagé : même signature qu'avant l'ajout de `location` à l'exigence
+    /// de protocole, délègue avec `location: nil`.
+    func sendViaSocketFallback(
+        conversationId: String,
+        content: String?,
+        attachmentIds: [String],
+        replyToId: String?,
+        storyReplyToId: String?,
+        originalLanguage: String?,
+        isEncrypted: Bool,
+        clientMessageId: String
+    ) async -> MessageSocketManager.SendMessageAck? {
+        await sendViaSocketFallback(
+            conversationId: conversationId,
+            content: content,
+            attachmentIds: attachmentIds,
+            replyToId: replyToId,
+            storyReplyToId: storyReplyToId,
+            originalLanguage: originalLanguage,
+            isEncrypted: isEncrypted,
+            clientMessageId: clientMessageId,
+            location: nil
+        )
+    }
 }
 
 // MARK: - Message Socket Manager
@@ -1343,7 +1380,6 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
     public let messageConsumed = PassthroughSubject<MessageConsumedEvent, Never>()
 
     // Combine publishers — location sharing
-    public let locationShared = PassthroughSubject<LocationSharedEvent, Never>()
     public let liveLocationStarted = PassthroughSubject<LiveLocationStartedEvent, Never>()
     public let liveLocationUpdated = PassthroughSubject<LiveLocationUpdatedEvent, Never>()
     public let liveLocationStopped = PassthroughSubject<LiveLocationStoppedEvent, Never>()
@@ -1881,10 +1917,6 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
         }
     }
 
-    public func emitLocationShare(payload: LocationSharePayload) {
-        emitEncodable(payload, event: "location:share")
-    }
-
     public func emitLiveLocationStart(payload: LiveLocationStartPayload) {
         emitEncodable(payload, event: "location:live-start")
     }
@@ -1932,7 +1964,7 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
     private func buildAttachmentPayload(
         conversationId: String, content: String?, attachmentIds: [String],
         replyToId: String?, storyReplyToId: String? = nil, originalLanguage: String?, isEncrypted: Bool,
-        clientMessageId: String
+        clientMessageId: String, location: SharedPlace? = nil
     ) -> [String: Any] {
         var payload: [String: Any] = [
             "conversationId": conversationId,
@@ -1944,7 +1976,22 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
         if let replyToId { payload["replyToId"] = replyToId }
         if let storyReplyToId { payload["storyReplyToId"] = storyReplyToId }
         if let originalLanguage { payload["originalLanguage"] = originalLanguage }
+        if let location { payload["location"] = MessageSocketManager.locationSocketPayload(location) }
         return payload
+    }
+
+    /// Sérialise un `SharedPlace` dans la forme dictionnaire que le gateway
+    /// valide (`parseSharedPlace` — coordonnées obligatoires, textes
+    /// optionnels). Les champs nil sont omis plutôt qu'envoyés en `NSNull`.
+    static func locationSocketPayload(_ place: SharedPlace) -> [String: Any] {
+        var dict: [String: Any] = [
+            "latitude": place.latitude,
+            "longitude": place.longitude
+        ]
+        if let name = place.name { dict["name"] = name }
+        if let address = place.address { dict["address"] = address }
+        if let category = place.category { dict["category"] = category }
+        return dict
     }
 
     public func sendWithAttachments(
@@ -1980,14 +2027,15 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
         storyReplyToId: String? = nil,
         originalLanguage: String? = nil,
         isEncrypted: Bool = false,
-        clientMessageId: String? = nil
+        clientMessageId: String? = nil,
+        location: SharedPlace? = nil
     ) async -> SendMessageAck? {
         guard let socket else { return nil }
         let cid = clientMessageId ?? ClientMessageId.generate()
         let payload = buildAttachmentPayload(
             conversationId: conversationId, content: content, attachmentIds: attachmentIds,
             replyToId: replyToId, storyReplyToId: storyReplyToId, originalLanguage: originalLanguage, isEncrypted: isEncrypted,
-            clientMessageId: cid
+            clientMessageId: cid, location: location
         )
         return await withCheckedContinuation { continuation in
             // 10s (was 30s): the gateway acks as soon as the message row is
@@ -2046,6 +2094,7 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
         isViewOnce: Bool? = nil,
         maxViewOnceCount: Int? = nil,
         clientMessageId: String? = nil,
+        location: SharedPlace? = nil,
         timeoutSeconds: Double = 10
     ) async -> SendMessageAck? {
         guard let socket else { return nil }
@@ -2066,6 +2115,9 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
         if let effectFlags { payload["effectFlags"] = Int(effectFlags) }
         if let isViewOnce { payload["isViewOnce"] = isViewOnce }
         if let maxViewOnceCount { payload["maxViewOnceCount"] = maxViewOnceCount }
+        // Lieu partagé — même clé `location` que le corps REST ; le handler
+        // socket la valide via `parseSharedPlace` (MessageHandler.ts).
+        if let location { payload["location"] = MessageSocketManager.locationSocketPayload(location) }
         return await withCheckedContinuation { continuation in
             socket.emitWithAck("message:send", payload).timingOut(after: timeoutSeconds) { items in
                 if let response = items.first as? [String: Any],
@@ -2102,7 +2154,8 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
         storyReplyToId: String?,
         originalLanguage: String?,
         isEncrypted: Bool,
-        clientMessageId: String
+        clientMessageId: String,
+        location: SharedPlace? = nil
     ) async -> SendMessageAck? {
         if attachmentIds.isEmpty {
             if isEncrypted { return nil }
@@ -2112,7 +2165,8 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
                 originalLanguage: originalLanguage,
                 replyToId: replyToId,
                 storyReplyToId: storyReplyToId,
-                clientMessageId: clientMessageId
+                clientMessageId: clientMessageId,
+                location: location
             )
         }
         return await sendWithAttachmentsAsync(
@@ -2123,7 +2177,8 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
             storyReplyToId: storyReplyToId,
             originalLanguage: originalLanguage,
             isEncrypted: isEncrypted,
-            clientMessageId: clientMessageId
+            clientMessageId: clientMessageId,
+            location: location
         )
     }
 
@@ -2952,13 +3007,6 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
         }
 
         // --- Location events ---
-
-        socket.on("location:shared") { [weak self] data, _ in
-            guard let self else { return }
-            self.decode(LocationSharedEvent.self, from: data) { [weak self] event in
-                self?.locationShared.send(event)
-            }
-        }
 
         socket.on("location:live-started") { [weak self] data, _ in
             guard let self else { return }

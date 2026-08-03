@@ -383,9 +383,6 @@ struct FloatingCallPillView: View {
     // MARK: - Formatting
 
     private var formattedDuration: String {
-        let totalSeconds = Int(callManager.callDuration)
-        let minutes = totalSeconds / 60
-        let seconds = totalSeconds % 60
-        return String(format: "%02d:%02d", minutes, seconds)
+        callManager.formattedDuration
     }
 }

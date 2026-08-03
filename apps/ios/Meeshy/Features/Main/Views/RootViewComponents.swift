@@ -56,11 +56,13 @@ struct ThemedActionButton: View {
                     .rotationEffect(.degrees(isPressed ? -8 : 0))
 
                 if badge > 0 {
-                    Text("\(min(badge, 99))")
-                        .font(MeeshyFont.relative(9, weight: .bold))
+                    Text(NotificationBadge.displayed(badge))
+                        .font(MeeshyFont.relative(9, weight: NotificationBadge.fontWeight))
                         .foregroundColor(Color(hex: color))
-                        .frame(width: 16, height: 16)
-                        .background(Circle().fill(Color.white))
+                        .lineLimit(1)
+                        .padding(.horizontal, 5)
+                        .frame(minWidth: 16, minHeight: 16)
+                        .background(Capsule().fill(Color.white))
                         .offset(x: size * 0.33, y: -size * 0.33)
                         .pulse(intensity: 0.08)
                 }
@@ -365,6 +367,10 @@ struct ThemedFeedOverlay: View {
                     .foregroundStyle(
                         LinearGradient(colors: [MeeshyColors.indigo500, MeeshyColors.indigo700], startPoint: .leading, endPoint: .trailing)
                     )
+                    // Même garde-fou que « Meeshy Chats » : rétrécir plutôt que
+                    // tronquer quand le volet (iPad) est étroit.
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.55)
             },
             trailing: {
                 Button {
@@ -727,11 +733,11 @@ struct ThemedFeedOverlay: View {
                 originalContent: post.content,
                 originalLanguage: post.originalLanguage,
                 originalType: post.type,
-                canBeReel: post.hasMedia,
                 media: post.media.map { EditablePostMedia($0) },
+                originalLocation: post.location,
                 isRepost: post.repost != nil,
                 onSave: { draft in
-                    await viewModel.updatePost(post.id, content: draft.content, language: draft.language, type: draft.type, removeMediaIds: draft.removeMediaIds.isEmpty ? nil : draft.removeMediaIds)
+                    await viewModel.updatePost(post.id, content: draft.content, language: draft.language, type: draft.type, removeMediaIds: draft.removeMediaIds.isEmpty ? nil : draft.removeMediaIds, location: draft.location)
                 },
                 onDismiss: { editingPost = nil }
             )

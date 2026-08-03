@@ -324,7 +324,15 @@ public final class APIClient: APIClientProviding, @unchecked Sendable {
     // pagination. The serial queue + single reused decoder are race-free; the value
     // is smuggled back through an unchecked box so callers keep plain `Decodable`
     // (non-Sendable) response types.
-    private static let offMainDecoder: JSONDecoder = {
+    private static let offMainDecoder: JSONDecoder = makeAPIPayloadDecoder()
+
+    /// Décodeur canonique des payloads REST du gateway : le serveur émet des
+    /// dates ISO 8601 AVEC fractions de seconde (`2026-07-29T10:00:00.000Z`),
+    /// que la stratégie `.iso8601` de Foundation REFUSE
+    /// (`dataCorrupted("Expected date string to be ISO8601-formatted")`).
+    /// `internal` (pas `private`) pour que les tests décodent avec la stratégie
+    /// de PRODUCTION au lieu d'en réinventer une plus stricte que le serveur.
+    nonisolated static func makeAPIPayloadDecoder() -> JSONDecoder {
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .custom { decoder in
             let container = try decoder.singleValueContainer()
@@ -334,7 +342,7 @@ public final class APIClient: APIClientProviding, @unchecked Sendable {
             throw DecodingError.dataCorruptedError(in: container, debugDescription: "Invalid date: \(dateStr)")
         }
         return decoder
-    }()
+    }
     private static let decodeQueue = DispatchQueue(label: "me.meeshy.api.decode", qos: .userInitiated)
     private struct DecodeBox<V>: @unchecked Sendable { let value: V }
 
@@ -364,8 +372,39 @@ public final class APIClient: APIClientProviding, @unchecked Sendable {
         }.value
     }
 
-    public var authToken: String?
-    public var anonymousSessionToken: String?
+    // net-09 — les deux tokens étaient des vars nues sur une classe
+    // @unchecked Sendable : data race lecture header / écriture refresh, et
+    // paire mixte observable au switch (13 paires déchirées mesurées par le
+    // test de stress sur l'implémentation non verrouillée). Un seul verrou
+    // pour la PAIRE : les getters/setters existants restent source-compatibles
+    // (protocole APIClientProviding inchangé), setTokens/currentTokens
+    // offrent la lecture/écriture atomique du couple. Prior art du pattern :
+    // CallManager.isCallActiveFlag.
+    private let tokenLock = OSAllocatedUnfairLock<(auth: String?, anon: String?)>(initialState: (nil, nil))
+
+    public var authToken: String? {
+        get { tokenLock.withLock { $0.auth } }
+        set { tokenLock.withLock { $0.auth = newValue } }
+    }
+
+    public var anonymousSessionToken: String? {
+        get { tokenLock.withLock { $0.anon } }
+        set { tokenLock.withLock { $0.anon = newValue } }
+    }
+
+    /// Écriture atomique de la paire — à préférer aux deux setters séparés
+    /// quand les deux tokens changent ensemble (switch de compte).
+    public func setTokens(auth: String?, anonymous: String?) {
+        tokenLock.withLock { pair in
+            pair.auth = auth
+            pair.anon = anonymous
+        }
+    }
+
+    /// Lecture atomique de la paire — jamais un mélange de deux écritures.
+    public func currentTokens() -> (auth: String?, anon: String?) {
+        tokenLock.withLock { $0 }
+    }
 
     private init() {
         let config = URLSessionConfiguration.default
@@ -390,14 +429,7 @@ public final class APIClient: APIClientProviding, @unchecked Sendable {
             delegateQueue: nil
         )
 
-        self.decoder = JSONDecoder()
-        self.decoder.dateDecodingStrategy = .custom { decoder in
-            let container = try decoder.singleValueContainer()
-            let dateStr = try container.decode(String.self)
-            if let date = Self.isoFormatterWithFractional.date(from: dateStr) { return date }
-            if let date = Self.isoFormatter.date(from: dateStr) { return date }
-            throw DecodingError.dataCorruptedError(in: container, debugDescription: "Invalid date: \(dateStr)")
-        }
+        self.decoder = Self.makeAPIPayloadDecoder()
     }
 
     /// T15b — purge le cache HTTP de la session (bodies ETag/304 des réponses

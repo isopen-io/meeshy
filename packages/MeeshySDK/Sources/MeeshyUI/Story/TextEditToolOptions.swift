@@ -87,13 +87,12 @@ struct TextEditToolOptions: View {
 
     // MARK: - Style
 
-    /// Taille et graisse coiffent la liste des polices : ce sont des valeurs
-    /// continues, elles se règlent là où on choisit la famille plutôt que
-    /// derrière une bulle chacune.
+    /// La taille coiffe la liste des polices : c'est une valeur continue, elle
+    /// se règle là où on choisit la famille plutôt que derrière une bulle.
+    /// La graisse, elle, vit avec l'alignement (directive user 2026-07-28).
     private var styleOptions: some View {
         VStack(spacing: 10) {
             sizeSlider
-            weightSlider
             styleFamilyRow
         }
     }
@@ -229,7 +228,18 @@ struct TextEditToolOptions: View {
 
     // MARK: - Align
 
+    /// Graisse et alignement partagent un panneau : ce sont les deux réglages
+    /// qui décident de la SILHOUETTE du bloc de texte, indépendamment de la
+    /// famille de police. Les loger ensemble évite d'ouvrir deux panneaux pour
+    /// un même geste de mise en page.
     private var alignOptions: some View {
+        VStack(spacing: 10) {
+            weightSlider
+            alignRow
+        }
+    }
+
+    private var alignRow: some View {
         HStack(spacing: 10) {
             alignButton("left", "text.alignleft")
             alignButton("center", "text.aligncenter")
@@ -364,8 +374,6 @@ struct TextEditToolOptions: View {
 
     // MARK: - Frame (cadrage)
 
-    /// Forme de la boîte de cadrage derrière le texte (actif uniquement quand un
-    /// fond est présent). Le padding ≥ 1 'o' est automatique côté rendu.
     /// Forme, marge et liseré de la boîte de cadre. La forme est indépendante
     /// du fond depuis que `hasFrameBox` existe : choisir un cadre ne repeint
     /// plus le texte d'un fond noir non demandé.

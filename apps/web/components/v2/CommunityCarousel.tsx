@@ -2,6 +2,7 @@
 
 import React, { useRef, useEffect, useState } from 'react';
 import { formatCompactNumber } from '@/utils/format-number';
+import { buildAttachmentUrl } from '@/utils/attachment-url';
 
 export interface CommunityItem {
   id: string;
@@ -139,7 +140,7 @@ function CommunityCard({
       {/* Fond */}
       {banner ? (
         <img
-          src={banner}
+          src={buildAttachmentUrl(banner) ?? undefined}
           alt={name}
           width={400}
           height={300}

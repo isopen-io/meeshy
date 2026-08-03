@@ -177,6 +177,148 @@ final class ConversationSyncEngineTests: XCTestCase {
         await fulfillment(of: [expectation], timeout: 2.0)
     }
 
+    // MARK: - Le delta sync ne ré-inflate pas un non-lu déjà lu localement
+
+    /// « La pastille part puis revient » : l'utilisateur ouvre la conversation
+    /// (compteur à 0 + frontière de lecture posée), puis un retour en
+    /// avant-plan ou une reconnexion socket déclenche un delta sync. Le serveur,
+    /// qui n'a pas encore traité l'accusé de lecture (outbox), renvoie encore
+    /// `unreadCount: 4` — et l'écriture cache brute rallumait la pastille.
+    func test_syncSinceLastCheckpoint_doesNotReviveUnread_afterLocalRead() async {
+        await CacheCoordinator.shared.conversations.invalidate(for: "list")
+        UserDefaults.standard.set(Date(), forKey: "me.meeshy.lastFullReconcileAt")
+
+        let lastMessageAt = Date().addingTimeInterval(-60)
+        var read = MeeshyConversation(
+            id: "c-read", identifier: "test-c-read", type: .direct,
+            lastMessageAt: lastMessageAt, unreadCount: 0
+        )
+        read.userState.lastReadAt = Date()  // frontière postérieure au dernier message
+        try? await CacheCoordinator.shared.conversations.save([read], for: "list")
+
+        mockAPI.stub("/conversations", result: OffsetPaginatedAPIResponse<[APIConversation]>(
+            success: true,
+            data: [TestFactories.makeAPIConversation(
+                id: "c-read", lastMessageAt: lastMessageAt, unreadCount: 4
+            )],
+            pagination: OffsetPagination(total: 1, hasMore: false, limit: 500, offset: 0),
+            error: nil
+        ))
+
+        await engine.syncSinceLastCheckpoint()
+
+        let cached = await CacheCoordinator.shared.conversations.load(for: "list").snapshot() ?? []
+        XCTAssertEqual(cached.first(where: { $0.id == "c-read" })?.userState.unreadCount, 0,
+            "un instantané serveur en retard sur la lecture locale ne doit pas rallumer la pastille")
+    }
+
+    /// Le pendant : un message VRAIMENT plus récent que la frontière doit
+    /// repasser la conversation en non-lu. La règle se répare toute seule et ne
+    /// peut pas masquer durablement un vrai non-lu.
+    func test_syncSinceLastCheckpoint_keepsUnread_whenMessageIsNewerThanLocalRead() async {
+        await CacheCoordinator.shared.conversations.invalidate(for: "list")
+        UserDefaults.standard.set(Date(), forKey: "me.meeshy.lastFullReconcileAt")
+
+        let readAt = Date().addingTimeInterval(-120)
+        var read = MeeshyConversation(
+            id: "c-fresh", identifier: "test-c-fresh", type: .direct,
+            lastMessageAt: readAt, unreadCount: 0
+        )
+        read.userState.lastReadAt = readAt
+        try? await CacheCoordinator.shared.conversations.save([read], for: "list")
+
+        mockAPI.stub("/conversations", result: OffsetPaginatedAPIResponse<[APIConversation]>(
+            success: true,
+            data: [TestFactories.makeAPIConversation(
+                id: "c-fresh", lastMessageAt: Date(), unreadCount: 2
+            )],
+            pagination: OffsetPagination(total: 1, hasMore: false, limit: 500, offset: 0),
+            error: nil
+        ))
+
+        await engine.syncSinceLastCheckpoint()
+
+        let cached = await CacheCoordinator.shared.conversations.load(for: "list").snapshot() ?? []
+        XCTAssertEqual(cached.first(where: { $0.id == "c-fresh" })?.userState.unreadCount, 2,
+            "un message postérieur à la frontière de lecture doit rendre la conversation non lue")
+    }
+
+    /// La conversation OUVERTE était protégée des broadcasts socket
+    /// (`handleUnreadUpdated`) mais pas des syncs REST.
+    func test_syncSinceLastCheckpoint_forcesOpenConversationToZero() async {
+        await CacheCoordinator.shared.conversations.invalidate(for: "list")
+        UserDefaults.standard.set(Date(), forKey: "me.meeshy.lastFullReconcileAt")
+        try? await CacheCoordinator.shared.conversations.save(
+            [MeeshyConversation(id: "c-open", identifier: "test-c-open", type: .direct)], for: "list"
+        )
+        engine.setCurrentlyOpenConversation("c-open")
+
+        mockAPI.stub("/conversations", result: OffsetPaginatedAPIResponse<[APIConversation]>(
+            success: true,
+            data: [TestFactories.makeAPIConversation(
+                id: "c-open", lastMessageAt: Date(), unreadCount: 75
+            )],
+            pagination: OffsetPagination(total: 1, hasMore: false, limit: 500, offset: 0),
+            error: nil
+        ))
+
+        await engine.syncSinceLastCheckpoint()
+
+        let cached = await CacheCoordinator.shared.conversations.load(for: "list").snapshot() ?? []
+        XCTAssertEqual(cached.first(where: { $0.id == "c-open" })?.userState.unreadCount, 0,
+            "l'utilisateur regarde cette conversation — aucun sync ne doit y remettre un compteur")
+        engine.setCurrentlyOpenConversation(nil)
+    }
+
+    /// `fullSync` persiste sa PREMIÈRE page avant d'avoir les suivantes : le
+    /// cache est alors réduit à la page 1. Sans baseline figée avant la sync,
+    /// la deuxième écriture confronterait les conversations des pages 2+ à ce
+    /// cache tronqué, n'y trouverait aucun homologue local, et perdrait
+    /// silencieusement leur frontière de lecture — la pastille revenait donc
+    /// pour toute conversation lue au-delà de la première page.
+    func test_fullSync_preservesReadFrontier_forConversationsBeyondFirstPage() async {
+        await CacheCoordinator.shared.conversations.invalidate(for: "list")
+
+        let lastMessageAt = Date().addingTimeInterval(-300)
+        // 3 conversations en cache, toutes lues localement.
+        var cached: [MeeshyConversation] = (0..<3).map { i in
+            MeeshyConversation(
+                id: "c-page\(i)", identifier: "test-c-page\(i)", type: .direct,
+                lastMessageAt: lastMessageAt, unreadCount: 0
+            )
+        }
+        for i in cached.indices { cached[i].userState.lastReadAt = Date() }
+        try? await CacheCoordinator.shared.conversations.save(cached, for: "list")
+
+        // Le serveur les renvoie toutes non lues (accusés de lecture pas encore
+        // traités), sur DEUX pages : `c-page0` seule en page 1, les deux autres
+        // au fan-out. La première écriture réduit le cache à `c-page0` — sans
+        // baseline figée, la seconde ne retrouvait plus la frontière de
+        // `c-page1` / `c-page2` et laissait passer le compteur serveur.
+        func page(_ ids: [Int], total: Int) -> Result<OffsetPaginatedAPIResponse<[APIConversation]>, Error> {
+            .success(OffsetPaginatedAPIResponse(
+                success: true,
+                data: ids.map {
+                    TestFactories.makeAPIConversation(
+                        id: "c-page\($0)", lastMessageAt: lastMessageAt, unreadCount: 6
+                    )
+                },
+                pagination: OffsetPagination(total: total, hasMore: false, limit: 100, offset: 0),
+                error: nil
+            ))
+        }
+        mockConvService.listResultsByOffset = [0: page([0], total: 3), 1: page([1, 2], total: 3)]
+        mockConvService.listResult = page([], total: 3)
+
+        await engine.fullSync()
+
+        let result = await CacheCoordinator.shared.conversations.load(for: "list").snapshot() ?? []
+        for i in 0..<3 {
+            XCTAssertEqual(result.first(where: { $0.id == "c-page\(i)" })?.userState.unreadCount, 0,
+                "c-page\(i) était lue localement — aucune écriture de fullSync ne doit rallumer sa pastille")
+        }
+    }
+
     // MARK: - P7-10: réconciliation complète périodique (ghost pruning)
 
     /// Une conversation HARD-supprimée côté serveur n'est JAMAIS renvoyée par
@@ -1007,14 +1149,21 @@ private final class MockConversationService: ConversationServiceProviding, @unch
         OffsetPaginatedAPIResponse(success: true, data: [], pagination: nil, error: nil)
     )
     var listCallCount = 0
+    /// Réponses par OFFSET — nécessaire pour exercer la pagination réelle de
+    /// `fullSync` (page 1 puis fan-out) : avec la seule `listResult`, toutes
+    /// les pages renvoient les mêmes ids et le code de fusion des pages 2+
+    /// n'est jamais atteint. Un offset absent retombe sur `listResult`.
+    var listResultsByOffset: [Int: Result<OffsetPaginatedAPIResponse<[APIConversation]>, Error>] = [:]
 
     func reset() {
         listCallCount = 0
+        listResultsByOffset = [:]
         listResult = .success(OffsetPaginatedAPIResponse(success: true, data: [], pagination: nil, error: nil))
     }
 
     func list(offset: Int, limit: Int) async throws -> OffsetPaginatedAPIResponse<[APIConversation]> {
         listCallCount += 1
+        if let scoped = listResultsByOffset[offset] { return try scoped.get() }
         return try listResult.get()
     }
 
@@ -1085,7 +1234,8 @@ private final class MockMessageService: MessageServiceProviding, @unchecked Send
 private extension TestFactories {
     static func makeAPIConversation(
         id: String = "conv-1",
-        lastMessageAt: Date? = nil
+        lastMessageAt: Date? = nil,
+        unreadCount: Int = 0
     ) -> APIConversation {
         var json: [String: Any] = [
             "id": id,
@@ -1094,7 +1244,7 @@ private extension TestFactories {
             "createdAt": ISO8601DateFormatter().string(from: Date()),
             "updatedAt": ISO8601DateFormatter().string(from: Date()),
             "isActive": true,
-            "unreadCount": 0
+            "unreadCount": unreadCount
         ]
         if let lastMessageAt {
             json["lastMessageAt"] = ISO8601DateFormatter().string(from: lastMessageAt)
@@ -1303,5 +1453,23 @@ private actor PersistedMessagesCollector {
     private(set) var batches: [[APIMessage]] = []
     func append(_ messages: [APIMessage]) {
         batches.append(messages)
+    }
+}
+
+/// sync-04 — reset des checkpoints de delta-sync (logout / ré-auth).
+extension ConversationSyncEngineTests {
+
+    func test_resetSyncCheckpoints_removesAllThreeUserDefaultsKeys() {
+        let keys = ["me.meeshy.lastSyncTimestamp", "me.meeshy.lastCleanupDate", "me.meeshy.lastFullReconcileAt"]
+        for key in keys { UserDefaults.standard.set(Date(), forKey: key) }
+
+        engine.resetSyncCheckpoints()
+
+        for key in keys {
+            XCTAssertNil(
+                UserDefaults.standard.object(forKey: key),
+                "\(key) doit être effacé — le compte suivant ne doit pas hériter du watermark de la session sortante"
+            )
+        }
     }
 }

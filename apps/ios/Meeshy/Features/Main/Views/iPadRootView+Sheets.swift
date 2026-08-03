@@ -131,6 +131,65 @@ extension iPadRootView {
                 // Cf. fix sync pill chevauchement 2026-05-27 dans RootView.
                 .environment(\.isStoryViewerPresenting, true)
             }
+            // Composer de CRÉATION — monté au niveau racine, comme le viewer
+            // ci-dessus et comme sur iPhone : `StoryTrayView` est instanciée par
+            // plusieurs hôtes qui observent le même `showStoryComposer`, et
+            // chacun présentait son propre cover. Détail dans
+            // `StoryComposerCover`.
+            .storyComposerCover(
+                viewModel: storyViewModel,
+                router: router,
+                conversationListViewModel: conversationViewModel,
+                statusViewModel: statusViewModel
+            )
+            // Lecteur de réels immersif. `ReelsPresenter` est un singleton
+            // partagé : toucher un réel (carte du feed, écran Favoris) posait
+            // `launch` et SEUL `RootView` (iPhone) le rendait — sur iPad le tap
+            // ne produisait rien, en silence.
+            //
+            // Pas de `ReelsRevealContainer` ici : sa vague d'ouverture naît aux
+            // coordonnées du bouton feed flottant, qui n'existe pas sur iPad.
+            // Une présentation plein écran donne le même écran d'arrivée sans
+            // ancre fantôme.
+            .fullScreenCover(item: $reelsPresenter.launch) { launch in
+                // Encarts réels lus sur la fenêtre de présentation : le média est
+                // plein cadre (`ignoresSafeArea`) et sa barre d'actions doit
+                // dégager la barre d'état — des encarts nuls la colleraient
+                // dessous.
+                GeometryReader { proxy in
+                    ReelsPlayerView(
+                        seedPosts: launch.seedPosts,
+                        startId: launch.startId,
+                        commentTargetId: launch.commentId,
+                        commentParentTargetId: launch.parentCommentId,
+                        revealCompleted: true,
+                        safeArea: proxy.safeAreaInsets,
+                        onClose: { reelsPresenter.dismiss() },
+                        onOpenProfile: { userId, username in
+                            reelsPresenter.dismiss()
+                            router.deepLinkProfileUser = ProfileSheetUser(userId: userId, username: username)
+                        },
+                        onOpenStory: { userId in
+                            reelsPresenter.dismiss()
+                            storyViewerCoordinator.present(StoryViewerRequest(
+                                id: userId,
+                                startAtFirstUnviewed: true,
+                                singleGroup: true
+                            ))
+                        },
+                        authorHasStory: { userId in
+                            storyViewModel.storyRingState(forUserId: userId) != .none
+                        }
+                    )
+                    .ignoresSafeArea()
+                }
+                // Idem story viewer : un fullScreenCover n'hérite pas des
+                // EnvironmentObject du parent.
+                .environmentObject(router)
+                .environmentObject(statusViewModel)
+                .environmentObject(conversationViewModel)
+                .environmentObject(storyViewModel)
+            }
             // Présentation d'appel (cover + PiP + pastille + bulle + bannière
             // call-waiting) extraite dans `CallPresentationLayer` (partagé avec
             // RootView) : découple le churn CallManager de `iPadRootView.body` —

@@ -127,7 +127,7 @@ struct ConversationInfoSheet: View {
                 blockOtherUser()
             }
         } message: {
-            Text(String(format: String(localized: "conversation.info.block.message", defaultValue: "Vous ne recevrez plus de messages de %@. Vous pourrez le debloquer dans les reglages.", bundle: .main), conversation.name))
+            Text(String(format: String(localized: "conversation.info.block.message", defaultValue: "Vous ne recevrez plus de messages de %@. Vous pourrez le débloquer dans les réglages.", bundle: .main), conversation.name))
         }
         .onAppear {
             withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
@@ -563,7 +563,7 @@ struct ConversationInfoSheet: View {
             HStack(spacing: 8) {
                 Image(systemName: "person.2.badge.gearshape")
                     .font(MeeshyFont.relative(13, weight: .semibold))
-                Text(String(localized: "conversation.info.manage_members", defaultValue: "Gerer les membres", bundle: .main))
+                Text(String(localized: "conversation.info.manage_members", defaultValue: "Gérer les membres", bundle: .main))
                     .font(MeeshyFont.relative(13, weight: .semibold))
                 Spacer()
                 Image(systemName: "chevron.forward")
@@ -580,7 +580,7 @@ struct ConversationInfoSheet: View {
         }
         .padding(.horizontal, 20)
         .padding(.top, 12)
-        .accessibilityLabel(String(localized: "conversation.info.manage_members.a11y", defaultValue: "Gerer les membres du groupe", bundle: .main))
+        .accessibilityLabel(String(localized: "conversation.info.manage_members.a11y", defaultValue: "Gérer les membres du groupe", bundle: .main))
     }
 
     private func memberRow(_ participant: PaginatedParticipant) -> some View {
@@ -1082,7 +1082,7 @@ struct ConversationInfoSheet: View {
             }
             await MainActor.run { shareableLink = ShareableLink(url: shareURL) }
         } catch {
-            FeedbackToastManager.shared.showError(String(localized: "conversation.info.share.error", defaultValue: "Erreur lors de la creation du lien", bundle: .main))
+            FeedbackToastManager.shared.showError(String(localized: "conversation.info.share.error", defaultValue: "Erreur lors de la création du lien", bundle: .main))
         }
     }
 
@@ -1091,7 +1091,7 @@ struct ConversationInfoSheet: View {
             try await ConversationService.shared.leave(conversationId: conversation.id)
             dismiss()
         } catch {
-            FeedbackToastManager.shared.showError(String(localized: "conversation.info.leave.error", defaultValue: "Erreur lors du depart de la conversation", bundle: .main))
+            FeedbackToastManager.shared.showError(String(localized: "conversation.info.leave.error", defaultValue: "Erreur lors du départ de la conversation", bundle: .main))
         }
     }
 

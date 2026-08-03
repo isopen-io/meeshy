@@ -1929,3 +1929,46 @@ entirely superseded — for the second time after 212i.
    (`MockPostService` visibility drift, two-phase outro duration) reached `main` and kept
    every iOS PR red. Fixing those was worth more than the UI/UX iteration itself. When the
    gate is red for everyone, repairing it *is* the iteration.
+
+---
+
+## 2026-07-31 — « Ça part puis ça revient » : un état lu se défait toujours au même endroit
+
+Trois trous distincts produisaient un unique symptôme, et **aucun** n'était dans le code
+qui pose l'état lu — tous étaient dans le code qui le RELIT.
+
+**Leçons :**
+1. **Un état optimiste qui n'est pas écrit dans le cache n'existe pas.** L'état « lu » des
+   notifications ne vivait que dans le tableau `@Published` de la liste ; le store GRDB
+   gardait `isRead:false`. Comme `loadInitial()` lit le cache d'abord avec une fenêtre
+   fraîche de 2 min, rouvrir la cloche re-servait l'instantané d'avant le marquage. Règle :
+   pour toute mutation locale optimiste, se demander *quel est le prochain lecteur, et que
+   verra-t-il ?* — pas seulement *l'écran courant est-il à jour ?*
+2. **Une garde posée sur un chemin doit l'être sur TOUS les chemins.** `handleUnreadUpdated`
+   protégeait déjà la conversation ouverte contre les broadcasts socket. Personne n'avait
+   posé la même garde sur `fullSync` / `deltaSyncCore`, qui écrivent le MÊME champ dans le
+   MÊME cache. Chercher systématiquement les autres écrivains d'un champ avant de conclure
+   qu'il est protégé.
+3. **Un enum de validation serveur est un contrat client silencieusement rompu.** iOS envoyait
+   `source: "story"`, absent de l'enum → 400 à chaque slide, `impressionCount` figé à 0 sur
+   toutes les stories depuis toujours. Même classe que le fix `reports` (`f408b2584`). Quand
+   deux schémas listent les mêmes valeurs, en faire UNE constante partagée.
+4. **Relire son propre correctif comme celui d'un autre.** Mon fix était incomplet :
+   `fullSync` persiste sa 1re page avant d'avoir les suivantes, donc la 2e écriture
+   confrontait les pages 2+ à un cache tronqué et reperdait leur frontière. Trouvé
+   uniquement en relisant, pas par les tests — que j'avais écrits trop faibles pour le voir.
+5. **Un test qui passe du premier coup n'a rien prouvé.** Mon test de non-régression passait
+   AVEC ET SANS le correctif : le mock renvoyait les mêmes ids à chaque page, donc le code
+   de fusion des pages 2+ n'était jamais atteint. Toujours retirer le correctif et exiger le
+   rouge — un test de régression non vu rouge est un test décoratif.
+
+## 2026-07-31 — Revue UI/UX simulateurs + incident xcstrings
+- **`.scaledToFill()` sur une Image resizable enfant direct d'un frame flexible gonfle la largeur du parent** dès que la vignette dépasse le conteneur (carte position du feed : 640 pt > volet iPad ET > iPhone une fois la vignette chargée). Antidote systématique : la média en `.overlay {}` d'une base `Color.clear.frame(...)` — un overlay ne participe pas au layout.
+- **Jamais de `git checkout -- <fichier>` sur un fichier potentiellement touché par une session parallèle** (récidive : Localizable.xcstrings — leur WIP de 5 clés détruit, puis leur commit a balayé mes clés sous un message trompeur). Réverter mes hunks chirurgicalement à la place. Et ne jamais réécrire un xcstrings par json.dump (churn intégral) : édition par blocs.
+- **Un titre custom `titleView` de CollapsibleHeader n'hérite d'aucun lineLimit/minimumScaleFactor** — tout appelant doit les poser lui-même sinon troncature (« Mee. » sur volet iPad).
+
+## 2026-08-01 — Application des lots de la revue local-first
+- **`xcodebuild | grep && commit` avale l'exit 65** : le pipeline retourne le code de grep. Un commit est parti avec un test rouge (b426b11b8, rattrapé par 4690f85a9). Règle : toujours `set -o pipefail` en tête des chaînes de vérification, et vérifier `exit=$?` explicitement.
+- **Fixture JSON minimale + decode `try?` = faux GREEN impossible, mais faux RED possible** : le décodage synthétisé de `MeeshyMessageAttachment` exige fileName/filePath/uploadedBy/createdAt — un JSON partiel échoue EN SILENCE dans les guards `try?` d'hydratation. Construire les fixtures par le VRAI type (init public + JSONEncoder), jamais à la main.
+- **Les défauts d'arguments publics ne peuvent référencer un symbole privé** : `seedSource: ... = Self.privateClosure` ne compile pas ; utiliser un défaut `nil` + résolution `?? Self.privé` dans le corps.
+- **`logout()`/hôte SPM** : la cascade complète avec session atteint UNUserNotificationCenter (bundleProxy nil). Les purges testables se posent AVANT le guard `activeUserId` (patron T15b), le test emprunte l'early-return.

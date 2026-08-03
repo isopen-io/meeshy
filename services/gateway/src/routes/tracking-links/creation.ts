@@ -158,6 +158,26 @@ export async function registerCreationRoutes(fastify: FastifyInstance) {
         return sendBadRequest(reply, 'Le token personnalisé doit contenir au moins 5 caractères');
       }
 
+      // `conversationId` et `messageId` viennent du corps de la requête et
+      // n'étaient jamais vérifiés : l'authentification étant optionnelle sur
+      // cette route, un appelant anonyme rattachait un lien de suivi à
+      // n'importe quelle conversation. Rattacher exige désormais d'y
+      // participer ; créer un lien sans rattachement reste ouvert.
+      if (body.conversationId) {
+        const ctx = request.authContext;
+        const where = ctx?.isAnonymous && ctx.participantId
+          ? { id: ctx.participantId, conversationId: body.conversationId, isActive: true }
+          : { userId: ctx?.userId, conversationId: body.conversationId, isActive: true };
+
+        const participant = ctx?.isAuthenticated
+          ? await fastify.prisma.participant.findFirst({ where, select: { id: true } })
+          : null;
+
+        if (!participant) {
+          return sendForbidden(reply, 'Access denied to this conversation');
+        }
+      }
+
       const existingLink = await trackingLinkService.findExistingTrackingLink(
         body.originalUrl,
         body.conversationId

@@ -51,6 +51,10 @@ extension StoryComposerView {
             // doesn't time out on this body's full modifier chain.
             canvasComposerLayer
 
+            // Amorces de page blanche — DANS le canvas, sous le chrome. Elles ne
+            // prélèvent aucune hauteur : le canvas reste plein écran au repos.
+            blankCanvasStarters
+
             // Top bar — auto-hides during canvas zoom to reveal canvas controls.
             // Hidden (non-interactive) while the floating text editor is open.
             VStack(spacing: 0) {
@@ -65,12 +69,10 @@ extension StoryComposerView {
             .allowsHitTesting(viewModel.textEditingMode == .inactive)
             .environment(\.colorScheme, canvasChromeScheme)
 
-            // Bottom: toolbar + active panel.
-            // When the composer is empty (no content + no tool selected) we
-            // swap the compact toolbar for `emptyStateLargePicker` — large
-            // rectangular tiles in a horizontal carousel taking the bottom
-            // half of the screen. The compact toolbar comes back as soon as
-            // a tool is selected OR a slide has any content.
+            // Bottom: toolbar + active panel. Monté INCONDITIONNELLEMENT depuis
+            // S5 — l'ancienne grille d'état vide (6 tuiles opaques sur 47 % de la
+            // hauteur) qui s'y substituait a disparu : une page blanche montre le
+            // même rail d'outils que le reste du temps, donc rien à réapprendre.
             // Hidden (non-interactive) while the floating text editor is open.
             bottomRegion
                 .opacity(isFloatingEditorActive ? 0 : 1)
@@ -100,7 +102,11 @@ extension StoryComposerView {
 
             // Floating text edit overlay — sits above every composer control.
             // Empty view when `textEditingMode == .inactive`.
-            StoryTextEditToolbar(viewModel: viewModel)
+            StoryTextEditToolbar(
+                viewModel: viewModel,
+                onControlsTopYChange: { measuredTextToolbarTopY = $0 },
+                onTopBarBottomYChange: { measuredTextTopBarBottomY = $0 }
+            )
                 .padding(.bottom, keyboardHeight)
                 .environment(\.colorScheme, canvasChromeScheme)
 
@@ -138,7 +144,7 @@ extension StoryComposerView {
                     bandStateMachine.reset()
                 }
                 if oldTool == .drawing {
-                    areFabsVisible = true
+                    bandStateMachine.showChrome()
                 }
             }
             // Switching BETWEEN tabs of an already-open tool sheet (the
@@ -152,6 +158,16 @@ extension StoryComposerView {
             if newTool == .timeline {
                 viewModel.loadCurrentSlideIntoTimeline()
             }
+        }
+        // Le band s'ouvre à la hauteur de l'outil, pas à celle du précédent.
+        // `composerBandHeight` (état du grabber, semé à 280) était appliqué tel
+        // quel à TOUS les panneaux via `panelHeightOverride` : la timeline, qui
+        // demande 392 pt pour ses opérations + transport + scrubber + 3 pistes
+        // + footer, se retrouvait dans une fenêtre de 230 pt et son bas partait
+        // hors de l'écran (constat user 2026-07-30 « des contrôleurs coupés »).
+        .adaptiveOnChange(of: activeBandTool) { _, tool in
+            guard let tool else { return }
+            composerBandHeight = Self.bandHeight(for: tool)
         }
         .adaptiveOnChange(of: viewModel.isDrawingImmersive) { _, immersive in
             // Bascule liste ⇄ plein écran : le pinceau sélectionné replie le
@@ -180,11 +196,16 @@ extension StoryComposerView {
             if viewModel.currentSlide.effects.background == nil {
                 syncCurrentSlideEffects()
             }
+            // Dernière photo de la pellicule : résolue UNE fois, app-side. Sans
+            // fournisseur (défaut) ou sans autorisation, elle reste `nil` et
+            // l'amorce retombe sur « Galerie » — jamais de vignette vide.
+            loadRecentCameraRollAsset()
         }
         .adaptiveOnChange(of: viewModel.currentSlideIndex) { _, _ in
             viewModel.loadCurrentSlideIntoTimeline()
+            // `reset()` restaure aussi le chrome : changer de slide efface tout,
+            // y compris un masquage volontaire.
             bandStateMachine.reset()
-            areFabsVisible = true
             // A text edit overlay open on the previous slide references an
             // element that does not exist on the new one — close it.
             viewModel.exitTextEditingMode()
@@ -202,8 +223,6 @@ extension StoryComposerView {
         }
         .onDisappear {
             StoryMediaCoordinator.shared.deactivate()
-            publishTask?.cancel()
-            publishTask = nil
             viewModel.stopMemoryObserver()
             // Contrat StoryTimelineEngine : "owner MUST call shutdown()" —
             // libère AVPlayer + observer périodique + AVAudioEngine du mixer.
@@ -260,55 +279,32 @@ extension StoryComposerView {
     var bottomRegion: some View {
         VStack(spacing: 0) {
             Spacer()
-            if shouldShowEmptyStateLargePicker {
-                emptyStateLargePicker
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
-            } else {
-                ComposerControlsLayer(
-                    viewModel: viewModel,
-                    bandStateMachine: $bandStateMachine,
-                    areFabsVisible: $areFabsVisible,
-                    selectedFilter: $selectedFilter,
-                    fgMediaItem: $fgMediaItem,
-                    showAudioDocumentPicker: $showAudioDocumentPicker,
-                    showVoiceRecorderSheet: $showVoiceRecorderSheet,
-                    resizableBandHeight: $composerBandHeight,
-                    bandMinHeight: Self.composerBandMinHeight,
-                    bandMaxHeight: Self.composerBandMaxHeight,
-                    // Hauteur RÉELLE rendue de la band déployée (content-driven) —
-                    // réservée par `presentedSheetHeight` pour scaler le canvas
-                    // EXACTEMENT au-dessus (0 quand la band est repliée / FABs seuls,
-                    // état où le canvas reste plein écran).
-                    onBandHeightChange: { measuredBottomBandHeight = $0 },
-                    onBandTopYChange: { measuredBandTopY = $0 },
-                    onOpenMediaCrop: { id in openMediaEditor(elementId: id) },
-                    onOpenStickerPicker: { showStickerPicker = true }
-                )
-            }
+            ComposerControlsLayer(
+                viewModel: viewModel,
+                chrome: chromeContext,
+                bandStateMachine: $bandStateMachine,
+                selectedFilter: $selectedFilter,
+                fgMediaItem: $fgMediaItem,
+                showAudioDocumentPicker: $showAudioDocumentPicker,
+                showVoiceRecorderSheet: $showVoiceRecorderSheet,
+                showSoundLibrary: $showSoundLibrary,
+                resizableBandHeight: $composerBandHeight,
+                bandMinHeight: Self.composerBandMinHeight,
+                bandMaxHeight: Self.composerBandMaxHeight,
+                // Hauteur RÉELLE rendue de la band déployée (content-driven) —
+                // réservée par `presentedSheetHeight` pour scaler le canvas
+                // EXACTEMENT au-dessus (0 quand la band est repliée / FABs seuls,
+                // état où le canvas reste plein écran).
+                onBandHeightChange: { measuredBottomBandHeight = $0 },
+                onBandTopYChange: { measuredBandTopY = $0 },
+                onOpenMediaCrop: { id in openMediaEditor(elementId: id) },
+                onDismissActivePanel: dismissActiveBandPanel,
+                onOpenStickerPicker: { showStickerPicker = true },
+                onOpenLocationPicker: { showLocationPicker = true }
+            )
         }
-        .animation(.spring(response: 0.35, dampingFraction: 0.85),
-                   value: shouldShowEmptyStateLargePicker)
     }
 
-    // MARK: - Empty-State Large Picker
-    //
-    // Shown in place of the compact toolbar when the composer canvas is empty
-    // (no media, no text, no sticker, no drawing, no background) AND no tool
-    // is currently active. Surface a roomy carousel of large rectangular
-    // tiles so the user discovers the available creation modes immediately
-    // — better space utilization than ~70% black canvas + tiny pills row.
-    // The current compact toolbar comes back the moment a tool is selected
-    // OR any content is added.
-
-    /// True when the entire composer carries no authoring state yet — used
-    /// to decide whether to surface the discovery-mode large picker.
-    ///
-    /// `slide.effects.background` is intentionally NOT in the check because
-    /// it is always auto-populated with a random pastel on composer open
-    /// (see `.onAppear` → `syncCurrentSlideEffects`). The background being
-    /// set therefore tells us nothing about user intent — only explicit
-    /// content additions (text / media / sticker / drawing) flip the slide
-    /// out of empty state.
     /// Un éditeur flottant plein-canvas est ouvert → le band compact standard
     /// est masqué et non-interactif. TEXTE : depuis toujours. DESSIN : en
     /// PLEIN ÉCRAN de tracé uniquement (user 2026-07-11 v2) — le mode liste
@@ -316,6 +312,17 @@ extension StoryComposerView {
     var isFloatingEditorActive: Bool {
         viewModel.textEditingMode != .inactive
             || viewModel.isDrawingImmersive
+    }
+
+    // `activeBandTool` a déménagé en `StoryComposerView+Chrome.swift` : il dérive
+    // du contexte de chrome, seule résolution de l'état effectif du band.
+
+    /// Hauteur d'ouverture du band pour `tool` : sa hauteur de conception,
+    /// clampée dans les bornes du grabber.
+    static func bandHeight(for tool: StoryToolMode) -> CGFloat {
+        min(composerBandMaxHeight,
+            max(composerBandMinHeight,
+                ComposerToolPanelHost.defaultPanelHeight(for: tool)))
     }
 
     /// La surface de TRACÉ est montée : outil dessin actif ET plein écran
@@ -334,338 +341,223 @@ extension StoryComposerView {
         viewModel.canvasChromeScheme
     }
 
-    var isComposerEmpty: Bool {
-        let slidesEmpty = viewModel.slides.allSatisfy { slide in
-            slide.content == nil
-                && viewModel.slideImages[slide.id] == nil
-                && slide.effects.textObjects.isEmpty
-                && (slide.effects.mediaObjects ?? []).isEmpty
-                && (slide.effects.stickerObjects ?? []).isEmpty
-                && slide.effects.drawingData == nil
-                && (slide.effects.drawingStrokes ?? []).isEmpty
+    // MARK: - Amorces de page blanche (S5)
+    //
+    // Remplacent la grille de six tuiles opaques qui prélevait 47 % de la
+    // hauteur avant même que l'utilisateur ait fait quoi que ce soit. Trois
+    // éléments seulement, POSÉS DANS LE CANVAS, qui disparaissent au premier
+    // contenu : un indice « Touchez pour écrire », une capsule « Caméra » et la
+    // dernière photo de la pellicule (ou, à défaut, une capsule « Galerie »).
+    // Aucun n'occupe de hauteur réservée : le canvas reste plein écran.
+
+    var blankCanvasStarters: some View {
+        // Gate STRUCTUREL, comme la top bar et la colonne d'historique de ce même
+        // `mainContent` : hors page blanche, la surface n'existe pas. Elle
+        // couvre le canvas ENTIER — la neutraliser par `.allowsHitTesting(false)`
+        // marchait, mais imposait que plus aucun geste ne soit posé après le
+        // drapeau (un modificateur ne s'applique qu'à ce qui le PRÉCÈDE), et les
+        // deux gestes ci-dessous l'étaient. Démonter la vue rend l'ordre des
+        // modificateurs sans effet sur la question.
+        ZStack {
+            if offersContentStarters {
+                // `BlankCanvasStarterSurface` occupe TOUTE la place offerte :
+                // c'est ce qui rend le geste de la directive user disponible
+                // depuis n'importe quel pixel de la page blanche. Un `VStack` nu
+                // ne s'étire que sur son axe majeur — sa largeur aurait valu
+                // celle de la plus large capsule (~200 pt sur 393), et le même
+                // swipe aurait marché ou non selon 80 pt d'écart latéral. Aucun
+                // geste n'est volé au canvas : sur une slide vierge il n'y a, par
+                // définition, aucun élément à sélectionner, et le tap y route
+                // vers EXACTEMENT la même politique.
+                BlankCanvasStarterSurface {
+                    blankCanvasTypeHint
+                    blankCanvasStarterRow
+                }
+                // Dégage le rail de FABs (48 pt + marge + safe area).
+                .padding(.bottom, ComposerControlMetrics.bottomOverlayClearance)
+                .onTapGesture { handleCanvasBackgroundTap() }
+                .simultaneousGesture(blankCanvasTextSwipe)
+                .transition(.opacity)
+            }
         }
-        return slidesEmpty
-            && viewModel.drawingData == nil
-            && viewModel.drawingStrokes.isEmpty
+        .animation(.spring(response: 0.3, dampingFraction: 0.85), value: offersContentStarters)
+        .environment(\.colorScheme, canvasChromeScheme)
     }
 
-    var shouldShowEmptyStateLargePicker: Bool {
-        Self.resolveShouldShowEmptyStateLargePicker(
-            activeToolIsNil: viewModel.activeTool == nil,
-            isComposerEmpty: isComposerEmpty,
-            bandStateIsHidden: bandStateMachine.state == .hidden,
-            presentedSystemSheetFraction: presentedSystemSheetFraction,
-            isTimelineVisible: viewModel.isTimelineVisible
-        )
-    }
-
-    /// Résolution pure de `shouldShowEmptyStateLargePicker`, extraite en
-    /// `static` pour être testable sans monter la View — même pattern que
-    /// `ComposerControlsLayer.resolveEffectiveBandState`.
+    /// Directive user 2026-07-31 : sur l'état vide, un SWIPE VERS LE BAS range les
+    /// amorces ET ouvre directement l'éditeur de texte — même chemin que le tap.
+    /// Geste COMPLÉMENTAIRE, jamais unique (D4) : le tap canvas, le tap sur
+    /// l'indice et le FAB « Texte » le doublent tous.
     ///
-    /// Le picker grand format n'est montré QUE quand :
-    ///  - aucun outil n'est sélectionné côté viewModel,
-    ///  - le bandeau d'outils est complètement masqué (.hidden — le
-    ///    `bandStateMachine` peut être pré-ouvert via empty-state → tile,
-    ///    auquel cas le panel doit prendre toute la place),
-    ///  - et le slide n'a aucun contenu réel.
-    /// Sans le check `bandStateIsHidden`, le picker pouvait persister visuellement
-    /// derrière le bandeau pendant les transitions (le band est animé via spring
-    /// et le if/else était insuffisant pendant le mid-transition).
-    ///  - ET aucune sheet système partielle (sticker / vocal / transitions)
-    ///    n'est présentée : ces sheets ne couvrent que ~45–50 % de l'écran, si
-    ///    bien que le titre « Start your story » du picker dépassait au-dessus
-    ///    du bord de la sheet (fantôme). On masque donc le picker tant qu'une
-    ///    sheet est ouverte — il réapparaît à sa fermeture si le slide est
-    ///    toujours vierge.
-    ///  - ET la timeline n'est pas visible : la tuile Timeline du picker
-    ///    (comme le FAB et le bouton overflow) ne fait que flip
-    ///    `isTimelineVisible`, sans toucher `activeTool`/`bandStateMachine` —
-    ///    sans cette condition le picker restait affiché par-dessus le panel
-    ///    timeline (bug : tuile Timeline sans effet visible, cul-de-sac).
-    static func resolveShouldShowEmptyStateLargePicker(
-        activeToolIsNil: Bool,
-        isComposerEmpty: Bool,
-        bandStateIsHidden: Bool,
-        presentedSystemSheetFraction: CGFloat?,
-        isTimelineVisible: Bool
-    ) -> Bool {
-        activeToolIsNil
-            && isComposerEmpty
-            && bandStateIsHidden
-            && presentedSystemSheetFraction == nil
-            && !isTimelineVisible
+    /// Plus de garde `offersContentStarters` dans la closure : le geste n'existe
+    /// que monté avec la surface, et elle ne l'est que sur une page blanche.
+    private var blankCanvasTextSwipe: some Gesture {
+        DragGesture(minimumDistance: 20)
+            .onEnded { value in
+                guard value.translation.height > 40,
+                      abs(value.translation.height) > abs(value.translation.width)
+                else { return }
+                startTextCompositionOnBlankCanvas()
+            }
     }
 
-    /// Pastel accent color per tile. Picks a distinct hue so the carousel
-    /// feels lively without breaking from the brand palette. Each accent is
-    /// applied at low opacity behind the icon glyph (soft tinted card).
-    func tileAccent(for tool: StoryToolMode) -> Color {
-        switch tool {
-        case .media:    return MeeshyColors.error          // peachy red
-        case .audio:    return MeeshyColors.indigo400      // soft lavender
-        case .text:     return MeeshyColors.indigo400      // soft lavender
-        case .drawing:  return MeeshyColors.success        // mint green
-        case .texture:  return MeeshyColors.warning        // butter yellow
-        case .filters:  return MeeshyColors.info           // sky blue
-        case .timeline: return MeeshyColors.indigo300      // pale indigo
+    /// L'indice est TAPABLE et route vers la même action que le canvas : un
+    /// `Text` SwiftUI reçoit les taps par défaut, et le rendre inerte aurait
+    /// créé un trou mort au centre exact de la zone qu'il désigne. Il annonce
+    /// donc ce qu'il fait, et le fait.
+    private var blankCanvasTypeHint: some View {
+        Text(String(localized: "story.composer.start.hint",
+                    defaultValue: "Touchez pour écrire", bundle: .module))
+            .font(MeeshyFont.relative(15, weight: .semibold))
+            .foregroundStyle(.primary.opacity(0.75))
+            .padding(.horizontal, 16)
+            .frame(minHeight: 44)
+            .contentShape(Rectangle())
+            .onTapGesture { startTextCompositionOnBlankCanvas() }
+            .accessibilityAddTraits(.isButton)
+            .accessibilityLabel(String(localized: "story.composer.start.a11y.text",
+                                       defaultValue: "Écrire un texte", bundle: .module))
+    }
+
+    @ViewBuilder
+    private var blankCanvasStarterRow: some View {
+        HStack(spacing: 10) {
+            if storyCameraCapture != nil, viewModel.canAddMedia {
+                blankCanvasStarterCapsule(
+                    icon: "camera.fill",
+                    title: String(localized: "story.composer.start.camera",
+                                  defaultValue: "Caméra", bundle: .module),
+                    a11y: String(localized: "story.composer.start.a11y.camera",
+                                 defaultValue: "Prendre une photo ou une vidéo", bundle: .module),
+                    action: { showCameraCapture = true }
+                )
+            }
+            if viewModel.canAddMedia {
+                blankCanvasGalleryStarter
+            }
+        }
+    }
+
+    /// Règle PURE de l'amorce « pellicule ». `hasRecentAsset` ne vaut vrai que
+    /// si l'app a pu résoudre une vignette SANS rien demander — c'est-à-dire si
+    /// l'accès en lecture était DÉJÀ accordé (`.authorized`/`.limited`) et la
+    /// pellicule non vide. Le composer ne prompte donc jamais à l'ouverture ; la
+    /// demande d'accès est reportée sur le tap de la capsule générique.
+    nonisolated static func galleryStarter(
+        hasRecentAsset: Bool,
+        hasCameraRollProvider: Bool
+    ) -> StoryGalleryStarter {
+        guard hasCameraRollProvider else { return .systemPickerCapsule }
+        return hasRecentAsset ? .recentAssetThumbnail : .accessRequestCapsule
+    }
+
+    /// Règle PURE de l'issue du tap : accès accordé sur ce geste → la dernière
+    /// photo entre directement (le geste reste UNIQUE) ; refus ou pellicule vide
+    /// → `PhotosPicker` système. Laisser l'amorce sans effet ferait d'un refus
+    /// une impasse définitive, et le picker n'exige aucune permission.
+    nonisolated static func galleryAccessOutcome(
+        resolved asset: StoryRecentCameraRollAsset?
+    ) -> StoryGalleryAccessOutcome {
+        guard let asset else { return .presentSystemPicker }
+        return .insertRecentAsset(asset)
+    }
+
+    /// Vignette de la DERNIÈRE photo de la pellicule quand l'app l'a injectée
+    /// (`\.storyRecentCameraRollAsset`) ET que l'accès en lecture était déjà
+    /// accordé : un tap l'insère, sans passer par un picker — c'est l'ancre
+    /// « dernière photo accessible en 1 geste ». Le chevron accolé reste la
+    /// porte vers la pellicule complète. Sinon on retombe sur la capsule
+    /// « Galerie » : la capacité n'est jamais perdue.
+    @ViewBuilder
+    private var blankCanvasGalleryStarter: some View {
+        switch Self.galleryStarter(hasRecentAsset: recentCameraRollAsset != nil,
+                                   hasCameraRollProvider: storyRecentCameraRollAsset != nil) {
+        case .recentAssetThumbnail:
+            blankCanvasRecentAssetStarter
+        case .accessRequestCapsule:
+            // Le TAP est le geste explicite qui autorise la demande d'accès —
+            // jamais l'ouverture du composer.
+            blankCanvasStarterCapsule(
+                icon: "photo.on.rectangle.angled",
+                title: String(localized: "story.composer.start.gallery",
+                              defaultValue: "Galerie", bundle: .module),
+                a11y: String(localized: "story.composer.start.a11y.gallery",
+                             defaultValue: "Choisir dans la galerie", bundle: .module),
+                action: { requestRecentCameraRollAccess() }
+            )
+        case .systemPickerCapsule:
+            blankCanvasSystemPickerStarter
         }
     }
 
     @ViewBuilder
-    var emptyStateLargePicker: some View {
-        VStack(spacing: 8) {
-            VStack(spacing: 2) {
-                Text(String(localized: "story.composer.empty.title",
-                            defaultValue: "Commencez votre story",
-                            bundle: .module))
-                    .font(.system(size: 17, weight: .bold, design: .rounded))
-                    .foregroundStyle(MeeshyColors.brandGradient)
-                Text(String(localized: "story.composer.empty.subtitle",
-                            defaultValue: "Choisissez un outil pour démarrer",
-                            bundle: .module))
-                    .font(.system(size: 11))
-                    .foregroundColor((colorScheme == .dark ? Color.white : MeeshyColors.indigo950).opacity(0.7))
+    private var blankCanvasRecentAssetStarter: some View {
+        if let asset = recentCameraRollAsset {
+            HStack(spacing: 0) {
+                Button {
+                    HapticFeedback.light()
+                    addRecentCameraRollAsset(asset)
+                } label: {
+                    Image(uiImage: asset.thumbnail)
+                        .resizable()
+                        .scaledToFill()
+                        .frame(width: 44, height: 44)
+                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                        .padding(.leading, 6)
+                        .padding(.vertical, 6)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(String(localized: "story.composer.start.a11y.recent",
+                                           defaultValue: "Utiliser la dernière photo", bundle: .module))
+                PhotosPicker(selection: $fgMediaItem, matching: .any(of: [.images, .videos])) {
+                    // `.forward` et non `.right` : le chevron désigne « la
+                    // suite » et doit se retourner en arabe (RTL).
+                    Image(systemName: "chevron.forward")
+                        .font(MeeshyFont.relative(13, weight: .semibold))
+                        .foregroundStyle(.primary.opacity(0.7))
+                        .padding(.horizontal, 12)
+                        .frame(minHeight: 44)
+                        .contentShape(Rectangle())
+                }
+                .accessibilityLabel(String(localized: "story.composer.start.a11y.gallery",
+                                           defaultValue: "Choisir dans la galerie", bundle: .module))
             }
-            .padding(.top, 8)
-            .opacity(pickerSelectedTool == nil ? 1 : 0)
-            .scaleEffect(pickerSelectedTool == nil ? 1 : 0.95)
-
-            // 6 tiles in a 2-column grid fit comfortably.
-            // The grid sizes to its content so the picker stays at
-            // the bottom and leaves ≥ 80 % of the screen for the top bar +
-            // canvas pastel preview, per the empty-state UX brief.
-            LazyVGrid(
-                columns: [
-                    GridItem(.flexible(), spacing: 10),
-                    GridItem(.flexible(), spacing: 10)
-                ],
-                spacing: 10
-            ) {
-                    largeToolTile(
-                        .media,
-                        icon: "play.rectangle.fill",
-                        title: String(localized: "story.composer.empty.tile.media",
-                                      defaultValue: "Médias",
-                                      bundle: .module),
-                        subtitle: String(localized: "story.composer.empty.tile.media.sub",
-                                         defaultValue: "Photos, vidéos",
-                                         bundle: .module)
-                    )
-                    largeToolTile(
-                        .audio,
-                        icon: "music.note",
-                        title: String(localized: "story.composer.empty.tile.son",
-                                      defaultValue: "Son",
-                                      bundle: .module),
-                        subtitle: String(localized: "story.composer.empty.tile.son.sub",
-                                         defaultValue: "Musique, voix",
-                                         bundle: .module),
-                        specialCategory: .son
-                    )
-                    largeToolTile(
-                        .text,
-                        icon: "textformat",
-                        title: String(localized: "story.composer.empty.tile.text",
-                                      defaultValue: "Texte",
-                                      bundle: .module),
-                        subtitle: String(localized: "story.composer.empty.tile.text.sub",
-                                         defaultValue: "Style, couleur, verre",
-                                         bundle: .module)
-                    )
-                    largeToolTile(
-                        .drawing,
-                        icon: "pencil.tip",
-                        title: String(localized: "story.composer.empty.tile.drawing",
-                                      defaultValue: "Dessin",
-                                      bundle: .module),
-                        subtitle: String(localized: "story.composer.empty.tile.drawing.sub",
-                                         defaultValue: "Pencil et couleurs",
-                                         bundle: .module)
-                    )
-                largeToolTile(
-                    .texture,
-                    icon: "paintpalette.fill",
-                    title: String(localized: "story.tool.texture",
-                                  defaultValue: "Fond",
-                                  bundle: .module),
-                    subtitle: String(localized: "story.background.swatch",
-                                     defaultValue: "Couleur de fond",
-                                     bundle: .module)
-                )
-                largeToolTile(
-                    .timeline,
-                    icon: "clock",
-                    title: String(localized: "story.composer.empty.tile.timeline",
-                                  defaultValue: "Timeline",
-                                  bundle: .module),
-                    subtitle: String(localized: "story.composer.empty.tile.timeline.sub",
-                                     defaultValue: "Montage et durée",
-                                     bundle: .module)
-                )
-            }
-            .padding(.horizontal, 20)
-            .padding(.bottom, 8)
+            .frame(minHeight: 44)
+            .adaptiveGlass(in: Capsule())
         }
-        .padding(.bottom, safeAreaBottomInset + 12)
-        .frame(maxWidth: .infinity)
-        .background(
-            UnevenRoundedRectangle(
-                topLeadingRadius: 24,
-                bottomLeadingRadius: 0,
-                bottomTrailingRadius: 0,
-                topTrailingRadius: 24,
-                style: .continuous
-            )
-            // Aligné sur la même charte que `ComposerBottomBand` : un tint
-            // opaque adaptatif (blanc en light / indigo950 en dark) pour rester
-            // lisible quelle que soit la couleur du canvas (pastel/photo) en
-            // arrière-plan. Avant: `.ultraThinMaterial` qui se faisait teinter
-            // par la slide et écrasait le contraste des sous-titres.
-            .fill(colorScheme == .dark
-                ? MeeshyColors.indigo950.opacity(0.92)
-                : Color.white.opacity(0.92))
-            .overlay(
-                UnevenRoundedRectangle(
-                    topLeadingRadius: 24,
-                    bottomLeadingRadius: 0,
-                    bottomTrailingRadius: 0,
-                    topTrailingRadius: 24,
-                    style: .continuous
-                )
-                .stroke(
-                    (colorScheme == .dark ? Color.white : MeeshyColors.indigo950).opacity(0.08),
-                    lineWidth: 0.5
-                )
-            )
-            .shadow(color: .black.opacity(0.20), radius: 14, y: -6)
-            .ignoresSafeArea(edges: .bottom)
-        )
     }
 
-    @ViewBuilder
-    func largeToolTile(
-        _ tool: StoryToolMode,
+    private var blankCanvasSystemPickerStarter: some View {
+        // Le libellé est résolu AVANT le label du `PhotosPicker` : ce
+        // closure est traité comme `@Sendable`, et `Bundle.module` y est
+        // main-actor-isolé (avertissement de concurrence, futur erreur).
+        let galleryTitle = String(localized: "story.composer.start.gallery",
+                                  defaultValue: "Galerie", bundle: .module)
+        return PhotosPicker(selection: $fgMediaItem, matching: .any(of: [.images, .videos])) {
+            BlankCanvasStarterLabel(icon: "photo.on.rectangle.angled", title: galleryTitle)
+        }
+        .accessibilityLabel(String(localized: "story.composer.start.a11y.gallery",
+                                   defaultValue: "Choisir dans la galerie", bundle: .module))
+    }
+
+    private func blankCanvasStarterCapsule(
         icon: String,
         title: String,
-        subtitle: String,
-        specialCategory: BandCategory? = nil
+        a11y: String,
+        action: @escaping () -> Void
     ) -> some View {
-        let accent = tileAccent(for: tool)
-        let isSelected = pickerSelectedTool == tool
-        let isOtherSelected = pickerSelectedTool != nil && pickerSelectedTool != tool
-
         Button {
-            // Selection animation : briefly highlight the tapped tile + fade
-            // the others before propagating to viewModel.selectTool. The
-            // resulting activeTool change flips `shouldShowEmptyStateLargePicker`
-            // to false and the outer spring animates the picker out, revealing
-            // the compact toolbar + active panel beneath. ~220ms total before
-            // the swap fires so the highlight is perceivable.
-            HapticFeedback.medium()
-            withAnimation(.spring(response: 0.22, dampingFraction: 0.6)) {
-                pickerSelectedTool = tool
-            }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.22) {
-                // Timeline (2026-07-14) vit dans le band comme les autres
-                // outils — seul `isTimelineVisible` est flippé ici, sans
-                // `selectTool`/`bandStateMachine` (parité avec le FAB et le
-                // bouton overflow) : `ComposerControlsLayer.
-                // resolveEffectiveBandState` force `.toolPanel(.timeline)`
-                // tant que la machine reste `.hidden`, et
-                // `shouldShowEmptyStateLargePicker` cède la place au band dès
-                // que `isTimelineVisible` passe à true.
-                if tool == .timeline {
-                    viewModel.isTimelineVisible = true
-                    pickerSelectedTool = nil
-                    return
-                }
-                // For the Text tile, jump straight into the inline editor :
-                // viewModel.addText() itself spawns a fresh text + sets
-                // selectedElementId + sets activeTool = .text, so calling
-                // selectTool(.text) before it would toggle activeTool off
-                // when addText then re-sets it back — and the @Published
-                // re-render race could leave activeTool nil at the end.
-                // Adopt the simpler invariant : addText is the sole entry
-                // point for the .text tool when the slide has no text yet.
-                if tool == .text,
-                   viewModel.currentEffects.textObjects.isEmpty {
-                    // Create the text and jump straight into the floating
-                    // editor so the user can type immediately.
-                    if let newText = viewModel.addText() {
-                        viewModel.enterTextEditingMode(textId: newText.id)
-                    }
-                } else {
-                    viewModel.selectTool(tool)
-                }
-                // Auto-open the band to the selected tool's category + panel
-                // so controls appear immediately when the empty-state picker
-                // transitions out. Without this, the band stayed .hidden and
-                // the user had to manually tap a FAB to reveal controls.
-                // (Le dessin s'ouvre lui aussi sur son panneau : la LISTE des
-                // traits — le plein écran n'arrive qu'au choix d'un pinceau.)
-                bandStateMachine.tapFAB(specialCategory ?? tool.bandCategory)
-                bandStateMachine.tapTile(tool)
-                pickerSelectedTool = nil
-            }
+            HapticFeedback.light()
+            action()
         } label: {
-            HStack(spacing: 10) {
-                ZStack {
-                    Circle()
-                        .fill(accent.opacity(isSelected ? 0.55 : 0.30))
-                        .frame(width: 44, height: 44)
-                    Image(systemName: icon)
-                        .font(.system(size: 22, weight: .semibold))
-                        .foregroundStyle(accent)
-                }
-
-                VStack(alignment: .leading, spacing: 2) {
-                    // Couleur adaptée au mode système — sur fond pastel clair
-                    // le blanc sur clair était illisible. On utilise indigo950
-                    // en light mode (contraste sur pastel) et blanc en dark.
-                    Text(title)
-                        .font(.system(size: 14, weight: .semibold, design: .rounded))
-                        .foregroundColor(colorScheme == .dark ? .white : MeeshyColors.indigo950)
-                        .lineLimit(1)
-                    Text(subtitle)
-                        .font(.system(size: 11))
-                        .foregroundColor((colorScheme == .dark ? Color.white : MeeshyColors.indigo950).opacity(0.75))
-                        .lineLimit(2)
-                        .multilineTextAlignment(.leading)
-                }
-                Spacer(minLength: 0)
-            }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 12)
-            .frame(maxWidth: .infinity)
-            .frame(height: 72)
-            .background(
-                RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    // Uniform pastel tint matching the tile's accent — replaces
-                    // the previous .ultraThinMaterial gray fill so each tile
-                    // reads as its own color instead of a generic glass card.
-                    .fill(accent.opacity(0.20))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 18, style: .continuous)
-                            .stroke(accent.opacity(isSelected ? 0.75 : 0.40), lineWidth: isSelected ? 2 : 1)
-                    )
-            )
-            .shadow(color: accent.opacity(isSelected ? 0.45 : 0), radius: 14, y: 4)
-            .scaleEffect(isSelected ? 1.05 : 1.0)
-            .opacity(isOtherSelected ? 0.30 : 1.0)
-            // Outer padding gives the scale-up animation room to breathe
-            // without being clipped by the grid cell — without it, the
-            // selected tile's enlarged corners touch neighbouring tiles
-            // and shadow gets cropped.
-            .padding(6)
+            BlankCanvasStarterLabel(icon: icon, title: title)
         }
         .buttonStyle(.plain)
-        .accessibilityAddTraits(.isButton)
-        .accessibilityLabel(title)
-        .accessibilityHint(subtitle)
+        .accessibilityLabel(a11y)
     }
 
     // MARK: - Canvas + Drawing Layer (Task 2.18)
+
 
     /// CALayer-based canvas + drawing overlay + viewport transform/gestures
     /// + loading + zoom-reset overlays. Extracted so the SwiftUI type-checker
@@ -767,12 +659,21 @@ extension StoryComposerView {
                     // contenu tourné déborde symétriquement et reste TAPPABLE
                     // (directive user 2026-07-14 : les chips pilotent la
                     // manipulation).
-                    CanvasLayerIndicator(layer: manipulationLayer)
-                        .fixedSize()
-                        .rotationEffect(.degrees(-90))
-                        .frame(width: 24, height: 44)
-                        .padding(.leading, 8)
+                    // Montés SEULEMENT là où leur override change réellement la
+                    // couche manipulée (fond ET premier plan peuplés) : sur une
+                    // slide à une seule couche, `resolveManipulationLayer` ignore
+                    // l'override et les chips n'étaient que décoratifs.
+                    if showsCanvasLayerIndicator {
+                        CanvasLayerIndicator(layer: manipulationLayer)
+                            .fixedSize()
+                            .rotationEffect(.degrees(-90))
+                            .frame(width: 24, height: 44)
+                            .padding(.leading, 8)
+                            .transition(.opacity)
+                    }
                 }
+                .animation(.spring(response: 0.3, dampingFraction: 0.85),
+                           value: showsCanvasLayerIndicator)
                 // Contours du canvas : matérialisés en pointillé dès que le
                 // fond ne remplit PAS tout le canvas (mode « fit », ou aucun
                 // média de fond) — directive user 2026-07-14. Le rayon épouse
@@ -838,15 +739,38 @@ extension StoryComposerView {
     /// REPOS (FABs flottants, band `.hidden`) et le dessin immersif restent PLEIN
     /// écran — les FABs/bulles flottent par-dessus. Cf. `StoryCanvasFraming.isCarded`.
     var canvasIsCarded: Bool {
+        Self.resolveCanvasIsCarded(
+            isTextEditing: viewModel.textEditingMode != .inactive,
+            effectiveBandIsHidden: chromeContext.isBandHidden,
+            drawingActive: viewModel.drawingEditingMode.isActive,
+            presentedSystemSheetFraction: presentedSystemSheetFraction
+        )
+    }
+
+    /// Résolution pure de `canvasIsCarded`, extraite en `static` — même
+    /// pattern que `resolveShouldShowEmptyStateLargePicker`. `effectiveBandIsHidden`
+    /// lit l'état RÉSOLU (`ComposerChromeContext.isBandHidden`, S1), jamais
+    /// l'état BRUT de `bandStateMachine.state` : sur les 6 chemins d'ouverture
+    /// Timeline (`BandStateMachineTests.openTimeline*`) la machine peut rester
+    /// `.hidden` tandis que `isTimelineVisible` force le panneau via l'override
+    /// d'`effectiveBandState` — lire l'état brut ici referait carder le canvas
+    /// par coïncidence (le terme `timelineActive` séparé compensait déjà ce
+    /// trou côté `canvasIsCarded`, mais PAS côté `presentedSheetHeight`, cf.
+    /// `resolvePresentedSheetHeight`). Plus besoin de ce terme redondant une
+    /// fois l'état résolu passé directement à `StoryCanvasFraming.isCarded`
+    /// (paramètre `timelineActive` gardé à son défaut `false`).
+    static func resolveCanvasIsCarded(
+        isTextEditing: Bool,
+        effectiveBandIsHidden: Bool,
+        drawingActive: Bool,
+        presentedSystemSheetFraction: CGFloat?
+    ) -> Bool {
         // L'édition texte garde le canvas plein écran, sheet système comprise.
-        guard viewModel.textEditingMode == .inactive else { return false }
-        let bandPresent = bandStateMachine.state != .hidden
-        let drawingActive = viewModel.drawingEditingMode.isActive
+        guard !isTextEditing else { return false }
         if StoryCanvasFraming.isCarded(
-            bandPresent: bandPresent,
+            bandPresent: !effectiveBandIsHidden,
             drawingActive: drawingActive,
-            textActive: false,
-            timelineActive: viewModel.isTimelineVisible
+            textActive: false
         ) {
             return true
         }
@@ -863,9 +787,39 @@ extension StoryComposerView {
     /// canvas (jamais écrasé à zéro → sinon le solver retombe en plein écran = bas de
     /// nouveau masqué). Hors carding → `0`.
     var presentedSheetHeight: CGFloat {
+        Self.resolvePresentedSheetHeight(
+            canvasIsCarded: canvasIsCarded,
+            effectiveBandIsHidden: chromeContext.isBandHidden,
+            measuredBandTopY: measuredBandTopY,
+            measuredBottomBandHeight: measuredBottomBandHeight,
+            composerBandHeight: composerBandHeight,
+            presentedSystemSheetFraction: presentedSystemSheetFraction,
+            composerScreenHeight: composerScreenHeight
+        )
+    }
+
+    /// Résolution pure de `presentedSheetHeight`, extraite en `static` — même
+    /// pattern que `resolveCanvasIsCarded`. AVANT le fix S4, le bloc de
+    /// réserve mesurée restait derrière l'état BRUT
+    /// (`bandStateMachine.state != .hidden`), sans le filet redondant qui
+    /// sauvait `canvasIsCarded` : sur les 6 chemins d'ouverture Timeline la
+    /// machine reste `.hidden` pendant que `effectiveBandIsHidden` (résolu)
+    /// est `false`, donc cette fonction retournait `0` alors que
+    /// `canvasIsCarded == true` — le canvas cardait à une taille trop grande,
+    /// ses contrôles bas passant SOUS le panneau Timeline réellement rendu
+    /// (~392-406pt, bug §0 du rapport terrain 2026-07-30).
+    static func resolvePresentedSheetHeight(
+        canvasIsCarded: Bool,
+        effectiveBandIsHidden: Bool,
+        measuredBandTopY: CGFloat,
+        measuredBottomBandHeight: CGFloat,
+        composerBandHeight: CGFloat,
+        presentedSystemSheetFraction: CGFloat?,
+        composerScreenHeight: CGFloat
+    ) -> CGFloat {
         guard canvasIsCarded else { return 0 }
         var height: CGFloat = 0
-        if bandStateMachine.state != .hidden {
+        if !effectiveBandIsHidden {
             // Réserve = distance du HAUT RÉEL de la band (coord globales,
             // `measuredBandTopY`) au bas de l'écran → le canvas se rétracte
             // EXACTEMENT jusqu'au haut visuellement rendu de la band, jamais
@@ -904,22 +858,37 @@ extension StoryComposerView {
     /// désormais par un FLOU du média de fond — la carte nette flotte au-dessus de
     /// sa propre version floutée (look intégré) — ou, à défaut d'image, par la
     /// couleur de fond de la story.
+    ///
+    /// S5 — il est TAPABLE, et route vers la MÊME closure que le fond du canvas
+    /// (`handleCanvasBackgroundTap`). Sur iPhone 16 Pro les bandes représentent
+    /// 874 − 714 = 160 pt, soit ~18 % de la hauteur, dont la bande basse — la
+    /// plus proche du pouce. Elles ont exactement l'apparence du canvas ; les
+    /// laisser inertes contredisait frontalement « toute la surface du canvas
+    /// est le bouton texte ». Le letterbox est SOUS `canvasComposerLayer` dans
+    /// le ZStack : le canvas garde la priorité sur son propre rectangle.
     @ViewBuilder
     var canvasLetterbox: some View {
-        if let bg = composerLetterboxImage {
-            Color.clear
-                .overlay(Image(uiImage: bg).resizable().scaledToFill())
-                .clipped()
-                .blur(radius: 34, opaque: true)
-                .overlay(Color.black.opacity(0.20))
-                .ignoresSafeArea()
-        } else {
-            Rectangle()
-                .fill(storyBackgroundStyle(
-                    viewModel.backgroundColor.replacingOccurrences(of: "#", with: "")))
-                .ignoresSafeArea()
-                .animation(.easeInOut(duration: 0.25), value: canvasIsCarded)
+        Group {
+            if let bg = composerLetterboxImage {
+                Color.clear
+                    .overlay(Image(uiImage: bg).resizable().scaledToFill())
+                    .clipped()
+                    .blur(radius: 34, opaque: true)
+                    .overlay(Color.black.opacity(0.20))
+                    .ignoresSafeArea()
+            } else {
+                Rectangle()
+                    .fill(storyBackgroundStyle(
+                        viewModel.backgroundColor.replacingOccurrences(of: "#", with: "")))
+                    .ignoresSafeArea()
+                    .animation(.easeInOut(duration: 0.25), value: canvasIsCarded)
+            }
         }
+        .contentShape(Rectangle())
+        .onTapGesture { handleCanvasBackgroundTap() }
+        // Le tracé immersif possède l'écran entier : lui voler un touch par le
+        // letterbox interromprait un trait en cours.
+        .allowsHitTesting(!isImmersiveDrawingSurface)
     }
 
     /// Bitmap du média de fond courant, source du flou de `canvasLetterbox`.
@@ -976,7 +945,10 @@ extension StoryComposerView {
                     // posé ci-dessus. L'éditeur d'image plein écran s'ouvre
                     // au double-tap.
                     break
-                case .sticker:
+                case .sticker, .location:
+                    // Pastille de lieu : sélection seule (le canvas l'a remontée
+                    // au premier plan). Elle se déplace/redimensionne au doigt et
+                    // se retire par le menu contextuel — rien à éditer au tap.
                     break
                 }
             },
@@ -991,7 +963,7 @@ extension StoryComposerView {
                 case .media:
                     // Open dedicated full-screen media editor (image crop / video editor)
                     openMediaEditor(elementId: id)
-                case .sticker:
+                case .sticker, .location:
                     break
                 }
             },
@@ -1031,6 +1003,11 @@ extension StoryComposerView {
             onInlineTextEditEnded: { _ in
                 viewModel.exitTextEditingMode()
             },
+            // Bornes de la ZONE d'édition texte : le canvas y centre le bloc
+            // édité et l'y borne en hauteur, un texte plus long défilant à
+            // l'intérieur (spec 2026-08-01).
+            inlineEditFloorGlobalY: measuredTextToolbarTopY,
+            inlineEditCeilingGlobalY: measuredTextTopBarBottomY,
             onManipulationLayerChanged: { layer in
                 manipulationLayer = layer
             },
@@ -1062,11 +1039,11 @@ extension StoryComposerView {
                     break
                 }
             },
-            onBackgroundTapped: {
-                withAnimation(.spring(response: 0.3)) {
-                    areFabsVisible.toggle()
-                }
-            },
+            // Routé par `ComposerChromePolicy.backgroundTapAction` : le toggle
+            // inconditionnel d'avant n'avait aucun effet visible panneau ouvert
+            // (la politique masquait déjà le chrome), puis « Retour » découvrait
+            // un écran sans « Fermer » ni « Publier » (bug terrain 2026-07-31).
+            onBackgroundTapped: { handleCanvasBackgroundTap() },
             onBackgroundTransformChanged: { transform in
                 viewModel.backgroundTransform = StoryComposerViewModel.BackgroundTransform(
                     scale: transform.scale ?? 1.0,
@@ -1204,8 +1181,10 @@ extension StoryComposerView {
                         },
                         onToggleMute: {
                             HapticFeedback.light()
+                            // Un-bouton : mute → volume 0 (niveau mémorisé),
+                            // unmute → restaure le niveau quitté (pas 1.0 forcé).
                             var obj = binding.wrappedValue
-                            obj.volume = obj.volume > 0 ? 0 : 1
+                            obj.toggleMute()
                             binding.wrappedValue = obj
                         }
                     )
@@ -1226,8 +1205,71 @@ extension StoryComposerView {
                 ForEach(foregroundVideoBindings, id: \.wrappedValue.id) { binding in
                     videoMuteButton(for: binding, canvasSize: geo.size)
                 }
+                // La vidéo de FOND — le cas le plus courant, et le seul qui
+                // n'avait aucune affordance : `foregroundVideoBindings` filtre
+                // sur `isBackground == false`. Son volume était pourtant bien
+                // lu au rendu (`StoryCanvasUIView+Rendering`).
+                if let bg = backgroundVideoBinding {
+                    backgroundVideoMuteButton(for: bg, canvasSize: geo.size)
+                }
             }
         }
+    }
+
+    /// Bouton de coupure du son de la vidéo de fond.
+    ///
+    /// Le fond couvre tout le canvas : sa position ne dérive pas du modèle
+    /// comme celle d'un clip d'avant-plan, elle est ancrée au coin HAUT-GAUCHE
+    /// — la colonne de boutons flottants est alignée en bas, et les boutons
+    /// par-clip suivent chacun leur propre média.
+    ///
+    /// Mêmes icône, geste et clés de localisation que `videoMuteButton` : un
+    /// contrôle visuellement différent pour la même action serait une
+    /// régression d'apprentissage, et aucune clé neuve n'est à traduire.
+    func backgroundVideoMuteButton(for binding: Binding<StoryMediaObject>,
+                                   canvasSize: CGSize) -> some View {
+        let muted = binding.wrappedValue.volume <= 0
+        let inset: CGFloat = 18
+        return Button {
+            HapticFeedback.light()
+            var obj = binding.wrappedValue
+            obj.toggleMute()
+            binding.wrappedValue = obj
+        } label: {
+            Image(systemName: muted ? "speaker.slash.fill" : "speaker.wave.2.fill")
+                .font(.system(size: 13, weight: .bold))
+                .foregroundColor(.white)
+                .frame(width: 30, height: 30)
+                .background(.ultraThinMaterial, in: Circle())
+                .overlay(Circle().stroke(Color.white.opacity(0.3), lineWidth: 1))
+        }
+        .buttonStyle(.plain)
+        .position(x: inset + 15, y: inset + 15)
+        .accessibilityLabel(muted
+            ? String(localized: "story.video.unmute", defaultValue: "Activer le son de la vidéo", bundle: .module)
+            : String(localized: "story.video.mute", defaultValue: "Couper le son de la vidéo", bundle: .module))
+    }
+
+    /// Binding vers la vidéo de FOND, s'il y en a une. Optionnel et non
+    /// tableau — cf. `backgroundVideoIndex(in:)`.
+    var backgroundVideoBinding: Binding<StoryMediaObject>? {
+        let medias = viewModel.currentEffects.mediaObjects ?? []
+        guard let idx = Self.backgroundVideoIndex(in: medias) else { return nil }
+        let snapshot = medias[idx]
+        return Binding<StoryMediaObject>(
+            get: {
+                let list = viewModel.currentEffects.mediaObjects ?? []
+                return list.indices.contains(idx) ? list[idx] : snapshot
+            },
+            set: { newValue in
+                var effects = viewModel.currentEffects
+                guard var list = effects.mediaObjects,
+                      list.indices.contains(idx) else { return }
+                list[idx] = newValue
+                effects.mediaObjects = list
+                viewModel.currentEffects = effects
+            }
+        )
     }
 
     func videoMuteButton(for binding: Binding<StoryMediaObject>,
@@ -1249,8 +1291,9 @@ extension StoryComposerView {
 
         return Button {
             HapticFeedback.light()
+            // Un-bouton : mémento de restauration (cf. StoryVolumeCarrying).
             var obj = binding.wrappedValue
-            obj.volume = obj.volume > 0 ? 0 : 1
+            obj.toggleMute()
             binding.wrappedValue = obj
         } label: {
             Image(systemName: muted ? "speaker.slash.fill" : "speaker.wave.2.fill")
@@ -1262,12 +1305,25 @@ extension StoryComposerView {
         }
         .buttonStyle(.plain)
         .position(x: px, y: py)
-        .accessibilityLabel(muted ? "Activer le son de la vidéo" : "Couper le son de la vidéo")
+        .accessibilityLabel(muted
+            ? String(localized: "story.video.unmute", defaultValue: "Activer le son de la vidéo", bundle: .module)
+            : String(localized: "story.video.mute", defaultValue: "Couper le son de la vidéo", bundle: .module))
     }
 
     /// Bindings vers chaque vidéo foreground (`isBackground == false`, kind
     /// `.video`) de la slide courante — pour le bouton mute. Écrit en retour
     /// dans `viewModel.currentEffects`, ce qui resync la slide et l'aperçu.
+    /// Index de la vidéo de FOND, s'il y en a une.
+    ///
+    /// Pure et statique : la décision se teste sans monter la vue (même patron
+    /// que `presentedCameraCapture(isRequested:provider:)`). Rend le PREMIER
+    /// fond vidéo et non un tableau — le modèle ne contraint pas l'unicité du
+    /// fond, et deux bindings poseraient deux boutons superposés au même coin
+    /// du canvas.
+    nonisolated static func backgroundVideoIndex(in medias: [StoryMediaObject]) -> Int? {
+        medias.firstIndex { $0.isBackground && $0.kind == .video }
+    }
+
     var foregroundVideoBindings: [Binding<StoryMediaObject>] {
         let medias = viewModel.currentEffects.mediaObjects ?? []
         return medias.enumerated().compactMap { idx, obj -> Binding<StoryMediaObject>? in
@@ -1329,13 +1385,17 @@ extension StoryComposerView {
                                 .frame(width: 56, height: 56)
                                 .rotationEffect(.degrees(-90))
                                 .animation(.easeInOut(duration: 0.3), value: mediaLoadProgress)
+                            // Doctrine 86i : badge numérique DANS un cercle fixe de
+                            // 56 pt, pas un libellé de lecture — au même titre que
+                            // les glyphes SF Symbols, hors périmètre D3 (scaler le
+                            // ferait déborder du cercle sans bénéfice de lecture).
                             Text("\(Int(mediaLoadProgress * 100))%")
                                 .font(.system(size: 13, weight: .bold, design: .rounded))
                                 .foregroundColor(.white)
                         }
                         if !mediaLoadLabel.isEmpty {
                             Text(mediaLoadLabel)
-                                .font(.system(size: 12, weight: .medium))
+                                .font(MeeshyFont.relative(12, weight: .medium))
                                 .foregroundColor(.white.opacity(0.8))
                         }
                     }
@@ -1358,6 +1418,9 @@ extension StoryComposerView {
                     .foregroundColor(.white)
                     .frame(width: 30, height: 30)
                     .background(Circle().fill(.black.opacity(0.5)))
+                    // Pastille de 30 pt, seule dans son coin : le débord de
+                    // contact la porte à 44 sans toucher au rendu.
+                    .composerHitTarget()
             }
             .padding(.top, showTopBar ? 70 : 16)
             .padding(.trailing, 12)
@@ -1417,5 +1480,66 @@ extension StoryComposerView {
             viewModel.drawingStrokes = survivors
             HapticFeedback.light()
         }
+    }
+}
+
+// MARK: - Amorces de page blanche : surface d'accueil et libellé partagé
+
+/// Surface d'accueil des amorces de page blanche. Sa seule responsabilité est
+/// GÉOMÉTRIQUE : occuper l'intégralité de la place offerte et rendre ce
+/// rectangle tapable/glissable. Un `VStack` ne s'étire QUE sur son axe majeur —
+/// sa largeur vaut celle de son plus large enfant, soit ~200 pt sur les 393
+/// d'un iPhone 16 Pro : le swipe-down de la directive user (2026-07-31) n'aurait
+/// répondu que dans une colonne centrale, et le même geste, sur des pixels
+/// d'apparence identique, aurait marché ou non selon 80 pt d'écart.
+///
+/// Feuille de vue autonome (comme `BlankCanvasStarterLabel`) pour que cette
+/// propriété soit prouvée par un RENDU mesuré et non par un `contains` dans un
+/// fichier de 1 400 lignes.
+struct BlankCanvasStarterSurface<Content: View>: View {
+    let content: Content
+
+    init(@ViewBuilder content: () -> Content) {
+        self.content = content()
+    }
+
+    var body: some View {
+        VStack(spacing: 14) {
+            Spacer(minLength: 0)
+            content
+            Spacer(minLength: 0)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .contentShape(Rectangle())
+    }
+}
+
+/// Libellé partagé des capsules d'amorce (Caméra, Galerie).
+///
+/// Feuille de vue autonome (pas une méthode de `StoryComposerView`) : elle est
+/// montée à l'intérieur du label d'un `PhotosPicker`, contexte que le
+/// compilateur traite comme non isolé — une méthode `@MainActor` n'y est pas
+/// franchissable. C'est aussi la bonne granularité SwiftUI : entrées primitives,
+/// aucune dépendance au graphe du composer.
+///
+/// D1 — 44 pt de zone de contact dès l'écriture, et typographie RELATIVE
+/// (`MeeshyFont.relative`) : ce fichier n'utilisait jusqu'ici que des
+/// `.font(.system(size:))` figées, insensibles au Dynamic Type.
+struct BlankCanvasStarterLabel: View {
+    let icon: String
+    let title: String
+
+    var body: some View {
+        HStack(spacing: 7) {
+            Image(systemName: icon)
+                .font(MeeshyFont.relative(15, weight: .semibold))
+            Text(title)
+                .font(MeeshyFont.relative(14, weight: .semibold))
+        }
+        .foregroundStyle(.primary)
+        .padding(.horizontal, 16)
+        .frame(minHeight: 44)
+        .contentShape(Capsule())
+        .adaptiveGlass(in: Capsule())
     }
 }

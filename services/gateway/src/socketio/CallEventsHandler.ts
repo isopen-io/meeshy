@@ -19,6 +19,7 @@ import { logger } from '../utils/logger';
 import { CALL_EVENTS, CALL_ERROR_CODES, CALL_TERMINAL_STATUSES } from '@meeshy/shared/types/video-call';
 import { ROOMS, CLIENT_EVENTS } from '@meeshy/shared/types/socketio-events';
 import { resolveCallEndedRooms } from '../utils/callEndedFanout';
+import { callErrorMessageOf, parseCallHandlerError } from './utils/call-error-parsing';
 import { buildCallSilentPush, shouldMirrorAnsweredElsewhere } from '../services/call-push-mirroring';
 import { notificationString } from '@meeshy/shared/utils/notification-strings';
 import { resolveUserLanguage } from '@meeshy/shared/utils/conversation-helpers';
@@ -75,7 +76,7 @@ import type {
  * disconnect handler (`callParticipant.findMany` with `include: callSession`),
  * threaded into the grace-window helpers.
  */
-type DisconnectParticipation = {
+export type DisconnectParticipation = {
   id: string;
   participantId: string;
   callSessionId: string;
@@ -207,8 +208,13 @@ export class CallEventsHandler {
    * ABSENT from the cached snapshot, never when one is present but stale
    * (already left). Every path that writes `CallParticipant.leftAt` for
    * this call must evict the entry so the very next `call:signal` re-reads.
+   *
+   * Public: also wired in server.ts as `CallService.setSignalCacheInvalidationCallback`
+   * / `CallCleanupService.setSignalCacheInvalidationCallback` — those services
+   * force-end calls (writing `leftAt`) through their own GC/phantom-cleanup
+   * paths, outside any socket handler in this class.
    */
-  private invalidateSignalSession(callId: string): void {
+  invalidateSignalSession(callId: string): void {
     this.signalSessionCache.delete(callId);
   }
 
@@ -557,9 +563,9 @@ export class CallEventsHandler {
         // (createMissedCallNotifications) was already wired but never
         // called from this path before audit 2026-05-11.
         /* istanbul ignore next -- handleMissedCall has its own internal catch and never rejects */
-        await this.handleMissedCall(callId).catch((err: any) => {
+        await this.handleMissedCall(callId).catch((err: unknown) => {
           logger.error('handleMissedCall failed for ringing timeout', {
-            callId, err: err?.message
+            callId, err: callErrorMessageOf(err, String(err))
           });
         });
 
@@ -688,6 +694,76 @@ export class CallEventsHandler {
   }
 
   /**
+   * CALL-RESILIENCE (Vague 44) — the broadcast half of
+   * `leaveParticipationAndBroadcast`, extracted and made public so
+   * `AuthHandler`'s anonymous-guest disconnect path (the one case this
+   * handler's own disconnect flow cannot resolve — its participation lookup
+   * is keyed on `participant.userId`, always null for an anonymous guest,
+   * see the `CALL-RESILIENCE` note in `AuthHandler.handleDisconnection`) can
+   * fan out the exact same PARTICIPANT_LEFT/call:ended/postCallSummary/
+   * evictCallRoomSockets sequence after calling `CallService.leaveCall`
+   * itself, instead of leaving the other party's UI "in call" until the
+   * ~120s `CallCleanupService` GC.
+   */
+  async broadcastParticipantLeftResult(opts: {
+    io: SocketIOServer;
+    leftSession: Awaited<ReturnType<CallService['leaveCall']>>;
+    participation: DisconnectParticipation;
+    userId: string;
+  }): Promise<void> {
+    const { io, leftSession, participation, userId } = opts;
+
+    // Invariant "every path that writes leftAt evicts the signal cache" (see
+    // invalidateSignalSession). Held here rather than in the private caller
+    // below so the anonymous-guest path — AuthHandler's disconnect cleanup,
+    // which runs leaveCall itself and enters through this public method — gets
+    // it too. Without it, that call's ICE/SDP kept relaying off the stale 2s
+    // snapshot after the DB already stamped leftAt.
+    this.invalidateSignalSession(participation.callSessionId);
+
+    io.to(ROOMS.call(participation.callSessionId)).emit(
+      CALL_EVENTS.PARTICIPANT_LEFT,
+      {
+        callId: participation.callSessionId,
+        participantId: participation.id,
+        mode: participation.callSession.mode
+      } as CallParticipantLeftEvent
+    );
+
+    const dcStatus = leftSession.status as string;
+    if (dcStatus === 'ended' || dcStatus === 'missed') {
+      const dcEndedEvent: CallEndedEvent = {
+        callId: leftSession.id,
+        duration: leftSession.duration || 0,
+        endedBy: userId,
+        reason: (leftSession.endReason || 'completed') as CallEndReason
+      };
+      // CALL-RESILIENCE — use the shared fanout (call + conversation + every
+      // active member's user room), not a narrow two-room emit: a still-ringing
+      // callee has joined neither room yet and would otherwise keep ringing
+      // until its own client-side timeout (see resolveCallEndedRooms).
+      await this.broadcastCallEnded(io, leftSession.id, leftSession.conversationId, dcEndedEvent);
+      await this.postCallSummary(leftSession.id);
+      if (dcStatus === 'missed') {
+        /* istanbul ignore next -- handleMissedCall has its own internal catch and never rejects */
+        this.handleMissedCall(leftSession.id).catch((err) => {
+          logger.error('❌ handleMissedCall failed after disconnect-grace leave', {
+            callId: leftSession.id,
+            err
+          });
+        });
+      }
+
+      // Room-membership leak fix — mirrors the same fix on call:end/
+      // call:leave/call:force-leave: this only evicted THIS socket via
+      // leaveCall(), leaving every other still-joined socket (e.g. a
+      // second device/tab) a member of the now-dead room until its own
+      // disconnect.
+      await this.evictCallRoomSockets(io, participation.callSessionId);
+    }
+  }
+
+  /**
    * CALL-RESILIENCE — the terminal leave+broadcast path shared by an immediate
    * (pre-answer) disconnect and an expired reconnect grace window. Extracted
    * verbatim from the disconnect handler's per-participation loop so both callers
@@ -713,6 +789,76 @@ export class CallEventsHandler {
         // forceEndOrphanedCallSession.
         endReasonHint: CallEndReason.connectionLost
       });
+      // Cache eviction now lives inside broadcastParticipantLeftResult, so
+      // both this caller and AuthHandler's anonymous path get it.
+      await this.broadcastParticipantLeftResult({ io, leftSession, participation, userId });
+
+      logger.info('✅ Socket: Auto-left call on disconnect', {
+        callId: participation.callSessionId,
+        userId
+      });
+    } catch (leaveError) {
+      await this.forceCleanupParticipationAfterLeaveFailure({ io, participation, userId, leaveError });
+    }
+  }
+
+  /**
+   * CALL-RESILIENCE — the force-cleanup fallback for a participation whose
+   * `leaveCall` rejected (DB error, validation): stamp `leftAt` directly,
+   * force-end the session when it was the last participant, and fan out the
+   * same participant-left/call-ended/summary/room-eviction sequence. Without
+   * it a failed leave leaves a zombie participant until the ~120s
+   * `CallCleanupService` GC.
+   *
+   * Public for the same reason as `broadcastParticipantLeftResult`:
+   * `AuthHandler`s anonymous-guest disconnect path runs `leaveCall` itself
+   * (this handler cannot resolve anonymous participations — its lookup is
+   * keyed on `participant.userId`) and only logged when it threw, so a guest
+   * whose leave hit a DB error stayed a zombie while a registered user in the
+   * exact same situation was force-cleaned.
+   *
+   * Never rejects — an unusable fallback must not abort the caller’s loop
+   * over the remaining participations.
+   */
+  async forceCleanupParticipationAfterLeaveFailure(opts: {
+    io: SocketIOServer;
+    participation: DisconnectParticipation;
+    userId: string;
+    leaveError: unknown;
+  }): Promise<void> {
+    const { io, participation, userId, leaveError } = opts;
+    // IMPORTANT FIX: Force cleanup even if leaveCall fails
+    // This prevents zombie calls when DB errors or validation fails
+    logger.error('❌ Socket: Error in leaveCall, forcing direct cleanup', {
+      callId: participation.callSessionId,
+      userId,
+      error: leaveError
+    });
+
+    try {
+      const now = new Date();
+
+      // Audit C5 (2026-07-02) — `{leftAt: null}` alone misses Mongo docs
+      // whose leftAt field was never written (pre-C5 participants).
+      const remainingParticipants = await this.prisma.$transaction(async (tx) => {
+        await tx.callParticipant.update({
+          where: { id: participation.id },
+          data: { leftAt: now }
+        });
+        return tx.callParticipant.count({
+          where: {
+            callSessionId: participation.callSessionId,
+            OR: [{ leftAt: null }, { leftAt: { isSet: false } }]
+          }
+        });
+      });
+
+      // Invariant "every path that writes leftAt evicts the signal cache"
+      // (see invalidateSignalSession) — must run AFTER the write commits,
+      // like every other call site. Invalidating before the transaction let
+      // a `call:signal` racing the in-flight write force a fresh read of the
+      // still-uncommitted (pre-write) session and repopulate the cache with
+      // a stale "not left" snapshot that then survived the full TTL.
       this.invalidateSignalSession(participation.callSessionId);
 
       io.to(ROOMS.call(participation.callSessionId)).emit(
@@ -724,139 +870,65 @@ export class CallEventsHandler {
         } as CallParticipantLeftEvent
       );
 
-      const dcStatus = leftSession.status as string;
-      if (dcStatus === 'ended' || dcStatus === 'missed') {
-        const dcEndedEvent: CallEndedEvent = {
-          callId: leftSession.id,
-          duration: leftSession.duration || 0,
-          endedBy: userId,
-          reason: (leftSession.endReason || 'completed') as CallEndReason
-        };
-        // CALL-RESILIENCE — use the shared fanout (call + conversation + every
-        // active member's user room), not a narrow two-room emit: a still-ringing
-        // callee has joined neither room yet and would otherwise keep ringing
-        // until its own client-side timeout (see resolveCallEndedRooms).
-        await this.broadcastCallEnded(io, leftSession.id, leftSession.conversationId, dcEndedEvent);
-        await this.postCallSummary(leftSession.id);
-        if (dcStatus === 'missed') {
-          /* istanbul ignore next -- handleMissedCall has its own internal catch and never rejects */
-          this.handleMissedCall(leftSession.id).catch((err) => {
-            logger.error('❌ handleMissedCall failed after disconnect-grace leave', {
-              callId: leftSession.id,
-              err
-            });
-          });
-        }
+      if (remainingParticipants === 0) {
+        // Terminal write protocol (see CallCleanupService.forceEndCall):
+        // status-guarded + version-bumped, so this can never silently
+        // clobber — or be clobbered by — a concurrent version-guarded
+        // writer. Previously this did a raw, unguarded `callSession.update`
+        // with no version bump and no endReason, which could stomp a call
+        // another path had already resolved to missed/rejected/failed.
+        const forceEnded = await this.callService.forceEndOrphanedCallSession(
+          participation.callSessionId,
+          CallEndReason.connectionLost
+        );
 
-        // Room-membership leak fix — mirrors the same fix on call:end/
-        // call:leave/call:force-leave: this only evicted THIS socket via
-        // leaveCall(), leaving every other still-joined socket (e.g. a
-        // second device/tab) a member of the now-dead room until its own
-        // disconnect.
-        await this.evictCallRoomSockets(io, participation.callSessionId);
+        if (forceEnded) {
+          logger.info('✅ Socket: Force-ended call after disconnect error', {
+            callId: participation.callSessionId,
+            duration: forceEnded.duration,
+            status: forceEnded.status
+          });
+
+          const dcForceEndedEvent: CallEndedEvent = {
+            callId: participation.callSessionId,
+            duration: forceEnded.duration,
+            endedBy: userId,
+            reason: forceEnded.endReason
+          };
+          await this.broadcastCallEnded(
+            io,
+            participation.callSessionId,
+            participation.callSession.conversationId,
+            dcForceEndedEvent
+          );
+          await this.postCallSummary(participation.callSessionId);
+          if (forceEnded.status === CallStatus.missed) {
+            /* istanbul ignore next -- handleMissedCall has its own internal catch and never rejects */
+            this.handleMissedCall(participation.callSessionId).catch((err) => {
+              logger.error('❌ handleMissedCall failed after force-cleanup on disconnect error', {
+                callId: participation.callSessionId,
+                err
+              });
+            });
+          }
+
+          // Room-membership leak fix — same reasoning as the happy path
+          // above: this force-cleanup branch also terminates the call
+          // session and must evict every remaining socket from its room.
+          await this.evictCallRoomSockets(io, participation.callSessionId);
+        }
       }
 
-      logger.info('✅ Socket: Auto-left call on disconnect', {
+      logger.info('✅ Socket: Force cleanup successful on disconnect', {
         callId: participation.callSessionId,
         userId
       });
-    } catch (leaveError) {
-      // IMPORTANT FIX: Force cleanup even if leaveCall fails
-      // This prevents zombie calls when DB errors or validation fails
-      logger.error('❌ Socket: Error in leaveCall, forcing direct cleanup', {
+    } catch (forceError) {
+      logger.error('❌ Socket: Force cleanup also failed', {
         callId: participation.callSessionId,
         userId,
-        error: leaveError
+        error: forceError
       });
-
-      try {
-        const now = new Date();
-        this.invalidateSignalSession(participation.callSessionId);
-
-        // Audit C5 (2026-07-02) — `{leftAt: null}` alone misses Mongo docs
-        // whose leftAt field was never written (pre-C5 participants).
-        const remainingParticipants = await this.prisma.$transaction(async (tx) => {
-          await tx.callParticipant.update({
-            where: { id: participation.id },
-            data: { leftAt: now }
-          });
-          return tx.callParticipant.count({
-            where: {
-              callSessionId: participation.callSessionId,
-              OR: [{ leftAt: null }, { leftAt: { isSet: false } }]
-            }
-          });
-        });
-
-        io.to(ROOMS.call(participation.callSessionId)).emit(
-          CALL_EVENTS.PARTICIPANT_LEFT,
-          {
-            callId: participation.callSessionId,
-            participantId: participation.id,
-            mode: participation.callSession.mode
-          } as CallParticipantLeftEvent
-        );
-
-        if (remainingParticipants === 0) {
-          // Terminal write protocol (see CallCleanupService.forceEndCall):
-          // status-guarded + version-bumped, so this can never silently
-          // clobber — or be clobbered by — a concurrent version-guarded
-          // writer. Previously this did a raw, unguarded `callSession.update`
-          // with no version bump and no endReason, which could stomp a call
-          // another path had already resolved to missed/rejected/failed.
-          const forceEnded = await this.callService.forceEndOrphanedCallSession(
-            participation.callSessionId,
-            CallEndReason.connectionLost
-          );
-
-          if (forceEnded) {
-            logger.info('✅ Socket: Force-ended call after disconnect error', {
-              callId: participation.callSessionId,
-              duration: forceEnded.duration,
-              status: forceEnded.status
-            });
-
-            const dcForceEndedEvent: CallEndedEvent = {
-              callId: participation.callSessionId,
-              duration: forceEnded.duration,
-              endedBy: userId,
-              reason: forceEnded.endReason
-            };
-            await this.broadcastCallEnded(
-              io,
-              participation.callSessionId,
-              participation.callSession.conversationId,
-              dcForceEndedEvent
-            );
-            await this.postCallSummary(participation.callSessionId);
-            if (forceEnded.status === CallStatus.missed) {
-              /* istanbul ignore next -- handleMissedCall has its own internal catch and never rejects */
-              this.handleMissedCall(participation.callSessionId).catch((err) => {
-                logger.error('❌ handleMissedCall failed after force-cleanup on disconnect error', {
-                  callId: participation.callSessionId,
-                  err
-                });
-              });
-            }
-
-            // Room-membership leak fix — same reasoning as the happy path
-            // above: this force-cleanup branch also terminates the call
-            // session and must evict every remaining socket from its room.
-            await this.evictCallRoomSockets(io, participation.callSessionId);
-          }
-        }
-
-        logger.info('✅ Socket: Force cleanup successful on disconnect', {
-          callId: participation.callSessionId,
-          userId
-        });
-      } catch (forceError) {
-        logger.error('❌ Socket: Force cleanup also failed', {
-          callId: participation.callSessionId,
-          userId,
-          error: forceError
-        });
-      }
     }
   }
 
@@ -1082,6 +1154,29 @@ export class CallEventsHandler {
   }
 
   /**
+   * Resolve the caller's own CallParticipant.participantId for THIS call,
+   * regardless of `leftAt` — unlike `resolveActiveCallParticipantId`, a
+   * participant who has already left this call still resolves (needed by
+   * call:analytics, which fires post-hangup). Unlike
+   * `resolveParticipantIdFromCall`, which only checks conversation
+   * membership, a conversation member who never joined this specific call
+   * resolves to null — closing the gap where any member of the conversation
+   * could submit fabricated telemetry against a call they were never part
+   * of.
+   */
+  private async resolveEverCallParticipantId(userId: string, callId: string): Promise<string | null> {
+    try {
+      const callSession = await this.callService.getCallSession(callId);
+      const everParticipant = callSession.participants.find(
+        (p) => (p.participant?.userId ?? p.participantId) === userId
+      );
+      return everParticipant?.participantId ?? null;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
    * CallService throws plain `Error`s formatted as `"<CODE>: <description>"`
    * (e.g. getCallSession's `CALL_NOT_FOUND: Call session not found`, thrown
    * when the peer ends the call in the same instant a toggle is in flight).
@@ -1102,6 +1197,110 @@ export class CallEventsHandler {
       return { code: match[1], message: match[2] } as CallError;
     }
     return { code: 'MEDIA_TOGGLE_FAILED', message: fallbackMessage } as CallError;
+  }
+
+  /**
+   * Shared body of `call:toggle-audio` / `call:toggle-video` — the two
+   * handlers were ~90-line copies differing only by the `mediaType` literal,
+   * which meant every future fix (auth, rate limit, validation, participant
+   * resolution) had to be applied twice and could silently drift between
+   * audio and video. CVE-002 (rate limiting) / CVE-006 (input validation)
+   * comments below apply identically to both media types.
+   */
+  private async handleMediaToggle(
+    socket: Socket,
+    getUserId: (socketId: string) => string | undefined,
+    data: CallMediaToggleEvent,
+    mediaType: 'audio' | 'video'
+  ): Promise<void> {
+    try {
+      const userId = getUserId(socket.id);
+      if (!userId) {
+        socket.emit(CALL_EVENTS.ERROR, {
+          code: 'NOT_AUTHENTICATED',
+          message: 'User not authenticated',
+          callId: data?.callId
+        } as CallError);
+        return;
+      }
+
+      // CVE-002: Rate limiting check
+      const rateLimitPassed = await checkSocketRateLimit(
+        socket,
+        userId,
+        SOCKET_RATE_LIMITS.MEDIA_TOGGLE,
+        this.rateLimiter,
+        CALL_EVENTS.ERROR
+      );
+      if (!rateLimitPassed) return;
+
+      // CVE-006: Validate input data
+      const validation = validateSocketEvent(socketMediaToggleSchema, data);
+      if (isValidationFailure(validation)) {
+        const { error: validationError, details: validationDetails } = validation;
+        socket.emit(CALL_EVENTS.ERROR, {
+          code: CALL_ERROR_CODES.VALIDATION_ERROR,
+          message: validationError,
+          details: validationDetails ? { issues: validationDetails } : undefined,
+          callId: data?.callId
+        } as CallError);
+        return;
+      }
+
+      logger.info(`📞 Socket: call:toggle-${mediaType}`, {
+        socketId: socket.id,
+        userId,
+        callId: data.callId,
+        enabled: data.enabled
+      });
+
+      // Audit P2-GW-5 — `updateParticipantMedia` queries on
+      // `participantId` (Participant.id ObjectId), NOT userId. Passing
+      // userId here matched nothing and the toggle silently failed.
+      // Resolve to the real participantId before calling the service.
+      const participantId = await this.resolveActiveCallParticipantId(userId, data.callId);
+      if (!participantId) {
+        socket.emit(CALL_EVENTS.ERROR, {
+          code: CALL_ERROR_CODES.NOT_A_PARTICIPANT,
+          message: 'You are not a participant in this call',
+          callId: data?.callId
+        } as CallError);
+        return;
+      }
+      await this.callService.updateParticipantMedia(
+        data.callId,
+        participantId,
+        mediaType,
+        data.enabled
+      );
+
+      // P0-3 — broadcast to the OTHER participants only. The sender already
+      // updated its own state locally and must NOT receive its own echo:
+      // iOS treats any received call:media-toggled as the REMOTE peer's state
+      // (drives the muted indicator / avatar placeholder). `socket.to`
+      // excludes the sender; `io.to` would include it.
+      const toggleEvent: CallMediaToggleEvent = {
+        callId: data.callId,
+        participantId,
+        mediaType,
+        enabled: data.enabled
+      };
+
+      socket.to(ROOMS.call(data.callId)).emit(
+        CALL_EVENTS.MEDIA_TOGGLED,
+        toggleEvent
+      );
+
+      logger.info(`✅ Socket: ${mediaType === 'audio' ? 'Audio' : 'Video'} toggled`, {
+        callId: data.callId,
+        userId,
+        enabled: data.enabled
+      });
+    } catch (error) {
+      logger.error(`❌ Socket: Error toggling ${mediaType}`, error);
+
+      socket.emit(CALL_EVENTS.ERROR, { ...this.mapMediaToggleError(error, `Failed to toggle ${mediaType}`), callId: data?.callId } as CallError);
+    }
   }
 
   /**
@@ -1524,12 +1723,12 @@ export class CallEventsHandler {
         if (!rateLimitPassed) return;
 
         socket.data.appForeground = data?.foreground === true;
-      } catch (err: any) {
+      } catch (err) {
         // Was the one handler in this file with no try/catch — every async
         // Socket.IO listener here must have one (emit() doesn't await
         // rejected promises, so an uncaught throw here becomes an unhandled
         // rejection instead of a logged, contained failure).
-        logger.error('presence:app-state failed', { error: err?.message });
+        logger.error('presence:app-state failed', { error: callErrorMessageOf(err, String(err)) });
       }
     });
 
@@ -1619,8 +1818,8 @@ export class CallEventsHandler {
           socket.emit(CALL_EVENTS.INITIATED, { ...event, iceServers });
           logger.info('📲 Replayed in-progress call:initiated on (re)connect', { callId: c.id, userId });
         }
-      } catch (err: any) {
-        logger.error('call:check-active failed', { error: err?.message });
+      } catch (err) {
+        logger.error('call:check-active failed', { error: callErrorMessageOf(err, String(err)) });
       }
     });
 
@@ -1804,7 +2003,7 @@ export class CallEventsHandler {
           // GW6(c) — appForeground is only trusted on a FRESH socket (see
           // isFreshForegroundSocket): a zombie foreground socket must not
           // suppress the VoIP push (iOS dedups by callId anyway).
-          if (memberSockets.some((s: any) => this.isFreshForegroundSocket(s.data))) {
+          if (memberSockets.some((s) => this.isFreshForegroundSocket(s.data))) {
             foregroundUserIds.add(memberId);
           }
           const memberIceServers = this.callService.generateIceServers(memberId);
@@ -1930,14 +2129,10 @@ export class CallEventsHandler {
             });
           }
         }
-      } catch (error: any) {
+      } catch (error) {
         logger.error('Error initiating call', error);
 
-        const errorMessage = error.message || 'Failed to initiate call';
-        const errorCode = errorMessage.split(':')[0];
-        const message = errorMessage.includes(':')
-          ? errorMessage.split(':').slice(1).join(':').trim()
-          : errorMessage;
+        const { code: errorCode, message } = parseCallHandlerError(error, 'Failed to initiate call');
 
         ack?.({ success: false, error: { code: errorCode, message } });
         socket.emit(CALL_EVENTS.ERROR, { code: errorCode, message } as CallError);
@@ -2150,10 +2345,11 @@ export class CallEventsHandler {
           // (answer sent to nobody). callSession is already in scope from joinCall.
           const senderId = replayOffer.signal.from;
           const senderActive = callSession.participants.some(
-            (p: any) => !p.leftAt && (
-              (p.participant?.userId ?? p.participantId) === senderId ||
-              p.participantId === senderId
-            )
+            (p: { leftAt: Date | null; participantId: string; participant?: { userId?: string | null } | null }) =>
+              !p.leftAt && (
+                (p.participant?.userId ?? p.participantId) === senderId ||
+                p.participantId === senderId
+              )
           );
           if (senderActive) {
             socket.emit(CALL_EVENTS.SIGNAL, replayOffer);
@@ -2184,14 +2380,10 @@ export class CallEventsHandler {
           userId,
           participantId: participant.id
         });
-      } catch (error: any) {
+      } catch (error) {
         logger.error('❌ Socket: Error joining call', error);
 
-        const errorMessage = error.message || 'Failed to join call';
-        const errorCode = errorMessage.split(':')[0];
-        const message = errorMessage.includes(':')
-          ? errorMessage.split(':').slice(1).join(':').trim()
-          : errorMessage;
+        const { code: errorCode, message } = parseCallHandlerError(error, 'Failed to join call');
 
         // Audit gateway (2026-07-28) — this ack previously sent only the bare
         // `message` string despite `errorCode` already being computed above,
@@ -2376,7 +2568,7 @@ export class CallEventsHandler {
             userId
           });
         }
-      } catch (error: any) {
+      } catch (error) {
         logger.error('❌ Socket: Error leaving call', error);
 
         // Sibling-drift fix (Vague 27, mirrors call:end's catch) — if
@@ -2390,11 +2582,7 @@ export class CallEventsHandler {
         const recoveryUserId = getUserId(socket.id) ?? 'unknown';
         await this.forceEndOrphanedCallAfterOptimisticBroadcast(io, data.callId, recoveryUserId);
 
-        const errorMessage = error.message || 'Failed to leave call';
-        const errorCode = errorMessage.split(':')[0];
-        const message = errorMessage.includes(':')
-          ? errorMessage.split(':').slice(1).join(':').trim()
-          : errorMessage;
+        const { code: errorCode, message } = parseCallHandlerError(error, 'Failed to leave call');
 
         socket.emit(CALL_EVENTS.ERROR, {
           code: errorCode,
@@ -2600,11 +2788,11 @@ export class CallEventsHandler {
           userId,
           callsProcessed: activeCalls.length
         });
-      } catch (error: any) {
+      } catch (error) {
         logger.error('❌ Socket: Error force leaving calls', error);
         socket.emit(CALL_EVENTS.ERROR, {
           code: 'FORCE_LEAVE_ERROR',
-          message: error.message || 'Failed to force leave calls'
+          message: callErrorMessageOf(error, 'Failed to force leave calls')
         } as CallError);
       }
     });
@@ -2881,7 +3069,7 @@ export class CallEventsHandler {
           type: data.signal.type,
           targetSockets: targetSocketIds.length
         });
-      } catch (error: any) {
+      } catch (error) {
         logger.error('❌ Socket: Error forwarding signal', error);
 
         socket.emit(CALL_EVENTS.ERROR, {
@@ -2898,95 +3086,7 @@ export class CallEventsHandler {
      * CVE-006: Added input validation
      */
     socket.on(CALL_EVENTS.TOGGLE_AUDIO, async (data: CallMediaToggleEvent) => {
-      try {
-        const userId = getUserId(socket.id);
-        if (!userId) {
-          socket.emit(CALL_EVENTS.ERROR, {
-            code: 'NOT_AUTHENTICATED',
-            message: 'User not authenticated',
-            callId: data?.callId
-          } as CallError);
-          return;
-        }
-
-        // CVE-002: Rate limiting check
-        const rateLimitPassed = await checkSocketRateLimit(
-          socket,
-          userId,
-          SOCKET_RATE_LIMITS.MEDIA_TOGGLE,
-          this.rateLimiter,
-          CALL_EVENTS.ERROR
-        );
-        if (!rateLimitPassed) return;
-
-        // CVE-006: Validate input data
-        const validation = validateSocketEvent(socketMediaToggleSchema, data);
-        if (isValidationFailure(validation)) {
-          const { error: validationError, details: validationDetails } = validation;
-          socket.emit(CALL_EVENTS.ERROR, {
-            code: CALL_ERROR_CODES.VALIDATION_ERROR,
-            message: validationError,
-            details: validationDetails ? { issues: validationDetails } : undefined,
-            callId: data?.callId
-          } as CallError);
-          return;
-        }
-
-        logger.info('📞 Socket: call:toggle-audio', {
-          socketId: socket.id,
-          userId,
-          callId: data.callId,
-          enabled: data.enabled
-        });
-
-        // Audit P2-GW-5 — `updateParticipantMedia` queries on
-        // `participantId` (Participant.id ObjectId), NOT userId. Passing
-        // userId here matched nothing and the toggle silently failed.
-        // Resolve to the real participantId before calling the service.
-        const audioParticipantId = await this.resolveActiveCallParticipantId(userId, data.callId);
-        if (!audioParticipantId) {
-          socket.emit(CALL_EVENTS.ERROR, {
-            code: CALL_ERROR_CODES.NOT_A_PARTICIPANT,
-            message: 'You are not a participant in this call',
-            callId: data?.callId
-          } as CallError);
-          return;
-        }
-        await this.callService.updateParticipantMedia(
-          data.callId,
-          audioParticipantId,
-          'audio',
-          data.enabled
-        );
-
-        // P0-3 — broadcast to the OTHER participants only, mirroring the video
-        // toggle handler below. The sender already updated its own mic state
-        // locally and must NOT receive its own echo: iOS treats any received
-        // call:media-toggled as the REMOTE peer's state (drives the muted
-        // indicator). `io.to` incorrectly included the sender, corrupting the
-        // sender's own view of the peer's mute state on every self-toggle.
-        const toggleEvent: CallMediaToggleEvent = {
-          callId: data.callId,
-          participantId: audioParticipantId,
-          mediaType: 'audio',
-          enabled: data.enabled
-        };
-
-        socket.to(ROOMS.call(data.callId)).emit(
-          CALL_EVENTS.MEDIA_TOGGLED,
-          toggleEvent
-        );
-
-        logger.info('✅ Socket: Audio toggled', {
-          callId: data.callId,
-          userId,
-          enabled: data.enabled
-        });
-      } catch (error: any) {
-        logger.error('❌ Socket: Error toggling audio', error);
-
-        socket.emit(CALL_EVENTS.ERROR, { ...this.mapMediaToggleError(error, 'Failed to toggle audio'), callId: data?.callId } as CallError);
-      }
+      await this.handleMediaToggle(socket, getUserId, data, 'audio');
     });
 
     /**
@@ -2995,91 +3095,7 @@ export class CallEventsHandler {
      * CVE-006: Added input validation
      */
     socket.on(CALL_EVENTS.TOGGLE_VIDEO, async (data: CallMediaToggleEvent) => {
-      try {
-        const userId = getUserId(socket.id);
-        if (!userId) {
-          socket.emit(CALL_EVENTS.ERROR, {
-            code: 'NOT_AUTHENTICATED',
-            message: 'User not authenticated',
-            callId: data?.callId
-          } as CallError);
-          return;
-        }
-
-        // CVE-002: Rate limiting check
-        const rateLimitPassed = await checkSocketRateLimit(
-          socket,
-          userId,
-          SOCKET_RATE_LIMITS.MEDIA_TOGGLE,
-          this.rateLimiter,
-          CALL_EVENTS.ERROR
-        );
-        if (!rateLimitPassed) return;
-
-        // CVE-006: Validate input data
-        const validation = validateSocketEvent(socketMediaToggleSchema, data);
-        if (isValidationFailure(validation)) {
-          const { error: validationError, details: validationDetails } = validation;
-          socket.emit(CALL_EVENTS.ERROR, {
-            code: CALL_ERROR_CODES.VALIDATION_ERROR,
-            message: validationError,
-            details: validationDetails ? { issues: validationDetails } : undefined,
-            callId: data?.callId
-          } as CallError);
-          return;
-        }
-
-        logger.info('📞 Socket: call:toggle-video', {
-          socketId: socket.id,
-          userId,
-          callId: data.callId,
-          enabled: data.enabled
-        });
-
-        // Audit P2-GW-5 — see audio toggle handler for rationale.
-        const videoParticipantId = await this.resolveActiveCallParticipantId(userId, data.callId);
-        if (!videoParticipantId) {
-          socket.emit(CALL_EVENTS.ERROR, {
-            code: CALL_ERROR_CODES.NOT_A_PARTICIPANT,
-            message: 'You are not a participant in this call',
-            callId: data?.callId
-          } as CallError);
-          return;
-        }
-        await this.callService.updateParticipantMedia(
-          data.callId,
-          videoParticipantId,
-          'video',
-          data.enabled
-        );
-
-        // P0-3 — broadcast to the OTHER participants only. The sender already
-        // updated its own camera state locally and must NOT receive its own echo:
-        // iOS treats any received call:media-toggled as the REMOTE peer's state
-        // (drives the avatar placeholder). `socket.to` excludes the sender;
-        // `io.to` would include it.
-        const toggleEvent: CallMediaToggleEvent = {
-          callId: data.callId,
-          participantId: videoParticipantId,
-          mediaType: 'video',
-          enabled: data.enabled
-        };
-
-        socket.to(ROOMS.call(data.callId)).emit(
-          CALL_EVENTS.MEDIA_TOGGLED,
-          toggleEvent
-        );
-
-        logger.info('✅ Socket: Video toggled', {
-          callId: data.callId,
-          userId,
-          enabled: data.enabled
-        });
-      } catch (error: any) {
-        logger.error('❌ Socket: Error toggling video', error);
-
-        socket.emit(CALL_EVENTS.ERROR, { ...this.mapMediaToggleError(error, 'Failed to toggle video'), callId: data?.callId } as CallError);
-      }
+      await this.handleMediaToggle(socket, getUserId, data, 'video');
     });
 
     /**
@@ -3252,13 +3268,9 @@ export class CallEventsHandler {
           duration: callSession.duration,
           reason: endReason
         });
-      } catch (error: any) {
+      } catch (error) {
         logger.error('Error ending call', error);
-        const errorMessage = error.message || 'Failed to end call';
-        const errorCode = errorMessage.split(':')[0];
-        const message = errorMessage.includes(':')
-          ? errorMessage.split(':').slice(1).join(':').trim()
-          : errorMessage;
+        const { code: errorCode, message } = parseCallHandlerError(error, 'Failed to end call');
 
         // The fast-path broadcast may already have told the room the call
         // ended before this failure (e.g. endCall() itself threw). Force the
@@ -3597,7 +3609,15 @@ export class CallEventsHandler {
         if (!rateLimitPassed) return;
 
         const validation = validateSocketEvent(socketRequestIceServersSchema, data);
-        if (!validation.success) return;
+        if (isValidationFailure(validation)) {
+          socket.emit(CALL_EVENTS.ERROR, {
+            code: CALL_ERROR_CODES.VALIDATION_ERROR,
+            message: validation.error,
+            details: validation.details ? { issues: validation.details } : undefined,
+            callId: data?.callId
+          } as CallError);
+          return;
+        }
 
         // Authorization: socket must be in the call room (joined on call:join).
         if (!socket.rooms.has(ROOMS.call(data.callId))) {
@@ -3666,7 +3686,15 @@ export class CallEventsHandler {
         if (!rateLimitPassed) return;
 
         const validation = validateSocketEvent(socketCallBackgroundedSchema, data);
-        if (!validation.success) return;
+        if (isValidationFailure(validation)) {
+          socket.emit(CALL_EVENTS.ERROR, {
+            code: CALL_ERROR_CODES.VALIDATION_ERROR,
+            message: validation.error,
+            details: validation.details ? { issues: validation.details } : undefined,
+            callId: data?.callId
+          } as CallError);
+          return;
+        }
 
         // Resolve the caller's own participantId rather than trusting the
         // client-supplied one — otherwise a participant could flag a peer's
@@ -3708,7 +3736,15 @@ export class CallEventsHandler {
         if (!rateLimitPassed) return;
 
         const validation = validateSocketEvent(socketCallForegroundedSchema, data);
-        if (!validation.success) return;
+        if (isValidationFailure(validation)) {
+          socket.emit(CALL_EVENTS.ERROR, {
+            code: CALL_ERROR_CODES.VALIDATION_ERROR,
+            message: validation.error,
+            details: validation.details ? { issues: validation.details } : undefined,
+            callId: data?.callId
+          } as CallError);
+          return;
+        }
 
         // Same rationale as call:backgrounded — resolve the caller's own
         // participantId instead of trusting the client-supplied one.
@@ -3747,7 +3783,15 @@ export class CallEventsHandler {
         if (!rateLimitPassed) return;
 
         const validation = validateSocketEvent(socketCallScreenCaptureDetectedSchema, data);
-        if (!validation.success) return;
+        if (isValidationFailure(validation)) {
+          socket.emit(CALL_EVENTS.ERROR, {
+            code: CALL_ERROR_CODES.VALIDATION_ERROR,
+            message: validation.error,
+            details: validation.details ? { issues: validation.details } : undefined,
+            callId: data?.callId
+          } as CallError);
+          return;
+        }
 
         if (!socket.rooms.has(ROOMS.call(data.callId))) {
           return;
@@ -3817,15 +3861,27 @@ export class CallEventsHandler {
         if (!rateLimitPassed) return;
 
         const validation = validateSocketEvent(socketCallAnalyticsSchema, data);
-        if (!validation.success) return;
+        if (isValidationFailure(validation)) {
+          socket.emit(CALL_EVENTS.ERROR, {
+            code: CALL_ERROR_CODES.VALIDATION_ERROR,
+            message: validation.error,
+            details: validation.details ? { issues: validation.details } : undefined,
+            callId: data?.callId
+          } as CallError);
+          return;
+        }
 
         // Authorization — was previously unchecked, letting any authenticated
-        // user submit telemetry against an arbitrary callId. Scoped to
-        // conversation membership (not `resolveActiveCallParticipantId`,
-        // which requires `leftAt: null` — analytics fires after the client
-        // has already left the call, so an active-participant check would
-        // reject the legitimate sender).
-        const analyticsParticipantId = await this.resolveParticipantIdFromCall(userId, data.callId);
+        // user submit telemetry against an arbitrary callId, then scoped to
+        // conversation membership via `resolveParticipantIdFromCall` — which
+        // still let ANY member of the conversation submit fabricated
+        // telemetry for a call they never joined, since it never looks at
+        // CallParticipant rows at all. `resolveEverCallParticipantId` checks
+        // the caller actually has a CallParticipant row for THIS call
+        // (regardless of `leftAt`, since analytics fires after the sender
+        // has already left — `resolveActiveCallParticipantId`'s `leftAt:
+        // null` requirement would reject the legitimate sender).
+        const analyticsParticipantId = await this.resolveEverCallParticipantId(userId, data.callId);
         if (!analyticsParticipantId) return;
 
         logger.info('📞 Socket: call:analytics received', {

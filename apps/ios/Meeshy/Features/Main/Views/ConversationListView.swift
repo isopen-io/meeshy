@@ -137,9 +137,6 @@ struct ConversationListView: View {
 
     // Status
     @State private var showStatusComposer = false
-    @State private var showStatusBubble = false
-    @State private var selectedStatusEntry: StatusEntry?
-    @State private var moodBadgeAnchor: CGPoint = .zero
 
     // Search and Filters
     @FocusState var isSearching: Bool
@@ -190,9 +187,6 @@ struct ConversationListView: View {
 
     // Invite sheet
     @State var inviteSheetConversation: Conversation? = nil
-
-    // Status republication
-    @State private var republishStatusEntry: StatusEntry? = nil
 
     // Communities data
     @State var userCommunities: [MeeshyCommunity] = []
@@ -758,23 +752,6 @@ struct ConversationListView: View {
                     .presentationDetents([.medium, .large])
                     .presentationDragIndicator(.visible)
             }
-        .withStatusBubble()
-        .sheet(item: $republishStatusEntry) { entry in
-            StatusComposerView(
-                viewModel: statusViewModel,
-                initialEmoji: entry.moodEmoji,
-                initialText: entry.content,
-                viaUsername: entry.username,
-                repostOfId: entry.id,
-                repostAudioUrl: entry.audioUrl
-            )
-            // Same presentation contract as the two other entry points into the
-            // composer (see `RootViewComponents`): `.large` keeps the sheet usable
-            // at accessibility text sizes, and the drag indicator advertises that
-            // the sheet is resizable rather than leaving the gesture undiscoverable.
-            .presentationDetents([.medium, .large])
-            .presentationDragIndicator(.visible)
-        }
         .sheet(isPresented: $showStatusComposer) {
             StatusComposerView(viewModel: statusViewModel)
                 .presentationDetents([.medium, .large])
@@ -815,14 +792,6 @@ struct ConversationListView: View {
             .adaptiveOnChange(of: feedIsVisible) { wasVisible, isVisible in
                 if wasVisible && !isVisible {
                     withAnimation(.easeOut(duration: 0.25)) { isScrollingDown = false }
-                }
-            }
-            .overlay {
-                if showStatusBubble, let status = selectedStatusEntry {
-                    StatusBubbleOverlay(status: status, anchorPoint: moodBadgeAnchor, isPresented: $showStatusBubble, onRepublish: { entry in
-                        republishStatusEntry = entry
-                    })
-                        .zIndex(200)
                 }
             }
             .overlay { conversationContextMenuOverlay }

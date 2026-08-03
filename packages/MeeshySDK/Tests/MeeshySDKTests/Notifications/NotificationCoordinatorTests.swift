@@ -48,6 +48,10 @@ final class NotificationCoordinatorTests: XCTestCase {
         func reloadTimelines() {
             reloadCount += 1
         }
+        var wipeAllCount = 0
+        func wipeAll() {
+            wipeAllCount += 1
+        }
     }
 
     // MARK: - Factory
@@ -81,6 +85,21 @@ final class NotificationCoordinatorTests: XCTestCase {
         UserDefaults(suiteName: suite)?.removePersistentDomain(forName: suite)
         return NotificationCoordinator(badgeWriter: MockBadgeWriter(), appGroupSuiteName: suite,
                                        currentUserIdProvider: { userId })
+    }
+
+    // MARK: - appgroup-01 — reset() wipes the App Group widget store
+
+    func test_reset_invokesWidgetSinkWipeAll() {
+        let (sut, _, sink, _) = makeSUT()
+
+        sut.reset()
+
+        XCTAssertEqual(
+            sink.wipeAllCount, 1,
+            "reset() (cascade logout) must wipe the App Group widget store — keys AND staging dirs — " +
+            "otherwise the signed-out account's conversations stay on the home screen and its pending " +
+            "relays replay under the next account"
+        )
     }
 
     // MARK: - U2 — read-status resets the open-conversation badge
@@ -509,7 +528,10 @@ final class NotificationCoordinatorTests: XCTestCase {
         waitFor("reset badge write") { writer.writes.last == 0 }
 
         XCTAssertEqual(writer.writes.last, 0)
-        XCTAssertEqual(sink.publishedUnread.last, 0)
+        // appgroup-01 — reset() délègue désormais la remise à zéro du store
+        // widget au wipe App Group complet (wipeAll), qui supprime la clé
+        // unread_count côté sink au lieu de publier 0.
+        XCTAssertEqual(sink.wipeAllCount, 1)
         XCTAssertEqual(UserDefaults(suiteName: suite)?.integer(forKey: "unread_count"), 0)
     }
 

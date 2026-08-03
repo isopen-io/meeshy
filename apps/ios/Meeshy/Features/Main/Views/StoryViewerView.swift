@@ -12,25 +12,26 @@ struct SharedContentWrapper: Identifiable {
 }
 
 /// Wrapper used by `StoryViewerView.fullScreenCover(item:)` to drive the
-/// repost-as-story composer launched from the bottom-bar Partager button (C.1).
-/// Carrying both the source `StoryItem` and the original author's handle keeps
-/// the cover identifiable + supplies what `StoryComposerViewModel(reposting:authorHandle:)`
-/// needs without leaking optionals through the binding.
-struct RepostStorySourceWrapper: Identifiable {
+/// repost-as-post composer launched from the kebab menu's "Editer et republier
+/// en post" action (C.2). Feeds the
+/// `UnifiedPostComposer(repostingStory:authorHandle:onPublishRepost:onDismiss:)`
+/// init introduced in B.7 — the sole surviving repost-as-story wrapper (the
+/// share-button-based `RepostStorySourceWrapper` cover was dead code, removed
+/// S6: the share button reposts directly via `PostService.repost`, see
+/// `StoryViewerView+Sidebar.swift`).
+struct RepostPostSourceWrapper: Identifiable {
     let id = UUID()
     let story: StoryItem
     let authorHandle: String
 }
 
-/// Wrapper used by `StoryViewerView.fullScreenCover(item:)` to drive the
-/// repost-as-post composer launched from the kebab menu's "Editer et republier
-/// en post" action (C.2). Mirrors `RepostStorySourceWrapper` but feeds the
-/// `UnifiedPostComposer(repostingStory:authorHandle:onPublishRepost:onDismiss:)`
-/// init introduced in B.7.
-struct RepostPostSourceWrapper: Identifiable {
-    let id = UUID()
-    let story: StoryItem
-    let authorHandle: String
+/// Enveloppe `Identifiable` d'un `SharedPlace` pour le
+/// `.fullScreenCover(item:)` du reader — ouverte au tap d'une pastille de
+/// lieu de la story (Layer 6.6). Même identité que `BubbleFullscreenPlace`
+/// côté bulle : la paire de coordonnées.
+struct StoryReaderPlaceWrapper: Identifiable {
+    let place: SharedPlace
+    var id: String { "\(place.latitude),\(place.longitude)" }
 }
 
 /// Draft state for a single story's composer
@@ -585,6 +586,10 @@ struct StoryViewerView: View {
             PlaybackCoordinator.shared.stopAll()
             if let story = currentStory {
                 SocialSocketManager.shared.leavePostRoom(postId: story.id)
+                // Relâche la déclaration de contenu actif — conditionnelle à
+                // l'identité pour rester correcte si un autre écran a déjà
+                // déclaré le sien entre-temps.
+                NotificationToastManager.shared.onPostClosed(story.id)
             }
             Task { await EngagementTracker.shared.end(surface: .storyViewer) }
         }
@@ -827,27 +832,18 @@ struct StoryViewerView: View {
             .environmentObject(statusViewModel)
             .presentationDetents([.medium, .large] as Set<PresentationDetent>)
         }
-        .fullScreenCover(item: $repostStoryComposerSource, onDismiss: { resumeTimer() }) { wrapper in
-            StoryComposerView(
-                viewModel: StoryComposerViewModel(
-                    reposting: wrapper.story,
-                    authorHandle: wrapper.authorHandle
-                ),
-                onPublishSlide: { _, _, _, _, _ in },
-                onPublishAllInBackground: { slides, slideImages, loadedImages, loadedVideoURLs, loadedAudioURLs, originalLanguage, visibility, visibilityUserIds in
-                    viewModel.publishStoryInBackground(
-                        slides: slides,
-                        slideImages: slideImages,
-                        loadedImages: loadedImages,
-                        loadedVideoURLs: loadedVideoURLs,
-                        loadedAudioURLs: loadedAudioURLs,
-                        originalLanguage: originalLanguage,
-                        visibility: visibility,
-                        visibilityUserIds: visibilityUserIds
-                    )
-                    repostStoryComposerSource = nil
-                },
-                onDismiss: { repostStoryComposerSource = nil }
+        .fullScreenCover(item: $readerFullscreenPlace, onDismiss: { resumeTimer() }) { wrapper in
+            // Tap d'une pastille de lieu (Layer 6.6) : la story est déjà en
+            // pause (`pauseTimer()` au tap), la carte plein écran offre
+            // « Ouvrir dans Plans » / « Itinéraire » — même surface que la
+            // bulle de message (`LocationFullscreenView`).
+            LocationFullscreenView(
+                latitude: wrapper.place.latitude,
+                longitude: wrapper.place.longitude,
+                placeName: wrapper.place.name,
+                address: wrapper.place.address,
+                accentColor: currentGroup?.avatarColor ?? MeeshyColors.brandPrimaryHex,
+                senderName: currentGroup?.username
             )
         }
         .fullScreenCover(item: $editAndRepostAsPostSource, onDismiss: { resumeTimer() }) { wrapper in
@@ -872,11 +868,14 @@ struct StoryViewerView: View {
                 },
                 onStoryImported: { result in
                     Logger.stories.info(
-                        "repost.import slide=\(result.targetSize.width, privacy: .public)x\(result.targetSize.height, privacy: .public) texts=\(result.texts.count, privacy: .public) media=\(result.media.count, privacy: .public) stickers=\(result.stickers.count, privacy: .public) drawing=\(result.drawingData != nil, privacy: .public) audios=\(result.audios.count, privacy: .public) clamped=\(result.warnings.count, privacy: .public)"
+                        "repost.import slide=\(result.targetSize.width, privacy: .public)x\(result.targetSize.height, privacy: .public) texts=\(result.texts.count, privacy: .public) media=\(result.media.count, privacy: .public) stickers=\(result.stickers.count, privacy: .public) drawing=\(result.drawingData != nil, privacy: .public) audios=\(result.audios.count, privacy: .public) locations=\(result.locations.count, privacy: .public) clamped=\(result.warnings.count, privacy: .public)"
                     )
                 },
                 onDismiss: { editAndRepostAsPostSource = nil }
             )
+            .storyLocationPickerProvided()
+            .storyCameraCaptureProvided()
+            .storyRecentCameraRollProvided()
         }
     }
 
@@ -1279,8 +1278,9 @@ struct StoryViewerView: View {
     /// full-screen picker). Drives the heart-button bounce in the sidebar.
     @State private var heartBouncePulse: Int = 0
     @State private var sharedContentWrapper: SharedContentWrapper?
-    @State private var repostStoryComposerSource: RepostStorySourceWrapper?
     @State private var editAndRepostAsPostSource: RepostPostSourceWrapper?
+    /// Lieu de la story ouvert plein écran (tap sur une pastille de position).
+    @State private var readerFullscreenPlace: StoryReaderPlaceWrapper?
 
     private let quickEmojis = ["❤️", "😂", "😮", "🔥", "😢", "👏"]
 
@@ -1369,6 +1369,7 @@ struct StoryViewerView: View {
             storyHasAudibleSound: storyHasAudibleSound,
             storyHasTranslatableContent: storyHasTranslatableContent,
             storyHasBackgroundAudio: storyHasBackgroundAudio,
+            headerBackgroundAudioDisplay: headerBackgroundAudioDisplay,
             storyHasAudioTranscript: storyHasAudioTranscript,
             isGlobalMuted: isGlobalMuted,
             availableTranslationLanguages: availableTranslationLanguages,
@@ -1400,8 +1401,8 @@ struct StoryViewerView: View {
             isComposerEngaged: $isComposerEngaged,
             hasComposerContent: $hasComposerContent,
             sharedContentWrapper: $sharedContentWrapper,
-            repostStoryComposerSource: $repostStoryComposerSource,
             editAndRepostAsPostSource: $editAndRepostAsPostSource,
+            readerFullscreenPlace: $readerFullscreenPlace,
             isPresented: $isPresented,
             selectedProfileUser: $selectedProfileUser,
             showReportSheet: $showReportSheet,
@@ -1427,15 +1428,14 @@ struct StoryViewerView: View {
             dismissComposer: { dismissComposer() },
             goToPrevious: { goToPrevious() },
             goToNext: { goToNext() },
-            sendComment: { text, effectFlags, parentId, pendingMedia in
-                sendComment(text: text, effectFlags: effectFlags, parentId: parentId, pendingMedia: pendingMedia)
+            sendComment: { text, effectFlags, parentId, pendingMedia, location in
+                sendComment(text: text, effectFlags: effectFlags, parentId: parentId, pendingMedia: pendingMedia, location: location)
             },
             makeStoryCommentRow: { comment, userLang in
                 makeStoryCommentRow(comment, userLang: userLang)
             },
             toggleStoryCommentThread: { await toggleStoryCommentThread($0) },
             makeStoryExternalShareURL: { makeStoryExternalShareURL($0) },
-            storyTimeRemaining: { storyTimeRemaining($0) },
             deleteCurrentStory: { deleteCurrentStory() },
             repostAsPostDirect: { repostAsPostDirect() },
             dismissViewer: { dismissViewer() },
@@ -1713,6 +1713,41 @@ struct StoryViewerView: View {
             effects: story.storyEffects,
             backgroundAudio: story.backgroundAudio
         )
+    }
+
+    /// Contenu à droite de la note du header (directive user 2026-08-02) :
+    /// un son de BIBLIOTHÈQUE s'annonce par le crédit défilant
+    /// « titre · @pseudo · M:SS » à la place de la sinusoïde ; une piste
+    /// PROPRE (première publication, même si la capture l'a versée ensuite à
+    /// la bibliothèque) garde la sinusoïde. Même résolveur que la chip du
+    /// canvas ; la fenêtre du FOND (fin = fin de slide) arme le compteur de
+    /// temps restant — primitives Equatable descendues en `let`, jamais le
+    /// `BackgroundEntry` privé du mixer.
+    var headerBackgroundAudioDisplay: AudioChipHeaderModel { // internal for cross-file access
+        guard let story = currentStory else { return AudioChipHeaderModel(display: .waveform) }
+        let bg = (story.storyEffects?.audioPlayerObjects ?? [])
+            .first(where: { $0.isBackground == true })
+        if let bg, bg.soundId != nil {
+            return AudioChipHeaderModel(
+                display: AudioChipDisplay.resolve(
+                    soundId: bg.soundId, title: bg.name,
+                    authorUsername: bg.soundAuthorUsername),
+                window: AudioChipPlaybackWindow(
+                    startTime: bg.startTime.map(TimeInterval.init),
+                    duration: bg.duration.map(TimeInterval.init),
+                    isBackground: true,
+                    slideDuration: currentSlideDuration))
+        }
+        if let entry = story.backgroundAudio {
+            return AudioChipHeaderModel(
+                display: AudioChipDisplay.resolve(
+                    soundId: entry.id, title: entry.title,
+                    authorUsername: entry.uploaderName),
+                window: AudioChipPlaybackWindow(
+                    isBackground: true,
+                    slideDuration: currentSlideDuration))
+        }
+        return AudioChipHeaderModel(display: .waveform)
     }
 
     /// Probes each foreground video of the current slide for a real audio track.

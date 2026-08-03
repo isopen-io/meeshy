@@ -70,3 +70,35 @@ MATCH_PASSWORD=...
 The dotenv format does NOT use `export`. Confirm `apps/ios/fastlane/.env`
 is covered by `.gitignore` before saving secrets there (the root `.env*`
 glob already covers it).
+
+## ANDP credentials (`meeshy.sh build-number` / `device`)
+
+`./meeshy.sh device` aligns `CURRENT_PROJECT_VERSION` on the latest App Store
+Connect build before compiling, so an app installed on a real device carries the
+same build number as TestFlight (see `sync_build_number` in `meeshy.sh`). It
+does so through `andp`, which reads its own credentials file — **not** fastlane's
+`.env`. Without it the command degrades gracefully (it keeps the committed
+number and says so), but it can no longer self-heal.
+
+ANDP resolves, first match wins:
+
+1. `$ANDP_CONFIG_DIR/secrets.yml`
+2. `<project>/.andp/secrets.yml` — covered by `.gitignore` (`.andp/`)
+3. `~/.andp/secrets.yml` — **recommended**: outside every repo, one file for all
+   projects, so it can never be committed by accident
+
+```yaml
+# ~/.andp/secrets.yml   (chmod 600, directory chmod 700)
+accounts:
+  primary:
+    asc_api:
+      key_id: <App Store Connect key id>       # same key as ASC_KEY_ID
+      issuer_id: <issuer uuid>                 # same as ASC_ISSUER_ID
+      key_content: |                           # contents of the AuthKey_*.p8
+        -----BEGIN PRIVATE KEY-----
+        ...
+        -----END PRIVATE KEY-----
+```
+
+Check the wiring with `andp build-number me.meeshy.app --strategy max-build --json`:
+`source.latest_asc` is the latest build on ASC, `build_number` the next one.

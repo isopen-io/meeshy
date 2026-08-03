@@ -33,7 +33,7 @@ extension iPadRootView {
                 onDismiss: { rightPanelRoute = nil }
             )
             .navigationBarHidden(true)
-            .safeAreaInset(edge: .top, spacing: 0) { ConnectionBanner() }
+            .safeAreaInset(edge: .top, spacing: 0) { ConnectionBanner(onItemTap: handleSyncPillTap) }
         case .communityDetail(let communityId):
             CommunityDetailView(
                 communityId: communityId,
@@ -54,7 +54,7 @@ extension iPadRootView {
                 onDismiss: { rightPanelRoute = nil }
             )
             .navigationBarHidden(true)
-            .safeAreaInset(edge: .top, spacing: 0) { ConnectionBanner() }
+            .safeAreaInset(edge: .top, spacing: 0) { ConnectionBanner(onItemTap: handleSyncPillTap) }
         case .communityCreate:
             CommunityCreateView(
                 onCreated: { community in
@@ -78,7 +78,7 @@ extension iPadRootView {
                 }
             )
         case .communityInvite(let communityId):
-            CommunityInviteView(communityId: communityId)
+            CommunityInviteView(communityId: communityId, onDone: { rightPanelRoute = nil })
         case .notifications:
             NotificationListView(
                 onNotificationTap: { notification in
@@ -87,7 +87,7 @@ extension iPadRootView {
                 onDismiss: { rightPanelRoute = nil }
             )
                         .navigationBarHidden(true)
-            .safeAreaInset(edge: .top, spacing: 0) { ConnectionBanner() }
+            .safeAreaInset(edge: .top, spacing: 0) { ConnectionBanner(onItemTap: handleSyncPillTap) }
             .onDisappear {
                 Task { await notificationManager.refreshUnreadCount() }
             }
@@ -113,16 +113,14 @@ extension iPadRootView {
                                 .navigationBarHidden(true)
         case .postDetail(let postId, let initialPost, let showComments, let commentId, let parentCommentId):
             PostDetailView(postId: postId, initialPost: initialPost, showComments: showComments, targetCommentId: commentId, targetParentCommentId: parentCommentId)
-                        case .bookmarks:
+        case .bookmarks:
+            // Idem iPhone : la barre système porte le titre, et sur iPad le
+            // bouton retour du panneau droit y vit aussi.
             BookmarksView()
-                                .navigationBarHidden(true)
         case .starredMessages:
             StarredMessagesView()
         case .friendRequests:
             FriendRequestListView()
-                                .navigationBarHidden(true)
-        case .editProfile:
-            EditProfileView()
                                 .navigationBarHidden(true)
         case .conversation:
             EmptyView()
@@ -204,12 +202,15 @@ struct iPadLeftColumnHeader: View {
                             .foregroundColor(theme.textSecondary)
 
                         if notificationCount > 0 {
-                            Text("\(min(notificationCount, 99))")
-                                // Doctrine 86i : compteur dans une pastille circulaire fixe 16×16 → figé.
-                                .font(MeeshyFont.relative(9, weight: .bold))
+                            Text(NotificationBadge.displayed(notificationCount))
+                                // Doctrine 86i : le compteur reste figé face au Dynamic
+                                // Type, mais la pastille s'élargit — « 99+ » entier.
+                                .font(MeeshyFont.relative(9, weight: NotificationBadge.fontWeight))
                                 .foregroundColor(.white)
-                                .frame(width: 16, height: 16)
-                                .background(Circle().fill(MeeshyColors.error))
+                                .lineLimit(1)
+                                .padding(.horizontal, 5)
+                                .frame(minWidth: 16, minHeight: 16)
+                                .background(Capsule().fill(MeeshyColors.error))
                                 .offset(x: 6, y: -6)
                                 .accessibilityHidden(true)
                         }

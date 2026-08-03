@@ -639,6 +639,18 @@ export const messageSchema = {
         moodEmoji: { type: 'string', nullable: true }
       }
     },
+    location: {
+      type: 'object',
+      nullable: true,
+      description: 'Lieu partagé (position figée + POI enrichi) — hissé depuis metadata.location. Validé serveur (parseSharedPlace) ; null si le message ne porte aucun lieu.',
+      properties: {
+        latitude: { type: 'number' },
+        longitude: { type: 'number' },
+        name: { type: 'string', nullable: true },
+        address: { type: 'string', nullable: true },
+        category: { type: 'string', nullable: true }
+      }
+    },
     replyTo: {
       type: 'object',
       nullable: true,
@@ -815,6 +827,23 @@ export const messageMinimalSchema = {
     senderId: { type: 'string', nullable: true, description: 'Sender ID' },
     messageType: { type: 'string', description: 'Message type' },
     createdAt: { type: 'string', format: 'date-time', description: 'Creation timestamp' },
+    // Lot 3 (partage de position) — hissé depuis metadata.location. Un
+    // message géolocalisé sans légende a un `content` vide ; ce champ est
+    // ce qui permet au client de rendre malgré tout un aperçu pertinent.
+    // Absent du schéma = tronqué en silence par fast-json-stringify, cf.
+    // le commentaire de `cursorPagination` plus bas dans ce fichier.
+    location: {
+      type: 'object',
+      nullable: true,
+      description: 'Lieu partagé (aperçu de conversation) — validé serveur, null si absent',
+      properties: {
+        latitude: { type: 'number' },
+        longitude: { type: 'number' },
+        name: { type: 'string', nullable: true },
+        address: { type: 'string', nullable: true },
+        category: { type: 'string', nullable: true }
+      }
+    },
     // Sender info (required for ConversationList.tsx getSenderName())
     sender: { ...userMinimalSchema, nullable: true, description: 'Sender user info' },
     anonymousSender: { ...anonymousSenderSchema, nullable: true, description: 'Anonymous sender info' },

@@ -219,12 +219,20 @@ export class SocialEventsHandler {
       (post.visibility as string) ?? 'PUBLIC',
       (post.visibilityUserIds as string[] | undefined) ?? [],
     );
-    this.emitToFriends(recipients, authorId, SERVER_EVENTS.POST_UPDATED, { post });
+    // Feed rooms filtrées par visibilité + post room, UN SEUL emit dédoublonné
+    // (miroir broadcastPostLiked). Caveat assumé : si l'édition RESTREINT la
+    // visibilité, les membres déjà joints à la post room reçoivent encore
+    // cette update — même sémantique que comment:added, pas d'éviction de room.
+    this.emitToFeedsAndPostRoom(recipients, authorId, post.id, SERVER_EVENTS.POST_UPDATED, { post });
   }
 
   async broadcastPostDeleted(postId: string, authorId: string): Promise<void> {
+    // Sur-diffusion sûre (payload id-only) : la post room reçoit aussi la
+    // suppression, sinon un viewer non-ami resté sur le détail/reel d'un post
+    // supprimé ne le sait jamais. `post:join` est gaté par visibilité côté
+    // serveur (PostReactionHandler) et io.to([...]) dédoublonne.
     const friendIds = await this.getFriendIds(authorId);
-    this.emitToFriends(friendIds, authorId, SERVER_EVENTS.POST_DELETED, { postId, authorId });
+    this.emitToFeedsAndPostRoom(friendIds, authorId, postId, SERVER_EVENTS.POST_DELETED, { postId, authorId });
   }
 
   async broadcastPostLiked(
@@ -291,11 +299,20 @@ export class SocialEventsHandler {
   /// Emitted when an author edits a published story (PUT /posts/:id). Mirrors
   /// `broadcastStoryCreated`'s visibility filtering — only viewers who can
   /// currently see the story receive the update.
-  async broadcastStoryUpdated(story: Post, authorId: string): Promise<void> {
+  /// `engagementReset: true` when the edit wiped views/reactions (content
+  /// edit) — clients must mark the story unseen again for every viewer.
+  async broadcastStoryUpdated(
+    story: Post,
+    authorId: string,
+    options?: { engagementReset?: boolean },
+  ): Promise<void> {
     const visibility = story.visibility;
     const visibilityUserIds = [...(story.visibilityUserIds ?? [])];
     const recipients = await this.getVisibilityFilteredRecipients(authorId, visibility, visibilityUserIds);
-    this.emitToFriends(recipients, authorId, SERVER_EVENTS.STORY_UPDATED, { story });
+    this.emitToFriends(recipients, authorId, SERVER_EVENTS.STORY_UPDATED, {
+      story,
+      engagementReset: options?.engagementReset ?? false,
+    });
   }
 
   /// Emitted when an author deletes a story. Sent to all friends (we don't have

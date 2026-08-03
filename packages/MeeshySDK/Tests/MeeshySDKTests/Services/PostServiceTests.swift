@@ -331,6 +331,21 @@ final class PostServiceTests: XCTestCase {
         XCTAssertEqual(mock.lastRequest?.method, "POST")
     }
 
+    func testCreateWithTypeReelWithoutMediaDegradesToPost() async throws {
+        let post = makePost(id: "reelTyped1")
+        let response = APIResponse(success: true, data: post, error: nil)
+        mock.stub("/posts", result: response)
+
+        _ = try await service.createWithType(.reel, content: "Would-be reel")
+
+        // Règle produit 2026-08-02 : un REEL exige vidéo || audio || >= 2 images.
+        // `createWithType` ne transporte AUCUN média → la composition ne peut pas
+        // qualifier ; le service publie un POST au lieu d'un REEL invalide.
+        XCTAssertEqual(mock.requestCount, 1)
+        XCTAssertEqual(mock.lastRequest?.endpoint, "/posts")
+        XCTAssertEqual(mock.lastRequest?.bodyJSON?["type"] as? String, "POST")
+    }
+
     // MARK: - Error case
 
     func testGetFeedThrowsOnNetworkError() async {
@@ -384,5 +399,41 @@ final class PostServiceTests: XCTestCase {
         XCTAssertEqual(mock.requestCount, 1)
         XCTAssertEqual(mock.lastRequest?.endpoint, "/posts/\(postId)/impression")
         XCTAssertEqual(mock.lastRequest?.method, "POST")
+    }
+
+    // MARK: - update : tri-état du lieu (gestion de la position à l'édition)
+
+    func test_update_setLocation_encodesThePlaceObject() async throws {
+        let response = APIResponse(success: true, data: makePost(id: "p1"), error: nil)
+        mock.stub("/posts/p1", result: response)
+        let place = SharedPlace(latitude: 48.8584, longitude: 2.2945, name: "Tour Eiffel")
+
+        _ = try await service.update(postId: "p1", location: .set(place))
+
+        let encoded = mock.lastRequest?.bodyJSON?["location"] as? [String: Any]
+        XCTAssertEqual(encoded?["latitude"] as? Double ?? 0, 48.8584, accuracy: 0.0001)
+        XCTAssertEqual(encoded?["name"] as? String, "Tour Eiffel")
+    }
+
+    func test_update_removeLocation_encodesExplicitNull() async throws {
+        // Le retrait DOIT partir en `location: null` — une clé absente
+        // signifie « inchangé » pour le gateway (tri-état).
+        let response = APIResponse(success: true, data: makePost(id: "p1"), error: nil)
+        mock.stub("/posts/p1", result: response)
+
+        _ = try await service.update(postId: "p1", location: .remove)
+
+        XCTAssertTrue(mock.lastRequest?.bodyJSON?["location"] is NSNull,
+                      "`.remove` doit émettre un null JSON explicite, pas omettre la clé")
+    }
+
+    func test_update_withoutLocation_omitsTheKey() async throws {
+        let response = APIResponse(success: true, data: makePost(id: "p1"), error: nil)
+        mock.stub("/posts/p1", result: response)
+
+        _ = try await service.update(postId: "p1", content: "nouveau texte")
+
+        XCTAssertNil(mock.lastRequest?.bodyJSON?["location"],
+                     "Sans modification du lieu, la clé ne doit pas partir (inchangé)")
     }
 }

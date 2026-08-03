@@ -17,7 +17,7 @@ final class MessagePersistenceLogoutPurgeTests: XCTestCase {
 
     private let tables = [
         "messages", "pending_ids", "message_translations", "message_transcriptions",
-        "message_audio_translations", "local_attachments", "outbox"
+        "message_audio_translations", "local_attachments", "outbox", "send_attempts"
     ]
 
     override func setUp() async throws {
@@ -36,6 +36,7 @@ final class MessagePersistenceLogoutPurgeTests: XCTestCase {
             try db.execute(sql: "INSERT INTO message_audio_translations (id, messageLocalId, targetLanguage, status, receivedAt) VALUES ('a1','m1','en','ready', ?)", arguments: [now])
             try db.execute(sql: "INSERT INTO local_attachments (localId, messageLocalId, type, mimeType, fileName, fileSize, localPath, createdAt) VALUES ('att1','m1','image','image/jpeg','f.jpg',100,'/tmp/f', ?)", arguments: [now])
             try db.execute(sql: "INSERT INTO outbox (id, kind, conversationId, payload, status, createdAt, updatedAt, nextAttemptAt) VALUES ('o1','sendMessage','c1', ?, 'pending', ?, ?, ?)", arguments: [Data(), now, now, now])
+            try db.execute(sql: "INSERT INTO send_attempts (localId, attemptNumber, transport, startedAt, outcome) VALUES ('m1', 1, 'rest', ?, 'failed')", arguments: [now])
         }
     }
 

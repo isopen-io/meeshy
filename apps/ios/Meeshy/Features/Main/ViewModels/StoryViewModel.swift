@@ -24,17 +24,76 @@ enum StoryCoverThumbnail {
     static func cacheKey(storyId: String) -> String { "story-cover:\(storyId)" }
 
     /// Tray cover resolution order: locally-rendered composite (captures every layer)
-    /// → server thumbnail → raw media URL → author avatar. Pure + testable.
+    /// → server thumbnail → raw media URL (image only — `CachedAvatarImage` cannot
+    /// decode a video file) → author avatar. Pure + testable.
     static func preferredCoverURLString(
         localCover: URL?,
         serverThumbnailUrl: String?,
         mediaUrl: String?,
+        mediaIsImage: Bool,
         avatarURL: String?
     ) -> String? {
         if let localCover { return localCover.absoluteString }
         if let t = serverThumbnailUrl, !t.isEmpty { return t }
-        if let u = mediaUrl, !u.isEmpty { return u }
+        if mediaIsImage, let u = mediaUrl, !u.isEmpty { return u }
         return avatarURL
+    }
+
+    /// Plan de rendu d'une cover côté RÉCEPTEUR (aperçu à la volée) : quelles
+    /// images charger et dans quel slot du renderer les injecter. Une story
+    /// texte/fond coloré (± audio) est rendable sans aucune image ; un fond
+    /// visuel image doit être chargé (couche dominante) ; un fond VIDÉO n'a
+    /// pas de poster frame côté récepteur → pas de plan, la chaîne
+    /// `preferredCoverURLString` garde la main. Pure + testable.
+    struct ReceiverCoverPlan: Equatable {
+        /// Fond legacy (premier média image du post) → paramètre `bgImage`.
+        var legacyBackgroundURL: String?
+        /// Images par id d'objet (fond moderne inclus) → `loadedImages`.
+        var imageURLsByObjectId: [String: String]
+        /// Objets dont l'image est indispensable (fond moderne) : échec de
+        /// chargement = pas de cover plutôt qu'une cover sans sa couche dominante.
+        var requiredObjectIds: Set<String>
+    }
+
+    static func receiverCoverPlan(for item: StoryItem) -> ReceiverCoverPlan? {
+        guard let effects = item.storyEffects else { return nil }
+        var plan = ReceiverCoverPlan(
+            legacyBackgroundURL: nil, imageURLsByObjectId: [:], requiredObjectIds: []
+        )
+
+        if let bg = effects.resolvedBackgroundMedia {
+            let url = bg.mediaURL ?? item.media.first(where: { $0.id == bg.postMediaId })?.url
+            guard bg.kind == .image, let url, !url.isEmpty else { return nil }
+            plan.imageURLsByObjectId[bg.id] = url
+            plan.requiredObjectIds.insert(bg.id)
+        } else if let legacyVisual = item.media.first(where: { $0.type == .image || $0.type == .video }) {
+            guard legacyVisual.type == .image, let url = legacyVisual.url, !url.isEmpty else { return nil }
+            plan.legacyBackgroundURL = url
+        }
+
+        for obj in effects.resolvedForegroundMediaObjects where obj.kind == .image {
+            let url = obj.mediaURL ?? item.media.first(where: { $0.id == obj.postMediaId })?.url
+            if let url, !url.isEmpty { plan.imageURLsByObjectId[obj.id] = url }
+        }
+
+        let hasVisualBackground = plan.legacyBackgroundURL != nil || !plan.requiredObjectIds.isEmpty
+        let hasDrawableContent = !effects.textObjects.isEmpty
+            || effects.drawingData != nil
+            || !(effects.background ?? "").isEmpty
+        guard hasVisualBackground || hasDrawableContent else { return nil }
+        return plan
+    }
+
+    /// La DERNIÈRE story de chaque groupe (celle que la tuile du tray montre),
+    /// hors stories déjà couvertes par un composite local. Pure + testable.
+    static func receiverCoverCandidates(
+        groups: [StoryGroup],
+        hasLocalCover: (String) -> Bool
+    ) -> [StoryItem] {
+        groups.compactMap { group in
+            guard let last = group.stories.last, !hasLocalCover(last.id) else { return nil }
+            return last
+        }
     }
 }
 
@@ -54,7 +113,27 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
     @Published var storyGroups: [StoryGroup] = []
     @Published var isLoading = false
     @Published var showStoryComposer = false
-    @Published var activeUpload: StoryUploadState?
+    /// Brouillon à reprendre, consommé par le cover racine du composer
+    /// (`StoryComposerCover`). Posé AVANT `showStoryComposer = true` pour que
+    /// le composer s'ouvre SUR ce brouillon et autosauvegarde sous son id —
+    /// sans adoption, il écrirait sous un id neuf et dupliquerait le brouillon.
+    var pendingDraftId: String?
+    /// C5 — file LOCALE des publications en cours. Ordre = ordre des taps
+    /// « Publier ». Une seule monte à la fois (`currentUploadId`), mais rien
+    /// n'empêche d'en empiler d'autres : plus aucune exclusion mutuelle à la
+    /// CRÉATION. L'échec de l'une ne bloque pas les suivantes.
+    @Published private(set) var activeUploads: [StoryUploadState] = []
+    /// Vue de compatibilité : l'upload que les surfaces d'avatar mettent en
+    /// avant (un échec l'emporte, sinon la tête de file). `activeUploads` étant
+    /// `@Published`, toutes les vues qui lisent cette propriété calculée
+    /// continuent de se rafraîchir.
+    var activeUpload: StoryUploadState? { StoryUploadPresentation.surfaced(in: activeUploads)?.upload }
+    /// Id de l'upload qui MONTE en ce moment. `nil` = la file peut démarrer le
+    /// suivant.
+    private var currentUploadId: String?
+    /// Incrémenté quand une cover de tray vient d'être rendue côté récepteur —
+    /// invalide le tray pour que `latestStoryThumbnailURL` relise le cache local.
+    @Published private(set) var receiverCoverRenderTick = 0
     private var uploadTask: Task<Void, Never>?
 
     private let storyService: StoryServiceProviding
@@ -62,18 +141,68 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
     private var cancellables = Set<AnyCancellable>()
     private let socialSocket: SocialSocketProviding
     private let api: APIClientProviding
+    private let visibilityStore: StoryVisibilityPreferenceStore
+    /// Cycle de vie de publication du brouillon (directive 2026-08-02) :
+    /// succès online (`launchUploadTask`), annulation (`cancelUpload`) et
+    /// édition (`runStoryUpdate`) y écrivent. Propriété injectable — même
+    /// raison que les autres dépendances de ce VM — pour que les tests
+    /// n'exercent jamais le singleton `.shared` (base réelle du sandbox app).
+    private let draftStore: StoryDraftStore
 
     init(
         storyService: StoryServiceProviding = StoryService.shared,
         postService: PostServiceProviding = PostService.shared,
         socialSocket: SocialSocketProviding = SocialSocketManager.shared,
-        api: APIClientProviding = APIClient.shared
+        api: APIClientProviding = APIClient.shared,
+        visibilityStore: StoryVisibilityPreferenceStore = .init(),
+        draftStore: StoryDraftStore = .shared
     ) {
         self.storyService = storyService
         self.postService = postService
         self.socialSocket = socialSocket
         self.api = api
+        self.visibilityStore = visibilityStore
+        self.draftStore = draftStore
         observeReconnectionForRetry()
+        observeQueueDispositions()
+    }
+
+    /// C6 — dernier mode d'audience choisi, injecté au composer à son
+    /// ouverture. Passe par le VM (et non par un statique global) pour qu'une
+    /// seule instance de magasin — donc une seule suite `UserDefaults` — serve
+    /// l'écriture et la lecture, y compris sous test.
+    var lastComposerVisibility: String { visibilityStore.lastVisibility() }
+
+    /// Depuis S3.4 la queue peut reprendre un item que le VM a relâché : sans
+    /// cet abonnement, un anneau rouge FANTÔME survivrait à une publication
+    /// réussie par le drain de fond. `publishFailed` retire aussi la ligne —
+    /// l'item est alors listé dans `MyStoriesView` via
+    /// `StoryPublishService.failedItems`, une seule affordance et pas deux.
+    private func observeQueueDispositions() {
+        StoryPublishQueue.shared.publishSucceeded.publisher
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] payload in
+                self?.removeActiveUpload(queueId: payload.queueId)
+            }
+            .store(in: &cancellables)
+
+        StoryPublishQueue.shared.publishFailed.publisher
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] payload in
+                self?.removeActiveUpload(queueId: payload.queueId)
+            }
+            .store(in: &cancellables)
+    }
+
+    private func removeActiveUpload(queueId: String) {
+        guard let idx = activeUploads.firstIndex(where: { $0.queueId == queueId }) else { return }
+        let removed = activeUploads.remove(at: idx)
+        if currentUploadId == removed.id {
+            uploadTask?.cancel()
+            uploadTask = nil
+            currentUploadId = nil
+        }
+        drainUploadsIfNeeded()
     }
 
     // MARK: - StoryPublishExecutor conformance (Pilier 22 V3)
@@ -84,7 +213,7 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
     ///
     /// Decodes the queued payload, materializes the local media files, and
     /// drives the shared `runStoryUpload` pipeline to completion. Headless:
-    /// no UI mutations on `activeUpload` so the queue path can run from
+    /// no UI mutations on `activeUploads` so the queue path can run from
     /// cold start without ghost banners. Returns the server-assigned post
     /// id of the LAST published slide (the one the queue uses to reconcile
     /// the optimistic `pending_<uuid>` row).
@@ -176,7 +305,7 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
     /// banner remains available; this just removes the friction of having
     /// to tap retry yourself when the network comes back.
     ///
-    /// Note: this only handles uploads still in `activeUpload` (process is
+    /// Note: this only handles uploads still in `activeUploads` (process is
     /// alive). Cross-restart resume is the StoryPublishQueue scope (V2).
     private func observeReconnectionForRetry() {
         MessageSocketManager.shared.$isConnected
@@ -190,9 +319,14 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
                     // Wait a bit so the connection stabilizes and any in-flight
                     // request has a chance to complete first.
                     try? await Task.sleep(nanoseconds: 2_000_000_000)
-                    if case .failed = self.activeUpload?.phase {
-                        self.retryUpload()
+                    // TOUTES les entrées en échec repartent — la file les
+                    // sérialise (une seule monte à la fois) et la revendication
+                    // atomique empêche toute course avec le drain de queue.
+                    let failedIds = self.activeUploads.compactMap { upload -> String? in
+                        if case .failed = upload.phase { return upload.id }
+                        return nil
                     }
+                    for id in failedIds { self.retryUpload(id: id) }
                 }
             }
             .store(in: &cancellables)
@@ -208,6 +342,17 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
         /// un kill le laisse en queue → repris au boot.
         var queueId: String?
         var queueTempStoryId: String?
+        /// Brouillon d'origine (directive 2026-08-02) : gelé au hand-off, il
+        /// n'est supprimé qu'au SUCCÈS serveur confirmé ; l'annulation le
+        /// dégèle, l'échec permanent le ramène éditable avec son erreur.
+        var draftId: String?
+        /// E5 — le VM détient-il la revendication de son item en queue ?
+        /// Posée au write-ahead, CONSERVÉE à l'échec dès qu'une slide est
+        /// commise (`releaseQueueClaimIfNothingCommitted`). Un retry ne doit
+        /// re-revendiquer que s'il l'a relâchée : sinon `markInFlight`
+        /// refuserait sa PROPRE revendication et la ligne resterait en
+        /// `.queued`, hors de portée du drain comme du geste « Réessayer ».
+        var ownsQueueClaim: Bool = false
         var progress: Double
         var phase: UploadPhase
 
@@ -215,7 +360,9 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
         let authorName: String
         let authorAvatar: String?
 
-        let slides: [StorySlide]
+        /// Variable pour recevoir les slides ENRICHIES (thumbHashes calculés en
+        /// aval du hand-off) avant que l'upload ne démarre.
+        var slides: [StorySlide]
         let slideImages: [String: UIImage]
         let loadedImages: [String: UIImage]
         let loadedVideoURLs: [String: URL]
@@ -230,7 +377,15 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
         ///     fails at slide 3 leaves slides 1-2 visible to friends as orphans).
         var publishedPostIds: [String] = []
 
-        enum UploadPhase: Sendable {
+        enum UploadPhase: Sendable, Equatable {
+            /// L'entrée existe pour l'UI mais son intent n'est pas encore
+            /// durable : write-ahead et enrichissement thumbHash en cours. La
+            /// drainer publierait des slides sans thumbHash, sans revendication
+            /// et sans `queueId` (l'intent survivrait alors au succès et serait
+            /// republié au boot). JAMAIS drainable.
+            case preparing
+            /// Persistée, revendiquée, enrichie — en attente de son tour.
+            case queued
             case uploading
             case publishing
             case failed(String)
@@ -259,12 +414,14 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
             purgeDeadStories()
             sortStoryGroupsInPlace()
             prefetchAllStoryMedia(storyGroups)
+            renderMissingReceiverCovers()
             return
         case .stale(let data, _):
             storyGroups = data
             purgeDeadStories()
             sortStoryGroupsInPlace()
             prefetchAllStoryMedia(storyGroups)
+            renderMissingReceiverCovers()
             // R8 inc.1 — le refresh silencieux passe en DELTA quand le cache
             // porte un curseur updatedAt (sinon nil → full historique). Curseur
             // dérivé du tray APRÈS purge : il doit refléter ce qu'on détient
@@ -307,6 +464,7 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
                     purgeDeadStories(deletedIds: Set(response.meta?.deletedStoryIds ?? []))
                     if !deltaGroups.isEmpty {
                         prefetchAllStoryMedia(storyGroups)
+                        renderMissingReceiverCovers()
                     }
                     return
                 }
@@ -327,12 +485,22 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
             if response.success {
                 var groups = response.data.toStoryGroups()
 
-                // Preserve locally-viewed state for stories the API hasn't synced yet
-                let locallyViewed = buildLocallyViewedSet()
+                // Preserve locally-viewed state for stories the API hasn't synced yet.
+                // Garde raffinée : une édition de CONTENU postérieure à la vue
+                // locale (reset d'engagement serveur) fait céder la monotonie —
+                // sauf pour ses PROPRES stories, dont l'état « vu » est
+                // client-only par construction (recordView exclut l'auteur).
+                let locallyViewed = buildLocallyViewedMap()
+                let selfId = AuthManager.shared.currentUser?.id
                 if !locallyViewed.isEmpty {
                     groups = groups.map { group in
+                        let isOwnGroup = group.id == selfId
                         let merged = group.stories.map { story in
-                            guard !story.isViewed, locallyViewed.contains(story.id) else { return story }
+                            guard !story.isViewed, let viewedAt = locallyViewed[story.id] else { return story }
+                            guard isOwnGroup || Self.shouldKeepLocalViewed(
+                                localViewedAt: viewedAt == .distantPast ? nil : viewedAt,
+                                contentEditedAt: story.contentEditedAt
+                            ) else { return story }
                             var copy = story; copy.isViewed = true; return copy
                         }
                         return group.with(stories: merged)
@@ -366,6 +534,7 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
                 sortStoryGroupsInPlace()
                 try? await CacheCoordinator.shared.stories.save(storyGroups, for: Self.storiesCacheKey)
                 prefetchAllStoryMedia(storyGroups)
+                renderMissingReceiverCovers()
             }
         } catch {
             Logger.messages.error("[StoryVM] Failed to load stories: \(error.localizedDescription)")
@@ -382,6 +551,33 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
         return ids
     }
 
+    /// `id → viewedAt` des stories vues localement (`.distantPast` quand le
+    /// moment de la vue est inconnu — caches antérieurs au champ). Sert à la
+    /// garde monotone raffinée : une vue sans horodatage cède toujours devant
+    /// une édition de contenu.
+    private func buildLocallyViewedMap() -> [String: Date] {
+        var map: [String: Date] = [:]
+        for group in storyGroups {
+            for story in group.stories where story.isViewed {
+                map[story.id] = story.viewedAt ?? .distantPast
+            }
+        }
+        return map
+    }
+
+    /// Garde « viewed monotone » raffinée (directive 2026-07-29) : une fois
+    /// vue localement, une story RESTE vue même si le serveur (laggé) dit le
+    /// contraire — SAUF quand son contenu a été édité APRÈS la vue locale :
+    /// le serveur a alors volontairement effacé les vues (reset
+    /// d'engagement), la story redevient légitimement non-vue.
+    /// `contentEditedAt` est le SEUL horodatage fiable pour ce test —
+    /// `updatedAt` bouge sur chaque écriture (compteurs de vues inclus).
+    nonisolated static func shouldKeepLocalViewed(localViewedAt: Date?, contentEditedAt: Date?) -> Bool {
+        guard let contentEditedAt else { return true }
+        guard let localViewedAt else { return false }
+        return localViewedAt >= contentEditedAt
+    }
+
     // MARK: - Background Prefetch (triggered on story load)
 
     /// URLs média déjà préchargées dans cette session — garde de déduplication.
@@ -395,6 +591,75 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
     /// content-addressed donc immuables ; le viewer garde son chemin de charge à la
     /// demande si jamais le disque a évincé l'asset entre-temps).
     private var prefetchedMediaURLs: Set<String> = []
+
+    /// Stories dont le rendu de cover récepteur a déjà été tenté cette session —
+    /// évite de re-tenter en boucle les compositions non rendables (fond vidéo,
+    /// image de fond introuvable) à chaque rafraîchissement du tray.
+    private var attemptedReceiverCoverStoryIds: Set<String> = []
+
+    /// Aperçu à la volée côté récepteur : rend le composite (texte + fond +
+    /// couches) de la dernière story de chaque groupe depuis ses `StoryEffects`
+    /// et le stocke sous `StoryCoverThumbnail.cacheKey(storyId:)` — le même
+    /// emplacement que la cover locale de l'auteur, que la tuile du tray
+    /// préfère déjà à tout le reste. Aucun upload : le texte reste re-rendable
+    /// par viewer (Prisme) et les stories DÉJÀ publiées gagnent un aperçu.
+    func renderMissingReceiverCovers() {
+        let candidates = StoryCoverThumbnail.receiverCoverCandidates(
+            groups: storyGroups,
+            hasLocalCover: { storyId in
+                attemptedReceiverCoverStoryIds.contains(storyId)
+                    || CacheCoordinator.thumbnailLocalFileURL(
+                        for: StoryCoverThumbnail.cacheKey(storyId: storyId)
+                    ) != nil
+            }
+        )
+        guard !candidates.isEmpty else { return }
+        attemptedReceiverCoverStoryIds.formUnion(candidates.map(\.id))
+
+        Task(priority: .utility) { [weak self] in
+            let imageCache = await CacheCoordinator.shared.images
+            var storedAny = false
+
+            for item in candidates {
+                guard let plan = StoryCoverThumbnail.receiverCoverPlan(for: item) else { continue }
+
+                var legacyBackground: UIImage?
+                if let bgURL = plan.legacyBackgroundURL {
+                    let resolved = MeeshyConfig.resolveMediaURL(bgURL)?.absoluteString ?? bgURL
+                    legacyBackground = await imageCache.image(for: resolved)
+                    guard legacyBackground != nil else { continue }
+                }
+
+                var loadedImages: [String: UIImage] = [:]
+                for (objectId, urlString) in plan.imageURLsByObjectId {
+                    let resolved = MeeshyConfig.resolveMediaURL(urlString)?.absoluteString ?? urlString
+                    if let image = await imageCache.image(for: resolved) {
+                        loadedImages[objectId] = image
+                    }
+                }
+                guard plan.requiredObjectIds.allSatisfy({ loadedImages[$0] != nil }) else { continue }
+
+                let slide = StorySlide(
+                    id: item.id,
+                    content: item.content,
+                    effects: item.storyEffects ?? StoryEffects()
+                )
+                guard let cover = StorySlideRenderer.renderComposite(
+                    slide: slide,
+                    bgImage: legacyBackground,
+                    loadedImages: loadedImages,
+                    size: StoryCoverThumbnail.renderSize
+                ), let jpeg = cover.jpegData(compressionQuality: 0.85) else { continue }
+
+                await CacheCoordinator.shared.thumbnails.store(
+                    jpeg, for: StoryCoverThumbnail.cacheKey(storyId: item.id)
+                )
+                storedAny = true
+            }
+
+            if storedAny { self?.receiverCoverRenderTick += 1 }
+        }
+    }
 
     /// Prefetch all media for all story groups in the background.
     /// Downloads images to disk cache and prerolls video players for the first groups.
@@ -752,6 +1017,12 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
         _ = try await OfflineQueue.shared.enqueue(
             .markStoryViewed, payload: payload, conversationId: storyId
         )
+        // Sans ce réveil explicite, la ligne dort `.pending` jusqu'à ce qu'une
+        // mutation SANS RAPPORT (envoi, réaction) réveille le videur — la
+        // pastille affichait « Synchronisation des vues story » en boucle sans
+        // jamais se vider. C'était le SEUL site d'enfilement à ne pas le faire :
+        // même correctif que `markAsRead` (cf. OutboxFlushTrigger).
+        await OutboxFlushTrigger.flushNow()
     }
 
     /// C3 (unification des remontées, 2026-07-14) : chaque slide de story affiché émet
@@ -908,10 +1179,14 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
         loadedVideoURLs: [String: URL],
         loadedAudioURLs: [String: URL] = [:],
         originalLanguage: String? = nil,
-        visibility: String = "FRIENDS",
-        visibilityUserIds: [String] = []
+        visibility: String = StoryVisibilityPreferenceStore.fallback,
+        visibilityUserIds: [String] = [],
+        draftId: String? = nil
     ) {
-        guard activeUpload == nil else { return }
+        // C6 — l'écriture a lieu au hand-off de CRÉATION uniquement (jamais
+        // depuis `updateStoryInBackground` : changer l'audience d'une story
+        // existante n'est pas « mon dernier choix pour une nouvelle story »).
+        visibilityStore.remember(visibility)
 
         // Offline-first: route through StoryPublishQueue instead of TUS so
         // the publish survives a cold start and reconnect. The queue handler
@@ -928,7 +1203,8 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
                     loadedAudioURLs: loadedAudioURLs,
                     originalLanguage: originalLanguage,
                     visibility: visibility,
-                    visibilityUserIds: visibilityUserIds
+                    visibilityUserIds: visibilityUserIds,
+                    draftId: draftId
                 )
             }
             showStoryComposer = false
@@ -942,8 +1218,9 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
         let upload = StoryUploadState(
             id: UUID().uuidString,
             thumbnailImage: thumbnail,
+            draftId: draftId,
             progress: 0,
-            phase: .uploading,
+            phase: .preparing,
             authorId: user?.id ?? "",
             authorName: user?.displayName ?? user?.username ?? "",
             authorAvatar: user?.avatar,
@@ -956,18 +1233,26 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
             visibility: visibility,
             visibilityUserIds: visibilityUserIds
         )
-        activeUpload = upload
+        let uploadId = upload.id
+        activeUploads.append(upload)
         showStoryComposer = false
 
         // E5 — write-ahead : la MÊME persistance que le chemin offline court
-        // AVANT l'upload, marquée in-flight pour que le drain (reconnect) ne
+        // AVANT l'upload, revendiquée pour que le drain (reconnect) ne
         // double-publie pas pendant que l'upload UI tourne. Un kill efface le
         // marqueur volatile → le drain de boot reprend l'item : une story en
-        // cours de publication ne peut plus se perdre. Séquencé (persist PUIS
-        // launch) pour que le succès puisse toujours retirer son intent.
+        // cours de publication ne peut plus se perdre.
+        //
+        // ORDRE STRICT, non négociable : persist → revendication →
+        // enrichissement thumbHash → payload persisté mis à niveau → l'entrée
+        // devient `.queued` → drain. L'entrée reste `.preparing` — donc
+        // structurellement non drainable — tant que ces quatre étapes ne sont
+        // pas passées : un drain déclenché entre-temps par une 2e publication,
+        // une annulation ou un événement de queue partirait sinon avec les
+        // slides BRUTES, sans revendication et sans `queueId`.
         Task { [weak self] in
             guard let self else { return }
-            if let intent = await self.persistPublishIntentToQueue(
+            let intent = await self.persistPublishIntentToQueue(
                 slides: slides,
                 slideImages: slideImages,
                 loadedImages: loadedImages,
@@ -976,13 +1261,83 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
                 originalLanguage: originalLanguage,
                 visibility: visibility,
                 visibilityUserIds: visibilityUserIds
-            ) {
-                await StoryPublishQueue.shared.markInFlight(intent.queueId)
-                self.activeUpload?.queueId = intent.queueId
-                self.activeUpload?.queueTempStoryId = intent.tempStoryId
+            )
+            // L'item vient d'être créé : personne d'autre ne peut le détenir,
+            // la revendication est donc acquise d'office ici. On enregistre
+            // malgré tout QUI la détient : le retry après commit partiel en
+            // dépend (re-revendiquer sa propre claim serait refusé).
+            var ownsClaim = false
+            if let intent {
+                ownsClaim = await StoryPublishQueue.shared.markInFlight(intent.queueId)
             }
-            self.launchUploadTask()
+            let enriched = await self.enrichSlidesWithThumbHashes(
+                queueId: intent?.queueId,
+                slides: slides,
+                slideImages: slideImages,
+                loadedImages: loadedImages,
+                loadedVideoURLs: loadedVideoURLs
+            )
+            self.mutateUpload(id: uploadId) {
+                $0.slides = enriched
+                $0.queueId = intent?.queueId
+                $0.queueTempStoryId = intent?.tempStoryId
+                $0.ownsQueueClaim = ownsClaim
+                $0.phase = .queued
+            }
+            self.drainUploadsIfNeeded()
         }
+    }
+
+    /// Décision produit : les thumbHashes ne bloquent JAMAIS le retour au feed
+    /// (C3). Ils sont calculés après le hand-off, écrits dans l'intent persisté
+    /// et dans l'état d'upload en mémoire, puis seulement le TUS démarre.
+    ///
+    /// Un kill entre le write-ahead et cette mise à niveau laisse en queue une
+    /// story SANS thumbHash — publiée correctement au drain de boot, seul le
+    /// placeholder flou du lecteur manque. Durabilité > cosmétique.
+    private func enrichSlidesWithThumbHashes(
+        queueId: String?,
+        slides: [StorySlide],
+        slideImages: [String: UIImage],
+        loadedImages: [String: UIImage],
+        loadedVideoURLs: [String: URL]
+    ) async -> [StorySlide] {
+        let enriched = await StoryThumbHashEnricher.enrich(
+            slides: slides,
+            bgImages: slideImages,
+            loadedImages: loadedImages,
+            videoURLs: loadedVideoURLs
+        )
+        guard let queueId else { return enriched }
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        // La mise à niveau du payload PERSISTÉ est best-effort : son échec ne
+        // dit rien des thumbHashes en mémoire, qui restent parfaitement
+        // valides. Retourner les slides brutes priverait la story de son
+        // placeholder flou pour une raison qui ne la concerne pas.
+        guard let payload = try? encoder.encode(enriched) else { return enriched }
+        await StoryPublishQueue.shared.updateSlidesPayload(queueId, payload)
+        return enriched
+    }
+
+    /// Accès indexé sûr à une entrée de la file (no-op si l'id a disparu
+    /// entre-temps : succès, annulation, reprise par le drain de fond). TOUS
+    /// les callbacks de progression/phase passent par là.
+    private func mutateUpload(id: String, _ body: (inout StoryUploadState) -> Void) {
+        guard let idx = activeUploads.firstIndex(where: { $0.id == id }) else { return }
+        body(&activeUploads[idx])
+    }
+
+    /// Démarre l'upload suivant si aucun ne monte. Les uploads se déroulent un
+    /// à la fois, dans l'ordre de publication : le TUS d'une story multi-slides
+    /// sature déjà la bande passante, les paralléliser ne ferait que les
+    /// ralentir tous. Les entrées `.preparing` et `.failed` sont sautées.
+    private func drainUploadsIfNeeded() {
+        guard currentUploadId == nil else { return }
+        guard let next = activeUploads.first(where: { $0.phase == .queued }) else { return }
+        currentUploadId = next.id
+        mutateUpload(id: next.id) { $0.phase = .uploading }
+        launchUploadTask(for: next.id)
     }
 
     /// Persists the in-memory composer state to disk and enqueues the
@@ -1006,8 +1361,9 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
         loadedVideoURLs: [String: URL],
         loadedAudioURLs: [String: URL] = [:],
         originalLanguage: String? = nil,
-        visibility: String = "FRIENDS",
-        visibilityUserIds: [String] = []
+        visibility: String = StoryVisibilityPreferenceStore.fallback,
+        visibilityUserIds: [String] = [],
+        draftId: String? = nil
     ) async {
         guard let intent = await persistPublishIntentToQueue(
             slides: slides,
@@ -1017,7 +1373,8 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
             loadedAudioURLs: loadedAudioURLs,
             originalLanguage: originalLanguage,
             visibility: visibility,
-            visibilityUserIds: visibilityUserIds
+            visibilityUserIds: visibilityUserIds,
+            draftId: draftId
         ) else { return }
 
         insertOptimisticOfflineStories(
@@ -1033,6 +1390,22 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
             localized: "story.publish.queue.enqueued",
             defaultValue: "Story enregistrée — publication au retour en ligne"
         ))
+
+        // L'enrichissement est TOUJOURS le dernier maillon avant le premier
+        // octet réseau, et JAMAIS devant un feedback utilisateur. Sur le chemin
+        // en ligne ce feedback est le dismiss (déjà passé) ; ici c'est le
+        // triptyque lignes optimistes + haptic + toast. L'intercaler avant
+        // laisserait le tray VIDE plusieurs secondes (jusqu'à la borne par
+        // vidéo) — exactement le coût que C3 vient d'éliminer ailleurs.
+        // Le cover optimiste vient de `renderComposite`, pas du thumbHash :
+        // repousser l'enrichissement n'a aucun impact visuel.
+        _ = await enrichSlidesWithThumbHashes(
+            queueId: intent.queueId,
+            slides: slides,
+            slideImages: slideImages,
+            loadedImages: loadedImages,
+            loadedVideoURLs: loadedVideoURLs
+        )
     }
 
     /// E5 — cœur de persistance du publish (write-ahead) partagé par les DEUX
@@ -1049,7 +1422,8 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
         loadedAudioURLs: [String: URL],
         originalLanguage: String? = nil,
         visibility: String,
-        visibilityUserIds: [String]
+        visibilityUserIds: [String],
+        draftId: String? = nil
     ) async -> (queueId: String, tempStoryId: String)? {
         // 1. Re-key slide backgrounds.
         let bgImages = Dictionary(
@@ -1118,7 +1492,8 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
             mediaReferences: mediaReferences,
             tempStoryId: tempStoryId,
             visibilityUserIds: visibilityUserIds,
-            originalLanguage: originalLanguage
+            originalLanguage: originalLanguage,
+            draftId: draftId
         )
         _ = await StoryPublishQueue.shared.enqueue(item)
         return (queueId: item.id, tempStoryId: tempStoryId)
@@ -1198,6 +1573,105 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
         }
     }
 
+    // MARK: - Reprise d'un échec de publication (spec 2026-08-01, incrément 5)
+
+    /// Seam injectable (tests) : retrait d'un item de l'historique d'échecs.
+    /// Le chemin réel traverse `StoryPublishService` (queue actor singleton +
+    /// rafraîchissement du `failedItems` publié) — un état global qu'une
+    /// suite de tests ne doit pas muter.
+    var failedItemDiscarder: (StoryPublishQueueItem) async -> Void = { item in
+        await StoryPublishService.shared.discard(item)
+    }
+
+    /// Ouvre le composer de CRÉATION sur un brouillon existant. L'ORDRE est
+    /// l'invariant : `pendingDraftId` est posé AVANT `showStoryComposer`,
+    /// sinon `StoryComposerCover` construit un VM vierge qui autosauvegarde
+    /// sous un id neuf et duplique le brouillon. Seul écrivain app-side de
+    /// `pendingDraftId` (le cover le remet à `nil` au dismiss).
+    func openComposer(resumingDraftId draftId: String) {
+        pendingDraftId = draftId
+        showStoryComposer = true
+    }
+
+    /// Convertit un échec de publication en brouillon ÉDITABLE (« Reprendre »).
+    /// Ordre STRICT — le travail n'est jamais perdu entre deux états :
+    ///   1. décode `slidesPayload` et résout les fichiers de `mediaReferences` ;
+    ///   2. écrit un brouillon NEUF (slides + copies des médias via
+    ///      `saveMedia(draftId:)` → `meeshy_draft_media/<id>/`) puis VÉRIFIE la
+    ///      persistance en relisant le store ;
+    ///   3. seulement ensuite, retire l'item de file et son placeholder
+    ///      optimiste.
+    /// Toute défaillance avant (3) laisse l'item de file INTACT et retourne
+    /// `nil` (le brouillon partiel éventuel est effacé). La présentation du
+    /// composer reste à la charge de l'appelant (la sheet « Mes stories »
+    /// route par son followUp différé → `openComposer(resumingDraftId:)`).
+    func resumeFailedItem(
+        _ item: StoryPublishQueueItem,
+        draftStore: StoryDraftStore = .shared
+    ) async -> String? {
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        guard let slides = try? decoder.decode([StorySlide].self, from: item.slidesPayload),
+              !slides.isEmpty else {
+            Logger.stories.error(
+                "resumeFailedItem: slidesPayload indécodable ou vide pour \(item.id, privacy: .public)")
+            showResumeFailureToast()
+            return nil
+        }
+
+        guard let media = try? loadMediaFromReferences(item.mediaReferences) else {
+            Logger.stories.error(
+                "resumeFailedItem: média manquant/illisible pour \(item.id, privacy: .public) — item conservé")
+            showResumeFailureToast()
+            return nil
+        }
+
+        // `loadMediaFromReferences` (le MÊME validateur que le chemin de
+        // publication de la file) déprefixe les fonds en `slideImages` —
+        // `saveMedia` attend les clés d'ORIGINE, on re-préfixe.
+        let images = media.slideImages.reduce(into: media.loadedImages) { acc, entry in
+            acc["slide-bg-\(entry.key)"] = entry.value
+        }
+
+        let draftId = UUID().uuidString
+        draftStore.save(draftId: draftId,
+                        slides: slides,
+                        visibility: item.visibility,
+                        visibilityUserIds: item.visibilityUserIds ?? [],
+                        originalLanguage: item.originalLanguage)
+        draftStore.saveMedia(
+            draftId: draftId,
+            images: images,
+            videoURLs: media.loadedVideoURLs,
+            audioURLs: media.loadedAudioURLs
+        )
+
+        // `save`/`saveMedia` sont best-effort (elles loggent au lieu de
+        // throw) : on RELIT le store avant de toucher à l'item de file. Une
+        // copie manquante = brouillon effacé + item conservé, jamais l'inverse.
+        let persistedIds = Set(draftStore.loadMediaReferences(draftId: draftId).map(\.elementId))
+        let expectedIds = Set(item.mediaReferences.map(\.elementId))
+        guard draftStore.listDrafts().contains(where: { $0.id == draftId }),
+              expectedIds.isSubset(of: persistedIds) else {
+            draftStore.delete(draftId: draftId)
+            Logger.stories.error(
+                "resumeFailedItem: persistance du brouillon incomplète pour \(item.id, privacy: .public) — item conservé")
+            showResumeFailureToast()
+            return nil
+        }
+
+        await failedItemDiscarder(item)
+        removeOptimisticStories(tempStoryId: item.tempStoryId)
+        return draftId
+    }
+
+    private func showResumeFailureToast() {
+        FeedbackToastManager.shared.showError(String(
+            localized: "story.mine.failed.resume.error",
+            defaultValue: "Impossible de reprendre cette story",
+            bundle: .main))
+    }
+
     /// Retire toutes les stories optimistes d'un `tempStoryId` (ids préfixés
     /// `tempStoryId#`). Idempotent. Supprime le groupe s'il devient vide.
     /// Persiste le cache pour que le cold-start ne ressuscite pas le pending.
@@ -1234,8 +1708,17 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
         }
     }
 
-    private func launchUploadTask() {
-        guard let upload = activeUpload else { return }
+    private func launchUploadTask(for id: String) {
+        // L'état est relu depuis la file : il porte les slides ENRICHIES
+        // (thumbHashes) posées à la fin de la phase `.preparing`.
+        guard let upload = activeUploads.first(where: { $0.id == id }) else {
+            // L'entrée a disparu entre la sélection et le lancement (annulation,
+            // reprise par le drain de fond) : rendre la main, sinon
+            // `currentUploadId` resterait posé et gèlerait la file entière.
+            currentUploadId = nil
+            drainUploadsIfNeeded()
+            return
+        }
 
         uploadTask = Task { [weak self] in
             guard let self else { return }
@@ -1243,13 +1726,13 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
                 _ = try await self.runStoryUpload(
                     upload,
                     onProgress: { [weak self] progress in
-                        self?.activeUpload?.progress = progress
+                        self?.mutateUpload(id: id) { $0.progress = progress }
                     },
                     onPhase: { [weak self] phase in
-                        self?.activeUpload?.phase = phase
+                        self?.mutateUpload(id: id) { $0.phase = phase }
                     },
                     onPublishedSlide: { [weak self] published in
-                        self?.activeUpload?.publishedPostIds.append(published.post.id)
+                        self?.mutateUpload(id: id) { $0.publishedPostIds.append(published.post.id) }
                         self?.insertOrAppendStoryItem(
                             published.item, forAuthor: published.post.author
                         )
@@ -1260,25 +1743,75 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
                 self.cleanupUploadTempFiles(upload)
                 // E5 — l'upload online a abouti : retirer l'intent write-ahead
                 // (queue + dossier médias), sinon le boot suivant re-publierait.
-                if let queueId = self.activeUpload?.queueId {
-                    let tempId = self.activeUpload?.queueTempStoryId
+                let finished = self.activeUploads.first(where: { $0.id == id })
+                if let queueId = finished?.queueId {
+                    let tempId = finished?.queueTempStoryId
                     Task.detached {
                         await StoryPublishQueue.shared.dequeue(queueId)
                         if let tempId { Self.removeOfflineQueueMediaDirectory(tempStoryId: tempId) }
                     }
                 }
-                self.activeUpload = nil
-                self.uploadTask = nil
+                // Directive 2026-08-02 : succès serveur CONFIRMÉ — seul
+                // événement qui efface le brouillon gelé au hand-off. Ce
+                // chemin (upload online, piloté par `launchUploadTask`) ne
+                // passe pas par `publishSucceeded` (silencieux, cf. `dequeue`) :
+                // c'est donc ici, et pas dans `StoryPublishService`, que ce
+                // succès-là doit être consommé.
+                if let draftId = finished?.draftId {
+                    self.draftStore.delete(draftId: draftId)
+                }
+                self.activeUploads.removeAll { $0.id == id }
                 HapticFeedback.success()
-                FeedbackToastManager.shared.showSuccess(String(localized: "story.published", defaultValue: "Story published", bundle: .main))
+                FeedbackToastManager.shared.showSuccess(String(localized: "story.published", defaultValue: "Story publiée", bundle: .main))
+                self.releaseUploadSlot(after: id)
             } catch {
                 if !Task.isCancelled {
-                    self.activeUpload?.phase = .failed(error.localizedDescription)
-                    FeedbackToastManager.shared.showError(String(localized: "story.publishError", defaultValue: "Failed to publish story", bundle: .main))
+                    self.mutateUpload(id: id) { $0.phase = .failed(error.localizedDescription) }
+                    FeedbackToastManager.shared.showError(String(localized: "story.publishError", defaultValue: "Échec de la publication de la story", bundle: .main))
                     // Don't cleanup temp files on failure — retry may need them
+                    self.releaseQueueClaimIfNothingCommitted(uploadId: id)
                 }
+                self.releaseUploadSlot(after: id)
             }
         }
+    }
+
+    /// Rend le créneau d'upload à la file — mais UNIQUEMENT s'il nous
+    /// appartient encore. `cancelUpload(id:)` annule la tâche en vol PUIS
+    /// démarre la suivante : le `catch` de la tâche annulée se déroule après,
+    /// et effacer `currentUploadId`/`uploadTask` à cet instant laisserait
+    /// l'upload fraîchement démarré sans propriétaire (un 2e démarrable en
+    /// parallèle) et sans poignée d'annulation.
+    private func releaseUploadSlot(after id: String) {
+        guard currentUploadId == id else { return }
+        currentUploadId = nil
+        uploadTask = nil
+        // L'échec ou l'annulation d'une story ne gèle PAS la file.
+        drainUploadsIfNeeded()
+    }
+
+    /// Relâcher, c'est passer le relais : la queue possède le backoff, le
+    /// budget de 5 tentatives et l'historique d'échec (visible et rejouable
+    /// dans `MyStoriesView`) ; le VM ne garde que l'affordance de retry en
+    /// 1 tap. Sans ce relâchement, l'item restait revendiqué à vie et le drain
+    /// de fond le sautait pour toujours.
+    ///
+    /// MAIS uniquement si RIEN n'a encore été commis côté serveur :
+    /// `executeQueuedPublish` republierait TOUTES les slides du payload
+    /// (`StoryPublishQueueItem` ne porte aucun avancement), donc les amis
+    /// verraient les slides déjà publiées EN DOUBLE — et `cancelUpload` ne
+    /// connaîtrait pas les post ids du second jeu. Dès qu'une slide est
+    /// commise, seul le retry local (qui porte `publishedPostIds`) sait où
+    /// reprendre : la revendication reste au VM.
+    private func releaseQueueClaimIfNothingCommitted(uploadId: String) {
+        guard let upload = activeUploads.first(where: { $0.id == uploadId }),
+              upload.publishedPostIds.isEmpty,
+              let queueId = upload.queueId else { return }
+        // Le drapeau tombe SYNCHRONEMENT : un retry immédiat doit savoir qu'il
+        // lui faut re-revendiquer, sans dépendre de l'ordonnancement du
+        // `Task.detached` qui efface le marqueur côté acteur.
+        mutateUpload(id: uploadId) { $0.ownsQueueClaim = false }
+        Task.detached { await StoryPublishQueue.shared.clearInFlight(queueId) }
     }
 
     // MARK: - Shared Upload Pipeline (UI-driven + queue-driven)
@@ -1293,7 +1826,7 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
 
     /// Headless story upload pipeline shared by:
     ///   1. `launchUploadTask` (composer flow) — wraps progress/phase/published
-    ///       callbacks to drive the `activeUpload` banner and tray prepend.
+    ///       callbacks to drive the `activeUploads` surfaces and tray prepend.
     ///   2. `executeQueuedPublish` (queue flow) — passes no-op callbacks since
     ///       there is no banner to update on cold-start replay.
     ///
@@ -1429,9 +1962,19 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
                     guard !Task.isCancelled else { return newPostIds }
                     let obj = audioObjects[i]
                     guard let audioURL = upload.loadedAudioURLs[obj.id] ?? upload.loadedVideoURLs[obj.id] else {
-                        os.Logger.storyAudio.error(
-                            "publish audio URL missing audioId=\(obj.id, privacy: .public) — clip will be uploaded but unplayable (postMediaId stays empty)"
-                        )
+                        // Son EMPRUNTÉ à la bibliothèque : aucun fichier local à
+                        // uploader, c'est ATTENDU — le clip reste servi par son
+                        // `mediaURL` serveur (repli du reader), `postMediaId`
+                        // vide par contrat. Ne pas crier au média perdu.
+                        if obj.soundId != nil, obj.mediaURL?.isEmpty == false {
+                            os.Logger.storyAudio.info(
+                                "publish audio borrowed from library audioId=\(obj.id, privacy: .public) soundId=\(obj.soundId ?? "", privacy: .public) — served by mediaURL, nothing to upload"
+                            )
+                        } else {
+                            os.Logger.storyAudio.error(
+                                "publish audio URL missing audioId=\(obj.id, privacy: .public) — clip will be uploaded but unplayable (postMediaId stays empty)"
+                            )
+                        }
                         continue
                     }
                     let result = try await uploader.uploadFile(
@@ -1508,6 +2051,240 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
         return newPostIds
     }
 
+    // MARK: - Background Update (édition d'une story publiée, 2026-07-29)
+
+    /// Contexte d'édition capturé depuis `StoryComposerViewModel` au moment du
+    /// publish — valeurs COPIÉES, le VM du composer n'est jamais retenu.
+    struct StoryEditContext {
+        let postId: String
+        let originalMediaIds: [String]
+        let originalBackgroundMediaId: String?
+        let hydratedBackgroundImage: UIImage?
+    }
+
+    /// Route le publish d'un composer en mode édition vers `PUT /posts/:id`.
+    /// Le serveur remet vues/réactions à zéro (contenu édité) et conserve la
+    /// date de publication ; `story:updated` + le delta-sync propagent le
+    /// « redevenu non-vu » aux autres clients.
+    ///
+    /// V1 en ligne uniquement : contrairement au publish, l'édition ne passe
+    /// pas par la file offline — retourne `false` (composer laissé ouvert)
+    /// quand le réseau manque, pour ne rien perdre.
+    @discardableResult
+    func updateStoryInBackground(
+        edit: StoryEditContext,
+        slides: [StorySlide],
+        slideImages: [String: UIImage],
+        loadedImages: [String: UIImage],
+        loadedVideoURLs: [String: URL],
+        loadedAudioURLs: [String: URL] = [:],
+        originalLanguage: String? = nil,
+        visibility: String = StoryVisibilityPreferenceStore.fallback,
+        visibilityUserIds: [String] = [],
+        draftId: String? = nil
+    ) -> Bool {
+        guard let slide = slides.first else { return false }
+        if NetworkMonitor.shared.isOffline {
+            FeedbackToastManager.shared.showError(String(
+                localized: "story.edit.offline",
+                defaultValue: "Connexion requise pour modifier la story"))
+            return false
+        }
+        Task { [weak self] in
+            await self?.runStoryUpdate(
+                edit: edit, slide: slide, slideImages: slideImages,
+                loadedImages: loadedImages, loadedVideoURLs: loadedVideoURLs,
+                loadedAudioURLs: loadedAudioURLs, originalLanguage: originalLanguage,
+                visibility: visibility, visibilityUserIds: visibilityUserIds,
+                draftId: draftId
+            )
+        }
+        return true
+    }
+
+    /// Pipeline d'update : n'uploade QUE les assets nouveaux (`postMediaId`
+    /// vide — même règle que `runStoryUpload`), garde les médias serveur
+    /// encore référencés, retire les orphelins via `removeMediaIds`, puis
+    /// `PUT /posts/:id` avec le blob d'effects complet.
+    private func runStoryUpdate(
+        edit: StoryEditContext,
+        slide: StorySlide,
+        slideImages: [String: UIImage],
+        loadedImages: [String: UIImage],
+        loadedVideoURLs: [String: URL],
+        loadedAudioURLs: [String: URL],
+        originalLanguage: String?,
+        visibility: String,
+        visibilityUserIds: [String],
+        draftId: String? = nil
+    ) async {
+        do {
+            let serverOrigin = MeeshyConfig.shared.serverOrigin
+            guard let baseURL = URL(string: serverOrigin), let token = api.authToken else {
+                throw URLError(.userAuthenticationRequired)
+            }
+            let uploader = TusUploadManager(baseURL: baseURL)
+            var updatedEffects = slide.effects
+            var newMediaIds: [String] = []
+            var keptOriginalIds = Set<String>()
+
+            // 1. Fond de slide. Identité d'instance : le MÊME UIImage que
+            // celui posé par l'hydratation = fond inchangé → l'original reste
+            // attaché, aucun ré-upload. Une autre instance = fond remplacé.
+            if let bgImage = slideImages[slide.id] {
+                if let hydrated = edit.hydratedBackgroundImage, hydrated === bgImage,
+                   let originalBg = edit.originalBackgroundMediaId {
+                    keptOriginalIds.insert(originalBg)
+                } else {
+                    let thumbHash = bgImage.toThumbHash()
+                    let compressed = await MediaCompressor.shared.compressImage(bgImage)
+                    let fileName = "image_\(UUID().uuidString).\(compressed.fileExtension)"
+                    let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent(fileName)
+                    try compressed.data.write(to: tempURL)
+                    defer { try? FileManager.default.removeItem(at: tempURL) }
+                    let result = try await uploader.uploadFile(
+                        fileURL: tempURL, mimeType: compressed.mimeType,
+                        token: token, uploadContext: "story", thumbHash: thumbHash
+                    )
+                    await CacheCoordinator.shared.images.adoptImage(localFile: tempURL, for: result.fileUrl)
+                    newMediaIds.append(result.id)
+                }
+            } else if slide.mediaURL != nil, let originalBg = edit.originalBackgroundMediaId {
+                // Fond distant sans bitmap local (vidéo de fond) toujours
+                // référencé par la slide → conservé tel quel.
+                keptOriginalIds.insert(originalBg)
+            }
+
+            // 2. Médias de premier plan — même règle que le publish : seuls
+            // les objets sans `postMediaId` sont uploadés, les autres restent
+            // pointés sur leurs assets serveur (et sont donc conservés).
+            if var mediaObjects = updatedEffects.mediaObjects {
+                for i in mediaObjects.indices {
+                    let obj = mediaObjects[i]
+                    if !obj.postMediaId.isEmpty {
+                        keptOriginalIds.insert(obj.postMediaId)
+                        continue
+                    }
+                    if obj.kind == .video, let videoURL = loadedVideoURLs[obj.id] {
+                        let result = try await uploader.uploadFile(
+                            fileURL: videoURL, mimeType: "video/mp4",
+                            token: token, uploadContext: "story"
+                        )
+                        await CacheCoordinator.shared.video.seed(copyingLocalFile: videoURL, for: result.fileUrl)
+                        mediaObjects[i].postMediaId = result.id
+                        mediaObjects[i].mediaURL = result.fileUrl
+                        newMediaIds.append(result.id)
+                    } else if obj.kind == .image, let uiImage = loadedImages[obj.id] {
+                        let fgThumbHash = uiImage.toThumbHash()
+                        let compressed = await MediaCompressor.shared.compressImage(uiImage)
+                        let fileName = "image_\(UUID().uuidString).\(compressed.fileExtension)"
+                        let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent(fileName)
+                        try compressed.data.write(to: tempURL)
+                        defer { try? FileManager.default.removeItem(at: tempURL) }
+                        let result = try await uploader.uploadFile(
+                            fileURL: tempURL, mimeType: compressed.mimeType,
+                            token: token, uploadContext: "story", thumbHash: fgThumbHash
+                        )
+                        await CacheCoordinator.shared.images.adoptImage(localFile: tempURL, for: result.fileUrl)
+                        mediaObjects[i].postMediaId = result.id
+                        mediaObjects[i].mediaURL = result.fileUrl
+                        newMediaIds.append(result.id)
+                    } else {
+                        os.Logger.storyAudio.error(
+                            "update foreground media asset missing kind=\(obj.mediaType, privacy: .public) id=\(obj.id, privacy: .public) — layer will be invisible to viewers"
+                        )
+                    }
+                }
+                updatedEffects.mediaObjects = mediaObjects
+            }
+
+            // 3. Clips audio — même contrat.
+            if var audioObjects = updatedEffects.audioPlayerObjects {
+                for i in audioObjects.indices {
+                    let obj = audioObjects[i]
+                    if !obj.postMediaId.isEmpty {
+                        keptOriginalIds.insert(obj.postMediaId)
+                        continue
+                    }
+                    guard let audioURL = loadedAudioURLs[obj.id] ?? loadedVideoURLs[obj.id] else {
+                        os.Logger.storyAudio.error(
+                            "update audio URL missing audioId=\(obj.id, privacy: .public) — clip unplayable (postMediaId stays empty)"
+                        )
+                        continue
+                    }
+                    let result = try await uploader.uploadFile(
+                        fileURL: audioURL, mimeType: "audio/mp4",
+                        token: token, uploadContext: "story"
+                    )
+                    await CacheCoordinator.shared.audio.seed(copyingLocalFile: audioURL, for: result.fileUrl)
+                    audioObjects[i].postMediaId = result.id
+                    newMediaIds.append(result.id)
+                }
+                updatedEffects.audioPlayerObjects = audioObjects
+            }
+
+            // 4. Les originaux plus référencés par la composition éditée.
+            let removeMediaIds = edit.originalMediaIds.filter { !keptOriginalIds.contains($0) }
+
+            // 5. PUT — le gateway pose `contentEditedAt`, remet l'engagement à
+            // zéro et broadcast `story:updated` avec `engagementReset: true`.
+            let post = try await postService.update(
+                postId: edit.postId,
+                content: slide.content,
+                visibility: visibility,
+                visibilityUserIds: visibilityUserIds,
+                moodEmoji: nil,
+                originalLanguage: originalLanguage,
+                type: nil,
+                removeMediaIds: removeMediaIds.isEmpty ? nil : removeMediaIds,
+                storyEffects: updatedEffects,
+                mediaIds: newMediaIds.isEmpty ? nil : newMediaIds,
+                location: nil
+            )
+
+            // 6. Réconciliation locale : cover local-first re-rendue (la
+            // composition a changé) + remplacement de l'item dans le groupe.
+            var editedSlide = slide
+            editedSlide.effects = updatedEffects
+            if let cover = StorySlideRenderer.renderComposite(
+                slide: editedSlide,
+                bgImage: slideImages[slide.id],
+                loadedImages: loadedImages,
+                size: StoryCoverThumbnail.renderSize
+            ), let jpeg = cover.jpegData(compressionQuality: 0.85) {
+                await CacheCoordinator.shared.thumbnails.store(
+                    jpeg, for: StoryCoverThumbnail.cacheKey(storyId: post.id)
+                )
+            }
+            let groups = [post].toStoryGroups(currentUserId: AuthManager.shared.currentUser?.id)
+            if var item = groups.first?.stories.first {
+                item.isViewed = true
+                item.viewedAt = Date()
+                insertOrAppendStoryItem(item, forAuthor: post.author)
+            }
+            storyService.cache(post: post)
+            HapticFeedback.success()
+            FeedbackToastManager.shared.showSuccess(String(
+                localized: "story.edit.success", defaultValue: "Story mise à jour", bundle: .main))
+            // Directive 2026-08-02 : succès serveur CONFIRMÉ — le brouillon
+            // d'édition (gelé par `freezeCurrentDraftForPublish` au hand-off)
+            // n'a plus de raison d'être : la story qu'il modifiait est à jour.
+            if let draftId {
+                draftStore.delete(draftId: draftId)
+            }
+        } catch {
+            Logger.messages.error("[StoryVM] Story update failed: \(error.localizedDescription)")
+            FeedbackToastManager.shared.showError(String(
+                localized: "story.edit.error", defaultValue: "Échec de la mise à jour de la story", bundle: .main))
+            // Échec PERMANENT (l'édition ne passe pas par la file de retry) :
+            // le brouillon revient éditable, avec son erreur affichable —
+            // sinon il resterait gelé à vie, invisible des reprises.
+            if let draftId {
+                draftStore.recordPublishFailure(draftId: draftId, message: error.localizedDescription)
+            }
+        }
+    }
+
     /// Hydrates the in-memory dictionaries that `runStoryUpload` consumes
     /// from a flat `[StoryMediaReference]` list. The queue stores absolute
     /// disk paths because the in-memory `UIImage` / `URL` graph is not
@@ -1575,41 +2352,86 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
         )
     }
 
-    func retryUpload() {
-        guard case .failed = activeUpload?.phase else { return }
-        activeUpload?.progress = 0
-        activeUpload?.phase = .uploading
-        launchUploadTask()
+    func retryUpload(id: String) {
+        guard let upload = activeUploads.first(where: { $0.id == id }),
+              case .failed(let previousError) = upload.phase else { return }
+        // `.preparing` et NON `.queued` : la re-revendication ci-dessous
+        // traverse un saut d'acteur, et pendant ce vol une ligne `.queued` est
+        // SÉLECTIONNABLE par `drainUploadsIfNeeded()` — qu'un autre upload qui
+        // se termine (ou qu'on annule) déclenche. Elle partirait NUE, en
+        // parallèle du drain de fond qui détient peut-être encore l'item :
+        // exactement la double publication que la phase ferme au premier tap.
+        mutateUpload(id: id) {
+            $0.progress = 0
+            $0.phase = .preparing
+        }
+        // Le VM détient DÉJÀ la revendication (cas nominal du retry après un
+        // commit partiel : elle lui est conservée parce que lui seul sait où
+        // reprendre). Re-revendiquer refuserait sa propre claim et figerait la
+        // ligne — plus aucune affordance ne l'atteindrait. Rien n'est en vol
+        // ici : `.queued` puis drain se suivent sur le même tour de MainActor.
+        guard !upload.ownsQueueClaim, let queueId = upload.queueId else {
+            mutateUpload(id: id) { $0.phase = .queued }
+            drainUploadsIfNeeded()
+            return
+        }
+        Task { [weak self] in
+            guard let self else { return }
+            // Re-revendication ATOMIQUE : si le drain de fond a repris l'item
+            // entre-temps, publier en parallèle dupliquerait la story. On rend
+            // la ligne à son état ROUGE — `.queued` la sortirait de l'overlay
+            // (gestes gatés sur `.failed`) et de la reprise à la reconnexion.
+            guard await StoryPublishQueue.shared.markInFlight(queueId) else {
+                self.mutateUpload(id: id) { $0.phase = .failed(previousError) }
+                return
+            }
+            self.mutateUpload(id: id) {
+                $0.ownsQueueClaim = true
+                $0.phase = .queued
+            }
+            self.drainUploadsIfNeeded()
+        }
     }
 
-    func cancelUpload() {
-        if let upload = activeUpload {
-            cleanupUploadTempFiles(upload)
-            // Delete any slides that were committed before the user cancelled —
-            // otherwise a 5-slide story cancelled at slide 3 leaves slides 1-2
-            // visible to friends as orphan stories that don't fit any slideshow.
-            // Fire-and-forget on a detached task; don't block the cancel UX.
-            let orphans = upload.publishedPostIds
-            if !orphans.isEmpty {
-                Task.detached { [storyService = self.storyService] in
-                    for postId in orphans {
-                        try? await storyService.delete(storyId: postId)
-                    }
+    func cancelUpload(id: String) {
+        guard let upload = activeUploads.first(where: { $0.id == id }) else { return }
+        cleanupUploadTempFiles(upload)
+        // Annulation EXPLICITE d'une publication en attente : dégèle le
+        // brouillon (retire `pendingPublishAt`) sans lui fabriquer d'erreur —
+        // il n'y a pas eu d'échec, l'utilisateur a juste changé d'avis. Il
+        // redevient visible/éditable dans les reprises.
+        if let draftId = upload.draftId {
+            draftStore.clearPendingPublish(draftId: draftId)
+        }
+        // Delete any slides that were committed before the user cancelled —
+        // otherwise a 5-slide story cancelled at slide 3 leaves slides 1-2
+        // visible to friends as orphan stories that don't fit any slideshow.
+        // Fire-and-forget on a detached task; don't block the cancel UX.
+        let orphans = upload.publishedPostIds
+        if !orphans.isEmpty {
+            Task.detached { [storyService = self.storyService] in
+                for postId in orphans {
+                    try? await storyService.delete(storyId: postId)
                 }
             }
         }
         // E5 — annulation EXPLICITE : l'intent write-ahead part avec (sinon la
         // story annulée ressusciterait au prochain boot via le drain de queue).
-        if let queueId = activeUpload?.queueId {
-            let tempId = activeUpload?.queueTempStoryId
+        if let queueId = upload.queueId {
+            let tempId = upload.queueTempStoryId
             Task.detached {
                 await StoryPublishQueue.shared.dequeue(queueId)
                 if let tempId { Self.removeOfflineQueueMediaDirectory(tempStoryId: tempId) }
             }
         }
-        uploadTask?.cancel()
-        uploadTask = nil
-        activeUpload = nil
+        if currentUploadId == id {
+            uploadTask?.cancel()
+            uploadTask = nil
+            currentUploadId = nil
+        }
+        activeUploads.removeAll { $0.id == id }
+        // Annuler la story en vol enchaîne la suivante.
+        drainUploadsIfNeeded()
     }
 
     /// Cleanup temp video/audio files after upload completes.
@@ -1670,14 +2492,23 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
     /// avec la garde isViewed MONOTONE du sink storyUpdated / fetch full —
     /// un `isViewedByMe` serveur en retard ne dé-voit jamais un anneau local.
     func insertOrMergeStoryGroups(_ groups: [StoryGroup], replacingExisting: Bool = false) {
+        let selfId = AuthManager.shared.currentUser?.id
         for newGroup in groups {
             if let idx = storyGroups.firstIndex(where: { $0.id == newGroup.id }) {
+                let isOwnGroup = newGroup.id == selfId
                 var stories = storyGroups[idx].stories
                 for story in newGroup.stories {
                     if let j = stories.firstIndex(where: { $0.id == story.id }) {
                         guard replacingExisting else { continue }
                         var replacement = story
-                        if stories[j].isViewed && !replacement.isViewed {
+                        // Monotone raffinée : cède quand le CONTENU a été édité
+                        // après la vue locale (reset d'engagement) — jamais pour
+                        // ses propres stories (état « vu » client-only).
+                        if stories[j].isViewed && !replacement.isViewed,
+                           isOwnGroup || Self.shouldKeepLocalViewed(
+                               localViewedAt: stories[j].viewedAt,
+                               contentEditedAt: replacement.contentEditedAt
+                           ) {
                             replacement.isViewed = true
                             replacement.viewedAt = stories[j].viewedAt
                         }
@@ -1739,6 +2570,21 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
         // sinks — les handlers à delta ±1 (`applyPostReactionDelta`,
         // `applyStoryReactionDelta`) compteraient alors double.
         guard socketCancellables.isEmpty else { return }
+
+        // rts-02 — rattrapage du tray au reconnect social : des stories ont pu
+        // être créées ou supprimées pendant la coupure. Le curseur se calcule
+        // au moment de l'ÉVÉNEMENT (pas à l'armement) — insertOrMergeStoryGroups,
+        // la garde isViewed monotone, les tombstones et le fallback full sur
+        // échec du delta garantissent déjà l'idempotence côté
+        // fetchStoriesFromNetwork.
+        socialSocket.didReconnect
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] in
+                guard let self, !self.isLoading else { return }
+                Task { await self.fetchStoriesFromNetwork(deltaSince: Self.deltaSince(for: self.storyGroups)) }
+            }
+            .store(in: &socketCancellables)
+
         socialSocket.storyCreated
             .receive(on: DispatchQueue.main)
             .sink { [weak self] apiPost in
@@ -1776,9 +2622,16 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] event in
                 guard let self else { return }
-                let updated = [event.story].toStoryGroups(currentUserId: AuthManager.shared.currentUser?.id)
+                let selfId = AuthManager.shared.currentUser?.id
+                // Reset d'engagement (édition de contenu) : le serveur a effacé
+                // vues et réactions — la story redevient non-vue pour les
+                // viewers. Jamais pour l'auteur lui-même (son état « vu » est
+                // client-only, recordView l'exclut côté serveur).
+                let engagementReset = event.engagementReset ?? false
+                let updated = [event.story].toStoryGroups(currentUserId: selfId)
                 for updatedGroup in updated {
                     guard let groupIdx = self.storyGroups.firstIndex(where: { $0.id == updatedGroup.id }) else { continue }
+                    let isOwnGroup = updatedGroup.id == selfId
                     var stories = self.storyGroups[groupIdx].stories
                     for newStory in updatedGroup.stories {
                         if let storyIdx = stories.firstIndex(where: { $0.id == newStory.id }) {
@@ -1786,16 +2639,25 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
                             // Local-first : `isViewed` est posé en optimiste par markViewed
                             // (fire-and-forget) ; le serveur peut lagger → un `isViewedByMe`
                             // stale dans story:updated reverterait l'anneau en « non-vu ».
-                            // Viewed est MONOTONE (une fois vu, reste vu). Même garde que
-                            // fetchStoriesFromNetwork (buildLocallyViewedSet) appliquée ici
-                            // au chemin socket pour éviter la divergence REST/temps-réel.
-                            if stories[storyIdx].isViewed && !replacement.isViewed {
+                            // Viewed est MONOTONE (une fois vu, reste vu) — SAUF quand
+                            // l'édition a remis l'engagement à zéro (flag de l'event, ou
+                            // `contentEditedAt` postérieur à la vue locale pour le chemin
+                            // REST). Même garde que fetchStoriesFromNetwork.
+                            if stories[storyIdx].isViewed && !replacement.isViewed,
+                               isOwnGroup || (!engagementReset && Self.shouldKeepLocalViewed(
+                                   localViewedAt: stories[storyIdx].viewedAt,
+                                   contentEditedAt: replacement.contentEditedAt
+                               )) {
                                 replacement.isViewed = true
+                                replacement.viewedAt = stories[storyIdx].viewedAt
                             }
                             stories[storyIdx] = replacement
                         }
                     }
                     self.storyGroups[groupIdx] = self.storyGroups[groupIdx].with(stories: stories)
+                    // L'anneau du groupe peut redevenir « non-vu » — même
+                    // re-tri que storyViewed pour remonter la bulle fraîche.
+                    self.sortStoryGroupsInPlace()
                 }
                 self.persistStoryCache()
             }

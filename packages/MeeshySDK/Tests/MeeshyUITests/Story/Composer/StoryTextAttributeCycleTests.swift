@@ -213,10 +213,53 @@ final class StoryTextAttributeCycleTests: XCTestCase {
             .symbol(name: "square.dashed", emphasis: 0))
         let thickest = StoryTextAttributeCycle.indicator(.border, of: text(borderWidth: 12))
         let thinnest = StoryTextAttributeCycle.indicator(.border, of: text(borderWidth: 2))
-        guard case .symbol(_, let heavy) = thickest, case .symbol(_, let light) = thinnest else {
+        guard case .symbol(_, let heavy, _) = thickest,
+              case .symbol(_, let light, _) = thinnest else {
             return XCTFail("le contour doit rendre son épaisseur")
         }
         XCTAssertGreaterThan(heavy, light)
+    }
+
+    // MARK: - Les couleurs se lisent sur la bulle
+
+    /// La bulle Couleur montre déjà sa teinte ; le contour du texte doit la
+    /// montrer aussi, sinon l'épaisseur se règle à l'aveugle sur la couleur.
+    func test_indicator_forBorder_carriesItsColour() {
+        let obj = text(borderWidth: 4, borderColor: "FF2E63")
+        guard case .symbol(_, _, let tint) = StoryTextAttributeCycle.indicator(.border, of: obj) else {
+            return XCTFail("le contour doit rester un symbole")
+        }
+        XCTAssertEqual(tint, "FF2E63")
+    }
+
+    /// Sans trait, il n'y a pas de couleur à annoncer — la bulle reprend la
+    /// teinte neutre du verre.
+    func test_indicator_forBorder_withoutAStroke_carriesNoColour() {
+        guard case .symbol(_, _, let tint) =
+                StoryTextAttributeCycle.indicator(.border, of: text(borderWidth: 0, borderColor: "FF2E63")) else {
+            return XCTFail("le contour doit rester un symbole")
+        }
+        XCTAssertNil(tint)
+    }
+
+    func test_indicator_forFrame_carriesItsBorderColour() {
+        var obj = text(frameShape: StoryTextFrameShape.pill.rawValue)
+        obj.frameBorderWidth = 3
+        obj.frameBorderColor = "34D399"
+        guard case .symbol(_, _, let tint) = StoryTextAttributeCycle.indicator(.frame, of: obj) else {
+            return XCTFail("le cadre doit rester un symbole")
+        }
+        XCTAssertEqual(tint, "34D399")
+    }
+
+    func test_indicator_forFrame_withoutALiseré_carriesNoColour() {
+        var obj = text(frameShape: StoryTextFrameShape.pill.rawValue)
+        obj.frameBorderWidth = 0
+        obj.frameBorderColor = "34D399"
+        guard case .symbol(_, _, let tint) = StoryTextAttributeCycle.indicator(.frame, of: obj) else {
+            return XCTFail("le cadre doit rester un symbole")
+        }
+        XCTAssertNil(tint)
     }
 
     func test_indicator_forStyle_showsTheCurrentFamily() {

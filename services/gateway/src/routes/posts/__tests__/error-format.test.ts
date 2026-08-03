@@ -98,7 +98,7 @@ const buildMockPrisma = (): PrismaClient => ({
   post: { findUnique: jest.fn<() => Promise<null>>().mockResolvedValue(null) },
   postComment: { findUnique: jest.fn<() => Promise<null>>().mockResolvedValue(null) },
   postImpression: { create: jest.fn(), createMany: jest.fn() },
-  storyBackgroundAudio: { create: jest.fn(), findMany: jest.fn(), update: jest.fn() },
+  sound: { create: jest.fn(), findMany: jest.fn(), update: jest.fn() },
 } as unknown as PrismaClient);
 
 const buildNoAuthMiddleware = () =>

@@ -15,7 +15,7 @@ extension StoryCanvasUIView {
     /// coûte rien tant qu'aucune valeur ne change.
     func applyVolumeAutomation(at time: Float) {
         let effects = slide.effects
-        let isDucking = shouldDuckVideoAudio(effects: effects)
+        let slideDucks = shouldDuckVideoAudio(effects: effects)
 
         // Vidéo de fond.
         if let bg = effects.mediaObjects?.first(where: { $0.isBackground }) {
@@ -24,7 +24,11 @@ extension StoryCanvasUIView {
                 keyframes: bg.keyframes,
                 at: time - Float(bg.startTime ?? 0)
             )
-            backgroundLayer.volume = StoryVolumeResolver.ducked(resolved, isDucking: isDucking)
+            backgroundLayer.volume = StoryVolumeResolver.ducked(
+                resolved,
+                isDucking: StoryVolumeResolver.isDucking(
+                    slideDucks: slideDucks, isDuckingDisabled: bg.isDuckingDisabled)
+            )
         }
 
         // Vidéos d'avant-plan : chaque couche porte son propre média.
@@ -35,8 +39,28 @@ extension StoryCanvasUIView {
                 keyframes: media.keyframes,
                 at: time - Float(media.startTime ?? 0)
             )
-            layer.volume = StoryVolumeResolver.ducked(resolved, isDucking: isDucking)
+            layer.volume = StoryVolumeResolver.ducked(
+                resolved,
+                isDucking: StoryVolumeResolver.isDucking(
+                    slideDucks: slideDucks, isDuckingDisabled: media.isDuckingDisabled)
+            )
         }
+
+        applyAudioMixerVolumes(at: time)
+    }
+
+    /// Pousse les volumes du MODÈLE (clips audio fg + bg) dans le
+    /// `ReaderAudioMixer`, résolus à l'instant `time`.
+    ///
+    /// Deux appelants :
+    /// - `applyVolumeAutomation` (tick 60 Hz du reader, mode `.play`) ;
+    /// - `rebuildLayers` en `.edit` (éditeur sonore) — le reconfigure du mixer
+    ///   est gaté sur la COMPOSITION (`slideAudioRevision`), donc un mute /
+    ///   changement de volume seul ne le franchit pas, et l'`.edit` n'a pas de
+    ///   display-link : sans cette poussée au rebuild, la boucle du composer
+    ///   continuait de jouer une piste que l'auteur venait de couper.
+    func applyAudioMixerVolumes(at time: Float) {
+        let effects = slide.effects
 
         // Clips audio d'avant-plan — jamais atténués : l'atténuation vise la
         // piste des VIDÉOS, qui est ce qui couvre la musique.

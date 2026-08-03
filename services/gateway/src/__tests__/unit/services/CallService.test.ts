@@ -2758,6 +2758,116 @@ describe('CallService - setReapedCallCallback (sweeps GC d\'initiateCall)', () =
 
     expect(result.id).toBe('call-new');
   });
+
+  it('diffuse call:ended au broadcaster pour le callId moissonné par le sweep phantom — sans quoi le pair reste bloqué indéfiniment (aucun autre chemin GC ne rebalaie un call déjà `ended`)', async () => {
+    const staleCallId = 'stale-call-reaped';
+    const staleStartedAt = new Date(Date.now() - 5 * 60_000);
+    mockPrisma.conversation.findUnique.mockResolvedValue(createMockConversation());
+    mockPrisma.participant.findFirst.mockResolvedValue({
+      id: 'participant-123', conversationId: 'conv-123', userId: 'user-123', isActive: true
+    });
+    mockPrisma.callParticipant.findMany.mockResolvedValue([{
+      id: 'stale-part-1',
+      callSessionId: staleCallId,
+      leftAt: null,
+      callSession: {
+        id: staleCallId,
+        startedAt: staleStartedAt,
+        conversationId: 'conv-other',
+        status: CallStatus.active,
+        answeredAt: staleStartedAt
+      }
+    }]);
+    mockPrisma.callSession.findFirst.mockResolvedValue(null);
+    mockPrisma.$transaction
+      .mockImplementationOnce(async (cb: (tx: any) => Promise<any>) => {
+        const tx = {
+          callParticipant: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
+          callSession: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) }
+        };
+        return cb(tx);
+      })
+      .mockImplementationOnce(async (cb: (tx: any) => Promise<any>) => {
+        const tx = {
+          callSession: { create: jest.fn().mockResolvedValue({ id: 'call-123' }) },
+          callParticipant: { create: jest.fn().mockResolvedValue({}) }
+        };
+        return cb(tx);
+      });
+    mockPrisma.callSession.findUnique.mockResolvedValue(createMockCallSession({
+      participants: [createMockParticipant()],
+      initiator: createMockUser(),
+      conversation: createMockConversation()
+    }));
+
+    const broadcasts: Array<{ callId: string; conversationId?: string; endedEvent: any }> = [];
+    callService.setCallEndedBroadcaster((callId, conversationId, endedEvent) => {
+      broadcasts.push({ callId, conversationId, endedEvent });
+    });
+
+    await callService.initiateCall(validInitiateData);
+
+    expect(broadcasts).toHaveLength(1);
+    expect(broadcasts[0].callId).toBe(staleCallId);
+    expect(broadcasts[0].conversationId).toBe('conv-other');
+    expect(broadcasts[0].endedEvent).toMatchObject({
+      callId: staleCallId,
+      reason: CallEndReason.garbageCollected
+    });
+  });
+
+  it('diffuse call:ended au broadcaster pour le callId moissonné par le sweep zombie', async () => {
+    const zombieCall = setupZombieSweep();
+    const broadcasts: Array<{ callId: string; conversationId?: string; endedEvent: any }> = [];
+    callService.setCallEndedBroadcaster((callId, conversationId, endedEvent) => {
+      broadcasts.push({ callId, conversationId, endedEvent });
+    });
+
+    await callService.initiateCall(validInitiateData);
+
+    expect(broadcasts).toHaveLength(1);
+    expect(broadcasts[0].callId).toBe(zombieCall.id);
+    expect(broadcasts[0].conversationId).toBe('conv-123');
+    expect(broadcasts[0].endedEvent).toMatchObject({
+      callId: zombieCall.id,
+      reason: CallEndReason.garbageCollected
+    });
+  });
+
+  it('un broadcaster qui rejette ne bloque JAMAIS initiateCall (fire-and-forget, parité setReapedCallCallback)', async () => {
+    setupZombieSweep();
+    callService.setCallEndedBroadcaster(() => Promise.reject(new Error('boom')));
+
+    const result = await callService.initiateCall(validInitiateData);
+
+    expect(result.id).toBe('call-new');
+  });
+
+  it('sans broadcaster câblé, les sweeps restent silencieux (comportement actuel)', async () => {
+    setupZombieSweep();
+
+    const result = await callService.initiateCall(validInitiateData);
+
+    expect(result.id).toBe('call-new');
+  });
+
+  it('invalide le cache de session de signal (call:signal) pour le callId moissonné par le sweep zombie — invariant documenté dans CallEventsHandler.invalidateSignalSession', async () => {
+    const zombieCall = setupZombieSweep();
+    const invalidated: string[] = [];
+    callService.setSignalCacheInvalidationCallback((callId) => { invalidated.push(callId); });
+
+    await callService.initiateCall(validInitiateData);
+
+    expect(invalidated).toContain(zombieCall.id);
+  });
+
+  it('sans callback d\'invalidation câblé, les sweeps restent silencieux (comportement actuel)', async () => {
+    setupZombieSweep();
+
+    const result = await callService.initiateCall(validInitiateData);
+
+    expect(result.id).toBe('call-new');
+  });
 });
 
 describe('CallService - finalizeCallSummary (chemins terminaux REST end/leave)', () => {
@@ -2877,6 +2987,35 @@ describe('CallService - broadcastCallEndedIfTerminal (call:ended sur chemins RES
 
     expect(() => callService.broadcastCallEndedIfTerminal(null as any, 'u')).not.toThrow();
     expect(calls).toHaveLength(0);
+  });
+});
+
+describe('CallService - invalidateSignalCache (call:signal cache sur chemins REST end/leave)', () => {
+  let callService: CallService;
+  let mockPrisma: ReturnType<typeof createMockPrisma>;
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockPrisma = createMockPrisma();
+    callService = new CallService(mockPrisma as any, new Date(Date.now() - 24 * 60 * 60 * 1000));
+  });
+
+  // Les routes REST end/leave appellent endCall()/leaveCall() (qui écrivent
+  // CallParticipant.leftAt) mais, contrairement aux handlers socket
+  // call:end/call:leave/call:force-leave, n'invalidaient jamais le cache de
+  // session `call:signal` (TTL 2s) de CallEventsHandler — sibling exact du
+  // trou déjà fermé pour call:ended (broadcastCallEndedIfTerminal ci-dessus).
+  it('délègue au callback d’invalidation avec le callId', () => {
+    const invalidated: string[] = [];
+    callService.setSignalCacheInvalidationCallback((callId) => { invalidated.push(callId); });
+
+    callService.invalidateSignalCache('rest-call-1');
+
+    expect(invalidated).toEqual(['rest-call-1']);
+  });
+
+  it('sans callback câblé, ne throw pas (no-op — parité broadcastCallEndedIfTerminal)', () => {
+    expect(() => callService.invalidateSignalCache('no-callback-call')).not.toThrow();
   });
 });
 
@@ -4040,6 +4179,82 @@ describe('CallService - markCallAsMissed non-ringing guard', () => {
       where: { id: 'conv-123', activeCallId: 'call-123' },
       data: { activeCallId: null }
     });
+  });
+
+  it('invalidates the call:signal session cache on a fresh ringing→missed write — every sibling terminal writer (endCall/leaveCall callers, the REST end/leave routes, the GC zombie sweep) does this, finalizeMissedCallCleanup never did', async () => {
+    // Doc invariant in CallEventsHandler.invalidateSignalSession: "Every path
+    // that writes CallParticipant.leftAt for this call must evict the entry
+    // so the very next call:signal re-reads." finalizeMissedCallCleanup does
+    // write leftAt (assertion above) but, unlike notifyReapedCallEnded (the
+    // GC sweep), never called invalidateSignalCache — its sole caller,
+    // CallEventsHandler.handleMissedCall (reached from the ringing-timeout
+    // handler), never invalidated it either. A stray ICE/SDP call:signal
+    // arriving within the 2s cache TTL after a call times out to "missed"
+    // would still be relayed against the stale pre-leftAt snapshot.
+    const ringingCall = createMockCallSession({
+      status: CallStatus.ringing,
+      participants: [createMockParticipant()],
+      initiator: createMockUser()
+    });
+    const missedCall = {
+      ...ringingCall,
+      status: CallStatus.missed,
+      endedAt: new Date(),
+      participants: [createMockParticipant({ user: createMockUser() })],
+      initiator: createMockUser(),
+      conversation: createMockConversation()
+    };
+    mockPrisma.callSession.findUnique
+      .mockResolvedValueOnce(ringingCall)
+      .mockResolvedValueOnce(missedCall);
+    mockPrisma.callSession.updateMany.mockResolvedValue({ count: 1 });
+    const invalidated: string[] = [];
+    callService.setSignalCacheInvalidationCallback((callId) => { invalidated.push(callId); });
+
+    await callService.markCallAsMissed('call-123');
+
+    expect(invalidated).toContain('call-123');
+  });
+
+  it('invalidates the call:signal session cache even on the idempotent already-missed branch (ringing-timeout race) — mirrors the releaseActiveCallClaim fix above for the same branch', async () => {
+    const missedCall = createMockCallSession({
+      status: CallStatus.missed,
+      endedAt: new Date(),
+      participants: [createMockParticipant({ user: createMockUser() })],
+      initiator: createMockUser(),
+      conversation: createMockConversation()
+    });
+    mockPrisma.callSession.findUnique
+      .mockResolvedValueOnce(missedCall)
+      .mockResolvedValueOnce(missedCall);
+    const invalidated: string[] = [];
+    callService.setSignalCacheInvalidationCallback((callId) => { invalidated.push(callId); });
+
+    await callService.markCallAsMissed('call-123');
+
+    expect(invalidated).toContain('call-123');
+  });
+
+  it('without a callback wired, markCallAsMissed stays silent (comportement actuel — optional callback, matches every other invalidateSignalCache caller)', async () => {
+    const ringingCall = createMockCallSession({
+      status: CallStatus.ringing,
+      participants: [createMockParticipant()],
+      initiator: createMockUser()
+    });
+    const missedCall = {
+      ...ringingCall,
+      status: CallStatus.missed,
+      endedAt: new Date(),
+      participants: [createMockParticipant({ user: createMockUser() })],
+      initiator: createMockUser(),
+      conversation: createMockConversation()
+    };
+    mockPrisma.callSession.findUnique
+      .mockResolvedValueOnce(ringingCall)
+      .mockResolvedValueOnce(missedCall);
+    mockPrisma.callSession.updateMany.mockResolvedValue({ count: 1 });
+
+    await expect(callService.markCallAsMissed('call-123')).resolves.not.toThrow();
   });
 });
 

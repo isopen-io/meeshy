@@ -16,6 +16,7 @@ import { MessagingService } from '../services/MessagingService';
 import { CallEventsHandler } from './CallEventsHandler';
 import { SocialEventsHandler } from './handlers/SocialEventsHandler';
 import { LocationHandler } from './handlers/LocationHandler';
+import { sharedPlaceFromMetadata, hoistLocationOnto } from '../services/location/sharedPlace';
 import { AuthHandler } from './handlers/AuthHandler';
 import { MessageHandler } from './handlers/MessageHandler';
 import { StatusHandler } from './handlers/StatusHandler';
@@ -316,6 +317,13 @@ export class MeeshySocketIOManager {
       userSockets: this.userSockets,
       emitPresenceSnapshot: (socket, userId, isAnonymous) =>
         this._emitPresenceSnapshot(socket, userId, isAnonymous),
+      // CALL-RESILIENCE (Vague 44) — lets AuthHandler's anonymous-guest
+      // disconnect leave reuse CallEventsHandler's PARTICIPANT_LEFT/
+      // call:ended fanout instead of leaving the other party's UI "in call".
+      broadcastCallParticipantLeft: (opts) =>
+        this.callEventsHandler.broadcastParticipantLeftResult({ io: this.io as SocketIOServer, ...opts }),
+      forceCleanupCallParticipant: (opts) =>
+        this.callEventsHandler.forceCleanupParticipationAfterLeaveFailure({ io: this.io as SocketIOServer, ...opts }),
     });
 
     this.adminAgentHandler = new AdminAgentHandler({
@@ -760,22 +768,27 @@ export class MeeshySocketIOManager {
           logger.info(`📸 [PRESENCE_SNAPSHOT] ${users.length} contacts sent to ${userId} (${users.filter(u => u.isOnline).length} online)`);
         }
       }
-
-      // Drain offline delivery queue regardless of snapshot cache hit/miss.
-      // Previously this only ran on the non-cached path — on quick reconnects
-      // (within the 30s TTL) queued messages were silently dropped.
-      // Anonymous users drain too: their queue is keyed by participant id
-      // (same key as connectedUsers / ROOMS.user for anonymous identities).
-      this._drainPendingMessages(userId, isAnonymous).catch(err => {
-        logger.warn('Failed to drain pending messages on connect', { userId, error: err });
-      });
-      if (!isAnonymous) {
-        this._emitUnreadCountsSnapshot(socket, userId).catch(err => {
-          logger.warn('Failed to emit unread counts snapshot on reconnect', { userId, error: err });
-        });
-      }
     } catch (error) {
       logger.error('❌ [PRESENCE_SNAPSHOT] Failed to build snapshot', error);
+    }
+
+    // Drain offline delivery queue regardless of snapshot cache hit/miss AND of
+    // whether the snapshot build above threw. `_drainPendingMessages` is the sole
+    // reconnect trigger that replays queued offline messages + their delivered
+    // receipts; the presence snapshot ("who's online") is cosmetic and must never
+    // gate it. Previously both lived in one try/catch, so a transient DB error in
+    // the snapshot build stranded queued messages until the next clean reconnect
+    // (or the queue TTL). Both calls carry their own `.catch` — they are
+    // independent of the snapshot outcome.
+    // Anonymous users drain too: their queue is keyed by participant id
+    // (same key as connectedUsers / ROOMS.user for anonymous identities).
+    this._drainPendingMessages(userId, isAnonymous).catch(err => {
+      logger.warn('Failed to drain pending messages on connect', { userId, error: err });
+    });
+    if (!isAnonymous) {
+      this._emitUnreadCountsSnapshot(socket, userId).catch(err => {
+        logger.warn('Failed to emit unread counts snapshot on reconnect', { userId, error: err });
+      });
     }
   }
 
@@ -1077,10 +1090,6 @@ export class MeeshySocketIOManager {
 
       socket.on(CLIENT_EVENTS.POST_REACTION_REQUEST_SYNC, async (data, callback) => {
         try { await this.postReactionHandler.handleRequestSync(socket, data, callback); } catch (error) { logger.error('[POST_REACTION_SYNC] Error:', error); callback?.({ success: false, error: 'Internal server error' }); }
-      });
-
-      socket.on(CLIENT_EVENTS.LOCATION_SHARE, async (data, callback) => {
-        try { await this.locationHandler.handleLocationShare(socket, data, callback); } catch (error) { logger.error('[LOCATION_SHARE] Error:', error); callback?.({ success: false, error: 'Internal server error' }); }
       });
 
       socket.on(CLIENT_EVENTS.LOCATION_LIVE_START, async (data, callback) => {
@@ -1911,7 +1920,21 @@ export class MeeshySocketIOManager {
         } : undefined,
         attachments: message.attachments ?? [],
         replyToId: message.replyToId || undefined,
-        replyTo: message.replyTo ? {
+        // DUPLICATION CONNUE — pas unifiée avec MessageHandler._buildMessagePayload
+        // (services/gateway/src/socketio/handlers/MessageHandler.ts, champ
+        // `replyTo`) : ce bloc RECONSTRUIT et APLATIT le sender (username/
+        // firstName/lastName remontés depuis `sender.user`), alors que
+        // `_buildMessagePayload` fait un passthrough BRUT de `message.replyTo`
+        // (sender imbriqué, non aplati). Les deux formes de fil sont donc
+        // DÉLIBÉRÉMENT différentes aujourd'hui (chemin socket `message:send`
+        // vs chemin REST/agent de ce fichier) — les fusionner changerait la
+        // forme du payload consommée par un client sans certitude sur lequel
+        // des deux client iOS/web dépend. D'où le commentaire plutôt que la
+        // fusion demandée : **tout champ ajouté ici sur `replyTo` (dont
+        // `location`) doit être répliqué à la main dans `_buildMessagePayload`**,
+        // et inversement — c'est la 3e fois que cette duplication cause un
+        // bug de parité (cf. `location` ci-dessous).
+        replyTo: message.replyTo ? hoistLocationOnto({
           id: message.replyTo.id,
           conversationId: normalizedId,
           senderId: message.replyTo.senderId || undefined,
@@ -1919,6 +1942,7 @@ export class MeeshySocketIOManager {
           originalLanguage: message.replyTo.originalLanguage || 'fr',
           messageType: (message.replyTo.messageType || 'text') as MessageType,
           createdAt: message.replyTo.createdAt || new Date(),
+          metadata: (message.replyTo as unknown as { metadata?: unknown }).metadata,
           sender: message.replyTo.sender ? {
             id: message.replyTo.sender.id,
             displayName: message.replyTo.sender.nickname || message.replyTo.sender.displayName,
@@ -1929,8 +1953,20 @@ export class MeeshySocketIOManager {
             firstName: message.replyTo.sender.user?.firstName || '',
             lastName: message.replyTo.sender.user?.lastName || '',
           } : undefined
-        } : undefined,
+        } as unknown as Record<string, unknown>) : undefined,
       };
+
+      // Lieu partagé : hisser `metadata.location` en top-level `location`.
+      // Ce broadcast sert AUSSI le chemin REST (POST /conversations/:id/messages
+      // → MeeshySocketIOManager.broadcastMessage) et les messages d'agent — un
+      // hoist manquant ICI laisserait la position invisible en temps réel pour
+      // tout message envoyé via REST, alors même que `messagePayload.metadata`
+      // porte déjà le bloc brut. Miroir de MessageHandler.broadcastNewMessage
+      // (chemin socket `message:send`).
+      const place = sharedPlaceFromMetadata(message.metadata);
+      if (place) {
+        (messagePayload as Record<string, unknown>).location = place;
+      }
 
       if (message.attachments && message.attachments.length > 0) {
         const first = message.attachments[0] as unknown as Record<string, unknown>;
