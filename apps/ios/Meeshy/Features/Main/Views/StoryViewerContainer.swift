@@ -37,14 +37,46 @@ struct StoryViewerContainer: View {
 
     @State private var timedOut = false
     @State private var reloadAttempts = 0
+    /// R4 inc.2b — bloque le rendu de `StoryViewerView` tant que le `postId`
+    /// notifié n'a pas été confirmé frais (voir
+    /// `StoryViewModel.refreshFromCachedPostIfAvailable` et
+    /// `isGroupReadyToPresent` plus bas). Sans ce verrou, le premier rendu
+    /// bascule sur `StoryViewerView` dès que `groupIndex(forUserId:)` existe
+    /// — y compris à la TOUTE PREMIÈRE évaluation, AVANT que `.task(id:)`
+    /// n'ait eu la moindre chance de tourner (une `Task` non structurée
+    /// créée par `.task` ne s'exécute jamais de façon synchrone avec le
+    /// rendu qui l'a déclenchée). `StoryActionSidebarView` gèle son rail
+    /// d'actions à son PREMIER `.onAppear`, qui ne se redéclenche JAMAIS sur
+    /// une simple mise à jour de données (identité de vue préservée) — donc
+    /// un montage prématuré fige le bug pour toute la lecture du slide.
+    /// `nil` tant que non vérifié pour ce `postId` précis.
+    @State private var freshnessCheckedPostId: String?
 
     private var uid: String { userId ?? "" }
+
+    /// Pur, testable sans hôte SwiftUI (parité `StoryViewerScope.resolve`) —
+    /// `nonisolated` car le target app compile en `defaultIsolation
+    /// MainActor` : sans ce modificateur le bundle de tests (nonisolated)
+    /// ne peut ni appeler cette fonction ni en lire le résultat.
+    nonisolated static func isGroupReadyToPresent(
+        groupExists: Bool,
+        postId: String?,
+        freshnessCheckedPostId: String?
+    ) -> Bool {
+        guard groupExists else { return false }
+        guard let postId else { return true }
+        return freshnessCheckedPostId == postId
+    }
 
     var body: some View {
         ZStack {
             Color.black.ignoresSafeArea()
 
-            if let resolvedIndex = viewModel.groupIndex(forUserId: uid) {
+            if Self.isGroupReadyToPresent(
+                groupExists: viewModel.groupIndex(forUserId: uid) != nil,
+                postId: postId,
+                freshnessCheckedPostId: freshnessCheckedPostId
+            ), let resolvedIndex = viewModel.groupIndex(forUserId: uid) {
                 let resolvedStoryIndex = StoryIndexResolver.index(
                     forPostId: postId,
                     in: viewModel.storyGroups[resolvedIndex],
@@ -90,6 +122,7 @@ struct StoryViewerContainer: View {
         }
         .task(id: uid) {
             timedOut = false
+            freshnessCheckedPostId = nil
             await ensureGroupAvailable(uid: uid)
         }
     }
@@ -193,6 +226,19 @@ struct StoryViewerContainer: View {
             Logger.messages.error("[StoryViewerContainer] Opened with empty uid source=\(presentationSource, privacy: .public) — marking as not found")
             timedOut = true
             return
+        }
+
+        // R4 inc.2b — quand le point d'entrée connaît le postId exact
+        // (notification), rafraîchit D'ABORD depuis le cache SDK déjà chaud
+        // (fetch fait par `StoryNotificationTargetViewModel.load()` quelques
+        // ms plus tôt) — AVANT le court-circuit « groupe déjà présent »
+        // ci-dessous, qui sinon laisserait le premier rendu (voir
+        // `isGroupReadyToPresent`) monter le viewer sur un compteur périmé.
+        // Purement local (lecture de cache, aucun réseau) : n'ajoute aucune
+        // latence au chemin normal, sans notification (`postId == nil`).
+        if let postId {
+            viewModel.refreshFromCachedPostIfAvailable(postId: postId)
+            freshnessCheckedPostId = postId
         }
 
         if viewModel.groupIndex(forUserId: uid) != nil { return }

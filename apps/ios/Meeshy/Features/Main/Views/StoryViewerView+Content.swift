@@ -2488,6 +2488,15 @@ extension StoryViewerView {
     /// after the cache check, a single debounced network reconciliation confirms
     /// the real count. The 400ms dwell + stale-id guard keep this O(1) per
     /// *watched* story (never the O(N)-on-swipe fetch removed in 2026-05-28).
+    ///
+    /// Every time a reconciliation branch actually MOVES `storyCommentCount`
+    /// (cache hit or network stale-0 fix), it also bumps
+    /// `storyCommentCountReconciledPulse` — the dedicated, one-way signal
+    /// `StoryActionSidebarView` watches to re-open its already-frozen rail
+    /// membership for the comments button. This is what makes the reveal
+    /// happen on a NORMAL open (tray/profile/feed — no notification postId),
+    /// not just on the notification path already covered upstream by
+    /// `StoryViewModel.refreshFromCachedPostIfAvailable`.
     func loadStoryCommentCount() {
         guard let story = currentStory else {
             storyCommentCount = 0
@@ -2505,7 +2514,16 @@ extension StoryViewerView {
             case .fresh(let comments, _), .stale(let comments, _):
                 let top = comments.filter { $0.parentId == nil }
                 let total = top.count + top.reduce(0) { $0 + $1.replies }
-                if total != storyCommentCount { storyCommentCount = total }
+                // Le bump ne s'exécute que sur un changement RÉEL de valeur —
+                // `storyCommentCountReconciledPulse` doit rester silencieux
+                // quand le cache confirme simplement le seed du payload.
+                // Voir StoryActionSidebarView pour le consommateur : SEUL ce
+                // canal peut faire réapparaître le bouton commentaires après
+                // le gel, jamais une activité temps réel.
+                if total != storyCommentCount {
+                    storyCommentCount = total
+                    storyCommentCountReconciledPulse += 1
+                }
                 return
             case .expired, .empty:
                 break
@@ -2533,7 +2551,10 @@ extension StoryViewerView {
             // replies. A genuinely empty thread stays 0 → button stays hidden.
             let top = response.data.filter { $0.parentId == nil }
             let total = top.count + top.reduce(0) { $0 + ($1.replyCount ?? 0) }
-            if total != storyCommentCount { storyCommentCount = total }
+            if total != storyCommentCount {
+                storyCommentCount = total
+                storyCommentCountReconciledPulse += 1
+            }
         }
     }
 }

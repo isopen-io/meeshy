@@ -114,6 +114,13 @@ struct StoryActionSidebarView: View {
     let currentStory: StoryItem?
     let currentGroup: StoryGroup?
     let storyCommentCount: Int
+    /// Impulsion dédiée à la réconciliation d'OUVERTURE de slide — voir
+    /// `StoryViewerView.storyCommentCountReconciledPulse`. Distincte de
+    /// `storyCommentCount` : celui-ci bouge aussi en temps réel (activité live,
+    /// propre composer), cette impulsion NE bouge QUE quand
+    /// `loadStoryCommentCount()` (+Content.swift) confirme un compteur plus
+    /// exact que le payload d'entrée.
+    let storyCommentCountReconciledPulse: Int
     /// Forward / external-share count for the Envoyer button label (user spec
     /// 2026-05-28: non-author sees counts on Réact + Comments + Envoyer).
     let storyShareCount: Int
@@ -170,15 +177,24 @@ struct StoryActionSidebarView: View {
     /// pendant la lecture.
     @State private var frozenRailPlan: StoryActionRailPlan?
 
-    /// Résolution depuis les entrées courantes (payload déjà seedé de manière
-    /// synchrone par `startTimer()` avant le rendu du slide).
+    /// Résolution depuis les entrées courantes. La MEMBERSHIP
+    /// (`showsComments`) lit `currentStory?.commentCount` — le payload déjà
+    /// en paramètre de la vue — plutôt que le miroir `@State
+    /// storyCommentCount`, pour ne JAMAIS dépendre de l'ordre réel des
+    /// `.onAppear` SwiftUI : `StoryActionSidebarView` est un descendant
+    /// profond du viewer (Layer 8), et rien ne garantit structurellement que
+    /// le `.onAppear` ancêtre qui seed `storyCommentCount` (via
+    /// `startTimer()`) s'exécute avant celui-ci. Lire le payload élimine ce
+    /// risque par construction. Le LABEL affiché, lui, reste sur
+    /// `storyCommentCount` (compteur vivant, mis à jour en temps réel par
+    /// les réconciliations post-gel) — voir `sidebarContent` plus bas.
     private var liveRailPlan: StoryActionRailPlan {
         StoryActionRailPlan.resolve(
             isOwnStory: isOwnStory,
             canReply: onReplyToStory != nil,
             isPublicStory: currentStory?.isPublic == true,
             hasAudibleSound: storyHasAudibleSound,
-            commentCount: storyCommentCount,
+            commentCount: currentStory?.commentCount ?? 0,
             hasTranslatableContent: storyHasTranslatableContent
         )
     }
@@ -239,6 +255,41 @@ struct StoryActionSidebarView: View {
         .adaptiveOnChange(of: storyHasAudibleSound) { wasAudible, isAudible in
             guard !wasAudible, isAudible else { return }
             frozenRailPlan = liveRailPlan
+        }
+        // Réconciliation du compteur de commentaires — MÊME contrat que le
+        // probe audio juste au-dessus, pour le MÊME symptôme : un thread de
+        // commentaires bien réel restait invisible pour toute la lecture
+        // d'un slide ouvert NORMALEMENT (tray, profil, feed…), car
+        // `liveRailPlan` fige la membership sur `currentStory?.commentCount`
+        // — le payload du tray, potentiellement périmé jusqu'à 72 h (cache
+        // stories). Le chemin notification est déjà couvert en amont
+        // (`StoryViewModel.refreshFromCachedPostIfAvailable` +
+        // `StoryViewerContainer.isGroupReadyToPresent`, qui rafraîchissent le
+        // payload AVANT le premier montage) ; celui-ci couvre tous les
+        // autres points d'entrée, où aucun postId de notification n'est
+        // connu et où ce verrou ne s'applique jamais.
+        //
+        // `storyCommentCountReconciledPulse` ne tique QUE sur la
+        // réconciliation d'ouverture de `loadStoryCommentCount()`
+        // (+Content.swift : cache commentaires local, puis — si toujours à
+        // 0 — une requête réseau bornée ~400 ms) : ni `sendComment` (propre
+        // composer), ni le socket `comment:added` reçu pendant la lecture
+        // (`applyStoryCommentAdded` +Content.swift,
+        // `StoryViewModel.applyStoryCommentCountDelta`) ne l'incrémentent —
+        // ces derniers restent volontairement hors du gel (directive
+        // 2026-07-10 : jamais de bouton qui surgit en cours de lecture).
+        // Transition à sens unique comme le probe audio : ne fait
+        // qu'apparaître, jamais disparaître.
+        .adaptiveOnChange(of: storyCommentCountReconciledPulse) { _, _ in
+            guard !railPlan.showsComments else { return }
+            frozenRailPlan = StoryActionRailPlan.resolve(
+                isOwnStory: isOwnStory,
+                canReply: onReplyToStory != nil,
+                isPublicStory: currentStory?.isPublic == true,
+                hasAudibleSound: storyHasAudibleSound,
+                commentCount: storyCommentCount,
+                hasTranslatableContent: storyHasTranslatableContent
+            )
         }
     }
 

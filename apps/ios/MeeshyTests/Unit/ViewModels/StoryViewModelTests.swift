@@ -71,10 +71,12 @@ final class StoryViewModelTests: XCTestCase {
         authorId: String = "author-1",
         authorUsername: String = "alice",
         createdAt: String = "2026-01-15T12:00:00.000Z",
-        expiresAt: String? = "2026-01-16T09:00:00.000Z"
+        expiresAt: String? = "2026-01-16T09:00:00.000Z",
+        commentCount: Int? = nil
     ) -> APIPost {
         let expiresAtJSON = expiresAt.map { "\"\($0)\"" } ?? "null"
         let contentJSON = content.map { "\"\($0)\"" } ?? "null"
+        let commentCountJSON = commentCount.map { ", \"commentCount\": \($0)" } ?? ""
         return JSONStub.decode("""
         {
             "id": "\(id)",
@@ -82,7 +84,7 @@ final class StoryViewModelTests: XCTestCase {
             "content": \(contentJSON),
             "createdAt": "\(createdAt)",
             "expiresAt": \(expiresAtJSON),
-            "author": {"id": "\(authorId)", "username": "\(authorUsername)"}
+            "author": {"id": "\(authorId)", "username": "\(authorUsername)"}\(commentCountJSON)
         }
         """)
     }
@@ -550,6 +552,46 @@ final class StoryViewModelTests: XCTestCase {
         let group = sut.storyGroups.first { $0.id == "u-merge" }
         XCTAssertEqual(group?.stories.map(\.id), ["s-old", "s-new"],
                        "Merge appends ascending by createdAt without duplicating (storyCreated sink contract)")
+    }
+
+    // MARK: - refreshFromCachedPostIfAvailable (Fix A — bouton commentaires manquant sur entrée notification)
+
+    /// Le chemin notification (`StoryNotificationTargetViewModel.load()`) a
+    /// déjà fetché ce post en réseau et l'a mis en cache dans
+    /// `storyService.cachedPost(id:)` quelques millisecondes avant que ce
+    /// viewer ne se monte. `ensureStoryLoaded` a un contrat cache-first
+    /// VOLONTAIRE — il ne refetch jamais un postId déjà dans le tray (voir
+    /// `test_ensureStoryLoaded_storyAlreadyInTray_skipsNetwork` ci-dessus) —
+    /// donc un tray qui contient DÉJÀ ce post avec un `commentCount` périmé
+    /// n'était jamais rafraîchi par ce chemin. `refreshFromCachedPostIfAvailable`
+    /// ne fait AUCUN réseau : elle relit le cache SDK déjà chaud et fusionne.
+    func test_refreshFromCachedPostIfAvailable_staleStoryInTray_mergesFreshCommentCountFromCache() {
+        let stale = makeStoryItem(id: "s-known")
+        sut.storyGroups = [makeStoryGroup(userId: "u1", stories: [stale])]
+        mockStoryService.cachedPostResult = Self.makeStoryAPIPost(
+            id: "s-known", authorId: "u1", authorUsername: "alice",
+            createdAt: Self.isoDate(offset: -60), expiresAt: Self.isoDate(offset: 3600),
+            commentCount: 7)
+
+        sut.refreshFromCachedPostIfAvailable(postId: "s-known")
+
+        let refreshed = sut.storyGroups.first(where: { $0.id == "u1" })?
+            .stories.first(where: { $0.id == "s-known" })
+        XCTAssertEqual(refreshed?.commentCount, 7,
+                       "A commentCount already in the tray but stale relative to the notification's fresh fetch must be updated")
+        XCTAssertEqual(mockStoryService.fetchPostCallCount, 0,
+                       "Must read the already-warm SDK cache, never hit the network again")
+    }
+
+    func test_refreshFromCachedPostIfAvailable_nothingCached_isNoOp() {
+        let stale = makeStoryItem(id: "s-known")
+        sut.storyGroups = [makeStoryGroup(userId: "u1", stories: [stale])]
+        // mockStoryService.cachedPostResult stays nil — the normal, non-notification path.
+
+        sut.refreshFromCachedPostIfAvailable(postId: "s-known")
+
+        XCTAssertEqual(sut.storyGroups.first?.stories.first?.commentCount, 0)
+        XCTAssertEqual(mockStoryService.fetchPostCallCount, 0)
     }
 
     // MARK: - R8 inc.1 : delta-sync du refetch silencieux
