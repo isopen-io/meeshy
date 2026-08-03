@@ -1,5 +1,41 @@
 # @meeshy/translator
 
+## 1.17.0
+
+### Minor Changes
+
+- Changements automatiques détectés :
+
+  - courbe d'automation du volume sur les pistes
+  - poser et retirer des points de volume
+  - le volume d'un clip peut monter jusqu'à 200 %
+  - la forme d'onde reflète le niveau réel et se garde sur disque
+  - la vidéo exportée reproduit l'automation de volume
+  - le volume des médias suit le playhead
+  - la clé de cache couvre tous les octets, la couleur du texte se rend enfin en direct
+  - la vidéo de fond respecte enfin le volume choisi
+  - un resolver unique décide du volume d'un clip
+  - le volume devient un canal de keyframe, l'audio gagne l'automation
+  - le volume d'un média peut monter jusqu'à 200 %
+  - disconnect-grace expiry now ends calls with connectionLost, not completed (#2426)
+  - le canvas reste plein écran pendant l'édition
+  - une seule rangée de sept outils, Terminé seul en haut
+  - le panneau Cadre gagne Aucun, une marge et un liseré
+  - taille et graisse deviennent des curseurs du panneau Police
+  - la rangée basse tourne au tap, ouvre à l'appui long
+  - les sept attributs tournent au tap, le cadre ne repeint plus
+  - les fonds préréglés deviennent une source unique
+  - le calque rend la marge et le liseré du cadre
+  - le cadre se détache du fond — aucun, marge, liseré
+  - la fiche montre tout, temps comme espace
+  - les poignées suivent le surlignage, un clip ne dépasse plus sa source
+  - le tap surligne, le double tap ouvre, le glissement déplace
+  - le header ne clignote plus entre gris opaque et transparent
+  - la durée de slide dérive du contenu, sans exception
+  - la barre de timing peut enfin allonger un clip
+  - un seul chemin pour régler début, fin et durée
+  - une seule règle pour les bornes d'une fenêtre de clip
+
 ## 1.16.0
 
 ### Minor Changes

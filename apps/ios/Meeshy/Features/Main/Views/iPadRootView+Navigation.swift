@@ -102,6 +102,8 @@ extension iPadRootView {
             rightPanelRoute = .profile
         case .userLinks:
             rightPanelRoute = .links
+        case .hashtag(let tag):
+            rightPanelRoute = .hashtagResults(tag: tag)
         case .magicLink:
             break
         }

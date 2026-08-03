@@ -1170,7 +1170,7 @@ struct PostDetailView: View {
                 ? truncation.text + "..."
                 : effectiveContent
             VStack(alignment: .leading, spacing: 2) {
-                MessageTextRenderer.render(bodyText, fontSize: 16, color: theme.textPrimary, accentColor: Color(hex: accentColor), trackedLinks: postTrackedLinks)
+                MessageTextRenderer.render(bodyText, fontSize: 16, color: theme.textPrimary, mentionColor: Color(hex: accentColor), accentColor: Color(hex: accentColor), trackedLinks: postTrackedLinks)
                     .tint(Color(hex: accentColor))
                 if truncation.isTruncated {
                     Text(isTextExpanded

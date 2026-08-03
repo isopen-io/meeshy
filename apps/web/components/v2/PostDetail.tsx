@@ -8,6 +8,7 @@ import { Avatar } from './Avatar';
 import { LanguageOrb } from './LanguageOrb';
 import { TranslationToggle } from './TranslationToggle';
 import { CommentList } from './CommentList';
+import { PostContentText } from './PostContentText';
 import type { TranslationItem } from './TranslationToggle';
 import type { Post, PostComment } from '@meeshy/shared/types/post';
 import { getLanguageName } from './flags';
@@ -180,17 +181,21 @@ function PostDetail({
           {post.content && (
             <div className="mb-4">
               {translationItems.length > 0 ? (
-                <TranslationToggle
-                  originalContent={post.content}
-                  originalLanguage={post.originalLanguage ?? 'unknown'}
-                  originalLanguageName={post.originalLanguage ? getLanguageName(post.originalLanguage) : undefined}
-                  translations={translationItems}
-                  userLanguage={userLanguage}
-                  variant="block"
-                />
+                <>
+                  <TranslationToggle
+                    originalContent={post.content}
+                    originalLanguage={post.originalLanguage ?? 'unknown'}
+                    originalLanguageName={post.originalLanguage ? getLanguageName(post.originalLanguage) : undefined}
+                    translations={translationItems}
+                    userLanguage={userLanguage}
+                    variant="block"
+                    showContent={false}
+                  />
+                  <PostContentText content={post.content} className="text-[var(--gp-text-primary)]" />
+                </>
               ) : (
                 <>
-                  <p className="text-[var(--gp-text-primary)] whitespace-pre-wrap">{post.content}</p>
+                  <PostContentText content={post.content} className="text-[var(--gp-text-primary)]" />
                   {onTranslate && post.originalLanguage && post.originalLanguage !== userLanguage && (
                     <button
                       onClick={onTranslate}

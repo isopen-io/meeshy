@@ -148,6 +148,20 @@ export const postsService = {
     return unwrap(response);
   },
 
+  async getPostsByHashtag(tag: string, filters: { cursor?: string; limit?: number } = {}): Promise<CursorPaginatedResponse<Post>> {
+    const params = new URLSearchParams();
+    if (filters.cursor) params.set('cursor', filters.cursor);
+    if (filters.limit) params.set('limit', String(filters.limit));
+    const qs = params.toString();
+    const response = await apiService.get<CursorPaginatedResponse<Post>>(`/posts/hashtag/${tag}${qs ? `?${qs}` : ''}`);
+    return unwrap(response);
+  },
+
+  async getTrendingHashtags(limit: number = 20): Promise<{ tag: string; usageCount: number }[]> {
+    const response = await apiService.get<{ success: boolean; data: { tag: string; usageCount: number }[] }>(`/hashtags/trending?limit=${limit}`);
+    return unwrap(unwrap(response));
+  },
+
   async getReelsFeed(filters: ReelFeedFilters = {}): Promise<ReelsFeedResponse> {
     const params = new URLSearchParams();
     if (filters.cursor) params.set('cursor', filters.cursor);
