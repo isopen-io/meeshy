@@ -46,4 +46,37 @@ export class HashtagService {
 
     return result;
   }
+
+  /**
+   * Upsert `Hashtag` (créer si absent, réutiliser sinon) puis `PostHashtag`
+   * par `(postId, hashtagId)` — une republication met à jour `display`, elle
+   * n'est jamais avalée en silence (même raison que l'upsert de `SoundUsage`
+   * cette session). Recompte `Hashtag.usageCount` après coup plutôt que
+   * d'incrémenter à l'aveugle : jamais de dérive rejouable.
+   */
+  async createPostHashtags(postId: string, hashtags: ExtractedHashtag[]): Promise<void> {
+    for (const { tag, display } of hashtags) {
+      try {
+        const hashtag = await this.prisma.hashtag.upsert({
+          where: { tag },
+          create: { tag },
+          update: {},
+        });
+        await this.prisma.postHashtag.upsert({
+          where: { post_hashtag_unique: { postId, hashtagId: hashtag.id } },
+          create: { postId, hashtagId: hashtag.id, display },
+          update: { display },
+        });
+        await this.recountHashtag(hashtag.id);
+      } catch (error) {
+        log.error('createPostHashtags a échoué', error instanceof Error ? error : new Error(String(error)),
+          { postId, tag });
+      }
+    }
+  }
+
+  private async recountHashtag(hashtagId: string): Promise<void> {
+    const usageCount = await this.prisma.postHashtag.count({ where: { hashtagId } });
+    await this.prisma.hashtag.update({ where: { id: hashtagId }, data: { usageCount, lastUsedAt: new Date() } });
+  }
 }
