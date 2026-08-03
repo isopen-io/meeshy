@@ -485,10 +485,11 @@ describe('POST /conversations/:conversationId/mark-as-read — edge cases', () =
     expect(response.statusCode).toBe(200);
     expect(response.json().success).toBe(true);
 
-    // CONVERSATION_UNREAD_UPDATED must fire for badge reset
+    // CONVERSATION_UNREAD_UPDATED must fire for badge reset, carrying the real
+    // post-mark remaining unread (sourced from getUnreadCount), not a hardcoded 0.
     expect(emitMock).toHaveBeenCalledWith(
       'conversation:unread-updated',
-      { conversationId: CONVERSATION_ID, unreadCount: 0 }
+      { conversationId: CONVERSATION_ID, unreadCount: expect.any(Number) }
     );
     // read-status:updated (peer disclosure) must NOT fire
     expect(emitMock).not.toHaveBeenCalledWith('read-status:updated', expect.anything());
