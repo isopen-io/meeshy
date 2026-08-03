@@ -242,6 +242,22 @@ final class FloatingCallPillViewTests: XCTestCase {
         )
     }
 
+    func test_collapseToBubble_resetsSizeTierToCircle() throws {
+        let source = try pillSource()
+        guard let range = source.range(of: "private func collapseToBubble(exitTranslation: CGFloat) {") else {
+            XCTFail("collapseToBubble not found in FloatingCallPillView.swift"); return
+        }
+        let end = source.range(of: "\n    // MARK: - Actions", range: range.upperBound..<source.endIndex)?.lowerBound
+            ?? source.endIndex
+        let body = String(source[range.lowerBound..<end])
+        XCTAssertTrue(
+            body.contains("callManager.bubbleSizeTier = .circle"),
+            "collapseToBubble must reset bubbleSizeTier to .circle — the only entry point " +
+            "into .bubble mode, so a PiP left enlarged in a previous session must not " +
+            "reappear already expanded."
+        )
+    }
+
     func test_pillContent_hasContainerAccessibilityLabel() throws {
         let source = try pillSource()
         XCTAssertTrue(

@@ -268,6 +268,16 @@ final class CallManager: ObservableObject {
     /// 1 = bas) — survit à la rotation/redimensionnement, contrairement à un
     /// point absolu. Proche du haut par défaut, sous la Dynamic Island.
     @Published var bubbleVerticalFraction: CGFloat = 0.08
+    /// Palier de taille du PiP quand la bulle est repliée (`.bubble`
+    /// displayMode) — cercle par défaut, agrandi par pincement jusqu'à
+    /// `.large` (spec 2026-08-03-call-bubble-pip-resize-morph-design.md).
+    /// Contrairement à `bubbleEdge`/`bubbleVerticalFraction` juste au-dessus
+    /// (mutés par le drag de repositionnement, donc réinitialisés
+    /// explicitement en fin d'appel), celui-ci n'a qu'un seul point d'entrée
+    /// en mode bulle — `FloatingCallPillView.collapseToBubble()` — qui le
+    /// repose déjà à `.circle` à chaque fois : pas de reset défensif
+    /// redondant nécessaire ici.
+    @Published var bubbleSizeTier: CallBubbleSizeTier = .circle
     @Published private(set) var hasLocalVideoTrack = false
     @Published private(set) var hasRemoteVideoTrack = false
     /// Outbound video auto-suspended by the graceful-degradation survival layer
