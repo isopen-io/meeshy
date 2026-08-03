@@ -358,6 +358,18 @@ struct StoryViewerView: View {
     @State var storyCommentsHasMore = false
     @State var isLoadingComments = false
     @State var storyCommentCount: Int = 0
+    /// Impulsion (mirroir `heartBouncePulse`) incrémentée UNIQUEMENT par la
+    /// réconciliation d'ouverture de `loadStoryCommentCount()` (+Content.swift :
+    /// cache commentaires local puis, si toujours à 0, une requête réseau
+    /// bornée ~400 ms) — jamais par une activité TEMPS RÉEL (`sendComment`,
+    /// le socket `comment:added` via `applyStoryCommentAdded` +Content.swift,
+    /// ou `StoryViewModel.applyStoryCommentCountDelta` qui tient
+    /// `currentStory?.commentCount` lui-même live). Ces trois derniers canaux
+    /// DOIVENT rester hors du gel du rail (directive 2026-07-10 : jamais de
+    /// bouton qui surgit en cours de lecture) ; seule cette impulsion dédiée
+    /// permet à `StoryActionSidebarView` de distinguer « le payload d'entrée
+    /// était périmé » de « quelqu'un vient de commenter pendant que je lis ».
+    @State var storyCommentCountReconciledPulse: Int = 0
     @State var replyingToStoryComment: FeedComment? = nil
     @State var storyCommentRepliesMap: [String: [FeedComment]] = [:]
     @State var storyCommentExpandedThreads: Set<String> = []
@@ -1362,6 +1374,7 @@ struct StoryViewerView: View {
             storyReactionCount: storyReactionCount,
             storyCurrentUserHasReacted: !storyCurrentUserReactions.isEmpty,
             storyCommentCount: storyCommentCount,
+            storyCommentCountReconciledPulse: storyCommentCountReconciledPulse,
             storyShareCount: currentStory?.shareCount ?? 0,
             storyViewCount: currentStory?.viewCount ?? 0,
             storyRepostCount: currentStory?.repostCount ?? 0,

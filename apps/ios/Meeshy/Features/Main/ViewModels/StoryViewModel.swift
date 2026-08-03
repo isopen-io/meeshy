@@ -2560,6 +2560,33 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
         return true
     }
 
+    /// R4 inc.2b — le chemin notification (`StoryNotificationTargetViewModel.load()`)
+    /// a DÉJÀ fetché ce post en réseau et l'a mis en cache dans
+    /// `storyService.cachedPost(id:)` (même singleton `StoryService.shared`
+    /// en production) quelques millisecondes avant que ce viewer ne se
+    /// monte. `ensureStoryLoaded` a un contrat cache-first VOLONTAIRE — il
+    /// ne refetch jamais un postId déjà présent dans le tray (voir
+    /// `test_ensureStoryLoaded_storyAlreadyInTray_skipsNetwork`) — donc un
+    /// tray qui contient DÉJÀ ce post (compteurs périmés, ex: `commentCount`)
+    /// n'était jamais rafraîchi par ce chemin, et un bouton dont
+    /// l'apparition dépend de ce compteur (rail d'actions du viewer, voir
+    /// `StoryActionRailPlan.showsComments`) restait manquant pour toute la
+    /// lecture du slide. Cette méthode ne fait AUCUN réseau : elle relit
+    /// uniquement le cache SDK déjà chaud et fusionne via
+    /// `insertOrMergeStoryGroups(replacingExisting: true)` (même mécanisme
+    /// que le delta-sync R8 inc.1) — no-op silencieux si rien n'est en
+    /// cache (chemin normal, sans notification).
+    func refreshFromCachedPostIfAvailable(postId: String) {
+        guard let cached = storyService.cachedPost(id: postId) else { return }
+        let groups = [cached].toStoryGroups(currentUserId: AuthManager.shared.currentUser?.id)
+            .compactMap { group -> StoryGroup? in
+                let alive = group.stories.filter { !$0.isExpired() }
+                return alive.isEmpty ? nil : group.with(stories: alive)
+            }
+        guard !groups.isEmpty else { return }
+        insertOrMergeStoryGroups(groups, replacingExisting: true)
+    }
+
     /// Set dédié aux sinks socket (le `cancellables` partagé porte aussi le
     /// sink de reconnexion posé à l'init) — garde d'idempotence resettable,
     /// même idiome que `FeedViewModel.subscribeToSocketEvents`.
