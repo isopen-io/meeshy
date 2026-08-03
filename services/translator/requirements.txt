@@ -2,7 +2,7 @@
 python-dotenv==1.2.2
 
 # Framework web
-fastapi==0.139.2
+fastapi==0.141.1
 uvicorn[standard]==0.52.0
 pydantic-settings==2.14.2
 pydantic==2.13.4
