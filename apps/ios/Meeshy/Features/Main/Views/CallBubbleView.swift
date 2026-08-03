@@ -29,27 +29,13 @@ struct CallBubbleView: View {
     var body: some View {
         if callManager.displayMode == .bubble && callManager.callState.isActive && !callManager.isSystemPiPActive {
             GeometryReader { geometry in
-                ZStack {
-                    if isMenuRevealed {
-                        dismissLayer
-                    }
-                    bubbleCluster(in: geometry)
-                        .position(bubbleCenter(in: geometry))
-                }
+                bubbleCluster(in: geometry)
+                    .position(bubbleCenter(in: geometry))
             }
             .ignoresSafeArea()
             .transition(reduceMotion ? .opacity : .scale.combined(with: .opacity))
             .animation(reduceMotion ? nil : .spring(response: 0.4, dampingFraction: 0.75), value: callManager.displayMode)
         }
-    }
-
-    // MARK: - Dismiss layer (taps outside the cluster close the mini-menu)
-
-    private var dismissLayer: some View {
-        Color.clear
-            .contentShape(Rectangle())
-            .onTapGesture { closeMenu() }
-            .accessibilityHidden(true)
     }
 
     // MARK: - Cluster (bubble + revealed menu buttons)
@@ -86,9 +72,12 @@ struct CallBubbleView: View {
                 .onEnded { _ in revealMenu() }
         )
         .onTapGesture {
-            guard !isMenuRevealed else { return }
-            HapticFeedback.medium()
-            callManager.displayMode = .fullScreen
+            if isMenuRevealed {
+                closeMenu()
+            } else {
+                HapticFeedback.medium()
+                callManager.displayMode = .fullScreen
+            }
         }
         .accessibilityElement(children: .contain)
         .accessibilityLabel(
@@ -102,10 +91,10 @@ struct CallBubbleView: View {
         .accessibilityAction(named: String(localized: "a11y.call.bubble.quickMenu", defaultValue: "Ouvrir le mini-menu d'appel", bundle: .main)) {
             revealMenu()
         }
-        // Le calque de fermeture (dismissLayer) est `.accessibilityHidden` —
-        // sans cette action, un utilisateur VoiceOver qui ouvre le mini-menu
-        // n'a aucun moyen de le refermer autrement qu'attendre les 3s d'auto-
-        // dismiss ou déclencher raccrocher (destructif).
+        // Retaper la bulle referme le menu (voir .onTapGesture ci-dessus),
+        // mais VoiceOver navigue par swipe, pas par tap direct sur la bulle —
+        // sans cette action explicite, fermer le menu exigerait d'attendre
+        // les 3s d'auto-dismiss ou de déclencher raccrocher (destructif).
         .accessibilityAction(named: String(localized: "a11y.call.bubble.closeMenu", defaultValue: "Fermer le mini-menu d'appel", bundle: .main)) {
             closeMenu()
         }
