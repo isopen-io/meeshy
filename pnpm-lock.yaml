@@ -490,8 +490,8 @@ importers:
         specifier: ^2.1.0
         version: 2.1.0(@opentelemetry/api@1.9.1)
       '@tus/server':
-        specifier: ^2.4.1
-        version: 2.4.1(@opentelemetry/api@1.9.1)
+        specifier: ^2.4.3
+        version: 2.4.3(@opentelemetry/api@1.9.1)
       axios:
         specifier: ^1.18.1
         version: 1.18.1
@@ -4671,12 +4671,16 @@ packages:
     resolution: {integrity: sha512-RW/aYO2pp0L4AVG6NebPL+Q9FKKtDXF2+skBq3NbOMOEoxWFHSCgtzIX1pBPezFdZDwqdZMIlx+NQGQYYp6/3Q==}
     engines: {node: '>=20.19.0'}
 
-  '@tus/server@2.4.1':
-    resolution: {integrity: sha512-WShIwCqtthAL0x++f/VCF6ZpbULjRIYLPumQoOYNHa4NVMxW1pDBAKsNE3Y+rnVTzOttEumIXD1WDNRsIf7x7Q==}
+  '@tus/server@2.4.3':
+    resolution: {integrity: sha512-bS0nyuc0xyK+fal9+hawnY3eMfoTSij4LqE328lKEmkl0HLDg4ld6/o5sdYMgzuNvVbvwKb7PdveDvEdqJOsYw==}
     engines: {node: '>=20.19.0'}
 
   '@tus/utils@0.7.0':
     resolution: {integrity: sha512-BPom8lVwR4fkk1EynPeQwuN0e5bH2gBphwt69uF5rS4wRD2N7IyHDPqdjcAY0I7gNEWfUitPyDodywbD4r7dEQ==}
+    engines: {node: '>=20.19.0'}
+
+  '@tus/utils@0.7.1':
+    resolution: {integrity: sha512-KXKK6mhsRto7cApRtJFoIovd6rAXJBUd1qR6S1ynVXApdd+jT1eBHprKP0D9oZtJwwD/B8+n3DLAm68DYPqfuQ==}
     engines: {node: '>=20.19.0'}
 
   '@tybys/wasm-util@0.10.3':
@@ -9808,8 +9812,8 @@ packages:
   sprintf-js@1.0.3:
     resolution: {integrity: sha512-D9cPgkvLlV3t3IzL0D0YLvGA9Ahk4PcvVwUbN0dSGr1aP0Nrt4AEnTUbuGvquEC0mA64Gqt1fzirlRs5ibXx8g==}
 
-  srvx@0.11.21:
-    resolution: {integrity: sha512-GWTHjKMeekX8CwJf4VU9Oo6mJpSGaflGMddbCvR+Cmmh9sslRMiGbAoqqZacE0r1ncARh6buCEETr2W52F8b1w==}
+  srvx@0.11.22:
+    resolution: {integrity: sha512-LqZxxBDMKuMAZzFzJnDCkFOrs9MZQZr0LvHiO/SuSZVdQaXD7xQ5UWTUxheJrQPve1qk9MG2B/yttUvJxw8egQ==}
     engines: {node: '>=20.16.0'}
     hasBin: true
 
@@ -15317,13 +15321,13 @@ snapshots:
       - '@opentelemetry/api'
       - supports-color
 
-  '@tus/server@2.4.1(@opentelemetry/api@1.9.1)':
+  '@tus/server@2.4.3(@opentelemetry/api@1.9.1)':
     dependencies:
-      '@tus/utils': 0.7.0
+      '@tus/utils': 0.7.1
       debug: 4.4.3
       lodash.throttle: 4.1.1
       set-cookie-parser: 2.7.2
-      srvx: 0.11.21
+      srvx: 0.11.22
     optionalDependencies:
       '@redis/client': 5.12.1(@opentelemetry/api@1.9.1)
       ioredis: 5.10.1
@@ -15333,6 +15337,8 @@ snapshots:
       - supports-color
 
   '@tus/utils@0.7.0': {}
+
+  '@tus/utils@0.7.1': {}
 
   '@tybys/wasm-util@0.10.3':
     dependencies:
@@ -21896,7 +21902,7 @@ snapshots:
 
   sprintf-js@1.0.3: {}
 
-  srvx@0.11.21: {}
+  srvx@0.11.22: {}
 
   stable-hash@0.0.5: {}
 
