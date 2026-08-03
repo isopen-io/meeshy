@@ -286,6 +286,66 @@ describe('CallEventsHandler — signalSessionCache invalidated on leave/end', ()
     expect((handler as any).signalSessionCache.has(CALL_ID)).toBe(false);
   });
 
+  it('forceCleanupParticipationAfterLeaveFailure evicts the cache AFTER the leftAt write commits, not before (Vague 50)', async () => {
+    // `forceCleanupParticipationAfterLeaveFailure` invalidated the cache
+    // BEFORE awaiting the `leftAt` transaction, unlike every other one of the
+    // 8 invalidation call sites (all invalidate strictly after their write
+    // commits). A `call:signal` racing the in-flight transaction can hit the
+    // now-empty cache, force a fresh read of the still-uncommitted (pre-write)
+    // session, and repopulate the cache with a stale "not left" snapshot that
+    // then survives the full 2s TTL *after* the write actually lands.
+    const { handler, handlers, io, directEmit } = makeHarness();
+    await primeCache(handlers);
+    expect((handler as any).signalSessionCache.has(CALL_ID)).toBe(true);
+
+    const sessionAfterWrite = {
+      ...makeActiveSession(),
+      participants: [
+        { id: 'cp-a', participantId: 'pa', leftAt: new Date(), participant: { userId: USER_A } },
+        { id: 'cp-b', participantId: 'pb', leftAt: null, participant: { userId: USER_B } },
+      ],
+    };
+
+    (handler as any).prisma.$transaction = jest.fn(async () => {
+      // A signal from A races the in-flight write: at this instant the DB
+      // has not committed yet, so a forced re-read (triggered by an
+      // already-evicted cache) would still see A as `leftAt: null`.
+      await handlers[CALL_EVENTS.SIGNAL](
+        makeSignal({ type: 'ice-candidate', from: USER_A, to: USER_B }),
+        jest.fn<any>()
+      );
+      // The write "commits" only now.
+      mockGetCallSession.mockResolvedValue(sessionAfterWrite);
+      return 1; // one remaining participant (B) — skips the force-end branch
+    });
+
+    await handler.forceCleanupParticipationAfterLeaveFailure({
+      io: io as any,
+      participation: {
+        id: 'cp-a',
+        participantId: 'pa',
+        callSessionId: CALL_ID,
+        callSession: { mode: 'p2p', conversationId: CONV_ID, status: 'active' }
+      } as any,
+      userId: USER_A,
+      leaveError: new Error('db blip')
+    });
+
+    // Within the TTL, a second signal from the now-departed A must be
+    // rejected — not served from a snapshot repopulated mid-transaction,
+    // before the write committed.
+    directEmit.mockClear();
+    await handlers[CALL_EVENTS.SIGNAL](
+      makeSignal({ type: 'ice-candidate', from: USER_A, to: USER_B }),
+      jest.fn<any>()
+    );
+
+    expect(directEmit).toHaveBeenCalledWith(
+      CALL_EVENTS.ERROR,
+      expect.objectContaining({ code: 'NOT_A_PARTICIPANT' })
+    );
+  });
+
   it('a stale-cache signal from a just-left sender is rejected (fresh read forced), not relayed', async () => {
     const { handlers, directEmit } = makeHarness();
     await primeCache(handlers);
