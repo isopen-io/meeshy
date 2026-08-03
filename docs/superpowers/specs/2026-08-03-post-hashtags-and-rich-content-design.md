@@ -26,7 +26,9 @@ le même objectif produit — une caption de post/reel lisible et navigable :
    | iOS — reel feed (`ReelFeedCard.swift:250`) | `Text(displayCaption)` **brut** — aucun rendu riche |
    | iOS — reel repost embarqué (`ReelRepostEmbedCell.swift:122`) | `Text(repost.content)` **brut** — aucun rendu riche |
    | Web — post détail (`PostDetail.tsx:193`) | `<p>{post.content}</p>` **brut** — aucun rendu riche |
-   | Web — rendu partagé traduction (`TranslationToggle.tsx:127,171`) | `<p>{content}</p>` **brut** — point de passage commun post/commentaire/statut/story |
+   | Web — carte post du feed (`PostCard.tsx:231`) | `<p>{content}</p>` **brut** — aucun rendu riche (chemin sans traduction) |
+   | Web — reel (`ReelPlayer.tsx:328`) | `<p>{caption}</p>` **brut** — aucun rendu riche |
+   | Web — rendu partagé traduction (`TranslationToggle.tsx:127,171`) | `<p>{content}</p>` **brut** — point de passage commun post/commentaire/statut/story, utilisé par `PostDetail.tsx` ET `PostCard.tsx` quand des traductions existent |
 
    Un renderer riche existe déjà côté web pour les messages de conversation
    (`MarkdownMessage.tsx`) et pour les mentions en commentaire (#2021), mais
@@ -37,7 +39,7 @@ le même objectif produit — une caption de post/reel lisible et navigable :
 | Sujet | Décision |
 |---|---|
 | Scope contenu | POST et REEL uniquement — pas STORY, STATUS, ni les commentaires (qui ont déjà leur propre rendu #2021) |
-| Modèle de données hashtag | `Hashtag` + `PostHashtag`, miroir exact de `Mention`/`PostMention` (Approche A retenue sur 3 options — cohérence avec les patterns déjà en place) |
+| Modèle de données hashtag | `Hashtag` + `PostHashtag`, même forme relationnelle que `Mention`/`PostMention` (Approche A retenue sur 3 options) — mais PAS le même comportement à l'édition, voir §2 |
 | Rendu | Un seul composant/segment partagé mentions+liens+hashtags par plateforme, pas trois mécanismes séparés |
 | Plateformes | Web + iOS. Android hors scope (chantier séparé si besoin) |
 | Tendances | Oui — `Hashtag.usageCount`, recompté (jamais incrémenté à l'aveugle) après chaque mutation, même philosophie que `SoundCaptureService.recountSound` |
@@ -75,11 +77,16 @@ model PostHashtag {
   post       Post     @relation("PostHashtags", fields: [postId], references: [id], onDelete: Cascade)
   hashtag    Hashtag  @relation(fields: [hashtagId], references: [id], onDelete: Cascade)
 
-  @@unique([postId, hashtagId])
+  @@unique([postId, hashtagId], name: "post_hashtag_unique")
   @@index([hashtagId])
   @@index([postId])
 }
 ```
+
+Contrainte nommée explicitement (`post_hashtag_unique`), même convention que
+`PostMention.@@unique([postId, mentionedUserId], name: "post_user_mention_unique")`
+(`:3973`) — ce nom est la clé `where` de l'upsert côté service, pas le nom
+auto-généré `postId_hashtagId`.
 
 Sur `Post`, ajouter `postHashtags PostHashtag[] @relation("PostHashtags")`
 juste après `postMentions` (`:3012`).
@@ -106,11 +113,21 @@ Nouveau service, calqué sur `MentionService` (`services/gateway/src/services/Me
 
 Câblage dans `routes/posts/core.ts`, aux DEUX points où
 `mentionService.extractMentions`/`createPostMentions` sont déjà appelés
-(création `:157-166`, édition `:~309`) : extraction hashtag en parallèle de
-l'extraction mention, sur le même `postContent`. À l'édition, diff
-ancien/nouveau jeu de hashtags — les hashtags retirés font l'objet d'un
-`deleteMany` sur `PostHashtag` puis recompte des `Hashtag` touchés (miroir de
-`SoundCaptureService.dropRemovedUsages`).
+(création `:157-166`, édition `:303-309`) : extraction hashtag en parallèle de
+l'extraction mention, sur le même `postContent`.
+
+**Divergence assumée vs le pattern mention** : `MentionService.createPostMentions`
+(`:980-996`) ne fait qu'ajouter — un `create` avec doublon `P2002` avalé, et
+le commentaire de `core.ts:298` l'assume explicitement (« re-fires all;
+idempotent via P2002 swallow ») : un mention retirée à l'édition laisse sa
+ligne `PostMention` orpheline pour toujours. C'est acceptable pour les
+mentions (aucun compteur n'en dépend). **Ce n'est PAS acceptable pour les
+hashtags** puisque `Hashtag.usageCount` alimente les tendances — une ligne
+`PostHashtag` orpheline gonflerait un compteur qui ne redescend jamais. À
+l'édition, diff donc explicitement ancien/nouveau jeu de hashtags : les
+hashtags retirés font l'objet d'un `deleteMany` sur `PostHashtag` puis
+recompte des `Hashtag` touchés — modèle réel : `SoundCaptureService.dropRemovedUsages`
++ `recountSound` (déjà dans ce gateway), PAS le pattern mention.
 
 ## 3. Endpoints
 
@@ -152,15 +169,26 @@ ancien/nouveau jeu de hashtags — les hashtags retirés font l'objet d'un
 
 Nouveau composant partagé `PostContentText` (mentions+liens+hashtags,
 délibérément plus léger qu'un rendu markdown complet — pas de gras/italique/
-listes, juste ce que porte une caption de post) branché en remplacement des
-`<p>{content}</p>` bruts de `TranslationToggle.tsx:127,171` (point de rendu
-partagé post/commentaire/statut/story — **scope le branchement au chemin
-POST/REEL uniquement**, ne pas changer le rendu commentaire/statut/story qui
-sort du périmètre de ce chantier) et de `PostDetail.tsx:193`. Réutilise
-`apps/web/lib/utils/link-parser.ts` pour la détection d'URL ; nouvelle
-fonction de détection hashtag/mention alignée sur la même SSOT regex que
-`mention-parser.ts` et le service gateway. Nouvelle route `/hashtag/[tag]`
-(Next.js) pour la page de résultats.
+listes, juste ce que porte une caption de post).
+
+`TranslationToggle` expose déjà `showContent?: boolean` (défaut `true`) —
+« Set false for callers that render the content themselves » — utilisé
+par `StoryViewer.tsx:984` exactement pour ce besoin : le contenu est rendu
+par l'appelant, `TranslationToggle` ne sert alors que de puce indicateur de
+langue. **Aucune modification de `TranslationToggle.tsx` nécessaire** :
+`PostDetail.tsx` et `PostCard.tsx` passent `showContent={false}` et rendent
+eux-mêmes `<PostContentText>{effectiveContent}</PostContentText>` à côté,
+même pattern que `StoryViewer`. 4 sites à câbler :
+- `PostDetail.tsx:193` (chemin sans traduction, remplace le `<p>` direct)
+  + son appel `TranslationToggle` existant passe à `showContent={false}`
+- `PostCard.tsx:231` (idem) + son appel `TranslationToggle` idem
+- `ReelPlayer.tsx:328` (pas de `TranslationToggle` sur ce composant
+  actuellement — juste remplacer le `<p>` par `PostContentText`)
+
+Réutilise `apps/web/lib/utils/link-parser.ts` pour la détection d'URL ;
+nouvelle fonction de détection hashtag/mention alignée sur la même SSOT
+regex que `mention-parser.ts` et le service gateway. Nouvelle route
+`/hashtag/[tag]` (Next.js) pour la page de résultats.
 
 ## 6. Navigation
 
