@@ -2305,7 +2305,15 @@ final class CallManager: ObservableObject {
 
     // MARK: - Media Controls
 
-    func toggleMute() {
+    /// `reportToCallKit` is `false` only when this call originates FROM
+    /// CallKit itself (`CXSetMutedCallAction` delegate handler, e.g. Apple
+    /// Watch / lock-screen / CarPlay mute) — in that case CallKit's state
+    /// already reflects `isMuted`, and resubmitting a `CXSetMutedCallAction`
+    /// transaction back to it would be an avoidable no-op round-trip
+    /// answering CallKit's own notification. All other call sites (the
+    /// in-app mute button) keep the default and DO report to CallKit, so its
+    /// system UI (Watch, lock screen, CarPlay) stays in sync.
+    func toggleMute(reportToCallKit: Bool = true) {
         // Audit P1-13 — keep optimistic UX (instant local flip) but rollback
         // local state + WebRTC if CallKit refuses the transaction. Without
         // the rollback, the app's `isMuted` and the WebRTC track were
@@ -2318,6 +2326,11 @@ final class CallManager: ObservableObject {
         // guard below returns early for Mac / foreground in-app calls).
         if let callId = currentCallId {
             MessageSocketManager.shared.emitCallToggleAudio(callId: callId, enabled: !isMuted)
+        }
+
+        guard reportToCallKit else {
+            HapticFeedback.light()
+            return
         }
 
         // CALL-FIX 2026-06-06 (macOS) — `CXSetMutedCallAction` fails on iOS-app-on-Mac
@@ -5399,7 +5412,12 @@ private class CallKitDelegateProxy: NSObject, CXProviderDelegate, @unchecked Sen
         Task { @MainActor [weak self] in
             guard let manager = self?.manager else { return }
             if manager.isMuted != isMuted {
-                manager.toggleMute()
+                // reportToCallKit: false — CallKit is the SOURCE of this
+                // change (Watch/lock-screen/CarPlay); its own state already
+                // matches `isMuted`, so resubmitting a CXSetMutedCallAction
+                // here would just be an avoidable no-op transaction back to
+                // the system that just told us about it.
+                manager.toggleMute(reportToCallKit: false)
             }
         }
         action.fulfill()

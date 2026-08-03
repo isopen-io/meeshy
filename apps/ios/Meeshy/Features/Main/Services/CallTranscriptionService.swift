@@ -202,6 +202,15 @@ final class CallTranscriptionService: ObservableObject, CallTranscriptionService
     }
 
     var persistedSegmentsForTesting: [TranscriptionSegment] { persistedSegments }
+
+    /// Test-only seam: sets the active call identity without going through
+    /// `startTranscribing`, which requires a real `SFSpeechRecognizer` +
+    /// `AVAudioEngine` unavailable in the unit test host. Lets tests simulate
+    /// the stale-callback-after-redial race that `applyRecognitionResult`'s
+    /// `callId` guard defends against.
+    func setCallIdForTesting(_ value: String?) {
+        callId = value
+    }
     #endif
 
     // MARK: - Permission
@@ -524,6 +533,11 @@ final class CallTranscriptionService: ObservableObject, CallTranscriptionService
     private func startRecognitionTask(language: String) {
         guard let recognizer, let request else { return }
         let speakerId = localUserId
+        // Captured HERE (MainActor, at task-start time) so a stale callback
+        // from a call that has since ended/redialed can be told apart from
+        // the current one once it reaches applyRecognitionResult/Error — see
+        // those methods' callId guard.
+        let ownerCallId = callId
         // @Sendable-typed local: recognitionTask(with:)'s resultHandler runs
         // on the recognizer's own queue, off-MainActor — same isolation trap
         // as startLocalCapture's tap block and requestPermission's
@@ -532,7 +546,7 @@ final class CallTranscriptionService: ObservableObject, CallTranscriptionService
         // it's the identical Apple-completion-handler shape, so fixed
         // preemptively rather than waiting for a third device round-trip.
         let resultHandler: @Sendable (SFSpeechRecognitionResult?, Error?) -> Void = { [weak self] result, error in
-            self?.handleRecognizerCallback(result: result, error: error, speakerId: speakerId, language: language)
+            self?.handleRecognizerCallback(result: result, error: error, speakerId: speakerId, language: language, ownerCallId: ownerCallId)
         }
         recognitionTask = recognizer.recognitionTask(with: request, resultHandler: resultHandler)
     }
@@ -543,7 +557,8 @@ final class CallTranscriptionService: ObservableObject, CallTranscriptionService
         result: SFSpeechRecognitionResult?,
         error: Error?,
         speakerId: String,
-        language: String
+        language: String,
+        ownerCallId: String?
     ) {
         if let error {
             let errorDescription = error.localizedDescription
@@ -553,7 +568,7 @@ final class CallTranscriptionService: ObservableObject, CallTranscriptionService
                         domain: "CallTranscriptionService",
                         code: -2,
                         userInfo: [NSLocalizedDescriptionKey: errorDescription]
-                    )))
+                    )), callId: ownerCallId)
                     callsLogger.error("Recognition error: \(errorDescription, privacy: .public)")
                 }
             }
@@ -580,7 +595,8 @@ final class CallTranscriptionService: ObservableObject, CallTranscriptionService
         Task.detached(priority: .utility) { [weak self] in
             await self?.applyRecognitionResult(
                 text: text, speakerId: speakerId, startMs: startMs, endMs: endMs,
-                isFinal: isFinal, confidence: confidence, language: language, capturedAt: capturedAt
+                isFinal: isFinal, confidence: confidence, language: language, capturedAt: capturedAt,
+                callId: ownerCallId
             )
         }
     }
@@ -590,10 +606,20 @@ final class CallTranscriptionService: ObservableObject, CallTranscriptionService
     /// `capturedAt` is caller-supplied (arrival time), never re-stamped here
     /// — see `handleRecognizerCallback`'s comment on why application time is
     /// the wrong clock for this value.
+    ///
+    /// `callId` is the call that OWNED the recognition task at the moment it
+    /// was started (captured in `startRecognitionTask`), not the currently
+    /// active one — comparing it against `self.callId` here rejects a result
+    /// from a call that has since ended and been replaced by a new one
+    /// before this detached callback got a chance to run. Same defensive
+    /// pattern as `P2PWebRTCClient`'s `peerConnection === self.peerConnection`
+    /// identity guard and `CallManager`'s `currentCallId == callId` re-checks.
     func applyRecognitionResult(
         text: String, speakerId: String, startMs: Int, endMs: Int,
-        isFinal: Bool, confidence: Double, language: String, capturedAt: Date
+        isFinal: Bool, confidence: Double, language: String, capturedAt: Date,
+        callId: String? = nil
     ) {
+        guard self.callId == callId else { return }
         guard isTranscribing else { return }
         guard isFinal || isShowingOverlay else { return }
 
@@ -617,7 +643,8 @@ final class CallTranscriptionService: ObservableObject, CallTranscriptionService
     /// off, see `CallView`) reflects reality instead of staying lit while
     /// nothing updates, then restore `lastError` since `stopTranscribing()`
     /// clears it.
-    func applyRecognitionError(_ error: TranscriptionError) {
+    func applyRecognitionError(_ error: TranscriptionError, callId: String? = nil) {
+        guard self.callId == callId else { return }
         guard isTranscribing else { return }
         stopTranscribing()
         lastError = error
