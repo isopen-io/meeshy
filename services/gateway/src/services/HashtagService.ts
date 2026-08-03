@@ -79,4 +79,33 @@ export class HashtagService {
     const usageCount = await this.prisma.postHashtag.count({ where: { hashtagId } });
     await this.prisma.hashtag.update({ where: { id: hashtagId }, data: { usageCount, lastUsedAt: new Date() } });
   }
+
+  /**
+   * À l'édition, retire les `PostHashtag` dont le tag n'est plus dans le
+   * contenu édité (`keptTags`, déjà normalisés minuscule par l'appelant) et
+   * recompte les `Hashtag` touchés. Contrairement à `MentionService` (qui
+   * laisse les mentions retirées orphelines — sans conséquence, aucun
+   * compteur n'en dépend), `Hashtag.usageCount` alimente les tendances : une
+   * ligne orpheline gonflerait un compteur qui ne redescend jamais.
+   */
+  async reconcileRemovedHashtags(postId: string, keptTags: string[]): Promise<void> {
+    try {
+      const existing = await this.prisma.postHashtag.findMany({
+        where: { postId },
+        select: { id: true, hashtagId: true, hashtag: { select: { tag: true } } },
+      });
+      const kept = new Set(keptTags);
+      const removed = existing.filter((ph) => !kept.has(ph.hashtag.tag));
+      if (removed.length === 0) return;
+
+      await this.prisma.postHashtag.deleteMany({ where: { id: { in: removed.map((ph) => ph.id) } } });
+      const touchedHashtagIds = [...new Set(removed.map((ph) => ph.hashtagId))];
+      for (const hashtagId of touchedHashtagIds) {
+        await this.recountHashtag(hashtagId);
+      }
+    } catch (error) {
+      log.error('reconcileRemovedHashtags a échoué', error instanceof Error ? error : new Error(String(error)),
+        { postId });
+    }
+  }
 }

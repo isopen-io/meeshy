@@ -118,3 +118,55 @@ describe('HashtagService.createPostHashtags', () => {
       .resolves.toBeUndefined();
   });
 });
+
+describe('HashtagService.reconcileRemovedHashtags', () => {
+  function buildPrisma(overrides: Record<string, unknown> = {}) {
+    return {
+      postHashtag: {
+        findMany: jest.fn<() => Promise<unknown[]>>().mockResolvedValue([]),
+        deleteMany: jest.fn<() => Promise<unknown>>().mockResolvedValue({ count: 0 }),
+        count: jest.fn<() => Promise<number>>().mockResolvedValue(0),
+      },
+      hashtag: {
+        update: jest.fn<() => Promise<unknown>>().mockResolvedValue({}),
+      },
+      ...overrides,
+    } as unknown as import('@meeshy/shared/prisma/client').PrismaClient;
+  }
+
+  it('test_reconcile_noExistingHashtags_touchesNothing', async () => {
+    const prisma = buildPrisma();
+    await new HashtagService(prisma).reconcileRemovedHashtags('p1', ['paris']);
+    expect(prisma.postHashtag.deleteMany).not.toHaveBeenCalled();
+  });
+
+  it('test_reconcile_removesHashtagsNoLongerInContent_recountsThem', async () => {
+    const prisma = buildPrisma({
+      postHashtag: {
+        findMany: jest.fn<() => Promise<unknown[]>>().mockResolvedValue([
+          { id: 'ph1', hashtagId: 'h-paris', hashtag: { tag: 'paris' } },
+          { id: 'ph2', hashtagId: 'h-lyon', hashtag: { tag: 'lyon' } },
+        ]),
+        deleteMany: jest.fn<() => Promise<unknown>>().mockResolvedValue({ count: 1 }),
+        count: jest.fn<() => Promise<number>>().mockResolvedValue(4),
+      },
+      hashtag: { update: jest.fn<() => Promise<unknown>>().mockResolvedValue({}) },
+    });
+    await new HashtagService(prisma).reconcileRemovedHashtags('p1', ['paris']);
+
+    expect(prisma.postHashtag.deleteMany).toHaveBeenCalledWith({ where: { id: { in: ['ph2'] } } });
+    expect(prisma.hashtag.update).toHaveBeenCalledWith({
+      where: { id: 'h-lyon' },
+      data: { usageCount: 4, lastUsedAt: expect.any(Date) },
+    });
+    expect(prisma.hashtag.update).toHaveBeenCalledTimes(1);
+  });
+
+  it('test_reconcile_prismaThrows_neverRejects', async () => {
+    const prisma = buildPrisma({
+      postHashtag: { findMany: jest.fn().mockRejectedValue(new Error('DB down')) },
+    });
+    await expect(new HashtagService(prisma).reconcileRemovedHashtags('p1', []))
+      .resolves.toBeUndefined();
+  });
+});
