@@ -254,11 +254,8 @@ public enum StorySlideRenderer {
         }
         style.lineBreakMode = .byWordWrapping
 
-        // Honor an explicit weight override; otherwise keep the bold approximation
-        // historically used for the low-fidelity thumbHash composite.
-        let compositeWeight = textObj.parsedFontWeight?.uiFontWeight ?? .bold
         var attrs: [NSAttributedString.Key: Any] = [
-            .font: UIFont.systemFont(ofSize: fontSize, weight: compositeWeight),
+            .font: compositeFont(for: textObj, fontSize: fontSize),
             .foregroundColor: textColor,
             .paragraphStyle: style,
         ]
@@ -303,6 +300,15 @@ public enum StorySlideRenderer {
         case .glass:
             return UIColor.white.withAlphaComponent(0.25)
         }
+    }
+
+    /// Résolution de police du composite basse-fidélité (thumbHash + covers des autres
+    /// utilisateurs dans le tray) — délègue à `StoryTextFontResolver`, la même source que
+    /// le canvas pixel-parfait, pour honorer `fontFamily`/`textStyle` au lieu de
+    /// l'ancienne approximation `.systemFont(weight: .bold)`. Extrait `static` pour rester
+    /// testable en isolation, comme `compositeBackgroundColor`.
+    static func compositeFont(for text: StoryTextObject, fontSize: CGFloat) -> UIFont {
+        StoryTextFontResolver.resolveFont(forTextObject: text, size: fontSize)
     }
 
     /// Dessine un média foreground à PARITÉ avec le reader (`StoryMediaLayer`).

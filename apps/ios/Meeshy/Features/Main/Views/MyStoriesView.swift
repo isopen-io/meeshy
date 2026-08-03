@@ -361,7 +361,10 @@ struct MyStoriesView: View {
             kind: .published,
             thumbnailURL: story.media.first?.thumbnailUrl ?? story.media.first?.url,
             thumbHash: story.storyEffects?.thumbHash,
-            localCoverPath: nil,
+            localCoverPath: MyStoryThumbnailResolver.localCoverPath(
+                renderedCover: CacheCoordinator.thumbnailLocalFileURL(
+                    for: StoryCoverThumbnail.cacheKey(storyId: story.id))?.path,
+                legacyFallback: nil),
             backgroundHex: story.storyEffects?.background,
             date: story.createdAt,
             expiresAt: story.expiresAt,
@@ -488,7 +491,10 @@ struct MyStoriesView: View {
             kind: .draft,
             thumbnailURL: nil,
             thumbHash: draft.thumbHash,
-            localCoverPath: draft.coverFileURL?.path,
+            localCoverPath: MyStoryThumbnailResolver.localCoverPath(
+                renderedCover: CacheCoordinator.thumbnailLocalFileURL(
+                    for: StoryCoverThumbnail.cacheKey(storyId: draft.id))?.path,
+                legacyFallback: draft.coverFileURL?.path),
             backgroundHex: draft.backgroundHex,
             date: draft.updatedAt,
             expiresAt: nil,

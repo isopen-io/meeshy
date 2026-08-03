@@ -332,6 +332,19 @@ extension StoryComposerView {
         Set(images.keys).union(videos.keys).union(audios.keys)
     }
 
+    /// Pure: renders the first slide's pixel-perfect cover and JPEG-encodes it, or `nil`
+    /// if rendering fails. Extracted so the autosave hook's cache-write can be unit tested
+    /// without a live `StoryComposerView`/`ViewModel` harness.
+    @MainActor
+    static func draftCoverJPEG(firstSlide: StorySlide,
+                               loadedImages: [String: UIImage],
+                               bgImage: UIImage?,
+                               size: CGSize) -> Data? {
+        StoryStaticSnapshot.render(slide: firstSlide, loadedImages: loadedImages,
+                                   bgImage: bgImage, size: size)?
+            .jpegData(compressionQuality: 0.85)
+    }
+
     /// E1 — autosave débouncé post-mutation (`viewModel.autosaveTrigger`) :
     /// le travail d'édition survit désormais à un CRASH DUR (OOM, fatalError),
     /// pas seulement au passage en background. Le save JSON (GRDB) est léger
@@ -348,13 +361,28 @@ extension StoryComposerView {
         guard mayOverwriteStoredDraft else { return }
         flushOpenTimelineIntoSlide()
         syncCurrentSlideEffects()
+        let stampedSlides = slidesStampedWithThumbHash()
         StoryDraftStore.shared.save(draftId: viewModel.draftId,
-                                    slides: slidesStampedWithThumbHash(),
+                                    slides: stampedSlides,
                                     visibility: visibility,
                                     visibilityUserIds: visibilityUserIds,
                                     originalLanguage: storyLanguage,
                                     editingPostId: viewModel.editingPostId)
         persistCommandHistory()
+        // Cover composite local-first (même pipeline pixel-parfait que la publication) —
+        // « première slide dans l'ordre », même convention que l'ancienne heuristique
+        // brute qu'elle remplace côté My Stories > Drafts.
+        if let firstSlide = stampedSlides.first,
+           let jpeg = Self.draftCoverJPEG(firstSlide: firstSlide,
+                                          loadedImages: viewModel.loadedImages,
+                                          bgImage: viewModel.slideImages[firstSlide.id],
+                                          size: StoryCoverCacheKey.renderSize) {
+            let draftId = viewModel.draftId
+            Task {
+                await CacheCoordinator.shared.thumbnails.store(
+                    jpeg, for: StoryCoverCacheKey.key(for: draftId))
+            }
+        }
         let keys = Self.mediaKeysFingerprint(images: viewModel.loadedImages,
                                              videos: viewModel.loadedVideoURLs,
                                              audios: viewModel.loadedAudioURLs)

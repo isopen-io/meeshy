@@ -16,12 +16,11 @@ import MeeshyUI
 /// the author's own stories — instant, no backend, no baked upload. Other viewers
 /// keep the server thumbnail until Phase 2 (baked cover upload) ships.
 enum StoryCoverThumbnail {
-    /// Pixel size of the cached cover — 9:16, crisp enough for the tray ring avatar.
-    static let renderSize = CGSize(width: 270, height: 480)
+    /// Delegates to the SDK scheme (`StoryCoverCacheKey`) — shared with the draft
+    /// autosave hook, which lives SDK-side and cannot see this app-side type.
+    static let renderSize = StoryCoverCacheKey.renderSize
 
-    /// Disk-cache key (in `CacheCoordinator.thumbnails`) for a story's local cover.
-    /// Synthetic scheme so it never collides with a media-URL cache entry.
-    static func cacheKey(storyId: String) -> String { "story-cover:\(storyId)" }
+    static func cacheKey(storyId: String) -> String { StoryCoverCacheKey.key(for: storyId) }
 
     /// Tray cover resolution order: locally-rendered composite (captures every layer)
     /// → server thumbnail → raw media URL (image only — `CachedAvatarImage` cannot
@@ -1542,10 +1541,10 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
 
             // Cover composite local (même rendu que le chemin online) → cache
             // thumbnails. Le tray résout ce cover en priorité pour l'auteur.
-            if let cover = StorySlideRenderer.renderComposite(
+            if let cover = StoryStaticSnapshot.render(
                 slide: slide,
-                bgImage: slideImages[slide.id],
                 loadedImages: loadedImages,
+                bgImage: slideImages[slide.id],
                 size: StoryCoverThumbnail.renderSize
             ), let jpeg = cover.jpegData(compressionQuality: 0.85) {
                 Task {
@@ -2027,10 +2026,10 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
             // background's poster frame (it.26) — and cache it under the published
             // story id. The tray prefers it so the author instantly sees their fully
             // composed story, instead of the server thumbnail (raw bg, no overlays).
-            if let cover = StorySlideRenderer.renderComposite(
+            if let cover = StoryStaticSnapshot.render(
                 slide: slide,
-                bgImage: upload.slideImages[slide.id],
                 loadedImages: upload.loadedImages,
+                bgImage: upload.slideImages[slide.id],
                 size: StoryCoverThumbnail.renderSize
             ), let jpeg = cover.jpegData(compressionQuality: 0.85) {
                 await CacheCoordinator.shared.thumbnails.store(
@@ -2246,10 +2245,10 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
             // composition a changé) + remplacement de l'item dans le groupe.
             var editedSlide = slide
             editedSlide.effects = updatedEffects
-            if let cover = StorySlideRenderer.renderComposite(
+            if let cover = StoryStaticSnapshot.render(
                 slide: editedSlide,
-                bgImage: slideImages[slide.id],
                 loadedImages: loadedImages,
+                bgImage: slideImages[slide.id],
                 size: StoryCoverThumbnail.renderSize
             ), let jpeg = cover.jpegData(compressionQuality: 0.85) {
                 await CacheCoordinator.shared.thumbnails.store(
