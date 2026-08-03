@@ -20,6 +20,8 @@ final class MockPostService: PostServiceProviding, @unchecked Sendable {
 
     var getFeedResult: Result<PaginatedAPIResponse<[APIPost]>, Error> = .success(emptyPaginatedPosts)
     var getReelsResult: Result<PaginatedAPIResponse<[APIPost]>, Error>? = nil
+    var getPostsByHashtagResult: Result<PaginatedAPIResponse<[APIPost]>, Error> = .success(emptyPaginatedPosts)
+    var getTrendingHashtagsResult: Result<[APIHashtag], Error> = .success([])
     var createResult: Result<APIPost, Error> = .success(stubPost)
     var deleteResult: Result<Void, Error> = .success(())
     var likeResult: Result<Void, Error> = .success(())
@@ -46,6 +48,8 @@ final class MockPostService: PostServiceProviding, @unchecked Sendable {
     // MARK: - Call Tracking
 
     var getFeedCallCount = 0
+    var getPostsByHashtagCallCount = 0
+    var getTrendingHashtagsCallCount = 0
     var lastGetFeedCursor: String?
     var lastGetFeedLimit: Int?
 
@@ -197,6 +201,16 @@ final class MockPostService: PostServiceProviding, @unchecked Sendable {
         // Falls through to `getFeedResult` when no dedicated reels stub is set, so
         // existing tests that only stub the feed keep working unchanged.
         return try (getReelsResult ?? getFeedResult).get()
+    }
+
+    func getPostsByHashtag(tag: String, cursor: String?, limit: Int) async throws -> PaginatedAPIResponse<[APIPost]> {
+        getPostsByHashtagCallCount += 1
+        return try getPostsByHashtagResult.get()
+    }
+
+    func getTrendingHashtags(limit: Int) async throws -> [APIHashtag] {
+        getTrendingHashtagsCallCount += 1
+        return try getTrendingHashtagsResult.get()
     }
 
     func create(content: String?, type: String, visibility: String, moodEmoji: String?,
@@ -443,6 +457,10 @@ final class MockPostService: PostServiceProviding, @unchecked Sendable {
         getFeedCallCount = 0
         lastGetFeedCursor = nil
         lastGetFeedLimit = nil
+        getPostsByHashtagResult = .success(emptyPaginatedPosts)
+        getPostsByHashtagCallCount = 0
+        getTrendingHashtagsResult = .success([])
+        getTrendingHashtagsCallCount = 0
 
         getReelsResult = nil
         getReelsCallCount = 0

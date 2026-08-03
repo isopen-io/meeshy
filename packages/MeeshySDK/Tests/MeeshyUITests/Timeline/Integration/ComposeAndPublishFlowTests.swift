@@ -55,6 +55,12 @@ final class MockPostService: PostServiceProviding, @unchecked Sendable {
     func getReels(seedReelId: String?, cursor: String?, limit: Int) async throws -> PaginatedAPIResponse<[APIPost]> {
         throw NSError(domain: "mock", code: -1)
     }
+    func getPostsByHashtag(tag: String, cursor: String?, limit: Int) async throws -> PaginatedAPIResponse<[APIPost]> {
+        throw NSError(domain: "mock", code: -1)
+    }
+    func getTrendingHashtags(limit: Int) async throws -> [APIHashtag] {
+        throw NSError(domain: "mock", code: -1)
+    }
     func create(content: String?, type: String, visibility: String, moodEmoji: String?,
                 mediaIds: [String]?, audioUrl: String?, audioDuration: Int?,
                 originalLanguage: String?, mobileTranscription: MobileTranscriptionPayload?,
