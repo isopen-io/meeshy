@@ -41,7 +41,7 @@ pydantic==2.13.4
 # (exit 0) before merge — uv only ever reports the FIRST unsatisfiable pin.
 grpcio==1.83.0
 grpcio-tools==1.76.0
-grpcio-reflection==1.76.0
+grpcio-reflection==1.83.0
 protobuf==6.33.6
 pyzmq==27.1.0
 
