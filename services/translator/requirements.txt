@@ -26,15 +26,20 @@ pydantic==2.13.4
 # DO NOT bump protobuf to 7.x while grpcio-tools/grpcio-reflection are pinned to
 # 1.76.0 (they cap protobuf<7.0.0). Dependabot's semver-major bump to 7.35.1
 # (PR #2080) broke the Docker build — reject any future protobuf 7.x PR the same way.
-# DO NOT bump grpcio-tools on its own either: 1.83.0 requires grpcio>=1.83.0, which
-# the grpcio==1.82.1 pin above cannot satisfy ("Because grpcio-tools>=1.83.0 depends
-# on grpcio>=1.83.0 ... are incompatible"). PRs #2383 (grpcio-tools 1.83.0) and #2388
-# (protobuf 7.35.1) were merged together on 2026-07-27 and broke `Build translator`
-# again — both reverted here. Any bump in this family must move grpcio, grpcio-tools
-# and grpcio-reflection TOGETHER, and be validated with
+# grpcio bumped standalone to 1.83.0 on 2026-08-03 (PR #2515) — this now satisfies
+# grpcio-tools/grpcio-reflection's own `grpcio>=1.83.0` floor, so the version
+# mismatch that blocked #2383 is gone. DO NOT bump grpcio-tools on its own anyway:
+# grpcio-tools==1.83.0 requires protobuf>=7.35.1,<8.0.0 ("Because grpcio-tools==1.83.0
+# depends on protobuf>=7.35.1,<8.0.0 and you require protobuf==6.33.6 ... are
+# incompatible" — confirmed via `uv pip install --dry-run` with grpcio-tools bumped
+# alone), while grpcio-reflection 1.76.0 still caps protobuf<7.0.0. PRs #2383
+# (grpcio-tools 1.83.0) and #2388 (protobuf 7.35.1) were merged together on
+# 2026-07-27 and broke `Build translator` — both reverted here. Any bump in this
+# family must move grpcio, grpcio-tools, grpcio-reflection AND protobuf TOGETHER,
+# and be validated with
 # `uv pip compile --python-version 3.11 services/translator/requirements.txt -o <tmp>`
 # (exit 0) before merge — uv only ever reports the FIRST unsatisfiable pin.
-grpcio==1.82.1
+grpcio==1.83.0
 grpcio-tools==1.76.0
 grpcio-reflection==1.76.0
 protobuf==6.33.6

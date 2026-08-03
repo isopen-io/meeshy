@@ -69,6 +69,11 @@ updates:
       # manuellement la version Node de CI (cf. PR #2493 recréée malgré ignore)
       - dependency-name: "@types/node"
         update-types: ["version-update:semver-major"]
+      # TypeScript 7 (compilateur natif) n'expose pas l'API compilateur JS
+      # requise par ts-jest → toutes les suites Jest échouent au chargement
+      # (#2524 reverté). Rester sur 6.x tant que ts-jest ne supporte pas TS 7.
+      - dependency-name: "typescript"
+        update-types: ["version-update:semver-major"]
 
   # Service Gateway (Node.js/gRPC)
   - package-ecosystem: "npm"
@@ -116,6 +121,11 @@ updates:
       # CI tourne sous Node 22 : les majeures de @types/node doivent suivre
       # manuellement la version Node de CI (cf. PR #2493 recréée malgré ignore)
       - dependency-name: "@types/node"
+        update-types: ["version-update:semver-major"]
+      # TypeScript 7 (compilateur natif) n'expose pas l'API compilateur JS
+      # requise par ts-jest → toutes les suites Jest échouent au chargement
+      # (#2524 reverté). Rester sur 6.x tant que ts-jest ne supporte pas TS 7.
+      - dependency-name: "typescript"
         update-types: ["version-update:semver-major"]
 
   # Service Translator (Python/AI)
@@ -245,6 +255,12 @@ updates:
       # CI tourne sous Node 22 : les majeures de @types/node doivent suivre
       # manuellement la version Node de CI (cf. PR #2493 recréée malgré ignore)
       - dependency-name: "@types/node"
+        update-types: ["version-update:semver-major"]
+      # TypeScript 7 (compilateur natif) n'expose pas l'API compilateur JS
+      # requise par ts-jest → toutes les suites Jest échouent au chargement
+      # (#2524 reverté, le groupe build-tools l'avait embarqué). Rester sur 6.x
+      # tant que ts-jest ne supporte pas TS 7.
+      - dependency-name: "typescript"
         update-types: ["version-update:semver-major"]
 
   # ===========================================================================
