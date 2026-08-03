@@ -61,7 +61,7 @@ the existing test `test_storyCoverThumbnail_cacheKey_isSyntheticAndStoryScoped`)
 **Interfaces:**
 - Produces: `StoryCoverCacheKey.renderSize: CGSize`, `StoryCoverCacheKey.key(for id: String) -> String`
 
-- [ ] **Step 1: Write the failing SDK test**
+- [x] **Step 1: Write the failing SDK test**
 
 ```swift
 // packages/MeeshySDK/Tests/MeeshyUITests/Story/Canvas/StoryCoverCacheKeyTests.swift
@@ -83,12 +83,12 @@ final class StoryCoverCacheKeyTests: XCTestCase {
 }
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `xcodebuild test -scheme MeeshySDK-Package -destination 'platform=iOS Simulator,name=iPhone 16 Pro' -only-testing:MeeshyUITests/StoryCoverCacheKeyTests`
 Expected: FAIL — `StoryCoverCacheKey` does not exist.
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 ```swift
 // packages/MeeshySDK/Sources/MeeshyUI/Story/Canvas/StoryCoverCacheKey.swift
@@ -109,12 +109,12 @@ public enum StoryCoverCacheKey {
 }
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `xcodebuild test -scheme MeeshySDK-Package -destination 'platform=iOS Simulator,name=iPhone 16 Pro' -only-testing:MeeshyUITests/StoryCoverCacheKeyTests`
 Expected: PASS
 
-- [ ] **Step 5: Delegate the app's `StoryCoverThumbnail` to the new SDK primitive**
+- [x] **Step 5: Delegate the app's `StoryCoverThumbnail` to the new SDK primitive**
 
 In `apps/ios/Meeshy/Features/Main/ViewModels/StoryViewModel.swift`, replace:
 ```swift
@@ -136,12 +136,12 @@ enum StoryCoverThumbnail {
     static func cacheKey(storyId: String) -> String { StoryCoverCacheKey.key(for: storyId) }
 ```
 
-- [ ] **Step 6: Run the existing app test to confirm no regression**
+- [x] **Step 6: Run the existing app test to confirm no regression**
 
 Run: `xcodebuild test-without-building -project apps/ios/Meeshy.xcodeproj -scheme Meeshy -destination "platform=iOS Simulator,id=$SIM" -only-testing:MeeshyTests/StoryViewModelTests/test_storyCoverThumbnail_cacheKey_isSyntheticAndStoryScoped -derivedDataPath apps/ios/Build`
 Expected: PASS (unchanged observable behavior — `"story-cover:abc123"`).
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add packages/MeeshySDK/Sources/MeeshyUI/Story/Canvas/StoryCoverCacheKey.swift \
@@ -163,7 +163,7 @@ git commit -m "feat(sdk): extract StoryCoverCacheKey — shared cover cache-key 
   already `internal` in `MeeshyUI`, same target), `StoryRenderer.render(slide:into:at:mode:imageCache:contentsScale:) -> CALayer` (`@MainActor`).
 - Produces: `StoryStaticSnapshot.render(slide: StorySlide, loadedImages: [String: UIImage], size: CGSize) -> UIImage?` (`@MainActor`).
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```swift
 // packages/MeeshySDK/Tests/MeeshyUITests/Story/Canvas/StoryStaticSnapshotTests.swift
@@ -227,12 +227,12 @@ final class StoryStaticSnapshotTests: XCTestCase {
 }
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `xcodebuild test -scheme MeeshySDK-Package -destination 'platform=iOS Simulator,name=iPhone 16 Pro' -only-testing:MeeshyUITests/StoryStaticSnapshotTests`
 Expected: FAIL — `StoryStaticSnapshot` does not exist.
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 ```swift
 // packages/MeeshySDK/Sources/MeeshyUI/Story/Canvas/StoryStaticSnapshot.swift
@@ -271,12 +271,12 @@ public enum StoryStaticSnapshot {
 }
 ```
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 Run: `xcodebuild test -scheme MeeshySDK-Package -destination 'platform=iOS Simulator,name=iPhone 16 Pro' -only-testing:MeeshyUITests/StoryStaticSnapshotTests`
 Expected: PASS
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add packages/MeeshySDK/Sources/MeeshyUI/Story/Canvas/StoryStaticSnapshot.swift \
@@ -300,7 +300,7 @@ rotation, alignment, and solid text background are already correct here and are 
 - Consumes: `StoryTextFontResolver.resolveFont(forTextObject: StoryTextObject, size: CGFloat) -> UIFont` (existing, `packages/MeeshySDK/Sources/MeeshyUI/Story/Canvas/StoryTextFontResolver.swift:14`).
 - Produces: `StorySlideRenderer.compositeFont(for: StoryTextObject, fontSize: CGFloat) -> UIFont` (new, mirrors the existing testable `compositeBackgroundColor(for:)` at `StorySlideRenderer.swift:297`).
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```swift
 // packages/MeeshySDK/Tests/MeeshyUITests/Story/StorySlideRendererFontTests.swift
@@ -340,12 +340,12 @@ final class StorySlideRendererFontTests: XCTestCase {
 }
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `xcodebuild test -scheme MeeshySDK-Package -destination 'platform=iOS Simulator,name=iPhone 16 Pro' -only-testing:MeeshyUITests/StorySlideRendererFontTests`
 Expected: FAIL — `StorySlideRenderer.compositeFont` does not exist.
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 In `packages/MeeshySDK/Sources/MeeshyUI/Story/StorySlideRenderer.swift`, replace (inside
 `drawTextObject`, `StorySlideRenderer.swift:257-264`):
@@ -380,17 +380,17 @@ Then add, next to `compositeBackgroundColor(for:)` (`StorySlideRenderer.swift:29
     }
 ```
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 Run: `xcodebuild test -scheme MeeshySDK-Package -destination 'platform=iOS Simulator,name=iPhone 16 Pro' -only-testing:MeeshyUITests/StorySlideRendererFontTests`
 Expected: PASS
 
-- [ ] **Step 5: Run the full existing StorySlideRenderer suite to confirm no regression**
+- [x] **Step 5: Run the full existing StorySlideRenderer suite to confirm no regression**
 
 Run: `xcodebuild test -scheme MeeshySDK-Package -destination 'platform=iOS Simulator,name=iPhone 16 Pro' -only-testing:MeeshyUITests/StorySlideRendererTextScaleTests -only-testing:MeeshyUITests/StorySlideRendererTextBackgroundTests -only-testing:MeeshyUITests/StorySlideRendererRotationTests`
 Expected: PASS (colour/size/rotation/background untouched by this change).
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add packages/MeeshySDK/Sources/MeeshyUI/Story/StorySlideRenderer.swift \
@@ -412,7 +412,7 @@ git commit -m "fix(sdk): honour fontFamily/textStyle in the low-fidelity story c
   `CacheCoordinator.shared.thumbnails.store(_:for:) async` (existing).
 - Produces: `StoryComposerView.draftCoverJPEG(firstSlide: StorySlide, loadedImages: [String: UIImage], size: CGSize) -> Data?` (new, pure/testable — mirrors the existing `mediaKeysFingerprint` static-helper pattern in the same file).
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```swift
 // packages/MeeshySDK/Tests/MeeshyUITests/Story/Composer/StoryComposerDraftCoverTests.swift
@@ -445,12 +445,12 @@ final class StoryComposerDraftCoverTests: XCTestCase {
 }
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `xcodebuild test -scheme MeeshySDK-Package -destination 'platform=iOS Simulator,name=iPhone 16 Pro' -only-testing:MeeshyUITests/StoryComposerDraftCoverTests`
 Expected: FAIL — `StoryComposerView.draftCoverJPEG` does not exist.
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 In `packages/MeeshySDK/Sources/MeeshyUI/Story/StoryComposerView+SyncRestore.swift`, add a
 new static helper (near `mediaKeysFingerprint`, `StoryComposerView+SyncRestore.swift:329-333`):
@@ -512,12 +512,12 @@ with:
         }
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `xcodebuild test -scheme MeeshySDK-Package -destination 'platform=iOS Simulator,name=iPhone 16 Pro' -only-testing:MeeshyUITests/StoryComposerDraftCoverTests`
 Expected: PASS
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add packages/MeeshySDK/Sources/MeeshyUI/Story/StoryComposerView+SyncRestore.swift \
@@ -553,7 +553,7 @@ use XCTestExpectation with callbacks, not Task.sleep").
 **Interfaces:**
 - Consumes: `StoryStaticSnapshot.render(slide:loadedImages:size:) -> UIImage?` (Task 2).
 
-- [ ] **Step 1: Re-locate the 4 call sites and confirm which one to skip**
+- [x] **Step 1: Re-locate the 4 call sites and confirm which one to skip**
 
 Run: `grep -n "StorySlideRenderer.renderComposite" -B 20 apps/ios/Meeshy/Features/Main/ViewModels/StoryViewModel.swift | grep -E "renderComposite|^func |^    func "`
 Expected: 4 matches for `renderComposite`; the nearest preceding `func` for the FIRST match
@@ -561,7 +561,7 @@ must be `renderMissingReceiverCovers` — leave that one untouched. The other 3 
 `insertOptimisticOfflineStories`, the online publish loop, and the published-story edit
 ("Background Update") flow.
 
-- [ ] **Step 2: Replace call site 1 — `insertOptimisticOfflineStories` (~line 1545)**
+- [x] **Step 2: Replace call site 1 — `insertOptimisticOfflineStories` (~line 1545)**
 
 Replace:
 ```swift
@@ -581,7 +581,7 @@ with:
             ), let jpeg = cover.jpegData(compressionQuality: 0.85) {
 ```
 
-- [ ] **Step 3: Replace call site 2 — online publish loop (~line 2030)**
+- [x] **Step 3: Replace call site 2 — online publish loop (~line 2030)**
 
 Replace:
 ```swift
@@ -601,7 +601,7 @@ with:
             ), let jpeg = cover.jpegData(compressionQuality: 0.85) {
 ```
 
-- [ ] **Step 4: Replace call site 3 — published-story edit / "Background Update" flow (~line 2249)**
+- [x] **Step 4: Replace call site 3 — published-story edit / "Background Update" flow (~line 2249)**
 
 Replace:
 ```swift
@@ -626,17 +626,17 @@ with:
 The surrounding `let jpeg = ...` / `CacheCoordinator.shared.thumbnails.store(jpeg, for:
 StoryCoverThumbnail.cacheKey(storyId:))` lines are unchanged.
 
-- [ ] **Step 5: Confirm exactly 1 remaining call to the old renderer in this file**
+- [x] **Step 5: Confirm exactly 1 remaining call to the old renderer in this file**
 
 Run: `grep -c "StorySlideRenderer.renderComposite" apps/ios/Meeshy/Features/Main/ViewModels/StoryViewModel.swift`
 Expected: `1` (only `renderMissingReceiverCovers()`, left untouched by design).
 
-- [ ] **Step 6: Run the existing StoryViewModel test suite to confirm no regression**
+- [x] **Step 6: Run the existing StoryViewModel test suite to confirm no regression**
 
 Run: `xcodebuild test-without-building -project apps/ios/Meeshy.xcodeproj -scheme Meeshy -destination "platform=iOS Simulator,id=$SIM" -only-testing:MeeshyTests/StoryViewModelTests -derivedDataPath apps/ios/Build`
 Expected: PASS
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add apps/ios/Meeshy/Features/Main/ViewModels/StoryViewModel.swift
@@ -658,7 +658,7 @@ git commit -m "feat(ios): publish-time optimistic cover uses the pixel-perfect r
   `StoryCoverThumbnail.cacheKey(storyId:) -> String` (Task 1's delegator).
 - Produces: `MyStoryThumbnailResolver.localCoverPath(renderedCover: String?, legacyFallback: String?) -> String?` (new).
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Append to `apps/ios/MeeshyTests/Unit/Views/MyStoryThumbnailResolverTests.swift`:
 ```swift
@@ -678,12 +678,12 @@ Append to `apps/ios/MeeshyTests/Unit/Views/MyStoryThumbnailResolverTests.swift`:
     }
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `xcodebuild test-without-building -project apps/ios/Meeshy.xcodeproj -scheme Meeshy -destination "platform=iOS Simulator,id=$SIM" -only-testing:MeeshyTests/MyStoryThumbnailResolverTests -derivedDataPath apps/ios/Build`
 Expected: FAIL — `MyStoryThumbnailResolver.localCoverPath` does not exist.
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 In `apps/ios/Meeshy/Features/Main/Views/MyStoryThumbnailResolver.swift`, add:
 ```swift
@@ -695,12 +695,12 @@ In `apps/ios/Meeshy/Features/Main/Views/MyStoryThumbnailResolver.swift`, add:
     }
 ```
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 Run: `xcodebuild test-without-building -project apps/ios/Meeshy.xcodeproj -scheme Meeshy -destination "platform=iOS Simulator,id=$SIM" -only-testing:MeeshyTests/MyStoryThumbnailResolverTests -derivedDataPath apps/ios/Build`
 Expected: PASS
 
-- [ ] **Step 5: Wire it into `publishedCardModel`/`draftCardModel`**
+- [x] **Step 5: Wire it into `publishedCardModel`/`draftCardModel`**
 
 In `apps/ios/Meeshy/Features/Main/Views/MyStoriesView.swift`, replace
 `publishedCardModel` (line ~358-374):
@@ -758,12 +758,12 @@ with:
 `MyStoryCard.swift`'s `thumbnailLayers` is unchanged — it already reads `model.localCoverPath`
 first via `UIImage(contentsOfFile:)` (`MyStoryCard.swift:151-153`).
 
-- [ ] **Step 6: Run the full My Stories test suite to confirm no regression**
+- [x] **Step 6: Run the full My Stories test suite to confirm no regression**
 
 Run: `xcodebuild test-without-building -project apps/ios/Meeshy.xcodeproj -scheme Meeshy -destination "platform=iOS Simulator,id=$SIM" -only-testing:MeeshyTests/MyStoryThumbnailResolverTests -only-testing:MeeshyTests/MyStoryCardPresentationTests -only-testing:MeeshyTests/MyStoriesTabResolverTests -derivedDataPath apps/ios/Build`
 Expected: PASS
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add apps/ios/Meeshy/Features/Main/Views/MyStoryThumbnailResolver.swift \
@@ -776,26 +776,41 @@ git commit -m "fix(ios): My Stories grid prefers the local-first pixel-perfect c
 
 ### Task 7: Full verification pass
 
-- [ ] **Step 1: Full SDK test suite**
+- [x] **Step 1: Full SDK test suite**
 
 Run: `cd packages/MeeshySDK && xcodebuild test -scheme MeeshySDK-Package -destination 'platform=iOS Simulator,name=iPhone 16 Pro' -quiet`
 Expected: PASS, 0 failures.
+**Result:** PASS — 6175 XCTest assertions + 472 + 175 Swift Testing tests, 0 failures
+(`/tmp/sdk-final4.log`, exit 0, `** TEST SUCCEEDED **`).
 
 - [ ] **Step 2: Full app test suite**
 
 Run: `./apps/ios/meeshy.sh test`
 Expected: all 4 phases PASS.
+**Not run** — the full phased suite (4 phases incl. a live login against `DEMO_USER`) was
+judged too costly/environment-dependent for this pass. Ran a scoped equivalent instead:
+`xcodegen generate` + `build-for-testing` (project + full test bundle compiled clean,
+`** TEST BUILD SUCCEEDED **`) + `test-without-building -only-testing:MeeshyTests/MyStoryThumbnailResolverTests -only-testing:MeeshyTests/StoryViewModelTests` (125/125 passed, `/tmp/app-test-targeted.log`, exit 0). These are every test class that directly exercises the changed code (Tasks 5 & 6). The full phased run has not been executed — recommend running `./apps/ios/meeshy.sh test` before merging.
 
 - [ ] **Step 3: Manual smoke check in the simulator**
 
-Build and run (`./apps/ios/meeshy.sh run`): create a story with a custom font (non-default
-`fontFamily`) and a non-bold `textStyle` on a colour background, publish it, and check
-"My Stories → Published" shows the real font/weight in the grid card — not a flat colour
-rectangle, not the bold-system approximation. Then start a new story with styled text,
-background the app for ~3s (past the 2.5s autosave debounce) without publishing, reopen the
-app, and check "My Stories → Drafts" shows the same fidelity.
+**Not run** — no simulator/UI interaction performed this pass; only automated tests and
+static review. Flagging per the project's own standard ("if you can't test the UI, say so
+explicitly rather than claiming success") — this step should be done before merging.
 
-- [ ] **Step 4: Commit any fixups discovered during manual verification, then stop — no further steps.**
+- [x] **Step 4: Commit fixups discovered during automated verification.**
+
+Two real bugs were found and fixed via the SDK test suite (not just fixture bugs):
+1. `StoryCoverCacheKey` inherited `MeeshyUI`'s default `@MainActor` isolation, breaking
+   calls from nonisolated contexts — fixed with an explicit `nonisolated` modifier
+   (mirrors `CanvasGeometry`'s existing pattern).
+2. `StoryRenderer.render()` only builds the FOREGROUND item tree — the background is a
+   separate layer the live canvas (`StoryCanvasUIView.backgroundLayer`) and the export
+   compositor (`StoryAVCompositor.renderFrame`, via `resolveBackgroundImage` +
+   `paintAspectFill`) each composite independently. `StoryStaticSnapshot` was rewritten to
+   follow the same two-step order (paint background from in-memory bitmaps, then render the
+   foreground tree on top) instead of relying on `StoryRenderer`'s `imageCache` parameter,
+   which never reaches a background layer that `StoryRenderer.render()` doesn't build.
 
 ## Self-Review Notes (completed during plan authoring)
 

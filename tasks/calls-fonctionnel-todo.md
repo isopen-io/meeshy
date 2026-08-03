@@ -3446,3 +3446,45 @@ bug scopé dans l'ordre des opérations d'un des 8 sites d'invalidation.
   Android (confirmés présents dans `apps/ios`/`packages/MeeshySDK`/`apps/android`), à renforcer par un scan
   Swift/Kotlin dédié dans une prochaine vague. **Parité iOS/Android retry-on-failure retirée de cette
   liste** (confirmée résolue cette vague, voir ci-dessus).
+
+## Vague 51 — Garde de contrat cross-platform pour les littéraux `call:*` iOS/Android (2026-08-03)
+
+Point d'entrée : routine calling-feature (agent Cowork non interactif, mandat PHASE 1-12). Branche
+`claude/modest-cori-uv0fco`, redémarrée depuis `origin/main` à jour (`98cc74f9`, PR #2492 déjà mergée — 0 PR
+ouverte trouvée sur le sujet calls au démarrage). Un audit dédié (agent d'exploration, lecture seule) a
+recartographié la stack d'appel iOS/SDK et confirmé indépendamment le même item « reste ouvert » que la
+Vague 50 avait signalé sans le traiter : `CallEventsHandler-event-contract.test.ts` ne scanne que les
+`socket.on(...)` littéraux de `CallEventsHandler.ts` (gateway) contre le contrat partagé — aucun garde
+n'existe pour les littéraux `"call:..."` codés en dur côté iOS (`CallManager.swift`,
+`MessageSocketManager.swift` du SDK) et Android (`CallSignalManager.kt`), qui n'importent pas le contrat
+TypeScript et peuvent dériver silencieusement.
+
+- **[FAIBLE, gateway (scan multi-plateforme), infrastructure de test, TDD]** Nouveau fichier
+  `services/gateway/src/__tests__/unit/socketio/CallEventsHandler-cross-platform-event-contract.test.ts` :
+  lit en texte brut (sans toolchain Swift/Kotlin) les 3 fichiers de signalisation d'appel connus pour
+  contenir des littéraux `"call:..."` — `apps/ios/Meeshy/Features/Main/Services/CallManager.swift`,
+  `packages/MeeshySDK/Sources/MeeshySDK/Sockets/MessageSocketManager.swift`,
+  `apps/android/sdk-core/src/main/kotlin/me/meeshy/sdk/socket/CallSignalManager.kt` — et vérifie que chaque
+  littéral extrait existe dans le même contrat partagé (`CALL_EVENTS` ∪ `CLIENT_EVENTS` ∪ `SERVER_EVENTS`)
+  que le garde gateway existant.
+- **Constat** : aucune dérive trouvée — les 3 fichiers sont déjà alignés avec le contrat (attendu, cf.
+  Vagues précédentes : code appel déjà exceptionnellement propre). Ce n'est donc pas un bug corrigé mais une
+  garde de non-régression comblant un trou d'observabilité identifié à la Vague 50.
+- **Tests TDD (RED prouvé sans casser la prod)** : un premier cas fixture (`"call:definitely-not-a-real..."`)
+  prouve que l'extraction/comparaison détecte bien un littéral hors contrat. RED réel confirmé en
+  conditions live : littéral factice `"call:totally-bogus-event"` injecté temporairement dans
+  `CallSignalManager.kt` (production) → le nouveau test échoue avec le littéral listé dans `offContract` ;
+  fichier restauré depuis une copie (`git diff --stat` vide après restauration, confirmant un fichier
+  strictement identique) → GREEN. Suite calling gateway complète (`CallEventsHandler|CallService|
+  CallCleanupService|calls-routes|call-`) : 42 suites / 1041 tests verts (+1 suite / +4 tests vs. Vague 50).
+  `tsc --noEmit` gateway : 0 erreur.
+- **iOS/Android (lecture seule, aucun changement)** : hors périmètre — changement strictement gateway (1
+  nouveau fichier de test lisant les sources iOS/Android sans les modifier).
+- **Reste ouvert (inchangé)** : dead code / god-objects `CallManager.swift` (5663 lignes, confirmé par
+  l'audit de cette vague)/`CallEventsHandler.ts` (toujours jugé trop risqué pour une passe non scopée) ;
+  couverture E2E iOS des écrans d'appel entrant/sortant relativement fine (peu de XCUITest bout-en-bout,
+  confirmé par l'audit de cette vague — aucun XCUITest de bout en bout trouvé) ; l'ADR `actor CallEventQueue`
+  documenté dans `docs/superpowers/specs/2026-05-10-calls-sota-redesign-design.md` (section 10) semble ne
+  jamais avoir été implémenté (`grep CallEventQueue` vide sur `CallManager.swift` actuel) — à vérifier si
+  c'est un abandon délibéré déjà tracé ailleurs ou un écart ADR/code à documenter lors d'une prochaine
+  vague.

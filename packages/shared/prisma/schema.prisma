@@ -3010,6 +3010,7 @@ model Post {
   postReactions PostReaction[] @relation("PostReactionsTable")
   /// Mentions dans le corps du post
   postMentions  PostMention[]  @relation("PostMentions")
+  postHashtags  PostHashtag[]  @relation("PostHashtags")
 
   @@index([authorId, type, createdAt])
   @@index([communityId, type, createdAt])
@@ -3974,4 +3975,38 @@ model PostMention {
   @@index([postId])
   @@index([mentionedUserId])
   @@index([mentionedAt])
+}
+
+model Hashtag {
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  /// Normalisé minuscule — clé de correspondance. La casse d'affichage
+  /// d'origine vit sur PostHashtag, pas ici (un même tag peut être tapé
+  /// "#Paris" et "#paris" par deux auteurs différents).
+  tag         String   @unique
+  usageCount  Int      @default(0)
+  createdAt   DateTime @default(now())
+  lastUsedAt  DateTime @default(now())
+  postHashtags PostHashtag[]
+
+  @@index([usageCount(sort: Desc)])
+}
+
+/// Jointure post↔hashtag. Miroir de PostMention, MAIS avec un comportement
+/// différent à l'édition : les lignes retirées SONT supprimées (voir
+/// HashtagService.reconcileRemovedHashtags), contrairement à PostMention qui
+/// laisse ses lignes orphelines (acceptable là-bas car rien n'y compte).
+model PostHashtag {
+  id         String   @id @default(auto()) @map("_id") @db.ObjectId
+  postId     String   @db.ObjectId
+  hashtagId  String   @db.ObjectId
+  /// Casse telle que tapée par l'auteur — affichage uniquement.
+  display    String
+  createdAt  DateTime @default(now())
+
+  post       Post     @relation("PostHashtags", fields: [postId], references: [id], onDelete: Cascade)
+  hashtag    Hashtag  @relation(fields: [hashtagId], references: [id], onDelete: Cascade)
+
+  @@unique([postId, hashtagId], name: "post_hashtag_unique")
+  @@index([hashtagId])
+  @@index([postId])
 }

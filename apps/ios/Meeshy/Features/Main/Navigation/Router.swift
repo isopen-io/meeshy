@@ -25,6 +25,7 @@ enum Route: Hashable {
     case communityLinks
     case dataExport
     case postDetail(String, FeedPost? = nil, showComments: Bool = false, commentId: String? = nil, parentCommentId: String? = nil)
+    case hashtagResults(tag: String)
     case bookmarks
     case starredMessages
     case friendRequests
@@ -95,6 +96,8 @@ extension Route {
             return String(localized: "route.title.data_export", defaultValue: "Data export", bundle: .main)
         case .postDetail(_, let post, _, _, _):
             return post?.author ?? String(localized: "route.title.post", defaultValue: "Post", bundle: .main)
+        case .hashtagResults(let tag):
+            return "#\(tag)"
         case .bookmarks:
             return String(localized: "route.title.bookmarks", defaultValue: "Bookmarks", bundle: .main)
         case .starredMessages:
@@ -316,6 +319,9 @@ final class Router: ObservableObject {
                 // post including stories. The viewer-preferred path stays
                 // reserved for cold launch / push notification dispatch.
                 push(.postDetail(postId))
+
+            case .hashtag(let tag):
+                push(.hashtagResults(tag: tag))
 
             case .external:
                 break

@@ -10,6 +10,7 @@ import { LanguageOrb } from './LanguageOrb';
 import { TranslationToggle } from './TranslationToggle';
 import type { TranslationItem } from './TranslationToggle';
 import { getLanguageName } from './flags';
+import { PostContentText } from './PostContentText';
 
 export interface PostCardProps {
   author: { name: string; avatar?: string; emoji?: string };
@@ -224,11 +225,13 @@ function PostCard({
                 translations={translations}
                 userLanguage={userLanguage}
                 variant="block"
+                showContent={false}
               />
+              <PostContentText content={content} className="text-[var(--gp-text-primary)]" />
             </div>
           ) : (
             <div className="mb-3">
-              <p className="text-[var(--gp-text-primary)]">{content}</p>
+              <PostContentText content={content} className="text-[var(--gp-text-primary)]" />
               {onTranslate && lang !== userLanguage && (
                 <button
                   onClick={(e) => { e.stopPropagation(); onTranslate(); }}

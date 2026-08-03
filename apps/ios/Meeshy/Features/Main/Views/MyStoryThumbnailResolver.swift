@@ -21,4 +21,11 @@ enum MyStoryThumbnailResolver {
         }
         return .placeholder
     }
+
+    /// Le composite local-first (même pipeline pixel-parfait que la publication et
+    /// l'autosave de brouillon) gagne toujours sur l'ancien repli — thumbHash serveur
+    /// pour Published, premier fichier média brut pour Drafts.
+    static func localCoverPath(renderedCover: String?, legacyFallback: String?) -> String? {
+        renderedCover ?? legacyFallback
+    }
 }

@@ -247,9 +247,7 @@ struct ReelFeedCard: View, Equatable {
             }
             authorRow
             if !displayCaption.isEmpty {
-                Text(displayCaption)
-                    .font(.subheadline)
-                    .foregroundColor(.white)
+                MessageTextRenderer.render(displayCaption, fontSize: 15, color: .white, mentionColor: .white, accentColor: .white, hashtagColor: .white)
                     .lineLimit(2)
                     .shadow(color: .black.opacity(0.4), radius: 2, y: 1)
             }

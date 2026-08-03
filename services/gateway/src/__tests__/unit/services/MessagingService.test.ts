@@ -291,6 +291,37 @@ describe('MessagingService', () => {
       expect(mockPrisma.message.create).not.toHaveBeenCalled();
     });
 
+    it('resolves early-dedup senderId to the User id, matching the non-dedup path', async () => {
+      // `createSuccessResponse` normalises `senderId` (Participant.id → User.id)
+      // because clients compare `senderId` against their own `userId`. The
+      // early-dedup path must honour that contract too, exactly like the
+      // concurrent P2002 dedup path (MessageProcessor.saveMessage) and the
+      // fresh-send path — otherwise a sequential retry would resolve to the raw
+      // Participant.id. The mock models a real projection: the `sender` relation
+      // is only returned when the query actually requests the include.
+      const baseExisting = {
+        ...createMockMessage(),
+        translations: [{ language: 'fr', content: 'bonjour' }]
+      };
+      mockPrisma.message.findFirst.mockImplementationOnce((args: any) =>
+        Promise.resolve(
+          args?.include?.sender
+            ? { ...baseExisting, sender: { id: testParticipantId, userId: testUserId } }
+            : baseExisting
+        )
+      );
+
+      const response = await service.handleMessage(
+        { ...validRequest, clientMessageId: 'cmid-retry-sender' },
+        testParticipantId
+      );
+
+      expect(response.success).toBe(true);
+      expect((response.data as { isDuplicate?: boolean }).isDuplicate).toBe(true);
+      expect((response.data as { senderId?: string }).senderId).toBe(testUserId);
+      expect((response.data as { senderId?: string }).senderId).not.toBe(testParticipantId);
+    });
+
     it('should return error for invalid request (empty content)', async () => {
       const invalidRequest: MessageRequest = {
         conversationId: testConversationId,

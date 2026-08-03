@@ -1,5 +1,409 @@
 # @meeshy/gateway
 
+## 1.20.1
+
+### Patch Changes
+
+- Changements automatiques détectés :
+
+  - restreindre le build translator de release.yml a amd64 (#2505)
+
+## 1.20.0
+
+### Minor Changes
+
+- Changements automatiques détectés :
+
+  - My Stories grid + publish-time cover use pixel-perfect renderer
+  - pixel-perfect story cover rendering (StoryStaticSnapshot)
+
+## 1.19.0
+
+### Minor Changes
+
+- Changements automatiques détectés :
+
+  - affiche le bouton commentaire de manière fiable
+  - corrige le rognage du texte story (hauteur emoji + largeur police cursive)
+  - badge reset for opted-out users emitted a hardcoded unreadCount:0, wrongly clearing the reader's badge on a partial read
+  - page de résultats /hashtag/[tag] + hashtags tendance
+  - ReelPlayer rend la caption via PostContentText
+  - PostCard + PostDetail rendent la caption via PostContentText
+  - composant PostContentText (mentions+liens+hashtags)
+  - postsService.getPostsByHashtag + getTrendingHashtags
+  - #hashtag tap route vers HashtagResultsView (deep link)
+  - Route.hashtagResults + rendu
+  - écran de résultats HashtagResultsView
+  - PostServiceProviding.getPostsByHashtag + getTrendingHashtags
+  - les captions passent par MessageTextRenderer (mentions/liens/hashtags)
+  - nouveau segment hashtag dans MessageTextRenderer
+  - les mentions sont colorées (mentionColor jamais passé)
+  - endpoints recherche + tendances
+  - câblage création + édition de post
+  - nettoyage des hashtags retirés à l'édition
+  - persistance createPostHashtags + recompte usageCount
+  - extraction pure — HashtagService.extractHashtags
+  - schema Hashtag + PostHashtag
+  - forceCleanupParticipationAfterLeaveFailure invalidated the call:signal cache before the leftAt write, not after
+  - markCallAsMissed never invalidated the call:signal session cache (#2478)
+  - bound \_seq allocation so a stalled nextSeq never blocks the realtime path
+  - xcodegen régénère le pbxproj -- AppSourceGuard(.swift/Tests) manquait au target
+  - ferme le circuit succès/échec/annulation du brouillon gelé
+  - supprime un reel EN DIRECT sur post:deleted
+  - la republication met à jour la fenêtre au lieu de l'avaler, endMs plafonné à la durée réelle
+  - découverte par proximité géographique (posts/reels/stories)
+  - l'upload manuel accepte une forme d'onde du client
+  - le header descend la fenêtre du fond — le compteur M:SS s'arme au reader
+  - l'item de publication porte son draftId de bout en bout
+  - cycle de vie de publication sur StoryDraftStore
+  - les composers et l'edition appliquent la regle de composition REEL
+  - le crédit son défile en cercle et se termine par le temps restant
+  - la capture grave enfin la forme d'onde sur le Sound cree
+  - la forme d'onde du client traverse jusqu'au CaptureTrack
+  - la regle de composition d'un REEL exige video, audio ou >= 2 images
+  - SoundUsage enregistre la part du SON, plus la position sur la timeline
+  - borner sourceStart et intrinsicDuration sur les DEUX schemas
+  - les parseurs lisent les fenetres timeline ET source
+  - computeStoryDurationMs redevient le miroir exact d'iOS
+  - la video de FOND recoit le bouton de coupure du son
+  - resolution pure du fond video pour le bouton de coupure
+  - impose la fenêtre d'édition 24h sur message:edit (parité REST)
+  - clear stale retry offer once a later call on the conversation resolves
+  - l'aperçu de conversation compose un libellé pour un message position-seule
+  - chips Fichiers et Bibliothèque dans la feuille d'enregistrement audio
+  - le brouillon audio-seul devient un citoyen de plein droit
+  - phase 3 — un upload PostMedia sans uploadeur identifiable est REFUSÉ
+  - zéro any dans CallEventsHandler — parsing d'erreur unifié
+  - localise l'unité de taille de fichier des attachments
+  - l'upload ecrit durationMs — la story dure enfin tout l'audio
+  - fidélité de reprise des brouillons (audience + langue) et sélection visible
+  - le credit defilant du son de bibliotheque atteint le HEADER du reader
+  - mute d'auteur un-bouton par piste, honore par canvas, previewer et reader
+  - le funnel reseau presente l'auth aux medias proteges de MEME ORIGINE
+  - REST end/leave routes never invalidated the call:signal cache
+  - parité du nettoyage d'appel pour un participant anonyme qui se déconnecte
+  - le tap sur l'avatar Moi rouvre la liste « Mes stories » (supersession 2026-08-02)
+  - lire l'ENSEMBLE des rooms atteintes, pas la forme des appels io.to
+  - pagination offline du feed depuis feed_posts locale (lecteur GRDB activé)
+  - credit defilant du son de bibliotheque dans la chip audio
+  - le like d'un tiers reçu par socket n'allume plus isLikedByMe en GRDB
+  - la localisation live n'est plus renvoyée à son propre partageur (self-echo)
+  - post:updated et post:deleted atteignent aussi la post room
+  - une mutation sociale enfilée en ligne part immédiatement
+  - la bibliotheque n'est plus invisible — mutedAt:null ne matche pas un champ absent
+  - les 4 sinks socket muets persistent leur mutation en cache
+  - le détail de post rattrape post + commentaires au reconnect social
+  - le test du save debounce survit au retardataire d'un test voisin
+  - trois cles a11y orphelines de MyStoryRow quittent le catalogue
+  - 6 cles des confirmations et de la reprise d'echec au catalogue (7 langues)
+  - reprendre un echec de publication, confirmations de suppression, purge du code mort
+  - publier un brouillon repris ne detruit plus ses medias, adoption sans double invite
+  - le store de brouillons ne peut plus perdre le travail qu'il protege
+  - message:send-with-attachments preserve view-once/blur/expiry effects
+  - les 9 cles story.mine des onglets et cartes entrent au catalogue (7 langues)
+  - le guard CallManager suit la vraie fin de l'init
+  - DiskCacheStoreTests cesse de dependre du reseau vivant
+  - staging couvre la bibliotheque de sons (UPLOAD_DIR, volume, drapeau)
+  - le reconnect social rattrape le tray par un delta depuis le curseur affiché
+  - broadcast call:ended for initiateCall's own GC sweeps
+  - detach zmqClient listeners on translateTextDirectly timeout
+  - typing:stop retracts + untracks when the indicator preference flips OFF mid-burst
+  - broadcast participant-left for anonymous guest disconnects
+  - le ré-armement des sinks feed rattrape le trou par un refresh silencieux
+  - retour sur le feed = rejoindre la room feed:subscribe explicitement
+  - flush() pagine le backlog au lieu de geler les rows au-delà de la 50e
+  - sendReply transite par l'outbox durable et effectFlags survit à l'enfilement
+  - les traductions des messages envoyés survivent au cold start
+  - la collision d'ids de traduction ne fait plus rollback le batch de messages
+  - les événements d'engagement socket écrivent toutes les clés cache du post
+  - le like optimiste écrit TOUTES les clés cache du post, pas seulement la sienne
+  - un changement de userState mergé depuis le store persiste la liste
+  - le coalescing markAsRead fusionne les messageIds au lieu de les jeter
+  - garde anti-clobber outbox sur insertPosts + reapplication memoire des likes pending
+  - duration formatting, retry-logic dedup, toggle-handler dedup, silent validation drops
+  - les resultats messages locaux affichent le nom de conversation du cache — plus d'ObjectId brut offline
+  - loadMore() separe le premier rendu cache de la pagination reseau
+  - .expired/.empty peignent GRDB avant le reseau — metadonnees audio hydratees offline
+  - savePreservingFreshness — les mutations locales ne rajeunissent plus l'horloge SWR
+  - le cache main-feed garde les 100 posts les plus RECENTS — plus de tranche vieille servie en .fresh
+  - FriendshipCache seede depuis les stores persistes — statuts d'amitie justes au cold start offline
+  - la branche .expired peint la derniere donnee disque — plus d'ecran vide offline apres TTL
+  - deleteAll(conversationId:) cascade aux tables enfants — plus d'orphelins apres revocation
+  - la retention 6 mois fonctionne enfin — cascade reelle, plus de rollback avale
+  - les reconciliateurs bumpent changeVersion — leur refresh n'est plus avale par le diff O(1)
+  - la maintenance SQLite passe sous la garde beginBackgroundTask — fin du risque 0xdead10cc
+  - le trio de traduction texte reste chaud sous memory warning
+  - la branche .expired de load() flushe la victime dirty avant de la jeter
+  - flushAll, eviction et compteur de test couvrent les 27 stores GRDB — plus d'etat perdu au kill
+  - un memory warning ne detruit plus la table des traductions persistees
+  - authToken/anonymousSessionToken sous verrou — la paire ne se dechire plus
+  - annulation au logout + gate de session dans les handlers — fin de la boucle deconnectee
+  - reset() purge MediaConsumptionStore et les checkpoints TUS — residus cross-compte
+  - purge des impressions persistees et de PendingStatusQueue — residus cross-compte
+  - UserCategoryStore — reset au logout et CRUD optimiste avec rollback
+  - reset() purge UserDisplayNameCache — residu cross-compte en RAM
+  - l'invalidation de session signale la perte des envois en attente — la purge reste inconditionnelle
+  - les watermarks de delta-sync sont remis a zero au logout ET a la re-authentification
+  - un brouillon compose son thumbHash des le premier enregistrement
+  - le logout wipe l'App Group — widgets et relais du compte sortant
+  - plus de conversations fabriquees — etats vides explicites et samples reserves a la galerie
+  - le logout purge les tables feed et send_attempts — residu cross-compte at-rest
+  - reset() purge l'outbox d'etat de conversation — fin du rejeu cross-compte
+  - le logout purge la file d'actions settings — fin du PATCH cross-compte
+  - retryAll ne rejoue plus les messages media en texte-only
+  - la bande de glyphes debordait sa colonne, les cartes se chevauchaient
+  - VideoFilterConfig devient nonisolated — le bundle de tests recompile
+  - la vignette de carte delegue au resolver, elle ne le reimplemente pas
+  - « Mes stories » passe a deux onglets — Publiees et Brouillons
+  - la délivrance d'un message ne dépend plus d'un enrichissement best-effort
+  - la carte et sa bande de glyphes, comparables donc peu couteuses
+  - le bouton Reprendre du bandeau de brouillon ne casse plus sur quatre lignes
+  - le canvas du composer parle à VoiceOver — et le code mort du flux story disparaît
+  - le canvas s'ouvre vivant — amorces discrètes, swipe vers le texte, zéro délai artificiel
+  - synchronize VideoFilterPipeline.config against the capture-queue race
+  - isole l'extraction des frames binaires multipart dans un helper pur testé
+  - complète le commit publication — mock et clés de catalogue restés hors commit
+  - le fond s'affiche même quand le média n'est pas rattaché au post
+  - le repost rend enfin un Bool, et s'ouvre sur la dernière audience
+  - l'audience initiale s'injecte, et reprendre un brouillon la filtre
+  - ajouter un son ne déforme plus le panneau — forme d'onde bornée
+  - les regles de la carte « Mes stories » deviennent des donnees
+  - autant de brouillons qu'on veut — le store cesse d'en ecraser un
+  - le badge d'echec ne confisque plus l'acces a mes stories
+  - termine la migration du loquet de publication, et la sonde -O cesse de mentir
+  - l'éditeur audio cesse de sortir du viewport — safe area comptée deux fois
+  - la mesure du champ ne doit pas rearmer le layout qui l'appelle
+  - l'edition de texte a enfin sa ZONE — centree, bornee, ombragee
+  - la fiche de profil adopte la trame aérée des réglages
+  - publier rend la main immédiatement — file d'uploads, visibilité mémorisée, queue robuste
+  - « 99+ » s'affiche enfin, la pastille s'élargit, le gras tombe
+  - reapplique 1.0.1 au pbxproj, perdu par un auto-merge
+  - trame aérée partagée, filets alignés, fiches (i) en verre
+  - retire cinq clés mortes du cache, rend son hint au bouton de purge
+  - PiP système — ancre survivante, mode restauré, signal caméra honnête
+  - retablit -O + wholemodule, le contournement d'avril est obsolete
+  - suspendre le Now Playing pendant un appel, reprendre au retour au repos
+  - reliquats de revue du chrome — grabber tapable, code mort, contexte de sortie exact
+  - identité d'icônes — variante dark vide, tinted inversée, template CallKit absent
+  - l'ouverture de la Timeline devient une intention UNIQUE — le canvas réserve enfin sa place
+  - le chrome du composer devient une machine à état unique — plus d'écran nu possible
+  - la page du son — ce qui a été publié avec lui
+  - un composer vierge ne piège plus la sortie ni ne sème de brouillon fantôme
+  - la suppression d'un swap ne disparaît plus si l'agrégation échoue (#2437)
+  - résolveur audio nonisolated, et plus de faux « terminé »
+  - purge sélective du cache par type et par domaine
+  - un aperçu qui échoue ne laisse plus la ligne sur « stop »
+  - un son emprunté ne publie plus en silence
+  - l'aperçu joue vraiment, et la ligne se lit sans titre
+  - l'éviction trie par date d'ACCÈS, plus par date de téléchargement
+  - compteurs affichables — publications distinctes et lectures
+  - sélecteur de sons — « Mes sons » et « Tendances », avec recherche
+  - remplissage ouvert (PUBLIC + COMMUNITY) et vignette pour le sélecteur
+  - crédit d'auteur, titre donné par l'auteur, page du son
+  - les lots d'impressions etaient perdus a la sortie d'ecran et a la fermeture
+  - aligne la semantique d'impression sur celle des clients iOS
+  - portee comptee a chaque apparition, et le detail ecoute enfin les likes
+  - le like ne survivait que dans la vue qui l'avait pose
+  - corrections issues de la revue multi-prisme (correction, sécurité, tests)
+  - purge la dette bloquante du lot A — recomptage, libération, formats
+  - restaure les 5 cles de position ecrasees par un checkout concurrent
+  - la vignette map n'etire plus la card du post + titres et theme assainis
+  - 5 cles de position au catalogue, purge d'une cle morte, numero de build degele
+  - ferme la troisième porte d'attribution et la purge sur édition partielle
+  - descente du plafond a 5 Mbps (÷11,8 depuis l'origine)
+  - le MP4 exporte passe de 58,8 a 7,5 Mbps (÷7,8)
+  - l'ecran des demandes d'ajout laissait ses notifications non lues en cache
+  - fullSync perdait la frontiere de lecture des pages 2+
+  - les lectures ne se defaisaient plus — pastille et notifications
+  - referme la porte repost de createPost et pose le drapeau de rollout
+  - accepte post, story et sound — les signalements iOS partaient en 400
+  - purge les usages des stories supprimées et décrémente le compteur
+  - mutedAt arrête réellement la diffusion de la copie de bibliothèque
+  - le build local repart de 1263, et un mecanisme va chercher la verite chez Apple
+  - ferme la route /use, hache l'upload manuel, projette la liste publique
+  - routes /sounds avec garde d'autorisation et projection explicite
+  - capture branchée sur création et édition, rattachement gardé
+  - la position d'un post se change et se retire à l'ÉDITION
+  - SoundCaptureService — hash en flux, scope post, garde d'emprunt
+  - borne soundId et les champs audio non validés du blob storyEffects
+  - volume dédié servi par la route JWT, fin de l'écrêtage de durée
+  - modèle Sound + SoundUsage, collection figée par @@map
+  - le fond ne rembobine plus a la frappe, le texte reste au-dessus de ses outils
+  - reposts et commentaires gardent leur position ; purge de la voie morte FeedMedia.location
+  - la position d'un post s'affiche et s'ouvre en plein ecran partout
+  - la pastille de lieu s'ouvre en carte plein ecran au tap
+  - la position d'un post survit au passage domaine
+  - le hit-test de la pastille de lieu partage la mesure du rendu
+  - défaut français partout au composer — drapeau seul sur le bouton langue du post
+  - l'aperçu photothèque sonne, 19 vignettes derrière un « + » de tête
+  - warm-up à pile PLATE + coupes du header flottant — le boot rend la vue sans déborder
+  - pré-rendu DEBUG au boot — éteint la classe des stack-overflows du décodeur de métadonnées
+  - journalise les échecs de snapshot et de collage, ajoute la garde de câblage onIngest
+  - la vignette de lieu devient une image statique — le snapshot ne crashe plus
+  - horloge sur l'heure de publication, note + onde pour l'audio de fond, noms bornés à 16
+  - une mise à jour de point ne publie plus qu'une fois, et la garde des entrées du composer de mood couvre les quatre sites
+  - le dépôt ne fabrique plus de repli, et garde le vrai nom
+  - les doubles d'exporteur suivent la signature `branding:`
+  - le picker de lieu ne gele plus — la carte n'ouvre plus en .userLocation(fallback:)
+  - les mocks de `@/lib/config` gardent l'implémentation réelle
+  - le drop résout ses providers en séquence, pas en TaskGroup
+  - un seul débit, marque fusionnée et mémoïsée — 5,6 s → 3,8 s
+  - la position manquait au protocole — iOS ne compilait plus
+  - envoyer le lieu partagé depuis une conversation
+  - rendu du lieu reçu depuis message.location
+  - crash device (3e coupe) — le glyphe du bouton recherche devient une struct nominale
+  - transporter le lieu partagé sur les trois transports d'un message
+  - les echantillons photo cessent d'etre flous — .fastFormat rendait un degrade definitif
+  - câblage onIngest des surfaces commentaires et réponse à une story
+  - retirer les DTOs mortes du partage de position statique
+  - les deux extractRepostPayload oublient la pastille de lieu
+  - câblage onIngest dépôt/collage sur les deux composers de la surface POST
+  - câble onIngest (dépôt & collage) du composer vers les pipelines existants
+  - cible de dépôt et collage file:// dans UniversalComposerBar
+  - composerHasContent ignore les pastilles de lieu
+  - couche pure d'ingestion dépôt/collage (résolveur, routeur MIME, détecteur file://) avec tests
+  - la pastille de lieu prend la palette de marque, plus les couleurs systeme
+  - poser, deplacer et exporter une pastille de lieu
+  - meeshy.sh test execute enfin la suite du package MeeshySDK
+  - la cover du tray et le ThumbHash montrent la pastille de lieu
+  - le canvas live cesse d'evincer la calque de la pastille a chaque tick
+  - la pastille de lieu vit dans StoryEffects, donc elle survit au brouillon et part au serveur
+  - la suite MeeshySDK redevient verte — le décodeur du test refusait les dates du gateway
+  - un « vu » de story épuisé squattait la pastille pour 7 jours
+  - la pastille de lieu est dessinee par StoryRenderer, donc exportee
+  - StoryLocationObject, une pastille de lieu posable sur une slide
+  - retire force-init, qui offrait un compte BIGBOSS à qui la demandait
+  - la garde d'authentification cesse d'être toujours fausse
+  - le contenu d'une conversation cesse d'être lisible par n'importe qui
+  - le fond audio enregistré s'annonce — note au header, waveform au canvas
+  - un jeton à signature invalide ne délivre plus de jeton valide
+  - l'aperçu du tray se rend à la volée côté récepteur
+  - les cinq routes d'administration exigent enfin une identité
+  - un envoi hors-ligne conserve sa position au flush
+  - les avatars/bannières relatifs se résolvent contre l'origine API
+  - ferme le contournement d'authentification x-user-id sur les routes voice
+  - un post et un commentaire conservent leur lieu partage
+  - l'avatar du compte affiché partout où les données le fournissent
+  - un message conserve son lieu partage apres relaunch
+  - les bulles d'appel ne testent plus la langue du simulateur
+  - le commentaire du feed envoie enfin la position choisie
+  - createOfflineMediaPost accepte un lieu en attente
+  - exclure les posts texte+position de la file durable
+  - lot 3 - les apercus de conversation restituent la position
+  - authentification obligatoire et garde d'appartenance inconditionnelle sur /translate-blocking
+  - un seul rendu de lieu, alimente par SharedPlace
+  - la position d'un message survit aux deux chemins d'envoi
+  - les deux chemins de publication transportent la position, meme sans texte
+  - lot 1 - le message affiche en entier restitue sa position
+  - la tuile d'aperçu de lieu n'imbrique plus un String(localized:) dans le defaultValue d'un autre
+  - pointOfInterestCategory vit sur MKMapItem, pas MKPlacemark
+  - dette française à zéro — 26 dernières clés, et 84 valeurs sources réaccentuées
+  - les 8 surfaces du feed restituent la position d'un post
+  - la position d'un commentaire survit a l'apercu embarque dans un post
+  - un post et un commentaire transportent et restituent un lieu partage
+  - un message transporte et restitue un lieu partage
+  - supprime le hop MainActor qui envoyait geoManager hors de son acteur
+  - message, post et commentaire decodent un lieu partage
+  - un seul CLLocationManager pour les en-tetes geo, et un cache negatif
+  - SharedPlace, representation unique d'un lieu partage
+  - validation d'un lieu partage et extraction depuis metadata
+  - un seul releve en vol, un echec rearme la garde
+  - le delegate CoreLocation est cable au premier usage, pas depuis init
+  - le modele du picker est nonisolated, sa deinit ne double-libere plus au demontage
+  - l'identité d'une épingle de carte ne change plus à chaque rendu
+  - lot 6 — liens, parrainage, affiliation, chaînes à format (35 clés)
+  - lot 5 — sécurité, compte, profil vocal, états vides (109 clés)
+  - lot 4 — bulles, composer, statuts, permissions, appels (65 clés)
+  - lot 3 — feed, réels, communautés, appels (63 clés)
+  - lot 2 — réglages, profil, conversation, authentification (83 clés)
+  - 97 clés cessent de s'afficher en français dans une interface anglaise
+  - une seule bulle de pensée, quel que soit l'imbrication des hôtes
+  - les événements story/post à dates ISO ne sont plus silencieusement perdus
+  - supprime le pont de publication qui bouclait sur lui-même
+  - la liste dit les vues, le cœur ne ment plus, et l'édition d'une story publiée existe enfin
+  - plus une seule clé .module sans traduction
+  - une story publiée depuis un iPad partait dans une file sans consommateur
+  - éditer une story remet son engagement à zéro, jamais sa date de publication
+  - les vues du SDK parlent enfin les 7 langues
+  - une seule source de chemin réseau, et plus aucune file qui dort
+  - le tray de stories quitte le fil, et ScrollOffsetRelay compile
+  - la ligne de conversation dit la vérité, le badge tombe à l'arrivée en bas
+  - rendre la timeline navigable et sa fiche honnête
+  - plus aucun bouton inerte à l'ouverture sur iPad
+  - call:analytics now requires real call participation, not just conversation membership (#2435)
+  - add missing localization keys, fix mistranslation, add hint (#2433)
+  - anonymous disconnect leaveCall now stamps connectionLost (#2431)
+  - la permission d'envoi ne se ferme plus sur le quota de joins du lien (#2430)
+  - reconcile CallKit action timeouts and audio-reactivation race (#2428)
+  - replay offline delivery queue even when presence snapshot build fails (#2434)
+  - normalize recipient language before per-language message fan-out (#2432)
+  - réancre les gardes a11y et purge les clés mortes
+  - l'extension de partage envoie réellement
+  - « +10 s » revient, adossé à une durée d'auteur
+  - la barre de défilement s'aligne sur la course des clips
+  - une poignée de défilement sous les pistes
+  - la courbe de volume prend sa propre bande, sous le titre
+  - la règle d'activation passe sous NSExtensionAttributes
+  - la garde des cibles tactiles lit enfin le fichier qu'elle prétend garder
+  - la règle reste lisible sur toute la plage de zoom
+  - le secrets.yml ANDP redescend dans .andp/
+  - l'export applique enfin l'atténuation automatique
+  - l'auteur peut couper l'atténuation automatique d'un clip
+  - la version reprend le séparateur · avant le build
+  - la signature met la version en gros et se réduit à « Par Services CEO »
+  - poser et lire les points de volume depuis la fiche
+  - forme d'onde sous les vidéos et courbe de volume sur les pistes
+  - region-strip the resolveParticipantLanguage fallback (#2429)
+  - la graisse rejoint l'alignement, un tap dehors referme le panneau, les bulles portent leur couleur de trait
+  - message-edit 24h bypass reads global User.role, not Participant.role
+  - predicat pur de composition REEL + degradation creation + 422 edition
+  - un media TUS sans champ commentId redevient rattachable
+  - un auteur revoit SES stories expirees, dans une fenetre bornee
+  - resolve conversation id for stats on identifier join
+  - order read/delivered cursor freshness by createdAt, not ObjectId string (#2439)
+  - phase 2 — la revendication d'un média exige son propriétaire
+  - propriétaire sur PostMedia — phase 1 du point 21
+  - les impressions repetees d'un meme post n'en comptaient qu'une
+  - impressions de story en 400 + route de marquage lu par post
+  - ferme les quatre derniers trous d'authentification de l'audit
+  - le cleanup des orphelins épargne les avatars/bannières de profil
+
+## 1.18.0
+
+### Minor Changes
+
+- Changements automatiques détectés :
+
+  - courbe d'automation du volume sur les pistes
+  - poser et retirer des points de volume
+  - le volume d'un clip peut monter jusqu'à 200 %
+  - la forme d'onde reflète le niveau réel et se garde sur disque
+  - la vidéo exportée reproduit l'automation de volume
+  - le volume des médias suit le playhead
+  - la clé de cache couvre tous les octets, la couleur du texte se rend enfin en direct
+  - la vidéo de fond respecte enfin le volume choisi
+  - un resolver unique décide du volume d'un clip
+  - le volume devient un canal de keyframe, l'audio gagne l'automation
+  - le volume d'un média peut monter jusqu'à 200 %
+  - disconnect-grace expiry now ends calls with connectionLost, not completed (#2426)
+  - le canvas reste plein écran pendant l'édition
+  - une seule rangée de sept outils, Terminé seul en haut
+  - le panneau Cadre gagne Aucun, une marge et un liseré
+  - taille et graisse deviennent des curseurs du panneau Police
+  - la rangée basse tourne au tap, ouvre à l'appui long
+  - les sept attributs tournent au tap, le cadre ne repeint plus
+  - les fonds préréglés deviennent une source unique
+  - le calque rend la marge et le liseré du cadre
+  - le cadre se détache du fond — aucun, marge, liseré
+  - la fiche montre tout, temps comme espace
+  - les poignées suivent le surlignage, un clip ne dépasse plus sa source
+  - le tap surligne, le double tap ouvre, le glissement déplace
+  - le header ne clignote plus entre gris opaque et transparent
+  - la durée de slide dérive du contenu, sans exception
+  - la barre de timing peut enfin allonger un clip
+  - un seul chemin pour régler début, fin et durée
+  - une seule règle pour les bornes d'une fenêtre de clip
+
 ## 1.17.1
 
 ### Patch Changes
