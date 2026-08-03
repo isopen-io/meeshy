@@ -66,7 +66,7 @@ datasets==5.0.1
 # ==0.1.97 (metadata PyPI d'espnet) ; un uv pip compile confirmerait le conflit.
 huggingface_hub==1.24.0
 safetensors==0.8.0
-peft==0.19.1
+peft==0.20.0
 # PIN EXACT — chatterbox-tts 0.1.6 requiert transformers==5.14.1 (cf. uv.lock + pyproject.toml).
 # NE PAS élargir : transformers>=4.55 référence torch.float8_e8m0fnu (dtype MXFP4) absent de
 # torch 2.6.0 (épinglé dans Dockerfile) → AttributeError à l'import de chatterbox au build.
