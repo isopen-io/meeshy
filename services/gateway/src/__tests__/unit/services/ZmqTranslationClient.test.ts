@@ -1386,35 +1386,6 @@ describe('ZmqTranslationClient', () => {
       // Client should still function correctly
       expect(client).toBeDefined();
     });
-
-    it.skip('should throw error when circuit breaker is open', async () => {
-      // Directly inject a mock retry handler that simulates circuit breaker being open
-      const mockRetryHandler = {
-        canSendRequest: jest.fn().mockReturnValue(false),
-        registerRequest: jest.fn(),
-        markSuccess: jest.fn(),
-        markFailure: jest.fn(),
-        cleanupStaleRequests: jest.fn(),
-        getPendingCount: jest.fn().mockReturnValue(0),
-        getCircuitState: jest.fn().mockReturnValue('OPEN'),
-        clear: jest.fn(),
-        on: jest.fn(),
-      };
-
-      // Replace the retry handler
-      (client as any).retryHandler = mockRetryHandler;
-
-      const request: TranslationRequest = {
-        messageId: 'msg-123',
-        text: 'Test',
-        sourceLanguage: 'en',
-        targetLanguages: ['fr'],
-        conversationId: 'conv-456'
-      };
-
-      await expect(client.sendTranslationRequest(request)).rejects.toThrow('Circuit breaker is OPEN');
-      expect(mockRetryHandler.canSendRequest).toHaveBeenCalled();
-    });
   });
 
   // ════════════════════════════════════════════════════════════════════
@@ -1599,6 +1570,92 @@ describe('ZmqTranslationClient', () => {
       (client as any)._cbRecordSuccess();
 
       expect((client as any).cbConsecutiveErrors).toBe(0);
+      expect((client as any).cbOpenedAt).toBeNull();
+    });
+
+    // ── End-to-end wiring (setupEventForwarding → circuit breaker) ──────────
+    // The tests above poke the CB state machine directly. These drive REAL
+    // translator events through the full poll → parse → forward pipeline, so a
+    // regression that unwires `_cbRecordError` / `_cbRecordSuccess` from the
+    // event handlers — invisible to the direct-injection tests — is caught here.
+
+    const pushTranslationError = async (taskId: string): Promise<void> => {
+      const errorEvent: TranslationErrorEvent = {
+        type: 'translation_error',
+        taskId,
+        messageId: `msg-${taskId}`,
+        error: 'Translation service unavailable',
+        conversationId: 'conv-cb-e2e',
+      };
+      (mockSubSocket.receive as jest.Mock).mockResolvedValueOnce([
+        Buffer.from(JSON.stringify(errorEvent)),
+      ]);
+      await jest.advanceTimersByTimeAsync(100);
+    };
+
+    const pushTranslationCompleted = async (taskId: string): Promise<void> => {
+      const completedEvent: TranslationCompletedEvent = {
+        type: 'translation_completed',
+        taskId,
+        result: {
+          messageId: `msg-${taskId}`,
+          translatedText: 'Bonjour',
+          sourceLanguage: 'en',
+          targetLanguage: 'fr',
+          confidenceScore: 0.95,
+          processingTime: 150,
+          modelType: 'basic',
+        },
+        targetLanguage: 'fr',
+        timestamp: 1_700_000_000_000,
+      };
+      (mockSubSocket.receive as jest.Mock).mockResolvedValueOnce([
+        Buffer.from(JSON.stringify(completedEvent)),
+      ]);
+      await jest.advanceTimersByTimeAsync(100);
+    };
+
+    it('opens the breaker after threshold real translationError events, then rejects sends', async () => {
+      expect((client as any).cbOpenedAt).toBeNull();
+
+      // One error short of the threshold: breaker must stay closed and sends pass.
+      for (let i = 0; i < ZMQ_TOLERANCE_DEFAULTS.cbFailureThreshold - 1; i++) {
+        await pushTranslationError(`task-cb-${i}`);
+      }
+      expect((client as any).cbOpenedAt).toBeNull();
+
+      // The threshold-crossing error opens the breaker via the forwarded handler.
+      await pushTranslationError('task-cb-threshold');
+      expect((client as any).cbOpenedAt).not.toBeNull();
+
+      // Observable consequence: the send path now rejects instead of piling
+      // requests onto an unhealthy translator.
+      await expect(
+        client.sendTranslationRequest({
+          messageId: 'msg-blocked',
+          text: 'Test',
+          sourceLanguage: 'en',
+          targetLanguages: ['fr'],
+          conversationId: 'conv-cb-e2e',
+        })
+      ).rejects.toThrow('ZMQ circuit breaker OPEN');
+    });
+
+    it('a real translationCompleted event resets the consecutive-error count', async () => {
+      // Accumulate errors below the threshold.
+      for (let i = 0; i < ZMQ_TOLERANCE_DEFAULTS.cbFailureThreshold - 1; i++) {
+        await pushTranslationError(`task-reset-${i}`);
+      }
+      expect((client as any).cbConsecutiveErrors).toBe(
+        ZMQ_TOLERANCE_DEFAULTS.cbFailureThreshold - 1
+      );
+
+      // A success resets the streak, so the next error does NOT trip the breaker.
+      await pushTranslationCompleted('task-reset-success');
+      expect((client as any).cbConsecutiveErrors).toBe(0);
+
+      await pushTranslationError('task-reset-after');
+      expect((client as any).cbConsecutiveErrors).toBe(1);
       expect((client as any).cbOpenedAt).toBeNull();
     });
   });
