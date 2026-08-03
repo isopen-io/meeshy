@@ -1,5 +1,13 @@
 # @meeshy/gateway
 
+## 1.20.1
+
+### Patch Changes
+
+- Changements automatiques détectés :
+
+  - restreindre le build translator de release.yml a amd64 (#2505)
+
 ## 1.20.0
 
 ### Minor Changes

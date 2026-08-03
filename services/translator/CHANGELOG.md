@@ -1,5 +1,13 @@
 # @meeshy/translator
 
+## 1.19.1
+
+### Patch Changes
+
+- Changements automatiques détectés :
+
+  - restreindre le build translator de release.yml a amd64 (#2505)
+
 ## 1.19.0
 
 ### Minor Changes
