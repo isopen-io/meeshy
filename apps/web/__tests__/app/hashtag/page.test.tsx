@@ -1,0 +1,131 @@
+import { render, screen, waitFor } from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import React from 'react';
+import HashtagPage from '@/app/hashtag/[tag]/page';
+import type { Post } from '@meeshy/shared/types/post';
+
+jest.mock('next/navigation', () => ({
+  useParams: () => ({ tag: 'paris' }),
+  useRouter: () => ({ push: jest.fn() }),
+}));
+
+const mockGetPostsByHashtag = jest.fn();
+const mockGetTrendingHashtags = jest.fn();
+
+jest.mock('@/services/posts.service', () => ({
+  postsService: {
+    getPostsByHashtag: (...args: unknown[]) => mockGetPostsByHashtag(...args),
+    getTrendingHashtags: (...args: unknown[]) => mockGetTrendingHashtags(...args),
+  },
+}));
+
+jest.mock('@/hooks/use-i18n', () => ({
+  useI18n: () => ({
+    t: (key: string, paramsOrFallback?: Record<string, unknown> | string) =>
+      typeof paramsOrFallback === 'string' ? paramsOrFallback : key,
+  }),
+}));
+
+jest.mock('@/components/v2/Avatar', () => ({
+  Avatar: ({ name }: { name: string }) => <div data-testid="avatar">{name}</div>,
+}));
+
+jest.mock('@/components/v2/LanguageOrb', () => ({
+  LanguageOrb: () => <span data-testid="language-orb" />,
+}));
+
+jest.mock('@/components/v2/flags', () => ({
+  getLanguageName: (code: string) => code.toUpperCase(),
+}));
+
+jest.mock('@/components/layout/DashboardLayout', () => ({
+  DashboardLayout: ({ children, title }: { children: React.ReactNode; title?: string }) => (
+    <div data-testid="dashboard-layout" data-title={title}>
+      {children}
+    </div>
+  ),
+}));
+
+function makePost(overrides: Partial<Post> = {}): Post {
+  return {
+    id: 'post-1',
+    authorId: 'user-1',
+    author: { id: 'user-1', username: 'alice', displayName: 'Alice' },
+    type: 'POST',
+    visibility: 'PUBLIC',
+    content: 'Vue de #paris',
+    originalLanguage: 'fr',
+    likeCount: 3,
+    commentCount: 1,
+    repostCount: 0,
+    viewCount: 10,
+    bookmarkCount: 0,
+    shareCount: 0,
+    isPinned: false,
+    isEdited: false,
+    createdAt: '2026-08-01T00:00:00.000Z',
+    updatedAt: '2026-08-01T00:00:00.000Z',
+    ...overrides,
+  } as Post;
+}
+
+function renderPage() {
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false, gcTime: 0 } },
+  });
+  return render(
+    <QueryClientProvider client={queryClient}>
+      <HashtagPage />
+    </QueryClientProvider>,
+  );
+}
+
+describe('HashtagPage', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockGetPostsByHashtag.mockResolvedValue({
+      success: true,
+      data: [makePost()],
+      meta: { pagination: { total: 1, offset: 0, limit: 20, hasMore: false }, nextCursor: null },
+    });
+    mockGetTrendingHashtags.mockResolvedValue([{ tag: 'paris', usageCount: 42 }]);
+  });
+
+  it('shows the tag as the page title', async () => {
+    renderPage();
+    await waitFor(() =>
+      expect(screen.getByTestId('dashboard-layout')).toHaveAttribute('data-title', '#paris'),
+    );
+  });
+
+  it('fetches and renders posts matching the hashtag with clickable hashtag text', async () => {
+    renderPage();
+    expect(mockGetPostsByHashtag).toHaveBeenCalledWith('paris', { cursor: undefined, limit: 20 });
+    await waitFor(() =>
+      expect(screen.getAllByRole('link', { name: '#paris' }).length).toBeGreaterThan(1),
+    );
+    for (const link of screen.getAllByRole('link', { name: '#paris' })) {
+      expect(link).toHaveAttribute('href', '/hashtag/paris');
+    }
+  });
+
+  it('renders the trending hashtags list', async () => {
+    renderPage();
+    await waitFor(() => expect(mockGetTrendingHashtags).toHaveBeenCalled());
+    await waitFor(() =>
+      expect(screen.getAllByRole('link', { name: '#paris' }).length).toBeGreaterThan(0),
+    );
+  });
+
+  it('shows an empty state when no posts match the tag', async () => {
+    mockGetPostsByHashtag.mockResolvedValue({
+      success: true,
+      data: [],
+      meta: { pagination: { total: 0, offset: 0, limit: 20, hasMore: false }, nextCursor: null },
+    });
+    renderPage();
+    await waitFor(() =>
+      expect(screen.getByText('No posts with this hashtag yet')).toBeInTheDocument(),
+    );
+  });
+});
