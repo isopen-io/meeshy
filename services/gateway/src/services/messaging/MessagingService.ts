@@ -138,7 +138,26 @@ export class MessagingService {
         const earlyHit = await performanceLogger.withTiming(
           'messaging.earlyDedupCheck',
           () => this.prisma.message.findFirst({
-            where: { conversationId, clientMessageId: request.clientMessageId }
+            where: { conversationId, clientMessageId: request.clientMessageId },
+            // Fetch the sender relation so `createSuccessResponse` resolves
+            // `senderId` to the User.id (clients compare it to their own
+            // userId). Without it a sequential retry would return the raw
+            // Participant.id — the concurrent P2002 dedup path in
+            // MessageProcessor.saveMessage already carries this same shape.
+            include: {
+              sender: {
+                select: {
+                  id: true, displayName: true, avatar: true, type: true,
+                  nickname: true, userId: true,
+                  user: {
+                    select: {
+                      id: true, username: true, displayName: true,
+                      firstName: true, lastName: true, avatar: true
+                    }
+                  }
+                }
+              }
+            }
           }),
           corr
         );
