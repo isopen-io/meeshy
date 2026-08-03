@@ -3392,3 +3392,57 @@ terminaison d'appel qui a été oublié par l'invariant documenté d'invalidatio
   tests profonds sur `CallManager`/policies, peu de XCUITest bout-en-bout) ; test de contrat cross-platform
   signal (`CALL_EVENTS` partagé iOS/web/Android) limité à un fichier de 52 lignes — à renforcer avant tout
   changement de protocole de signalisation.
+
+## Vague 50 — `forceCleanupParticipationAfterLeaveFailure` invalidait le cache signal AVANT l'écriture `leftAt`, pas après (2026-08-03)
+
+Point d'entrée : routine calling-feature (agent Cowork non interactif, mandat PHASE 1-12). Branche
+`claude/modest-cori-a9q288`, redémarrée depuis `origin/main` à jour. PR #2478 (Vague 49) trouvée ouverte,
+CI entièrement verte, `mergeable_state: clean` — mergée avant de démarrer cette vague plutôt que laissée
+traîner. Un audit dédié (agent d'exploration, lecture seule) a revérifié l'ensemble des 8 sites
+`invalidateSignalSession`/`invalidateSignalCache` connus plus les god-objects `CallManager.swift`/
+`CallEventsHandler.ts` (toujours jugés trop volumineux pour un refactor sûr en une passe) et a confirmé
+deux choses : l'item « reste ouvert » parité iOS/Android retry-on-failure est bien résolu (vérifié à
+nouveau : `CallManager.swift:1187-1204` `canRetryCall`/`retryCall()`, Android `CallRetryPolicy.kt` +
+`CallUiState.canRetry`, web `call-retry-policy.ts` `isRetryableCallFailure` — les trois plateformes
+partagent le même ensemble retryable `{failed, connectionLost}`), à retirer de cette liste ; et un nouveau
+bug scopé dans l'ordre des opérations d'un des 8 sites d'invalidation.
+
+- **[MOYEN, gateway, CONFIRMÉ + CORRIGÉ, TDD]** `CallEventsHandler.forceCleanupParticipationAfterLeaveFailure`
+  (`CallEventsHandler.ts:823`) — le fallback de nettoyage forcé quand `leaveCall` a rejeté (erreur DB/
+  validation), atteint par le handler de déconnexion socket — appelait `this.invalidateSignalSession(...)`
+  **avant** d'attendre la transaction Prisma qui stampe `CallParticipant.leftAt`, à l'inverse des 7 autres
+  sites d'invalidation (`CallEventsHandler.ts:722`, `:1058`, `:2474`, `:2702`, `:3207`, plus
+  `CallService.finalizeMissedCallCleanup`/`notifyReapedCallEnded`), qui invalident tous strictement APRÈS
+  que leur écriture a committé.
+- **Impact concret** : un `call:signal` (SDP/ICE) de l'expéditeur en cours de force-cleanup, arrivant dans
+  la fenêtre entre l'invalidation prématurée et la fin de la transaction DB, force une relecture fraîche
+  via `refreshSignalSession` — mais la transaction n'a pas encore committé, donc cette relecture renvoie
+  encore l'ancien snapshot (`leftAt: null`) et le RE-cache pour un plein cycle TTL (2s) qui commence APRÈS
+  que l'écriture réelle a eu lieu. Un signal suivant, dans cette fenêtre de 2s post-commit, continue donc
+  d'être relayé comme si l'expéditeur était toujours participant — exactement le trou déjà fermé pour les 7
+  autres chemins.
+- **Fix** : une ligne déplacée — `this.invalidateSignalSession(participation.callSessionId)` se trouve
+  désormais immédiatement après le `await this.prisma.$transaction(...)`, avant l'émission
+  `PARTICIPANT_LEFT`, symétrique à l'ordre déjà utilisé partout ailleurs. Aucun changement de comportement
+  hors de cette fenêtre de course.
+- **Tests TDD** : RED confirmé (nouveau cas dans
+  `CallEventsHandler-signal-cache-invalidation.test.ts`, describe existant `signalSessionCache invalidated
+  on leave/end`) — le test mocke `prisma.$transaction` pour faire arriver un `call:signal` concurrent
+  PENDANT la transaction (avant que le mock de `getCallSession` ne bascule sur le snapshot post-écriture),
+  puis vérifie qu'un second signal juste après le fix reste rejeté (`NOT_A_PARTICIPANT`). Avant le fix,
+  l'expéditeur passait la vérification de participant (cache repollué avec l'ancien snapshot) et
+  l'assertion échouait avec `TARGET_NOT_FOUND` au lieu de `NOT_A_PARTICIPANT` — preuve que la garde
+  d'expéditeur était contournée, pas seulement un artefact de harnais. GREEN après le fix : 7/7 tests du
+  fichier. Suite calling complète gateway filtrée (`CallEventsHandler|CallService|CallCleanupService|
+  calls-routes|call-`) : 41 suites / 1037 tests verts — aucune régression sur les 7 autres sites déjà
+  corrects. `tsc --noEmit` gateway : 0 erreur. `bun run test:coverage` complet lancé en fin de vague pour
+  confirmation finale — cf. résultat consigné au commit/PR.
+- **iOS/Android (lecture seule, aucun changement)** : hors périmètre — changement strictement gateway
+  (`CallEventsHandler.ts`, tests).
+- **Reste ouvert** : dead code / god-objects `CallManager.swift`/`CallEventsHandler.ts` (inchangé, toujours
+  jugé trop risqué pour une passe non scopée) ; couverture E2E iOS des écrans d'appel entrant/sortant
+  relativement fine (peu de XCUITest bout-en-bout) ; test de contrat cross-platform `CALL_EVENTS` limité à
+  un scan des littéraux gateway — ne couvre pas une dérive d'un littéral `"call:..."` codé en dur côté iOS/
+  Android (confirmés présents dans `apps/ios`/`packages/MeeshySDK`/`apps/android`), à renforcer par un scan
+  Swift/Kotlin dédié dans une prochaine vague. **Parité iOS/Android retry-on-failure retirée de cette
+  liste** (confirmée résolue cette vague, voir ci-dessus).

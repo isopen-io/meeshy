@@ -837,7 +837,6 @@ export class CallEventsHandler {
 
     try {
       const now = new Date();
-      this.invalidateSignalSession(participation.callSessionId);
 
       // Audit C5 (2026-07-02) — `{leftAt: null}` alone misses Mongo docs
       // whose leftAt field was never written (pre-C5 participants).
@@ -853,6 +852,14 @@ export class CallEventsHandler {
           }
         });
       });
+
+      // Invariant "every path that writes leftAt evicts the signal cache"
+      // (see invalidateSignalSession) — must run AFTER the write commits,
+      // like every other call site. Invalidating before the transaction let
+      // a `call:signal` racing the in-flight write force a fresh read of the
+      // still-uncommitted (pre-write) session and repopulate the cache with
+      // a stale "not left" snapshot that then survived the full TTL.
+      this.invalidateSignalSession(participation.callSessionId);
 
       io.to(ROOMS.call(participation.callSessionId)).emit(
         CALL_EVENTS.PARTICIPANT_LEFT,
