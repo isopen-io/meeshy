@@ -1018,13 +1018,24 @@ export class PostService {
     return updated;
   }
 
-  async deletePost(postId: string, userId: string) {
+  /**
+   * Soft-delete d'un poste.
+   *
+   * Auteur : toujours autorisé. Modérateur et plus : autorisé sur le poste
+   * d'autrui, avec une ligne AdminAuditLog. Un modérateur ne peut PAS modifier
+   * un poste — réécrire le texte de quelqu'un sous sa signature casserait
+   * l'intégrité du contenu ; `updatePost` reste réservé à l'auteur.
+   */
+  async deletePost(postId: string, actorId: string, options: { actorRole: string }) {
     const post = await this.prisma.post.findFirst({
       where: { id: postId, deletedAt: NOT_DELETED },
     });
 
     if (!post) return null;
-    if (post.authorId !== userId) {
+
+    const isAuthor = post.authorId === actorId;
+    const canModerate = ['BIGBOSS', 'ADMIN', 'MODERATOR'].includes(options.actorRole);
+    if (!isAuthor && !canModerate) {
       throw new Error('FORBIDDEN');
     }
 
@@ -1032,6 +1043,26 @@ export class PostService {
       where: { id: postId },
       data: { deletedAt: new Date() },
     });
+
+    // Retrait par un tiers habilité : trace d'audit. Best-effort comme la
+    // désactivation des liens ci-dessous — un log perdu ne doit pas annuler
+    // une suppression déjà committée.
+    if (!isAuthor) {
+      try {
+        await this.prisma.adminAuditLog.create({
+          data: {
+            userId: post.authorId,
+            adminId: actorId,
+            action: 'DELETE_POST',
+            entity: 'Post',
+            entityId: postId,
+            metadata: JSON.stringify({ type: post.type }),
+          },
+        });
+      } catch (err) {
+        log.warn('deletePost: audit log write failed', { postId, actorId, err });
+      }
+    }
 
     // Soft-delete only flips `deletedAt` — the Prisma `onDelete: Cascade` relation
     // never fires, so any share-tracking links targeting this post would keep
