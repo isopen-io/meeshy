@@ -440,6 +440,52 @@ export async function notificationRoutes(fastify: FastifyInstance) {
   );
 
   // ============================================
+  // DELETE /notifications/read - Supprimer toutes les notifications lues
+  // Route STATIQUE : elle gagne sur DELETE /notifications/:id dans find-my-way.
+  // Sans elle, l'appel (déjà émis par le web) matchait :id avec id="read" → 404.
+  // ============================================
+
+  fastify.delete(
+    '/notifications/read',
+    {
+      onRequest: [fastify.authenticate],
+      schema: {
+        description: 'Delete all read notifications of the current user',
+        tags: ['notifications'],
+        summary: 'Delete read notifications',
+        response: {
+          200: {
+            type: 'object',
+            properties: {
+              success: { type: 'boolean' },
+              count: {
+                type: 'number',
+                description: 'Number of notifications deleted',
+              },
+            },
+          },
+          401: errorResponseSchema,
+          500: errorResponseSchema,
+        },
+      },
+    },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      try {
+        const userId = request.user!.userId;
+        const count = await notificationService.deleteAllRead(userId);
+
+        return {
+          success: true,
+          count,
+        };
+      } catch (error) {
+        fastify.log.error({ error }, 'Error deleting read notifications');
+        return sendInternalError(reply, 'Failed to delete read notifications');
+      }
+    }
+  );
+
+  // ============================================
   // DELETE /notifications/:id - Supprimer
   // ============================================
 
