@@ -1736,6 +1736,60 @@ final class ConversationListViewModelTests: XCTestCase {
         XCTAssertEqual(bumped.lastMessageAttachmentCount, 0)
     }
 
+    /// Bug report 2026-08-04 : une notification arrive pour un DM, la ligne
+    /// remonte bien en tête mais s'affiche SANS le nom de l'auteur — la
+    /// facette neutre (`.bumped`) pose `senderName: nil` sans condition, et
+    /// CONVERSATION_UPDATED (chemin message-driven) ne porte que `senderId`
+    /// (jamais `updatedBy`). Pour un DM, l'auteur d'un message ENTRANT est
+    /// forcément l'autre participant : la ligne doit résoudre son nom depuis
+    /// `participantUserId`/`participantUsername`, déjà en mémoire, sans
+    /// attendre la prochaine synchro.
+    func test_conversationUpdatedEvent_directConversation_resolvesSenderNameFromParticipant() async throws {
+        let messageSocket = MockMessageSocket()
+        let (sut, _, _, _, _, _, _) = makeSUT(messageSocket: messageSocket)
+        var conv = makeConversation(id: "dm1", type: .direct, lastMessageAt: Date(timeIntervalSince1970: 3_000))
+        conv.participantUserId = "windie-id"
+        conv.participantUsername = "Windie Nh"
+        sut.setConversations([conv])
+
+        let newer = Date(timeIntervalSince1970: 9_000)
+        let event = makeConversationUpdatedEvent(
+            conversationId: "dm1", lastMessageAt: newer,
+            lastMessageId: "m-windie", senderId: "windie-id"
+        )
+        messageSocket.conversationUpdated.send(event)
+
+        try await Task.sleep(nanoseconds: 80_000_000)
+
+        let bumped = try XCTUnwrap(sut.conversations.first(where: { $0.id == "dm1" }))
+        XCTAssertEqual(bumped.lastMessageSenderName, "Windie Nh",
+                       "Le nom de l'autre participant doit être résolu immédiatement pour un DM — sans lui la ligne affiche le texte du message sans auteur.")
+    }
+
+    /// Contrôle négatif du test ci-dessus : un `senderId` qui ne correspond
+    /// PAS au participant du DM (message d'un tiers dans un contexte où le
+    /// client ne peut pas l'identifier localement) ne doit rien inventer.
+    func test_conversationUpdatedEvent_directConversation_senderIdMismatch_leavesSenderNameNil() async throws {
+        let messageSocket = MockMessageSocket()
+        let (sut, _, _, _, _, _, _) = makeSUT(messageSocket: messageSocket)
+        var conv = makeConversation(id: "dm2", type: .direct, lastMessageAt: Date(timeIntervalSince1970: 3_000))
+        conv.participantUserId = "windie-id"
+        conv.participantUsername = "Windie Nh"
+        sut.setConversations([conv])
+
+        let newer = Date(timeIntervalSince1970: 9_000)
+        let event = makeConversationUpdatedEvent(
+            conversationId: "dm2", lastMessageAt: newer,
+            lastMessageId: "m-other", senderId: "someone-else-id"
+        )
+        messageSocket.conversationUpdated.send(event)
+
+        try await Task.sleep(nanoseconds: 80_000_000)
+
+        let bumped = try XCTUnwrap(sut.conversations.first(where: { $0.id == "dm2" }))
+        XCTAssertNil(bumped.lastMessageSenderName)
+    }
+
     /// Pins the production payload shape: handlers/MessageHandler.ts emits
     /// CONVERSATION_UPDATED on every new message WITHOUT `updatedBy`. If
     /// the SDK ever requires that field again the decode silently fails,
@@ -3068,7 +3122,8 @@ private func makeConversationUpdatedEvent(
     avatar: String? = nil,
     includeUpdatedBy: Bool = true,
     lastMessageId: String? = nil,
-    locationName: String? = nil
+    locationName: String? = nil,
+    senderId: String? = nil
 ) -> ConversationUpdatedEvent {
     let isoFormatter = ISO8601DateFormatter()
     isoFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
@@ -3082,6 +3137,7 @@ private func makeConversationUpdatedEvent(
     if let title { json["title"] = title }
     if let avatar { json["avatar"] = avatar }
     if let lastMessageId { json["lastMessageId"] = lastMessageId }
+    if let senderId { json["senderId"] = senderId }
     if let locationName {
         json["location"] = ["latitude": 48.858, "longitude": 2.294, "name": locationName]
     }
