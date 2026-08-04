@@ -39,6 +39,7 @@ import { MessageReadStatusService } from '../services/MessageReadStatusService.j
 import { EmailService } from '../services/EmailService';
 import { PushNotificationService } from '../services/PushNotificationService';
 import { NotificationService } from '../services/notifications/NotificationService';
+import { setSharedNotificationService } from '../services/notifications/notification-service-registry';
 import { PrivacyPreferencesService } from '../services/PrivacyPreferencesService';
 import { getBlockedUserIdsAmong } from '../utils/blocking';
 import { PostAudioService } from '../services/posts/PostAudioService';
@@ -210,6 +211,11 @@ export class MeeshySocketIOManager {
 
     // CORRECTION: Créer NotificationService AVANT MessagingService pour que les mentions génèrent des notifications
     this.notificationService = new NotificationService(prisma);
+    // Cette instance est LA vivante du processus (elle recevra `io` via
+    // setSocketIO) : l'enregistrer pour que les cascades hors-manager
+    // (MessageReadStatusService…) émettent réellement sur le socket au lieu
+    // d'instancier un doublon muet sans io.
+    setSharedNotificationService(this.notificationService);
     this.mentionService = new MentionService(prisma);
     this.messagingService = new MessagingService(prisma, this.translationService, this.notificationService);
     // RC-4 — construct the shared CallService BEFORE CallEventsHandler so both

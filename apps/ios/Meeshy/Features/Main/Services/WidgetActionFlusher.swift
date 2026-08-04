@@ -48,6 +48,14 @@ final class WidgetActionFlusher {
                     name: .conversationMarkedRead,
                     object: conversationId
                 )
+                // Frontière de lecture locale (GRDB) — sans elle le prochain
+                // reloadFromCache() ré-affichait la pastille — et notifications
+                // de la cloche (portée conversation), sans déclarer la
+                // conversation active.
+                await ConversationSyncEngine.shared.markConversationReadLocally(conversationId)
+                await MainActor.run {
+                    NotificationToastManager.shared.onConversationMarkedRead(conversationId)
+                }
             } catch {
                 logger.error("Widget mark-as-read failed for \(conversationId): \(error.localizedDescription)")
                 failed.append(conversationId)

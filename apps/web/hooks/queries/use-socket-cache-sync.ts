@@ -6,6 +6,8 @@ import { queryKeys } from '@/lib/react-query/query-keys';
 import { meeshySocketIOService } from '@/services/meeshy-socketio.service';
 import { apiService } from '@/services/api.service';
 import { useAuthStore } from '@/stores/auth-store';
+import { useNotificationStore } from '@/stores/notification-store';
+import { setConversationUnreadInCache } from '@/lib/conversations/unread-cache';
 import type { Message, Conversation } from '@/types';
 import type { TranslationEvent } from '@meeshy/shared/types';
 import type { SocketIOTranslation } from '@meeshy/shared/types/attachment-audio';
@@ -564,22 +566,19 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
 
     // Handler for unread count updates — applies to ALL conversation list variants (filtered, unfiltered)
     const handleUnreadUpdated = (data: { conversationId: string; unreadCount: number }) => {
-      queryClient.setQueriesData<Conversation[]>(
-        { queryKey: queryKeys.conversations.lists() },
-        (old) =>
-          old?.map((conv) =>
-            conv.id === data.conversationId
-              ? { ...conv, unreadCount: data.unreadCount }
-              : conv
-          )
-      );
-      updateInfiniteConversationCache(queryClient, (convs) =>
-        convs.map((conv) =>
-          conv.id === data.conversationId
-            ? { ...conv, unreadCount: data.unreadCount }
-            : conv
-        )
-      );
+      // Garde de conversation OUVERTE (miroir du gate iOS
+      // `ConversationSyncEngine.handleUnreadUpdated`) : le gateway émet le
+      // compteur à TOUS les destinataires, y compris celui qui regarde la
+      // conversation. Sans clamp, le badge s'allume sur la conversation en
+      // cours de lecture entre l'arrivée du message et l'aller-retour
+      // mark-as-read (et indéfiniment si l'utilisateur est scrollé dans
+      // l'historique). Un message postérieur à la fermeture ré-allumera le
+      // badge normalement : la garde ne s'applique qu'à la conversation active.
+      const activeConversationId = useNotificationStore.getState().activeConversationId;
+      const effectiveUnread =
+        data.conversationId === activeConversationId ? 0 : data.unreadCount;
+
+      setConversationUnreadInCache(queryClient, data.conversationId, effectiveUnread);
     };
 
     const handleParticipantRoleUpdated = (data: { conversationId: string; userId: string; newRole: string }) => {
