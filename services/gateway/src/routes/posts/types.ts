@@ -318,6 +318,17 @@ export const UpdatePostSchema = z.object({
   return true;
 }, { message: 'EXCEPT and ONLY visibility require at least one userId in visibilityUserIds' });
 
+/// Surfaces d'où peut partir un « Enregistrer ». Volontairement plus courte que
+/// IMPRESSION_SOURCES : seules ces trois surfaces exposent l'action.
+export const DOWNLOAD_SURFACES = ['feed', 'detail', 'reel'] as const;
+
+export const RecordDownloadsSchema = z.object({
+  /// Bornes alignées sur removeMediaIds : un poste ne porte jamais 50 médias,
+  /// la borne est un garde-fou anti-abus, pas une limite produit.
+  mediaIds: z.array(z.string()).min(1).max(50),
+  surface: z.enum(DOWNLOAD_SURFACES).default('detail'),
+});
+
 export const CreateCommentSchema = z.object({
   // Le contenu peut être vide quand un média est joint (commentaire média seul).
   // Le refine ci-dessous garantit qu'un commentaire porte AU MOINS du texte ou un média.
