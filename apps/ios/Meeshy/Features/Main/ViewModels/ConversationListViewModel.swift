@@ -100,10 +100,10 @@ class ConversationListViewModel: ObservableObject {
     /// by `ConversationStoreSocketBridge`) or a local expand/collapse reflects
     /// into `userCategories` via its publisher.
     private let categoryStore: UserCategoryStore
-    /// Publisher des notifications push « message » (conversationId). Injecté
-    /// pour la testabilité ; en production, branché sur
+    /// Publisher des notifications push « message » (conversationId +
+    /// messageId). Injecté pour la testabilité ; en production, branché sur
     /// `PushNotificationManager.shared.messageNotificationReceived`.
-    private let messageNotificationPublisher: AnyPublisher<String, Never>
+    private let messageNotificationPublisher: AnyPublisher<MessageActivitySignal, Never>
     /// Source des brouillons persistés (UserDefaults). Injecté pour la
     /// testabilité ; en production, `DraftStore.shared`.
     private let draftStore: DraftStore
@@ -367,7 +367,7 @@ class ConversationListViewModel: ObservableObject {
         authManager: AuthManaging = AuthManager.shared,
         storyService: StoryServiceProviding = StoryService.shared,
         syncEngine: ConversationSyncEngineProviding = ConversationSyncEngine.shared,
-        messageNotificationPublisher: AnyPublisher<String, Never> = PushNotificationManager.shared.messageNotificationReceived.eraseToAnyPublisher(),
+        messageNotificationPublisher: AnyPublisher<MessageActivitySignal, Never> = PushNotificationManager.shared.messageNotificationReceived.eraseToAnyPublisher(),
         draftStore: DraftStore = DraftStore.shared,
         store: ConversationStore = .shared,
         categoryStore: UserCategoryStore = .shared
@@ -895,13 +895,30 @@ class ConversationListViewModel: ObservableObject {
     private func subscribeToPushNotifications() {
         messageNotificationPublisher
             .receive(on: DispatchQueue.main)
-            .sink { [weak self] conversationId in
+            .sink { [weak self] signal in
                 guard let self else { return }
-                if self.convIndex(for: conversationId) != nil {
-                    self.bumpToTop(conversationId: conversationId, facet: .bumped(at: self.dateProvider()))
-                } else {
-                    self.fetchAndPrependMissingConversation(id: conversationId, source: .pushNotification)
+                guard let idx = self.convIndex(for: signal.conversationId) else {
+                    self.fetchAndPrependMissingConversation(id: signal.conversationId, source: .pushNotification)
+                    return
                 }
+                // Le push ne transporte AUCUN fait sur le message : sa facette
+                // est neutre et `applyLastMessage` remplace les onze champs
+                // `lastMessage*` en bloc. C'est le bon choix pour un message
+                // qu'on n'a pas (garder ceux du précédent afficherait un auteur
+                // faux) — mais destructeur pour celui que la ligne montre DÉJÀ.
+                // Le socket `message:new` précède le push d'environ une seconde,
+                // donc appliquer la facette ici effaçait l'aperçu et l'auteur
+                // qu'il venait d'écrire, et `schedulePersist` gravait le vide en
+                // L2 : la ligne restait muette jusqu'au prochain resync REST
+                // complet. On ne bump que pour un AUTRE message.
+                if let messageId = signal.messageId,
+                   self.conversations[idx].lastMessageId == messageId {
+                    return
+                }
+                self.bumpToTop(
+                    conversationId: signal.conversationId,
+                    facet: .bumped(at: self.dateProvider())
+                )
             }
             .store(in: &cancellables)
     }
