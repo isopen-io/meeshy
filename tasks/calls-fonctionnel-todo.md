@@ -3488,3 +3488,39 @@ TypeScript et peuvent dériver silencieusement.
   jamais avoir été implémenté (`grep CallEventQueue` vide sur `CallManager.swift` actuel) — à vérifier si
   c'est un abandon délibéré déjà tracé ailleurs ou un écart ADR/code à documenter lors d'une prochaine
   vague.
+
+## Vague 52 — `call:transcription-segment` gardait uniquement le littéral `'ended'`, pas `CALL_TERMINAL_STATUSES` (2026-08-04)
+
+Point d'entrée : routine calling-feature (agent Cowork non interactif, mandat PHASE 1-12). Branche
+`claude/modest-cori-cds5c7`, redémarrée depuis `origin/main` à jour (`54bbee9`, 0 PR ouverte trouvée sur le
+sujet calls au démarrage). Un audit dédié (agent, lecture seule) a re-scanné `CallEventsHandler.ts`/
+`CallService.ts` contre les 5 patterns de bug déjà rencontrés dans les vagues précédentes (dérive de garde
+de statut terminal, ordre d'invalidation du cache signal, ordre de libération de claim, résolveur
+participant faible vs strict, bump de `version` sur écriture terminale) et a confirmé que les 4 premiers
+patterns étaient déjà corrigés partout — sauf un nouveau site pour le pattern 1.
+
+- **[FAIBLE-MOYEN, gateway, CONFIRMÉ + CORRIGÉ, TDD]** `CallEventsHandler.ts:3553`, handler
+  `call:transcription-segment` — gardait `callSession.status === 'ended'` (un littéral unique) au lieu de
+  `CALL_TERMINAL_STATUSES` (`ended`/`missed`/`rejected`/`failed`), déjà importé et utilisé correctement
+  ailleurs dans le même fichier (lignes 653 et 3998).
+- **Impact concret** : un appel résolu `missed`, `rejected` ou `failed` (au lieu de `ended`) laisse la garde
+  passer. Un socket encore joint à `ROOMS.call(callId)` dans la fenêtre entre l'écriture terminale et
+  `evictCallRoomSockets` (plusieurs étapes `await` plus loin — `broadcastCallEnded`/`postCallSummary`/
+  `handleMissedCall`) qui émet `call:transcription-segment` voit son segment relayé dans une room d'appel
+  déjà mort, et potentiellement envoyé au traducteur ZMQ (charge gaspillée) — un broadcast fantôme dans un
+  appel résolu, symétrique aux trous déjà fermés côté cache signal (Vagues 49/50) mais sur le chemin de
+  garde de statut, pas d'invalidation de cache.
+- **Fix** : une ligne — `callSession.status === 'ended'` → `(CALL_TERMINAL_STATUSES as readonly
+  string[]).includes(callSession.status)`, symétrique aux gardes déjà correctes lignes 653/3998.
+- **Tests TDD** : RED confirmé — `CallEventsHandler-transcription.test.ts` avait déjà un `describe` couvrant
+  `status: 'ended'` (silencieusement droppé) mais aucun cas pour `missed`/`rejected`/`failed`. Paramétré en
+  `describe.each(['ended', 'missed', 'rejected', 'failed'])` : avant le fix, les 3 nouveaux statuts
+  laissaient passer le relais (`roomEmit` appelé) — 3 tests rouges sur 21. Fix appliqué → 21/21 verts. Suite
+  calling gateway complète filtrée (`CallEventsHandler|CallService|CallCleanupService|calls-routes|call-`) :
+  42 suites / 1047 tests verts — aucune régression sur les 4 autres patterns déjà corrects. `tsc --noEmit`
+  gateway : 0 erreur. Suite gateway complète (`bun run test:coverage`) : 578 suites / 15271 tests verts.
+- **iOS/Android (lecture seule, aucun changement)** : hors périmètre — changement strictement gateway
+  (`CallEventsHandler.ts`, 1 fichier de test).
+- **Reste ouvert (inchangé)** : dead code / god-objects `CallManager.swift`/`CallEventsHandler.ts` ; ADR
+  `actor CallEventQueue` non implémenté (à trancher : abandon délibéré ou écart à documenter) ; couverture
+  E2E iOS des écrans d'appel (peu de XCUITest bout-en-bout).
