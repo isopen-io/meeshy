@@ -342,21 +342,30 @@ export function registerMessagesRoutes(
       if (!socketIOManager) return;
       const io = socketIOManager.getIO();
 
+      const { MessageReadStatusService } = await import('../../services/MessageReadStatusService');
+      const readStatusService = new MessageReadStatusService(prisma);
+
+      // Badge reset is internal multi-device sync, not a peer disclosure — it
+      // fires on BOTH privacy branches. Emit the REAL post-mark remaining
+      // unread (mirrors message-read-status.ts:560-565), never a hardcoded 0:
+      // an exact/partial read advances the cursor only over the contiguous
+      // read prefix, so messages can legitimately remain unread. A hardcoded 0
+      // would wrongly clear the reader's badge across ALL their devices.
+      const emitUnreadUpdate = async () => {
+        if (type !== 'read') return;
+        const remainingUnread = await readStatusService.getUnreadCount(participantId, conversationId);
+        io.to(ROOMS.user(userId)).emit(SERVER_EVENTS.CONVERSATION_UNREAD_UPDATED, {
+          conversationId,
+          unreadCount: remainingUnread,
+        });
+      };
+
       const shouldBroadcast = await privacyPreferencesService.shouldShowReadReceipts(userId, isAnonymous);
 
       if (!shouldBroadcast) {
-        // Badge reset is internal multi-device sync, not a peer disclosure — always fire.
-        if (type === 'read') {
-          io.to(ROOMS.user(userId)).emit(SERVER_EVENTS.CONVERSATION_UNREAD_UPDATED, {
-            conversationId,
-            unreadCount: 0,
-          });
-        }
+        await emitUnreadUpdate();
         return;
       }
-
-      const { MessageReadStatusService } = await import('../../services/MessageReadStatusService');
-      const readStatusService = new MessageReadStatusService(prisma);
 
       // Fetch the summary and the list of active participants' userIds in parallel.
       // We emit to BOTH the conversation room AND each registered participant's
@@ -394,10 +403,7 @@ export function registerMessagesRoutes(
       emitter.emit(SERVER_EVENTS.READ_STATUS_UPDATED, payload);
       emitter.emit(SERVER_EVENTS.MESSAGE_READ_STATUS_UPDATED, payload);
 
-      io.to(ROOMS.user(userId)).emit(SERVER_EVENTS.CONVERSATION_UNREAD_UPDATED, {
-        conversationId,
-        unreadCount: 0,
-      });
+      await emitUnreadUpdate();
     } catch (error) {
       logger.error('Error broadcasting read status:', error);
     }
@@ -1579,6 +1585,12 @@ export function registerMessagesRoutes(
       // rapportés : le curseur peut buter sur un trou et annoncer 0 alors que
       // le client vient d'afficher des messages situés après ce trou.
       if (unreadCount === 0 && !reportedMessageIds && !caughtUpToMessageId) {
+        // Le raccourci ne doit pas sauter la cascade notifications : une
+        // réaction/mention arrivée sur un message déjà lu a créé une
+        // notification alors que le compteur de messages est resté à 0.
+        Promise.resolve(
+          fastify.notificationService?.markConversationNotificationsAsRead?.(userId, conversationId)
+        ).catch(() => {});
         return sendSuccess(reply, { markedCount: 0 });
       }
 

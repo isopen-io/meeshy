@@ -69,6 +69,12 @@ export function useInfiniteConversationsQuery(options: UseInfiniteConversationsO
       return lastPage.pagination.offset + lastPage.pagination.limit;
     },
     enabled,
+    // Le client global tourne en `staleTime: Infinity` + `refetchOnMount: false`
+    // et cette liste est PERSISTÉE en IndexedDB (24 h). Le socket ne pousse
+    // rien app fermée : au démarrage à froid, badges et aperçus restaient un
+    // instantané d'il y a 24 h. Même correctif que la liste de notifications
+    // (use-notifications-query.ts) : monter la sidebar relit toujours le serveur.
+    refetchOnMount: 'always',
   });
 }
 

@@ -77,6 +77,7 @@ function createMockNotificationService() {
     markPostNotificationsAsRead: jest.fn<any>().mockResolvedValue(2),
     markNotificationsByTypesAsRead: jest.fn<any>().mockResolvedValue(4),
     deleteNotification: jest.fn<any>().mockResolvedValue(true),
+    deleteAllRead: jest.fn<any>().mockResolvedValue(4),
     createMessageNotification: jest.fn<any>().mockResolvedValue({ id: 'new-notif' }),
   };
 }
@@ -508,6 +509,39 @@ describe('removed debug notification routes', () => {
   it('no longer registers POST /notifications/test/create', () => {
     const { fastify } = setup();
     expect(() => getRoute(fastify, 'POST', 'test/create')).toThrow();
+  });
+});
+
+// ─── DELETE /notifications/read ───────────────────────────────────────────────
+//
+// Le web appelait déjà cet endpoint (« supprimer les lues ») : sans route
+// dédiée, la requête matchait DELETE /notifications/:id avec id="read" → 404
+// systématique. La route statique gagne sur la paramétrique dans find-my-way.
+
+describe('DELETE /notifications/read', () => {
+  beforeEach(() => jest.clearAllMocks());
+
+  it('purge les notifications lues du user courant via le service', async () => {
+    const { fastify, ns, reply } = setup();
+    const route = getRoute(fastify, 'DELETE', '/notifications/read');
+    ns.deleteAllRead.mockResolvedValue(4);
+
+    const req = makeRequest();
+    const result = await route.handler(req, reply);
+
+    expect(ns.deleteAllRead).toHaveBeenCalledWith(USER_ID);
+    expect(result).toMatchObject({ success: true, count: 4 });
+  });
+
+  it('returns 500 on service error', async () => {
+    const { fastify, ns, reply } = setup();
+    const route = getRoute(fastify, 'DELETE', '/notifications/read');
+    ns.deleteAllRead.mockRejectedValue(new Error('DB error'));
+
+    const req = makeRequest();
+    await route.handler(req, reply);
+
+    expect(mockSendInternalError).toHaveBeenCalledWith(reply, expect.any(String));
   });
 });
 

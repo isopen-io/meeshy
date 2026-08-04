@@ -101,6 +101,10 @@ class AudioMessageResult:
     processing_time_ms: int
     timestamp: datetime = field(default_factory=datetime.now)
     new_voice_profile: Optional[NewVoiceProfileData] = None
+    # Langues réellement demandées après filtrage. Permet de distinguer les deux
+    # cas où `translations` est vide : aucune traduction demandée (légitime) vs
+    # toutes les langues en échec (à signaler au client).
+    requested_languages: List[str] = field(default_factory=list)
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for serialization"""
@@ -708,7 +712,8 @@ class AudioMessagePipeline:
             voice_model_user_id=voice_model_user_id,
             voice_model_quality=voice_model.quality_score if voice_model else 0.0,
             processing_time_ms=processing_time,
-            new_voice_profile=new_voice_profile_data
+            new_voice_profile=new_voice_profile_data,
+            requested_languages=list(target_languages)
         )
 
         logger.info(

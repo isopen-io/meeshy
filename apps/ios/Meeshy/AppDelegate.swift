@@ -168,9 +168,14 @@ class AppDelegate: NSObject, UIApplicationDelegate {
             return
         }
 
-        let unreadTotal = userInfo["unreadCount"] as? Int
+        // Le gateway sérialise `unreadCount` en STRING dans `data` — le cast
+        // `as? Int` échouait toujours et le compteur de la cloche n'était
+        // jamais appliqué au réveil silencieux.
+        let unreadTotal = (userInfo["unreadCount"] as? Int)
+            ?? (userInfo["unreadCount"] as? String).flatMap(Int.init)
         let convId = userInfo["conversationId"] as? String
-        let convUnread = userInfo["conversationUnread"] as? Int
+        let convUnread = (userInfo["conversationUnread"] as? Int)
+            ?? (userInfo["conversationUnread"] as? String).flatMap(Int.init)
         let messageId = userInfo["messageId"] as? String
         // Phase A real-time instrumentation — log the silent-push arrival
         // so we can correlate `perf:push.sendViaAPNS` (gateway side) with

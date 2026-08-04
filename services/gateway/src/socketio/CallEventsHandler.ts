@@ -3550,7 +3550,7 @@ export class CallEventsHandler {
           select: { status: true }
         });
 
-        if (!callSession || callSession.status === 'ended') return;
+        if (!callSession || (CALL_TERMINAL_STATUSES as readonly string[]).includes(callSession.status)) return;
 
         // No callSession.metadata.translationEnabled gate — the real product
         // control is client-side (the speaker's own captions toggle; no
