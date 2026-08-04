@@ -96,7 +96,7 @@ public enum StoryExporter {
         // the single choke point every export path (viewer, timeline, save)
         // flows through. On hosts without a live UIApplication the id is
         // `.invalid` and the end call is skipped.
-        let backgroundTaskId = await UIApplication.shared.beginBackgroundTask(withName: "story-export")
+        let backgroundTaskId = UIApplication.shared.beginBackgroundTask(withName: "story-export")
         defer {
             if backgroundTaskId != .invalid {
                 Task { @MainActor in UIApplication.shared.endBackgroundTask(backgroundTaskId) }
@@ -518,8 +518,12 @@ public enum StoryExporter {
     private nonisolated static func pump(_ pair: PumpPair,
                                          label: String,
                                          reporter: ExportProgressReporter?) async {
-        let input = pair.input
-        let output = pair.output
+        // `nonisolated(unsafe)` : AVAssetWriterInput/AVAssetReaderOutput predate
+        // Swift concurrency and aren't marked Sendable, but `requestMediaDataWhenReady`
+        // is Apple's own documented contract for exactly this cross-queue usage —
+        // the callback below is the ONLY place either is touched, always on `queue`.
+        nonisolated(unsafe) let input = pair.input
+        nonisolated(unsafe) let output = pair.output
         let queue = DispatchQueue(label: "me.meeshy.story.export.\(label)")
         await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
             let box = ContinuationBox(continuation)

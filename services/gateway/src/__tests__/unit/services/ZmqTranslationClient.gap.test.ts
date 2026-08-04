@@ -152,7 +152,11 @@ describe('ZmqTranslationClient — gap-fill', () => {
       ).rejects.toThrow('Either audioPath or audioData');
     });
 
-    it('should register retry timeout (resend fires after 30s)', async () => {
+    // Ce test gardait l'ancien renvoi à 30 s. Il est devenu la garde inverse :
+    // en prod (2026-08-04) ce renvoi dupliquait le job Whisper, la seconde
+    // passe mourait sur le fichier temporaire nettoyé par la première et son
+    // erreur effaçait une transcription déjà livrée au client.
+    it('should arm a deadman instead of resending after 30s', async () => {
       await client.sendTranscriptionOnlyRequest({
         messageId: 'msg-tc-retry',
         audioPath: '/tmp/audio.wav'
@@ -163,7 +167,7 @@ describe('ZmqTranslationClient — gap-fill', () => {
 
       await jest.advanceTimersByTimeAsync(30_001);
 
-      expect((mockPushSocket.send as jest.Mock).mock.calls.length).toBeGreaterThanOrEqual(2);
+      expect((mockPushSocket.send as jest.Mock).mock.calls.length).toBe(callsBefore);
     });
   });
 

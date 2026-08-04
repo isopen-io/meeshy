@@ -10,8 +10,7 @@ import MeeshySDK
 /// - **Markdown**: `**bold**`, `*italic*`, `~~strikethrough~~`, `__underline__`
 /// - **Meeshy links**: `m+TOKEN` → tappable link to `https://meeshy.me/l/TOKEN`
 /// - **Mentions**: `@username` → tappable link to the profile
-/// - **Hashtags**: `#tag` → styled text ONLY (no tap target: the product has no
-///   hashtag feed screen, so a link would lead nowhere)
+/// - **Hashtags**: `#tag` → tappable link to `https://meeshy.me/hashtag/<tag>`
 /// - **URLs**: Auto-detected via `NSDataDetector` and made tappable
 ///
 /// The pipeline is extensible: add new `NSRegularExpression` entries to `rules`.
@@ -141,16 +140,15 @@ public enum MessageTextRenderer {
     enum Segment {
         case text(String, Styles)
         case mentionLink(display: String, url: URL, username: String)
-        /// `#tag` — styled text, NOT a link (no hashtag feed screen exists).
-        case hashtagText(display: String)
         case meeshyTokenLink(display: String, url: URL, token: String)
         case urlLink(display: String, url: URL)
+        case hashtagLink(display: String, url: URL, tag: String)
     }
 
     // MARK: - Rule Definitions
 
     private enum RuleKind {
-        case bold, italic, strikethrough, underline, meeshyLink, mention, hashtag, url
+        case bold, italic, strikethrough, underline, meeshyLink, mention, url, hashtag
         case displayNameMention(username: String)
     }
 
@@ -162,14 +160,14 @@ public enum MessageTextRenderer {
         pattern: #"(?<![a-zA-Z0-9])@([a-zA-Z0-9_]{1,30})"#
     )
 
-    /// Symmetric to `mentionRegex`. The lookbehind also excludes `_` so a
-    /// trailing `#` glued to a word (`C#`, `page#anchor`) never opens a tag,
-    /// and `\p{L}` keeps accented / non-Latin tags whole (`#été`, `#東京`).
-    /// The `(?=[0-9_]*\p{L})` lookahead requires at least one LETTER, so a
-    /// plain numbering (`Réunion #3`, `#42`) stays untinted text while
-    /// `#1direction` still reads as a tag.
+    // `#` + 1-50 caractères Unicode lettre/chiffre/underscore. PAS de tiret
+    // (convention hashtag). Frontière gauche : ni mot ni `/` — exclut aussi
+    // bien "C#paris" qu'un fragment d'URL "exemple.com/#section". MÊME
+    // classe de caractères que le service gateway (HashtagService.ts) —
+    // SSOT dupliquée consciemment, comme MENTION_HANDLE_CHARS l'est déjà
+    // entre mention-parser.ts et son miroir Swift.
     private static let hashtagRegex = try! NSRegularExpression(
-        pattern: #"(?<![a-zA-Z0-9_])#(?=[0-9_]*\p{L})([\p{L}0-9_]{1,50})"#
+        pattern: #"(?<![\p{L}\p{N}_/])#([\p{L}\p{N}_]{1,50})"#
     )
 
     /// Priority-ordered rules. First match at any position wins.
@@ -276,6 +274,9 @@ public enum MessageTextRenderer {
         return text.contains("http") || text.contains("m+")
     }
 
+    // `internal` (pas `private`) — même précédent que `resolvedLinkURL` : accès
+    // direct depuis les tests via `@testable import`, sans exposer publiquement
+    // un détail d'implémentation hors du module.
     static func parse(_ text: String, inherited: Styles = [], mentionDisplayNames: [String: String]? = nil) -> [Segment] {
         let ns = text as NSString
         let length = ns.length
@@ -369,13 +370,17 @@ public enum MessageTextRenderer {
                     segments.append(.mentionLink(display: display, url: url, username: username))
                 }
 
-            case .hashtag:
-                segments.append(.hashtagText(display: ns.substring(with: match.range)))
-
             case .displayNameMention(let username):
                 let display = ns.substring(with: match.range)
                 if let url = URL(string: "https://meeshy.me/u/\(username)") {
                     segments.append(.mentionLink(display: display, url: url, username: username))
+                }
+
+            case .hashtag:
+                let tag = ns.substring(with: match.range(at: 1))
+                let display = ns.substring(with: match.range)
+                if let url = URL(string: "https://meeshy.me/hashtag/\(tag.lowercased())") {
+                    segments.append(.hashtagLink(display: display, url: url, tag: tag.lowercased()))
                 }
 
             case .url:
@@ -455,15 +460,14 @@ public enum MessageTextRenderer {
                 charOffset += display.count
                 result.append(attr)
 
-            case .hashtagText(let display):
-                // Semibold + teinte, JAMAIS souligné ni `.link` : le produit n'a
-                // pas d'écran de flux par hashtag, un lien mènerait nulle part.
+            case .hashtagLink(let display, let url, _):
                 var attr = AttributedString(display)
+                attr.link = url
                 attr.font = Self.font(fontSize, .semibold, relative: usesRelativeFont)
-                // Pas de `.link` ⇒ pas de `.tint()` pour le colorer : sans teinte
-                // explicite on retombe sur la couleur de base du texte.
-                attr.foregroundColor = hashtagColor ?? color
-                applyHighlight(to: &attr, segmentText: display, charOffset: charOffset, ranges: highlightRanges)
+                attr.underlineStyle = .single
+                if let hashtagColor {
+                    attr.foregroundColor = hashtagColor
+                }
                 charOffset += display.count
                 result.append(attr)
 

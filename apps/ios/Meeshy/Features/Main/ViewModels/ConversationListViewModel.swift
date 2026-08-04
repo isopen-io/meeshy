@@ -773,10 +773,31 @@ class ConversationListViewModel: ObservableObject {
                 if let newLastAt = event.lastMessageAt,
                    newLastAt > self.conversations[index].lastMessageAt {
                     Logger.messages.debug("[conversationUpdated] bump websocket id=\(event.conversationId, privacy: .public)")
+                    // Le payload message-driven ne porte que `senderId` (jamais
+                    // `updatedBy`, réservé aux mises à jour de métadonnées — cf.
+                    // ConversationUpdatedEvent). Pour un DM, l'auteur d'un NOUVEAU
+                    // message est forcément l'autre participant : on résout son nom
+                    // depuis les champs déjà en mémoire sur la ligne (aucun aller-
+                    // retour réseau/cache), pour que la ligne affiche l'auteur dès
+                    // ce bump au lieu d'attendre la prochaine synchro. Les groupes
+                    // n'ont pas cette info en local — comportement neutre inchangé.
+                    let resolvedSenderName: String?
+                    if self.conversations[index].type == .direct,
+                       let senderId = event.senderId,
+                       senderId == self.conversations[index].participantUserId {
+                        resolvedSenderName = self.conversations[index].participantUsername
+                    } else {
+                        resolvedSenderName = nil
+                    }
                     self.bumpToTop(
                         conversationId: event.conversationId,
-                        facet: .bumped(at: newLastAt, id: event.lastMessageId, preview: event.lastMessagePreview,
-                                       location: event.location)
+                        facet: LastMessageFacet(
+                            id: event.lastMessageId,
+                            preview: event.lastMessagePreview,
+                            senderName: resolvedSenderName,
+                            at: newLastAt,
+                            location: event.location
+                        )
                     )
                 } else {
                     if let msgId = event.lastMessageId {

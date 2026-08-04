@@ -269,11 +269,17 @@ export default async function messageReadStatusRoutes(fastify: FastifyInstance) 
         }
       } else {
         // Badge reset is internal multi-device sync, not a peer disclosure — always fire.
+        // Emit the REAL post-mark remaining unread (mirrors the shouldShowReadReceipts
+        // path, message-read-status.ts:554-558), never a hardcoded 0: an exact/partial
+        // read (`messageIds` without `caughtUpToMessageId`) advances the cursor only over
+        // the contiguous read prefix, so messages legitimately remain unread. A hardcoded
+        // 0 would wrongly clear the reader's badge across ALL their devices.
         const manager = fastify.socketIOHandler?.getManager?.();
         if (manager) {
+          const remainingUnread = await readStatusService.getUnreadCount(membership.id, conversationId);
           manager.getIO().to(ROOMS.user(userId)).emit(SERVER_EVENTS.CONVERSATION_UNREAD_UPDATED, {
             conversationId,
-            unreadCount: 0,
+            unreadCount: remainingUnread,
           });
         }
       }

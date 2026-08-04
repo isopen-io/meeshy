@@ -54,6 +54,27 @@ const ISO_639_3_TO_1: Readonly<Record<string, string>> = {
 };
 
 /**
+ * Réduction EXPLICITE des codes ISO 639-1 DÉPRÉCIÉS vers leur code canonique
+ * courant. `iw`/`in`/`ji` sont les anciens codes retirés du registre ISO 639-1
+ * pour l'hébreu, l'indonésien et le yiddish. La JVM les conserve pour
+ * compatibilité descendante : `java.util.Locale.getLanguage()` normalise
+ * `he→iw`, `id→in`, `yi→ji`. Un client Android (plateforme miroir Meeshy) sur
+ * une locale hébraïque émet donc `iw`, qui — laissé verbatim — ne matche AUCUNE
+ * ligne `MessageTranslation` (clé `he`) et fait retomber le lecteur sur
+ * l'original non traduit : violation directe du Prisme Linguistique, même classe
+ * de collision silencieuse que le map 3-lettres élimine pour `fil`/`swe`.
+ *
+ * Chaque cible est re-validée contre `SUPPORTED_CODES` avant retour (comme le
+ * chemin 3-lettres) : `ji` → `yi` non supporté retombe donc sur `undefined`.
+ *
+ * Miroir Swift à maintenir synchrone : `MeeshyUser.normalizeLanguageCode`
+ * (packages/MeeshySDK/Sources/MeeshySDK/Auth/AuthModels.swift, `iso639ReductionMap`).
+ */
+const LEGACY_ISO_639_1: Readonly<Record<string, string>> = {
+  iw: 'he', in: 'id', ji: 'yi',
+};
+
+/**
  * Normalise un identifier de langue vers un code supporté par Meeshy.
  *
  * Entrées acceptées (cas réels rencontrés cross-platform) :
@@ -110,6 +131,12 @@ export function normalizeLanguageCode(
     const reduced = ISO_639_3_TO_1[primary];
     return reduced && SUPPORTED_CODES.has(reduced) ? reduced : undefined;
   }
+
+  // Alias ISO 639-1 DÉPRÉCIÉ (`iw`/`in`/`ji`) : réduit vers le code canonique
+  // courant via table EXPLICITE, re-validé contre les codes supportés (comme le
+  // chemin 3-lettres). Sinon un `iw` verbatim ne matcherait aucune traduction `he`.
+  const legacy = LEGACY_ISO_639_1[primary];
+  if (legacy) return SUPPORTED_CODES.has(legacy) ? legacy : undefined;
 
   // Code 2-lettres inconnu : conservé (ne matchera aucune traduction → le
   // caller applique son fallback). Préserve le comportement historique.

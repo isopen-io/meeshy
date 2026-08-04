@@ -2207,7 +2207,7 @@ final class CallManagerMuteStateTests: XCTestCase {
     /// mute indicator. Without it, the remote UI always thinks our mic is live.
     func test_toggleMute_emitsCallToggleAudio() throws {
         let source = try callManagerSource()
-        guard let toggleMuteRange = source.range(of: "func toggleMute()") else {
+        guard let toggleMuteRange = source.range(of: "func toggleMute(reportToCallKit: Bool = true) {") else {
             XCTFail("toggleMute() not found in CallManager.swift"); return
         }
         // Find the closing brace of toggleMute by scanning forward.
@@ -2227,7 +2227,7 @@ final class CallManagerMuteStateTests: XCTestCase {
     /// means muted, enabled=true means live microphone.
     func test_toggleMute_emitsAudioEnabled_asInverseOfIsMuted() throws {
         let source = try callManagerSource()
-        guard let toggleMuteRange = source.range(of: "func toggleMute()") else {
+        guard let toggleMuteRange = source.range(of: "func toggleMute(reportToCallKit: Bool = true) {") else {
             XCTFail("toggleMute() not found"); return
         }
         let afterToggleMute = String(source[toggleMuteRange.upperBound...])
@@ -2240,6 +2240,32 @@ final class CallManagerMuteStateTests: XCTestCase {
             "emitCallToggleAudio in toggleMute() must pass `enabled: !isMuted` — " +
             "the gateway's `enabled` field means 'audio is on', which is the logical " +
             "inverse of the local isMuted flag")
+    }
+
+    /// `CXSetMutedCallAction` (Watch/lock-screen/CarPlay mute) must sync local
+    /// state via `toggleMute(reportToCallKit: false)`, NOT the bare
+    /// `toggleMute()` — CallKit is the source of this change, so its own
+    /// state already matches; resubmitting a fresh `CXSetMutedCallAction`
+    /// transaction back to CallKit from inside its own delegate callback
+    /// would be an avoidable no-op round-trip.
+    func test_cxSetMutedCallActionHandler_doesNotResubmitToCallKit() throws {
+        let source = try callManagerSource()
+        guard let handlerRange = source.range(of: "func provider(_ provider: CXProvider, perform action: CXSetMutedCallAction)") else {
+            XCTFail("CXSetMutedCallAction delegate handler not found in CallManager.swift"); return
+        }
+        let afterHandler = String(source[handlerRange.upperBound...])
+        guard let nextFuncRange = afterHandler.range(of: "\n    func ") else {
+            XCTFail("Could not isolate CXSetMutedCallAction handler body"); return
+        }
+        let body = String(afterHandler[..<nextFuncRange.lowerBound])
+        XCTAssertTrue(
+            body.contains("toggleMute(reportToCallKit: false)"),
+            "CXSetMutedCallAction handler must call toggleMute(reportToCallKit: false) " +
+            "to avoid resubmitting a redundant CXSetMutedCallAction transaction to CallKit")
+        XCTAssertFalse(
+            body.contains("manager.toggleMute()"),
+            "CXSetMutedCallAction handler must not call bare toggleMute() — it would " +
+            "report the change back to CallKit as if it originated locally")
     }
 
     /// socket.didReconnect must re-sync audio mute state. On reconnect the gateway

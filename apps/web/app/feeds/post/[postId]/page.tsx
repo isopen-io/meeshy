@@ -2,6 +2,8 @@
 
 import { useState, useCallback, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
+import { useQueryClient } from '@tanstack/react-query';
+import { markScopeNotificationsRead } from '@/lib/notifications/notification-read-sync';
 import { usePostQuery } from '@/hooks/queries/use-post-query';
 import { useCommentsInfiniteQuery, useCommentsList } from '@/hooks/queries/use-comments-query';
 import {
@@ -47,6 +49,7 @@ import { copyToClipboard } from '@/lib/clipboard';
 export default function PostDetailPage() {
   const params = useParams();
   const router = useRouter();
+  const queryClient = useQueryClient();
   const postId = params.postId as string;
   const toastCtx = useToast();
   const showToast = useCallback(
@@ -103,10 +106,15 @@ export default function PostDetailPage() {
     if (!postId) return;
     if (isAuthenticated) {
       postsService.viewPost(postId).catch(() => {});
+      // Consommer les notifications du post (nouveau post, commentaires,
+      // réactions — portée serveur `context.postId`). `viewPost` ne marque
+      // qu'à la PREMIÈRE vue : une notification arrivée après resterait non
+      // lue à vie sans cet appel dédié.
+      markScopeNotificationsRead(queryClient, { kind: 'post', postId });
     } else {
       recordAnonymousView(postId, getOrCreateWebSessionKey());
     }
-  }, [postId, isAuthenticated]);
+  }, [postId, isAuthenticated, queryClient]);
 
   if (postQuery.isLoading) {
     return (

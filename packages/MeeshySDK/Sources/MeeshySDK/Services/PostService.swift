@@ -23,6 +23,11 @@ public struct PostShareResult: Decodable, Sendable {
 
 public protocol PostServiceProviding: Sendable {
     func getFeed(cursor: String?, limit: Int) async throws -> PaginatedAPIResponse<[APIPost]>
+    /// `GET /posts/hashtag/:tag` — posts+reels portant ce hashtag, plus
+    /// récents en premier. `tag` est envoyé tel quel (le serveur normalise).
+    func getPostsByHashtag(tag: String, cursor: String?, limit: Int) async throws -> PaginatedAPIResponse<[APIPost]>
+    /// `GET /hashtags/trending` — top hashtags par usageCount décroissant.
+    func getTrendingHashtags(limit: Int) async throws -> [APIHashtag]
     /// Thread de découverte de réels (`GET /posts/feed/reels`). `seedReelId` = le
     /// réel d'entrée touché dans le feed → le serveur classe par affinité à ce réel
     /// (et l'exclut, comme il exclut les réels de l'utilisateur). Sans seed → « Pour toi ».
@@ -143,6 +148,14 @@ public final class PostService: PostServiceProviding, @unchecked Sendable {
 
     public func getFeed(cursor: String? = nil, limit: Int = 20) async throws -> PaginatedAPIResponse<[APIPost]> {
         try await api.paginatedRequest(endpoint: "/posts/feed", cursor: cursor, limit: limit)
+    }
+
+    public func getPostsByHashtag(tag: String, cursor: String? = nil, limit: Int = 20) async throws -> PaginatedAPIResponse<[APIPost]> {
+        try await api.paginatedRequest(endpoint: "/posts/hashtag/\(tag)", cursor: cursor, limit: limit)
+    }
+
+    public func getTrendingHashtags(limit: Int = 20) async throws -> [APIHashtag] {
+        try await api.request(endpoint: "/hashtags/trending?limit=\(limit)")
     }
 
     public func getReels(seedReelId: String? = nil, cursor: String? = nil, limit: Int = 20) async throws -> PaginatedAPIResponse<[APIPost]> {

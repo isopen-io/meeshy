@@ -155,7 +155,7 @@ final class MessageTextRendererTests: XCTestCase {
             switch segment {
             case .text(let s, _): return "text(\(s))"
             case .mentionLink(let d, _, _): return "mention(\(d))"
-            case .hashtagText(let d): return "hashtag(\(d))"
+            case .hashtagLink(let d, _, _): return "hashtag(\(d))"
             case .meeshyTokenLink(let d, _, _): return "token(\(d))"
             case .urlLink(let d, _): return "url(\(d))"
             }
@@ -189,11 +189,12 @@ final class MessageTextRendererTests: XCTestCase {
         XCTAssertEqual(kinds("#été"), ["hashtag(#été)"])
     }
 
-    func test_parse_purelyNumericTag_isNotAHashtag() {
-        // « Réunion #3 », « appartement #42 » : une numérotation courante en
-        // français n'est PAS un hashtag et ne doit pas être teintée.
-        XCTAssertEqual(kinds("Réunion #3 demain"), ["text(Réunion #3 demain)"])
-        XCTAssertEqual(kinds("#42"), ["text(#42)"])
+    func test_parse_purelyNumericTag_isAHashtag() {
+        // SSOT gateway (HashtagService.ts, HASHTAG_REGEX) n'exclut pas les
+        // tags purement numériques — le SDK doit rester aligné pour que le
+        // rendu client corresponde exactement à ce que le backend indexe.
+        XCTAssertEqual(kinds("Réunion #3 demain"), ["text(Réunion )", "hashtag(#3)", "text( demain)"])
+        XCTAssertEqual(kinds("#42"), ["hashtag(#42)"])
     }
 
     func test_parse_alphanumericTagStartingWithDigit_isAHashtag() {

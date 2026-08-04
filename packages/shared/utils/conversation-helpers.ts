@@ -244,28 +244,39 @@ export function isValidMongoId(id: string): boolean {
 }
 
 /**
- * Calcule si un message peut encore être modifié (1 heure max pour users normaux)
+ * Calcule si un message peut encore être modifié (SSOT de la fenêtre d'édition).
+ *
+ * Parité stricte avec les chemins autoritaires qui, aujourd'hui, réimplémentent
+ * la même règle chacun de leur côté :
+ *  - socket : `MessageHandler.handleMessageEdit` (`EDIT_WINDOW_MS = 24h`)
+ *  - REST   : `routes/conversations/messages-advanced.ts` (`twentyFourHoursInMs`)
+ *  - web    : `hooks/use-message-interactions` (`twentyFourHoursInMs`)
+ *
+ * Un utilisateur normal dispose de 24 heures ; le contournement de la fenêtre
+ * est un privilège de rôle GLOBAL (MODERATOR/ADMIN/BIGBOSS), jamais un rôle de
+ * conversation (admin/moderator/member) — comparé en majuscules car la DB peut
+ * stocker le rôle en minuscules. Un `createdAt` invalide (Date → NaN) ne bloque
+ * jamais : `NaN > window` est faux, exactement comme les trois sites ci-dessus.
  */
 export function canEditMessage(
   createdAt: Date | string,
   userRole: string = 'USER'
 ): { canEdit: boolean; reason?: string } {
-  // Admins et BIGBOSS peuvent toujours modifier (case-insensitive — DB may store lowercase)
-  if (['ADMIN', 'BIGBOSS', 'MODERATOR', 'CREATOR'].includes(userRole.toUpperCase())) {
+  if (['MODERATOR', 'ADMIN', 'BIGBOSS'].includes(userRole.toUpperCase())) {
     return { canEdit: true };
   }
-  
+
   const messageDate = typeof createdAt === 'string' ? new Date(createdAt) : createdAt;
   const messageAge = Date.now() - messageDate.getTime();
-  const oneHourInMs = 60 * 60 * 1000;
-  
-  if (messageAge > oneHourInMs) {
+  const EDIT_WINDOW_MS = 24 * 60 * 60 * 1000;
+
+  if (messageAge > EDIT_WINDOW_MS) {
     return {
       canEdit: false,
       reason: 'MESSAGE_TOO_OLD',
     };
   }
-  
+
   return { canEdit: true };
 }
 

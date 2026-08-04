@@ -1691,7 +1691,7 @@ struct StoryViewerView: View {
     /// préférée est vide. « Original » est donc une chaîne VIDE : chaque overlay
     /// retombe sur son propre texte, dans sa propre langue. La valeur choisie ne
     /// peut pas entrer en collision avec un code BCP-47.
-    static let originalLanguageOverride = "__meeshy.original__"
+    nonisolated static let originalLanguageOverride = "__meeshy.original__"
 
     /// Helper pur (testable) : prépend l'override langue à la chaine préférée, dédupliqué.
     /// `nil`/vide → chaine de base inchangée. Sinon l'override passe en tête et est retiré

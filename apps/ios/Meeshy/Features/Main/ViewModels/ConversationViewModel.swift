@@ -3601,7 +3601,15 @@ class ConversationViewModel: ObservableObject {
             NotificationCenter.default.post(name: .conversationMarkedRead, object: convId)
         }
         // 3. Send to server in background (fire-and-forget, queue on failure)
-        guard UserPreferencesManager.shared.privacy.showReadReceipts else { return }
+        //
+        // PAS de gate client sur showReadReceipts : le gateway gate déjà le
+        // broadcast aux pairs selon la préférence (divulgation), mais il a
+        // BESOIN de l'appel pour avancer le curseur de lecture — c'est lui qui
+        // alimente `conversation:unread-updated` (badge multi-appareils, icône,
+        // widget). Le même gate a été délibérément retiré du chemin
+        // ConversationListViewModel pour la même raison ; avec le gate, un
+        // utilisateur accusés-OFF gardait un badge fantôme sur ses autres
+        // appareils et sur l'icône de l'app.
         // Wave 1 Phase C — route through the offline outbox so a read
         // receipt produced while offline survives an app kill and replays
         // on reconnect. The gateway route is naturally idempotent (read

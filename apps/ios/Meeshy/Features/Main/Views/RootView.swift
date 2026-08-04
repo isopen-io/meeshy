@@ -386,6 +386,8 @@ struct RootView: View {
                             .navigationBarHidden(true)
                     case .postDetail(let postId, let initialPost, let showComments, let commentId, let parentCommentId):
                         PostDetailView(postId: postId, initialPost: initialPost, showComments: showComments, targetCommentId: commentId, targetParentCommentId: parentCommentId)
+                    case .hashtagResults(let tag):
+                        HashtagResultsView(tag: tag)
                     case .bookmarks:
                         // Pas de `navigationBarHidden` : cet écran n'a pas
                         // d'en-tête maison, la barre système porte son titre ET
@@ -1036,6 +1038,9 @@ struct RootView: View {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
                 router.push(.links)
             }
+
+        case .hashtag(let tag):
+            router.push(.hashtagResults(tag: tag))
 
         case .magicLink:
             break

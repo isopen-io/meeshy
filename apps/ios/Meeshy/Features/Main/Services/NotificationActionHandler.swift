@@ -1,5 +1,5 @@
 import UIKit
-import UserNotifications
+@preconcurrency import UserNotifications
 import MeeshySDK
 import os
 
@@ -13,13 +13,13 @@ private let logger = Logger(subsystem: "me.meeshy.app", category: "push")
 /// see `SilentPushState`).
 @MainActor
 protocol BackgroundTaskScheduling {
-    func beginTask(name: String, expirationHandler: (() -> Void)?) -> UIBackgroundTaskIdentifier
+    func beginTask(name: String, expirationHandler: (@Sendable () -> Void)?) -> UIBackgroundTaskIdentifier
     func endTask(_ identifier: UIBackgroundTaskIdentifier)
 }
 
 @MainActor
 struct UIApplicationBackgroundTaskScheduler: BackgroundTaskScheduling {
-    func beginTask(name: String, expirationHandler: (() -> Void)?) -> UIBackgroundTaskIdentifier {
+    func beginTask(name: String, expirationHandler: (@Sendable () -> Void)?) -> UIBackgroundTaskIdentifier {
         UIApplication.shared.beginBackgroundTask(withName: name, expirationHandler: expirationHandler)
     }
 
@@ -173,6 +173,14 @@ final class NotificationActionHandler: NotificationActionHandling {
         localMarkRead: @escaping @MainActor (String) -> Void = { conversationId in
             NotificationCoordinator.shared.markConversationRead(conversationId)
             NotificationCenter.default.post(name: .conversationMarkedRead, object: conversationId)
+            // Frontière de lecture LOCALE : `.conversationMarkedRead` ne touche
+            // que les tableaux @Published — sans cette écriture GRDB, le
+            // prochain `reloadFromCache()` ré-affichait la pastille.
+            Task { await ConversationSyncEngine.shared.markConversationReadLocally(conversationId) }
+            // Notifications de la cloche (portée conversation) : serveur +
+            // cache + publishers, sans déclarer la conversation active
+            // (l'app peut être en arrière-plan, rien n'est ouvert).
+            NotificationToastManager.shared.onConversationMarkedRead(conversationId)
         },
         removeDeliveredForConversation: @escaping @MainActor (String) -> Void = { conversationId in
             NotificationActionHandler.removeDeliveredNotifications(
@@ -549,13 +557,16 @@ final class NotificationActionHandler: NotificationActionHandling {
     nonisolated static func removeDeliveredNotifications(
         matching predicate: @escaping @Sendable ([AnyHashable: Any]) -> Bool
     ) {
-        let center = UNUserNotificationCenter.current()
-        center.getDeliveredNotifications { notifications in
+        // `.current()` returns the same shared instance every call — fetched
+        // fresh on both sides instead of captured, so the completion handler
+        // doesn't need to carry a UNUserNotificationCenter (not Sendable)
+        // across the @Sendable boundary.
+        UNUserNotificationCenter.current().getDeliveredNotifications { notifications in
             let matching = notifications
                 .filter { predicate($0.request.content.userInfo) }
                 .map(\.request.identifier)
             guard !matching.isEmpty else { return }
-            center.removeDeliveredNotifications(withIdentifiers: matching)
+            UNUserNotificationCenter.current().removeDeliveredNotifications(withIdentifiers: matching)
         }
     }
 }

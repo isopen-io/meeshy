@@ -47,6 +47,18 @@ jest.mock('../../../../services/MentionService', () => ({
   })),
 }));
 
+const mockExtractHashtags = jest.fn<any>().mockReturnValue([]);
+const mockCreatePostHashtags = jest.fn<any>().mockResolvedValue(undefined);
+const mockReconcileRemovedHashtags = jest.fn<any>().mockResolvedValue(undefined);
+
+jest.mock('../../../../services/HashtagService', () => ({
+  HashtagService: jest.fn().mockImplementation(() => ({
+    extractHashtags: (...args: any[]) => mockExtractHashtags(...args),
+    createPostHashtags: (...args: any[]) => mockCreatePostHashtags(...args),
+    reconcileRemovedHashtags: (...args: any[]) => mockReconcileRemovedHashtags(...args),
+  })),
+}));
+
 // GW1 — the routes consume the DECORATED fastify.notificationService (wired
 // instance), not a locally constructed NotificationService: mocks are injected
 // via app.decorate in buildApp below.
@@ -468,6 +480,58 @@ describe('POST /posts — geo discoverability', () => {
     expect(res.statusCode).toBe(400);
     expect(res.json().code).toBe('VALIDATION_ERROR');
     expect(mockCreatePost.mock.calls.length).toBe(callsBefore);
+    await app.close();
+  });
+});
+
+describe('POST /posts — hashtags', () => {
+  it('extracts hashtags from the created post content and persists them via HashtagService', async () => {
+    mockExtractHashtags.mockReturnValueOnce([
+      { tag: 'paris', display: '#paris' },
+      { tag: 'été', display: '#été' },
+    ]);
+    const app = await buildApp();
+    const res = await app.inject({
+      method: 'POST', url: '/posts',
+      payload: { type: 'POST', content: 'Belle journée #paris #été' },
+    });
+    expect(res.statusCode).toBe(201);
+    expect(mockCreatePostHashtags).toHaveBeenCalledWith(
+      'post-001',
+      [{ tag: 'paris', display: '#paris' }, { tag: 'été', display: '#été' }],
+    );
+    await app.close();
+  });
+
+  it('does not call createPostHashtags when extraction finds no hashtags', async () => {
+    mockExtractHashtags.mockReturnValueOnce([]);
+    mockCreatePostHashtags.mockClear();
+    const app = await buildApp();
+    await app.inject({ method: 'POST', url: '/posts', payload: { type: 'POST', content: 'Rien ici' } });
+    expect(mockCreatePostHashtags).not.toHaveBeenCalled();
+    await app.close();
+  });
+});
+
+describe('PUT /posts/:postId — hashtags', () => {
+  it('persists new hashtags and reconciles removed ones on edit', async () => {
+    mockExtractHashtags.mockReturnValueOnce([{ tag: 'lyon', display: '#lyon' }]);
+    const app = await buildApp();
+    const res = await app.inject({
+      method: 'PUT', url: `/posts/${POST_ID}`,
+      payload: { content: '#lyon uniquement maintenant' },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(mockCreatePostHashtags).toHaveBeenCalledWith(POST_ID, [{ tag: 'lyon', display: '#lyon' }]);
+    expect(mockReconcileRemovedHashtags).toHaveBeenCalledWith(POST_ID, ['lyon']);
+    await app.close();
+  });
+
+  it('reconciles with an empty kept-list when the edited content has no hashtags', async () => {
+    mockExtractHashtags.mockReturnValueOnce([]);
+    const app = await buildApp();
+    await app.inject({ method: 'PUT', url: `/posts/${POST_ID}`, payload: { content: 'Plus de hashtag' } });
+    expect(mockReconcileRemovedHashtags).toHaveBeenCalledWith(POST_ID, []);
     await app.close();
   });
 });

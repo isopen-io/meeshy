@@ -1,5 +1,5 @@
 import Foundation
-import Contacts
+@preconcurrency import Contacts
 import MeeshySDK
 
 // MARK: - Device Contact
@@ -111,7 +111,12 @@ final class ContactSyncService: ContactSyncProviding, @unchecked Sendable {
     /// MainActor : `enumerateContacts` est synchrone et peut parcourir des
     /// milliers d'entrées.
     nonisolated static func fetchDeviceContacts(store: CNContactStore) async throws -> [DeviceContact] {
-        try await withCheckedThrowingContinuation { continuation in
+        // `nonisolated(unsafe)` : CNContactStore predates Swift concurrency and
+        // isn't marked Sendable, but `enumerateContacts` below is Apple's own
+        // documented contract for synchronous, off-main enumeration — the
+        // exact cross-queue usage this dispatches to.
+        nonisolated(unsafe) let store = store
+        return try await withCheckedThrowingContinuation { continuation in
             DispatchQueue.global(qos: .userInitiated).async {
                 let keys = [
                     CNContactGivenNameKey,
@@ -141,9 +146,9 @@ final class ContactSyncService: ContactSyncProviding, @unchecked Sendable {
     }
 
     nonisolated static func deviceRegionCode() -> String? {
-        if #available(iOS 16, *) {
-            return Locale.current.region?.identifier
-        }
-        return Locale.current.regionCode
+        // No #available check needed — the app's deployment floor is iOS
+        // 16.0 (project.yml), so `Locale.current.regionCode`'s pre-16
+        // fallback was unreachable dead code.
+        Locale.current.region?.identifier
     }
 }

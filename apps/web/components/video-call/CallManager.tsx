@@ -413,6 +413,18 @@ export function CallManager() {
         return;
       }
 
+      // A call:ended for a callId this client isn't tracking as its current
+      // session is stale/unrelated — e.g. the server force-ending a phantom
+      // call session (CallService.initiateCall's reaped-call cleanup) fires an
+      // async call:ended for THAT callId, which can arrive after this client
+      // has already moved on to a brand-new call. Without this guard the
+      // unconditional reset() below (and the waiting-call promotion further
+      // down) would tear down a healthy, unrelated active call.
+      const { currentCall: trackedCall } = useCallStore.getState();
+      if (trackedCall && trackedCall.id !== event.callId) {
+        return;
+      }
+
       // Clear timeout
       clearCallTimeout();
 

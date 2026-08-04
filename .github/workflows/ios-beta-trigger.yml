@@ -1,7 +1,8 @@
 name: iOS (beta) → Xcode Cloud
 
 # Déclenche le workflow Xcode Cloud « TestFlight beta test iOS » quand, et
-# seulement quand, le message de commit contient le mot-clé `(beta)`.
+# seulement quand, le message de commit contient un marqueur beta — sous
+# n'importe laquelle de ces formes : (beta) [beta] {beta} "beta" 'beta'.
 #
 # Pourquoi passer par ici plutôt que par une condition Xcode Cloud ? Xcode Cloud
 # ne sait pas filtrer sur le MESSAGE d'un commit — ses conditions de démarrage
@@ -43,7 +44,6 @@ jobs:
       # (audience APP_STORE_ELIGIBLE — le seul des deux qui produise un
       # livrable ; « TestFlight iOS » est en INTERNAL_ONLY).
       XCODE_CLOUD_WORKFLOW_ID: FD799587-E62A-4D3D-BA8E-6FA25AC53F05
-      BETA_KEYWORD: '(beta)'
 
     steps:
       # Le message de commit est une donnée NON FIABLE : il ne doit jamais être
@@ -61,14 +61,21 @@ jobs:
             echo "Déclenchement manuel demandé."
             exit 0
           fi
-          case "$COMMIT_MESSAGE" in
-            *"$BETA_KEYWORD"*)
-              echo "wanted=true" >> "$GITHUB_OUTPUT"
-              echo "Mot-clé $BETA_KEYWORD trouvé dans le message de commit." ;;
-            *)
-              echo "wanted=false" >> "$GITHUB_OUTPUT"
-              echo "Pas de $BETA_KEYWORD dans le message de commit — rien à faire." ;;
-          esac
+          # Marqueur beta accepté sous n'importe laquelle de ces formes.
+          markers=("(beta)" "[beta]" "{beta}" "\"beta\"" "'beta'")
+          wanted=false
+          for marker in "${markers[@]}"; do
+            case "$COMMIT_MESSAGE" in
+              *"$marker"*) wanted=true ;;
+            esac
+          done
+          if [ "$wanted" = true ]; then
+            echo "wanted=true" >> "$GITHUB_OUTPUT"
+            echo "Marqueur beta trouvé dans le message de commit."
+          else
+            echo "wanted=false" >> "$GITHUB_OUTPUT"
+            echo "Aucun marqueur beta ((beta) [beta] {beta} \"beta\" 'beta') dans le message de commit — rien à faire."
+          fi
 
       - uses: actions/checkout@v7
         if: steps.decide.outputs.wanted == 'true'
@@ -149,5 +156,5 @@ jobs:
       - name: Nothing to do
         if: steps.decide.outputs.wanted != 'true'
         run: |
-          echo "Aucun (beta) dans le message de commit : aucun build Xcode Cloud démarré." \
+          echo "Aucun marqueur beta ((beta) [beta] {beta} \"beta\" 'beta') dans le message de commit : aucun build Xcode Cloud démarré." \
             >> "$GITHUB_STEP_SUMMARY"

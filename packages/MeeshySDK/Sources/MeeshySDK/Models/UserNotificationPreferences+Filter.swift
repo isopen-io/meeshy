@@ -143,8 +143,6 @@ public extension UserNotificationPreferences {
         case .achievementUnlocked, .legacyAchievementUnlocked, .streakMilestone, .badgeEarned,
              .legacyStatusUpdate, .legacyAffiliateSignup:
             return true
-        default:
-            return true
         }
     }
 

@@ -264,14 +264,21 @@ final class WebRTCService {
         await client.disableLocalVideo()
     }
 
-    func switchCamera() {
+    /// `completion` reports whether the switch actually succeeded — the
+    /// caller (`CallManager`) uses it to correct any optimistic UI state
+    /// (front/back mirroring) it applied before the async switch resolved.
+    /// Always invoked, exactly once, on the same @MainActor context this
+    /// method inherits.
+    func switchCamera(completion: ((Bool) -> Void)? = nil) {
         let previousTask = switchCameraTask
         switchCameraTask = Task { [weak self] in
             await previousTask?.value
             do {
                 try await self?.client.switchCamera()
+                completion?(true)
             } catch {
                 Logger.webrtc.error("Failed to switch camera: \(error.localizedDescription)")
+                completion?(false)
             }
         }
     }

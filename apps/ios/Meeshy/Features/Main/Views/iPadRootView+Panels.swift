@@ -113,6 +113,8 @@ extension iPadRootView {
                                 .navigationBarHidden(true)
         case .postDetail(let postId, let initialPost, let showComments, let commentId, let parentCommentId):
             PostDetailView(postId: postId, initialPost: initialPost, showComments: showComments, targetCommentId: commentId, targetParentCommentId: parentCommentId)
+        case .hashtagResults(let tag):
+            HashtagResultsView(tag: tag)
         case .bookmarks:
             // Idem iPhone : la barre système porte le titre, et sur iPad le
             // bouton retour du panneau droit y vit aussi.

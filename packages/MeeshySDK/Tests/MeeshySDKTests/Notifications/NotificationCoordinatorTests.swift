@@ -87,6 +87,79 @@ final class NotificationCoordinatorTests: XCTestCase {
                                        currentUserIdProvider: { userId })
     }
 
+    private func makeSUTWithOpenConversation(_ openId: String?) -> NotificationCoordinator {
+        let suite = "group.test.meeshy.coordinator.\(UUID().uuidString)"
+        createdSuiteNames.append(suite)
+        UserDefaults(suiteName: suite)?.removePersistentDomain(forName: suite)
+        return NotificationCoordinator(badgeWriter: MockBadgeWriter(), appGroupSuiteName: suite,
+                                       openConversationIdProvider: { openId })
+    }
+
+    // MARK: - Réveil background — syncNow ne doit RIEN écraser sans snapshot autoritaire
+
+    func test_syncNow_beforeAnyAuthoritativeSnapshot_preservesBadgeAndAppGroupMirror() async {
+        let (sut, writer, _, suite) = makeSUT()
+        // La NSE vient d'écrire le compte de la push ; le process est relancé
+        // à froid par une push silencieuse, le coordinateur est VIDE.
+        UserDefaults(suiteName: suite)?.set(7, forKey: NotificationCoordinator.unreadCountKey)
+
+        await sut.syncNow()
+
+        XCTAssertTrue(
+            writer.writes.isEmpty,
+            "syncNow sur un coordinateur jamais hydraté écrasait aps.badge avec 0 — " +
+            "le réveil background annulait le badge que la push venait de poser"
+        )
+        XCTAssertEqual(
+            UserDefaults(suiteName: suite)?.integer(forKey: NotificationCoordinator.unreadCountKey), 7,
+            "le miroir App Group écrit par la NSE doit survivre au réveil background"
+        )
+    }
+
+    func test_syncNow_afterAuthoritativeSnapshot_writesBadge() async {
+        let (sut, writer, _, _) = makeSUT()
+        sut.reconcileConversationUnreads([
+            makeConversation(id: "c1", unread: 3),
+        ])
+
+        await sut.syncNow()
+
+        XCTAssertEqual(writer.writes.last, 3)
+    }
+
+    // MARK: - Gate conversation ouverte — le badge d'icône ne gonfle pas pendant la lecture
+
+    func test_applyConversationUnread_openConversation_clampsToZero() {
+        let sut = makeSUTWithOpenConversation("c1")
+
+        sut.applyConversationUnread(conversationId: "c1", unreadCount: 5)
+
+        XCTAssertEqual(
+            sut.conversationUnreadTotal, 0,
+            "Le gateway émet conversation:unread-updated à TOUS les destinataires, y compris " +
+            "celui qui lit — le compteur de la conversation OUVERTE doit être clampé à 0, " +
+            "sinon le badge d'icône/widget gonfle pendant la lecture (miroir du gate " +
+            "ConversationSyncEngine.handleUnreadUpdated)"
+        )
+    }
+
+    func test_applyConversationUnread_otherConversation_stillCounts() {
+        let sut = makeSUTWithOpenConversation("c1")
+
+        sut.applyConversationUnread(conversationId: "c2", unreadCount: 4)
+
+        XCTAssertEqual(sut.conversationUnreadTotal, 4,
+                       "Le gate ne s'applique qu'à la conversation ouverte — les autres comptent normalement")
+    }
+
+    func test_applyConversationUnread_noOpenConversation_appliesServerValue() {
+        let sut = makeSUTWithOpenConversation(nil)
+
+        sut.applyConversationUnread(conversationId: "c1", unreadCount: 3)
+
+        XCTAssertEqual(sut.conversationUnreadTotal, 3)
+    }
+
     // MARK: - appgroup-01 — reset() wipes the App Group widget store
 
     func test_reset_invokesWidgetSinkWipeAll() {

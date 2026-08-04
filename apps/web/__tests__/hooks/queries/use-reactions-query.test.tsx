@@ -1062,6 +1062,7 @@ describe('useReactionsQuery', () => {
           emoji: '❤️',
           aggregation: { emoji: '❤️', count: 1, participantIds: ['user-1'], hasCurrentUser: true },
           participantId: 'user-1',
+          userId: 'user-1',
           action: 'add',
         });
       });
@@ -1070,6 +1071,115 @@ describe('useReactionsQuery', () => {
         expect(result.current.reactions.find(r => r.emoji === '❤️')).toBeDefined();
         expect(result.current.userReactions).toContain('❤️');
       });
+    });
+
+    it('handleReactionAdded: highlights own reaction on a second device (userId matches, participantId does not)', async () => {
+      // Multi-device: the current user (User.id 'user-1') reacts on device A.
+      // Device B receives the echo. On the wire the reactor is identified by
+      // Participant.id ('participant-abc'), which is NOT the User.id — the two
+      // are ObjectIds from different collections and never collide. Device B
+      // must still recognise the reaction as "mine" via the event's userId and
+      // add the emoji to userReactions, otherwise the emoji renders un-highlighted
+      // and a tap re-adds instead of toggling off.
+      const { wrapper, queryClient } = createWrapperWithClient();
+
+      queryClient.setQueryData(['reactions', '507f1f77bcf86cd799439011'], {
+        reactions: [],
+        userReactions: [],
+      });
+
+      const { result } = renderHook(
+        () => useReactionsQuery({ messageId: '507f1f77bcf86cd799439011', currentUserId: 'user-1' }),
+        { wrapper }
+      );
+
+      await waitFor(() => expect(mockOnReactionAdded).toHaveBeenCalled());
+
+      const capturedAdded = mockOnReactionAdded.mock.calls[mockOnReactionAdded.mock.calls.length - 1][0] as (e: ReactionUpdateEvent) => void;
+
+      act(() => {
+        capturedAdded({
+          messageId: '507f1f77bcf86cd799439011',
+          emoji: '❤️',
+          aggregation: { emoji: '❤️', count: 1, participantIds: ['participant-abc'], hasCurrentUser: true },
+          participantId: 'participant-abc',
+          userId: 'user-1',
+          action: 'add',
+        });
+      });
+
+      await waitFor(() => {
+        expect(result.current.userReactions).toContain('❤️');
+      });
+    });
+
+    it('handleReactionRemoved: clears own reaction on a second device (userId matches, participantId does not)', async () => {
+      const { wrapper, queryClient } = createWrapperWithClient();
+
+      queryClient.setQueryData(['reactions', '507f1f77bcf86cd799439011'], {
+        reactions: [{ emoji: '❤️', count: 1, participantIds: ['participant-abc'], hasCurrentUser: true }],
+        userReactions: ['❤️'],
+      });
+
+      const { result } = renderHook(
+        () => useReactionsQuery({ messageId: '507f1f77bcf86cd799439011', currentUserId: 'user-1' }),
+        { wrapper }
+      );
+
+      await waitFor(() => expect(mockOnReactionRemoved).toHaveBeenCalled());
+
+      const capturedRemoved = mockOnReactionRemoved.mock.calls[mockOnReactionRemoved.mock.calls.length - 1][0] as (e: ReactionUpdateEvent) => void;
+
+      act(() => {
+        capturedRemoved({
+          messageId: '507f1f77bcf86cd799439011',
+          emoji: '❤️',
+          aggregation: { emoji: '❤️', count: 0, participantIds: [], hasCurrentUser: false },
+          participantId: 'participant-abc',
+          userId: 'user-1',
+          action: 'remove',
+        });
+      });
+
+      await waitFor(() => {
+        expect(result.current.userReactions).not.toContain('❤️');
+      });
+    });
+
+    it('handleReactionAdded: does NOT highlight when another user reacts (userId differs)', async () => {
+      // Guard against over-matching: a different user's reaction must never land
+      // in the current user's userReactions.
+      const { wrapper, queryClient } = createWrapperWithClient();
+
+      queryClient.setQueryData(['reactions', '507f1f77bcf86cd799439011'], {
+        reactions: [],
+        userReactions: [],
+      });
+
+      const { result } = renderHook(
+        () => useReactionsQuery({ messageId: '507f1f77bcf86cd799439011', currentUserId: 'user-1' }),
+        { wrapper }
+      );
+
+      await waitFor(() => expect(mockOnReactionAdded).toHaveBeenCalled());
+
+      const capturedAdded = mockOnReactionAdded.mock.calls[mockOnReactionAdded.mock.calls.length - 1][0] as (e: ReactionUpdateEvent) => void;
+
+      act(() => {
+        capturedAdded({
+          messageId: '507f1f77bcf86cd799439011',
+          emoji: '👍',
+          aggregation: { emoji: '👍', count: 1, participantIds: ['participant-xyz'], hasCurrentUser: false },
+          participantId: 'participant-xyz',
+          userId: 'user-2',
+          action: 'add',
+        });
+      });
+
+      await waitFor(() => {
+        expect(result.current.reactions.find(r => r.emoji === '👍')).toBeDefined();
+      });
+      expect(result.current.userReactions).not.toContain('👍');
     });
 
     it('handleReactionAdded: updates existing reaction count', async () => {
@@ -1186,6 +1296,7 @@ describe('useReactionsQuery', () => {
           emoji: '❤️',
           aggregation: { emoji: '❤️', count: 3, participantIds: [], hasCurrentUser: true },
           participantId: 'user-1', // same as currentUserId - already in userReactions
+          userId: 'user-1',
           action: 'add',
         });
       });
@@ -1219,6 +1330,7 @@ describe('useReactionsQuery', () => {
           emoji: '❤️',
           aggregation: { emoji: '❤️', count: 0, participantIds: [], hasCurrentUser: false },
           participantId: 'user-1',
+          userId: 'user-1',
           action: 'remove',
         });
       });
@@ -1284,6 +1396,7 @@ describe('useReactionsQuery', () => {
           emoji: '❤️',
           aggregation: { emoji: '❤️', count: 0, participantIds: [], hasCurrentUser: false },
           participantId: 'user-1',
+          userId: 'user-1',
           action: 'remove',
         });
       });
@@ -1311,6 +1424,7 @@ describe('useReactionsQuery', () => {
           emoji: '❤️',
           aggregation: { emoji: '❤️', count: 0, participantIds: [], hasCurrentUser: false },
           participantId: 'user-1',
+          userId: 'user-1',
           action: 'remove',
         });
       });
@@ -1399,6 +1513,7 @@ describe('useReactionsQuery', () => {
           emoji: '❤️',
           aggregation: { emoji: '❤️', count: 0, participantIds: [], hasCurrentUser: false },
           participantId: 'user-1',
+          userId: 'user-1',
           action: 'remove',
         });
       });
@@ -1584,6 +1699,7 @@ describe('useReactionsQuery', () => {
           emoji: '❤️', // count > 0 → map path; '👍' goes through false branch `: r`
           aggregation: { emoji: '❤️', count: 1, participantIds: ['user-2'], hasCurrentUser: false },
           participantId: 'user-1',
+          userId: 'user-1',
           action: 'remove',
         });
       });

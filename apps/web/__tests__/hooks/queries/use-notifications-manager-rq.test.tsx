@@ -19,15 +19,19 @@ jest.mock('@/services/notification.service', () => ({
     fetchNotifications: (...args: unknown[]) => mockFetchNotifications(...args),
     getUnreadCount: jest.fn(),
     getCounts: jest.fn(),
-    markAsRead: jest.fn(),
+    markAsRead: jest.fn().mockResolvedValue(undefined),
     markAllAsRead: jest.fn(),
     deleteNotification: jest.fn(),
     deleteAllRead: jest.fn(),
+    markConversationRead: jest.fn().mockResolvedValue(undefined),
+    markPostRead: jest.fn().mockResolvedValue(undefined),
   },
 }));
 
 let capturedReadHandler: ((notificationId: string) => void) | null = null;
 let capturedNotificationHandler: ((notification: unknown) => void) | null = null;
+let capturedDeletedHandler: ((notificationId: string) => void) | null = null;
+let capturedCountsHandler: ((counts: { unread?: number; total?: number }) => void) | null = null;
 
 jest.mock('@/services/notification-socketio.singleton', () => ({
   notificationSocketIO: {
@@ -40,7 +44,14 @@ jest.mock('@/services/notification-socketio.singleton', () => ({
       capturedReadHandler = cb;
       return () => {};
     }),
-    onNotificationDeleted: jest.fn(() => () => {}),
+    onNotificationDeleted: jest.fn((cb: (id: string) => void) => {
+      capturedDeletedHandler = cb;
+      return () => {};
+    }),
+    onCounts: jest.fn((cb: (counts: { unread?: number; total?: number }) => void) => {
+      capturedCountsHandler = cb;
+      return () => {};
+    }),
   },
 }));
 
@@ -58,9 +69,11 @@ jest.mock('@/stores/auth-store', () => {
   return { useAuthStore };
 });
 
+let mockActiveConversationId: string | null = null;
+
 jest.mock('@/stores/notification-store', () => {
   const useNotificationStore = () => ({});
-  useNotificationStore.getState = () => ({ activeConversationId: null });
+  useNotificationStore.getState = () => ({ activeConversationId: mockActiveConversationId });
   return { useNotificationStore };
 });
 
@@ -229,5 +242,128 @@ describe('useNotificationsManagerRQ — freshness', () => {
     expect(invalidateSpy).toHaveBeenCalledWith(
       expect.objectContaining({ queryKey: ['notifications', 'list'] })
     );
+  });
+});
+
+/**
+ * `notification:counts` est le SEUL événement que le gateway émet après tout
+ * marquage serveur (ouverture de conversation, vue d'un post, autre appareil).
+ * Il était reçu par le singleton puis jeté : la cloche ne se corrigeait qu'au
+ * prochain refetch. La valeur serveur est autoritaire et absolue.
+ */
+describe('useNotificationsManagerRQ — notification:counts (resync autoritaire)', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    capturedCountsHandler = null;
+  });
+
+  it('applique la valeur absolue du serveur au badge', async () => {
+    mockFetchNotifications.mockResolvedValue(seedPage(2));
+
+    const { result } = renderHook(() => useNotificationsManagerRQ(), { wrapper: createWrapper() });
+
+    await waitFor(() => expect(result.current.unreadCount).toBe(2));
+    await waitFor(() => expect(capturedCountsHandler).not.toBeNull());
+
+    act(() => {
+      capturedCountsHandler!({ unread: 0, total: 3 });
+    });
+
+    await waitFor(() => expect(result.current.unreadCount).toBe(0));
+  });
+
+  it('ignore un payload sans champ unread numérique', async () => {
+    mockFetchNotifications.mockResolvedValue(seedPage(2));
+
+    const { result } = renderHook(() => useNotificationsManagerRQ(), { wrapper: createWrapper() });
+
+    await waitFor(() => expect(result.current.unreadCount).toBe(2));
+    await waitFor(() => expect(capturedCountsHandler).not.toBeNull());
+
+    act(() => {
+      capturedCountsHandler!({} as { unread?: number });
+    });
+
+    expect(result.current.unreadCount).toBe(2);
+  });
+});
+
+describe('useNotificationsManagerRQ — notification:deleted (multi-appareils)', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    capturedDeletedHandler = null;
+  });
+
+  it('retire la ligne et décrémente quand la notification supprimée était non lue', async () => {
+    mockFetchNotifications.mockResolvedValue(seedPage(2));
+
+    const { result } = renderHook(() => useNotificationsManagerRQ(), { wrapper: createWrapper() });
+
+    await waitFor(() => expect(result.current.unreadCount).toBe(2));
+    await waitFor(() => expect(capturedDeletedHandler).not.toBeNull());
+
+    act(() => {
+      capturedDeletedHandler!('notif-1');
+    });
+
+    await waitFor(() => expect(result.current.notifications.some((n) => n.id === 'notif-1')).toBe(false));
+    expect(result.current.unreadCount).toBe(1);
+  });
+
+  it('ne décrémente pas pour une notification déjà lue', async () => {
+    mockFetchNotifications.mockResolvedValue(seedPage(2));
+
+    const { result } = renderHook(() => useNotificationsManagerRQ(), { wrapper: createWrapper() });
+
+    await waitFor(() => expect(result.current.unreadCount).toBe(2));
+    await waitFor(() => expect(capturedDeletedHandler).not.toBeNull());
+
+    act(() => {
+      capturedDeletedHandler!('notif-3'); // déjà lue
+    });
+
+    await waitFor(() => expect(result.current.notifications.some((n) => n.id === 'notif-3')).toBe(false));
+    expect(result.current.unreadCount).toBe(2);
+  });
+});
+
+/**
+ * Miroir du `markConsumedOnArrival` iOS : une notification pour la
+ * conversation OUVERTE naît consommée — insérée déjà lue (sinon la liste
+ * montre une ligne non lue avec un compteur qui n'a pas bougé) et marquée lue
+ * côté serveur pour que `notification:counts` ne la recompte pas.
+ */
+describe('useNotificationsManagerRQ — notification pour la conversation active', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    capturedNotificationHandler = null;
+    mockActiveConversationId = 'conv-42';
+  });
+
+  afterEach(() => {
+    mockActiveConversationId = null;
+  });
+
+  it('insère la notification déjà lue, sans incrément, et la marque lue côté serveur', async () => {
+    const { NotificationService } = jest.requireMock('@/services/notification.service');
+    mockFetchNotifications.mockResolvedValue(seedPage(2));
+
+    const { result } = renderHook(() => useNotificationsManagerRQ(), { wrapper: createWrapper() });
+
+    await waitFor(() => expect(result.current.unreadCount).toBe(2));
+    await waitFor(() => expect(capturedNotificationHandler).not.toBeNull());
+
+    act(() => {
+      capturedNotificationHandler!({
+        ...makeNotification('live-1', false),
+        context: { conversationId: 'conv-42' },
+      });
+    });
+
+    await waitFor(() =>
+      expect(result.current.notifications.find((n) => n.id === 'live-1')?.state.isRead).toBe(true)
+    );
+    expect(result.current.unreadCount).toBe(2);
+    expect(NotificationService.markAsRead).toHaveBeenCalledWith('live-1');
   });
 });

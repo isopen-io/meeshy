@@ -1017,6 +1017,59 @@ describe('MessageTranslationService — audio & Prisme supplement', () => {
       // errors should have incremented
       expect(svc.getStats().errors).toBeGreaterThanOrEqual(statsBefore);
     });
+
+    it('drops a translation whose message was soft-deleted mid-flight (no rehydrate, no broadcast)', async () => {
+      // A message deleted (translations:null + deletedAt) while its translation
+      // was in flight must NOT be rehydrated nor re-broadcast — same deletedAt
+      // invariant every sibling write path enforces (ReactionService, edit/delete).
+      prisma.message.findUnique.mockResolvedValue({ deletedAt: new Date(), translations: null });
+      const events: unknown[] = [];
+      svc.on('translationReady', (e) => events.push(e));
+
+      mockZmqClient.emit('translationCompleted', {
+        taskId: 'deleted-msg-task',
+        targetLanguage: 'fr',
+        result: {
+          messageId: 'msg-deleted',
+          sourceLanguage: 'en',
+          targetLanguage: 'fr',
+          translatedText: 'Bonjour',
+          confidenceScore: 0.9,
+          processingTime: 5,
+          modelType: 'basic'
+        }
+      });
+      await flushAsync(4);
+
+      expect(prisma.message.update).not.toHaveBeenCalled();
+      expect(events).toHaveLength(0);
+    });
+
+    it('still delivers the translation when the deletion lookup itself fails (fail-open)', async () => {
+      // A transient error resolving deletedAt must not swallow a valid
+      // translation — the deletion guard fails open, mirroring the save path's
+      // "continue even when DB save fails" resilience contract.
+      prisma.message.findUnique.mockRejectedValue(new Error('DB lookup error'));
+      const events: unknown[] = [];
+      svc.on('translationReady', (e) => events.push(e));
+
+      mockZmqClient.emit('translationCompleted', {
+        taskId: 'lookup-fail-task',
+        targetLanguage: 'fr',
+        result: {
+          messageId: 'msg-lookup-fail',
+          sourceLanguage: 'en',
+          targetLanguage: 'fr',
+          translatedText: 'Bonjour',
+          confidenceScore: 0.9,
+          processingTime: 5,
+          modelType: 'basic'
+        }
+      });
+      await flushAsync(4);
+
+      expect(events).toHaveLength(1);
+    });
   });
 
   // =========================================================================

@@ -1,5 +1,38 @@
 # Lessons
 
+## Leçon 81 — la langue SOURCE envoyée au translator n'était PAS normalisée, contrairement aux cibles (2026-08-04, routine messaging)
+
+Audit ciblé du cœur temps-réel TS (env Linux, pas de Xcode). `MessageTranslationService`
+canonicalisait chaque langue CIBLE via le SSOT `normalizeLanguageCode`
+(`_resolveTargetLanguages`) mais envoyait la SOURCE verbatim :
+`sourceLanguage: message.originalLanguage` (sites 540/656/3052). Or les clients
+transmettent `originalLanguage` = `Locale.current` (`'pt-BR'`, `'FR'`, `'de-DE'`) et
+le champ est persisté sans normalisation. Côté translator, la source passe par
+`LANGUAGE_MAPPINGS.get(src, 'eng_Latn')` : un code région-taggé absent de la table
+retombe **silencieusement sur `'eng_Latn'`** → NLLB traduit un texte portugais comme
+s'il était anglais. Traductions dégradées/fausses pour tous les lecteurs cross-langue,
+invisible pour l'expéditeur (le skip d'auto-traduction, lui, compare des formes
+normalisées, donc il fonctionnait).
+
+**Fix** : helper `_normalizeSourceLanguage` (miroir de la logique source déjà présente
+dans `_resolveTargetLanguages`), appliqué aux 3 sites qui construisent une
+`TranslationRequest` ZMQ. `'auto'` (détection) et valeurs vides préservés.
+
+**Leçons :**
+1. **Une asymétrie de normalisation entre deux champs d'un même payload est un bug
+   silencieux.** La cible était corrigée, la source oubliée — le même `normalizeLanguageCode`
+   existait à 3 lignes de distance. Quand un helper canonicalise un champ d'une requête,
+   vérifier que TOUS les champs de langue de cette requête passent par lui.
+2. **Le repli d'un `.get(key, DEFAULT)` côté consommateur masque le bug côté producteur.**
+   `LANGUAGE_MAPPINGS.get('pt-BR', 'eng_Latn')` ne lève jamais — il retourne l'anglais.
+   Un défaut « raisonnable » (anglais) transforme une clé invalide en résultat plausible
+   mais faux. Chercher les `.get(x, default)` sur la frontière quand on trace une donnée
+   mal formée : ils avalent l'erreur au lieu de la signaler.
+3. **Un test de régression doit rester VERT sur les cas déjà corrects.** Les cas `'auto'`
+   et `'fr'` passaient avant ET après le fix — ils prouvent l'absence de régression sur
+   les entrées déjà canoniques, pendant que `'pt-BR'`/`'de-DE'` prouvaient le bug (rouge
+   avant, vert après). Toujours mêler cas-qui-changent et cas-qui-ne-changent-pas.
+
 ## Leçon 80 — l'épinglage/désépinglage de message ne passait PAS par la file hors-ligne (2026-07-09, routine messaging, iter 150)
 
 Suite directe de la Leçon 79 (qui appliquait la règle « énumérer TOUTES les mutations d'un agrégat message
@@ -1972,3 +2005,34 @@ qui pose l'état lu — tous étaient dans le code qui le RELIT.
 - **Fixture JSON minimale + decode `try?` = faux GREEN impossible, mais faux RED possible** : le décodage synthétisé de `MeeshyMessageAttachment` exige fileName/filePath/uploadedBy/createdAt — un JSON partiel échoue EN SILENCE dans les guards `try?` d'hydratation. Construire les fixtures par le VRAI type (init public + JSONEncoder), jamais à la main.
 - **Les défauts d'arguments publics ne peuvent référencer un symbole privé** : `seedSource: ... = Self.privateClosure` ne compile pas ; utiliser un défaut `nil` + résolution `?? Self.privé` dans le corps.
 - **`logout()`/hôte SPM** : la cascade complète avec session atteint UNUserNotificationCenter (bundleProxy nil). Les purges testables se posent AVANT le guard `activeUserId` (patron T15b), le test emprunte l'early-return.
+
+## 2026-08-03 — Continuous-improvement cycle : alias 639-1 dépréciés + identité réaction multi-device
+
+Deux corrections issues d'un audit ciblé du cœur temps-réel TS (env Linux, pas de
+Xcode — vérification bornée à shared/gateway/web).
+
+**Leçons :**
+1. **Un champ requis dans une signature révèle TOUS ses appelants ; un champ optionnel
+   les masque.** En rendant `userId` REQUIS sur `createUpdateEvent`, le compilateur a
+   exposé 11 sites d'émission (handler socket, 3 routes REST, messages-advanced, chemin
+   agent, fallback dégradé) — dont 8 que le grep initial du sous-agent avait ratés. Un
+   `userId?` optionnel aurait compilé partout en injectant silencieusement `undefined`,
+   laissant le prisme multi-device cassé sur le chemin REST. Règle : pour propager un
+   nouveau champ à TOUS les producteurs, le rendre requis sur la fonction de fabrique
+   force la complétude ; ne relâcher en optionnel que sur le TYPE transporté (compat des
+   payloads rejoués).
+2. **Comparer deux IDs de collections différentes échoue toujours en silence.** Le web
+   comparait `event.participantId` (Participant.id) à `currentUserId` (User.id) : jamais
+   égaux, donc « ma réaction » jamais reconnue sur un 2e appareil. Un test masquait le bug
+   en passant `participantId: 'user-1'` ET `currentUserId: 'user-1'` — même valeur pour
+   deux identités distinctes. Règle : dans une assertion d'égalité d'IDs, utiliser des
+   valeurs LEXICALEMENT distinctes pour chaque espace d'ID, sinon le test valide une
+   coïncidence, pas le contrat.
+3. **`iw`/`in`/`ji` : la JVM émet encore les codes ISO 639-1 dépréciés** (`he`/`id`/`yi`).
+   Un client Android sur locale hébraïque envoie `iw`, qui verbatim ne matche aucune
+   traduction `he` → repli sur l'original non traduit (violation Prisme). Même classe que
+   la troncature `fil→fi`/`swe→sw` déjà corrigée. Réduire via table EXPLICITE re-validée
+   contre les codes supportés (`ji→yi` non supporté → `undefined`), miroir Swift maintenu.
+4. **Toujours re-grep les autres écrivains d'un champ/appelants d'une fonction avant de
+   conclure « fait ».** (récidive de la leçon 2026-07-31 #2). Le sous-agent avait localisé
+   2 sites ; il y en avait 11.

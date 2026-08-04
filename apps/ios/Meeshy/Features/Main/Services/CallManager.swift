@@ -268,6 +268,16 @@ final class CallManager: ObservableObject {
     /// 1 = bas) — survit à la rotation/redimensionnement, contrairement à un
     /// point absolu. Proche du haut par défaut, sous la Dynamic Island.
     @Published var bubbleVerticalFraction: CGFloat = 0.08
+    /// Palier de taille du PiP quand la bulle est repliée (`.bubble`
+    /// displayMode) — cercle par défaut, agrandi par pincement jusqu'à
+    /// `.large` (spec 2026-08-03-call-bubble-pip-resize-morph-design.md).
+    /// Contrairement à `bubbleEdge`/`bubbleVerticalFraction` juste au-dessus
+    /// (mutés par le drag de repositionnement, donc réinitialisés
+    /// explicitement en fin d'appel), celui-ci n'a qu'un seul point d'entrée
+    /// en mode bulle — `FloatingCallPillView.collapseToBubble()` — qui le
+    /// repose déjà à `.circle` à chaque fois : pas de reset défensif
+    /// redondant nécessaire ici.
+    @Published var bubbleSizeTier: CallBubbleSizeTier = .circle
     @Published private(set) var hasLocalVideoTrack = false
     @Published private(set) var hasRemoteVideoTrack = false
     /// Outbound video auto-suspended by the graceful-degradation survival layer
@@ -2295,7 +2305,15 @@ final class CallManager: ObservableObject {
 
     // MARK: - Media Controls
 
-    func toggleMute() {
+    /// `reportToCallKit` is `false` only when this call originates FROM
+    /// CallKit itself (`CXSetMutedCallAction` delegate handler, e.g. Apple
+    /// Watch / lock-screen / CarPlay mute) — in that case CallKit's state
+    /// already reflects `isMuted`, and resubmitting a `CXSetMutedCallAction`
+    /// transaction back to it would be an avoidable no-op round-trip
+    /// answering CallKit's own notification. All other call sites (the
+    /// in-app mute button) keep the default and DO report to CallKit, so its
+    /// system UI (Watch, lock screen, CarPlay) stays in sync.
+    func toggleMute(reportToCallKit: Bool = true) {
         // Audit P1-13 — keep optimistic UX (instant local flip) but rollback
         // local state + WebRTC if CallKit refuses the transaction. Without
         // the rollback, the app's `isMuted` and the WebRTC track were
@@ -2308,6 +2326,11 @@ final class CallManager: ObservableObject {
         // guard below returns early for Mac / foreground in-app calls).
         if let callId = currentCallId {
             MessageSocketManager.shared.emitCallToggleAudio(callId: callId, enabled: !isMuted)
+        }
+
+        guard reportToCallKit else {
+            HapticFeedback.light()
+            return
         }
 
         // CALL-FIX 2026-06-06 (macOS) — `CXSetMutedCallAction` fails on iOS-app-on-Mac
@@ -2464,12 +2487,18 @@ final class CallManager: ObservableObject {
     }
 
     func switchCamera() {
-        webRTCService.switchCamera()
         // §7.7 — optimistic front/back tracking for mirroring. On iPhone/iPad a
         // flip alternates front↔back; on Mac switchCamera is usually a no-op so
-        // the flag rarely matters there.
+        // the flag rarely matters there. Corrected on failure (hardware busy,
+        // single-camera device) so the mirror flag never stays desynced from
+        // the camera actually in use for the rest of the call.
+        let previousFrontCamera = isUsingFrontCamera
         isUsingFrontCamera.toggle()
         HapticFeedback.light()
+        webRTCService.switchCamera { [weak self] success in
+            guard let self, !success else { return }
+            self.isUsingFrontCamera = previousFrontCamera
+        }
     }
 
     // §7.1 — Continuity / external camera picker. On iPhone the front/back flip
@@ -5389,7 +5418,12 @@ private class CallKitDelegateProxy: NSObject, CXProviderDelegate, @unchecked Sen
         Task { @MainActor [weak self] in
             guard let manager = self?.manager else { return }
             if manager.isMuted != isMuted {
-                manager.toggleMute()
+                // reportToCallKit: false — CallKit is the SOURCE of this
+                // change (Watch/lock-screen/CarPlay); its own state already
+                // matches `isMuted`, so resubmitting a CXSetMutedCallAction
+                // here would just be an avoidable no-op transaction back to
+                // the system that just told us about it.
+                manager.toggleMute(reportToCallKit: false)
             }
         }
         action.fulfill()

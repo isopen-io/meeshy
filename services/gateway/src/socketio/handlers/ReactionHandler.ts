@@ -150,7 +150,8 @@ export class ReactionHandler {
         validated.emoji,
         'add',
         participantId,
-        message?.conversationId ?? ''
+        message?.conversationId ?? '',
+        userId
       );
 
       const successResponse: SocketIOResponse<unknown> = {
@@ -171,7 +172,8 @@ export class ReactionHandler {
             removedEmoji,
             'remove',
             participantId,
-            message.conversationId
+            message.conversationId,
+            userId
           )
             // The swap is already persisted (addReaction removed the old emoji),
             // so the removal MUST reach every peer. If the aggregation read here
@@ -181,7 +183,7 @@ export class ReactionHandler {
             // reaction:sync. The degraded aggregation self-heals on the next sync.
             .catch(err => {
               logger.error('reaction:add replaced-emoji createUpdateEvent failed — propagating degraded removal', { error: err, conversationId: message.conversationId });
-              return this._degradedRemovalEvent(message.conversationId, participantId, validated.messageId, removedEmoji);
+              return this._degradedRemovalEvent(message.conversationId, participantId, validated.messageId, removedEmoji, userId);
             })
             .then(removeEvent => this._propagateReplacedEmojiRemoval(
               message.conversationId, participantId, validated.messageId, removedEmoji, removeEvent
@@ -280,7 +282,8 @@ export class ReactionHandler {
         validated.emoji,
         'remove',
         participantId,
-        message?.conversationId ?? ''
+        message?.conversationId ?? '',
+        userId
       );
 
       const successResponse: SocketIOResponse<unknown> = {
@@ -446,12 +449,14 @@ export class ReactionHandler {
     conversationId: string,
     participantId: string,
     messageId: string,
-    emoji: string
+    emoji: string,
+    userId: string
   ): ReactionUpdateEvent {
     return {
       messageId,
       conversationId,
       participantId,
+      userId,
       emoji,
       action: 'remove',
       aggregation: { emoji, count: 0, participantIds: [], hasCurrentUser: false },

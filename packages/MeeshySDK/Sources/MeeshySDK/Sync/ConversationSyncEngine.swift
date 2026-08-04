@@ -286,6 +286,7 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
         }.value
     }
 
+    @discardableResult
     public func fullSync() async -> Bool {
         guard !isSyncing else { return true }
         isSyncing = true

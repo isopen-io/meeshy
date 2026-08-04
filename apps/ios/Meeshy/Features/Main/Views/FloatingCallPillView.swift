@@ -367,6 +367,7 @@ struct FloatingCallPillView: View {
             // longer active, matching CallBubbleView's own display guard.
             guard callManager.callState.isActive else { return }
             callManager.displayMode = .bubble
+            callManager.bubbleSizeTier = .circle
             pillDragOffset = 0
         }
     }

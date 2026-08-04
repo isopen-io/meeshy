@@ -116,6 +116,15 @@ struct ReelsPlayerView: View {
         .offset(x: max(0, edgeDrag))
         .task {
             viewModel.seed(posts: seedPosts, startId: startId)
+            // Le réel affiché est CONSOMMÉ : ses notifications (nouveau réel,
+            // commentaires, réactions) ne doivent plus apparaître non lues, et
+            // `activePostId` fait naître consommées celles qui arrivent pendant
+            // le visionnage. Le viewer de réels était la seule surface sans ce
+            // marquage — `POST /posts/:id/view` étant borné à la première vue,
+            // une notification arrivée après restait non lue pour toujours.
+            if let id = viewModel.currentId ?? startId {
+                NotificationToastManager.shared.onPostOpened(id)
+            }
             // Reel comment notification: auto-open the comments sheet on the seed
             // reel and scroll to the targeted comment. Brief delay so the reel is
             // on screen first (the reveal disc settles), then present.
@@ -141,6 +150,10 @@ struct ReelsPlayerView: View {
             // bar / action rail / info must reappear when you page.
             if chromeHidden { chromeHidden = false }
             if newId != nil { HapticFeedback.light() }
+            // Consommation des notifications du réel affiché (voir .task) —
+            // fermeture conditionnelle à l'identité puis ouverture du suivant.
+            if let old { NotificationToastManager.shared.onPostClosed(old) }
+            if let newId { NotificationToastManager.shared.onPostOpened(newId) }
             // Order matters: finalize the PREVIOUS reel's session (real watch-time +
             // heartbeat samples + completed) and `end` it BEFORE `begin` of the next —
             // both in the SAME Task so `begin` never races ahead of the deferred `end`
@@ -155,7 +168,16 @@ struct ReelsPlayerView: View {
                 viewModel.recordView(newId)
             }
         }
-        .sheet(item: $commentsReel) { reel in
+        .sheet(item: $commentsReel, onDismiss: {
+            // La feuille de commentaires relâche `activePostId` à sa fermeture
+            // (elle porte le même id que le réel affiché) : re-déclarer le réel
+            // encore à l'écran pour que les notifications qui arrivent pendant
+            // le visionnage continuent de naître consommées. Le POST serveur
+            // reste coalescé par la fenêtre du manager — pas de re-requête.
+            if let id = viewModel.currentId {
+                NotificationToastManager.shared.onPostOpened(id)
+            }
+        }) { reel in
             CommentsSheetView(
                 post: reel,
                 accentColor: reel.authorColor,
@@ -189,6 +211,7 @@ struct ReelsPlayerView: View {
             // d'engagement (watch-time + vue qualifiée) du réel courant.
             viewModel.leaveActivePostRoom()
             finalizeReelSession(for: viewModel.currentId)
+            NotificationToastManager.shared.onPostClosed(viewModel.currentId)
             Task { await EngagementTracker.shared.end(surface: .reels) }
         }
         .statusBarHidden(true)

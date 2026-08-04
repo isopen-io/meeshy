@@ -3446,3 +3446,81 @@ bug scopé dans l'ordre des opérations d'un des 8 sites d'invalidation.
   Android (confirmés présents dans `apps/ios`/`packages/MeeshySDK`/`apps/android`), à renforcer par un scan
   Swift/Kotlin dédié dans une prochaine vague. **Parité iOS/Android retry-on-failure retirée de cette
   liste** (confirmée résolue cette vague, voir ci-dessus).
+
+## Vague 51 — Garde de contrat cross-platform pour les littéraux `call:*` iOS/Android (2026-08-03)
+
+Point d'entrée : routine calling-feature (agent Cowork non interactif, mandat PHASE 1-12). Branche
+`claude/modest-cori-uv0fco`, redémarrée depuis `origin/main` à jour (`98cc74f9`, PR #2492 déjà mergée — 0 PR
+ouverte trouvée sur le sujet calls au démarrage). Un audit dédié (agent d'exploration, lecture seule) a
+recartographié la stack d'appel iOS/SDK et confirmé indépendamment le même item « reste ouvert » que la
+Vague 50 avait signalé sans le traiter : `CallEventsHandler-event-contract.test.ts` ne scanne que les
+`socket.on(...)` littéraux de `CallEventsHandler.ts` (gateway) contre le contrat partagé — aucun garde
+n'existe pour les littéraux `"call:..."` codés en dur côté iOS (`CallManager.swift`,
+`MessageSocketManager.swift` du SDK) et Android (`CallSignalManager.kt`), qui n'importent pas le contrat
+TypeScript et peuvent dériver silencieusement.
+
+- **[FAIBLE, gateway (scan multi-plateforme), infrastructure de test, TDD]** Nouveau fichier
+  `services/gateway/src/__tests__/unit/socketio/CallEventsHandler-cross-platform-event-contract.test.ts` :
+  lit en texte brut (sans toolchain Swift/Kotlin) les 3 fichiers de signalisation d'appel connus pour
+  contenir des littéraux `"call:..."` — `apps/ios/Meeshy/Features/Main/Services/CallManager.swift`,
+  `packages/MeeshySDK/Sources/MeeshySDK/Sockets/MessageSocketManager.swift`,
+  `apps/android/sdk-core/src/main/kotlin/me/meeshy/sdk/socket/CallSignalManager.kt` — et vérifie que chaque
+  littéral extrait existe dans le même contrat partagé (`CALL_EVENTS` ∪ `CLIENT_EVENTS` ∪ `SERVER_EVENTS`)
+  que le garde gateway existant.
+- **Constat** : aucune dérive trouvée — les 3 fichiers sont déjà alignés avec le contrat (attendu, cf.
+  Vagues précédentes : code appel déjà exceptionnellement propre). Ce n'est donc pas un bug corrigé mais une
+  garde de non-régression comblant un trou d'observabilité identifié à la Vague 50.
+- **Tests TDD (RED prouvé sans casser la prod)** : un premier cas fixture (`"call:definitely-not-a-real..."`)
+  prouve que l'extraction/comparaison détecte bien un littéral hors contrat. RED réel confirmé en
+  conditions live : littéral factice `"call:totally-bogus-event"` injecté temporairement dans
+  `CallSignalManager.kt` (production) → le nouveau test échoue avec le littéral listé dans `offContract` ;
+  fichier restauré depuis une copie (`git diff --stat` vide après restauration, confirmant un fichier
+  strictement identique) → GREEN. Suite calling gateway complète (`CallEventsHandler|CallService|
+  CallCleanupService|calls-routes|call-`) : 42 suites / 1041 tests verts (+1 suite / +4 tests vs. Vague 50).
+  `tsc --noEmit` gateway : 0 erreur.
+- **iOS/Android (lecture seule, aucun changement)** : hors périmètre — changement strictement gateway (1
+  nouveau fichier de test lisant les sources iOS/Android sans les modifier).
+- **Reste ouvert (inchangé)** : dead code / god-objects `CallManager.swift` (5663 lignes, confirmé par
+  l'audit de cette vague)/`CallEventsHandler.ts` (toujours jugé trop risqué pour une passe non scopée) ;
+  couverture E2E iOS des écrans d'appel entrant/sortant relativement fine (peu de XCUITest bout-en-bout,
+  confirmé par l'audit de cette vague — aucun XCUITest de bout en bout trouvé) ; l'ADR `actor CallEventQueue`
+  documenté dans `docs/superpowers/specs/2026-05-10-calls-sota-redesign-design.md` (section 10) semble ne
+  jamais avoir été implémenté (`grep CallEventQueue` vide sur `CallManager.swift` actuel) — à vérifier si
+  c'est un abandon délibéré déjà tracé ailleurs ou un écart ADR/code à documenter lors d'une prochaine
+  vague.
+
+## Vague 52 — `call:transcription-segment` gardait uniquement le littéral `'ended'`, pas `CALL_TERMINAL_STATUSES` (2026-08-04)
+
+Point d'entrée : routine calling-feature (agent Cowork non interactif, mandat PHASE 1-12). Branche
+`claude/modest-cori-cds5c7`, redémarrée depuis `origin/main` à jour (`54bbee9`, 0 PR ouverte trouvée sur le
+sujet calls au démarrage). Un audit dédié (agent, lecture seule) a re-scanné `CallEventsHandler.ts`/
+`CallService.ts` contre les 5 patterns de bug déjà rencontrés dans les vagues précédentes (dérive de garde
+de statut terminal, ordre d'invalidation du cache signal, ordre de libération de claim, résolveur
+participant faible vs strict, bump de `version` sur écriture terminale) et a confirmé que les 4 premiers
+patterns étaient déjà corrigés partout — sauf un nouveau site pour le pattern 1.
+
+- **[FAIBLE-MOYEN, gateway, CONFIRMÉ + CORRIGÉ, TDD]** `CallEventsHandler.ts:3553`, handler
+  `call:transcription-segment` — gardait `callSession.status === 'ended'` (un littéral unique) au lieu de
+  `CALL_TERMINAL_STATUSES` (`ended`/`missed`/`rejected`/`failed`), déjà importé et utilisé correctement
+  ailleurs dans le même fichier (lignes 653 et 3998).
+- **Impact concret** : un appel résolu `missed`, `rejected` ou `failed` (au lieu de `ended`) laisse la garde
+  passer. Un socket encore joint à `ROOMS.call(callId)` dans la fenêtre entre l'écriture terminale et
+  `evictCallRoomSockets` (plusieurs étapes `await` plus loin — `broadcastCallEnded`/`postCallSummary`/
+  `handleMissedCall`) qui émet `call:transcription-segment` voit son segment relayé dans une room d'appel
+  déjà mort, et potentiellement envoyé au traducteur ZMQ (charge gaspillée) — un broadcast fantôme dans un
+  appel résolu, symétrique aux trous déjà fermés côté cache signal (Vagues 49/50) mais sur le chemin de
+  garde de statut, pas d'invalidation de cache.
+- **Fix** : une ligne — `callSession.status === 'ended'` → `(CALL_TERMINAL_STATUSES as readonly
+  string[]).includes(callSession.status)`, symétrique aux gardes déjà correctes lignes 653/3998.
+- **Tests TDD** : RED confirmé — `CallEventsHandler-transcription.test.ts` avait déjà un `describe` couvrant
+  `status: 'ended'` (silencieusement droppé) mais aucun cas pour `missed`/`rejected`/`failed`. Paramétré en
+  `describe.each(['ended', 'missed', 'rejected', 'failed'])` : avant le fix, les 3 nouveaux statuts
+  laissaient passer le relais (`roomEmit` appelé) — 3 tests rouges sur 21. Fix appliqué → 21/21 verts. Suite
+  calling gateway complète filtrée (`CallEventsHandler|CallService|CallCleanupService|calls-routes|call-`) :
+  42 suites / 1047 tests verts — aucune régression sur les 4 autres patterns déjà corrects. `tsc --noEmit`
+  gateway : 0 erreur. Suite gateway complète (`bun run test:coverage`) : 578 suites / 15271 tests verts.
+- **iOS/Android (lecture seule, aucun changement)** : hors périmètre — changement strictement gateway
+  (`CallEventsHandler.ts`, 1 fichier de test).
+- **Reste ouvert (inchangé)** : dead code / god-objects `CallManager.swift`/`CallEventsHandler.ts` ; ADR
+  `actor CallEventQueue` non implémenté (à trancher : abandon délibéré ou écart à documenter) ; couverture
+  E2E iOS des écrans d'appel (peu de XCUITest bout-en-bout).

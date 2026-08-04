@@ -1731,7 +1731,7 @@ describe('ZmqTranslationClient', () => {
       expect(stats.requests_sent).toBe(1);
     });
 
-    it('should emit transcriptionError after timeout', async () => {
+    it('should emit transcriptionError after the deadman timeout', async () => {
       const errors: any[] = [];
       client.on('transcriptionError', (e) => errors.push(e));
 
@@ -1741,12 +1741,107 @@ describe('ZmqTranslationClient', () => {
         audioPath: '/tmp/audio.mp3'
       });
 
-      // Exhaust retries to guarantee an error is eventually emitted (maxRetries+1 timeouts).
-      for (let i = 0; i < ZMQ_TOLERANCE_DEFAULTS.maxRetries + 1; i++) {
-        await jest.advanceTimersByTimeAsync(30_000 + 100);
-      }
+      // No retry window fires anymore; the single deadman eventually reports.
+      await jest.advanceTimersByTimeAsync(
+        ZMQ_TOLERANCE_DEFAULTS.voiceTranslateDeadmanMs + 1_000
+      );
 
       expect(errors.length).toBeGreaterThan(0);
+    });
+
+    // Prod incident 2026-08-04: Whisper took 42s on a 19s voice note while the
+    // per-attempt timeout was 30s. The gateway resent the SAME taskId, the
+    // first pass succeeded and broadcast transcription:ready, then the retry
+    // died on the temp file the first pass had already cleaned up and
+    // broadcast audio:transcription-failed 140ms later — wiping a perfectly
+    // good transcription off the client. Same class of bug already fixed for
+    // voice_translate: a long Whisper pipeline must be fired once, never resent.
+    it('should not resend transcription requests on the 30s window', async () => {
+      const sendCallsBefore = (mockPushSocket.send as jest.Mock).mock.calls.length;
+
+      await client.sendTranscriptionOnlyRequest({
+        messageId: 'msg-no-retry',
+        attachmentId: 'attach-no-retry',
+        audioPath: '/tmp/audio.mp3'
+      });
+
+      const afterSend = (mockPushSocket.send as jest.Mock).mock.calls.length;
+      expect(afterSend).toBe(sendCallsBefore + 1);
+
+      // Whisper legitimately runs past the legacy retry window.
+      await jest.advanceTimersByTimeAsync(35_000);
+      expect((mockPushSocket.send as jest.Mock).mock.calls.length).toBe(afterSend);
+
+      await jest.advanceTimersByTimeAsync(35_000);
+      expect((mockPushSocket.send as jest.Mock).mock.calls.length).toBe(afterSend);
+    });
+  });
+
+  describe('ZmqTranslationClient — a late error never clobbers a delivered result', () => {
+    beforeEach(async () => {
+      client = new ZmqTranslationClient();
+      await client.initialize();
+    });
+
+    const completed = (taskId: string) => Buffer.from(JSON.stringify({
+      type: 'transcription_completed',
+      taskId,
+      messageId: 'msg-1',
+      attachmentId: 'att-1',
+      transcription: 'Bonjour, ceci est un test',
+      language: 'fr',
+      timestamp: Date.now()
+    }));
+
+    const failed = (taskId: string) => Buffer.from(JSON.stringify({
+      type: 'transcription_error',
+      taskId,
+      messageId: 'msg-1',
+      attachmentId: 'att-1',
+      error: 'No such file or directory: /tmp/transcription_temp/trans_x.mp4',
+      timestamp: Date.now()
+    }));
+
+    it('drops a transcription_error arriving after the same task already completed', async () => {
+      const errors: any[] = [];
+      const successes: any[] = [];
+      client.on('transcriptionError', (e) => errors.push(e));
+      client.on('transcriptionCompleted', (e) => successes.push(e));
+
+      (mockSubSocket.receive as jest.Mock)
+        .mockResolvedValueOnce([completed('dup-task')])
+        .mockResolvedValueOnce([failed('dup-task')]);
+
+      await jest.advanceTimersByTimeAsync(200);
+
+      expect(successes.length).toBe(1);
+      expect(errors.length).toBe(0);
+    });
+
+    it('still reports a genuine transcription_error when nothing succeeded', async () => {
+      const errors: any[] = [];
+      client.on('transcriptionError', (e) => errors.push(e));
+
+      (mockSubSocket.receive as jest.Mock).mockResolvedValueOnce([failed('lonely-task')]);
+
+      await jest.advanceTimersByTimeAsync(200);
+
+      expect(errors.length).toBe(1);
+      expect(errors[0].taskId).toBe('lonely-task');
+    });
+
+    it('keeps reporting errors for a different task than the one that succeeded', async () => {
+      const errors: any[] = [];
+      client.on('transcriptionError', (e) => errors.push(e));
+
+      (mockSubSocket.receive as jest.Mock)
+        .mockResolvedValueOnce([completed('task-a')])
+        .mockResolvedValueOnce([failed('task-b')]);
+
+      await jest.advanceTimersByTimeAsync(200);
+
+      expect(errors.length).toBe(1);
+      expect(errors[0].taskId).toBe('task-b');
     });
   });
 

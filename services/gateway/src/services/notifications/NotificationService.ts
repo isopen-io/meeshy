@@ -863,7 +863,7 @@ export class NotificationService {
           let unreadBadge: number | undefined;
           try {
             const count = await this.prisma.notification.count({
-              where: { userId: params.userId, readAt: null },
+              where: { userId: params.userId, isRead: false },
             });
             if (typeof count === 'number') unreadBadge = count;
           } catch {
@@ -889,6 +889,12 @@ export class NotificationService {
               ...(pushCategory ? { category: pushCategory } : {}),
               ...(unreadBadge !== undefined ? { badge: unreadBadge } : {}),
               data: {
+                // Identité de la ligne créée : SEULE clé permettant au client
+                // de marquer lu au tap (POST /notifications/:id/read). Sans
+                // elle, les types sans context.conversationId/postId (system,
+                // login_new_device, password_changed, two_factor_*,
+                // friend_request) restaient non lus à vie après un tap push.
+                notificationId: formatted.id,
                 ...(unreadBadge !== undefined ? { unreadCount: String(unreadBadge) } : {}),
                 type: params.type,
                 conversationId: params.context.conversationId || '',
@@ -3514,8 +3520,11 @@ export class NotificationService {
   private async emitCountsUpdate(userId: string): Promise<void> {
     if (!this.io) return;
     try {
+      // `isRead: false` — même prédicat (indexé [userId, isRead]) que la liste
+      // et le badge REST. `readAt: null` divergeait sur les données legacy et
+      // tournait en collscan (aucun index sur readAt).
       const [unread, total] = await Promise.all([
-        this.prisma.notification.count({ where: { userId, readAt: null } }),
+        this.prisma.notification.count({ where: { userId, isRead: false } }),
         this.prisma.notification.count({ where: { userId } }),
       ]);
       this.io.to(ROOMS.user(userId)).emit(SERVER_EVENTS.NOTIFICATION_COUNTS, { unread, total });
@@ -3797,6 +3806,14 @@ export class NotificationService {
       });
 
       const formatted = this.formatNotification(notification);
+      // Sync multi-appareils : les AUTRES appareils retirent la ligne précise
+      // de leur cloche sans refetch. `notification:counts` seul ne dit pas
+      // LAQUELLE a été lue.
+      if (this.io) {
+        this.io
+          .to(ROOMS.user(formatted.userId))
+          .emit(SERVER_EVENTS.NOTIFICATION_READ, { notificationId });
+      }
       this.emitCountsUpdate(formatted.userId).catch(() => {});
       return formatted;
     } catch (error) {
@@ -3963,6 +3980,30 @@ export class NotificationService {
   }
 
   /**
+   * Supprime toutes les notifications LUES de l'utilisateur.
+   * Émet `notification:counts` (le total change) quand au moins une ligne part.
+   */
+  async deleteAllRead(userId: string): Promise<number> {
+    try {
+      const result = await this.prisma.notification.deleteMany({
+        where: { userId, isRead: true },
+      });
+
+      if (result.count > 0) {
+        this.emitCountsUpdate(userId).catch(() => {});
+      }
+
+      return result.count;
+    } catch (error) {
+      notificationLogger.error('Failed to delete read notifications', {
+        error,
+        userId,
+      });
+      return 0;
+    }
+  }
+
+  /**
    * Supprime une notification
    */
   async deleteNotification(notificationId: string): Promise<boolean> {
@@ -3978,6 +4019,11 @@ export class NotificationService {
       });
 
       if (existing?.userId) {
+        if (this.io) {
+          this.io
+            .to(ROOMS.user(existing.userId))
+            .emit(SERVER_EVENTS.NOTIFICATION_DELETED, { notificationId });
+        }
         this.emitCountsUpdate(existing.userId).catch(() => {});
       }
 
