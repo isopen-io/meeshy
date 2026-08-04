@@ -1259,7 +1259,8 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
                 loadedAudioURLs: loadedAudioURLs,
                 originalLanguage: originalLanguage,
                 visibility: visibility,
-                visibilityUserIds: visibilityUserIds
+                visibilityUserIds: visibilityUserIds,
+                draftId: draftId
             )
             // L'item vient d'être créé : personne d'autre ne peut le détenir,
             // la revendication est donc acquise d'office ici. On enregistre
