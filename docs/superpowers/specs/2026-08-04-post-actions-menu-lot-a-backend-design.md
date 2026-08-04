@@ -54,15 +54,61 @@ besoins. Ce lot ne livre que les deux écarts réels, afin que les lots clients
    aujourd'hui par iOS (`FeedViewModel.swift:908`) sera remplacé au lot B. Le
    backend accepte déjà les huit motifs, aucun changement requis ici.
 4. **La trace de téléchargement n'est pas remontée en UI** pour le moment.
-   Elle est écrite et conservée, rien de plus.
+   Elle est écrite et conservée, rien de plus. Les compteurs dénormalisés sont
+   néanmoins alimentés dès ce lot (décision 7) : c'est ce qui garantit qu'une
+   future surface analytique lira en O(1) sans jamais agréger la table
+   d'événements.
 5. **Historique complet des téléchargements** : chaque téléchargement produit
    une ligne, y compris répété par le même utilisateur sur le même média.
-6. **Aucune notification à l'auteur** lors d'une suppression par un modérateur.
+6. **Aucune purge ni TTL** sur la table d'événements pour l'instant. L'index
+   `[createdAt]` rend une purge ou un index TTL triviaux à ajouter plus tard
+   sans migration de schéma, et les compteurs dénormalisés garantissent que
+   les totaux survivent à toute purge future.
+7. **Lectures analytiques rapides par construction** — architecture à deux
+   étages : compteurs dénormalisés pour tout ce qui se lit en O(1), table
+   d'événements indexée pour l'analyse fine. Détail en section 1.
+8. **Aucune notification à l'auteur** lors d'une suppression par un modérateur.
    La ligne d'audit est le seul artefact. Notifier impliquerait un type de
    notification, quatre traductions et une entrée dans la carte des préférences
    — sujet produit distinct.
 
 ## 1. Traçabilité des téléchargements de médias
+
+### Architecture de lecture — deux étages
+
+Une table d'événements brute grossit sans limite ; compter par agrégation
+dessus se dégrade avec le volume. La lecture analytique rapide est donc obtenue
+par construction, pas par optimisation ultérieure :
+
+**Étage chaud — O(1), aucune agrégation.** Deux compteurs dénormalisés
+incrémentés à l'écriture. Toute question « combien » se répond en lisant un
+entier, quelle que soit la taille de la table. Ce n'est pas une entorse à la
+règle anti-redondance du CLAUDE.md (qui vise les paires booléen + timestamp) :
+`Post` porte déjà huit compteurs de ce type — `viewCount`, `impressionCount`,
+`bookmarkCount`, `shareCount`, `playCount`, `postOpenCount`,
+`qualifiedViewCount`, `repostCount`.
+
+**Ordre d'écriture : événements d'abord, compteurs ensuite.** Le gateway
+n'utilise `$transaction` nulle part ; le pattern impression
+(`interactions.ts:374-392`) enchaîne `create` puis `update` sans transaction, et
+ce lot le suit. La conséquence doit être assumée en connaissance de cause : une
+panne entre les deux écritures laisse le compteur en retard sur l'historique.
+Cet ordre est le seul réparable — un compteur sous-évalué se recalcule depuis
+les événements, alors qu'un compteur incrémenté avant un `createMany` qui
+échoue serait surévalué sans aucune trace permettant de le corriger.
+
+**Étage froid — la table d'événements, indexée pour les requêtes réelles.**
+
+| Index | Requête servie |
+|---|---|
+| `[postId, userId]` | téléchargeurs uniques d'un poste · « cet utilisateur a-t-il déjà téléchargé ? » |
+| `[mediaId, createdAt]` | grain média sur une fenêtre temporelle |
+| `[userId, createdAt]` | historique de téléchargement d'un utilisateur |
+| `[createdAt]` | balayage par période, rollups futurs, TTL éventuel |
+
+`[surface, createdAt]` est délibérément écarté : `surface` n'a que trois
+valeurs, l'index serait trop peu sélectif pour être choisi par le planner. Le
+filtre par surface s'applique après le filtre temporel.
 
 ### Modèle Prisma
 
@@ -86,8 +132,10 @@ model PostMediaDownload {
   media PostMedia @relation(fields: [mediaId], references: [id], onDelete: Cascade)
   user  User      @relation("UserPostMediaDownloads", fields: [userId], references: [id])
 
-  @@index([postId])
+  @@index([postId, userId])
+  @@index([mediaId, createdAt])
   @@index([userId, createdAt])
+  @@index([createdAt])
 }
 ```
 
@@ -95,9 +143,28 @@ Relations inverses à ajouter : `mediaDownloads PostMediaDownload[]` sur `Post`,
 sur `PostMedia`, et `postMediaDownloads PostMediaDownload[] @relation("UserPostMediaDownloads")`
 sur `User`.
 
-**Pas de compteur dénormalisé** (`downloadCount`) sur `Post` ni `PostMedia` :
-la donnée n'est pas remontée, et le CLAUDE.md interdit les champs redondants.
-Un `count()` suffira quand une surface en aura besoin.
+### Compteurs dénormalisés
+
+Deux compteurs, deux sémantiques distinctes :
+
+| Champ | Incrément | Répond à |
+|---|---|---|
+| `Post.downloadCount` | **+1 par action** « Enregistrer », quel que soit le nombre de médias | « combien de fois ce poste a-t-il été enregistré ? » |
+| `PostMedia.downloadCount` | **+1 par média** effectivement écrit | « quelle image / vidéo de ce poste est la plus reprise ? » |
+
+```prisma
+// sur model Post
+downloadCount Int @default(0)
+
+// sur model PostMedia
+downloadCount Int @default(0)
+```
+
+**La somme des `PostMedia.downloadCount` d'un poste ne vaut PAS son
+`Post.downloadCount`, et c'est voulu** : l'un compte des actions, l'autre des
+médias. Un poste à quatre images enregistré une fois donne `Post.downloadCount
+= 1` et quatre `PostMedia.downloadCount = 1`. Ne jamais « corriger » cet écart
+— il porte l'information.
 
 ### Route
 
@@ -125,10 +192,27 @@ quatre images télécharge les quatre d'un coup, un seul aller-retour.
 3. Chargement du poste non supprimé — sinon `404 POST_NOT_FOUND`.
 4. Contrôle de visibilité via `canUserViewPost(prisma, post, userId)`
    (`services/posts/postVisibility.ts:64`) — sinon `403 FORBIDDEN`.
-5. Filtrage : seuls les `mediaIds` dont le `PostMedia.postId` correspond au
+5. **Déduplication des `mediaIds`** (voir l'encadré ci-dessous — non
+   négociable).
+6. Filtrage : seuls les `mediaIds` dont le `PostMedia.postId` correspond au
    poste sont retenus.
-6. `createMany` des lignes retenues.
-7. `sendSuccess(reply, { recorded })`.
+7. `createMany` des lignes retenues.
+8. `updateMany` sur `PostMedia` : `downloadCount { increment: 1 }` pour les ids
+   retenus.
+9. `update` sur `Post` : `downloadCount { increment: 1 }` — une seule fois,
+   l'action compte pour une.
+10. `sendSuccess(reply, { recorded })`.
+
+#### Déduplication des `mediaIds` — la dérive à empêcher
+
+`updateMany` avec un filtre `in` **déduplique** : `{ id: { in: ['a', 'a'] } }`
+ne matche qu'un document et n'incrémente qu'une fois. Un batch contenant deux
+fois le même `mediaId` écrirait donc deux lignes d'événement pour un seul
+incrément de compteur — historique et compteur divergeraient silencieusement,
+et définitivement, sans qu'aucune erreur ne soit levée.
+
+Les `mediaIds` sont donc dédupliqués à l'entrée de la route, avant toute
+écriture. `recorded` compte les lignes après déduplication.
 
 #### Table des erreurs
 
@@ -206,6 +290,12 @@ TDD : chaque test est écrit et rouge avant la ligne de production correspondant
   (non-déduplication — protège la décision 5 contre une régression en upsert) ;
 - un `mediaId` appartenant à un autre poste est filtré : aucune ligne pour lui,
   `recorded` ne le compte pas, statut 200 ;
+- **un `mediaId` répété dans le même batch ne produit qu'une ligne**, et
+  `PostMedia.downloadCount` n'est incrémenté que d'un — verrouille la
+  déduplication d'entrée contre le piège `updateMany` + `in` ;
+- `Post.downloadCount` est incrémenté de **1** pour un batch de quatre médias,
+  tandis que chacun des quatre `PostMedia.downloadCount` est incrémenté de 1 —
+  verrouille la divergence volontaire entre les deux compteurs ;
 - poste invisible pour l'appelant → 403, aucune ligne écrite ;
 - poste supprimé → 404 ;
 - appel non authentifié → 401 ;
@@ -237,14 +327,31 @@ vingtaine de suites gateway échouent ; sans `shared build`, `SocialEventsHandle
 
 Le modèle `PostMediaDownload` est purement additif : aucune donnée existante
 n'est touchée, aucun champ n'est retiré. MongoDB crée la collection à la
-première écriture.
+première écriture. Les deux `downloadCount` sont des `Int @default(0)` : les
+documents `Post` et `PostMedia` existants les lisent à `0` sans backfill.
 
-**L'entrypoint de production ne joue aucune migration** (cf. mémoire projet) :
-les index `@@index([postId])` et `@@index([userId, createdAt])` déclarés dans le
-schéma ne seront pas créés automatiquement sur la base de production. Ils
-devront être posés manuellement via `mongosh` après déploiement. À défaut, la
-collection reste fonctionnelle en écriture — seules les futures lectures
-analytiques seraient lentes.
+### Les index NE se créent PAS tout seuls
+
+**L'entrypoint de production ne joue aucune migration.** Les quatre `@@index`
+déclarés dans le schéma Prisma ne seront jamais créés sur la base de
+production par un déploiement. Sans action explicite, la collection écrit
+parfaitement et toute lecture analytique fait un COLLSCAN — exactement ce que
+cette architecture cherche à éviter.
+
+Le lot livre donc un script de migration versionné, sur le modèle de
+`2026-07-04-reaction-single-per-user-unique-index.mongodb.js` :
+
+`packages/shared/prisma/migrations/2026-08-04-post-media-download-indexes.mongodb.js`
+
+- crée les quatre index sur `PostMediaDownload` avec des noms explicites ;
+- **idempotent** : un index déjà présent avec la même spec est un no-op ;
+  présent avec une spec divergente, il est droppé puis recréé ;
+- s'exécute par `mongosh "$DATABASE_URL" < 2026-08-04-post-media-download-indexes.mongodb.js` ;
+- l'en-tête du script documente la raison de chaque index (la table du § 1),
+  pour qu'un futur mainteneur ne supprime pas « celui qui ne sert à rien ».
+
+L'exécution de ce script sur la production fait partie de la définition de
+« terminé » du lot A, au même titre que les tests verts.
 
 ## Hors périmètre de ce lot
 
