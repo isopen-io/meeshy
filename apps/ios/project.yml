@@ -78,12 +78,13 @@ settings:
   # --strategy max-build` et écrit ICI **et** dans le pbxproj — les deux, sinon
   # la prochaine régénération réécrase le correctif.
   VERSIONING_SYSTEM: apple-generic
-  # 1271 = dernier build VALID sur App Store Connect (vérifié 2026-08-04 via
-  # `andp status me.meeshy.app 1271`). Le pbxproj committé portait déjà 1271,
-  # écrit par `meeshy.sh build-number` ; laisser 1268 ici faisait REGRESSER le
-  # numéro à la première `xcodegen generate` — le piège que le bloc ci-dessus
-  # décrit, reproduit en direct le 2026-08-04.
-  CURRENT_PROJECT_VERSION: "1271"
+  # 1743 = dernier build présent sur App Store Connect, VALID (run Xcode Cloud
+  # 1743 du 2026-08-04, vérifié via `andp status me.meeshy.app 1743`). Xcode
+  # Cloud numérote avec son propre compteur (CI_BUILD_NUMBER), très au-dessus de
+  # la série locale : une valeur restée à 1271 ici ne bloquerait pas les lanes
+  # fastlane — elles prennent max(dépôt, dernier TestFlight) + 1 — mais rendrait
+  # le prochain numéro imprévisible, ce que le bloc ci-dessus proscrit.
+  CURRENT_PROJECT_VERSION: "1743"
   # Alignée sur la version App Store Connect. Passée à 1.0.1 le 2026-07-31 :
   # la 1.0.0 avait été rejetée (déclaration Age Rating `ageAssurance` à true
   # sans mécanisme de vérification d'âge dans l'app), et l'enregistrement ASC a
