@@ -596,7 +596,6 @@ struct MessageDetailSheet: View {
     private func languageRow(_ lang: LanguageDisplay, originalLang: String) -> some View {
         let langColor = Color(hex: LanguageDisplay.colorHex(for:lang.code))
         let hasTranslation = translations[lang.code] != nil
-        let hasAudioTranslation = mergedTranslatedAudios.contains { $0.targetLanguage.lowercased() == lang.code.lowercased() }
         let isTranslating = translatingLanguages.contains(lang.code) || translatingAudioLanguages.contains(lang.code)
         let isSelected = selectedLanguageCode == lang.code
 
