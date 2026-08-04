@@ -429,6 +429,33 @@ export class MessageTranslationService extends EventEmitter {
     return result;
   }
 
+  /**
+   * Canonicalise la langue SOURCE envoyée au translator, avec la MÊME parité que
+   * les cibles ({@link _resolveTargetLanguages}, SSOT `normalizeLanguageCode`).
+   *
+   * Les clients transmettent `originalLanguage` verbatim (`Locale.current` :
+   * `'fr-FR'`, `'FR'`, `'pt-BR'`) et le champ est persisté sans normalisation.
+   * Côté translator, la source est résolue via
+   * `LANGUAGE_MAPPINGS.get(src, 'eng_Latn')` — un code région-taggé (`'pt-BR'`)
+   * absent de la table retombe SILENCIEUSEMENT sur `'eng_Latn'`, donc NLLB
+   * traduit le texte comme s'il était anglais : traductions dégradées/fausses
+   * pour tous les lecteurs cross-langue (violation du Prisme Linguistique, même
+   * classe de collision que celle déjà corrigée pour les cibles).
+   *
+   * Le sentinel `'auto'` (détection de langue) et les valeurs vides
+   * (`null`/`undefined`/`''`) sont préservés tels quels — `'auto'` doit atteindre
+   * le translator intact pour déclencher la détection, et une source absente
+   * conserve son comportement historique.
+   */
+  private _normalizeSourceLanguage(
+    originalLanguage: string | null | undefined
+  ): string {
+    if (!originalLanguage || originalLanguage === 'auto') {
+      return originalLanguage as string;
+    }
+    return normalizeLanguageCode(originalLanguage) ?? originalLanguage.toLowerCase();
+  }
+
   private async _processTranslationsAsync(message: any, targetLanguage?: string, modelType?: string) {
     try {
       const startTime = Date.now();
@@ -537,7 +564,7 @@ export class MessageTranslationService extends EventEmitter {
       const request: TranslationRequest = {
         messageId: message.id,
         text: message.content,
-        sourceLanguage: message.originalLanguage,
+        sourceLanguage: this._normalizeSourceLanguage(message.originalLanguage),
         targetLanguages: cacheMisses,  // ✨ Seulement les langues non cachées
         conversationId: message.conversationId,
         modelType: finalModelType
@@ -653,7 +680,7 @@ export class MessageTranslationService extends EventEmitter {
       const request: TranslationRequest = {
         messageId: messageId,
         text: existingMessage.content,
-        sourceLanguage: existingMessage.originalLanguage,
+        sourceLanguage: this._normalizeSourceLanguage(existingMessage.originalLanguage),
         targetLanguages: filteredTargetLanguages,
         conversationId: existingMessage.conversationId,
         modelType: finalModelType
@@ -3049,7 +3076,7 @@ export class MessageTranslationService extends EventEmitter {
       const request: TranslationRequest = {
         messageId: `rest_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
         text: text,
-        sourceLanguage: sourceLanguage,
+        sourceLanguage: this._normalizeSourceLanguage(sourceLanguage),
         targetLanguages: [targetLanguage],
         conversationId: 'rest-request',
         modelType: modelType
