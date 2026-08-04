@@ -122,15 +122,18 @@ Calqué sur `PostImpression` / `PostView`, qui écrivent une ligne par événeme
 model PostMediaDownload {
   id        String   @id @default(auto()) @map("_id") @db.ObjectId
   postId    String   @db.ObjectId
+  /// Pas de relation Prisma vers PostMedia, délibérément : une cascade
+  /// effacerait la trace analytique en même temps que le média détaché ou
+  /// supprimé, alors qu'on veut précisément la conserver. Même raisonnement
+  /// que `PostMedia.uploaderId`, qui se passe de relation pour la même raison.
   mediaId   String   @db.ObjectId
   userId    String   @db.ObjectId
   /// Surface d'origine de l'action : feed | detail | reel
   surface   String   @default("detail")
   createdAt DateTime @default(now())
 
-  post  Post      @relation(fields: [postId], references: [id], onDelete: Cascade)
-  media PostMedia @relation(fields: [mediaId], references: [id], onDelete: Cascade)
-  user  User      @relation("UserPostMediaDownloads", fields: [userId], references: [id])
+  post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
+  user User @relation("UserPostMediaDownloads", fields: [userId], references: [id])
 
   @@index([postId, userId])
   @@index([mediaId, createdAt])
@@ -139,9 +142,9 @@ model PostMediaDownload {
 }
 ```
 
-Relations inverses à ajouter : `mediaDownloads PostMediaDownload[]` sur `Post`,
-sur `PostMedia`, et `postMediaDownloads PostMediaDownload[] @relation("UserPostMediaDownloads")`
-sur `User`.
+Relations inverses à ajouter : `mediaDownloads PostMediaDownload[]` sur `Post`
+et `postMediaDownloads PostMediaDownload[] @relation("UserPostMediaDownloads")`
+sur `User`. Rien sur `PostMedia`, qui n'a pas de relation entrante ici.
 
 ### Compteurs dénormalisés
 
@@ -189,9 +192,8 @@ quatre images télécharge les quatre d'un coup, un seul aller-retour.
 
 1. Authentification requise (`registeredUser`) — sinon `401 UNAUTHORIZED`.
 2. Validation Zod du body — sinon `400 VALIDATION_ERROR`.
-3. Chargement du poste non supprimé — sinon `404 POST_NOT_FOUND`.
-4. Contrôle de visibilité via `canUserViewPost(prisma, post, userId)`
-   (`services/posts/postVisibility.ts:64`) — sinon `403 FORBIDDEN`.
+3. Chargement du poste non supprimé **filtré par la visibilité du
+   demandeur** — sinon `404 POST_NOT_FOUND` (voir l'encadré ACL).
 5. **Déduplication des `mediaIds`** (voir l'encadré ci-dessous — non
    négociable).
 6. Filtrage : seuls les `mediaIds` dont le `PostMedia.postId` correspond au
@@ -219,10 +221,33 @@ Les `mediaIds` sont donc dédupliqués à l'entrée de la route, avant toute
 | Cas | Statut | Code |
 |---|---|---|
 | Non authentifié | 401 | `UNAUTHORIZED` |
-| Poste absent ou supprimé | 404 | `POST_NOT_FOUND` |
-| Poste non visible pour l'appelant | 403 | `FORBIDDEN` |
+| Poste absent, supprimé **ou non visible** | 404 | `POST_NOT_FOUND` |
 | `mediaIds` vide, > 50, ou `surface` hors énum | 400 | `VALIDATION_ERROR` |
 | Un `mediaId` n'appartient pas au poste | 200 | filtré, non compté dans `recorded` |
+
+#### ACL : quelle visibilité, et pourquoi pas 403
+
+**Le filtre est celui de la VISIBILITÉ, pas celui de l'interaction.**
+`postVisibility.ts` porte deux ACL délibérément différentes, et son en-tête
+documente l'asymétrie comme un choix produit (décision 2026-07-08) :
+
+- `buildPostVisibilityOrFilter` / `PostService.buildVisibilityFilter` — ce
+  qu'un utilisateur peut **voir** : amis ∪ contacts DM ∪ co-membres de
+  communauté ;
+- `canUserViewPost` — ce sur quoi il peut **interagir** (réagir, commenter) :
+  amis stricts.
+
+Enregistrer un média est un acte de consommation, pas d'interaction : si
+l'utilisateur a pu afficher le média, il doit pouvoir l'enregistrer. Utiliser
+`canUserViewPost` refuserait le téléchargement d'un média affiché à l'écran
+d'un contact DM. Le chargement passe donc par le **même** chemin que la lecture
+du poste — `findFirst` avec `buildVisibilityFilter(userId)`, exactement comme
+`PostService.getPostById` (`PostService.ts:581-586`).
+
+**Conséquence : pas de `403`.** Un poste inexistant et un poste invisible sont
+indiscernables par construction — le filtre de visibilité fait partie du
+`where`. C'est le comportement voulu : répondre `403` révélerait qu'un poste
+existe à cet identifiant. `getPostById` se comporte déjà ainsi.
 
 **Arbitrage sur le dernier cas** : un client dont le cache est en retard sur une
 édition (média détaché entre-temps) ne doit pas voir tout son batch rejeté.
@@ -296,7 +321,8 @@ TDD : chaque test est écrit et rouge avant la ligne de production correspondant
 - `Post.downloadCount` est incrémenté de **1** pour un batch de quatre médias,
   tandis que chacun des quatre `PostMedia.downloadCount` est incrémenté de 1 —
   verrouille la divergence volontaire entre les deux compteurs ;
-- poste invisible pour l'appelant → 403, aucune ligne écrite ;
+- poste invisible pour l'appelant → **404** (pas 403 : ne pas révéler son
+  existence), aucune ligne écrite, aucun compteur touché ;
 - poste supprimé → 404 ;
 - appel non authentifié → 401 ;
 - `mediaIds: []` → 400.
