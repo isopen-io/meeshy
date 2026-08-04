@@ -613,6 +613,21 @@ export const messageSchema = {
       enum: ['user', 'system', 'ads', 'app', 'agent', 'authority'],
       description: 'Source/origin of the message'
     },
+    metadata: {
+      type: 'object',
+      nullable: true,
+      // `additionalProperties: true` — sans lui, fast-json-stringify strippe
+      // SILENCIEUSEMENT le contenu de metadata à la sérialisation de la
+      // réponse (même piège que le schéma inline de `GET /messages/:messageId`
+      // et que `messageMinimalSchema`). Les routes construisent bien
+      // `metadata: message.metadata`, mais le client ne recevait rien : la
+      // bulle système d'appel restait bloquée sur `kind: 'call-live'`
+      // ("Appel en cours / Toucher pour rejoindre") pour toujours, la
+      // transition vers `kind: 'call'` (édition du MÊME message côté gateway)
+      // n'atteignant jamais l'app.
+      additionalProperties: true,
+      description: 'Structured per-type payload (call-summary facts, postReplyTo, location…) — forme libre'
+    },
 
     // State
     isEdited: { type: 'boolean', description: 'Message has been edited' },
