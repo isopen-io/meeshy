@@ -906,8 +906,10 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
         }
         let userId = await currentUserId()
         let username = await currentUsername()
+        let displayName = await currentUserDisplayName()
         let isMe = apiMessage.senderId == userId
-        let msg = apiMessage.toMessage(currentUserId: userId, currentUsername: username)
+        let msg = apiMessage.toMessage(
+            currentUserId: userId, currentUsername: username, currentUserDisplayName: displayName)
         await cache.messages.upsert(item: msg, for: msg.conversationId) { existing, new in
             existing.contains(where: { $0.id == new.id }) ? existing : existing + [new]
         }
@@ -1002,7 +1004,9 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
     private func handleEditedMessage(_ apiMessage: APIMessage) async {
         let userId = await currentUserId()
         let username = await currentUsername()
-        let msg = apiMessage.toMessage(currentUserId: userId, currentUsername: username)
+        let displayName = await currentUserDisplayName()
+        let msg = apiMessage.toMessage(
+            currentUserId: userId, currentUsername: username, currentUserDisplayName: displayName)
         await cache.messages.upsertPatch(for: msg.conversationId, itemId: msg.id) { existing in
             existing = msg
         }
@@ -1395,6 +1399,10 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
 
     private func currentUsername() async -> String? {
         await MainActor.run { AuthManager.shared.currentUser?.username }
+    }
+
+    private func currentUserDisplayName() async -> String? {
+        await MainActor.run { AuthManager.shared.currentUser?.displayName }
     }
 
     /// Persist a conversation list pre-sorted by `lastMessageAt` DESC. Centralising

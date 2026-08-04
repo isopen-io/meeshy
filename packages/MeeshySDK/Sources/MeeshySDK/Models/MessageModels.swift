@@ -617,7 +617,11 @@ extension APIMessage {
         return f
     }()
 
-    public func toMessage(currentUserId: String, currentUsername: String? = nil) -> MeeshyMessage {
+    public func toMessage(
+        currentUserId: String,
+        currentUsername: String? = nil,
+        currentUserDisplayName: String? = nil
+    ) -> MeeshyMessage {
         let msgType: MeeshyMessage.MessageType = {
             switch messageType?.lowercased() {
             case "image": return .image
@@ -782,6 +786,16 @@ extension APIMessage {
             )
         }()
         let resolvedUsername = sender?.username ?? sender?.user?.username
+        let isMe = (sender?.resolvedUserId ?? senderId) == currentUserId
+            || (currentUsername != nil && resolvedUsername?.lowercased() == currentUsername?.lowercased())
+
+        // Un écho socket allégé peut omettre l'enveloppe expéditeur. Pour MON
+        // propre message, l'identité de la session est déjà la vérité en local :
+        // s'en servir évite que l'aperçu de la liste perde le nom de l'auteur
+        // entre l'insertion optimiste et le prochain resync REST. Repli
+        // strictement borné à `isMe` — jamais deviner le nom d'un autre.
+        let effectiveSenderName = senderDisplayName ?? (isMe ? currentUserDisplayName : nil)
+        let effectiveSenderUsername = resolvedUsername ?? (isMe ? currentUsername : nil)
 
         var effects: MessageEffects = .none
         if let flags = effectFlags, flags > 0 {
@@ -817,11 +831,10 @@ extension APIMessage {
             createdAt: createdAt, updatedAt: updatedAt ?? createdAt,
             attachments: uiAttachments, reactions: uiReactions, replyTo: uiReplyTo,
             forwardedFrom: uiForwardRef,
-            senderName: senderDisplayName, senderUsername: resolvedUsername, senderColor: senderColor,
+            senderName: effectiveSenderName, senderUsername: effectiveSenderUsername, senderColor: senderColor,
             senderAvatarURL: sender?.resolvedAvatar, senderUserId: sender?.resolvedUserId,
             deliveryStatus: computedDeliveryStatus,
-            isMe: (sender?.resolvedUserId ?? senderId) == currentUserId
-                || (currentUsername != nil && resolvedUsername?.lowercased() == currentUsername?.lowercased()),
+            isMe: isMe,
             deliveredToAllAt: deliveredToAllAt, readByAllAt: readByAllAt,
             deliveredCount: deliveredCount ?? 0, readCount: readCount ?? 0,
             recipientCount: recipientCount ?? 0,
