@@ -666,14 +666,12 @@ describe('MeeshySocketIOManager', () => {
   // -------------------------------------------------------------------------
 
   describe('Socket operations', () => {
-    it('isUserInConversationRoom returns false when user not in connectedUsers', () => {
+    it('isUserInConversationRoom returns false when user has no tracked sockets', () => {
       expect(manager.isUserInConversationRoom('ghost', 'conv-1')).toBe(false);
     });
 
     it('isUserInConversationRoom returns false when socket not found', () => {
-      (manager as any).connectedUsers.set('user-1', {
-        id: 'user-1', socketId: 'sock-missing', isAnonymous: false, language: 'fr', resolvedLanguages: [],
-      });
+      (manager as any).userSockets.set('user-1', new Set(['sock-missing']));
       expect(manager.isUserInConversationRoom('user-1', 'conv-1')).toBe(false);
     });
 
@@ -681,9 +679,7 @@ describe('MeeshySocketIOManager', () => {
       const rooms = new Set(['conversation:conv-1']);
       const fakeSocket = { rooms };
       ioState.sockets.sockets.set('sock-1', fakeSocket);
-      (manager as any).connectedUsers.set('user-1', {
-        id: 'user-1', socketId: 'sock-1', isAnonymous: false, language: 'fr', resolvedLanguages: [],
-      });
+      (manager as any).userSockets.set('user-1', new Set(['sock-1']));
       expect(manager.isUserInConversationRoom('user-1', 'conv-1')).toBe(true);
     });
 
@@ -691,10 +687,19 @@ describe('MeeshySocketIOManager', () => {
       const rooms = new Set(['conversation:other']);
       const fakeSocket = { rooms };
       ioState.sockets.sockets.set('sock-1', fakeSocket);
-      (manager as any).connectedUsers.set('user-1', {
-        id: 'user-1', socketId: 'sock-1', isAnonymous: false, language: 'fr', resolvedLanguages: [],
-      });
+      (manager as any).userSockets.set('user-1', new Set(['sock-1']));
       expect(manager.isUserInConversationRoom('user-1', 'conv-1')).toBe(false);
+    });
+
+    it('isUserInConversationRoom returns true when ANY device is in the room (multi-device)', () => {
+      // The latest-promoted socket (sock-web) is NOT in the room, but the phone is.
+      ioState.sockets.sockets.set('sock-phone', { rooms: new Set(['conversation:conv-1']) });
+      ioState.sockets.sockets.set('sock-web', { rooms: new Set(['conversation:other']) });
+      (manager as any).userSockets.set('user-1', new Set(['sock-phone', 'sock-web']));
+      (manager as any).connectedUsers.set('user-1', {
+        id: 'user-1', socketId: 'sock-web', isAnonymous: false, language: 'fr', resolvedLanguages: [],
+      });
+      expect(manager.isUserInConversationRoom('user-1', 'conv-1')).toBe(true);
     });
 
     it('disconnectUser returns false for unknown user', () => {
@@ -702,20 +707,30 @@ describe('MeeshySocketIOManager', () => {
     });
 
     it('disconnectUser returns false when socket not found', () => {
-      (manager as any).connectedUsers.set('user-1', {
-        id: 'user-1', socketId: 'sock-missing', isAnonymous: false, language: 'fr', resolvedLanguages: [],
-      });
+      (manager as any).userSockets.set('user-1', new Set(['sock-missing']));
       expect(manager.disconnectUser('user-1')).toBe(false);
     });
 
     it('disconnectUser calls socket.disconnect and returns true', () => {
       const fakeSocket = { disconnect: jest.fn() };
       ioState.sockets.sockets.set('sock-1', fakeSocket);
-      (manager as any).connectedUsers.set('user-1', {
-        id: 'user-1', socketId: 'sock-1', isAnonymous: false, language: 'fr', resolvedLanguages: [],
-      });
+      (manager as any).userSockets.set('user-1', new Set(['sock-1']));
       expect(manager.disconnectUser('user-1')).toBe(true);
       expect(fakeSocket.disconnect).toHaveBeenCalledWith(true);
+    });
+
+    it('disconnectUser closes EVERY device of a multi-device user (force-logout)', () => {
+      const phone = { disconnect: jest.fn() };
+      const web = { disconnect: jest.fn() };
+      ioState.sockets.sockets.set('sock-phone', phone);
+      ioState.sockets.sockets.set('sock-web', web);
+      (manager as any).userSockets.set('user-1', new Set(['sock-phone', 'sock-web']));
+      (manager as any).connectedUsers.set('user-1', {
+        id: 'user-1', socketId: 'sock-web', isAnonymous: false, language: 'fr', resolvedLanguages: [],
+      });
+      expect(manager.disconnectUser('user-1')).toBe(true);
+      expect(phone.disconnect).toHaveBeenCalledWith(true);
+      expect(web.disconnect).toHaveBeenCalledWith(true);
     });
 
     it('sendToUser returns false for unknown user', () => {
@@ -725,12 +740,22 @@ describe('MeeshySocketIOManager', () => {
     it('sendToUser emits event to socket and returns true', () => {
       const fakeSocket = { emit: jest.fn() };
       ioState.sockets.sockets.set('sock-1', fakeSocket);
-      (manager as any).connectedUsers.set('user-1', {
-        id: 'user-1', socketId: 'sock-1', isAnonymous: false, language: 'fr', resolvedLanguages: [],
-      });
+      (manager as any).userSockets.set('user-1', new Set(['sock-1']));
       const result = manager.sendToUser('user-1', SERVER_EVENTS.MESSAGE_NEW as any, { id: 'test' } as any);
       expect(result).toBe(true);
       expect(fakeSocket.emit).toHaveBeenCalledWith(SERVER_EVENTS.MESSAGE_NEW, { id: 'test' });
+    });
+
+    it('sendToUser emits to EVERY device of a multi-device user', () => {
+      const phone = { emit: jest.fn() };
+      const web = { emit: jest.fn() };
+      ioState.sockets.sockets.set('sock-phone', phone);
+      ioState.sockets.sockets.set('sock-web', web);
+      (manager as any).userSockets.set('user-1', new Set(['sock-phone', 'sock-web']));
+      const result = manager.sendToUser('user-1', SERVER_EVENTS.MESSAGE_NEW as any, { id: 'test' } as any);
+      expect(result).toBe(true);
+      expect(phone.emit).toHaveBeenCalledWith(SERVER_EVENTS.MESSAGE_NEW, { id: 'test' });
+      expect(web.emit).toHaveBeenCalledWith(SERVER_EVENTS.MESSAGE_NEW, { id: 'test' });
     });
 
     it('broadcast emits to all connected sockets', () => {
@@ -2985,7 +3010,8 @@ describe('MeeshySocketIOManager', () => {
   // -------------------------------------------------------------------------
 
   describe('sendToUser - edge cases', () => {
-    it('returns false when connectedUser exists but socket is missing from sockets map', () => {
+    it('returns false when a socket is tracked but missing from the sockets map', () => {
+      (manager as any).userSockets.set('user-no-socket', new Set(['missing-sock']));
       (manager as any).connectedUsers.set('user-no-socket', {
         id: 'user-no-socket', socketId: 'missing-sock', isAnonymous: false, language: 'fr', resolvedLanguages: [],
       });
