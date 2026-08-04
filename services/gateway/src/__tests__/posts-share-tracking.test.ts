@@ -213,7 +213,10 @@ describe('PostService.deletePost — TrackingLink invalidation', () => {
   it('soft-deletes the post AND deactivates its tracking links', async () => {
     prisma.post.findFirst.mockResolvedValueOnce({ id: POST_ID, authorId: USER_ID });
     prisma.post.update.mockResolvedValueOnce({ id: POST_ID } as any);
-    await service.deletePost(POST_ID, USER_ID);
+    // L'acteur EST l'auteur ici : le rôle n'ouvre aucun droit supplémentaire,
+    // il est passé parce que la signature l'exige depuis l'ajout du droit de
+    // modération.
+    await service.deletePost(POST_ID, USER_ID, { actorRole: 'USER' });
     expect(prisma.trackingLink.updateMany).toHaveBeenCalledTimes(1);
     const arg = prisma.trackingLink.updateMany.mock.calls[0][0] as any;
     expect(arg.where).toMatchObject({ targetId: POST_ID });
@@ -222,7 +225,7 @@ describe('PostService.deletePost — TrackingLink invalidation', () => {
 
   it('returns null (no link work) when the post does not exist', async () => {
     prisma.post.findFirst.mockResolvedValueOnce(null);
-    const res = await service.deletePost(POST_ID, USER_ID);
+    const res = await service.deletePost(POST_ID, USER_ID, { actorRole: 'USER' });
     expect(res).toBeNull();
     expect(prisma.trackingLink.updateMany).not.toHaveBeenCalled();
   });

@@ -390,7 +390,7 @@ export function registerCoreRoutes(
     }
   });
 
-  // DELETE /posts/:postId — Soft delete (author only)
+  // DELETE /posts/:postId — Soft delete (auteur, ou modérateur et plus avec audit)
   fastify.delete('/posts/:postId', {
     preValidation: [requiredAuth],
   }, async (request: FastifyRequest<{ Params: PostParams }>, reply: FastifyReply) => {
@@ -401,7 +401,9 @@ export function registerCoreRoutes(
       }
 
       const { postId } = request.params;
-      const result = await postService.deletePost(postId, authContext.registeredUser.id);
+      const result = await postService.deletePost(postId, authContext.registeredUser.id, {
+        actorRole: authContext.registeredUser.role,
+      });
       if (!result) {
         return sendNotFound(reply, 'Post not found', { code: 'POST_NOT_FOUND' });
       }
