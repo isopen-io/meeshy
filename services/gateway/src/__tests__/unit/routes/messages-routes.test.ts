@@ -1089,6 +1089,23 @@ describe('POST /conversations/:id/mark-read', () => {
     expect(mockSendSuccess).toHaveBeenCalledWith(reply, { markedCount: 0 });
   });
 
+  // Cascade notifications : le raccourci « 0 non-lu → ne rien faire » ne doit
+  // PAS sauter le marquage des notifications de la conversation — une réaction
+  // ou une mention arrivée sur un message déjà lu a créé une notification alors
+  // que le compteur de messages non lus est resté à 0.
+  it('marks conversation notifications as read even on the unreadCount===0 shortcut', async () => {
+    mockGetUnreadCount.mockResolvedValue(0);
+    const markConvNotifs = jest.fn<any>().mockResolvedValue(1);
+    fastify.notificationService = { markConversationNotificationsAsRead: markConvNotifs };
+    const reply = makeReply();
+
+    await getHandler_()(makeRequest(), reply);
+    await new Promise((resolve) => setImmediate(resolve));
+
+    expect(markConvNotifs).toHaveBeenCalledWith(USER_ID, 'resolved-conv-id');
+    expect(mockSendSuccess).toHaveBeenCalledWith(reply, { markedCount: 0 });
+  });
+
   it('marks messages as read and broadcasts when unreadCount > 0', async () => {
     mockGetUnreadCount.mockResolvedValue(3);
     const reply = makeReply();
@@ -3256,25 +3273,30 @@ describe('GET /conversations/:id/messages/search — extra branch coverage', () 
 describe('broadcastReadStatus — CONVERSATION_UNREAD_UPDATED badge reset', () => {
   const getMarkReadHandler = () => fastify._routes['POST']['/conversations/:id/mark-read'];
 
-  it('emits CONVERSATION_UNREAD_UPDATED with unreadCount=0 to the reading user room after mark-read', async () => {
+  // Le badge reset porte le RESTE RÉEL recompté après marquage — jamais un 0
+  // codé en dur : en lecture exacte/partielle, le curseur n'avance que sur le
+  // préfixe contigu réellement affiché, des messages restent légitimement non
+  // lus. Un 0 en dur viderait à tort le badge sur TOUS les appareils du lecteur.
+  it('emits CONVERSATION_UNREAD_UPDATED with the recomputed remaining unread after mark-read', async () => {
     mockShouldShowReadReceipts.mockResolvedValue(true);
     // No other participants — avoids chaining issue so READ_STATUS_UPDATED also fires cleanly.
     prisma.participant.findMany.mockResolvedValue([]);
-    mockGetUnreadCount.mockResolvedValue(3);
+    // 1er appel = garde pré-marquage (3 non-lus), 2e = recompte post-marquage (1 restant).
+    mockGetUnreadCount.mockResolvedValueOnce(3).mockResolvedValueOnce(1);
 
     await getMarkReadHandler()(makeRequest(), makeReply());
 
     expect(fastify._mockTo).toHaveBeenCalledWith(`user:${USER_ID}`);
     expect(fastify._mockEmit).toHaveBeenCalledWith('conversation:unread-updated', {
       conversationId: 'resolved-conv-id',
-      unreadCount: 0,
+      unreadCount: 1,
     });
   });
 
   it('emits CONVERSATION_UNREAD_UPDATED even when showReadReceipts=false (badge reset is not a peer disclosure)', async () => {
     mockShouldShowReadReceipts.mockResolvedValue(false);
     prisma.participant.findMany.mockResolvedValue([]);
-    mockGetUnreadCount.mockResolvedValue(3);
+    mockGetUnreadCount.mockResolvedValueOnce(3).mockResolvedValueOnce(0);
 
     await getMarkReadHandler()(makeRequest(), makeReply());
 

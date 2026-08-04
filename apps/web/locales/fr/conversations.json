@@ -713,7 +713,8 @@
       "writeMessage": "Écrivez votre message…",
       "file": "Fichier",
       "document": "Document"
-    }
+    },
+    "newMessagesWhileAway": "nouveaux messages"
   },
   "bubbleStream": {
     "messageSentSuccessfully": "Message envoyé avec succès",

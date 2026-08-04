@@ -747,6 +747,13 @@ export class MessageReadStatusService {
     // TTL and silently drop the read receipt.
     let dedupKey: string | undefined;
     const exactMessageIds = options?.messageIds;
+    // La cascade « conversation lue → notifications lues » est INDÉPENDANTE de
+    // l'avancement du curseur : elle part avant tous les early-returns
+    // (conversation vide, dédup, receipt périmé). Sinon une réaction/mention
+    // arrivée sur un message déjà lu laisse sa notification non lue à vie — le
+    // curseur ne bougeant plus, l'ancien emplacement (fin de méthode) n'était
+    // plus jamais atteint.
+    this.syncConversationNotifications(participantId, conversationId);
     try {
       // Resolve the effective target message id BEFORE the dedup gate. When the
       // caller omits latestMessageId, the dedup key must reflect the ACTUAL
@@ -948,30 +955,6 @@ export class MessageReadStatusService {
         `[MessageReadStatus] Participant ${participantId} marked conversation ${conversationId} as read`
       );
 
-      // Synchroniser avec les notifications (requires userId from participant)
-      try {
-        const participant = await this.prisma.participant.findUnique({
-          where: { id: participantId },
-          select: { userId: true }
-        });
-
-        if (participant?.userId) {
-          const { NotificationService } = await import(
-            "./notifications/NotificationService"
-          );
-          const notificationService = new NotificationService(this.prisma);
-          await notificationService.markConversationNotificationsAsRead(
-            participant.userId,
-            conversationId
-          );
-        }
-      } catch (notifError) {
-        logger.warn(
-          "[MessageReadStatus] Error syncing notifications:",
-          notifError
-        );
-      }
-
       return frozenCount;
     } catch (error) {
       // Release the dedup key so a retry within the TTL is not swallowed by the
@@ -986,6 +969,62 @@ export class MessageReadStatusService {
       );
       throw error;
     }
+  }
+
+  /**
+   * Cascade « conversation lue → notifications de la conversation lues ».
+   *
+   * Fire-and-forget avec sa propre clé de dédup (même TTL que les receipts) :
+   * les flushs rapprochés du client (IntersectionObserver web ~1/s) ne
+   * déclenchent qu'un update Mongo par fenêtre, tout en restant indépendants
+   * des gardes du curseur de lecture. Utilise le NotificationService PARTAGÉ
+   * (câblé `io`) quand il est enregistré, pour que `notification:counts`
+   * atteigne réellement les clients — le repli local reste correct pour les
+   * écritures DB.
+   */
+  private syncConversationNotifications(
+    participantId: string,
+    conversationId: string
+  ): void {
+    const dedupKey = `${participantId}:${conversationId}:notif-sync`;
+    const now = Date.now();
+    const lastCall = MessageReadStatusService.recentActionCache.get(dedupKey);
+    if (lastCall && now - lastCall < MessageReadStatusService.DEDUP_TTL_MS) {
+      return;
+    }
+    MessageReadStatusService.recentActionCache.set(dedupKey, now);
+
+    void (async () => {
+      try {
+        const participant = await this.prisma.participant.findUnique({
+          where: { id: participantId },
+          select: { userId: true },
+        });
+        if (!participant?.userId) return;
+
+        const { getSharedNotificationService } = await import(
+          "./notifications/notification-service-registry"
+        );
+        let notificationService = getSharedNotificationService();
+        if (!notificationService) {
+          const { NotificationService } = await import(
+            "./notifications/NotificationService"
+          );
+          notificationService = new NotificationService(this.prisma);
+        }
+        await notificationService.markConversationNotificationsAsRead(
+          participant.userId,
+          conversationId
+        );
+      } catch (notifError) {
+        // Best-effort : libérer la clé pour qu'un rappel dans le TTL retente.
+        MessageReadStatusService.recentActionCache.delete(dedupKey);
+        logger.warn(
+          "[MessageReadStatus] Error syncing notifications:",
+          notifError
+        );
+      }
+    })();
   }
 
   /**
