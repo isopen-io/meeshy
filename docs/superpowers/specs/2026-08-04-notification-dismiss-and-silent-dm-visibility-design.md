@@ -53,26 +53,29 @@ Le schema Prisma `Conversation` (`packages/shared/prisma/schema.prisma:313-353`)
 
 ### Modèle de données
 
-Deux champs nullables ajoutés à `Conversation`, aux côtés de `closedAt`/`closedBy` (`schema.prisma:328-329`, même style de paire déjà en usage dans ce modèle) :
+**Correction post-revue** : la première version de ce spec proposait un champ `createdBy String?` sur `Conversation`. C'est redondant — `Participant.role` (`schema.prisma:502`, valeurs `admin`/`moderator`/`member`... et `creator`) porte déjà ce rôle, posé à la création (`core.ts:1014`, `role: 'creator'`) et utilisé comme source de vérité du créateur dans tout le reste du codebase (`delete-for-me.ts:48`, `leave.ts:47`, `sharing.ts:327`, `participants.ts:492,669`, `links/creation.ts:170`). Un `createdBy` séparé aurait en plus divergé silencieusement du vrai créateur : `delete-for-me.ts:47-74` et `leave.ts` **transfèrent déjà** le rôle `creator` à un autre participant actif quand le créateur d'origine quitte/supprime pour lui-même — y compris sans restriction de type, donc applicable à un DM. `conversationListParticipantSelect` (`core.ts:77-90`) charge déjà `role: true` et `userId: true` pour chaque participant : aucune requête supplémentaire n'est nécessaire pour `GET /conversations`.
+
+Un seul champ nullable ajouté à `Conversation`, aux côtés de `closedAt`/`closedBy` (`schema.prisma:328-329`, même style de paire déjà en usage dans ce modèle) :
 
 ```prisma
-createdBy     String?   @db.ObjectId  // id du créateur ; null pour les conversations existantes avant migration
-firstMessageAt DateTime?              // null tant qu'aucun message n'a été envoyé ; source de vérité unique
+firstMessageAt DateTime?   // null tant qu'aucun message n'a été envoyé ; source de vérité unique
 ```
 
-Pas de booléen dupliqué (`isEmpty`/`hasMessages`) à côté de `firstMessageAt`, conformément à la convention du projet (`services/gateway/CLAUDE.md` : « No redundant boolean + timestamp pairs »).
+Pas de booléen dupliqué (`isEmpty`/`hasMessages`) à côté, conformément à la convention du projet (`services/gateway/CLAUDE.md` : « No redundant boolean + timestamp pairs »).
 
-**Migration** : les conversations existantes reçoivent `createdBy = null`, `firstMessageAt = null`. Une conversation `direct` déjà vide en base (aucun message jamais envoyé) redeviendrait donc invisible pour ses deux participants après migration — cas marginal à vérifier en base avant merge (le produit est en usage actif, ce cas est probablement quasi inexistant, mais doit être confirmé par une requête de comptage plutôt que supposé).
+**Migration** : les conversations existantes reçoivent `firstMessageAt = null` (pas de backfill actif, voir Hors périmètre). Contrairement à la version initiale de ce spec, l'identité du créateur n'a pas besoin d'être reconstituée : `Participant.role` est un champ déjà peuplé historiquement, aucune conversation existante ne perd cette information. Seul un DM déjà vide en base (aucun message jamais envoyé) redeviendrait invisible pour le participant non-créateur après migration — cas marginal à vérifier en base avant merge par une requête de comptage plutôt que supposé, mais qui n'affecte plus le créateur légitime (qui garde sa visibilité grâce à `role`, sans dépendre de la migration).
 
 ### Flux de création (direct uniquement — groupes inchangés)
 
-- `prisma.conversation.create` persiste `createdBy: userId`, `firstMessageAt: null` pour **toute** conversation (utile au-delà de ce cas d'usage). Le filtre d'exclusion décrit ci-dessous ne s'applique en revanche que lorsque `type === 'direct'` — un groupe créé sans message reste visible immédiatement pour tous ses membres, comportement inchangé.
-- `CONVERSATION_NEW` (`core.ts:1128-1133`) n'est émis **qu'au créateur A** pour un direct sans message — pas à B.
+- `prisma.conversation.create` persiste `firstMessageAt: null` pour **toute** conversation (utile au-delà de ce cas d'usage). Le filtre d'exclusion décrit ci-dessous ne s'applique en revanche que lorsque `type === 'direct'` — un groupe créé sans message reste visible immédiatement pour tous ses membres, comportement inchangé.
+- `CONVERSATION_NEW` (`core.ts:1128-1133`) n'est émis **qu'au créateur A** pour un direct sans message — pas à B. Le créateur est déjà connu sans requête supplémentaire : c'est `userId`, la variable qui reçoit `role: 'creator'` quelques lignes plus haut (`core.ts:1014`).
 - `createConversationInviteNotification` **n'est pas appelée** pour une conversation `direct` fraîchement créée. Les conversations `group`/`broadcast`/etc. gardent le comportement actuel sans changement : `new_conversation_group`, `added_to_conversation` continuent d'être notifiées immédiatement à la création, cette catégorie de notification garde son sens (rejoindre un groupe est un événement complet en soi, contrairement à un DM vide).
 
 ### Flux `GET /conversations`
 
-Ajout d'une clause d'exclusion dans `whereClause` (`core.ts:316-328`) : une conversation `direct` avec `firstMessageAt = null` n'apparaît dans les résultats que si `createdBy === userId` (l'appelant courant). Aucun changement pour les conversations avec au moins un message, ni pour les types non-direct.
+Ajout d'une clause d'exclusion dans `whereClause` (`core.ts:316-328`) : une conversation `direct` avec `firstMessageAt = null` n'apparaît dans les résultats que si le participant courant a `role: 'creator'` — condition ajoutée à l'intérieur du `participants.some` déjà présent (même relation, pas de nouvelle jointure), aux côtés du filtre `isActive`/`deletedForMe` existant. Aucun changement pour les conversations avec au moins un message, ni pour les types non-direct.
+
+**Interaction avec le transfert de propriété existant** (`delete-for-me.ts:47-74`, `leave.ts`) : si A quitte/supprime pour lui-même un DM encore vide avant tout message, `role: 'creator'` est automatiquement transféré à B par ce mécanisme préexistant — inchangé par ce spec. B verra alors la conversation apparaître à son prochain `GET /conversations`, puisque le filtre relit `role` en direct plutôt que de dépendre d'un champ figé à la création. Comportement dérivé gratuitement de la source de vérité unique, pas un cas spécial à coder.
 
 ### Flux premier message envoyé
 
@@ -86,7 +89,8 @@ Comportement à ajouter :
 
 ### Approches écartées
 
-- **Cacher aussi côté créateur** (aucun champ `createdBy`, un DM n'apparaît pour personne avant le premier message) : plus simple, aucune migration — mais contredit l'exigence explicite que A voie sa conversation vide.
+- **Cacher aussi côté créateur** (un DM n'apparaît pour personne avant le premier message) : plus simple, aucune notion de créateur à consulter — mais contredit l'exigence explicite que A voie sa conversation vide.
+- **Ajouter un champ `createdBy` dédié sur `Conversation`** : première version de ce spec, écartée en revue — redondant avec `Participant.role === 'creator'` déjà existant et déjà source de vérité ailleurs dans le codebase, avec un risque réel de désynchronisation silencieuse au transfert de propriété (voir Modèle de données).
 - **Détecter le « premier message » par une requête `COUNT` par envoi** plutôt que lire `firstMessageAt` : évite d'ajouter un champ, mais ajoute une requête sur **chaque** message envoyé, pour toujours, contre une simple lecture de champ déjà en mémoire au moment du handler — moins bon compromis pour une opération qui a lieu à très haute fréquence (le produit vise 100k+ messages/s).
 
 ## Tests (TDD)
@@ -97,9 +101,10 @@ Comportement à ajouter :
 
 **Problème 2 (gateway)** :
 - `POST /conversations` (direct, 0 message) : `CONVERSATION_NEW` non émis à B, `createConversationInviteNotification` non appelée pour B ; toujours émis/appelée pour A. Comportement `group`/`broadcast` inchangé (test de non-régression explicite).
-- `GET /conversations` : un DM vide n'apparaît que pour `createdBy`, pas pour l'autre participant ; un DM avec au moins un message apparaît pour les deux, quel que soit `createdBy`.
+- `GET /conversations` : un DM vide n'apparaît que pour le participant dont `role === 'creator'`, pas pour l'autre ; un DM avec au moins un message apparaît pour les deux, quel que soit leur rôle.
+- Transfert de propriété sur un DM vide (`delete-for-me`/`leave` appelé par le créateur avant tout message) : le nouveau porteur de `role === 'creator'` voit la conversation apparaître à son prochain `GET /conversations`, sans code spécifique à ce spec.
 - Envoi du premier message dans un DM créé silencieusement : `firstMessageAt` passe de `null` à non-null exactement une fois (test de concurrence : deux envois quasi simultanés ne doivent flip qu'une fois) ; `CONVERSATION_NEW` émis à B à ce moment ; B ne reçoit **pas** de notification `new_conversation_direct`, seulement la notification de message standard.
-- Migration Prisma : conversations pré-existantes avec `createdBy = null` — vérifier le comportement documenté (invisibles pour tous si `firstMessageAt = null`, comportement normal sinon).
+- Migration Prisma : conversations pré-existantes avec `firstMessageAt = null` — un DM déjà vide en base reste visible pour le participant `role === 'creator'` (champ historique inchangé par la migration), invisible pour l'autre.
 
 ## Hors périmètre
 
