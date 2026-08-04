@@ -2276,14 +2276,22 @@ export class MeeshySocketIOManager {
 
 
   /**
-   * Vérifie si un utilisateur est dans une salle de conversation
+   * Vérifie si un utilisateur est dans une salle de conversation.
+   *
+   * Multi-device : un utilisateur peut avoir plusieurs sockets (téléphone + web).
+   * On considère qu'il est dans la salle si N'IMPORTE LAQUELLE de ses sessions
+   * y est — `connectedUsers[...].socketId` ne pointe que sur la dernière session
+   * promue et donnerait un faux négatif quand la conversation est ouverte sur un
+   * autre appareil (ex. suppression de push mal déclenchée). `userSockets` est la
+   * source de vérité multi-device.
    */
   isUserInConversationRoom(userId: string, conversationId: string): boolean {
-    const user = this.connectedUsers.get(userId);
-    if (user) {
-      const socket = this.io.sockets.sockets.get(user.socketId);
-      if (socket) {
-        return socket.rooms.has(`conversation:${conversationId}`);
+    const socketIds = this.userSockets.get(userId);
+    if (!socketIds) return false;
+    const room = `conversation:${conversationId}`;
+    for (const socketId of socketIds) {
+      if (this.io.sockets.sockets.get(socketId)?.rooms.has(room)) {
+        return true;
       }
     }
     return false;
@@ -2291,37 +2299,54 @@ export class MeeshySocketIOManager {
 
 
   /**
-   * Déconnecte un utilisateur spécifique
+   * Déconnecte un utilisateur spécifique.
+   *
+   * Multi-device : ferme TOUTES les sessions de l'utilisateur (téléphone + web).
+   * L'ancienne implémentation ne fermait que `connectedUsers[...].socketId` (la
+   * dernière session promue) ; la déconnexion de ce socket promouvait alors une
+   * autre session dans `connectedUsers`, laissant l'utilisateur en ligne — un
+   * force-logout / bannissement était contournable pour toute session multiple.
+   * On itère sur un snapshot car `disconnect(true)` déclenche `handleDisconnection`
+   * qui mute `userSockets` pendant l'itération.
    */
   disconnectUser(userId: string): boolean {
-    const user = this.connectedUsers.get(userId);
-    if (user) {
-      const socket = this.io.sockets.sockets.get(user.socketId);
+    const socketIds = this.userSockets.get(userId);
+    if (!socketIds || socketIds.size === 0) return false;
+    let disconnected = false;
+    for (const socketId of [...socketIds]) {
+      const socket = this.io.sockets.sockets.get(socketId);
       if (socket) {
         socket.disconnect(true);
-        return true;
+        disconnected = true;
       }
     }
-    return false;
+    return disconnected;
   }
 
   /**
-   * Envoie une notification à un utilisateur spécifique
+   * Envoie une notification à un utilisateur spécifique.
+   *
+   * Multi-device : émet sur TOUTES les sessions de l'utilisateur. L'ancienne
+   * implémentation n'émettait que sur `connectedUsers[...].socketId`, perdant
+   * silencieusement l'événement sur les autres appareils. Retourne `true` dès
+   * qu'au moins un socket a reçu l'événement.
    */
   sendToUser<K extends keyof ServerToClientEvents>(
-    userId: string, 
-    event: K, 
+    userId: string,
+    event: K,
     ...args: Parameters<ServerToClientEvents[K]>
   ): boolean {
-    const user = this.connectedUsers.get(userId);
-    if (user) {
-      const socket = this.io.sockets.sockets.get(user.socketId);
+    const socketIds = this.userSockets.get(userId);
+    if (!socketIds || socketIds.size === 0) return false;
+    let sent = false;
+    for (const socketId of socketIds) {
+      const socket = this.io.sockets.sockets.get(socketId);
       if (socket) {
         socket.emit(event, ...args);
-        return true;
+        sent = true;
       }
     }
-    return false;
+    return sent;
   }
 
   /**
