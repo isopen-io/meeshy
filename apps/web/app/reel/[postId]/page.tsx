@@ -2,6 +2,9 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
+import { useQueryClient } from '@tanstack/react-query';
+import { useAuthStore } from '@/stores/auth-store';
+import { markScopeNotificationsRead } from '@/lib/notifications/notification-read-sync';
 import { useToast } from '@/components/v2';
 import { ReelPlayer } from '@/components/feed/ReelPlayer';
 import { usePostQuery } from '@/hooks/queries/use-post-query';
@@ -101,6 +104,18 @@ export default function ReelPage() {
   useEffect(() => {
     if (currentId) recordImpression(currentId);
   }, [currentId, recordImpression]);
+
+  // Consommer les notifications du réel affiché (nouveau réel, commentaires,
+  // réactions — portée serveur `context.postId`). Le viewer de réels
+  // n'émettait AUCUN marquage : les notifications de réels restaient non lues
+  // à vie. Miroir du `onPostOpened` iOS, coalescé par le module.
+  const queryClient = useQueryClient();
+  const { isAuthenticated } = useAuthStore();
+  useEffect(() => {
+    if (currentId && isAuthenticated) {
+      markScopeNotificationsRead(queryClient, { kind: 'post', postId: currentId });
+    }
+  }, [currentId, isAuthenticated, queryClient]);
 
   const close = useCallback(() => {
     if (window.history.length > 1) router.back();

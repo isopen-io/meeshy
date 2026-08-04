@@ -205,6 +205,22 @@ public final class NotificationToastManager: ObservableObject {
         markConversationNotificationsRead(conversationId)
     }
 
+    /// Variante de `onConversationOpened` pour un marquage SANS ouverture : la
+    /// quick-action « Marquer lu » d'une bannière push et l'action du widget
+    /// consomment la conversation sans jamais l'afficher. Fait le même triplet
+    /// (publisher in-app + patch du cache GRDB + marquage serveur coalescé)
+    /// mais ne déclare PAS la conversation active — l'app peut être en
+    /// arrière-plan, aucune surface n'est ouverte.
+    public func onConversationMarkedRead(_ conversationId: String) {
+        if let toast = currentToast, toast.conversationId == conversationId {
+            dismissToast()
+        }
+
+        conversationNotificationsRead.send(conversationId)
+        applyReadToCache(.conversation(id: conversationId))
+        markConversationNotificationsRead(conversationId)
+    }
+
     /// Pendant de `onConversationOpened` pour un contenu social : story, statut
     /// ou post de feed. Le contenu étant consommé, ses notifications (« X a
     /// publié une story », commentaires et réactions dessus) ne doivent plus
