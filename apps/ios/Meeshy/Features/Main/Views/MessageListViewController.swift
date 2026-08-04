@@ -278,6 +278,14 @@ final class MessageListViewController: UIViewController {
         // emission is missed and the list would render empty even though
         // `store.messages` is non-empty.
         applySnapshot(animated: false)
+        // `onNewMessagesBadge` only fires on an INCREASE or on the two
+        // explicit scroll-to-bottom reset paths — never on "nothing changed,
+        // still at rest". A stale nonzero value already held by the SwiftUI
+        // `@State` (from before this fresh controller existed) is therefore
+        // never corrected on a settled initial load. `pendingUnreadCount` is
+        // guaranteed 0 here (first `applySnapshot` never increments it), so
+        // this force-syncs the badge to the truth.
+        onNewMessagesBadge?(pendingUnreadCount)
     }
 
     private func configureStickyDayOverlay() {

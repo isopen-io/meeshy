@@ -419,9 +419,22 @@ public class AudioPlaybackManager: NSObject, ObservableObject {
 
     /// Tracks shorter than this are never resumed (a 1s voice note is replayed
     /// whole). Also gates `persistPosition` so we don't store noise.
-    private static let minResumableDuration: TimeInterval = 2.0
+    nonisolated private static let minResumableDuration: TimeInterval = 2.0
     /// Dead-zone at both ends of the track, in seconds.
-    private static let resumeEdgeGuard: TimeInterval = 1.0
+    nonisolated private static let resumeEdgeGuard: TimeInterval = 1.0
+
+    /// Whether `saved` is a position playback will actually honor on the next
+    /// play. Single source of truth for the dead-zone rule: the seek path
+    /// (`applyResumePositionIfAvailable`), the store path (`saveResumePosition`)
+    /// and the bubble's elapsed timecode all ask this, so the UI can never
+    /// advertise a resume point the engine would silently ignore.
+    nonisolated public static func isResumable(
+        _ saved: TimeInterval, totalDuration: TimeInterval
+    ) -> Bool {
+        totalDuration >= minResumableDuration
+            && saved > resumeEdgeGuard
+            && saved < totalDuration - resumeEdgeGuard
+    }
 
     /// Seeks to the saved resume position (if any) BEFORE playback starts.
     /// Called from `playData(_:)` once `duration` is known and the player is
@@ -429,10 +442,8 @@ public class AudioPlaybackManager: NSObject, ObservableObject {
     private func applyResumePositionIfAvailable() {
         guard let attId = attachmentId,
               let player,
-              duration >= Self.minResumableDuration,
               let saved = AudioPlaybackPositionStore.shared.position(for: attId),
-              saved > Self.resumeEdgeGuard,
-              saved < duration - Self.resumeEdgeGuard else { return }
+              Self.isResumable(saved, totalDuration: duration) else { return }
         player.currentTime = saved
         currentTime = saved
         progress = duration > 0 ? saved / duration : 0
@@ -456,7 +467,7 @@ public class AudioPlaybackManager: NSObject, ObservableObject {
     /// meaningful to resume). Short tracks are never stored.
     private func saveResumePosition(_ elapsed: TimeInterval, forAttachment id: String, totalDuration: TimeInterval) {
         guard totalDuration >= Self.minResumableDuration else { return }
-        if elapsed > Self.resumeEdgeGuard && elapsed < totalDuration - Self.resumeEdgeGuard {
+        if Self.isResumable(elapsed, totalDuration: totalDuration) {
             AudioPlaybackPositionStore.shared.save(elapsed, for: id)
         } else {
             AudioPlaybackPositionStore.shared.clear(for: id)
@@ -595,6 +606,22 @@ extension AudioPlayerView {
     /// decimal (1000-based) one — despite a comment claiming they matched.
     nonisolated public static func formatBytes(_ bytes: Int64) -> String {
         formatMediaFileSize(bytes)
+    }
+}
+
+/// The progress an audio bubble renders, resolved once and shared by the
+/// waveform tint, the percentage chip and the elapsed timecode.
+/// `isLive` distinguishes a playing engine (full accent) from a persisted
+/// at-rest position (attenuated accent).
+nonisolated public struct AudioProgressDisplay: Sendable, Equatable {
+    public let fraction: Double
+    public let elapsed: TimeInterval
+    public let isLive: Bool
+
+    public init(fraction: Double, elapsed: TimeInterval, isLive: Bool) {
+        self.fraction = fraction
+        self.elapsed = elapsed
+        self.isLive = isLive
     }
 }
 
@@ -1553,6 +1580,61 @@ public struct AudioPlayerView: View {
         MediaConsumptionStore.shared.fraction(for: attachment.id) ?? 0
     }
 
+    /// The stored resume point for this attachment, but ONLY when playback
+    /// would honor it — see `AudioPlaybackManager.isResumable`. Filtering here
+    /// keeps the timecode from advertising a position the engine ignores.
+    private var eligibleResumePosition: TimeInterval? {
+        guard let saved = AudioPlaybackPositionStore.shared.position(for: attachment.id),
+              AudioPlaybackManager.isResumable(saved, totalDuration: estimatedDuration)
+        else { return nil }
+        return saved
+    }
+
+    private var displayedProgress: AudioProgressDisplay {
+        Self.progressDisplay(
+            liveProgress: player.progress,
+            liveCurrentTime: player.currentTime,
+            restingProgress: restingProgress,
+            resumePosition: eligibleResumePosition,
+            totalDuration: estimatedDuration)
+    }
+
+    /// What the widget SHOWS for "how far along am I" — one resolution behind
+    /// the waveform tint, the percentage chip AND the elapsed timecode, so the
+    /// three can never contradict each other.
+    ///
+    /// While the engine plays, its own head wins: the timecode must track the
+    /// audio coming out of the speaker even if the user scrubbed backwards past
+    /// the monotonic consumption mark.
+    ///
+    /// At rest — a fresh launch, a bubble whose engine was never attached — the
+    /// two persisted facts answer two different questions and are kept apart:
+    /// `fraction` (waveform + chip) reports how much of the note has EVER been
+    /// consumed, while `elapsed` reports where the play button will START. They
+    /// coincide on a simple pause; they diverge when an already-finished note
+    /// is re-listened and paused mid-way (100 % consumed, resumes at 0:22).
+    nonisolated public static func progressDisplay(
+        liveProgress: Double,
+        liveCurrentTime: TimeInterval,
+        restingProgress: Double,
+        resumePosition: TimeInterval?,
+        totalDuration: TimeInterval
+    ) -> AudioProgressDisplay {
+        guard liveProgress <= 0 else {
+            return AudioProgressDisplay(
+                fraction: liveProgress, elapsed: liveCurrentTime, isLive: true)
+        }
+        let fraction = max(0, min(1, restingProgress))
+        guard totalDuration > 0 else {
+            return AudioProgressDisplay(fraction: fraction, elapsed: 0, isLive: false)
+        }
+        // Consumption is monotonic and sticky-complete; the resume point is the
+        // only value that predicts where the play button will start.
+        let elapsed = resumePosition.map { max(0, min(totalDuration, $0)) }
+            ?? fraction * totalDuration
+        return AudioProgressDisplay(fraction: fraction, elapsed: elapsed, isLive: false)
+    }
+
     /// Maps a touch / drag x-position within the waveform strip to a normalized
     /// seek fraction (0...1), clamped at both edges. Single source of truth for
     /// BOTH the tap-to-seek and the swipe-to-scrub gestures on `waveformProgress`
@@ -1576,9 +1658,8 @@ public struct AudioPlayerView: View {
             // Live playback (incl. a resumed position) drives the bars with the
             // full accent. At rest we fall back to the persisted consumption
             // fraction with an attenuated accent — discreet, per the Prisme.
-            let isLivePlayback = player.progress > 0
-            let shownProgress = isLivePlayback ? player.progress : restingProgress
-            let playedColor = isLivePlayback ? accent : accent.opacity(0.4)
+            let shownProgress = displayedProgress.fraction
+            let playedColor = displayedProgress.isLive ? accent : accent.opacity(0.4)
 
             HStack(spacing: 0) {
                 ForEach(0..<barCount, id: \.self) { i in
@@ -1637,7 +1718,7 @@ public struct AudioPlayerView: View {
     /// `rightChipsColumn` (capsules empilées à droite du widget).
     private var timeRow: some View {
         HStack(spacing: 0) {
-            Text(formatMediaDuration(player.currentTime))
+            Text(formatMediaDuration(displayedProgress.elapsed))
                 .font(.system(size: context.isCompact ? 9 : 10, weight: .semibold, design: .monospaced))
                 .foregroundColor(isDark ? .white.opacity(0.5) : .black.opacity(0.4))
             Spacer()
@@ -1686,7 +1767,7 @@ public struct AudioPlayerView: View {
     }
 
     private var percentageChip: some View {
-        let pct = Int(player.progress * 100)
+        let pct = Int(displayedProgress.fraction * 100)
         let isStarted = pct > 0
         let chipBg: Color = isStarted
             ? accent.opacity(0.85)

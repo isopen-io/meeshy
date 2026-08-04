@@ -729,7 +729,8 @@ struct AudioMediaView: View, Equatable {
                     message.content,
                     fontSize: 13,
                     color: isDark ? MeeshyColors.indigo400.opacity(0.5) : MeeshyColors.indigo500.opacity(0.4),
-                    mentionColor: MeeshyColors.indigo400,
+                    mentionColor: MeeshyColors.mentionColor(isDark: isDark),
+                    hashtagColor: MeeshyColors.hashtagColor(isDark: isDark),
                     accentColor: Color(hex: contactColor),
                     mentionDisplayNames: mentionDisplayNames.isEmpty ? nil : mentionDisplayNames
                 )
@@ -997,7 +998,8 @@ struct AudioMediaView: View, Equatable {
                 message.content,
                 fontSize: 14,
                 color: isDark ? Color.white.opacity(0.92) : MeeshyColors.indigo950.opacity(0.92),
-                mentionColor: MeeshyColors.indigo400,
+                mentionColor: MeeshyColors.mentionColor(isDark: isDark),
+                hashtagColor: MeeshyColors.hashtagColor(isDark: isDark),
                 accentColor: Color(hex: contactColor),
                 mentionDisplayNames: mentionDisplayNames.isEmpty ? nil : mentionDisplayNames
             )

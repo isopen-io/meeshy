@@ -833,6 +833,25 @@ struct ReelPageView: View {
         .accessibilityValue("\(count)")
     }
 
+    /// Légende du reel rendue par `MessageTextRenderer` pour teinter `@mention`
+    /// et `#hashtag`. Fond TOUJOURS sombre (vidéo plein écran) : on épingle les
+    /// variantes `isDark: true` plutôt que de suivre le thème de l'app — les
+    /// variantes light (indigo600/800) seraient illisibles sur la vidéo.
+    /// Les URLs restent blanches + soulignées (convention plein écran).
+    private var reelDescriptionText: some View {
+        MessageTextRenderer.render(
+            displayedDescription,
+            fontSize: 15,
+            color: .white,
+            mentionColor: MeeshyColors.mentionColor(isDark: true),
+            hashtagColor: MeeshyColors.hashtagColor(isDark: true),
+            accentColor: .white,
+            usesRelativeFont: true
+        )
+        .tint(.white)
+        .fixedSize(horizontal: false, vertical: true)
+    }
+
     private var infoOverlay: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 10) {
@@ -870,10 +889,7 @@ struct ReelPageView: View {
             if audioMedia == nil, !displayedDescription.isEmpty {
                 if descriptionExpanded {
                     ScrollView(.vertical, showsIndicators: true) {
-                        Text(displayedDescription)
-                            .font(.subheadline)
-                            .foregroundColor(.white)
-                            .fixedSize(horizontal: false, vertical: true)
+                        reelDescriptionText
                             .frame(maxWidth: .infinity, alignment: .leading)
                     }
                     .frame(maxHeight: 240)
@@ -881,11 +897,8 @@ struct ReelPageView: View {
                         withAnimation(.easeInOut(duration: 0.2)) { descriptionExpanded.toggle() }
                     }
                 } else {
-                    Text(displayedDescription)
-                        .font(.subheadline)
-                        .foregroundColor(.white)
+                    reelDescriptionText
                         .lineLimit(3)
-                        .fixedSize(horizontal: false, vertical: true)
                         .onTapGesture {
                             withAnimation(.easeInOut(duration: 0.2)) { descriptionExpanded.toggle() }
                         }

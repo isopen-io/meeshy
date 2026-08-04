@@ -321,7 +321,9 @@ public struct ImageFullscreen: View {
                             caption,
                             fontSize: 14,
                             color: .white,
-                            mentionColor: Color(hex: "818CF8"),
+                            // Visionneuse plein écran TOUJOURS sombre → variantes dark figées.
+                            mentionColor: MeeshyColors.mentionColor(isDark: true),
+                            hashtagColor: MeeshyColors.hashtagColor(isDark: true),
                             accentColor: Color(hex: accentColor),
                             mentionDisplayNames: mentionDisplayNames
                         )

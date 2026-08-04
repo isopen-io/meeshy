@@ -34,7 +34,7 @@ Diagnostic : 4 audits parallèles (web conversations, web notifications, gateway
 - [x] Build iOS OK (meeshy.sh, 90 s) + NotificationCoordinatorTests 35/35 sur simulateur
 
 ## Hors périmètre (documenté, non traité)
-C5 champ mort `ConversationReadCursor.unreadCount` + index ; C8 admin clear-all sans counts ; C9 friends.ts markRead artisanal ; C11 getUserNotifications mort ; C12 consolidation des 4 routes mark-read ; web : composants morts (NotificationBell, v2), routage push SW dupliqué, SW qui ne marque rien au tap ; iOS : T3 séparateur non implémenté (firstUnreadMessageId code mort), T6 previewMode marque lu, T7 warm-up DEBUG.
+C5 champ mort `ConversationReadCursor.unreadCount` + index ; C8 admin clear-all sans counts ; ~~C9 friends.ts markRead artisanal~~ (RÉSOLU 2026-08-04 : `respondFriendRequest` passe par `NotificationService.markFriendRequestNotificationsAsRead` — un seul update Mongo indexé filtré sur `context.friendRequestId` + émission `notification:counts` pour la sync cloche multi-appareils ; fin du `findMany` de toutes les non-lues + filtre mémoire + N updates sans émission) ; C11 getUserNotifications mort ; C12 consolidation des 4 routes mark-read ; web : composants morts (NotificationBell, v2), routage push SW dupliqué, SW qui ne marque rien au tap ; iOS : T3 séparateur non implémenté (firstUnreadMessageId code mort), T6 previewMode marque lu, T7 warm-up DEBUG.
 
 ## Review
 3 commits sur `fix/unread-read-sync` : 83b8424fc (gateway), acf9fadb6 (web), 3e341101c (iOS).
