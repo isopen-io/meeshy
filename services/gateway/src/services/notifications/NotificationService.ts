@@ -3867,7 +3867,7 @@ export class NotificationService {
    */
   private async markContextNotificationsAsRead(
     userId: string,
-    contextKey: 'conversationId' | 'postId',
+    contextKey: 'conversationId' | 'postId' | 'friendRequestId',
     contextValue: string
   ): Promise<number> {
     if (!/^[0-9a-f]{24}$/i.test(userId)) {
@@ -3930,6 +3930,22 @@ export class NotificationService {
    */
   async markPostNotificationsAsRead(userId: string, postId: string): Promise<number> {
     return this.markContextNotificationsAsRead(userId, 'postId', postId);
+  }
+
+  /**
+   * Marque comme lues toutes les notifications de l'utilisateur liées à une
+   * demande d'amitié (`context.friendRequestId`). Appelé quand l'utilisateur
+   * répond à la demande (accept/reject) — la notification « X vous a envoyé une
+   * demande d'amitié » ne doit plus rester non lue une fois consommée.
+   *
+   * Passe par la même route indexée que conversation/post (un seul update Mongo
+   * scopé userId) et émet `notification:counts` afin que la cloche des AUTRES
+   * appareils se mette à jour en temps réel — l'ancien chemin artisanal
+   * (findMany de toutes les non-lues + filtre mémoire + N updates) n'émettait
+   * rien et laissait le badge multi-appareils périmé.
+   */
+  async markFriendRequestNotificationsAsRead(userId: string, friendRequestId: string): Promise<number> {
+    return this.markContextNotificationsAsRead(userId, 'friendRequestId', friendRequestId);
   }
 
   /**

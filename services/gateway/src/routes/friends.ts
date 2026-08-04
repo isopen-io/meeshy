@@ -479,33 +479,20 @@ export async function friendRequestRoutes(fastify: FastifyInstance) {
         }),
       });
 
-      // Marquer les notifications de requete d'amitie comme lues
-      // Note: Filtre simplifié car Prisma MongoDB ne supporte pas les filtres JSON complexes
+      // Marquer les notifications liées à cette demande d'amitié comme lues.
+      // SSOT : on passe par le service (un seul update Mongo indexé filtré
+      // server-side sur context.friendRequestId + émission notification:counts
+      // pour la sync multi-appareils de la cloche). Le service avale ses propres
+      // erreurs (retourne 0) — l'échec du marquage ne bloque jamais la réponse.
       const notificationService = fastify.notificationService;
-      try {
-        const notifications = await fastify.prisma.notification.findMany({
-          where: {
-            userId: userId,
-            type: 'friend_request',
-            isRead: false,
-          }
-        });
-
-        // Filtrer côté application pour trouver celles liées à cette demande
-        const relevantNotifications = notifications.filter((n: any) =>
-          n.context?.friendRequestId === id
-        );
-
-        // Marquer comme lues
-        for (const notif of relevantNotifications) {
-          await fastify.prisma.notification.update({
-            where: { id: notif.id },
-            data: { isRead: true, readAt: new Date() }
-          });
+      if (notificationService) {
+        try {
+          await notificationService.markFriendRequestNotificationsAsRead(userId, id);
+        } catch (error) {
+          // Le service avale déjà ses erreurs, mais on garde le filet : le
+          // marquage des notifications ne doit JAMAIS faire échouer la réponse.
+          logError(fastify.log, 'Error marking friend request notification as read:', error);
         }
-      } catch (error) {
-        // Log mais ne pas bloquer
-        logError(fastify.log, 'Error marking friend request notification as read:', error);
       }
 
       // Envoyer une notification a l'expediteur selon la reponse
