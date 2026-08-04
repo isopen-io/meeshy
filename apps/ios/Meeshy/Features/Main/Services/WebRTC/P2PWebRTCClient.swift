@@ -900,9 +900,17 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
         }
     }
 
-    /// Whether a local camera track currently exists (drives the UI's
-    /// self-preview / camera-toggle affordance).
-    var hasLocalVideoTrack: Bool { localVideoTrack_ != nil }
+    /// Whether local video is currently being sent (drives the UI's
+    /// self-preview / camera-toggle affordance, `effectiveSwapStreams`, and
+    /// the bitrate/quality policy's `isSendingVideo` gate). Deliberately keyed
+    /// off `isEnabled`, NOT `localVideoTrack_ != nil` — `disableLocalVideo()`
+    /// keeps the track object alive (just disabled + capture stopped) so a
+    /// later `enableLocalVideo()` can cheaply resume the SAME track instead of
+    /// rebuilding the capturer. A raw nil-check would therefore stay `true`
+    /// through every survival-triggered downgrade, silently breaking the
+    /// `localVideoSuspendedTile` fallback and `effectiveSwapStreams` in
+    /// CallView.swift for the rest of the call.
+    var hasLocalVideoTrack: Bool { localVideoTrack_?.isEnabled == true }
 
     /// Mid-call audio→video upgrade (FaceTime-style asymmetric — we control our
     /// own outbound video only). Lazily builds the camera track, attaches it to
