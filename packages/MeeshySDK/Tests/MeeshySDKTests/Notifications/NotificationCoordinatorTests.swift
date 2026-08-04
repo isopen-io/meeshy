@@ -95,6 +95,38 @@ final class NotificationCoordinatorTests: XCTestCase {
                                        openConversationIdProvider: { openId })
     }
 
+    // MARK: - Réveil background — syncNow ne doit RIEN écraser sans snapshot autoritaire
+
+    func test_syncNow_beforeAnyAuthoritativeSnapshot_preservesBadgeAndAppGroupMirror() async {
+        let (sut, writer, _, suite) = makeSUT()
+        // La NSE vient d'écrire le compte de la push ; le process est relancé
+        // à froid par une push silencieuse, le coordinateur est VIDE.
+        UserDefaults(suiteName: suite)?.set(7, forKey: NotificationCoordinator.unreadCountKey)
+
+        await sut.syncNow()
+
+        XCTAssertTrue(
+            writer.writes.isEmpty,
+            "syncNow sur un coordinateur jamais hydraté écrasait aps.badge avec 0 — " +
+            "le réveil background annulait le badge que la push venait de poser"
+        )
+        XCTAssertEqual(
+            UserDefaults(suiteName: suite)?.integer(forKey: NotificationCoordinator.unreadCountKey), 7,
+            "le miroir App Group écrit par la NSE doit survivre au réveil background"
+        )
+    }
+
+    func test_syncNow_afterAuthoritativeSnapshot_writesBadge() async {
+        let (sut, writer, _, _) = makeSUT()
+        sut.reconcileConversationUnreads([
+            makeConversation(id: "c1", unread: 3),
+        ])
+
+        await sut.syncNow()
+
+        XCTAssertEqual(writer.writes.last, 3)
+    }
+
     // MARK: - Gate conversation ouverte — le badge d'icône ne gonfle pas pendant la lecture
 
     func test_applyConversationUnread_openConversation_clampsToZero() {

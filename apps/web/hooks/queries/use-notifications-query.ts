@@ -17,10 +17,13 @@ export function useNotificationsQuery(options: NotificationsFiltersAndPagination
   });
 }
 
-export function useInfiniteNotificationsQuery(options: NotificationsFiltersAndPagination = {}) {
-  const { limit = 50, ...filters } = options;
+export function useInfiniteNotificationsQuery(
+  options: NotificationsFiltersAndPagination & { enabled?: boolean } = {}
+) {
+  const { limit = 50, enabled = true, ...filters } = options;
 
   return useInfiniteQuery({
+    enabled,
     queryKey: [...queryKeys.notifications.lists(), 'infinite', filters],
     queryFn: async ({ pageParam = 0 }) => {
       const response = await NotificationService.fetchNotifications({

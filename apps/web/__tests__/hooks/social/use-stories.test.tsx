@@ -47,10 +47,14 @@ const mockCurrentUser = {
 
 let mockAuthToken: string | null = 'tok-1';
 
-jest.mock('@/stores/auth-store', () => ({
-  useAuthStore: (sel: (s: unknown) => unknown) =>
-    sel({ user: mockCurrentUser, authToken: mockAuthToken }),
-}));
+jest.mock('@/stores/auth-store', () => {
+  const useAuthStore = (sel: (s: unknown) => unknown) =>
+    sel({ user: mockCurrentUser, authToken: mockAuthToken });
+  // notification-read-sync (appelé par recordView) lit le token hors React
+  // via getState().
+  useAuthStore.getState = () => ({ user: mockCurrentUser, authToken: mockAuthToken });
+  return { useAuthStore };
+});
 
 // ---------------------------------------------------------------------------
 // Query keys mock

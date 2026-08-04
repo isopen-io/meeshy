@@ -222,6 +222,11 @@ struct CommentsSheetView: View {
     /// Focus réel du champ du composer — pilote l'insertion d'un texte déposé
     /// (au curseur quand le champ a le focus, sinon à la fin).
     @State private var composerIsFocused: Bool = false
+    /// Vrai si C'EST CETTE FEUILLE qui a déclaré le post actif (présentation
+    /// depuis le feed). Depuis un hôte qui l'avait déjà déclaré (viewer de
+    /// réels), la feuille ne revendique rien et ne relâche rien à sa
+    /// fermeture — l'ordre onDismiss/onDisappear devient indifférent.
+    @State private var claimedActivePost: Bool = false
     @State private var repliesMap: [String: [FeedComment]] = [:]
     @State private var expandedThreads: Set<String> = []
     @State private var loadingReplies: Set<String> = []
@@ -513,6 +518,7 @@ struct CommentsSheetView: View {
             // RÉELS sans passer par PostDetailView : c'était le seul chemin
             // où une notification de commentaire n'était jamais consommée.
             // Idempotent quand l'hôte (réel) a déjà déclaré ce post actif.
+            claimedActivePost = NotificationToastManager.shared.activePostId != post.id
             NotificationToastManager.shared.onPostOpened(post.id)
             // Sème l'état "liké par moi" des commentaires top-level déjà chargés
             // (`post.comments` porte `currentUserReactions` depuis `toFeedPost`).
@@ -524,9 +530,13 @@ struct CommentsSheetView: View {
         }
         .onDisappear {
             SocialSocketManager.shared.leavePostRoom(postId: post.id)
-            // Conditionnel à l'identité côté manager. L'hôte réel re-déclare
-            // son post actif au dismiss (voir ReelsPlayerView.sheet onDismiss).
-            NotificationToastManager.shared.onPostClosed(post.id)
+            // Ne relâcher QUE ce que la feuille a revendiqué : présentée
+            // depuis le viewer de réels (post déjà actif), elle ne doit pas
+            // effacer l'état du réel encore affiché derrière — quel que soit
+            // l'ordre onDismiss/onDisappear que SwiftUI choisit.
+            if claimedActivePost {
+                NotificationToastManager.shared.onPostClosed(post.id)
+            }
         }
         .onReceive(
             SocialSocketManager.shared.commentAdded

@@ -366,9 +366,12 @@ export function BubbleStreamPage({
   // mark-as-read et son compteur croissait indéfiniment. `conversationId`
   // n'est fourni qu'une fois l'initialisation finie : le conteneur scrollable
   // est alors monté, et le changement de dépendance ré-attache les observers.
+  // Sessions ANONYMES exclues : la route mark-as-read est JWT-only
+  // (allowAnonymous: false) — chaque flush partirait en 401.
   useSeenMessages({
     containerRef: messagesContainerRef,
-    conversationId: isInitializing ? null : (normalizedConversationId || null),
+    conversationId:
+      isInitializing || isAnonymousMode ? null : (normalizedConversationId || null),
   });
 
   // Détection automatique de langue

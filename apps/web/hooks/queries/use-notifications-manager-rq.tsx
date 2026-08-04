@@ -41,7 +41,11 @@ export function useNotificationsManagerRQ(options: UseNotificationsManagerRQOpti
     hasNextPage,
     fetchNextPage,
     refetch,
-  } = useInfiniteNotificationsQuery({ limit, ...filters });
+  // `enabled` : le manager est monté au layout RACINE (TabNotificationManager),
+  // donc aussi sur /login, /join/*, etc. Sans garde, la query (refetchOnMount
+  // 'always' + withRetry) tirait des GET /notifications non authentifiés sur
+  // toutes les pages publiques.
+  } = useInfiniteNotificationsQuery({ limit, enabled: isAuthenticated, ...filters });
 
   const unreadCount = notificationsData?.pages[0]?.unreadCount ?? 0;
 

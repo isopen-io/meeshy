@@ -18,6 +18,7 @@
 import type { QueryClient } from '@tanstack/react-query';
 import { queryKeys } from '@/lib/react-query/query-keys';
 import { NotificationService } from '@/services/notification.service';
+import { useAuthStore } from '@/stores/auth-store';
 import type { Notification } from '@/types/notification';
 
 export type NotificationReadScope =
@@ -121,10 +122,21 @@ export function markScopeNotificationsRead(
   queryClient: QueryClient,
   scope: NotificationReadScope
 ): void {
+  // Garde CENTRALE d'authentification : les sessions anonymes (liens de
+  // partage — /chat/:id, story publique) n'ont pas de notifications et la
+  // route gateway est JWT-only. Sans cette garde, chaque ouverture anonyme
+  // déclenchait un 401 rejoué par withRetry + la file de refresh token.
+  if (!useAuthStore.getState().authToken) return;
+
   applyScopeReadToCache(queryClient, scope);
 
   const key = scopeKey(scope);
   const now = Date.now();
+  // Purge des entrées expirées (Map bornée par l'activité de la fenêtre —
+  // une session longue de stories n'accumule pas une entrée par slide à vie).
+  for (const [k, at] of lastServerMarkAt) {
+    if (now - at >= SERVER_MARK_COALESCE_MS) lastServerMarkAt.delete(k);
+  }
   const last = lastServerMarkAt.get(key);
   if (last !== undefined && now - last < SERVER_MARK_COALESCE_MS) return;
   lastServerMarkAt.set(key, now);

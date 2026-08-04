@@ -889,6 +889,12 @@ export class NotificationService {
               ...(pushCategory ? { category: pushCategory } : {}),
               ...(unreadBadge !== undefined ? { badge: unreadBadge } : {}),
               data: {
+                // Identité de la ligne créée : SEULE clé permettant au client
+                // de marquer lu au tap (POST /notifications/:id/read). Sans
+                // elle, les types sans context.conversationId/postId (system,
+                // login_new_device, password_changed, two_factor_*,
+                // friend_request) restaient non lus à vie après un tap push.
+                notificationId: formatted.id,
                 ...(unreadBadge !== undefined ? { unreadCount: String(unreadBadge) } : {}),
                 type: params.type,
                 conversationId: params.context.conversationId || '',

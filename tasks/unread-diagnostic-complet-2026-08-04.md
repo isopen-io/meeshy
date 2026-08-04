@@ -15,9 +15,15 @@ Méthode : 8 audits de code exhaustifs + vérification des données prod (lectur
   friend_new_mood 715, friend_new_post 507, post_like 120, …), **orphelines sans contexte** : `login_new_device` 159,
   `friend_request` 10.
 - **Divergence `isRead`/`readAt` : 0** — le passage au prédicat `isRead` (G6) est sans risque de saut de badge.
-- Conclusion : les correctifs de code n'assainiront le stock qu'au fil des ouvertures. **Une réconciliation
-  one-shot est nécessaire** (voir §6.4) : sinon la cloche et le badge push des comptes existants restent gonflés
-  par 6 mois d'accumulation.
+- **Analyse fine (2e passe, jointure curseurs — CORRIGE la conclusion initiale)** : sur les 66 358 non-lues de
+  type conversation, **58 596 (88 %) appartiennent à des destinataires SANS curseur de lecture** (jamais de
+  mark-as-read : comptes dormants — top 8 inactifs depuis fin 2025 — ou clients Android dont le mark-as-read
+  404 depuis toujours), 7 762 ont un curseur EN RETARD (réellement non lues), et **0 sont marquables**
+  (la cascade au fil de l'eau avait déjà consommé tout ce qui était derrière un curseur). Backlog réparti sur
+  236 comptes. **Conclusion corrigée : PAS de backfill technique à faire** — le script
+  `scripts/reconcile-read-notifications.mongodb.js` (dry-run validé en prod : 0 éligible) reste comme filet
+  idempotent, et l'assainissement réel passe par (a) le fix Android T1 et (b) une décision produit de
+  RÉTENTION/expiration des notifications des comptes dormants.
 
 ---
 
@@ -238,6 +244,24 @@ read-all (E), suppression (F, émet `notification:deleted` unitaire).
 12. Suppression du code mort listé (§2.13, §3 F1-F2, gateway member_left/translation_ready, Android T10 si
     non câblé volontairement), read-exactness Android (T2), debounce des refetch Android (T12),
     listener `message:read-status-updated` web avant fin du dual-emit, `comment_like` → poser context.commentId.
+
+## 6bis. Revue de code de la branche (2026-08-04) + P0 appliqués
+
+Revue indépendante des 4 premiers commits : architecture validée (cascade indépendante du curseur, registre
+partagé, counts absolus, gates miroirs web/iOS), aucun problème critique de données. Corrigé dans la foulée :
+- **Bloquant** : sessions anonymes (liens de partage) → garde d'authentification CENTRALE dans
+  `markScopeNotificationsRead` (plus 401 rejoués par withRetry) + `useSeenMessages` désactivé en anonyme
+  (la route mark-as-read est `allowAnonymous: false`).
+- Purge des entrées expirées de la Map de coalescing ; aria-label de la pastille i18n (clé
+  `newMessagesWhileAway`, 4 locales × 2 namespaces) ; fermeture de la sheet commentaires iOS rendue
+  insensible à l'ordre onDismiss/onDisappear (`claimedActivePost`).
+- P0 appliqués dans le même lot : Android `@POST mark-as-read` (T1), guard d'hydratation
+  `NotificationCoordinator.syncNow()` + cast String du unreadCount (G1), `notificationId` dans le data push,
+  sync globale web de `conversation:unread-updated` + `refetchOnMount:'always'` conversations + query
+  notifications gated auth.
+- Restes documentés (non corrigés, volontaire) : duplication `unread-cache` vs
+  `updateInfiniteConversationCache` (refactor à part), clamp iOS pendant la fenêtre app-backgroundée-socket-
+  encore-connecté (décision assumée, miroir du sync engine), événements de portée multi-appareils (P1.6).
 
 ### Décisions produit à trancher (bloquantes pour certains items)
 - **Badge d'icône = quel compteur ?** (messages, notifications, ou somme — G2/F7/T8 en dépendent)

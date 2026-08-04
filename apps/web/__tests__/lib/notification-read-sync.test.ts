@@ -22,6 +22,14 @@ jest.mock('@/services/notification.service', () => ({
   },
 }));
 
+let mockAuthToken: string | null = 'test-token';
+
+jest.mock('@/stores/auth-store', () => ({
+  useAuthStore: {
+    getState: () => ({ authToken: mockAuthToken }),
+  },
+}));
+
 import {
   notificationMatchesScope,
   applyScopeReadToCache,
@@ -139,6 +147,7 @@ describe('markScopeNotificationsRead — coalescing serveur', () => {
   beforeEach(() => {
     jest.useFakeTimers();
     queryClient = new QueryClient();
+    mockAuthToken = 'test-token';
     mockMarkConversationRead.mockReset().mockResolvedValue(undefined);
     mockMarkPostRead.mockReset().mockResolvedValue(undefined);
     __resetNotificationReadSyncForTests();
@@ -146,6 +155,16 @@ describe('markScopeNotificationsRead — coalescing serveur', () => {
 
   afterEach(() => {
     jest.useRealTimers();
+  });
+
+  it("session anonyme (pas de token) : aucun appel serveur — la route est JWT-only, un 401 serait rejoué par withRetry", () => {
+    mockAuthToken = null;
+
+    markScopeNotificationsRead(queryClient, { kind: 'conversation', conversationId: CONV_ID });
+    markScopeNotificationsRead(queryClient, { kind: 'post', postId: POST_ID });
+
+    expect(mockMarkConversationRead).not.toHaveBeenCalled();
+    expect(mockMarkPostRead).not.toHaveBeenCalled();
   });
 
   it('appelle la route de portée conversation une seule fois dans la fenêtre de coalescing', () => {

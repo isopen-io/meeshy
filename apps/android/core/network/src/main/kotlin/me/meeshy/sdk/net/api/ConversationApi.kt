@@ -9,7 +9,6 @@ import me.meeshy.sdk.model.UpdateConversationSettingsRequest
 import retrofit2.http.Body
 import retrofit2.http.GET
 import retrofit2.http.POST
-import retrofit2.http.PATCH
 import retrofit2.http.PUT
 import retrofit2.http.Path
 import retrofit2.http.Query
@@ -43,7 +42,11 @@ interface ConversationApi {
     @POST("conversations")
     suspend fun create(@Body body: CreateConversationRequest): ApiResponse<ApiConversation>
 
-    @PATCH("conversations/{id}/read")
+    // POST, jamais PATCH : le gateway n'enregistre ce chemin qu'en POST
+    // (routes/message-read-status.ts /mark-as-read + alias /read). Le PATCH
+    // historique répondait 404 en silence — l'outbox épuisait ses tentatives
+    // et les badges ne se vidaient jamais durablement.
+    @POST("conversations/{id}/mark-as-read")
     suspend fun markRead(@Path("id") id: String): ApiResponse<Unit>
 
     @PUT("user-preferences/conversations/{id}")

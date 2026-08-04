@@ -541,7 +541,7 @@ const ConversationMessagesComponent = memo(function ConversationMessages({
             )}
             aria-label={
               unseenWhileAwayCount > 0
-                ? `${unseenWhileAwayCount} nouveaux messages — ${scrollButtonDirection === 'up' ? 'remonter vers les messages récents' : 'aller au bas de la conversation'}`
+                ? `${unseenWhileAwayCount} ${t('newMessagesWhileAway')}`
                 : scrollButtonDirection === 'up' ? 'Scroll to top' : 'Scroll to bottom'
             }
             title={scrollButtonDirection === 'up' ? 'Remonter vers les messages récents' : 'Aller au bas de la conversation'}
