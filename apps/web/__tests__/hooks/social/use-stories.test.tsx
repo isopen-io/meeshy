@@ -62,6 +62,20 @@ jest.mock('@/lib/react-query/query-keys', () => ({
       all: ['stories'],
       feed: () => ['stories', 'feed'],
     },
+    // Consommées par notification-read-sync (recordView marque les
+    // notifications du slide affiché).
+    notifications: {
+      all: ['notifications'],
+      lists: () => ['notifications', 'list'],
+      unreadCount: () => ['notifications', 'unreadCount'],
+    },
+  },
+}));
+
+jest.mock('@/services/notification.service', () => ({
+  NotificationService: {
+    markPostRead: jest.fn().mockResolvedValue(undefined),
+    markConversationRead: jest.fn().mockResolvedValue(undefined),
   },
 }));
 

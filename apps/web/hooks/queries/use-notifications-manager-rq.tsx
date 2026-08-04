@@ -10,6 +10,7 @@ import {
 } from './use-notifications-query';
 import { queryKeys } from '@/lib/react-query/query-keys';
 import { notificationSocketIO } from '@/services/notification-socketio.singleton';
+import { NotificationService } from '@/services/notification.service';
 import type { Notification, NotificationFilters } from '@/types/notification';
 import { toast } from 'sonner';
 import { buildNotificationTitle, buildNotificationContent, getNotificationLink, getNotificationBorderColor } from '@/utils/notification-helpers';
@@ -94,14 +95,26 @@ export function useNotificationsManagerRQ(options: UseNotificationsManagerRQOpti
       notificationSocketIO.connect(authToken);
     }
 
-    const handleNewNotification = (notification: Notification) => {
-      const notificationConversationId = notification.context?.conversationId;
+    const handleNewNotification = (incoming: Notification) => {
+      const notificationConversationId = incoming.context?.conversationId;
       const activeConversationId = useNotificationStore.getState().activeConversationId;
       const currentPath = typeof window !== 'undefined' ? window.location.pathname : '';
       const isInActiveConversation = notificationConversationId && (
         activeConversationId === notificationConversationId ||
         currentPath.includes(`/conversations/${notificationConversationId}`)
       );
+
+      // Une notification pour la conversation OUVERTE naît consommée (miroir du
+      // `markConsumedOnArrival` iOS) : insérée déjà lue — sinon la liste montre
+      // une ligne non lue alors que le compteur n'a pas bougé — et marquée lue
+      // côté serveur pour que `notification:counts` et le badge push ne la
+      // recomptent pas.
+      const notification: Notification = isInActiveConversation
+        ? { ...incoming, state: { ...incoming.state, isRead: true, readAt: new Date() } }
+        : incoming;
+      if (isInActiveConversation) {
+        NotificationService.markAsRead(incoming.id).catch(() => {});
+      }
 
       const queries = queryClient.getQueriesData({ queryKey: queryKeys.notifications.lists(), exact: false });
 
@@ -214,12 +227,74 @@ export function useNotificationsManagerRQ(options: UseNotificationsManagerRQOpti
       }
     };
 
+    const handleNotificationDeleted = (notificationId: string) => {
+      let wasUnread = false;
+
+      queryClient.setQueriesData(
+        { queryKey: queryKeys.notifications.lists(), exact: false },
+        (old: unknown) => {
+          if (!old || typeof old !== 'object' || !('pages' in old)) return old;
+          const data = old as { pages: Array<{ notifications?: Notification[]; unreadCount?: number }>; pageParams: unknown[] };
+
+          const foundUnread = data.pages.some((page) =>
+            page.notifications?.some((n: Notification) => n.id === notificationId && !n.state.isRead)
+          );
+          if (foundUnread) wasUnread = true;
+
+          return {
+            ...data,
+            pages: data.pages.map((page) => ({
+              ...page,
+              notifications: page.notifications?.filter((n: Notification) => n.id !== notificationId),
+              unreadCount: foundUnread
+                ? Math.max(0, (page.unreadCount ?? 0) - 1)
+                : page.unreadCount,
+            })),
+          };
+        }
+      );
+
+      if (wasUnread) {
+        queryClient.setQueryData(
+          queryKeys.notifications.unreadCount(),
+          (old: number | undefined) => Math.max(0, (old ?? 1) - 1)
+        );
+      }
+    };
+
+    // `notification:counts` est la resync AUTORITAIRE du serveur : émise après
+    // chaque marquage côté gateway (ouverture de conversation, vue d'un post,
+    // action sur un autre appareil). Sans elle, la cloche ne se corrigeait
+    // qu'au prochain refetch (montage / focus fenêtre).
+    const handleCounts = (counts: { unread?: number; total?: number }) => {
+      if (typeof counts?.unread !== 'number') return;
+
+      queryClient.setQueriesData(
+        { queryKey: queryKeys.notifications.lists(), exact: false },
+        (old: unknown) => {
+          if (!old || typeof old !== 'object' || !('pages' in old)) return old;
+          const data = old as { pages: Array<{ notifications?: Notification[]; unreadCount?: number }>; pageParams: unknown[] };
+          if (data.pages.every((page) => page.unreadCount === counts.unread)) return old;
+          return {
+            ...data,
+            pages: data.pages.map((page) => ({ ...page, unreadCount: counts.unread })),
+          };
+        }
+      );
+
+      queryClient.setQueryData(queryKeys.notifications.unreadCount(), counts.unread);
+    };
+
     const unsubscribeNotification = notificationSocketIO.onNotification(handleNewNotification);
     const unsubscribeRead = notificationSocketIO.onNotificationRead(handleNotificationRead);
+    const unsubscribeDeleted = notificationSocketIO.onNotificationDeleted(handleNotificationDeleted);
+    const unsubscribeCounts = notificationSocketIO.onCounts(handleCounts);
 
     return () => {
       unsubscribeNotification();
       unsubscribeRead();
+      unsubscribeDeleted();
+      unsubscribeCounts();
     };
   }, [isAuthenticated, queryClient, showNotificationToast]);
 

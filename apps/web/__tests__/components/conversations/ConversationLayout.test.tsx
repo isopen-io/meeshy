@@ -1,7 +1,23 @@
 import React from 'react';
-import { render, screen, waitFor, fireEvent, act } from '@testing-library/react';
+import { render as rtlRender, screen, waitFor, fireEvent, act } from '@testing-library/react';
 import '@testing-library/jest-dom';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ConversationLayout } from '../../../components/conversations/ConversationLayout';
+
+// ConversationLayout consomme désormais useQueryClient() directement (reset
+// optimiste du badge + marquage des notifications à l'ouverture) : chaque
+// render doit fournir un QueryClientProvider.
+const render: typeof rtlRender = ((ui: React.ReactElement, options?: Parameters<typeof rtlRender>[1]) => {
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false, gcTime: 0 } },
+  });
+  return rtlRender(ui, {
+    wrapper: ({ children }: { children: React.ReactNode }) => (
+      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+    ),
+    ...options,
+  });
+}) as typeof rtlRender;
 import { useUser, useIsAuthChecking } from '@/stores';
 import { conversationsService } from '@/services/conversations.service';
 import { useConversationMessagesRQ } from '@/hooks/queries/use-conversation-messages-rq';

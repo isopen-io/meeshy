@@ -29,6 +29,9 @@ import { useSocketIOMessaging } from '@/hooks/use-socketio-messaging';
 import { useConversationsPaginationRQ } from '@/hooks/queries/use-conversations-pagination-rq';
 import { useNotificationsManagerRQ } from '@/hooks/queries/use-notifications-manager-rq';
 import { useNotificationActions } from '@/stores/notification-store';
+import { useQueryClient } from '@tanstack/react-query';
+import { markScopeNotificationsRead } from '@/lib/notifications/notification-read-sync';
+import { setConversationUnreadInCache } from '@/lib/conversations/unread-cache';
 import { useVirtualKeyboard } from '@/hooks/use-virtual-keyboard';
 import { conversationsService } from '@/services/conversations.service';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
@@ -96,6 +99,7 @@ export function ConversationLayout({ selectedConversationId }: ConversationLayou
 
   // Notification system
   const { setActiveConversationId } = useNotificationActions();
+  const queryClient = useQueryClient();
   useNotificationsManagerRQ(); // Initialise Socket.IO pour les notifications en temps réel
 
   // Instance ID pour debugging
@@ -364,11 +368,22 @@ export function ConversationLayout({ selectedConversationId }: ConversationLayou
 
   // ========== EFFECTS ==========
 
-  // Informer le store de notifications
+  // Informer le store de notifications + consommer l'ouverture :
+  // - reset OPTIMISTE du badge de la conversation (le serveur confirmera via
+  //   `conversation:unread-updated` après le mark-as-read de useSeenMessages) ;
+  // - marquage des notifications de la conversation (cloche) — patch cache
+  //   immédiat + route de portée coalescée, miroir du `onConversationOpened` iOS.
   useEffect(() => {
     setActiveConversationId(effectiveSelectedId || null);
+    if (effectiveSelectedId) {
+      setConversationUnreadInCache(queryClient, effectiveSelectedId, 0);
+      markScopeNotificationsRead(queryClient, {
+        kind: 'conversation',
+        conversationId: effectiveSelectedId,
+      });
+    }
     return () => setActiveConversationId(null);
-  }, [effectiveSelectedId, setActiveConversationId]);
+  }, [effectiveSelectedId, setActiveConversationId, queryClient]);
 
   // Sync URL → local
   useEffect(() => {
