@@ -996,9 +996,16 @@ struct CommentsSheetView: View {
                 }
             }
 
-            Text(post.displayContent)
-                .font(MeeshyFont.relative(15))
-                .foregroundColor(theme.textSecondary)
+            MessageTextRenderer.render(
+                post.displayContent,
+                fontSize: 15,
+                color: theme.textSecondary,
+                mentionColor: MeeshyColors.mentionColor(isDark: isDark),
+                hashtagColor: MeeshyColors.hashtagColor(isDark: isDark),
+                accentColor: Color(hex: accentColor),
+                usesRelativeFont: true
+            )
+                .tint(Color(hex: accentColor))
                 .lineLimit(3)
 
             HStack(spacing: 16) {
@@ -1043,9 +1050,16 @@ struct CommentsSheetView: View {
                     .font(MeeshyFont.relative(12, weight: .semibold))
                     .foregroundColor(Color(hex: reply.authorColor))
 
-                Text(reply.displayContent)
-                    .font(MeeshyFont.relative(12))
-                    .foregroundColor(theme.textSecondary)
+                MessageTextRenderer.render(
+                    reply.displayContent,
+                    fontSize: 12,
+                    color: theme.textSecondary,
+                    mentionColor: MeeshyColors.mentionColor(isDark: isDark),
+                    hashtagColor: MeeshyColors.hashtagColor(isDark: isDark),
+                    accentColor: Color(hex: reply.authorColor),
+                    usesRelativeFont: true
+                )
+                    .tint(Color(hex: reply.authorColor))
                     .lineLimit(1)
             }
 
@@ -1887,9 +1901,20 @@ struct CommentRowView: View, Equatable {
                         .accessibilityHidden(true)
                 }
 
-                Text(effectiveCommentContent)
-                    .font(MeeshyFont.relative(contentFont))
-                    .foregroundColor(theme.textPrimary)
+                // `MessageTextRenderer` (et non `Text`) pour que `@mention` /
+                // `#hashtag` soient teintés comme partout ailleurs.
+                // `usesRelativeFont` conserve le scaling Dynamic Type du
+                // `MeeshyFont.relative(contentFont)` d'origine.
+                MessageTextRenderer.render(
+                    effectiveCommentContent,
+                    fontSize: contentFont,
+                    color: theme.textPrimary,
+                    mentionColor: MeeshyColors.mentionColor(isDark: theme.mode.isDark),
+                    hashtagColor: MeeshyColors.hashtagColor(isDark: theme.mode.isDark),
+                    accentColor: Color(hex: accentColor),
+                    usesRelativeFont: true
+                )
+                    .tint(Color(hex: accentColor))
                     .fixedSize(horizontal: false, vertical: true)
                     .animation(.easeInOut(duration: 0.2), value: showOriginal)
                     .messageEffects(comment.effects, hasPlayedAppearance: hasPlayedAppearanceEffect)

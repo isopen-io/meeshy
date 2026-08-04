@@ -147,6 +147,122 @@ final class MessageTextRendererTests: XCTestCase {
         XCTAssertEqual(omitted, explicitNil)
     }
 
+    // MARK: - Hashtags
+
+    /// Réduit les segments à une forme comparable sans dépendre de `Text`.
+    private func kinds(_ text: String) -> [String] {
+        MessageTextRenderer.parse(text).map { segment in
+            switch segment {
+            case .text(let s, _): return "text(\(s))"
+            case .mentionLink(let d, _, _): return "mention(\(d))"
+            case .hashtagText(let d): return "hashtag(\(d))"
+            case .meeshyTokenLink(let d, _, _): return "token(\(d))"
+            case .urlLink(let d, _): return "url(\(d))"
+            }
+        }
+    }
+
+    func test_parse_loneHashtag_producesHashtagSegment() {
+        XCTAssertEqual(kinds("#meeshy"), ["hashtag(#meeshy)"])
+    }
+
+    func test_parse_hashtagInSentence_keepsSurroundingText() {
+        XCTAssertEqual(
+            kinds("vive #meeshy aujourd'hui"),
+            ["text(vive )", "hashtag(#meeshy)", "text( aujourd'hui)"]
+        )
+    }
+
+    func test_parse_hashtagAndMention_bothRecognizedInSameText() {
+        XCTAssertEqual(
+            kinds("@alice regarde #swift"),
+            ["mention(@alice)", "text( regarde )", "hashtag(#swift)"]
+        )
+    }
+
+    func test_parse_hashtagGluedToPunctuation_stopsAtPunctuation() {
+        XCTAssertEqual(kinds("génial #swift!"), ["text(génial )", "hashtag(#swift)", "text(!)"])
+        XCTAssertEqual(kinds("(#swift)"), ["text(()", "hashtag(#swift)", "text())"])
+    }
+
+    func test_parse_hashtagWithAccentedLetters_capturesFullWord() {
+        XCTAssertEqual(kinds("#été"), ["hashtag(#été)"])
+    }
+
+    func test_parse_purelyNumericTag_isNotAHashtag() {
+        // « Réunion #3 », « appartement #42 » : une numérotation courante en
+        // français n'est PAS un hashtag et ne doit pas être teintée.
+        XCTAssertEqual(kinds("Réunion #3 demain"), ["text(Réunion #3 demain)"])
+        XCTAssertEqual(kinds("#42"), ["text(#42)"])
+    }
+
+    func test_parse_alphanumericTagStartingWithDigit_isAHashtag() {
+        XCTAssertEqual(kinds("#1direction"), ["hashtag(#1direction)"])
+    }
+
+    func test_parse_hashSuffixedToAWord_isNotAHashtag() {
+        // Lookbehind : `C#` ne doit pas ouvrir un hashtag vide, et
+        // `page#section` reste du texte.
+        XCTAssertEqual(kinds("langage C#"), ["text(langage C#)"])
+    }
+
+    func test_parse_urlFragment_staysASingleURLSegment() {
+        // Le `#` d'une ancre est INTERNE à l'URL — jamais un hashtag.
+        XCTAssertEqual(
+            kinds("voir https://meeshy.me/a#top"),
+            ["text(voir )", "url(https://meeshy.me/a#top)"]
+        )
+    }
+
+    func test_parse_hashtagInsideBold_survivesNestedParsing() {
+        XCTAssertEqual(kinds("**#swift**"), ["hashtag(#swift)"])
+    }
+
+    func test_hasInlineSyntax_hashtagOnly_isTrue() {
+        // Sans ce trigger, le fast-path plain-text court-circuiterait le hashtag.
+        XCTAssertTrue(MessageTextRenderer.hasInlineSyntax("juste #swift ici"))
+    }
+
+    func test_hasInlineSyntax_plainTextWithoutTrigger_remainsFalse() {
+        XCTAssertFalse(MessageTextRenderer.hasInlineSyntax("aucun trigger ici"))
+    }
+
+    func test_render_withHashtagColor_doesNotCrash() {
+        XCTAssertNotNil(
+            MessageTextRenderer.render(
+                "salut @alice #meeshy",
+                color: .primary,
+                mentionColor: .blue,
+                hashtagColor: .purple
+            )
+        )
+    }
+
+    func test_render_hashtagColor_changesOutput() {
+        // Le paramètre est réellement appliqué au segment hashtag.
+        let tinted = MessageTextRenderer.render("#meeshy", color: .primary, hashtagColor: .purple)
+        let plain = MessageTextRenderer.render("#meeshy", color: .primary)
+        XCTAssertNotEqual(tinted, plain)
+    }
+
+    func test_extractURLs_ignoresHashtags() {
+        XCTAssertTrue(MessageTextRenderer.extractURLs(from: "#meeshy #swift").isEmpty)
+    }
+
+    // MARK: - Relative (Dynamic Type) font opt-in
+
+    func test_render_relativeFont_differsFromFixedFont() {
+        let fixed = MessageTextRenderer.render("bonjour", color: .primary)
+        let relative = MessageTextRenderer.render("bonjour", color: .primary, usesRelativeFont: true)
+        XCTAssertNotEqual(fixed, relative)
+    }
+
+    func test_render_relativeFont_defaultsToFixed() {
+        let omitted = MessageTextRenderer.render("bonjour", color: .primary)
+        let explicit = MessageTextRenderer.render("bonjour", color: .primary, usesRelativeFont: false)
+        XCTAssertEqual(omitted, explicit)
+    }
+
     // MARK: - highlightRanges (internal)
 
     func test_highlightRanges_findsAllOccurrences() {

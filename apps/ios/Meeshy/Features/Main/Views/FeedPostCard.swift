@@ -267,6 +267,12 @@ struct FeedPostCard: View {
     /// Teinte des liens cliquables dans le corps du post.
     private var postLinkTint: Color { Color(hex: accentColor) }
 
+    /// Les entités inline gardent l'identité produit (indigo thématisé), jamais
+    /// la couleur de l'auteur : avant, faute de `mentionColor:`, la mention
+    /// héritait du `.tint()` d'accent — donc une teinte différente par post.
+    private var mentionTint: Color { MeeshyColors.mentionColor(isDark: theme.mode.isDark) }
+    private var hashtagTint: Color { MeeshyColors.hashtagColor(isDark: theme.mode.isDark) }
+
     /// Destination trackée `/l/<token>` pour la façade vidéo, dérivée de la
     /// première URL du contenu via `post.trackedLinkMap`. `nil` → watchURL.
     private var embedTrackedURL: URL? {
@@ -295,7 +301,7 @@ struct FeedPostCard: View {
                     if isLocationOnlyPost {
                         EmptyView()
                     } else if isTextExpanded {
-                        MessageTextRenderer.render(effectiveContent, color: theme.textPrimary, accentColor: postLinkTint, trackedLinks: post.trackedLinkMap.isEmpty ? nil : post.trackedLinkMap)
+                        MessageTextRenderer.render(effectiveContent, color: theme.textPrimary, mentionColor: mentionTint, hashtagColor: hashtagTint, accentColor: postLinkTint, trackedLinks: post.trackedLinkMap.isEmpty ? nil : post.trackedLinkMap)
                             .lineLimit(nil)
                             .tint(postLinkTint)
                             .accessibilityHint(String(localized: "a11y.feed.post.open.hint", defaultValue: "Touche deux fois pour ouvrir la publication", bundle: .main))
@@ -312,7 +318,7 @@ struct FeedPostCard: View {
                             .accessibilityAddTraits(.isButton)
                             .accessibilityHint(String(localized: "a11y.feed.post.see_less.hint", defaultValue: "Réduit le texte", bundle: .main))
                     } else {
-                        MessageTextRenderer.render(truncation.text + (truncation.isTruncated ? "..." : ""), color: theme.textPrimary, accentColor: postLinkTint, trackedLinks: post.trackedLinkMap.isEmpty ? nil : post.trackedLinkMap)
+                        MessageTextRenderer.render(truncation.text + (truncation.isTruncated ? "..." : ""), color: theme.textPrimary, mentionColor: mentionTint, hashtagColor: hashtagTint, accentColor: postLinkTint, trackedLinks: post.trackedLinkMap.isEmpty ? nil : post.trackedLinkMap)
                             .lineLimit(nil)
                             .tint(postLinkTint)
                             .accessibilityHint(String(localized: "a11y.feed.post.open.hint", defaultValue: "Touche deux fois pour ouvrir la publication", bundle: .main))

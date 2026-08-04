@@ -76,8 +76,13 @@ struct BubbleQuotedReply: View, Equatable {
 
     private var theme: ThemeManager { ThemeManager.shared }
 
+    /// Distinct des liens URL — et thématisé (cf. `MeeshyColors.mentionColor`).
     private var mentionTint: Color {
-        MeeshyColors.indigo400 // distinct des liens URL
+        MeeshyColors.mentionColor(isDark: isDark)
+    }
+
+    private var hashtagTint: Color {
+        MeeshyColors.hashtagColor(isDark: isDark)
     }
 
     /// Titre de la citation. Pour un mood échoé par le serveur, `authorName`
@@ -139,7 +144,7 @@ struct BubbleQuotedReply: View, Equatable {
                             MessageTextRenderer.render(
                                 reply.previewText.isEmpty ? fallback : reply.previewText,
                                 fontSize: 12, color: previewColor,
-                                mentionColor: mentionTint, accentColor: previewColor,
+                                mentionColor: mentionTint, hashtagColor: hashtagTint, accentColor: previewColor,
                                 mentionDisplayNames: mentionDisplayNames.isEmpty ? nil : mentionDisplayNames
                             )
                             .lineLimit(2)

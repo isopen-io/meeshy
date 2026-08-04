@@ -115,6 +115,32 @@ public nonisolated struct MeeshyColors {
         isDark ? Color(hex: "13111C") : Color(hex: "F8F7FF")
     }
 
+    // MARK: - Inline Entity Tints (@mention / #hashtag)
+    //
+    // Teintes des entités inline rendues par `MessageTextRenderer` — mêmes
+    // valeurs partout (bulles, posts, commentaires, reels, moods) pour que
+    // « une mention » ait UNE identité visuelle dans tout le produit.
+    //
+    // Elles sont THÉMATISÉES : la teinte unique historique (`indigo400`,
+    // `#818CF8`) ne contraste qu'à 2.98:1 sur le fond clair `#FFFFFF` — sous le
+    // seuil WCAG AA (4.5:1). Chaque variante ci-dessous passe AA dans SON mode
+    // (le `.system` du réglage de thème est déjà résolu en light/dark par
+    // `ThemeManager.mode` / `colorScheme` chez l'appelant — pas de 3e branche).
+
+    /// Teinte d'une mention `@user` — lien tappable, la plus prononcée des deux.
+    /// Light : `indigo600` (6.3:1 sur `#FFFFFF`). Dark : `indigo300` (9.9:1 sur `#09090B`).
+    public static func mentionColor(isDark: Bool) -> Color {
+        isDark ? indigo300 : indigo600
+    }
+
+    /// Teinte d'un hashtag `#tag` — décoratif (non tappable), volontairement un
+    /// cran plus sourd que la mention pour rester distinguable d'elle ET du
+    /// lien d'accent, sans quitter la rampe indigo de marque.
+    /// Light : `indigo800` (9.9:1 sur `#FFFFFF`). Dark : `indigo400` (6.6:1 sur `#09090B`).
+    public static func hashtagColor(isDark: Bool) -> Color {
+        isDark ? indigo400 : indigo800
+    }
+
     // MARK: - Brand Gradient (The Signature)
 
     public static let brandGradient = LinearGradient(
