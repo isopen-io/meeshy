@@ -2487,12 +2487,18 @@ final class CallManager: ObservableObject {
     }
 
     func switchCamera() {
-        webRTCService.switchCamera()
         // §7.7 — optimistic front/back tracking for mirroring. On iPhone/iPad a
         // flip alternates front↔back; on Mac switchCamera is usually a no-op so
-        // the flag rarely matters there.
+        // the flag rarely matters there. Corrected on failure (hardware busy,
+        // single-camera device) so the mirror flag never stays desynced from
+        // the camera actually in use for the rest of the call.
+        let previousFrontCamera = isUsingFrontCamera
         isUsingFrontCamera.toggle()
         HapticFeedback.light()
+        webRTCService.switchCamera { [weak self] success in
+            guard let self, !success else { return }
+            self.isUsingFrontCamera = previousFrontCamera
+        }
     }
 
     // §7.1 — Continuity / external camera picker. On iPhone the front/back flip
