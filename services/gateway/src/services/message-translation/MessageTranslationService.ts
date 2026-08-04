@@ -922,6 +922,32 @@ export class MessageTranslationService extends EventEmitter {
         return;
       }
 
+      // Deletion guard : un message soft-supprimé pendant que sa traduction était
+      // en vol ne doit être ni ré-hydraté ni re-diffusé. handleMessageDelete remet
+      // atomiquement translations:null + deletedAt ; réécrire translations ici
+      // annulerait ce nettoyage (fuite de contenu) et diffuserait message:translation
+      // pour un message que tous les clients ont déjà rendu supprimé. Même invariant
+      // deletedAt que chaque write path frère (ReactionService, message edit/delete).
+      // Fail-open : une erreur de lookup ne fait PAS tomber une traduction valide
+      // (même contrat de résilience que la sauvegarde ci-dessous).
+      let messageDeleted = false;
+      try {
+        const messageState = await this.prisma.message.findUnique({
+          where: { id: data.result.messageId },
+          select: { deletedAt: true }
+        });
+        messageDeleted = messageState?.deletedAt != null;
+      } catch (error) {
+        logger.warn(
+          `⚠️ [TranslationService] Lookup deletedAt échoué pour ${data.result.messageId}, on continue: ${error}`
+        );
+      }
+      if (messageDeleted) {
+        logger.debug(
+          `⏭️ [TranslationService] Traduction droppée : message ${data.result.messageId} supprimé pendant la traduction`
+        );
+        return;
+      }
 
       this.stats.incrementTranslationsReceived();
       
