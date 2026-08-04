@@ -19,7 +19,7 @@ final class ConversationListViewModelTests: XCTestCase {
         authManager: MockAuthManager? = nil,
         storyService: MockStoryService? = nil,
         syncEngine: MockConversationSyncEngine? = nil,
-        messageNotificationPublisher: AnyPublisher<String, Never>? = nil,
+        messageNotificationPublisher: AnyPublisher<MessageActivitySignal, Never>? = nil,
         draftStore: DraftStore? = nil,
         store: ConversationStore? = nil,
         categoryStore: UserCategoryStore? = nil
@@ -41,7 +41,7 @@ final class ConversationListViewModelTests: XCTestCase {
         let storyService = storyService ?? MockStoryService()
         let syncEngine = syncEngine ?? MockConversationSyncEngine()
         let pushPublisher = messageNotificationPublisher
-            ?? PassthroughSubject<String, Never>().eraseToAnyPublisher()
+            ?? PassthroughSubject<MessageActivitySignal, Never>().eraseToAnyPublisher()
         let resolvedDraftStore: DraftStore = {
             if let draftStore { return draftStore }
             let store = DraftStore(userDefaults: UserDefaults(suiteName: "ConvListVMTests-\(UUID().uuidString)")!)
@@ -2816,14 +2816,66 @@ final class ConversationListViewModelTests: XCTestCase {
     // MARK: - Push notification bump
 
     func test_pushNotification_messageForKnownConversation_bumpsToTop() {
-        let subject = PassthroughSubject<String, Never>()
+        let subject = PassthroughSubject<MessageActivitySignal, Never>()
         let (sut, _, _, _, _, _, _) = makeSUT(messageNotificationPublisher: subject.eraseToAnyPublisher())
         sut.conversations = [makeConversation(id: "a"), makeConversation(id: "b")]
-        subject.send("b")
+        subject.send(MessageActivitySignal(conversationId: "b"))
         let exp = expectation(description: "bump applied on main")
         DispatchQueue.main.async { exp.fulfill() }
         wait(for: [exp], timeout: 1)
         XCTAssertEqual(sut.conversations.first?.id, "b")
+    }
+
+    /// Régression 2026-08-04 : le push APNs de premier plan arrive ~1 s APRÈS
+    /// l'événement socket `message:new`. Sa facette est NEUTRE (aucun fait sur
+    /// le message) et `applyLastMessage` remplace les onze champs en bloc —
+    /// donc l'appliquer au message que la ligne affiche DÉJÀ effaçait l'aperçu
+    /// et l'auteur, puis `schedulePersist` gravait le vide en L2. La ligne
+    /// restait muette jusqu'à un resync REST complet (relance de l'app).
+    func test_pushNotification_forMessageAlreadyOnRow_preservesLastMessageFacts() {
+        let subject = PassthroughSubject<MessageActivitySignal, Never>()
+        let (sut, _, _, _, _, _, _) = makeSUT(messageNotificationPublisher: subject.eraseToAnyPublisher())
+        let sentAt = Date(timeIntervalSince1970: 1_700_000_000)
+        var known = makeConversation(id: "b", lastMessageAt: sentAt)
+        known.applyLastMessage(LastMessageFacet(
+            id: "msg-1", preview: "Bonjour", senderName: "meeshy sama", at: sentAt
+        ))
+        sut.conversations = [makeConversation(id: "a"), known]
+
+        subject.send(MessageActivitySignal(conversationId: "b", messageId: "msg-1"))
+        let exp = expectation(description: "push handled on main")
+        DispatchQueue.main.async { exp.fulfill() }
+        wait(for: [exp], timeout: 1)
+
+        let row = sut.conversations.first { $0.id == "b" }
+        XCTAssertEqual(row?.lastMessagePreview, "Bonjour")
+        XCTAssertEqual(row?.lastMessageSenderName, "meeshy sama")
+        XCTAssertEqual(row?.lastMessageId, "msg-1")
+        XCTAssertEqual(row?.lastMessageAt, sentAt,
+                       "L'horodatage SERVEUR ne doit pas être remplacé par l'heure locale du push")
+    }
+
+    /// Le push reste le filet de sécurité quand il parle d'un message que le
+    /// client n'a PAS : la facette neutre est alors le bon choix (garder les
+    /// champs du message précédent afficherait un auteur faux).
+    func test_pushNotification_forUnknownMessage_stillBumpsWithNeutralFacet() {
+        let subject = PassthroughSubject<MessageActivitySignal, Never>()
+        let (sut, _, _, _, _, _, _) = makeSUT(messageNotificationPublisher: subject.eraseToAnyPublisher())
+        var known = makeConversation(id: "b", lastMessageAt: Date(timeIntervalSince1970: 1_700_000_000))
+        known.applyLastMessage(LastMessageFacet(
+            id: "msg-1", preview: "Bonjour", senderName: "meeshy sama",
+            at: Date(timeIntervalSince1970: 1_700_000_000)
+        ))
+        sut.conversations = [makeConversation(id: "a"), known]
+
+        subject.send(MessageActivitySignal(conversationId: "b", messageId: "msg-2"))
+        let exp = expectation(description: "push handled on main")
+        DispatchQueue.main.async { exp.fulfill() }
+        wait(for: [exp], timeout: 1)
+
+        XCTAssertEqual(sut.conversations.first?.id, "b")
+        XCTAssertNil(sut.conversations.first?.lastMessagePreview)
+        XCTAssertNil(sut.conversations.first?.lastMessageSenderName)
     }
 
     // MARK: - Foreground reactivation
