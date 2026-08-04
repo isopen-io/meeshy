@@ -252,12 +252,22 @@ describe('canEditMessage', () => {
     vi.useRealTimers();
   });
 
-  it('should allow editing for admins regardless of time', () => {
-    const oldMessage = new Date('2024-03-14T12:00:00Z'); // 24 hours ago
-    expect(canEditMessage(oldMessage, 'ADMIN')).toEqual({ canEdit: true });
-    expect(canEditMessage(oldMessage, 'BIGBOSS')).toEqual({ canEdit: true });
-    expect(canEditMessage(oldMessage, 'MODERATOR')).toEqual({ canEdit: true });
-    expect(canEditMessage(oldMessage, 'CREATOR')).toEqual({ canEdit: true });
+  it('should allow privileged global roles to edit regardless of time', () => {
+    const wellPastWindow = new Date('2024-03-13T12:00:00Z'); // 48 hours ago
+    expect(canEditMessage(wellPastWindow, 'ADMIN')).toEqual({ canEdit: true });
+    expect(canEditMessage(wellPastWindow, 'BIGBOSS')).toEqual({ canEdit: true });
+    expect(canEditMessage(wellPastWindow, 'MODERATOR')).toEqual({ canEdit: true });
+  });
+
+  it('should NOT treat CREATOR as a window-bypass role', () => {
+    // CREATOR is not a global role (BIGBOSS/ADMIN/MODERATOR/AUDIT/ANALYST/USER)
+    // nor a member role (admin/moderator/member) — it never granted a real
+    // bypass anywhere, so past the window it is gated like any regular user.
+    const wellPastWindow = new Date('2024-03-13T12:00:00Z'); // 48 hours ago
+    expect(canEditMessage(wellPastWindow, 'CREATOR')).toEqual({
+      canEdit: false,
+      reason: 'MESSAGE_TOO_OLD',
+    });
   });
 
   it('should allow editing recent messages for regular users', () => {
@@ -265,8 +275,8 @@ describe('canEditMessage', () => {
     expect(canEditMessage(recentMessage, 'USER')).toEqual({ canEdit: true });
   });
 
-  it('should deny editing old messages for regular users', () => {
-    const oldMessage = new Date('2024-03-15T10:30:00Z'); // 1.5 hours ago
+  it('should deny editing messages older than 24h for regular users', () => {
+    const oldMessage = new Date('2024-03-14T11:00:00Z'); // 25 hours ago
     expect(canEditMessage(oldMessage, 'USER')).toEqual({
       canEdit: false,
       reason: 'MESSAGE_TOO_OLD',
@@ -279,24 +289,30 @@ describe('canEditMessage', () => {
   });
 
   it('should default to USER role', () => {
-    const oldMessage = new Date('2024-03-15T10:30:00Z'); // 1.5 hours ago
+    const oldMessage = new Date('2024-03-14T11:00:00Z'); // 25 hours ago
     expect(canEditMessage(oldMessage)).toEqual({
       canEdit: false,
       reason: 'MESSAGE_TOO_OLD',
     });
   });
 
-  it('should allow editing exactly at 1 hour boundary', () => {
-    const exactlyOneHour = new Date('2024-03-15T11:00:00Z');
-    expect(canEditMessage(exactlyOneHour, 'USER')).toEqual({ canEdit: true });
+  it('should allow editing exactly at the 24h boundary', () => {
+    const exactly24h = new Date('2024-03-14T12:00:00Z');
+    expect(canEditMessage(exactly24h, 'USER')).toEqual({ canEdit: true });
   });
 
-  it('should deny editing just past 1 hour', () => {
-    const justPastOneHour = new Date('2024-03-15T10:59:59Z');
-    expect(canEditMessage(justPastOneHour, 'USER')).toEqual({
+  it('should deny editing just past 24h', () => {
+    const justPast24h = new Date('2024-03-14T11:59:59Z');
+    expect(canEditMessage(justPast24h, 'USER')).toEqual({
       canEdit: false,
       reason: 'MESSAGE_TOO_OLD',
     });
+  });
+
+  it('should never block on an invalid createdAt (NaN age)', () => {
+    // Parity with the authoritative sites: `NaN > window` is false, so a
+    // malformed timestamp never wrongly gates an edit.
+    expect(canEditMessage('not-a-date', 'USER')).toEqual({ canEdit: true });
   });
 });
 
@@ -624,7 +640,7 @@ describe('canEditMessage — role case insensitivity', () => {
     vi.useRealTimers();
   });
 
-  const oldMessage = new Date('2024-03-14T12:00:00Z');
+  const oldMessage = new Date('2024-03-13T12:00:00Z'); // 48 hours ago — well past window
 
   it('allows admin with lowercase role (DB may store lowercase)', () => {
     expect(canEditMessage(oldMessage, 'admin')).toEqual({ canEdit: true });
@@ -638,8 +654,11 @@ describe('canEditMessage — role case insensitivity', () => {
     expect(canEditMessage(oldMessage, 'BigBoss')).toEqual({ canEdit: true });
   });
 
-  it('allows creator with lowercase role', () => {
-    expect(canEditMessage(oldMessage, 'creator')).toEqual({ canEdit: true });
+  it('does not grant creator any bypass regardless of case', () => {
+    expect(canEditMessage(oldMessage, 'creator')).toEqual({
+      canEdit: false,
+      reason: 'MESSAGE_TOO_OLD',
+    });
   });
 });
 
