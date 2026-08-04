@@ -81,6 +81,18 @@ public final class NotificationCoordinator: ObservableObject {
     /// `UserPreferencesManager.shared.$notification` au `start()`.
     private let badgeEnabledChanges: AnyPublisher<Bool, Never>?
 
+    /// Conversation actuellement OUVERTE à l'écran. Le gateway émet
+    /// `conversation:unread-updated` à TOUS les destinataires — y compris
+    /// celui qui est en train de lire — et la push silencieuse fait de même :
+    /// sans ce gate, le badge d'icône et le widget gonflent pour la
+    /// conversation affichée, jusqu'à un `read-status:updated` qui peut ne
+    /// jamais venir (lecture exacte scrollée dans l'historique). Miroir du
+    /// gate `ConversationSyncEngine.handleUnreadUpdated`. Injectable pour les
+    /// tests ; défaut = la conversation active du socket messages (posée par
+    /// `NotificationToastManager.onConversationOpened`, nettoyée à la
+    /// fermeture).
+    private let openConversationIdProvider: @MainActor () -> String?
+
     /// Ids of conversations the user has muted. Muted conversations still show
     /// their unread badge on their own row, but MUST NOT nag the app-icon badge
     /// or the widget unread counter — the whole point of muting is to silence
@@ -98,13 +110,15 @@ public final class NotificationCoordinator: ObservableObject {
         appGroupSuiteName: String = "group.me.meeshy.apps",
         currentUserIdProvider: @escaping @MainActor () -> String? = { AuthManager.shared.currentUser?.id },
         badgeEnabledProvider: @escaping @MainActor () -> Bool = { UserPreferencesManager.shared.notification.notificationBadgeEnabled },
-        badgeEnabledChanges: AnyPublisher<Bool, Never>? = nil
+        badgeEnabledChanges: AnyPublisher<Bool, Never>? = nil,
+        openConversationIdProvider: @escaping @MainActor () -> String? = { MessageSocketManager.shared.activeConversationId }
     ) {
         self.badgeWriter = badgeWriter
         self.appGroupDefaults = UserDefaults(suiteName: appGroupSuiteName)
         self.currentUserIdProvider = currentUserIdProvider
         self.badgeEnabledProvider = badgeEnabledProvider
         self.badgeEnabledChanges = badgeEnabledChanges
+        self.openConversationIdProvider = openConversationIdProvider
     }
 
     // MARK: - Lifecycle
@@ -234,9 +248,12 @@ public final class NotificationCoordinator: ObservableObject {
     }
 
     /// Apply a single conversation unread-count update (from the
-    /// `conversation:unread-updated` socket event).
+    /// `conversation:unread-updated` socket event or the silent push).
+    /// The count of the conversation currently OPEN on screen is clamped to 0:
+    /// the user is looking at it, it can never be "unread" on the app icon.
     public func applyConversationUnread(conversationId: String, unreadCount: Int) {
-        let clamped = max(unreadCount, 0)
+        let isOpen = conversationId == openConversationIdProvider()
+        let clamped = isOpen ? 0 : max(unreadCount, 0)
         if conversationUnreadCounts[conversationId] == clamped { return }
         conversationUnreadCounts[conversationId] = clamped
         recomputeTotal()

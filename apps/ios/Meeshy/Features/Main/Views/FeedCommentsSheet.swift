@@ -505,6 +505,15 @@ struct CommentsSheetView: View {
         .modifier(TranslucentSheetBackground())
         .onAppear {
             SocialSocketManager.shared.joinPostRoom(postId: post.id)
+            // Les commentaires du post sont CONSOMMÉS : marque lues les
+            // notifications du post (portée serveur `context.postId`, qui
+            // couvre commentaires et réactions) et déclare le post actif —
+            // les notifications arrivant pendant la lecture naissent
+            // consommées. Cette feuille est présentée depuis le FEED et les
+            // RÉELS sans passer par PostDetailView : c'était le seul chemin
+            // où une notification de commentaire n'était jamais consommée.
+            // Idempotent quand l'hôte (réel) a déjà déclaré ce post actif.
+            NotificationToastManager.shared.onPostOpened(post.id)
             // Sème l'état "liké par moi" des commentaires top-level déjà chargés
             // (`post.comments` porte `currentUserReactions` depuis `toFeedPost`).
             seedLikedIds(from: comments)
@@ -515,6 +524,9 @@ struct CommentsSheetView: View {
         }
         .onDisappear {
             SocialSocketManager.shared.leavePostRoom(postId: post.id)
+            // Conditionnel à l'identité côté manager. L'hôte réel re-déclare
+            // son post actif au dismiss (voir ReelsPlayerView.sheet onDismiss).
+            NotificationToastManager.shared.onPostClosed(post.id)
         }
         .onReceive(
             SocialSocketManager.shared.commentAdded
