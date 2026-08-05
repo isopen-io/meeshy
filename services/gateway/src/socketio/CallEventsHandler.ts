@@ -1764,7 +1764,14 @@ export class CallEventsHandler {
         const activeCalls = await this.prisma.callSession.findMany({
           where: {
             conversationId: { in: convIds },
-            endedAt: null,
+            // `endedAt` is never explicitly written to `null` at call
+            // creation (CallService.initiateCall omits it) — a plain
+            // `endedAt: null` equality filter only matches an EXPLICIT
+            // null, never an unset field, so it silently matched zero
+            // rows for every real ringing call (audit calling-stack
+            // 2026-08-04). Same class of bug as `leftAt`/`activeCallId`
+            // elsewhere in this file — mirror their `isSet: false` guard.
+            OR: [{ endedAt: null }, { endedAt: { isSet: false } }],
             initiatorId: { not: userId },
             // No `connecting` here — the FSM (CallService Item F) never
             // persists that status, so it can never match.
