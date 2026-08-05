@@ -218,12 +218,13 @@ struct MessageLanguageDetailView: View {
                 } else {
                     onSelectAudioLanguage?(nil)
                 }
+            } else if let audioAttachmentId = Self.resolveAudioAttachmentId(
+                cachedTranscriptionAttachmentId: transcription?.attachmentId,
+                attachments: message.attachments
+            ) {
+                Task { await translateAudioTo(lang.code, attachmentId: audioAttachmentId) }
             } else {
-                if transcription != nil {
-                    Task { await translateAudioTo(lang.code) }
-                } else {
-                    Task { await translateTo(lang.code, from: originalLang) }
-                }
+                Task { await translateTo(lang.code, from: originalLang) }
             }
         } label: {
             HStack(spacing: 10) {
@@ -348,8 +349,7 @@ struct MessageLanguageDetailView: View {
         }
     }
 
-    private func translateAudioTo(_ targetLang: String) async {
-        guard let attachmentId = transcription?.attachmentId else { return }
+    private func translateAudioTo(_ targetLang: String, attachmentId: String) async {
         translatingAudioLanguages.insert(targetLang)
         translationError = nil
         defer { translatingAudioLanguages.remove(targetLang) }
@@ -450,5 +450,18 @@ struct MessageLanguageDetailView: View {
 
     static func languageName(for code: String) -> String {
         LanguageDisplay.from(code: code)?.name ?? code.uppercased()
+    }
+
+    /// Résout l'attachment audio/vidéo à traduire pour une demande on-demand :
+    /// préfère l'attachmentId déjà connu via une transcription cachée (source
+    /// fiable, évite une recherche), sinon détecte un attachment timebased
+    /// directement sur le message (fonctionne même si `transcription` n'a
+    /// jamais été hydratée localement).
+    static func resolveAudioAttachmentId(
+        cachedTranscriptionAttachmentId: String?,
+        attachments: [MeeshyMessageAttachment]
+    ) -> String? {
+        cachedTranscriptionAttachmentId
+            ?? attachments.first { AttachmentKind(mimeType: $0.mimeType).hasTimebasedTrack }?.id
     }
 }
