@@ -2,11 +2,41 @@
 # Strips ad-hoc / development signatures from embedded SPM binary frameworks
 # in an .xcarchive, so the distribution step re-signs them cleanly.
 #
-# Invoked after the 'archive' action from THREE places:
-#   1. Xcode Cloud — auto-runs ci_scripts/ci_post_xcodebuild.sh after each action.
+# Invoked after the 'archive' action from cinq endroits — mais UN SEUL d'entre
+# eux est inopérant, et il faut le savoir :
+#
+#   1. Xcode Cloud — exécute ce script automatiquement après l'action archive.
+#      ⚠️ SANS AUCUN EFFET SUR LE PRODUIT LIVRÉ. Xcode Cloud lance ce hook APRÈS
+#      avoir exporté ses IPA, pas entre l'archive et l'export. Mesuré sur le run
+#      1742 (2026-08-04) : exports ad-hoc 19:11:06, development 19:11:07,
+#      app-store 19:11:09 — ce script à 19:11:30. Il strippe donc une archive
+#      dont les IPA sont déjà écrits. NE PAS compter sur lui pour Xcode Cloud ;
+#      le rejet ITMS-90035 de ce run vient d'ailleurs (voir le bloc ci-dessous).
 #   2. fastlane — the `build_production` lane calls it between archive and export.
 #   3. Xcode GUI — the Meeshy scheme's Archive post-action runs it before the
 #      archive reaches the Organizer, so "Distribute App" works directly.
+#      DÉCLARÉE DANS `project.yml` (clé `schemes: Meeshy: archive: postActions`),
+#      pas seulement dans le .xcscheme : ce dernier est régénéré par XcodeGen, et
+#      c'est précisément ainsi que la post-action a disparu entre le 2026-05-18 et
+#      le 2026-08-04, sans qu'aucun build ne devienne rouge.
+#   4. `./meeshy.sh archive` — via la fonction `strip_embedded_signatures`.
+#   5. `./meeshy.sh distribute` — idem, avant l'export de l'IPA de distribution.
+#
+# Ces chemins sont vérifiés mécaniquement par `ArchiveSignatureStripGuardTests`,
+# et le PRODUIT exporté est vérifié par `ci_scripts/verify_embedded_signatures.sh`
+# (branché sur meeshy.sh, la lane fastlane et ios-release.yml) — ce script-ci
+# étant muet quand il ne tourne pas, c'est ce second gate qui le rend visible.
+#
+# ─── Le rejet ITMS-90035 du 2026-08-04 (build 1742) n'est PAS de ce ressort ───
+# Ce script avait bien tourné. La cause était le binaire STUB que Xcode injecte
+# dans les frameworks sans code, signé ad hoc sous l'identifier « arm64-apple »
+# (le nom du fichier temporaire qui le porte). Elle est corrigée à la source par
+# `fix_codeless_framework_identifiers.sh`, branché en BUILD PHASE du target
+# Meeshy — donc exécuté pendant le build, avant tout export, Xcode Cloud compris.
+#
+# Ce script-ci reste utile comme seconde barrière sur les chemins locaux, mais
+# il n'est plus le correctif principal, et il ne doit pas le redevenir : sur
+# Xcode Cloud, un hook post-archive arrive toujours trop tard.
 #
 # After the 'archive' action, embedded SPM frameworks (FirebaseAnalytics,
 # GoogleAdsOnDeviceConversion, GoogleAppMeasurement,
