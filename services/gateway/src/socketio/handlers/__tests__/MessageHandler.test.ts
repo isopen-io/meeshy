@@ -598,6 +598,41 @@ describe('MessageHandler', () => {
       );
     });
 
+    // The socket schema omits `messageType` (the client cannot supply it), so
+    // the handler must DERIVE it from the attachment MIME types. Otherwise every
+    // media message on this — the PRIMARY attachment path — is persisted and
+    // broadcast as 'text', and `protectedPreview`/`contentTypeIcon` show a 💬
+    // balloon instead of the media icon for a view-once/blurred/ephemeral photo.
+    it('derives messageType from the attachment MIME (image) instead of hardcoding text', async () => {
+      (deps.attachmentService.getAttachment as jest.Mock<any>).mockResolvedValue({
+        id: 'a1b2c3d4e5f6a1b2c3d4e5f0',
+        uploadedBy: USER_ID,
+        mimeType: 'image/jpeg',
+      });
+
+      await handler.handleMessageSendWithAttachments(socket, validAttachData(), callback);
+
+      expect(deps.messagingService.handleMessage).toHaveBeenCalledWith(
+        expect.objectContaining({ messageType: 'image' }),
+        PARTICIPANT_ID,
+      );
+    });
+
+    it('derives messageType from the attachment MIME (audio voice note)', async () => {
+      (deps.attachmentService.getAttachment as jest.Mock<any>).mockResolvedValue({
+        id: 'a1b2c3d4e5f6a1b2c3d4e5f0',
+        uploadedBy: USER_ID,
+        mimeType: 'audio/m4a',
+      });
+
+      await handler.handleMessageSendWithAttachments(socket, validAttachData(), callback);
+
+      expect(deps.messagingService.handleMessage).toHaveBeenCalledWith(
+        expect.objectContaining({ messageType: 'audio' }),
+        PARTICIPANT_ID,
+      );
+    });
+
     it('returns USER_BLOCKED error for blocked DM', async () => {
       (deps.prisma.conversation.findUnique as jest.Mock<any>).mockResolvedValue({
         type: 'direct',
