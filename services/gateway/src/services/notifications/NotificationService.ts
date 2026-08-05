@@ -1022,7 +1022,11 @@ export class NotificationService {
       // Send immediate email for high-priority notifications to offline users
       if (this.emailService && params.priority === 'high') {
         try {
-          const sockets = this.io ? await this.io.in(params.userId).fetchSockets() : [];
+          // Presence check MUST target the room every registered socket joins
+          // (`ROOMS.user(id)` === `user:${id}`, cf. AuthHandler). The room named
+          // by the bare user id is always empty, so a bare-id check would mark
+          // every online user "offline" and fire spurious immediate emails.
+          const sockets = this.io ? await this.io.in(ROOMS.user(params.userId)).fetchSockets() : [];
           if (sockets.length === 0) {
             const { getCacheStore } = await import('../CacheStore');
             const cache = getCacheStore();
