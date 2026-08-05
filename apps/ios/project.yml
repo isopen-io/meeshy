@@ -78,14 +78,27 @@ settings:
   # --strategy max-build` et écrit ICI **et** dans le pbxproj — les deux, sinon
   # la prochaine régénération réécrase le correctif.
   VERSIONING_SYSTEM: apple-generic
-  CURRENT_PROJECT_VERSION: "1271"
+  CURRENT_PROJECT_VERSION: "1743"
   # Alignée sur la version App Store Connect. Passée à 1.0.1 le 2026-07-31 :
   # la 1.0.0 avait été rejetée (déclaration Age Rating `ageAssurance` à true
   # sans mécanisme de vérification d'âge dans l'app), et l'enregistrement ASC a
   # été renommé plutôt que recréé — description et captures sont conservées.
   # Laisser 1.0.0 ici ferait produire par tout build local un CFBundleShortVersionString
   # en désaccord avec la version qui attend le binaire.
-  MARKETING_VERSION: "1.0.3"
+  #
+  # 1.0.4 le 2026-08-04 : la 1.0.3 (build 1269) a été rejetée sur deux points
+  # Guideline 2.5.4 — VoIP et audio déclarés dans UIBackgroundModes sans que le
+  # reviewer ait pu localiser les fonctionnalités correspondantes. Les deux
+  # existent (PushKit/CallKit dans VoIPPushManager, MPNowPlayingInfoCenter dans
+  # ConversationAudioCoordinator+NowPlaying) : la correction est côté notes de
+  # review et captures vidéo, PAS côté code — voir DEMO_REVIEW_NOTES dans
+  # fastlane/Fastfile.
+  #
+  # RAPPEL : `ci_post_clone.sh` ne lance PAS xcodegen, donc Xcode Cloud build le
+  # pbxproj COMMITTÉ. Toute modification ici doit être répercutée dans les deux
+  # `MARKETING_VERSION` du pbxproj, sinon le binaire livré garde l'ancienne
+  # version pendant que ce fichier annonce la nouvelle.
+  MARKETING_VERSION: "1.0.4"
 
   # Équipe de signature (Automatic). Indispensable pour `meeshy.sh device`
   # (déploiement sur appareil réel) : sans DEVELOPMENT_TEAM, la signature
