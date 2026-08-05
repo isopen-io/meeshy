@@ -289,6 +289,7 @@ model User {
   postViews          PostView[]        @relation("UserPostViews")
   postImpressions    PostImpression[]  @relation("UserPostImpressions")
   postBookmarks      PostBookmark[]    @relation("UserPostBookmarks")
+  postMediaDownloads PostMediaDownload[] @relation("UserPostMediaDownloads")
   postEngagements    PostEngagement[]  @relation("UserPostEngagements")
 
   // Story audio library
@@ -2974,6 +2975,11 @@ model Post {
   postOpenCount      Int @default(0)
   qualifiedViewCount Int @default(0)
   playCount          Int @default(0)
+  /// Nombre d'actions « Enregistrer » sur ce poste : +1 par action, quel que
+  /// soit le nombre de médias téléchargés. NE VAUT PAS la somme des
+  /// `PostMedia.downloadCount` de ce poste — l'un compte des actions, l'autre
+  /// des médias. Ne pas « réconcilier » les deux, l'écart porte l'information.
+  downloadCount      Int @default(0)
 
   // ============================================
   // FLAGS
@@ -3005,6 +3011,7 @@ model Post {
   anonymousOpens AnonymousPostOpen[]
   impressions PostImpression[]
   bookmarks   PostBookmark[]
+  mediaDownloads PostMediaDownload[]
   engagements PostEngagement[]
   /// Réactions table (Phase 3 — source de vérité moderne, remplace progressivement reactions: Json[])
   postReactions PostReaction[] @relation("PostReactionsTable")
@@ -3200,6 +3207,11 @@ model PostMedia {
   /// la propriété au lieu de la conserver.
   uploaderId   String?  @db.ObjectId
 
+  /// Nombre de fois que CE média précis a été téléchargé : +1 par média
+  /// effectivement enregistré. Voir la note sur `Post.downloadCount` — la somme
+  /// des `downloadCount` des médias d'un poste ne vaut PAS celui du poste.
+  downloadCount Int     @default(0)
+
   createdAt    DateTime @default(now())
 
   post    Post?        @relation(fields: [postId], references: [id], onDelete: SetNull, onUpdate: Cascade)
@@ -3341,6 +3353,39 @@ model PostBookmark {
 
   @@unique([postId, userId])
   @@index([userId, createdAt])
+}
+
+/// Téléchargement d'un média de poste par un utilisateur.
+///
+/// Historique COMPLET : un même utilisateur re-téléchargeant le même média
+/// produit une nouvelle ligne (jamais d'upsert). Le dédupliqué reste calculable
+/// par distinct(userId). Les totaux, eux, se lisent en O(1) sur
+/// `Post.downloadCount` / `PostMedia.downloadCount` — cette table n'est JAMAIS
+/// agrégée pour répondre à un « combien ».
+model PostMediaDownload {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  postId    String   @db.ObjectId
+  /// Pas de relation Prisma vers PostMedia, délibérément : une cascade
+  /// effacerait la trace analytique en même temps que le média détaché ou
+  /// supprimé, alors qu'on veut précisément la conserver. Même raisonnement
+  /// que `PostMedia.uploaderId`, qui se passe de relation pour la même raison.
+  mediaId   String   @db.ObjectId
+  userId    String   @db.ObjectId
+  /// Surface d'origine de l'action : feed | detail | reel
+  surface   String   @default("detail")
+  createdAt DateTime @default(now())
+
+  post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
+  user User @relation("UserPostMediaDownloads", fields: [userId], references: [id])
+
+  /// Téléchargeurs uniques d'un poste · « cet utilisateur a-t-il téléchargé ? »
+  @@index([postId, userId])
+  /// Grain média sur une fenêtre temporelle.
+  @@index([mediaId, createdAt])
+  /// Historique de téléchargement d'un utilisateur.
+  @@index([userId, createdAt])
+  /// Balayage par période, rollups futurs, TTL éventuel.
+  @@index([createdAt])
 }
 
 /// Statut d'une demande de suppression de compte
