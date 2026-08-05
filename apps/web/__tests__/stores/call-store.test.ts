@@ -753,24 +753,6 @@ describe('CallStore', () => {
     });
   });
 
-  describe('setCallEndReason', () => {
-    it('should store the call end reason', () => {
-      act(() => {
-        useCallStore.getState().setCallEndReason('completed');
-      });
-
-      expect(useCallStore.getState().callEndReason).toBe('completed');
-    });
-
-    it('should store rejected reason', () => {
-      act(() => {
-        useCallStore.getState().setCallEndReason('rejected');
-      });
-
-      expect(useCallStore.getState().callEndReason).toBe('rejected');
-    });
-  });
-
   describe('Heartbeat', () => {
     beforeEach(() => {
       jest.useFakeTimers();
@@ -1064,7 +1046,6 @@ describe('CallStore', () => {
         useCallStore.getState().setIceServers([{ urls: 'stun:stun.example.com' }]);
         useCallStore.getState().setReconnecting(5);
         useCallStore.getState().setConnectionQuality('poor');
-        useCallStore.getState().setCallEndReason('rejected');
       });
 
       act(() => {
@@ -1076,7 +1057,6 @@ describe('CallStore', () => {
       expect(state.isReconnecting).toBe(false);
       expect(state.reconnectAttempt).toBe(0);
       expect(state.connectionQuality).toBeNull();
-      expect(state.callEndReason).toBeNull();
     });
   });
 

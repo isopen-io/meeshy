@@ -437,6 +437,12 @@ export class MessageHandler {
         }
       }
 
+      // Mettre à jour l'activité — parité avec handleMessageSend. L'envoi de
+      // pièces jointes (notamment les notes vocales, dont ce path WS est le
+      // SEUL transport) est une activité utilisateur qui doit rafraîchir
+      // lastActiveAt, sinon la présence d'un utilisateur voice-first se périme.
+      this.statusService.updateLastSeen(userId || participantId, isAnonymous);
+
       const resolvedParticipantId = await this._resolveParticipantId(userId, participantId, validated.conversationId, isAnonymous);
       if (!resolvedParticipantId) {
         this._sendError(callback, 'Not a participant in this conversation', socket);

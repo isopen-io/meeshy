@@ -688,6 +688,16 @@ describe('MessageHandler', () => {
       expect(deps.stats.messages_processed).toBe(1);
     });
 
+    // Presence parity with the text path (handleMessageSend): sending media —
+    // notably voice notes, whose ONLY transport is this WS event — is a
+    // user-driven activity and MUST refresh lastActiveAt, otherwise a
+    // voice-first user's presence goes stale despite constant sending.
+    it('refreshes sender activity (updateLastSeen) on success', async () => {
+      await handler.handleMessageSendWithAttachments(socket, validAttachData(), callback);
+
+      expect(deps.statusService.updateLastSeen).toHaveBeenCalledWith(USER_ID, false);
+    });
+
     it('increments errors and calls sendError on exception', async () => {
       (deps.messagingService.handleMessage as jest.Mock<any>).mockRejectedValue(new Error('network'));
 
