@@ -1496,14 +1496,19 @@ describe('PostService', () => {
     it('returns null when the post does not exist', async () => {
       prisma.post.findFirst.mockResolvedValue(null);
 
-      const result = await service.deletePost('missing', 'user-1');
+      const result = await service.deletePost('missing', 'user-1', { actorRole: 'USER' });
       expect(result).toBeNull();
     });
 
     it('throws FORBIDDEN when the user is not the author', async () => {
       prisma.post.findFirst.mockResolvedValue(makePost({ authorId: 'other-user' }));
 
-      await expect(service.deletePost('post-1', 'user-1')).rejects.toThrow('FORBIDDEN');
+      // Rôle USER : un non-auteur sans pouvoir de modération reste refusé.
+      // Le droit de retrait n'est ouvert qu'à MODERATOR / ADMIN / BIGBOSS
+      // (cf. posts-delete-moderator.test.ts).
+      await expect(
+        service.deletePost('post-1', 'user-1', { actorRole: 'USER' }),
+      ).rejects.toThrow('FORBIDDEN');
       expect(prisma.post.update).not.toHaveBeenCalled();
     });
 
@@ -1512,7 +1517,7 @@ describe('PostService', () => {
       const deletedPost = makePost({ deletedAt: new Date() });
       prisma.post.update.mockResolvedValue(deletedPost);
 
-      const result = await service.deletePost('post-1', 'user-1');
+      const result = await service.deletePost('post-1', 'user-1', { actorRole: 'USER' });
 
       expect(prisma.post.update).toHaveBeenCalledWith(
         expect.objectContaining({

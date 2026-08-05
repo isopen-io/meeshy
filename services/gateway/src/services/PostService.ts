@@ -628,6 +628,77 @@ export class PostService {
     };
   }
 
+  /**
+   * Enregistre le téléchargement des médias d'un poste par un utilisateur.
+   *
+   * ACL — c'est le filtre de VISIBILITÉ qui s'applique, pas celui
+   * d'interaction : enregistrer un média est un acte de consommation, donc si
+   * l'utilisateur a pu afficher le média il doit pouvoir l'enregistrer.
+   * `canUserViewPost` (amis stricts) refuserait le téléchargement d'un média
+   * affiché à l'écran d'un contact DM — l'asymétrie voir ⊇ interagir est
+   * documentée dans `services/posts/postVisibility.ts`.
+   *
+   * Retourne `null` si le poste est introuvable, supprimé OU invisible : les
+   * trois cas sont indiscernables par construction (le filtre fait partie du
+   * `where`), et c'est voulu — distinguer révélerait l'existence du poste.
+   *
+   * ORDRE D'ÉCRITURE : événements d'abord, compteurs ensuite. Le gateway
+   * n'utilise pas de transaction ; une panne entre les deux laisse le compteur
+   * en retard sur l'historique, ce qui se recalcule. L'ordre inverse
+   * produirait un compteur en avance, irréparable.
+   */
+  async recordMediaDownloads(
+    postId: string,
+    userId: string,
+    input: { mediaIds: string[]; surface: string },
+  ): Promise<{ recorded: number } | null> {
+    const visibilityFilter = await this.buildVisibilityFilter(userId);
+    const post = await this.prisma.post.findFirst({
+      where: { id: postId, deletedAt: NOT_DELETED, ...visibilityFilter },
+      select: { id: true },
+    });
+    if (!post) return null;
+
+    // Déduplication AVANT toute écriture : `updateMany` + `in` ne matche
+    // qu'une fois un id répété, donc un batch non dédupliqué écrirait N lignes
+    // d'historique pour un seul incrément de compteur — divergence silencieuse
+    // et définitive entre les deux.
+    const requestedIds = Array.from(new Set(input.mediaIds));
+
+    // Seuls les médias réellement attachés à CE poste sont retenus. Un client
+    // dont le cache est en retard sur une édition ne doit pas voir tout son
+    // batch rejeté pour un média détaché entre-temps.
+    const ownedMedia = await this.prisma.postMedia.findMany({
+      where: { id: { in: requestedIds }, postId },
+      select: { id: true },
+    });
+    const mediaIds = ownedMedia.map((m) => m.id);
+    if (mediaIds.length === 0) return { recorded: 0 };
+
+    await this.prisma.postMediaDownload.createMany({
+      data: mediaIds.map((mediaId) => ({
+        postId,
+        mediaId,
+        userId,
+        surface: input.surface,
+      })),
+    });
+
+    await this.prisma.postMedia.updateMany({
+      where: { id: { in: mediaIds } },
+      data: { downloadCount: { increment: 1 } },
+    });
+
+    // +1 par ACTION, jamais par média : ce compteur répond à « combien de fois
+    // ce poste a-t-il été enregistré ».
+    await this.prisma.post.update({
+      where: { id: postId },
+      data: { downloadCount: { increment: 1 } },
+    });
+
+    return { recorded: mediaIds.length };
+  }
+
   /// Builds the Prisma `where` fragment that enforces post visibility for a viewer.
   /// Mirrors `PostFeedService.buildVisibilityFilter` so single-post fetches, view
   /// recording, and the feed apply the SAME audience rules.
@@ -947,13 +1018,24 @@ export class PostService {
     return updated;
   }
 
-  async deletePost(postId: string, userId: string) {
+  /**
+   * Soft-delete d'un poste.
+   *
+   * Auteur : toujours autorisé. Modérateur et plus : autorisé sur le poste
+   * d'autrui, avec une ligne AdminAuditLog. Un modérateur ne peut PAS modifier
+   * un poste — réécrire le texte de quelqu'un sous sa signature casserait
+   * l'intégrité du contenu ; `updatePost` reste réservé à l'auteur.
+   */
+  async deletePost(postId: string, actorId: string, options: { actorRole: string }) {
     const post = await this.prisma.post.findFirst({
       where: { id: postId, deletedAt: NOT_DELETED },
     });
 
     if (!post) return null;
-    if (post.authorId !== userId) {
+
+    const isAuthor = post.authorId === actorId;
+    const canModerate = ['BIGBOSS', 'ADMIN', 'MODERATOR'].includes(options.actorRole);
+    if (!isAuthor && !canModerate) {
       throw new Error('FORBIDDEN');
     }
 
@@ -961,6 +1043,26 @@ export class PostService {
       where: { id: postId },
       data: { deletedAt: new Date() },
     });
+
+    // Retrait par un tiers habilité : trace d'audit. Best-effort comme la
+    // désactivation des liens ci-dessous — un log perdu ne doit pas annuler
+    // une suppression déjà committée.
+    if (!isAuthor) {
+      try {
+        await this.prisma.adminAuditLog.create({
+          data: {
+            userId: post.authorId,
+            adminId: actorId,
+            action: 'DELETE_POST',
+            entity: 'Post',
+            entityId: postId,
+            metadata: JSON.stringify({ type: post.type }),
+          },
+        });
+      } catch (err) {
+        log.warn('deletePost: audit log write failed', { postId, actorId, err });
+      }
+    }
 
     // Soft-delete only flips `deletedAt` — the Prisma `onDelete: Cascade` relation
     // never fires, so any share-tracking links targeting this post would keep

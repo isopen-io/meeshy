@@ -36,7 +36,26 @@ default rather than signing with a blank team. The header block in
 |----------------------|----------------------------------------------|
 | `DEMO_USER`          | App Store reviewer demo username.            |
 | `DEMO_PASSWORD`      | App Store reviewer demo password.            |
-| `DEMO_REVIEW_NOTES`  | (Optional) Custom notes for App Review.      |
+| `DEMO_USER_2`        | Second reviewer account — **required to demo calls.** |
+| `DEMO_PASSWORD_2`    | Second reviewer account password.            |
+| `DEMO_REVIEW_NOTES`  | (Optional) Overrides the generated step-by-step notes. |
+
+### Why a second account is mandatory
+
+Build 1269 (version 1.0.3) was rejected twice under **Guideline 2.5.4** — App
+Review could not locate the VoIP or the persistent-audio features. Both exist
+in the app; the reviewer simply could not reach them. **A call needs two
+accounts, and only one was ever provided — nobody can call themselves.**
+
+Without `DEMO_USER_2` / `DEMO_PASSWORD_2` the `release` lane still ships, but
+prints a loud warning: the reviewer will again be unable to place a call, and
+the same rejection is the likely outcome. Removing the `voip` / `audio`
+background modes is NOT an acceptable workaround — it would break background
+call audio and lock-screen voice-message playback for every user.
+
+Apple also asks for a **screen recording on a physical device** for each of the
+two features. Record them and attach them in App Store Connect → App Review
+Information → Notes. No code change can substitute for those recordings.
 
 These credentials grant App Review access to a fully functioning account.
 **Rotate them after any suspected exposure** (e.g. they previously lived in
@@ -64,6 +83,8 @@ ASC_ISSUER_ID=...
 ASC_KEY_FILEPATH=/Users/<you>/.appstoreconnect/AuthKey_XXXX.p8
 DEMO_USER=...
 DEMO_PASSWORD=...
+DEMO_USER_2=...
+DEMO_PASSWORD_2=...
 MATCH_PASSWORD=...
 ```
 

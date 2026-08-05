@@ -7,7 +7,7 @@ import { UnifiedAuthRequest } from '../../middleware/auth';
 import { PostService } from '../../services/PostService';
 import { MediaService } from '../../services/MediaService';
 import type { OrphanMediaCleanupService } from '../../services/storage/OrphanMediaCleanupService';
-import { LikeSchema, RepostSchema, PostParams, EngagementBatchSchema } from './types';
+import { LikeSchema, RepostSchema, PostParams, EngagementBatchSchema, RecordDownloadsSchema } from './types';
 import { sendSuccess, sendForbidden, sendUnauthorized, sendNotFound, sendInternalError, sendBadRequest, sendConflict } from '../../utils/response';
 import { ConflictError } from '../../errors/custom-errors';
 import { resolveMentionedUsers } from '../../services/MentionService';
@@ -595,6 +595,45 @@ export function registerInteractionRoutes(
       return sendSuccess(reply, link);
     } catch (error) {
       fastify.log.error(`[GET /posts/:postId/share] Error: ${error}`);
+      return sendInternalError(reply, 'Internal server error', { code: 'INTERNAL_ERROR' });
+    }
+  });
+
+  // POST /posts/:postId/downloads — Trace le téléchargement des médias d'un poste.
+  //
+  // Batch et non unitaire : « Enregistrer » sur un poste à quatre images
+  // télécharge les quatre d'un coup, un seul aller-retour. La validation, l'ACL
+  // et la déduplication vivent dans PostService.recordMediaDownloads.
+  fastify.post('/posts/:postId/downloads', {
+    preValidation: [requiredAuth],
+  }, async (request: FastifyRequest<{ Params: PostParams }>, reply: FastifyReply) => {
+    try {
+      const authContext = (request as UnifiedAuthRequest).authContext;
+      if (!authContext?.registeredUser) {
+        return sendUnauthorized(reply, 'Authentication required', { code: 'UNAUTHORIZED' });
+      }
+
+      const parsed = RecordDownloadsSchema.safeParse(request.body);
+      if (!parsed.success) {
+        return sendBadRequest(reply, 'Invalid request', { code: 'VALIDATION_ERROR' });
+      }
+
+      const { postId } = request.params;
+      const result = await postService.recordMediaDownloads(
+        postId,
+        authContext.registeredUser.id,
+        { mediaIds: parsed.data.mediaIds, surface: parsed.data.surface },
+      );
+
+      // null couvre indistinctement « absent », « supprimé » et « invisible » —
+      // les distinguer révélerait l'existence du poste.
+      if (!result) {
+        return sendNotFound(reply, 'Post not found', { code: 'POST_NOT_FOUND' });
+      }
+
+      return sendSuccess(reply, result);
+    } catch (error) {
+      fastify.log.error(`[POST /posts/:postId/downloads] Error: ${error}`);
       return sendInternalError(reply, 'Internal server error', { code: 'INTERNAL_ERROR' });
     }
   });
