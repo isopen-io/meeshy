@@ -94,16 +94,24 @@ export class StatusService {
    * connecté via Socket.IO, on le marque en ligne et on broadcaste.
    */
   ensureUserOnline(userId: string, isAnonymous: boolean = false): void {
-    const cacheKey = isAnonymous ? `anon_online_${userId}` : userId;
+    // The throttle window lives in `onlineEnsureCache` under `anon_online_*`
+    // (matched by markDisconnected's delete), but the disconnect race-guard must
+    // read the key markDisconnected actually WRITES into `disconnectedUsers` —
+    // `anon_activity_*` for anonymous participants (see markDisconnected + the
+    // sibling guards in updateAnonymous*). Guarding on `anon_online_*` here made
+    // the guard a permanent no-op for anonymous users, letting a REST call still
+    // in flight resurrect an "online" presence for a participant who just left.
+    const throttleKey = isAnonymous ? `anon_online_${userId}` : userId;
+    const guardKey = isAnonymous ? `anon_activity_${userId}` : userId;
 
-    if (this.disconnectedUsers.has(cacheKey)) return;
+    if (this.disconnectedUsers.has(guardKey)) return;
 
     const now = Date.now();
-    const lastEnsure = this.onlineEnsureCache.get(cacheKey) || 0;
+    const lastEnsure = this.onlineEnsureCache.get(throttleKey) || 0;
 
     if (now - lastEnsure < this.ONLINE_ENSURE_THROTTLE_MS) return;
 
-    this.onlineEnsureCache.set(cacheKey, now);
+    this.onlineEnsureCache.set(throttleKey, now);
 
     const updatePromise = isAnonymous
       ? this.prisma.participant.update({
