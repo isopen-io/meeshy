@@ -625,6 +625,30 @@ class PostDetailViewModel: ObservableObject {
         }
     }
 
+    /// Deletes the loaded post. Mirrors `FeedViewModel.deletePost` — no local
+    /// list to remove from (this IS the single loaded post), so success just
+    /// reports true and the caller (`PostDetailView`) pops the screen.
+    @discardableResult
+    func deletePost(_ postId: String) async -> Bool {
+        do {
+            try await postService.delete(postId: postId)
+            FeedbackToastManager.shared.showSuccess(String(localized: "feed.post.deleted", defaultValue: "Post deleted", bundle: .main))
+            return true
+        } catch {
+            FeedbackToastManager.shared.showError(String(localized: "feed.post.deleteError", defaultValue: "Error deleting post", bundle: .main))
+            return false
+        }
+    }
+
+    func pinPost(_ postId: String) async {
+        do {
+            try await postService.pinPost(postId: postId)
+            FeedbackToastManager.shared.showSuccess(String(localized: "feed.post.pinned", defaultValue: "Post pinned", bundle: .main))
+        } catch {
+            FeedbackToastManager.shared.showError(String(localized: "feed.post.pinError", defaultValue: "Error pinning post", bundle: .main))
+        }
+    }
+
     /// Wave 1 Phase C — comment creation flows through the offline
     /// outbox so the optimistic comment appears instantly and survives
     /// app kill. The gateway response is the authoritative comment id ;

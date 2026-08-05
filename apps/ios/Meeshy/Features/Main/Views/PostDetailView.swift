@@ -991,19 +991,43 @@ struct PostDetailView: View {
             } label: {
                 Label(String(localized: "feed.post.detail.share", defaultValue: "Partager", bundle: .main), systemImage: "square.and.arrow.up")
             }
+            Button {
+                toggleDetailBookmark()
+            } label: {
+                Label(String(localized: "feed.post.save", defaultValue: "Enregistrer", bundle: .main), systemImage: isPostBookmarked ? "bookmark.fill" : "bookmark")
+            }
             if displayPost?.authorId == AuthManager.shared.currentUser?.id {
+                Button {
+                    Task { await viewModel.pinPost(postId) }
+                    HapticFeedback.light()
+                } label: {
+                    Label(String(localized: "feed.post.pin", defaultValue: "Epingler", bundle: .main), systemImage: "pin")
+                }
                 Button {
                     isEditing = true
                     HapticFeedback.light()
                 } label: {
                     Label(String(localized: "feed.post.edit", defaultValue: "Modifier", bundle: .main), systemImage: "pencil")
                 }
-            }
-            Button(role: .destructive) {
-                HapticFeedback.light()
-                Task { await viewModel.reportPost(postId) }
-            } label: {
-                Label(String(localized: "feed.post.detail.report", defaultValue: "Signaler", bundle: .main), systemImage: "exclamationmark.triangle")
+                Divider()
+                Button(role: .destructive) {
+                    HapticFeedback.medium()
+                    Task {
+                        if await viewModel.deletePost(postId) {
+                            router.pop()
+                        }
+                    }
+                } label: {
+                    Label(String(localized: "common.delete", defaultValue: "Supprimer", bundle: .main), systemImage: "trash")
+                }
+            } else {
+                Divider()
+                Button(role: .destructive) {
+                    HapticFeedback.light()
+                    Task { await viewModel.reportPost(postId) }
+                } label: {
+                    Label(String(localized: "feed.post.detail.report", defaultValue: "Signaler", bundle: .main), systemImage: "exclamationmark.triangle")
+                }
             }
         } label: {
             Image(systemName: "ellipsis")
