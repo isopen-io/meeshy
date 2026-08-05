@@ -1175,8 +1175,14 @@ struct BubbleStandardLayout: View {
         content.isMe ? .white.opacity(0.9) : Color(hex: contactColor)
     }
 
+    /// Distinct des liens URL — et THÉMATISÉ : l'`indigo400` figé d'avant ne
+    /// contrastait qu'à 2.98:1 sur le fond clair de l'app.
     private var mentionTint: Color {
-        MeeshyColors.indigo400 // distinct des liens URL
+        MeeshyColors.mentionColor(isDark: theme.mode.isDark)
+    }
+
+    private var hashtagTint: Color {
+        MeeshyColors.hashtagColor(isDark: theme.mode.isDark)
     }
 
     @ViewBuilder
@@ -1187,6 +1193,7 @@ struct BubbleStandardLayout: View {
             mentionDisplayNames: mentionDisplayNames,
             highlightTerm: highlightSearchTerm,
             mentionTint: mentionTint,
+            hashtagTint: hashtagTint,
             linkTint: linkTint,
             trackedLinks: content.text?.trackedLinks ?? [:]
         )
@@ -1204,6 +1211,7 @@ struct BubbleStandardLayout: View {
                 textPrimary: theme.textPrimary,
                 mentionDisplayNames: mentionDisplayNames,
                 mentionTint: mentionTint,
+                hashtagTint: hashtagTint,
                 linkTint: linkTint,
                 trackedLinks: content.text?.trackedLinks ?? [:]
             )

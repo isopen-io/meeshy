@@ -2766,9 +2766,18 @@ struct StoryCommentRowView: View, Equatable {
     }
 
     private var contentText: some View {
-        Text(displayContent)
-            .font(MeeshyFont.relative(13.5))
-            .foregroundColor(.white)
+        // Le viewer story épingle `.preferredColorScheme(.dark)` : les entités
+        // inline prennent donc les variantes `isDark: true`, jamais le thème app.
+        MessageTextRenderer.render(
+            displayContent,
+            fontSize: 13.5,
+            color: .white,
+            mentionColor: MeeshyColors.mentionColor(isDark: true),
+            hashtagColor: MeeshyColors.hashtagColor(isDark: true),
+            accentColor: .white,
+            usesRelativeFont: true
+        )
+            .tint(.white)
             .lineLimit(6)
             .multilineTextAlignment(.leading)
             .animation(.easeInOut(duration: 0.2), value: showOriginal)

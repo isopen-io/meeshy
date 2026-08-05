@@ -38,6 +38,7 @@ import { NotificationService } from '../../../services/notifications/Notificatio
 const USER_ID = '64a000000000000000000001';
 const CONVERSATION_ID = '64b000000000000000000002';
 const POST_ID = '64c000000000000000000003';
+const FRIEND_REQUEST_ID = '64d000000000000000000004';
 
 describe('NotificationService — marquage par contexte en 1 requête (iter 35 F7)', () => {
   let service: NotificationService;
@@ -134,6 +135,47 @@ describe('NotificationService — marquage par contexte en 1 requête (iter 35 F
         }],
       });
       expect(count).toBe(1);
+    });
+  });
+
+  describe('markFriendRequestNotificationsAsRead', () => {
+    it('émet un seul update Mongo filtré sur context.friendRequestId sans findMany/updateMany', async () => {
+      prisma.$runCommandRaw.mockResolvedValue({ ok: 1, n: 1, nModified: 1 });
+
+      const count = await service.markFriendRequestNotificationsAsRead(USER_ID, FRIEND_REQUEST_ID);
+
+      expect(prisma.notification.findMany).not.toHaveBeenCalled();
+      expect(prisma.notification.updateMany).not.toHaveBeenCalled();
+      expect(prisma.$runCommandRaw).toHaveBeenCalledWith({
+        update: 'Notification',
+        updates: [{
+          q: {
+            userId: { $oid: USER_ID },
+            isRead: false,
+            'context.friendRequestId': FRIEND_REQUEST_ID,
+          },
+          u: { $set: { isRead: true, readAt: { $date: expect.any(String) } } },
+          multi: true,
+        }],
+      });
+      expect(count).toBe(1);
+    });
+
+    it('rafraîchit les compteurs (notification:counts) pour la sync multi-appareils', async () => {
+      prisma.$runCommandRaw.mockResolvedValue({ ok: 1, n: 1, nModified: 1 });
+
+      await service.markFriendRequestNotificationsAsRead(USER_ID, FRIEND_REQUEST_ID);
+      await new Promise(resolve => setImmediate(resolve));
+
+      expect(mockIO.to).toHaveBeenCalledWith(`user:${USER_ID}`);
+      expect(mockIO.emit).toHaveBeenCalledWith('notification:counts', expect.any(Object));
+    });
+
+    it('retourne 0 sans requête DB pour un userId non-ObjectId (session anonyme)', async () => {
+      const count = await service.markFriendRequestNotificationsAsRead('anon-session-token', FRIEND_REQUEST_ID);
+
+      expect(prisma.$runCommandRaw).not.toHaveBeenCalled();
+      expect(count).toBe(0);
     });
   });
 });

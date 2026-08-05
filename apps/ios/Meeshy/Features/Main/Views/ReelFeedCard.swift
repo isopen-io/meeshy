@@ -247,7 +247,19 @@ struct ReelFeedCard: View, Equatable {
             }
             authorRow
             if !displayCaption.isEmpty {
-                MessageTextRenderer.render(displayCaption, fontSize: 15, color: .white, mentionColor: .white, accentColor: .white, hashtagColor: .white)
+                // Fond TOUJOURS sombre (vidéo + scrim noir) : on épingle les
+                // variantes `isDark: true` au lieu de suivre le thème de l'app —
+                // les variantes light (indigo600/800) seraient illisibles ici.
+                MessageTextRenderer.render(
+                    displayCaption,
+                    fontSize: 15,
+                    color: .white,
+                    mentionColor: MeeshyColors.mentionColor(isDark: true),
+                    hashtagColor: MeeshyColors.hashtagColor(isDark: true),
+                    accentColor: .white,
+                    usesRelativeFont: true
+                )
+                    .tint(.white)
                     .lineLimit(2)
                     .shadow(color: .black.opacity(0.4), radius: 2, y: 1)
             }

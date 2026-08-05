@@ -329,7 +329,9 @@ private struct AudioFullscreenPage: View {
                     captionText,
                     fontSize: 13,
                     color: .white.opacity(0.8),
-                    mentionColor: MeeshyColors.indigo400,
+                    // Overlay plein écran TOUJOURS sombre → variantes dark figées.
+                    mentionColor: MeeshyColors.mentionColor(isDark: true),
+                    hashtagColor: MeeshyColors.hashtagColor(isDark: true),
                     accentColor: accent,
                     mentionDisplayNames: mentionDisplayNames.isEmpty ? nil : mentionDisplayNames
                 )

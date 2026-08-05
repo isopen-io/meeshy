@@ -1147,6 +1147,53 @@ do_release_andp() {
     return "$rc"
 }
 
+# ─── Signature des frameworks embarqués (ITMS-90035) ─────────────────────────
+# À l'action `archive`, la signature automatique signe les XCFrameworks binaires
+# embarqués (FirebaseAnalytics, GoogleAppMeasurement, GoogleAdsOnDeviceConversion,
+# GoogleAppMeasurementIdentitySupport, WebRTC) avec l'identité de DÉVELOPPEMENT.
+# `-exportArchive` les re-signe ensuite en Distribution, mais ce « replacing
+# existing signature » laisse des métadonnées résiduelles que l'analyseur d'App
+# Store Connect rejette : ITMS-90035 « Invalid Signature — Code failed to satisfy
+# specified code requirement(s) ».
+#
+# Le strip DOIT donc courir entre l'archive et l'export, sur TOUS les chemins.
+# `meeshy.sh` ne l'appelait sur aucun des deux siens : `archive` et `distribute`
+# produisaient des IPA rejetés à l'upload, alors que le build lui-même passait.
+strip_embedded_signatures() {
+    local archive_path="$1"
+    local strip_script="./ci_scripts/ci_post_xcodebuild.sh"
+
+    if [ ! -x "$strip_script" ]; then
+        err "Strip script introuvable ou non exécutable: $strip_script"
+        err "Sans lui, l'IPA sera rejeté par App Store Connect (ITMS-90035)."
+        exit 1
+    fi
+
+    log "Stripping embedded framework signatures (ITMS-90035 guard)..."
+    CI_XCODEBUILD_ACTION=archive CI_ARCHIVE_PATH="$archive_path" "$strip_script"
+    ok "Embedded framework signatures stripped"
+}
+
+# Vérifie l'IPA/app EXPORTÉ : chaque framework embarqué doit porter une signature
+# de distribution valide. C'est le seul contrôle qui juge le produit livré plutôt
+# que le câblage du pipeline — un strip oublié y devient rouge localement au lieu
+# de revenir par courriel d'Apple deux jours plus tard.
+verify_embedded_signatures() {
+    local bundle_path="$1"
+    local verify_script="./ci_scripts/verify_embedded_signatures.sh"
+
+    if [ ! -x "$verify_script" ]; then
+        err "Verification script introuvable ou non exécutable: $verify_script"
+        exit 1
+    fi
+
+    log "Verifying embedded framework signatures..."
+    if ! "$verify_script" "$bundle_path"; then
+        err "Signature verification FAILED — ne pas uploader cet IPA."
+        exit 1
+    fi
+}
+
 # ─── Archive + IPA ───────────────────────────────────────────────────────────
 do_archive() {
     local archive_config="${CONFIGURATION:-Release}"
@@ -1182,6 +1229,8 @@ do_archive() {
     fi
     ok "Archive created: $archive_path"
 
+    strip_embedded_signatures "$archive_path"
+
     # Export IPA
     log "Exporting IPA (method: $EXPORT_METHOD)..."
     local export_opts="$DERIVED_DATA/$archive_config/ExportOptions.plist"
@@ -1213,6 +1262,8 @@ EOXML
         err "IPA export failed"
         exit 1
     fi
+
+    verify_embedded_signatures "$ipa_file"
 
     local ipa_size
     ipa_size=$(du -h "$ipa_file" | cut -f1)
@@ -1341,6 +1392,8 @@ do_distribute() {
     rm -f "$archive_log"
     ok "Archive created: $archive_path"
 
+    strip_embedded_signatures "$archive_path"
+
     # ── Export IPA ──
     log "Exporting IPA (method: $dist_method)..."
     local export_opts="$DERIVED_DATA/Distribution/ExportOptions.plist"
@@ -1383,6 +1436,8 @@ EOXML
         err "IPA file not found after export"
         exit 1
     fi
+
+    verify_embedded_signatures "$ipa_file"
 
     local ipa_size
     ipa_size=$(du -h "$ipa_file" | cut -f1)

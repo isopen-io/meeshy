@@ -6,6 +6,23 @@ import os
 
 private let logger = Logger(subsystem: "me.meeshy.app", category: "push")
 
+/// « Un message est arrivé dans cette conversation » — le seul fait qu'une
+/// notification entrante établisse. `messageId` est porté séparément pour que
+/// l'abonné puisse reconnaître un message qu'il détient DÉJÀ (le socket
+/// `message:new` précède typiquement le push d'environ une seconde) et
+/// s'abstenir d'écraser ce qu'il en sait par une facette neutre. `nil` quand
+/// le payload ne le transporte pas — l'abonné retombe alors sur son
+/// comportement conservateur.
+public struct MessageActivitySignal: Sendable, Equatable {
+    public let conversationId: String
+    public let messageId: String?
+
+    public init(conversationId: String, messageId: String? = nil) {
+        self.conversationId = conversationId
+        self.messageId = messageId
+    }
+}
+
 @MainActor
 public final class PushNotificationManager: NSObject, ObservableObject {
     public static let shared = PushNotificationManager()
@@ -17,14 +34,14 @@ public final class PushNotificationManager: NSObject, ObservableObject {
     /// The app layer observes this to perform navigation.
     @Published public var pendingNotificationPayload: NotificationPayload?
 
-    /// Émet un conversationId chaque fois qu'une notification entrante
-    /// (bannière au premier plan ou push silencieux) signale une activité de
-    /// message. La liste de conversations s'y abonne pour remonter la ligne
-    /// en tête en temps réel — y compris quand le message est arrivé via APNs
-    /// alors que le websocket était déconnecté. Distinct de
+    /// Émet un signal d'activité chaque fois qu'une notification entrante
+    /// (bannière au premier plan ou push silencieux) signale un message. La
+    /// liste de conversations s'y abonne pour remonter la ligne en tête en
+    /// temps réel — y compris quand le message est arrivé via APNs alors que
+    /// le websocket était déconnecté. Distinct de
     /// `pendingNotificationPayload`, qui porte une intention de navigation sur
     /// un tap explicite.
-    public let messageNotificationReceived = PassthroughSubject<String, Never>()
+    public let messageNotificationReceived = PassthroughSubject<MessageActivitySignal, Never>()
 
     /// Keys exposed at type level so they can be reused by tests writing to
     /// the same UserDefaults suite without re-stringifying the namespace.
@@ -222,10 +239,12 @@ public final class PushNotificationManager: NSObject, ObservableObject {
     public func noteMessageActivity(userInfo: [AnyHashable: Any]) {
         guard let conversationId = userInfo["conversationId"] as? String,
               !conversationId.isEmpty else { return }
-        let isMessage = (userInfo["type"] as? String) == "message"
-            || (userInfo["messageId"] as? String)?.isEmpty == false
+        let messageId = (userInfo["messageId"] as? String).flatMap { $0.isEmpty ? nil : $0 }
+        let isMessage = (userInfo["type"] as? String) == "message" || messageId != nil
         guard isMessage else { return }
-        messageNotificationReceived.send(conversationId)
+        messageNotificationReceived.send(
+            MessageActivitySignal(conversationId: conversationId, messageId: messageId)
+        )
     }
 
     // MARK: - Badge

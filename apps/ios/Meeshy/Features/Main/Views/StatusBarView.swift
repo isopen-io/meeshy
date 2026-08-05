@@ -160,9 +160,16 @@ struct StatusBarView: View {
                 .foregroundColor(theme.textPrimary)
 
             if let content = entry.content {
-                Text(content)
-                    .font(.footnote)
-                    .foregroundColor(theme.textSecondary)
+                MessageTextRenderer.render(
+                    content,
+                    fontSize: 13,
+                    color: theme.textSecondary,
+                    mentionColor: MeeshyColors.mentionColor(isDark: theme.mode.isDark),
+                    hashtagColor: MeeshyColors.hashtagColor(isDark: theme.mode.isDark),
+                    accentColor: MeeshyColors.brandPrimary,
+                    usesRelativeFont: true
+                )
+                    .tint(MeeshyColors.brandPrimary)
                     .multilineTextAlignment(.center)
             }
 

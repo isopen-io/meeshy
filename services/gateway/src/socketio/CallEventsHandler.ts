@@ -134,6 +134,26 @@ export class CallEventsHandler {
   private static readonly OFFER_BUFFER_TTL_MS = 150_000;
 
   /**
+   * Idempotency guard for `createMissedCallNotifications`, keyed by callId →
+   * first-notified timestamp. `handleMissedCall` is reachable from 7
+   * independent terminal paths (ringing-timeout, disconnect-grace-expiry,
+   * force-cleanup-after-leave-failure, force-end-orphaned, call:leave,
+   * call:force-leave, call:end) plus `CallCleanupService`'s GC tier, which
+   * calls `createMissedCallNotifications` directly via `missedCallNotify`.
+   * Only the ringing-timeout path guards itself with an atomic `updateMany`
+   * (count===0 → return) before calling `handleMissedCall`; every other path
+   * merely READS the call's already-committed status and fires again
+   * whenever it happens to observe `missed`, regardless of whether IT caused
+   * the transition. Without this guard, a hangup racing the ringing timeout
+   * — an everyday occurrence, not an edge case — delivers TWO persisted
+   * `missed_call` notifications (double badge, double push) for one missed
+   * call. TTL-swept below rather than wired into every terminal call site,
+   * mirroring `bufferedOffers`/`signalSessionCache`.
+   */
+  private readonly missedCallNotifiedAt = new Map<string, number>();
+  private static readonly MISSED_CALL_NOTIFY_DEDUP_TTL_MS = 600_000;
+
+  /**
    * CALL-RESILIENCE 2026-07-02 — an ANSWERED call rides on a direct peer-to-peer
    * media connection (DTLS-SRTP) that the gateway never carries: a transient loss
    * of the signaling socket (network blip, single-instance restart/deploy) does
@@ -234,6 +254,11 @@ export class CallEventsHandler {
       for (const [callId, entry] of this.signalSessionCache) {
         if (now - entry.fetchedAt >= CallEventsHandler.SIGNAL_SESSION_TTL_MS) {
           this.signalSessionCache.delete(callId);
+        }
+      }
+      for (const [callId, notifiedAt] of this.missedCallNotifiedAt) {
+        if (now - notifiedAt >= CallEventsHandler.MISSED_CALL_NOTIFY_DEDUP_TTL_MS) {
+          this.missedCallNotifiedAt.delete(callId);
         }
       }
     }, 60_000).unref();
@@ -1764,7 +1789,14 @@ export class CallEventsHandler {
         const activeCalls = await this.prisma.callSession.findMany({
           where: {
             conversationId: { in: convIds },
-            endedAt: null,
+            // `endedAt` is never explicitly written to `null` at call
+            // creation (CallService.initiateCall omits it) — a plain
+            // `endedAt: null` equality filter only matches an EXPLICIT
+            // null, never an unset field, so it silently matched zero
+            // rows for every real ringing call (audit calling-stack
+            // 2026-08-04). Same class of bug as `leftAt`/`activeCallId`
+            // elsewhere in this file — mirror their `isSet: false` guard.
+            OR: [{ endedAt: null }, { endedAt: { isSet: false } }],
             initiatorId: { not: userId },
             // No `connecting` here — the FSM (CallService Item F) never
             // persists that status, so it can never match.
@@ -4072,10 +4104,18 @@ export class CallEventsHandler {
    * Créer des notifications pour les participants qui n'ont pas répondu à un appel
    */
   async createMissedCallNotifications(callId: string): Promise<void> {
+    const notifiedAt = this.missedCallNotifiedAt.get(callId);
+    if (notifiedAt !== undefined && Date.now() - notifiedAt < CallEventsHandler.MISSED_CALL_NOTIFY_DEDUP_TTL_MS) {
+      logger.info('📢 Missed call notifications already sent for this call — skipping duplicate', { callId });
+      return;
+    }
+
     if (!this.notificationService) {
       logger.warn('⚠️ NotificationService not initialized, cannot create missed call notifications');
       return;
     }
+
+    this.missedCallNotifiedAt.set(callId, Date.now());
 
     try {
       // Récupérer les informations de l'appel
