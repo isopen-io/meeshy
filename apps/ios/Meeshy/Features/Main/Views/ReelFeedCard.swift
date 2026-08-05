@@ -265,8 +265,7 @@ struct ReelFeedCard: View, Equatable {
                 // Fond TOUJOURS sombre (vidéo + scrim noir) : on épingle les
                 // variantes `isDark: true` au lieu de suivre le thème de l'app —
                 // les variantes light (indigo600/800) seraient illisibles ici.
-                MessageTextRenderer.render(
-                    displayCaption,
+                MessageTextRenderer.render(displayCaption,
                     fontSize: 15,
                     color: .white,
                     mentionColor: MeeshyColors.mentionColor(isDark: true),
