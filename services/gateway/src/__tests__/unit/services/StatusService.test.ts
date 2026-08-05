@@ -131,6 +131,13 @@ describe('StatusService', () => {
       expect(mockPrisma.user.update).not.toHaveBeenCalled();
     });
 
+    it('should cause ensureUserOnline to short-circuit for an anonymous user (no Prisma call)', async () => {
+      service.markDisconnected('anon-1', true);
+      service.ensureUserOnline('anon-1', true);
+      await flushPromises();
+      expect(mockPrisma.participant.update).not.toHaveBeenCalled();
+    });
+
     it('should cause updateUserLastSeen to skip for the disconnected user', async () => {
       service.markDisconnected('user-1', false);
       await service.updateUserLastSeen('user-1');
