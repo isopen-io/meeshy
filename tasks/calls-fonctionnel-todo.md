@@ -3573,6 +3573,61 @@ bug scopé/mécanique selon les 5 patterns déjà rencontrés dans les vagues pr
   ce sandbox) ; changement strictement gateway (`CallEventsHandler.ts`, 1 fichier de test).
 - **Reste ouvert (inchangé)** : dead code / god-objects `CallManager.swift`/`CallEventsHandler.ts` ; ADR
   `actor CallEventQueue` non implémenté ; couverture E2E iOS des écrans d'appel (peu de XCUITest
-  bout-en-bout) ; `packages/shared/types/api-schemas.ts` `callSessionSchema.status` enum omet
-  `initiated`/`connecting`/`reconnecting` (drift schéma/doc — vérifié inoffensif à l'exécution,
-  `fast-json-stringify` n'impose pas `enum`, candidat FAIBLE pour une prochaine vague).
+  bout-en-bout).
+
+## Vague 54 — unmount leak call-waiting banner + dead code `callEndReason` + enum drift `callSessionSchema.status` (2026-08-05)
+
+Point d'entrée : routine calling-feature (agent Cowork non interactif, mandat PHASE 1-12). Branche
+`claude/modest-cori-bih8gr`, redémarrée depuis `origin/main` à jour ; aucune PR calls concurrente ouverte.
+Sans toolchain macOS/Xcode dans ce sandbox, le scope a été délibérément restreint à la couche TypeScript
+(gateway + web), seule vérifiable par build/tests réels ici — pas de tentative de modification Swift
+non compilable à l'aveugle. Audit dédié (agent général, lecture seule, croisé avec ce fichier et
+`tasks/calls-audit-2026-07-11.md` pour éviter tout doublon avec du travail déjà fermé/en cours) sur
+`CallEventsHandler.ts`, `CallService.ts`, `CallCleanupService.ts`, `TURNCredentialService.ts`,
+`routes/calls.ts` et la couche WebRTC web (`CallManager.tsx`, `call-store.ts`, `webrtc-service.ts`,
+`use-webrtc-p2p.ts`) — la majeure partie du terrain facile côté gateway est déjà nettoyée par les 53
+vagues précédentes ; rien de neuf trouvé dans `CallEventsHandler`/`CallService`/`CallCleanupService`/
+`TURNCredentialService`/`routes/calls.ts` au-delà de ce qui est déjà corrigé en date du 2026-08-05.
+
+- **[MOYEN, web, CONFIRMÉ + CORRIGÉ, TDD]** `CallManager.tsx` — l'effet de nettoyage au démontage
+  (`useEffect` de cleanup, ~ligne 1036) ne vidait que `callTimeoutRef` via `clearCallTimeout()` ; le second
+  timer indépendant du composant, `waitingTimeoutRef` (armé par `startWaitingTimeout` dès qu'un DEUXIÈME
+  `call:initiated` arrive pendant un appel déjà actif, pour auto-décliner la bannière « call waiting » après
+  45s), n'était jamais vidé. **Impact concret** : utilisateur en appel actif, un second appelant sonne
+  (bannière affichée), l'utilisateur navigue ailleurs / se déconnecte AVANT que le timeout expire → 45s
+  après le démontage, le timeout orphelin s'exécute quand même et appelle `rejectWaitingCall` — un vrai
+  `socket.emit('call:end', {reason: 'rejected'})` — pour un composant que plus rien n'observe, déclinant
+  silencieusement un appel que l'utilisateur a peut-être géré autrement entretemps. **Fix** : ajout de
+  `clearWaitingTimeout()` dans le même effet de cleanup + dans son tableau de dépendances. **Tests TDD** :
+  nouveau fichier `CallManager.unmountCleanup.test.tsx` — RED confirmé avant le fix (l'assertion
+  `call:end` intercepte l'emit orphelin après `unmount()` + `jest.advanceTimersByTime(45001)`), GREEN
+  après. Suite `video-call`/`video-calls` complète : 26 suites / 227 tests verts.
+- **[FAIBLE, web, dead code, CONFIRMÉ + SUPPRIMÉ]** `call-store.ts` — champ `callEndReason` + action
+  `setCallEndReason` : aucune référence en dehors de leur propre définition et de leurs propres tests
+  (grep repo entier, y compris Swift/Kotlin) ; la Vague du 2026-07-12 (retry-on-failure) avait déjà
+  délibérément construit `pendingRetry` SANS jamais câbler `setCallEndReason`, sans le retirer ensuite.
+  Retiré (champ, action, valeurs par défaut/reset, import de type `CallEndReason` désormais inutilisé) +
+  ses 2 blocs de test dans `call-store.test.ts`. `CallEndReason` (le TYPE, dans `video-call.ts`) reste
+  utilisé ailleurs (ex. `CallEndedEvent.reason`) — non touché.
+- **[FAIBLE, shared, drift schéma, CONFIRMÉ + CORRIGÉ, TDD]** `packages/shared/types/api-schemas.ts`
+  `callSessionSchema.status` — déjà repéré comme dette faible en Vague 53 (« candidat FAIBLE pour une
+  prochaine vague ») ; l'enum listait 6 des 9 valeurs Prisma `CallStatus`, omettant `initiated`,
+  `connecting`, `reconnecting`. Inoffensif à l'exécution (`fast-json-stringify` ne valide pas contre
+  `enum` en sérialisation) mais un contrat REST qui ment sur les statuts possibles mord dès qu'un outil
+  plus strict (codegen OpenAPI, validateur de requête) lui fait confiance comme exhaustif. **Fix** : les 9
+  valeurs ajoutées. **Tests TDD** : nouveau fichier
+  `call-session-status-enum-drift.test.ts` (gateway) verrouillant la parité contre un miroir statique de
+  `enum CallStatus` (schema.prisma) — RED confirmé avant le fix, GREEN après.
+- **Vérification globale (pas seulement le périmètre calls)** : suite gateway complète
+  (`bunx jest`, hors coverage) : 587/587 suites, 15341/15341 tests verts. Suite web complète : 502/502
+  suites, 11645/11666 tests verts (21 skip pré-existants). Suite `packages/shared` (`vitest run`) :
+  48/48 fichiers, 1454/1454 tests verts. `tsc --noEmit` sur les 4 fichiers modifiés : aucune erreur
+  introduite (les erreurs pré-existantes ailleurs dans `apps/web` — `VideoLightbox.tsx`,
+  `use-communities-query.ts`, etc. — sont hors du diff de cette vague et non liées aux calls).
+- **iOS/Android (lecture seule, aucun changement)** : hors périmètre — aucune toolchain Swift/Kotlin dans
+  ce sandbox Linux ; changements strictement gateway/shared/web (4 fichiers modifiés + 2 nouveaux fichiers
+  de test).
+- **Reste ouvert (inchangé)** : dead code / god-objects `CallManager.swift`/`CallEventsHandler.ts` ; ADR
+  `actor CallEventQueue` non implémenté ; couverture E2E iOS des écrans d'appel (peu de XCUITest
+  bout-en-bout) ; `enableSimulcast()` (`webrtc-service.ts`) référencé uniquement par son propre test —
+  scaffolding SFU Phase 2 documenté comme intentionnel, PAS retiré.

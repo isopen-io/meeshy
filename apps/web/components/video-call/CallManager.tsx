@@ -1035,8 +1035,13 @@ export function CallManager() {
    */
   useEffect(() => {
     return () => {
-      // Clear timeout on unmount
+      // Clear timeouts on unmount — both the no-answer timeout AND the
+      // call-waiting auto-decline timeout. Missing the latter left an
+      // orphaned setTimeout that, 45s after unmount, would still call
+      // rejectWaitingCall() — a real call:end emit — for a component nothing
+      // is observing anymore.
       clearCallTimeout();
+      clearWaitingTimeout();
 
       if (isInCall) {
         logger.debug('[CallManager]', 'Cleaning up on unmount');
@@ -1044,7 +1049,7 @@ export function CallManager() {
         // CallInterface will handle WebRTC cleanup
       }
     };
-  }, [isInCall, reset, clearCallTimeout]);
+  }, [isInCall, reset, clearCallTimeout, clearWaitingTimeout]);
 
   if (process.env.NODE_ENV === 'development') {
     console.log('[CallManager] Rendering:', {
