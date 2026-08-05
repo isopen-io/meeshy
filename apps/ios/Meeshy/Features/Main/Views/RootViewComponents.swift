@@ -409,7 +409,8 @@ struct ThemedFeedOverlay: View {
     /// handoff (clear + pause du moteur feed) avant de présenter. Identique au
     /// chemin iPad (`FeedView.reelFeedCardView`).
     private func reelFeedCardView(for post: FeedPost) -> some View {
-        ReelFeedCardContainer(
+        let isOwnPost = post.authorId == AuthManager.shared.currentUser?.id
+        return ReelFeedCardContainer(
             coordinator: reelAutoplay,
             post: post,
             isDark: isDark,
@@ -458,7 +459,19 @@ struct ThemedFeedOverlay: View {
                     name: Notification.Name("openProfileSheet"),
                     object: ["userId": authorId, "username": post.authorUsername ?? post.author]
                 )
-            }
+            },
+            onEdit: isOwnPost ? { post in
+                editingPost = post
+            } : nil,
+            onDelete: isOwnPost ? { postId in
+                Task { await viewModel.deletePost(postId) }
+            } : nil,
+            onReport: !isOwnPost ? { postId in
+                Task { await viewModel.reportPost(postId) }
+            } : nil,
+            onPin: isOwnPost ? { postId in
+                Task { await viewModel.pinPost(postId) }
+            } : nil
         )
         // Marge latérale plus serrée que les posts standards (`FeedPostCard` = 16)
         // → la carte Réel est un peu plus large sur iPhone, tout en gardant une
@@ -508,6 +521,9 @@ struct ThemedFeedOverlay: View {
             } : nil,
             onReport: post.authorId != AuthManager.shared.currentUser?.id ? { postId in
                 Task { await viewModel.reportPost(postId) }
+            } : nil,
+            onPin: post.authorId == AuthManager.shared.currentUser?.id ? { postId in
+                Task { await viewModel.pinPost(postId) }
             } : nil,
             onEdit: post.authorId == AuthManager.shared.currentUser?.id ? { post in
                 editingPost = post

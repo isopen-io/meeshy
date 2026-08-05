@@ -30,6 +30,12 @@ struct ReelFeedCardContainer: View {
     let onBookmark: (String) -> Void
     let onShare: (String) -> Void
     let onTapAuthor: (String) -> Void
+    /// Menu « … » (parité avec `FeedPostCard`) — `nil` = action indisponible,
+    /// masquée du menu (même convention de gating que `FeedPostCard`).
+    var onEdit: ((FeedPost) -> Void)? = nil
+    var onDelete: ((String) -> Void)? = nil
+    var onReport: ((String) -> Void)? = nil
+    var onPin: ((String) -> Void)? = nil
 
     var body: some View {
         ReelFeedCard(
@@ -50,7 +56,11 @@ struct ReelFeedCardContainer: View {
             onRepost: onRepost,
             onBookmark: onBookmark,
             onShare: onShare,
-            onTapAuthor: onTapAuthor
+            onTapAuthor: onTapAuthor,
+            onEdit: onEdit,
+            onDelete: onDelete,
+            onReport: onReport,
+            onPin: onPin
         )
         .equatable()
     }
@@ -83,6 +93,11 @@ struct ReelFeedCard: View, Equatable {
     let onBookmark: (String) -> Void
     let onShare: (String) -> Void
     let onTapAuthor: (String) -> Void
+    /// Menu « … » (parité avec `FeedPostCard`) — `nil` = action indisponible.
+    var onEdit: ((FeedPost) -> Void)? = nil
+    var onDelete: ((String) -> Void)? = nil
+    var onReport: ((String) -> Void)? = nil
+    var onPin: ((String) -> Void)? = nil
 
     static func == (lhs: ReelFeedCard, rhs: ReelFeedCard) -> Bool {
         lhs.post.id == rhs.post.id
@@ -250,8 +265,7 @@ struct ReelFeedCard: View, Equatable {
                 // Fond TOUJOURS sombre (vidéo + scrim noir) : on épingle les
                 // variantes `isDark: true` au lieu de suivre le thème de l'app —
                 // les variantes light (indigo600/800) seraient illisibles ici.
-                MessageTextRenderer.render(
-                    displayCaption,
+                MessageTextRenderer.render(displayCaption,
                     fontSize: 15,
                     color: .white,
                     mentionColor: MeeshyColors.mentionColor(isDark: true),
@@ -384,7 +398,76 @@ struct ReelFeedCard: View, Equatable {
                        count: displayShareCount,
                        label: String(localized: "feed.post.share", defaultValue: "Partager", bundle: .main),
                        hint: String(localized: "a11y.feed.post.share.hint", defaultValue: "Partage cette publication via un lien", bundle: .main)) { onShare(post.id) }
+            Spacer()
+            moreOptionsMenu
         }
+    }
+
+    /// Menu « … » — mêmes actions/libellés/icônes que `FeedPostCard.moreOptionsMenu`
+    /// (copier/partager/enregistrer/épingler/modifier/supprimer/signaler), parité
+    /// de la carte Réel plein-cadre avec la carte poste standard.
+    private var moreOptionsMenu: some View {
+        Menu {
+            Button {
+                UIPasteboard.general.string = post.content
+                HapticFeedback.success()
+            } label: {
+                Label(String(localized: "feed.post.copy_text", defaultValue: "Copier le texte", bundle: .main), systemImage: "doc.on.doc")
+            }
+            Button {
+                onShare(post.id)
+                HapticFeedback.light()
+            } label: {
+                Label(String(localized: "feed.post.share", defaultValue: "Partager", bundle: .main), systemImage: "square.and.arrow.up")
+            }
+            Button {
+                onBookmark(post.id)
+                HapticFeedback.light()
+            } label: {
+                Label(String(localized: "feed.post.save", defaultValue: "Enregistrer", bundle: .main), systemImage: "bookmark")
+            }
+            if let onPin {
+                Button {
+                    onPin(post.id)
+                    HapticFeedback.light()
+                } label: {
+                    Label(String(localized: "feed.post.pin", defaultValue: "Epingler", bundle: .main), systemImage: "pin")
+                }
+            }
+            if let onEdit {
+                Button {
+                    onEdit(post)
+                    HapticFeedback.light()
+                } label: {
+                    Label(String(localized: "feed.post.edit", defaultValue: "Modifier", bundle: .main), systemImage: "pencil")
+                }
+            }
+            if let onDelete {
+                Divider()
+                Button(role: .destructive) {
+                    onDelete(post.id)
+                    HapticFeedback.medium()
+                } label: {
+                    Label(String(localized: "common.delete", defaultValue: "Supprimer", bundle: .main), systemImage: "trash")
+                }
+            }
+            if let onReport {
+                Divider()
+                Button(role: .destructive) {
+                    onReport(post.id)
+                    HapticFeedback.medium()
+                } label: {
+                    Label(String(localized: "feed.post.report", defaultValue: "Signaler", bundle: .main), systemImage: "exclamationmark.triangle")
+                }
+            }
+        } label: {
+            Image(systemName: "ellipsis")
+                .font(MeeshyFont.relative(18))
+                .foregroundColor(.white)
+                .shadow(color: .black.opacity(0.4), radius: 2, y: 1)
+        }
+        .accessibilityLabel(String(localized: "feed.post.more_options", defaultValue: "Plus d'options", bundle: .main))
+        .accessibilityHint(String(localized: "feed.post.more_options.hint", defaultValue: "Ouvre le menu des actions", bundle: .main))
     }
 
     /// Action glyph that gains an accent-colour BORDER on the glyph itself when
