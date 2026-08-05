@@ -3524,3 +3524,55 @@ patterns étaient déjà corrigés partout — sauf un nouveau site pour le patt
 - **Reste ouvert (inchangé)** : dead code / god-objects `CallManager.swift`/`CallEventsHandler.ts` ; ADR
   `actor CallEventQueue` non implémenté (à trancher : abandon délibéré ou écart à documenter) ; couverture
   E2E iOS des écrans d'appel (peu de XCUITest bout-en-bout).
+
+## Vague 53 — `handleMissedCall` livrait 2 notifications « appel manqué » pour un seul appel raté (2026-08-05)
+
+Point d'entrée : routine calling-feature (agent Cowork non interactif, mandat PHASE 1-12). Branche
+`claude/modest-cori-xc8hle`, redémarrée depuis `origin/main` à jour. PR #2574 (Vague précédente, dead
+`call:check-active` replay + listener leak web) trouvée ouverte — CI entièrement verte SAUF le job
+`Security` (Trivy) en `failure` ; log confirmé : `403 Forbidden` sur `mirror.gcr.io` en téléchargeant la
+DB de vulnérabilités, un échec d'infra transitoire sans rapport avec le diff (2 fichiers,
+`CallEventsHandler.ts`/`CallManager.tsx`). `Security` n'est pas un check requis par le job `summary`
+(`if: always()`, agrège sans conditionner sur son résultat) — mergée telle quelle. Un audit dédié (agent
+d'exploration, lecture seule, croisé avec `tasks/calls-fonctionnel-todo.md`) a ensuite cherché un nouveau
+bug scopé/mécanique selon les 5 patterns déjà rencontrés dans les vagues précédentes.
+
+- **[MOYEN, gateway, CONFIRMÉ + CORRIGÉ, TDD]** `CallEventsHandler.handleMissedCall` est atteignable
+  depuis **7 chemins terminaux indépendants** (ringing-timeout `buildRingingTimeoutHandler:566`,
+  disconnect-grace-expiry `:749`, force-cleanup-after-leave-failure `:907`, force-end-orphaned `:1088`,
+  `call:leave` `:2552`, `call:force-leave` `:2767`, `call:end` `:3261`), plus `CallCleanupService`'s GC
+  tier qui appelle `createMissedCallNotifications` DIRECTEMENT via `missedCallNotify` (bypass complet de
+  `handleMissedCall`). Seul le chemin ringing-timeout se protège avant d'appeler `handleMissedCall` — via
+  un `updateMany` atomique scopé `[initiated, ringing]` (`count === 0` → `return`, « une autre voie a déjà
+  transitionné »). Les 6 AUTRES chemins socket ne font que LIRE le statut déjà committé de l'appel
+  (`finalStatus = callSession.status`) et rappellent `handleMissedCall` dès qu'ils observent `missed`,
+  qu'ILS soient ou non à l'origine de la transition — `markCallAsMissed` elle-même a une garde côté
+  ÉCRITURE (statut non-ringing → skip write, déjà idempotente depuis les Vagues antérieures) mais AUCUNE
+  garde ne protège l'appel à `createMissedCallNotifications` en aval, qui n'avait strictement aucune
+  déduplication.
+- **Impact concret** : A appelle B ; le ringing-timeout de 60s gagne la transition atomique vers `missed`
+  et notifie B (notification #1). Au même instant (course quotidienne, pas un cas limite) A raccroche
+  (`call:leave`) ou le socket de A tombe et la grâce de déconnexion expire ; ce second chemin lit le
+  statut déjà `missed` (committé par le timeout) et rappelle `handleMissedCall` → notification #2 pour B,
+  pour le même appel. Badge doublé, push doublé, entrée doublée dans le centre de notifications.
+- **Fix** : garde de déduplication par callId (`missedCallNotifiedAt: Map<string, number>`) DANS
+  `createMissedCallNotifications` elle-même plutôt que dans `handleMissedCall` — couvre d'un seul coup les
+  7 chemins socket ET l'appel direct de GC sans devoir instrumenter chaque site d'appel individuellement.
+  TTL-balayée (600s) dans l'intervalle de nettoyage existant à 60s, aux côtés de `bufferedOffers` et
+  `signalSessionCache` — mêmes idiome et fenêtre de tolérance que les structures sœurs, pas de nouveau
+  point d'accroche « cleanup terminal » à câbler dans les 7 sites.
+- **Tests TDD** : RED confirmé via `git stash` du seul fichier source (tests déjà en place) — 2 nouveaux
+  cas dans le describe `createMissedCallNotifications` : (1) double appel sur le même callId → avant le
+  fix, 2 notifications au lieu de 1 attendue ; (2) isolation — un 2e callId différent après déduplication
+  du 1er → avant le fix, 3 notifications au lieu de 2 attendues (aucune régression sur les cas déjà
+  distincts). GREEN après restauration du fix. Suite calling gateway complète filtrée
+  (`CallEventsHandler|CallService|CallCleanupService|calls-routes|call-`) : 43 suites / 1050 tests verts —
+  aucune régression. `tsc --noEmit` gateway : 0 erreur. Suite gateway complète (`bun run test:coverage`) :
+  582/582 suites, 15307/15307 tests verts.
+- **iOS/Android (lecture seule, aucun changement)** : hors périmètre (aucune toolchain Swift/Kotlin dans
+  ce sandbox) ; changement strictement gateway (`CallEventsHandler.ts`, 1 fichier de test).
+- **Reste ouvert (inchangé)** : dead code / god-objects `CallManager.swift`/`CallEventsHandler.ts` ; ADR
+  `actor CallEventQueue` non implémenté ; couverture E2E iOS des écrans d'appel (peu de XCUITest
+  bout-en-bout) ; `packages/shared/types/api-schemas.ts` `callSessionSchema.status` enum omet
+  `initiated`/`connecting`/`reconnecting` (drift schéma/doc — vérifié inoffensif à l'exécution,
+  `fast-json-stringify` n'impose pas `enum`, candidat FAIBLE pour une prochaine vague).
