@@ -184,9 +184,10 @@ export class PostService {
         ?? sourcePost.id;
     }
 
-    // Règle produit (directive user 2026-08-02) : un REEL exige une composition
-    // qualifiante — vidéo || audio || >= 2 images (`qualifiesAsReel`, miroir du
-    // SDK). DÉGRADATION SILENCIEUSE en POST plutôt qu'un 422 : les clients
+    // Règle produit (directive user 2026-08-02, étendue par la directive durée
+    // minimale) : un REEL exige une composition qualifiante — vidéo (>=3s) ||
+    // audio (>=3s) || >= 2 images (`qualifiesAsReel`, miroir du SDK).
+    // DÉGRADATION SILENCIEUSE en POST plutôt qu'un 422 : les clients
     // antérieurs à la règle envoient `type: REEL` dès 1 média (ancienne
     // doctrine) — rejeter casserait leur publication, alors qu'un reclassement
     // en POST préserve le contenu. Un REEL sans aucun mediaId (trou
@@ -198,7 +199,7 @@ export class PostService {
       const claimableMedia = data.mediaIds?.length
         ? await this.prisma.postMedia.findMany({
             where: { id: { in: data.mediaIds }, ...claimableMediaWhere(userId) },
-            select: { mimeType: true },
+            select: { mimeType: true, duration: true },
           })
         : [];
       if (!qualifiesAsReel(claimableMedia)) {
@@ -780,10 +781,11 @@ export class PostService {
   }) {
     const post = await this.prisma.post.findFirst({
       where: { id: postId, deletedAt: NOT_DELETED },
-      // `mimeType` alimente la règle de composition REEL (`qualifiesAsReel`)
-      // sur la liste FINALE des médias — Prisma `select` : tout champ vérifié
-      // DOIT y figurer.
-      include: { media: { select: { id: true, mimeType: true } } },
+      // `mimeType`/`duration` alimentent la règle de composition REEL
+      // (`qualifiesAsReel`, y compris le plancher de durée 3s) sur la liste
+      // FINALE des médias — Prisma `select` : tout champ vérifié DOIT y
+      // figurer.
+      include: { media: { select: { id: true, mimeType: true, duration: true } } },
     });
 
     if (!post) return null;
@@ -836,7 +838,7 @@ export class PostService {
     const attachedMedia = mediaIdsToAttach.length > 0
       ? await this.prisma.postMedia.findMany({
           where: { id: { in: mediaIdsToAttach }, ...claimableMediaWhere(userId) },
-          select: { mimeType: true },
+          select: { mimeType: true, duration: true },
         })
       : [];
     const finalMedia = [
@@ -863,9 +865,10 @@ export class PostService {
       updateData.type = requestedType;
     }
 
-    // Règle produit (directive user 2026-08-02) : un REEL doit rester
-    // QUALIFIANT — vidéo || audio || >= 2 images (`qualifiesAsReel`) — après
-    // retraits/ajouts, qu'il soit basculé en REEL ou qu'il le reste. Le 422 ne
+    // Règle produit (directive user 2026-08-02, étendue par la directive durée
+    // minimale) : un REEL doit rester QUALIFIANT — vidéo (>=3s) || audio
+    // (>=3s) || >= 2 images (`qualifiesAsReel`) — après retraits/ajouts, qu'il
+    // soit basculé en REEL ou qu'il le reste. Le 422 ne
     // vaut que quand l'édition TOUCHE le type ou la composition : une édition
     // de texte seule sur un REEL hérité non conforme (corpus pré-backfill,
     // ex. 1 image) doit continuer de passer — le backfill

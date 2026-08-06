@@ -1198,10 +1198,10 @@ struct FeedView: View {
             Task { await impressions.flushNow() }
         }
         .sheet(isPresented: $showAudioComposer) {
-            AudioPostComposerView { audioURL, mimeType, transcription in
+            AudioPostComposerView { audioURL, mimeType, durationMs, transcription in
                 showAudioComposer = false
                 Task {
-                    await publishAudioPost(audioURL: audioURL, mimeType: mimeType, transcription: transcription, originalLanguage: transcription?.language)
+                    await publishAudioPost(audioURL: audioURL, mimeType: mimeType, durationMs: durationMs, transcription: transcription, originalLanguage: transcription?.language)
                 }
             }
         }
@@ -1329,13 +1329,16 @@ struct FeedView: View {
                     }
 
                     // Réel ⇄ Post toggle — shown ONLY when the current
-                    // composition qualifies as a reel (video || audio || >= 2
-                    // images). Removing an image (2→1) de-qualifies: the toggle
-                    // disappears and `ReelComposition.defaultType` publishes a
-                    // POST regardless of this flag — no 1-image REEL possible.
+                    // composition qualifies as a reel (video >=3s || audio
+                    // >=3s || >= 2 images). Removing an image (2→1) de-
+                    // qualifies: the toggle disappears and
+                    // `ReelComposition.defaultType` publishes a POST
+                    // regardless of this flag — no 1-image REEL possible, nor
+                    // a video/audio under 3 seconds.
                     if ReelComposition.qualifiesAsReel(
                         mimeTypes: pendingAttachments.map(\.mimeType)
-                            + (pendingAudioURL != nil ? ["audio/mp4"] : [])
+                            + (pendingAudioURL != nil ? ["audio/mp4"] : []),
+                        durationsMs: pendingAttachments.map(\.duration)
                     ) {
                         Button {
                             composerForcePlainPost.toggle()

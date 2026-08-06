@@ -297,6 +297,7 @@ extension FeedView {
             // flushes — no online/offline divergence on the surface it lands on.
             let postType = ReelComposition.defaultType(
                 mimeTypes: attachments.map(\.mimeType),
+                durationsMs: attachments.map(\.duration),
                 forcePlainPost: composerForcePlainPost
             ).rawValue
             withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
@@ -369,6 +370,7 @@ extension FeedView {
                     content: text,
                     type: ReelComposition.defaultType(
                         mimeTypes: attachments.map(\.mimeType) + (audioURL != nil ? ["audio/mp4"] : []),
+                        durationsMs: attachments.map(\.duration),
                         forcePlainPost: composerForcePlainPost
                     ).rawValue,
                     mediaIds: uploadedIds.isEmpty ? nil : uploadedIds,
@@ -402,7 +404,7 @@ extension FeedView {
     }
 
     // MARK: - Audio Post
-    func publishAudioPost(audioURL: URL, mimeType: String, transcription: MobileTranscriptionPayload?, originalLanguage: String? = nil) async {
+    func publishAudioPost(audioURL: URL, mimeType: String, durationMs: Int, transcription: MobileTranscriptionPayload?, originalLanguage: String? = nil) async {
         guard let token = APIClient.shared.authToken,
               let baseURL = URL(string: MeeshyConfig.shared.serverOrigin) else { return }
 
@@ -419,6 +421,7 @@ extension FeedView {
                 // respecté — plus de "REEL" codé en dur.
                 type: ReelComposition.defaultType(
                     mimeTypes: [mimeType],
+                    durationsMs: [durationMs],
                     forcePlainPost: composerForcePlainPost
                 ).rawValue,
                 mediaIds: [result.id],
@@ -851,12 +854,14 @@ struct FeedComposerSheet: View {
                         }
                     }
                     // Toggle visible SEULEMENT quand la composition qualifie
-                    // (règle produit 2026-08-02). Retirer une image (2→1) le
-                    // fait disparaître et `defaultType` retombe sur POST —
-                    // aucun REEL 1-image publiable.
+                    // (règle produit 2026-08-02 + directive durée minimale).
+                    // Retirer une image (2→1) le fait disparaître et
+                    // `defaultType` retombe sur POST — aucun REEL 1-image
+                    // publiable, ni une vidéo/audio de moins de 3s.
                     if ReelComposition.qualifiesAsReel(
                         mimeTypes: pendingAttachments.map(\.mimeType)
-                            + (pendingAudioURL != nil ? ["audio/mp4"] : [])
+                            + (pendingAudioURL != nil ? ["audio/mp4"] : []),
+                        durationsMs: pendingAttachments.map(\.duration)
                     ) {
                         reelTypeToggle
                     }
@@ -1008,10 +1013,10 @@ struct FeedComposerSheet: View {
             onIngest: { handleSheetComposerIngest($0) }
         ))
         .sheet(isPresented: $showAudioComposer) {
-            AudioPostComposerView { audioURL, mimeType, transcription in
+            AudioPostComposerView { audioURL, mimeType, durationMs, transcription in
                 showAudioComposer = false
                 Task {
-                    await publishAudioFromSheet(audioURL: audioURL, mimeType: mimeType, transcription: transcription)
+                    await publishAudioFromSheet(audioURL: audioURL, mimeType: mimeType, durationMs: durationMs, transcription: transcription)
                 }
             }
         }
@@ -1491,6 +1496,7 @@ struct FeedComposerSheet: View {
             // post lands on the same surface (REEL for video / multi-image).
             let postType = ReelComposition.defaultType(
                 mimeTypes: attachments.map(\.mimeType),
+                durationsMs: attachments.map(\.duration),
                 forcePlainPost: forcePlainPost
             ).rawValue
             onDismiss()
@@ -1541,7 +1547,7 @@ struct FeedComposerSheet: View {
                 }
                 progressCancellable?.cancel()
 
-                await viewModel.createPost(content: text, type: ReelComposition.defaultType(mimeTypes: attachments.map(\.mimeType), forcePlainPost: forcePlainPost).rawValue, visibility: postVisibility, mediaIds: uploadedIds.isEmpty ? nil : uploadedIds, originalLanguage: composerLanguage)
+                await viewModel.createPost(content: text, type: ReelComposition.defaultType(mimeTypes: attachments.map(\.mimeType), durationsMs: attachments.map(\.duration), forcePlainPost: forcePlainPost).rawValue, visibility: postVisibility, mediaIds: uploadedIds.isEmpty ? nil : uploadedIds, originalLanguage: composerLanguage)
 
                 await MainActor.run {
                     isUploading = false
@@ -1562,7 +1568,7 @@ struct FeedComposerSheet: View {
         }
     }
 
-    private func publishAudioFromSheet(audioURL: URL, mimeType: String, transcription: MobileTranscriptionPayload?) async {
+    private func publishAudioFromSheet(audioURL: URL, mimeType: String, durationMs: Int, transcription: MobileTranscriptionPayload?) async {
         guard let token = APIClient.shared.authToken,
               let baseURL = URL(string: MeeshyConfig.shared.serverOrigin) else { return }
         await MainActor.run { isUploading = true }
@@ -1576,6 +1582,7 @@ struct FeedComposerSheet: View {
                 // respecté — plus de "REEL" codé en dur.
                 type: ReelComposition.defaultType(
                     mimeTypes: [mimeType],
+                    durationsMs: [durationMs],
                     forcePlainPost: forcePlainPost
                 ).rawValue,
                 mediaIds: [result.id],
