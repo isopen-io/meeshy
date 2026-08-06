@@ -3691,3 +3691,46 @@ précédentes) sur les 8 patterns de bug déjà rencontrés, scope délibéréme
   `actor CallEventQueue` non implémenté ; couverture E2E iOS des écrans d'appel (peu de XCUITest
   bout-en-bout) ; `enableSimulcast()` scaffolding SFU Phase 2 (intentionnel) ; **nouveau** — dead code
   `use-video-call.ts` (5 méthodes non consommées, voir ci-dessus, candidat pour une prochaine vague).
+## Vague 55 — call:already-answered n'éteignait pas la bannière call-waiting (2026-08-05)
+
+Point d'entrée : routine calling-feature (agent Cowork non interactif, mandat PHASE 1-12). Branche
+`claude/modest-cori-sxx5n5`, redémarrée depuis `origin/main` à jour. PR #2578 (`claude/modest-cori-bih8gr`,
+Vague 54 : unmount `waitingTimeoutRef` leak, dead `callEndReason`, enum drift `callSessionSchema.status`)
+était déjà ouverte et non mergée au démarrage de cette session — scope délibérément disjoint pour éviter
+tout doublon/conflit (aucun fichier en commun). Audit dédié (agent général, lecture seule) sur la couche
+web (`CallManager.tsx`, `call-store.ts`, `webrtc-service.ts`, `use-webrtc-p2p.ts`, `use-video-call.ts`,
+`VideoCallInterface.tsx`) et gateway (`CallEventsHandler.ts`, `CallService.ts`, `CallCleanupService.ts`,
+`TURNCredentialService.ts`, `routes/calls.ts`) — la majeure partie du terrain facile y est déjà nettoyée
+par les 54 vagues précédentes.
+
+- **[HAUT, web, CONFIRMÉ + CORRIGÉ, TDD]** `CallManager.tsx` `handleAnsweredElsewhere` (le listener
+  `call:already-answered`, qui éteint la sonnerie quand l'utilisateur décroche sur un AUTRE device) ne
+  vérifiait que `incomingCall` (le ring plein écran), jamais `waitingCall` (la bannière busy-path compacte
+  affichée quand un DEUXIÈME appel sonne pendant un appel déjà actif, cf. Vague 40/`CallWaitingBanner`).
+  **Scénario concret** : utilisateur en appel actif sur le device A ; un second appelant sonne → bannière
+  call-waiting affichée + timer d'auto-déclin 45s armé (`startWaitingTimeout`). L'utilisateur décroche ce
+  DEUXIÈME appel sur le device B au lieu de toucher la bannière sur A. Le gateway passe l'appel en `active`
+  et diffuse `call:already-answered` aux rooms utilisateur — device A l'ignorait (comparé uniquement à
+  `incomingCall`, `null` puisque l'appel waiting n'est jamais promu en `incomingCall`), donc la bannière ET
+  son timer continuaient de tourner sans personne pour les regarder. 45s plus tard, le timer orphelin
+  émettait `rejectWaitingCall` → un vrai `call:end {reason: 'rejected'}` pour l'appel même que l'utilisateur
+  est en train de vivre sur le device B. L'autorisation `CallParticipant` étant scopée à l'utilisateur (pas
+  au device), le gateway accepte l'ordre — l'appel actif sur B se fait raccrocher silencieusement par une
+  bannière périmée sur A. **Fix** : `handleAnsweredElsewhere` vérifie maintenant `incomingCall` PUIS
+  `waitingCall` (branches indépendantes, chacune scopée à son propre callId) — la branche waiting vide
+  `clearWaitingTimeout()` + `setWaitingCall(null)`, sans toucher à l'appel actif. **Tests TDD** : nouveau
+  fichier `CallManager.answeredElsewhereWaiting.test.tsx` (4 cas : bannière dismiss, timer orphelin
+  neutralisé, appel actif intact, callId non concerné ignoré) — RED confirmé avant le fix (2/4 rouges,
+  exactement la banner-non-dismissed + le `call:end` orphelin), GREEN après. Suite `video-call`/
+  `video-calls`/`call-store` complète : 24 suites / 180 tests verts (aucune régression). `tsc --noEmit` :
+  30 erreurs `CallManager.tsx` avant ET après (compté par stash/pop) — toutes pré-existantes (le fichier a
+  un vieux socket typé `unknown`/`as unknown` ailleurs dans le fichier), aucune introduite par ce diff.
+- **[MOYEN, gateway, documenté seulement, PAS corrigé]** `CallService.ts` `initiateCall` autorise
+  explicitement les conversations GROUP, mais le plafond P2P de participants actifs (max 2,
+  `CallService.ts` `joinCall`) verrouille silencieusement tout membre au-delà du premier répondant. Les 3
+  clients connus (web, iOS — Android non audité cette vague) gatent le bouton "démarrer un appel" aux
+  conversations `direct` uniquement, donc actuellement inatteignable via l'UI normale — non corrigé
+  (defense-in-depth, pas de bug utilisateur actif), mais non documenté dans les 54 vagues précédentes.
+  Candidat pour une prochaine vague avant qu'un client (ex. Android) ne câble un jour l'appel de groupe.
+- **iOS/Android (lecture seule, aucun changement)** : hors périmètre — aucune toolchain Swift/Kotlin dans
+  ce sandbox Linux ; changement strictement web (1 fichier modifié + 1 nouveau fichier de test).

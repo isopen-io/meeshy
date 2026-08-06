@@ -83,6 +83,9 @@ struct ReelsPlayerView: View {
 
     @StateObject private var viewModel = ReelsViewModel()
     @State private var commentsReel: FeedPost?
+    /// Réel en édition via le menu « … » du rail d'actions — parité avec le
+    /// menu de `FeedPostCard`/`ReelFeedCard` (même `EditPostSheet`).
+    @State private var editingReel: FeedPost?
     /// Comment target carried into the comments sheet when it auto-opens from a
     /// notification. Cleared when the user opens comments manually so a later tap
     /// never re-scrolls to the old target.
@@ -191,6 +194,20 @@ struct ReelsPlayerView: View {
             // recorded the (deduplicated) share + minted the caller's TrackingLink.
             ShareSheet(activityItems: [link.url])
         }
+        .sheet(item: $editingReel) { reel in
+            EditPostSheet(
+                originalContent: reel.content,
+                originalLanguage: reel.originalLanguage,
+                originalType: reel.type,
+                media: reel.media.map { EditablePostMedia($0) },
+                originalLocation: reel.location,
+                isRepost: reel.repost != nil,
+                onSave: { draft in
+                    await viewModel.updatePost(reel.id, content: draft.content, language: draft.language, type: draft.type, removeMediaIds: draft.removeMediaIds.isEmpty ? nil : draft.removeMediaIds, location: draft.location)
+                },
+                onDismiss: { editingReel = nil }
+            )
+        }
         // Call-aware : un appel entrant pendant un réel ouvert doit le mettre en
         // pause (vidéo + audio) — la session audio appartient alors à l'appel. Le
         // viewer étant immobile, aucune `drive`-pass n'est rappelée ; on pause donc
@@ -289,6 +306,7 @@ struct ReelsPlayerView: View {
                     commentsReel = reel
                 },
                 onShare: { shareReel(reel) },
+                onEdit: { editingReel = reel },
                 onTapAuthorName: { openProfile(for: reel) },
                 onTapAvatar: { openAvatarDestination(for: reel) }
             )
@@ -479,6 +497,9 @@ struct ReelPageView: View {
     @Binding var chromeHidden: Bool
     var onComment: () -> Void
     var onShare: () -> Void
+    /// Menu « … » → ouvre `EditPostSheet` sur ce réel (état possédé par
+    /// `ReelsPlayerView`, le seul habilité à présenter la sheet).
+    var onEdit: () -> Void
     /// Author name tap → profile.
     var onTapAuthorName: () -> Void
     /// Avatar tap → story (if active) else profile.
@@ -944,7 +965,8 @@ struct ReelPageView: View {
             viewModel: viewModel,
             reel: reel,
             onComment: onComment,
-            onShare: onShare
+            onShare: onShare,
+            onEdit: onEdit
         )
     }
 }
@@ -957,6 +979,12 @@ private struct ReelActionRail: View {
     let reel: FeedPost
     var onComment: () -> Void
     var onShare: () -> Void
+    var onEdit: () -> Void
+
+    private var isOwnReel: Bool {
+        guard let me = AuthManager.shared.currentUser?.id else { return false }
+        return me == reel.authorId
+    }
 
     var body: some View {
         VStack(spacing: 22) {
@@ -1002,7 +1030,73 @@ private struct ReelActionRail: View {
                 action: onShare
             )
             .accessibilityLabel(String(localized: "reels.action.share", defaultValue: "Partager", bundle: .main))
+
+            moreOptionsMenu
         }
+    }
+
+    /// Menu « … » — mêmes actions/libellés/icônes que `FeedPostCard`/`ReelFeedCard`
+    /// (copier/partager/enregistrer/épingler/modifier/supprimer/signaler), parité
+    /// du lecteur plein écran avec les cartes du feed.
+    private var moreOptionsMenu: some View {
+        Menu {
+            Button {
+                UIPasteboard.general.string = reel.content
+                HapticFeedback.success()
+            } label: {
+                Label(String(localized: "feed.post.copy_text", defaultValue: "Copier le texte", bundle: .main), systemImage: "doc.on.doc")
+            }
+            Button {
+                onShare()
+            } label: {
+                Label(String(localized: "feed.post.share", defaultValue: "Partager", bundle: .main), systemImage: "square.and.arrow.up")
+            }
+            Button {
+                viewModel.toggleBookmark(reel)
+                HapticFeedback.light()
+            } label: {
+                Label(String(localized: "feed.post.save", defaultValue: "Enregistrer", bundle: .main), systemImage: "bookmark")
+            }
+            if isOwnReel {
+                Button {
+                    Task { await viewModel.pinPost(reel.id) }
+                    HapticFeedback.light()
+                } label: {
+                    Label(String(localized: "feed.post.pin", defaultValue: "Epingler", bundle: .main), systemImage: "pin")
+                }
+                Button {
+                    onEdit()
+                    HapticFeedback.light()
+                } label: {
+                    Label(String(localized: "feed.post.edit", defaultValue: "Modifier", bundle: .main), systemImage: "pencil")
+                }
+                Divider()
+                Button(role: .destructive) {
+                    Task { await viewModel.deletePost(reel.id) }
+                    HapticFeedback.medium()
+                } label: {
+                    Label(String(localized: "common.delete", defaultValue: "Supprimer", bundle: .main), systemImage: "trash")
+                }
+            } else {
+                Divider()
+                Button(role: .destructive) {
+                    Task { await viewModel.reportPost(reel.id) }
+                    HapticFeedback.medium()
+                } label: {
+                    Label(String(localized: "feed.post.report", defaultValue: "Signaler", bundle: .main), systemImage: "exclamationmark.triangle")
+                }
+            }
+        } label: {
+            VStack(spacing: 5) {
+                Image(systemName: "ellipsis")
+                    .font(.system(size: 26, weight: .semibold))
+                    .foregroundColor(.white)
+                    .frame(width: 48, height: 32)
+            }
+            .shadow(color: .black.opacity(0.4), radius: 2, y: 1)
+        }
+        .accessibilityLabel(String(localized: "feed.post.more_options", defaultValue: "Plus d'options", bundle: .main))
+        .accessibilityHint(String(localized: "feed.post.more_options.hint", defaultValue: "Ouvre le menu des actions", bundle: .main))
     }
 }
 
