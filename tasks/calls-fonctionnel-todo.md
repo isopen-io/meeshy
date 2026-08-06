@@ -3735,3 +3735,44 @@ précédentes) sur les 8 patterns de bug déjà rencontrés, scope délibéréme
   `actor CallEventQueue` non implémenté ; couverture E2E iOS des écrans d'appel (peu de XCUITest
   bout-en-bout) ; `enableSimulcast()` scaffolding SFU Phase 2 (intentionnel) ; **nouveau** — dead code
   `use-video-call.ts` (5 méthodes non consommées, voir ci-dessus, candidat pour une prochaine vague).
+
+## Vague 57 — dead code `use-video-call.ts` : 5 méthodes + `isCallSupported`/`error` jamais consommés (2026-08-06)
+
+Point d'entrée : routine calling-feature (agent Cowork non interactif, mandat PHASE 1-12). Branche
+`claude/modest-cori-46anby`, redémarrée depuis `origin/main` à jour (`f8f2eaae`, aucune PR calling
+ouverte au démarrage). Suite directe de la Vague 56, qui avait explicitement flagué ce fichier comme
+candidat de nettoyage sans le traiter (scope disjoint de `CallManager.tsx`/`call-store.ts` alors en vol).
+
+- **[FAIBLE, web, dead code, CONFIRMÉ + SUPPRIMÉ]** `apps/web/hooks/conversations/use-video-call.ts` —
+  vérification exhaustive (grep sur les 2 seuls call sites de production, `ConversationLayout.tsx` et
+  `CallSystemMessage.tsx`) : les deux ne déstructurent **que** `startCall`. `answerCall`, `rejectCall`,
+  `endCall`, `toggleAudio`, `toggleVideo` (5 méthodes socket pleinement implémentées) — déjà identifiées
+  Vague 56 — n'avaient aucun appelant hors de leurs propres tests. Vérification étendue cette vague :
+  `isCallSupported` (dérivé de `conversation?.type === 'direct'`, redondant avec la garde déjà inline dans
+  `startCall`) et `error` (state posé uniquement par `answerCall`, donc mort dès que celui-ci l'est) sont
+  eux aussi absents de tout call site de production — le retour du hook est réduit à `{ startCall }`
+  uniquement. Le flux réel de réponse/rejet/raccroché/toggle audio-vidéo passe entièrement par
+  `CallManager.tsx` + `call-store.ts` (composant séparé, cf. Vagues 54-56), jamais par ce hook.
+  **Fix** : `UseVideoCallReturn` réduit à `{ startCall }` ; suppression des 5 callbacks socket morts, du
+  state `error`, de la constante dérivée `isCallSupported`, de la variable `callStore` (devenue inutilisée
+  — `startCall` lit déjà `useCallStore.getState()` directement) et de l'import `CallJoinAck` devenu
+  inutile. JSDoc du hook mis à jour pour documenter explicitement le contrat "startCall only" et éviter
+  qu'un futur ajout naïf de méthode y re-glisse du code mort.
+- **Tests** : suppression des blocs `describe('isCallSupported')`, `describe('answerCall')`,
+  `describe('rejectCall')`, `describe('endCall')`, `describe('toggleAudio')`, `describe('toggleVideo')`
+  (≈280 lignes) — comportement `startCall` (media constraints, ICE servers, ack success/failure, cleanup
+  stream, P0 currentCall init) intégralement conservé et vert. `__tests__/hooks/conversations/use-video-call.test.tsx` :
+  28/28 tests verts (down from ~50, suppression pure sans perte de couverture comportementale — aucun des
+  blocs retirés ne testait un chemin atteignable en production). Suite élargie `video-call`/`video-calls`/
+  `call-store`/`hooks/conversations` : 34 suites / 462 tests verts, aucune régression.
+- **`tsc --noEmit`** : 17 erreurs pré-existantes dans `ConversationLayout.tsx` (comptées identiques avant/
+  après via `git stash`/`pop`) — aucune introduite par ce diff ; `use-video-call.ts`/`CallSystemMessage.tsx`
+  zéro erreur. ESLint indisponible dans ce sandbox (crash `Converting circular structure to JSON` sur la
+  config flat `eslint-config-next`, pré-existant et indépendant du diff — non bloquant, `tsc` + tests font
+  foi).
+- **iOS/Android (lecture seule, aucun changement)** : hors périmètre — aucune toolchain Swift/Kotlin dans
+  ce sandbox Linux ; changement strictement web (1 fichier modifié + 1 fichier de test).
+- **Reste ouvert (inchangé)** : dead code / god-objects `CallManager.swift`/`CallEventsHandler.ts` ; ADR
+  `actor CallEventQueue` non implémenté ; couverture E2E iOS des écrans d'appel ; `enableSimulcast()`
+  scaffolding SFU Phase 2 (intentionnel) ; plafond P2P (max 2 participants actifs) vs conversations GROUP
+  autorisées côté `initiateCall` (Vague 55, defense-in-depth, inatteignable via l'UI normale actuelle).
