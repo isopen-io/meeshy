@@ -736,7 +736,12 @@ struct FeedPostCard: View {
                         HapticFeedback.light()
                     }
                 } label: {
-                    Label(String(localized: "feed.post.save", defaultValue: "Enregistrer", bundle: .main), systemImage: "bookmark")
+                    Label(
+                        post.primaryReelDisplayMedia != nil
+                            ? String(localized: "feed.reel.save_media", defaultValue: "Sauvegarder", bundle: .main)
+                            : String(localized: "feed.post.save", defaultValue: "Enregistrer", bundle: .main),
+                        systemImage: "bookmark"
+                    )
                 }
                 if onPin != nil {
                     Button {

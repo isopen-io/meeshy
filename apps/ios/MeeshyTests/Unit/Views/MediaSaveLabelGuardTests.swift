@@ -28,4 +28,14 @@ final class MediaSaveLabelGuardTests: XCTestCase {
         XCTAssertTrue(source.contains(#"String(localized: "reels.action.bookmark", defaultValue: "Enregistrer", bundle: .main)"#),
             "Le bouton bookmark dédié de la rail (ReelActionRail) doit rester « Enregistrer »")
     }
+
+    func test_feedPostCard_saveMenuItem_usesDynamicLabelByMediaPresence() throws {
+        let source = try sourceWithoutComments("Meeshy/Features/Main/Views/FeedPostCard.swift")
+        XCTAssertTrue(source.contains(#"post.primaryReelDisplayMedia != nil"#),
+            "La branche média du menu « … » de FeedPostCard doit rester conditionnée sur primaryReelDisplayMedia")
+        XCTAssertTrue(source.contains(#"String(localized: "feed.reel.save_media", defaultValue: "Sauvegarder", bundle: .main)"#),
+            "Quand la branche média est active, le menu « … » de FeedPostCard doit afficher « Sauvegarder »")
+        XCTAssertTrue(source.contains(#"String(localized: "feed.post.save", defaultValue: "Enregistrer", bundle: .main)"#),
+            "La branche bookmark du menu ET le bouton dédié actionsBar doivent rester « Enregistrer »")
+    }
 }
