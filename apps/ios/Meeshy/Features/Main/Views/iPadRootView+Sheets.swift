@@ -177,6 +177,10 @@ extension iPadRootView {
                                 singleGroup: true
                             ))
                         },
+                        onOpenDetail: { postId in
+                            reelsPresenter.dismiss()
+                            router.push(.postDetail(postId))
+                        },
                         authorHasStory: { userId in
                             storyViewModel.storyRingState(forUserId: userId) != .none
                         }

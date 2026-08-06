@@ -55,16 +55,21 @@ final class ReelsViewModel: ObservableObject {
 
     @Published private(set) var likedIds: Set<String> = []
     @Published private(set) var bookmarkedIds: Set<String> = []
+    /// Réels repartagés durant CETTE session de visionnage — append-only
+    /// (comme `FeedView.postRepostedIds`, un repost ne se défait pas ici).
+    @Published private(set) var repostedIds: Set<String> = []
 
     private var likeDelta: [String: Int] = [:]
     /// Optimistic bookmark-count bump per post id — same role as `likeDelta`.
     /// Purged when the canonical absolute count arrives on `post:bookmarked`.
     private var bookmarkDelta: [String: Int] = [:]
+    private var repostDelta: [String: Int] = [:]
     /// Optimistic comment-count bump per post id (applied on top of the server
     /// count) so the reel's comment counter rises the instant a comment is sent.
     @Published private var commentDelta: [String: Int] = [:]
     private var heartInFlight: Set<String> = []
     private var bookmarkInFlight: Set<String> = []
+    private var repostInFlight: Set<String> = []
 
     private var nextCursor: String?
     private var hasMore = true
@@ -287,6 +292,13 @@ final class ReelsViewModel: ObservableObject {
 
     func isLiked(_ id: String) -> Bool { likedIds.contains(id) }
     func isBookmarked(_ id: String) -> Bool { bookmarkedIds.contains(id) }
+    func isReposted(_ id: String) -> Bool { repostedIds.contains(id) }
+
+    /// Repost count including the optimistic bump from a just-fired repost —
+    /// même rôle que `bookmarkCount`.
+    func repostCount(_ post: FeedPost) -> Int {
+        max(0, post.repostCount + (repostDelta[post.id] ?? 0))
+    }
 
     func likeCount(_ post: FeedPost) -> Int {
         max(0, post.likes + (likeDelta[post.id] ?? 0))
@@ -397,6 +409,31 @@ final class ReelsViewModel: ObservableObject {
                 }
             }
             bookmarkInFlight.remove(id)
+        }
+    }
+
+    /// Repartage direct (sans citation), append-only — mirroir de
+    /// `FeedView.togglePostRepost`. Optimiste : `repostedIds`/`repostDelta`
+    /// s'appliquent immédiatement, rollback UNIQUEMENT si l'API échoue (le
+    /// backend n'offre pas d'« un-repost », donc pas de toggle possible).
+    func repost(_ post: FeedPost) {
+        let id = post.id
+        guard !repostInFlight.contains(id) else { return }
+        repostInFlight.insert(id)
+        repostedIds.insert(id)
+        repostDelta[id, default: 0] += 1
+        EngagementTracker.shared.recordAction(.shared, surface: .reels)
+        HapticFeedback.light()
+        Task {
+            defer { repostInFlight.remove(id) }
+            do {
+                _ = try await service.repost(postId: id, targetType: nil, content: nil, isQuote: false, visibility: nil)
+                FeedbackToastManager.shared.showSuccess(String(localized: "feed.post.repost.success", defaultValue: "Repartage", bundle: .main))
+            } catch {
+                repostedIds.remove(id)
+                repostDelta[id, default: 0] -= 1
+                FeedbackToastManager.shared.showError(String(localized: "feed.post.repost.error", defaultValue: "Erreur lors du repost", bundle: .main))
+            }
         }
     }
 

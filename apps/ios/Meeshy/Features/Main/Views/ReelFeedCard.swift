@@ -121,6 +121,10 @@ struct ReelFeedCard: View, Equatable {
     private var accentHex: String { post.authorColor }
     /// Lieu du réel ouvert plein écran (tap sur le sticker de position).
     @State private var reelCardFullscreenPlace: BubbleFullscreenPlace?
+    /// Flux « Enregistrer en local » du menu « … » : pour un réel, Enregistrer
+    /// télécharge le MÉDIA (image/vidéo) dans Photos — distinct du bouton
+    /// favori dédié (bookmark) qui, lui, enregistre le poste dans l'app.
+    @StateObject private var mediaSaveCoordinator = MediaSaveCoordinator()
 
     /// Non-nil when this card displays a REPUBLISHED reel: the outer post has no
     /// media (content sourced from the reposted reel). Drives author attribution
@@ -177,6 +181,7 @@ struct ReelFeedCard: View, Equatable {
                 senderName: displayAuthor
             )
         }
+        .mediaSaveFlow(mediaSaveCoordinator)
     }
 
     // Largeur de contenu du feed (le GeometryReader donne la vraie ; estimation
@@ -221,17 +226,20 @@ struct ReelFeedCard: View, Equatable {
         }
     }
 
-    // MARK: - Logo Réel (coin haut-droit) — tap → page détail du poste
+    // MARK: - Logo Réel (coin haut-droit) — menu « … » (parité avec le rail bas)
 
+    /// Second point d'accès au menu « … » (même contenu que `moreOptionsMenu`,
+    /// factorisé via `moreOptionsMenuContent`) — remplace l'ancien bouton
+    /// mono-action « ouvrir le détail » : cette action vit maintenant en tête
+    /// du menu (« Ouvrir »).
     private var reelGlyph: some View {
         VStack {
             HStack {
                 Spacer()
-                Button {
-                    onTapGlyph()
-                    HapticFeedback.light()
+                Menu {
+                    moreOptionsMenuContent
                 } label: {
-                    Image(systemName: "play.rectangle.on.rectangle.fill")
+                    Image(systemName: "ellipsis")
                         .font(MeeshyFont.relative(15, weight: .bold))
                         .foregroundColor(.white)
                         .padding(8)
@@ -240,9 +248,9 @@ struct ReelFeedCard: View, Equatable {
                         .shadow(color: .black.opacity(0.25), radius: 3, y: 1)
                         .contentShape(Circle())
                 }
-                .buttonStyle(.plain)
                 .padding(10)
-                .accessibilityLabel(String(localized: "feed.reel.open_detail.a11y", defaultValue: "Ouvrir le détail du réel", bundle: .main))
+                .accessibilityLabel(String(localized: "feed.post.more_options", defaultValue: "Plus d'options", bundle: .main))
+                .accessibilityHint(String(localized: "feed.post.more_options.hint", defaultValue: "Ouvre le menu des actions", bundle: .main))
             }
             Spacer()
         }
@@ -393,73 +401,18 @@ struct ReelFeedCard: View, Equatable {
                        hint: String(localized: "a11y.feed.post.save.hint", defaultValue: "Enregistre la publication dans vos favoris", bundle: .main),
                        participated: isBookmarked) { onBookmark(post.id) }
             Spacer()
-            reelButton(outline: "square.and.arrow.up", filled: "square.and.arrow.up",
-                       tint: .white,
-                       count: displayShareCount,
-                       label: String(localized: "feed.post.share", defaultValue: "Partager", bundle: .main),
-                       hint: String(localized: "a11y.feed.post.share.hint", defaultValue: "Partage cette publication via un lien", bundle: .main)) { onShare(post.id) }
-            Spacer()
+            // Partager reste disponible dans le menu « … » — retiré des icônes
+            // principales pour ne pas dupliquer Repartager (même slot d'intention).
             moreOptionsMenu
         }
     }
 
     /// Menu « … » — mêmes actions/libellés/icônes que `FeedPostCard.moreOptionsMenu`
-    /// (copier/partager/enregistrer/épingler/modifier/supprimer/signaler), parité
-    /// de la carte Réel plein-cadre avec la carte poste standard.
+    /// (ouvrir/copier/partager/enregistrer/épingler/modifier/supprimer/signaler),
+    /// parité de la carte Réel plein-cadre avec la carte poste standard.
     private var moreOptionsMenu: some View {
         Menu {
-            Button {
-                UIPasteboard.general.string = post.content
-                HapticFeedback.success()
-            } label: {
-                Label(String(localized: "feed.post.copy_text", defaultValue: "Copier le texte", bundle: .main), systemImage: "doc.on.doc")
-            }
-            Button {
-                onShare(post.id)
-                HapticFeedback.light()
-            } label: {
-                Label(String(localized: "feed.post.share", defaultValue: "Partager", bundle: .main), systemImage: "square.and.arrow.up")
-            }
-            Button {
-                onBookmark(post.id)
-                HapticFeedback.light()
-            } label: {
-                Label(String(localized: "feed.post.save", defaultValue: "Enregistrer", bundle: .main), systemImage: "bookmark")
-            }
-            if let onPin {
-                Button {
-                    onPin(post.id)
-                    HapticFeedback.light()
-                } label: {
-                    Label(String(localized: "feed.post.pin", defaultValue: "Epingler", bundle: .main), systemImage: "pin")
-                }
-            }
-            if let onEdit {
-                Button {
-                    onEdit(post)
-                    HapticFeedback.light()
-                } label: {
-                    Label(String(localized: "feed.post.edit", defaultValue: "Modifier", bundle: .main), systemImage: "pencil")
-                }
-            }
-            if let onDelete {
-                Divider()
-                Button(role: .destructive) {
-                    onDelete(post.id)
-                    HapticFeedback.medium()
-                } label: {
-                    Label(String(localized: "common.delete", defaultValue: "Supprimer", bundle: .main), systemImage: "trash")
-                }
-            }
-            if let onReport {
-                Divider()
-                Button(role: .destructive) {
-                    onReport(post.id)
-                    HapticFeedback.medium()
-                } label: {
-                    Label(String(localized: "feed.post.report", defaultValue: "Signaler", bundle: .main), systemImage: "exclamationmark.triangle")
-                }
-            }
+            moreOptionsMenuContent
         } label: {
             Image(systemName: "ellipsis")
                 .font(MeeshyFont.relative(18))
@@ -468,6 +421,91 @@ struct ReelFeedCard: View, Equatable {
         }
         .accessibilityLabel(String(localized: "feed.post.more_options", defaultValue: "Plus d'options", bundle: .main))
         .accessibilityHint(String(localized: "feed.post.more_options.hint", defaultValue: "Ouvre le menu des actions", bundle: .main))
+    }
+
+    /// Contenu partagé des DEUX déclencheurs « … » de la carte (rail bas +
+    /// glyphe coin haut-droit) — un seul endroit à faire évoluer.
+    @ViewBuilder
+    private var moreOptionsMenuContent: some View {
+        Button {
+            onTapGlyph()
+            HapticFeedback.light()
+        } label: {
+            Label(String(localized: "feed.post.open", defaultValue: "Ouvrir", bundle: .main), systemImage: "arrow.up.right.square")
+        }
+        Button {
+            UIPasteboard.general.string = post.content
+            HapticFeedback.success()
+        } label: {
+            Label(String(localized: "feed.post.copy_text", defaultValue: "Copier le texte", bundle: .main), systemImage: "doc.on.doc")
+        }
+        Button {
+            onShare(post.id)
+            HapticFeedback.light()
+        } label: {
+            Label(String(localized: "feed.post.share", defaultValue: "Partager", bundle: .main), systemImage: "square.and.arrow.up")
+        }
+        if media != nil {
+            Button {
+                requestSaveMedia()
+            } label: {
+                Label(String(localized: "feed.post.save", defaultValue: "Enregistrer", bundle: .main), systemImage: "bookmark")
+            }
+        }
+        if let onPin {
+            Button {
+                onPin(post.id)
+                HapticFeedback.light()
+            } label: {
+                Label(String(localized: "feed.post.pin", defaultValue: "Epingler", bundle: .main), systemImage: "pin")
+            }
+        }
+        if let onEdit {
+            Button {
+                onEdit(post)
+                HapticFeedback.light()
+            } label: {
+                Label(String(localized: "feed.post.edit", defaultValue: "Modifier", bundle: .main), systemImage: "pencil")
+            }
+        }
+        if let onDelete {
+            Divider()
+            Button(role: .destructive) {
+                onDelete(post.id)
+                HapticFeedback.medium()
+            } label: {
+                Label(String(localized: "common.delete", defaultValue: "Supprimer", bundle: .main), systemImage: "trash")
+            }
+        }
+        if let onReport {
+            Divider()
+            Button(role: .destructive) {
+                onReport(post.id)
+                HapticFeedback.medium()
+            } label: {
+                Label(String(localized: "feed.post.report", defaultValue: "Signaler", bundle: .main), systemImage: "exclamationmark.triangle")
+            }
+        }
+    }
+
+    /// Déclenche le flux unifié « Enregistrer en local » sur le média du réel
+    /// (pas le poste — un réel n'a de sens à « enregistrer » que par son
+    /// image/vidéo). No-op si le réel n'a pas de média résolvable.
+    private func requestSaveMedia() {
+        guard let media, let url = media.url, !url.isEmpty else { return }
+        HapticFeedback.light()
+        let attachmentKind: AttachmentKind
+        switch media.type {
+        case .video: attachmentKind = .video
+        case .audio: attachmentKind = .audio
+        case .document: attachmentKind = .document
+        case .image: attachmentKind = .image
+        }
+        mediaSaveCoordinator.requestSave(MediaSaveRequest(
+            kind: attachmentKind,
+            remoteURLString: url,
+            suggestedFileName: media.fileName
+        ))
     }
 
     /// Action glyph that gains an accent-colour BORDER on the glyph itself when

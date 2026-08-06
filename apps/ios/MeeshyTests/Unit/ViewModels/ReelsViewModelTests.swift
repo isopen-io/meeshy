@@ -239,6 +239,38 @@ final class ReelsViewModelTests: XCTestCase {
         XCTAssertEqual(sut.reels.first(where: { $0.id == "r1" })?.content, "avant", "Content should roll back on update failure")
     }
 
+    // MARK: - repost() — icône principale « Republier » (remplace Partager)
+
+    func test_repost_success_marksRepostedAndBumpsCount() async {
+        let (sut, service, _) = makeSUT()
+        sut.seed(posts: [Self.makeReel(id: "r1")], startId: "r1")
+        let reel = sut.reels[0]
+
+        sut.repost(reel)
+        // Attend la fin du Task interne : sondage sur repostCallCount (pas de
+        // sleep arbitraire) — même convention que les autres tests optimistes.
+        for _ in 0..<50 where service.repostCallCount == 0 { await Task.yield() }
+
+        XCTAssertTrue(sut.isReposted("r1"))
+        XCTAssertEqual(sut.repostCount(reel), 1)
+        XCTAssertEqual(service.lastRepostPostId, "r1")
+    }
+
+    func test_repost_failure_rollsBackRepostedState() async {
+        let (sut, service, _) = makeSUT()
+        sut.seed(posts: [Self.makeReel(id: "r1")], startId: "r1")
+        service.repostResult = .failure(APIError.networkError(URLError(.timedOut)))
+        let reel = sut.reels[0]
+
+        sut.repost(reel)
+        for _ in 0..<50 where service.repostCallCount == 0 { await Task.yield() }
+        // Laisse le rollback (post-catch) s'appliquer après l'échec.
+        for _ in 0..<50 where sut.isReposted("r1") { await Task.yield() }
+
+        XCTAssertFalse(sut.isReposted("r1"))
+        XCTAssertEqual(sut.repostCount(reel), 0)
+    }
+
     private static func makeAPIPost(id: String, content: String) -> APIPost {
         JSONStub.decode("""
         {"id":"\(id)","type":"REEL","content":"\(content)","createdAt":"2026-01-15T12:00:00.000Z","author":{"id":"a1","username":"alice"}}
