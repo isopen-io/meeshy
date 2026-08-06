@@ -420,6 +420,74 @@ final class ReelsViewModel: ObservableObject {
         }
     }
 
+    // MARK: - Options « … » (parité avec le menu du feed — FeedViewModel)
+
+    /// Suppression optimiste, avec rollback si l'API échoue. Réutilise
+    /// `removeDeletedReel` (même logique d'avancement du pager que l'événement
+    /// temps réel `post:deleted`) pour ne pas dupliquer la règle d'avancement.
+    func deletePost(_ postId: String) async {
+        guard reels.contains(where: { $0.id == postId }) else { return }
+        let snapshot = reels
+        let snapshotCurrentId = currentId
+        removeDeletedReel(postId)
+        do {
+            try await service.delete(postId: postId)
+            FeedbackToastManager.shared.showSuccess(String(localized: "feed.post.deleted", defaultValue: "Post deleted", bundle: .main))
+        } catch {
+            reels = snapshot
+            currentId = snapshotCurrentId
+            FeedbackToastManager.shared.showError(String(localized: "feed.post.deleteError", defaultValue: "Error deleting post", bundle: .main))
+        }
+    }
+
+    func reportPost(_ postId: String) async {
+        do {
+            try await ReportService.shared.reportPost(postId: postId, reportType: "inappropriate", reason: nil)
+            FeedbackToastManager.shared.showSuccess(String(localized: "feed.post.reported", defaultValue: "Post reported", bundle: .main))
+        } catch {
+            FeedbackToastManager.shared.showError(String(localized: "feed.post.reportError", defaultValue: "Error reporting post", bundle: .main))
+        }
+    }
+
+    func pinPost(_ postId: String) async {
+        do {
+            try await service.pinPost(postId: postId)
+            FeedbackToastManager.shared.showSuccess(String(localized: "feed.post.pinned", defaultValue: "Post pinned", bundle: .main))
+        } catch {
+            FeedbackToastManager.shared.showError(String(localized: "feed.post.pinError", defaultValue: "Error pinning post", bundle: .main))
+        }
+    }
+
+    /// Met à jour le texte d'un reel possédé. Miroir de `FeedViewModel.updatePost`
+    /// mais sur `reels` : mutation optimiste immédiate, re-hydratation depuis la
+    /// réponse serveur, rollback sur échec.
+    func updatePost(_ postId: String, content: String, language: String? = nil, type: String? = nil, removeMediaIds: [String]? = nil, location: PostLocationUpdate? = nil) async {
+        guard let idx = reels.firstIndex(where: { $0.id == postId }) else { return }
+        let snapshot = reels[idx]
+        var optimistic = snapshot
+        optimistic.content = content
+        optimistic.translatedContent = nil
+        optimistic.translations = nil
+        switch location {
+        case .set(let place): optimistic.location = place
+        case .remove: optimistic.location = nil
+        case nil: break
+        }
+        reels[idx] = optimistic
+        do {
+            let updated = try await service.update(postId: postId, content: content, visibility: nil, visibilityUserIds: nil, moodEmoji: nil, originalLanguage: language, type: type, removeMediaIds: removeMediaIds, storyEffects: nil, mediaIds: nil, location: location)
+            if let newIdx = reels.firstIndex(where: { $0.id == postId }) {
+                reels[newIdx] = updated.toFeedPost(preferredLanguages: AuthManager.shared.currentUser?.preferredContentLanguages ?? [])
+            }
+            FeedbackToastManager.shared.showSuccess(String(localized: "feed.post.edited", defaultValue: "Post edited", bundle: .main))
+        } catch {
+            if let rollbackIdx = reels.firstIndex(where: { $0.id == postId }) {
+                reels[rollbackIdx] = snapshot
+            }
+            FeedbackToastManager.shared.showError(String(localized: "feed.post.editError", defaultValue: "Error editing post", bundle: .main))
+        }
+    }
+
     func recordView(_ id: String) {
         // Vue UNIQUE (`viewCount`) — dédupliquée côté serveur par `PostView`
         // (`@@unique(postId, userId)`) : rejouer l'appel ne la gonfle pas.
