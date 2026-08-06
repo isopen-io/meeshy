@@ -1205,7 +1205,17 @@ export class CallEventsHandler {
         (p) => ((p.participant?.userId ?? p.participantId) === userId) && !p.leftAt
       );
       return activeParticipant?.participantId ?? null;
-    } catch {
+    } catch (error) {
+      // A genuine "not a participant" resolves via the `.find()` above
+      // returning undefined, never via this catch — reaching here means
+      // getCallSession itself failed (DB timeout, connection drop, bug), which
+      // is otherwise indistinguishable from "not a participant" and silently
+      // drops the caller's toggle/heartbeat/quality-report with zero trace.
+      logger.warn('resolveActiveCallParticipantId: getCallSession failed, treating caller as unauthorized', {
+        userId,
+        callId,
+        error: error instanceof Error ? error.message : String(error)
+      });
       return null;
     }
   }
@@ -1228,7 +1238,14 @@ export class CallEventsHandler {
         (p) => (p.participant?.userId ?? p.participantId) === userId
       );
       return everParticipant?.participantId ?? null;
-    } catch {
+    } catch (error) {
+      // See resolveActiveCallParticipantId — same rationale: a getCallSession
+      // failure must be logged, not silently folded into "not a participant".
+      logger.warn('resolveEverCallParticipantId: getCallSession failed, treating caller as unauthorized', {
+        userId,
+        callId,
+        error: error instanceof Error ? error.message : String(error)
+      });
       return null;
     }
   }

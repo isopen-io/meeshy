@@ -242,6 +242,39 @@ final class FloatingCallPillViewTests: XCTestCase {
         )
     }
 
+    func test_muteButton_hasAccessibilityHint() throws {
+        // Audit fix: mute/speaker only had .accessibilityLabel + toggle trait —
+        // unlike hangupButton, VoiceOver users got no indication of what muting
+        // means for the other party from the label alone.
+        let source = try pillSource()
+        guard let range = source.range(of: "private var muteButton") else {
+            XCTFail("FloatingCallPillView must define muteButton")
+            return
+        }
+        let end = source.index(range.lowerBound, offsetBy: 1000, limitedBy: source.endIndex) ?? source.endIndex
+        let vicinity = String(source[range.lowerBound..<end])
+        XCTAssertTrue(
+            vicinity.contains(".accessibilityHint(") && vicinity.contains("call.control.mute.hint"),
+            "The mute button must carry an accessibility hint, sharing the call.control.mute.hint " +
+            "key already used by CallView's mute control so both call surfaces read identically."
+        )
+    }
+
+    func test_speakerButton_hasAccessibilityHint() throws {
+        let source = try pillSource()
+        guard let range = source.range(of: "private var speakerButton") else {
+            XCTFail("FloatingCallPillView must define speakerButton")
+            return
+        }
+        let end = source.index(range.lowerBound, offsetBy: 1000, limitedBy: source.endIndex) ?? source.endIndex
+        let vicinity = String(source[range.lowerBound..<end])
+        XCTAssertTrue(
+            vicinity.contains(".accessibilityHint(") && vicinity.contains("call.control.speaker.hint"),
+            "The speaker button must carry an accessibility hint, sharing the call.control.speaker.hint " +
+            "key already used by CallView's speaker control so both call surfaces read identically."
+        )
+    }
+
     func test_collapseToBubble_resetsSizeTierToCircle() throws {
         let source = try pillSource()
         guard let range = source.range(of: "private func collapseToBubble(exitTranslation: CGFloat) {") else {

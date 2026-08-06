@@ -2354,12 +2354,22 @@ export class CallService {
     if (Object.keys(data).length === 0) {
       return;
     }
-    await this.prisma.callSession.update({ where: { id: callId }, data }).catch((error) => {
-      logger.warn('Failed to persist call stats', {
-        callId,
-        error: error instanceof Error ? error.message : String(error)
+    // Scope the write to the exact (bytesSent, bytesReceived) snapshot read
+    // above via `updateMany`'s `where`, not a plain `update`. Two participants
+    // (or a duplicate/out-of-order report from the same one) can call this
+    // concurrently; without this guard, whichever `update()` commits last wins
+    // outright — even carrying a SMALLER total — silently corrupting the
+    // "data spent" figure with a lost update. If the row changed underneath
+    // us, `count` is 0 and this report is dropped: acceptable for best-effort
+    // telemetry, and the next report recomputes against a fresher snapshot.
+    await this.prisma.callSession
+      .updateMany({ where: { id: callId, bytesSent: current.bytesSent, bytesReceived: current.bytesReceived }, data })
+      .catch((error) => {
+        logger.warn('Failed to persist call stats', {
+          callId,
+          error: error instanceof Error ? error.message : String(error)
+        });
       });
-    });
   }
 
   /**
