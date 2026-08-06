@@ -2258,7 +2258,16 @@ describe('ZmqTranslationClient', () => {
       await client.initialize();
     });
 
-    it('should retry sendAudioProcessRequest on timeout and increment requests_sent — lines 458-460', async () => {
+    // Prod incident 2026-08-06: le pipeline audio complet (Whisper + NLLB +
+    // Chatterbox, plusieurs minutes) dépassait systématiquement le timeout par
+    // tentative de 30 s. Le gateway re-poussait le MÊME taskId toutes les 30 s
+    // (jusqu'à 5 tentatives), dupliquant le job dans le worker pool ML du
+    // translator — la contention GPU qui en résultait faisait à son tour
+    // dépasser le watchdog de synthèse TTS (180 s), aboutissant à un échec
+    // total et répété ('translation_failed') pour le même message toutes les
+    // ~3 minutes, indéfiniment. Même remède que sendTranscriptionOnlyRequest :
+    // un seul tir, deadman long, pas de retry.
+    it('should not resend audio process requests on the 30s window', async () => {
       const request: Omit<AudioProcessRequest, 'type'> = {
         messageId: 'msg-audio-retry',
         attachmentId: 'attach-retry',
@@ -2275,11 +2284,38 @@ describe('ZmqTranslationClient', () => {
       await client.sendAudioProcessRequest(request);
       const statsBefore = client.getStats().requests_sent;
 
-      // Trigger retry
+      // No retry window fires anymore; advancing past the old 30s threshold
+      // must NOT trigger a duplicate PUSH of the same task.
       await jest.advanceTimersByTimeAsync(30_000 + 100);
 
       const statsAfter = client.getStats().requests_sent;
-      expect(statsAfter).toBeGreaterThan(statsBefore);
+      expect(statsAfter).toBe(statsBefore);
+    });
+
+    it('should emit audioProcessError after the deadman timeout instead of resending', async () => {
+      const errors: any[] = [];
+      client.on('audioProcessError', (e) => errors.push(e));
+
+      const request: Omit<AudioProcessRequest, 'type'> = {
+        messageId: 'msg-audio-deadman',
+        attachmentId: 'attach-deadman',
+        conversationId: 'conv-deadman',
+        senderId: 'user-deadman',
+        audioUrl: '',
+        audioPath: '/tmp/audio.mp3',
+        audioDurationMs: 1000,
+        targetLanguages: ['fr'],
+        generateVoiceClone: false,
+        modelType: 'basic'
+      };
+
+      await client.sendAudioProcessRequest(request);
+
+      await jest.advanceTimersByTimeAsync(
+        ZMQ_TOLERANCE_DEFAULTS.voiceTranslateDeadmanMs + 1_000
+      );
+
+      expect(errors.length).toBeGreaterThan(0);
     });
   });
 

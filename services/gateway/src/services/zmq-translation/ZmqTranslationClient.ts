@@ -563,6 +563,17 @@ export class ZmqTranslationClient extends EventEmitter {
 
   /**
    * Envoie une requête de processing audio
+   *
+   * Pipeline long (Whisper + NLLB + Chatterbox, plusieurs minutes) : aucun
+   * retry n'est armé, comme pour `sendTranscriptionOnlyRequest`.
+   *
+   * Prod incident 2026-08-06 : le timeout par défaut (30 s, retry activé)
+   * était systématiquement dépassé par le pipeline complet. Le gateway
+   * re-poussait le MÊME taskId toutes les 30 s (jusqu'à 5 tentatives),
+   * dupliquant le job dans le worker pool ML — la contention GPU qui en
+   * résultait faisait à son tour dépasser le watchdog de synthèse TTS
+   * (180 s), aboutissant à un échec total et répété du même message
+   * ('translation_failed') toutes les ~3 minutes, indéfiniment.
    */
   async sendAudioProcessRequest(request: Omit<AudioProcessRequest, 'type'>): Promise<string> {
     if (this._cbIsOpen()) {
@@ -578,7 +589,8 @@ export class ZmqTranslationClient extends EventEmitter {
         await this.requestSender.sendAudioProcessRequest(request, existingTaskId);
         this.stats.requests_sent++;
         return existingTaskId;
-      }
+      },
+      { retryEnabled: false, timeoutMs: ZMQ_VOICE_TRANSLATE_DEADMAN_MS }
     );
     return taskId;
   }
