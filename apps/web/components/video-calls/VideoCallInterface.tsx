@@ -384,6 +384,7 @@ export function VideoCallInterface({ callId }: VideoCallInterfaceProps) {
   };
 
   const handleSwitchCamera = async () => {
+    let newStream: MediaStream | null = null;
     try {
       if (!localStream) return;
 
@@ -394,7 +395,7 @@ export function VideoCallInterface({ callId }: VideoCallInterfaceProps) {
       const currentFacingMode = (constraints as unknown).facingMode || 'user';
       const newFacingMode = currentFacingMode === 'user' ? 'environment' : 'user';
 
-      const newStream = await navigator.mediaDevices.getUserMedia({
+      newStream = await navigator.mediaDevices.getUserMedia({
         video: { facingMode: newFacingMode },
         audio: false,
       });
@@ -414,9 +415,16 @@ export function VideoCallInterface({ callId }: VideoCallInterfaceProps) {
       videoTrack.stop();
       localStream.removeTrack(videoTrack);
       localStream.addTrack(newVideoTrack);
+      newStream = null; // ownership transferred to localStream — catch must not stop it
 
       toast.success(t('calls.toasts.cameraSwitched'));
     } catch (error) {
+      // getUserMedia can succeed while a later step (e.g. replaceTrack on a
+      // closing sender) rejects. An un-stopped newly-acquired track leaves the
+      // other-facing camera hardware capturing with nothing consuming it —
+      // no other cleanup path (call-store reset included) ever learns about a
+      // stream that was never attached to localStream.
+      newStream?.getVideoTracks().forEach((track) => track.stop());
       logger.error('[VideoCallInterface]', 'Failed to switch camera', { error });
       toast.error(t('calls.toasts.cameraSwitchFailed'));
     }
