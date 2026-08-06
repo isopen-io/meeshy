@@ -4323,7 +4323,7 @@ describe('CallService - persistCallStats', () => {
 
     await callService.persistCallStats('missing-call', { bytesSent: 1000, bytesReceived: 500 });
 
-    expect(mockPrisma.callSession.update).not.toHaveBeenCalled();
+    expect(mockPrisma.callSession.updateMany).not.toHaveBeenCalled();
   });
 
   it('returns early without update when findUnique rejects (network error → null via .catch)', async () => {
@@ -4332,20 +4332,21 @@ describe('CallService - persistCallStats', () => {
 
     await callService.persistCallStats('call-123', { bytesSent: 1000 });
 
-    expect(mockPrisma.callSession.update).not.toHaveBeenCalled();
+    expect(mockPrisma.callSession.updateMany).not.toHaveBeenCalled();
   });
 
-  it('updates bytesSent/bytesReceived when new total exceeds stored total', async () => {
+  it('updates bytesSent/bytesReceived when new total exceeds stored total, scoped to the read snapshot', async () => {
     mockPrisma.callSession.findUnique.mockResolvedValue({
       bytesSent: 100,
       bytesReceived: 200
     });
-    mockPrisma.callSession.update.mockResolvedValue({});
+    mockPrisma.callSession.updateMany.mockResolvedValue({ count: 1 });
 
     await callService.persistCallStats('call-123', { bytesSent: 500, bytesReceived: 600 });
 
-    expect(mockPrisma.callSession.update).toHaveBeenCalledWith(
+    expect(mockPrisma.callSession.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
+        where: expect.objectContaining({ id: 'call-123', bytesSent: 100, bytesReceived: 200 }),
         data: expect.objectContaining({ bytesSent: 500, bytesReceived: 600 })
       })
     );
@@ -4359,7 +4360,7 @@ describe('CallService - persistCallStats', () => {
 
     await callService.persistCallStats('call-123', { bytesSent: 100, bytesReceived: 200 });
 
-    expect(mockPrisma.callSession.update).not.toHaveBeenCalled();
+    expect(mockPrisma.callSession.updateMany).not.toHaveBeenCalled();
   });
 
   it('updates networkQuality when a valid level is provided', async () => {
@@ -4367,11 +4368,11 @@ describe('CallService - persistCallStats', () => {
       bytesSent: null,
       bytesReceived: null
     });
-    mockPrisma.callSession.update.mockResolvedValue({});
+    mockPrisma.callSession.updateMany.mockResolvedValue({ count: 1 });
 
     await callService.persistCallStats('call-123', { level: 'excellent' });
 
-    expect(mockPrisma.callSession.update).toHaveBeenCalledWith(
+    expect(mockPrisma.callSession.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({ networkQuality: 'excellent' })
       })
@@ -4386,7 +4387,7 @@ describe('CallService - persistCallStats', () => {
 
     await callService.persistCallStats('call-123', { level: 'unknown' as any });
 
-    expect(mockPrisma.callSession.update).not.toHaveBeenCalled();
+    expect(mockPrisma.callSession.updateMany).not.toHaveBeenCalled();
   });
 
   it('catches and logs when update fails (.catch handler) — Error instance branch', async () => {
@@ -4394,7 +4395,7 @@ describe('CallService - persistCallStats', () => {
       bytesSent: 0,
       bytesReceived: 0
     });
-    mockPrisma.callSession.update.mockRejectedValue(new Error('update failed'));
+    mockPrisma.callSession.updateMany.mockRejectedValue(new Error('update failed'));
 
     // Should NOT throw — the .catch swallows the error
     await expect(
@@ -4408,7 +4409,7 @@ describe('CallService - persistCallStats', () => {
       bytesReceived: 0
     });
     // Throw a non-Error (string) to exercise the String(error) branch
-    mockPrisma.callSession.update.mockRejectedValue('plain string error');
+    mockPrisma.callSession.updateMany.mockRejectedValue('plain string error');
 
     await expect(
       callService.persistCallStats('call-123', { bytesSent: 500, bytesReceived: 600 })
@@ -4423,7 +4424,7 @@ describe('CallService - persistCallStats', () => {
 
     await callService.persistCallStats('call-123', { bytesSent: -1, bytesReceived: -1, level: 'bad' as any });
 
-    expect(mockPrisma.callSession.update).not.toHaveBeenCalled();
+    expect(mockPrisma.callSession.updateMany).not.toHaveBeenCalled();
   });
 
   it('uses fallback 0 when current.bytesSent/bytesReceived are null', async () => {
@@ -4431,12 +4432,12 @@ describe('CallService - persistCallStats', () => {
       bytesSent: null,
       bytesReceived: null
     });
-    mockPrisma.callSession.update.mockResolvedValue({});
+    mockPrisma.callSession.updateMany.mockResolvedValue({ count: 1 });
 
     await callService.persistCallStats('call-123', { bytesSent: 100, bytesReceived: 200 });
 
     // currentTotal = null??0 + null??0 = 0; 100+200 > 0 → update
-    expect(mockPrisma.callSession.update).toHaveBeenCalledWith(
+    expect(mockPrisma.callSession.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({ bytesSent: 100, bytesReceived: 200 })
       })
@@ -4448,13 +4449,13 @@ describe('CallService - persistCallStats', () => {
       bytesSent: 0,
       bytesReceived: 500
     });
-    mockPrisma.callSession.update.mockResolvedValue({});
+    mockPrisma.callSession.updateMany.mockResolvedValue({ count: 1 });
 
     // Only bytesSent provided → reportReceived is null → nextReceived = null ?? current.bytesReceived ?? 0 = 500
     // currentTotal = 0 + 500 = 500; nextSent + nextReceived = 1000 + 500 = 1500 > 500 → update
     await callService.persistCallStats('call-123', { bytesSent: 1000 });
 
-    expect(mockPrisma.callSession.update).toHaveBeenCalledWith(
+    expect(mockPrisma.callSession.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({ bytesSent: 1000, bytesReceived: 500 })
       })
@@ -4466,13 +4467,13 @@ describe('CallService - persistCallStats', () => {
       bytesSent: 200,
       bytesReceived: 0
     });
-    mockPrisma.callSession.update.mockResolvedValue({});
+    mockPrisma.callSession.updateMany.mockResolvedValue({ count: 1 });
 
     // Only bytesReceived provided → reportSent is null → nextSent = null ?? current.bytesSent ?? 0 = 200
     // currentTotal = 200 + 0 = 200; nextSent + nextReceived = 200 + 800 = 1000 > 200 → update
     await callService.persistCallStats('call-123', { bytesReceived: 800 });
 
-    expect(mockPrisma.callSession.update).toHaveBeenCalledWith(
+    expect(mockPrisma.callSession.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({ bytesSent: 200, bytesReceived: 800 })
       })
@@ -4485,13 +4486,13 @@ describe('CallService - persistCallStats', () => {
       bytesSent: null,
       bytesReceived: null
     });
-    mockPrisma.callSession.update.mockResolvedValue({});
+    mockPrisma.callSession.updateMany.mockResolvedValue({ count: 1 });
 
     // Only bytesReceived provided, both current values null → nextSent = null ?? null ?? 0 = 0
     // nextReceived = 500 (not null); currentTotal = null??0 + null??0 = 0; 0+500 > 0 → update
     await callService.persistCallStats('call-123', { bytesReceived: 500 });
 
-    expect(mockPrisma.callSession.update).toHaveBeenCalledWith(
+    expect(mockPrisma.callSession.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({ bytesSent: 0, bytesReceived: 500 })
       })
@@ -4505,13 +4506,13 @@ describe('CallService - persistCallStats', () => {
       bytesSent: null,
       bytesReceived: null
     });
-    mockPrisma.callSession.update.mockResolvedValue({});
+    mockPrisma.callSession.updateMany.mockResolvedValue({ count: 1 });
 
     // Only bytesSent provided → reportReceived=null; current.bytesReceived=null → nextReceived=??0=0
     // nextSent=500, nextReceived=0; currentTotal=0; 500+0>0 → update
     await callService.persistCallStats('call-123', { bytesSent: 500 });
 
-    expect(mockPrisma.callSession.update).toHaveBeenCalledWith(
+    expect(mockPrisma.callSession.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({ bytesSent: 500, bytesReceived: 0 })
       })
@@ -4521,15 +4522,36 @@ describe('CallService - persistCallStats', () => {
   it('updates networkQuality good, fair, and poor levels', async () => {
     for (const level of ['good', 'fair', 'poor'] as const) {
       mockPrisma.callSession.findUnique.mockResolvedValue({ bytesSent: null, bytesReceived: null });
-      mockPrisma.callSession.update.mockResolvedValue({});
+      mockPrisma.callSession.updateMany.mockResolvedValue({ count: 1 });
 
       await callService.persistCallStats('call-123', { level });
 
-      expect(mockPrisma.callSession.update).toHaveBeenCalledWith(
+      expect(mockPrisma.callSession.updateMany).toHaveBeenCalledWith(
         expect.objectContaining({ data: expect.objectContaining({ networkQuality: level }) })
       );
       jest.clearAllMocks();
     }
+  });
+
+  it('regression: scopes the write to the read snapshot so a concurrent larger report cannot be clobbered', async () => {
+    // Simulates two participants racing call:quality-report for the same call.
+    // Both read the same (0, 0) snapshot; the "winning" concurrent write already
+    // advanced the row to (2000, 3000) by the time THIS report's write lands.
+    // A plain `update()` would blindly overwrite with the smaller (500, 600)
+    // pair; `updateMany` scoped to the stale snapshot must instead match zero
+    // rows and leave the fresher totals in place.
+    mockPrisma.callSession.findUnique.mockResolvedValue({ bytesSent: 0, bytesReceived: 0 });
+    mockPrisma.callSession.updateMany.mockResolvedValue({ count: 0 });
+
+    await expect(
+      callService.persistCallStats('call-123', { bytesSent: 500, bytesReceived: 600 })
+    ).resolves.toBeUndefined();
+
+    expect(mockPrisma.callSession.updateMany).toHaveBeenCalledWith({
+      where: { id: 'call-123', bytesSent: 0, bytesReceived: 0 },
+      data: { bytesSent: 500, bytesReceived: 600 }
+    });
+    // A 0-count match must not throw or retry — best-effort telemetry.
   });
 });
 
