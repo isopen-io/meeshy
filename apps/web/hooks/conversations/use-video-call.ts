@@ -8,14 +8,14 @@
  * @module hooks/conversations/use-video-call
  */
 
-import { useCallback, useState } from 'react';
+import { useCallback } from 'react';
 import { toast } from 'sonner';
 import { meeshySocketIOService } from '@/services/meeshy-socketio.service';
 import { useCallStore } from '@/stores/call-store';
 import { useAuth } from '@/hooks/use-auth';
 import { CLIENT_EVENTS } from '@meeshy/shared/types/socketio-events';
 import type { Conversation } from '@meeshy/shared/types';
-import type { CallInitiateAck, CallJoinAck } from '@meeshy/shared/types/video-call';
+import type { CallInitiateAck } from '@meeshy/shared/types/video-call';
 import { getCallMediaConstraints, stopPreauthorizedStream } from '@/lib/calls/call-media-constraints';
 
 interface UseVideoCallOptions {
@@ -29,25 +29,21 @@ export type CallMediaType = 'audio' | 'video';
 
 interface UseVideoCallReturn {
   startCall: (type?: CallMediaType) => Promise<void>;
-  answerCall: (callId: string) => Promise<void>;
-  rejectCall: (callId: string) => Promise<void>;
-  endCall: (callId: string) => Promise<void>;
-  toggleAudio: (callId: string, enabled: boolean) => Promise<void>;
-  toggleVideo: (callId: string, enabled: boolean) => Promise<void>;
-  isCallSupported: boolean;
-  error: string | null;
 }
 
 /**
- * Hook pour gérer les appels vidéo
+ * Hook pour initier un appel vidéo/audio.
+ *
+ * N'expose QUE `startCall` : c'est le seul membre consommé en production
+ * (`ConversationLayout`, `CallSystemMessage`) — répondre/rejeter/raccrocher/
+ * toggle audio-vidéo passent tous par `CallManager.tsx` + `call-store.ts`,
+ * pas par ce hook. Les anciens `answerCall`/`rejectCall`/`endCall`/
+ * `toggleAudio`/`toggleVideo`/`isCallSupported`/`error` n'avaient aucun
+ * appelant en dehors de leurs propres tests (retiré Vague 57, cf.
+ * `tasks/calls-fonctionnel-todo.md`).
  */
 export function useVideoCall({ conversation }: UseVideoCallOptions): UseVideoCallReturn {
-  const [error, setError] = useState<string | null>(null);
-  const callStore = useCallStore();
   const { user } = useAuth();
-
-  // Les appels ne sont supportés que pour les conversations directes
-  const isCallSupported = conversation?.type === 'direct';
 
   /**
    * Démarre un appel vidéo
@@ -143,59 +139,8 @@ export function useVideoCall({ conversation }: UseVideoCallOptions): UseVideoCal
     }
   }, [conversation, user]);
 
-  const answerCall = useCallback(async (callId: string) => {
-    const socket = meeshySocketIOService.getSocket();
-    if (!socket?.connected) {
-      setError('Socket not connected');
-      return;
-    }
-    socket.emit(CLIENT_EVENTS.CALL_JOIN, { callId }, (response: CallJoinAck) => {
-      if (!response?.success) {
-        setError('Failed to join call');
-        return;
-      }
-      if (response.data?.iceServers?.length) {
-        useCallStore.getState().setIceServers(response.data.iceServers);
-      }
-    });
-  }, []);
-
-  const rejectCall = useCallback(async (callId: string) => {
-    const socket = meeshySocketIOService.getSocket();
-    if (!socket?.connected) return;
-    socket.emit(CLIENT_EVENTS.CALL_END, { callId, reason: 'rejected' }, () => {});
-  }, []);
-
-  const endCall = useCallback(async (callId: string) => {
-    const socket = meeshySocketIOService.getSocket();
-    if (!socket?.connected) return;
-    socket.emit(CLIENT_EVENTS.CALL_END, { callId, reason: 'completed' }, () => {});
-    callStore.reset();
-  }, [callStore]);
-
-  const toggleAudio = useCallback(async (callId: string, enabled: boolean) => {
-    const socket = meeshySocketIOService.getSocket();
-    if (!socket?.connected) return;
-    socket.emit(CLIENT_EVENTS.CALL_TOGGLE_AUDIO, { callId, enabled }, () => {});
-    callStore.toggleAudio();
-  }, [callStore]);
-
-  const toggleVideo = useCallback(async (callId: string, enabled: boolean) => {
-    const socket = meeshySocketIOService.getSocket();
-    if (!socket?.connected) return;
-    socket.emit(CLIENT_EVENTS.CALL_TOGGLE_VIDEO, { callId, enabled }, () => {});
-    callStore.toggleVideo();
-  }, [callStore]);
-
   return {
     startCall,
-    answerCall,
-    rejectCall,
-    endCall,
-    toggleAudio,
-    toggleVideo,
-    isCallSupported,
-    error,
   };
 }
 

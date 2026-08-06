@@ -368,8 +368,21 @@ export class ReactionHandler {
   }
 
   /**
-   * Résout le Participant.id pour un utilisateur enregistré via le messageId → conversationId.
-   * Pour les anonymes, retourne directement user.participantId.
+   * Résout le Participant.id gaté par l'appartenance à la conversation du message.
+   *
+   * Registered : messageId → conversationId, puis Participant actif pour ce user
+   * dans CETTE conversation.
+   *
+   * Anonyme : un Participant anonyme est lié à EXACTEMENT une conversation (créé
+   * au join d'un lien de partage — voir AuthHandler._authenticateAnonymousUser).
+   * On vérifie donc que le message appartient bien à la conversation de l'anon
+   * AVANT de faire confiance à `user.participantId` en mémoire. Sans ce gate, un
+   * anon qui a rejoint la conversation A pouvait passer un messageId de la
+   * conversation B et lire, via `reaction:request-sync`, la liste des réacteurs
+   * de B (displayName, avatar) — divulgation cross-conversation (IDOR). Le gate
+   * ré-affirme aussi `isActive`, donc un anon banni/retiré depuis le connect est
+   * rejeté. Miroir de `resolveParticipant` (utils/participant-resolver.ts), déjà
+   * appliqué aux handlers typing:*.
    */
   private async _resolveParticipantId(
     user: SocketUser | undefined,
@@ -377,8 +390,6 @@ export class ReactionHandler {
     isAnonymous: boolean,
     messageId: string
   ): Promise<string | undefined> {
-    if (isAnonymous) return user?.participantId;
-
     // Guard: a `messageId` still carrying a client-generated optimistic id
     // (`cid_<uuid>`) — or anything not a 24-hex Mongo ObjectId — must NEVER reach
     // prisma.message.findUnique, which throws P2023 ("Malformed ObjectID") and
@@ -395,6 +406,16 @@ export class ReactionHandler {
       select: { conversationId: true }
     });
     if (!msg) return undefined;
+
+    if (isAnonymous) {
+      const participantId = user?.participantId;
+      if (!participantId) return undefined;
+      const anonParticipant = await this.prisma.participant.findFirst({
+        where: { id: participantId, conversationId: msg.conversationId, isActive: true },
+        select: { id: true }
+      });
+      return anonParticipant ? participantId : undefined;
+    }
 
     const participant = await this.prisma.participant.findFirst({
       where: { userId, conversationId: msg.conversationId, isActive: true },

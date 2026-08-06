@@ -93,7 +93,7 @@ describe('PostService — règle de composition REEL', () => {
 
   describe('createPost', () => {
     it('keeps REEL when the claimable media qualifies (video)', async () => {
-      prisma.postMedia.findMany.mockResolvedValue([{ mimeType: 'video/mp4' }]);
+      prisma.postMedia.findMany.mockResolvedValue([{ mimeType: 'video/mp4', duration: 5000 }]);
       prisma.post.create.mockResolvedValue(makePost({ type: 'REEL' }));
 
       await service.createPost({ ...baseCreate, type: PostType.REEL, mediaIds: ['m1'] }, 'user-1');
@@ -156,6 +156,28 @@ describe('PostService — règle de composition REEL', () => {
         expect.objectContaining({ data: expect.objectContaining({ type: PostType.POST }) }),
       );
     });
+
+    it('silently degrades a REEL to POST when the video is under 3 seconds', async () => {
+      prisma.postMedia.findMany.mockResolvedValue([{ mimeType: 'video/mp4', duration: 2000 }]);
+      prisma.post.create.mockResolvedValue(makePost());
+
+      await service.createPost({ ...baseCreate, type: PostType.REEL, mediaIds: ['m1'] }, 'user-1');
+
+      expect(prisma.post.create).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ type: PostType.POST }) }),
+      );
+    });
+
+    it('keeps REEL when the video is exactly 3 seconds', async () => {
+      prisma.postMedia.findMany.mockResolvedValue([{ mimeType: 'video/mp4', duration: 3000 }]);
+      prisma.post.create.mockResolvedValue(makePost({ type: 'REEL' }));
+
+      await service.createPost({ ...baseCreate, type: PostType.REEL, mediaIds: ['m1'] }, 'user-1');
+
+      expect(prisma.post.create).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ type: PostType.REEL }) }),
+      );
+    });
   });
 
   describe('updatePost', () => {
@@ -209,7 +231,7 @@ describe('PostService — règle de composition REEL', () => {
     it('materializes freshly attached media for the rule (video attach → REEL ok)', async () => {
       prisma.post.findFirst.mockResolvedValue(makePost({ type: 'POST', media: [] }));
       prisma.post.update.mockResolvedValue(makePost({ type: 'REEL' }));
-      prisma.postMedia.findMany.mockResolvedValue([{ mimeType: 'video/mp4' }]);
+      prisma.postMedia.findMany.mockResolvedValue([{ mimeType: 'video/mp4', duration: 5000 }]);
 
       await service.updatePost('post-1', 'user-1', { type: PostType.REEL, mediaIds: ['new-m1'] });
 
@@ -218,6 +240,27 @@ describe('PostService — règle de composition REEL', () => {
       };
       expect(readArg.where.id).toEqual({ in: ['new-m1'] });
       expect(readArg.where.uploaderId).toBe('user-1');
+      expect(prisma.post.update).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ type: PostType.REEL }) }),
+      );
+    });
+
+    it('rejects switching a POST to REEL when the attached video is under 3 seconds (422)', async () => {
+      prisma.post.findFirst.mockResolvedValue(makePost({ type: 'POST', media: [] }));
+      prisma.postMedia.findMany.mockResolvedValue([{ mimeType: 'video/mp4', duration: 2000 }]);
+
+      await expect(service.updatePost('post-1', 'user-1', { type: PostType.REEL, mediaIds: ['new-m1'] }))
+        .rejects.toMatchObject({ statusCode: 422 });
+      expect(prisma.post.update).not.toHaveBeenCalled();
+    });
+
+    it('accepts switching a POST to REEL when the attached video is exactly 3 seconds', async () => {
+      prisma.post.findFirst.mockResolvedValue(makePost({ type: 'POST', media: [] }));
+      prisma.post.update.mockResolvedValue(makePost({ type: 'REEL' }));
+      prisma.postMedia.findMany.mockResolvedValue([{ mimeType: 'video/mp4', duration: 3000 }]);
+
+      await service.updatePost('post-1', 'user-1', { type: PostType.REEL, mediaIds: ['new-m1'] });
+
       expect(prisma.post.update).toHaveBeenCalledWith(
         expect.objectContaining({ data: expect.objectContaining({ type: PostType.REEL }) }),
       );

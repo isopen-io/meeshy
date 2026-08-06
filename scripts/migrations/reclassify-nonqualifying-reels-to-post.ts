@@ -2,14 +2,16 @@
  * Migration : repasser en POST les REEL existants NON CONFORMES à la règle de
  * composition.
  *
- * Règle produit (directive user 2026-08-02) — un post n'est un RÉEL que si sa
- * composition porte :
- *   - au moins une VIDÉO, OU
- *   - au moins un AUDIO, OU
- *   - PLUSIEURS (>= 2) IMAGES.
+ * Règle produit (directive user 2026-08-02, étendue par la directive durée
+ * minimale) — un post n'est un RÉEL que si sa composition porte :
+ *   - au moins une VIDÉO d'au moins 3 secondes, OU
+ *   - au moins un AUDIO d'au moins 3 secondes, OU
+ *   - PLUSIEURS (>= 2) IMAGES (jamais soumises à une condition de durée).
  * Tout REEL qui ne satisfait pas cette règle (texte seul, une seule image,
- * document(s)) redevient un POST. Corpus visé (E11) : les REEL 1-image créés
- * par les clients de l'ancienne doctrine « >= 1 média → REEL ».
+ * document(s), vidéo/audio de moins de 3 secondes) redevient un POST. Corpus
+ * visé (E11) : les REEL 1-image créés par les clients de l'ancienne doctrine
+ * « >= 1 média → REEL » ; et les REEL vidéo/audio courts créés avant la
+ * directive durée minimale.
  *
  * Prédicat : MIROIR de `services/gateway/src/services/posts/reelComposition.ts`
  * (qui reflète lui-même le SDK `ReelComposition.qualifiesAsReel`). Inverse de
@@ -38,18 +40,28 @@ const prisma = new PrismaClient();
 const APPLY = process.argv.includes('--apply');
 const BATCH = 500;
 
-type MediaLite = { mimeType: string | null };
+type MediaLite = { mimeType: string | null; duration: number | null };
 
 type Verdict = { qualifies: boolean; reason: string };
 
+const MIN_QUALIFYING_DURATION_MS = 3000;
+
+function meetsMinDuration(duration: number | null): boolean {
+  return typeof duration === 'number' && duration >= MIN_QUALIFYING_DURATION_MS;
+}
+
 function classify(media: MediaLite[]): Verdict {
-  const mimes = media.map((m) => (m.mimeType ?? '').toLowerCase());
-  const video = mimes.filter((t) => t.startsWith('video/')).length;
-  const audio = mimes.filter((t) => t.startsWith('audio/')).length;
-  const image = mimes.filter((t) => t.startsWith('image/')).length;
-  if (video > 0) return { qualifies: true, reason: 'video' };
-  if (audio > 0) return { qualifies: true, reason: image > 0 ? 'audio+photo' : 'audio' };
+  const entries = media.map((m) => ({ mime: (m.mimeType ?? '').toLowerCase(), duration: m.duration }));
+  const video = entries.filter((e) => e.mime.startsWith('video/'));
+  const audio = entries.filter((e) => e.mime.startsWith('audio/'));
+  const image = entries.filter((e) => e.mime.startsWith('image/')).length;
+  if (video.some((e) => meetsMinDuration(e.duration))) return { qualifies: true, reason: 'video' };
+  if (audio.some((e) => meetsMinDuration(e.duration))) {
+    return { qualifies: true, reason: image > 0 ? 'audio+photo' : 'audio' };
+  }
   if (image >= 2) return { qualifies: true, reason: 'multi-photo' };
+  if (video.length > 0) return { qualifies: false, reason: 'video-too-short' };
+  if (audio.length > 0) return { qualifies: false, reason: 'audio-too-short' };
   if (image === 1) return { qualifies: false, reason: 'single-photo' };
   if (media.length > 0) return { qualifies: false, reason: 'document-only' };
   return { qualifies: false, reason: 'no-media' };
@@ -73,7 +85,7 @@ async function main() {
 
   const reels = await prisma.post.findMany({
     where: { type: 'REEL', deletedAt: null },
-    select: { id: true, media: { select: { mimeType: true } } },
+    select: { id: true, media: { select: { mimeType: true, duration: true } } },
   });
   console.log(`Posts type=REEL (non supprimés) examinés : ${reels.length}`);
 
@@ -87,7 +99,9 @@ async function main() {
 
   console.log('\nRépartition par verdict :');
   for (const [reason, count] of Object.entries(reasons).sort((a, b) => b[1] - a[1])) {
-    const tag = ['single-photo', 'document-only', 'no-media'].includes(reason) ? '→ POST ' : '  reste REEL';
+    const tag = ['single-photo', 'document-only', 'no-media', 'video-too-short', 'audio-too-short'].includes(reason)
+      ? '→ POST '
+      : '  reste REEL';
     console.log(`  ${tag}  ${reason.padEnd(13)} : ${count}`);
   }
   console.log(`\n➡️  À reclasser en POST : ${toPost.length}`);

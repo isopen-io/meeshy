@@ -29,17 +29,11 @@
 	<key>CFBundleShortVersionString</key>
 	<string>$(MARKETING_VERSION)</string>
 	<key>CFBundleVersion</key>
-	<string>1271</string>
+	<string>1746</string>
 	<key>NSExtension</key>
 	<dict>
 		<key>NSExtensionAttributes</key>
 		<dict>
-			<!-- Lot 1 : texte et URL UNIQUEMENT. S'annoncer pour un type que
-			     l'extension ne sait pas envoyer ferait apparaître Meeshy dans la
-			     feuille de partage de Photos pour y échouer — pire que de ne pas
-			     y figurer. Les images et vidéos reviendront avec le pipeline TUS
-			     (lot 2) ; leur règle d'activation revient EN MÊME TEMPS, jamais
-			     avant. -->
 			<key>NSExtensionActivationRule</key>
 			<dict>
 				<key>NSExtensionActivationSupportsText</key>

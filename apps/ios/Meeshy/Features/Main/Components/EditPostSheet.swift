@@ -26,10 +26,14 @@ struct EditablePostMedia: Identifiable, Equatable {
     let id: String
     let kind: Kind
     let previewURL: URL?
+    /// Durée serveur-autoritaire (ms), quand connue — alimente le plancher de
+    /// 3s de `ReelComposition` pour les vidéos/audios. `nil` pour les images
+    /// et documents (jamais soumis à cette condition).
+    let durationMs: Int?
 
     /// Pont vers le moteur de classification SDK (`ReelComposition`), pour que
-    /// la sheet évalue la règle produit (video || audio || >= 2 images) sur la
-    /// même échelle de types que les composers.
+    /// la sheet évalue la règle produit (video >=3s || audio >=3s || >= 2
+    /// images) sur la même échelle de types que les composers.
     var feedMediaType: FeedMediaType {
         switch kind {
         case .image: return .image
@@ -39,10 +43,11 @@ struct EditablePostMedia: Identifiable, Equatable {
         }
     }
 
-    init(id: String, kind: Kind, previewURL: URL?) {
+    init(id: String, kind: Kind, previewURL: URL?, durationMs: Int? = nil) {
         self.id = id
         self.kind = kind
         self.previewURL = previewURL
+        self.durationMs = durationMs
     }
 
     init(_ media: FeedMedia) {
@@ -55,6 +60,7 @@ struct EditablePostMedia: Identifiable, Equatable {
         }
         let raw = media.thumbnailUrl ?? media.url
         self.previewURL = raw.flatMap { MeeshyConfig.resolveMediaURL($0) }
+        self.durationMs = media.duration
     }
 }
 
@@ -98,11 +104,13 @@ struct EditPostSheet: View {
 
     private var normalizedOriginalType: String { (originalType ?? "POST").uppercased() }
 
-    /// Règle produit 2026-08-02, évaluée sur la composition APRÈS retraits :
-    /// un REEL exige une vidéo, un audio, ou au moins deux images.
+    /// Règle produit 2026-08-02 + directive durée minimale, évaluée sur la
+    /// composition APRÈS retraits : un REEL exige une vidéo (>=3s), un audio
+    /// (>=3s), ou au moins deux images.
     private var remainingQualifiesAsReel: Bool {
         ReelComposition.qualifiesAsReel(
-            mediaKinds: media.filter { !removedMediaIds.contains($0.id) }.map(\.feedMediaType)
+            mediaKinds: media.filter { !removedMediaIds.contains($0.id) }
+                .map { (kind: $0.feedMediaType, durationMs: $0.durationMs) }
         )
     }
 

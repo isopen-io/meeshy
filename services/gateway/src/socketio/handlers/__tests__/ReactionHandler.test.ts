@@ -713,6 +713,82 @@ describe('ReactionHandler', () => {
       expect(callback).toHaveBeenCalledWith({ success: true, data: reactions });
     });
 
+    // ── Cross-conversation membership gating (IDOR) ────────────────────────
+    //
+    // An anonymous Participant is bound to exactly ONE conversation. The
+    // resolver must verify the target message belongs to that conversation
+    // before trusting the in-memory participantId — otherwise an anon that
+    // joined conversation A can pass a foreign messageId (conversation B) and
+    // read B's reactor list (display names, avatars) via reaction:request-sync,
+    // or mutate reactions it should never reach. `participant.findFirst`
+    // returning null models "this anon is not an active member of the message's
+    // conversation".
+    function buildAnonHandlerForForeignMessage(reactionOverrides: Record<string, any> = {}) {
+      const anonUsers = new Map<string, any>();
+      anonUsers.set(ANON_SESSION_TOKEN, {
+        id: ANON_SESSION_TOKEN,
+        socketId: ANON_SOCKET_ID,
+        isAnonymous: true,
+        participantId: ANON_PARTICIPANT_ID,
+        language: 'fr',
+      });
+      const anonSocketToUser = new Map<string, string>();
+      anonSocketToUser.set(ANON_SOCKET_ID, ANON_SESSION_TOKEN);
+
+      const FOREIGN_CONV_ID = '507f191e810c19729de860ff';
+      return buildHandler({
+        connectedUsers: anonUsers,
+        socketToUser: anonSocketToUser,
+        reactionService: makeReactionService(reactionOverrides),
+        prisma: {
+          message: { findUnique: jest.fn<any>().mockResolvedValue({ conversationId: FOREIGN_CONV_ID }) },
+          // Anon is NOT an active participant of the message's conversation.
+          participant: { findFirst: jest.fn<any>().mockResolvedValue(null), findMany: jest.fn<any>().mockResolvedValue([]) },
+        },
+      });
+    }
+
+    it('anonymous user cannot sync reactions for a message outside their conversation', async () => {
+      const { handler, reactionService } = buildAnonHandlerForForeignMessage({
+        getMessageReactions: jest.fn<any>().mockResolvedValue([{ emoji: '👋', count: 1 }]),
+      });
+      const callback = jest.fn<any>();
+
+      await handler.handleReactionSync(makeAnonSocket(), MESSAGE_ID, callback);
+
+      expect(reactionService.getMessageReactions).not.toHaveBeenCalled();
+      expect(callback).toHaveBeenCalledWith(
+        expect.objectContaining({ success: false, error: 'Could not resolve participant' })
+      );
+    });
+
+    it('anonymous user cannot add a reaction to a message outside their conversation', async () => {
+      const { handler, reactionService } = buildAnonHandlerForForeignMessage();
+      const callback = jest.fn<any>();
+
+      await handler.handleReactionAdd(makeAnonSocket(), { messageId: MESSAGE_ID, emoji: '🔥' }, callback);
+
+      expect(reactionService.addReaction).not.toHaveBeenCalled();
+      expect(callback).toHaveBeenCalledWith(
+        expect.objectContaining({ success: false, error: 'Could not resolve participant' })
+      );
+    });
+
+    it('anonymous sync verifies the anon participant is active in the message conversation', async () => {
+      const { handler, prisma } = buildAnonHandlerForForeignMessage();
+
+      await handler.handleReactionSync(makeAnonSocket(), MESSAGE_ID, jest.fn());
+
+      expect((prisma.message.findUnique as jest.Mock)).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { id: MESSAGE_ID } })
+      );
+      expect((prisma.participant.findFirst as jest.Mock)).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({ id: ANON_PARTICIPANT_ID, isActive: true }),
+        })
+      );
+    });
+
     it('anonymous user without participantId cannot add reaction', async () => {
       const anonUsers = new Map<string, any>();
       anonUsers.set(ANON_SESSION_TOKEN, {

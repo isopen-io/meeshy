@@ -1496,14 +1496,19 @@ describe('PostService', () => {
     it('returns null when the post does not exist', async () => {
       prisma.post.findFirst.mockResolvedValue(null);
 
-      const result = await service.deletePost('missing', 'user-1');
+      const result = await service.deletePost('missing', 'user-1', { actorRole: 'USER' });
       expect(result).toBeNull();
     });
 
     it('throws FORBIDDEN when the user is not the author', async () => {
       prisma.post.findFirst.mockResolvedValue(makePost({ authorId: 'other-user' }));
 
-      await expect(service.deletePost('post-1', 'user-1')).rejects.toThrow('FORBIDDEN');
+      // Rôle USER : un non-auteur sans pouvoir de modération reste refusé.
+      // Le droit de retrait n'est ouvert qu'à MODERATOR / ADMIN / BIGBOSS
+      // (cf. posts-delete-moderator.test.ts).
+      await expect(
+        service.deletePost('post-1', 'user-1', { actorRole: 'USER' }),
+      ).rejects.toThrow('FORBIDDEN');
       expect(prisma.post.update).not.toHaveBeenCalled();
     });
 
@@ -1512,7 +1517,7 @@ describe('PostService', () => {
       const deletedPost = makePost({ deletedAt: new Date() });
       prisma.post.update.mockResolvedValue(deletedPost);
 
-      const result = await service.deletePost('post-1', 'user-1');
+      const result = await service.deletePost('post-1', 'user-1', { actorRole: 'USER' });
 
       expect(prisma.post.update).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -1540,8 +1545,8 @@ describe('PostService', () => {
     });
 
     it('switches a POST to a REEL when it carries a qualifying composition (video)', async () => {
-      // Règle produit 2026-08-02 : video || audio || >= 2 images.
-      prisma.post.findFirst.mockResolvedValue(makePost({ authorId: 'user-1', type: 'POST', media: [{ id: 'm1', mimeType: 'video/mp4' }] }));
+      // Règle produit 2026-08-02 : video (>=3s) || audio (>=3s) || >= 2 images.
+      prisma.post.findFirst.mockResolvedValue(makePost({ authorId: 'user-1', type: 'POST', media: [{ id: 'm1', mimeType: 'video/mp4', duration: 5000 }] }));
       prisma.post.update.mockResolvedValue(makePost({ type: 'REEL' }));
 
       await service.updatePost('post-1', 'user-1', { type: PostType.REEL });
@@ -1638,7 +1643,7 @@ describe('PostService', () => {
 
     it('allows removing media from a REEL whose remaining composition still qualifies', async () => {
       // Retirer l'image laisse la vidéo — la composition reste qualifiante.
-      prisma.post.findFirst.mockResolvedValue(makePost({ authorId: 'user-1', type: 'REEL', media: [{ id: 'm1', mimeType: 'image/jpeg' }, { id: 'm2', mimeType: 'video/mp4' }] }));
+      prisma.post.findFirst.mockResolvedValue(makePost({ authorId: 'user-1', type: 'REEL', media: [{ id: 'm1', mimeType: 'image/jpeg' }, { id: 'm2', mimeType: 'video/mp4', duration: 5000 }] }));
       prisma.post.update.mockResolvedValue(makePost({ type: 'REEL' }));
 
       await service.updatePost('post-1', 'user-1', { removeMediaIds: ['m1'] });
@@ -1843,11 +1848,12 @@ describe('PostService', () => {
       });
 
       it('REEL: newly added media counts toward the composition rule', async () => {
-        prisma.post.findFirst.mockResolvedValue(makePost({ authorId: 'user-1', type: 'REEL', media: [{ id: 'm1', mimeType: 'video/mp4' }] }));
+        prisma.post.findFirst.mockResolvedValue(makePost({ authorId: 'user-1', type: 'REEL', media: [{ id: 'm1', mimeType: 'video/mp4', duration: 5000 }] }));
         prisma.post.update.mockResolvedValue(makePost({ type: 'REEL' }));
-        // Le média fraîchement téléversé est matérialisé (mimeType) pour la
-        // règle de composition : la vidéo ajoutée garde le REEL qualifiant.
-        prisma.postMedia.findMany.mockResolvedValue([{ mimeType: 'video/quicktime' }]);
+        // Le média fraîchement téléversé est matérialisé (mimeType/duration)
+        // pour la règle de composition : la vidéo ajoutée garde le REEL
+        // qualifiant.
+        prisma.postMedia.findMany.mockResolvedValue([{ mimeType: 'video/quicktime', duration: 5000 }]);
 
         await service.updatePost('post-1', 'user-1', { removeMediaIds: ['m1'], mediaIds: ['new-m1'] });
 

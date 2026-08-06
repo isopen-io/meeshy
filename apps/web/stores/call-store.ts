@@ -15,7 +15,6 @@ import type {
   CallParticipant,
   CallControls,
   CallState,
-  CallEndReason,
   ConnectionQualityLevel,
 } from '@meeshy/shared/types/video-call';
 
@@ -56,7 +55,6 @@ export type PendingCallRetryMap = Record<string, PendingCallRetry>;
 
 interface CallStoreState extends CallState {
   // Extended state
-  callEndReason: CallEndReason | null;
   reconnectAttempt: number;
   connectionQuality: ConnectionQualityLevel | null;
   isReconnecting: boolean;
@@ -110,9 +108,6 @@ interface CallStoreState extends CallState {
 
   // Actions: Connection quality
   setConnectionQuality: (quality: ConnectionQualityLevel) => void;
-
-  // Actions: End reason
-  setCallEndReason: (reason: CallEndReason) => void;
 
   // Actions: Join an ongoing call from its live message bubble
   requestJoin: (request: JoinCallRequest) => void;
@@ -180,7 +175,6 @@ export const useCallStore = create<CallStoreState>((set, get) => ({
   ...initialState,
 
   // Extended state defaults
-  callEndReason: null,
   reconnectAttempt: 0,
   connectionQuality: null,
   isReconnecting: false,
@@ -495,12 +489,6 @@ export const useCallStore = create<CallStoreState>((set, get) => ({
     set({ connectionQuality: quality });
   },
 
-  // ===== END REASON =====
-
-  setCallEndReason: (reason) => {
-    set({ callEndReason: reason });
-  },
-
   // ===== JOIN FROM LIVE CALL BUBBLE =====
 
   requestJoin: (request) => {
@@ -569,7 +557,6 @@ export const useCallStore = create<CallStoreState>((set, get) => ({
       remoteStreams: new Map(),
       peerConnections: new Map(),
       translations: new Map(),
-      callEndReason: null,
       reconnectAttempt: 0,
       connectionQuality: null,
       isReconnecting: false,

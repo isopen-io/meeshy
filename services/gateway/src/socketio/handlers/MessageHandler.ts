@@ -40,6 +40,7 @@ import {
 } from '../utils/message-payload-filter.js';
 import { resolveParticipant } from '../utils/participant-resolver.js';
 import { buildMessageAckData, stripClientMessageId, type MessageAckSource } from '../utils/message-ack-shaping.js';
+import { messageTypeFromMimeTypes } from '../utils/attachment-message-type.js';
 import { BoundedTtlCache } from '../../utils/bounded-cache.js';
 import type {
   MessageRequest,
@@ -436,6 +437,12 @@ export class MessageHandler {
         }
       }
 
+      // Mettre à jour l'activité — parité avec handleMessageSend. L'envoi de
+      // pièces jointes (notamment les notes vocales, dont ce path WS est le
+      // SEUL transport) est une activité utilisateur qui doit rafraîchir
+      // lastActiveAt, sinon la présence d'un utilisateur voice-first se périme.
+      this.statusService.updateLastSeen(userId || participantId, isAnonymous);
+
       const resolvedParticipantId = await this._resolveParticipantId(userId, participantId, validated.conversationId, isAnonymous);
       if (!resolvedParticipantId) {
         this._sendError(callback, 'Not a participant in this conversation', socket);
@@ -477,7 +484,13 @@ export class MessageHandler {
         // contournerait également le dedup serveur.
         clientMessageId: validated.clientMessageId,
         originalLanguage: validated.originalLanguage,
-        messageType: 'text',
+        // Le schéma socket n'expose pas `messageType` (le client ne peut pas le
+        // fournir) — on le DÉRIVE des MIME des pièces jointes déjà résolues
+        // ci-dessus. Sans ça, une photo/vidéo/audio (dont les médias view-once /
+        // floutés / éphémères qui transitent principalement par CE path) était
+        // persistée et diffusée en `'text'`, faisant afficher un ballon 💬 au
+        // lieu de l'icône média dans `protectedPreview`/`contentTypeIcon`.
+        messageType: messageTypeFromMimeTypes(attachments.map((a) => a?.mimeType)) ?? 'text',
         replyToId: validated.replyToId,
         storyReplyToId: validated.storyReplyToId,
         forwardedFromId: validated.forwardedFromId,

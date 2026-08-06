@@ -1,6 +1,6 @@
 {
   "name": "@meeshy/gateway",
-  "version": "1.21.0",
+  "version": "1.22.1",
   "description": "Fastify Gateway service for Meeshy real-time messaging",
   "private": true,
   "main": "dist/src/server.js",
@@ -40,7 +40,7 @@
     "@parse/node-apn": "^8.1.0",
     "@prisma/client": "^6.19.3",
     "@signalapp/libsignal-client": "^0.99.2",
-    "@tus/file-store": "^2.1.0",
+    "@tus/file-store": "^2.1.1",
     "@tus/server": "^2.4.3",
     "axios": "^1.19.0",
     "bcrypt": "^6.0.0",

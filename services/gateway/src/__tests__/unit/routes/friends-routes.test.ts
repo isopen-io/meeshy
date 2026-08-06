@@ -155,6 +155,7 @@ function makeNotifService() {
     createFriendRequestNotification: jest.fn().mockResolvedValue(undefined),
     createFriendAcceptedNotification: jest.fn().mockResolvedValue(undefined),
     createSystemNotification: jest.fn().mockResolvedValue(undefined),
+    markFriendRequestNotificationsAsRead: jest.fn().mockResolvedValue(0),
     emitFriendRequestCancelled: jest.fn(),
     emitFriendRequestNew: jest.fn(),
     emitFriendRequestAccepted: jest.fn(),
@@ -927,12 +928,12 @@ describe('PATCH /friend-requests/:id — social events', () => {
 });
 
 describe('PATCH /friend-requests/:id — notification error and onDuplicate', () => {
-  it('notification findMany error is swallowed (does not fail route)', async () => {
+  it('a failing markFriendRequestNotificationsAsRead does not fail the route', async () => {
+    const notifService = makeNotifService();
+    notifService.markFriendRequestNotificationsAsRead.mockRejectedValueOnce(new Error('notification db crash'));
     const app = await buildApp({
-      prismaOpts: {
-        friendRequestFindFirst: DB_FRIEND_REQUEST,
-        notificationFindMany: new Error('notification db crash'),
-      },
+      prismaOpts: { friendRequestFindFirst: DB_FRIEND_REQUEST, conversationFindFirst: null },
+      notifService,
     });
     const res = await app.inject({
       method: 'PATCH',
@@ -944,15 +945,11 @@ describe('PATCH /friend-requests/:id — notification error and onDuplicate', ()
     await app.close();
   });
 
-  it('marks only matching notifications as read and skips non-matching ones', async () => {
-    const matchingNotif = { ...DB_NOTIFICATION, id: 'match-notif', context: { friendRequestId: FR_ID } };
-    const otherNotif = { ...DB_NOTIFICATION, id: 'other-notif', context: { friendRequestId: 'other-id' } };
+  it('delegates friend-request notification marking to the shared service (SSOT, multi-device counts)', async () => {
+    const notifService = makeNotifService();
     const app = await buildApp({
-      prismaOpts: {
-        friendRequestFindFirst: DB_FRIEND_REQUEST,
-        notificationFindMany: [matchingNotif, otherNotif],
-        conversationFindFirst: null,
-      },
+      prismaOpts: { friendRequestFindFirst: DB_FRIEND_REQUEST, conversationFindFirst: null },
+      notifService,
     });
     await app.inject({
       method: 'PATCH',
@@ -960,11 +957,22 @@ describe('PATCH /friend-requests/:id — notification error and onDuplicate', ()
       headers: { ...AUTH, 'content-type': 'application/json' },
       body: JSON.stringify({ status: 'accepted' }),
     });
-    const prisma = (app as unknown as { prisma: ReturnType<typeof makePrisma> }).prisma;
-    expect(prisma.notification.update).toHaveBeenCalledTimes(1);
-    expect(prisma.notification.update).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { id: 'match-notif' } })
-    );
+    expect(notifService.markFriendRequestNotificationsAsRead).toHaveBeenCalledWith(USER_ID, FR_ID);
+    await app.close();
+  });
+
+  it('does not mark friend-request notifications when notificationService is absent', async () => {
+    const app = await buildApp({
+      prismaOpts: { friendRequestFindFirst: DB_FRIEND_REQUEST, conversationFindFirst: null },
+      notifService: null,
+    });
+    const res = await app.inject({
+      method: 'PATCH',
+      url: `/friend-requests/${FR_ID}`,
+      headers: { ...AUTH, 'content-type': 'application/json' },
+      body: JSON.stringify({ status: 'accepted' }),
+    });
+    expect(res.statusCode).toBe(200);
     await app.close();
   });
 

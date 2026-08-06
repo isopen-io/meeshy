@@ -1,5 +1,67 @@
 # @meeshy/gateway
 
+## 1.22.1
+
+### Patch Changes
+
+- e842007: fix(gateway/zmq): a malformed translation_completed frame no longer poisons the
+  (taskId, targetLanguage) dedup slot
+
+  `ZmqMessageHandler.handleTranslationCompleted` stamped `resultKey` as processed
+  _before_ validating the payload. A malformed frame (missing `result` /
+  `result.messageId`) therefore consumed the dedup slot and early-returned; the
+  translator's at-least-once re-delivery of the valid result for the same
+  `taskId+targetLanguage` was then dropped by the `has(resultKey)` guard, leaving
+  the recipient stranded on the untranslated original (Prisme violation). The
+  dedup `add` + LRU trim now run only after validation succeeds, so only accepted
+  events consume a slot.
+
+## 1.22.0
+
+### Minor Changes
+
+- Changements automatiques détectés :
+
+  - dedupe missed-call notifications across racing terminal paths
+  - dead call:check-active replay + web listener leak on unmount (#2574)
+  - presence check for immediate high-priority email must target ROOMS.user, not the bare user id
+  - corrige ITMS-90035 a la source — identifier des stubs de frameworks sans code
+  - colore mentions et hashtags de façon adaptative light/dark dans posts/commentaires/reels/moods
+  - accepte [beta] {beta} et guillemets en plus de (beta)
+  - unifie l'affichage de la progression audio (waveform, pourcentage, minuteur)
+  - synchronise le badge non-lu de la conversation au chargement initial
+  - le push APNs n'écrase plus la facette liste posée par le socket message:new
+  - repli sur l'identité locale quand un écho socket omet l'enveloppe expéditeur
+  - hasLocalVideoTrack survives a survival downgrade, camera-switch mirroring desync on failure
+  - un retry de transcription n'ecrase plus une transcription livree
+  - drop translations completing after a message is soft-deleted (#2566)
+  - drop translations completing after a message is soft-deleted
+  - transcription-segment guard used literal 'ended' instead of CALL_TERMINAL_STATUSES (#2564)
+  - guard call:ended against a stale/unrelated callId (#2562)
+  - synchronisation fiable des non-lus — gateway + web + iOS (#2560)
+  - guard against stale transcription callbacks and redundant CallKit mute round-trip (#2559)
+  - résout l'auteur du DM immédiatement au bump temps réel
+  - résout 8 warnings Xcode Cloud (concurrence, code mort, dépréciation)
+  - résout 3/4 warnings Xcode Cloud sur StoryExporter
+  - résout 2 warnings Xcode Cloud (fullSync, switch exhaustif)
+  - résout les warnings de concurrence sur ExtractionBox
+  - propage draftId au chemin de publication en ligne
+  - normalize source language sent to translator (Prisme parity)
+  - fan out disconnectUser/sendToUser/isUserInConversationRoom across all devices
+  - ajoute la clé hashtag.results.empty au catalogue (7 langues)
+  - fusionne ancienneté et « Republier » sur une ligne de pied
+  - sync own message reactions across devices via reactor userId
+  - reduce deprecated ISO 639-1 aliases (iw/in/ji) to canonical codes
+  - route friend-request read-marking through NotificationService (multi-device bell sync)
+  - déclare metadata dans messageSchema — la bulle d'appel restait figée sur "en cours"
+  - traduction audio cassee en prod — TTS opus + echec silencieux (#2565)
+  - align canEditMessage SSOT with the real 24h edit window
+
+### Patch Changes
+
+- Updated dependencies
+  - @meeshy/shared@1.8.5
+
 ## 1.21.0
 
 ### Minor Changes

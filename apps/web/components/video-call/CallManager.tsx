@@ -494,17 +494,33 @@ export function CallManager() {
       // tab sonnait indéfiniment (audit appels 2026-07-11, finding #1).
       // Scopé au callId qui sonne : ne touche ni le ring d'un autre appel ni
       // un appel déjà établi sur CE tab.
-      if (!incomingCall || incomingCall.callId !== event.callId) return;
+      if (incomingCall?.callId === event.callId) {
+        logger.info('[CallManager]', 'Call answered on another device - dismissing ring - callId: ' + event.callId);
 
-      logger.info('[CallManager]', 'Call answered on another device - dismissing ring - callId: ' + event.callId);
+        import('@/utils/ringtone').then(({ stopRingtone }) => {
+          stopRingtone();
+        });
+        clearCallTimeout();
+        setIncomingCall(null);
+        return;
+      }
 
-      import('@/utils/ringtone').then(({ stopRingtone }) => {
-        stopRingtone();
-      });
-      clearCallTimeout();
-      setIncomingCall(null);
+      // Same multi-device race, but for the BUSY-path call-waiting banner
+      // (routine calling-feature, Vague 55, 2026-08-05): a second call rang
+      // in while already on an active call, showing `waitingCall` instead of
+      // `incomingCall`. Without this branch, answering that second call on
+      // another device left the banner AND its 45s auto-decline timer
+      // (`startWaitingTimeout`) running unattended here — the orphaned timer
+      // would fire `rejectWaitingCall` (a real `call:end reason=rejected`)
+      // for a call the user is now actively on elsewhere, silently killing
+      // it from a stale banner nobody is looking at.
+      if (waitingCall?.callId === event.callId) {
+        logger.info('[CallManager]', 'Waiting call answered on another device - dismissing banner - callId: ' + event.callId);
+        clearWaitingTimeout();
+        setWaitingCall(null);
+      }
     },
-    [incomingCall, clearCallTimeout]
+    [incomingCall, waitingCall, clearCallTimeout, clearWaitingTimeout]
   );
 
   /**
@@ -1021,6 +1037,7 @@ export function CallManager() {
           s.off(SERVER_EVENTS.CALL_PARTICIPANT_JOINED, attachedListeners[SERVER_EVENTS.CALL_PARTICIPANT_JOINED]);
           s.off(SERVER_EVENTS.CALL_PARTICIPANT_LEFT, attachedListeners[SERVER_EVENTS.CALL_PARTICIPANT_LEFT]);
           s.off(SERVER_EVENTS.CALL_ENDED, attachedListeners[SERVER_EVENTS.CALL_ENDED]);
+          s.off(SERVER_EVENTS.CALL_ALREADY_ANSWERED, attachedListeners[SERVER_EVENTS.CALL_ALREADY_ANSWERED]);
           s.off(SERVER_EVENTS.CALL_MEDIA_TOGGLED, attachedListeners[SERVER_EVENTS.CALL_MEDIA_TOGGLED]);
           s.off(SERVER_EVENTS.CALL_ERROR, attachedListeners[SERVER_EVENTS.CALL_ERROR]);
         }
@@ -1034,8 +1051,13 @@ export function CallManager() {
    */
   useEffect(() => {
     return () => {
-      // Clear timeout on unmount
+      // Clear timeouts on unmount — both the no-answer timeout AND the
+      // call-waiting auto-decline timeout. Missing the latter left an
+      // orphaned setTimeout that, 45s after unmount, would still call
+      // rejectWaitingCall() — a real call:end emit — for a component nothing
+      // is observing anymore.
       clearCallTimeout();
+      clearWaitingTimeout();
 
       if (isInCall) {
         logger.debug('[CallManager]', 'Cleaning up on unmount');
@@ -1043,7 +1065,7 @@ export function CallManager() {
         // CallInterface will handle WebRTC cleanup
       }
     };
-  }, [isInCall, reset, clearCallTimeout]);
+  }, [isInCall, reset, clearCallTimeout, clearWaitingTimeout]);
 
   if (process.env.NODE_ENV === 'development') {
     console.log('[CallManager] Rendering:', {
