@@ -375,6 +375,11 @@ jest.mock('../emitAttachmentUpdated', () => ({
 }));
 
 jest.mock('../utils/message-payload-filter', () => ({
+  // Keep the REAL `groupSocketsByLanguage` (which normalizes BCP-47 recipient
+  // languages via the shared source of truth) so the manager's per-language
+  // grouping is exercised against real normalization; only the pure trimming is
+  // spied on so tests can assert exactly which languages were requested.
+  ...jest.requireActual('../utils/message-payload-filter'),
   filterMessagePayloadForLanguages: jest.fn().mockImplementation((payload: unknown) => payload),
 }));
 
@@ -403,6 +408,7 @@ jest.mock('../../utils/logger-enhanced', () => ({
 
 import { MeeshySocketIOManager } from '../MeeshySocketIOManager';
 import { SERVER_EVENTS, CLIENT_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
+import { filterMessagePayloadForLanguages as filterMessagePayloadForLanguagesSpy } from '../utils/message-payload-filter';
 
 // ---------------------------------------------------------------------------
 // Test helpers
@@ -4067,6 +4073,50 @@ describe('MeeshySocketIOManager', () => {
       expect(() => (manager as any)._emitMessageNewByLanguage(room, payload)).not.toThrow();
       // Both sockets should be in one bucket → chained emit
       expect(ioState.to).toHaveBeenCalled();
+    });
+
+    it('normalizes an anonymous pt-BR recipient to the 2-letter pt key (BCP-47 — Prisme)', () => {
+      // Prisme Linguistique: an anonymous participant carries a raw, verbatim
+      // `language` ('pt-BR') and has NO resolvedLanguages. The message stores its
+      // translation under the 2-letter key 'pt'. If the per-language grouping only
+      // lowercases ('pt-br') instead of stripping the region subtag, the trimming
+      // step receives 'pt-br', the stored 'pt' translation never matches, it is
+      // pruned from that recipient's payload, and the reader falls back to the
+      // untranslated original — the exact violation the shared
+      // `groupSocketsByLanguage` helper was built (and unit-tested) to prevent.
+      // The manager MUST delegate to that helper, exactly like MessageHandler does,
+      // rather than re-implement the grouping with a raw `.toLowerCase()`.
+      const room = 'conversation:ptbr-room';
+      ioState.sockets.adapter.rooms.set(room, new Set(['sock-ptbr']));
+      (manager as any).socketToUser.set('sock-ptbr', 'anon-ptbr');
+      (manager as any).connectedUsers.set('anon-ptbr', {
+        id: 'anon-ptbr', socketId: 'sock-ptbr', isAnonymous: true,
+        language: 'pt-BR', resolvedLanguages: [],
+      });
+      (filterMessagePayloadForLanguagesSpy as jest.Mock).mockClear();
+
+      const payload = {
+        id: 'msg-ptbr',
+        originalLanguage: 'fr',
+        content: 'Bonjour',
+        translations: [
+          { targetLanguage: 'pt', translatedContent: 'Olá' },
+          { targetLanguage: 'en', translatedContent: 'Hello' },
+        ],
+      };
+      (manager as any)._emitMessageNewByLanguage(room, payload);
+
+      const languageCalls = (filterMessagePayloadForLanguagesSpy as jest.Mock).mock.calls.map(
+        (c: unknown[]) => c[1] as string[]
+      );
+      expect(languageCalls.length).toBeGreaterThan(0);
+      // The pt-BR recipient's group must request the normalized 'pt' key, never
+      // the region-tagged 'pt-br' (which matches no stored translation).
+      const ptGroup = languageCalls.find((langs) => langs.includes('pt'));
+      expect(ptGroup).toBeDefined();
+      for (const langs of languageCalls) {
+        expect(langs).not.toContain('pt-br');
+      }
     });
   });
 
