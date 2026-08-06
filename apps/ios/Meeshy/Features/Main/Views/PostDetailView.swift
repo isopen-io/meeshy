@@ -159,6 +159,9 @@ struct PostDetailView: View {
     @State private var isRepostInFlight: Bool = false
     @State private var showRepostOptions: Bool = false
     @State private var isEditing: Bool = false
+    /// Flux « Enregistrer en local » du menu « … » — déclenché uniquement
+    /// quand le post a un média (sinon Enregistrer bascule le favori in-app).
+    @StateObject private var mediaSaveCoordinator = MediaSaveCoordinator()
 
     private var detailIsLiked: Bool { postLikedIds.contains(postId) }
     private var detailLikeCount: Int {
@@ -258,6 +261,26 @@ struct PostDetailView: View {
                     : String(localized: "post.bookmark.added", defaultValue: "Ajouté aux favoris", bundle: .main))
             }
         }
+    }
+
+    /// Déclenche le flux unifié « Enregistrer en local » sur le média principal
+    /// du post (repost-aware via `primaryReelDisplayMedia`). No-op si absent —
+    /// gardé par l'appelant (`displayPost?.primaryReelDisplayMedia != nil`).
+    private func requestSaveMedia() {
+        guard let media = displayPost?.primaryReelDisplayMedia, let url = media.url, !url.isEmpty else { return }
+        HapticFeedback.light()
+        let attachmentKind: AttachmentKind
+        switch media.type {
+        case .video: attachmentKind = .video
+        case .audio: attachmentKind = .audio
+        case .document: attachmentKind = .document
+        case .image: attachmentKind = .image
+        }
+        mediaSaveCoordinator.requestSave(MediaSaveRequest(
+            kind: attachmentKind,
+            remoteURLString: url,
+            suggestedFileName: media.fileName
+        ))
     }
 
     @MainActor
@@ -900,6 +923,7 @@ struct PostDetailView: View {
             }
         }
         .audioFullscreenCover($audioFullscreen, accentColor: accentColor)
+        .mediaSaveFlow(mediaSaveCoordinator)
     }
 
     // MARK: - Floating Header (CollapsibleHeader)
@@ -992,7 +1016,11 @@ struct PostDetailView: View {
                 Label(String(localized: "feed.post.detail.share", defaultValue: "Partager", bundle: .main), systemImage: "square.and.arrow.up")
             }
             Button {
-                toggleDetailBookmark()
+                if displayPost?.primaryReelDisplayMedia != nil {
+                    requestSaveMedia()
+                } else {
+                    toggleDetailBookmark()
+                }
             } label: {
                 Label(String(localized: "feed.post.save", defaultValue: "Enregistrer", bundle: .main), systemImage: isPostBookmarked ? "bookmark.fill" : "bookmark")
             }

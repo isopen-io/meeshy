@@ -80,6 +80,9 @@ struct FeedPostCard: View {
     @State private var isTextExpanded = false
     /// Lieu du post ouvert plein écran (tap sur le sticker ou la carte).
     @State private var fullscreenPlace: BubbleFullscreenPlace?
+    /// Flux « Enregistrer en local » du menu « … » — déclenché uniquement
+    /// quand le post a un média (sinon Enregistrer bascule le favori in-app).
+    @StateObject private var mediaSaveCoordinator = MediaSaveCoordinator()
 
     var accentColor: String { post.authorColor }
     private var topComments: [FeedComment] { Array(post.comments.sorted { $0.likes > $1.likes }.prefix(3)) }
@@ -562,6 +565,27 @@ struct FeedPostCard: View {
             )
         }
         .audioFullscreenCover($audioFullscreen, accentColor: accentColor)
+        .mediaSaveFlow(mediaSaveCoordinator)
+    }
+
+    /// Déclenche le flux unifié « Enregistrer en local » sur le média principal
+    /// du post (repost-aware via `primaryReelDisplayMedia`). No-op si absent —
+    /// gardé par l'appelant (`post.primaryReelDisplayMedia != nil`).
+    private func requestSaveMedia() {
+        guard let media = post.primaryReelDisplayMedia, let url = media.url, !url.isEmpty else { return }
+        HapticFeedback.light()
+        let attachmentKind: AttachmentKind
+        switch media.type {
+        case .video: attachmentKind = .video
+        case .audio: attachmentKind = .audio
+        case .document: attachmentKind = .document
+        case .image: attachmentKind = .image
+        }
+        mediaSaveCoordinator.requestSave(MediaSaveRequest(
+            kind: attachmentKind,
+            remoteURLString: url,
+            suggestedFileName: media.fileName
+        ))
     }
 
     // MARK: - Author Header
@@ -684,6 +708,14 @@ struct FeedPostCard: View {
             Spacer()
 
             Menu {
+                if let onTapPost {
+                    Button {
+                        onTapPost(post)
+                        HapticFeedback.light()
+                    } label: {
+                        Label(String(localized: "feed.post.open", defaultValue: "Ouvrir", bundle: .main), systemImage: "arrow.up.right.square")
+                    }
+                }
                 Button {
                     UIPasteboard.general.string = post.content
                     HapticFeedback.success()
@@ -697,8 +729,12 @@ struct FeedPostCard: View {
                     Label(String(localized: "feed.post.share", defaultValue: "Partager", bundle: .main), systemImage: "square.and.arrow.up")
                 }
                 Button {
-                    onBookmark?(post.id)
-                    HapticFeedback.light()
+                    if post.primaryReelDisplayMedia != nil {
+                        requestSaveMedia()
+                    } else {
+                        onBookmark?(post.id)
+                        HapticFeedback.light()
+                    }
                 } label: {
                     Label(String(localized: "feed.post.save", defaultValue: "Enregistrer", bundle: .main), systemImage: "bookmark")
                 }

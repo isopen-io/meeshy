@@ -459,6 +459,13 @@ struct RootView: View {
                                     singleGroup: true
                                 ))
                             },
+                            onOpenDetail: { postId in
+                                // Ferme le lecteur immersif avant de pousser le détail —
+                                // sinon la page se pousse SOUS l'overlay (zIndex 60) et
+                                // reste invisible tant que l'utilisateur ne ferme pas.
+                                closeReels()
+                                router.push(.postDetail(postId))
+                            },
                             authorHasStory: { userId in
                                 storyViewModel.storyRingState(forUserId: userId) != .none
                             }

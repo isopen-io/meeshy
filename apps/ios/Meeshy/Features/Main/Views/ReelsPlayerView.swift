@@ -75,6 +75,10 @@ struct ReelsPlayerView: View {
     /// Opens the author's active story (wired in RootView to the same
     /// `StoryViewerCoordinator` the feed uses). `nil` = no-op.
     var onOpenStory: ((_ userId: String) -> Void)? = nil
+    /// Menu « … » → « Ouvrir » : pousse la page détail du poste (wired in
+    /// RootView to `router.push(.postDetail(_:))`, fermant d'abord le lecteur
+    /// immersif). `nil` = item masqué.
+    var onOpenDetail: ((_ postId: String) -> Void)? = nil
     /// Reports whether the given author currently has an active story, so the
     /// avatar tap can route to the story (else it falls back to the profile).
     /// Backed by `StoryViewModel.hasUnviewedStories` / `storyRingState` in
@@ -307,6 +311,7 @@ struct ReelsPlayerView: View {
                 },
                 onShare: { shareReel(reel) },
                 onEdit: { editingReel = reel },
+                onOpenDetail: onOpenDetail.map { handler in { handler(reel.id) } },
                 onTapAuthorName: { openProfile(for: reel) },
                 onTapAvatar: { openAvatarDestination(for: reel) }
             )
@@ -500,6 +505,9 @@ struct ReelPageView: View {
     /// Menu « … » → ouvre `EditPostSheet` sur ce réel (état possédé par
     /// `ReelsPlayerView`, le seul habilité à présenter la sheet).
     var onEdit: () -> Void
+    /// Menu « … » → « Ouvrir » : pousse la page détail du poste. `nil` =
+    /// item masqué (parité avec les autres callbacks optionnels du rail).
+    var onOpenDetail: (() -> Void)? = nil
     /// Author name tap → profile.
     var onTapAuthorName: () -> Void
     /// Avatar tap → story (if active) else profile.
@@ -970,6 +978,7 @@ struct ReelPageView: View {
             onComment: onComment,
             onShare: onShare,
             onEdit: onEdit,
+            onOpenDetail: onOpenDetail,
             onSaveMedia: requestSaveMedia
         )
     }
@@ -1004,6 +1013,7 @@ private struct ReelActionRail: View {
     var onComment: () -> Void
     var onShare: () -> Void
     var onEdit: () -> Void
+    var onOpenDetail: (() -> Void)?
     /// Menu « … » → déclenche le flux « Enregistrer en local » sur le média
     /// du réel (coordinateur possédé par `ReelPageView`, seul habilité à
     /// présenter la sheet de destination).
@@ -1076,6 +1086,13 @@ private struct ReelActionRail: View {
     /// du lecteur plein écran avec les cartes du feed.
     private var moreOptionsMenu: some View {
         Menu {
+            if let onOpenDetail {
+                Button {
+                    onOpenDetail()
+                } label: {
+                    Label(String(localized: "feed.post.open", defaultValue: "Ouvrir", bundle: .main), systemImage: "arrow.up.right.square")
+                }
+            }
             Button {
                 UIPasteboard.general.string = reel.content
                 HapticFeedback.success()
