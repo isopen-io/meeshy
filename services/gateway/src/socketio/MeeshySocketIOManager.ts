@@ -8,7 +8,7 @@ import { Server as HTTPServer } from 'http';
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { MessageTranslationService, MessageData } from '../services/message-translation/MessageTranslationService';
 import { transformTranslationsToArray } from '../utils/translation-transformer';
-import { filterMessagePayloadForLanguages } from './utils/message-payload-filter';
+import { filterMessagePayloadForLanguages, groupSocketsByLanguage } from './utils/message-payload-filter';
 import { applyResolvedLanguagesRefresh } from './utils/resolved-languages-refresh';
 import { MaintenanceService } from '../services/MaintenanceService';
 import { StatusService } from '../services/StatusService';
@@ -1723,25 +1723,29 @@ export class MeeshySocketIOManager {
 
     if (!localSocketIds || localSocketIds.size === 0) return;
 
-    const originalLanguage = String(payload.originalLanguage || 'fr').toLowerCase();
-    const socketsByLanguageKey = new Map<string, { socketIds: string[]; langs: string[] }>();
-    for (const socketId of localSocketIds) {
-      const userId = this.socketToUser.get(socketId);
-      const socketUser = userId ? this.connectedUsers.get(userId) : undefined;
-      const langs: string[] =
-        socketUser && socketUser.resolvedLanguages.length > 0
-          ? socketUser.resolvedLanguages
-          : [String(socketUser?.language || originalLanguage).toLowerCase()];
-      const key = langs.join(',');
-      const bucket = socketsByLanguageKey.get(key);
-      if (bucket) bucket.socketIds.push(socketId);
-      else socketsByLanguageKey.set(key, { socketIds: [socketId], langs });
-    }
+    // Delegate the per-recipient language grouping to the shared, unit-tested
+    // `groupSocketsByLanguage` helper — exactly like `MessageHandler`'s twin
+    // path. The helper normalizes every recipient language AND the original via
+    // the shared `normalizeLanguageCode` SSOT (`'pt-BR' → 'pt'`), so a stored
+    // translation keyed on the 2-letter code is never pruned for an anonymous
+    // recipient carrying a raw BCP-47 `language` (Prisme Linguistique). The
+    // previous inline grouping only `.toLowerCase()`d the language, leaving
+    // `'pt-br'` un-matched against the `'pt'` translation key — a silent Prisme
+    // regression on this REST/ZMQ broadcast path that the socket `message:send`
+    // path (already delegating) never had.
+    const originalLanguage = String(payload.originalLanguage || 'fr');
+    const groups = groupSocketsByLanguage({
+      socketIds: localSocketIds,
+      originalLanguage,
+      socketToUser: (sid) => this.socketToUser.get(sid),
+      resolveLanguages: (uid) => this.connectedUsers.get(uid)?.resolvedLanguages,
+      userLanguage: (uid) => this.connectedUsers.get(uid)?.language,
+    });
 
-    for (const { socketIds: socketsForLangs, langs } of socketsByLanguageKey.values()) {
-      if (socketsForLangs.length === 0) continue;
-      const filtered = filterMessagePayloadForLanguages(payload, [...langs, originalLanguage]);
-      const [firstSid, ...restSids] = socketsForLangs;
+    for (const group of groups) {
+      if (group.socketIds.length === 0) continue;
+      const filtered = filterMessagePayloadForLanguages(payload, group.languages);
+      const [firstSid, ...restSids] = group.socketIds;
       let emitter: ReturnType<SocketIOServer['to']> = this.io.to(firstSid);
       for (const socketId of restSids) emitter = emitter.to(socketId);
       emitter.emit(SERVER_EVENTS.MESSAGE_NEW, filtered);
