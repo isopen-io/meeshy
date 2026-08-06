@@ -400,31 +400,13 @@ struct ReelFeedCard: View, Equatable {
                        label: String(localized: "feed.post.save", defaultValue: "Enregistrer", bundle: .main),
                        hint: String(localized: "a11y.feed.post.save.hint", defaultValue: "Enregistre la publication dans vos favoris", bundle: .main),
                        participated: isBookmarked) { onBookmark(post.id) }
-            Spacer()
-            // Partager reste disponible dans le menu « … » — retiré des icônes
-            // principales pour ne pas dupliquer Repartager (même slot d'intention).
-            moreOptionsMenu
+            // Partager et le menu « … » restent disponibles via `reelGlyph`
+            // (coin haut-droit) — un seul trigger, pas de doublon en bas.
         }
     }
 
-    /// Menu « … » — mêmes actions/libellés/icônes que `FeedPostCard.moreOptionsMenu`
-    /// (ouvrir/copier/partager/enregistrer/épingler/modifier/supprimer/signaler),
-    /// parité de la carte Réel plein-cadre avec la carte poste standard.
-    private var moreOptionsMenu: some View {
-        Menu {
-            moreOptionsMenuContent
-        } label: {
-            Image(systemName: "ellipsis")
-                .font(MeeshyFont.relative(18))
-                .foregroundColor(.white)
-                .shadow(color: .black.opacity(0.4), radius: 2, y: 1)
-        }
-        .accessibilityLabel(String(localized: "feed.post.more_options", defaultValue: "Plus d'options", bundle: .main))
-        .accessibilityHint(String(localized: "feed.post.more_options.hint", defaultValue: "Ouvre le menu des actions", bundle: .main))
-    }
-
-    /// Contenu partagé des DEUX déclencheurs « … » de la carte (rail bas +
-    /// glyphe coin haut-droit) — un seul endroit à faire évoluer.
+    /// Contenu partagé du menu « … » — déclenché uniquement par `reelGlyph`
+    /// (glyphe coin haut-droit), seul trigger de la carte.
     @ViewBuilder
     private var moreOptionsMenuContent: some View {
         Button {
@@ -449,7 +431,7 @@ struct ReelFeedCard: View, Equatable {
             Button {
                 requestSaveMedia()
             } label: {
-                Label(String(localized: "feed.post.save", defaultValue: "Enregistrer", bundle: .main), systemImage: "bookmark")
+                Label(String(localized: "feed.reel.save_media", defaultValue: "Sauvegarder", bundle: .main), systemImage: "bookmark")
             }
         }
         if let onPin {

@@ -1022,7 +1022,12 @@ struct PostDetailView: View {
                     toggleDetailBookmark()
                 }
             } label: {
-                Label(String(localized: "feed.post.save", defaultValue: "Enregistrer", bundle: .main), systemImage: isPostBookmarked ? "bookmark.fill" : "bookmark")
+                Label(
+                    displayPost?.primaryReelDisplayMedia != nil
+                        ? String(localized: "feed.reel.save_media", defaultValue: "Sauvegarder", bundle: .main)
+                        : String(localized: "feed.post.save", defaultValue: "Enregistrer", bundle: .main),
+                    systemImage: isPostBookmarked ? "bookmark.fill" : "bookmark"
+                )
             }
             if displayPost?.authorId == AuthManager.shared.currentUser?.id {
                 Button {
