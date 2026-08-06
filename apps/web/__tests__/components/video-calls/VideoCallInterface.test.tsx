@@ -507,7 +507,10 @@ describe('VideoCallInterface (container)', () => {
       const pc = { getSenders: () => [{ track: { kind: 'video' }, replaceTrack }] };
       storeState.peerConnections = new Map([['peer1', pc]]) as unknown as typeof storeState.peerConnections;
 
-      const newVideoTrack = {};
+      // Carries its own `stop` spy: the newly-acquired track must never
+      // survive a rejected replaceTrack, or the other-facing camera hardware
+      // is left capturing with nothing consuming it.
+      const newVideoTrack = { stop: jest.fn() };
       setupCameraSwitchDom(jest.fn().mockResolvedValue({ getVideoTracks: () => [newVideoTrack] }));
 
       render(<VideoCallInterface callId="call1" />);
@@ -516,6 +519,7 @@ describe('VideoCallInterface (container)', () => {
       await waitFor(() => expect(replaceTrack).toHaveBeenCalled());
       await waitFor(() => expect(toast.error).toHaveBeenCalledWith('calls.toasts.cameraSwitchFailed'));
 
+      expect(newVideoTrack.stop).toHaveBeenCalledTimes(1);
       expect(videoTrack.stop).not.toHaveBeenCalled();
       expect(localStream.removeTrack).not.toHaveBeenCalled();
       expect(localStream.addTrack).not.toHaveBeenCalled();

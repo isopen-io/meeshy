@@ -28,7 +28,7 @@ import { MessagingService } from './services/MessagingService';
 import { MentionService } from './services/MentionService';
 import { OrphanMediaCleanupService } from './services/storage/OrphanMediaCleanupService';
 import { logger } from './gateway-logger';
-import { resolveBuildInfo } from './utils/build-info';
+import { resolveBuildInfo } from '@meeshy/shared/utils/build-info';
 
 import { authRoutes } from './routes/auth';
 import { conversationRoutes } from './routes/conversations';

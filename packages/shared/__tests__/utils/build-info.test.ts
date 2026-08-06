@@ -1,27 +1,29 @@
-import { resolveBuildInfo } from '../../../utils/build-info';
+import { describe, it, expect } from 'vitest';
+import { resolveBuildInfo } from '../../utils/build-info';
 
 /**
- * Le gateway ne disait pas quel code il exécutait : `/health` renvoyait un
- * `version: '1.0.0'` codé en dur, identique depuis toujours. Savoir si un
- * correctif était en production supposait un `docker inspect` sur le serveur,
- * ou une corrélation entre l'uptime du container et l'horodatage des tags du
- * registre — une inférence, jamais une lecture.
+ * Aucun service ne disait quel code il exécutait : les endpoints `/health`
+ * renvoyaient une version codée en dur, identique depuis toujours. Savoir si un
+ * correctif était en production supposait un `docker inspect` sur l'hôte, ou une
+ * corrélation entre l'uptime du container et l'horodatage des tags `sha-<short>`
+ * du registre — une inférence, jamais une lecture.
  *
- * L'information existait pourtant déjà : le Dockerfile grave
- * `org.opencontainers.image.revision` depuis le build-arg `VCS_REF`, que la CI
- * alimente avec `github.sha`. Elle n'était simplement pas remontée au runtime.
+ * L'information existait pourtant déjà : les trois Dockerfiles gravent
+ * `org.opencontainers.image.revision` depuis le build-arg `VCS_REF`, que
+ * `.github/workflows/docker.yml` alimente avec `github.sha`.
+ *
+ * Ce helper vit dans `shared` et non dans chaque service : le gateway et le web
+ * le consomment tous deux, et le contrat de champs doit rester identique pour
+ * que les trois `/health` se comparent sans traduction. Le translator (Python)
+ * en porte un miroir, `src/utils/build_info.py`, tenu aligné sur ces mêmes noms.
  */
 describe('resolveBuildInfo', () => {
   it('expose le commit gravé dans l’image', () => {
-    const info = resolveBuildInfo({ GIT_COMMIT: 'fc11ab82a1b2c3d4e5f6' });
-
-    expect(info.commit).toBe('fc11ab82a1b2c3d4e5f6');
+    expect(resolveBuildInfo({ GIT_COMMIT: 'fc11ab82a1b2c3d4e5f6' }).commit).toBe('fc11ab82a1b2c3d4e5f6');
   });
 
   it('expose une forme courte alignée sur les tags `sha-<short>` du registre', () => {
-    const info = resolveBuildInfo({ GIT_COMMIT: 'fc11ab82a1b2c3d4e5f6' });
-
-    expect(info.commitShort).toBe('fc11ab8');
+    expect(resolveBuildInfo({ GIT_COMMIT: 'fc11ab82a1b2c3d4e5f6' }).commitShort).toBe('fc11ab8');
   });
 
   /**
@@ -31,7 +33,6 @@ describe('resolveBuildInfo', () => {
    */
   it('rend null plutôt qu’une valeur fabriquée quand le commit est absent', () => {
     const info = resolveBuildInfo({});
-
     expect(info.commit).toBeNull();
     expect(info.commitShort).toBeNull();
   });
@@ -42,22 +43,16 @@ describe('resolveBuildInfo', () => {
   });
 
   it('expose la date de build quand elle est gravée', () => {
-    const info = resolveBuildInfo({ BUILD_DATE: '2026-08-06T02:47:00Z' });
-
-    expect(info.builtAt).toBe('2026-08-06T02:47:00Z');
+    expect(resolveBuildInfo({ BUILD_DATE: '2026-08-06T02:47:00Z' }).builtAt).toBe('2026-08-06T02:47:00Z');
   });
 
   it('rend null quand la date de build est absente', () => {
     expect(resolveBuildInfo({}).builtAt).toBeNull();
   });
 
-  /**
-   * Un SHA court gravé tel quel (déploiement manuel, build local) ne doit pas
-   * être tronqué davantage ni rejeté.
-   */
+  /** Un SHA déjà court (build local, déploiement manuel) n'est ni tronqué ni rejeté. */
   it('accepte un SHA déjà court sans le mutiler', () => {
     const info = resolveBuildInfo({ GIT_COMMIT: 'fc11ab8' });
-
     expect(info.commit).toBe('fc11ab8');
     expect(info.commitShort).toBe('fc11ab8');
   });

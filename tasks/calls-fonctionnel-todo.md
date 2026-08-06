@@ -3776,3 +3776,55 @@ candidat de nettoyage sans le traiter (scope disjoint de `CallManager.tsx`/`call
   `actor CallEventQueue` non implémenté ; couverture E2E iOS des écrans d'appel ; `enableSimulcast()`
   scaffolding SFU Phase 2 (intentionnel) ; plafond P2P (max 2 participants actifs) vs conversations GROUP
   autorisées côté `initiateCall` (Vague 55, defense-in-depth, inatteignable via l'UI normale actuelle).
+
+## Vague 58 — `handleSwitchCamera` laissait la nouvelle caméra allumée après un `replaceTrack` en échec (2026-08-06)
+
+Point d'entrée : routine calling-feature (agent Cowork non interactif, mandat PHASE 1-12). Branche
+`claude/modest-cori-pse5rq`, redémarrée depuis `origin/main` à jour (`53f77a9c`, aucune PR calling
+ouverte au démarrage). Audit dédié (agent général, lecture seule, croisé avec les 57 vagues précédentes
+et `tasks/calls-audit-2026-07-11.md` pour éviter tout doublon) sur `CallEventsHandler.ts`, `CallService.ts`,
+`CallCleanupService.ts`, `TURNCredentialService.ts`, `routes/calls.ts`, `call-store.ts`, `CallManager.tsx`,
+`VideoCallInterface.tsx` — la couche gateway reste exceptionnellement propre (chaque Map en mémoire
+tracée — `missedCallNotifiedAt`, `callCancellationPushSentAt`, `qualityDegradedStreaks`, `bufferedOffers`,
+`signalSessionCache`, `disconnectGraceTimers`, `heartbeats`/`heartbeatDbWriteTimers`/
+`backgroundedParticipants` — a déjà sa garde d'idempotence/ordre posée en Vagues 42-57) ; la surface la
+plus fraîche s'est révélée côté web, sur le nettoyage de piste média du changement de caméra.
+
+- **[MOYEN, web, CONFIRMÉ + CORRIGÉ, TDD]** `VideoCallInterface.tsx` `handleSwitchCamera` (~ligne 386) —
+  `getUserMedia` acquiert la nouvelle caméra (facing mode opposé) AVANT que `RTCRtpSender.replaceTrack`
+  ne soit tenté sur chaque peer connection ; en cas de rejet de `replaceTrack` (sender/connection en train
+  de se fermer en même temps qu'un raccroché concurrent, renégociation codec/device en échec — exactement
+  le scénario déjà couvert par le test existant « keeps the old track alive »), le bloc `catch` se
+  contentait de logger/toaster l'erreur sans jamais arrêter le flux `newStream` fraîchement acquis. Le
+  nouveau track vidéo n'ayant jamais été attaché à `localStream` (l'attache n'arrive qu'après le succès
+  de `replaceTrack`), aucun autre chemin de nettoyage — pas même `call-store.reset()`, qui ne stoppe que
+  les tracks qu'il connaît via `localStream`/`remoteStreams` — n'en a jamais connaissance. **Impact
+  concret** : la caméra physique de l'autre côté (front/back) reste allumée et capture sans qu'aucun
+  consommateur ne lise le flux — exactement la classe de régression de confidentialité que
+  `stopPreauthorizedStream` (`lib/calls/call-media-constraints.ts`) documente déjà explicitement pour le
+  chemin de join d'appel (« leaving the mic/camera hot after a failed join is a privacy regression of its
+  own »), jamais répliquée ici. Le test dédié existant pour ce rejet (`VideoCallInterface.test.tsx`,
+  « surfaces cameraSwitchFailed and keeps the old track alive ») n'avait même jamais instrumenté cette
+  piste (`newVideoTrack = {}`, sans mock `stop`) — le trou n'était pas juste non corrigé, il n'était pas
+  détectable. **Fix** : `newStream` déplacé hors du `try` (variable `let`), stoppé (`getVideoTracks()
+  .forEach(track => track.stop())`) dans le `catch`, et remis à `null` juste après l'échange réussi pour
+  que le `catch` ne stoppe jamais un track désormais vivant dans `localStream`.
+- **Tests TDD** : `newVideoTrack` du test de rejet existant enrichi d'un spy `stop: jest.fn()` (au lieu de
+  `{}`) + nouvelle assertion `expect(newVideoTrack.stop).toHaveBeenCalledTimes(1)` — RED confirmé avant le
+  fix (`TypeError: track.stop is not a function` en réutilisant le fixture nu, puis `0` appels avec un
+  fixture instrumenté séparément), GREEN après. Suite `VideoCallInterface.test.tsx` : 16/16 verts. Suite
+  élargie `video-call`/`video-calls`/`call-store` (27 suites, filtre `--testPathPatterns`) : 209/209 tests
+  verts, aucune régression.
+- **`tsc --noEmit`** (`apps/web`) : 11 erreurs pré-existantes dans `VideoCallInterface.tsx` (`TS2571`/
+  `TS18046`, socket typé `unknown` ailleurs dans le fichier — hors du diff de cette vague), comptées
+  identiques avant/après via `git stash`/`pop` ; aucune introduite par ce diff.
+- **iOS/Android (lecture seule, aucun changement)** : hors périmètre — aucune toolchain Swift/Kotlin dans
+  ce sandbox Linux ; changement strictement web (1 fichier modifié + 1 fichier de test).
+- **Reste ouvert (inchangé)** : dead code / god-objects `CallManager.swift`/`CallEventsHandler.ts` ; ADR
+  `actor CallEventQueue` non implémenté ; couverture E2E iOS des écrans d'appel ; `enableSimulcast()`
+  scaffolding SFU Phase 2 (intentionnel) ; plafond P2P (max 2 participants actifs) vs conversations GROUP
+  autorisées côté `initiateCall` (Vague 55) ; busy-path — un TROISIÈME appelant simultané remplace
+  silencieusement la bannière call-waiting du deuxième sans le décliner explicitement sur le fil
+  (`CallManager.tsx:309-315`, FAIBLE-MOYEN, edge case rare non corrigé cette vague) ;
+  `pendingParticipantsByCallId` (`call-store.ts:139`) sans TTL par appel, borné en pratique par le
+  `reset()` générique plutôt qu'une éviction ciblée (FAIBLE, non corrigé).
