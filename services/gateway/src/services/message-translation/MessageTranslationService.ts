@@ -172,10 +172,11 @@ export class MessageTranslationService extends EventEmitter {
     this.zmqClient.on('voiceTranslationCompleted', this._safeZmqHandler('voiceTranslationCompleted', this._handleVoiceTranslationCompleted));
     this.zmqClient.on('voiceTranslationFailed', this._safeZmqHandler('voiceTranslationFailed', this._handleVoiceTranslationFailed));
 
-    // Story text object translation — forward to MeeshySocketIOManager
-    this.zmqClient.on('storyTextObjectTranslationCompleted', (event: { postId: string; textObjectIndex: number; translations: Record<string, string> }) => {
-      this.emit('storyTextObjectTranslationCompleted', event);
-    });
+    // Story text object translation — forward to MeeshySocketIOManager.
+    // Routed through _safeZmqHandler like every sibling listener so a synchronous
+    // throw from any downstream consumer is absorbed instead of propagating out of
+    // the ZMQ dispatch loop as an uncaught exception (see "Async EventEmitter Hazard").
+    this.zmqClient.on('storyTextObjectTranslationCompleted', this._safeZmqHandler('storyTextObjectTranslationCompleted', this._forwardStoryTextObjectTranslation));
 
     // Client initialized successfully
 
@@ -879,6 +880,16 @@ export class MessageTranslationService extends EventEmitter {
         logger.error(`ZMQ handler error for event "${event}"`, { error });
       });
     };
+  }
+
+  /**
+   * Re-émet les traductions de textObjects de story vers les consommateurs du
+   * service (MeeshySocketIOManager). Async pour passer par _safeZmqHandler : une
+   * exception synchrone d'un consommateur en aval devient alors un rejet absorbé
+   * au lieu de remonter en exception non capturée depuis la boucle ZMQ.
+   */
+  private async _forwardStoryTextObjectTranslation(event: { postId: string; textObjectIndex: number; translations: Record<string, string> }): Promise<void> {
+    this.emit('storyTextObjectTranslationCompleted', event);
   }
 
   private async _handleTranslationCompleted(data: {
