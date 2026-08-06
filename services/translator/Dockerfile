@@ -193,6 +193,15 @@ ARG NODE_VERSION=22
 
 # Environment variables
 ENV HOME=/workspace \
+    # Build metadata — le label OCI grave déjà la révision, mais un label n'est
+    # lisible que par `docker inspect` sur l'hôte. En variable d'environnement,
+    # `resolve_build_info` la remonte dans /health : identifier le code en
+    # production devient un `curl`, plus une corrélation entre l'uptime du
+    # container et l'horodatage des tags `sha-<short>` du registre.
+    # (VCS_REF / BUILD_DATE sont déjà re-déclarés en ARG l.171-172, après le
+    # `FROM runtime-${TORCH_BACKEND}` — un ARG ne franchit pas un FROM.)
+    GIT_COMMIT=${VCS_REF} \
+    BUILD_DATE=${BUILD_DATE} \
     PYTHONPATH=/workspace:/workspace/generated \
     PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
