@@ -20,4 +20,12 @@ final class MediaSaveLabelGuardTests: XCTestCase {
         XCTAssertTrue(source.contains(#"String(localized: "feed.post.save", defaultValue: "Enregistrer", bundle: .main)"#),
             "Le bouton bookmark dédié de la rail (actionsRow) doit rester « Enregistrer »")
     }
+
+    func test_reelsPlayerView_saveMediaMenuItem_usesSauvegarderLabel() throws {
+        let source = try sourceWithoutComments("Meeshy/Features/Main/Views/ReelsPlayerView.swift")
+        XCTAssertTrue(source.contains(#"String(localized: "feed.reel.save_media", defaultValue: "Sauvegarder", bundle: .main)"#),
+            "Le téléchargement média du menu « … » du lecteur plein écran doit afficher « Sauvegarder »")
+        XCTAssertTrue(source.contains(#"String(localized: "reels.action.bookmark", defaultValue: "Enregistrer", bundle: .main)"#),
+            "Le bouton bookmark dédié de la rail (ReelActionRail) doit rester « Enregistrer »")
+    }
 }
