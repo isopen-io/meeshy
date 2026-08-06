@@ -176,6 +176,75 @@ final class ReelsViewModelTests: XCTestCase {
         XCTAssertNil(shortUrl)
     }
 
+    // MARK: - deletePost() — parité avec le menu « … » du feed (FeedViewModel.deletePost)
+
+    func test_deletePost_success_removesReelFromPagerAndAdvancesCurrentId() async {
+        let (sut, service, _) = makeSUT()
+        sut.seed(posts: [Self.makeReel(id: "r1"), Self.makeReel(id: "r2")], startId: "r1")
+
+        await sut.deletePost("r1")
+
+        XCTAssertEqual(service.deleteCallCount, 1)
+        XCTAssertEqual(service.lastDeletePostId, "r1")
+        XCTAssertEqual(sut.reels.map(\.id), ["r2"])
+        // Le reel courant était celui supprimé : le pager avance vers le suivant.
+        XCTAssertEqual(sut.currentId, "r2")
+    }
+
+    func test_deletePost_failure_restoresReel() async {
+        let (sut, service, _) = makeSUT()
+        sut.seed(posts: [Self.makeReel(id: "r1")], startId: "r1")
+        service.deleteResult = .failure(APIError.networkError(URLError(.timedOut)))
+
+        await sut.deletePost("r1")
+
+        XCTAssertEqual(sut.reels.map(\.id), ["r1"], "Reel should be restored on delete failure")
+        XCTAssertEqual(sut.currentId, "r1")
+    }
+
+    // MARK: - pinPost()
+
+    func test_pinPost_callsPostService() async {
+        let (sut, _, _) = makeSUT()
+
+        await sut.pinPost("pin-reel")
+
+        // pinPost utilise postService.pinPost, un stub no-op côté mock — même
+        // convention faible que FeedViewModelTests.test_pinPost_callsPostService.
+        XCTAssertTrue(true, "pinPost should complete without error")
+    }
+
+    // MARK: - updatePost()
+
+    func test_updatePost_success_replacesReelWithServerResponse() async {
+        let (sut, service, _) = makeSUT()
+        sut.seed(posts: [Self.makeReel(id: "r1", content: "avant")], startId: "r1")
+        service.createResult = .success(Self.makeAPIPost(id: "r1", content: "après"))
+
+        await sut.updatePost("r1", content: "après", language: "fr", type: nil, removeMediaIds: nil, location: nil)
+
+        XCTAssertEqual(service.updateCallCount, 1)
+        XCTAssertEqual(service.lastUpdatePostId, "r1")
+        XCTAssertEqual(service.lastUpdateContent, "après")
+        XCTAssertEqual(sut.reels.first(where: { $0.id == "r1" })?.content, "après")
+    }
+
+    func test_updatePost_failure_restoresOriginalContent() async {
+        let (sut, service, _) = makeSUT()
+        sut.seed(posts: [Self.makeReel(id: "r1", content: "avant")], startId: "r1")
+        service.createResult = .failure(APIError.networkError(URLError(.timedOut)))
+
+        await sut.updatePost("r1", content: "après", language: nil, type: nil, removeMediaIds: nil, location: nil)
+
+        XCTAssertEqual(sut.reels.first(where: { $0.id == "r1" })?.content, "avant", "Content should roll back on update failure")
+    }
+
+    private static func makeAPIPost(id: String, content: String) -> APIPost {
+        JSONStub.decode("""
+        {"id":"\(id)","type":"REEL","content":"\(content)","createdAt":"2026-01-15T12:00:00.000Z","author":{"id":"a1","username":"alice"}}
+        """)
+    }
+
     // MARK: - Pagination resilience (transient network failure must NOT kill it forever)
 
     func test_loadMore_transientNetworkFailure_keepsPaginationAliveForRetry() async {

@@ -154,6 +154,26 @@ export class CallEventsHandler {
   private static readonly MISSED_CALL_NOTIFY_DEDUP_TTL_MS = 600_000;
 
   /**
+   * Idempotency guard for `sendCallCancellationPushes`, the sibling of
+   * `missedCallNotifiedAt` above — same multi-path fan-in problem, different
+   * notification channel. `sendCallCancellationPushes` is reachable from
+   * every `broadcastCallEnded` call site (ringing-timeout, call:leave,
+   * call:force-leave, call:end, disconnect-grace-expiry,
+   * force-cleanup-after-leave-failure, force-end-orphaned, plus the REST
+   * `broadcastCallEndedForTerminatedCall` wrapper) AND directly from
+   * `CallCleanupService`'s GC tier via
+   * `sendMissedCallCancellationPushForTerminatedCall`. None of those callers
+   * check whether THEY caused the terminal transition — same as the
+   * `missedCallNotifiedAt` write-up above — so a hangup racing the ringing
+   * timeout (or the GC tier racing either) fires this silent `call_cancel`
+   * push twice for one call. Vague 53 only deduped the persisted
+   * `missed_call` notification; this push is a separate fan-out that never
+   * got the same guard.
+   */
+  private readonly callCancellationPushSentAt = new Map<string, number>();
+  private static readonly CALL_CANCELLATION_PUSH_DEDUP_TTL_MS = 600_000;
+
+  /**
    * CALL-RESILIENCE 2026-07-02 — an ANSWERED call rides on a direct peer-to-peer
    * media connection (DTLS-SRTP) that the gateway never carries: a transient loss
    * of the signaling socket (network blip, single-instance restart/deploy) does
@@ -259,6 +279,11 @@ export class CallEventsHandler {
       for (const [callId, notifiedAt] of this.missedCallNotifiedAt) {
         if (now - notifiedAt >= CallEventsHandler.MISSED_CALL_NOTIFY_DEDUP_TTL_MS) {
           this.missedCallNotifiedAt.delete(callId);
+        }
+      }
+      for (const [callId, sentAt] of this.callCancellationPushSentAt) {
+        if (now - sentAt >= CallEventsHandler.CALL_CANCELLATION_PUSH_DEDUP_TTL_MS) {
+          this.callCancellationPushSentAt.delete(callId);
         }
       }
     }, 60_000).unref();
@@ -476,6 +501,13 @@ export class CallEventsHandler {
   ): Promise<void> {
     if (!this.pushService || !conversationId) return;
     if (endedEvent.reason !== 'missed' && endedEvent.reason !== 'rejected') return;
+
+    const sentAt = this.callCancellationPushSentAt.get(callId);
+    if (sentAt !== undefined && Date.now() - sentAt < CallEventsHandler.CALL_CANCELLATION_PUSH_DEDUP_TTL_MS) {
+      logger.info('📲 call_cancel push already sent for this call — skipping duplicate', { callId });
+      return;
+    }
+    this.callCancellationPushSentAt.set(callId, Date.now());
 
     try {
       const [members, joined] = await Promise.all([

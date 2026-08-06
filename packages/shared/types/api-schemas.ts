@@ -2180,7 +2180,7 @@ export const callSessionSchema = {
     },
     status: {
       type: 'string',
-      enum: ['ringing', 'active', 'ended', 'missed', 'rejected', 'failed'],
+      enum: ['initiated', 'ringing', 'connecting', 'active', 'reconnecting', 'ended', 'missed', 'rejected', 'failed'],
       description: 'Call status'
     },
 

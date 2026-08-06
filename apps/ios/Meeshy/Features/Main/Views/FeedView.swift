@@ -744,7 +744,8 @@ struct FeedView: View {
     private func reelFeedCardView(for post: FeedPost) -> some View {
         // `ReelFeedCardContainer` observe le coordinator et calcule `isActive` en
         // interne : le body de FeedView ne dépend donc pas d'`activeReelId` (I1).
-        ReelFeedCardContainer(
+        let isOwnPost = post.authorId == AuthManager.shared.currentUser?.id
+        return ReelFeedCardContainer(
             coordinator: reelAutoplay,
             post: post,
             isDark: isDark,
@@ -790,7 +791,19 @@ struct FeedView: View {
                     name: Notification.Name("openProfileSheet"),
                     object: ["userId": authorId, "username": post.authorUsername ?? post.author]
                 )
-            }
+            },
+            onEdit: isOwnPost ? { post in
+                editingPost = post
+            } : nil,
+            onDelete: isOwnPost ? { postId in
+                Task { await viewModel.deletePost(postId) }
+            } : nil,
+            onReport: !isOwnPost ? { postId in
+                Task { await viewModel.reportPost(postId) }
+            } : nil,
+            onPin: isOwnPost ? { postId in
+                Task { await viewModel.pinPost(postId) }
+            } : nil
         )
         // Marge latérale volontairement plus serrée que les posts standards
         // (`FeedPostCard` = 16) → la carte Réel est un peu plus large, tout en
