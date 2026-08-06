@@ -522,6 +522,8 @@ struct ReelPageView: View {
     /// highlight tracks the SAME position the user scrubs/plays. One engine per
     /// page; only the active audio reel ever plays.
     @StateObject private var audioPlayer = AudioPlaybackManager()
+    /// Flux « Enregistrer en local » du menu « … » du rail d'actions.
+    @StateObject private var mediaSaveCoordinator = MediaSaveCoordinator()
 
     private var accentColor: String { reel.authorColor }
 
@@ -693,6 +695,7 @@ struct ReelPageView: View {
                 senderName: reel.author
             )
         }
+        .mediaSaveFlow(mediaSaveCoordinator)
     }
 
     // MARK: Audio open-autostart (WS3.1)
@@ -966,8 +969,29 @@ struct ReelPageView: View {
             reel: reel,
             onComment: onComment,
             onShare: onShare,
-            onEdit: onEdit
+            onEdit: onEdit,
+            onSaveMedia: requestSaveMedia
         )
+    }
+
+    /// Déclenche le flux unifié « Enregistrer en local » sur le média du réel
+    /// (image/vidéo) — distinct du bouton favori dédié (bookmark) qui, lui,
+    /// enregistre le poste dans l'app. No-op si le réel n'a pas de média.
+    private func requestSaveMedia() {
+        guard let media = reel.primaryReelDisplayMedia, let url = media.url, !url.isEmpty else { return }
+        HapticFeedback.light()
+        let attachmentKind: AttachmentKind
+        switch media.type {
+        case .video: attachmentKind = .video
+        case .audio: attachmentKind = .audio
+        case .document: attachmentKind = .document
+        case .image: attachmentKind = .image
+        }
+        mediaSaveCoordinator.requestSave(MediaSaveRequest(
+            kind: attachmentKind,
+            remoteURLString: url,
+            suggestedFileName: media.fileName
+        ))
     }
 }
 
@@ -980,6 +1004,10 @@ private struct ReelActionRail: View {
     var onComment: () -> Void
     var onShare: () -> Void
     var onEdit: () -> Void
+    /// Menu « … » → déclenche le flux « Enregistrer en local » sur le média
+    /// du réel (coordinateur possédé par `ReelPageView`, seul habilité à
+    /// présenter la sheet de destination).
+    var onSaveMedia: () -> Void
 
     private var isOwnReel: Bool {
         guard let me = AuthManager.shared.currentUser?.id else { return false }
@@ -1023,13 +1051,21 @@ private struct ReelActionRail: View {
             )
             .accessibilityLabel(String(localized: "reels.action.bookmark", defaultValue: "Enregistrer", bundle: .main))
 
+            // Icône principale : Republier (Partager reste disponible dans le
+            // menu « … », parité avec `ReelFeedCard.actionsRow`). Repost
+            // append-only (pas d'un-repost) — `participated` reste vrai une
+            // fois posé, comme le feed.
+            let isReposted = viewModel.isReposted(reel.id)
             ReelActionButton(
-                systemName: "arrowshape.turn.up.right.fill",
-                tint: .white,
-                count: nil,
-                action: onShare
+                systemName: "arrow.2.squarepath",
+                outline: "arrow.2.squarepath",
+                tint: isReposted ? MeeshyColors.success : .white,
+                count: viewModel.repostCount(reel),
+                participated: isReposted,
+                accentHex: reel.authorColor,
+                action: { viewModel.repost(reel) }
             )
-            .accessibilityLabel(String(localized: "reels.action.share", defaultValue: "Partager", bundle: .main))
+            .accessibilityLabel(String(localized: "feed.post.repost", defaultValue: "Repartager", bundle: .main))
 
             moreOptionsMenu
         }
@@ -1051,11 +1087,12 @@ private struct ReelActionRail: View {
             } label: {
                 Label(String(localized: "feed.post.share", defaultValue: "Partager", bundle: .main), systemImage: "square.and.arrow.up")
             }
-            Button {
-                viewModel.toggleBookmark(reel)
-                HapticFeedback.light()
-            } label: {
-                Label(String(localized: "feed.post.save", defaultValue: "Enregistrer", bundle: .main), systemImage: "bookmark")
+            if reel.primaryReelDisplayMedia != nil {
+                Button {
+                    onSaveMedia()
+                } label: {
+                    Label(String(localized: "feed.post.save", defaultValue: "Enregistrer", bundle: .main), systemImage: "bookmark")
+                }
             }
             if isOwnReel {
                 Button {

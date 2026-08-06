@@ -121,6 +121,10 @@ struct ReelFeedCard: View, Equatable {
     private var accentHex: String { post.authorColor }
     /// Lieu du réel ouvert plein écran (tap sur le sticker de position).
     @State private var reelCardFullscreenPlace: BubbleFullscreenPlace?
+    /// Flux « Enregistrer en local » du menu « … » : pour un réel, Enregistrer
+    /// télécharge le MÉDIA (image/vidéo) dans Photos — distinct du bouton
+    /// favori dédié (bookmark) qui, lui, enregistre le poste dans l'app.
+    @StateObject private var mediaSaveCoordinator = MediaSaveCoordinator()
 
     /// Non-nil when this card displays a REPUBLISHED reel: the outer post has no
     /// media (content sourced from the reposted reel). Drives author attribution
@@ -177,6 +181,7 @@ struct ReelFeedCard: View, Equatable {
                 senderName: displayAuthor
             )
         }
+        .mediaSaveFlow(mediaSaveCoordinator)
     }
 
     // Largeur de contenu du feed (le GeometryReader donne la vraie ; estimation
@@ -393,12 +398,8 @@ struct ReelFeedCard: View, Equatable {
                        hint: String(localized: "a11y.feed.post.save.hint", defaultValue: "Enregistre la publication dans vos favoris", bundle: .main),
                        participated: isBookmarked) { onBookmark(post.id) }
             Spacer()
-            reelButton(outline: "square.and.arrow.up", filled: "square.and.arrow.up",
-                       tint: .white,
-                       count: displayShareCount,
-                       label: String(localized: "feed.post.share", defaultValue: "Partager", bundle: .main),
-                       hint: String(localized: "a11y.feed.post.share.hint", defaultValue: "Partage cette publication via un lien", bundle: .main)) { onShare(post.id) }
-            Spacer()
+            // Partager reste disponible dans le menu « … » — retiré des icônes
+            // principales pour ne pas dupliquer Repartager (même slot d'intention).
             moreOptionsMenu
         }
     }
@@ -420,11 +421,12 @@ struct ReelFeedCard: View, Equatable {
             } label: {
                 Label(String(localized: "feed.post.share", defaultValue: "Partager", bundle: .main), systemImage: "square.and.arrow.up")
             }
-            Button {
-                onBookmark(post.id)
-                HapticFeedback.light()
-            } label: {
-                Label(String(localized: "feed.post.save", defaultValue: "Enregistrer", bundle: .main), systemImage: "bookmark")
+            if media != nil {
+                Button {
+                    requestSaveMedia()
+                } label: {
+                    Label(String(localized: "feed.post.save", defaultValue: "Enregistrer", bundle: .main), systemImage: "bookmark")
+                }
             }
             if let onPin {
                 Button {
@@ -468,6 +470,26 @@ struct ReelFeedCard: View, Equatable {
         }
         .accessibilityLabel(String(localized: "feed.post.more_options", defaultValue: "Plus d'options", bundle: .main))
         .accessibilityHint(String(localized: "feed.post.more_options.hint", defaultValue: "Ouvre le menu des actions", bundle: .main))
+    }
+
+    /// Déclenche le flux unifié « Enregistrer en local » sur le média du réel
+    /// (pas le poste — un réel n'a de sens à « enregistrer » que par son
+    /// image/vidéo). No-op si le réel n'a pas de média résolvable.
+    private func requestSaveMedia() {
+        guard let media, let url = media.url, !url.isEmpty else { return }
+        HapticFeedback.light()
+        let attachmentKind: AttachmentKind
+        switch media.type {
+        case .video: attachmentKind = .video
+        case .audio: attachmentKind = .audio
+        case .document: attachmentKind = .document
+        case .image: attachmentKind = .image
+        }
+        mediaSaveCoordinator.requestSave(MediaSaveRequest(
+            kind: attachmentKind,
+            remoteURLString: url,
+            suggestedFileName: media.fileName
+        ))
     }
 
     /// Action glyph that gains an accent-colour BORDER on the glyph itself when
