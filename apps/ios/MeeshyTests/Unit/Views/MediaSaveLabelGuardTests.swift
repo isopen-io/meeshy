@@ -38,4 +38,14 @@ final class MediaSaveLabelGuardTests: XCTestCase {
         XCTAssertTrue(source.contains(#"String(localized: "feed.post.save", defaultValue: "Enregistrer", bundle: .main)"#),
             "La branche bookmark du menu ET le bouton dédié actionsBar doivent rester « Enregistrer »")
     }
+
+    func test_postDetailView_saveMenuItem_usesDynamicLabelByMediaPresence() throws {
+        let source = try sourceWithoutComments("Meeshy/Features/Main/Views/PostDetailView.swift")
+        XCTAssertTrue(source.contains(#"displayPost?.primaryReelDisplayMedia != nil"#),
+            "La branche média du menu « … » de PostDetailView doit rester conditionnée sur primaryReelDisplayMedia")
+        XCTAssertTrue(source.contains(#"String(localized: "feed.reel.save_media", defaultValue: "Sauvegarder", bundle: .main)"#),
+            "Quand la branche média est active, le menu « … » de PostDetailView doit afficher « Sauvegarder »")
+        XCTAssertTrue(source.contains(#"String(localized: "a11y.post.bookmark_add", defaultValue: "Ajouter aux favoris", bundle: .main)"#),
+            "Le bouton bookmark dédié de la barre d'action (hors menu), sur ses propres clés a11y.post.bookmark_*, ne doit pas être touché")
+    }
 }
