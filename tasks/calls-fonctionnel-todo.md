@@ -3631,3 +3631,63 @@ vagues précédentes ; rien de neuf trouvé dans `CallEventsHandler`/`CallServic
   `actor CallEventQueue` non implémenté ; couverture E2E iOS des écrans d'appel (peu de XCUITest
   bout-en-bout) ; `enableSimulcast()` (`webrtc-service.ts`) référencé uniquement par son propre test —
   scaffolding SFU Phase 2 documenté comme intentionnel, PAS retiré.
+
+## Vague 56 — `sendCallCancellationPushes` livrait 2 pushes `call_cancel` pour un seul appel missed/rejected (2026-08-06)
+
+Point d'entrée : routine calling-feature (agent Cowork non interactif, mandat PHASE 1-12). Branche
+`claude/modest-cori-ct9ddv`, redémarrée depuis `origin/main` à jour (`6e871dcf`, PR #2578 — Vague 54 —
+mergée avant de démarrer cette vague ; PR #2581 — Vague 55 — trouvée ouverte avec un conflit de merge sur
+`CallManager.tsx`/`tasks/calls-fonctionnel-todo.md` contre le `main` fraîchement mis à jour par #2578,
+résolu manuellement dans un worktree dédié (le code source s'est auto-mergé sans conflit réel, seul le
+changelog avait un conflit textuel) et repoussé pour re-vérification CI avant merge — traité en dehors de
+cette vague de code. Audit dédié (agent d'exploration, lecture seule, croisé avec les 55 vagues
+précédentes) sur les 8 patterns de bug déjà rencontrés, scope délibérément exclu de `CallManager.tsx`/
+`call-store.ts` (fichiers en vol sur #2581).
+
+- **[MOYEN, gateway, CONFIRMÉ + CORRIGÉ, TDD]** `CallEventsHandler.ts` `sendCallCancellationPushes`
+  (`:472`) — le fan-out de push silencieuse `call_cancel` (coupe CallKit pour un membre de la conversation
+  qui n'a JAMAIS rejoint la room d'appel — socket mort / app suspendue) n'avait AUCUNE garde
+  d'idempotence, contrairement à son cousin `createMissedCallNotifications` (dédupliqué en Vague 53 via
+  `missedCallNotifiedAt`). Cette fonction est atteignable depuis **tous** les appelants de
+  `broadcastCallEnded`(ringing-timeout, `call:leave`, `call:force-leave`, `call:end`,
+  disconnect-grace-expiry, force-cleanup-after-leave-failure, force-end-orphaned, plus le wrapper REST
+  `broadcastCallEndedForTerminatedCall`) **ET** directement depuis le wrapper public
+  `sendMissedCallCancellationPushForTerminatedCall`, utilisé par le tier GC de `CallCleanupService`.
+  Exactement le même défaut de conception que la Vague 53 avait fermé côté notification persistée —
+  laissé ouvert côté push silencieuse. **Scénario concret** : le ringing-timeout gagne la transition vers
+  `missed`, diffuse `call:ended` et envoie le push `call_cancel` aux membres jamais rejoints ; le tier GC
+  de `CallCleanupService` (ou un `call:leave` qui arrive juste après, lisant le statut déjà `missed`) relit
+  le même appel encore `initiated`/`ringing` en base à ce moment précis (fenêtre de course entre la
+  transition et son observation par le tier suivant) et rappelle le même chemin — un membre jamais rejoint
+  reçoit deux pushes `call_cancel` silencieux pour le même appel (surcharge APNs/FCM, requêtes Prisma
+  redondantes, bruit de log). Impact utilisateur faible (le push est un simple kill CallKit idempotent côté
+  client — recevoir un deuxième "stop ringing" sur un appel déjà arrêté est un no-op visible), mais le
+  pattern est identique à un bug déjà jugé MOYEN en Vague 53 et mérite la même garde par cohérence.
+  **Fix** : nouvelle map `callCancellationPushSentAt` (miroir exact de `missedCallNotifiedAt` — même TTL
+  600s, même balayage dans l'intervalle 60s existant), vérifiée/posée au tout début de
+  `sendCallCancellationPushes` (après les gardes existantes `pushService`/`conversationId`/`reason`, avant
+  toute requête Prisma).
+- **Tests TDD** : 2 nouveaux cas dans `CallEventsHandler-gc-missed-cancel-push.test.ts` — (1) deux appels
+  successifs de `sendMissedCallCancellationPushForTerminatedCall` pour le MÊME callId → `sendToUser` appelé
+  1 seule fois (RED confirmé par `git stash` du seul fichier source : 2 appels avant le fix) ; (2) deux
+  callIds DIFFÉRENTS → chacun reçoit son propre push (`sendToUser` appelé 2 fois, prouve l'absence de
+  sur-déduplication globale). GREEN après restauration du fix. Suite calling gateway complète filtrée
+  (`CallEventsHandler|CallService|CallCleanupService|calls-routes|call-`) : 44 suites / 1053 tests verts —
+  aucune régression. Suite gateway complète (`bunx jest`, hors coverage) : 587/587 suites, 15348/15348
+  tests verts. `tsc --noEmit` gateway : 0 erreur (après `npx prisma generate --generator client` +
+  `packages/shared` `bun run build`, prérequis documentés dans `CLAUDE.md`).
+- **iOS/Android (lecture seule, aucun changement)** : hors périmètre — aucune toolchain Swift/Kotlin dans
+  ce sandbox Linux ; changement strictement gateway (`CallEventsHandler.ts`, 1 fichier de test).
+- **[FAIBLE, web, documenté seulement, PAS corrigé]** `apps/web/hooks/conversations/use-video-call.ts` —
+  `answerCall`/`rejectCall`/`endCall`/`toggleAudio`/`toggleVideo` (exportés via `UseVideoCallReturn`, tous
+  pleinement implémentés — émissions socket réelles, pas des stubs) n'ont aucun site d'appel en
+  production : les deux seuls consommateurs (`ConversationLayout.tsx`, `CallSystemMessage.tsx`) ne
+  déstructurent que `startCall`. Le flux d'appel réel passe entièrement par `CallManager.tsx` (composant
+  séparé), pas par ce hook. Candidat de suppression dead-code (5 méthodes + champs d'interface + ~280
+  lignes de tests dédiés dans `use-video-call.test.tsx`) — non traité cette vague, `CallManager.tsx` étant
+  en vol sur #2581 et une suppression de cette taille méritant sa propre vague dédiée plutôt qu'un ajout
+  en fin de session déjà chargée.
+- **Reste ouvert** : dead code / god-objects `CallManager.swift`/`CallEventsHandler.ts` ; ADR
+  `actor CallEventQueue` non implémenté ; couverture E2E iOS des écrans d'appel (peu de XCUITest
+  bout-en-bout) ; `enableSimulcast()` scaffolding SFU Phase 2 (intentionnel) ; **nouveau** — dead code
+  `use-video-call.ts` (5 méthodes non consommées, voir ci-dessus, candidat pour une prochaine vague).
