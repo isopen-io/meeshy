@@ -11,7 +11,7 @@ import { setConversationUnreadInCache } from '@/lib/conversations/unread-cache';
 import type { Message, Conversation } from '@/types';
 import type { TranslationEvent } from '@meeshy/shared/types';
 import type { SocketIOTranslation } from '@meeshy/shared/types/attachment-audio';
-import type { AudioTranslationReadyEventData } from '@meeshy/shared/types/socketio-events';
+import type { AudioTranslationReadyEventData, TranscriptionReadyEventData } from '@meeshy/shared/types/socketio-events';
 import type { OptimisticMessage } from '@/utils/optimistic-message';
 
 function isOptimisticMessage(m: Message): m is OptimisticMessage {
@@ -605,32 +605,69 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
       });
     };
 
-    // W6: Handler for transcription results — updates attachment transcription in cache
-    const handleTranscription = (data: { messageId: string; transcription: string; language?: string; [key: string]: unknown }) => {
-      if (!conversationId) return;
+    // W6: Handler for transcription results (`audio:transcription-ready`, stage 1
+    // of the audio pipeline) — writes the transcription onto the attachment it
+    // belongs to.
+    //
+    // Routed by the event's OWN `conversationId`, like `handleAudioTranslation`
+    // and `handleTranslation`: the socket is joined to every conversation room
+    // the user belongs to, so a voice note transcribed while they read another
+    // chat — or read none at all (`ConversationLayout` passes
+    // `effectiveSelectedId`, which is null on the conversation-list view) —
+    // belongs to a cache entry that is not the hook's active conversation.
+    // Writing to the active key dropped it silently, and `staleTime: Infinity`
+    // never re-reads it: the bubble stayed untranscribed until a manual
+    // refresh. Same Prisme Linguistique gap the two sibling handlers close, on
+    // the one pipeline stage that had been left behind.
+    //
+    // `messageCacheKeysFor` (rather than a single `messages.infinite(id)` write)
+    // also reaches an identifier-keyed alias entry — the home page mounts the
+    // global conversation as "meeshy" while socket payloads carry the resolved
+    // ObjectId.
+    //
+    // The attachment is picked by `data.attachmentId`, not by "first audio
+    // attachment": a message can carry several voice notes, each transcribed by
+    // its own event, and first-match stamped every one of them onto the first
+    // note while the others stayed permanently untranscribed. The mimeType scan
+    // remains only as the fallback for a payload that carries no attachmentId —
+    // a named-but-unknown attachment is left alone, since mis-attributing a
+    // transcription is worse than not showing it yet.
+    const handleTranscription = (data: TranscriptionReadyEventData) => {
+      const targetConversationId = data.conversationId ?? conversationId;
+      if (!targetConversationId) return;
 
-      queryClient.setQueryData(
-        queryKeys.messages.infinite(conversationId),
-        (old: { pages: { messages: Message[]; hasMore: boolean; total: number }[]; pageParams: number[] } | undefined) => {
-          if (!old) return old;
-          return {
-            ...old,
-            pages: old.pages.map((page) => ({
-              ...page,
-              messages: page.messages.map((m) => {
-                if (m.id !== data.messageId) return m;
-                // Attach transcription to the first audio attachment or at message level
-                const attachments = Array.isArray(m.attachments) ? [...m.attachments] : [];
-                const audioIdx = attachments.findIndex((a) => a.mimeType?.startsWith('audio/'));
-                if (audioIdx >= 0) {
-                  attachments[audioIdx] = { ...attachments[audioIdx], transcription: data.transcription, transcriptionLanguage: data.language };
-                }
-                return { ...m, attachments, transcription: data.transcription, transcriptionLanguage: data.language };
-              }),
-            })),
-          };
-        }
-      );
+      const language = data.transcription?.language;
+
+      const applyTranscription = (
+        old: InfiniteMessagesData | undefined
+      ): InfiniteMessagesData | undefined => {
+        if (!old) return old;
+        return {
+          ...old,
+          pages: old.pages.map((page) => ({
+            ...page,
+            messages: page.messages.map((m) => {
+              if (m.id !== data.messageId) return m;
+              const attachments = Array.isArray(m.attachments) ? [...m.attachments] : [];
+              const targetIdx = data.attachmentId
+                ? attachments.findIndex((a) => a.id === data.attachmentId)
+                : attachments.findIndex((a) => a.mimeType?.startsWith('audio/'));
+              if (targetIdx >= 0) {
+                attachments[targetIdx] = {
+                  ...attachments[targetIdx],
+                  transcription: data.transcription,
+                  transcriptionLanguage: language,
+                };
+              }
+              return { ...m, attachments, transcription: data.transcription, transcriptionLanguage: language };
+            }),
+          })),
+        };
+      };
+
+      for (const key of messageCacheKeysFor(queryClient, targetConversationId)) {
+        queryClient.setQueryData(key, applyTranscription);
+      }
     };
 
     // W6: Handler for audio translation ready — updates attachment with translated audio URL.

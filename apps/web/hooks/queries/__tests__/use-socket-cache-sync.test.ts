@@ -21,6 +21,8 @@ let capturedDeleteListener: ((messageId: string) => void) | null = null;
 // Capture the translation + audio-translation listeners registered by the hook
 let capturedTranslationListener: ((data: any) => void) | null = null;
 let capturedAudioTranslationListener: ((data: any) => void) | null = null;
+// Capture the transcription listener registered by the hook
+let capturedTranscriptionListener: ((data: any) => void) | null = null;
 
 jest.mock('@/services/meeshy-socketio.service', () => ({
   meeshySocketIOService: {
@@ -38,7 +40,10 @@ jest.mock('@/services/meeshy-socketio.service', () => ({
       return () => { capturedTranslationListener = null; };
     }),
     onUnreadUpdated: jest.fn(() => () => {}),
-    onTranscription: jest.fn(() => () => {}),
+    onTranscription: jest.fn((listener: (data: any) => void) => {
+      capturedTranscriptionListener = listener;
+      return () => { capturedTranscriptionListener = null; };
+    }),
     onAudioTranslation: jest.fn((listener: (data: any) => void) => {
       capturedAudioTranslationListener = listener;
       return () => { capturedAudioTranslationListener = null; };
@@ -457,5 +462,172 @@ describe('useSocketCacheSync — translations apply beyond the active conversati
 
     const cached = queryClient.getQueryData(queryKeys.messages.infinite('conv-other')) as any;
     expect(cached.pages[0].messages[0].translatedAudios?.fr?.url).toBe('https://x/fr.mp3');
+  });
+});
+
+describe('useSocketCacheSync — transcription routing (audio pipeline stage 1)', () => {
+  beforeEach(() => {
+    capturedTranscriptionListener = null;
+    jest.clearAllMocks();
+  });
+
+  // Real `audio:transcription-ready` shape (TranscriptionReadyEventData): the
+  // text and its language live UNDER `transcription`, and the event names the
+  // attachment it belongs to.
+  function makeTranscriptionEvent(overrides: Record<string, unknown> = {}) {
+    return {
+      messageId: 'm-audio',
+      attachmentId: 'att-1',
+      conversationId: 'conv-other',
+      transcription: {
+        id: 't-1',
+        text: 'Bonjour tout le monde',
+        language: 'fr',
+        confidence: 0.94,
+        source: 'whisper',
+      },
+      ...overrides,
+    };
+  }
+
+  function makeAudioMessage(id: string, conversationId: string, attachments: unknown[]) {
+    const msg = makeMessage({ id, conversationId, content: '', messageType: 'audio' });
+    (msg as any).attachments = attachments;
+    return msg;
+  }
+
+  it('applies a transcription to a message in a NON-active conversation via data.conversationId', () => {
+    // The socket is joined to every conversation room the user belongs to, so a
+    // voice note transcribed while the user reads ANOTHER chat arrives here.
+    // Routing the write by the hook's active conversation dropped it, and
+    // `staleTime: Infinity` never re-reads it.
+    const { queryClient, wrapper } = createTestHarness('conv-active');
+    queryClient.setQueryData(queryKeys.messages.infinite('conv-other'), {
+      pages: [{
+        messages: [makeAudioMessage('m-audio', 'conv-other', [
+          { id: 'att-1', mimeType: 'audio/mpeg' },
+        ])],
+        hasMore: false,
+        total: 1,
+      }],
+      pageParams: [1],
+    });
+
+    renderHook(() => useSocketCacheSync({ conversationId: 'conv-active', enabled: true }), { wrapper });
+    expect(capturedTranscriptionListener).not.toBeNull();
+
+    act(() => { capturedTranscriptionListener!(makeTranscriptionEvent()); });
+
+    const cached = queryClient.getQueryData(queryKeys.messages.infinite('conv-other')) as any;
+    expect(cached.pages[0].messages[0].attachments[0].transcription?.text).toBe('Bonjour tout le monde');
+  });
+
+  it('applies a transcription while NO conversation is open (conversation-list view)', () => {
+    // `ConversationLayout` passes `effectiveSelectedId`, which is null on the
+    // list view — the handler must still route by the event's own id.
+    const { queryClient, wrapper } = createTestHarness('conv-active');
+    queryClient.setQueryData(queryKeys.messages.infinite('conv-other'), {
+      pages: [{
+        messages: [makeAudioMessage('m-audio', 'conv-other', [
+          { id: 'att-1', mimeType: 'audio/mpeg' },
+        ])],
+        hasMore: false,
+        total: 1,
+      }],
+      pageParams: [1],
+    });
+
+    renderHook(() => useSocketCacheSync({ conversationId: null, enabled: true }), { wrapper });
+
+    act(() => { capturedTranscriptionListener!(makeTranscriptionEvent()); });
+
+    const cached = queryClient.getQueryData(queryKeys.messages.infinite('conv-other')) as any;
+    expect(cached.pages[0].messages[0].attachments[0].transcription?.text).toBe('Bonjour tout le monde');
+  });
+
+  it('attaches the transcription to the attachment named by data.attachmentId, not the first audio one', () => {
+    // A message can carry several voice notes; each is transcribed by its own
+    // event. Picking the first audio attachment mis-attributed every one of
+    // them to the first note and left the others permanently untranscribed.
+    const { queryClient, wrapper } = createTestHarness('conv-active');
+    queryClient.setQueryData(queryKeys.messages.infinite('conv-active'), {
+      pages: [{
+        messages: [makeAudioMessage('m-audio', 'conv-active', [
+          { id: 'att-1', mimeType: 'audio/mpeg' },
+          { id: 'att-2', mimeType: 'audio/mpeg' },
+        ])],
+        hasMore: false,
+        total: 1,
+      }],
+      pageParams: [1],
+    });
+
+    renderHook(() => useSocketCacheSync({ conversationId: 'conv-active', enabled: true }), { wrapper });
+
+    act(() => {
+      capturedTranscriptionListener!(makeTranscriptionEvent({
+        conversationId: 'conv-active',
+        attachmentId: 'att-2',
+      }));
+    });
+
+    const attachments = (queryClient.getQueryData(queryKeys.messages.infinite('conv-active')) as any)
+      .pages[0].messages[0].attachments;
+    expect(attachments[1].transcription?.text).toBe('Bonjour tout le monde');
+    expect(attachments[0].transcription).toBeUndefined();
+  });
+
+  it('records the transcription language from data.transcription.language', () => {
+    // The language lives under `transcription`, never at the payload root —
+    // reading `data.language` stamped `undefined` on every transcription.
+    const { queryClient, wrapper } = createTestHarness('conv-active');
+    queryClient.setQueryData(queryKeys.messages.infinite('conv-active'), {
+      pages: [{
+        messages: [makeAudioMessage('m-audio', 'conv-active', [
+          { id: 'att-1', mimeType: 'audio/mpeg' },
+        ])],
+        hasMore: false,
+        total: 1,
+      }],
+      pageParams: [1],
+    });
+
+    renderHook(() => useSocketCacheSync({ conversationId: 'conv-active', enabled: true }), { wrapper });
+
+    act(() => {
+      capturedTranscriptionListener!(makeTranscriptionEvent({ conversationId: 'conv-active' }));
+    });
+
+    const message = (queryClient.getQueryData(queryKeys.messages.infinite('conv-active')) as any)
+      .pages[0].messages[0];
+    expect(message.attachments[0].transcriptionLanguage).toBe('fr');
+    expect(message.transcriptionLanguage).toBe('fr');
+  });
+
+  it('also updates an identifier-keyed (alias) cache entry for the same conversation', () => {
+    // The home page mounts the global conversation as "meeshy" while socket
+    // payloads carry the resolved ObjectId — the same alias gap
+    // `messageCacheKeysFor` exists to close for new/edited messages.
+    const objectId = '507f1f77bcf86cd799439011';
+    const { queryClient, wrapper } = createTestHarness('conv-active');
+    queryClient.setQueryData(queryKeys.messages.infinite('meeshy'), {
+      pages: [{
+        messages: [makeAudioMessage('m-audio', objectId, [
+          { id: 'att-1', mimeType: 'audio/mpeg' },
+        ])],
+        hasMore: false,
+        total: 1,
+      }],
+      pageParams: [1],
+    });
+
+    renderHook(() => useSocketCacheSync({ conversationId: 'conv-active', enabled: true }), { wrapper });
+
+    act(() => {
+      capturedTranscriptionListener!(makeTranscriptionEvent({ conversationId: objectId }));
+    });
+
+    const cached = queryClient.getQueryData(queryKeys.messages.infinite('meeshy')) as any;
+    expect(cached.pages[0].messages[0].attachments[0].transcription?.text).toBe('Bonjour tout le monde');
   });
 });
