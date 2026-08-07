@@ -258,6 +258,12 @@ export async function registerMessageRoutes(fastify: FastifyInstance) {
         socketIOManager.getIO()?.to(`conversation:${participantShareLink.conversationId}`).emit(SERVER_EVENTS.LINK_MESSAGE_NEW, {
           message: {
             id: message.id,
+            // Seul routage dont dispose le destinataire : Socket.IO ne
+            // transporte pas le nom de la room côté réception, donc un message
+            // sans `conversationId` est indélivrable — le client ne sait pas
+            // dans quelle conversation l'insérer. Même valeur que la room.
+            conversationId: participantShareLink.conversationId,
+            senderId: anonymousParticipant.id,
             content: message.content,
             originalLanguage: message.originalLanguage,
             messageType: message.messageType,
@@ -523,6 +529,8 @@ export async function registerMessageRoutes(fastify: FastifyInstance) {
         socketIOManager.getIO()?.to(`conversation:${shareLink.conversationId}`).emit(SERVER_EVENTS.LINK_MESSAGE_NEW, {
           message: {
             id: message.id,
+            conversationId: shareLink.conversationId,
+            senderId: participant.id,
             content: message.content,
             originalLanguage: message.originalLanguage,
             messageType: message.messageType,
