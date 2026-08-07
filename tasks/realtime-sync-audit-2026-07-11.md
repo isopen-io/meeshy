@@ -331,3 +331,16 @@ Gates : 2 suites `use-socket-cache-sync` 83/83 ; suite web complète **505 suite
   clé unique, mais via `invalidateQueries`/`removeQueries` (sémantique de préfixe et
   d'éviction, pas d'écriture de contenu) : hors périmètre de cette passe, à traiter
   seulement avec un défaut observable à l'appui.
+
+### Candidat identifié pour le cycle 7 (relevé pendant cette passe)
+
+`handleLinkMessageNew` INSÈRE un message, exactement comme `handleNewMessage` — mais
+il ne porte pas le repli `landedInCache` que ce dernier documente longuement : quand
+aucune entrée de cache n'existe encore (fetch initial en vol, ou conversation jamais
+ouverte de la session), l'updater sort sur `if (!old) return old` et le message
+d'aperçu de lien est perdu pour de bon, `staleTime: Infinity` ne relisant jamais.
+Même classe de perte de données, même fichier, même famille de handlers. Non embarqué
+ici : le cycle 5 avait cadré cette passe sur le routage d'alias, et l'ajout demande
+son propre test RED (entrée absente → `invalidateQueries` appelée). À vérifier au
+préalable : si tout `link:message:new` est doublé d'un `message:new` pour le même
+message, le repli existe déjà en amont et le candidat tombe.
