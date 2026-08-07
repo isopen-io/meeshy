@@ -258,9 +258,15 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
                 break;
               }
 
-              // Fallback : dédup par timestamp pour le cas où le broadcast
-              // arrive AVANT le ACK (optimiste encore en status 'sending')
-              if (isOwnMessage && isOptimisticMessage(m) && m._localStatus === 'sending') {
+              // Fallback : dédup par timestamp pour tout optimiste NON encore
+              // réconcilié (pas de `_serverMessageId`). Couvre le broadcast
+              // arrivé AVANT le ACK (status 'sending') ET le cas où le ACK a
+              // expiré (status 'failed', voir messaging.service `timedOut`) alors
+              // que le serveur a bien persisté puis diffusé le message — typique
+              // du replay de la delivery-queue au reconnect, bien après les 10 s.
+              // Un broadcast qui matche (même auteur, < 5 s) prouve que l'envoi a
+              // réussi : la bulle en échec est réconciliée, jamais dupliquée.
+              if (isOwnMessage && isOptimisticMessage(m)) {
                 const timeDiff = Math.abs(
                   new Date(message.createdAt).getTime() - new Date(m.createdAt).getTime()
                 );

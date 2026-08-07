@@ -178,6 +178,35 @@ describe('useSocketCacheSync — B1 ID-only dedup', () => {
     expect(cached.pages[0].messages[0].id).toBe('server-1');
   });
 
+  it('reconciles a timed-out (failed) optimistic message when the server broadcast arrives', () => {
+    const { queryClient, wrapper } = createTestHarness('conv-1');
+
+    // A send whose ACK timed out: markMessageFailed set _localStatus to 'failed'
+    // and left _serverMessageId unset (messaging.service returns { timedOut } and
+    // the message may still have been persisted + broadcast server-side).
+    const optimistic = {
+      ...makeMessage({ id: 'temp-1', conversationId: 'conv-1', content: 'Hello world', senderId: 'current-user' }),
+      _tempId: 'temp-1',
+      _localStatus: 'failed',
+    };
+    queryClient.setQueryData(queryKeys.messages.infinite('conv-1'), {
+      pages: [{ messages: [optimistic], hasMore: false, total: 1 }],
+      pageParams: [1],
+    });
+
+    renderHook(() => useSocketCacheSync({ conversationId: 'conv-1', enabled: true }), { wrapper });
+
+    // The server DID persist + broadcast the message (e.g. reconnect delivery-queue
+    // replay) well after the 10s ACK timeout already marked the bubble failed.
+    const serverMsg = makeMessage({ id: 'server-1', conversationId: 'conv-1', content: 'Hello world', senderId: 'current-user' });
+    act(() => { capturedMessageListener!(serverMsg); });
+
+    const cached = queryClient.getQueryData(queryKeys.messages.infinite('conv-1')) as any;
+    // The failed bubble is reconciled into the delivered message, not duplicated.
+    expect(cached.pages[0].messages).toHaveLength(1);
+    expect(cached.pages[0].messages[0].id).toBe('server-1');
+  });
+
   it('does NOT replace stale optimistic messages older than 30s', () => {
     const { queryClient, wrapper } = createTestHarness('conv-1');
 
