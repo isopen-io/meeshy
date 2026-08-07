@@ -135,3 +135,63 @@ fantôme entre autosaves). Restauration : un mode à sélection ne survit
 qu'accompagné de sa liste — sans elle, repli produit inchangé (Contacts).
 La pastille de sélection est décidée par un helper pur
 (MyStoryCardPresentation.selectionIndicator), la vue ne fait que rendre.
+
+---
+
+# Rattrapage web après reconnexion — watermark empoisonné, fenêtre exclusive, ACK perdu (2026-08-07)
+
+## Demande (routine amélioration continue temps réel)
+Auditer le cœur temps-réel vérifiable sous Linux (shared / gateway / web) et
+livrer jusqu'au merge. Cycle précédent : ACK réaction sur écriture + réconciliation
+de l'envoi optimiste expiré (PR #2601).
+
+## Constats (Phase 1 — audit du rattrapage `syncNewerMessages`)
+Le rattrapage non destructif de `useConversationMessagesRQ` — le seul mécanisme
+web qui comble le trou d'une déconnexion — portait trois défauts, tous sur le
+chemin exact qu'il est censé couvrir.
+
+### D1 — Le watermark était calculé sur l'horloge LOCALE
+`newestCreatedAtMs(cached.pages.flatMap(p => p.messages))` inclut les messages
+**optimistes**, dont `createOptimisticMessage` pose le `createdAt` avec l'horloge
+de l'appareil. Or le seul moment où un optimiste séjourne dans le cache est celui
+où le rattrapage sert : composition hors-ligne, ou ACK perdu. Le client demandait
+donc `createdAt > maintenant-sur-cet-appareil` à un gateway qui compare en temps
+**serveur** → rien ne revenait, et tout ce que les pairs avaient envoyé pendant la
+coupure restait invisible jusqu'à un rechargement à froid.
+**iOS ne souffrait pas du défaut** : `SyncWatermark.newest` exclut explicitement
+les optimistes (`packages/MeeshySDK/Sources/MeeshySDK/Models/SyncWatermark.swift`).
+Le web était la seule surface divergente.
+
+### D2 — Fenêtre `after` exclusive à la milliseconde
+`buildAfterWatermarkClause` applique `createdAt > after` (STRICT). Ancrer sur
+l'instant exact du plus récent message connu rend un jumeau créé dans la même
+milliseconde définitivement inatteignable. iOS reculait déjà d'une milliseconde
+(`ConversationViewModel.syncMissedMessages`) ; le web non.
+
+### D3 — Pas de réconciliation par `clientMessageId`
+Le rattrapage ne dédupliquait que par `id`. La copie serveur d'un envoi confirmé
+pendant la coupure porte un `id` MongoDB ≠ `_tempId` (`cid_<uuid>`) mais bien le
+`clientMessageId` (exposé par la route REST) : la bulle optimiste restait à côté
+de sa propre copie serveur → message affiché deux fois.
+
+## Plan
+- [x] T1 — RED : 4 tests (`use-conversation-messages-rq.test.tsx`)
+- [x] T2 — watermark sur messages confirmés serveur uniquement (`!isOptimisticMessage`)
+- [x] T3 — repli relecture complète quand le cache n'a AUCUN message serveur
+      (non destructive : `mergePendingLocalMessages` préserve les envois en attente)
+- [x] T4 — `WATERMARK_INCLUSIVE_MARGIN_MS = 1` : fenêtre inclusive
+- [x] T5 — réconciliation par `clientMessageId` : la copie serveur REMPLACE l'optimiste
+- [x] T6 — vérification : suite web complète, `tsc` sur le fichier touché
+- [x] T7 — CHANGELOG
+
+## Revue
+Le correctif aligne le web sur un contrat déjà écrit, testé et documenté côté iOS
+— ce n'était pas un arbitrage de design mais un **trou de parité**. Les
+assertions existantes sur la valeur exacte de `after` ont été mises à jour
+(la fenêtre devient volontairement inclusive) ; les 4 nouveaux tests ont été vus
+ROUGES avant correctif.
+
+Divergence assumée avec iOS sur le cas « aucun message serveur » : iOS no-op
+(le chargement complet a lieu à l'ouverture), le web relit complètement — un
+onglet peut rester ouvert des heures en arrière-plan sans jamais repasser par un
+montage, et la relecture y est non destructive.
