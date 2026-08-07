@@ -1262,6 +1262,37 @@ describe('useSocketCacheSync', () => {
       expect(cached.pages[0].messages).toHaveLength(1);
     });
 
+    it('invalidates the messages query when no cache entry exists yet', () => {
+      const { wrapper, queryClient } = createWrapperWithClient();
+      const invalidateSpy = jest.spyOn(queryClient, 'invalidateQueries');
+
+      renderHook(() => useSocketCacheSync({ conversationId: 'conv-1' }), { wrapper });
+
+      act(() => {
+        linkMessageNewCallback?.({ message: { id: 'link-1', conversationId: 'conv-1', content: 'https://example.com', messageType: 'link', createdAt: new Date().toISOString() } });
+      });
+
+      expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['messages', 'list', 'conv-1', 'infinite'] });
+    });
+
+    it('does not invalidate when the message did land in a cache entry', () => {
+      const { wrapper, queryClient } = createWrapperWithClient();
+
+      queryClient.setQueryData(['messages', 'list', 'conv-1', 'infinite'], {
+        pages: [{ messages: [], hasMore: false, total: 0 }],
+        pageParams: [1],
+      });
+      const invalidateSpy = jest.spyOn(queryClient, 'invalidateQueries');
+
+      renderHook(() => useSocketCacheSync({ conversationId: 'conv-1' }), { wrapper });
+
+      act(() => {
+        linkMessageNewCallback?.({ message: { id: 'link-1', conversationId: 'conv-1', content: 'https://example.com', createdAt: new Date().toISOString() } });
+      });
+
+      expect(invalidateSpy).not.toHaveBeenCalledWith({ queryKey: ['messages', 'list', 'conv-1', 'infinite'] });
+    });
+
     it('ignores link messages without a conversationId', () => {
       const { wrapper, queryClient } = createWrapperWithClient();
 

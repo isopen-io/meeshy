@@ -138,10 +138,10 @@ function makePrisma(overrides: Record<string, any> = {}) {
 }
 
 function makeSocketIOHandler(hasManager = false) {
-  if (!hasManager) return { getManager: () => null };
+  if (!hasManager) return { getManager: () => null, to: jest.fn(), emit: jest.fn() };
   const emit = jest.fn();
   const to = jest.fn(() => ({ emit }));
-  return { getManager: () => ({ getIO: () => ({ to }) }) };
+  return { getManager: () => ({ getIO: () => ({ to }) }), to, emit };
 }
 
 async function buildApp(opts: {
@@ -402,7 +402,11 @@ describe('POST /links/:id/messages — anonymous: originalLanguage canonicalizat
 
 describe('POST /links/:id/messages — anonymous: socketIO emit', () => {
   let app: FastifyInstance;
-  beforeAll(async () => { app = await buildApp({ socketIOHandler: makeSocketIOHandler(true) }); });
+  let socketIOHandler: ReturnType<typeof makeSocketIOHandler>;
+  beforeAll(async () => {
+    socketIOHandler = makeSocketIOHandler(true);
+    app = await buildApp({ socketIOHandler });
+  });
   afterAll(async () => { await app.close(); });
 
   it('returns 201 and emits socket event when socketIO manager is available', async () => {
@@ -413,6 +417,21 @@ describe('POST /links/:id/messages — anonymous: socketIO emit', () => {
     expect(res.statusCode).toBe(201);
     expect(res.json().success).toBe(true);
     expect(res.json().data.messageId).toBe(MSG_ID);
+  });
+
+  // Le seul routage dont dispose un client : la charge utile elle-même. Le nom
+  // de la room n'est pas transporté par Socket.IO côté réception, donc un
+  // message sans `conversationId` est indélivrable — le client ne sait dans
+  // quelle conversation l'insérer.
+  it('carries the conversationId of the room it was emitted to', () => {
+    expect(socketIOHandler.to).toHaveBeenCalledWith(`conversation:${CONV_ID}`);
+    const [, payload] = socketIOHandler.emit.mock.calls[0] as [string, { message: Record<string, unknown> }];
+    expect(payload.message.conversationId).toBe(CONV_ID);
+  });
+
+  it('carries the senderId of the anonymous participant that authored it', () => {
+    const [, payload] = socketIOHandler.emit.mock.calls[0] as [string, { message: Record<string, unknown> }];
+    expect(payload.message.senderId).toBe(PART_ID);
   });
 });
 
@@ -593,11 +612,13 @@ describe('POST /links/:id/messages/auth — with tracking links', () => {
 
 describe('POST /links/:id/messages/auth — socketIO emit', () => {
   let app: FastifyInstance;
+  let socketIOHandler: ReturnType<typeof makeSocketIOHandler>;
   beforeAll(async () => {
     const prisma = makePrisma();
     prisma.conversationShareLink.findUnique = jest.fn<any>().mockResolvedValue(mockShareLink);
     prisma.participant.findFirst = jest.fn<any>().mockResolvedValue({ id: PART_ID, conversationId: CONV_ID });
-    app = await buildApp({ prisma, socketIOHandler: makeSocketIOHandler(true) });
+    socketIOHandler = makeSocketIOHandler(true);
+    app = await buildApp({ prisma, socketIOHandler });
   });
   afterAll(async () => { await app.close(); });
 
@@ -605,6 +626,13 @@ describe('POST /links/:id/messages/auth — socketIO emit', () => {
     const res = await app.inject({ method: 'POST', url: `/links/${MSHY_ID}/messages/auth`, payload: VALID_BODY });
     expect(res.statusCode).toBe(201);
     expect(res.json().success).toBe(true);
+  });
+
+  it('carries the conversationId and senderId, exactly like the anonymous twin', () => {
+    expect(socketIOHandler.to).toHaveBeenCalledWith(`conversation:${CONV_ID}`);
+    const [, payload] = socketIOHandler.emit.mock.calls[0] as [string, { message: Record<string, unknown> }];
+    expect(payload.message.conversationId).toBe(CONV_ID);
+    expect(payload.message.senderId).toBe(PART_ID);
   });
 });
 

@@ -1287,8 +1287,19 @@ export interface ConversationClosedEventData {
   readonly closedAt: string;
 }
 
+/**
+ * `conversationId` et `senderId` sont OBLIGATOIRES : Socket.IO ne transporte pas
+ * le nom de la room côté réception, donc la charge utile est le seul routage dont
+ * dispose le client. Un message sans `conversationId` est indélivrable — aucun
+ * cache ne peut l'accueillir.
+ */
 export interface LinkMessageNewEventData {
-  readonly message: Record<string, unknown>;
+  readonly message: {
+    readonly id: string;
+    readonly conversationId: string;
+    readonly senderId: string;
+    readonly [key: string]: unknown;
+  };
 }
 
 export const AGENT_ADMIN_EVENT_KINDS = ['delivery-queue', 'scan', 'config', 'topics'] as const;
