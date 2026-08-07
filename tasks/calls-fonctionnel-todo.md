@@ -4058,3 +4058,55 @@ commentaire d'en-tête). Prend directement la Vague 61 comme point de départ (i
   de 5 tâches distinctes dans `WebRTCService`) — laissé pour une vague dédiée.
 - **Reste ouvert** : dead code / god-objects `CallManager.swift` (5717 lignes) ; ADR `actor CallEventQueue`
   non implémenté ; `switchCameraTask` non sérialisé avec les autres tâches caméra/vidéo de `WebRTCService`.
+
+## Vague 63 — `CXAnswerCallAction` était le seul handler CallKit mutant non gardé par `activeCallUUID` (2026-08-07)
+
+Point d'entrée : suite immédiate de la Vague 62, même session. Audit dédié (agent Explore, lecture seule)
+mandaté explicitement pour chercher la suite de `a1206ca3` (PR #2606, mergée plus tôt cette routine) sur
+`CallManager.swift`, `P2PWebRTCClient.swift`, `WebRTCService.swift`, `CallTranscriptionService.swift`,
+`CallView.swift`, `CallStarter.swift`, `CallsViewModel.swift`, `PiPCallController.swift`,
+`CallPiPPolicy.swift` + signalisation gateway (`call:*` events). Verdict de l'audit : codebase très
+durcie par les vagues précédentes (guards d'identité/génération quasi-systématiques, `[weak self]`
+partout, chaînage de tâches sérialisé pour hold/survival/ICE-restart) — un seul écart réel trouvé,
+confirmé par lecture directe du source avant tout fix.
+
+- **[ÉLEVÉ, iOS, CONFIRMÉ + CORRIGÉ, TDD source-guard]** `CallManager.swift`
+  `CallKitDelegateProxy.provider(_:perform: CXAnswerCallAction)` (~ligne 5360) — `a1206ca3` a ajouté le
+  garde `action.callUUID == manager.activeCallUUID` à `CXEndCallAction`, `CXSetMutedCallAction`,
+  `CXSetHeldCallAction` et `CXPlayDTMFCallAction`, mais **pas** à `CXAnswerCallAction` — le 5e handler
+  mutant, et objectivement le plus destructeur à laisser sans garde. Confirmé par lecture directe :
+  `reportIncomingVoIPCall`'s busy path (ligne ~1301) génère un `uuid` LOCAL, le reporte via
+  `reportNewIncomingCall` puis le retire immédiatement via `reportCall(endedAt:)` — **sans jamais écrire
+  `activeCallUUID`** (qui n'est posé qu'à la ligne 1340, sur la branche idle/succès). `activeCallUUID`
+  pointe donc en permanence vers l'appel PRIMAIRE réel pendant toute la durée du busy path.
+  `holdPendingAnswerAction` (ligne 434) n'a AUCUN garde d'identité propre : elle supersede-et-fail
+  inconditionnellement tout `pendingAnswerAction` déjà tenu dès qu'un nouveau `CXAnswerCallAction` arrive.
+  **Scénario concret** : appel A actif et connecté (answer action déjà fulfilled) ; VoIP push pour un
+  appel B pendant que A est actif → busy path → CallKit reporte B avec un UUID fantôme puis le retire
+  aussitôt ; si CallKit délivre malgré tout un `CXAnswerCallAction` tagué de cet UUID fantôme dans la
+  fenêtre de timing étroite qui suit → sans garde, `holdPendingAnswerAction` l'aurait tenu comme LE
+  pending-answer courant — anodin ici puisque A n'a plus d'action en attente à ce stade, mais le VRAI
+  danger est l'inverse : un appel entrant C en cours de sonnerie (pending-answer réel en attente) reçoit
+  un `CXAnswerCallAction` fantôme d'un busy-path concurrent (D) → `holdPendingAnswerAction` supersede
+  et `.fail()` l'action de C — désynchronisant CallKit (qui croit C toujours en attente de réponse) de
+  l'app (qui vient d'échouer la vraie tentative de réponse de l'utilisateur).
+  **Fix minimal, même geste que `a1206ca3`** : garde `action.callUUID == manager.activeCallUUID` ajouté
+  juste avant `manager.holdPendingAnswerAction(action)`, avec `Logger.calls.warning` + `action.fail()`
+  sur mismatch (pas `.fulfill()` — CallKit sait déjà que cet appel est terminé via `reportCall(endedAt:)`,
+  compléter par « répondu » serait un mensonge ; `.fail()` est aussi la sémantique déjà utilisée par
+  `settlePendingAnswerAction(fulfilled: false, …)` pour un answer action supersédé). Aucun changement sur
+  le chemin identity-matched (chemin normal : appel unique, `action.callUUID` égale toujours
+  `activeCallUUID`).
+- **Tests** : `CallManagerTests.swift` → nouveau `test_cxAnswerCallAction_guardsOnActiveCallUUIDBeforeHoldingAnswerAction`
+  dans `CallKitActionCallUUIDGuardTests` (même classe que les 4 gardes de `a1206ca3`), même patron
+  (extraction du corps du handler en `String`, offset du garde < offset de l'action protégée) + assertion
+  sur la présence de `action.fail()`. Fenêtre `handlerBody` élargie à 3500 caractères (vs 2000 par défaut)
+  pour ce handler spécifiquement : son commentaire de doc pré-existant (historique `[Fix 2026-07-02]`/
+  `[Fix 2026-07-03]`) plus le nouveau commentaire du garde repoussent la position du garde au-delà de la
+  fenêtre par défaut — vérifié en rejouant l'extraction en Python contre le source réel avant commit.
+- **Reste ouvert** : dead code / god-objects `CallManager.swift` (5717+ lignes) ; ADR `actor CallEventQueue`
+  non implémenté ; `switchCameraTask` non sérialisé avec les autres tâches caméra/vidéo de `WebRTCService` ;
+  busy-path `reportNewIncomingCall` failure handler (ligne ~1310) ne nettoie que le dedup VoIP, jamais
+  `pendingIncomingCall`/`showCallWaitingBanner` (contrairement au chemin idle qui route par `failCall`) —
+  UI-only, s'auto-corrige au prochain `endCurrentAndAnswerPending()`, sévérité faible, non corrigé cette
+  vague (candidat pour un futur balayage ciblé « busy-path parity »).
