@@ -431,3 +431,88 @@ Non traité, relevé pour un cycle suivant :
 - iOS n'écoute pas `link:message:new` du tout (aucune occurrence dans
   `packages/MeeshySDK` ni `apps/ios`) : les messages de share link n'arrivent pas
   en temps réel sur iOS, indépendamment de D1. Non vérifiable sous Linux.
+
+---
+
+## Cycle 8 — le corps REST 201 des deux routes de lien de partage
+
+Repris du legs du cycle 7 : « le schéma de réponse 201 des deux routes déclare
+`sender: { type: 'null' }` ». Vérifié, réel, et plus large que ce qui avait été
+relevé.
+
+### D1 (racine) — le payload était construit DEUX fois par route
+
+Chaque route bâtissait le même message en deux littéraux jumeaux : un pour l'emit
+`link:message:new`, un pour le corps 201. C'est cette duplication qui a produit le
+défaut : le cycle 7 a ajouté `conversationId` et `senderId` au littéral SOCKET, et
+le jumeau REST est resté en arrière. L'auteur d'un message n'avait donc aucun moyen
+de router son propre message, alors que tous les autres participants le recevaient
+correctement routé — le correctif du cycle 7 n'avait couvert qu'un des deux tuyaux.
+
+### D2 — fast-json-stringify tronquait 11 champs en silence
+
+Les deux schémas 201 nommaient 5 propriétés pendant que les routes en produisaient
+15. `conversationId`, `senderId`, `isEdited`, `editedAt`, `deletedAt`, `replyToId`,
+`updatedAt`, `location` et l'essentiel de `sender` disparaissaient à la
+sérialisation. Aucune erreur, aucun log : la propriété non déclarée est simplement
+absente. Le fichier `api-schemas.ts` documentait déjà ce piège pour l'aperçu de
+conversation (« Absent du schéma = tronqué en silence ») — même piège, autre
+surface.
+
+### D3 — `sender: { type: 'null' }` (route anonyme)
+
+Le cas le plus dur : la route charge le `Participant` via `include`, puis le schéma
+le sérialise en `null` littéral. `use-anonymous-messages.ts` lit exactement
+`message.sender` pour bâtir le message optimiste de l'auteur, qui n'avait donc
+jamais d'expéditeur. Défaut visible à l'écran, pas seulement sur le fil.
+
+### D4 — `messageSenderSchema` ne décrit pas un participant (route auth)
+
+Le jumeau authentifié utilisait `messageSenderSchema`, qui décrit un *utilisateur*
+(username / firstName / isMeeshyer). L'expéditeur d'un message de lien est un
+`Participant` : seule l'intersection (`id`, `displayName`, `avatar`) passait,
+`userId`, `type`, `language` et le `user` imbriqué étaient effacés — alors que le
+chemin socket les livre depuis toujours.
+
+### D5 (pourquoi le défaut a survécu) — récidive exacte de D4 du cycle 7
+
+Les 3 suites de test mockaient `routes/links/types` avec des stand-ins permissifs
+(`messageSenderSchema: { type: 'object', additionalProperties: true }`), ce qui fait
+échoter à fast-json-stringify tout ce que la route lui passe : un schéma tronquant
+restait indiscernable d'un schéma correct. Et aucun test ne lisait `data.message` —
+seulement `data.messageId` et le statut. Les 3 mocks passent désormais par
+`jest.requireActual`, ne stubbant que le `parse` Zod.
+
+## Plan
+- [x] T1 — RED : mocks de types réels (`requireActual`) dans les 3 suites
+- [x] T2 — RED : 5 assertions × 2 routes sur le corps 201 sérialisé (routage, sender, lieu, enveloppe d'édition, égalité avec le payload socket)
+- [x] T3 — D1 : `buildLinkMessagePayload`, un seul objet pour l'emit et la réponse
+- [x] T4 — D2/D3/D4 : `linkMessageSchema` + `linkMessageSenderSchema` uniques, partagés par les 2 routes
+- [x] T5 — `sharedPlaceResponseSchema` dans `@meeshy/shared`, les 2 copies inline le reprennent
+- [x] T6 — gates : suites gateway, `tsc --noEmit` gateway + shared
+- [x] T7 — CHANGELOG (2 changesets)
+
+## Revue
+
+L'assertion qui porte le correctif est la dernière : *le corps 201 est égal au
+payload socket*. Les quatre autres décrivent des symptômes ; celle-ci nomme
+l'invariant, et elle est ce qui rendrait un futur ajout au seul littéral socket
+immédiatement rouge. C'est aussi elle qui a dicté la forme du correctif — un
+`buildLinkMessagePayload` unique rend la divergence impossible à écrire, là où
+recopier le champ manquant l'aurait seulement repoussée d'un cycle.
+
+Vérification par mutation (leçon 2026-07-31 #5) : les 10 tests ont été vus ROUGES
+avant correctif, avec le diff exact des 11 champs supprimés et `sender` à `null`.
+
+Non traité, relevé pour un cycle suivant :
+- `anonymous-chat.service.ts:119` déclare `sendMessage(): Promise<Message>` mais
+  retourne `result.data`, qui est `{ messageId, message }` — pas un `Message`.
+  `use-anonymous-messages.ts` compense par un double cast
+  (`result as unknown as Record<string, unknown>`) lisant les DEUX formes. Le type
+  ment ; le cast le cache. Correction côté web, hors périmètre gateway de cette
+  passe.
+- `sendMessageBodySchema` ne déclare ni `clientMessageId` ni `replyToId`, que les
+  deux routes lisent pourtant depuis le corps. Sans `additionalProperties: false`
+  ils passent, donc pas de défaut observable aujourd'hui — mais le schéma ne
+  documente pas le contrat d'entrée réel.
+- iOS n'écoute toujours pas `link:message:new` (inchangé depuis le cycle 7).
