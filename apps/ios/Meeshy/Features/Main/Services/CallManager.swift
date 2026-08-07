@@ -5381,6 +5381,26 @@ private class CallKitDelegateProxy: NSObject, CXProviderDelegate, @unchecked Sen
                 action.fulfill()
                 return
             }
+            // Identity guard: mirrors CXEndCallAction/CXSetMutedCallAction/
+            // CXSetHeldCallAction/CXPlayDTMFCallAction below — reportIncomingVoIPCall's
+            // busy path reports a SECOND, distinct CXCallUpdate/UUID via
+            // reportNewIncomingCall while a primary call is already active, then
+            // immediately retires it with reportCall(endedAt:). activeCallUUID only
+            // ever tracks the primary call, so a mismatch here is that phantom/stale
+            // UUID, not ours to answer. Without this guard, `holdPendingAnswerAction`
+            // would hold THIS action as THE pending answer for the call — its
+            // supersede-and-fail path (or the 10s safety net) could then fail/fulfill
+            // the wrong action, tearing down the real, active call's genuinely
+            // pending answer instead of the phantom one. `.fail()`, not `.fulfill()`:
+            // CallKit already knows this call ended (reportCall(endedAt:) above), so
+            // completing it as "answered" would be a lie.
+            guard action.callUUID == manager.activeCallUUID else {
+                Logger.calls.warning(
+                    "CallKit -> CXAnswerCallAction for non-active callUUID=\(action.callUUID), failing"
+                )
+                action.fail()
+                return
+            }
             manager.holdPendingAnswerAction(action)
             await manager.answerCallReady()
         }

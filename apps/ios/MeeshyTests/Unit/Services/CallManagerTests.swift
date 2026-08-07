@@ -2107,6 +2107,35 @@ final class CallKitActionCallUUIDGuardTests: XCTestCase {
             XCTAssertTrue(g < d, "CXPlayDTMFCallAction: the callUUID guard must run BEFORE sendDTMF is invoked.")
         }
     }
+
+    /// `CXAnswerCallAction` was the one mutating CX*Action handler a1206ca3 left
+    /// unguarded: `holdPendingAnswerAction` unconditionally supersedes-and-fails
+    /// whatever answer action it currently holds, with no identity check of its own.
+    /// A busy-path phantom/stale-UUID CXAnswerCallAction reaching this handler would
+    /// therefore fail the REAL, active call's genuinely pending answer action instead
+    /// of being declined itself — the most destructive of the five to leave unguarded.
+    /// A longer `handlerBody` window is required here: this handler's pre-existing
+    /// doc comment (the `[Fix 2026-07-02]`/`[Fix 2026-07-03]` history) plus the new
+    /// guard's own comment push the guard past the other handlers' default 2000-char
+    /// window.
+    func test_cxAnswerCallAction_guardsOnActiveCallUUIDBeforeHoldingAnswerAction() throws {
+        let body = try handlerBody(try callManagerSource(), marker: "perform action: CXAnswerCallAction", length: 3500)
+        let guardOffset = body.range(of: "action.callUUID == manager.activeCallUUID")?.lowerBound
+        let holdOffset = body.range(of: "manager.holdPendingAnswerAction(action)")?.lowerBound
+        XCTAssertNotNil(guardOffset, "CXAnswerCallAction must guard on action.callUUID == manager.activeCallUUID")
+        XCTAssertNotNil(holdOffset, "CXAnswerCallAction must call manager.holdPendingAnswerAction(action)")
+        if let g = guardOffset, let h = holdOffset {
+            XCTAssertTrue(g < h, "CXAnswerCallAction: the callUUID guard must run BEFORE holdPendingAnswerAction is invoked.")
+        }
+        // On a mismatch, CallKit still requires the action to be settled — but as
+        // `.fail()`, not `.fulfill()`: CallKit already knows this call ended
+        // (reportCall(endedAt:) in the busy path), so completing it as "answered"
+        // would be a lie, unlike the identity-matched success path which holds it
+        // for a later fulfill in transitionToConnected.
+        XCTAssertTrue(body.contains("action.fail()"),
+            "CXAnswerCallAction must fail() the action on a callUUID mismatch — CallKit requires every " +
+            "CX*Action to eventually be completed, and fulfilling would falsely claim the call was answered.")
+    }
 }
 
 // MARK: - handleHold tracked task guard

@@ -4006,3 +4006,191 @@ gap trouvé est dans le voisinage caméra déjà identifié comme fragile par le
 - **Reste ouvert** : dead code / god-objects `CallManager.swift` (5717 lignes) ; ADR `actor CallEventQueue`
   non implémenté ; `hasLocalVideoTrack` menteur après un `buildLocalVideoTrackAndStartCapture()` raté ;
   `switchCameraTask` non sérialisé avec les autres tâches caméra/vidéo de `WebRTCService`.
+
+## Vague 62 — `buildLocalVideoTrackAndStartCapture()` laissait `hasLocalVideoTrack` répondre `true` après un échec de build vidéo (2026-08-07)
+
+Point d'entrée : routine calling-feature (agent Cowork non interactif, mandat PHASE 1-12). Branche
+`claude/upbeat-dirac-mgf1ve` redémarrée depuis `origin/main` à jour. **PR orpheline trouvée au démarrage** :
+`claude/upbeat-dirac-oev17i` (#2609, Vague 61 ci-dessus) était ouverte, CI standard verte, mergée en premier
+(aucun `ios-tests.yml` déclenchable — 403 sur `workflow_dispatch` depuis ce token — mais ce workflow n'a
+**aucun** trigger `pull_request`/branch-protection, donc ne bloque jamais un merge par design, cf. son
+commentaire d'en-tête). Prend directement la Vague 61 comme point de départ (item « reste ouvert » n°1).
+
+- **[MOYEN-ÉLEVÉ, iOS, CONFIRMÉ + CORRIGÉ, TDD source-guard]** `P2PWebRTCClient.swift`
+  `buildLocalVideoTrackAndStartCapture()` (~ligne 253) — `videoTrack.isEnabled = true` +
+  `localVideoTrack_ = videoTrack` + `videoCapturer = capturer` s'exécutent AVANT les 3 points d'échec
+  restants de la fonction (`Self.pickCaptureDevice` → `noCameraAvailable`, `selectFormat` →
+  `noCameraFormatAvailable`, `capturer.startCapture` → erreur native). Aucun des 3 ne revertait ces
+  propriétés avant de propager : un throw ici laissait `localVideoTrack_` posé avec `isEnabled == true`.
+  `hasLocalVideoTrack` (ligne 913) est délibérément keyé sur `isEnabled`, pas sur une simple nil-check
+  (cf. son doc-comment — nécessaire pour que `disableLocalVideo()` puisse garder le track vivant en vue
+  d'un `enableLocalVideo()` bon marché) : ce choix de design rend CE bug particulièrement sournois, il
+  contourne exactement la garde que `hasLocalVideoTrack` pense avoir. **Scénario concret** : appel
+  entrant vidéo, caméra occupée par une autre app → `startCapture` échoue → `performLocalMediaStart`
+  bascule en repli audio-only (`isVideoEnabled = false`) MAIS ne touche jamais `hasLocalVideoTrack` sur ce
+  chemin (repose sur sa valeur initiale `false`, correcte par accident) ; en revanche tout appelant qui
+  RELIT `webRTCService.hasLocalVideoTrack` après un échec similaire de `upgradeToVideo()` (mid-call
+  audio→vidéo) — `toggleVideo`'s `catch` générique (CallManager.swift:2482-2487), le `catch` générique de
+  la récupération vidéo post-unhold (CallManager.swift:3347-3351) — écrase `self.hasLocalVideoTrack` avec
+  cette valeur MENTEUSE (`true`) juste après avoir mis `isVideoEnabled = false` : `CallView.swift`
+  (`swapStreams && callManager.hasLocalVideoTrack`, ligne 1103) et le self-preview gate lisent alors un
+  état incohérent — vidéo affichée/permise comme active alors qu'aucune caméra ne capture réellement,
+  désynchronisation qui ne se corrige jamais d'elle-même avant la fin de l'appel.
+  **Fix minimal, même geste que la Vague 61** : `pickCaptureDevice`/`selectFormat`/`startCapture` passent
+  dans un `do { … } catch { revert; throw error }` — le `catch` re-nil `localVideoTrack_`/`videoCapturer`/
+  `videoFilterDelegate` (identity-guardé sur `videoCapturer === capturer`, même garde que le nettoyage
+  `isStale` déjà présent juste en dessous pour le cas SŒUR — session terminée pendant le warm-up — resté
+  inchangé et indépendant) avant de rethrow. `await MainActor.run` autour du revert : le throw de
+  `startCapture` peut reprendre sur un executor arbitraire (même raison que le check `isStale` voisin).
+  Pas de changement de comportement sur le chemin succès.
+- **Tests** : `P2PWebRTCClientBuildVideoTrackFailureRevertSourceTests.swift` (nouveau, même patron que
+  `P2PWebRTCClientSwitchCameraFailureRevertSourceTests` — lecture du source en `String`, 3 assertions :
+  les 3 points d'échec sont bien à l'intérieur du `do`, le `catch` re-nil les 3 propriétés identity-guardé
+  puis rethrow, et le nettoyage `isStale` voisin (cas SŒUR distinct) n'a ni été fusionné ni supprimé —
+  garde de non-régression sur le compte de sites `if videoCapturer === capturer {` (attendu : 2). Toutes
+  les assertions vérifiées manuellement contre le source réel (`python3` string-matching) avant commit —
+  aucune toolchain Swift/Xcode disponible dans ce sandbox Linux.
+- **Autre candidat exploré, rien corrigé ici** : `WebRTCService.switchCamera()`'s `switchCameraTask` ne se
+  sérialise qu'avec lui-même (`await previousTask?.value` où `previousTask` = l'ancien `switchCameraTask`),
+  pas avec `videoToggleTask`/`holdVideoTask`/`survivalVideoTask`/`iceRestartTask` — un switch caméra
+  pourrait courir en concurrence avec un upgrade/downgrade vidéo ou une reprise post-hold sur le même
+  `RTCCameraVideoCapturer`. Portée plus large qu'une vague ciblée (toucherait la chaîne de sérialisation
+  de 5 tâches distinctes dans `WebRTCService`) — laissé pour une vague dédiée.
+- **Reste ouvert** : dead code / god-objects `CallManager.swift` (5717 lignes) ; ADR `actor CallEventQueue`
+  non implémenté ; `switchCameraTask` non sérialisé avec les autres tâches caméra/vidéo de `WebRTCService`.
+
+## Vague 63 — `CXAnswerCallAction` était le seul handler CallKit mutant non gardé par `activeCallUUID` (2026-08-07)
+
+Point d'entrée : suite immédiate de la Vague 62, même session. Audit dédié (agent Explore, lecture seule)
+mandaté explicitement pour chercher la suite de `a1206ca3` (PR #2606, mergée plus tôt cette routine) sur
+`CallManager.swift`, `P2PWebRTCClient.swift`, `WebRTCService.swift`, `CallTranscriptionService.swift`,
+`CallView.swift`, `CallStarter.swift`, `CallsViewModel.swift`, `PiPCallController.swift`,
+`CallPiPPolicy.swift` + signalisation gateway (`call:*` events). Verdict de l'audit : codebase très
+durcie par les vagues précédentes (guards d'identité/génération quasi-systématiques, `[weak self]`
+partout, chaînage de tâches sérialisé pour hold/survival/ICE-restart) — un seul écart réel trouvé,
+confirmé par lecture directe du source avant tout fix.
+
+- **[ÉLEVÉ, iOS, CONFIRMÉ + CORRIGÉ, TDD source-guard]** `CallManager.swift`
+  `CallKitDelegateProxy.provider(_:perform: CXAnswerCallAction)` (~ligne 5360) — `a1206ca3` a ajouté le
+  garde `action.callUUID == manager.activeCallUUID` à `CXEndCallAction`, `CXSetMutedCallAction`,
+  `CXSetHeldCallAction` et `CXPlayDTMFCallAction`, mais **pas** à `CXAnswerCallAction` — le 5e handler
+  mutant, et objectivement le plus destructeur à laisser sans garde. Confirmé par lecture directe :
+  `reportIncomingVoIPCall`'s busy path (ligne ~1301) génère un `uuid` LOCAL, le reporte via
+  `reportNewIncomingCall` puis le retire immédiatement via `reportCall(endedAt:)` — **sans jamais écrire
+  `activeCallUUID`** (qui n'est posé qu'à la ligne 1340, sur la branche idle/succès). `activeCallUUID`
+  pointe donc en permanence vers l'appel PRIMAIRE réel pendant toute la durée du busy path.
+  `holdPendingAnswerAction` (ligne 434) n'a AUCUN garde d'identité propre : elle supersede-et-fail
+  inconditionnellement tout `pendingAnswerAction` déjà tenu dès qu'un nouveau `CXAnswerCallAction` arrive.
+  **Scénario concret** : appel A actif et connecté (answer action déjà fulfilled) ; VoIP push pour un
+  appel B pendant que A est actif → busy path → CallKit reporte B avec un UUID fantôme puis le retire
+  aussitôt ; si CallKit délivre malgré tout un `CXAnswerCallAction` tagué de cet UUID fantôme dans la
+  fenêtre de timing étroite qui suit → sans garde, `holdPendingAnswerAction` l'aurait tenu comme LE
+  pending-answer courant — anodin ici puisque A n'a plus d'action en attente à ce stade, mais le VRAI
+  danger est l'inverse : un appel entrant C en cours de sonnerie (pending-answer réel en attente) reçoit
+  un `CXAnswerCallAction` fantôme d'un busy-path concurrent (D) → `holdPendingAnswerAction` supersede
+  et `.fail()` l'action de C — désynchronisant CallKit (qui croit C toujours en attente de réponse) de
+  l'app (qui vient d'échouer la vraie tentative de réponse de l'utilisateur).
+  **Fix minimal, même geste que `a1206ca3`** : garde `action.callUUID == manager.activeCallUUID` ajouté
+  juste avant `manager.holdPendingAnswerAction(action)`, avec `Logger.calls.warning` + `action.fail()`
+  sur mismatch (pas `.fulfill()` — CallKit sait déjà que cet appel est terminé via `reportCall(endedAt:)`,
+  compléter par « répondu » serait un mensonge ; `.fail()` est aussi la sémantique déjà utilisée par
+  `settlePendingAnswerAction(fulfilled: false, …)` pour un answer action supersédé). Aucun changement sur
+  le chemin identity-matched (chemin normal : appel unique, `action.callUUID` égale toujours
+  `activeCallUUID`).
+- **Tests** : `CallManagerTests.swift` → nouveau `test_cxAnswerCallAction_guardsOnActiveCallUUIDBeforeHoldingAnswerAction`
+  dans `CallKitActionCallUUIDGuardTests` (même classe que les 4 gardes de `a1206ca3`), même patron
+  (extraction du corps du handler en `String`, offset du garde < offset de l'action protégée) + assertion
+  sur la présence de `action.fail()`. Fenêtre `handlerBody` élargie à 3500 caractères (vs 2000 par défaut)
+  pour ce handler spécifiquement : son commentaire de doc pré-existant (historique `[Fix 2026-07-02]`/
+  `[Fix 2026-07-03]`) plus le nouveau commentaire du garde repoussent la position du garde au-delà de la
+  fenêtre par défaut — vérifié en rejouant l'extraction en Python contre le source réel avant commit.
+- **Reste ouvert** : dead code / god-objects `CallManager.swift` (5717+ lignes) ; ADR `actor CallEventQueue`
+  non implémenté ; `switchCameraTask` non sérialisé avec les autres tâches caméra/vidéo de `WebRTCService` ;
+  busy-path `reportNewIncomingCall` failure handler (ligne ~1310) ne nettoie que le dedup VoIP, jamais
+  `pendingIncomingCall`/`showCallWaitingBanner` (contrairement au chemin idle qui route par `failCall`) —
+  UI-only, s'auto-corrige au prochain `endCurrentAndAnswerPending()`, sévérité faible, non corrigé cette
+  vague (candidat pour un futur balayage ciblé « busy-path parity »).
+
+## Vague 64 — audit gateway signaling + dead code CallManager : verdict propre, spec prête pour la sérialisation caméra (2026-08-07)
+
+Point d'entrée : suite de la Vague 63, même session. Audit dédié (agent Explore, lecture seule) mandaté
+sur 3 axes explicitement listés en « reste ouvert » des vagues précédentes : signalisation gateway
+(glare/autorisation/dead code socket), dead code mécanique de `CallManager.swift` (5737 lignes), et le
+gap de sérialisation `switchCameraTask` déjà repéré en Vague 61/63.
+
+- **Signalisation gateway (`call:signal`/`call:join`/`call:end`, `signalSessionCache`)** : **rien trouvé**
+  au niveau de confiance déjà établi par cette routine. Lecture complète de `CALL_EVENTS.SIGNAL` (garde de
+  fraîcheur `refreshSignalSession`, rate-limit ICE par appel, émission ciblée via `resolveTargetSockets`
+  scopée `ROOMS.call(callId) ∩ targetUserId` — pas de fuite possible vers la mauvaise room/participant),
+  `CALL_EVENTS.JOIN` (replay d'offre bufferisée re-validé contre `leftAt` courant), `CALL_EVENTS.END`
+  (autorisation stricte AVANT le broadcast fast-path, `resolveActiveCallParticipantId` pas la vérification
+  de membership plus faible), et les 7 sites d'invalidation de `signalSessionCache`. Le rôle poli/impoli de
+  perfect-negotiation est **entièrement côté client** (`setNegotiationRole`) — la question « rôle assigné
+  déterministiquement côté gateway » ne s'applique pas, rien à trouver là. Les entrées apparemment mortes
+  du registre `CALL_EVENTS` (`MODE_CHANGED`, `TRANSCRIPTION*`) sont déjà `@deprecated` et documentées comme
+  intentionnellement conservées-mais-non-câblées (audit 2026-07-11 #4) — déjà disposé, pas une nouvelle
+  trouvaille.
+- **Dead code mécanique `CallManager.swift`** : **rien trouvé**. Extraction des 139 déclarations
+  `private`/`fileprivate` (`func`/`var`/`let`) + 31 `@Published`, comptage des sites d'usage dans le fichier
+  et dans le reste de `apps/ios`. Chaque déclaration a ≥1 usage réel (les plus bas : `isLinkQualityDegraded`,
+  `isRemoteAudioEnabled`, `isRemoteScreenCapturing`, `selectedCameraId`, `showCallWaitingBanner` — 1 binding
+  de View légitime chacun, pas mort). Cohérent avec le fait que Vague 47/54 ont déjà retiré le mort évident.
+  Le god-object (5737 lignes, un seul type portant CallKit + orchestration WebRTC + analytics + TURN refresh
+  + task-chaining hold/survival/ICE-restart + audio session + PiP + screen-capture monitoring) reste de la
+  dette d'architecture **valide** mais hors du périmètre d'un balayage mécanique mono-vague.
+- **[MOYEN-ÉLEVÉ, iOS, CONFIRMÉ PAR LECTURE DIRECTE, PAS ENCORE CORRIGÉ]** `WebRTCService.switchCamera()`/
+  `switchToCamera()` (WebRTCService.swift:272-301) et `CallManager.switchCamera()`/`selectCamera()`
+  (CallManager.swift:2492-2527) ne rejoignent PAS la famille `videoToggleTask`/`holdVideoTask`/
+  `survivalVideoTask`/`iceRestartTask`/`signalOfferAnswerTask` (doc-comment `survivalVideoTask`,
+  CallManager.swift:598-627) — `CallManager.switchCamera()` appelle `webRTCService.switchCamera(completion:)`
+  directement, fire-and-forget, sans capturer/attendre AUCUN des 5 tasks trackés. Confirmé par lecture
+  directe des deux côtés : `P2PWebRTCClient.switchCamera()`/`switchToCamera(uniqueID:)`
+  (P2PWebRTCClient.swift:1035-1084, 1117-1140) font leur propre cycle `stopCapture()`→`startCapture()` sur
+  LE MÊME `RTCCameraVideoCapturer` que `enableLocalVideo()`/`disableLocalVideo()`
+  (P2PWebRTCClient.swift:949-1000, pilotés par `toggleVideo`/`handleHold`/`applySurvivalVideoSend`).
+  **Scénario concret** : double-geste plausible en vrai usage — l'utilisateur désactive la vidéo (tap) puis
+  bascule immédiatement la caméra (ou l'inverse). `videoToggleTask` atteint
+  `await webRTCService.downgradeFromVideo()` → `client.disableLocalVideo()` → `await
+  videoCapturer?.stopCapture()` EN COURS ; concurremment, `switchCamera()` déclenche son propre
+  `stopCapture()`→`startCapture()` sur le MÊME capturer. Cas grave possible : le `startCapture()` du switch
+  termine APRÈS le `stopCapture()` du toggle → caméra physiquement ALLUMÉE et en train de streamer alors que
+  `isVideoEnabled == false` / `hasLocalVideoTrack == false` — régression de confidentialité (LED caméra
+  allumée sans rien qui consomme le flux), dans la même famille de sévérité que la Vague 58
+  (`stopPreauthorizedStream`) et la Vague 62 (mensonge `hasLocalVideoTrack`). Item explicitement laissé
+  ouvert par la Vague 61 (« switchCameraTask… hors du scope d'une vague ciblée ») et reconduit en reste
+  ouvert par les Vagues 62/63 — confirmé maintenant par lecture directe des DEUX côtés (pas seulement
+  supposé), donc élevé de « candidat » à « bug confirmé, spec de fix prête ».
+  **Pourquoi NON corrigé cette vague** : une fermeture correcte exige une exclusion mutuelle
+  BIDIRECTIONNELLE — `switchCamera()` doit attendre les 5 tasks existants ET chacun des 5 doit désormais
+  attendre un nouveau `cameraSwitchTask`, ce qui touche ~9 sites d'édition dans un fichier de 5737 lignes
+  (1 dans `toggleVideo`, 2 dans `handleHold` — lignes ~3262 et ~3304, 1 dans `applySurvivalVideoSend` —
+  ligne ~5673, 1 dans `scheduleICERestart` — ligne ~5207, 4 dans les sites de création de
+  `signalOfferAnswerTask` — lignes ~1750, ~1797, ~1927, ~2013/2043 — plus la réécriture de `switchCamera()`
+  elle-même avec un pont continuation pour attendre la complétion réelle du `completion:` de
+  `webRTCService.switchCamera`). Sans toolchain Swift/Xcode dans ce sandbox Linux pour compiler-vérifier
+  9 sites d'édition simultanés dans du code déjà densément audité, le risque d'introduire une régression
+  de compile non détectée avant merge dépasse la valeur d'un fix mono-vague — décision cohérente avec le
+  jugement déjà porté 3 fois par cette routine sur ce même item (Vagues 61/62/63).
+  **Spec de fix prête pour la prochaine vague avec accès compilateur** :
+  1. `private var cameraSwitchTask: Task<Void, Never>?` (nouvelle propriété, après `signalOfferAnswerTask`
+     ligne 627) + addendum au doc-comment de `survivalVideoTask` expliquant la course sur le capturer
+     (distincte de la réentrance `RTCPeerConnection` déjà documentée).
+  2. `switchCamera()` : capturer `previousToggle/Hold/Survival/ICERestart/Answer` + `previousCameraSwitch`
+     (les 6), `cameraSwitchTask = Task { @MainActor … await tous les 6 …; pont
+     `withCheckedContinuation` autour de `webRTCService.switchCamera(completion:)` pour que
+     `cameraSwitchTask.value` ne résolve qu'à la fin réelle du switch, pas à l'enqueue }`.
+  3. Ajouter la capture + `await previousCameraSwitch?.value` aux 8 sites existants listés ci-dessus
+     (même geste répétitif que les 5 autres, un seul pattern à dupliquer 8 fois).
+  4. `selectCamera(id:)`/`switchToCamera(uniqueID:)` (picker caméra externe Mac/Continuity, chemin
+     beaucoup plus rare que le flip avant/arrière) : `WebRTCService.switchToCamera` n'a AUCUN completion
+     aujourd'hui (fire-and-forget, log d'erreur seul) — fermer complètement ce second chemin nécessite
+     aussi de lui ajouter un completion, une extension d'API en plus des 9 sites ci-dessus. Peut être
+     scindé en une vague séparée si la première (flip avant/arrière) est jugée suffisante à elle seule.
+  5. `endCallInternal` (ligne ~3640-3646) : ajouter `cameraSwitchTask = nil` au nettoyage des 4 autres
+     tasks.
+  6. Tests : source-guard uniquement (même contrainte que Vagues 61-63) — vérifier que les 9 sites
+     capturent bien `cameraSwitchTask` et l'attendent, plus que `switchCamera()` attend les 5 autres.
+- **Reste ouvert** : dead code / god-objects `CallManager.swift` (5737 lignes) ; ADR `actor CallEventQueue`
+  non implémenté ; sérialisation `switchCamera`/`selectCamera` contre la famille de 5 tasks vidéo (spec
+  ci-dessus, prête pour exécution avec accès compilateur) ; busy-path `reportNewIncomingCall` failure
+  handler ne nettoie pas `pendingIncomingCall`/`showCallWaitingBanner` (UI-only, faible, auto-corrigé).
