@@ -3828,3 +3828,62 @@ plus fraîche s'est révélée côté web, sur le nettoyage de piste média du c
   (`CallManager.tsx:309-315`, FAIBLE-MOYEN, edge case rare non corrigé cette vague) ;
   `pendingParticipantsByCallId` (`call-store.ts:139`) sans TTL par appel, borné en pratique par le
   `reset()` générique plutôt qu'une éviction ciblée (FAIBLE, non corrigé).
+
+## Vague 59 — busy-path : un TROISIÈME appelant simultané ne déclinait jamais le deuxième bumpé (2026-08-06)
+
+Point d'entrée : routine calling-feature (agent Cowork non interactif, mandat PHASE 1-12). Branche
+`claude/modest-cori-irfbtv`, redémarrée depuis `origin/main` à jour (`7179a685`, aucune PR calling ouverte
+au démarrage). Suite directe du "reste ouvert" de la Vague 58, qui avait explicitement flaggé ce point sans
+le traiter.
+
+- **[FAIBLE-MOYEN, web, CONFIRMÉ + CORRIGÉ, TDD]** `CallManager.tsx` `handleIncomingCall` (branche busy-path,
+  ~ligne 309) — quand un utilisateur est déjà en appel actif ET qu'une bannière `CallWaitingBanner` affiche
+  déjà un DEUXIÈME appelant (`waitingCall`), l'arrivée d'un `call:initiated` pour un TROISIÈME appelant
+  passait par la même branche `busyInCall && busyCall && busyCall.id !== event.callId` et faisait
+  `setWaitingCall(event)` + `startWaitingTimeout(event.callId)` sans jamais regarder l'état `waitingCall`
+  courant. `setWaitingCall` écrase silencieusement l'objet du deuxième appelant par celui du troisième (React
+  state, pas une queue), et `startWaitingTimeout` fait `clearTimeout(waitingTimeoutRef.current)` avant de
+  poser le nouveau timer — le timer d'auto-déclin 45s du DEUXIÈME appelant est donc annulé sans qu'aucun
+  `rejectWaitingCall` (le `call:end reason=rejected` normalement émis par le bouton Decline ou par ce même
+  timeout) ne soit jamais émis pour lui. **Scénario concret** : appel actif A↔B ; C appelle → bannière
+  call-waiting affichée pour C, timer 45s armé ; D appelle avant que C ne raccroche/timeout → la bannière
+  bascule sur D, le timer de C est silencieusement annulé, AUCUN signal de déclin n'est jamais envoyé au fil
+  de C. Le device de C continue de sonner jusqu'à SON PROPRE timeout côté client (ou le ringing-timeout
+  serveur ~60s de `CallService`) au lieu de recevoir immédiatement le même `call:end reason=rejected`
+  qu'un déclin explicite — écart de parité avec le chemin "Decline" normal, confirmé en lisant `call-store.ts`
+  (aucune structure de type queue/historique par callId, `pendingParticipantsByCallId` n'a aucun rapport avec
+  ce chemin) et le gateway (`CallEventsHandler.ts`/`CallService.ts` ne font que relayer `call:initiated` à
+  tous les participants de la conversation — le "bump" est purement un artefact d'état local `useState` côté
+  web, aucune correction serveur nécessaire). **Fix minimal** : dans la branche busy, si `waitingCall` existe
+  déjà ET a un `callId` différent du nouvel événement, on appelle `clearWaitingTimeout()` +
+  `rejectWaitingCall(waitingCall.callId)` (exactement le même chemin que le bouton Decline/l'auto-timeout,
+  aucun nouveau mécanisme) AVANT de promouvoir le troisième appelant dans la bannière. Un re-`call:initiated`
+  pour le MÊME `callId` que la bannière déjà affichée (retransmission réseau) ne déclenche pas de déclin —
+  gardé par la comparaison `waitingCall.callId !== event.callId`, déjà couvert par test dédié.
+- **Tests TDD** : nouveau fichier `CallManager.callWaitingBump.test.tsx` (2 cas) — (1) appel actif + deuxième
+  appelant en attente + troisième appelant arrive → assert `socket.emit(CLIENT_EVENTS.CALL_END, {callId:
+  DEUXIÈME, reason: 'rejected'})` ET la bannière affiche maintenant le troisième (RED confirmé par
+  `git stash` du seul fichier source : `endCall` était `undefined`, exactement l'absence de signal décrite
+  ci-dessus) ; (2) un `call:initiated` répété pour le MÊME deuxième appelant ne redéclenche pas de déclin.
+  GREEN après le fix. Suite élargie `video-call`/`video-calls`/`call-store`/`CallManager` (28 suites) :
+  211/211 tests verts, aucune régression (y compris les 6 cas existants de
+  `CallManager.callWaiting.test.tsx` et les 4 de `CallManager.answeredElsewhereWaiting.test.tsx`, tous deux
+  dans la même zone de code).
+- **`tsc --noEmit`** (`apps/web`) : 30 erreurs pré-existantes dans `CallManager.tsx` (mêmes que Vague 55/58,
+  socket typé `unknown` ailleurs dans le fichier, hors du diff de cette vague), comptées identiques avant/
+  après via `git stash`/`pop` ; aucune introduite par ce diff.
+- **Autres pistes explorées, rien trouvé de nouveau à corriger** : relecture complète de `call-store.ts`
+  (568 lignes) — `reset()`, `setLocalStream`/`removeRemoteStream`/`clearRemoteStreams`/
+  `clearPeerConnections` stoppent bien tous les tracks/connections, `pendingParticipantsByCallId` reste
+  borné par `reset()` (déjà documenté comme reste-ouvert FAIBLE, pas de nouveau chemin de fuite trouvé) ;
+  `handleAnsweredElsewhere`/`handleCallEnded` déjà couverts par les gardes des Vagues 55/58, aucun trou
+  supplémentaire identifié dans le temps imparti à cette passe.
+- **iOS/Android (lecture seule, aucun changement)** : hors périmètre — aucune toolchain Swift/Kotlin dans ce
+  sandbox Linux ; changement strictement web (1 fichier modifié + 1 nouveau fichier de test).
+- **Reste ouvert** : dead code / god-objects `CallManager.swift`/`CallEventsHandler.ts` ; ADR
+  `actor CallEventQueue` non implémenté ; couverture E2E iOS des écrans d'appel ; `enableSimulcast()`
+  scaffolding SFU Phase 2 (intentionnel) ; plafond P2P (max 2 participants actifs) vs conversations GROUP
+  autorisées côté `initiateCall` (Vague 55) ; `pendingParticipantsByCallId` (`call-store.ts:139`) sans TTL
+  par appel, borné en pratique par le `reset()` générique plutôt qu'une éviction ciblée (FAIBLE, non
+  corrigé). **Busy-path troisième appelant retiré de cette liste** (confirmé résolu cette vague, voir
+  ci-dessus).

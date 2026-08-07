@@ -308,6 +308,17 @@ export function CallManager() {
       // or swap to them. Auto-declines on timeout if ignored (busy for real).
       const { isInCall: busyInCall, currentCall: busyCall } = useCallStore.getState();
       if (busyInCall && busyCall && busyCall.id !== event.callId) {
+        // A THIRD caller arriving while a SECOND is already showing in the
+        // waiting banner must not silently bump it out of local state — that
+        // orphans the second caller's ring with no decline signal until its
+        // own timeout eventually fires. Explicitly decline it first (same
+        // call:end reason=rejected path as the Decline button/auto-timeout),
+        // then let the third caller take over the banner.
+        if (waitingCall && waitingCall.callId !== event.callId) {
+          logger.info('[CallManager]', 'Third caller bumping waiting call ' + waitingCall.callId + ' — declining it for ' + event.callId);
+          clearWaitingTimeout();
+          rejectWaitingCall(waitingCall.callId);
+        }
         logger.info('[CallManager]', 'Busy in another call — showing call-waiting banner for ' + event.callId);
         setWaitingCall(event);
         startWaitingTimeout(event.callId);
@@ -326,7 +337,7 @@ export function CallManager() {
       startCallTimeout(event.callId);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?.id, setCurrentCall, setInCall, isInCall, currentCall, startCallTimeout, startWaitingTimeout]);
+  }, [user?.id, setCurrentCall, setInCall, isInCall, currentCall, startCallTimeout, startWaitingTimeout, waitingCall, clearWaitingTimeout, rejectWaitingCall]);
 
   /**
    * Handle participant joined
