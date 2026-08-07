@@ -280,3 +280,65 @@ sortant (un run drainé ne ré-arme jamais, donc pas de boucle infinie).
 
 Non traité (hors périmètre vérifiable sous Linux) : le miroir iOS de cette file,
 `OfflineQueue`, n'a pas été audité — pas de Xcode dans cet environnement.
+
+# Suivi de lecture exact web — l'observateur ne voyait aucune bulle montée après coup (2026-08-07)
+
+## Demande (routine amélioration continue temps réel)
+Audit continu de la pile de messagerie temps réel (PHASE 1-3 : synchronisation,
+livraison, accusés). Périmètre retenu ce cycle : le chemin des accusés de lecture
+côté web (`useSeenMessages` → `messagesService.markAsRead` → gateway).
+
+## Constats (Phase 1 — audit du chemin de lecture exacte)
+
+### D1 (racine) — `MutationObserver` rapporte la RACINE de la mutation, pas la bulle
+`useSeenMessages` observe au montage via `container.querySelectorAll('[id^="message-"]')`
+(qui descend dans le sous-arbre), puis délègue tout le reste — virtualisation,
+messages temps réel — à un `MutationObserver` dont `attach`/`detach` ne testaient
+que le **nœud rapporté lui-même**. Or `messages-display.tsx` enveloppe chaque
+`BubbleMessage` dans un `<div key={message.id}>` **sans `id`** (branche virtualisée
+comme branche simple) : le nœud inséré est ce wrapper, la bulle porteuse de
+`id="message-<id>"` n'est qu'un descendant. La condition ne matchait donc jamais
+en production.
+
+### D2 (conséquence 1) — aucun accusé pour les messages arrivés après le montage
+Seul le lot initial était observé. Un `message:new`, un replay de la
+delivery-queue au reconnect ou une rangée virtualisée entrant à l'écran n'était
+jamais rapporté : ✓✓ bleu bloqué côté expéditeur, badge non-lus figé côté lecteur.
+À froid — messages rendus APRÈS le premier effet, dépendances toutes stables —
+**aucune** bulle n'était observée de toute la session.
+
+### D3 (conséquence 2, opposée) — des messages jamais vus déclarés lus
+Une bulle démontée ne recevait jamais son `disappeared` : elle restait « visible »
+pour `SeenMessageAccumulator` et franchissait le seuil de présence **hors écran**.
+Le hook réintroduisait ainsi côté client le défaut par fenêtre temporelle que le
+suivi exact corrige côté serveur.
+
+### D4 (pourquoi le défaut a survécu) — les tests encodaient une forme DOM irréelle
+`use-seen-messages.test.tsx` insérait les bulles en **nœud direct**
+(`addedNodes: [bubble]`), forme que la production ne produit jamais. Le test
+« observes a bubble mounted later by the virtualizer » passait donc sur un
+scénario qui n'existe pas. Récidive de la leçon 2026-08-03 #2 (un test qui valide
+une coïncidence, pas le contrat).
+
+## Plan
+- [x] T1 — RED : 4 tests sur la VRAIE forme DOM (bulle dans son wrapper de rangée)
+- [x] T2 — D1 : `forEachBubble(node, visit)` applique le traitement au nœud ET à ses descendants
+- [x] T3 — vérification : `__tests__/hooks` 106 suites / 2105 tests ; suite web complète ; tsc propre sur les fichiers touchés
+- [x] T4 — CHANGELOG
+
+## Revue
+Un seul défaut racine (D1), deux symptômes opposés (D2 lecture jamais signalée,
+D3 lecture inventée) — c'est la signature d'un observateur branché au mauvais
+niveau du DOM, pas de deux bugs indépendants. Le correctif tient en une fonction
+pure (`forEachBubble`) réutilisée par les deux callbacks, plutôt qu'en un `ref`
+par bulle qui aurait touché `BubbleMessageNormalView` (dont le `ref` sert déjà au
+scroll-to-message).
+
+Vérification par mutation (leçon 2026-07-31 #5 — un test de régression non vu
+rouge est décoratif) : les 4 tests ajoutés ont été vus ROUGES avant le correctif,
+dont le cas comportemental D3 (`markAsRead` appelé avec l'id d'un message sorti du
+DOM avant le seuil).
+
+Non traité (hors périmètre vérifiable sous Linux) : le miroir iOS
+(`SeenMessageAccumulator.swift`) n'est pas concerné — SwiftUI signale
+l'apparition/disparition par `onAppear`/`onDisappear`, sans observateur DOM.
