@@ -431,3 +431,23 @@ Non traité, relevé pour un cycle suivant :
 - iOS n'écoute pas `link:message:new` du tout (aucune occurrence dans
   `packages/MeeshySDK` ni `apps/ios`) : les messages de share link n'arrivent pas
   en temps réel sur iOS, indépendamment de D1. Non vérifiable sous Linux.
+
+### Cycle 7 bis — le durcissement de type s'arrêtait aux pass-through web
+
+Complément au cycle 7 : `LinkMessageNewEventData` exige désormais `id`,
+`conversationId` et `senderId`, et `messaging.service` type bien ses listeners avec.
+Mais `orchestrator.service.ts` et `meeshy-socketio.service.ts` re-déclaraient
+`{ message: Record<string, unknown> }` dans de **purs pass-through** — deux méthodes
+qui ne font que déléguer — ré-élargissant le type juste après le seul étage qui
+l'appliquait. Le contrat durci n'atteignait donc jamais le consommateur qui en dépend.
+
+Les deux passent au type partagé. Violation directe de la règle SSOT du projet (un
+type partagé re-déclaré localement), et le genre de duplication qui rend un
+durcissement de contrat inopérant sans que rien ne le signale.
+
+Note de collision : ce cycle a été mené en parallèle d'une autre session de la
+routine qui a corrigé le même défaut (PR #2612, mergée en premier). Sa version est un
+sur-ensemble de la mienne côté gateway et types partagés — `senderId` en plus du
+`conversationId`, et le repli `landedInCache` de `handleLinkMessageNew` que le cycle 6
+avait laissé ouvert. Résolution du merge en faveur de la sienne partout où les deux se
+recouvrent ; seuls les deux pass-through web, qu'elle ne touchait pas, subsistent.

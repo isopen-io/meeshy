@@ -19,6 +19,7 @@ import type {
   MessageAckResponse,
   UnsubscribeFn
 } from './types';
+import type { LinkMessageNewEventData } from '@meeshy/shared/types/socketio-events';
 
 import { ConnectionService } from './connection.service';
 import { MessagingService } from './messaging.service';
@@ -581,7 +582,7 @@ export class SocketIOOrchestrator {
     return this.messagingService.onPendingMessagesDelivered(listener);
   }
 
-  onLinkMessageNew(listener: (data: { message: Record<string, unknown> }) => void): UnsubscribeFn {
+  onLinkMessageNew(listener: (data: LinkMessageNewEventData) => void): UnsubscribeFn {
     return this.messagingService.onLinkMessageNew(listener);
   }
 
