@@ -325,6 +325,21 @@ export function CallManager() {
         return;
       }
 
+      // A SECOND caller ringing in while the first `incomingCall` is still
+      // unanswered (not busy — isInCall is false, so the busy-path branch
+      // above never runs) used to fall straight through to setIncomingCall
+      // below, silently overwriting `incomingCall` and its shared
+      // `callTimeoutRef` with zero decline signal for the first caller — the
+      // same class of bug the busy-path fix above (third caller bumping the
+      // waiting banner) already closed, left open on this sibling branch.
+      // Explicitly decline the bumped call first, same call:end
+      // reason=rejected path Decline/auto-timeout already use.
+      if (incomingCall && incomingCall.callId !== event.callId) {
+        logger.info('[CallManager]', 'Second incoming call bumping unanswered call ' + incomingCall.callId + ' — declining it for ' + event.callId);
+        clearCallTimeout();
+        rejectWaitingCall(incomingCall.callId);
+      }
+
       // I am being called - show notification
       console.log('📞 [CallManager] Setting incomingCall state - should show CallNotification', {
         callId: event.callId,
@@ -337,7 +352,7 @@ export function CallManager() {
       startCallTimeout(event.callId);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?.id, setCurrentCall, setInCall, isInCall, currentCall, startCallTimeout, startWaitingTimeout, waitingCall, clearWaitingTimeout, rejectWaitingCall]);
+  }, [user?.id, setCurrentCall, setInCall, isInCall, currentCall, startCallTimeout, startWaitingTimeout, waitingCall, clearWaitingTimeout, rejectWaitingCall, incomingCall, clearCallTimeout]);
 
   /**
    * Handle participant joined
