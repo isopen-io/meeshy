@@ -21,6 +21,8 @@ let capturedDeleteListener: ((messageId: string) => void) | null = null;
 // Capture the translation + audio-translation listeners registered by the hook
 let capturedTranslationListener: ((data: any) => void) | null = null;
 let capturedAudioTranslationListener: ((data: any) => void) | null = null;
+// Capture the transcription listener registered by the hook
+let capturedTranscriptionListener: ((data: any) => void) | null = null;
 
 jest.mock('@/services/meeshy-socketio.service', () => ({
   meeshySocketIOService: {
@@ -38,7 +40,10 @@ jest.mock('@/services/meeshy-socketio.service', () => ({
       return () => { capturedTranslationListener = null; };
     }),
     onUnreadUpdated: jest.fn(() => () => {}),
-    onTranscription: jest.fn(() => () => {}),
+    onTranscription: jest.fn((listener: (data: any) => void) => {
+      capturedTranscriptionListener = listener;
+      return () => { capturedTranscriptionListener = null; };
+    }),
     onAudioTranslation: jest.fn((listener: (data: any) => void) => {
       capturedAudioTranslationListener = listener;
       return () => { capturedAudioTranslationListener = null; };
@@ -311,6 +316,93 @@ describe('useSocketCacheSync — delete advances conversation preview', () => {
     expect(convs![0].lastMessageAt).toBe(older.createdAt);
   });
 
+  it('removes a message deleted in a NON-active conversation', () => {
+    // `message:deleted` reaches the hook as a bare messageId — the transport
+    // layer drops the event's conversationId — but the socket is joined to
+    // EVERY conversation room, so deletes arrive for background conversations.
+    // Scoping the removal to the active conversation left them in place, and
+    // `staleTime: Infinity` never re-reads them.
+    const { queryClient, wrapper } = createTestHarness('conv-active');
+    const bgMessage = makeMessage({ id: 'm-bg', conversationId: 'conv-other', content: 'to delete' });
+    queryClient.setQueryData(queryKeys.messages.infinite('conv-other'), {
+      pages: [{ messages: [bgMessage], hasMore: false, total: 1 }],
+      pageParams: [1],
+    });
+
+    renderHook(() => useSocketCacheSync({ conversationId: 'conv-active', enabled: true }), { wrapper });
+
+    act(() => { capturedDeleteListener!('m-bg'); });
+
+    const cached = queryClient.getQueryData(queryKeys.messages.infinite('conv-other')) as any;
+    expect(cached.pages[0].messages).toHaveLength(0);
+  });
+
+  it('advances the preview of the conversation that owned the deleted message, not the active one', () => {
+    const { queryClient, wrapper } = createTestHarness('conv-active');
+    const older = makeMessage({ id: 'm-bg-old', conversationId: 'conv-other', content: 'older', createdAt: new Date('2026-01-01T00:00:00Z') });
+    const newer = makeMessage({ id: 'm-bg-new', conversationId: 'conv-other', content: 'newer', createdAt: new Date('2026-01-01T00:01:00Z') });
+    queryClient.setQueryData(queryKeys.messages.infinite('conv-other'), {
+      pages: [{ messages: [newer, older], hasMore: false, total: 2 }],
+      pageParams: [1],
+    });
+    queryClient.setQueryData<Conversation[]>(queryKeys.conversations.list(), [
+      { id: 'conv-other', lastMessage: newer, lastMessageAt: newer.createdAt, updatedAt: newer.createdAt } as any,
+    ]);
+
+    renderHook(() => useSocketCacheSync({ conversationId: 'conv-active', enabled: true }), { wrapper });
+
+    act(() => { capturedDeleteListener!('m-bg-new'); });
+
+    const convs = queryClient.getQueryData<Conversation[]>(queryKeys.conversations.list());
+    expect(convs![0].lastMessage?.id).toBe('m-bg-old');
+  });
+
+  it('removes the message from EVERY cached list holding it, including an alias entry', () => {
+    // The same conversation can be cached under its ObjectId and under an
+    // identifier alias ("meeshy" on the home page). Cleaning only one left the
+    // deleted bubble visible on the other screen.
+    const objectId = '507f1f77bcf86cd799439011';
+    const { queryClient, wrapper } = createTestHarness('conv-active');
+    const seed = () => ({
+      pages: [{ messages: [makeMessage({ id: 'm-dup', conversationId: objectId, content: 'x' })], hasMore: false, total: 1 }],
+      pageParams: [1],
+    });
+    queryClient.setQueryData(queryKeys.messages.infinite(objectId), seed());
+    queryClient.setQueryData(queryKeys.messages.infinite('meeshy'), seed());
+
+    renderHook(() => useSocketCacheSync({ conversationId: 'conv-active', enabled: true }), { wrapper });
+
+    act(() => { capturedDeleteListener!('m-dup'); });
+
+    expect((queryClient.getQueryData(queryKeys.messages.infinite(objectId)) as any).pages[0].messages).toHaveLength(0);
+    expect((queryClient.getQueryData(queryKeys.messages.infinite('meeshy')) as any).pages[0].messages).toHaveLength(0);
+  });
+
+  it('advances the preview of an alias-keyed conversation using the message own conversationId', () => {
+    // Under an identifier alias the cache KEY ("meeshy") is not the id the
+    // conversation list is keyed on (the ObjectId). Deriving the owning
+    // conversation from the query key left the preview stuck on the deleted
+    // message; the message row itself always carries the resolved ObjectId.
+    const objectId = '507f1f77bcf86cd799439011';
+    const { queryClient, wrapper } = createTestHarness('conv-active');
+    const older = makeMessage({ id: 'm-alias-old', conversationId: objectId, content: 'older', createdAt: new Date('2026-01-01T00:00:00Z') });
+    const newer = makeMessage({ id: 'm-alias-new', conversationId: objectId, content: 'newer', createdAt: new Date('2026-01-01T00:01:00Z') });
+    queryClient.setQueryData(queryKeys.messages.infinite('meeshy'), {
+      pages: [{ messages: [newer, older], hasMore: false, total: 2 }],
+      pageParams: [1],
+    });
+    queryClient.setQueryData<Conversation[]>(queryKeys.conversations.list(), [
+      { id: objectId, lastMessage: newer, lastMessageAt: newer.createdAt, updatedAt: newer.createdAt } as any,
+    ]);
+
+    renderHook(() => useSocketCacheSync({ conversationId: 'conv-active', enabled: true }), { wrapper });
+
+    act(() => { capturedDeleteListener!('m-alias-new'); });
+
+    const convs = queryClient.getQueryData<Conversation[]>(queryKeys.conversations.list());
+    expect(convs![0].lastMessage?.id).toBe('m-alias-old');
+  });
+
   it('leaves the preview untouched when a non-latest message is deleted', () => {
     const { queryClient, wrapper } = createTestHarness('conv-1');
     seedTwoMessages(queryClient);
@@ -457,5 +549,172 @@ describe('useSocketCacheSync — translations apply beyond the active conversati
 
     const cached = queryClient.getQueryData(queryKeys.messages.infinite('conv-other')) as any;
     expect(cached.pages[0].messages[0].translatedAudios?.fr?.url).toBe('https://x/fr.mp3');
+  });
+});
+
+describe('useSocketCacheSync — transcription routing (audio pipeline stage 1)', () => {
+  beforeEach(() => {
+    capturedTranscriptionListener = null;
+    jest.clearAllMocks();
+  });
+
+  // Real `audio:transcription-ready` shape (TranscriptionReadyEventData): the
+  // text and its language live UNDER `transcription`, and the event names the
+  // attachment it belongs to.
+  function makeTranscriptionEvent(overrides: Record<string, unknown> = {}) {
+    return {
+      messageId: 'm-audio',
+      attachmentId: 'att-1',
+      conversationId: 'conv-other',
+      transcription: {
+        id: 't-1',
+        text: 'Bonjour tout le monde',
+        language: 'fr',
+        confidence: 0.94,
+        source: 'whisper',
+      },
+      ...overrides,
+    };
+  }
+
+  function makeAudioMessage(id: string, conversationId: string, attachments: unknown[]) {
+    const msg = makeMessage({ id, conversationId, content: '', messageType: 'audio' });
+    (msg as any).attachments = attachments;
+    return msg;
+  }
+
+  it('applies a transcription to a message in a NON-active conversation via data.conversationId', () => {
+    // The socket is joined to every conversation room the user belongs to, so a
+    // voice note transcribed while the user reads ANOTHER chat arrives here.
+    // Routing the write by the hook's active conversation dropped it, and
+    // `staleTime: Infinity` never re-reads it.
+    const { queryClient, wrapper } = createTestHarness('conv-active');
+    queryClient.setQueryData(queryKeys.messages.infinite('conv-other'), {
+      pages: [{
+        messages: [makeAudioMessage('m-audio', 'conv-other', [
+          { id: 'att-1', mimeType: 'audio/mpeg' },
+        ])],
+        hasMore: false,
+        total: 1,
+      }],
+      pageParams: [1],
+    });
+
+    renderHook(() => useSocketCacheSync({ conversationId: 'conv-active', enabled: true }), { wrapper });
+    expect(capturedTranscriptionListener).not.toBeNull();
+
+    act(() => { capturedTranscriptionListener!(makeTranscriptionEvent()); });
+
+    const cached = queryClient.getQueryData(queryKeys.messages.infinite('conv-other')) as any;
+    expect(cached.pages[0].messages[0].attachments[0].transcription?.text).toBe('Bonjour tout le monde');
+  });
+
+  it('applies a transcription while NO conversation is open (conversation-list view)', () => {
+    // `ConversationLayout` passes `effectiveSelectedId`, which is null on the
+    // list view — the handler must still route by the event's own id.
+    const { queryClient, wrapper } = createTestHarness('conv-active');
+    queryClient.setQueryData(queryKeys.messages.infinite('conv-other'), {
+      pages: [{
+        messages: [makeAudioMessage('m-audio', 'conv-other', [
+          { id: 'att-1', mimeType: 'audio/mpeg' },
+        ])],
+        hasMore: false,
+        total: 1,
+      }],
+      pageParams: [1],
+    });
+
+    renderHook(() => useSocketCacheSync({ conversationId: null, enabled: true }), { wrapper });
+
+    act(() => { capturedTranscriptionListener!(makeTranscriptionEvent()); });
+
+    const cached = queryClient.getQueryData(queryKeys.messages.infinite('conv-other')) as any;
+    expect(cached.pages[0].messages[0].attachments[0].transcription?.text).toBe('Bonjour tout le monde');
+  });
+
+  it('attaches the transcription to the attachment named by data.attachmentId, not the first audio one', () => {
+    // A message can carry several voice notes; each is transcribed by its own
+    // event. Picking the first audio attachment mis-attributed every one of
+    // them to the first note and left the others permanently untranscribed.
+    const { queryClient, wrapper } = createTestHarness('conv-active');
+    queryClient.setQueryData(queryKeys.messages.infinite('conv-active'), {
+      pages: [{
+        messages: [makeAudioMessage('m-audio', 'conv-active', [
+          { id: 'att-1', mimeType: 'audio/mpeg' },
+          { id: 'att-2', mimeType: 'audio/mpeg' },
+        ])],
+        hasMore: false,
+        total: 1,
+      }],
+      pageParams: [1],
+    });
+
+    renderHook(() => useSocketCacheSync({ conversationId: 'conv-active', enabled: true }), { wrapper });
+
+    act(() => {
+      capturedTranscriptionListener!(makeTranscriptionEvent({
+        conversationId: 'conv-active',
+        attachmentId: 'att-2',
+      }));
+    });
+
+    const attachments = (queryClient.getQueryData(queryKeys.messages.infinite('conv-active')) as any)
+      .pages[0].messages[0].attachments;
+    expect(attachments[1].transcription?.text).toBe('Bonjour tout le monde');
+    expect(attachments[0].transcription).toBeUndefined();
+  });
+
+  it('records the transcription language from data.transcription.language', () => {
+    // The language lives under `transcription`, never at the payload root —
+    // reading `data.language` stamped `undefined` on every transcription.
+    const { queryClient, wrapper } = createTestHarness('conv-active');
+    queryClient.setQueryData(queryKeys.messages.infinite('conv-active'), {
+      pages: [{
+        messages: [makeAudioMessage('m-audio', 'conv-active', [
+          { id: 'att-1', mimeType: 'audio/mpeg' },
+        ])],
+        hasMore: false,
+        total: 1,
+      }],
+      pageParams: [1],
+    });
+
+    renderHook(() => useSocketCacheSync({ conversationId: 'conv-active', enabled: true }), { wrapper });
+
+    act(() => {
+      capturedTranscriptionListener!(makeTranscriptionEvent({ conversationId: 'conv-active' }));
+    });
+
+    const message = (queryClient.getQueryData(queryKeys.messages.infinite('conv-active')) as any)
+      .pages[0].messages[0];
+    expect(message.attachments[0].transcriptionLanguage).toBe('fr');
+    expect(message.transcriptionLanguage).toBe('fr');
+  });
+
+  it('also updates an identifier-keyed (alias) cache entry for the same conversation', () => {
+    // The home page mounts the global conversation as "meeshy" while socket
+    // payloads carry the resolved ObjectId — the same alias gap
+    // `messageCacheKeysFor` exists to close for new/edited messages.
+    const objectId = '507f1f77bcf86cd799439011';
+    const { queryClient, wrapper } = createTestHarness('conv-active');
+    queryClient.setQueryData(queryKeys.messages.infinite('meeshy'), {
+      pages: [{
+        messages: [makeAudioMessage('m-audio', objectId, [
+          { id: 'att-1', mimeType: 'audio/mpeg' },
+        ])],
+        hasMore: false,
+        total: 1,
+      }],
+      pageParams: [1],
+    });
+
+    renderHook(() => useSocketCacheSync({ conversationId: 'conv-active', enabled: true }), { wrapper });
+
+    act(() => {
+      capturedTranscriptionListener!(makeTranscriptionEvent({ conversationId: objectId }));
+    });
+
+    const cached = queryClient.getQueryData(queryKeys.messages.infinite('meeshy')) as any;
+    expect(cached.pages[0].messages[0].attachments[0].transcription?.text).toBe('Bonjour tout le monde');
   });
 });
