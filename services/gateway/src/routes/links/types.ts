@@ -207,6 +207,11 @@ export const linkMessageSchema = {
   description: 'Message rendered by the share-link send routes',
   properties: {
     id: { type: 'string', description: 'Message unique identifier' },
+    // Phase 4 §6.2 — le cid ne sert qu'à l'AUTEUR : c'est la seule clé qui
+    // relie ce message à la ligne optimiste déjà affichée. Il n'apparaît donc
+    // que dans la réponse 201 ; `stripClientMessageId` le retire du payload
+    // `link:message:new` servi aux pairs (cf. messages.ts).
+    clientMessageId: { type: 'string', description: "Author's optimistic-row id, echoed back for reconciliation" },
     // Même raison que sur le chemin socket (cf. messages.ts) : le destinataire
     // n'a pas d'autre routage que la charge utile. Le 201 revient à l'AUTEUR,
     // qui doit lui aussi savoir dans quelle conversation insérer son message.
@@ -335,6 +340,13 @@ export const sendMessageBodySchema = {
   description: 'Send message via share link request body',
   properties: {
     content: { type: 'string', maxLength: 1000, description: 'Message content (required unless attachments provided)' },
+    // Les deux routes LISENT ce champ (`body.clientMessageId` → `message.create`)
+    // et `sendMessageSchema` (Zod) l'exige. Il n'était pas déclaré ici : sans
+    // `additionalProperties: false` il passait quand même, donc aucun défaut
+    // observable — mais le contrat d'entrée publié en omettait le seul champ
+    // obligatoire. Déclaré SANS `required` : Zod reste le validateur unique,
+    // pour que le corps d'erreur d'un cid manquant ne change pas de forme.
+    clientMessageId: { type: 'string', description: 'Client-generated dedup id, format cid_<uuid v4 lowercase> (required — enforced by the Zod schema)' },
     originalLanguage: { type: 'string', default: 'fr', description: 'Message language code' },
     messageType: { type: 'string', default: 'text', description: 'Message type' },
     attachments: { type: 'array', items: { type: 'string' }, description: 'Attachment IDs' },
