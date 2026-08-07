@@ -209,6 +209,28 @@ describe('ReactionHandler', () => {
       expect(io.to).toHaveBeenCalled();
     });
 
+    it('replies success (not failure) when the post-write aggregation read throws — reaction already persisted', async () => {
+      // addReaction committed the reaction to the DB; createUpdateEvent (an
+      // aggregation READ, ReactionService.getEmojiAggregation) then throws on
+      // transient load. The ACK must reflect the PERSISTED state — otherwise the
+      // client rolls back an optimistic 👍 that is actually in the DB, and no peer
+      // hears about it until the next reaction:sync. Mirrors the fire-and-forget
+      // contract the file already applies to broadcast/notification failures.
+      const { handler } = buildHandler({
+        reactionService: {
+          addReaction: jest.fn<any>().mockResolvedValue({ reaction: { id: 'reaction-1', emoji: '👍' }, replacedEmojis: [] }),
+          createUpdateEvent: jest.fn<any>().mockRejectedValue(new Error('aggregation read timeout')),
+        },
+      });
+      const callback = jest.fn<any>();
+
+      await handler.handleReactionAdd(makeSocket(), { messageId: MESSAGE_ID, emoji: '👍' }, callback);
+      await new Promise(resolve => setImmediate(resolve));
+
+      expect(callback).toHaveBeenCalledTimes(1);
+      expect(callback).toHaveBeenCalledWith(expect.objectContaining({ success: true, data: { id: 'reaction-1', emoji: '👍' } }));
+    });
+
     it('calls reactionService.addReaction with resolved participantId', async () => {
       const { handler, reactionService } = buildHandler();
 
@@ -399,6 +421,26 @@ describe('ReactionHandler', () => {
 
       expect(callback).toHaveBeenCalledWith(expect.objectContaining({ success: true }));
       expect(io.to).toHaveBeenCalled();
+    });
+
+    it('replies success (not failure) when the post-write aggregation read throws — reaction already removed', async () => {
+      // removeReaction committed the removal; createUpdateEvent then throws on a
+      // transient aggregation-read failure. The ACK must reflect the persisted
+      // state — replying failure makes the client roll its optimistic un-react
+      // back and re-show a reaction that is already gone from the DB.
+      const { handler } = buildHandler({
+        reactionService: {
+          removeReaction: jest.fn<any>().mockResolvedValue(true),
+          createUpdateEvent: jest.fn<any>().mockRejectedValue(new Error('aggregation read timeout')),
+        },
+      });
+      const callback = jest.fn<any>();
+
+      await handler.handleReactionRemove(makeSocket(), { messageId: MESSAGE_ID, emoji: '👍' }, callback);
+      await new Promise(resolve => setImmediate(resolve));
+
+      expect(callback).toHaveBeenCalledTimes(1);
+      expect(callback).toHaveBeenCalledWith(expect.objectContaining({ success: true }));
     });
 
     it('returns error on service exception (Error instance)', async () => {
