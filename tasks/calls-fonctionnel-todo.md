@@ -3950,3 +3950,59 @@ bug trouvé est le jumeau exact de la Vague 59, sur la branche NON-busy de la m�
   par appel, borné en pratique par le `reset()` générique plutôt qu'une éviction ciblée (FAIBLE, non
   corrigé). **Deuxième-appelant-non-busy retiré de cette liste** (confirmé résolu cette vague, voir
   ci-dessus).
+
+## Vague 61 — `P2PWebRTCClient.switchCamera()` ne revertait pas `usingFrontCamera` sur un `startCapture` en échec (2026-08-07)
+
+Point d'entrée : routine calling-feature (agent Cowork non interactif, mandat PHASE 1-12). Branche
+`claude/upbeat-dirac-oev17i`, redémarrée depuis `origin/main` à jour (`c6867c134`, aucune PR calling ouverte
+au démarrage). Sandbox Linux sans toolchain Xcode — comme les vagues iOS précédentes (PR #2606/#2603
+mergées le jour même), fix source-guardé + CI `ios-tests.yml` déclenché manuellement (non auto-déclenché sur
+PR, cf. `.github/workflows/ios-tests.yml`) pour la validation réelle. Audit dédié (agent Explore, lecture
+seule) sur `P2PWebRTCClient.swift`, `WebRTCService.swift`, `CallManager.swift`, `VoIPPushManager.swift`,
+`VoIPDedupRing.swift`, `PiPCallController.swift`, `VideoSurvivalController.swift` + suites de tests
+correspondantes — la quasi-totalité des callbacks/délégués porte déjà un garde d'identité/staleness ; le
+gap trouvé est dans le voisinage caméra déjà identifié comme fragile par les commentaires du code lui-même
+(`stopCapture()`/`startCapture()` concurrents sur le même `RTCCameraVideoCapturer`).
+
+- **[MOYEN, iOS, CONFIRMÉ + CORRIGÉ, TDD source-guard]** `P2PWebRTCClient.swift` `switchCamera()`
+  (~ligne 1006) — la fonction bascule `usingFrontCamera.toggle()` de façon optimiste à l'entrée, puis
+  revert ce toggle sur les DEUX guard-throws précoces (pas de caméra / pas de format), mais le
+  `try await capturer.startCapture(...)` final — le point d'échec le plus probable sur matériel réel
+  (caméra occupée, appareil mono-caméra, erreur de configuration `AVCaptureSession`) — n'avait AUCUN
+  revert : un throw ici laissait `usingFrontCamera` affirmer que le switch avait réussi alors que le
+  capturer restait stoppé (aucune caméra, avant ou après, en cours de capture). **Distinct du fix déjà en
+  place** : `CallManagerSwitchCameraFailureCorrectionSourceTests` garde le revert du flag UI-facing
+  `CallManager.isUsingFrontCamera` (mirroring self-preview) sur ce même échec signalé par
+  `WebRTCService.switchCamera(completion:)` — mais ce flag est une COPIE côté CallManager, à une couche
+  au-dessus ; `P2PWebRTCClient.usingFrontCamera` (privé) est un état interne SÉPARÉ, jamais touché par ce
+  fix-là. **Scénario concret** : switch caméra échoue (capteur occupé par une autre app, timing bord) →
+  `CallManager.isUsingFrontCamera` revert correctement (mirroring self-preview correct) MAIS
+  `P2PWebRTCClient.usingFrontCamera` reste sur la valeur post-toggle (fausse) → `restartCapturerIfStopped()`
+  (déclenché par ex. par un retour au premier plan après backgrounding pendant l'appel) lit ce flag pour
+  choisir quelle caméra physique reprendre → tente de relancer la MAUVAISE caméra (celle qui vient
+  d'échouer) au lieu de celle que l'utilisateur voyait avant la tentative ratée — désynchronisation
+  UI-affichée vs capture-réellement-tentée qui ne se corrige jamais d'elle-même.
+  **Fix minimal** : `do { try await capturer.startCapture(...) } catch { usingFrontCamera.toggle(); throw error }`
+  — même geste que les deux guards précédents, appliqué au 3e point d'échec de la fonction. Pas de
+  changement de comportement sur le chemin succès (le flag garde sa valeur post-toggle, déjà correcte).
+- **Tests** : `P2PWebRTCClientSwitchCameraFailureRevertSourceTests.swift` (nouveau, miroir du patron
+  `P2PWebRTCClientConcurrencySourceTests`/`CallManagerSwitchCameraFailureCorrectionSourceTests` — lecture du
+  source en `String`, assertions sur la présence du `do/catch` et du revert avant le `throw error`, plus un
+  garde de non-régression sur le nombre total de `usingFrontCamera.toggle()` dans la fonction, 1 flip
+  optimiste + 3 reverts). Pas de test comportemental possible : `RTCCameraVideoCapturer` exige du matériel
+  caméra réel, absent de l'hôte de test unitaire — même contrainte documentée par les gardes-source
+  existants de ce fichier.
+- **Autres candidats explorés par l'audit, rien corrigé ici** : `buildLocalVideoTrackAndStartCapture()`
+  laisse `localVideoTrack_`/`videoCapturer` posés sur tout échec (donc `hasLocalVideoTrack` répond `true`
+  après un build raté) ; `WebRTCService.switchCamera()`'s `switchCameraTask` ne se sérialise qu'avec
+  lui-même, pas avec `videoToggleTask`/`holdVideoTask`/`survivalVideoTask`/`iceRestartTask`. Les deux sont
+  plus larges (le premier touche le chemin de démarrage vidéo initial, contrat `hasLocalVideoTrack` déjà
+  documenté "kept alive but disabled" ailleurs — nécessite de vérifier qu'aucun appelant ne dépend du
+  comportement actuel avant de le changer ; le second est une question de sérialisation multi-tâches plus
+  large, hors du scope d'une vague ciblée) — laissés pour une vague dédiée.
+- **iOS Tests CI** : déclenché manuellement via `workflow_dispatch` sur `ios-tests.yml` (branche
+  `claude/upbeat-dirac-oev17i`) après push — aucun trigger `pull_request` sur ce workflow (cf. commentaire
+  du fichier), donc validation explicite requise avant merge plutôt qu'implicite via check PR.
+- **Reste ouvert** : dead code / god-objects `CallManager.swift` (5717 lignes) ; ADR `actor CallEventQueue`
+  non implémenté ; `hasLocalVideoTrack` menteur après un `buildLocalVideoTrackAndStartCapture()` raté ;
+  `switchCameraTask` non sérialisé avec les autres tâches caméra/vidéo de `WebRTCService`.

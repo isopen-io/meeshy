@@ -1030,7 +1030,21 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
         let generation = sessionGeneration
         await capturer.stopCapture()
         let fps = targetFrameRate(for: selectedFormat)
-        try await capturer.startCapture(with: camera, format: selectedFormat, fps: fps)
+        do {
+            try await capturer.startCapture(with: camera, format: selectedFormat, fps: fps)
+        } catch {
+            // Mirror the two guard-throws above: a failed startCapture must not leave
+            // usingFrontCamera claiming the switch succeeded. restartCapturerIfStopped()
+            // reads this flag to decide which physical camera to resume — a stale value
+            // here would target the camera that just failed to start (capturer is now
+            // stopped, capturing nothing) instead of the one the user was actually seeing
+            // before this attempt. CallManager already reverts its own optimistic
+            // isUsingFrontCamera mirroring flag on this same failure (see
+            // CallManagerSwitchCameraFailureCorrectionSourceTests) — this keeps the
+            // internal capture-restart target in sync with that correction.
+            usingFrontCamera.toggle()
+            throw error
+        }
         let isStale = await MainActor.run { generation != sessionGeneration }
         if isStale {
             Logger.webrtc.warning("[WEBRTC] session changed during camera switch — stopping orphan capture")
