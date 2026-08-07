@@ -758,21 +758,21 @@ class AudioHandler:
         try:
             translation = translation_data['translation']
 
-            # D2: prefer raw bytes (no base64 round-trip), fall back to base64 or file
+            # D2: prefer raw bytes (no base64 round-trip), fall back to base64/file
+            # (read_audio_bytes handles the base64→file fallback off the event
+            # loop, matching _publish_audio_result's non-blocking read).
             audio_bytes = None
             if getattr(translation, 'audio_bytes', None):
                 audio_bytes = translation.audio_bytes
-            elif translation.audio_data_base64:
+            else:
                 try:
-                    audio_bytes = base64.b64decode(translation.audio_data_base64)
+                    audio_bytes = await asyncio.to_thread(
+                        read_audio_bytes,
+                        audio_path=translation.audio_path,
+                        audio_data_base64=translation.audio_data_base64,
+                    )
                 except Exception as e:
-                    logger.warning(f"[MULTIPART] Erreur décodage audio {translation.language}: {e}")
-            elif translation.audio_path and os.path.exists(translation.audio_path):
-                try:
-                    with open(translation.audio_path, 'rb') as f:
-                        audio_bytes = f.read()
-                except Exception as e:
-                    logger.warning(f"[MULTIPART] Erreur lecture fichier audio {translation.language}: {e}")
+                    logger.warning(f"[MULTIPART] Erreur lecture audio {translation.language}: {e}")
 
             # Préparer le metadata JSON (Frame 0)
             translated_audio_dict = {
