@@ -583,6 +583,31 @@ export const messageAttachmentMinimalSchema = {
 } as const;
 
 /**
+ * Lieu partagé — forme de réponse UNIQUE, miroir exact de `SharedPlace`
+ * (services/gateway/src/services/location/sharedPlace.ts) tel que
+ * `parseSharedPlace` le produit et que le serveur seul écrit dans
+ * `metadata.location`.
+ *
+ * Source unique parce que fast-json-stringify TRONQUE en silence tout champ
+ * qu'un schéma de réponse ne déclare pas : une surface qui recopie la forme
+ * de travers (ou l'omet) perd la position sans aucun signal. Toute réponse
+ * hissant `location` doit épandre CE schéma, en ne surchargeant que
+ * `description`.
+ */
+export const sharedPlaceResponseSchema = {
+  type: 'object',
+  nullable: true,
+  description: 'Lieu partagé (position figée + POI enrichi) — hissé depuis metadata.location, validé serveur ; null si absent',
+  properties: {
+    latitude: { type: 'number' },
+    longitude: { type: 'number' },
+    name: { type: 'string', nullable: true },
+    address: { type: 'string', nullable: true },
+    category: { type: 'string', nullable: true }
+  }
+} as const;
+
+/**
  * Message schema for API responses
  * Aligned with schema.prisma Message model
  */
@@ -655,16 +680,8 @@ export const messageSchema = {
       }
     },
     location: {
-      type: 'object',
-      nullable: true,
-      description: 'Lieu partagé (position figée + POI enrichi) — hissé depuis metadata.location. Validé serveur (parseSharedPlace) ; null si le message ne porte aucun lieu.',
-      properties: {
-        latitude: { type: 'number' },
-        longitude: { type: 'number' },
-        name: { type: 'string', nullable: true },
-        address: { type: 'string', nullable: true },
-        category: { type: 'string', nullable: true }
-      }
+      ...sharedPlaceResponseSchema,
+      description: 'Lieu partagé (position figée + POI enrichi) — hissé depuis metadata.location. Validé serveur (parseSharedPlace) ; null si le message ne porte aucun lieu.'
     },
     replyTo: {
       type: 'object',
@@ -848,16 +865,8 @@ export const messageMinimalSchema = {
     // Absent du schéma = tronqué en silence par fast-json-stringify, cf.
     // le commentaire de `cursorPagination` plus bas dans ce fichier.
     location: {
-      type: 'object',
-      nullable: true,
-      description: 'Lieu partagé (aperçu de conversation) — validé serveur, null si absent',
-      properties: {
-        latitude: { type: 'number' },
-        longitude: { type: 'number' },
-        name: { type: 'string', nullable: true },
-        address: { type: 'string', nullable: true },
-        category: { type: 'string', nullable: true }
-      }
+      ...sharedPlaceResponseSchema,
+      description: 'Lieu partagé (aperçu de conversation) — validé serveur, null si absent'
     },
     // Sender info (required for ConversationList.tsx getSenderName())
     sender: { ...userMinimalSchema, nullable: true, description: 'Sender user info' },
