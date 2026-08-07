@@ -1713,19 +1713,28 @@ extension P2PWebRTCClient: RTCDataChannelDelegate {
     nonisolated func dataChannelDidChangeState(_ dataChannel: RTCDataChannel) {
         let state = dataChannel.readyState
         Logger.webrtc.info("DataChannel '\(dataChannel.label)' state: \(state.rawValue)")
+        // Identity guard: see `deliverRemoteTrack` — a stale state notification from a
+        // torn-down call's data channel must not start/stop the keep-alive ping owned by
+        // the NEW call's transcriptionDataChannel.
         DispatchQueue.main.async { [weak self] in
+            guard let self, dataChannel === self.transcriptionDataChannel else { return }
             if state == .open {
-                self?.startDataChannelPing()
+                self.startDataChannelPing()
             } else {
-                self?.stopDataChannelPing()
+                self.stopDataChannelPing()
             }
         }
     }
 
     nonisolated func dataChannel(_ dataChannel: RTCDataChannel, didReceiveMessageWith buffer: RTCDataBuffer) {
         let data = buffer.data
+        // Identity guard: see `deliverRemoteTrack` — a stale in-band message (notably
+        // `{"type":"bye"}`, see `DataChannelInbound`) from a torn-down call's data channel
+        // must not be forwarded as if it belonged to the call now in progress: CallManager
+        // reads `currentCallId` (the NEW call's id) without validating the message's origin
+        // channel, so an unguarded stale "bye" would hang up the wrong, active call.
         DispatchQueue.main.async { [weak self] in
-            guard let self else { return }
+            guard let self, dataChannel === self.transcriptionDataChannel else { return }
             self.delegate?.webRTCClient(self, didReceiveDataChannelMessage: data)
         }
     }
