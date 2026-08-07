@@ -4006,3 +4006,55 @@ gap trouvé est dans le voisinage caméra déjà identifié comme fragile par le
 - **Reste ouvert** : dead code / god-objects `CallManager.swift` (5717 lignes) ; ADR `actor CallEventQueue`
   non implémenté ; `hasLocalVideoTrack` menteur après un `buildLocalVideoTrackAndStartCapture()` raté ;
   `switchCameraTask` non sérialisé avec les autres tâches caméra/vidéo de `WebRTCService`.
+
+## Vague 62 — `buildLocalVideoTrackAndStartCapture()` laissait `hasLocalVideoTrack` répondre `true` après un échec de build vidéo (2026-08-07)
+
+Point d'entrée : routine calling-feature (agent Cowork non interactif, mandat PHASE 1-12). Branche
+`claude/upbeat-dirac-mgf1ve` redémarrée depuis `origin/main` à jour. **PR orpheline trouvée au démarrage** :
+`claude/upbeat-dirac-oev17i` (#2609, Vague 61 ci-dessus) était ouverte, CI standard verte, mergée en premier
+(aucun `ios-tests.yml` déclenchable — 403 sur `workflow_dispatch` depuis ce token — mais ce workflow n'a
+**aucun** trigger `pull_request`/branch-protection, donc ne bloque jamais un merge par design, cf. son
+commentaire d'en-tête). Prend directement la Vague 61 comme point de départ (item « reste ouvert » n°1).
+
+- **[MOYEN-ÉLEVÉ, iOS, CONFIRMÉ + CORRIGÉ, TDD source-guard]** `P2PWebRTCClient.swift`
+  `buildLocalVideoTrackAndStartCapture()` (~ligne 253) — `videoTrack.isEnabled = true` +
+  `localVideoTrack_ = videoTrack` + `videoCapturer = capturer` s'exécutent AVANT les 3 points d'échec
+  restants de la fonction (`Self.pickCaptureDevice` → `noCameraAvailable`, `selectFormat` →
+  `noCameraFormatAvailable`, `capturer.startCapture` → erreur native). Aucun des 3 ne revertait ces
+  propriétés avant de propager : un throw ici laissait `localVideoTrack_` posé avec `isEnabled == true`.
+  `hasLocalVideoTrack` (ligne 913) est délibérément keyé sur `isEnabled`, pas sur une simple nil-check
+  (cf. son doc-comment — nécessaire pour que `disableLocalVideo()` puisse garder le track vivant en vue
+  d'un `enableLocalVideo()` bon marché) : ce choix de design rend CE bug particulièrement sournois, il
+  contourne exactement la garde que `hasLocalVideoTrack` pense avoir. **Scénario concret** : appel
+  entrant vidéo, caméra occupée par une autre app → `startCapture` échoue → `performLocalMediaStart`
+  bascule en repli audio-only (`isVideoEnabled = false`) MAIS ne touche jamais `hasLocalVideoTrack` sur ce
+  chemin (repose sur sa valeur initiale `false`, correcte par accident) ; en revanche tout appelant qui
+  RELIT `webRTCService.hasLocalVideoTrack` après un échec similaire de `upgradeToVideo()` (mid-call
+  audio→vidéo) — `toggleVideo`'s `catch` générique (CallManager.swift:2482-2487), le `catch` générique de
+  la récupération vidéo post-unhold (CallManager.swift:3347-3351) — écrase `self.hasLocalVideoTrack` avec
+  cette valeur MENTEUSE (`true`) juste après avoir mis `isVideoEnabled = false` : `CallView.swift`
+  (`swapStreams && callManager.hasLocalVideoTrack`, ligne 1103) et le self-preview gate lisent alors un
+  état incohérent — vidéo affichée/permise comme active alors qu'aucune caméra ne capture réellement,
+  désynchronisation qui ne se corrige jamais d'elle-même avant la fin de l'appel.
+  **Fix minimal, même geste que la Vague 61** : `pickCaptureDevice`/`selectFormat`/`startCapture` passent
+  dans un `do { … } catch { revert; throw error }` — le `catch` re-nil `localVideoTrack_`/`videoCapturer`/
+  `videoFilterDelegate` (identity-guardé sur `videoCapturer === capturer`, même garde que le nettoyage
+  `isStale` déjà présent juste en dessous pour le cas SŒUR — session terminée pendant le warm-up — resté
+  inchangé et indépendant) avant de rethrow. `await MainActor.run` autour du revert : le throw de
+  `startCapture` peut reprendre sur un executor arbitraire (même raison que le check `isStale` voisin).
+  Pas de changement de comportement sur le chemin succès.
+- **Tests** : `P2PWebRTCClientBuildVideoTrackFailureRevertSourceTests.swift` (nouveau, même patron que
+  `P2PWebRTCClientSwitchCameraFailureRevertSourceTests` — lecture du source en `String`, 3 assertions :
+  les 3 points d'échec sont bien à l'intérieur du `do`, le `catch` re-nil les 3 propriétés identity-guardé
+  puis rethrow, et le nettoyage `isStale` voisin (cas SŒUR distinct) n'a ni été fusionné ni supprimé —
+  garde de non-régression sur le compte de sites `if videoCapturer === capturer {` (attendu : 2). Toutes
+  les assertions vérifiées manuellement contre le source réel (`python3` string-matching) avant commit —
+  aucune toolchain Swift/Xcode disponible dans ce sandbox Linux.
+- **Autre candidat exploré, rien corrigé ici** : `WebRTCService.switchCamera()`'s `switchCameraTask` ne se
+  sérialise qu'avec lui-même (`await previousTask?.value` où `previousTask` = l'ancien `switchCameraTask`),
+  pas avec `videoToggleTask`/`holdVideoTask`/`survivalVideoTask`/`iceRestartTask` — un switch caméra
+  pourrait courir en concurrence avec un upgrade/downgrade vidéo ou une reprise post-hold sur le même
+  `RTCCameraVideoCapturer`. Portée plus large qu'une vague ciblée (toucherait la chaîne de sérialisation
+  de 5 tâches distinctes dans `WebRTCService`) — laissé pour une vague dédiée.
+- **Reste ouvert** : dead code / god-objects `CallManager.swift` (5717 lignes) ; ADR `actor CallEventQueue`
+  non implémenté ; `switchCameraTask` non sérialisé avec les autres tâches caméra/vidéo de `WebRTCService`.
