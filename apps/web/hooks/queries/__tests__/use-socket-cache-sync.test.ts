@@ -18,6 +18,9 @@ import type { Message, Conversation } from '@/types';
 let capturedMessageListener: ((message: Message) => void) | null = null;
 // Capture the delete listener registered by the hook
 let capturedDeleteListener: ((messageId: string) => void) | null = null;
+// Capture the translation + audio-translation listeners registered by the hook
+let capturedTranslationListener: ((data: any) => void) | null = null;
+let capturedAudioTranslationListener: ((data: any) => void) | null = null;
 
 jest.mock('@/services/meeshy-socketio.service', () => ({
   meeshySocketIOService: {
@@ -30,10 +33,16 @@ jest.mock('@/services/meeshy-socketio.service', () => ({
       capturedDeleteListener = listener;
       return () => { capturedDeleteListener = null; };
     }),
-    onTranslation: jest.fn(() => () => {}),
+    onTranslation: jest.fn((listener: (data: any) => void) => {
+      capturedTranslationListener = listener;
+      return () => { capturedTranslationListener = null; };
+    }),
     onUnreadUpdated: jest.fn(() => () => {}),
     onTranscription: jest.fn(() => () => {}),
-    onAudioTranslation: jest.fn(() => () => {}),
+    onAudioTranslation: jest.fn((listener: (data: any) => void) => {
+      capturedAudioTranslationListener = listener;
+      return () => { capturedAudioTranslationListener = null; };
+    }),
     onAttachmentStatusUpdated: jest.fn(() => () => {}),
     onParticipantRoleUpdated: jest.fn(() => () => {}),
     onPreferencesUpdated: jest.fn(() => () => {}),
@@ -336,5 +345,117 @@ describe('useSocketCacheSync — delete advances conversation preview', () => {
     // exist server-side but not be loaded in cache).
     const convs = queryClient.getQueryData<Conversation[]>(queryKeys.conversations.list());
     expect(convs![0].lastMessage?.id).toBe('m-only');
+  });
+});
+
+describe('useSocketCacheSync — translations apply beyond the active conversation', () => {
+  beforeEach(() => {
+    capturedTranslationListener = null;
+    capturedAudioTranslationListener = null;
+    jest.clearAllMocks();
+  });
+
+  function makeTranslation(messageId: string, targetLanguage: string, content: string) {
+    return {
+      id: `${messageId}_${targetLanguage}`,
+      messageId,
+      sourceLanguage: 'en',
+      targetLanguage,
+      translatedContent: content,
+      translationModel: 'medium',
+      cacheKey: `${messageId}_en_${targetLanguage}`,
+      cached: false,
+    };
+  }
+
+  it('applies a text translation to a message in a NON-active conversation', () => {
+    // Hook is mounted for the active conversation, but the socket is joined to
+    // every conversation room the user belongs to, so translation events arrive
+    // for background conversations too. TranslationEvent carries no
+    // conversationId — the write must be routed by messageId across all cached
+    // message lists, not only the active one.
+    const { queryClient, wrapper } = createTestHarness('conv-active');
+
+    const bgMessage = makeMessage({ id: 'm-bg', conversationId: 'conv-other', content: 'Hello', originalLanguage: 'en' });
+    queryClient.setQueryData(queryKeys.messages.infinite('conv-other'), {
+      pages: [{ messages: [bgMessage], hasMore: false, total: 1 }],
+      pageParams: [1],
+    });
+
+    renderHook(() => useSocketCacheSync({ conversationId: 'conv-active', enabled: true }), { wrapper });
+    expect(capturedTranslationListener).not.toBeNull();
+
+    act(() => {
+      capturedTranslationListener!({ messageId: 'm-bg', translations: [makeTranslation('m-bg', 'fr', 'Bonjour')] });
+    });
+
+    const cached = queryClient.getQueryData(queryKeys.messages.infinite('conv-other')) as any;
+    const translations = cached.pages[0].messages[0].translations;
+    expect(Array.isArray(translations)).toBe(true);
+    expect(translations.find((t: any) => t.targetLanguage === 'fr')?.translatedContent).toBe('Bonjour');
+  });
+
+  it('still applies a text translation to the active conversation (regression guard)', () => {
+    const { queryClient, wrapper } = createTestHarness('conv-active');
+    const msg = makeMessage({ id: 'm-active', conversationId: 'conv-active', content: 'Hello', originalLanguage: 'en' });
+    queryClient.setQueryData(queryKeys.messages.infinite('conv-active'), {
+      pages: [{ messages: [msg], hasMore: false, total: 1 }],
+      pageParams: [1],
+    });
+
+    renderHook(() => useSocketCacheSync({ conversationId: 'conv-active', enabled: true }), { wrapper });
+
+    act(() => {
+      capturedTranslationListener!({ messageId: 'm-active', translations: [makeTranslation('m-active', 'fr', 'Bonjour')] });
+    });
+
+    const cached = queryClient.getQueryData(queryKeys.messages.infinite('conv-active')) as any;
+    expect(cached.pages[0].messages[0].translations.find((t: any) => t.targetLanguage === 'fr')?.translatedContent).toBe('Bonjour');
+  });
+
+  it('dedups a re-translated language rather than appending a duplicate', () => {
+    const { queryClient, wrapper } = createTestHarness('conv-active');
+    const msg = makeMessage({ id: 'm-1', conversationId: 'conv-other', content: 'Hello', originalLanguage: 'en' });
+    (msg as any).translations = [makeTranslation('m-1', 'fr', 'Bonjour')];
+    queryClient.setQueryData(queryKeys.messages.infinite('conv-other'), {
+      pages: [{ messages: [msg], hasMore: false, total: 1 }],
+      pageParams: [1],
+    });
+
+    renderHook(() => useSocketCacheSync({ conversationId: 'conv-active', enabled: true }), { wrapper });
+
+    act(() => {
+      capturedTranslationListener!({ messageId: 'm-1', translations: [makeTranslation('m-1', 'fr', 'Salut')] });
+    });
+
+    const cached = queryClient.getQueryData(queryKeys.messages.infinite('conv-other')) as any;
+    const frTranslations = cached.pages[0].messages[0].translations.filter((t: any) => t.targetLanguage === 'fr');
+    expect(frTranslations).toHaveLength(1);
+    expect(frTranslations[0].translatedContent).toBe('Salut');
+  });
+
+  it('applies an audio translation to a message in a NON-active conversation via data.conversationId', () => {
+    const { queryClient, wrapper } = createTestHarness('conv-active');
+    const bgMessage = makeMessage({ id: 'm-audio', conversationId: 'conv-other', content: '', messageType: 'audio' });
+    queryClient.setQueryData(queryKeys.messages.infinite('conv-other'), {
+      pages: [{ messages: [bgMessage], hasMore: false, total: 1 }],
+      pageParams: [1],
+    });
+
+    renderHook(() => useSocketCacheSync({ conversationId: 'conv-active', enabled: true }), { wrapper });
+    expect(capturedAudioTranslationListener).not.toBeNull();
+
+    act(() => {
+      capturedAudioTranslationListener!({
+        messageId: 'm-audio',
+        attachmentId: 'att-1',
+        conversationId: 'conv-other',
+        language: 'fr',
+        translatedAudio: { id: 'a1', targetLanguage: 'fr', url: 'https://x/fr.mp3', transcription: 'Bonjour', durationMs: 1000, format: 'mp3', cloned: false, quality: 0.9, ttsModel: 'x' },
+      });
+    });
+
+    const cached = queryClient.getQueryData(queryKeys.messages.infinite('conv-other')) as any;
+    expect(cached.pages[0].messages[0].translatedAudios?.fr?.url).toBe('https://x/fr.mp3');
   });
 });

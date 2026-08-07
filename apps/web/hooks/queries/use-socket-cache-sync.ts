@@ -535,39 +535,51 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
       }
     };
 
-    // Handler for message translations — merges as Translation[] array (not Record)
+    // Handler for message translations — merges as Translation[] array (not Record).
+    //
+    // `TranslationEvent` carries only `messageId` (no conversationId), and the
+    // socket is joined to EVERY conversation room the user belongs to — so a
+    // translation can arrive for a message that lives in a conversation other
+    // than the one currently open (e.g. a message received while viewing the
+    // list or another chat, whose async translation completes moments later).
+    // Scoping the write to the hook's active `conversationId` silently dropped
+    // those, leaving the message stranded in its original language until a
+    // window refocus / manual refetch (`staleTime: Infinity` never re-reads it)
+    // — a direct Prisme Linguistique violation. Route the merge by `messageId`
+    // across every cached message list, mirroring `handleMessageDeleted`'s scan.
     const handleTranslation = (data: TranslationEvent) => {
-      if (!conversationId) return;
+      const applyMerge = (
+        old: InfiniteMessagesData | undefined
+      ): InfiniteMessagesData | undefined => {
+        if (!old) return old;
+        let changed = false;
+        const pages = old.pages.map((page) => {
+          let pageChanged = false;
+          const messages = page.messages.map((m) => {
+            if (m.id !== data.messageId) return m;
+            pageChanged = true;
 
-      queryClient.setQueryData(
-        queryKeys.messages.infinite(conversationId),
-        (old: { pages: { messages: Message[]; hasMore: boolean; total: number }[]; pageParams: number[] } | undefined) => {
-          if (!old) return old;
-          return {
-            ...old,
-            pages: old.pages.map((page) => ({
-              ...page,
-              messages: page.messages.map((m) => {
-                if (m.id !== data.messageId) return m;
+            // Merge translations as array, dedup by targetLanguage
+            const existingTranslations = Array.isArray(m.translations) ? [...m.translations] : [];
+            for (const t of data.translations) {
+              const idx = existingTranslations.findIndex((et) => et.targetLanguage === t.targetLanguage);
+              if (idx >= 0) existingTranslations[idx] = t;
+              else existingTranslations.push(t);
+            }
 
-                // Merge translations as array, dedup by targetLanguage
-                const existingTranslations = Array.isArray(m.translations) ? [...m.translations] : [];
-                for (const t of data.translations) {
-                  const targetLang = t.targetLanguage;
-                  const idx = existingTranslations.findIndex((et) => et.targetLanguage === targetLang);
-                  if (idx >= 0) existingTranslations[idx] = t;
-                  else existingTranslations.push(t);
-                }
+            return { ...m, translations: existingTranslations };
+          });
+          if (pageChanged) { changed = true; return { ...page, messages }; }
+          return page;
+        });
+        return changed ? { ...old, pages } : old;
+      };
 
-                return {
-                  ...m,
-                  translations: existingTranslations,
-                };
-              }),
-            })),
-          };
-        }
-      );
+      for (const query of queryClient.getQueryCache().findAll({ queryKey: queryKeys.messages.lists() })) {
+        const cached = query.state.data as InfiniteMessagesData | undefined;
+        if (!cached?.pages?.some((page) => page.messages?.some((m) => m.id === data.messageId))) continue;
+        queryClient.setQueryData(query.queryKey, applyMerge);
+      }
     };
 
     // Handler for unread count updates — applies to ALL conversation list variants (filtered, unfiltered)
@@ -621,13 +633,20 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
       );
     };
 
-    // W6: Handler for audio translation ready — updates attachment with translated audio URL
+    // W6: Handler for audio translation ready — updates attachment with translated audio URL.
+    //
+    // The event carries its own `conversationId`, and the socket receives audio
+    // translations for every joined conversation room — so route by
+    // `data.conversationId` rather than the hook's active conversation, or an
+    // audio translation completing for a background conversation is dropped
+    // (same Prisme gap as `handleTranslation`).
     const handleAudioTranslation = (data: AudioTranslationReadyEventData) => {
-      if (!conversationId) return;
+      const targetConversationId = data.conversationId ?? conversationId;
+      if (!targetConversationId) return;
 
       const targetLang = data.translatedAudio.targetLanguage;
       queryClient.setQueryData(
-        queryKeys.messages.infinite(conversationId),
+        queryKeys.messages.infinite(targetConversationId),
         (old: { pages: { messages: Message[]; hasMore: boolean; total: number }[]; pageParams: number[] } | undefined) => {
           if (!old) return old;
           return {
