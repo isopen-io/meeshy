@@ -34,6 +34,13 @@ async function attemptSend(msg: FailedMessage): Promise<boolean> {
   }
 }
 
+/** Work the queue still owes an attempt to, read fresh rather than off a snapshot. */
+function hasRetryableWork(): boolean {
+  return useFailedMessagesStore
+    .getState()
+    .failedMessages.some(m => m.retryCount < MAX_RETRY_COUNT);
+}
+
 /**
  * Replays messages whose send failed, once the connection can actually carry
  * them.
@@ -95,13 +102,25 @@ export function useAutoRetryFailedMessages() {
         drained = true;
       } finally {
         if (activeRun.current === run) activeRun.current = null;
-        // A run that stopped with work left behind holds the only reference to
-        // that work: readiness may have flapped back to `true` while it was
-        // still in flight, in which case the effect already ran and bailed on
-        // the ownership guard, and no dependency will change again. Re-arming
-        // hands the remainder to a fresh run. A drained run never re-arms, so
-        // this cannot spin.
-        if (!drained) setRearm(v => v + 1);
+        // A run holds the only reference to the work it did not finish, and
+        // nothing else will schedule the remainder: `isReady` is already `true`,
+        // so no dependency changes again until the connection drops. Two ways to
+        // finish with work outstanding, both re-armed here:
+        //
+        //  - the run stopped early (readiness flapped mid-flush), leaving its
+        //    own snapshot unconsumed;
+        //  - the run drained its snapshot, but the queue still owes attempts —
+        //    messages that failed again and are still inside MAX_RETRY_COUNT, or
+        //    messages queued after the snapshot was taken. Without this, the
+        //    budget could only ever be spent one attempt per reconnect: on a
+        //    connection that never drops, a message got a single retry and then
+        //    sat there untried, neither delivered nor marked exhausted.
+        //
+        // This cannot spin: every sweep increments `retryCount` for every
+        // message it attempts, so each pass strictly shrinks the remaining
+        // budget, and `hasRetryableWork` goes false after MAX_RETRY_COUNT passes
+        // at the latest. Nothing here is driven by wall time.
+        if (!drained || hasRetryableWork()) setRearm(v => v + 1);
       }
     };
 

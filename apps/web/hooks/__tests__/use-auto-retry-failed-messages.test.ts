@@ -1,4 +1,4 @@
-import { renderHook } from '@testing-library/react';
+import { act, renderHook } from '@testing-library/react';
 
 const mockUseConnectionStatus = jest.fn();
 jest.mock('@/hooks/use-connection-status', () => ({
@@ -77,6 +77,49 @@ function makeStore(failedMessages: ReturnType<typeof makeFailedMessage>[] = []) 
     removeFailedMessage: jest.fn(),
     updateFailedMessage: jest.fn(),
   };
+}
+
+/**
+ * `makeStore` freezes a snapshot: its actions record calls without ever changing
+ * `failedMessages`, so a test written against it cannot observe what a SECOND
+ * sweep of the queue would see. This one mirrors the real zustand store —
+ * immutable updates that replace the entry — which is what makes the retry
+ * budget, and work queued mid-sweep, observable at all.
+ */
+function makeLiveStore(initial: ReturnType<typeof makeFailedMessage>[] = []) {
+  const store = {
+    failedMessages: initial,
+    incrementRetryCount: jest.fn((id: string) => {
+      store.failedMessages = store.failedMessages.map(
+        (m) => (m.id === id ? { ...m, retryCount: m.retryCount + 1 } : m),
+      );
+    }),
+    removeFailedMessage: jest.fn((id: string) => {
+      store.failedMessages = store.failedMessages.filter((m) => m.id !== id);
+    }),
+    updateFailedMessage: jest.fn((id: string, updates: Record<string, unknown>) => {
+      store.failedMessages = store.failedMessages.map(
+        (m) => (m.id === id ? { ...m, ...updates } : m),
+      );
+    }),
+    enqueue: (message: ReturnType<typeof makeFailedMessage>) => {
+      store.failedMessages = [...store.failedMessages, message];
+    },
+  };
+  return store;
+}
+
+/**
+ * Drives the hook to a standstill. A sweep that re-arms does so from an async
+ * callback: React only picks the update up when `act` flushes, and the fresh
+ * sweep it schedules is a timer that did not exist during the previous advance.
+ * One advance can therefore only ever observe one sweep — alternating flush and
+ * advance is what lets the queue run to completion.
+ */
+async function settle(rounds = 8) {
+  for (let i = 0; i < rounds; i += 1) {
+    await act(async () => { await jest.advanceTimersByTimeAsync(5_000); });
+  }
 }
 
 beforeEach(() => {
@@ -378,5 +421,60 @@ describe('useAutoRetryFailedMessages', () => {
 
     await jest.advanceTimersByTimeAsync(2000);
     expect(mockSendMessage).toHaveBeenCalledTimes(2);
+  });
+
+  // ---------------------------------------------------------------------------
+  // D4 — MAX_RETRY_COUNT is a budget, and a live connection has to be able to
+  // spend it. Every test above pins a SINGLE sweep, and the one right above buys
+  // its second attempt with a reconnect: none of them can see that the queue was
+  // only ever swept once per readiness transition.
+  // ---------------------------------------------------------------------------
+
+  it('spends the whole retry budget on a connection that never drops', async () => {
+    mockSendMessage.mockResolvedValue(ackFailed());
+    const store = makeLiveStore([makeFailedMessage({ retryCount: 0 })]);
+    mockGetState.mockReturnValue(store);
+
+    renderHook(() => useAutoRetryFailedMessages());
+
+    await settle();
+
+    expect(mockSendMessage).toHaveBeenCalledTimes(3);
+    expect(store.updateFailedMessage).toHaveBeenCalledWith('msg-1', {
+      error: 'Max retries exceeded',
+    });
+  });
+
+  it('stops sweeping once the queue is empty', async () => {
+    const store = makeLiveStore([makeFailedMessage()]);
+    mockGetState.mockReturnValue(store);
+
+    renderHook(() => useAutoRetryFailedMessages());
+
+    await settle();
+
+    expect(mockSendMessage).toHaveBeenCalledTimes(1);
+    expect(store.failedMessages).toEqual([]);
+  });
+
+  it('picks up a message that failed while a flush was already in flight', async () => {
+    const store = makeLiveStore([
+      makeFailedMessage({ id: 'msg-1', content: 'first', clientMessageId: 'cid-1' }),
+    ]);
+    mockGetState.mockReturnValue(store);
+    // The sweep works off a snapshot taken before this message existed, so
+    // nothing in the run that is already flying will ever look at it.
+    mockSendMessage.mockImplementationOnce(async () => {
+      store.enqueue(makeFailedMessage({ id: 'msg-2', content: 'second', clientMessageId: 'cid-2' }));
+      return ackOk();
+    });
+
+    renderHook(() => useAutoRetryFailedMessages());
+
+    await settle();
+
+    expect(mockSendMessage).toHaveBeenCalledWith(
+      'conv-1', 'second', 'en', undefined, undefined, undefined, undefined, 'cid-2',
+    );
   });
 });

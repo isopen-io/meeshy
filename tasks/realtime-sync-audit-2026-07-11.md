@@ -644,3 +644,102 @@ Non traité, relevé pour un cycle suivant :
   `BubbleStreamPage` ne reçoit donc QUE `message:new` ; tout message posté par la
   route REST de lien (iOS, API tierce) lui est invisible en temps réel.
 - iOS n'écoute toujours pas `link:message:new` (inchangé depuis le cycle 7).
+
+---
+
+## Cycle 9 bis — le budget de réessai que la file ne pouvait pas dépenser
+
+Mené en parallèle du cycle 9 ci-dessus, par une autre session de la routine, sur
+un défaut disjoint. Renuméroté « bis » car le cycle 9 a été mergé en premier.
+
+Phase 3 (pipeline de remise). Les trois legs du cycle 8 ont été réexaminés
+d'abord. Sur le premier — le mensonge de type de
+`anonymous-chat.service.sendMessage` — cette passe a conclu « défaut sans chemin
+vivant » au motif que son seul appelant, `use-anonymous-messages.ts`, n'a aucun
+consommateur. **Conclusion fausse, et le cycle 9 ci-dessus montre pourquoi** :
+l'absence d'appelant N'ÉTAIT PAS l'atténuation du défaut, elle en était le
+défaut — le repli REST de l'expéditeur anonyme n'avait aucun tuyau capable de
+s'authentifier. Leçon : « personne n'appelle ce code » n'est pas une preuve
+d'innocuité ; c'est une question sur ce qui aurait dû l'appeler.
+
+`sendMessageBodySchema` reste sans défaut observable ; iOS/`link:message:new`
+n'est pas vérifiable sous Linux. Le défaut traité ici a été trouvé ailleurs, sur
+un chemin vivant : le rejeu automatique des messages en échec.
+
+### D1 (racine) — un balayage par transition de connexion, jamais plus
+
+`useAutoRetryFailedMessages` annonce `MAX_RETRY_COUNT = 3` tentatives
+automatiques espacées de `RETRY_DELAY_MS`. Il ne pouvait en dépenser qu'**une**.
+
+L'effet est clé sur `[isReady, rearm]`. Il prend un instantané de la file, la
+balaie une fois, et ne se ré-arme que s'il s'est arrêté *tôt* (bascule de
+`isReady` en cours de vidange). Un balayage mené à son terme avec des messages
+encore en file ne ré-armait rien — et `isReady` valait déjà `true`, donc plus
+aucune dépendance ne changerait jamais. Sur une connexion qui ne tombe pas, un
+message dont l'envoi échoue pour une raison transitoire recevait exactement un
+réessai puis restait là : ni remis, ni marqué épuisé, `retryCount` figé à 1, son
+budget restant indépensable. La seule façon d'acheter une 2e tentative était de
+perdre la connexion et de la retrouver — précisément la condition que la
+fonctionnalité existe pour traverser *sans* qu'on ait à la subir.
+
+### D2 — le travail arrivé derrière un balayage en vol était orphelin
+
+Même racine, autre symptôme : un message qui échoue *pendant* la vidange n'est
+pas dans l'instantané de ce balayage, et rien n'en planifiait un autre.
+
+### D3 (pourquoi le défaut a survécu) — un store gelé rend le 2e balayage invisible
+
+Les 18 tests existants pilotaient le hook avec `makeStore`, dont les actions
+(`incrementRetryCount`, `removeFailedMessage`) sont des `jest.fn()` qui
+enregistrent l'appel **sans jamais modifier `failedMessages`**. Contre un
+instantané gelé, « la file a été balayée deux fois » et « la file n'a été
+balayée qu'une fois » produisent exactement les mêmes assertions : le défaut
+était structurellement inobservable. Le test le plus proche — *allows a new
+flush once the previous one has finished* — achète sa 2e tentative par une
+reconnexion, donc il documentait la limite au lieu de la signaler.
+
+Le correctif : un balayage se ré-arme aussi lorsqu'il a vidé son instantané mais
+que le store doit encore des tentatives. Terminaison par le budget, pas par le
+temps — chaque passe incrémente `retryCount` pour chaque message tentée, donc
+elle réduit strictement le budget restant et la condition de ré-armement devient
+fausse après au plus `MAX_RETRY_COUNT` passes.
+
+## Plan
+- [x] T1 — RED : `makeLiveStore`, un double du store zustand qui applique vraiment ses mises à jour
+- [x] T2 — RED : budget entier dépensé sur une connexion stable (3 envois + `Max retries exceeded`)
+- [x] T3 — RED : un message mis en file pendant un balayage en vol finit par partir
+- [x] T4 — garde anti-spin : une file vidée cesse d'être balayée (verte avant ET après — c'est son rôle)
+- [x] T5 — GREEN : ré-armement sur `!drained || hasRetryableWork()`
+- [x] T6 — gates : suite web complète 505/505 (11 673 tests), `tsc --noEmit` sans erreur sur les fichiers touchés
+- [x] T7 — changeset
+
+## Revue
+
+L'assertion qui porte le correctif est *spends the whole retry budget on a
+connection that never drops* : elle nomme l'invariant (le budget est dépensable
+sans reconnexion) là où les autres décrivent des symptômes. C'est aussi elle qui
+a dicté la forme du correctif — ré-armer sur l'état réel de la file rend le
+budget dépensable par construction, alors qu'une boucle `for` de 3 tours à
+l'intérieur du balayage aurait ignoré D2 et rendu la vidange non interruptible.
+
+Note d'outillage : le ré-armement passe par un `setState` appelé depuis un
+callback asynchrone. Sous faux timers, un seul `advanceTimersByTimeAsync` ne peut
+observer qu'un balayage — React n'intègre la mise à jour qu'au `flush` d'`act`,
+et le balayage suivant est un timer qui n'existait pas pendant l'avance. D'où
+l'helper `settle()`, qui alterne `act` et avance du temps. Un test écrit avec une
+seule avance serait resté rouge en donnant l'impression que le correctif ne
+fonctionne pas.
+
+Vérification par mutation (leçon 2026-07-31 #5) : le correctif retiré
+(`if (!drained)`), les 2 tests de comportement repassent ROUGES — 1 envoi au lieu
+de 3, et le message mis en file en vol jamais envoyé — tandis que la garde
+anti-spin reste verte, ce qui est exactement son rôle.
+
+Non traité, relevé pour un cycle suivant :
+- ~~`use-anonymous-messages.ts` est du code mort~~ — traité par le cycle 9
+  ci-dessus, qui a supprimé le hook et câblé `AnonymousChatService.sendMessage`
+  au repli REST auquel il manquait.
+- Le hook ne rejoue la file qu'en présence d'un montage de `ConversationLayout`.
+  Une session ouverte sur une autre route ne vide jamais sa file — à confirmer
+  avant d'en faire un défaut.
+- `sendMessageBodySchema` et iOS/`link:message:new` : inchangés depuis le cycle 8.
