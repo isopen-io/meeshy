@@ -1015,6 +1015,28 @@ describe('useSocketCacheSync', () => {
         expect.objectContaining({ queryKey: ['conversations', 'participants', 'conv-1'] })
       );
     });
+
+    it('restores memberCount when a participant is unbanned', () => {
+      const { wrapper, queryClient } = createWrapperWithClient();
+
+      queryClient.setQueryData(['conversations', 'infinite'], {
+        pages: [{ conversations: [{ ...mockConversation, memberCount: 3 }], pagination: { total: 1, offset: 0, limit: 20, hasMore: false } }],
+        pageParams: [0],
+      });
+
+      renderHook(() => useSocketCacheSync(), { wrapper });
+
+      // A ban decrements the cached count; the unban is its exact inverse. Left
+      // un-incremented, every ban/unban round-trip drifts the displayed member
+      // count one lower than reality until an unrelated full refetch.
+      act(() => {
+        conversationParticipantBannedCallback?.({ conversationId: 'conv-1', userId: 'user-2', bannedBy: { id: 'admin-1' }, bannedAt: new Date().toISOString() });
+        conversationParticipantUnbannedCallback?.({ conversationId: 'conv-1', userId: 'user-2' });
+      });
+
+      const cached = queryClient.getQueryData(['conversations', 'infinite']) as { pages: { conversations: Conversation[] }[] };
+      expect((cached.pages[0].conversations[0] as any).memberCount).toBe(3);
+    });
   });
 
   describe('Conversation Closed Handler', () => {

@@ -92,29 +92,68 @@ function makePrisma(opts: {
   };
 }
 
+/**
+ * Records the socket side effects of a membership transition IN ORDER.
+ *
+ * Ordering matters both ways and is the whole contract: ban must broadcast
+ * BEFORE evicting the target's sockets (else the banned user never learns they
+ * were banned), and unban must re-join them BEFORE broadcasting (else the
+ * unbanned user — evicted at ban time — never learns they were unbanned).
+ * A mock that only counts calls cannot express that, which is why the previous
+ * `withSocket` mock (assert-nothing, `mockReturnThis`) let the missing re-join
+ * survive.
+ */
+function makeSocketRecorder() {
+  const order: string[] = [];
+  const emits: { room: string; event: string; payload: any }[] = [];
+  const leftRooms: string[] = [];
+
+  const io = {
+    to: (room: string) => ({
+      emit: (event: string, payload: any) => {
+        order.push(`emit:${event}`);
+        emits.push({ room, event, payload });
+      },
+    }),
+    in: (_room: string) => ({
+      fetchSockets: async () => [
+        {
+          leave: (room: string) => {
+            order.push(`leave:${room}`);
+            leftRooms.push(room);
+          },
+        },
+      ],
+    }),
+  };
+
+  const joinUserToConversationRoom = jest.fn<any>(async (_userId: string, conversationId: string) => {
+    order.push(`join:conversation:${conversationId}`);
+  });
+
+  const manager = {
+    getIO: () => io,
+    invalidateParticipantCache: jest.fn(),
+    joinUserToConversationRoom,
+  };
+
+  return { order, emits, leftRooms, joinUserToConversationRoom, manager };
+}
+
+type SocketRecorder = ReturnType<typeof makeSocketRecorder>;
+
 async function buildApp(opts: {
   authenticated?: boolean;
   prisma?: any;
-  withSocket?: boolean;
+  socket?: SocketRecorder;
 } = {}): Promise<FastifyInstance> {
-  const { authenticated = true, prisma = makePrisma(), withSocket = false } = opts;
+  const { authenticated = true, prisma = makePrisma(), socket } = opts;
 
   const app = Fastify({ logger: false });
   const requiredAuth = makePreValidationAuth(authenticated);
 
-  if (withSocket) {
-    const mockIO = {
-      to: jest.fn().mockReturnThis(),
-      emit: jest.fn(),
-      in: jest.fn().mockReturnThis(),
-      fetchSockets: jest.fn<any>().mockResolvedValue([{ leave: jest.fn() }]),
-    };
-    app.decorate('socketIOHandler', {
-      getManager: jest.fn(() => ({
-        getIO: jest.fn(() => mockIO),
-        invalidateParticipantCache: jest.fn(),
-      })),
-    });
+  if (socket) {
+    app.decorate('socketIOHandler', { getManager: jest.fn(() => socket.manager) });
   } else {
     app.decorate('socketIOHandler', null as any);
   }
@@ -174,9 +213,24 @@ describe('PATCH ban — success', () => {
 
 describe('PATCH ban — success with socket events', () => {
   it('returns 200 and emits ban event', async () => {
-    const app = await buildApp({ prisma: makePrisma(), withSocket: true });
+    const socket = makeSocketRecorder();
+    const app = await buildApp({ prisma: makePrisma(), socket });
     const res = await app.inject({ method: 'PATCH', url: `/conversations/${CONV_ID}/participants/${TARGET_ID}/ban`, payload: {} });
     expect(res.statusCode).toBe(200);
+    expect(socket.emits.map(e => e.event)).toContain('conversation:participant-banned');
+    await app.close();
+  });
+
+  it('evicts the banned user sockets from the conversation room AFTER broadcasting', async () => {
+    const socket = makeSocketRecorder();
+    const app = await buildApp({ prisma: makePrisma(), socket });
+    await app.inject({ method: 'PATCH', url: `/conversations/${CONV_ID}/participants/${TARGET_ID}/ban`, payload: {} });
+
+    expect(socket.leftRooms).toEqual(['conversation:conv-resolved-id']);
+    expect(socket.order).toEqual([
+      'emit:conversation:participant-banned',
+      'leave:conversation:conv-resolved-id',
+    ]);
     await app.close();
   });
 });
@@ -242,20 +296,65 @@ describe('PATCH unban — target not banned', () => {
   });
 });
 
+function makeUnbanPrisma() {
+  return {
+    participant: {
+      findFirst: jest.fn<any>()
+        .mockResolvedValueOnce({ id: 'part-curr', role: 'admin' })
+        .mockResolvedValueOnce({ id: 'part-tgt' }),
+      update: jest.fn<any>().mockResolvedValue({}),
+    },
+  };
+}
+
 describe('PATCH unban — success', () => {
   it('returns 200 when admin unbans a participant', async () => {
-    const prisma = {
-      participant: {
-        findFirst: jest.fn<any>()
-          .mockResolvedValueOnce({ id: 'part-curr', role: 'admin' })
-          .mockResolvedValueOnce({ id: 'part-tgt' }),
-        update: jest.fn<any>().mockResolvedValue({}),
-      },
-    };
-    const app = await buildApp({ prisma });
+    const app = await buildApp({ prisma: makeUnbanPrisma() });
     const res = await app.inject({ method: 'PATCH', url: `/conversations/${CONV_ID}/participants/${TARGET_ID}/unban`, payload: {} });
     expect(res.statusCode).toBe(200);
     expect(res.json().success).toBe(true);
+    await app.close();
+  });
+});
+
+describe('PATCH unban — restores live room membership', () => {
+  it('re-joins the unbanned user connected sockets to the conversation room', async () => {
+    const socket = makeSocketRecorder();
+    const app = await buildApp({ prisma: makeUnbanPrisma(), socket });
+    await app.inject({ method: 'PATCH', url: `/conversations/${CONV_ID}/participants/${TARGET_ID}/unban`, payload: {} });
+
+    // The exact inverse of the ban eviction. Without it the unbanned user stays
+    // outside `conversation:<id>` until a reconnect: no live message:new, and —
+    // because the delivery queue skips anyone `connectedUsers` reports online —
+    // no offline replay either, so messages sent meanwhile are lost to them.
+    expect(socket.joinUserToConversationRoom).toHaveBeenCalledWith(TARGET_ID, 'conv-resolved-id');
+    await app.close();
+  });
+
+  it('re-joins BEFORE broadcasting so the unbanned user receives their own unban event', async () => {
+    const socket = makeSocketRecorder();
+    const app = await buildApp({ prisma: makeUnbanPrisma(), socket });
+    await app.inject({ method: 'PATCH', url: `/conversations/${CONV_ID}/participants/${TARGET_ID}/unban`, payload: {} });
+
+    // `conversation:participant-unbanned` is broadcast to the conversation room
+    // only — the one room the ban evicted the target from. Emitting before the
+    // re-join means the person being unbanned is the single participant who
+    // never hears about it.
+    expect(socket.order).toEqual([
+      'join:conversation:conv-resolved-id',
+      'emit:conversation:participant-unbanned',
+    ]);
+    await app.close();
+  });
+
+  it('still broadcasts the unban when the room re-join fails', async () => {
+    const socket = makeSocketRecorder();
+    socket.joinUserToConversationRoom.mockRejectedValueOnce(new Error('adapter down'));
+    const app = await buildApp({ prisma: makeUnbanPrisma(), socket });
+    const res = await app.inject({ method: 'PATCH', url: `/conversations/${CONV_ID}/participants/${TARGET_ID}/unban`, payload: {} });
+
+    expect(res.statusCode).toBe(200);
+    expect(socket.emits.map(e => e.event)).toEqual(['conversation:participant-unbanned']);
     await app.close();
   });
 });

@@ -5,6 +5,9 @@ import { sendSuccess, sendBadRequest, sendForbidden, sendNotFound } from '../../
 import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events'
 import { resolveConversationId } from '../../utils/conversation-id-cache'
 import { invalidateParticipantLookup } from '../../utils/participant-lookup-cache'
+import { enhancedLogger } from '../../utils/logger-enhanced.js'
+
+const logger = enhancedLogger.child({ module: 'ConversationBanRoutes' })
 
 const ROLE_LEVELS: Record<string, number> = {
   creator: 40,
@@ -157,8 +160,37 @@ export function registerBanRoutes(
         data: { bannedAt: null, isActive: true, leftAt: null },
       })
 
-      const io = socketIOHandler?.getManager()?.getIO()
+      const manager = socketIOHandler?.getManager()
+      const io = manager?.getIO()
       const room = ROOMS.conversation(id)
+
+      // Exact inverse of the ban eviction above: the ban pulled every socket of
+      // this user out of `conversation:<id>`, and nothing puts them back until
+      // they reconnect (AuthHandler._joinUserConversations) or their client
+      // happens to emit `conversation:join`. Left un-rejoined, the unbanned user
+      // is in the worst possible state — `connectedUsers` reports them ONLINE,
+      // so every sender skips the offline delivery queue for them, while no live
+      // room event reaches them: messages, reactions, edits and receipts sent
+      // meanwhile are lost outright rather than replayed on reconnect (the
+      // hazard AuthHandler documents when a room join fails).
+      //
+      // Awaited BEFORE the broadcast, because the broadcast goes to the
+      // conversation room only: emitting first would leave the person being
+      // unbanned as the single participant who never learns about it. Mirrors
+      // ban's emit-then-evict ordering, which likewise ensures the target
+      // receives their own transition. A join failure is logged, never fatal —
+      // the broadcast still goes out for the remaining members.
+      if (manager) {
+        try {
+          await manager.joinUserToConversationRoom(targetUserId, id)
+        } catch (err) {
+          logger.error('Failed to re-join unbanned user to conversation room', {
+            userId: targetUserId,
+            conversationId: id,
+            err,
+          })
+        }
+      }
 
       if (io) {
         io.to(room).emit(SERVER_EVENTS.CONVERSATION_PARTICIPANT_UNBANNED, {
