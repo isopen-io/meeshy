@@ -3887,3 +3887,66 @@ le traiter.
   par appel, borné en pratique par le `reset()` générique plutôt qu'une éviction ciblée (FAIBLE, non
   corrigé). **Busy-path troisième appelant retiré de cette liste** (confirmé résolu cette vague, voir
   ci-dessus).
+
+## Vague 60 — un DEUXIÈME appelant non-busy bumpait le premier `incomingCall` sans décliner (2026-08-07)
+
+Point d'entrée : routine calling-feature (agent Cowork non interactif, mandat PHASE 1-12). Branche
+`claude/modest-cori-3j5xym`, redémarrée depuis `origin/main` à jour (`38640e69`, aucune PR calling ouverte
+au démarrage — la précédente instance de cette branche était déjà mergée en #2599 et purgée). Audit dédié
+(agent général, lecture seule, croisé avec les 59 vagues précédentes) sur `CallEventsHandler.ts`,
+`CallService.ts`, `TURNCredentialService.ts`, `routes/calls.ts`, `call-store.ts`, `CallManager.tsx`,
+`use-video-call.ts` — gateway toujours "exceptionnellement propre" (aucun nouveau trou trouvé sur
+`CallEventsHandler.ts`/`TURNCredentialService.ts`/`routes/calls.ts`, cf. candidats rejetés ci-dessous) ; le
+bug trouvé est le jumeau exact de la Vague 59, sur la branche NON-busy de la même fonction.
+
+- **[FAIBLE-MOYEN, web, CONFIRMÉ + CORRIGÉ, TDD]** `CallManager.tsx` `handleIncomingCall` (branche callee,
+  ~ligne 328) — quand l'utilisateur n'est PAS busy (`isInCall === false`, donc la branche busy-path de la
+  Vague 59 ne s'exécute jamais) et qu'un `incomingCall` est déjà affiché (premier appelant, pas encore
+  répondu/décliné), l'arrivée d'un second `call:initiated` pour un callId différent tombait directement dans
+  `setIncomingCall(event)` + `startCallTimeout(event.callId)` sans jamais regarder l'état `incomingCall`
+  courant — écrasement silencieux de l'état React ET du `callTimeoutRef` partagé (le second appel de
+  `startCallTimeout` fait `clearCallTimeout()` avant de poser son propre timer), sans jamais émettre le
+  `call:end reason=rejected` que Decline/l'auto-timeout envoient normalement. **Scénario concret** : C est
+  disponible (aucun appel actif) ; A appelle → `incomingCall = A`, notification plein écran, timer 45s armé ;
+  avant que C ne réponde/décline, B appelle aussi (conversation différente) → `incomingCall` bascule
+  silencieusement sur B, le timer de A est annulé sans déclin explicite — A continue de sonner jusqu'à SON
+  PROPRE timeout client (~45s) ou le ringing-timeout serveur (~60s) au lieu de recevoir immédiatement le
+  `call:end` qu'un Reject explicite envoie. Exactement le trou que la Vague 59 avait bouché sur la branche
+  busy-path (`waitingCall`), jamais répliqué sur la branche callee "pas encore en appel du tout".
+  **Fix minimal** : dans la branche callee, si `incomingCall` existe déjà ET a un `callId` différent du
+  nouvel événement, on appelle `clearCallTimeout()` + `rejectWaitingCall(incomingCall.callId)` — réutilisation
+  directe du helper `rejectWaitingCall` existant (générique malgré son nom : il ne fait qu'émettre
+  `CLIENT_EVENTS.CALL_END` pour le callId passé en paramètre, aucun état `waitingCall` interne) — avant de
+  promouvoir le second appelant. Un re-`call:initiated` pour le MÊME callId que `incomingCall` (retransmission
+  réseau) ne déclenche pas de déclin, gardé par la comparaison `incomingCall.callId !== event.callId`.
+- **Tests TDD** : nouveau fichier `CallManager.doubleIncomingCall.test.tsx` (2 cas, miroir exact de
+  `CallManager.callWaitingBump.test.tsx` mais SANS `enterActiveCall()`) — (1) premier `call:initiated` puis
+  second callId différent, `isInCall` restant `false` tout du long → assert `socket.emit(CLIENT_EVENTS.CALL_END,
+  {callId: PREMIER, reason: 'rejected'})` ET la notification affiche maintenant le second (RED confirmé par
+  `git stash` du seul fichier source : `endCall` était `undefined`) ; (2) un `call:initiated` répété pour le
+  MÊME premier appelant ne redéclenche pas de déclin. GREEN après le fix. Suite élargie `video-call`/
+  `video-calls`/`call-store`/`CallManager` (29 suites) : 213/213 tests verts, aucune régression (y compris les
+  6 cas de `CallManager.callWaiting.test.tsx` et les 2 de `CallManager.callWaitingBump.test.tsx`, tous deux
+  dans la même zone de code).
+- **`tsc --noEmit`** (`apps/web`) : 30 erreurs pré-existantes dans `CallManager.tsx` (mêmes que Vagues 55/58/
+  59, socket typé `unknown` ailleurs dans le fichier, hors du diff de cette vague), comptées identiques
+  avant/après via `git stash`/`pop` ; aucune introduite par ce diff.
+- **Autres candidats explorés, rien trouvé de nouveau** : (1) commentaire de `CallEventsHandler.ts` (branche
+  RECONNECTING, ~3508-3539) évoquant un "guard `!call.answeredAt` ci-dessus" absent textuellement du handler
+  — tracé jusqu'à `CallService.updateCallStatus` (ligne 845), qui applique bien ce garde à chaque transition
+  `newStatus === reconnecting` ; imprécision de commentaire sur la couche, pas un bug fonctionnel — rejeté.
+  (2) `TURNCredentialService.ts` relu intégralement (validation secrets, floor/NaN TTL, parsing ports) —
+  aucun trou trouvé, déjà très durci — rejeté. (3) `routes/calls.ts` (fin/leave REST) — invalidation
+  signal-cache (Vague 50), dédup cancellation-push (Vague 56/59), câblage `call:ended` déjà corrects — rejeté.
+  (4) `pendingParticipantsByCallId` sans TTL (item reste-ouvert #6) — toujours vrai mais impact réel plus
+  faible (borné par le prochain appel réussi ou `reset()`, aucun symptôme utilisateur direct) que le bug
+  trouvé — dépriorisé au profit de cette vague.
+- **iOS/Android (lecture seule, aucun changement)** : hors périmètre — aucune toolchain Swift/Kotlin dans ce
+  sandbox Linux ; changement strictement web (1 fichier modifié + 1 nouveau fichier de test).
+- **Reste ouvert** : dead code / god-objects `CallManager.swift`/`CallEventsHandler.ts` ; ADR
+  `actor CallEventQueue` non implémenté ; couverture E2E iOS des écrans d'appel ; `enableSimulcast()`
+  scaffolding SFU Phase 2 (intentionnel) ; plafond P2P (max 2 participants actifs) vs conversations GROUP
+  autorisées côté `initiateCall` (Vague 55) ; `pendingParticipantsByCallId` (`call-store.ts:139`) sans TTL
+  par appel, borné en pratique par le `reset()` générique plutôt qu'une éviction ciblée (FAIBLE, non
+  corrigé). **Deuxième-appelant-non-busy retiré de cette liste** (confirmé résolu cette vague, voir
+  ci-dessus).
