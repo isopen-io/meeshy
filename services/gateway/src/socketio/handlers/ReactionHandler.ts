@@ -140,58 +140,74 @@ export class ReactionHandler {
         return;
       }
 
-      const message = await this.prisma.message.findUnique({
-        where: { id: validated.messageId },
-        select: { conversationId: true }
-      });
-
-      const updateEvent = await reactionService.createUpdateEvent(
-        validated.messageId,
-        validated.emoji,
-        'add',
-        participantId,
-        message?.conversationId ?? '',
-        userId
-      );
-
+      // The reaction is now PERSISTED. ACK immediately: everything below (the
+      // conversation lookup, the aggregation read `createUpdateEvent`, the
+      // broadcasts and the offline enqueue) is a post-success side-effect. A
+      // transient failure in those reads must NOT flip the ACK to failure — that
+      // would make the client roll back a reaction already committed to the DB
+      // and leave peers uninformed until the next reaction:sync. The success
+      // response is sent here, before any further await, so the aggregation read
+      // can never gate it.
       const successResponse: SocketIOResponse<unknown> = {
         success: true,
         data: reaction
       };
       if (callback) callback(successResponse);
 
-      // Fire-and-forget post-success side-effects so errors in broadcast or
-      // notification do not confuse the already-confirmed client response.
-      if (message) {
-        // Single-reaction-per-user swap: tell other clients the previous emoji
-        // is gone before announcing the new one (order is cosmetic — the two
-        // events target different emojis and merge independently client-side).
-        for (const removedEmoji of replacedEmojis) {
-          reactionService.createUpdateEvent(
+      // Fire-and-forget post-success side-effects so errors in the aggregation
+      // read, broadcast or notification do not confuse the already-confirmed
+      // client response. Wrapped in its own try/catch so a throw never reaches
+      // the outer catch (which would double-invoke the callback with failure).
+      try {
+        const message = await this.prisma.message.findUnique({
+          where: { id: validated.messageId },
+          select: { conversationId: true }
+        });
+
+        if (message) {
+          const updateEvent = await reactionService.createUpdateEvent(
             validated.messageId,
-            removedEmoji,
-            'remove',
+            validated.emoji,
+            'add',
             participantId,
             message.conversationId,
             userId
-          )
-            // The swap is already persisted (addReaction removed the old emoji),
-            // so the removal MUST reach every peer. If the aggregation read here
-            // rejects (DB load/timeout) we fall back to a degraded removal event
-            // rather than dropping it — dropping it would leave every other
-            // participant showing the actor's stale emoji until a full
-            // reaction:sync. The degraded aggregation self-heals on the next sync.
-            .catch(err => {
-              logger.error('reaction:add replaced-emoji createUpdateEvent failed — propagating degraded removal', { error: err, conversationId: message.conversationId });
-              return this._degradedRemovalEvent(message.conversationId, participantId, validated.messageId, removedEmoji, userId);
-            })
-            .then(removeEvent => this._propagateReplacedEmojiRemoval(
-              message.conversationId, participantId, validated.messageId, removedEmoji, removeEvent
-            ));
+          );
+
+          // Single-reaction-per-user swap: tell other clients the previous emoji
+          // is gone before announcing the new one (order is cosmetic — the two
+          // events target different emojis and merge independently client-side).
+          for (const removedEmoji of replacedEmojis) {
+            reactionService.createUpdateEvent(
+              validated.messageId,
+              removedEmoji,
+              'remove',
+              participantId,
+              message.conversationId,
+              userId
+            )
+              // The swap is already persisted (addReaction removed the old emoji),
+              // so the removal MUST reach every peer. If the aggregation read here
+              // rejects (DB load/timeout) we fall back to a degraded removal event
+              // rather than dropping it — dropping it would leave every other
+              // participant showing the actor's stale emoji until a full
+              // reaction:sync. The degraded aggregation self-heals on the next sync.
+              .catch(err => {
+                logger.error('reaction:add replaced-emoji createUpdateEvent failed — propagating degraded removal', { error: err, conversationId: message.conversationId });
+                return this._degradedRemovalEvent(message.conversationId, participantId, validated.messageId, removedEmoji, userId);
+              })
+              .then(removeEvent => this._propagateReplacedEmojiRemoval(
+                message.conversationId, participantId, validated.messageId, removedEmoji, removeEvent
+              ));
+          }
+          this._broadcastReactionEventWithConversationId(message.conversationId, updateEvent, SERVER_EVENTS.REACTION_ADDED)
+            .catch(err => logger.error('reaction:add broadcast failed', { error: err, conversationId: message.conversationId }));
+          void this._enqueueOfflineReactionEvent(message.conversationId, participantId, 'reaction-added', validated.messageId, validated.emoji, updateEvent as unknown as Record<string, unknown>);
         }
-        this._broadcastReactionEventWithConversationId(message.conversationId, updateEvent, SERVER_EVENTS.REACTION_ADDED)
-          .catch(err => logger.error('reaction:add broadcast failed', { error: err, conversationId: message.conversationId }));
-        void this._enqueueOfflineReactionEvent(message.conversationId, participantId, 'reaction-added', validated.messageId, validated.emoji, updateEvent as unknown as Record<string, unknown>);
+      } catch (sideEffectError) {
+        // Reaction is persisted and the client already ACKed; the broadcast is
+        // best-effort. Peers reconcile on the next reaction:sync.
+        logger.error('reaction:add post-success side-effects failed', { error: sideEffectError });
       }
       // _createReactionNotification handles errors internally; void to be explicit.
       void this._createReactionNotification(validated.messageId, validated.emoji, participantId, isAnonymous, reaction.id);
@@ -272,30 +288,43 @@ export class ReactionHandler {
         return;
       }
 
-      const message = await this.prisma.message.findUnique({
-        where: { id: validated.messageId },
-        select: { conversationId: true }
-      });
-
-      const updateEvent = await reactionService.createUpdateEvent(
-        validated.messageId,
-        validated.emoji,
-        'remove',
-        participantId,
-        message?.conversationId ?? '',
-        userId
-      );
-
+      // The removal is now PERSISTED. ACK immediately: the conversation lookup,
+      // the aggregation read `createUpdateEvent`, the broadcast and the offline
+      // enqueue below are post-success side-effects. A transient failure in
+      // those reads must NOT flip the ACK to failure — that would make the client
+      // roll its optimistic un-react back and re-show a reaction that is already
+      // gone from the DB.
       const successResponse: SocketIOResponse<unknown> = {
         success: true,
         data: { message: 'Reaction removed successfully' }
       };
       if (callback) callback(successResponse);
 
-      if (message) {
-        this._broadcastReactionEventWithConversationId(message.conversationId, updateEvent, SERVER_EVENTS.REACTION_REMOVED)
-          .catch(err => logger.error('reaction:remove broadcast failed', { error: err, conversationId: message.conversationId }));
-        void this._enqueueOfflineReactionEvent(message.conversationId, participantId, 'reaction-removed', validated.messageId, validated.emoji, updateEvent as unknown as Record<string, unknown>);
+      // Wrapped in its own try/catch so a throw never reaches the outer catch
+      // (which would double-invoke the callback with failure).
+      try {
+        const message = await this.prisma.message.findUnique({
+          where: { id: validated.messageId },
+          select: { conversationId: true }
+        });
+
+        if (message) {
+          const updateEvent = await reactionService.createUpdateEvent(
+            validated.messageId,
+            validated.emoji,
+            'remove',
+            participantId,
+            message.conversationId,
+            userId
+          );
+          this._broadcastReactionEventWithConversationId(message.conversationId, updateEvent, SERVER_EVENTS.REACTION_REMOVED)
+            .catch(err => logger.error('reaction:remove broadcast failed', { error: err, conversationId: message.conversationId }));
+          void this._enqueueOfflineReactionEvent(message.conversationId, participantId, 'reaction-removed', validated.messageId, validated.emoji, updateEvent as unknown as Record<string, unknown>);
+        }
+      } catch (sideEffectError) {
+        // Removal is persisted and the client already ACKed; the broadcast is
+        // best-effort. Peers reconcile on the next reaction:sync.
+        logger.error('reaction:remove post-success side-effects failed', { error: sideEffectError });
       }
     } catch (error: unknown) {
       logger.error('reaction:remove failed', { error });
