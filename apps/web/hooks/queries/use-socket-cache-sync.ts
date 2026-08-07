@@ -192,7 +192,26 @@ type InfiniteMessagesData = {
  * slug-keyed entry and left the global conversation frozen until a reload.
  * Alias entries are recognised by the `conversationId` their cached messages
  * carry, which is the resolved ObjectId in every case.
+ *
+ * Every handler that writes into a message list routes through this helper. A
+ * direct `setQueryData(queryKeys.messages.infinite(id), …)` reaches the
+ * ObjectId-keyed entry only, and with `staleTime: Infinity` the alias copy is
+ * never re-read — the home-page bubble stays frozen on pre-event state until a
+ * manual refresh. Writing to the exact key it already returns is unchanged
+ * behaviour, so the helper is a strict superset, never a narrowing.
  */
+/**
+ * `attachment:status-updated` action → the attachment field it stamps. An action
+ * outside this set is rejected before the name is used as a computed key, which
+ * would otherwise write a literal `"undefined"` property onto the attachment.
+ */
+const CONSUMPTION_FIELD_BY_ACTION: Record<string, string> = {
+  listened: 'listenedAt',
+  watched: 'watchedAt',
+  viewed: 'viewedAt',
+  downloaded: 'downloadedAt',
+};
+
 function messageCacheKeysFor(
   queryClient: ReturnType<typeof useQueryClient>,
   conversationId: string
@@ -683,25 +702,28 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
       if (!targetConversationId) return;
 
       const targetLang = data.translatedAudio.targetLanguage;
-      queryClient.setQueryData(
-        queryKeys.messages.infinite(targetConversationId),
-        (old: { pages: { messages: Message[]; hasMore: boolean; total: number }[]; pageParams: number[] } | undefined) => {
-          if (!old) return old;
-          return {
-            ...old,
-            pages: old.pages.map((page) => ({
-              ...page,
-              messages: page.messages.map((m) => {
-                if (m.id !== data.messageId) return m;
-                // Store translated audio metadata keyed by target language
-                const translatedAudios = { ...((m as CachedMessage).translatedAudios || {}) };
-                translatedAudios[targetLang] = data.translatedAudio as unknown as SocketIOTranslation;
-                return { ...m, translatedAudios };
-              }),
-            })),
-          };
-        }
-      );
+      const applyAudioTranslation = (
+        old: InfiniteMessagesData | undefined
+      ): InfiniteMessagesData | undefined => {
+        if (!old) return old;
+        return {
+          ...old,
+          pages: old.pages.map((page) => ({
+            ...page,
+            messages: page.messages.map((m) => {
+              if (m.id !== data.messageId) return m;
+              // Store translated audio metadata keyed by target language
+              const translatedAudios = { ...((m as CachedMessage).translatedAudios || {}) };
+              translatedAudios[targetLang] = data.translatedAudio as unknown as SocketIOTranslation;
+              return { ...m, translatedAudios };
+            }),
+          })),
+        };
+      };
+
+      for (const key of messageCacheKeysFor(queryClient, targetConversationId)) {
+        queryClient.setQueryData(key, applyAudioTranslation);
+      }
     };
 
     // Handler for participant joined — update memberCount in conversation lists
@@ -834,71 +856,82 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
       const { conversationId: attachConvId, messageId: attachMsgId, attachment } = data;
       if (!attachConvId || !attachMsgId || !attachment) return;
       const attachId = (attachment as { id?: string }).id;
-      queryClient.setQueryData(
-        queryKeys.messages.infinite(attachConvId),
-        (old: { pages: { messages: Message[]; hasMore: boolean; total: number }[]; pageParams: number[] } | undefined) => {
-          if (!old) return old;
-          return {
-            ...old,
-            pages: old.pages.map((page) => ({
-              ...page,
-              messages: page.messages.map((m) => {
-                if (m.id !== attachMsgId) return m;
-                const attachments = Array.isArray((m as any).attachments)
-                  ? (m as any).attachments.map((a: { id?: string }) =>
-                      attachId && a.id === attachId ? { ...a, ...attachment as object } : a
-                    )
-                  : (m as any).attachments;
-                return { ...m, attachments };
-              }),
-            })),
-          };
-        }
-      );
+      const applyAttachment = (
+        old: InfiniteMessagesData | undefined
+      ): InfiniteMessagesData | undefined => {
+        if (!old) return old;
+        return {
+          ...old,
+          pages: old.pages.map((page) => ({
+            ...page,
+            messages: page.messages.map((m) => {
+              if (m.id !== attachMsgId) return m;
+              const attachments = Array.isArray((m as any).attachments)
+                ? (m as any).attachments.map((a: { id?: string }) =>
+                    attachId && a.id === attachId ? { ...a, ...attachment as object } : a
+                  )
+                : (m as any).attachments;
+              return { ...m, attachments };
+            }),
+          })),
+        };
+      };
+
+      for (const key of messageCacheKeysFor(queryClient, attachConvId)) {
+        queryClient.setQueryData(key, applyAttachment);
+      }
     };
 
     // Handler for message:pinned — update message in cache with pin metadata
     const handleMessagePinned = (data: { messageId: string; conversationId: string; pinnedBy: string; pinnedAt: string }) => {
       const { conversationId: pinnedConvId, messageId: pinnedMsgId, pinnedBy, pinnedAt } = data;
       if (!pinnedConvId || !pinnedMsgId) return;
-      queryClient.setQueryData(
-        queryKeys.messages.infinite(pinnedConvId),
-        (old: { pages: { messages: Message[]; hasMore: boolean; total: number }[]; pageParams: number[] } | undefined) => {
-          if (!old) return old;
-          return {
-            ...old,
-            pages: old.pages.map((page) => ({
-              ...page,
-              messages: page.messages.map((m) =>
-                m.id === pinnedMsgId ? { ...m, pinnedBy, pinnedAt } : m
-              ),
-            })),
-          };
-        }
-      );
+      const applyPin = (
+        old: InfiniteMessagesData | undefined
+      ): InfiniteMessagesData | undefined => {
+        if (!old) return old;
+        return {
+          ...old,
+          pages: old.pages.map((page) => ({
+            ...page,
+            messages: page.messages.map((m) =>
+              m.id === pinnedMsgId
+                ? ({ ...m, pinnedBy, pinnedAt } as Message & { pinnedBy: string; pinnedAt: string })
+                : m
+            ),
+          })),
+        };
+      };
+
+      for (const key of messageCacheKeysFor(queryClient, pinnedConvId)) {
+        queryClient.setQueryData(key, applyPin);
+      }
     };
 
     // Handler for message:unpinned — clear pin metadata from message in cache
     const handleMessageUnpinned = (data: { messageId: string; conversationId: string }) => {
       const { conversationId: unpinnedConvId, messageId: unpinnedMsgId } = data;
       if (!unpinnedConvId || !unpinnedMsgId) return;
-      queryClient.setQueryData(
-        queryKeys.messages.infinite(unpinnedConvId),
-        (old: { pages: { messages: Message[]; hasMore: boolean; total: number }[]; pageParams: number[] } | undefined) => {
-          if (!old) return old;
-          return {
-            ...old,
-            pages: old.pages.map((page) => ({
-              ...page,
-              messages: page.messages.map((m) => {
-                if (m.id !== unpinnedMsgId) return m;
-                const { pinnedBy: _pb, pinnedAt: _pa, ...rest } = m as Message & { pinnedBy?: string; pinnedAt?: string };
-                return rest as Message;
-              }),
-            })),
-          };
-        }
-      );
+      const clearPin = (
+        old: InfiniteMessagesData | undefined
+      ): InfiniteMessagesData | undefined => {
+        if (!old) return old;
+        return {
+          ...old,
+          pages: old.pages.map((page) => ({
+            ...page,
+            messages: page.messages.map((m) => {
+              if (m.id !== unpinnedMsgId) return m;
+              const { pinnedBy: _pb, pinnedAt: _pa, ...rest } = m as Message & { pinnedBy?: string; pinnedAt?: string };
+              return rest as Message;
+            }),
+          })),
+        };
+      };
+
+      for (const key of messageCacheKeysFor(queryClient, unpinnedConvId)) {
+        queryClient.setQueryData(key, clearPin);
+      }
     };
 
     // Handler for link:message:new — a link preview message arrived; append to messages + bump conversation
@@ -908,19 +941,22 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
       if (!linkConvId) return;
       const linkMsgId = linkMsg.id as string | undefined;
 
-      queryClient.setQueryData(
-        queryKeys.messages.infinite(linkConvId),
-        (old: { pages: { messages: Message[]; hasMore: boolean; total: number }[]; pageParams: number[] } | undefined) => {
-          if (!old) return old;
-          if (linkMsgId && old.pages.some((p) => p.messages.some((m) => m.id === linkMsgId))) return old;
-          return {
-            ...old,
-            pages: old.pages.map((page, i) =>
-              i === 0 ? { ...page, messages: [linkMsg as unknown as Message, ...page.messages] } : page
-            ),
-          };
-        }
-      );
+      const prependLinkMessage = (
+        old: InfiniteMessagesData | undefined
+      ): InfiniteMessagesData | undefined => {
+        if (!old) return old;
+        if (linkMsgId && old.pages.some((p) => p.messages.some((m) => m.id === linkMsgId))) return old;
+        return {
+          ...old,
+          pages: old.pages.map((page, i) =>
+            i === 0 ? { ...page, messages: [linkMsg as unknown as Message, ...page.messages] } : page
+          ),
+        };
+      };
+
+      for (const key of messageCacheKeysFor(queryClient, linkConvId)) {
+        queryClient.setQueryData(key, prependLinkMessage);
+      }
 
       const linkLastMessage = linkMsg as unknown as Message;
       const linkLastMessageAt = toDate(linkMsg.createdAt) ?? new Date();
@@ -965,31 +1001,39 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
       const targetConversationId = data.conversationId;
       if (!targetConversationId) return;
 
-      queryClient.setQueryData(
-        queryKeys.messages.infinite(targetConversationId),
-        (old: { pages: { messages: Message[]; hasMore: boolean; total: number }[]; pageParams: number[] } | undefined) => {
-          if (!old) return old;
-          return {
-            ...old,
-            pages: old.pages.map((page) => ({
-              ...page,
-              messages: page.messages.map((m) => {
-                if (m.id !== data.messageId) return m;
-                const attachments = Array.isArray(m.attachments) ? m.attachments.map((a: any) => {
-                  if (a.id !== data.attachmentId) return a;
-                  const updates: Record<string, unknown> = {};
-                  if (data.action === 'listened') updates.listenedAt = new Date().toISOString();
-                  if (data.action === 'watched') updates.watchedAt = new Date().toISOString();
-                  if (data.action === 'viewed') updates.viewedAt = new Date().toISOString();
-                  if (data.action === 'downloaded') updates.downloadedAt = new Date().toISOString();
-                  return { ...a, ...updates };
-                }) : m.attachments;
-                return { ...m, attachments };
-              }),
-            })),
-          };
-        }
-      );
+      const field = CONSUMPTION_FIELD_BY_ACTION[data.action];
+      if (!field) return;
+
+      // Stamped once, outside the updater: the same event now writes to every
+      // cache entry of the conversation, and a per-entry `new Date()` would give
+      // the same consumption two different timestamps depending on which key the
+      // screen happens to read.
+      const consumedAt = new Date().toISOString();
+
+      const applyConsumption = (
+        old: InfiniteMessagesData | undefined
+      ): InfiniteMessagesData | undefined => {
+        if (!old) return old;
+        return {
+          ...old,
+          pages: old.pages.map((page) => ({
+            ...page,
+            messages: page.messages.map((m) => {
+              if (m.id !== data.messageId) return m;
+              const attachments = Array.isArray(m.attachments)
+                ? m.attachments.map((a: any) =>
+                    a.id === data.attachmentId ? { ...a, [field]: consumedAt } : a
+                  )
+                : m.attachments;
+              return { ...m, attachments };
+            }),
+          })),
+        };
+      };
+
+      for (const key of messageCacheKeysFor(queryClient, targetConversationId)) {
+        queryClient.setQueryData(key, applyConsumption);
+      }
     };
 
     // Handler for conversation:deleted — user removed the conversation for themselves.

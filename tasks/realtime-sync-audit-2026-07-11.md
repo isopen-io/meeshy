@@ -251,3 +251,96 @@ l'accueil dans les 30 min de `gcTime`.
 Cause racine amont non traitée (contrat transport) : `messaging.service.ts:185` jette le
 `conversationId` de `MessageDeletedEventData`. Élargir la signature `onMessageDeleted`
 toucherait tous ses consommateurs ; le scan par id est correct sans changer le contrat.
+
+## Cycle 6 (2026-08-07) — le trou d'alias fermé sur les 6 handlers restants (Phases 2/4/5)
+
+Passe dédiée au suivi explicitement différé par le cycle 5 (« Relevé, NON traité »).
+Rien de neuf n'a été défriché : le cycle 5 avait identifié la surface, chiffré le
+correctif et décidé de ne pas l'embarquer sans un test par handler. C'est ce que
+fait ce cycle.
+
+### Le défaut
+
+Une conversation peut être présente DEUX fois dans le cache React Query : sous son
+ObjectId résolu (`/conversations/:id`) et sous son identifiant — l'accueil monte la
+conversation globale sous `"meeshy"` (`apps/web/app/page.tsx:34`). Les payloads socket
+ne portent JAMAIS que l'ObjectId. Six handlers écrivaient sur la clé unique
+`queryKeys.messages.infinite(objectId)` : sur l'entrée alias, `setQueryData` ne trouve
+rien à mettre à jour et le write est un no-op silencieux. `staleTime: Infinity` ne
+relit jamais → **la bulle de l'accueil reste figée sur l'état pré-événement jusqu'à un
+refresh manuel**.
+
+Handlers concernés et symptôme utilisateur sur l'accueil :
+
+| Handler | Événement | Symptôme |
+|---|---|---|
+| `handleAudioTranslation` | `audio:translation-ready` | l'audio traduit n'apparaît jamais |
+| `handleMessageAttachmentUpdated` | `message:attachment-updated` | l'enrichissement asynchrone d'attachment est perdu |
+| `handleAttachmentStatusUpdated` | `attachment:status-updated` | les marques listened/watched/viewed/downloaded sont perdues |
+| `handleMessagePinned` | `message:pinned` | l'état d'épinglage diverge entre les deux vues |
+| `handleMessageUnpinned` | `message:unpinned` | idem, en sens inverse |
+| `handleLinkMessageNew` | `link:message:new` | le message d'aperçu de lien n'apparaît jamais |
+
+### Le correctif
+
+Les six passent par `messageCacheKeysFor` — le SSOT « toute liste en cache appartenant
+à cette conversation », déjà utilisé par `handleNewMessage`, `handleMessageEdited`,
+`handleTranslation` et `handleTranscription`. Le helper renvoie la clé exacte quand elle
+existe : c'est un **sur-ensemble strict**, jamais un rétrécissement, donc le chemin
+canonique est inchangé par construction. Sa docstring porte désormais la règle pour
+tout handler futur.
+
+Un ajustement de second ordre sur `handleAttachmentStatusUpdated` : le timestamp de
+consommation était produit par `new Date()` À L'INTÉRIEUR de l'updater. Maintenant que
+le write s'évente sur N entrées, cela ferait N horodatages pour UNE consommation — il
+est calculé une fois, en amont de la boucle. La cascade de 4 `if` devient une table
+action→champ ; le garde `if (!field) return` qu'elle impose n'est pas cosmétique :
+sans lui, `{ ...a, [undefined]: ts }` écrit une propriété littérale `"undefined"` sur
+l'attachment.
+
+### Vérification
+
+TDD stricte : 6 tests RED d'abord, un par handler, chacun amorçant les DEUX entrées
+(ObjectId + alias) et assertant les DEUX. Les 6 ont échoué **uniquement sur l'assertion
+alias**, l'assertion canonique passant — la forme exacte du défaut, et le garde de
+non-régression du chemin canonique dans le même test. Puis GREEN : 6/6.
+
+Deux tests supplémentaires : dédup `link:message:new` sur l'entrée alias, et le garde
+action inconnue (rouge sans `if (!field) return` : `"undefined"` apparaît dans
+`Object.keys` des deux entrées).
+
+**Un test écrit puis JETÉ** (leçon 2026-07-31 #5 appliquée à la lettre) : le premier
+jet du garde action-inconnue assertait l'identité d'objet (`expect(after[0]).toBe(
+before[0])`) pour prouver qu'une action inconnue ne réécrit plus le message. Vu VERT
+avec ET sans le correctif → décoratif. Racine : `setData` de React Query passe par
+`replaceData` → `replaceEqualDeep` (structural sharing), qui restaure les références
+d'origine dès que la donnée est profondément égale — aucune assertion d'identité ne
+peut distinguer une réécriture deep-equal. Remplacé par une assertion sur
+`Object.keys`, elle observable, et re-vérifiée rouge par mutation.
+
+Gates : 2 suites `use-socket-cache-sync` 83/83 ; suite web complète **505 suites /
+11 668 tests** verte ; `tsc --noEmit` propre sur les fichiers modifiés.
+
+### Reste ouvert (inchangé depuis le cycle 5)
+
+- `messaging.service.ts:185` jette le `conversationId` de `MessageDeletedEventData` —
+  contrat transport, élargir `onMessageDeleted` touche tous ses consommateurs.
+- L'entrée alias n'est peuplée qu'après une visite de l'accueil dans les 30 min de
+  `gcTime` — le trou ne se manifeste que dans cette fenêtre.
+- `handlePendingMessagesDelivered` et `handleConversationJoinError` ciblent aussi la
+  clé unique, mais via `invalidateQueries`/`removeQueries` (sémantique de préfixe et
+  d'éviction, pas d'écriture de contenu) : hors périmètre de cette passe, à traiter
+  seulement avec un défaut observable à l'appui.
+
+### Candidat identifié pour le cycle 7 (relevé pendant cette passe)
+
+`handleLinkMessageNew` INSÈRE un message, exactement comme `handleNewMessage` — mais
+il ne porte pas le repli `landedInCache` que ce dernier documente longuement : quand
+aucune entrée de cache n'existe encore (fetch initial en vol, ou conversation jamais
+ouverte de la session), l'updater sort sur `if (!old) return old` et le message
+d'aperçu de lien est perdu pour de bon, `staleTime: Infinity` ne relisant jamais.
+Même classe de perte de données, même fichier, même famille de handlers. Non embarqué
+ici : le cycle 5 avait cadré cette passe sur le routage d'alias, et l'ajout demande
+son propre test RED (entrée absente → `invalidateQueries` appelée). À vérifier au
+préalable : si tout `link:message:new` est doublé d'un `message:new` pour le même
+message, le repli existe déjà en amont et le candidat tombe.

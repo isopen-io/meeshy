@@ -23,6 +23,12 @@ let capturedTranslationListener: ((data: any) => void) | null = null;
 let capturedAudioTranslationListener: ((data: any) => void) | null = null;
 // Capture the transcription listener registered by the hook
 let capturedTranscriptionListener: ((data: any) => void) | null = null;
+// Capture the listeners whose writes used to target a single ObjectId-keyed entry
+let capturedAttachmentUpdatedListener: ((data: any) => void) | null = null;
+let capturedAttachmentStatusListener: ((data: any) => void) | null = null;
+let capturedMessagePinnedListener: ((data: any) => void) | null = null;
+let capturedMessageUnpinnedListener: ((data: any) => void) | null = null;
+let capturedLinkMessageNewListener: ((data: any) => void) | null = null;
 
 jest.mock('@/services/meeshy-socketio.service', () => ({
   meeshySocketIOService: {
@@ -48,7 +54,10 @@ jest.mock('@/services/meeshy-socketio.service', () => ({
       capturedAudioTranslationListener = listener;
       return () => { capturedAudioTranslationListener = null; };
     }),
-    onAttachmentStatusUpdated: jest.fn(() => () => {}),
+    onAttachmentStatusUpdated: jest.fn((listener: (data: any) => void) => {
+      capturedAttachmentStatusListener = listener;
+      return () => { capturedAttachmentStatusListener = null; };
+    }),
     onParticipantRoleUpdated: jest.fn(() => () => {}),
     onPreferencesUpdated: jest.fn(() => () => {}),
     onConversationJoined: jest.fn(() => () => {}),
@@ -61,12 +70,24 @@ jest.mock('@/services/meeshy-socketio.service', () => ({
     onConversationParticipantUnbanned: jest.fn(() => () => {}),
     onConversationClosed: jest.fn(() => () => {}),
     onCategoryChanged: jest.fn(() => () => {}),
-    onMessageAttachmentUpdated: jest.fn(() => () => {}),
+    onMessageAttachmentUpdated: jest.fn((listener: (data: any) => void) => {
+      capturedAttachmentUpdatedListener = listener;
+      return () => { capturedAttachmentUpdatedListener = null; };
+    }),
     onPendingMessagesDelivered: jest.fn(() => () => {}),
-    onLinkMessageNew: jest.fn(() => () => {}),
+    onLinkMessageNew: jest.fn((listener: (data: any) => void) => {
+      capturedLinkMessageNewListener = listener;
+      return () => { capturedLinkMessageNewListener = null; };
+    }),
     onConversationJoinError: jest.fn(() => () => {}),
-    onMessagePinned: jest.fn(() => () => {}),
-    onMessageUnpinned: jest.fn(() => () => {}),
+    onMessagePinned: jest.fn((listener: (data: any) => void) => {
+      capturedMessagePinnedListener = listener;
+      return () => { capturedMessagePinnedListener = null; };
+    }),
+    onMessageUnpinned: jest.fn((listener: (data: any) => void) => {
+      capturedMessageUnpinnedListener = listener;
+      return () => { capturedMessageUnpinnedListener = null; };
+    }),
     onUserUpdated: jest.fn(() => () => {}),
     onStatusChange: jest.fn(() => () => {}),
   },
@@ -716,5 +737,208 @@ describe('useSocketCacheSync — transcription routing (audio pipeline stage 1)'
 
     const cached = queryClient.getQueryData(queryKeys.messages.infinite('meeshy')) as any;
     expect(cached.pages[0].messages[0].attachments[0].transcription?.text).toBe('Bonjour tout le monde');
+  });
+});
+
+describe('useSocketCacheSync — every message write reaches the alias-keyed cache entry', () => {
+  // A conversation can be cached twice at once: under its resolved ObjectId
+  // (`/conversations/:id`) and under its identifier — the home page mounts the
+  // global conversation as "meeshy" (`apps/web/app/page.tsx`). Socket payloads
+  // only ever carry the ObjectId, so a handler writing to the single key
+  // `queryKeys.messages.infinite(objectId)` silently no-ops on the alias entry,
+  // and `staleTime: Infinity` never re-reads it: the home-page bubble stays
+  // frozen until a manual refresh. `messageCacheKeysFor` is the source of truth
+  // for "every cached list that belongs to this conversation"; each test below
+  // seeds BOTH entries and asserts BOTH, so the canonical path stays guarded.
+  const objectId = '507f1f77bcf86cd799439011';
+
+  beforeEach(() => {
+    capturedAudioTranslationListener = null;
+    capturedAttachmentUpdatedListener = null;
+    capturedAttachmentStatusListener = null;
+    capturedMessagePinnedListener = null;
+    capturedMessageUnpinnedListener = null;
+    capturedLinkMessageNewListener = null;
+    jest.clearAllMocks();
+  });
+
+  function seedBothEntries(queryClient: QueryClient, message: Message) {
+    const page = () => ({
+      pages: [{ messages: [{ ...message }], hasMore: false, total: 1 }],
+      pageParams: [1],
+    });
+    queryClient.setQueryData(queryKeys.messages.infinite(objectId), page());
+    queryClient.setQueryData(queryKeys.messages.infinite('meeshy'), page());
+  }
+
+  function readBoth(queryClient: QueryClient) {
+    const at = (key: readonly unknown[]) => (queryClient.getQueryData(key) as any).pages[0].messages;
+    return {
+      canonical: at(queryKeys.messages.infinite(objectId)),
+      alias: at(queryKeys.messages.infinite('meeshy')),
+    };
+  }
+
+  it('applies an audio translation to the alias entry', () => {
+    const { queryClient, wrapper } = createTestHarness('conv-active');
+    seedBothEntries(queryClient, makeMessage({ id: 'm-audio', conversationId: objectId, messageType: 'audio' }));
+
+    renderHook(() => useSocketCacheSync({ conversationId: 'conv-active', enabled: true }), { wrapper });
+
+    act(() => {
+      capturedAudioTranslationListener!({
+        messageId: 'm-audio',
+        attachmentId: 'att-1',
+        conversationId: objectId,
+        language: 'fr',
+        translatedAudio: { id: 'a1', targetLanguage: 'fr', url: 'https://x/fr.mp3' },
+      });
+    });
+
+    const { canonical, alias } = readBoth(queryClient);
+    expect(canonical[0].translatedAudios?.fr?.url).toBe('https://x/fr.mp3');
+    expect(alias[0].translatedAudios?.fr?.url).toBe('https://x/fr.mp3');
+  });
+
+  it('applies an enriched attachment to the alias entry', () => {
+    const { queryClient, wrapper } = createTestHarness('conv-active');
+    const message = makeMessage({ id: 'm-att', conversationId: objectId });
+    (message as any).attachments = [{ id: 'att-1', mimeType: 'audio/mpeg' }];
+    seedBothEntries(queryClient, message);
+
+    renderHook(() => useSocketCacheSync({ conversationId: 'conv-active', enabled: true }), { wrapper });
+
+    act(() => {
+      capturedAttachmentUpdatedListener!({
+        conversationId: objectId,
+        messageId: 'm-att',
+        attachment: { id: 'att-1', transcription: { text: 'Bonjour' } },
+      });
+    });
+
+    const { canonical, alias } = readBoth(queryClient);
+    expect(canonical[0].attachments[0].transcription?.text).toBe('Bonjour');
+    expect(alias[0].attachments[0].transcription?.text).toBe('Bonjour');
+  });
+
+  it('applies an attachment consumption status to the alias entry', () => {
+    const { queryClient, wrapper } = createTestHarness('conv-active');
+    const message = makeMessage({ id: 'm-att', conversationId: objectId });
+    (message as any).attachments = [{ id: 'att-1', mimeType: 'audio/mpeg' }];
+    seedBothEntries(queryClient, message);
+
+    renderHook(() => useSocketCacheSync({ conversationId: 'conv-active', enabled: true }), { wrapper });
+
+    act(() => {
+      capturedAttachmentStatusListener!({
+        attachmentId: 'att-1',
+        messageId: 'm-att',
+        conversationId: objectId,
+        userId: 'current-user',
+        action: 'listened',
+      });
+    });
+
+    const { canonical, alias } = readBoth(queryClient);
+    expect(canonical[0].attachments[0].listenedAt).toBeDefined();
+    expect(alias[0].attachments[0].listenedAt).toBeDefined();
+  });
+
+  it('stamps no field for an unrecognised consumption action', () => {
+    // The action→field lookup must reject an unknown action before it is used
+    // as a computed key: `{ ...a, [undefined]: ts }` writes a literal
+    // "undefined" property onto the attachment, on every cached entry.
+    const { queryClient, wrapper } = createTestHarness('conv-active');
+    const message = makeMessage({ id: 'm-att', conversationId: objectId });
+    (message as any).attachments = [{ id: 'att-1', mimeType: 'audio/mpeg' }];
+    seedBothEntries(queryClient, message);
+
+    renderHook(() => useSocketCacheSync({ conversationId: 'conv-active', enabled: true }), { wrapper });
+
+    act(() => {
+      capturedAttachmentStatusListener!({
+        attachmentId: 'att-1',
+        messageId: 'm-att',
+        conversationId: objectId,
+        userId: 'current-user',
+        action: 'reacted',
+      });
+    });
+
+    const { canonical, alias } = readBoth(queryClient);
+    expect(Object.keys(canonical[0].attachments[0])).toEqual(['id', 'mimeType']);
+    expect(Object.keys(alias[0].attachments[0])).toEqual(['id', 'mimeType']);
+  });
+
+  it('applies pin metadata to the alias entry', () => {
+    const { queryClient, wrapper } = createTestHarness('conv-active');
+    seedBothEntries(queryClient, makeMessage({ id: 'm-pin', conversationId: objectId }));
+
+    renderHook(() => useSocketCacheSync({ conversationId: 'conv-active', enabled: true }), { wrapper });
+
+    act(() => {
+      capturedMessagePinnedListener!({
+        messageId: 'm-pin',
+        conversationId: objectId,
+        pinnedBy: 'user-9',
+        pinnedAt: '2026-08-07T10:00:00Z',
+      });
+    });
+
+    const { canonical, alias } = readBoth(queryClient);
+    expect(canonical[0].pinnedBy).toBe('user-9');
+    expect(alias[0].pinnedBy).toBe('user-9');
+  });
+
+  it('clears pin metadata from the alias entry', () => {
+    const { queryClient, wrapper } = createTestHarness('conv-active');
+    const message = makeMessage({ id: 'm-pin', conversationId: objectId });
+    (message as any).pinnedBy = 'user-9';
+    (message as any).pinnedAt = '2026-08-07T10:00:00Z';
+    seedBothEntries(queryClient, message);
+
+    renderHook(() => useSocketCacheSync({ conversationId: 'conv-active', enabled: true }), { wrapper });
+
+    act(() => {
+      capturedMessageUnpinnedListener!({ messageId: 'm-pin', conversationId: objectId });
+    });
+
+    const { canonical, alias } = readBoth(queryClient);
+    expect(canonical[0].pinnedBy).toBeUndefined();
+    expect(alias[0].pinnedBy).toBeUndefined();
+  });
+
+  it('prepends a link-preview message to the alias entry', () => {
+    const { queryClient, wrapper } = createTestHarness('conv-active');
+    seedBothEntries(queryClient, makeMessage({ id: 'm-existing', conversationId: objectId }));
+
+    renderHook(() => useSocketCacheSync({ conversationId: 'conv-active', enabled: true }), { wrapper });
+
+    act(() => {
+      capturedLinkMessageNewListener!({
+        message: makeMessage({ id: 'm-link', conversationId: objectId, content: 'https://example.com' }),
+      });
+    });
+
+    const { canonical, alias } = readBoth(queryClient);
+    expect(canonical.map((m: Message) => m.id)).toEqual(['m-link', 'm-existing']);
+    expect(alias.map((m: Message) => m.id)).toEqual(['m-link', 'm-existing']);
+  });
+
+  it('does not duplicate a link-preview message already present in the alias entry', () => {
+    const { queryClient, wrapper } = createTestHarness('conv-active');
+    seedBothEntries(queryClient, makeMessage({ id: 'm-link', conversationId: objectId, content: 'https://example.com' }));
+
+    renderHook(() => useSocketCacheSync({ conversationId: 'conv-active', enabled: true }), { wrapper });
+
+    act(() => {
+      capturedLinkMessageNewListener!({
+        message: makeMessage({ id: 'm-link', conversationId: objectId, content: 'https://example.com' }),
+      });
+    });
+
+    const { canonical, alias } = readBoth(queryClient);
+    expect(canonical).toHaveLength(1);
+    expect(alias).toHaveLength(1);
   });
 });
