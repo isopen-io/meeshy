@@ -195,3 +195,88 @@ Divergence assumée avec iOS sur le cas « aucun message serveur » : iOS no-op
 (le chargement complet a lieu à l'ouverture), le web relit complètement — un
 onglet peut rester ouvert des heures en arrière-plan sans jamais repasser par un
 montage, et la relecture y est non destructive.
+
+---
+
+# File de renvoi hors-ligne web — l'échec traité comme un succès (2026-08-07)
+
+## Demande (routine amélioration continue temps réel)
+Cycle N+1. Précédent : rattrapage `syncNewerMessages` (watermark local, fenêtre
+exclusive, réconciliation `clientMessageId`) — mergé via PR #2604.
+Périmètre vérifiable sous Linux : shared / gateway / web.
+
+## Constats (Phase 3 & 4 — pipeline de renvoi `useAutoRetryFailedMessages`)
+Le seul mécanisme web qui rejoue automatiquement un message dont l'envoi a
+échoué. Trois défauts, tous sur le chemin qu'il est censé couvrir.
+
+### D1 — `{ success: false }` est traité comme un succès (perte de message)
+`meeshySocketIOService.sendMessage` ne **rejette jamais** : tous ses chemins
+d'échec — socket absent, ACK expiré (`timedOut`), file orchestrateur pleine ou
+expirée, échec de chiffrement, erreur serveur — retournent `{ success: false }`
+(`services/socketio/messaging.service.ts`, `orchestrator.service.ts`). Le hook
+ignore la valeur retournée et appelle `store.removeFailedMessage(msg.id)`
+inconditionnellement dans le `try`. Conséquences :
+- au **1er essai raté**, l'entrée est supprimée de la file → message
+  définitivement perdu, sans trace UI (la file pilote l'affichage « échec ») ;
+- `MAX_RETRY_COUNT = 3` est décoratif : il n'y a jamais de 2e essai ;
+- le `catch` (seul endroit qui conserve l'entrée et pose `Max retries exceeded`)
+  est **du code mort**.
+Le chemin de renvoi MANUEL lit correctement `result?.success ?? false`
+(`ConversationLayout.handleRetryFailedMessage`) — c'est un trou de parité, pas
+un arbitrage de design.
+
+### D2 — Le flush ne se déclenche jamais sur reconnexion socket
+L'effet ne dépend que de `isOnline` (`navigator.onLine`), alors que la garde
+réelle est `getConnectionDiagnostics().isConnected`, lue **impérativement** donc
+non réactive. Au retour du réseau, l'événement `online` précède de plusieurs
+secondes le handshake Socket.IO → early return, et plus rien ne relance l'effet.
+Même trou au boot : `isOnline` vaut déjà `true` au montage, le socket n'est pas
+encore connecté → la file persistée en localStorage n'est **jamais** rejouée de
+toute la session. `useConnectionStatus().isReady` (`isOnline && isSocketConnected`)
+est déjà la source unique de vérité déclarée pour cet état.
+
+### D3 — Boucles de renvoi concurrentes
+Le cleanup remet `isRetrying.current = false` alors que `retrySequential` peut
+être en vol (le `setTimeout` a déjà firé — le `clearTimeout` n'annule rien). Un
+re-run de l'effet repasse alors la garde et démarre une 2e boucle sur les mêmes
+messages : double incrément de `retryCount`, doubles envois. Le fix D2 multiplie
+les re-runs, donc rend D3 probable.
+
+### D4 (racine) — La suite de tests validait un contrat imaginaire
+`mockSendMessage.mockRejectedValue(...)` simulait l'échec par une **rejection**,
+que le vrai service n'émet sur aucun chemin ; le succès était mocké
+`mockResolvedValue(undefined)`, sans `success`. Les tests d'échec passaient donc
+sur du code mort. Récidive de la leçon 2026-08-03 #2 (un test qui valide une
+coïncidence, pas le contrat).
+
+## Plan
+- [x] T1 — RED : tests réécrits sur le VRAI contrat `MessageAckResponse`
+- [x] T2 — D1 : livraison lue sur `ack.success`, rejection = échec (pas d'abandon de file)
+- [x] T3 — D2 : déclencheur `useConnectionStatus().isReady`, garde impérative supprimée
+- [x] T4 — D3 : jeton de possession libéré par la boucle, ref de disponibilité, ré-armement
+- [x] T5 — vérification : 505/505 suites web, 11 646 tests ; tsc propre sur les fichiers touchés
+- [x] T6 — CHANGELOG
+
+## Revue
+Les trois défauts partagent une racine unique (D4) : la suite de tests validait un
+contrat imaginaire. `mockRejectedValue` simulait l'échec par une rejection que le
+service n'émet nulle part, et le succès était mocké `resolvedValue(undefined)`,
+sans `success` — si bien que les deux tests d'échec passaient **sur du code mort**
+tandis que le seul comportement réel (`{ success: false }`) n'était couvert par
+aucun test. Récidive de la leçon 2026-08-03 #2.
+
+Vérification par mutation, chaque correctif retiré isolément (leçon 2026-07-31 #5
+— un test de régression non vu rouge est décoratif) :
+- D1 remis (`removeFailedMessage` inconditionnel) → 4 rouges
+- D2 remis (déclencheur `isOnline` seul) → 2 rouges
+- D3 remis (cleanup libère le jeton) → 1 rouge
+
+Le premier jet du correctif D3 était **incomplet** et l'a montré : le cleanup
+libérait encore le jeton, si bien qu'un run neuf démarrait sur un instantané où le
+message envoyé n'avait pas encore été retiré → doublon. Trouvé par le test, pas à
+la relecture. La possession appartient désormais à la boucle seule ; comme un run
+interrompu détient l'unique référence à son reliquat, il ré-arme l'effet en
+sortant (un run drainé ne ré-arme jamais, donc pas de boucle infinie).
+
+Non traité (hors périmètre vérifiable sous Linux) : le miroir iOS de cette file,
+`OfflineQueue`, n'a pas été audité — pas de Xcode dans cet environnement.

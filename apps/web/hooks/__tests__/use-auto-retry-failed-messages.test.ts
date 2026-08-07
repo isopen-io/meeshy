@@ -1,8 +1,8 @@
 import { renderHook } from '@testing-library/react';
 
-const mockUseNetworkStatus = jest.fn<boolean, []>();
-jest.mock('@/hooks/use-network-status', () => ({
-  useNetworkStatus: () => mockUseNetworkStatus(),
+const mockUseConnectionStatus = jest.fn();
+jest.mock('@/hooks/use-connection-status', () => ({
+  useConnectionStatus: () => mockUseConnectionStatus(),
 }));
 
 const mockGetState = jest.fn();
@@ -11,16 +11,37 @@ jest.mock('@/stores/failed-messages-store', () => ({
 }));
 
 const mockSendMessage = jest.fn();
-const mockGetConnectionDiagnostics = jest.fn();
 jest.mock('@/services/meeshy-socketio.service', () => ({
   meeshySocketIOService: {
     sendMessage: (...args: unknown[]) => mockSendMessage(...args),
-    getConnectionDiagnostics: () => mockGetConnectionDiagnostics(),
-    onStatusChange: jest.fn(() => () => {}),
   },
 }));
 
 import { useAutoRetryFailedMessages } from '../use-auto-retry-failed-messages';
+
+/**
+ * The real `meeshySocketIOService.sendMessage` resolves with a
+ * `MessageAckResponse` and NEVER rejects: every failure path — socket absent,
+ * ack timeout, orchestrator queue full/expired, encryption failure, server
+ * error — returns `{ success: false }`. These helpers pin the tests to that
+ * contract; mocking failure as a rejection (as an earlier revision did) exercises
+ * a branch the service cannot reach.
+ */
+const ackOk = (messageId = 'srv-1') => ({ success: true, messageId });
+const ackFailed = () => ({ success: false });
+const ackTimedOut = () => ({ success: false, timedOut: true });
+
+/** Connection readiness, the single trigger the hook subscribes to. */
+function connection(overrides: Partial<{ isOnline: boolean; isSocketConnected: boolean }> = {}) {
+  const isOnline = overrides.isOnline ?? true;
+  const isSocketConnected = overrides.isSocketConnected ?? true;
+  return {
+    isOnline,
+    isSocketConnected,
+    hasSocket: isSocketConnected,
+    isReady: isOnline && isSocketConnected,
+  };
+}
 
 function makeFailedMessage(overrides: Partial<{
   id: string;
@@ -61,9 +82,8 @@ function makeStore(failedMessages: ReturnType<typeof makeFailedMessage>[] = []) 
 beforeEach(() => {
   jest.clearAllMocks();
   jest.useFakeTimers();
-  mockUseNetworkStatus.mockReturnValue(true);
-  mockGetConnectionDiagnostics.mockReturnValue({ isConnected: true });
-  mockSendMessage.mockResolvedValue(undefined);
+  mockUseConnectionStatus.mockReturnValue(connection());
+  mockSendMessage.mockResolvedValue(ackOk());
 });
 
 afterEach(() => {
@@ -72,7 +92,7 @@ afterEach(() => {
 
 describe('useAutoRetryFailedMessages', () => {
   it('does not retry when offline', () => {
-    mockUseNetworkStatus.mockReturnValue(false);
+    mockUseConnectionStatus.mockReturnValue(connection({ isOnline: false, isSocketConnected: false }));
     const store = makeStore([makeFailedMessage()]);
     mockGetState.mockReturnValue(store);
 
@@ -92,8 +112,8 @@ describe('useAutoRetryFailedMessages', () => {
     expect(mockSendMessage).not.toHaveBeenCalled();
   });
 
-  it('does not retry when socket not connected', () => {
-    mockGetConnectionDiagnostics.mockReturnValue({ isConnected: false });
+  it('does not retry when the socket is not connected yet', () => {
+    mockUseConnectionStatus.mockReturnValue(connection({ isSocketConnected: false }));
     const store = makeStore([makeFailedMessage()]);
     mockGetState.mockReturnValue(store);
 
@@ -156,7 +176,7 @@ describe('useAutoRetryFailedMessages', () => {
     );
   });
 
-  it('removes message from store on successful retry', async () => {
+  it('removes message from store when the ack reports success', async () => {
     const store = makeStore([makeFailedMessage()]);
     mockGetState.mockReturnValue(store);
 
@@ -167,19 +187,6 @@ describe('useAutoRetryFailedMessages', () => {
     expect(store.removeFailedMessage).toHaveBeenCalledWith('msg-1');
   });
 
-  it('increments retryCount on failure', async () => {
-    mockSendMessage.mockRejectedValue(new Error('send failed'));
-    const store = makeStore([makeFailedMessage({ retryCount: 0 })]);
-    mockGetState.mockReturnValue(store);
-
-    renderHook(() => useAutoRetryFailedMessages());
-
-    await jest.advanceTimersByTimeAsync(2000);
-
-    expect(store.incrementRetryCount).toHaveBeenCalledWith('msg-1');
-    expect(store.removeFailedMessage).not.toHaveBeenCalled();
-  });
-
   it('stops retrying after MAX_RETRY_COUNT (3)', () => {
     const store = makeStore([makeFailedMessage({ retryCount: 3 })]);
     mockGetState.mockReturnValue(store);
@@ -188,20 +195,6 @@ describe('useAutoRetryFailedMessages', () => {
 
     jest.advanceTimersByTime(5000);
     expect(mockSendMessage).not.toHaveBeenCalled();
-  });
-
-  it('sets max retries error when retryCount + 1 reaches MAX_RETRY_COUNT', async () => {
-    mockSendMessage.mockRejectedValue(new Error('send failed'));
-    const store = makeStore([makeFailedMessage({ retryCount: 2 })]);
-    mockGetState.mockReturnValue(store);
-
-    renderHook(() => useAutoRetryFailedMessages());
-
-    await jest.advanceTimersByTimeAsync(2000);
-
-    expect(store.updateFailedMessage).toHaveBeenCalledWith('msg-1', {
-      error: 'Max retries exceeded',
-    });
   });
 
   it('uses null-safe attachmentIds check', async () => {
@@ -232,26 +225,158 @@ describe('useAutoRetryFailedMessages', () => {
     );
   });
 
-  it('resets isRetrying flag after sequential loop completes', async () => {
-    // This test covers the `isRetrying.current = false` line executed after the
-    // for-loop finishes (all messages sent + their inter-message delays elapsed).
-    const msg = makeFailedMessage({ id: 'msg-solo', content: 'solo' });
-    const store = makeStore([msg]);
+  // ---------------------------------------------------------------------------
+  // D1 — a `{ success: false }` ack is a FAILURE, not a success.
+  // ---------------------------------------------------------------------------
+
+  it('keeps the message queued when the ack reports failure', async () => {
+    mockSendMessage.mockResolvedValue(ackFailed());
+    const store = makeStore([makeFailedMessage({ retryCount: 0 })]);
     mockGetState.mockReturnValue(store);
 
     renderHook(() => useAutoRetryFailedMessages());
 
-    // 1st advance: fires the outer setTimeout → retrySequential starts, sends msg
+    await jest.advanceTimersByTimeAsync(2000);
+
+    expect(store.incrementRetryCount).toHaveBeenCalledWith('msg-1');
+    expect(store.removeFailedMessage).not.toHaveBeenCalled();
+  });
+
+  it('keeps the message queued when the ack times out', async () => {
+    mockSendMessage.mockResolvedValue(ackTimedOut());
+    const store = makeStore([makeFailedMessage({ retryCount: 0 })]);
+    mockGetState.mockReturnValue(store);
+
+    renderHook(() => useAutoRetryFailedMessages());
+
+    await jest.advanceTimersByTimeAsync(2000);
+
+    expect(store.removeFailedMessage).not.toHaveBeenCalled();
+  });
+
+  it('marks max retries exceeded when the failing ack is the last allowed attempt', async () => {
+    mockSendMessage.mockResolvedValue(ackFailed());
+    const store = makeStore([makeFailedMessage({ retryCount: 2 })]);
+    mockGetState.mockReturnValue(store);
+
+    renderHook(() => useAutoRetryFailedMessages());
+
+    await jest.advanceTimersByTimeAsync(2000);
+
+    expect(store.updateFailedMessage).toHaveBeenCalledWith('msg-1', {
+      error: 'Max retries exceeded',
+    });
+    expect(store.removeFailedMessage).not.toHaveBeenCalled();
+  });
+
+  it('does not mark max retries exceeded while attempts remain', async () => {
+    mockSendMessage.mockResolvedValue(ackFailed());
+    const store = makeStore([makeFailedMessage({ retryCount: 0 })]);
+    mockGetState.mockReturnValue(store);
+
+    renderHook(() => useAutoRetryFailedMessages());
+
+    await jest.advanceTimersByTimeAsync(2000);
+
+    expect(store.updateFailedMessage).not.toHaveBeenCalled();
+  });
+
+  it('treats an unexpected rejection as a failure rather than aborting the queue', async () => {
+    mockSendMessage
+      .mockRejectedValueOnce(new Error('boom'))
+      .mockResolvedValue(ackOk());
+    const store = makeStore([
+      makeFailedMessage({ id: 'msg-1', content: 'first' }),
+      makeFailedMessage({ id: 'msg-2', content: 'second' }),
+    ]);
+    mockGetState.mockReturnValue(store);
+
+    renderHook(() => useAutoRetryFailedMessages());
+
+    await jest.advanceTimersByTimeAsync(2000);
+    expect(store.removeFailedMessage).not.toHaveBeenCalledWith('msg-1');
+
+    await jest.advanceTimersByTimeAsync(2000);
+    expect(store.removeFailedMessage).toHaveBeenCalledWith('msg-2');
+  });
+
+  // ---------------------------------------------------------------------------
+  // D2 — the flush must be driven by socket readiness, not by navigator.onLine.
+  // ---------------------------------------------------------------------------
+
+  it('flushes the queue when the socket connects after the network is already back', async () => {
+    mockUseConnectionStatus.mockReturnValue(connection({ isOnline: true, isSocketConnected: false }));
+    const store = makeStore([makeFailedMessage()]);
+    mockGetState.mockReturnValue(store);
+
+    const { rerender } = renderHook(() => useAutoRetryFailedMessages());
+
+    await jest.advanceTimersByTimeAsync(5000);
+    expect(mockSendMessage).not.toHaveBeenCalled();
+
+    // `online` fired seconds ago; the Socket.IO handshake only completes now.
+    // `isOnline` never changed, so an isOnline-only dependency would leave the
+    // queue stranded for the whole session.
+    mockUseConnectionStatus.mockReturnValue(connection({ isOnline: true, isSocketConnected: true }));
+    rerender();
+
+    await jest.advanceTimersByTimeAsync(2000);
+    expect(mockSendMessage).toHaveBeenCalledTimes(1);
+  });
+
+  // ---------------------------------------------------------------------------
+  // D3 — readiness flapping must not start a second concurrent flush.
+  // ---------------------------------------------------------------------------
+
+  it('does not start a second concurrent flush when readiness flaps mid-run', async () => {
+    let resolveSend: ((value: unknown) => void) | undefined;
+    mockSendMessage.mockImplementation(
+      () => new Promise((resolve) => { resolveSend = resolve; }),
+    );
+    const store = makeStore([makeFailedMessage()]);
+    mockGetState.mockReturnValue(store);
+
+    const { rerender } = renderHook(() => useAutoRetryFailedMessages());
+
+    // The flush is in flight, parked on the first send.
     await jest.advanceTimersByTimeAsync(2000);
     expect(mockSendMessage).toHaveBeenCalledTimes(1);
 
-    // 2nd advance: fires the inter-message `await new Promise(setTimeout, RETRY_DELAY_MS)`
-    // inside retrySequential, completing the for-loop → isRetrying.current = false
-    await jest.advanceTimersByTimeAsync(2000);
+    // Readiness flaps while that send is still awaiting its ack. The old
+    // effect's cleanup runs and a fresh effect run is scheduled: neither may
+    // re-send a message the in-flight loop already owns.
+    mockUseConnectionStatus.mockReturnValue(connection({ isSocketConnected: false }));
+    rerender();
+    mockUseConnectionStatus.mockReturnValue(connection());
+    rerender();
 
-    // After flag resets, a new isOnline trigger would be eligible for retry.
-    // We verify indirectly: sendMessage was only called once (no double-retry).
+    resolveSend?.(ackOk());
+    await jest.advanceTimersByTimeAsync(4000);
+
     expect(mockSendMessage).toHaveBeenCalledTimes(1);
-    expect(store.removeFailedMessage).toHaveBeenCalledWith('msg-solo');
+    expect(store.incrementRetryCount).toHaveBeenCalledTimes(1);
+  });
+
+  it('allows a new flush once the previous one has finished', async () => {
+    const store = makeStore([makeFailedMessage()]);
+    mockGetState.mockReturnValue(store);
+
+    const { rerender } = renderHook(() => useAutoRetryFailedMessages());
+
+    // 1st advance fires the initial delay and sends; 2nd drains the
+    // inter-message delay so the loop completes and releases its slot.
+    await jest.advanceTimersByTimeAsync(2000);
+    await jest.advanceTimersByTimeAsync(2000);
+    expect(mockSendMessage).toHaveBeenCalledTimes(1);
+
+    // A later reconnect with the message still queued (its ack never removed it)
+    // must be free to try again.
+    mockUseConnectionStatus.mockReturnValue(connection({ isSocketConnected: false }));
+    rerender();
+    mockUseConnectionStatus.mockReturnValue(connection());
+    rerender();
+
+    await jest.advanceTimersByTimeAsync(2000);
+    expect(mockSendMessage).toHaveBeenCalledTimes(2);
   });
 });
