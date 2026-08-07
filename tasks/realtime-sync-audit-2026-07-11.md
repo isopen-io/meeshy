@@ -539,16 +539,132 @@ Non traité, relevé pour un cycle suivant :
 
 ---
 
-## Cycle 9 — le budget de réessai que la file ne pouvait pas dépenser
+## Cycle 9 — le repli d'envoi de l'expéditeur anonyme ne pouvait pas s'authentifier
+
+Repris du legs du cycle 8 : « `anonymous-chat.service.ts:119` déclare
+`sendMessage(): Promise<Message>` mais retourne `{ messageId, message }` ». Le
+mensonge de type était réel, mais en cherchant qui l'appelait on trouve mieux :
+personne. Et cette absence d'appelant EST le défaut.
+
+### D1 (racine) — un repli REST que l'expéditeur anonyme ne peut pas emprunter
+
+Quand l'ack de `message:send` revient en erreur (pas en timeout) et que la socket
+tient toujours, `MessagingService.sendMessageViaRest` renvoie l'envoi sur
+`POST /conversations/:id/messages`, qui s'authentifie au JWT. Un participant
+anonyme n'en a pas : son jeton est un `anon_<ts>_<hex>` (`routes/anonymous.ts:37`),
+que `apiService` place en `Authorization: Bearer` — sans jamais émettre
+`X-Session-Token` (`buildHeaders`, `api.service.ts:92`). Le middleware unifié le
+traite donc en JWT, `jwt.verify` échoue, 401. Le chemin de récupération ne
+récupérait rien : pour un anonyme, une erreur d'ack = message perdu, sans seconde
+chance.
+
+Sa route existe pourtant — `POST /links/:identifier/messages`, authentifiée par
+`X-Session-Token` — et son enveloppe client aussi : `AnonymousChatService.sendMessage`,
+que le cycle 8 avait justement durcie côté serveur. Elle n'était appelée que par
+un hook mort.
+
+### D2 — le cid était forgé sur place, donc la réconciliation était impossible
+
+`sendMessage` appelait `generateClientMessageId()` en interne au lieu d'accepter
+celui de l'appelant. Brancher le repli tel quel aurait troqué un message perdu
+contre un message DOUBLÉ : la ligne optimiste est indexée par cid
+(`clientMessageIdOf`, `mergePendingLocalMessages`), un cid neuf ne matche rien.
+
+### D3 — la route ne rendait pas le cid non plus
+
+Symétrique, côté gateway : les deux routes PERSISTENT `body.clientMessageId`
+(`message.create`) mais `buildLinkMessagePayload` ne le reportait dans aucun des
+deux tuyaux. Même en corrigeant D2, la réponse 201 n'aurait rien eu à réconcilier.
+Le chemin nominal tranche déjà ce contrat (Phase 4 §6.2) et le tranche en DEUX :
+cid conservé pour l'auteur, `stripClientMessageId` pour les pairs, afin qu'un tiers
+n'apprenne pas l'espace d'ids de la file de l'expéditeur. Les routes de lien
+suivent désormais la même règle via le même helper.
+
+### D4 — le hook mort qui cachait D2 et D1
+
+`use-anonymous-messages.ts` : zéro import dans tout le dépôt. C'est lui qui
+portait le double cast (`result as unknown as Record<string, unknown>`) lisant les
+deux formes à l'aveugle — un cast qui rendait le mensonge de type invisible, et
+dont la mort rendait invisible l'absence de tout repli anonyme. Supprimé.
+
+### D5 (pourquoi c'était indétectable) — le test encodait le mensonge
+
+`anonymous-chat.service.test.ts` moquait `data` par un `Message` nu, la forme que
+la route ne rend pas. La suite s'accordait donc avec une signature qu'aucun
+serveur ne satisfaisait. Fixture remise sur `{ messageId, message }`.
+
+## Plan
+- [x] T1 — RED gateway : le corps 201 porte le cid (2 routes) ; le payload socket ne le porte pas
+- [x] T2 — D3 : `buildLinkMessagePayload` rend le payload de l'AUTEUR ; `stripClientMessageId` en dérive celui des pairs
+- [x] T3 — `stripClientMessageId` générique et préservant (le retour `Record<string, unknown>` ré-élargissait l'emit typé du cycle 7)
+- [x] T4 — `clientMessageId` déclaré dans `linkMessageSchema` (sinon fast-json-stringify le tronque) et dans `sendMessageBodySchema`
+- [x] T5 — `LinkMessagePayload` + `LinkMessageSendResponseData` dans `@meeshy/shared`
+- [x] T6 — RED web : le repli anonyme passe par la route de lien, jamais par la route JWT ; il porte le cid de l'appelant
+- [x] T7 — D1/D2 : `canSendViaLink()` + `sendMessageViaLinkRest`, signature en objet d'options, type de retour réel
+- [x] T8 — D4/D5 : hook mort supprimé, fixtures du service remises sur la forme réelle
+- [x] T9 — gates : suites gateway + web, `tsc --noEmit` gateway/shared propres, web au niveau de la référence (1610 = 1610)
+- [x] T10 — CHANGELOG (2 changesets)
+
+## Revue
+
+Le legs du cycle 8 nommait un mensonge de type ; la question qui a payé n'est pas
+« ce type est-il faux ? » mais « qui l'appelle ? ». La réponse — personne — a
+transformé une correction cosmétique en défaut de livraison : le repli d'envoi
+n'existait pas pour la moitié anonyme des expéditeurs, et le code qui l'aurait
+servi dormait dans le dépôt, mort, à côté.
+
+La forme du correctif est dictée par une règle déjà tranchée ailleurs. Le cid
+revient à son auteur, jamais à un tiers : le chemin nominal l'énonce et
+l'implémente, les routes de lien l'ignoraient. Reprendre `stripClientMessageId`
+plutôt que réécrire la règle est ce qui garantit qu'un futur changement de
+politique se fasse en un seul endroit — et c'est en le réutilisant qu'on a
+découvert que ce helper détruisait le typage de tout payload qui le traversait,
+ré-élargissant précisément le contrat que le cycle 7 avait durci.
+
+Vérification par mutation (leçon 2026-07-31 #5) : les 2 tests gateway « echoes
+the clientMessageId » vus ROUGES avant correctif (`Received: undefined`, 2
+routes) ; le retrait de `stripClientMessageId` fait tomber 4 tests (fuite du cid
+aux pairs + égalité modulo) ; le court-circuit de `canSendViaLink()` fait tomber
+les 3 tests web du repli anonyme.
+
+Non traité, relevé pour un cycle suivant :
+- **`replyToId` n'est lu par aucune des deux routes de lien.** Le client l'envoie
+  (`AnonymousChatService.sendMessage` le place dans le corps), `sendMessageSchema`
+  ne le déclare pas, `message.create` ne l'écrit pas, et le payload le renvoie
+  toujours `null` depuis la ligne créée. Une réponse envoyée par un anonyme perd
+  donc son lien de réponse, en socket comme en REST. Demande une validation
+  serveur (le message cité doit appartenir à la même conversation) — c'est ce qui
+  l'a maintenu hors de cette passe.
+- **Le repli REST ne couvre toujours pas les pièces jointes anonymes.**
+  `sendMessageViaLinkRest` ignore `attachmentIds` : `sendMessageSchema` accepte
+  `attachments`, mais le contrat entre les deux n'a pas été vérifié.
+- **`/chat/[id]` ne monte jamais `useSocketCacheSync`.** `link:message:new` est
+  bien écouté au niveau service (`messaging.service.ts:208`), mais son unique
+  consommateur vit dans `ConversationLayout` (chemin authentifié). Un anonyme sur
+  `BubbleStreamPage` ne reçoit donc QUE `message:new` ; tout message posté par la
+  route REST de lien (iOS, API tierce) lui est invisible en temps réel.
+- iOS n'écoute toujours pas `link:message:new` (inchangé depuis le cycle 7).
+
+---
+
+## Cycle 9 bis — le budget de réessai que la file ne pouvait pas dépenser
+
+Mené en parallèle du cycle 9 ci-dessus, par une autre session de la routine, sur
+un défaut disjoint. Renuméroté « bis » car le cycle 9 a été mergé en premier.
 
 Phase 3 (pipeline de remise). Les trois legs du cycle 8 ont été réexaminés
-d'abord : le mensonge de type de `anonymous-chat.service.sendMessage` est réel
-mais son **seul** appelant est `use-anonymous-messages.ts`, qui n'a aucun
-consommateur dans l'app (zéro import hors scripts d'analyse de hooks) — défaut
-sans chemin vivant ; `sendMessageBodySchema` reste sans défaut observable ;
-iOS/`link:message:new` n'est pas vérifiable sous Linux. Ils restent ouverts.
-Le défaut traité ici a été trouvé sur un chemin vivant : le rejeu automatique
-des messages en échec.
+d'abord. Sur le premier — le mensonge de type de
+`anonymous-chat.service.sendMessage` — cette passe a conclu « défaut sans chemin
+vivant » au motif que son seul appelant, `use-anonymous-messages.ts`, n'a aucun
+consommateur. **Conclusion fausse, et le cycle 9 ci-dessus montre pourquoi** :
+l'absence d'appelant N'ÉTAIT PAS l'atténuation du défaut, elle en était le
+défaut — le repli REST de l'expéditeur anonyme n'avait aucun tuyau capable de
+s'authentifier. Leçon : « personne n'appelle ce code » n'est pas une preuve
+d'innocuité ; c'est une question sur ce qui aurait dû l'appeler.
+
+`sendMessageBodySchema` reste sans défaut observable ; iOS/`link:message:new`
+n'est pas vérifiable sous Linux. Le défaut traité ici a été trouvé ailleurs, sur
+un chemin vivant : le rejeu automatique des messages en échec.
 
 ### D1 (racine) — un balayage par transition de connexion, jamais plus
 
@@ -620,11 +736,9 @@ de 3, et le message mis en file en vol jamais envoyé — tandis que la garde
 anti-spin reste verte, ce qui est exactement son rôle.
 
 Non traité, relevé pour un cycle suivant :
-- `use-anonymous-messages.ts` est du code mort (aucun consommateur) et porte le
-  double cast qui compense le type menteur de `anonymous-chat.service.sendMessage`.
-  Supprimer le hook réglerait les deux d'un coup, mais c'est une suppression, pas
-  une correction de comportement : à mener comme sa propre passe, avec la
-  vérification que rien ne l'importe dynamiquement.
+- ~~`use-anonymous-messages.ts` est du code mort~~ — traité par le cycle 9
+  ci-dessus, qui a supprimé le hook et câblé `AnonymousChatService.sendMessage`
+  au repli REST auquel il manquait.
 - Le hook ne rejoue la file qu'en présence d'un montage de `ConversationLayout`.
   Une session ouverte sur une autre route ne vide jamais sa file — à confirmer
   avant d'en faire un défaut.

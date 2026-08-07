@@ -299,32 +299,61 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
         Logger.webrtc.info("[WEBRTC] captureDevices probe")
         let cams = RTCCameraVideoCapturer.captureDevices()
         Logger.webrtc.info("[WEBRTC] captureDevices count=\(cams.count)")
-        guard let camera = Self.pickCaptureDevice(preferring: .front) else {
-            // Aucune caméra : simulator iOS (device list vide) OU Mac sans caméra.
-            // Renvoyer l'erreur typée fait remonter l'échec proprement au lieu de
-            // laisser RTCCameraVideoCapturer throw une NSException plus tard.
-            Logger.webrtc.error("[WEBRTC] no capture device available — throwing noCameraAvailable")
-            throw WebRTCError.noCameraAvailable
-        }
-        // Sur Mac la caméra rapporte `.unspecified` ; ne pas présumer "front".
-        usingFrontCamera = camera.position == .front
-
-        Logger.webrtc.info("[WEBRTC] selectFormat begin")
-        let selectedFormat = selectFormat(for: camera)
-        guard let format = selectedFormat else {
-            Logger.webrtc.error("[WEBRTC] no usable camera format — throwing noCameraFormatAvailable")
-            throw WebRTCError.noCameraFormatAvailable
-        }
-
-        let fps = targetFrameRate(for: format)
         let generation = sessionGeneration
-        // C3 — armé AVANT `startCapture` : une interruption survenant pendant le
-        // warm-up caméra doit être vue. Après les gardes device/format, pour ne
-        // pas s'abonner à une session qu'on s'apprête à abandonner (simulateur
-        // sans caméra : `pickCaptureDevice` throw plus haut).
-        observeCaptureInterruptions(of: capturer.captureSession)
-        Logger.webrtc.info("[WEBRTC] capturer.startCapture begin fps=\(fps)")
-        try await capturer.startCapture(with: camera, format: format, fps: fps)
+        let camera: AVCaptureDevice
+        let format: AVCaptureDevice.Format
+        let fps: Int
+        do {
+            guard let pickedCamera = Self.pickCaptureDevice(preferring: .front) else {
+                // Aucune caméra : simulator iOS (device list vide) OU Mac sans caméra.
+                // Renvoyer l'erreur typée fait remonter l'échec proprement au lieu de
+                // laisser RTCCameraVideoCapturer throw une NSException plus tard.
+                Logger.webrtc.error("[WEBRTC] no capture device available — throwing noCameraAvailable")
+                throw WebRTCError.noCameraAvailable
+            }
+            camera = pickedCamera
+            // Sur Mac la caméra rapporte `.unspecified` ; ne pas présumer "front".
+            usingFrontCamera = camera.position == .front
+
+            Logger.webrtc.info("[WEBRTC] selectFormat begin")
+            guard let selectedFormat = selectFormat(for: camera) else {
+                Logger.webrtc.error("[WEBRTC] no usable camera format — throwing noCameraFormatAvailable")
+                throw WebRTCError.noCameraFormatAvailable
+            }
+            format = selectedFormat
+
+            fps = targetFrameRate(for: format)
+            // C3 — armé AVANT `startCapture` : une interruption survenant pendant le
+            // warm-up caméra doit être vue. Après les gardes device/format, pour ne
+            // pas s'abonner à une session qu'on s'apprête à abandonner (simulateur
+            // sans caméra : `pickCaptureDevice` throw plus haut).
+            observeCaptureInterruptions(of: capturer.captureSession)
+            Logger.webrtc.info("[WEBRTC] capturer.startCapture begin fps=\(fps)")
+            try await capturer.startCapture(with: camera, format: format, fps: fps)
+        } catch {
+            // Revert to a clean "no video" state on ANY failure past this point
+            // (no camera device / no usable format / `startCapture` itself
+            // failing on real hardware — camera busy, single-camera device,
+            // AVCaptureSession config error). Without this, `hasLocalVideoTrack`
+            // (keyed off `localVideoTrack_?.isEnabled`, see its doc-comment)
+            // kept reporting true to every caller — toggleVideo's catch blocks,
+            // unhold video recovery, CallView's self-preview gate — even though
+            // this capturer never captured a single frame: a UI/capture desync
+            // that never self-corrected for the rest of the call.
+            // `await MainActor.run`: `startCapture`'s throw can resume on an
+            // arbitrary executor (mirrors the isStale check below), so this
+            // must not mutate `videoCapturer`/`localVideoTrack_` off MainActor.
+            // Identity-guarded like that same check: a concurrent disconnect()
+            // or a new call's setup may already have replaced these properties.
+            await MainActor.run {
+                if videoCapturer === capturer {
+                    localVideoTrack_ = nil
+                    videoCapturer = nil
+                    videoFilterDelegate = nil
+                }
+            }
+            throw error
+        }
         // See `sessionGeneration` doc: this check-and-clear must be serialized
         // against disconnect() on MainActor, not run on whatever thread the
         // capture-session completion resumed us on.

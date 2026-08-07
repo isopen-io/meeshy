@@ -39,9 +39,17 @@ export function buildMessageAckData(source: MessageAckSource): MessageAckData {
   };
 }
 
-export function stripClientMessageId(
-  senderPayload: Record<string, unknown>,
-): Record<string, unknown> {
+/**
+ * Générique et préservant : le seul champ que la fonction retire est
+ * `clientMessageId`, donc son type de retour doit rester celui de l'entrée
+ * moins ce champ. Un retour `Record<string, unknown>` ré-élargirait tout
+ * payload typé qui la traverse — c'est ce qui casse l'emit typé
+ * `link:message:new`, dont le contrat exige `id`/`conversationId`/`senderId`
+ * (cycle 7). Un helper de nettoyage ne doit rien coûter au typage de l'appelant.
+ */
+export function stripClientMessageId<T extends Record<string, unknown>>(
+  senderPayload: T,
+): Omit<T, 'clientMessageId'> {
   const { clientMessageId: _clientMessageId, ...broadcastPayload } = senderPayload;
   return broadcastPayload;
 }
