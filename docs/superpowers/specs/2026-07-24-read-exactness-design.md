@@ -102,8 +102,15 @@ Propriétés : lecture contiguë depuis le dernier point → le curseur suit
 exactement ; saut vers le bas → le curseur ne franchit pas le trou et le badge
 reste haut. C'est le comportement voulu : les messages sautés ne sont pas lus.
 
-`unreadCount` reste calculé comme aujourd'hui — `count(createdAt > lastReadAt)`
-(`getUnreadCount` :115-183) — donc **aucune requête coûteuse n'est introduite**.
+`unreadCount` reste un simple `count(createdAt > plancher)` — **aucune requête
+coûteuse n'est introduite**. Le plancher est la **position chronologique** du
+curseur, `lastReadMessageCreatedAt` (repli `lastReadAt` pour les curseurs
+hérités, puis `joinedAt`), et NON le `lastReadAt` mural. En mode exact
+`_advanceCursor` écrit `lastReadAt = now` (postérieur à tous les messages en
+base) tout en conservant la vraie position dans `lastReadMessageCreatedAt` :
+plancher sur `lastReadAt` compterait `createdAt > now` = 0 et effacerait le
+badge à l'ouverture — l'exact opposé du « badge reste haut » ci-dessus. Voir
+`getUnreadCount` / `getUnreadCountsForUser` / `getUnreadCountsForParticipants`.
 La borne de 500 protège d'un scan non maîtrisé sur une conversation très en
 retard ; le curseur rattrapera au passage suivant.
 
