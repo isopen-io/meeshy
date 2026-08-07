@@ -316,6 +316,93 @@ describe('useSocketCacheSync — delete advances conversation preview', () => {
     expect(convs![0].lastMessageAt).toBe(older.createdAt);
   });
 
+  it('removes a message deleted in a NON-active conversation', () => {
+    // `message:deleted` reaches the hook as a bare messageId — the transport
+    // layer drops the event's conversationId — but the socket is joined to
+    // EVERY conversation room, so deletes arrive for background conversations.
+    // Scoping the removal to the active conversation left them in place, and
+    // `staleTime: Infinity` never re-reads them.
+    const { queryClient, wrapper } = createTestHarness('conv-active');
+    const bgMessage = makeMessage({ id: 'm-bg', conversationId: 'conv-other', content: 'to delete' });
+    queryClient.setQueryData(queryKeys.messages.infinite('conv-other'), {
+      pages: [{ messages: [bgMessage], hasMore: false, total: 1 }],
+      pageParams: [1],
+    });
+
+    renderHook(() => useSocketCacheSync({ conversationId: 'conv-active', enabled: true }), { wrapper });
+
+    act(() => { capturedDeleteListener!('m-bg'); });
+
+    const cached = queryClient.getQueryData(queryKeys.messages.infinite('conv-other')) as any;
+    expect(cached.pages[0].messages).toHaveLength(0);
+  });
+
+  it('advances the preview of the conversation that owned the deleted message, not the active one', () => {
+    const { queryClient, wrapper } = createTestHarness('conv-active');
+    const older = makeMessage({ id: 'm-bg-old', conversationId: 'conv-other', content: 'older', createdAt: new Date('2026-01-01T00:00:00Z') });
+    const newer = makeMessage({ id: 'm-bg-new', conversationId: 'conv-other', content: 'newer', createdAt: new Date('2026-01-01T00:01:00Z') });
+    queryClient.setQueryData(queryKeys.messages.infinite('conv-other'), {
+      pages: [{ messages: [newer, older], hasMore: false, total: 2 }],
+      pageParams: [1],
+    });
+    queryClient.setQueryData<Conversation[]>(queryKeys.conversations.list(), [
+      { id: 'conv-other', lastMessage: newer, lastMessageAt: newer.createdAt, updatedAt: newer.createdAt } as any,
+    ]);
+
+    renderHook(() => useSocketCacheSync({ conversationId: 'conv-active', enabled: true }), { wrapper });
+
+    act(() => { capturedDeleteListener!('m-bg-new'); });
+
+    const convs = queryClient.getQueryData<Conversation[]>(queryKeys.conversations.list());
+    expect(convs![0].lastMessage?.id).toBe('m-bg-old');
+  });
+
+  it('removes the message from EVERY cached list holding it, including an alias entry', () => {
+    // The same conversation can be cached under its ObjectId and under an
+    // identifier alias ("meeshy" on the home page). Cleaning only one left the
+    // deleted bubble visible on the other screen.
+    const objectId = '507f1f77bcf86cd799439011';
+    const { queryClient, wrapper } = createTestHarness('conv-active');
+    const seed = () => ({
+      pages: [{ messages: [makeMessage({ id: 'm-dup', conversationId: objectId, content: 'x' })], hasMore: false, total: 1 }],
+      pageParams: [1],
+    });
+    queryClient.setQueryData(queryKeys.messages.infinite(objectId), seed());
+    queryClient.setQueryData(queryKeys.messages.infinite('meeshy'), seed());
+
+    renderHook(() => useSocketCacheSync({ conversationId: 'conv-active', enabled: true }), { wrapper });
+
+    act(() => { capturedDeleteListener!('m-dup'); });
+
+    expect((queryClient.getQueryData(queryKeys.messages.infinite(objectId)) as any).pages[0].messages).toHaveLength(0);
+    expect((queryClient.getQueryData(queryKeys.messages.infinite('meeshy')) as any).pages[0].messages).toHaveLength(0);
+  });
+
+  it('advances the preview of an alias-keyed conversation using the message own conversationId', () => {
+    // Under an identifier alias the cache KEY ("meeshy") is not the id the
+    // conversation list is keyed on (the ObjectId). Deriving the owning
+    // conversation from the query key left the preview stuck on the deleted
+    // message; the message row itself always carries the resolved ObjectId.
+    const objectId = '507f1f77bcf86cd799439011';
+    const { queryClient, wrapper } = createTestHarness('conv-active');
+    const older = makeMessage({ id: 'm-alias-old', conversationId: objectId, content: 'older', createdAt: new Date('2026-01-01T00:00:00Z') });
+    const newer = makeMessage({ id: 'm-alias-new', conversationId: objectId, content: 'newer', createdAt: new Date('2026-01-01T00:01:00Z') });
+    queryClient.setQueryData(queryKeys.messages.infinite('meeshy'), {
+      pages: [{ messages: [newer, older], hasMore: false, total: 2 }],
+      pageParams: [1],
+    });
+    queryClient.setQueryData<Conversation[]>(queryKeys.conversations.list(), [
+      { id: objectId, lastMessage: newer, lastMessageAt: newer.createdAt, updatedAt: newer.createdAt } as any,
+    ]);
+
+    renderHook(() => useSocketCacheSync({ conversationId: 'conv-active', enabled: true }), { wrapper });
+
+    act(() => { capturedDeleteListener!('m-alias-new'); });
+
+    const convs = queryClient.getQueryData<Conversation[]>(queryKeys.conversations.list());
+    expect(convs![0].lastMessage?.id).toBe('m-alias-old');
+  });
+
   it('leaves the preview untouched when a non-latest message is deleted', () => {
     const { queryClient, wrapper } = createTestHarness('conv-1');
     seedTwoMessages(queryClient);
