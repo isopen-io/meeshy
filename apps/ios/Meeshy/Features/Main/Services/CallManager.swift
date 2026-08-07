@@ -679,7 +679,10 @@ final class CallManager: ObservableObject {
     // CallKit
     private let callProvider: CXProvider
     private let callController = CXCallController()
-    private var activeCallUUID: UUID?
+    // fileprivate (not private): CallKitDelegateProxy, below in this file, reads it to
+    // validate that a CXProviderDelegate action targets the call we're actually tracking
+    // before mutating shared state — see the action.callUUID guards in that class.
+    fileprivate var activeCallUUID: UUID?
 
     private init(webRTCService: WebRTCService? = nil) {
         self.webRTCService = webRTCService ?? WebRTCService()
@@ -5405,18 +5408,33 @@ private class CallKitDelegateProxy: NSObject, CXProviderDelegate, @unchecked Sen
         // means CallKit may time out the action if the manager hop is delayed.
         action.fulfill()
         Task { @MainActor [weak self] in
-            let stateAtEntry = self?.manager?.callState
+            guard let manager = self?.manager else { return }
+            let stateAtEntry = manager.callState
             Logger.calls.info(
                 "CallKit -> CXEndCallAction received (callUUID=\(action.callUUID), state=\(String(describing: stateAtEntry)))"
             )
-            self?.manager?.endCall()
+            // Identity guard: `reportIncomingVoIPCall`'s busy path reports a SECOND,
+            // distinct CXCallUpdate/UUID via `reportNewIncomingCall` while a primary
+            // call is already active, then retires it with `reportCall(endedAt:)` —
+            // `maximumCallGroups = 2` exists to let CallKit accept that report. If a
+            // system-originated action ever arrived tagged with that phantom UUID
+            // instead of the primary call's, `endCall()` must not tear down the real,
+            // active call. `activeCallUUID` only ever tracks the primary call, so any
+            // mismatch here is a stale/unrelated action, not ours to act on.
+            guard action.callUUID == manager.activeCallUUID else {
+                Logger.calls.warning(
+                    "CallKit -> CXEndCallAction for non-active callUUID=\(action.callUUID), ignoring"
+                )
+                return
+            }
+            manager.endCall()
         }
     }
 
     func provider(_ provider: CXProvider, perform action: CXSetMutedCallAction) {
         let isMuted = action.isMuted
         Task { @MainActor [weak self] in
-            guard let manager = self?.manager else { return }
+            guard let manager = self?.manager, action.callUUID == manager.activeCallUUID else { return }
             if manager.isMuted != isMuted {
                 // reportToCallKit: false — CallKit is the SOURCE of this
                 // change (Watch/lock-screen/CarPlay); its own state already
@@ -5442,7 +5460,8 @@ private class CallKitDelegateProxy: NSObject, CXProviderDelegate, @unchecked Sen
         let isOnHold = action.isOnHold
         action.fulfill()
         Task { @MainActor [weak self] in
-            self?.manager?.handleHold(isOnHold)
+            guard let manager = self?.manager, action.callUUID == manager.activeCallUUID else { return }
+            manager.handleHold(isOnHold)
         }
     }
 
@@ -5468,7 +5487,8 @@ private class CallKitDelegateProxy: NSObject, CXProviderDelegate, @unchecked Sen
         let digits = action.digits
         action.fulfill()
         Task { @MainActor [weak self] in
-            self?.manager?.sendDTMF(digits: digits)
+            guard let manager = self?.manager, action.callUUID == manager.activeCallUUID else { return }
+            manager.sendDTMF(digits: digits)
         }
     }
 
