@@ -5,8 +5,8 @@ import { attachmentMediaSelect, attachmentFullSelect, attachmentForwardPreviewSe
 import { hoistLocationOnto } from '../services/location/sharedPlace';
 import { MessageTranslationService } from '../services/message-translation/MessageTranslationService';
 import { transformTranslationsToArray, type MessageTranslationJSON } from '../utils/translation-transformer';
-import { SERVER_EVENTS, ROOMS, type SocketIOMessage } from '@meeshy/shared/types/socketio-events';
-import { emitConversationPreviewUpdate } from '../socketio/emitConversationPreviewUpdate';
+import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
+import { broadcastMessageMutation } from '../socketio/broadcastMessageMutation';
 import { validateParams, validateBody, validateQuery } from '../validation/helpers.js';
 import {
   MessageParamsSchema,
@@ -337,27 +337,18 @@ export default async function messageRoutes(fastify: FastifyInstance) {
         )
       };
 
-      // Diffuser la mise à jour via Socket.IO
-      try {
-        const socketIOManager = socketIOHandler.getManager();
-        if (socketIOManager) {
-          const room = ROOMS.conversation(message.conversationId);
-          socketIOManager.getIO().to(room).emit(SERVER_EVENTS.MESSAGE_EDITED, {
-            ...transformedMessage,
-            conversationId: message.conversationId
-          } as unknown as SocketIOMessage);
-          // Refresh the last-message preview for participants on the list
-          // screen (in user:<id> but not conversation:<id>) — parity with the
-          // WS edit path and broadcastNewMessage.
-          await emitConversationPreviewUpdate(
-            prisma, socketIOManager.getIO(), message.conversationId, userId,
-            (err) => logger.warn('conversation preview fanout (REST edit) failed', err as Error)
-          );
-        }
-      } catch (socketError) {
-        logger.error('Erreur lors de la diffusion Socket.IO', socketError as Error);
-        // Ne pas faire échouer l'édition si la diffusion échoue
-      }
+      // Diffuser la mise à jour via Socket.IO (room + aperçu de liste + file
+      // de livraison hors ligne — voir broadcastMessageMutation)
+      await broadcastMessageMutation({
+        prisma,
+        manager: socketIOHandler?.getManager(),
+        conversationId: message.conversationId,
+        actorUserId: userId,
+        eventType: 'edited',
+        messageId,
+        payload: { ...transformedMessage, conversationId: message.conversationId },
+        onError: (err) => logger.error('Erreur lors de la diffusion Socket.IO', err as Error),
+      });
 
       return sendSuccess(reply, {
         ...transformedMessage,
@@ -453,7 +444,7 @@ export default async function messageRoutes(fastify: FastifyInstance) {
       });
 
       // Marquer le message comme supprimé (soft delete)
-      const deletedMessage = await prisma.message.update({
+      await prisma.message.update({
         where: { id: messageId },
         data: {
           deletedAt: new Date()
@@ -484,27 +475,18 @@ export default async function messageRoutes(fastify: FastifyInstance) {
         }
       });
 
-      // Diffuser la suppression via Socket.IO
-      try {
-        const socketIOManager = socketIOHandler.getManager();
-        if (socketIOManager) {
-          const room = ROOMS.conversation(message.conversationId);
-          socketIOManager.getIO().to(room).emit(SERVER_EVENTS.MESSAGE_DELETED, {
-            messageId,
-            conversationId: message.conversationId
-          });
-          // Refresh the last-message preview for participants on the list
-          // screen: deleting the latest message changes their row, which
-          // MESSAGE_DELETED (conversation room only) never tells them.
-          await emitConversationPreviewUpdate(
-            prisma, socketIOManager.getIO(), message.conversationId, userId,
-            (err) => logger.warn('conversation preview fanout (REST delete) failed', err as Error)
-          );
-        }
-      } catch (socketError) {
-        logger.error('Erreur lors de la diffusion Socket.IO', socketError as Error);
-        // Ne pas faire échouer la suppression si la diffusion échoue
-      }
+      // Diffuser la suppression via Socket.IO (room + aperçu de liste + file
+      // de livraison hors ligne — voir broadcastMessageMutation)
+      await broadcastMessageMutation({
+        prisma,
+        manager: socketIOHandler?.getManager(),
+        conversationId: message.conversationId,
+        actorUserId: userId,
+        eventType: 'deleted',
+        messageId,
+        payload: { messageId, conversationId: message.conversationId },
+        onError: (err) => logger.error('Erreur lors de la diffusion Socket.IO', err as Error),
+      });
 
       return sendSuccess(reply, { message: 'Message supprimé avec succès' });
 
