@@ -342,3 +342,79 @@ DOM avant le seuil).
 Non traité (hors périmètre vérifiable sous Linux) : le miroir iOS
 (`SeenMessageAccumulator.swift`) n'est pas concerné — SwiftUI signale
 l'apparition/disparition par `onAppear`/`onDisappear`, sans observateur DOM.
+
+# Débannissement — la transition inverse du ban n'était appliquée qu'à moitié (2026-08-07)
+
+## Demande (routine amélioration continue temps réel)
+Audit continu de la pile de messagerie temps réel (PHASE 1-4 : synchronisation,
+livraison, offline). Périmètre retenu ce cycle : les transitions d'appartenance à
+une conversation (join / leave / kick / ban / unban) et leur effet sur les rooms
+Socket.IO — le seul canal par lequel `message:new` atteint un destinataire.
+
+## Constats (Phase 1 — audit des 4 transitions d'appartenance)
+
+### D1 (racine) — l'unban est le seul site à ne pas restaurer l'appartenance à la room
+Sur les 4 transitions, 3 sont symétriques et complètes : `leave.ts`, la suppression
+de participant (`participants.ts`) et `ban.ts` évincent tous explicitement les
+sockets de la cible de `conversation:<id>`. À l'inverse, les 8 sites d'octroi
+d'appartenance appellent tous `MeeshySocketIOManager.joinUserToConversationRoom`.
+L'unban (`ban.ts`, route `/unban`) n'appelait NI l'un NI l'autre : il remettait la
+ligne `Participant` à `isActive: true` et diffusait, sans jamais remettre les
+sockets dans la room. Divergence d'un site face à N frères identiques (leçon 82 #2).
+
+### D2 (conséquence 1) — messages PERDUS, pas différés
+`connectedUsers` rapporte l'utilisateur en ligne, donc les deux chemins d'envoi
+(`MessageHandler.broadcastNewMessage`, `MeeshySocketIOManager._broadcastNewMessage`)
+le sautent à l'enqueue de la file de livraison hors ligne. Ni émission live (plus
+dans la room) ni replay au reconnect (jamais mis en file) : tout ce qui transite
+par la room entre l'unban et la reconnexion suivante est perdu. C'est exactement le
+risque que `AuthHandler._joinUserConversations` documente pour un join échoué.
+
+### D3 (conséquence 2) — le débanni n'apprend pas son propre débannissement
+`conversation:participant-unbanned` n'est diffusé qu'à la room — celle dont le ban
+l'avait évincé. Le ban, lui, émet AVANT d'évincer : le banni reçoit bien le sien.
+L'ordre est donc porteur du contrat, dans les deux sens.
+
+### D4 (pourquoi le défaut a survécu) — le mock socket n'exprimait aucun ordre
+Le test « ban — success with socket events » n'assertait que `statusCode === 200`
+avec un mock `mockReturnThis()` incapable de distinguer une émission d'une
+éviction, et le test « unban — success » n'installait même pas de socket. Récidive
+de la leçon 2026-08-03 #2 (un test qui valide une coïncidence, pas le contrat).
+
+### D5 (miroir web) — `memberCount` dérive à chaque cycle ban/unban
+`use-socket-cache-sync.ts` décrémente sur `participant-banned` sans jamais
+ré-incrémenter sur `participant-unbanned`. Avec `staleTime: Infinity`, l'écart
+persiste. iOS applique déjà `memberCount += 1` : c'est le web qui divergeait.
+
+## Plan
+- [x] T1 — RED : mock socket enregistrant l'ORDRE (join / emit / leave), 3 tests unban + 1 test ban symétrique
+- [x] T2 — D1/D2/D3 : `joinUserToConversationRoom` awaité AVANT la diffusion, échec journalisé non fatal
+- [x] T3 — RED : aller-retour ban→unban sur `memberCount` (web)
+- [x] T4 — D5 : `+1` symétrique, même idiome que `handleConversationJoined`
+- [x] T5 — vérification : suites gateway + web complètes ; tsc propre sur les fichiers touchés
+- [x] T6 — CHANGELOG
+
+## Revue
+Une seule racine (D1 : une transition inverse appliquée à moitié), trois symptômes
+dont deux invisibles à la relecture du diff — la perte de messages (D2) n'apparaît
+qu'en croisant la route d'unban avec la garde d'enqueue de la file de livraison,
+deux fichiers qui ne se citent pas. Le correctif tient en un appel au SSOT déjà
+utilisé par les 8 autres sites d'octroi ; ce qui demandait de la précision, c'est
+l'ORDRE : awaiter le join AVANT la diffusion est ce qui rend D3 caduc sans ajouter
+la moindre émission dédiée.
+
+Vérification par mutation (leçon 2026-07-31 #5 — un test de régression non vu rouge
+est décoratif) : les 2 tests unban structurants ont été vus ROUGES avant le
+correctif (`Number of calls: 0`, puis ordre `[emit]` au lieu de `[join, emit]`) ;
+le test web a été vu ROUGE (`Received: 2` au lieu de `3`). Le test « diffusion
+préservée quand le re-join échoue » passait avant le correctif (aucun join tenté) —
+il ne prouve rien seul, il verrouille le chemin `catch` ajouté (log observé).
+
+Non traité (hors périmètre vérifiable sous Linux) : le miroir iOS n'a pas de dette
+ici — `ConversationListViewModel` applique déjà l'incrément symétrique, et
+l'appartenance aux rooms est gérée côté serveur. Non retenu : invalider les caches
+participants à l'unban (`invalidateParticipantLookup`, `invalidateParticipantCache`)
+— le ban le fait, mais aucun chemin d'envoi ne peut semer d'entrée périmée pendant
+un ban pour un utilisateur enregistré (les deux sites filtrent `isActive: true`
+en amont), donc l'ajouter aurait été du culte du cargo sans test capable de virer
+au rouge.

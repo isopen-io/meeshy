@@ -738,8 +738,23 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
       });
     };
 
-    // Handler for participant-unbanned — member was unbanned (may rejoin)
+    // Handler for participant-unbanned — member was unbanned and is an active
+    // member again. Increments memberCount as the exact inverse of the ban
+    // decrement above: without it every ban/unban round-trip drifts the cached
+    // count one lower than reality, and the drift persists until an unrelated
+    // full refetch (staleTime: Infinity never re-reads on its own).
     const handleConversationParticipantUnbanned = (data: { conversationId: string; userId: string }) => {
+      const unbannedUpdater = (convs: Conversation[]) =>
+        convs.map((conv) =>
+          conv.id === data.conversationId
+            ? { ...conv, memberCount: (conv.memberCount ?? 0) + 1 }
+            : conv
+        );
+      queryClient.setQueriesData<Conversation[]>(
+        { queryKey: queryKeys.conversations.lists() },
+        (old) => old ? unbannedUpdater(old) : old
+      );
+      updateInfiniteConversationCache(queryClient, unbannedUpdater);
       queryClient.invalidateQueries({
         queryKey: queryKeys.conversations.participants(data.conversationId),
       });
