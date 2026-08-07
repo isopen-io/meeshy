@@ -61,11 +61,14 @@ const mockParse = jest.fn<any>((body: any) => ({
   clientMessageId: body?.clientMessageId ?? 'cid_test',
 }));
 
+// Only `sendMessageSchema.parse` is stubbed (to drive Zod failures); every
+// response-shaping constant is the REAL one. A permissive stand-in
+// (`additionalProperties: true`) would make fast-json-stringify echo whatever
+// the route hands it, so a truncating schema would still look correct here —
+// exactly the coincidence the cycle-7 review flagged (D4).
 jest.mock('../../../routes/links/types', () => ({
+  ...(jest.requireActual('../../../routes/links/types') as Record<string, unknown>),
   sendMessageSchema: { parse: (...a: any[]) => mockParse(...a) },
-  sendMessageBodySchema: { type: 'object', properties: {}, additionalProperties: true },
-  messageSenderSchema: { type: 'object', additionalProperties: true },
-  SendMessageInput: {},
 }));
 
 // ─── Import after mocks ───────────────────────────────────────────────────────
@@ -760,5 +763,89 @@ describe('POST /links/:id/messages/auth — authenticated: originalLanguage cano
       expect.objectContaining({ data: expect.objectContaining({ originalLanguage: 'en' }) })
     );
     await app.close();
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// 201 response body contract — what the AUTHOR gets back
+//
+// The socket payload (asserted above) is what every OTHER participant receives;
+// the 201 body is the only thing the author itself sees. The two are built from
+// the same message but travel different pipes: the socket emit is raw, while the
+// REST body passes through fast-json-stringify, which drops every property the
+// response schema does not declare. A field missing from the schema is therefore
+// truncated in SILENCE — no error, no log, just an absent key.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const PLACE = { latitude: 48.8566, longitude: 2.3522, name: 'Paris', address: 'Île-de-France', category: 'city' };
+
+function messageBodyOf(res: { json: () => any }): Record<string, any> {
+  return res.json().data.message;
+}
+
+describe.each([
+  {
+    label: 'anonymous',
+    url: `/links/${MSHY_ID}/messages`,
+    headers: ANON_HEADERS,
+    prisma: () => makePrisma(),
+  },
+  {
+    label: 'authenticated',
+    url: `/links/${MSHY_ID}/messages/auth`,
+    headers: {} as Record<string, string>,
+    prisma: () => {
+      const prisma = makePrisma();
+      prisma.conversationShareLink.findUnique = jest.fn<any>().mockResolvedValue(mockShareLink);
+      prisma.participant.findFirst = jest.fn<any>().mockResolvedValue({ id: PART_ID, conversationId: CONV_ID });
+      return prisma;
+    },
+  },
+])('201 body contract — $label route', ({ url, headers, prisma: makeRoutePrisma }) => {
+  async function post(messageOverrides: Record<string, unknown> = {}, body: Record<string, unknown> = {}) {
+    const prisma = makeRoutePrisma();
+    prisma.message.create = jest.fn<any>().mockResolvedValue({ ...mockMessage, ...messageOverrides });
+    const app = await buildApp({ prisma });
+    const res = await app.inject({ method: 'POST', url, headers, payload: { ...VALID_BODY, ...body } });
+    await app.close();
+    return res;
+  }
+
+  it('routes the message it returns: conversationId and senderId are present', async () => {
+    const res = await post();
+    expect(res.statusCode).toBe(201);
+    expect(messageBodyOf(res).conversationId).toBe(CONV_ID);
+    expect(messageBodyOf(res).senderId).toBe(PART_ID);
+  });
+
+  it('returns the sender the route resolved, not a nulled placeholder', async () => {
+    const res = await post();
+    expect(messageBodyOf(res).sender).toMatchObject({ id: PART_ID, displayName: 'anon', type: 'anonymous' });
+  });
+
+  it('preserves a shared place instead of dropping it on serialization', async () => {
+    const res = await post({ metadata: { location: PLACE } }, { location: PLACE });
+    expect(messageBodyOf(res).location).toMatchObject({ latitude: PLACE.latitude, longitude: PLACE.longitude, name: 'Paris' });
+  });
+
+  it('preserves the edit / delete / reply envelope the route builds', async () => {
+    const res = await post({ isEdited: true, editedAt: new Date('2026-08-07T10:00:00.000Z'), replyToId: MSG_ID });
+    const message = messageBodyOf(res);
+    expect(message.isEdited).toBe(true);
+    expect(message.editedAt).toBe('2026-08-07T10:00:00.000Z');
+    expect(message.replyToId).toBe(MSG_ID);
+    expect(message.updatedAt).toEqual(expect.any(String));
+    expect(message).toHaveProperty('deletedAt', null);
+  });
+
+  it('returns the same message the other participants receive over the socket', async () => {
+    const socketIOHandler = makeSocketIOHandler(true);
+    const prisma = makeRoutePrisma();
+    const app = await buildApp({ prisma, socketIOHandler });
+    const res = await app.inject({ method: 'POST', url, headers, payload: VALID_BODY });
+    await app.close();
+
+    const [, emitted] = socketIOHandler.emit.mock.calls[0] as [string, { message: Record<string, unknown> }];
+    expect(messageBodyOf(res)).toEqual(JSON.parse(JSON.stringify(emitted.message)));
   });
 });

@@ -16,9 +16,64 @@ import type { Prisma } from '@meeshy/shared/prisma/client';
 import {
   sendMessageSchema,
   sendMessageBodySchema,
-  messageSenderSchema,
+  sendLinkMessageResponseSchema,
   SendMessageInput
 } from './types';
+import type { SharedPlace } from '../../services/location/sharedPlace';
+
+/**
+ * Corps d'un message de lien de partage, construit UNE fois par envoi.
+ *
+ * Les deux routes servent le même message par deux tuyaux — l'événement socket
+ * `link:message:new` pour les autres participants, la réponse 201 pour l'auteur.
+ * Deux littéraux jumeaux les faisaient diverger en silence : le cycle 7 a ajouté
+ * `conversationId`/`senderId` au seul littéral socket, laissant l'auteur sans
+ * moyen de router son propre message. Un objet unique rend la divergence
+ * impossible à écrire.
+ *
+ * `sender` reste le `Participant` chargé par Prisma : c'est ce que les clients
+ * reçoivent déjà du chemin socket, et `linkMessageSchema` décrit cette forme.
+ */
+function buildLinkMessagePayload(params: {
+  message: {
+    id: string;
+    content: string;
+    originalLanguage: string;
+    messageType: string;
+    isEdited: boolean;
+    editedAt: Date | null;
+    deletedAt: Date | null;
+    replyToId: string | null;
+    createdAt: Date;
+    updatedAt: Date;
+    sender?: unknown;
+  };
+  conversationId: string;
+  senderId: string;
+  place: SharedPlace | null;
+}) {
+  const { message, conversationId, senderId, place } = params;
+  return {
+    id: message.id,
+    // Seul routage dont dispose le destinataire : Socket.IO ne transporte pas
+    // le nom de la room côté réception, donc un message sans `conversationId`
+    // est indélivrable — le client ne sait pas dans quelle conversation
+    // l'insérer. Même valeur que la room.
+    conversationId,
+    senderId,
+    content: message.content,
+    originalLanguage: message.originalLanguage,
+    messageType: message.messageType,
+    isEdited: message.isEdited,
+    editedAt: message.editedAt,
+    deletedAt: message.deletedAt,
+    replyToId: message.replyToId,
+    createdAt: message.createdAt,
+    updatedAt: message.updatedAt,
+    sender: message.sender,
+    ...(place ? { location: place } : {})
+  };
+}
 
 export async function registerMessageRoutes(fastify: FastifyInstance) {
   const authRequired = createUnifiedAuthMiddleware(fastify.prisma, {
@@ -59,28 +114,7 @@ export async function registerMessageRoutes(fastify: FastifyInstance) {
       response: {
         201: {
           description: 'Message sent successfully',
-          type: 'object',
-          properties: {
-            success: { type: 'boolean', example: true },
-            data: {
-              type: 'object',
-              properties: {
-                messageId: { type: 'string', description: 'Created message ID' },
-                message: {
-                  type: 'object',
-                  properties: {
-                    id: { type: 'string' },
-                    content: { type: 'string' },
-                    originalLanguage: { type: 'string' },
-                    messageType: { type: 'string' },
-                    createdAt: { type: 'string', format: 'date-time' },
-                    sender: { type: 'null' },
-                    anonymousSender: { type: 'object', description: 'Anonymous sender information' }
-                  }
-                }
-              }
-            }
-          }
+          ...sendLinkMessageResponseSchema
         },
         400: {
           description: 'Bad request - invalid data',
@@ -252,49 +286,24 @@ export async function registerMessageRoutes(fastify: FastifyInstance) {
       // même contrat que le chemin nominal (messages.ts / MessageHandler).
       const place = sharedPlaceFromMetadata(message.metadata);
 
+      const payload = buildLinkMessagePayload({
+        message,
+        conversationId: participantShareLink.conversationId,
+        senderId: anonymousParticipant.id,
+        place
+      });
+
       // Émettre l'événement WebSocket
       const socketIOManager = fastify.socketIOHandler.getManager();
       if (socketIOManager) {
         socketIOManager.getIO()?.to(`conversation:${participantShareLink.conversationId}`).emit(SERVER_EVENTS.LINK_MESSAGE_NEW, {
-          message: {
-            id: message.id,
-            // Seul routage dont dispose le destinataire : Socket.IO ne
-            // transporte pas le nom de la room côté réception, donc un message
-            // sans `conversationId` est indélivrable — le client ne sait pas
-            // dans quelle conversation l'insérer. Même valeur que la room.
-            conversationId: participantShareLink.conversationId,
-            senderId: anonymousParticipant.id,
-            content: message.content,
-            originalLanguage: message.originalLanguage,
-            messageType: message.messageType,
-            isEdited: message.isEdited,
-            editedAt: message.editedAt,
-            deletedAt: message.deletedAt,
-            replyToId: message.replyToId,
-            createdAt: message.createdAt,
-            updatedAt: message.updatedAt,
-            sender: message.sender,
-            ...(place ? { location: place } : {})
-          }
+          message: payload
         });
       }
 
       return sendSuccess(reply, {
         messageId: message.id,
-        message: {
-          id: message.id,
-          content: message.content,
-          originalLanguage: message.originalLanguage,
-          messageType: message.messageType,
-          isEdited: message.isEdited,
-          editedAt: message.editedAt,
-          deletedAt: message.deletedAt,
-          replyToId: message.replyToId,
-          createdAt: message.createdAt,
-          updatedAt: message.updatedAt,
-          sender: message.sender,
-          ...(place ? { location: place } : {})
-        }
+        message: payload
       }, { statusCode: 201 });
 
     } catch (error) {
@@ -328,28 +337,7 @@ export async function registerMessageRoutes(fastify: FastifyInstance) {
       response: {
         201: {
           description: 'Message sent successfully',
-          type: 'object',
-          properties: {
-            success: { type: 'boolean', example: true },
-            data: {
-              type: 'object',
-              properties: {
-                messageId: { type: 'string', description: 'Created message ID' },
-                message: {
-                  type: 'object',
-                  properties: {
-                    id: { type: 'string' },
-                    content: { type: 'string' },
-                    originalLanguage: { type: 'string' },
-                    messageType: { type: 'string' },
-                    createdAt: { type: 'string', format: 'date-time' },
-                    sender: { ...messageSenderSchema },
-                    anonymousSender: { type: 'null' }
-                  }
-                }
-              }
-            }
-          }
+          ...sendLinkMessageResponseSchema
         },
         400: {
           description: 'Bad request - invalid data',
@@ -523,45 +511,24 @@ export async function registerMessageRoutes(fastify: FastifyInstance) {
       // Lieu partagé : hisser `metadata.location` en top-level `location`.
       const place = sharedPlaceFromMetadata(message.metadata);
 
+      const payload = buildLinkMessagePayload({
+        message,
+        conversationId: shareLink.conversationId,
+        senderId: participant.id,
+        place
+      });
+
       // Émettre l'événement WebSocket
       const socketIOManager = fastify.socketIOHandler.getManager();
       if (socketIOManager) {
         socketIOManager.getIO()?.to(`conversation:${shareLink.conversationId}`).emit(SERVER_EVENTS.LINK_MESSAGE_NEW, {
-          message: {
-            id: message.id,
-            conversationId: shareLink.conversationId,
-            senderId: participant.id,
-            content: message.content,
-            originalLanguage: message.originalLanguage,
-            messageType: message.messageType,
-            isEdited: message.isEdited,
-            editedAt: message.editedAt,
-            deletedAt: message.deletedAt,
-            replyToId: message.replyToId,
-            createdAt: message.createdAt,
-            updatedAt: message.updatedAt,
-            sender: message.sender,
-            ...(place ? { location: place } : {})
-          }
+          message: payload
         });
       }
 
       return sendSuccess(reply, {
         messageId: message.id,
-        message: {
-          id: message.id,
-          content: message.content,
-          originalLanguage: message.originalLanguage,
-          messageType: message.messageType,
-          isEdited: message.isEdited,
-          editedAt: message.editedAt,
-          deletedAt: message.deletedAt,
-          replyToId: message.replyToId,
-          createdAt: message.createdAt,
-          updatedAt: message.updatedAt,
-          sender: message.sender,
-          ...(place ? { location: place } : {})
-        }
+        message: payload
       }, { statusCode: 201 });
 
     } catch (error) {

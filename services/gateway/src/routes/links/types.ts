@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { normalizeLanguageCode } from '@meeshy/shared/utils/language-normalize';
+import { sharedPlaceResponseSchema } from '@meeshy/shared/types/api-schemas';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // ZOD VALIDATION SCHEMAS
@@ -149,6 +150,96 @@ export const messageSenderSchema = {
     displayName: { type: 'string', nullable: true, description: 'Sender display name' },
     avatar: { type: 'string', nullable: true, description: 'Sender avatar URL' },
     isMeeshyer: { type: 'boolean', description: 'Is registered user (vs anonymous)' }
+  }
+} as const;
+
+/**
+ * L'expéditeur d'un message de lien de partage est un `Participant`, PAS un
+ * `User` : les deux routes `POST /links/:identifier/messages[/auth]` le
+ * chargent via `include: { sender: { select: ... } }`, et l'événement socket
+ * `link:message:new` l'émet tel quel. `messageSenderSchema` décrit une forme
+ * d'utilisateur (username / firstName / isMeeshyer) qu'un participant ne porte
+ * pas : l'utiliser ici ne laissait passer que l'intersection (id, displayName,
+ * avatar) et effaçait `userId`, `type`, `language` et le `user` imbriqué.
+ */
+export const linkMessageSenderSchema = {
+  type: 'object',
+  nullable: true,
+  description: 'Participant that authored the message (registered or anonymous)',
+  properties: {
+    id: { type: 'string', description: 'Participant unique identifier' },
+    userId: { type: 'string', nullable: true, description: 'Linked user ID (null for anonymous participants)' },
+    displayName: { type: 'string', nullable: true, description: 'Participant display name' },
+    avatar: { type: 'string', nullable: true, description: 'Participant avatar URL' },
+    type: { type: 'string', description: 'Participant type (anonymous | member | ...)' },
+    language: { type: 'string', nullable: true, description: 'Participant language code' },
+    user: {
+      type: 'object',
+      nullable: true,
+      description: 'Registered account behind the participant, when there is one',
+      properties: {
+        id: { type: 'string' },
+        username: { type: 'string' },
+        firstName: { type: 'string', nullable: true },
+        lastName: { type: 'string', nullable: true },
+        displayName: { type: 'string', nullable: true },
+        avatar: { type: 'string', nullable: true },
+        systemLanguage: { type: 'string', nullable: true }
+      }
+    }
+  }
+} as const;
+
+/**
+ * Corps du message rendu par les DEUX routes d'envoi via lien de partage —
+ * réponse 201 ET événement socket `link:message:new`, qui construisent
+ * désormais un objet unique (`buildLinkMessagePayload`).
+ *
+ * Déclarer chaque champ n'est pas de la documentation : fast-json-stringify
+ * SUPPRIME en silence toute propriété absente du schéma de réponse. Les deux
+ * routes émettaient déjà `isEdited`, `editedAt`, `deletedAt`, `replyToId`,
+ * `updatedAt` et `location` — tous tronqués sans erreur ni log parce que le
+ * schéma 201 ne les nommait pas. Ajouter un champ au payload sans l'ajouter
+ * ici est un no-op côté client.
+ */
+export const linkMessageSchema = {
+  type: 'object',
+  description: 'Message rendered by the share-link send routes',
+  properties: {
+    id: { type: 'string', description: 'Message unique identifier' },
+    // Même raison que sur le chemin socket (cf. messages.ts) : le destinataire
+    // n'a pas d'autre routage que la charge utile. Le 201 revient à l'AUTEUR,
+    // qui doit lui aussi savoir dans quelle conversation insérer son message.
+    conversationId: { type: 'string', description: 'Conversation the message belongs to' },
+    senderId: { type: 'string', nullable: true, description: 'Participant ID of the author' },
+    content: { type: 'string', description: 'Message content' },
+    originalLanguage: { type: 'string', description: 'Original message language code' },
+    messageType: { type: 'string', description: 'Message type' },
+    isEdited: { type: 'boolean', description: 'Whether the message has been edited' },
+    editedAt: { type: 'string', format: 'date-time', nullable: true, description: 'Last edit timestamp' },
+    deletedAt: { type: 'string', format: 'date-time', nullable: true, description: 'Soft-deletion timestamp' },
+    replyToId: { type: 'string', nullable: true, description: 'Message this one replies to' },
+    createdAt: { type: 'string', format: 'date-time', description: 'Creation timestamp' },
+    updatedAt: { type: 'string', format: 'date-time', description: 'Last update timestamp' },
+    sender: { ...linkMessageSenderSchema },
+    location: { ...sharedPlaceResponseSchema }
+  }
+} as const;
+
+/**
+ * Réponse 201 des deux routes d'envoi via lien de partage.
+ */
+export const sendLinkMessageResponseSchema = {
+  type: 'object',
+  properties: {
+    success: { type: 'boolean', example: true },
+    data: {
+      type: 'object',
+      properties: {
+        messageId: { type: 'string', description: 'Created message ID' },
+        message: { ...linkMessageSchema }
+      }
+    }
   }
 } as const;
 
