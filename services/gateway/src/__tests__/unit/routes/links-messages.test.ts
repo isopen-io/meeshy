@@ -141,7 +141,10 @@ function makeSocketIOHandler(hasManager = false) {
   if (!hasManager) return { getManager: () => null };
   const emit = jest.fn();
   const to = jest.fn(() => ({ emit }));
-  return { getManager: () => ({ getIO: () => ({ to }) }) };
+  // `to` and `emit` are exposed so a test can assert the ROOM and the PAYLOAD,
+  // not merely that the route answered 201 — the payload is the contract the
+  // web client reads, and a status code cannot express it.
+  return { getManager: () => ({ getIO: () => ({ to }) }), to, emit };
 }
 
 async function buildApp(opts: {
@@ -402,7 +405,11 @@ describe('POST /links/:id/messages — anonymous: originalLanguage canonicalizat
 
 describe('POST /links/:id/messages — anonymous: socketIO emit', () => {
   let app: FastifyInstance;
-  beforeAll(async () => { app = await buildApp({ socketIOHandler: makeSocketIOHandler(true) }); });
+  let socketIOHandler: ReturnType<typeof makeSocketIOHandler>;
+  beforeAll(async () => {
+    socketIOHandler = makeSocketIOHandler(true);
+    app = await buildApp({ socketIOHandler });
+  });
   afterAll(async () => { await app.close(); });
 
   it('returns 201 and emits socket event when socketIO manager is available', async () => {
@@ -413,6 +420,24 @@ describe('POST /links/:id/messages — anonymous: socketIO emit', () => {
     expect(res.statusCode).toBe(201);
     expect(res.json().success).toBe(true);
     expect(res.json().data.messageId).toBe(MSG_ID);
+  });
+
+  it('carries the conversationId in the broadcast message', async () => {
+    // The room name is built from the conversation id, but the payload was
+    // assembled field by field and never included it. The web handler reads
+    // `message.conversationId` to find the cache entry to write into and bails
+    // out when it is absent, so every message posted through a share link was
+    // dropped by the client — no bubble, no conversation-list bump — until a
+    // manual reload.
+    socketIOHandler.emit.mockClear();
+    await app.inject({
+      method: 'POST', url: `/links/${MSHY_ID}/messages`,
+      headers: ANON_HEADERS, payload: VALID_BODY,
+    });
+
+    const [, payload] = socketIOHandler.emit.mock.calls[0] as [string, { message: Record<string, unknown> }];
+    expect(payload.message.conversationId).toBe(CONV_ID);
+    expect(payload.message.id).toBe(MSG_ID);
   });
 });
 
@@ -593,11 +618,13 @@ describe('POST /links/:id/messages/auth — with tracking links', () => {
 
 describe('POST /links/:id/messages/auth — socketIO emit', () => {
   let app: FastifyInstance;
+  let socketIOHandler: ReturnType<typeof makeSocketIOHandler>;
   beforeAll(async () => {
     const prisma = makePrisma();
     prisma.conversationShareLink.findUnique = jest.fn<any>().mockResolvedValue(mockShareLink);
     prisma.participant.findFirst = jest.fn<any>().mockResolvedValue({ id: PART_ID, conversationId: CONV_ID });
-    app = await buildApp({ prisma, socketIOHandler: makeSocketIOHandler(true) });
+    socketIOHandler = makeSocketIOHandler(true);
+    app = await buildApp({ prisma, socketIOHandler });
   });
   afterAll(async () => { await app.close(); });
 
@@ -605,6 +632,17 @@ describe('POST /links/:id/messages/auth — socketIO emit', () => {
     const res = await app.inject({ method: 'POST', url: `/links/${MSHY_ID}/messages/auth`, payload: VALID_BODY });
     expect(res.statusCode).toBe(201);
     expect(res.json().success).toBe(true);
+  });
+
+  it('carries the conversationId in the broadcast message', async () => {
+    // Same contract as the anonymous route: both sites assembled the payload by
+    // hand and both omitted the one field the client routes on.
+    socketIOHandler.emit.mockClear();
+    await app.inject({ method: 'POST', url: `/links/${MSHY_ID}/messages/auth`, payload: VALID_BODY });
+
+    const [, payload] = socketIOHandler.emit.mock.calls[0] as [string, { message: Record<string, unknown> }];
+    expect(payload.message.conversationId).toBe(CONV_ID);
+    expect(payload.message.id).toBe(MSG_ID);
   });
 });
 

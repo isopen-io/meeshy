@@ -22,7 +22,7 @@ import type {
   SocketIOResponse
 } from '@/types';
 import type { EncryptedPayload, EncryptionMode } from '@meeshy/shared/types/encryption';
-import type { AudioTranslationReadyEventData } from '@meeshy/shared/types/socketio-events';
+import type { AudioTranslationReadyEventData, LinkMessageNewEventData } from '@meeshy/shared/types/socketio-events';
 
 import { SocketIOOrchestrator } from './socketio/orchestrator.service';
 import type { ConnectionStatus } from './socketio/types';
@@ -418,7 +418,7 @@ class MeeshySocketIOService {
     return this.orchestrator.onPendingMessagesDelivered(listener);
   }
 
-  public onLinkMessageNew(listener: (data: { message: Record<string, unknown> }) => void): () => void {
+  public onLinkMessageNew(listener: (data: LinkMessageNewEventData) => void): () => void {
     return this.orchestrator.onLinkMessageNew(listener);
   }
 

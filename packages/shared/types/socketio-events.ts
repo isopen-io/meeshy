@@ -1287,8 +1287,20 @@ export interface ConversationClosedEventData {
   readonly closedAt: string;
 }
 
+/**
+ * `link:message:new` — un message posté via un lien de partage.
+ *
+ * `message` reste ouvert (les deux routes émettrices composent leur payload
+ * champ par champ), mais `id` et `conversationId` sont OBLIGATOIRES : le client
+ * route l'écriture de cache sur `conversationId` et abandonne sans lui. Les deux
+ * sites d'émission l'avaient omis, et le `Record<string, unknown>` nu ne pouvait
+ * pas le signaler — tout message envoyé par lien de partage était jeté côté web.
+ */
 export interface LinkMessageNewEventData {
-  readonly message: Record<string, unknown>;
+  readonly message: Record<string, unknown> & {
+    readonly id: string;
+    readonly conversationId: string;
+  };
 }
 
 export const AGENT_ADMIN_EVENT_KINDS = ['delivery-queue', 'scan', 'config', 'topics'] as const;

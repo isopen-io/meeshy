@@ -258,6 +258,7 @@ export async function registerMessageRoutes(fastify: FastifyInstance) {
         socketIOManager.getIO()?.to(`conversation:${participantShareLink.conversationId}`).emit(SERVER_EVENTS.LINK_MESSAGE_NEW, {
           message: {
             id: message.id,
+            conversationId: participantShareLink.conversationId,
             content: message.content,
             originalLanguage: message.originalLanguage,
             messageType: message.messageType,
@@ -523,6 +524,7 @@ export async function registerMessageRoutes(fastify: FastifyInstance) {
         socketIOManager.getIO()?.to(`conversation:${shareLink.conversationId}`).emit(SERVER_EVENTS.LINK_MESSAGE_NEW, {
           message: {
             id: message.id,
+            conversationId: shareLink.conversationId,
             content: message.content,
             originalLanguage: message.originalLanguage,
             messageType: message.messageType,
