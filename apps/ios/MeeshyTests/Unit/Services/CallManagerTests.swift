@@ -2028,6 +2028,87 @@ final class CallKitActionFulfillmentSourceGuardTests: XCTestCase {
     }
 }
 
+/// `reportIncomingVoIPCall`'s busy path reports a SECOND, distinct CXCallUpdate/UUID
+/// via `reportNewIncomingCall` while a primary call is already active (`maximumCallGroups
+/// = 2` exists to let CallKit accept it), then immediately retires it with
+/// `reportCall(endedAt:)`. `activeCallUUID` only ever tracks the primary call. Every
+/// CXProviderDelegate handler that mutates shared call state on the manager's behalf must
+/// therefore validate `action.callUUID == activeCallUUID` before acting — otherwise a
+/// system-originated action tagged with the phantom busy-call UUID (or any other stale
+/// UUID CallKit still remembers) would be misapplied to the real, active call.
+final class CallKitActionCallUUIDGuardTests: XCTestCase {
+
+    private func callManagerSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Services/CallManager.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    private func handlerBody(_ src: String, marker: String, length: Int = 2000) throws -> String {
+        guard let range = src.range(of: marker) else {
+            XCTFail("\(marker) handler not found"); return ""
+        }
+        let bodyStart = src[range.upperBound...].firstIndex(of: "{") ?? src.endIndex
+        return String(src[bodyStart...].prefix(length))
+    }
+
+    func test_activeCallUUID_isFileprivate_soCallKitDelegateProxyCanReadIt() throws {
+        let src = try callManagerSource()
+        XCTAssertTrue(src.contains("fileprivate var activeCallUUID: UUID?"),
+            "activeCallUUID must be fileprivate — CallKitDelegateProxy (a separate type in the " +
+            "same file) needs to read it to validate actions, and `private` would not be visible " +
+            "across the type boundary even within the same file.")
+    }
+
+    func test_cxEndCallAction_guardsOnActiveCallUUIDBeforeEndingCall() throws {
+        let body = try handlerBody(try callManagerSource(), marker: "perform action: CXEndCallAction")
+        let guardOffset = body.range(of: "action.callUUID == manager.activeCallUUID")?.lowerBound
+        let endCallOffset = body.range(of: "manager.endCall()")?.lowerBound
+        XCTAssertNotNil(guardOffset, "CXEndCallAction must guard on action.callUUID == manager.activeCallUUID")
+        XCTAssertNotNil(endCallOffset, "CXEndCallAction must call manager.endCall()")
+        if let g = guardOffset, let e = endCallOffset {
+            XCTAssertTrue(g < e, "CXEndCallAction: the callUUID guard must run BEFORE endCall() is invoked.")
+        }
+    }
+
+    func test_cxSetMutedCallAction_guardsOnActiveCallUUIDBeforeTogglingMute() throws {
+        let body = try handlerBody(try callManagerSource(), marker: "perform action: CXSetMutedCallAction")
+        let guardOffset = body.range(of: "action.callUUID == manager.activeCallUUID")?.lowerBound
+        let toggleOffset = body.range(of: "toggleMute(reportToCallKit: false)")?.lowerBound
+        XCTAssertNotNil(guardOffset, "CXSetMutedCallAction must guard on action.callUUID == manager.activeCallUUID")
+        XCTAssertNotNil(toggleOffset, "CXSetMutedCallAction must call manager.toggleMute(reportToCallKit: false)")
+        if let g = guardOffset, let t = toggleOffset {
+            XCTAssertTrue(g < t, "CXSetMutedCallAction: the callUUID guard must run BEFORE toggleMute is invoked.")
+        }
+    }
+
+    func test_cxSetHeldCallAction_guardsOnActiveCallUUIDBeforeHandlingHold() throws {
+        let body = try handlerBody(try callManagerSource(), marker: "perform action: CXSetHeldCallAction")
+        let guardOffset = body.range(of: "action.callUUID == manager.activeCallUUID")?.lowerBound
+        let holdOffset = body.range(of: "manager.handleHold(isOnHold)")?.lowerBound
+        XCTAssertNotNil(guardOffset, "CXSetHeldCallAction must guard on action.callUUID == manager.activeCallUUID")
+        XCTAssertNotNil(holdOffset, "CXSetHeldCallAction must call manager.handleHold(isOnHold)")
+        if let g = guardOffset, let h = holdOffset {
+            XCTAssertTrue(g < h, "CXSetHeldCallAction: the callUUID guard must run BEFORE handleHold is invoked.")
+        }
+    }
+
+    func test_cxPlayDTMFCallAction_guardsOnActiveCallUUIDBeforeSendingDTMF() throws {
+        let body = try handlerBody(try callManagerSource(), marker: "perform action: CXPlayDTMFCallAction")
+        let guardOffset = body.range(of: "action.callUUID == manager.activeCallUUID")?.lowerBound
+        let dtmfOffset = body.range(of: "manager.sendDTMF(digits: digits)")?.lowerBound
+        XCTAssertNotNil(guardOffset, "CXPlayDTMFCallAction must guard on action.callUUID == manager.activeCallUUID")
+        XCTAssertNotNil(dtmfOffset, "CXPlayDTMFCallAction must call manager.sendDTMF(digits:)")
+        if let g = guardOffset, let d = dtmfOffset {
+            XCTAssertTrue(g < d, "CXPlayDTMFCallAction: the callUUID guard must run BEFORE sendDTMF is invoked.")
+        }
+    }
+}
+
 // MARK: - handleHold tracked task guard
 
 @MainActor
