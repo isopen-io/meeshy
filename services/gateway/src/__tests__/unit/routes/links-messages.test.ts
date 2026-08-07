@@ -106,8 +106,11 @@ const mockAnonParticipant = {
   anonymousSession: { shareLinkId: LINK_DB_ID },
 };
 
+const CID = 'cid_550e8400-e29b-41d4-a716-446655440000';
+
 const mockMessage = {
   id: MSG_ID, content: 'Hello!', originalLanguage: 'fr', messageType: 'text',
+  clientMessageId: CID,
   isEdited: false, editedAt: null, deletedAt: null, replyToId: null,
   createdAt: new Date(), updatedAt: new Date(),
   sender: { id: PART_ID, userId: null, displayName: 'anon', avatar: null, type: 'anonymous', language: 'fr', user: null },
@@ -165,7 +168,7 @@ async function buildApp(opts: {
   return app;
 }
 
-const VALID_BODY = { content: 'Hello!', clientMessageId: 'cid_550e8400-e29b-41d4-a716-446655440000' };
+const VALID_BODY = { content: 'Hello!', clientMessageId: CID };
 const ANON_HEADERS = { 'x-session-token': SESSION_TOKEN };
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -838,7 +841,22 @@ describe.each([
     expect(message).toHaveProperty('deletedAt', null);
   });
 
-  it('returns the same message the other participants receive over the socket', async () => {
+  it('echoes the clientMessageId back to the author, so the optimistic row can be reconciled', async () => {
+    const res = await post();
+    expect(messageBodyOf(res).clientMessageId).toBe(CID);
+  });
+
+  it('withholds the clientMessageId from the other participants, exactly like the nominal path', async () => {
+    const socketIOHandler = makeSocketIOHandler(true);
+    const app = await buildApp({ prisma: makeRoutePrisma(), socketIOHandler });
+    await app.inject({ method: 'POST', url, headers, payload: VALID_BODY });
+    await app.close();
+
+    const [, emitted] = socketIOHandler.emit.mock.calls[0] as [string, { message: Record<string, unknown> }];
+    expect(emitted.message).not.toHaveProperty('clientMessageId');
+  });
+
+  it('returns the same message the other participants receive over the socket, modulo the clientMessageId', async () => {
     const socketIOHandler = makeSocketIOHandler(true);
     const prisma = makeRoutePrisma();
     const app = await buildApp({ prisma, socketIOHandler });
@@ -846,6 +864,7 @@ describe.each([
     await app.close();
 
     const [, emitted] = socketIOHandler.emit.mock.calls[0] as [string, { message: Record<string, unknown> }];
-    expect(messageBodyOf(res)).toEqual(JSON.parse(JSON.stringify(emitted.message)));
+    const { clientMessageId: _authorOnly, ...sharedWithPeers } = messageBodyOf(res);
+    expect(sharedWithPeers).toEqual(JSON.parse(JSON.stringify(emitted.message)));
   });
 });

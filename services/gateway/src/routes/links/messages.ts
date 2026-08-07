@@ -12,6 +12,7 @@ import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
 import { normalizeLanguageCode } from '@meeshy/shared/utils/language-normalize';
 import { parseSharedPlace, sharedPlaceFromMetadata } from '../../services/location/sharedPlace';
+import { stripClientMessageId } from '../../socketio/utils/message-ack-shaping.js';
 import type { Prisma } from '@meeshy/shared/prisma/client';
 import {
   sendMessageSchema,
@@ -31,6 +32,13 @@ import type { SharedPlace } from '../../services/location/sharedPlace';
  * moyen de router son propre message. Un objet unique rend la divergence
  * impossible à écrire.
  *
+ * Ce que la fonction rend est le payload de l'AUTEUR : il porte le
+ * `clientMessageId`, seule clé qui relie le message serveur à la ligne
+ * optimiste que l'auteur affiche déjà. Le payload des pairs s'en déduit par
+ * `stripClientMessageId` — même règle, même helper que le chemin nominal
+ * (Phase 4 §6.2, cf. MessageHandler) : le cid revient à son auteur, jamais à
+ * un tiers, qui n'a pas à connaître l'espace d'ids de sa file d'attente.
+ *
  * `sender` reste le `Participant` chargé par Prisma : c'est ce que les clients
  * reçoivent déjà du chemin socket, et `linkMessageSchema` décrit cette forme.
  */
@@ -40,6 +48,7 @@ function buildLinkMessagePayload(params: {
     content: string;
     originalLanguage: string;
     messageType: string;
+    clientMessageId?: string | null;
     isEdited: boolean;
     editedAt: Date | null;
     deletedAt: Date | null;
@@ -55,6 +64,7 @@ function buildLinkMessagePayload(params: {
   const { message, conversationId, senderId, place } = params;
   return {
     id: message.id,
+    ...(message.clientMessageId ? { clientMessageId: message.clientMessageId } : {}),
     // Seul routage dont dispose le destinataire : Socket.IO ne transporte pas
     // le nom de la room côté réception, donc un message sans `conversationId`
     // est indélivrable — le client ne sait pas dans quelle conversation
@@ -297,7 +307,7 @@ export async function registerMessageRoutes(fastify: FastifyInstance) {
       const socketIOManager = fastify.socketIOHandler.getManager();
       if (socketIOManager) {
         socketIOManager.getIO()?.to(`conversation:${participantShareLink.conversationId}`).emit(SERVER_EVENTS.LINK_MESSAGE_NEW, {
-          message: payload
+          message: stripClientMessageId(payload)
         });
       }
 
@@ -522,7 +532,7 @@ export async function registerMessageRoutes(fastify: FastifyInstance) {
       const socketIOManager = fastify.socketIOHandler.getManager();
       if (socketIOManager) {
         socketIOManager.getIO()?.to(`conversation:${shareLink.conversationId}`).emit(SERVER_EVENTS.LINK_MESSAGE_NEW, {
-          message: payload
+          message: stripClientMessageId(payload)
         });
       }
 
