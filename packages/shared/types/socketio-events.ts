@@ -1288,18 +1288,17 @@ export interface ConversationClosedEventData {
 }
 
 /**
- * `link:message:new` — un message posté via un lien de partage.
- *
- * `message` reste ouvert (les deux routes émettrices composent leur payload
- * champ par champ), mais `id` et `conversationId` sont OBLIGATOIRES : le client
- * route l'écriture de cache sur `conversationId` et abandonne sans lui. Les deux
- * sites d'émission l'avaient omis, et le `Record<string, unknown>` nu ne pouvait
- * pas le signaler — tout message envoyé par lien de partage était jeté côté web.
+ * `conversationId` et `senderId` sont OBLIGATOIRES : Socket.IO ne transporte pas
+ * le nom de la room côté réception, donc la charge utile est le seul routage dont
+ * dispose le client. Un message sans `conversationId` est indélivrable — aucun
+ * cache ne peut l'accueillir.
  */
 export interface LinkMessageNewEventData {
-  readonly message: Record<string, unknown> & {
+  readonly message: {
     readonly id: string;
     readonly conversationId: string;
+    readonly senderId: string;
+    readonly [key: string]: unknown;
   };
 }
 

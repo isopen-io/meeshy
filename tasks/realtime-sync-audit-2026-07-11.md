@@ -345,90 +345,109 @@ son propre test RED (entrée absente → `invalidateQueries` appelée). À véri
 préalable : si tout `link:message:new` est doublé d'un `message:new` pour le même
 message, le repli existe déjà en amont et le candidat tombe.
 
-## Cycle 7 (2026-08-07) — `link:message:new` n'a jamais porté sa conversation (Phases 2/3)
+---
 
-Suite directe du candidat relevé au cycle 6. Le candidat était « `handleLinkMessageNew`
-n'a pas de repli `landedInCache` » ; en remontant à la source pour vérifier si
-`link:message:new` était doublé d'un `message:new`, un défaut BIEN plus grave est
-apparu, qui rendait le candidat théorique : **le handler ne s'exécutait jamais**.
+# Cycle 7 — `link:message:new` : le seul événement des share links n'était pas routable (2026-08-07)
 
-### Le défaut
+## Demande (routine amélioration continue temps réel)
+Reprise du candidat explicitement légué par le cycle 6 (repli `landedInCache`
+manquant sur `handleLinkMessageNew`), avec sa précondition à vérifier d'abord :
+« si tout `link:message:new` est doublé d'un `message:new`, le candidat tombe ».
 
-Les deux routes qui diffusent l'événement — `POST /links/:identifier/messages`
-(anonyme) et `POST /links/:identifier/messages/auth` (authentifié),
-`services/gateway/src/routes/links/messages.ts:258` et `:523` — composent le payload
-`message` champ par champ : `id`, `content`, `originalLanguage`, `messageType`,
-`isEdited`, `editedAt`, `deletedAt`, `replyToId`, `createdAt`, `updatedAt`, `sender`,
-`location`. **Pas de `conversationId`** — alors que les deux construisent leur nom de
-room à partir de cette valeur exacte (`conversation:${shareLink.conversationId}`).
+## Constats (Phase 1 — audit de la chaîne complète de l'événement)
 
-Côté web, `handleLinkMessageNew` lit `linkMsg.conversationId` et sort immédiatement
-sans lui :
-```ts
-const linkConvId = linkMsg.conversationId as string | undefined;
-if (!linkConvId) return;
-```
-Conséquence : **tout message posté via un lien de partage était jeté par le client
-web**. Ni bulle, ni remontée dans la liste de conversations (les deux écritures sont
-en aval du `return`). `staleTime: Infinity` ne relit jamais → invisible jusqu'à un
-rechargement manuel. Un participant regardant la conversation ne voyait tout
-simplement rien arriver.
+### Précondition : le candidat NE tombe PAS — et cache un défaut plus grave
+Les deux routes REST de share link (`POST /links/:identifier/messages` anonyme et
+`/messages/auth` enregistrée) construisent le message puis émettent **uniquement**
+`SERVER_EVENTS.LINK_MESSAGE_NEW` vers `conversation:<id>`. Aucun `message:new`
+compagnon : cet événement est le seul canal temps réel de ce chemin d'envoi.
 
-### Pourquoi rien ne l'a détecté
+### D1 (racine) — la charge utile omet `conversationId`, le seul routage disponible
+Socket.IO ne transporte pas le nom de la room côté réception : la charge utile EST
+le routage. Or les deux littéraux émis listent `id, content, originalLanguage,
+messageType, isEdited, editedAt, deletedAt, replyToId, createdAt, updatedAt,
+sender` — ni `conversationId`, ni `senderId`. Côté web, `handleLinkMessageNew`
+ouvre sur `const linkConvId = linkMsg.conversationId; if (!linkConvId) return;`.
+Le handler sortait donc à sa PREMIÈRE ligne, à chaque événement, depuis toujours.
 
-Deux gardes ont échoué ensemble :
+### D2 (conséquence) — aucun message de share link n'apparaissait en temps réel
+Handler mort ⇒ ni insertion dans le cache messages, ni remontée de la conversation
+dans les deux caches de liste. Le message n'existait pour les autres participants
+qu'après un rechargement manuel — et avec `staleTime: Infinity`, souvent pas même
+alors. C'est la même classe de perte que les cycles 5 et 6, mais sur 100 % du
+trafic d'un chemin d'envoi, pas sur une fenêtre de cache.
 
-1. **Le type effaçait le contrat.** `LinkMessageNewEventData.message` était
-   `Record<string, unknown>`. `getIO()` renvoie pourtant
-   `SocketIOServer<ClientToServerEvents, ServerToClientEvents>` : les deux `emit`
-   ÉTAIENT typés — contre un type qui n'exige rien. Récidive de la leçon
-   2026-08-07 #1 en version *type* (cf. cycle 5, D1).
-2. **Les tests validaient une coïncidence.** Les deux suites « socketIO emit »
-   existaient déjà et n'assertaient que `statusCode === 201` : le mock `emit` était
-   créé puis jeté dans `makeSocketIOHandler`, hors de portée de toute assertion. Un
-   code de statut ne peut pas exprimer un contrat de payload. Récidive de la leçon
-   2026-08-03 #2.
+### D3 (le candidat légué, réel mais second) — pas de repli `landedInCache`
+Une fois D1 corrigé, l'updater sort toujours sur `if (!old) return old` quand
+aucune entrée n'existe encore. `handleNewMessage` documente longuement ce repli ;
+son jumeau ne l'avait pas.
 
-### Le correctif
+### D4 (pourquoi le défaut a survécu) — les tests validaient une coïncidence
+Côté gateway, les deux `describe(... socketIO emit)` n'inspectaient jamais l'émission :
+la fabrique `makeSocketIOHandler` créait `emit`/`to` en variables locales jamais
+exposées, et les tests n'assertaient que `statusCode === 201`. Côté web, le test
+« prepends the link message » fabriquait un payload AVEC `conversationId` — une
+forme que le serveur n'a jamais envoyée — et le test « ignores link messages
+without a conversationId » gravait le défaut en comportement attendu. Récidive de
+la leçon 2026-08-03 #2.
 
-- `conversationId` ajouté aux deux payloads d'émission (la valeur était déjà en main).
-- `LinkMessageNewEventData.message` exige désormais `id` ET `conversationId` en plus
-  du `Record<string, unknown>` ouvert. C'est le correctif de fond : l'omission
-  devient une **erreur de compilation** aux deux sites.
-- `makeSocketIOHandler` expose `to` et `emit` pour que les tests puissent asserter la
-  room et le payload, pas seulement le code de retour.
-- Web : l'orchestrateur et la façade socket re-déclaraient
-  `{ message: Record<string, unknown> }` dans de purs pass-through, ce qui ré-élargissait
-  le type juste après `messaging.service` qui, lui, utilisait déjà le type partagé.
-  Les deux passent au type partagé — sans quoi le durcissement n'atteint pas le handler.
+### D5 (contrat) — `LinkMessageNewEventData.message: Record<string, unknown>`
+Un type qui n'exprime aucun contrat ne peut en faire respecter aucun : rien ne
+signalait au gateway qu'il devait fournir `conversationId`.
 
-Le garde runtime `if (!linkConvId) return` est CONSERVÉ : c'est une frontière socket,
-le JSON arrive du réseau et le type n'est pas une garantie runtime (même raisonnement
-qu'au cycle 3 sur `ZmqMessageHandler`).
+## Plan
+- [x] T1 — RED : exposer les espions `to`/`emit`, asserter `conversationId` + `senderId` sur les 2 routes
+- [x] T2 — D1 : les deux littéraux émettent `conversationId` (même valeur que la room) et `senderId`
+- [x] T3 — D5 : `LinkMessageNewEventData.message` exige `id`, `conversationId`, `senderId`
+- [x] T4 — RED : entrée de cache absente → `invalidateQueries` (web)
+- [x] T5 — D3 : repli `landedInCache`, idiome identique à `handleNewMessage`
+- [x] T6 — vérification : suites gateway + web complètes ; tsc gateway propre, web au niveau de la référence
+- [x] T7 — CHANGELOG (2 changesets : contrat partagé, livraison web)
 
-### Vérification
+## Revue
+Le candidat légué (D3) était réel, mais la vérification de sa précondition a mis au
+jour la racine : le handler qu'il s'agissait de durcir ne s'exécutait jamais. Ajouter
+le repli sans corriger D1 aurait produit un correctif intégralement mort — l'ordre
+imposé par le cycle 6 (« vérifier d'abord si `link:message:new` est doublé ») est
+exactement ce qui l'a évité.
 
-TDD stricte : 2 tests RED d'abord, un par route, assertant `payload.message.conversationId`
-— tous deux `Received: undefined`. Puis GREEN : 34/34.
+Le correctif tient en deux champs par site d'émission, et sa forme est dictée par la
+symétrie : `conversationId` reçoit la MÊME expression que celle qui nomme la room
+(`participantShareLink.conversationId` / `shareLink.conversationId`), de sorte qu'un
+destinataire route toujours vers la room dont il a reçu le message, sans dépendre du
+`select` Prisma.
 
-Le durcissement de type vérifié SÉPARÉMENT par mutation : `conversationId` retiré des
-deux payloads → `tsc --noEmit` produit deux `TS2322`, un par site d'émission. Le type
-n'est donc pas décoratif, il verrouille réellement la régression.
+Vérification par mutation (leçon 2026-07-31 #5) : les 3 tests gateway ont été vus
+ROUGES avant le correctif (`Received: undefined` sur `conversationId` et `senderId`,
+sur les deux routes) ; le test web `landedInCache` a été vu ROUGE par mutation du
+drapeau (`Number of calls: 0`).
 
-Gates : gateway **587 suites / 15 378 tests**, shared **49 fichiers / 1 462 tests**,
-web **505 suites / 11 668 tests** — toutes vertes. `tsc --noEmit` propre sur les
-fichiers source touchés (les 14 erreurs de `orchestrator.service.test.ts` sont
-préexistantes : 14 avant, 14 après).
+Non traité, relevé pour un cycle suivant :
+- Le schéma de réponse REST 201 des deux routes déclare `sender: { type: 'null' }`,
+  donc `fast-json-stringify` NULLIFIE l'expéditeur dans la réponse rendue à
+  l'auteur, et n'expose ni `conversationId` ni `senderId`. Défaut de contrat REST
+  distinct du chemin socket traité ici ; demande son propre test RED sur le corps
+  sérialisé (les tests actuels lisent `res.json().data.messageId` seulement).
+- iOS n'écoute pas `link:message:new` du tout (aucune occurrence dans
+  `packages/MeeshySDK` ni `apps/ios`) : les messages de share link n'arrivent pas
+  en temps réel sur iOS, indépendamment de D1. Non vérifiable sous Linux.
 
-### Effet sur le cycle 6
+### Cycle 7 bis — le durcissement de type s'arrêtait aux pass-through web
 
-Le passage de `handleLinkMessageNew` à `messageCacheKeysFor` (cycle 6) était correct
-mais **inatteignable** : le handler sortait avant. Il devient effectif maintenant.
+Complément au cycle 7 : `LinkMessageNewEventData` exige désormais `id`,
+`conversationId` et `senderId`, et `messaging.service` type bien ses listeners avec.
+Mais `orchestrator.service.ts` et `meeshy-socketio.service.ts` re-déclaraient
+`{ message: Record<string, unknown> }` dans de **purs pass-through** — deux méthodes
+qui ne font que déléguer — ré-élargissant le type juste après le seul étage qui
+l'appliquait. Le contrat durci n'atteignait donc jamais le consommateur qui en dépend.
 
-### Le candidat d'origine, ré-évalué
+Les deux passent au type partagé. Violation directe de la règle SSOT du projet (un
+type partagé re-déclaré localement), et le genre de duplication qui rend un
+durcissement de contrat inopérant sans que rien ne le signale.
 
-`handleLinkMessageNew` reste sans repli `landedInCache` (contrairement à
-`handleNewMessage`) : si aucune entrée de cache n'existe pour la conversation, le
-message d'aperçu de lien est encore perdu. Le défaut est réel mais de portée bien
-moindre que celui corrigé ici, et il n'est plus masqué. À traiter au cycle 8, avec son
-propre test RED (entrée absente → `invalidateQueries` appelée).
+Note de collision : ce cycle a été mené en parallèle d'une autre session de la
+routine qui a corrigé le même défaut (PR #2612, mergée en premier). Sa version est un
+sur-ensemble de la mienne côté gateway et types partagés — `senderId` en plus du
+`conversationId`, et le repli `landedInCache` de `handleLinkMessageNew` que le cycle 6
+avait laissé ouvert. Résolution du merge en faveur de la sienne partout où les deux se
+recouvrent ; seuls les deux pass-through web, qu'elle ne touchait pas, subsistent.

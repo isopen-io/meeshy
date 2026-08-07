@@ -138,12 +138,9 @@ function makePrisma(overrides: Record<string, any> = {}) {
 }
 
 function makeSocketIOHandler(hasManager = false) {
-  if (!hasManager) return { getManager: () => null };
+  if (!hasManager) return { getManager: () => null, to: jest.fn(), emit: jest.fn() };
   const emit = jest.fn();
   const to = jest.fn(() => ({ emit }));
-  // `to` and `emit` are exposed so a test can assert the ROOM and the PAYLOAD,
-  // not merely that the route answered 201 — the payload is the contract the
-  // web client reads, and a status code cannot express it.
   return { getManager: () => ({ getIO: () => ({ to }) }), to, emit };
 }
 
@@ -422,22 +419,19 @@ describe('POST /links/:id/messages — anonymous: socketIO emit', () => {
     expect(res.json().data.messageId).toBe(MSG_ID);
   });
 
-  it('carries the conversationId in the broadcast message', async () => {
-    // The room name is built from the conversation id, but the payload was
-    // assembled field by field and never included it. The web handler reads
-    // `message.conversationId` to find the cache entry to write into and bails
-    // out when it is absent, so every message posted through a share link was
-    // dropped by the client — no bubble, no conversation-list bump — until a
-    // manual reload.
-    socketIOHandler.emit.mockClear();
-    await app.inject({
-      method: 'POST', url: `/links/${MSHY_ID}/messages`,
-      headers: ANON_HEADERS, payload: VALID_BODY,
-    });
-
+  // Le seul routage dont dispose un client : la charge utile elle-même. Le nom
+  // de la room n'est pas transporté par Socket.IO côté réception, donc un
+  // message sans `conversationId` est indélivrable — le client ne sait dans
+  // quelle conversation l'insérer.
+  it('carries the conversationId of the room it was emitted to', () => {
+    expect(socketIOHandler.to).toHaveBeenCalledWith(`conversation:${CONV_ID}`);
     const [, payload] = socketIOHandler.emit.mock.calls[0] as [string, { message: Record<string, unknown> }];
     expect(payload.message.conversationId).toBe(CONV_ID);
-    expect(payload.message.id).toBe(MSG_ID);
+  });
+
+  it('carries the senderId of the anonymous participant that authored it', () => {
+    const [, payload] = socketIOHandler.emit.mock.calls[0] as [string, { message: Record<string, unknown> }];
+    expect(payload.message.senderId).toBe(PART_ID);
   });
 });
 
@@ -634,15 +628,11 @@ describe('POST /links/:id/messages/auth — socketIO emit', () => {
     expect(res.json().success).toBe(true);
   });
 
-  it('carries the conversationId in the broadcast message', async () => {
-    // Same contract as the anonymous route: both sites assembled the payload by
-    // hand and both omitted the one field the client routes on.
-    socketIOHandler.emit.mockClear();
-    await app.inject({ method: 'POST', url: `/links/${MSHY_ID}/messages/auth`, payload: VALID_BODY });
-
+  it('carries the conversationId and senderId, exactly like the anonymous twin', () => {
+    expect(socketIOHandler.to).toHaveBeenCalledWith(`conversation:${CONV_ID}`);
     const [, payload] = socketIOHandler.emit.mock.calls[0] as [string, { message: Record<string, unknown> }];
     expect(payload.message.conversationId).toBe(CONV_ID);
-    expect(payload.message.id).toBe(MSG_ID);
+    expect(payload.message.senderId).toBe(PART_ID);
   });
 });
 

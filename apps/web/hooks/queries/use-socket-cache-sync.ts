@@ -941,10 +941,17 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
       if (!linkConvId) return;
       const linkMsgId = linkMsg.id as string | undefined;
 
+      // Même repli que `handleNewMessage` : sans entrée de cache (fetch initial
+      // en vol, conversation jamais ouverte de la session), l'updater sort sur
+      // `if (!old) return old` et le message est perdu pour de bon — `staleTime:
+      // Infinity` ne relit jamais, et le serveur ne rediffuse pas.
+      let landedInCache = false;
+
       const prependLinkMessage = (
         old: InfiniteMessagesData | undefined
       ): InfiniteMessagesData | undefined => {
         if (!old) return old;
+        landedInCache = true;
         if (linkMsgId && old.pages.some((p) => p.messages.some((m) => m.id === linkMsgId))) return old;
         return {
           ...old,
@@ -956,6 +963,12 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
 
       for (const key of messageCacheKeysFor(queryClient, linkConvId)) {
         queryClient.setQueryData(key, prependLinkMessage);
+      }
+
+      if (!landedInCache) {
+        queryClient.invalidateQueries({
+          queryKey: queryKeys.messages.infinite(linkConvId),
+        });
       }
 
       const linkLastMessage = linkMsg as unknown as Message;
