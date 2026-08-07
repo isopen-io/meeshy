@@ -167,3 +167,87 @@ Non traité (minimal-impact, hors TDD faute de caller atteignable restant) : le
 landmine `postId.substring`/`commentId.substring` dans les deux services reste,
 mais n'est plus atteignable via ces handlers désormais que la validation boundary
 est en place.
+
+## Cycle 5 (2026-08-07) — routage temps-réel du cache web : transcription + suppression (Phases 2/4/5)
+
+Passage ciblé sur `apps/web/hooks/queries/use-socket-cache-sync.ts`, le point de
+réconciliation socket→cache du web (1119 lignes, jamais audité par les cycles 1–4 qui
+couvraient le gateway et l'orchestrateur socket). **Deux défauts de correction réels
+corrigés**, même famille de racine : un handler qui DEVINE la conversation cible au lieu
+de la lire là où l'information existe.
+
+### D1 — `handleTranscription` : trois défauts, un type inventé
+
+Le handler était typé contre une forme de payload qui n'existe pas
+(`{ messageId, transcription: string, language? }`) au lieu de
+`TranscriptionReadyEventData` (`{ messageId, attachmentId, conversationId,
+transcription: { text, language, … } }`). Rien ne l'a détecté : la frontière
+`meeshySocketIOService.onTranscription(listener: (data: any) => void)` efface le type.
+Récidive de la leçon 2026-08-07 #1 (« un mock/type qui invente le contrat protège le bug »),
+en version *type* plutôt que *mock*.
+
+1. **Routage** : écriture vers `queryKeys.messages.infinite(conversationId)` — la
+   conversation ACTIVE du hook — avec `if (!conversationId) return`. Le socket est joint à
+   TOUTES les rooms de l'utilisateur : une note vocale transcrite pendant qu'il lit un
+   autre fil visait la mauvaise clé (aucun message ne matche → no-op silencieux), et
+   `ConversationLayout` passe `effectiveSelectedId`, **null sur la vue liste**, où la
+   transcription était purement jetée. `staleTime: Infinity` ne relit jamais → bulle sans
+   transcription jusqu'à un refresh manuel. Violation directe du Prisme (« le prisme
+   s'applique à TOUT le contenu — … transcriptions audio … »). Les deux handlers frères
+   (`handleTranslation`, `handleAudioTranslation`) portaient DÉJÀ un commentaire explicite
+   sur ce trou et avaient été corrigés ; l'étage 1 du pipeline audio était resté en arrière.
+2. **Ciblage d'attachment** : la transcription allait au PREMIER attachment audio
+   (`mimeType.startsWith('audio/')`) alors que le payload nomme le sien (`attachmentId`).
+   Un message à plusieurs notes vocales empilait toutes les transcriptions sur la première
+   et laissait les autres définitivement vides.
+3. **Langue** : `data.language` n'existe pas (elle est sous `data.transcription`) →
+   `transcriptionLanguage` valait `undefined` sur chaque transcription.
+
+Fix : routage par `data.conversationId ?? conversationId`, ciblage par `data.attachmentId`
+(le scan mimeType ne survit que comme repli pour un payload sans attachmentId ; un
+attachmentId nommé-mais-inconnu ne touche RIEN — mal attribuer est pire que ne pas
+afficher), langue depuis `data.transcription.language`, et passage à `messageCacheKeysFor`
+pour atteindre aussi l'entrée alias identifiant (l'accueil monte la conversation globale
+sous `"meeshy"` — cf. `apps/web/app/page.tsx:34` — tandis que les payloads portent
+l'ObjectId résolu).
+
+### D2 — `handleMessageDeleted` : suppression appliquée à la mauvaise conversation
+
+`message:deleted` arrive au hook en **messageId nu** : le gateway émet
+`{ messageId, conversationId }` (`MessageDeletedEventData`) mais la couche transport
+(`messaging.service.ts:185`) ne relaie que `data.messageId`. Le handler devinait donc la
+conversation = la conversation ACTIVE → **toute suppression dans une autre conversation
+n'était jamais appliquée** (bulle supprimée toujours affichée, `staleTime: Infinity`).
+Le scan de repli (branche « aucune conversation ouverte ») s'arrêtait au premier cache
+trouvé (`break`) — une conversation cachée sous ObjectId ET sous alias gardait la 2e copie —
+et dérivait l'id de conversation de la **clé de requête**, qui sous alias ne matche aucune
+ligne de la liste → aperçu figé sur le message supprimé.
+
+Fix : localisation du message par id sur TOUTES les listes de messages en cache (sur-ensemble
+strict de la conversation active ; couvre alias et caches mode-lien), et l'id de conversation
+de l'aperçu vient du **message lui-même** (toujours l'ObjectId résolu), jamais de la clé.
+
+### Vérification
+
+TDD stricte : 9 tests RED d'abord (5 transcription, 4 suppression), puis GREEN. Chaque
+correctif vérifié par mutation SÉPARÉMENT — routage transcription → 3 rouges, ciblage
+attachment → 1, langue → 1, alias → 1, `break` restauré → 1, id depuis la clé → 1.
+Le dernier n'était PAS pinné par le premier jet de tests : ajouté après que la mutation
+soit passée au vert (application de la leçon 2026-08-07 #5).
+
+Gates : 2 suites `use-socket-cache-sync` 74/74 ; suite web complète **505 suites /
+11 660 tests** verte ; `tsc --noEmit` propre sur les fichiers modifiés.
+
+### Relevé, NON traité (décision de périmètre)
+
+Le même trou d'alias (écriture mono-clé `queryKeys.messages.infinite(x)`) subsiste dans
+`handleAudioTranslation`, `handleMessageAttachmentUpdated`, `handleAttachmentStatusUpdated`,
+`handleMessagePinned`, `handleMessageUnpinned`, `handleLinkMessageNew` — tous no-op sur
+l'entrée alias `"meeshy"`. Correctif mécanique (boucle sur `messageCacheKeysFor`), mais 6
+handlers d'un coup sans défaut de routage sous-jacent : à traiter en passe dédiée avec
+tests par handler. Second-ordre : l'entrée alias n'est peuplée qu'après une visite de
+l'accueil dans les 30 min de `gcTime`.
+
+Cause racine amont non traitée (contrat transport) : `messaging.service.ts:185` jette le
+`conversationId` de `MessageDeletedEventData`. Élargir la signature `onMessageDeleted`
+toucherait tous ses consommateurs ; le scan par id est correct sans changer le contrat.
