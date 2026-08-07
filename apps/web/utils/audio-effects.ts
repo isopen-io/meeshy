@@ -508,14 +508,18 @@ export class BackSoundProcessor implements AudioEffectProcessor {
         this.player.dispose();
       }
 
-      // Create new player
+      // Create new player. Do NOT chain .toDestination() here — that would
+      // route the background track straight to the local speakers in
+      // addition to the peer-bound mix below, which the user would hear
+      // directly (and, without headphones, have re-captured by their own
+      // mic into a second, echoed copy of the outgoing stream).
       this.player = new Tone.Player({
         url,
         loop: true,
         volume: -10, // Reduce volume to blend better
         fadeIn: 0.5,
         fadeOut: 0.5,
-      }).toDestination();
+      });
 
       // Connect player to gain
       this.player.connect(this.playerGain);

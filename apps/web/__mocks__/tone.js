@@ -40,4 +40,18 @@ module.exports = {
     dispose: jest.fn(),
     pitch: 0,
   })),
+  loaded: jest.fn().mockResolvedValue(undefined),
+  start: jest.fn().mockResolvedValue(undefined),
+  Player: jest.fn(() => {
+    const instance = {
+      loaded: true,
+      buffer: { duration: 1 },
+      start: jest.fn(),
+      stop: jest.fn(),
+      dispose: jest.fn(),
+      connect: jest.fn(() => instance),
+      toDestination: jest.fn(() => instance),
+    };
+    return instance;
+  }),
 };
