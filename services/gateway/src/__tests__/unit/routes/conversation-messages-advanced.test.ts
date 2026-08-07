@@ -197,7 +197,11 @@ const createMockFastify = () => {
   const mockEmit = jest.fn();
   const mockTo = jest.fn().mockReturnValue({ emit: mockEmit });
   const mockGetIO = jest.fn().mockReturnValue({ to: mockTo });
-  const mockGetManager = jest.fn().mockReturnValue({ getIO: mockGetIO });
+  const mockEnqueueOfflineMutation = jest.fn().mockResolvedValue(undefined);
+  const mockGetManager = jest.fn().mockReturnValue({
+    getIO: mockGetIO,
+    enqueueOfflineMessageMutation: mockEnqueueOfflineMutation,
+  });
 
   const fastify: any = {
     get: jest.fn((path: string, _opts: any, handler: Function) => {
@@ -227,6 +231,7 @@ const createMockFastify = () => {
     _mockTo: mockTo,
     _mockEmit: mockEmit,
     _mockGetManager: mockGetManager,
+    _mockEnqueueOfflineMutation: mockEnqueueOfflineMutation,
   };
   return fastify;
 };
@@ -686,6 +691,39 @@ describe('registerMessagesAdvancedRoutes', () => {
       expect(mockSendSuccess).toHaveBeenCalled();
     });
 
+    // The live room emit above only reaches participants currently connected.
+    // The socket transport (`MessageHandler.handleMessageEdit`) additionally
+    // queues the edit for OFFLINE participants so it replays on reconnect;
+    // without the same call here, an edit made over REST is lost forever for
+    // anyone offline at that moment.
+    it('enqueues the edit for offline participants', async () => {
+      prisma.message.findFirst.mockResolvedValue(makeExistingMessage());
+      prisma.message.update.mockResolvedValue({
+        id: MSG_ID,
+        content: 'hello',
+        validatedMentions: [],
+        translations: null,
+      });
+
+      const req = makeRequest({
+        params: { id: CONV_ID, messageId: MSG_ID },
+        body: { content: 'hello' },
+      });
+      const reply = makeReply();
+
+      await getEditHandler(fastify)(req, reply);
+
+      expect(fastify._mockEnqueueOfflineMutation).toHaveBeenCalledWith(
+        expect.objectContaining({
+          conversationId: CONV_ID,
+          actorUserId: USER_ID,
+          eventType: 'edited',
+          messageId: MSG_ID,
+          payload: expect.objectContaining({ id: MSG_ID, conversationId: CONV_ID }),
+        })
+      );
+    });
+
     it('continues when socket broadcast throws', async () => {
       prisma.message.findFirst.mockResolvedValue(makeExistingMessage());
       prisma.message.update.mockResolvedValue({
@@ -949,6 +987,34 @@ describe('registerMessagesAdvancedRoutes', () => {
       expect(fastify._mockEmit).toHaveBeenCalledWith('message:deleted', expect.objectContaining({ messageId: MSG_ID }));
     });
 
+    // This is the route the iOS SDK deletes through (`MessageService.swift`).
+    // Same offline-replay guarantee the socket delete path gives: without it a
+    // deleted message stays visible forever on any participant offline at the
+    // moment of deletion.
+    it('enqueues the deletion for offline participants', async () => {
+      prisma.message.findFirst.mockResolvedValue({
+        ...makeExistingMessage(),
+        sender: { id: PART_ID, userId: USER_ID },
+        attachments: [],
+      });
+      prisma.message.update.mockResolvedValue({});
+
+      const req = makeRequest({ params: { id: CONV_ID, messageId: MSG_ID } });
+      const reply = makeReply();
+
+      await getDeleteMsgHandler(fastify)(req, reply);
+
+      expect(fastify._mockEnqueueOfflineMutation).toHaveBeenCalledWith(
+        expect.objectContaining({
+          conversationId: CONV_ID,
+          actorUserId: USER_ID,
+          eventType: 'deleted',
+          messageId: MSG_ID,
+          payload: { messageId: MSG_ID, conversationId: CONV_ID },
+        })
+      );
+    });
+
     it('keys onMessageDeleted by the message sender (registered author)', async () => {
       prisma.message.findFirst.mockResolvedValue({
         ...makeExistingMessage(),
@@ -1155,6 +1221,43 @@ describe('registerMessagesAdvancedRoutes', () => {
       expect(fastify._mockEmit).toHaveBeenCalledWith(
         'message:edited',
         expect.objectContaining({ id: MSG_ID, conversationId: CONV_ID })
+      );
+    });
+
+    it('enqueues the edit for offline participants (parity with PUT sibling)', async () => {
+      prisma.message.findFirst.mockResolvedValue({
+        id: MSG_ID,
+        conversationId: CONV_ID,
+        content: 'Original',
+        originalLanguage: 'fr',
+        senderId: PART_ID,
+        sender: { userId: USER_ID },
+        conversation: {
+          identifier: 'some-conv',
+          participants: [{ userId: USER_ID, isActive: true }],
+        },
+      });
+      prisma.participant.findFirst.mockResolvedValue({ id: PART_ID });
+      prisma.message.update.mockResolvedValue({
+        id: MSG_ID,
+        content: 'Updated',
+        translations: null,
+        sender: { id: PART_ID, userId: USER_ID, displayName: 'Alice', avatar: null, role: 'USER', user: { username: 'alice' } },
+      });
+
+      const req = makeRequest({ params: { messageId: MSG_ID }, body: { content: 'Updated' } });
+      const reply = makeReply();
+
+      await getPatchHandler(fastify)(req, reply);
+
+      expect(fastify._mockEnqueueOfflineMutation).toHaveBeenCalledWith(
+        expect.objectContaining({
+          conversationId: CONV_ID,
+          actorUserId: USER_ID,
+          eventType: 'edited',
+          messageId: MSG_ID,
+          payload: expect.objectContaining({ id: MSG_ID, conversationId: CONV_ID }),
+        })
       );
     });
 

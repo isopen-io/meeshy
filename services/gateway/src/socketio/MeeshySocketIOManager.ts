@@ -561,13 +561,15 @@ export class MeeshySocketIOManager {
   }
 
   /**
-   * Queue a message-aggregate mutation (currently pin/unpin, driven by the REST
-   * pin routes) for every OFFLINE conversation participant so their pin state
-   * converges on reconnect — the same offline-replay guarantee `MessageHandler`
-   * gives edits/deletes and `ReactionHandler` gives reactions. Without this a
-   * `message:pinned`/`message:unpinned` emitted only to the live conversation
-   * room is lost for anyone offline at that moment: their cached pin state
-   * stays stale until an unrelated full conversation refetch happens.
+   * Queue a message-aggregate mutation (pin/unpin from the REST pin routes,
+   * edit/delete from the five REST mutation routes via
+   * `broadcastMessageMutation`) for every OFFLINE conversation participant so
+   * their state converges on reconnect — the REST-side counterpart of the
+   * offline-replay guarantee `MessageHandler` gives the socket edit/delete path
+   * and `ReactionHandler` gives reactions. Without this a `message:pinned` /
+   * `message:edited` / `message:deleted` emitted only to the live conversation
+   * room is lost for anyone offline at that moment: their cached copy stays
+   * stale until an unrelated full conversation refetch happens.
    *
    * The actor is excluded by userId (the REST pin routes run under
    * `requiredAuth`, so the actor is always a registered user) and online
@@ -581,7 +583,7 @@ export class MeeshySocketIOManager {
   async enqueueOfflineMessageMutation(params: {
     conversationId: string;
     actorUserId: string | null | undefined;
-    eventType: 'pinned' | 'unpinned' | 'edited';
+    eventType: 'pinned' | 'unpinned' | 'edited' | 'deleted';
     messageId: string;
     payload: Record<string, unknown>;
   }): Promise<void> {

@@ -162,11 +162,14 @@ const mockAttachment = {
 function makeMockSocketIO() {
   const mockEmit = jest.fn();
   const mockTo = jest.fn().mockReturnValue({ emit: mockEmit, to: jest.fn().mockReturnThis() });
+  const mockEnqueueOfflineMutation = jest.fn().mockResolvedValue(undefined);
   return {
     mockEmit,
     mockTo,
+    mockEnqueueOfflineMutation,
     manager: {
       getIO: () => ({ to: mockTo }),
+      enqueueOfflineMessageMutation: mockEnqueueOfflineMutation,
     },
   };
 }
@@ -518,5 +521,73 @@ describe('POST /attachments/:attachmentId/status — DB error', () => {
       payload: { action: 'listened' },
     });
     expect(res.statusCode).toBe(500);
+  });
+});
+
+// ─── Offline replay parity: REST edit/delete must feed the delivery queue ─────
+//
+// `MessageHandler.handleMessageEdit`/`handleMessageDelete` (socket transport)
+// enqueue the mutation for every OFFLINE participant so their cached copy
+// converges on reconnect. These REST routes are the transport the iOS SDK
+// actually uses (`MessageService.swift`: PUT /messages/:id to edit,
+// DELETE /conversations/:id/messages/:id to delete), so without the same
+// enqueue an edit or delete made from iOS is lost FOREVER for anyone offline
+// at that moment — the live room emit is the only notification they'd ever get.
+
+describe('PUT /messages/:messageId — offline delivery replay', () => {
+  let app: FastifyInstance;
+  let mockEnqueueOfflineMutation: jest.Mock;
+  beforeAll(async () => {
+    const { manager, mockEnqueueOfflineMutation: enqueue } = makeMockSocketIO();
+    mockEnqueueOfflineMutation = enqueue;
+    app = await buildApp({ socketIOManager: manager });
+  });
+  afterAll(async () => { await app.close(); });
+
+  it('enqueues the edit for offline participants', async () => {
+    mockEnqueueOfflineMutation.mockClear();
+    const res = await app.inject({
+      method: 'PUT', url: '/messages/' + MSG_ID,
+      payload: { content: 'edited via REST' },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(mockEnqueueOfflineMutation).toHaveBeenCalledWith(
+      expect.objectContaining({
+        conversationId: CONV_ID,
+        actorUserId: USER_ID,
+        eventType: 'edited',
+        messageId: MSG_ID,
+        payload: expect.objectContaining({ id: MSG_ID, conversationId: CONV_ID }),
+      })
+    );
+  });
+});
+
+describe('DELETE /messages/:messageId — offline delivery replay', () => {
+  let app: FastifyInstance;
+  let mockEnqueueOfflineMutation: jest.Mock;
+  beforeAll(async () => {
+    const { manager, mockEnqueueOfflineMutation: enqueue } = makeMockSocketIO();
+    mockEnqueueOfflineMutation = enqueue;
+    app = await buildApp({ socketIOManager: manager });
+  });
+  afterAll(async () => { await app.close(); });
+
+  it('enqueues the deletion for offline participants', async () => {
+    mockEnqueueOfflineMutation.mockClear();
+    (app as any).prisma.message.findFirst
+      .mockResolvedValueOnce(mockMessage)
+      .mockResolvedValueOnce(null);
+    const res = await app.inject({ method: 'DELETE', url: '/messages/' + MSG_ID });
+    expect(res.statusCode).toBe(200);
+    expect(mockEnqueueOfflineMutation).toHaveBeenCalledWith(
+      expect.objectContaining({
+        conversationId: CONV_ID,
+        actorUserId: USER_ID,
+        eventType: 'deleted',
+        messageId: MSG_ID,
+        payload: { messageId: MSG_ID, conversationId: CONV_ID },
+      })
+    );
   });
 });

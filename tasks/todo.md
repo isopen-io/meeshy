@@ -418,3 +418,78 @@ participants à l'unban (`invalidateParticipantLookup`, `invalidateParticipantCa
 un ban pour un utilisateur enregistré (les deux sites filtrent `isActive: true`
 en amont), donc l'ajouter aurait été du culte du cargo sans test capable de virer
 au rouge.
+
+# La garantie de rejeu hors ligne des éditions/suppressions s'arrêtait à la frontière REST (2026-08-07 (3))
+
+## Demande (routine amélioration continue temps réel)
+Audit continu de la pile temps réel (PHASES 1–4). Périmètre retenu ce cycle :
+la parité de transport des mutations de message (édition / suppression) et leur
+rejeu aux participants HORS LIGNE.
+
+## Constats (Phase 1 — audit des 6 sites de mutation de message)
+
+### D1 (racine) — 5 des 6 sites de mutation n'alimentent jamais la file de livraison
+`MessageHandler.handleMessageEdit` / `handleMessageDelete` (transport socket)
+appellent `_enqueueOfflineEventForParticipants` — le helper dont le commentaire
+dit explicitement : « Without this, an edit or delete made while a recipient is
+offline is lost for them ». Les CINQ routes REST qui muteront le même message
+(`routes/messages.ts` PUT + DELETE `/messages/:messageId`,
+`routes/conversations/messages-advanced.ts` PUT `/conversations/:id/messages/:messageId`,
+DELETE idem, PATCH `/messages/:messageId`) diffusent bien `message:edited` /
+`message:deleted` à la room ET rafraîchissent l'aperçu de liste, mais
+n'enfilent RIEN. Un participant hors ligne à cet instant ne l'apprend JAMAIS.
+
+### D2 (portée réelle) — c'est le chemin PRIMAIRE d'iOS
+`MessageService.swift` édite via `PUT /messages/:messageId` et supprime via
+`DELETE /conversations/:id/messages/:messageId` : les deux sont REST. Toute
+édition/suppression faite depuis l'app iOS est donc perdue pour les pairs hors
+ligne, alors que la même action faite en socket depuis le web converge. Deux
+chemins pour la même intention qui divergent en silence (leçon 2026-08-07 #4).
+
+### D3 (empreinte de l'oubli) — l'API REST-side existait déjà, sans appelant
+`MeeshySocketIOManager.enqueueOfflineMessageMutation` est le point d'entrée
+prévu pour les routes REST (utilisé par pin/unpin) et son union `eventType`
+accepte déjà `'edited'` — un appelant prévu, jamais écrit. `'deleted'` manque
+de l'union : la signature elle-même porte la trace de l'omission.
+
+### D4 (pourquoi ça a survécu) — la duplication cachait l'asymétrie
+Les 5 blocs REST dupliquent chacun « emit + fanout aperçu » ; aucun ne référence
+les autres. Le commentaire de `emitConversationPreviewUpdate` affirme couvrir
+« les trois transports (WS + les deux routes REST) » : il y en a cinq côté REST.
+
+## Plan
+- [x] T1 — RED : tests de rejeu hors ligne sur les 5 sites REST
+- [x] T2 — D1/D3 : helper unique `broadcastMessageMutation` (emit + aperçu + enfilage), `'deleted'` ajouté à l'union
+- [x] T3 — D4 : les 5 sites REST passent par le helper (déduplication)
+- [x] T4 — vérification : suite gateway complète (588/588, 15403 tests) + tsc propre
+- [x] T5 — CHANGELOG
+
+## Revue
+Une seule racine (D1 : une garantie implémentée sur un seul des deux transports),
+mais le symptôme n'est visible qu'en croisant TROIS fichiers qui ne se citent
+pas : le commentaire de `_enqueueOfflineEventForParticipants` (qui énonce la
+garantie), les routes REST (qui ne l'appliquent pas) et `MessageService.swift`
+(qui prouve que c'est le chemin d'iOS). Aucune relecture d'un diff isolé
+n'aurait pu le voir.
+
+Le correctif ne consiste PAS à recopier une troisième ligne dans cinq blocs :
+la duplication est ce qui a rendu l'asymétrie invisible (cinq blocs
+« emit + aperçu » identiques, aucun ne référençant les autres, et le commentaire
+de `emitConversationPreviewUpdate` affirmant couvrir « les trois transports »
+alors qu'il y en a cinq côté REST). `broadcastMessageMutation` nomme les TROIS
+audiences d'une mutation (room, écrans de liste, hors ligne) en un seul endroit ;
+un sixième site ne peut plus en oublier une.
+
+Vérification par mutation (leçon 2026-07-31 #5 — un test de régression non vu
+rouge est décoratif) : les 5 tests de route ont été vus ROUGES avant le
+correctif, tous avec `Number of calls: 0`. Le passage par le helper a par
+ailleurs fait virer au rouge un test EXISTANT (`socketIOHandler` null à
+l'enregistrement) : `getManager()` était appelé hors du try/catch qu'il
+remplaçait — corrigé par `socketIOHandler?.getManager()`, la nullabilité étant
+réelle et déjà couverte. Le nouveau module est à 100 % (stmts/branches/funcs/lines).
+
+Non retenu : faire passer les routes pin/unpin par le même helper. Elles
+enfilent déjà correctement, ne diffusent PAS d'aperçu de liste (un épinglage ne
+change pas le dernier message) et leur `eventType` n'est pas dans le couple
+edit/delete — les y forcer aurait été une uniformisation de façade qui change
+leur comportement observable sans test capable de le justifier.
