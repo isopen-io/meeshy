@@ -8,6 +8,7 @@ import { validateParams, validateQuery } from '../validation/helpers.js';
 import { MessageIdParamSchema, ConversationIdParamSchema, ReadStatusesQuerySchema, DeliveryReceiptParamsSchema } from '../validation/message-read-status-schemas.js';
 import { MarkReadBodySchema } from '../validation/messages-schemas.js';
 import { resolveConversationId } from '../utils/conversation-id-cache.js';
+import { emitToConversationParticipants } from '../socketio/emitToConversationParticipants.js';
 import { sendSuccess, sendNotFound, sendForbidden, sendBadRequest, sendInternalError } from '../utils/response.js';
 import { enhancedLogger } from '../utils/logger-enhanced.js';
 import { createCustomRateLimiter } from '../utils/rate-limiter.js';
@@ -524,7 +525,7 @@ async function broadcastReadStatusUpdate(
     readStatusService.getLatestMessageSummary(args.conversationId),
     prisma.participant.findMany({
       where: { conversationId: args.conversationId, isActive: true },
-      select: { userId: true }
+      select: { id: true, userId: true }
     }),
     actorReadSyncP
   ]);
@@ -540,22 +541,17 @@ async function broadcastReadStatusUpdate(
   };
 
   const io = socketIOManager.getIO();
-  const convRoom = ROOMS.conversation(args.conversationId);
 
-  // Chain rooms so Socket.IO delivers the event at most once per socket,
-  // even if a socket belongs to both the conversation room and a user room.
-  let emitter: any = io.to(convRoom);
-  const seenRooms = new Set<string>([convRoom]);
-  for (const p of activeParticipants) {
-    if (!p.userId) continue;
-    const userRoom = ROOMS.user(p.userId);
-    if (seenRooms.has(userRoom)) continue;
-    seenRooms.add(userRoom);
-    emitter = emitter.to(userRoom);
-  }
-
-  emitter.emit(SERVER_EVENTS.READ_STATUS_UPDATED, payload);
-  emitter.emit(SERVER_EVENTS.MESSAGE_READ_STATUS_UPDATED, payload);
+  // Single chained fan-out — see `emitToConversationParticipants`. The loop this
+  // replaces skipped every participant without a `User` row, so an anonymous
+  // participant never learned that a peer had read anything.
+  emitToConversationParticipants({
+    io,
+    conversationId: args.conversationId,
+    participants: activeParticipants,
+    events: [SERVER_EVENTS.READ_STATUS_UPDATED, SERVER_EVENTS.MESSAGE_READ_STATUS_UPDATED],
+    payload
+  });
 
   if (args.type === 'read') {
     io.to(ROOMS.user(args.userId)).emit(SERVER_EVENTS.CONVERSATION_UNREAD_UPDATED, {

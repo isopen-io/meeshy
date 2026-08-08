@@ -3,6 +3,7 @@ import * as path from 'path';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { MessageTranslationService } from '../../services/message-translation/MessageTranslationService';
 import { aggregateAttachmentReactions } from '../../socketio/serializeAttachmentForSocket';
+import { emitToConversationParticipants } from '../../socketio/emitToConversationParticipants';
 import { MessagingService } from '../../services/messaging/MessagingService';
 import {
   buildPostReplyTo,
@@ -377,7 +378,7 @@ export function registerMessagesRoutes(
         readStatusService.getLatestMessageSummary(conversationId),
         prisma.participant.findMany({
           where: { conversationId, isActive: true },
-          select: { userId: true }
+          select: { id: true, userId: true }
         })
       ]);
 
@@ -390,18 +391,13 @@ export function registerMessagesRoutes(
         summary
       };
 
-      const convRoom = ROOMS.conversation(conversationId);
-      let emitter: any = io.to(convRoom);
-      const seenRooms = new Set<string>([convRoom]);
-      for (const p of activeParticipants) {
-        if (!p.userId) continue;
-        const userRoom = ROOMS.user(p.userId);
-        if (seenRooms.has(userRoom)) continue;
-        seenRooms.add(userRoom);
-        emitter = emitter.to(userRoom);
-      }
-      emitter.emit(SERVER_EVENTS.READ_STATUS_UPDATED, payload);
-      emitter.emit(SERVER_EVENTS.MESSAGE_READ_STATUS_UPDATED, payload);
+      emitToConversationParticipants({
+        io,
+        conversationId,
+        participants: activeParticipants,
+        events: [SERVER_EVENTS.READ_STATUS_UPDATED, SERVER_EVENTS.MESSAGE_READ_STATUS_UPDATED],
+        payload
+      });
 
       await emitUnreadUpdate();
     } catch (error) {

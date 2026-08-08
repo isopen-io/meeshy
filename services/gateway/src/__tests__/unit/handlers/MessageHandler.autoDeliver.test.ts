@@ -406,11 +406,15 @@ describe('MessageHandler — auto-deliver reaches anonymous recipients', () => {
       userId: null
     });
 
-    // The anonymous acker has no user room; the conversation room is what
-    // carries the receipt to them, and the sender is in it too.
+    // The anonymous acker DOES have a personal room: `AuthHandler` joins
+    // `ROOMS.user(participant.id)` for an anonymous socket, and says in the
+    // comment that put it there that this is the only room personal-event
+    // emitters address. The conversation room is not a substitute — a client
+    // sitting on the conversation list has left `conversation:<id>` and is
+    // reachable through its personal room alone.
     const roomTargets = to.mock.calls.map((c) => c[0]);
     expect(roomTargets).toContain(`conversation:${conversationId}`);
-    expect(roomTargets).not.toContain(`user:${anonParticipantId}`);
+    expect(roomTargets).toContain(`user:${anonParticipantId}`);
   });
 
   it('leaves a disconnected anonymous participant out', async () => {
