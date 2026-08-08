@@ -4362,3 +4362,41 @@ l'utilisateur a désactivé l'effet — coût CPU/batterie continu sans bénéfi
   correct (chaque `disconnect()`+reconstruction est idempotent) mais coûte un aller-retour stop/redémarrage
   de la détection de pitch à chaque toggle d'un effet non lié pendant que voice-coder reste actif ; pas un bug,
   candidat d'optimisation mineure pour une vague dédiée si mesuré comme significatif en pratique.
+
+## Vague 68 — exécution de la spec `useVideoFilters.ts` : retrait du dead code confirmé (2026-08-08)
+
+Point d'entrée : routine automatique d'amélioration continue (audio/vidéo calling). Reprise du candidat
+laissé ouvert par la Vague 65 (« `useVideoFilters.ts` dead code, candidat nettoyage »), reconduit sans
+action à travers les Vagues 66/67. Vérification exhaustive avant retrait plutôt que confiance dans
+l'étiquette du cycle précédent — même discipline que les cycles gateway 14-16 (« une énumération se
+revérifie, elle ne se recopie pas »).
+
+- **Vérification** : `grep -rn "useVideoFilters\|VideoFilterConfig\|FILTER_PRESETS"` sur tout le repo
+  (hors `node_modules`) ne renvoie **aucune** occurrence en dehors du fichier lui-même — ni import, ni
+  test, ni mention dans `components/video-calls/index.ts` (barrel public) ou dans les README/ARCHITECTURE
+  du dossier. Pipeline WebGL complet (temperature/brightness/contrast/saturation/exposure, shaders
+  vertex/fragment, `processStream`/`renderFrame`/`startProcessing`/`stopProcessing`) sans un seul
+  appelant en production — même forme que `useWebRTC.ts` retiré en Vague 33 (voir garde-test barrel
+  ci-dessous), à la différence que `useVideoFilters` n'a jamais été exporté du tout, même pas comme
+  footgun accessible via le barrel.
+- **Fix** : suppression de `apps/web/components/video-calls/hooks/useVideoFilters.ts` (262 lignes) et du
+  dossier `hooks/` devenu vide (ne contenait plus que ce fichier depuis le retrait de `useWebRTC.ts` en
+  Vague 33).
+- **Tests** : extension de la garde-barrel existante `__tests__/components/video-calls/index.test.ts`
+  (celle qui verrouille déjà l'absence de `useWebRTC.ts`) avec le même patron — 2 nouveaux tests :
+  le barrel n'exporte pas `useVideoFilters`, le fichier n'existe plus sur disque. Choix délibéré de
+  réutiliser le fichier de garde existant plutôt que d'en créer un nouveau : un seul emplacement où
+  vérifier « qu'est-ce que ce barrel a refusé d'exporter, et pourquoi » plutôt que la dispersion que la
+  duplication aurait produite.
+- **Vérification de non-régression** : suite `__tests__/components/video-calls/` + `components/video-calls/`
+  complète (10 suites / 55 tests, incluant les 4 de la garde-barrel étendue) verte. `packages/shared &&
+  bun run build` (prérequis CLAUDE.md) sans erreur. `tsc --noEmit` sur `apps/web` : aucune nouvelle erreur
+  imputable à ce diff (le fichier supprimé n'apparaissait dans AUCUNE des ~1600 lignes d'erreurs
+  pré-existantes de ce sandbox avant le retrait, confirmant qu'il n'était référencé nulle part y compris
+  par le compilateur). `next lint`/`eslint` : erreur de config circulaire pré-existante de ce sandbox,
+  non liée à ce diff (déjà documentée Vagues 65/67).
+- **Reste ouvert** : dead code / god-object `CallManager.swift` (~5770 lignes) ; ADR `actor CallEventQueue`
+  non implémenté ; busy-path `reportNewIncomingCall` failure handler UI-only (Vague 63/64) ;
+  `rebuildAudioGraph()` re-câblage complet à chaque toggle d'effet (optimisation mineure, Vague 67) ;
+  items iOS bloqués sur l'absence de toolchain Swift dans ce sandbox (sérialisation `switchCamera` déjà
+  fermée en Vague 66, reste le god-object et l'ADR `CallEventQueue`).
