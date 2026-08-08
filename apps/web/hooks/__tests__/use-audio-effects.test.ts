@@ -15,7 +15,7 @@ jest.mock('@/utils/audio-effects', () => ({
  * destination), so a toggle on effect B genuinely shifts effect A's outgoing
  * wire — the graph-edge rebuild is unavoidable and cheap. But the previous
  * implementation ALSO called the processor's full lifecycle `disconnect()`
- * (which, for `VoiceCoderProcessor`, stops its pitch-detection rAF loop) and
+ * (which, for `BackSoundProcessor`, stops background-music playback) and
  * `setActive()` on EVERY processor regardless of whether that processor's own
  * enabled bit changed — producing a wasted stop/restart cycle of background
  * work for processors that never actually toggled.

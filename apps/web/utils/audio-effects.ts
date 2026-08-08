@@ -292,10 +292,16 @@ export class VoiceCoderProcessor implements AudioEffectProcessor {
   }
 
   disconnect(): void {
-    // Leaves no dangling background work behind: whoever reconnects this
-    // processor (via setActive(true)) gets a fresh detection loop rather than
-    // inheriting one that silently kept running underneath a torn-down graph.
-    this.stopPitchDetection();
+    // Pure audio-graph teardown — does NOT touch the pitch-detection loop.
+    // setActive() is the sole authority over starting/stopping it (see its
+    // doc comment). rebuildAudioGraph() calls disconnect() on every
+    // processor on every effect toggle, including toggling a *different*
+    // effect while this one stays enabled, immediately followed by
+    // setActive(enabled) for every processor — if disconnect() also stopped
+    // the loop, that unrelated toggle would cancel and instantly reschedule
+    // a fresh rAF chain for a voice-coder that never actually turned off.
+    // Callers that actually mean to stop the background work for good (e.g.
+    // destroy()) call stopPitchDetection() themselves.
     this.outputNode.disconnect();
   }
 

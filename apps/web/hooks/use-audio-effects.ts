@@ -142,13 +142,12 @@ export function useAudioEffects({ inputStream, onOutputStreamReady }: UseAudioEf
     // A processor's chain POSITION can shift even when its own enabled bit
     // didn't (an unrelated neighbor toggling moves what it connects to), so
     // the Web Audio graph edges are always rebuilt below. But the processor's
-    // OWN lifecycle — disconnect()'s side effects (VoiceCoderProcessor stops
-    // its pitch-detection rAF loop, BackSoundProcessor stops playback) and
-    // setActive() — must only fire when its OWN enabled bit actually flips.
-    // Otherwise every unrelated toggle (or even a params-only update, which
-    // also produces a new effectsState reference) forces every still-enabled
-    // processor through a pointless stop/restart cycle of background work it
-    // never stopped needing.
+    // OWN lifecycle — disconnect()'s side effects (BackSoundProcessor stops
+    // playback) and setActive() — must only fire when its OWN enabled bit
+    // actually flips. Otherwise every unrelated toggle (or even a params-only
+    // update, which also produces a new effectsState reference) forces every
+    // still-enabled processor through a pointless stop/restart cycle of
+    // background work it never stopped needing.
     processorsRef.current.forEach((processor, type) => {
       const wasEnabled = previouslyEnabledTypes.has(type);
       const isEnabled = enabledTypes.has(type);
