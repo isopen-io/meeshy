@@ -554,12 +554,6 @@ describe('registerMessagesAdvancedRoutes', () => {
         createMentions,
       };
 
-      // La résolution lit le contenu TRAITÉ (liens de tracking déjà substitués),
-      // pas le corps de la requête : c'est lui qui doit porter le `@`.
-      mockProcessExplicitLinksInContent.mockResolvedValue({
-        processedContent: 'Hello @alice',
-        trackingLinks: [],
-      });
       prisma.message.findFirst.mockResolvedValue(makeExistingMessage());
       prisma.message.update.mockResolvedValue({
         id: MSG_ID,
@@ -576,8 +570,117 @@ describe('registerMessagesAdvancedRoutes', () => {
 
       await getEditHandler(fastify)(req, reply);
 
-      expect(extractMock).toHaveBeenCalledWith('Hello @alice', expect.any(Array));
+      expect(extractMock).toHaveBeenCalled();
       expect(mockSendSuccess).toHaveBeenCalled();
+    });
+
+    // Le chemin d'édition extrayait les handles BRUTS (`extractMentions`) là où
+    // la création extrait avec la liste des participants
+    // (`extractMentionsWithParticipants`, qui résout aussi `@Display Name`).
+    // Éditer un message contenant `@John Doe` DÉTRUISAIT donc la mention que la
+    // création avait validée : ligne `Mention` supprimée, champ remis à `[]`,
+    // alors que rien n'avait changé pour elle.
+    it('keeps a display-name mention alive across an edit', async () => {
+      const extractWithParticipants = jest.fn().mockReturnValue(['john']);
+      fastify.mentionService = {
+        extractMentionsWithParticipants: extractWithParticipants,
+        resolveUsernames: jest.fn().mockResolvedValue(new Map([['john', { id: 'user-john', username: 'john' }]])),
+        validateMentionPermissions: jest.fn().mockResolvedValue({ validUserIds: ['user-john'] }),
+        createMentions: jest.fn().mockResolvedValue(undefined),
+      };
+      prisma.participant.findMany.mockResolvedValue([
+        { userId: 'user-john', displayName: 'John Doe', user: { id: 'user-john', username: 'john', displayName: 'John Doe' } },
+      ]);
+      prisma.message.findFirst.mockResolvedValue(makeExistingMessage());
+
+      const req = makeRequest({
+        params: { id: CONV_ID, messageId: MSG_ID },
+        body: { content: 'Salut @John Doe, corrig\u00e9' },
+      });
+
+      await getEditHandler(fastify)(req, makeReply());
+
+      // La r\u00e9solution porte sur le contenu APR\u00c8S traitement des liens de
+      // suivi, comme sur le chemin de cr\u00e9ation : c'est ce texte-l\u00e0 qui est
+      // persist\u00e9 et affich\u00e9.
+      expect(extractWithParticipants).toHaveBeenCalledWith(
+        'processed content',
+        [{ userId: 'user-john', username: 'john', displayName: 'John Doe' }]
+      );
+      // Réconciliation : John n'avait pas de ligne, il en gagne une ; personne
+      // ne part, donc aucune suppression. Purger en bloc lui aurait donné un
+      // `mentionedAt` neuf à chaque édition — l'axe de tri de l'inbox.
+      expect(prisma.mention.deleteMany).not.toHaveBeenCalled();
+      expect(fastify.mentionService.createMentions).toHaveBeenCalledWith(MSG_ID, ['user-john']);
+      expect(prisma.message.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ validatedMentions: ['john'] }),
+        })
+      );
+    });
+
+    // L'inverse : une mention retir\u00e9e du texte doit sortir du champ ET de
+    // l'inbox `/mentions` de celui qu'elle nommait.
+    it('clears the mention set when the edited content drops every mention', async () => {
+      fastify.mentionService = {
+        extractMentionsWithParticipants: jest.fn().mockReturnValue([]),
+        resolveUsernames: jest.fn(),
+        validateMentionPermissions: jest.fn(),
+        createMentions: jest.fn(),
+      };
+      // Alice était mentionnée avant l'édition : c'est elle qui part.
+      prisma.mention.findMany.mockResolvedValue([{ mentionedParticipantId: 'user-alice' }]);
+      prisma.message.findFirst.mockResolvedValue(makeExistingMessage());
+
+      const req = makeRequest({
+        params: { id: CONV_ID, messageId: MSG_ID },
+        body: { content: 'plus de mention' },
+      });
+
+      await getEditHandler(fastify)(req, makeReply());
+
+      expect(prisma.mention.deleteMany).toHaveBeenCalledWith({
+        where: { messageId: MSG_ID, mentionedParticipantId: { in: ['user-alice'] } },
+      });
+      expect(prisma.message.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ validatedMentions: [] }),
+        })
+      );
+      // Lot d'entrants vide : aucune ligne créée. La garde du lot vide
+      // appartient à `createMentions`, qui la porte déjà.
+      expect(fastify.mentionService.createMentions).toHaveBeenCalledWith(MSG_ID, []);
+    });
+
+    // Le bloc remplacé notifiait TOUS les mentionnés à chaque édition : corriger
+    // une faute de frappe dans « salut @alice » repoussait un push à Alice,
+    // déjà nommée au premier envoi — dix corrections, dix pushes.
+    it('does not re-notify a mention that was already there', async () => {
+      fastify.mentionService = {
+        extractMentionsWithParticipants: jest.fn().mockReturnValue(['alice']),
+        resolveUsernames: jest.fn().mockResolvedValue(new Map([['alice', { id: 'user-alice', username: 'alice' }]])),
+        validateMentionPermissions: jest.fn().mockResolvedValue({ validUserIds: ['user-alice'] }),
+        createMentions: jest.fn().mockResolvedValue(undefined),
+      };
+      const createBatchMock = jest.fn().mockResolvedValue(1);
+      fastify.notificationService = { createMentionNotificationsBatch: createBatchMock };
+
+      // Alice était DÉJÀ mentionnée avant l'édition.
+      prisma.mention.findMany.mockResolvedValue([{ mentionedParticipantId: 'user-alice' }]);
+      prisma.message.findFirst.mockResolvedValue(makeExistingMessage());
+
+      const req = makeRequest({
+        params: { id: CONV_ID, messageId: MSG_ID },
+        body: { content: 'Salut @alice, typo corrigee' },
+      });
+
+      await getEditHandler(fastify)(req, makeReply());
+
+      expect(createBatchMock).not.toHaveBeenCalled();
+      // Sa ligne `Mention` n'est ni supprimée ni recréée : `mentionedAt` tient
+      // l'ordre de l'inbox, une correction de frappe ne doit pas l'y remonter.
+      expect(prisma.mention.deleteMany).not.toHaveBeenCalled();
+      expect(fastify.mentionService.createMentions).toHaveBeenCalledWith(MSG_ID, []);
     });
 
     // Ce test verrouillait le défaut : sans service de mentions câblé, CHAQUE
@@ -586,6 +689,7 @@ describe('registerMessagesAdvancedRoutes', () => {
     // texte après coup — la mention ne revenait jamais.
     it('preserves mentions when mentionService unavailable', async () => {
       fastify.mentionService = null;
+      prisma.mention.findMany.mockResolvedValue([{ mentionedParticipantId: 'user-alice' }]);
       prisma.message.findFirst.mockResolvedValue(makeExistingMessage());
       prisma.message.update.mockResolvedValue({
         id: MSG_ID,
@@ -608,33 +712,9 @@ describe('registerMessagesAdvancedRoutes', () => {
           data: expect.objectContaining({ validatedMentions: [] }),
         })
       );
-    });
-
-    // Préserver en base ne suffit pas : recopier le résultat vide de l'unité
-    // dans la réponse et dans la diffusion socket rejouerait l'effacement au
-    // niveau du PAYLOAD, et le web le cacherait (`staleTime: Infinity`).
-    it('keeps the persisted mentions in the response payload when resolution could not run', async () => {
-      fastify.mentionService = null;
-      prisma.message.findFirst.mockResolvedValue(makeExistingMessage());
-      prisma.message.update.mockResolvedValue({
-        id: MSG_ID,
-        content: 'Hello @alice',
-        validatedMentions: ['alice'],
-        translations: null,
-      });
-      mockProcessExplicitLinksInContent.mockResolvedValue({
-        processedContent: 'Hello @alice',
-        trackingLinks: [],
-      });
-
-      const req = makeRequest({
-        params: { id: CONV_ID, messageId: MSG_ID },
-        body: { content: 'Hello @alice' },
-      });
-      const reply = makeReply();
-
-      await getEditHandler(fastify)(req, reply);
-
+      // Préserver en base ne suffit pas : recopier le résultat vide de l'unité
+      // dans la réponse et la diffusion socket rejouerait l'effacement au
+      // niveau du PAYLOAD, et le web le cacherait (`staleTime: Infinity`).
       expect(mockSendSuccess).toHaveBeenCalledWith(
         expect.anything(),
         expect.objectContaining({ validatedMentions: ['alice'] })
@@ -847,12 +927,8 @@ describe('registerMessagesAdvancedRoutes', () => {
       const createBatchMock = jest.fn().mockResolvedValue(1);
       fastify.notificationService = { createMentionNotificationsBatch: createBatchMock };
 
-      mockProcessExplicitLinksInContent.mockResolvedValue({
-        processedContent: 'Hello @alice',
-        trackingLinks: [],
-      });
       prisma.message.findFirst.mockResolvedValue(makeExistingMessage());
-      prisma.message.update.mockResolvedValue({ id: MSG_ID, content: 'Hello @alice', validatedMentions: ['alice'], translations: null });
+      prisma.message.update.mockResolvedValue({ id: MSG_ID, content: 'Hello alice', validatedMentions: ['alice'], translations: null });
       prisma.user.findUnique.mockResolvedValue({ username: 'creator', avatar: null });
       prisma.conversation.findUnique.mockResolvedValue({
         title: 'Test',
@@ -862,69 +938,18 @@ describe('registerMessagesAdvancedRoutes', () => {
 
       const req = makeRequest({
         params: { id: CONV_ID, messageId: MSG_ID },
-        body: { content: 'Hello @alice' },
+        body: { content: 'Hello alice' },
       });
       const reply = makeReply();
 
       await getEditHandler(fastify)(req, reply);
 
-      // Alice n'était PAS déjà mentionnée (`mention.findMany` → []) : elle est
-      // entrante, donc notifiée. Une édition qui ne change pas l'ensemble des
-      // mentionnés ne renotifie personne.
-      expect(createBatchMock).toHaveBeenCalledWith(
-        ['user-alice'],
-        expect.objectContaining({ conversationId: CONV_ID, messageId: MSG_ID }),
-        expect.any(Array)
-      );
-    });
-
-    // D3 : le corps précédent renotifiait TOUS les mentionnés à chaque édition.
-    // Corriger une faute de frappe dans « salut @alice » repoussait un push à
-    // Alice, déjà nommée au premier envoi — dix corrections, dix pushes.
-    it('does not re-notify a mention that was already there', async () => {
-      const validateMentionPermissions = jest.fn().mockResolvedValue({
-        isValid: true,
-        validUserIds: ['user-alice'],
-      });
-      fastify.mentionService = {
-        extractMentionsWithParticipants: jest.fn().mockReturnValue(['alice']),
-        resolveUsernames: jest.fn().mockResolvedValue(new Map([['alice', { id: 'user-alice', username: 'alice' }]])),
-        validateMentionPermissions,
-        createMentions: jest.fn().mockResolvedValue(undefined),
-      };
-
-      const createBatchMock = jest.fn().mockResolvedValue(1);
-      fastify.notificationService = { createMentionNotificationsBatch: createBatchMock };
-
-      // Alice était DÉJÀ mentionnée avant l'édition.
-      prisma.mention.findMany.mockResolvedValue([{ mentionedParticipantId: 'user-alice' }]);
-      mockProcessExplicitLinksInContent.mockResolvedValue({
-        processedContent: 'Hello @alice, typo corrigee',
-        trackingLinks: [],
-      });
-      prisma.message.findFirst.mockResolvedValue(makeExistingMessage());
-      prisma.message.update.mockResolvedValue({
-        id: MSG_ID, content: 'Hello @alice, typo corrigee', validatedMentions: ['alice'], translations: null,
-      });
-
-      const req = makeRequest({
-        params: { id: CONV_ID, messageId: MSG_ID },
-        body: { content: 'Hello @alice, typo corrigee' },
-      });
-      const reply = makeReply();
-
-      await getEditHandler(fastify)(req, reply);
-
-      expect(createBatchMock).not.toHaveBeenCalled();
-      // Sa ligne `Mention` n'est ni supprimée ni recréée : `mentionedAt` tient
-      // l'ordre de l'inbox, une correction de frappe ne doit pas l'y remonter.
-      expect(prisma.mention.deleteMany).not.toHaveBeenCalled();
-      expect(mockSendSuccess).toHaveBeenCalled();
+      expect(createBatchMock).toHaveBeenCalled();
     });
 
     it('handles mention processing error gracefully', async () => {
       fastify.mentionService = {
-        extractMentions: jest.fn().mockImplementation(() => { throw new Error('mention error'); }),
+        extractMentionsWithParticipants: jest.fn().mockImplementation(() => { throw new Error('mention error'); }),
         resolveUsernames: jest.fn(),
         validateMentionPermissions: jest.fn(),
         createMentions: jest.fn(),
@@ -2168,6 +2193,8 @@ describe('registerMessagesAdvancedRoutes', () => {
     });
 
     it('resolveUsernames returns empty userMap - clears mentions', async () => {
+      // L'effacement n'est observable que s'il y avait quelqu'un à retirer.
+      prisma.mention.findMany.mockResolvedValue([{ mentionedParticipantId: 'user-alice' }]);
       const extractMock = jest.fn().mockReturnValue(['unknown']);
       const resolveUsernames = jest.fn().mockResolvedValue(new Map()); // empty map
       fastify.mentionService = {
@@ -2176,13 +2203,6 @@ describe('registerMessagesAdvancedRoutes', () => {
         validateMentionPermissions: jest.fn(),
         createMentions: jest.fn(),
       };
-      // L'effacement n'est observable que s'il y avait quelque chose à
-      // effacer : un message déjà sans mention n'a aucune écriture à subir.
-      prisma.mention.findMany.mockResolvedValueOnce([{ mentionedParticipantId: 'user-alice' }]);
-      mockProcessExplicitLinksInContent.mockResolvedValue({
-        processedContent: 'hello @unknown',
-        trackingLinks: [],
-      });
 
       prisma.message.findFirst.mockResolvedValue(makeExistingMessage());
       prisma.message.update.mockResolvedValue({
@@ -2596,13 +2616,13 @@ describe('registerMessagesAdvancedRoutes', () => {
     it('sender or conversationInfo null - skips notification', async () => {
       // Covers branch 20: if (sender && conversationInfo) → false
       const extractMock = jest.fn().mockReturnValue(['alice']);
-      const resolveUsernames = jest.fn().mockResolvedValue(new Map([['alice', { id: 'user-alice' }]]));
+      const resolveUsernames = jest.fn().mockResolvedValue(new Map([['alice', { id: 'user-alice', username: 'alice' }]]));
       const validateMentionPermissions = jest.fn().mockResolvedValue({
         isValid: true,
         validUserIds: ['user-alice'],
       });
       const createMentions = jest.fn().mockResolvedValue(undefined);
-      fastify.mentionService = { extractMentions: extractMock, resolveUsernames, validateMentionPermissions, createMentions };
+      fastify.mentionService = { extractMentionsWithParticipants: extractMock, resolveUsernames, validateMentionPermissions, createMentions };
 
       const createBatchMock = jest.fn().mockResolvedValue(1);
       fastify.notificationService = { createMentionNotificationsBatch: createBatchMock };

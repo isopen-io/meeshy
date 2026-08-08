@@ -16,9 +16,9 @@ import {
   errorResponseSchema
 } from '@meeshy/shared/types/api-schemas';
 import { canAccessConversation } from './utils/access-control';
+import { replaceMessageMentions } from '../../services/messaging/messageMentions';
 import { resolveConversationId } from '../../utils/conversation-id-cache';
 import { broadcastMessageMutation } from '../../socketio/broadcastMessageMutation';
-import { resolveMessageMentions } from '../../services/messaging/messageMentions';
 import { broadcastReactionMutation } from '../../socketio/broadcastReactionMutation';
 import type {
   ConversationParams,
@@ -209,8 +209,10 @@ export function registerMessagesAdvancedRoutes(
 
       // ÉTAPE: Traiter les liens [[url]] et <url> AVANT de sauvegarder le message
       let processedContent = content.trim();
+        logger.info(`Processing tracking links in edited message messageId=${messageId}`);
 
       try {
+        logger.info('===== ENTERED TRY BLOCK FOR MENTIONS =====');
         logger.info(`Processing tracking links in edited message messageId=${messageId}`);
         const { processedContent: contentWithLinks, trackingLinks } = await trackingLinkService.processExplicitLinksInContent({
           content: content.trim(),
@@ -286,91 +288,79 @@ export function registerMessagesAdvancedRoutes(
         }
       });
 
-      // ÉTAPE: Réconcilier les mentions du message édité.
-      //
-      // `resolveMessageMentions` en mode `'replace'` — la MÊME unité que les
-      // chemins d'envoi (socket, REST, lien de partage). Le corps qui vivait
-      // ici extrayait avec `extractMentions` (handles bruts SEULS), là où tous
-      // les autres écrivains passent par `extractMentionsWithParticipants` :
-      // éditer « salut @John Doe » effaçait John — ligne `Mention` supprimée,
-      // `validatedMentions` vidé, surlignage web perdu à vie
-      // (`staleTime: Infinity`) — alors que le texte le nommait toujours.
-      //
-      // Il purgeait AUSSI les lignes avant d'extraire quoi que ce soit, et
-      // remettait `validatedMentions: []` sur service absent comme sur simple
-      // exception : une panne transitoire détruisait des mentions que rien ne
-      // reconstruit. L'unité s'abstient désormais dans ces deux cas.
-      //
-      // `senderId` reçoit un `User.id` : `validateMentionPermissions` le compare
-      // aux `Participant.userId` de la conversation.
-      const mentions = await resolveMessageMentions({
+      // Ce que ce message doit à ceux qu'il NOMME, après édition : le lot de
+      // mentions doit être RECOMPOSÉ, pas complété. Le corps vivait ici, en
+      // double du chemin de création — et il extrayait moins bien : handles
+      // bruts seulement, là où la création résout aussi `@Display Name`.
+      // Éditer un message contenant `@John Doe` détruisait donc la mention que
+      // la création avait validée. Deux extracteurs pour un même champ ne
+      // peuvent pas rester d'accord ; il n'y en a plus qu'un.
+      const editedMentions = await replaceMessageMentions({
         prisma,
         mentionService: fastify.mentionService,
         message: { id: messageId, conversationId, senderId: userId },
         content: processedContent,
-        mode: 'replace',
-        onError: (err) => logger.error('[MESSAGES] Erreur de réconciliation des mentions', err),
+        onError: (err) => logger.error('Edit - Error processing mentions', err)
       });
-
       // Recopier `validatedUsernames` SANS ce garde-fou rejouerait dans la
       // réponse et dans la diffusion socket l'effacement que l'unité vient
       // d'empêcher en base : quand elle n'a rien pu établir, `updatedMessage`
       // porte déjà la valeur persistée, qui est la bonne.
-      if (mentions.reconciled) {
-        updatedMessage.validatedMentions = [...mentions.validatedUsernames];
+      if (editedMentions.reconciled) {
+        updatedMessage.validatedMentions = [...editedMentions.validatedUsernames];
       }
 
-      // Seuls les ENTRANTS sont notifiés : le corps précédent renotifiait tous
-      // les mentionnés à chaque édition, donc dix corrections de frappe
-      // valaient dix pushes à quelqu'un déjà nommé au premier envoi.
-      if (mentions.newlyMentionedUserIds.length > 0) {
-        const notificationService = fastify.notificationService;
-        if (notificationService) {
-          try {
-            const [sender, conversationInfo] = await Promise.all([
-              prisma.user.findUnique({
-                where: { id: userId },
-                select: { username: true, displayName: true, avatar: true }
-              }),
-              prisma.conversation.findUnique({
-                where: { id: conversationId },
-                select: {
-                  title: true,
-                  type: true,
-                  participants: { where: { isActive: true }, select: { userId: true } }
-                }
-              })
-            ]);
+      // La notification de mention, elle, ne concerne QUE l'édition : pas
+      // d'éventail « réponse » ni « message régulier » — les destinataires ont
+      // déjà été prévenus à l'envoi. Seul un NOUVEAU mentionné apprend quelque
+      // chose : renotifier l'ensemble complet ferait de dix corrections de
+      // frappe dix pushes pour quelqu'un déjà nommé au premier envoi.
+      if (editedMentions.newlyMentionedUserIds.length > 0 && fastify.notificationService) {
+        try {
+          const [sender, conversationInfo] = await Promise.all([
+            prisma.user.findUnique({
+              where: { id: userId },
+              select: { username: true, displayName: true, avatar: true }
+            }),
+            prisma.conversation.findUnique({
+              where: { id: conversationId },
+              select: {
+                title: true,
+                type: true,
+                participants: { where: { isActive: true }, select: { userId: true } }
+              }
+            })
+          ]);
 
-            if (sender && conversationInfo) {
-              const memberIds = conversationInfo.participants
-                .map((m: { userId: string | null }) => m.userId)
-                .filter(Boolean);
+          if (sender && conversationInfo) {
+            const memberIds = conversationInfo.participants
+              .map((m: { userId: string | null }) => m.userId)
+              .filter(Boolean);
 
-              await notificationService.createMentionNotificationsBatch(
-                [...mentions.newlyMentionedUserIds],
-                {
-                  senderId: userId,
-                  senderProfile: {
-                    username: sender.username,
-                    displayName: sender.displayName,
-                    avatar: sender.avatar,
-                  },
-                  messageContent: processedContent,
-                  conversationId,
-                  messageId
+            await fastify.notificationService.createMentionNotificationsBatch(
+              [...editedMentions.newlyMentionedUserIds],
+              {
+                senderId: userId,
+                senderProfile: {
+                  username: sender.username,
+                  displayName: sender.displayName,
+                  avatar: sender.avatar,
                 },
-                memberIds
-              );
-            }
-          } catch (notifError) {
-            logger.error('[MESSAGES] Erreur notifications mentions', notifError);
+                messageContent: processedContent,
+                conversationId,
+                messageId
+              },
+              memberIds
+            );
           }
+        } catch (notifError) {
+          logger.error('Erreur notifications mentions', notifError);
         }
       }
 
       // Déclencher la retraduction automatique du message modifié
       try {
+        logger.info('===== ENTERED TRY BLOCK FOR MENTIONS =====');
         // Utiliser les instances déjà disponibles dans le contexte Fastify
         const translationService = fastify.translationService;
 

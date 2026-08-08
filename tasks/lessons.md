@@ -1,5 +1,36 @@
 # Lessons
 
+## Leçon 87 — quand deux écrivains d'un même champ divergent, c'est le PLUS DESTRUCTEUR qu'il faut lire en premier (2026-08-08, routine messaging)
+
+Audit ciblé du cœur temps-réel TS (env Linux, pas de Xcode). Suite immédiate du cycle 20 :
+la route d'édition était le quatrième écrivain de `Message.validatedMentions`, et le seul à
+extraire avec `extractMentions` (handles bruts) au lieu de
+`extractMentionsWithParticipants` (qui résout aussi `@Display Name`). Comme elle PURGE les
+lignes `Mention` avant de ré-extraire, corriger une faute de frappe dans un message qui
+nommait quelqu'un par son nom d'affichage supprimait sa mention — inbox `/mentions` et
+surlignage compris.
+
+**Leçons :**
+1. **Un écrivain qui commence par supprimer transforme toute différence d'extraction en perte
+   définitive.** Deux extracteurs qui divergent sur un champ *additif* donnent un affichage
+   incomplet ; sur un champ *reconstruit après purge*, ils donnent une suppression. Chercher
+   d'abord, parmi les écrivains divergents, celui qui fait `deleteMany` avant de recalculer :
+   c'est lui qui porte le dégât, et c'est lui qu'il faut brancher sur la source unique.
+2. **Un drapeau `{ replace: true }` aurait recréé le trou qu'on venait de fermer.** Deux
+   exports nommés (`resolveMessageMentions` / `replaceMessageMentions`) forcent l'appelant à
+   dire quelle sémantique il demande ; un paramètre booléen a une valeur par défaut, donc un
+   oubli possible — et l'oubli aurait laissé un `validatedMentions` périmé décrivant des
+   lignes déjà supprimées. Quand deux variantes n'ont PAS de défaut raisonnable, ne pas leur
+   en inventer un.
+3. **L'absence de court-circuit peut être le contrat, pas une optimisation oubliée.** La
+   variante « création » ne doit rien écrire quand le contenu n'a pas de `@` ; la variante
+   « édition » doit faire exactement l'inverse (effacer). Avant de reporter une garde d'un
+   chemin sur l'autre par symétrie, vérifier qu'elle veut dire la même chose des deux côtés.
+4. **Un test qui assert le NOM de la méthode appelée bloque la convergence.** Trois tests
+   existants verrouillaient `extractMentions` — c'est-à-dire le défaut lui-même. Les faire
+   porter sur le comportement (« une mention par nom d'affichage survit à une édition »)
+   change ce que le prochain refactor a le droit de casser.
+
 ## Leçon 86 — une garde d'optimisation posée AVANT l'appel est la moitié oubliable du contrat (2026-08-08, routine messaging)
 
 Audit ciblé du cœur temps-réel TS (env Linux, pas de Xcode). Cinquième unité de la même
@@ -2628,12 +2659,26 @@ Les deux tombent ensemble dès qu'on RÉCONCILIE au lieu de re-créer : lire l'e
 (une requête sur un chemin qui en fait déjà cinq), ne supprimer que les partants, ne créer que
 les entrants — qui sont alors exactement le lot à notifier.
 
+**Confirmation par l'expérience** — une seconde session a traité ce même cycle en parallèle
+(PR #2640) en suivant la prescription à la lettre : purge en bloc puis recréation. Elle a corrigé
+D1 et laissé D2 et D3 intacts — et son commentaire de route affirmait même « seul un nouveau
+mentionné apprend quelque chose » au-dessus d'un appel qui passait l'ensemble complet. La
+prescription ne s'est pas contentée d'omettre les deux voisins : elle a produit une intention
+écrite que le code ne tenait pas.
+
 **Règle** — Un « reste ouvert » qui prescrit son propre remède l'a écrit en connaissant le
 symptôme, pas le code. Traiter la prescription comme une hypothèse à vérifier contre le bloc
 réel : relire les lignes qu'elle remplace et se demander ce que l'opération prescrite (ici : la
 purge) cause d'autre. Les leçons 5 et 8 disaient de ne pas s'arrêter à la ligne principale d'un
 « reste ouvert » ; celle-ci ajoute que la SOLUTION qu'il propose mérite la même défiance que le
 diagnostic.
+
+**Corollaire d'intégration** — quand deux sessions livrent le même cycle en parallèle, la fusion
+ne se tranche pas par « qui est arrivé en premier » ni par « qui en a fait plus ». Comparer
+défaut par défaut : ici l'API de la PR arrivée première (deux exports nommés, cœur commun sans
+écriture) était la meilleure, et les correctifs de la seconde (réconciliation, abstention sur
+panne, `reconciled`) étaient les bons. Prendre la structure de l'une et les corrections de
+l'autre — jamais écraser l'une par l'autre.
 
 **Corollaire — un correctif de persistance n'est fini qu'une fois le PAYLOAD vérifié.** L'unité
 apprend à s'abstenir (service absent, panne) au lieu de détruire ; l'appelant qui recopie
