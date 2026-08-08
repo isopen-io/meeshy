@@ -10,11 +10,11 @@ import type {
   MessageResponseMetadata
 } from '@meeshy/shared/types';
 import { MessageTranslationService } from '../message-translation/MessageTranslationService';
-import { conversationStatsService } from '../ConversationStatsService';
 import { MessageReadStatusService } from '../MessageReadStatusService';
 import { NotificationService } from '../notifications/NotificationService';
 import { MessageValidator } from './MessageValidator';
 import { MessageProcessor } from './MessageProcessor';
+import { runMessagePostSaveEffects } from './messagePostSaveEffects';
 import { enhancedLogger, performanceLogger } from '../../utils/logger-enhanced';
 import { getCachedParticipant, cacheParticipant } from '../../utils/participant-lookup-cache';
 import { normalizeLanguageCode } from '@meeshy/shared/utils/language-normalize';
@@ -320,12 +320,22 @@ export class MessagingService {
   }
 
   /**
-   * Effets de bord post-save qui ne doivent JAMAIS retarder l'ACK client :
-   * bump du timestamp de conversation, marquage du message comme lu pour son
-   * propre expéditeur, mise en file de la traduction, et mise à jour des
-   * statistiques. Chacun s'exécute indépendamment avec sa propre capture
-   * d'erreur — une défaillance n'empêche pas les autres, et aucun ne bloque
-   * la réponse qui fait passer la coche de l'expéditeur.
+   * Effets de bord post-save qui ne doivent JAMAIS retarder l'ACK client.
+   *
+   * Les trois que TOUT message committé doit à sa conversation — bump du
+   * timestamp, mise en file de la traduction, statistiques de langue — vivent
+   * dans `runMessagePostSaveEffects`, hors de cette classe : les routes de lien
+   * de partage la contournent entièrement, et une obligation produit enfermée
+   * dans un `private` n'est honorable que par les appelants de sa classe.
+   *
+   * Le quatrième reste ICI : l'avancement du curseur de lecture de l'auteur
+   * demande un vrai `Participant`, ce que seul ce chemin garantit (la route de
+   * lien authentifiée peut porter `{ id: userId }` synthétique pour la
+   * conversation globale). Cf. le docstring de l'unité partagée.
+   *
+   * Chaque effet s'exécute indépendamment avec sa propre capture d'erreur — une
+   * défaillance n'empêche pas les autres, et aucune ne bloque la réponse qui
+   * fait passer la coche de l'expéditeur.
    */
   private runPostSaveSideEffects(args: {
     message: Message;
@@ -335,33 +345,27 @@ export class MessagingService {
   }): void {
     const { message, conversationId, senderParticipantId, originalLanguage } = args;
 
-    void this.updateConversation(conversationId).catch((err) =>
-      logger.error('post-save updateConversation failed', err as Error)
-    );
+    runMessagePostSaveEffects({
+      prisma: this.prisma,
+      translationService: this.translationService,
+      message: {
+        id: message.id,
+        conversationId: message.conversationId,
+        senderId: message.senderId,
+        content: message.content,
+        messageType: message.messageType,
+        replyToId: message.replyToId
+      },
+      originalLanguage,
+      onError: (effect, err) =>
+        logger.error(`post-save ${effect} failed`, err as Error)
+    });
 
     void this.readStatusService
       .markMessagesAsRead(senderParticipantId, conversationId, message.id)
       .catch((err) =>
         logger.error('post-save markMessagesAsRead failed', err as Error)
       );
-
-    void this.queueTranslation(message, originalLanguage).catch((err) =>
-      logger.error('post-save queueTranslation failed', err as Error)
-    );
-
-    void this.updateStats(conversationId, originalLanguage).catch((err) =>
-      logger.error('post-save updateStats failed', err as Error)
-    );
-  }
-
-  /**
-   * Met à jour le timestamp de dernière activité de la conversation
-   */
-  private async updateConversation(conversationId: string): Promise<void> {
-    await this.prisma.conversation.update({
-      where: { id: conversationId },
-      data: { lastMessageAt: new Date() }
-    });
   }
 
   /**
@@ -423,23 +427,6 @@ export class MessagingService {
         languagesCompleted: [],
         languagesFailed: ['unknown']
       };
-    }
-  }
-
-  /**
-   * Met à jour les statistiques de conversation
-   */
-  private async updateStats(conversationId: string, language: string): Promise<any> {
-    try {
-      return await conversationStatsService.updateOnNewMessage(
-        this.prisma,
-        conversationId,
-        language,
-        () => []
-      );
-    } catch (error) {
-      logger.error('Error updating stats', error as Error);
-      return undefined;
     }
   }
 
