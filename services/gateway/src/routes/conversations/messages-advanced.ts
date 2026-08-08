@@ -17,7 +17,7 @@ import {
 } from '@meeshy/shared/types/api-schemas';
 import { canAccessConversation } from './utils/access-control';
 import { reconcileEditedMentions } from '../../services/messaging/messageMentions';
-import { processEditedContentLinks } from '../../services/messaging/messageLinks';
+import { processExplicitLinks } from '../../services/messaging/messageLinks';
 import { emitMentionCreated } from '../../socketio/emitMentionCreated';
 import { resolveConversationId } from '../../utils/conversation-id-cache';
 import { broadcastMessageMutation } from '../../socketio/broadcastMessageMutation';
@@ -213,12 +213,12 @@ export function registerMessagesAdvancedRoutes(
       // l'écriture. Le corps vivait ici, déplié — donc absent du chemin socket,
       // qui est pourtant le transport d'édition PRIMAIRE et écrivait le texte
       // brut. Un seul point d'appel, désormais, pour les deux transports.
-      const processedContent = await processEditedContentLinks({
+      const processedContent = await processExplicitLinks({
         trackingLinkService,
         content: content.trim(),
         conversationId,
         messageId,
-        editorUserId: userId,
+        createdBy: userId,
         onError: (err) => logger.error('Error processing tracking links in edit', err),
       });
 

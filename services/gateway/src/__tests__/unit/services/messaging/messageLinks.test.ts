@@ -1,17 +1,17 @@
 /**
- * `processEditedContentLinks` — la source unique du traitement `[[url]]` /
- * `<url>` sur le chemin d'ÉDITION, quel qu'en soit le transport.
+ * `processExplicitLinks` — la source unique du traitement `[[url]]` / `<url>`,
+ * à l'ENVOI comme à l'ÉDITION, quel qu'en soit le transport.
  *
  * @jest-environment node
  */
 
 import { describe, it, expect, jest } from '@jest/globals';
-import { processEditedContentLinks } from '../../../../services/messaging/messageLinks';
+import { processExplicitLinks } from '../../../../services/messaging/messageLinks';
 
 const CONTEXT = {
   conversationId: 'conv-1',
   messageId: 'msg-1',
-  editorUserId: 'u-editor',
+  createdBy: 'u-editor',
 };
 
 function makeLinkService(processed = 'salut m+abc123') {
@@ -23,11 +23,11 @@ function makeLinkService(processed = 'salut m+abc123') {
   };
 }
 
-describe('processEditedContentLinks', () => {
+describe('processExplicitLinks', () => {
   it('rend le contenu traité quand le texte porte un [[url]]', async () => {
     const trackingLinkService = makeLinkService();
 
-    const content = await processEditedContentLinks({
+    const content = await processExplicitLinks({
       trackingLinkService,
       content: 'salut [[https://example.com]]',
       ...CONTEXT,
@@ -45,7 +45,7 @@ describe('processEditedContentLinks', () => {
   it('rend le contenu traité quand le texte porte un <url>', async () => {
     const trackingLinkService = makeLinkService('voir m+def456');
 
-    const content = await processEditedContentLinks({
+    const content = await processExplicitLinks({
       trackingLinkService,
       content: 'voir <https://example.com>',
       ...CONTEXT,
@@ -61,7 +61,7 @@ describe('processEditedContentLinks', () => {
   it("ne touche PAS le service quand le texte ne porte aucune syntaxe traçable", async () => {
     const trackingLinkService = makeLinkService();
 
-    const content = await processEditedContentLinks({
+    const content = await processExplicitLinks({
       trackingLinkService,
       content: 'bonjour https://example.com et [texte](https://example.org)',
       ...CONTEXT,
@@ -80,7 +80,7 @@ describe('processEditedContentLinks', () => {
     };
     const onError = jest.fn();
 
-    const content = await processEditedContentLinks({
+    const content = await processExplicitLinks({
       trackingLinkService,
       content: 'salut [[https://example.com]]',
       ...CONTEXT,
@@ -92,7 +92,7 @@ describe('processEditedContentLinks', () => {
   });
 
   it('rend le contenu original sans service câblé', async () => {
-    const content = await processEditedContentLinks({
+    const content = await processExplicitLinks({
       trackingLinkService: null,
       content: 'salut [[https://example.com]]',
       ...CONTEXT,

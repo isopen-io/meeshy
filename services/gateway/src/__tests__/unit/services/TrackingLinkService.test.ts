@@ -809,6 +809,89 @@ describe('processExplicitLinksInContent', () => {
 
     expect(processedContent).toContain('https://example.com/page');
   });
+
+  // Les quatre cas suivants décrivaient le SECOND exemplaire de cet algorithme
+  // (`MessageProcessor.processLinksInContent`, supprimé) et ne décrivaient
+  // celui-ci nulle part. Ils vivent désormais avec l'unique implémentation.
+  it('falls back to raw URL when createTrackingLink throws for <url>', async () => {
+    const prisma = makePrisma({
+      trackingLink: {
+        findFirst: jest.fn().mockResolvedValue(null),
+        findUnique: jest.fn().mockResolvedValue(null),
+        create: jest.fn().mockRejectedValue(new Error('DB error')),
+      },
+    });
+    const svc = new TrackingLinkService(prisma);
+
+    const { processedContent } = await svc.processExplicitLinksInContent({
+      content: '<https://example.com/page>',
+      conversationId: 'conv_001',
+    });
+
+    expect(processedContent).toBe('https://example.com/page');
+  });
+
+  it('reuses an EXISTING tracking link rather than creating a second one', async () => {
+    const create = jest.fn();
+    const prisma = makePrisma({
+      trackingLink: {
+        findFirst: jest.fn().mockResolvedValue({ ...LINK_FIXTURE, token: 'existing-tok' }),
+        findUnique: jest.fn().mockResolvedValue(null),
+        create,
+      },
+    });
+    const svc = new TrackingLinkService(prisma);
+
+    const { processedContent } = await svc.processExplicitLinksInContent({
+      content: '[[https://example.com/page]]',
+      conversationId: 'conv_001',
+    });
+
+    expect(processedContent).toBe('m+existing-tok');
+    expect(create).not.toHaveBeenCalled();
+  });
+
+  // Le cache de tokens est partagé par les DEUX syntaxes : la même URL écrite
+  // une fois en `[[…]]` et une fois en `<…>` ne doit pas minter deux liens.
+  it('reuses one token across the [[url]] and <url> syntaxes', async () => {
+    const create = jest.fn().mockResolvedValue({ ...LINK_FIXTURE, token: 'shared-tok' });
+    const prisma = makePrisma({
+      trackingLink: {
+        findFirst: jest.fn().mockResolvedValue(null),
+        findUnique: jest.fn().mockResolvedValue(null),
+        create,
+      },
+    });
+    const svc = new TrackingLinkService(prisma);
+
+    const { processedContent } = await svc.processExplicitLinksInContent({
+      content: '[[https://same.com/p]] and <https://same.com/p>',
+      conversationId: 'conv_001',
+    });
+
+    expect(processedContent).toBe('m+shared-tok and m+shared-tok');
+    expect(create).toHaveBeenCalledTimes(1);
+  });
+
+  it('leaves a text carrying neither syntax untouched', async () => {
+    const create = jest.fn();
+    const svc = new TrackingLinkService(makePrisma({
+      trackingLink: {
+        findFirst: jest.fn().mockResolvedValue(null),
+        findUnique: jest.fn().mockResolvedValue(null),
+        create,
+      },
+    }));
+
+    const { processedContent, trackingLinks } = await svc.processExplicitLinksInContent({
+      content: 'Plain text with a bare https://example.com URL',
+      conversationId: 'conv_001',
+    });
+
+    expect(processedContent).toBe('Plain text with a bare https://example.com URL');
+    expect(trackingLinks).toHaveLength(0);
+    expect(create).not.toHaveBeenCalled();
+  });
 });
 
 // ---------------------------------------------------------------------------

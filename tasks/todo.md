@@ -1,104 +1,103 @@
-# Cycle 24 — L'édition et ce qu'elle réécrit : les liens, et qui elle nomme
+# Cycle 25 — Deux copies d'un algorithme, et l'espace d'ids où elles divergeaient
 
-Tête laissée par le cycle 23 :
-« **`MessageHandler.handleMessageEdit` ne repasse toujours pas par le traitement des liens
-`[[url]]` / `<url>`** que la route REST applique avant de sauver. Éditer un message par socket pour
-y coller un lien traçable écrit le texte brut ; par REST, le même geste crée le lien. Sixième
-asymétrie du même handler, et la seule qui reste sur le contenu lui-même. »
+Tête laissée par le cycle 24 :
+« **`MessageProcessor.processLinksInContent` est un deuxième exemplaire complet de
+`TrackingLinkService.processExplicitLinksInContent`** — mêmes quatre étapes, mêmes regex, même
+réutilisation de token, ~90 lignes chacun. Le chemin d'ENVOI passe par le premier, les deux chemins
+d'édition par le second. Deux copies d'un même algorithme ne peuvent pas rester d'accord : le
+correctif `$`-sequence (replacer fonction) n'a d'ailleurs été appliqué aux deux qu'après coup. »
 
-Vérifié, et c'est bien le cas. Ce cycle la ferme — et ferme du même mouvement la dernière
-asymétrie **inverse**, celle où c'est REST qui manquait quelque chose que le socket faisait.
+Vérifié, et c'est bien le cas. En les réunissant, on découvre qu'elles n'étaient pas seulement
+redondantes : **elles ne remplissaient pas `TrackingLink.createdBy` depuis le même espace d'ids.**
 
-## Les deux défauts, et qui les subissait
+## D1 — le lien créé à l'envoi n'appartenait à personne de réel
 
-| # | Défaut | Transport touché | Ce que l'utilisateur voyait |
-|---|---|---|---|
-| D1 | l'édition n'ouvre aucun lien traçable | **socket** (web : `CLIENT_EVENTS.MESSAGE_EDIT`) | coller `[[https://example.com]]` dans une édition laissait les crochets EN DUR dans le message, pour toujours — le même texte à l'envoi produit un `m+<token>` |
-| D2 | aucun `mention:created` émis | **REST** (iOS : `PUT /messages/:id`) | nommer quelqu'un depuis un iPhone ne lui parvenait jamais en direct s'il n'était pas dans le salon de la conversation |
+`TrackingLink.createdBy` est un **`User.id`** — le schéma le dit (« Utilisateur qui a créé le lien
+(null si anonyme) ») et `routes/tracking-links/tracking.ts` le lit comme tel :
 
-Les deux défauts ont la même forme et la même cause : une obligation écrite **dépliée** dans un
-seul des deux transports d'édition. Aucun des deux n'est secondaire — le web édite par socket, iOS
-édite par REST. Chaque bloc déplié était donc invisible depuis l'autre moitié des utilisateurs.
+| Ligne | Usage |
+|---|---|
+| `:535` | **autorisation** — `trackingLink.createdBy !== userId` ⇒ 403 |
+| `:601-608` | « mes liens » : compte, liste, statistiques |
+| `:703` | édition d'un lien, `where: { token, createdBy: userId }` |
 
-## D1 — `processEditedContentLinks`
+Le chemin d'ENVOI y écrivait `data.senderId`, qui est un **`Participant.id`** (`Message.senderId`
+référence `Participant`). Conséquences pour un lien créé en tapant `[[url]]` dans un message :
+
+1. il n'apparaît **jamais** dans la liste de liens de son auteur, ni dans ses statistiques ;
+2. son auteur se voit **refuser** l'accès à son propre lien (`createdBy` non nul et ≠ son `User.id`) ;
+3. l'unicité applicative `(targetId, createdBy)` ne regroupe rien par partageur.
+
+Les **cinq autres** écrivains de ce champ passent bien un `User.id` — les deux routes de lien de
+partage (`routes/links/messages.ts`, `undefined` pour l'anonyme), `PostService`,
+`PostCommentService`, et les deux chemins d'édition depuis le cycle 24. Un seul écrivain sur six
+était en désaccord, et c'était le chemin le plus emprunté.
+
+Même forme que le cycle 22 (`Mention` keyée sur un `Participant.id` là où la permission raisonne en
+`User.id`) : deux espaces d'ids disjoints, une comparaison qui ne matche jamais, et un silence
+complet — rien ne lève, la ligne s'écrit, elle ne désigne simplement personne.
+
+## Le remède : résoudre une fois, et seulement si ça sert
 
 ```ts
-export async function processEditedContentLinks(params: EditedLinkParams): Promise<string>
+const linkAuthorUserId = this.containsLinks(data.content)
+  ? await this.resolveLinkAuthorUserId(data.senderId)
+  : undefined;
 ```
 
-Un point d'appel public que les deux transports traversent. Il porte trois choses qu'un appelant
-n'a plus à reproduire :
+- **Une seule résolution** pour les deux chemins de tracking du message (syntaxe explicite ET URLs
+  brutes de `metadata.trackingLinks`, qui portaient le même mauvais id).
+- **Payée seulement si le texte porte une URL.** `containsLinks` couvre les deux syntaxes
+  explicites autant que les URLs brutes — `[[https://…]]` contient une URL. Un message sans lien ne
+  produit aucun `TrackingLink`, donc aucun propriétaire à désigner : zéro requête.
+- **`undefined` pour l'anonyme comme pour une lecture en échec.** Un lien sans propriétaire vaut
+  mieux qu'un lien attribué à un id qui ne désigne aucun utilisateur — et c'est exactement ce que
+  le schéma prévoit. Même forme et même raison que `resolveSenderUserId` côté mentions.
 
-- **Le court-circuit.** Un texte sans `[[` ni `<` ne peut RIEN produire de traçable : il ressort
-  verbatim, sans requête et sans l'aller-retour de protection markdown dont il n'a aucun besoin.
-  La route REST payait ce round-trip sur chaque édition, y compris « corrigé la faute de frappe ».
-- **Le best-effort.** Un magasin de liens en panne rend le contenu ORIGINAL et l'édition aboutit :
-  un lien perdu ne doit pas transformer une édition réussie en 500.
-- **Le contrat rétréci** — `Promise<string>`, pas `{ processedContent, trackingLinks }`. L'édition
-  ne consomme pas la liste des liens créés, et ce qu'un contrat ne promet pas ne peut pas se
-  retrouver oublié à moitié.
+## D2 — l'algorithme, une fois
 
-Côté socket, le contenu traité devient ensuite le **seul en circulation** : base, réconciliation
-des mentions, retraduction, payload `message:edited`. La retraduction lisait encore
-`validated.content.trim()` — elle aurait traduit des crochets et une URL absents du message
-persisté, puis écrasé la traduction du contenu réel.
+`MessageProcessor.processLinksInContent` perd ses ~90 lignes et devient une délégation à
+`processExplicitLinks`, l'unité que le cycle 24 avait créée pour les deux chemins d'édition. Elle
+est généralisée (plus rien d'« Edited » dans son nom ni dans ses paramètres) et exporte
+`hasTrackableLinkSyntax` pour que l'appelant puisse éviter ce que l'unité, elle, ne peut pas savoir
+inutile : la requête de résolution d'auteur.
 
-Le service est **construit par défaut** par le handler (`deps.trackingLinkService ?? new
-TrackingLinkService(deps.prisma)`) et non exigé du site de construction : le laisser à câbler
-rejouerait exactement le défaut qu'on corrige — un écrivain qui oublie, et l'édition socket
-réécrit du texte brut sans que rien ne le dise. L'injection ne sert qu'aux tests.
+Le chemin d'envoi gagne au passage le **court-circuit** : un message sans `[[` ni `<` ne traverse
+plus l'aller-retour de protection markdown qu'il payait à chaque envoi.
 
-## D2 — `emitMentionCreated`
+## Côté test — la couverture déménage, elle ne disparaît pas
 
-`message:edited` ne fan qu'à `conversation:<id>`. Quelqu'un que l'édition vient de nommer n'y est
-pas forcément — il est sur sa liste, sur un autre écran, ailleurs dans l'app. C'est
-`mention:created` qui porte la nouvelle, et les **deux** clients l'écoutent
-(`messaging.service.ts:221`, `MessageSocketManager.swift:3101`).
+Les 13 tests d'algorithme de `MessageProcessor.test.ts` décrivaient le second exemplaire — et ne
+décrivaient l'exemplaire survivant nulle part. Quatre d'entre eux couvraient des comportements
+**absents** de la suite de `TrackingLinkService` : réutilisation d'un lien EXISTANT, token partagé
+entre les syntaxes `[[…]]` et `<…>`, repli sur l'URL brute quand le minting échoue pour `<url>`,
+texte sans syntaxe traçable. Ils vivent maintenant avec l'unique implémentation. Les quatre cas
+`$` étaient déjà couverts par `TrackingLinkService.dollarSequences.test.ts`.
 
-Le cycle 23 avait livré cet éventail déplié dans le seul `handleMessageEdit`. La route REST n'en
-émettait aucun. L'éventail est maintenant une unité que les deux transports appellent, et elle
-porte la garde d'auto-mention — l'auteur sait qu'il vient de se nommer.
-
-Best-effort **par destinataire** : une socket fermée sur l'un ne prive pas les suivants de leur
-notification.
-
-## Ce que le cycle a aussi corrigé, côté test
-
-Le double de `@meeshy/shared/types/socketio-events` de la suite REST ne déclarait ni
-`ROOMS.user` ni `SERVER_EVENTS.MENTION_CREATED` : tout éventail vers un salon personnel y levait
-un `TypeError` que le best-effort avalait. Le double couvre désormais les deux salons.
-
-L'assertion « la résolution des mentions porte sur le contenu APRÈS traitement des liens » portait
-sur un texte sans syntaxe traçable : avec le court-circuit, elle serait devenue triviale. Le texte
-du cas porte maintenant un `<url>`, donc l'assertion prouve à nouveau le couplage qu'elle vise.
+`MessageProcessor` garde ce qui lui appartient vraiment : la **délégation** (arguments transmis,
+résultat rendu, court-circuit, contrat jamais-lève) et la propriété du lien.
 
 ## Vérification
 
 ```
-services/gateway : 602 suites / 15638 tests — tous verts
+services/gateway : 602 suites / 15637 tests — tous verts
 tsc --noEmit     : propre
 ```
 
-Nouveaux tests : 5 sur `processEditedContentLinks` (`[[url]]`, `<url>`, court-circuit sans
-syntaxe traçable, panne ⇒ contenu original, service absent), 5 sur `emitMentionCreated` (salon
-personnel de chaque entrant, auto-mention sautée, lot vide, IO absente, émission en échec qui
-n'arrête pas l'éventail), 5 sur le chemin socket (contenu traité persisté / diffusé / retraduit,
-panne ⇒ contenu brut mais édition réussie, court-circuit), 1 sur le chemin REST
-(`mention:created` au salon personnel de l'entrant).
+Nouveaux tests : 5 sur la propriété du lien à l'envoi (`User.id` derrière le participant, URLs
+brutes au même nom, anonyme sans propriétaire, aucune résolution sans URL, résolution en panne qui
+n'empêche pas l'envoi), 3 sur la délégation, 4 déménagés vers `TrackingLinkService.test.ts`.
 
 ## Reste ouvert après ce cycle
 
-- **`MessageProcessor.processLinksInContent` est un deuxième exemplaire complet de
-  `TrackingLinkService.processExplicitLinksInContent`** — mêmes quatre étapes, mêmes regex, même
-  réutilisation de token, ~90 lignes chacun. Le chemin d'ENVOI passe par le premier, les deux
-  chemins d'édition par le second. Deux copies d'un même algorithme ne peuvent pas rester
-  d'accord : le correctif `$`-sequence (replacer fonction) n'a d'ailleurs été appliqué aux deux
-  qu'après coup. **Tête du prochain cycle.**
+- **Les `TrackingLink` déjà écrits portent des `Participant.id` dans `createdBy`.** Le correctif ne
+  vaut que pour les liens à venir ; les anciens restent invisibles pour leur auteur. Un script de
+  réparation (jointure `Participant.id → userId`) est à écrire, sur le modèle de
+  `repair-mention-user-ids.ts` — qui lui-même **n'a jamais été exécuté**, faute d'accès base depuis
+  cette routine. **Tête du prochain cycle.**
 - **Le domaine social extrait encore avec `extractMentions`.** `routes/posts/core.ts` (création ET
   édition de post) et `routes/posts/comments.ts` : un `@John Doe` dans un post ou un commentaire ne
-  nomme personne — jamais, pas seulement à l'édition.
-- **`repair-mention-user-ids.ts` n'a jamais été exécuté** — aucun accès base depuis cette routine.
-  À lancer sans `--apply` d'abord.
+  nomme personne.
 - **`MentionCreatedEventData.mentionedParticipantId` reste dans les types partagés** et n'est peuplé
   par aucun émetteur ; le SDK iOS le décode. Champ mort des deux côtés.
 - **`getMentionsForMessage` et `getRecentMentionsForUser` n'ont aucun consommateur d'écran** —
@@ -108,3 +107,6 @@ panne ⇒ contenu brut mais édition réussie, court-circuit), 1 sur le chemin R
 - **`getLatestMessageSummary` résume le DERNIER message de la conversation, pas celui qu'on vient
   d'acquitter** (cycle 19, inchangé).
 - L'arbitrage `delete-for-me` tranché par le cycle 12 attend toujours une validation humaine.
+- **La suppression de la branche distante échoue depuis cette routine** : `git push --delete`
+  répond « Everything up-to-date » sans agir (réessayé 4 fois). Les branches mergées des cycles
+  s'accumulent côté remote.

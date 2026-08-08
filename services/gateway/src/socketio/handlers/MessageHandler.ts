@@ -56,7 +56,7 @@ import { conversationStatsService } from '../../services/ConversationStatsServic
 import { conversationMessageStatsService } from '../../services/ConversationMessageStatsService';
 import { resolveMentionedUsers, resolveUsernamesToIds } from '../../services/MentionService';
 import { reconcileEditedMentions, type MentionResolver } from '../../services/messaging/messageMentions';
-import { processEditedContentLinks, type ExplicitLinkProcessor } from '../../services/messaging/messageLinks';
+import { processExplicitLinks, type ExplicitLinkProcessor } from '../../services/messaging/messageLinks';
 import { emitMentionCreated } from '../emitMentionCreated';
 import { TrackingLinkService } from '../../services/TrackingLinkService';
 import { getSocketRateLimiter, SOCKET_RATE_LIMITS } from '../../utils/socket-rate-limiter.js';
@@ -713,12 +713,12 @@ export class MessageHandler {
       // les crochets restaient en dur dans le message, pour toujours, alors que
       // le même texte envoyé produit un lien traçable. Le contenu traité est
       // ensuite le SEUL en circulation : base, mentions, retraduction, payload.
-      const editedContent = await processEditedContentLinks({
+      const editedContent = await processExplicitLinks({
         trackingLinkService: this.trackingLinkService,
         content: validated.content.trim(),
         conversationId: message.conversationId,
         messageId: validated.messageId,
-        editorUserId: userId,
+        createdBy: userId,
         onError: (err) => handlerLogger.warn('tracking link processing failed on socket edit', { messageId: validated.messageId, error: err }),
       });
 
