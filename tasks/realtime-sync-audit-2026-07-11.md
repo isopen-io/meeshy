@@ -1059,6 +1059,12 @@ client ne peut réordonner que des conversations qu'il voit.
 
 ## Cycle 14 (2026-08-08) — les deux ids que le `PUT` de préférences ne vérifiait pas
 
+> **Collision de numérotation** — une autre session de la routine a mené en parallèle
+> un travail disjoint (rejeu hors ligne des réactions REST, PR #2626, mergée en
+> premier) qu'elle numérote aussi « cycle 14 », mais dans `tasks/todo.md` et
+> `tasks/lessons.md`, pas ici. Ce fichier garde sa propre séquence : « cycle 14 » y
+> désigne l'entrée ci-dessous. Les deux ne se recouvrent sur aucun fichier.
+
 Suivi direct des deux premiers points de la liste laissée ouverte par le cycle 13 :
 « `POST /user-preferences/reorder` n'a pas de `maxItems` » et « **aucune route de
 préférences ne vérifie l'appartenance** (le `PUT` peut créer une ligne contre un id
