@@ -1046,7 +1046,10 @@ final class SwitchCameraSourceGuardTests: XCTestCase {
 
     func test_switchToCamera_chainsOntoPreviousTask() throws {
         let src = try webRTCServiceSource()
-        guard let body = body(of: "func switchToCamera(uniqueID: String)", in: src) else {
+        // Ancre sur le nom + la parenthèse ouvrante, pas la liste de paramètres
+        // complète : `switchToCamera(uniqueID:)` a depuis gagné un `completion:`
+        // optionnel (même rationale que `switchCamera()` ci-dessus).
+        guard let body = body(of: "func switchToCamera(", in: src) else {
             XCTFail("switchToCamera(uniqueID:) not found"); return
         }
         XCTAssertTrue(
