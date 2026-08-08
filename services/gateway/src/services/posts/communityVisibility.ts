@@ -4,12 +4,21 @@ import type { CacheStore } from '../CacheStore';
 const COMMUNITY_COMEMBERS_CACHE_TTL = 300; // 5 min — miroir des listes amis/contacts
 
 /**
+ * La seule surface Prisma que la résolution touche. Déclarée en `Pick` plutôt
+ * qu'en `PrismaClient` entier pour que les appelants qui ne portent eux-mêmes
+ * qu'une tranche du client (`filterPostAudience`) puissent la passer sans
+ * assertion de type — un `as PrismaClient` sur un sous-type structurel est
+ * exactement le genre d'assertion que ce dépôt refuse.
+ */
+export type CommunityVisibilityPrisma = Pick<PrismaClient, 'communityMember'>;
+
+/**
  * Tous les membres actifs des communautés auxquelles `userId` appartient activement,
  * self exclu. Miroir de PostFeedService.getDirectConversationContactIds : résolution
  * d'appartenance en deux temps, cache Redis optionnel, dégradation sûre en [].
  */
 export async function getCommunityCoMemberIds(
-  prisma: PrismaClient,
+  prisma: CommunityVisibilityPrisma,
   userId: string,
   cache?: CacheStore,
 ): Promise<string[]> {

@@ -82,7 +82,7 @@ export async function filterPostAudience(params: PostAudienceParams): Promise<st
   if (visibility === 'ONLY') return admit((id) => visibilityUserIdSet.has(id));
 
   if (visibility === 'COMMUNITY') {
-    const coMemberIds = new Set(await getCommunityCoMemberIds(prisma as PrismaClient, authorId));
+    const coMemberIds = new Set(await getCommunityCoMemberIds(prisma, authorId));
     return admit((id) => coMemberIds.has(id));
   }
 
