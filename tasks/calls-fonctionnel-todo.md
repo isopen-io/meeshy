@@ -4362,3 +4362,30 @@ l'utilisateur a désactivé l'effet — coût CPU/batterie continu sans bénéfi
   correct (chaque `disconnect()`+reconstruction est idempotent) mais coûte un aller-retour stop/redémarrage
   de la détection de pitch à chaque toggle d'un effet non lié pendant que voice-coder reste actif ; pas un bug,
   candidat d'optimisation mineure pour une vague dédiée si mesuré comme significatif en pratique.
+
+## Vague 68 — retrait de `useVideoFilters.ts` : pipeline WebGL mort, zéro appelant (2026-08-08)
+
+Point d'entrée : routine automatique d'amélioration continue (audio/vidéo calling). Reprise directe de
+l'item « reste ouvert » identifié en Vague 65 : `useVideoFilters.ts` (`apps/web/components/video-calls/hooks/`)
+— pipeline WebGL complet de filtres vidéo temps réel (température/luminosité/contraste/saturation/exposition,
+262 lignes, shaders GLSL inclus) sans aucun appelant en production, même forme que `useWebRTC.ts` déjà retiré
+en Vague 33.
+
+- **Vérification avant suppression** : grep exhaustif du hook (`useVideoFilters`), de son type exporté
+  (`VideoFilterConfig`) et de sa constante exportée (`FILTER_PRESETS`) sur tout `apps/web` — un seul fichier
+  matché : sa propre définition. Non exporté depuis `components/video-calls/index.ts` (10 exports, aucun ne
+  le cite). Aucun test ne l'importe (`useVideoFilters|VideoFilterConfig|FILTER_PRESETS` sur `**/*.test.*` :
+  0 résultat) — code jamais instancié, donc jamais couvert, donc aucune perte de couverture à sa suppression.
+- **Fix** : suppression du fichier. Aucun autre fichier touché — rien ne le référence, donc rien à recâbler.
+- **Vérification** : suite `apps/web` complète après `packages/shared && npx prisma generate --generator client`
+  + `bun run build` (prérequis CLAUDE.md, non faits au démarrage de cette session) — `jest components/video-calls`
+  (10 suites / 53 tests) et `jest utils hooks` (173 suites / 3699 tests, 2 skip pré-existants) verts, aucune
+  régression. `tsc --noEmit` : 0 nouvelle erreur imputable à ce diff (les ~30 erreurs restantes du repo —
+  `use-communities-query.ts`, `use-stories-realtime.ts`, `z-index-validator.ts`, etc. — sont préexistantes,
+  sans rapport avec `video-calls/hooks`, non touchées par ce diff). `next lint`/`eslint` cassent dans ce
+  sandbox avec l'erreur de config circulaire déjà documentée en Vague 65 — non bloquant, limitation
+  d'environnement connue.
+- **Reste ouvert** : dead code / god-object `CallManager.swift` (~5770 lignes) ; ADR `actor CallEventQueue`
+  non implémenté ; busy-path `reportNewIncomingCall` failure handler UI-only (Vague 63/64) ; optimisation
+  mineure `rebuildAudioGraph()` (Vague 67) ; items iOS toujours bloqués sur l'absence de toolchain Swift
+  dans ce sandbox (`switch`/`xcodebuild` absents, reconfirmé cette session).
